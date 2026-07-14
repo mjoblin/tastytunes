@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { LifeBuoy, Moon, Sun } from 'lucide-react'
+import { Heart, Moon, Sun } from 'lucide-react'
 import type { AlignH, AlignV, AmbientArtMode, AmbientCoverage, AppSettings, Theme } from '@shared/ipc'
 import { tt } from '@/api'
 import { useStore } from '@/store'
@@ -28,7 +28,7 @@ export function SettingsScreen(): React.JSX.Element {
           className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-gold text-bg text-[12.5px] font-medium
                      shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.3)] hover:brightness-110 hover:scale-[1.03] transition-all"
         >
-          <LifeBuoy size={15} strokeWidth={2} />
+          <Heart size={15} strokeWidth={2} />
           Support
         </button>
       </header>
