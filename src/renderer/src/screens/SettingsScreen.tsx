@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Moon, Sun } from 'lucide-react'
+import { LifeBuoy, Moon, Sun } from 'lucide-react'
 import type { AlignH, AlignV, AmbientArtMode, AmbientCoverage, AppSettings, Theme } from '@shared/ipc'
 import { tt } from '@/api'
 import { useStore } from '@/store'
@@ -22,6 +22,15 @@ export function SettingsScreen(): React.JSX.Element {
     <div ref={useScrollMemory('settings')} className="h-full overflow-y-auto">
       <header className="flex items-center gap-4 px-8 pt-8 pb-4">
         <h1 className="font-display font-bold text-[26px] tracking-tight">Settings</h1>
+        <div className="flex-1" />
+        <button
+          onClick={() => setInfoOpen(true)}
+          className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-gold text-bg text-[12.5px] font-medium
+                     shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.3)] hover:brightness-110 hover:scale-[1.03] transition-all"
+        >
+          <LifeBuoy size={15} strokeWidth={2} />
+          Support
+        </button>
       </header>
 
       <div className="px-8 pb-10 max-w-2xl space-y-8">
@@ -177,18 +186,6 @@ export function SettingsScreen(): React.JSX.Element {
                 className="shrink-0 text-[12.5px] px-3 py-1.5 rounded-lg ring-1 ring-edge text-dim hover:text-ink hover:ring-edge2 transition-all"
               >
                 View shortcuts
-              </button>
-            </SettingRow>
-
-            <SettingRow
-              label="About TastyTunes"
-              hint="Version, license, source, and support. Also opens by clicking the wordmark."
-            >
-              <button
-                onClick={() => setInfoOpen(true)}
-                className="shrink-0 text-[12.5px] px-3 py-1.5 rounded-lg ring-1 ring-edge text-dim hover:text-ink hover:ring-edge2 transition-all"
-              >
-                About
               </button>
             </SettingRow>
 
