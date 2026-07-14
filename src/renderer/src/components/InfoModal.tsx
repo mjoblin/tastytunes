@@ -1,4 +1,4 @@
-import { ExternalLink, X } from 'lucide-react'
+import { ExternalLink, Heart, X } from 'lucide-react'
 import { version } from '../../../../package.json'
 import { tt } from '@/api'
 import { useStore } from '@/store'
@@ -65,6 +65,12 @@ export function InfoModal(): React.JSX.Element {
           <p className="text-[11.5px] text-faint leading-relaxed px-1">
             Yep — that's the support link for PunyTunes, not TastyTunes. Same author, same
             streamers, same inbox. I'm not going to create a different support link.
+          </p>
+
+          <p className="text-[11.5px] text-faint leading-relaxed px-1">
+            Please don't support the app unless you can afford it, but if you enjoy the app and
+            are comfortable contributing, then your support will be greatly appreciated{' '}
+            <Heart size={11} className="inline-block text-gold -mt-0.5" fill="currentColor" strokeWidth={0} />
           </p>
         </div>
       </div>
