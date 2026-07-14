@@ -7,7 +7,8 @@ const GROUPS: Array<{ title: string; rows: Array<[string, string]> }> = [
     rows: [
       ['Space / K', 'Play / pause'],
       ['← / →', 'Previous / next track'],
-      ['J / L', 'Seek −10s / +10s']
+      ['J / L', 'Seek −10s / +10s'],
+      ['1 – 9', 'Recall preset']
     ]
   },
   {

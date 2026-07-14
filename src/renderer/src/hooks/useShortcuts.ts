@@ -54,6 +54,15 @@ export function useShortcuts(): void {
         return
       }
 
+      // 1–9: direct preset recall, radio-tuner style (only for occupied slots)
+      if (/^[1-9]$/.test(e.key)) {
+        const id = Number(e.key)
+        if (s.presets?.presets?.some((p) => p.id === id)) {
+          void tt.command({ type: 'recallPreset', presetId: id })
+        }
+        return
+      }
+
       const seekTo = (delta: number): void => {
         const playhead = s.playhead
         const duration = s.playState?.metadata?.duration
