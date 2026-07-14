@@ -1,13 +1,13 @@
 import {
   Cable,
+  Cog,
   Disc3,
   HardDrive,
   ListMusic,
   PanelLeftClose,
   PanelLeftOpen,
   PictureInPicture2,
-  Radio,
-  Settings2
+  Radio
 } from 'lucide-react'
 import { tt } from '@/api'
 import { useStore, type Screen } from '@/store'
@@ -21,7 +21,7 @@ const ITEMS: Array<{ id: Screen; label: string; icon: typeof Disc3; key: string 
   { id: 'device', label: 'Device', icon: HardDrive, key: 'D' }
 ]
 
-const SETTINGS_ITEM = { id: 'settings' as Screen, label: 'Settings', icon: Settings2, key: 'E' }
+const SETTINGS_ITEM = { id: 'settings' as Screen, label: 'Settings', icon: Cog, key: 'E' }
 
 export function Nav(): React.JSX.Element {
   const screen = useStore((s) => s.screen)
@@ -96,8 +96,25 @@ export function Nav(): React.JSX.Element {
         {ITEMS.map(navItem)}
       </div>
 
-      {/* collapse + settings pinned at the bottom */}
+      {/* mini player + settings pinned at the bottom, collapse last */}
       <div className={cx('space-y-0.5 pb-3', collapsed ? 'px-2' : 'px-3')}>
+        <button
+          onClick={() => void tt.toggleMini()}
+          data-tip="Mini player"
+          aria-label="Mini player"
+          className={cx(
+            'w-full flex items-center rounded-lg h-9 text-[13.5px] text-dim hover:text-ink hover:bg-veil transition-colors',
+            collapsed ? 'justify-center px-0' : 'gap-3 px-3'
+          )}
+        >
+          <PictureInPicture2 size={16} strokeWidth={1.8} className="shrink-0" />
+          {!collapsed && (
+            <span className="flex-1 min-w-0 overflow-hidden whitespace-nowrap text-left">
+              Mini player
+            </span>
+          )}
+        </button>
+        {navItem(SETTINGS_ITEM)}
         <button
           onClick={() => void toggleCollapsed()}
           data-tip={collapsed ? 'Expand menu' : 'Collapse menu'}
@@ -118,23 +135,6 @@ export function Nav(): React.JSX.Element {
             </span>
           )}
         </button>
-        <button
-          onClick={() => void tt.toggleMini()}
-          data-tip="Mini player"
-          aria-label="Mini player"
-          className={cx(
-            'w-full flex items-center rounded-lg h-9 text-[13.5px] text-faint hover:text-dim hover:bg-veil transition-colors',
-            collapsed ? 'justify-center px-0' : 'gap-3 px-3'
-          )}
-        >
-          <PictureInPicture2 size={16} strokeWidth={1.8} className="shrink-0" />
-          {!collapsed && (
-            <span className="flex-1 min-w-0 overflow-hidden whitespace-nowrap text-left">
-              Mini player
-            </span>
-          )}
-        </button>
-        {navItem(SETTINGS_ITEM)}
       </div>
     </nav>
   )
