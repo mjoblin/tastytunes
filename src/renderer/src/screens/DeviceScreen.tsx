@@ -35,7 +35,7 @@ export function DeviceScreen(): React.JSX.Element {
 
   return (
     <div ref={useScrollMemory('device')} className="h-full overflow-y-auto">
-      <header className="flex items-center gap-4 px-8 pt-8 pb-4">
+      <header className="drag-region flex items-center gap-4 px-8 pt-8 pb-4">
         <h1 className="font-display font-bold text-[26px] tracking-tight">Device</h1>
       </header>
 

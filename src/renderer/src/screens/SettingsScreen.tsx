@@ -20,12 +20,12 @@ export function SettingsScreen(): React.JSX.Element {
 
   return (
     <div ref={useScrollMemory('settings')} className="h-full overflow-y-auto">
-      <header className="flex items-center gap-4 px-8 pt-8 pb-4">
+      <header className="drag-region flex items-center gap-4 px-8 pt-8 pb-4">
         <h1 className="font-display font-bold text-[26px] tracking-tight">Settings</h1>
         <div className="flex-1" />
         <button
           onClick={() => setInfoOpen(true)}
-          className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-gold text-bg text-[12.5px] font-medium
+          className="no-drag flex items-center gap-2 px-3.5 py-2 rounded-lg bg-gold text-bg text-[12.5px] font-medium
                      shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.3)] hover:brightness-110 hover:scale-[1.03] transition-all"
         >
           <Heart size={15} strokeWidth={2} />

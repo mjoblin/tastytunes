@@ -23,11 +23,11 @@ export function NowPlayingScreen(): React.JSX.Element {
   // Titleless top band: preserves the header's vertical rhythm (and houses the
   // display-mode button) so the art/text sit where they did with a title.
   const header = (
-    <header className="flex items-center justify-end px-8 pt-8 pb-4 min-h-[83px]">
+    <header className="drag-region flex items-center justify-end px-8 pt-8 pb-4 min-h-[83px]">
       <button
         onClick={() => setDisplayMode(true)}
         title="Full-screen display mode (F)"
-        className="p-2 rounded-md text-faint hover:text-dim transition-colors"
+        className="no-drag p-2 rounded-md text-faint hover:text-dim transition-colors"
       >
         <Maximize2 size={16} />
       </button>

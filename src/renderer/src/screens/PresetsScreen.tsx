@@ -110,7 +110,7 @@ export function PresetsScreen(): React.JSX.Element {
 
   return (
     <div className="h-full flex flex-col">
-      <header className="flex items-center gap-4 px-8 pt-8 pb-4">
+      <header className="drag-region flex items-center gap-4 px-8 pt-8 pb-4">
         <h1 className="font-display font-bold text-[26px] tracking-tight">Presets</h1>
         <span className="font-mono text-[11px] text-faint">
           {items.length} / {presets?.max_presets ?? '—'} slots
@@ -121,7 +121,7 @@ export function PresetsScreen(): React.JSX.Element {
             data-tip="Scroll to the playing preset"
             aria-label="Scroll to the playing preset"
             onClick={() => scrollToPlaying(true)}
-            className="tip-bottom p-2 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 active:scale-90 transition-all"
+            className="no-drag tip-bottom p-2 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 active:scale-90 transition-all"
           >
             <Crosshair size={16} />
           </button>
@@ -130,7 +130,7 @@ export function PresetsScreen(): React.JSX.Element {
             aria-label={followPresets ? 'Auto-follow: on' : 'Auto-follow: off'}
             onClick={() => void setFollowPresets(!followPresets)}
             className={cx(
-              'tip-bottom p-2 rounded-lg ring-1 transition-all',
+              'no-drag tip-bottom p-2 rounded-lg ring-1 transition-all',
               followPresets
                 ? 'ring-gold/50 bg-golddim text-gold'
                 : 'ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70'
