@@ -1,0 +1,296 @@
+@import 'tailwindcss';
+
+/* Runtime-tintable accent: useArtAccent() overrides this per album.
+   --gold-rgb is the STATIC state/brand gold (per theme, never art-tinted). */
+:root {
+  --amber-rgb: 240 168 72;
+  --gold-rgb: 240 168 72;
+}
+
+@theme {
+  --font-display: 'Bricolage Grotesque Variable', ui-sans-serif, sans-serif;
+  --font-sans: 'Instrument Sans Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Spline Sans Mono', ui-monospace, 'SF Mono', monospace;
+
+  /* warm near-black "faceplate" palette (dark is the default theme) */
+  --color-bg: #0e0d0b;
+  --color-panel: #151311;
+  --color-raised: #1d1a16;
+  --color-edge: rgb(255 255 255 / 0.08);
+  --color-edge2: rgb(255 255 255 / 0.16);
+  --color-ink: #f4efe6;
+  --color-dim: #a69e90;
+  --color-faint: #6f675b;
+  --color-amber: rgb(var(--amber-rgb));
+  --color-amberdim: rgb(var(--amber-rgb) / 0.14);
+  /* fixed gold for brand + "currently playing" — never tinted by album art */
+  --color-gold: rgb(var(--gold-rgb));
+  --color-golddim: rgb(var(--gold-rgb) / 0.16);
+  --color-goldtile: #322817; /* playing tile: lifted and warmed toward gold */
+  --color-led: #67dd8b;
+  --color-alert: #e0654f;
+  /* neutral overlay tints that flip with the theme (hover washes, tracks) */
+  --color-veil: rgb(255 255 255 / 0.05);
+  --color-veil2: rgb(255 255 255 / 0.1);
+}
+
+/* light theme: warm paper + aluminum faceplate */
+:root.light {
+  --gold-rgb: 178 118 16;
+  --color-bg: #f2eee6;
+  --color-panel: #eae5da;
+  --color-raised: #e0dacc;
+  --color-edge: rgb(30 20 5 / 0.1);
+  --color-edge2: rgb(30 20 5 / 0.2);
+  --color-ink: #292219;
+  --color-dim: #6d6455;
+  --color-faint: #9b9280;
+  --color-goldtile: #eee0bd;
+  --color-led: #1fa456;
+  --color-alert: #c74a35;
+  --color-veil: rgb(30 20 5 / 0.05);
+  --color-veil2: rgb(30 20 5 / 0.12);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-bg text-ink font-sans antialiased overflow-hidden select-none;
+}
+
+img {
+  -webkit-user-drag: none;
+}
+
+.drag-region {
+  -webkit-app-region: drag;
+}
+
+/* mini-player window: transparent page so the rounded strip floats */
+:root.mini body {
+  background: transparent;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* faceplate silkscreen labels */
+.microlabel {
+  @apply font-mono text-[10px] uppercase tracking-[0.22em] text-faint;
+}
+
+/* tech readout chips (codec / sample rate / bit depth) */
+.badge {
+  @apply font-mono text-[10px] uppercase tracking-[0.14em] text-dim border border-edge2 rounded px-1.5 py-0.5;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-veil2);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-edge2);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+/* connection lamp */
+.led {
+  @apply inline-block h-2 w-2 rounded-full;
+}
+.led-on {
+  background: var(--color-led);
+  box-shadow: 0 0 6px rgb(103 221 139 / 0.8);
+}
+.led-busy {
+  background: var(--color-amber);
+  box-shadow: 0 0 6px rgb(var(--amber-rgb) / 0.8);
+  animation: led-pulse 1.1s ease-in-out infinite;
+}
+.led-off {
+  background: #4a453d;
+}
+@keyframes led-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* playing "EQ bars" indicator */
+.eqbars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 12px;
+}
+.eqbars span {
+  width: 3px;
+  border-radius: 1px;
+  background: currentColor; /* color via text-* on the wrapper */
+  animation: eq-bounce 1s ease-in-out infinite;
+}
+.eqbars span:nth-child(2) {
+  animation-delay: 0.25s;
+}
+.eqbars span:nth-child(3) {
+  animation-delay: 0.5s;
+}
+.eqbars.paused span {
+  animation-play-state: paused;
+  height: 3px !important;
+}
+@keyframes eq-bounce {
+  0%,
+  100% {
+    height: 4px;
+  }
+  50% {
+    height: 12px;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.spin {
+  animation: spin 1.2s linear infinite;
+}
+
+/* playing preset tile: gold ring + a soft steady bloom */
+.tile-playing {
+  box-shadow:
+    0 0 0 2px rgb(var(--gold-rgb) / 0.9),
+    0 0 26px rgb(var(--gold-rgb) / 0.32),
+    0 0 62px 12px rgb(var(--gold-rgb) / 0.2);
+}
+
+/* subtler variant for rows in dense lists (queue, sources): same ring, less bloom */
+.row-playing {
+  box-shadow:
+    0 0 0 2px rgb(var(--gold-rgb) / 0.9),
+    0 0 14px rgb(var(--gold-rgb) / 0.2),
+    0 0 30px 4px rgb(var(--gold-rgb) / 0.1);
+}
+
+/* ambient album-art backdrop behind the whole window */
+.ambient-art {
+  position: absolute;
+  inset: 0;
+  background-position: center;
+  background-size: cover;
+  transform: scale(1.3);
+  filter: blur(100px) saturate(1.4);
+  opacity: 0.2;
+}
+:root.light .ambient-art {
+  opacity: 0.16;
+  filter: blur(100px) saturate(1.1);
+}
+.ambient-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120% 95% at 50% 42%, transparent 42%, rgb(0 0 0 / 0.5) 100%);
+}
+:root.light .ambient-vignette {
+  background: radial-gradient(120% 95% at 50% 42%, transparent 48%, rgb(40 28 8 / 0.22) 100%);
+}
+
+/* soft glow behind large album art */
+.art-glow {
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.08),
+    0 24px 80px -12px rgb(0 0 0 / 0.85),
+    0 0 120px -30px rgb(var(--amber-rgb) / 0.25);
+}
+
+/* deterministic tooltips for the nav rail (native titles are unreliable in
+   frameless windows): appears to the right of the element after a short dwell */
+[data-tip] {
+  position: relative;
+}
+[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  translate: 0 -50%;
+  background: var(--color-raised);
+  color: var(--color-ink);
+  box-shadow:
+    0 0 0 1px var(--color-edge2),
+    0 8px 24px rgb(0 0 0 / 0.35);
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 60;
+  transition: opacity 0.12s ease;
+}
+[data-tip]:hover::after {
+  opacity: 1;
+  transition-delay: 0.45s;
+}
+/* variant: tooltip below the element instead of to the right */
+[data-tip].tip-bottom::after {
+  left: 50%;
+  top: calc(100% + 8px);
+  translate: -50% 0;
+}
+/* variant: tooltip above the element (for bottom-bar controls) */
+[data-tip].tip-top::after {
+  left: 50%;
+  top: auto;
+  bottom: calc(100% + 8px);
+  translate: -50% 0;
+}
+
+/* click feedback for scroll-to-current: a gold pulse just inside the target
+   row, so it never extends past the scroll container and gets clipped */
+.target-flash {
+  outline: 3px solid transparent;
+  outline-offset: -3px;
+  animation: target-flash 0.8s ease-out;
+}
+@keyframes target-flash {
+  0% {
+    outline-color: rgb(var(--gold-rgb) / 0);
+  }
+  20% {
+    outline-color: rgb(var(--gold-rgb) / 0.85);
+  }
+  100% {
+    outline-color: rgb(var(--gold-rgb) / 0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .target-flash {
+    animation: none;
+  }
+}
+
+/* display mode hides the cursor after idle */
+.cursor-hidden,
+.cursor-hidden * {
+  cursor: none !important;
+}

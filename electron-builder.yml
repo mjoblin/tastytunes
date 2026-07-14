@@ -1,0 +1,20 @@
+appId: app.tastytunes
+productName: TastyTunes
+directories:
+  buildResources: build
+  output: dist
+files:
+  - out/**
+  - package.json
+npmRebuild: false
+mac:
+  category: public.app-category.music
+  target:
+    - dmg
+win:
+  target:
+    - nsis
+linux:
+  target:
+    - AppImage
+  category: Audio
