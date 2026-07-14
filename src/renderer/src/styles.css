@@ -264,6 +264,13 @@ img {
   bottom: calc(100% + 8px);
   translate: -50% 0;
 }
+/* modifier: right-align to the element instead of centering, so tips near a
+   window's right edge (mini player) aren't clipped by overflow */
+[data-tip].tip-end::after {
+  left: auto;
+  right: 0;
+  translate: 0 0;
+}
 
 /* click feedback for scroll-to-current: a gold pulse just inside the target
    row, so it never extends past the scroll container and gets clipped */

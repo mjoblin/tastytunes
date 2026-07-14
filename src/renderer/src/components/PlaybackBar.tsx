@@ -88,7 +88,7 @@ export function PlaybackBar(): React.JSX.Element {
       <div className="flex flex-col items-center justify-center gap-1 min-w-0">
         <div className="flex items-center gap-1">
           <TransportButton
-            title="Shuffle"
+            tip="Shuffle"
             enabled={active && canShuffle}
             accent={shuffleOn}
             onClick={() => void tt.command({ type: 'setShuffle', mode: shuffleOn ? 'off' : 'all' })}
@@ -96,7 +96,7 @@ export function PlaybackBar(): React.JSX.Element {
             <Shuffle size={15} />
           </TransportButton>
           <TransportButton
-            title="Previous (←)"
+            tip="Previous (←)"
             enabled={active && canPrev}
             onClick={() => void tt.command({ type: 'previousTrack' })}
           >
@@ -104,11 +104,12 @@ export function PlaybackBar(): React.JSX.Element {
           </TransportButton>
 
           <button
-            title={playing ? 'Pause (space)' : 'Play (space)'}
+            data-tip={playing ? 'Pause (space)' : 'Play (space)'}
+            aria-label={playing ? 'Pause (space)' : 'Play (space)'}
             disabled={!active || (!canToggle && !busy)}
             onClick={() => void tt.command({ type: 'togglePlayback' })}
             className={cx(
-              'mx-1.5 h-11 w-11 rounded-full flex items-center justify-center transition-all',
+              'tip-top mx-1.5 h-11 w-11 rounded-full flex items-center justify-center transition-all',
               active && (canToggle || busy)
                 ? 'bg-gold text-bg hover:scale-105 shadow-[0_0_20px_rgb(var(--gold-rgb)_/_0.35)]'
                 : 'bg-veil2 text-faint'
@@ -124,14 +125,14 @@ export function PlaybackBar(): React.JSX.Element {
           </button>
 
           <TransportButton
-            title="Next (→)"
+            tip="Next (→)"
             enabled={active && canNext}
             onClick={() => void tt.command({ type: 'nextTrack' })}
           >
             <SkipForward size={18} />
           </TransportButton>
           <TransportButton
-            title="Repeat"
+            tip="Repeat"
             enabled={active && canRepeat}
             accent={repeatOn}
             onClick={() => void tt.command({ type: 'setRepeat', mode: repeatOn ? 'off' : 'all' })}
@@ -140,7 +141,7 @@ export function PlaybackBar(): React.JSX.Element {
           </TransportButton>
           {canStop && meta.isRadio && (
             <TransportButton
-              title="Stop"
+              tip="Stop"
               enabled={active}
               onClick={() => void tt.command({ type: 'stop' })}
             >
@@ -167,9 +168,10 @@ export function PlaybackBar(): React.JSX.Element {
             />
           </div>
           <button
-            className="font-mono text-[10.5px] text-faint w-11 text-left tabular-nums hover:text-dim"
+            className="tip-top font-mono text-[10.5px] text-faint w-11 text-left tabular-nums hover:text-dim"
             onClick={() => setShowRemaining((r) => !r)}
-            title="Toggle remaining time"
+            data-tip="Toggle remaining time"
+            aria-label="Toggle remaining time"
           >
             {active && duration != null
               ? showRemaining
@@ -186,11 +188,12 @@ export function PlaybackBar(): React.JSX.Element {
         {active && <VolumeCluster />}
         <DeviceSwitcher />
         <button
-          title={powered ? 'Standby' : 'Power on'}
+          data-tip={powered ? 'Standby' : 'Power on'}
+          aria-label={powered ? 'Standby' : 'Power on'}
           disabled={!connected}
           onClick={() => void tt.command({ type: 'power', power: 'toggle' })}
           className={cx(
-            'p-2 rounded-full flex items-center justify-center transition-all',
+            'tip-top p-2 rounded-full flex items-center justify-center transition-all',
             powered
               ? 'bg-gold text-bg shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.35)] hover:scale-110 hover:shadow-[0_0_20px_rgb(var(--gold-rgb)_/_0.5)]'
               : connected
@@ -207,24 +210,25 @@ export function PlaybackBar(): React.JSX.Element {
 
 function TransportButton({
   children,
-  title,
+  tip,
   enabled,
   accent,
   onClick
 }: {
   children: React.ReactNode
-  title: string
+  tip: string
   enabled: boolean
   accent?: boolean
   onClick(): void
 }): React.JSX.Element {
   return (
     <button
-      title={title}
+      data-tip={tip}
+      aria-label={tip}
       disabled={!enabled}
       onClick={onClick}
       className={cx(
-        'p-2 rounded-md transition-colors',
+        'tip-top p-2 rounded-md transition-colors',
         !enabled ? 'text-faint/40' : accent ? 'text-gold' : 'text-dim hover:text-ink'
       )}
     >

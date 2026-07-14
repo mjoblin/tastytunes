@@ -30,9 +30,10 @@ export function SignalLamp(): React.JSX.Element | null {
   return (
     <div className="relative">
       <button
-        title={`Signal: ${SIGNAL_LABELS[quality]}`}
+        data-tip={open ? undefined : `Signal: ${SIGNAL_LABELS[quality]}`}
+        aria-label={`Signal: ${SIGNAL_LABELS[quality]}`}
         onClick={() => setOpen((o) => !o)}
-        className="p-2 rounded-md hover:bg-veil transition-colors"
+        className="tip-top p-2 rounded-md hover:bg-veil transition-colors"
       >
         <span
           className="block h-2.5 w-2.5 rounded-full"

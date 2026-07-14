@@ -98,19 +98,21 @@ export function MiniPlayer(): React.JSX.Element {
               )}
             >
               <button
-                title="Open TastyTunes"
+                data-tip="Open TastyTunes"
+                aria-label="Open TastyTunes"
                 onClick={() => {
                   void tt.showMain()
                   void tt.toggleMini()
                 }}
-                className="no-drag p-1 rounded text-faint hover:text-ink transition-colors"
+                className="no-drag tip-bottom tip-end p-1 rounded text-faint hover:text-ink transition-colors"
               >
                 <Expand size={12} />
               </button>
               <button
-                title="Close mini player"
+                data-tip="Close mini player"
+                aria-label="Close mini player"
                 onClick={() => void tt.toggleMini()}
-                className="no-drag p-1 rounded text-faint hover:text-ink transition-colors"
+                className="no-drag tip-bottom tip-end p-1 rounded text-faint hover:text-ink transition-colors"
               >
                 <X size={13} />
               </button>
@@ -119,15 +121,16 @@ export function MiniPlayer(): React.JSX.Element {
 
           {/* transport + volume + time */}
           <div className="flex items-center gap-1.5">
-            <MiniButton enabled={active && canPrev} title="Previous" onClick={() => void tt.command({ type: 'previousTrack' })}>
+            <MiniButton enabled={active && canPrev} tip="Previous" onClick={() => void tt.command({ type: 'previousTrack' })}>
               <SkipBack size={14} />
             </MiniButton>
             <button
-              title={playing ? 'Pause' : 'Play'}
+              data-tip={playing ? 'Pause' : 'Play'}
+              aria-label={playing ? 'Pause' : 'Play'}
               disabled={!active || (!canToggle && !busy)}
               onClick={() => void tt.command({ type: 'togglePlayback' })}
               className={cx(
-                'no-drag h-8 w-8 rounded-full flex items-center justify-center transition-all shrink-0',
+                'no-drag tip-top h-8 w-8 rounded-full flex items-center justify-center transition-all shrink-0',
                 active && (canToggle || busy)
                   ? 'bg-gold text-bg hover:scale-105'
                   : 'bg-veil2 text-faint'
@@ -141,16 +144,17 @@ export function MiniPlayer(): React.JSX.Element {
                 <Play size={14} fill="currentColor" strokeWidth={0} className="translate-x-[1px]" />
               )}
             </button>
-            <MiniButton enabled={active && canNext} title="Next" onClick={() => void tt.command({ type: 'nextTrack' })}>
+            <MiniButton enabled={active && canNext} tip="Next" onClick={() => void tt.command({ type: 'nextTrack' })}>
               <SkipForward size={14} />
             </MiniButton>
 
             {active && hasVolume && (
               <button
-                title={muted ? 'Unmute' : 'Mute'}
+                data-tip={muted ? 'Unmute' : 'Mute'}
+                aria-label={muted ? 'Unmute' : 'Mute'}
                 onClick={() => void tt.command({ type: 'setMute', mute: !muted })}
                 className={cx(
-                  'no-drag p-1 ml-0.5 rounded transition-colors',
+                  'no-drag tip-top p-1 ml-0.5 rounded transition-colors',
                   muted ? 'text-gold' : 'text-faint hover:text-dim'
                 )}
               >
@@ -180,22 +184,23 @@ export function MiniPlayer(): React.JSX.Element {
 
 function MiniButton({
   children,
-  title,
+  tip,
   enabled,
   onClick
 }: {
   children: React.ReactNode
-  title: string
+  tip: string
   enabled: boolean
   onClick(): void
 }): React.JSX.Element {
   return (
     <button
-      title={title}
+      data-tip={tip}
+      aria-label={tip}
       disabled={!enabled}
       onClick={onClick}
       className={cx(
-        'no-drag p-1 rounded transition-colors',
+        'no-drag tip-top p-1 rounded transition-colors',
         enabled ? 'text-dim hover:text-ink' : 'text-faint/40'
       )}
     >

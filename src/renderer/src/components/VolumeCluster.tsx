@@ -46,32 +46,36 @@ export function VolumeCluster(): React.JSX.Element | null {
     <button
       onClick={() => void tt.command({ type: 'setMute', mute: !muted })}
       className={cx(
-        'p-1.5 rounded-md transition-colors',
+        'tip-top p-1.5 rounded-md transition-colors',
         // gold = engaged state (matches shuffle/repeat), not red: muting isn't an error
         muted ? 'text-gold' : 'text-dim hover:text-ink'
       )}
-      title={muted ? 'Unmute (m)' : 'Mute (m)'}
+      data-tip={muted ? 'Unmute (m)' : 'Mute (m)'}
+      aria-label={muted ? 'Unmute (m)' : 'Mute (m)'}
     >
       {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
     </button>
   )
 
   if (!preAmp) {
-    // Control Bus: relative nudges only.
+    // Control Bus: relative nudges only. (No tooltip on the wrapper — it would
+    // fight the buttons' tips; scroll-to-adjust is in the shortcuts overlay.)
     return (
-      <div className="flex items-center gap-1" onWheel={onWheel} title="Scroll to adjust volume">
+      <div className="flex items-center gap-1" onWheel={onWheel}>
         {muteButton}
         <button
           onClick={() => void tt.command({ type: 'volumeStepChange', delta: -1 })}
-          className="p-1.5 rounded-md text-dim hover:text-ink transition-colors"
-          title="Volume down (↓)"
+          className="tip-top p-1.5 rounded-md text-dim hover:text-ink transition-colors"
+          data-tip="Volume down (↓)"
+          aria-label="Volume down (↓)"
         >
           <Minus size={15} />
         </button>
         <button
           onClick={() => void tt.command({ type: 'volumeStepChange', delta: 1 })}
-          className="p-1.5 rounded-md text-dim hover:text-ink transition-colors"
-          title="Volume up (↑)"
+          className="tip-top p-1.5 rounded-md text-dim hover:text-ink transition-colors"
+          data-tip="Volume up (↑)"
+          aria-label="Volume up (↑)"
         >
           <Plus size={15} />
         </button>
@@ -98,7 +102,7 @@ export function VolumeCluster(): React.JSX.Element | null {
   const pendingLevel = scrub != null ? toLevel(scrub) : null
 
   return (
-    <div className="flex items-center gap-2 w-44" onWheel={onWheel} title="Scroll to adjust volume">
+    <div className="flex items-center gap-2 w-44" onWheel={onWheel}>
       {muteButton}
       <div className={cx('flex-1', muted && 'opacity-40')}>
         <Slider
