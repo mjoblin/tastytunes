@@ -26,6 +26,7 @@ const SETTINGS_ITEM = { id: 'settings' as Screen, label: 'Settings', icon: Setti
 export function Nav(): React.JSX.Element {
   const screen = useStore((s) => s.screen)
   const setScreen = useStore((s) => s.setScreen)
+  const setInfoOpen = useStore((s) => s.setInfoOpen)
   const queueTotal = useStore((s) => s.queue?.total ?? null)
   const ambientWindow = useStore((s) => s.ambientWindowActive)
   const settings = useStore((s) => s.settings)
@@ -73,7 +74,12 @@ export function Nav(): React.JSX.Element {
     >
       {/* macOS traffic-light inset + wordmark; draggable like a title bar */}
       <div className={cx('drag-region pt-11 pb-5', collapsed ? 'px-0 text-center' : 'px-5')}>
-        <div className="font-display font-bold text-[19px] leading-none tracking-tight">
+        <button
+          onClick={() => setInfoOpen(true)}
+          data-tip="About TastyTunes"
+          aria-label="About TastyTunes"
+          className="no-drag font-display font-bold text-[19px] leading-none tracking-tight cursor-pointer"
+        >
           {collapsed ? (
             <>
               t<span className="text-gold">t</span>
@@ -83,7 +89,7 @@ export function Nav(): React.JSX.Element {
               tasty<span className="text-gold">tunes</span>
             </>
           )}
-        </div>
+        </button>
       </div>
 
       <div className={cx('flex-1 space-y-0.5', collapsed ? 'px-2' : 'px-3')}>

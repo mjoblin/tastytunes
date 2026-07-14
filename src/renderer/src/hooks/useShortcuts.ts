@@ -27,6 +27,7 @@ export function useShortcuts(): void {
 
       if (e.key === 'Escape') {
         if (s.shortcutsOpen) s.setShortcutsOpen(false)
+        else if (s.infoOpen) s.setInfoOpen(false)
         else if (s.displayMode) s.setDisplayMode(false)
         else if (s.diagnosticsOpen) s.setDiagnosticsOpen(false)
         return

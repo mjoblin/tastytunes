@@ -53,6 +53,7 @@ interface TTState {
 
   diagnosticsOpen: boolean
   shortcutsOpen: boolean
+  infoOpen: boolean
   displayMode: boolean
   /** True while the full-window ambient backdrop is showing — chrome goes transparent. */
   ambientWindowActive: boolean
@@ -62,6 +63,7 @@ interface TTState {
   setScreen(screen: Screen): void
   setDiagnosticsOpen(open: boolean): void
   setShortcutsOpen(open: boolean): void
+  setInfoOpen(open: boolean): void
   setDisplayMode(on: boolean): void
   setAmbientWindowActive(on: boolean): void
   setSettings(settings: AppSettings): void
@@ -92,6 +94,7 @@ export const useStore = create<TTState>((set) => ({
 
   diagnosticsOpen: false,
   shortcutsOpen: false,
+  infoOpen: false,
   displayMode: false,
   ambientWindowActive: false,
   miniHover: false,
@@ -99,6 +102,7 @@ export const useStore = create<TTState>((set) => ({
   setScreen: (screen) => set({ screen }),
   setDiagnosticsOpen: (diagnosticsOpen) => set({ diagnosticsOpen }),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
+  setInfoOpen: (infoOpen) => set({ infoOpen }),
   setDisplayMode: (displayMode) => set({ displayMode }),
   setAmbientWindowActive: (ambientWindowActive) => set({ ambientWindowActive }),
   setSettings: (settings) => set({ settings }),

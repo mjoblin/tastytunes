@@ -11,6 +11,7 @@ export function SettingsScreen(): React.JSX.Element {
   const settings = useStore((s) => s.settings)
   const setSettings = useStore((s) => s.setSettings)
   const setShortcutsOpen = useStore((s) => s.setShortcutsOpen)
+  const setInfoOpen = useStore((s) => s.setInfoOpen)
 
   const save = async (patch: Partial<AppSettings>): Promise<void> => {
     const next = await tt.setSettings(patch)
@@ -176,6 +177,18 @@ export function SettingsScreen(): React.JSX.Element {
                 className="shrink-0 text-[12.5px] px-3 py-1.5 rounded-lg ring-1 ring-edge text-dim hover:text-ink hover:ring-edge2 transition-all"
               >
                 View shortcuts
+              </button>
+            </SettingRow>
+
+            <SettingRow
+              label="About TastyTunes"
+              hint="Version, license, source, and support. Also opens by clicking the wordmark."
+            >
+              <button
+                onClick={() => setInfoOpen(true)}
+                className="shrink-0 text-[12.5px] px-3 py-1.5 rounded-lg ring-1 ring-edge text-dim hover:text-ink hover:ring-edge2 transition-all"
+              >
+                About
               </button>
             </SettingRow>
 
