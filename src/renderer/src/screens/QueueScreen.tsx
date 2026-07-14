@@ -25,6 +25,8 @@ import { cx, fmtTime } from '@/lib/format'
 export function QueueScreen(): React.JSX.Element {
   const queue = useStore((s) => s.queue)
   const playState = useStore((s) => s.playState)
+  const nowPlaying = useStore((s) => s.nowPlaying)
+  const zoneState = useStore((s) => s.zoneState)
   const followQueue = useStore((s) => s.settings.followQueue)
   const setSettings = useStore((s) => s.setSettings)
   const setQueueItems = useStore((s) => s.setQueueItems)
@@ -43,6 +45,10 @@ export function QueueScreen(): React.JSX.Element {
   const items = (queue?.items ?? []).filter((i) => i.id != null)
   const playId = queue?.play_id ?? playState?.queue_id ?? null
   const playing = playState?.state === 'play'
+  // The queue belongs to the MEDIA_PLAYER source. When another source is
+  // active (AirPlay, radio, …) the device still reports a play_id — that row
+  // is just where the queue is parked, and must not claim to be playing.
+  const queueSourceActive = (nowPlaying?.source?.id ?? zoneState?.source) === 'MEDIA_PLAYER'
 
   const totalSecs = items.reduce((acc, i) => acc + (i.metadata?.duration ?? 0), 0)
 
@@ -123,6 +129,7 @@ export function QueueScreen(): React.JSX.Element {
                 item={item}
                 isCurrent={item.id === playId}
                 playing={playing}
+                sourceActive={queueSourceActive}
                 currentRef={item.id === playId ? currentRef : undefined}
               />
             ))}
@@ -137,11 +144,14 @@ function QueueRow({
   item,
   isCurrent,
   playing,
+  sourceActive,
   currentRef
 }: {
   item: QueueListItem
   isCurrent: boolean
   playing: boolean
+  /** The queue's own source (MEDIA_PLAYER) is what's audible right now. */
+  sourceActive: boolean
   currentRef?: React.MutableRefObject<HTMLDivElement | null>
 }): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -160,7 +170,11 @@ function QueueRow({
         'group grid grid-cols-[26px_44px_1fr_auto_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5',
         'cursor-default transition-colors',
         isDragging && 'z-10 bg-raised shadow-xl',
-        isCurrent ? 'row-playing bg-gold/10' : 'hover:bg-veil'
+        // current + queue audible: full playing treatment; current while another
+        // source plays: just the parked resume point, quietly set apart
+        isCurrent && sourceActive && 'row-playing bg-gold/10',
+        isCurrent && !sourceActive && 'ring-1 ring-edge2 bg-veil/60 hover:bg-veil',
+        !isCurrent && 'hover:bg-veil'
       )}
       onClick={() => {
         if (item.id != null) void tt.command({ type: 'playQueueId', queueId: item.id })
@@ -168,7 +182,13 @@ function QueueRow({
     >
       <div className="flex items-center justify-center">
         {isCurrent ? (
-          <span className={cx('eqbars text-gold', !playing && 'paused')}>
+          <span
+            className={cx(
+              'eqbars',
+              sourceActive ? 'text-gold' : 'text-faint',
+              (!playing || !sourceActive) && 'paused'
+            )}
+          >
             <span style={{ height: 6 }} />
             <span style={{ height: 10 }} />
             <span style={{ height: 5 }} />
@@ -189,7 +209,7 @@ function QueueRow({
       </div>
 
       <div className="min-w-0">
-        <div className={cx('text-[13.5px] truncate', isCurrent ? 'text-gold' : 'text-ink')}>
+        <div className={cx('text-[13.5px] truncate', isCurrent && sourceActive ? 'text-gold' : 'text-ink')}>
           {md?.title ?? md?.name ?? '—'}
         </div>
         <div className="text-[12px] text-dim truncate">
