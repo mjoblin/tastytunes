@@ -82,11 +82,13 @@ export function MiniPlayer(): React.JSX.Element {
           {/* title row + window controls (revealed while the cursor is over the window) */}
           <div className="flex items-start gap-2">
             <div className="flex-1 min-w-0">
-              <div className="text-[12.5px] text-ink truncate leading-tight">
-                {(active && meta.title) || 'Nothing playing'}
+              {/* min-heights + nbsp keep both lines occupying space during the
+                  brief metadata gap on track changes, so the layout never shifts */}
+              <div className="text-[12.5px] text-ink truncate leading-tight min-h-[15px]">
+                {active ? (meta.title ?? ' ') : 'Nothing playing'}
               </div>
-              <div className="text-[11px] text-dim truncate leading-tight mt-0.5">
-                {(active && meta.subtitle) || (connected ? '' : 'not connected')}
+              <div className="text-[11px] text-dim truncate leading-tight mt-0.5 min-h-[13px]">
+                {(active && meta.subtitle) || (connected ? ' ' : 'not connected')}
               </div>
             </div>
             <div
