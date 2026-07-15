@@ -68,7 +68,7 @@ export function SettingsScreen(): React.JSX.Element {
         <button
           onClick={() => setInfoOpen(true)}
           className="no-drag flex items-center gap-2 px-3.5 py-2 rounded-lg bg-gold text-bg text-[12.5px] font-medium
-                     shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.3)] hover:brightness-110 hover:scale-[1.03] transition-all"
+                     shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.3)] hover:brightness-110 motion-safe:hover:scale-[1.03] transition-all"
         >
           <Heart size={15} strokeWidth={2} />
           Info &amp; Support
@@ -248,7 +248,7 @@ export function SettingsScreen(): React.JSX.Element {
               <button
                 onClick={() => void tt.clearRecents()}
                 disabled={recentsCount === 0}
-                className="shrink-0 text-[12.5px] px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-alert hover:ring-edge2 hover:bg-raised/70 active:scale-90 transition-all disabled:opacity-40 disabled:hover:text-dim disabled:hover:ring-edge disabled:hover:bg-panel/70"
+                className="shrink-0 text-[12.5px] px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-alert hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all disabled:opacity-40 disabled:hover:text-dim disabled:hover:ring-edge disabled:hover:bg-panel/70"
               >
                 {recentsCount > 0 ? `Clear history (${recentsCount})` : 'History empty'}
               </button>
@@ -260,7 +260,7 @@ export function SettingsScreen(): React.JSX.Element {
             >
               <button
                 onClick={() => setShortcutsOpen(true)}
-                className="shrink-0 text-[12.5px] px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 active:scale-90 transition-all"
+                className="shrink-0 text-[12.5px] px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
               >
                 View shortcuts
               </button>

@@ -30,6 +30,7 @@ export function scrollToWithContext(el: HTMLElement | null, gapPx = 8, context =
   const contextOffset = fits ? context * eRect.height + gapPx : 0
   container.scrollTo({
     top: container.scrollTop + (eRect.top - cRect.top) - contextOffset,
-    behavior: 'smooth'
+    // jump instantly when the OS asks for reduced motion
+    behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
   })
 }

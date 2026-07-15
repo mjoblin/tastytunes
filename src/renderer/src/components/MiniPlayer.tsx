@@ -132,7 +132,7 @@ export function MiniPlayer(): React.JSX.Element {
               className={cx(
                 'no-drag tip-top h-8 w-8 rounded-full flex items-center justify-center transition-all shrink-0',
                 active && (canToggle || busy)
-                  ? 'bg-gold text-bg hover:scale-105'
+                  ? 'bg-gold text-bg motion-safe:hover:scale-105'
                   : 'bg-veil2 text-faint'
               )}
             >

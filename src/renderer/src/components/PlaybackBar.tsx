@@ -112,7 +112,7 @@ export function PlaybackBar(): React.JSX.Element {
             className={cx(
               'tip-top mx-1.5 h-11 w-11 rounded-full flex items-center justify-center transition-all',
               active && (canToggle || busy)
-                ? 'bg-gold text-bg hover:scale-105 shadow-[0_0_20px_rgb(var(--gold-rgb)_/_0.35)]'
+                ? 'bg-gold text-bg motion-safe:hover:scale-105 shadow-[0_0_20px_rgb(var(--gold-rgb)_/_0.35)]'
                 : 'bg-veil2 text-faint'
             )}
           >
@@ -197,9 +197,9 @@ export function PlaybackBar(): React.JSX.Element {
           className={cx(
             'tip-top p-2 rounded-full flex items-center justify-center transition-all',
             powered
-              ? 'bg-gold text-bg shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.35)] hover:scale-110 hover:shadow-[0_0_20px_rgb(var(--gold-rgb)_/_0.5)]'
+              ? 'bg-gold text-bg shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.35)] motion-safe:hover:scale-110 hover:shadow-[0_0_20px_rgb(var(--gold-rgb)_/_0.5)]'
               : connected
-                ? 'bg-veil2 text-faint hover:bg-golddim hover:text-gold hover:scale-110'
+                ? 'bg-veil2 text-faint hover:bg-golddim hover:text-gold motion-safe:hover:scale-110'
                 : 'bg-veil2 text-faint/40'
           )}
         >

@@ -143,7 +143,7 @@ export function PresetsScreen(): React.JSX.Element {
             data-tip={cards ? 'View as rows' : 'View as cards'}
             aria-label={cards ? 'View as rows' : 'View as cards'}
             onClick={() => void setLayout(cards ? 'rows' : 'cards')}
-            className="no-drag tip-bottom p-2 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 active:scale-90 transition-all"
+            className="no-drag tip-bottom p-2 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
           >
             {cards ? <Rows3 size={16} /> : <LayoutGrid size={16} />}
           </button>
@@ -151,7 +151,7 @@ export function PresetsScreen(): React.JSX.Element {
             data-tip="Scroll to the playing preset"
             aria-label="Scroll to the playing preset"
             onClick={() => scrollToPlaying(true)}
-            className="no-drag tip-bottom p-2 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 active:scale-90 transition-all"
+            className="no-drag tip-bottom p-2 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
           >
             <Crosshair size={16} />
           </button>
@@ -336,7 +336,7 @@ function PresetCard({ preset, playing }: { preset: PresetItem; playing: boolean 
         // it stays legible on gold/orange album covers.
         // Hover: a slight grow + lift (scale is layout-free, so edge-clipped
         // cards just clip at the scrollport; z-10 keeps the grown card on top).
-        'group text-left rounded-2xl p-2 pb-2.5 transition-all duration-200 ease-out hover:z-10 hover:scale-[1.04]',
+        'group text-left rounded-2xl p-2 pb-2.5 transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]',
         isDragging && 'z-10 opacity-90',
         playing ? 'bg-goldtile/70 tile-playing' : 'bg-raised/70 ring-1 ring-edge card-hover-glow'
       )}
@@ -358,7 +358,7 @@ function PresetCard({ preset, playing }: { preset: PresetItem; playing: boolean 
           <div className="absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
             <span
               className="h-11 w-11 rounded-full bg-amber text-bg flex items-center justify-center
-                         transition-all duration-150 hover:scale-110
+                         transition-all duration-150 motion-safe:hover:scale-110
                          hover:shadow-[0_0_24px_rgb(var(--amber-rgb)_/_0.6)]"
             >
               <Play size={18} fill="currentColor" strokeWidth={0} className="translate-x-[1px]" />

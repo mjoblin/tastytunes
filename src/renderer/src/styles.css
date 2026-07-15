@@ -89,6 +89,7 @@ body {
   outline: none;
 }
 
+
 img {
   -webkit-user-drag: none;
 }
@@ -372,4 +373,16 @@ img {
 .cursor-hidden,
 .cursor-hidden * {
   cursor: none !important;
+}
+
+/* Respect the OS "reduce motion" preference: still decorative movement. Scale
+   interactions are gated per-element (motion-safe: variants); this freezes the
+   looping animations. Spinners stay — a frozen spinner reads as a hang — and
+   color/opacity fades stay, since they don't move anything. Kept last in the
+   file so source order can't let later rules re-animate. */
+@media (prefers-reduced-motion: reduce) {
+  .eqbars span,
+  .led-busy {
+    animation: none;
+  }
 }
