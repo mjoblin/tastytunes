@@ -78,6 +78,27 @@ export interface RecentTrack {
   session: string | null
 }
 
+/**
+ * Does a recently-played entry describe what /zone/play_state currently
+ * reports? Mirrors the recording normalization in main/recents.ts (title-keyed;
+ * a radio "song" that's absent or just echoes the station name is null), so the
+ * Recently Played screen can mark its head entry live without drifting from how
+ * entries were written.
+ */
+export function recentMatchesPlayState(e: RecentTrack, ps: ZonePlayState | null): boolean {
+  const md = ps?.metadata
+  if (!md) return false
+  const eq = (a: string | null | undefined, b: string | null | undefined): boolean =>
+    (a ?? '').trim().toLowerCase() === (b ?? '').trim().toLowerCase()
+  const isRadio = /radio/i.test(md.class ?? '') || md.station != null
+  if (e.isRadio !== isRadio) return false
+  if (isRadio) {
+    const title = md.title != null && md.station != null && eq(md.title, md.station) ? null : (md.title ?? null)
+    return eq(e.station, md.station) && eq(e.title, title)
+  }
+  return e.title != null && eq(e.title, md.title)
+}
+
 // -------------------------------------------------------- main -> renderer push
 
 export type PushMessage =

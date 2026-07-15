@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ChevronRight, Disc3, History, Music, Radio, Trash2 } from 'lucide-react'
-import type { RecentTrack } from '@shared/ipc'
+import { recentMatchesPlayState, type RecentTrack } from '@shared/ipc'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
@@ -39,7 +39,15 @@ const songText = (e: RecentTrack): string | null =>
 export function RecentlyPlayedScreen(): React.JSX.Element {
   const recents = useStore((s) => s.recents)
   const grouped = useStore((s) => s.settings.recentsGrouped)
+  const playState = useStore((s) => s.playState)
   const setSettings = useStore((s) => s.setSettings)
+
+  // The head entry is "live" while it's what's actually sounding right now.
+  const state = playState?.state
+  const headIsLive =
+    recents.length > 0 &&
+    (state === 'play' || state === 'buffering') &&
+    recentMatchesPlayState(recents[0], playState)
 
   const scrollRef = useScrollMemory('recently-played')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -123,13 +131,19 @@ export function RecentlyPlayedScreen(): React.JSX.Element {
                         key={block.id}
                         block={block}
                         now={now}
+                        live={headIsLive && block === blocks[0]}
                         expanded={expanded.has(block.id)}
                         onToggle={() => toggleExpand(block.id)}
                       />
                     ) : (
                       // Discrete track, or "All songs" mode: one row per entry.
                       block.entries.map((entry, i) => (
-                        <TrackRow key={`${block.id}-${i}`} entry={entry} now={now} />
+                        <TrackRow
+                          key={`${block.id}-${i}`}
+                          entry={entry}
+                          now={now}
+                          live={headIsLive && block === blocks[0] && i === 0}
+                        />
                       ))
                     )
                   )}
@@ -159,7 +173,26 @@ function Thumb({ entry }: { entry: RecentTrack }): React.JSX.Element {
   )
 }
 
-function TrackRow({ entry, now }: { entry: RecentTrack; now: number }): React.JSX.Element {
+/** Small animated bars marking the live head entry (matches the queue's). */
+function LiveBars(): React.JSX.Element {
+  return (
+    <span className="eqbars text-gold shrink-0">
+      <span style={{ height: 6 }} />
+      <span style={{ height: 10 }} />
+      <span style={{ height: 5 }} />
+    </span>
+  )
+}
+
+function TrackRow({
+  entry,
+  now,
+  live
+}: {
+  entry: RecentTrack
+  now: number
+  live?: boolean
+}): React.JSX.Element {
   const title = entry.isRadio ? (entry.station ?? entry.title) : entry.title
   // Queue-row anatomy: title up top, artist — album below (songText would
   // repeat the title in the subtitle).
@@ -169,14 +202,20 @@ function TrackRow({ entry, now }: { entry: RecentTrack; now: number }): React.JS
   return (
     <div
       data-recent-row="track"
-      className="flex items-center gap-4 rounded-xl px-3 py-2.5 ring-1 ring-edge bg-panel/60"
+      className={cx(
+        'flex items-center gap-4 rounded-xl px-3 py-2.5',
+        live ? 'row-playing bg-gold/10' : 'ring-1 ring-edge bg-panel/60'
+      )}
     >
       <Thumb entry={entry} />
       <div className="min-w-0 flex-1">
-        <div className="text-[13.5px] text-ink truncate">{title ?? '—'}</div>
+        <div className={cx('flex items-center gap-2 text-[13.5px] truncate', live ? 'text-gold' : 'text-ink')}>
+          {live && <LiveBars />}
+          <span className="truncate">{title ?? '—'}</span>
+        </div>
         {subtitle && <div className="text-[12px] text-dim truncate">{subtitle}</div>}
       </div>
-      <RightMeta at={entry.at} now={now} source={entry.source} />
+      <RightMeta at={entry.at} now={now} source={entry.source} live={live} />
     </div>
   )
 }
@@ -184,11 +223,13 @@ function TrackRow({ entry, now }: { entry: RecentTrack; now: number }): React.JS
 function SessionRow({
   block,
   now,
+  live,
   expanded,
   onToggle
 }: {
   block: Block
   now: number
+  live?: boolean
   expanded: boolean
   onToggle(): void
 }): React.JSX.Element {
@@ -209,8 +250,10 @@ function SessionRow({
         data-recent-row="session"
         onClick={expandable ? onToggle : undefined}
         className={cx(
-          'flex items-center gap-4 rounded-xl px-3 py-2.5 ring-1 ring-edge bg-panel/60',
-          expandable && 'cursor-pointer hover:bg-raised/70 hover:ring-edge2 transition-colors'
+          'flex items-center gap-4 rounded-xl px-3 py-2.5',
+          live ? 'row-playing bg-gold/10' : 'ring-1 ring-edge bg-panel/60',
+          expandable && 'cursor-pointer transition-colors',
+          expandable && !live && 'hover:bg-raised/70 hover:ring-edge2'
         )}
       >
         <div className="h-11 w-11 shrink-0 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
@@ -221,11 +264,14 @@ function SessionRow({
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-[13.5px] text-ink truncate">{primary ?? '—'}</div>
+          <div className={cx('flex items-center gap-2 text-[13.5px] truncate', live ? 'text-gold' : 'text-ink')}>
+            {live && <LiveBars />}
+            <span className="truncate">{primary ?? '—'}</span>
+          </div>
           {subtitle && <div className="text-[12px] text-dim truncate">{subtitle}</div>}
         </div>
         {/* Suppress the right-hand source when it just repeats the primary line (streams). */}
-        <RightMeta at={head.at} now={now} source={head.source === primary ? null : head.source} />
+        <RightMeta at={head.at} now={now} source={head.source === primary ? null : head.source} live={live} />
         {expandable && (
           <button
             onClick={(ev) => {
@@ -267,15 +313,19 @@ function SessionRow({
 function RightMeta({
   at,
   now,
-  source
+  source,
+  live
 }: {
   at: number
   now: number
   source: string | null
+  live?: boolean
 }): React.JSX.Element {
   return (
     <div className="shrink-0 text-right">
-      <div className="text-[11.5px] text-faint tabular-nums">{fmtRelative(at, now)}</div>
+      <div className={cx('text-[11.5px] tabular-nums', live ? 'text-gold/80' : 'text-faint')}>
+        {live ? 'now' : fmtRelative(at, now)}
+      </div>
       {source && <div className="text-[10.5px] mt-0.5 truncate max-w-[9rem] text-faint/70">{source}</div>}
     </div>
   )
