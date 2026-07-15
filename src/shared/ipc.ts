@@ -394,6 +394,8 @@ export interface AppSettings {
   recentsGrouped: boolean
   /** MCP server for local AI agents. */
   mcp: McpSettings
+  /** Last-visited Settings tab (id from the Settings screen's tab rail). */
+  settingsTab: string
   /** Remembered mini-player window position. */
   miniBounds: { x: number; y: number } | null
 }
@@ -419,6 +421,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   sleepAction: 'standby',
   recentsGrouped: true,
   mcp: { enabled: false, bind: 'localhost', port: 8555, disabledClusters: [], disabledTools: [] },
+  settingsTab: 'appearance',
   miniBounds: null
 }
 

@@ -1,5 +1,16 @@
 import { useState } from 'react'
-import { Check, Copy, Heart, Moon, Sun } from 'lucide-react'
+import {
+  Bot,
+  Check,
+  CircleDot,
+  Copy,
+  Heart,
+  LayoutGrid,
+  Moon,
+  Palette,
+  SlidersHorizontal,
+  Sun
+} from 'lucide-react'
 import {
   MCP_CLUSTERS,
   type AlignH,
@@ -17,6 +28,15 @@ import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { SIGNAL_COLORS, cx } from '@/lib/format'
 import { Slider } from '@/components/Slider'
 
+const TABS = [
+  { id: 'appearance', label: 'Appearance', icon: Palette },
+  { id: 'layout', label: 'Layout', icon: LayoutGrid },
+  { id: 'behavior', label: 'Behavior', icon: SlidersHorizontal },
+  { id: 'agents', label: 'AI agents', icon: Bot },
+  { id: 'lamps', label: 'Status lamps', icon: CircleDot }
+] as const
+type SettingsTab = (typeof TABS)[number]['id']
+
 export function SettingsScreen(): React.JSX.Element {
   const settings = useStore((s) => s.settings)
   const setSettings = useStore((s) => s.setSettings)
@@ -28,6 +48,16 @@ export function SettingsScreen(): React.JSX.Element {
     const next = await tt.setSettings(patch)
     setSettings(next)
   }
+
+  // Last-visited tab persists; switch locally first so the rail feels instant.
+  const [tab, setTab] = useState<SettingsTab>(() =>
+    TABS.some((t) => t.id === settings.settingsTab) ? (settings.settingsTab as SettingsTab) : 'appearance'
+  )
+  const selectTab = (id: SettingsTab): void => {
+    setTab(id)
+    void save({ settingsTab: id })
+  }
+  const panelRef = useScrollMemory(`settings:${tab}`)
 
   return (
     <div className="h-full flex flex-col">
@@ -44,12 +74,29 @@ export function SettingsScreen(): React.JSX.Element {
         </button>
       </header>
 
-      {/* pinned header; only the content scrolls (house pattern) */}
-      <div ref={useScrollMemory('settings')} className="flex-1 overflow-y-auto px-8 pb-10 pt-1">
-        <div className="max-w-2xl space-y-8">
-        {/* ------------------------------------------------------------ appearance */}
+      {/* pinned header + tab rail; only the per-tab panel scrolls */}
+      <div className="flex-1 min-h-0 flex gap-8 px-8 pb-8 pt-1">
+        <nav className="w-44 shrink-0 space-y-0.5">
+          {TABS.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => selectTab(id)}
+              className={cx(
+                'w-full flex items-center gap-3 rounded-lg h-9 px-3 text-[13.5px] transition-colors',
+                tab === id ? 'bg-amberdim text-amber' : 'text-dim hover:text-ink hover:bg-veil'
+              )}
+            >
+              <Icon size={15} strokeWidth={1.8} className="shrink-0" />
+              <span className="flex-1 text-left">{label}</span>
+            </button>
+          ))}
+        </nav>
+
+        {/* keyed by tab so each tab keeps its own scroll position */}
+        <div key={tab} ref={panelRef} className="flex-1 min-w-0 overflow-y-auto">
+          <div className="max-w-2xl space-y-8">
+        {tab === 'appearance' && (
         <section className="space-y-3">
-          <div className="microlabel">appearance</div>
           <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
             <SettingRow
               label="Theme"
@@ -138,8 +185,9 @@ export function SettingsScreen(): React.JSX.Element {
             />
           </div>
         </section>
+        )}
 
-        {/* ---------------------------------------------------------- presets grid */}
+        {tab === 'layout' && (
         <section className="space-y-3">
           <div className="microlabel">presets grid</div>
           <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
@@ -171,10 +219,10 @@ export function SettingsScreen(): React.JSX.Element {
             />
           </div>
         </section>
+        )}
 
-        {/* -------------------------------------------------------------- behavior */}
+        {tab === 'behavior' && (
         <section className="space-y-3">
-          <div className="microlabel">behavior</div>
           <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
             <Toggle
               label="Keyboard media keys"
@@ -235,13 +283,12 @@ export function SettingsScreen(): React.JSX.Element {
             </SettingRow>
           </div>
         </section>
+        )}
 
-        {/* ---------------------------------------------------------- ai agents (mcp) */}
-        <McpSection settings={settings} save={save} />
+        {tab === 'agents' && <McpSection settings={settings} save={save} />}
 
-        {/* ------------------------------------------------------------ status lamps */}
+        {tab === 'lamps' && (
         <section className="space-y-3">
-          <div className="microlabel">status lamps</div>
           <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
             <div>
               <div className="text-[13.5px] mb-0.5">Connection</div>
@@ -269,10 +316,12 @@ export function SettingsScreen(): React.JSX.Element {
             </div>
           </div>
         </section>
+        )}
 
         <div className="microlabel">
           settings are saved automatically and persist between sessions
         </div>
+          </div>
         </div>
       </div>
     </div>
@@ -324,7 +373,6 @@ function McpSection({
 
   return (
     <section className="space-y-3">
-      <div className="microlabel">ai agents (mcp)</div>
       <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
         <Toggle
           label="MCP server"
