@@ -62,6 +62,14 @@ body {
   @apply bg-bg text-ink font-sans antialiased overflow-hidden select-none;
 }
 
+/* Desktop-app feel: keyboard input is the shortcut system, not tab-navigation,
+   so suppress the browser's focus rings app-wide. Text inputs keep their own
+   styled focus (Tailwind ring classes are box-shadows, unaffected by this). */
+:focus,
+:focus-visible {
+  outline: none;
+}
+
 img {
   -webkit-user-drag: none;
 }
