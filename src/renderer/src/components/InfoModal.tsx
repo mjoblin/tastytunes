@@ -69,7 +69,7 @@ export function InfoModal(): React.JSX.Element {
 
           <p className="text-[11.5px] text-faint leading-relaxed px-1">
             Please don't support the app unless you can afford it, but if you enjoy the app and
-            are comfortable contributing, then your support will be greatly appreciated{' '}
+            are comfortable contributing, then your support is greatly appreciated{' '}
             <Heart size={11} className="inline-block text-gold -mt-0.5" fill="currentColor" strokeWidth={0} />
           </p>
         </div>
