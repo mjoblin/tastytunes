@@ -10,6 +10,11 @@ import { fmtDayBucket, fmtRelative } from '@/lib/format'
 export function RecentlyPlayedScreen(): React.JSX.Element {
   const recents = useStore((s) => s.recents)
 
+  // Must be called unconditionally (Rules of Hooks): clearing history flips the
+  // list between empty and non-empty, and a hook nested in that branch would
+  // change the render's hook count and crash the whole tree.
+  const scrollRef = useScrollMemory('recently-played')
+
   // Keep the "x min ago" labels and day buckets fresh without a reload.
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
@@ -54,7 +59,7 @@ export function RecentlyPlayedScreen(): React.JSX.Element {
           </div>
         </div>
       ) : (
-        <div ref={useScrollMemory('recently-played')} className="flex-1 overflow-y-auto px-8 pb-8 pt-1">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto px-8 pb-8 pt-1">
           <div className="max-w-2xl space-y-6">
             {groups.map((group) => (
               <div key={group.label}>
