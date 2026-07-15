@@ -161,7 +161,11 @@ function Thumb({ entry }: { entry: RecentTrack }): React.JSX.Element {
 
 function TrackRow({ entry, now }: { entry: RecentTrack; now: number }): React.JSX.Element {
   const title = entry.isRadio ? (entry.station ?? entry.title) : entry.title
-  const subtitle = entry.isRadio ? entry.title : songText(entry)
+  // Queue-row anatomy: title up top, artist — album below (songText would
+  // repeat the title in the subtitle).
+  const subtitle = entry.isRadio
+    ? entry.title
+    : [entry.artist, entry.album].filter(Boolean).join(' — ') || null
   return (
     <div
       data-recent-row="track"

@@ -432,6 +432,9 @@ export class DeviceManager {
    * merges in late-arriving art, so this can fire on every play_state push.
    */
   private recordRecentlyPlayed(ps: ZonePlayState): void {
+    // Only log active playback: on connect (or wake) the device re-announces a
+    // paused/stopped track's metadata, which must not become a phantom row.
+    if (ps.state !== 'play' && ps.state !== 'buffering') return
     const md = ps.metadata
     if (!md) return
     const isRadio = /radio/i.test(md.class ?? '') || md.station != null
