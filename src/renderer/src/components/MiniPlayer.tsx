@@ -15,6 +15,7 @@ import { tt } from '@/api'
 import { useStore } from '@/store'
 import { usePlayhead } from '@/hooks/usePlayhead'
 import { useArtAccent } from '@/hooks/useArtAccent'
+import { useMotionPreference } from '@/hooks/useMotionPreference'
 import { useWheelVolume } from '@/components/VolumeCluster'
 import { controlSet, cx, deriveNowPlaying, fmtTime } from '@/lib/format'
 
@@ -46,6 +47,7 @@ export function MiniPlayer(): React.JSX.Element {
   const meta = deriveNowPlaying(playState, nowPlaying)
   const controls = controlSet(nowPlaying)
   useArtAccent(settings.accentFollowsArt && active ? meta.artUrl : null, settings.theme)
+  useMotionPreference(settings.motion)
 
   const state = playState?.state
   const playing = state === 'play'

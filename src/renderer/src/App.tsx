@@ -4,6 +4,7 @@ import { tt } from '@/api'
 import { useStore } from '@/store'
 import { useShortcuts } from '@/hooks/useShortcuts'
 import { useArtAccent } from '@/hooks/useArtAccent'
+import { useMotionPreference } from '@/hooks/useMotionPreference'
 import { deriveNowPlaying } from '@/lib/format'
 import { Nav } from '@/components/Nav'
 import { PlaybackBar } from '@/components/PlaybackBar'
@@ -44,6 +45,7 @@ export default function App(): React.JSX.Element {
   const meta = deriveNowPlaying(playState, nowPlaying)
   const artActive = connected && !inStandby ? meta.artUrl : null
   useArtAccent(settings.accentFollowsArt ? artActive : null, settings.theme)
+  useMotionPreference(settings.motion)
 
   useEffect(() => {
     document.documentElement.classList.toggle('light', settings.theme === 'light')

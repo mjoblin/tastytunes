@@ -1,5 +1,10 @@
 @import 'tailwindcss';
 
+/* Motion is app-controlled: settings.motion resolves (system | on | off) into
+   a .reduce-motion class on :root (useMotionPreference), so motion-safe:
+   utilities follow the app's choice rather than the media query directly. */
+@custom-variant motion-safe (&:where(:root:not(.reduce-motion), :root:not(.reduce-motion) *));
+
 /* Runtime-tintable accent: useArtAccent() overrides this per album.
    --gold-rgb is the STATIC state/brand gold (per theme, never art-tinted). */
 :root {
@@ -375,14 +380,12 @@ img {
   cursor: none !important;
 }
 
-/* Respect the OS "reduce motion" preference: still decorative movement. Scale
-   interactions are gated per-element (motion-safe: variants); this freezes the
-   looping animations. Spinners stay — a frozen spinner reads as a hang — and
-   color/opacity fades stay, since they don't move anything. Kept last in the
-   file so source order can't let later rules re-animate. */
-@media (prefers-reduced-motion: reduce) {
-  .eqbars span,
-  .led-busy {
-    animation: none;
-  }
+/* Reduced motion (settings.motion resolved against the OS preference): still
+   decorative movement. Scale interactions are gated per-element (motion-safe:
+   variants); this freezes the looping animations. Spinners stay — a frozen
+   spinner reads as a hang — and color/opacity fades stay, since they don't
+   move anything. Kept last in the file so source order can't re-animate. */
+:root.reduce-motion .eqbars span,
+:root.reduce-motion .led-busy {
+  animation: none;
 }

@@ -20,6 +20,7 @@ import {
   type AppSettings,
   type McpBind,
   type McpSettings,
+  type MotionMode,
   type Theme
 } from '@shared/ipc'
 import { tt } from '@/api'
@@ -227,6 +228,21 @@ export function SettingsScreen(): React.JSX.Element {
         {tab === 'behavior' && (
         <section className="space-y-3">
           <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
+            <SettingRow
+              label="Animations"
+              hint="Motion effects — hover growth, the equalizer bars, smooth scrolling. System follows your OS Reduce Motion setting."
+            >
+              <Segmented<MotionMode>
+                value={settings.motion}
+                onChange={(motion) => void save({ motion })}
+                options={[
+                  { value: 'on', label: 'On' },
+                  { value: 'off', label: 'Off' },
+                  { value: 'system', label: 'System' }
+                ]}
+              />
+            </SettingRow>
+
             <Toggle
               label="Keyboard media keys"
               hint="Play/pause, next, and previous keys control the streamer even when TastyTunes is in the background."

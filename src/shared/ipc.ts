@@ -380,6 +380,8 @@ export function sleepTrackKey(ps: ZonePlayState | null): string | null {
 export type Theme = 'dark' | 'light'
 /** How a collection screen lays out its items. */
 export type ScreenLayout = 'rows' | 'cards'
+/** Motion effects: follow the OS Reduce Motion setting, or force on/off. */
+export type MotionMode = 'system' | 'on' | 'off'
 export type AmbientArtMode = 'off' | 'now-playing' | 'all'
 export type AmbientCoverage = 'main' | 'window'
 export type AlignH = 'left' | 'center' | 'right'
@@ -418,6 +420,8 @@ export interface AppSettings {
   sleepAction: SleepAction
   /** Recently Played: collapse continuous sessions (radio/AirPlay/…) to one row, vs a row per song. */
   recentsGrouped: boolean
+  /** Motion effects (hover growth, eqbars, smooth scrolling). */
+  motion: MotionMode
   /** MCP server for local AI agents. */
   mcp: McpSettings
   /** Last-visited Settings tab (id from the Settings screen's tab rail). */
@@ -448,6 +452,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   presetsLayout: 'cards',
   sleepAction: 'standby',
   recentsGrouped: true,
+  motion: 'system',
   mcp: { enabled: false, bind: 'localhost', port: 8555, disabledClusters: [], disabledTools: [] },
   settingsTab: 'appearance',
   miniBounds: null
