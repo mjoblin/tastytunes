@@ -146,8 +146,9 @@ export function QueueScreen(): React.JSX.Element {
         </div>
       </header>
 
-      {/* pt-1 so the current item's ring isn't clipped when it's first */}
-      <div ref={scrollRef} className={cx('flex-1 overflow-y-auto pt-1', cards ? 'px-8 pb-8' : 'px-6 pb-6')}>
+      {/* rows: pt-1 keeps the current ring unclipped; cards: pt-2 gives the
+          hover grow + glow ring headroom on the top row */}
+      <div ref={scrollRef} className={cx('flex-1 overflow-y-auto', cards ? 'px-8 pb-8 pt-2' : 'px-6 pb-6 pt-1')}>
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
           <SortableContext
             items={items.map((i) => i.id as number)}
@@ -324,8 +325,8 @@ function QueueCard({ item, isCurrent, playing, sourceActive, currentRef }: Queue
         isCurrent && sourceActive
           ? 'bg-goldtile/70 tile-playing'
           : isCurrent
-            ? 'bg-veil/60 ring-1 ring-edge2 hover:shadow-[0_10px_28px_-8px_rgb(0_0_0_/_0.4)]'
-            : 'bg-raised/70 ring-1 ring-edge hover:ring-edge2 hover:shadow-[0_10px_28px_-8px_rgb(0_0_0_/_0.4)]'
+            ? 'bg-veil/60 ring-1 ring-edge2 card-hover-glow'
+            : 'bg-raised/70 ring-1 ring-edge card-hover-glow'
       )}
     >
       <button

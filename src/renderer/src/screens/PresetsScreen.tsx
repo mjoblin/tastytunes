@@ -171,8 +171,9 @@ export function PresetsScreen(): React.JSX.Element {
         </div>
       </header>
 
-      {/* pt-1 so the playing item's ring isn't clipped when it's first */}
-      <div ref={setContainerRef} className={cx('flex-1 overflow-y-auto pt-1', cards ? 'px-8 pb-8' : 'px-6 pb-6')}>
+      {/* rows: pt-1 keeps the playing ring unclipped; cards: pt-2 gives the
+          hover grow + glow ring headroom on the top row */}
+      <div ref={setContainerRef} className={cx('flex-1 overflow-y-auto', cards ? 'px-8 pb-8 pt-2' : 'px-6 pb-6 pt-1')}>
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
           <SortableContext
             items={items.map((p) => p.id as number)}
@@ -337,9 +338,7 @@ function PresetCard({ preset, playing }: { preset: PresetItem; playing: boolean 
         // cards just clip at the scrollport; z-10 keeps the grown card on top).
         'group text-left rounded-2xl p-2 pb-2.5 transition-all hover:z-10 hover:scale-[1.04]',
         isDragging && 'z-10 opacity-90',
-        playing
-          ? 'bg-goldtile/70 tile-playing'
-          : 'bg-raised/70 ring-1 ring-edge hover:ring-edge2 hover:shadow-[0_10px_28px_-8px_rgb(0_0_0_/_0.4)]'
+        playing ? 'bg-goldtile/70 tile-playing' : 'bg-raised/70 ring-1 ring-edge card-hover-glow'
       )}
     >
       <button
