@@ -4,8 +4,13 @@ import { tt } from '@/api'
 import { useStore } from '@/store'
 import { cx } from '@/lib/format'
 
-/** Roon-zone-style device picker, right in the playback bar. */
-export function DeviceSwitcher(): React.JSX.Element {
+/**
+ * Roon-zone-style device picker, right in the playback bar — rendered only
+ * when there's more than one known streamer. Single-device homes never need
+ * it (the Device screen covers list/connect/discover), and the bar's right
+ * cluster is contested space.
+ */
+export function DeviceSwitcher(): React.JSX.Element | null {
   const connection = useStore((s) => s.connection)
   const devices = useStore((s) => s.devices)
   const discovering = useStore((s) => s.discovering)
@@ -31,6 +36,8 @@ export function DeviceSwitcher(): React.JSX.Element {
       descriptionUrl: ''
     })
   }
+
+  if (listed.length <= 1) return null
 
   return (
     <div className="relative">
