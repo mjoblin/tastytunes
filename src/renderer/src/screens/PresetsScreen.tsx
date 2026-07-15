@@ -335,7 +335,7 @@ function PresetCard({ preset, playing }: { preset: PresetItem; playing: boolean 
         // it stays legible on gold/orange album covers.
         // Hover: a slight grow + lift (scale is layout-free, so edge-clipped
         // cards just clip at the scrollport; z-10 keeps the grown card on top).
-        'group text-left rounded-2xl p-2 pb-2.5 transition-all hover:z-10 hover:scale-[1.02]',
+        'group text-left rounded-2xl p-2 pb-2.5 transition-all hover:z-10 hover:scale-[1.04]',
         isDragging && 'z-10 opacity-90',
         playing
           ? 'bg-goldtile/70 tile-playing'
@@ -356,7 +356,7 @@ function PresetCard({ preset, playing }: { preset: PresetItem; playing: boolean 
           )}
 
           {/* hover overlay — the whole card recalls the preset; the chip is the affordance */}
-          <div className="absolute inset-0 rounded-lg bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+          <div className="absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
             <span
               className="h-11 w-11 rounded-full bg-amber text-bg flex items-center justify-center
                          transition-all duration-150 hover:scale-110
