@@ -4,6 +4,7 @@ import type { RecentTrack } from '@shared/ipc'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
+import { Segmented } from '@/components/Segmented'
 import { cx, fmtDayBucket, fmtRelative } from '@/lib/format'
 
 interface Block {
@@ -78,23 +79,14 @@ export function RecentlyPlayedScreen(): React.JSX.Element {
         <div className="flex-1" />
         {recents.length > 0 && (
           <>
-            <div className="no-drag flex rounded-lg ring-1 ring-edge bg-bg/70 p-0.5">
-              {[
-                { on: true, label: 'Grouped' },
-                { on: false, label: 'All songs' }
-              ].map((opt) => (
-                <button
-                  key={opt.label}
-                  onClick={() => toggleGrouped(opt.on)}
-                  className={cx(
-                    'px-3 py-1.5 rounded-md text-[12px] transition-colors',
-                    grouped === opt.on ? 'bg-golddim text-gold' : 'text-dim hover:text-ink'
-                  )}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
+            <Segmented<boolean>
+              value={grouped}
+              onChange={toggleGrouped}
+              options={[
+                { value: true, label: 'Grouped' },
+                { value: false, label: 'All songs' }
+              ]}
+            />
             <button
               onClick={() => void tt.clearRecents()}
               data-tip="Clear history"
