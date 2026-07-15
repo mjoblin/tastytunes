@@ -2,6 +2,7 @@ import { app, BrowserWindow, globalShortcut, ipcMain, powerMonitor, screen, shel
 import { join } from 'node:path'
 import { IPC, type AppSettings, type SleepTimer, type StreamerCommand } from '@shared/ipc'
 import { DeviceManager } from './deviceManager'
+import { McpBridge } from './mcpServer'
 import { getSettings, updateSettings } from './persist'
 import { getRecents } from './recents'
 
@@ -16,6 +17,7 @@ app.setPath(
 )
 
 const deviceManager = new DeviceManager()
+const mcpBridge = new McpBridge(deviceManager)
 let mainWindow: BrowserWindow | null = null
 let miniWindow: BrowserWindow | null = null
 
@@ -142,6 +144,7 @@ function registerIpc(): void {
   ipcMain.handle(IPC.setSettings, (_e, patch: Partial<AppSettings>) => {
     const next = updateSettings(patch)
     syncMediaKeys()
+    mcpBridge.sync(next)
     return next
   })
   ipcMain.handle(IPC.openExternal, (_e, url: string) => {
@@ -206,6 +209,7 @@ if (!gotLock) {
     registerIpc()
     createWindow()
     syncMediaKeys()
+    mcpBridge.sync(getSettings())
     void deviceManager.startup()
 
     powerMonitor.on('resume', () => {
@@ -225,6 +229,7 @@ if (!gotLock) {
 
   app.on('will-quit', () => {
     globalShortcut.unregisterAll()
+    mcpBridge.stop()
     deviceManager.shutdown()
   })
 }

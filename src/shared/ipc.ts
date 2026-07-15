@@ -98,6 +98,7 @@ export type PushMessage =
   /** Cursor is over the mini window (CSS :hover can't fire over drag regions). */
   | { kind: 'miniHover'; hovered: boolean }
   | { kind: 'sleep'; sleep: SleepTimer | null }
+  | { kind: 'mcpStatus'; status: McpStatus }
 
 // ------------------------------------------------------ renderer -> main actions
 
@@ -123,6 +124,201 @@ export type StreamerCommand =
   | { type: 'queueMove'; id: number; from: number; to: number }
   | { type: 'presetDelete'; presetId: number }
   | { type: 'presetMove'; from: number; to: number }
+
+// ------------------------------------------------------------------- MCP server
+
+/** Which interface the MCP server binds to. */
+export type McpBind = 'localhost' | 'lan'
+
+export interface McpSettings {
+  /** Master switch — the server only exists while this is on. */
+  enabled: boolean
+  /** localhost = this computer only; lan = any machine on the network. */
+  bind: McpBind
+  port: number
+  /** Cluster ids switched off (everything is on by default). */
+  disabledClusters: string[]
+  /** Individual tool names switched off. */
+  disabledTools: string[]
+}
+
+export interface McpStatus {
+  running: boolean
+  /** Reachable endpoint while running, e.g. http://192.168.1.20:8555/mcp. */
+  url: string | null
+  error: string | null
+}
+
+export interface McpToolInfo {
+  name: string
+  title: string
+  /** Written for the agent reading tools/list — precise beats promotional. */
+  description: string
+}
+
+export interface McpClusterInfo {
+  id: string
+  title: string
+  /** Written for the human toggling clusters in Settings. */
+  description: string
+  readOnly?: boolean
+  tools: McpToolInfo[]
+}
+
+/**
+ * Everything the MCP server can expose — shared so the Settings screen and the
+ * server agree exactly. Schemas and handlers live in main (mcpServer.ts);
+ * enable/disable state lives in settings.mcp.
+ */
+export const MCP_CLUSTERS: McpClusterInfo[] = [
+  {
+    id: 'status',
+    title: 'Status & lists',
+    description: 'Read-only: what is playing, the queue, presets, sources, devices, history.',
+    readOnly: true,
+    tools: [
+      {
+        name: 'get_status',
+        title: 'Get status',
+        description:
+          'One combined snapshot: connection and device, power state, active source, what is playing (title/artist/album/station, format, position/duration), volume and mute, shuffle/repeat, queue position, and any armed sleep timer. Call this first.'
+      },
+      {
+        name: 'list_queue',
+        title: 'List queue',
+        description:
+          'The play queue: id, position, title, artist, album, and duration per track, plus which id is current.'
+      },
+      {
+        name: 'list_presets',
+        title: 'List presets',
+        description:
+          'The device presets (numbered slots for stations and albums): id, name, kind, and whether one is currently playing.'
+      },
+      {
+        name: 'list_sources',
+        title: 'List sources',
+        description: 'Audio sources (media player, internet radio, USB, Bluetooth, …) and which is active.'
+      },
+      {
+        name: 'list_devices',
+        title: 'List devices',
+        description: 'StreamMagic streamers known on the network and which one is connected.'
+      },
+      {
+        name: 'list_recently_played',
+        title: 'List recently played',
+        description: 'Local history of tracks and stations that have played, newest first.'
+      }
+    ]
+  },
+  {
+    id: 'transport',
+    title: 'Transport',
+    description: 'Play, pause, skip, seek, queue jumps, shuffle and repeat.',
+    tools: [
+      { name: 'play', title: 'Play', description: 'Start or resume playback.' },
+      { name: 'pause', title: 'Pause', description: 'Pause playback.' },
+      { name: 'stop', title: 'Stop', description: 'Stop playback (mainly internet radio).' },
+      { name: 'next_track', title: 'Next track', description: 'Skip to the next track.' },
+      { name: 'previous_track', title: 'Previous track', description: 'Go back to the previous track.' },
+      {
+        name: 'seek',
+        title: 'Seek',
+        description: 'Jump to a position (seconds) in the current track.'
+      },
+      {
+        name: 'play_queue_item',
+        title: 'Play queue item',
+        description: 'Jump to a specific track in the queue by its id (see list_queue).'
+      },
+      { name: 'set_shuffle', title: 'Set shuffle', description: 'Turn shuffle on or off.' },
+      { name: 'set_repeat', title: 'Set repeat', description: 'Turn repeat-all on or off.' }
+    ]
+  },
+  {
+    id: 'volume',
+    title: 'Volume',
+    description: 'Absolute volume, relative nudges, and mute.',
+    tools: [
+      {
+        name: 'set_volume',
+        title: 'Set volume',
+        description:
+          'Set volume to an absolute percent (0–100). Respects the volume limit configured in the app.'
+      },
+      {
+        name: 'change_volume',
+        title: 'Change volume',
+        description: 'Nudge volume up or down by a number of steps (positive or negative).'
+      },
+      { name: 'set_mute', title: 'Set mute', description: 'Mute or unmute.' }
+    ]
+  },
+  {
+    id: 'presets',
+    title: 'Presets',
+    description: 'Recall a numbered preset (station or album).',
+    tools: [
+      {
+        name: 'recall_preset',
+        title: 'Recall preset',
+        description: 'Recall a preset by its id (see list_presets for names).'
+      }
+    ]
+  },
+  {
+    id: 'sources',
+    title: 'Sources',
+    description: 'Switch the active audio source.',
+    tools: [
+      {
+        name: 'set_source',
+        title: 'Set source',
+        description: 'Switch to a source by its id (see list_sources).'
+      }
+    ]
+  },
+  {
+    id: 'power',
+    title: 'Power',
+    description: 'Wake the streamer or send it to network standby.',
+    tools: [
+      {
+        name: 'set_power',
+        title: 'Set power',
+        description:
+          "'on' wakes the streamer; 'standby' stops playback and puts it into network standby (it stays reachable)."
+      }
+    ]
+  },
+  {
+    id: 'devices',
+    title: 'Devices',
+    description: 'Switch which streamer the app controls.',
+    tools: [
+      {
+        name: 'connect_device',
+        title: 'Connect device',
+        description: 'Connect to a different streamer by host/IP (see list_devices).'
+      }
+    ]
+  },
+  {
+    id: 'sleep',
+    title: 'Sleep timer',
+    description: 'Arm or cancel the sleep timer.',
+    tools: [
+      {
+        name: 'set_sleep_timer',
+        title: 'Set sleep timer',
+        description:
+          "Arm the sleep timer: either minutes from now, or at the end of the current track. Action is 'pause' or 'standby' (defaults to the user's configured choice)."
+      },
+      { name: 'cancel_sleep_timer', title: 'Cancel sleep timer', description: 'Clear any armed sleep timer.' }
+    ]
+  }
+]
 
 // ------------------------------------------------------------------- sleep timer
 
@@ -196,6 +392,8 @@ export interface AppSettings {
   sleepAction: SleepAction
   /** Recently Played: collapse continuous sessions (radio/AirPlay/…) to one row, vs a row per song. */
   recentsGrouped: boolean
+  /** MCP server for local AI agents. */
+  mcp: McpSettings
   /** Remembered mini-player window position. */
   miniBounds: { x: number; y: number } | null
 }
@@ -220,6 +418,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   followPresets: false,
   sleepAction: 'standby',
   recentsGrouped: true,
+  mcp: { enabled: false, bind: 'localhost', port: 8555, disabledClusters: [], disabledTools: [] },
   miniBounds: null
 }
 
@@ -241,6 +440,7 @@ export interface Snapshot {
   sources: SystemSources | null
   sleep: SleepTimer | null
   recents: RecentTrack[]
+  mcpStatus: McpStatus
   frames: FrameEntry[]
   logs: LogEntry[]
 }

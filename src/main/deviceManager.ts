@@ -8,6 +8,7 @@ import {
   type DiscoveredDevice,
   type FrameEntry,
   type LogEntry,
+  type McpStatus,
   type PushMessage,
   type RecentTrack,
   type SleepTimer,
@@ -76,6 +77,7 @@ export class DeviceManager {
   private queuePresetsTimer: NodeJS.Timeout | null = null
   private sleep: SleepTimer | null = null
   private sleepTimeout: NodeJS.Timeout | null = null
+  private mcpStatus: McpStatus = { running: false, url: null, error: null }
 
   // ------------------------------------------------------------------ lifecycle
 
@@ -425,6 +427,17 @@ export class DeviceManager {
     })()
   }
 
+  // ------------------------------------------------------------------ MCP status
+
+  /** Status pushed by the MCP bridge (null = log only, keep current status). */
+  setMcpStatus(status: McpStatus | null, logText: string, level: LogEntry['level'] = 'info'): void {
+    this.log(level, 'mcp', logText)
+    if (status) {
+      this.mcpStatus = status
+      this.push({ kind: 'mcpStatus', status })
+    }
+  }
+
   // ------------------------------------------------------------- recently played
 
   /**
@@ -520,6 +533,7 @@ export class DeviceManager {
       ...this.cache,
       sleep: this.sleep,
       recents: getRecents(),
+      mcpStatus: this.mcpStatus,
       frames: this.frames,
       logs: this.logs
     }

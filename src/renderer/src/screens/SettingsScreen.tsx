@@ -1,6 +1,16 @@
 import { useState } from 'react'
-import { Heart, Moon, Sun } from 'lucide-react'
-import type { AlignH, AlignV, AmbientArtMode, AmbientCoverage, AppSettings, Theme } from '@shared/ipc'
+import { Check, Copy, Heart, Moon, Sun } from 'lucide-react'
+import {
+  MCP_CLUSTERS,
+  type AlignH,
+  type AlignV,
+  type AmbientArtMode,
+  type AmbientCoverage,
+  type AppSettings,
+  type McpBind,
+  type McpSettings,
+  type Theme
+} from '@shared/ipc'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
@@ -224,6 +234,9 @@ export function SettingsScreen(): React.JSX.Element {
           </div>
         </section>
 
+        {/* ---------------------------------------------------------- ai agents (mcp) */}
+        <McpSection settings={settings} save={save} />
+
         {/* ------------------------------------------------------------ status lamps */}
         <section className="space-y-3">
           <div className="microlabel">status lamps</div>
@@ -260,6 +273,166 @@ export function SettingsScreen(): React.JSX.Element {
         </div>
       </div>
     </div>
+  )
+}
+
+// ------------------------------------------------------------- ai agents (mcp)
+
+function McpSection({
+  settings,
+  save
+}: {
+  settings: AppSettings
+  save(patch: Partial<AppSettings>): Promise<void>
+}): React.JSX.Element {
+  const mcp = settings.mcp
+  const status = useStore((s) => s.mcpStatus)
+  const [copied, setCopied] = useState(false)
+
+  const saveMcp = (patch: Partial<McpSettings>): void => {
+    void save({ mcp: { ...mcp, ...patch } })
+  }
+  const clusterOff = (id: string): boolean => mcp.disabledClusters.includes(id)
+  const toggleCluster = (id: string, on: boolean): void =>
+    saveMcp({
+      disabledClusters: on
+        ? mcp.disabledClusters.filter((c) => c !== id)
+        : [...mcp.disabledClusters, id]
+    })
+  const toolOff = (name: string): boolean => mcp.disabledTools.includes(name)
+  const toggleTool = (name: string): void =>
+    saveMcp({
+      disabledTools: toolOff(name)
+        ? mcp.disabledTools.filter((t) => t !== name)
+        : [...mcp.disabledTools, name]
+    })
+
+  const connectCmd = status.url ? `claude mcp add --transport http tastytunes ${status.url}` : null
+  const copy = (): void => {
+    if (!connectCmd) return
+    void navigator.clipboard.writeText(connectCmd).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1600)
+    })
+  }
+
+  const enabledTools = MCP_CLUSTERS.reduce(
+    (n, c) => (clusterOff(c.id) ? n : n + c.tools.filter((t) => !toolOff(t.name)).length),
+    0
+  )
+
+  return (
+    <section className="space-y-3">
+      <div className="microlabel">ai agents (mcp)</div>
+      <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
+        <Toggle
+          label="MCP server"
+          hint="Let local AI agents (Claude Code, Claude Desktop, …) see and control the streamer over the Model Context Protocol."
+          checked={mcp.enabled}
+          onChange={(enabled) => saveMcp({ enabled })}
+        />
+
+        {/* live status + the exact command to connect an agent */}
+        {mcp.enabled && (
+          <div className="rounded-lg bg-bg ring-1 ring-edge px-3 py-2.5 space-y-2">
+            <div className="flex items-center gap-2.5">
+              <span className={cx('led', status.running ? 'led-on' : status.error ? 'led-off' : 'led-busy')} />
+              <span className="text-[12px] text-dim">
+                {status.running
+                  ? <>Serving <span className="font-mono text-ink/90">{status.url}</span> · {enabledTools} tools</>
+                  : (status.error ?? 'Starting…')}
+              </span>
+            </div>
+            {connectCmd && (
+              <div className="flex items-center gap-2">
+                <code className="flex-1 min-w-0 truncate font-mono text-[11px] text-faint">{connectCmd}</code>
+                <button
+                  onClick={copy}
+                  data-tip={copied ? 'Copied' : 'Copy'}
+                  aria-label="Copy connect command"
+                  className="shrink-0 p-1.5 rounded text-dim hover:text-ink transition-colors"
+                >
+                  {copied ? <Check size={13} className="text-led" /> : <Copy size={13} />}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className={cx('space-y-5', !mcp.enabled && 'opacity-40 pointer-events-none')}>
+          <SettingRow
+            label="Reachable from"
+            hint="Your streamer already accepts commands from the whole network — LAN exposure here is no wider. Localhost is the cautious default."
+          >
+            <Segmented<McpBind>
+              value={mcp.bind}
+              onChange={(bind) => saveMcp({ bind })}
+              options={[
+                { value: 'localhost', label: 'This Mac' },
+                { value: 'lan', label: 'Whole network' }
+              ]}
+            />
+          </SettingRow>
+
+          <SettingRow label="Port" hint="The HTTP port the MCP endpoint listens on.">
+            <input
+              type="number"
+              min={1024}
+              max={65535}
+              value={mcp.port}
+              onChange={(e) => {
+                const v = Math.max(1024, Math.min(65535, Number(e.target.value) || 8555))
+                saveMcp({ port: v })
+              }}
+              className="w-24 bg-bg rounded-lg ring-1 ring-edge focus:ring-edge2 outline-none px-3 py-1.5 text-[13px] font-mono"
+            />
+          </SettingRow>
+
+          <div className="space-y-4">
+            <div>
+              <div className="text-[13.5px]">Tools</div>
+              <div className="text-[11.5px] text-faint max-w-sm">
+                What connected agents are allowed to do. Switch off whole clusters, or click
+                individual tools to toggle them. Changes apply to the next agent request.
+              </div>
+            </div>
+            {MCP_CLUSTERS.map((cluster) => {
+              const off = clusterOff(cluster.id)
+              return (
+                <div key={cluster.id}>
+                  <Toggle
+                    label={cluster.title}
+                    hint={cluster.description}
+                    checked={!off}
+                    onChange={(on) => toggleCluster(cluster.id, on)}
+                  />
+                  <div className={cx('mt-2 flex flex-wrap gap-1.5', off && 'opacity-40 pointer-events-none')}>
+                    {cluster.tools.map((t) => {
+                      const on = !toolOff(t.name)
+                      return (
+                        <button
+                          key={t.name}
+                          onClick={() => toggleTool(t.name)}
+                          aria-pressed={on}
+                          className={cx(
+                            'px-2.5 py-1 rounded-full font-mono text-[10.5px] ring-1 transition-colors',
+                            on
+                              ? 'ring-gold/40 bg-golddim text-gold'
+                              : 'ring-edge text-faint line-through hover:text-dim'
+                          )}
+                        >
+                          {t.name}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+    </section>
   )
 }
 

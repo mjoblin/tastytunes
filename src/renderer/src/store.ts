@@ -5,6 +5,7 @@ import type {
   DiscoveredDevice,
   FrameEntry,
   LogEntry,
+  McpStatus,
   PushMessage,
   RecentTrack,
   SleepAction,
@@ -74,6 +75,8 @@ interface TTState {
   sleep: SleepTimer | null
   /** Local recently-played log, newest first (mirrored from the main process). */
   recents: RecentTrack[]
+  /** MCP server state, mirrored from the main process. */
+  mcpStatus: McpStatus
 
   setScreen(screen: Screen): void
   setDiagnosticsOpen(open: boolean): void
@@ -118,6 +121,7 @@ export const useStore = create<TTState>((set) => ({
   miniHover: false,
   sleep: null,
   recents: [],
+  mcpStatus: { running: false, url: null, error: null },
 
   setScreen: (screen) => set({ screen }),
   setDiagnosticsOpen: (diagnosticsOpen) => set({ diagnosticsOpen }),
@@ -150,6 +154,7 @@ export const useStore = create<TTState>((set) => ({
       sources: snap.sources,
       sleep: snap.sleep,
       recents: snap.recents,
+      mcpStatus: snap.mcpStatus,
       playhead: snap.position ? { secs: snap.position.position, at: Date.now() } : null,
       frames: snap.frames,
       logs: snap.logs
@@ -203,6 +208,8 @@ export const useStore = create<TTState>((set) => ({
           return { sleep: msg.sleep }
         case 'recents':
           return { recents: msg.data }
+        case 'mcpStatus':
+          return { mcpStatus: msg.status }
       }
     })
 }))

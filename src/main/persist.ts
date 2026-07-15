@@ -15,6 +15,8 @@ export function getSettings(): AppSettings {
   try {
     const raw = JSON.parse(readFileSync(settingsPath(), 'utf-8'))
     loaded = { ...DEFAULT_SETTINGS, ...raw }
+    // The merge above is shallow — backfill nested objects from older files.
+    loaded.mcp = { ...DEFAULT_SETTINGS.mcp, ...loaded.mcp }
   } catch {
     loaded = { ...DEFAULT_SETTINGS }
   }
