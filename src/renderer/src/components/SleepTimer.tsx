@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Moon } from 'lucide-react'
-import type { SleepAction } from '@shared/ipc'
+import { sleepTrackKey, type SleepAction } from '@shared/ipc'
 import { tt } from '@/api'
 import { useStore } from '@/store'
-import { currentTrackKey } from '@/hooks/useSleepTimer'
 import { cx, deriveNowPlaying, fmtTime } from '@/lib/format'
 
 const DURATIONS: Array<{ minutes: number; label: string }> = [
@@ -20,7 +19,6 @@ const ACTION_VERB: Record<SleepAction, string> = { pause: 'Pause', standby: 'Sta
 /** Plexamp/Sonos-style sleep timer: pause or standby after a countdown, or at end of track. */
 export function SleepTimer(): React.JSX.Element {
   const sleep = useStore((s) => s.sleep)
-  const setSleep = useStore((s) => s.setSleep)
   const setSleepAction = useStore((s) => s.setSleepAction)
   const stored = useStore((s) => s.settings.sleepAction)
   const playState = useStore((s) => s.playState)
@@ -47,17 +45,20 @@ export function SleepTimer(): React.JSX.Element {
     playState?.metadata?.duration ?? nowPlaying?.display?.progress?.duration ?? null
   const meta = deriveNowPlaying(playState, nowPlaying)
   const canEndOfTrack =
-    currentTrackKey(playState) != null && duration != null && duration > 0 && !meta.isRadio
+    sleepTrackKey(playState) != null && duration != null && duration > 0 && !meta.isRadio
 
+  // The timer itself lives in the main process (it must survive this window
+  // closing); these calls arm/adjust it and the store mirrors its pushes.
   const arm = (minutes: number): void => {
-    setSleep({ action, minutes, firesAt: Date.now() + minutes * 60_000, trackKey: null })
+    void tt.setSleep({ action, minutes, firesAt: Date.now() + minutes * 60_000, trackKey: null })
   }
   const armEndOfTrack = (): void => {
-    setSleep({ action, minutes: null, firesAt: null, trackKey: currentTrackKey(playState) })
+    void tt.setSleep({ action, minutes: null, firesAt: null, trackKey: sleepTrackKey(playState) })
   }
   const chooseAction = (next: SleepAction): void => {
     setSleepAction(next)
     void tt.setSettings({ sleepAction: next })
+    if (sleep) void tt.setSleep({ ...sleep, action: next })
   }
 
   const statusLine = sleep
@@ -140,7 +141,7 @@ export function SleepTimer(): React.JSX.Element {
                 {statusLine ?? 'Inactive'}
               </span>
               <button
-                onClick={() => setSleep(null)}
+                onClick={() => void tt.setSleep(null)}
                 disabled={!sleep}
                 className={cx(
                   'text-[11px] transition-colors',

@@ -2,14 +2,16 @@
 // to renderer windows. Mirrors PunyTunes' StreamMagicManager, translated to Node.
 
 import { BrowserWindow, Notification, nativeImage, webContents } from 'electron'
-import type {
-  ConnectionState,
-  DiscoveredDevice,
-  FrameEntry,
-  LogEntry,
-  PushMessage,
-  Snapshot,
-  StreamerCommand
+import {
+  sleepTrackKey,
+  type ConnectionState,
+  type DiscoveredDevice,
+  type FrameEntry,
+  type LogEntry,
+  type PushMessage,
+  type SleepTimer,
+  type Snapshot,
+  type StreamerCommand
 } from '@shared/ipc'
 import type {
   Presets,
@@ -67,6 +69,8 @@ export class DeviceManager {
   private currentTrackKey: string | null = null
   private lastSourceId: string | null = null
   private queuePresetsTimer: NodeJS.Timeout | null = null
+  private sleep: SleepTimer | null = null
+  private sleepTimeout: NodeJS.Timeout | null = null
 
   // ------------------------------------------------------------------ lifecycle
 
@@ -97,6 +101,8 @@ export class DeviceManager {
   }
 
   connect(host: string): void {
+    // A timer armed for one device must never act on another.
+    if (this.sleep && this.socket && this.socket.host !== host) this.setSleep(null)
     this.socket?.close()
     this.cache = emptyCache()
     this.currentTrackKey = null
@@ -132,6 +138,7 @@ export class DeviceManager {
   }
 
   disconnect(): void {
+    if (this.sleep) this.setSleep(null)
     this.socket?.close()
     this.socket = null
     this.cache = emptyCache()
@@ -147,8 +154,67 @@ export class DeviceManager {
   }
 
   shutdown(): void {
+    if (this.sleepTimeout) clearTimeout(this.sleepTimeout)
     this.socket?.close()
     this.socket = null
+  }
+
+  // ---------------------------------------------------------------- sleep timer
+
+  /**
+   * Arm or clear the sleep timer. Lives here (not in a renderer) so it
+   * survives the window closing on macOS. Node timers stall during system
+   * sleep, so checkSleepTimer() re-evaluates the absolute deadline on resume.
+   */
+  setSleep(sleep: SleepTimer | null): void {
+    this.sleep = sleep
+    if (this.sleepTimeout) {
+      clearTimeout(this.sleepTimeout)
+      this.sleepTimeout = null
+    }
+    if (sleep) {
+      this.log('info', 'sleep', sleep.minutes != null ? `armed: ${sleep.action} in ${sleep.minutes} min` : `armed: ${sleep.action} at end of track`)
+    }
+    if (sleep?.firesAt != null) {
+      const ms = sleep.firesAt - Date.now()
+      if (ms <= 0) {
+        this.fireSleep()
+        return
+      }
+      this.sleepTimeout = setTimeout(() => this.fireSleep(), ms)
+    }
+    this.push({ kind: 'sleep', sleep: this.sleep })
+  }
+
+  /** Fire a countdown that came due while the system was asleep (on resume). */
+  checkSleepTimer(): void {
+    if (this.sleep?.firesAt != null && Date.now() >= this.sleep.firesAt) this.fireSleep()
+  }
+
+  private fireSleep(): void {
+    const action = this.sleep?.action
+    this.sleep = null
+    if (this.sleepTimeout) {
+      clearTimeout(this.sleepTimeout)
+      this.sleepTimeout = null
+    }
+    this.push({ kind: 'sleep', sleep: null })
+    // Only touch the streamer while connected — a timer that expires after a
+    // dropout should quietly clear, never pause on reconnect.
+    if (action && this.connection.phase === 'connected') {
+      this.log('info', 'sleep', `fired: ${action}`)
+      void this.command(action === 'standby' ? { type: 'power', power: 'NETWORK' } : { type: 'pause' })
+    }
+  }
+
+  /** End-of-track sleep: fire when the armed track gives way or playback ends. */
+  private sleepBoundaryCheck(ps: ZonePlayState): void {
+    const sleep = this.sleep
+    if (!sleep || sleep.minutes != null) return
+    const key = sleepTrackKey(ps)
+    const advanced = sleep.trackKey != null && key != null && key !== sleep.trackKey
+    const ended = ps.state === 'stop' || ps.state === 'no_signal'
+    if (advanced || ended) this.fireSleep()
   }
 
   // ------------------------------------------------------------------- commands
@@ -241,6 +307,7 @@ export class DeviceManager {
       case '/zone/play_state':
         this.cache.playState = data as ZonePlayState
         this.trackChangeNotification(this.cache.playState)
+        this.sleepBoundaryCheck(this.cache.playState)
         return this.push({ kind: 'playState', data: this.cache.playState })
       case '/zone/play_state/position':
         this.cache.position = data as ZonePosition
@@ -393,6 +460,7 @@ export class DeviceManager {
       discovering: this.discovering,
       settings: getSettings(),
       ...this.cache,
+      sleep: this.sleep,
       frames: this.frames,
       logs: this.logs
     }

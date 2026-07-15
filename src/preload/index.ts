@@ -1,5 +1,12 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
-import { IPC, type AppSettings, type PushMessage, type StreamerCommand, type TastyTunesApi } from '@shared/ipc'
+import {
+  IPC,
+  type AppSettings,
+  type PushMessage,
+  type SleepTimer,
+  type StreamerCommand,
+  type TastyTunesApi
+} from '@shared/ipc'
 
 const api: TastyTunesApi = {
   getSnapshot: () => ipcRenderer.invoke(IPC.getSnapshot),
@@ -13,6 +20,7 @@ const api: TastyTunesApi = {
   fetchArt: (url: string) => ipcRenderer.invoke(IPC.fetchArt, url),
   toggleMini: () => ipcRenderer.invoke(IPC.toggleMini),
   showMain: () => ipcRenderer.invoke(IPC.showMain),
+  setSleep: (sleep: SleepTimer | null) => ipcRenderer.invoke(IPC.setSleep, sleep),
   onPush: (cb: (msg: PushMessage) => void) => {
     const listener = (_e: IpcRendererEvent, msg: PushMessage): void => cb(msg)
     ipcRenderer.on(IPC.push, listener)

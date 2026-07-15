@@ -62,6 +62,7 @@ export type PushMessage =
   | { kind: 'log'; entry: LogEntry }
   /** Cursor is over the mini window (CSS :hover can't fire over drag regions). */
   | { kind: 'miniHover'; hovered: boolean }
+  | { kind: 'sleep'; sleep: SleepTimer | null }
 
 // ------------------------------------------------------ renderer -> main actions
 
@@ -88,11 +89,43 @@ export type StreamerCommand =
   | { type: 'presetDelete'; presetId: number }
   | { type: 'presetMove'; from: number; to: number }
 
+// ------------------------------------------------------------------- sleep timer
+
+/** What the sleep timer does when it expires. */
+export type SleepAction = 'pause' | 'standby'
+
+/**
+ * A live sleep timer. Ephemeral by design — a countdown shouldn't survive a
+ * restart. Owned by the main process (so it outlives the window on macOS);
+ * renderers arm/disarm via setSleep and mirror state from pushes.
+ * `minutes: null` means "end of the current track", in which case `trackKey`
+ * is the armed track's identity and `firesAt` is unused.
+ */
+export interface SleepTimer {
+  action: SleepAction
+  minutes: number | null
+  firesAt: number | null
+  trackKey: string | null
+}
+
+/**
+ * Identity of the currently-playing track, used to detect the boundary for an
+ * "end of track" sleep timer. Queue playback gives a stable per-item id; other
+ * sources (AirPlay, USB) fall back to title/artist. Null when nothing
+ * identifiable is playing. Shared so the arming renderer and the firing main
+ * process can never disagree.
+ */
+export function sleepTrackKey(ps: ZonePlayState | null): string | null {
+  if (!ps) return null
+  if (ps.queue_id != null) return `q${ps.queue_id}`
+  const md = ps.metadata
+  if (md?.title) return `t:${md.title}:${md.artist ?? ''}`
+  return null
+}
+
 // ---------------------------------------------------------------------- settings
 
 export type Theme = 'dark' | 'light'
-/** What the sleep timer does when it expires. */
-export type SleepAction = 'pause' | 'standby'
 export type AmbientArtMode = 'off' | 'now-playing' | 'all'
 export type AmbientCoverage = 'main' | 'window'
 export type AlignH = 'left' | 'center' | 'right'
@@ -168,6 +201,7 @@ export interface Snapshot {
   systemInfo: SystemInfo | null
   systemPower: SystemPower | null
   sources: SystemSources | null
+  sleep: SleepTimer | null
   frames: FrameEntry[]
   logs: LogEntry[]
 }
@@ -189,6 +223,8 @@ export interface TastyTunesApi {
   toggleMini(): Promise<void>
   /** Show and focus the main window. */
   showMain(): Promise<void>
+  /** Arm or clear the sleep timer (lives in the main process). */
+  setSleep(sleep: SleepTimer | null): Promise<void>
   onPush(cb: (msg: PushMessage) => void): () => void
 }
 
@@ -204,5 +240,6 @@ export const IPC = {
   fetchArt: 'tt:fetchArt',
   toggleMini: 'tt:toggleMini',
   showMain: 'tt:showMain',
+  setSleep: 'tt:setSleep',
   push: 'tt:push'
 } as const

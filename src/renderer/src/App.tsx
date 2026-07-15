@@ -3,7 +3,6 @@ import { Loader2, Power, Search } from 'lucide-react'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { useShortcuts } from '@/hooks/useShortcuts'
-import { useSleepTimer } from '@/hooks/useSleepTimer'
 import { useArtAccent } from '@/hooks/useArtAccent'
 import { deriveNowPlaying } from '@/lib/format'
 import { Nav } from '@/components/Nav'
@@ -21,7 +20,6 @@ import { SettingsScreen } from '@/screens/SettingsScreen'
 
 export default function App(): React.JSX.Element {
   useShortcuts()
-  useSleepTimer()
 
   const screen = useStore((s) => s.screen)
   const connection = useStore((s) => s.connection)

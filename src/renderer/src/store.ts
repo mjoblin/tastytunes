@@ -7,6 +7,7 @@ import type {
   LogEntry,
   PushMessage,
   SleepAction,
+  SleepTimer,
   Snapshot
 } from '@shared/ipc'
 import type {
@@ -26,19 +27,6 @@ export type Screen = 'now-playing' | 'queue' | 'presets' | 'sources' | 'device' 
 
 const FRAME_RING = 300
 const LOG_RING = 300
-
-/**
- * A live sleep timer. Ephemeral by design — a countdown shouldn't survive a
- * restart — so it lives here, not in persisted settings. `minutes: null` means
- * "end of the current track", in which case `trackKey` is the armed track's
- * identity and `firesAt` is unused.
- */
-export interface SleepTimer {
-  action: SleepAction
-  minutes: number | null
-  firesAt: number | null
-  trackKey: string | null
-}
 
 interface PlayheadSync {
   secs: number
@@ -73,7 +61,7 @@ interface TTState {
   ambientWindowActive: boolean
   /** Mini window only: cursor is over the window (pushed from main). */
   miniHover: boolean
-  /** Live sleep timer, or null when none is armed. */
+  /** Live sleep timer, mirrored from the main process (arm via tt.setSleep). */
   sleep: SleepTimer | null
 
   setScreen(screen: Screen): void
@@ -82,7 +70,6 @@ interface TTState {
   setInfoOpen(open: boolean): void
   setDisplayMode(on: boolean): void
   setAmbientWindowActive(on: boolean): void
-  setSleep(sleep: SleepTimer | null): void
   setSleepAction(action: SleepAction): void
   setSettings(settings: AppSettings): void
   setQueueItems(items: QueueListItem[]): void
@@ -124,12 +111,10 @@ export const useStore = create<TTState>((set) => ({
   setInfoOpen: (infoOpen) => set({ infoOpen }),
   setDisplayMode: (displayMode) => set({ displayMode }),
   setAmbientWindowActive: (ambientWindowActive) => set({ ambientWindowActive }),
-  setSleep: (sleep) => set({ sleep }),
+  // Local settings echo only — an armed timer's action is updated via
+  // tt.setSleep, and the main process pushes the change back.
   setSleepAction: (action) =>
-    set((s) => ({
-      settings: { ...s.settings, sleepAction: action },
-      sleep: s.sleep ? { ...s.sleep, action } : null
-    })),
+    set((s) => ({ settings: { ...s.settings, sleepAction: action } })),
   setSettings: (settings) => set({ settings }),
   setQueueItems: (items) =>
     set((s) => (s.queue ? { queue: { ...s.queue, items } } : {})),
@@ -148,6 +133,7 @@ export const useStore = create<TTState>((set) => ({
       systemInfo: snap.systemInfo,
       systemPower: snap.systemPower,
       sources: snap.sources,
+      sleep: snap.sleep,
       playhead: snap.position ? { secs: snap.position.position, at: Date.now() } : null,
       frames: snap.frames,
       logs: snap.logs
@@ -197,6 +183,8 @@ export const useStore = create<TTState>((set) => ({
         }
         case 'miniHover':
           return { miniHover: msg.hovered }
+        case 'sleep':
+          return { sleep: msg.sleep }
       }
     })
 }))

@@ -1,6 +1,6 @@
 import { app, BrowserWindow, globalShortcut, ipcMain, powerMonitor, screen, shell } from 'electron'
 import { join } from 'node:path'
-import { IPC, type AppSettings, type StreamerCommand } from '@shared/ipc'
+import { IPC, type AppSettings, type SleepTimer, type StreamerCommand } from '@shared/ipc'
 import { DeviceManager } from './deviceManager'
 import { getSettings, updateSettings } from './persist'
 
@@ -147,6 +147,7 @@ function registerIpc(): void {
     if (/^https?:/i.test(url)) return shell.openExternal(url)
     return Promise.resolve()
   })
+  ipcMain.handle(IPC.setSleep, (_e, sleep: SleepTimer | null) => deviceManager.setSleep(sleep))
   ipcMain.handle(IPC.toggleMini, () => toggleMiniPlayer())
   ipcMain.handle(IPC.showMain, () => {
     if (!mainWindow || mainWindow.isDestroyed()) createWindow()
@@ -204,7 +205,11 @@ if (!gotLock) {
     syncMediaKeys()
     void deviceManager.startup()
 
-    powerMonitor.on('resume', () => deviceManager.healthCheck())
+    powerMonitor.on('resume', () => {
+      deviceManager.healthCheck()
+      // Node timers stall during system sleep; fire any countdown that came due.
+      deviceManager.checkSleepTimer()
+    })
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow()
