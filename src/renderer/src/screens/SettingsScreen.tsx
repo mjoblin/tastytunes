@@ -246,7 +246,7 @@ export function SettingsScreen(): React.JSX.Element {
               <button
                 onClick={() => void tt.clearRecents()}
                 disabled={recentsCount === 0}
-                className="shrink-0 text-[12.5px] px-3 py-1.5 rounded-lg ring-1 ring-edge text-dim hover:text-alert hover:ring-edge2 transition-all disabled:opacity-40 disabled:hover:text-dim disabled:hover:ring-edge"
+                className="shrink-0 text-[12.5px] px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-alert hover:ring-edge2 hover:bg-raised/70 active:scale-90 transition-all disabled:opacity-40 disabled:hover:text-dim disabled:hover:ring-edge disabled:hover:bg-panel/70"
               >
                 {recentsCount > 0 ? `Clear history (${recentsCount})` : 'History empty'}
               </button>
@@ -258,7 +258,7 @@ export function SettingsScreen(): React.JSX.Element {
             >
               <button
                 onClick={() => setShortcutsOpen(true)}
-                className="shrink-0 text-[12.5px] px-3 py-1.5 rounded-lg ring-1 ring-edge text-dim hover:text-ink hover:ring-edge2 transition-all"
+                className="shrink-0 text-[12.5px] px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 active:scale-90 transition-all"
               >
                 View shortcuts
               </button>
