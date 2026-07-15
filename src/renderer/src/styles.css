@@ -36,7 +36,15 @@
 
 /* light theme: warm paper + aluminum faceplate */
 :root.light {
+  /* Both accents need the darker light-tuning: the dark theme's bright amber
+     (240 168 72) all but vanishes on paper. useArtAccent applies the same
+     clamp when tinting per-album. */
+  --amber-rgb: 178 118 16;
   --gold-rgb: 178 118 16;
+  /* Selection washes need more pigment on paper than on the dark faceplate,
+     where a faint tint over near-black already reads as a lit chip. */
+  --color-amberdim: rgb(var(--amber-rgb) / 0.18);
+  --color-golddim: rgb(var(--gold-rgb) / 0.2);
   --color-bg: #f2eee6;
   --color-panel: #eae5da;
   --color-raised: #e0dacc;
