@@ -94,7 +94,9 @@ export function SettingsScreen(): React.JSX.Element {
         </nav>
 
         {/* keyed by tab so each tab keeps its own scroll position */}
-        <div key={tab} ref={panelRef} className="flex-1 min-w-0 overflow-y-auto">
+        {/* p-px: the cards' 1px ring must not sit flush against the scrollport,
+            or it clips when the panel narrows to exactly max-w-2xl */}
+        <div key={tab} ref={panelRef} className="flex-1 min-w-0 overflow-y-auto p-px">
           <div className="max-w-2xl space-y-8">
         {tab === 'appearance' && (
         <section className="space-y-3">
