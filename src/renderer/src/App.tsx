@@ -9,6 +9,7 @@ import { Nav } from '@/components/Nav'
 import { PlaybackBar } from '@/components/PlaybackBar'
 import { DiagnosticsDrawer } from '@/components/DiagnosticsDrawer'
 import { ShortcutsOverlay } from '@/components/ShortcutsOverlay'
+import { CommandPalette } from '@/components/CommandPalette'
 import { InfoModal } from '@/components/InfoModal'
 import { DisplayMode } from '@/components/DisplayMode'
 import { NowPlayingScreen } from '@/screens/NowPlayingScreen'
@@ -30,6 +31,7 @@ export default function App(): React.JSX.Element {
   const diagnosticsOpen = useStore((s) => s.diagnosticsOpen)
   const shortcutsOpen = useStore((s) => s.shortcutsOpen)
   const infoOpen = useStore((s) => s.infoOpen)
+  const paletteOpen = useStore((s) => s.paletteOpen)
   const displayMode = useStore((s) => s.displayMode)
   const setDisplayMode = useStore((s) => s.setDisplayMode)
 
@@ -108,6 +110,7 @@ export default function App(): React.JSX.Element {
         <PlaybackBar />
         {displayMode && <DisplayMode />}
         {shortcutsOpen && <ShortcutsOverlay />}
+        {paletteOpen && <CommandPalette />}
         {infoOpen && <InfoModal />}
       </div>
     </div>

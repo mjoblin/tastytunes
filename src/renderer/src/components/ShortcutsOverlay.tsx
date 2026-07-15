@@ -1,6 +1,8 @@
 import { X } from 'lucide-react'
 import { useStore } from '@/store'
 
+const MOD = /mac/i.test(navigator.platform) ? '⌘' : 'Ctrl'
+
 const GROUPS: Array<{ title: string; rows: Array<[string, string]> }> = [
   {
     title: 'Playback',
@@ -23,6 +25,7 @@ const GROUPS: Array<{ title: string; rows: Array<[string, string]> }> = [
   {
     title: 'Navigate',
     rows: [
+      [`${MOD} K`, 'Command palette'],
       ['N Q P R S D E', 'Now Playing · Queue · Presets · Recently · Sources · Device · sEttings'],
       ['F', 'Full-screen display mode'],
       ['`', 'SMOIP payload console'],

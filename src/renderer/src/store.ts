@@ -64,6 +64,7 @@ interface TTState {
   diagnosticsOpen: boolean
   shortcutsOpen: boolean
   infoOpen: boolean
+  paletteOpen: boolean
   displayMode: boolean
   /** True while the full-window ambient backdrop is showing — chrome goes transparent. */
   ambientWindowActive: boolean
@@ -78,6 +79,7 @@ interface TTState {
   setDiagnosticsOpen(open: boolean): void
   setShortcutsOpen(open: boolean): void
   setInfoOpen(open: boolean): void
+  setPaletteOpen(open: boolean): void
   setDisplayMode(on: boolean): void
   setAmbientWindowActive(on: boolean): void
   setSleepAction(action: SleepAction): void
@@ -110,6 +112,7 @@ export const useStore = create<TTState>((set) => ({
   diagnosticsOpen: false,
   shortcutsOpen: false,
   infoOpen: false,
+  paletteOpen: false,
   displayMode: false,
   ambientWindowActive: false,
   miniHover: false,
@@ -120,6 +123,7 @@ export const useStore = create<TTState>((set) => ({
   setDiagnosticsOpen: (diagnosticsOpen) => set({ diagnosticsOpen }),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   setInfoOpen: (infoOpen) => set({ infoOpen }),
+  setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
   setDisplayMode: (displayMode) => set({ displayMode }),
   setAmbientWindowActive: (ambientWindowActive) => set({ ambientWindowActive }),
   // Local settings echo only — an armed timer's action is updated via

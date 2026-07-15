@@ -15,6 +15,14 @@ const SCREEN_KEYS: Record<string, Screen> = {
 export function useShortcuts(): void {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent): void => {
+      // Command palette: ⌘K / Ctrl+K toggles from anywhere, inputs included.
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault()
+        const s = useStore.getState()
+        s.setPaletteOpen(!s.paletteOpen)
+        return
+      }
+
       const target = e.target as HTMLElement | null
       if (
         target &&
