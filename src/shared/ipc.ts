@@ -65,6 +65,8 @@ export interface RecentTrack {
   source: string | null
   /** SMOIP source id (e.g. "AIRPLAY", "IR", "MEDIA_PLAYER") — lets a row re-activate the source. */
   sourceId: string | null
+  /** Queue item id at record time — lets a local row replay the track if it's still queued. */
+  queueId: number | null
   isRadio: boolean
   /** Airable radio id, if any — used to match a station back to a preset for re-tuning. */
   radioId: number | null

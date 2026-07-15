@@ -37,6 +37,7 @@ function mergeEntries(base: RecentTrack, other: RecentTrack): RecentTrack {
     artUrl: base.artUrl ?? other.artUrl,
     source: base.source ?? other.source,
     sourceId: base.sourceId ?? other.sourceId,
+    queueId: base.queueId ?? other.queueId,
     isRadio: base.isRadio,
     radioId: base.radioId ?? other.radioId,
     session: base.session ?? other.session
@@ -55,6 +56,7 @@ function normalize(e: RecentTrack): RecentTrack {
     artUrl: e.artUrl ?? null,
     source: e.source ?? null,
     sourceId: e.sourceId ?? null,
+    queueId: e.queueId ?? null,
     isRadio,
     radioId: e.radioId ?? null,
     // Legacy rows only knew radio-vs-not; group legacy radio by station, others as discrete.
@@ -101,7 +103,9 @@ export function getRecents(): RecentTrack[] {
   }
   // Upgrade older rows to the current shape, then collapse duplicates from the
   // era before dedup was title-based.
-  const upgraded = raw.some((e) => e.session === undefined || e.sourceId === undefined)
+  const upgraded = raw.some(
+    (e) => e.session === undefined || e.sourceId === undefined || e.queueId === undefined
+  )
   const list = raw.map(normalize)
   const collapsed = collapseConsecutive(list)
   cached = collapsed

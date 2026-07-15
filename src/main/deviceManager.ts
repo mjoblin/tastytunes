@@ -461,6 +461,7 @@ export class DeviceManager {
       artUrl: md.art_url ?? null,
       source: this.cache.nowPlaying?.source?.name ?? md.source ?? null,
       sourceId,
+      queueId: ps.queue_id ?? null,
       isRadio,
       radioId: md.radio_id ?? null,
       session
