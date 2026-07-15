@@ -1,5 +1,5 @@
 // The MCP server: a Streamable-HTTP endpoint in the main process so local AI
-// agents (Claude Code, Claude Desktop, …) can drive the streamer.
+// agents and other MCP clients can drive the streamer.
 //
 // Stateless per the SDK's documented pattern: each POST gets a fresh
 // McpServer + transport, so settings changes (tool/cluster toggles) apply to

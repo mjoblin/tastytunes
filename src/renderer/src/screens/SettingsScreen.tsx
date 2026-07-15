@@ -307,10 +307,9 @@ function McpSection({
         : [...mcp.disabledTools, name]
     })
 
-  const connectCmd = status.url ? `claude mcp add --transport http tastytunes ${status.url}` : null
   const copy = (): void => {
-    if (!connectCmd) return
-    void navigator.clipboard.writeText(connectCmd).then(() => {
+    if (!status.url) return
+    void navigator.clipboard.writeText(status.url).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 1600)
     })
@@ -327,29 +326,27 @@ function McpSection({
       <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
         <Toggle
           label="MCP server"
-          hint="Let local AI agents (Claude Code, Claude Desktop, …) see and control the streamer over the Model Context Protocol."
+          hint="Let AI agents and other MCP clients see and control the streamer over the Model Context Protocol."
           checked={mcp.enabled}
           onChange={(enabled) => saveMcp({ enabled })}
         />
 
-        {/* live status + the exact command to connect an agent */}
+        {/* live status + the endpoint to paste into an agent's MCP config */}
         {mcp.enabled && (
           <div className="rounded-lg bg-bg ring-1 ring-edge px-3 py-2.5 space-y-2">
             <div className="flex items-center gap-2.5">
               <span className={cx('led', status.running ? 'led-on' : status.error ? 'led-off' : 'led-busy')} />
               <span className="text-[12px] text-dim">
-                {status.running
-                  ? <>Serving <span className="font-mono text-ink/90">{status.url}</span> · {enabledTools} tools</>
-                  : (status.error ?? 'Starting…')}
+                {status.running ? <>Serving {enabledTools} tools</> : (status.error ?? 'Starting…')}
               </span>
             </div>
-            {connectCmd && (
+            {status.running && status.url && (
               <div className="flex items-center gap-2">
-                <code className="flex-1 min-w-0 truncate font-mono text-[11px] text-faint">{connectCmd}</code>
+                <code className="flex-1 min-w-0 truncate font-mono text-[11px] text-faint">{status.url}</code>
                 <button
                   onClick={copy}
-                  data-tip={copied ? 'Copied' : 'Copy'}
-                  aria-label="Copy connect command"
+                  data-tip={copied ? 'Copied' : 'Copy endpoint'}
+                  aria-label="Copy MCP endpoint"
                   className="shrink-0 p-1.5 rounded text-dim hover:text-ink transition-colors"
                 >
                   {copied ? <Check size={13} className="text-led" /> : <Copy size={13} />}
@@ -362,14 +359,14 @@ function McpSection({
         <div className={cx('space-y-5', !mcp.enabled && 'opacity-40 pointer-events-none')}>
           <SettingRow
             label="Reachable from"
-            hint="Your streamer already accepts commands from the whole network — LAN exposure here is no wider. Localhost is the cautious default."
+            hint="Your streamer already accepts commands from anything on your local network — allowing that here is no wider. This computer is the cautious default."
           >
             <Segmented<McpBind>
               value={mcp.bind}
               onChange={(bind) => saveMcp({ bind })}
               options={[
-                { value: 'localhost', label: 'This Mac' },
-                { value: 'lan', label: 'Whole network' }
+                { value: 'localhost', label: 'This computer' },
+                { value: 'lan', label: 'Local network' }
               ]}
             />
           </SettingRow>
@@ -416,9 +413,10 @@ function McpSection({
                           aria-pressed={on}
                           className={cx(
                             'px-2.5 py-1 rounded-full font-mono text-[10.5px] ring-1 transition-colors',
+                            // quiet grays: filled = enabled, hollow + struck = off
                             on
-                              ? 'ring-gold/40 bg-golddim text-gold'
-                              : 'ring-edge text-faint line-through hover:text-dim'
+                              ? 'ring-edge2 bg-veil2 text-ink/80 hover:text-ink'
+                              : 'ring-edge text-faint/70 line-through hover:text-dim'
                           )}
                         >
                           {t.name}
