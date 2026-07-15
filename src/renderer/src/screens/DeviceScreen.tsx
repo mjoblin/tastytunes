@@ -34,12 +34,14 @@ export function DeviceScreen(): React.JSX.Element {
   })()
 
   return (
-    <div ref={useScrollMemory('device')} className="h-full overflow-y-auto">
+    <div className="h-full flex flex-col">
       <header className="drag-region flex items-center gap-4 px-8 pt-8 pb-4">
         <h1 className="font-display font-bold text-[26px] tracking-tight">Device</h1>
       </header>
 
-      <div className="px-8 pb-10 max-w-2xl space-y-8">
+      {/* pinned header; only the content scrolls (house pattern) */}
+      <div ref={useScrollMemory('device')} className="flex-1 overflow-y-auto px-8 pb-10 pt-1">
+        <div className="max-w-2xl space-y-8">
         {/* ------------------------------------------------------------ connection */}
         <section className="space-y-3">
           <div className="microlabel">connection</div>
@@ -165,6 +167,7 @@ export function DeviceScreen(): React.JSX.Element {
 
         <div className="microlabel">
           press <span className="text-dim">`</span> for the smoip payload console
+        </div>
         </div>
       </div>
     </div>
