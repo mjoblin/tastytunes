@@ -7,10 +7,25 @@ import {
   useSensors,
   type DragEndEvent
 } from '@dnd-kit/core'
-import { SortableContext, rectSortingStrategy, useSortable } from '@dnd-kit/sortable'
+import {
+  SortableContext,
+  rectSortingStrategy,
+  useSortable,
+  verticalListSortingStrategy
+} from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Crosshair, Footprints, Play, Radio, Trash2 } from 'lucide-react'
+import {
+  Crosshair,
+  Footprints,
+  GripVertical,
+  LayoutGrid,
+  Play,
+  Radio,
+  Rows3,
+  Trash2
+} from 'lucide-react'
 import type { PresetItem } from '@shared/smoip'
+import type { ScreenLayout } from '@shared/ipc'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
@@ -22,8 +37,11 @@ export function PresetsScreen(): React.JSX.Element {
   const playState = useStore((s) => s.playState)
   const zoneState = useStore((s) => s.zoneState)
   const nowPlaying = useStore((s) => s.nowPlaying)
-  const { presetCardSize, presetGap, presetFillRows, followPresets } = useStore((s) => s.settings)
+  const { presetCardSize, presetGap, presetFillRows, followPresets, presetsLayout } = useStore(
+    (s) => s.settings
+  )
   const setSettings = useStore((s) => s.setSettings)
+  const cards = presetsLayout === 'cards'
   const items = (presets?.presets ?? []).filter((p) => p.id != null)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
 
@@ -77,13 +95,14 @@ export function PresetsScreen(): React.JSX.Element {
     },
     [scrollMemory]
   )
+  // Cards get half a card of context above the target; rows get a full row.
   const scrollToPlaying = useCallback(
     (flash = false): void => {
       const el = containerRef.current?.querySelector('[data-playing="true"]') as HTMLElement | null
-      scrollToWithContext(el, presetGap)
+      scrollToWithContext(el, cards ? presetGap : 8, cards ? 0.5 : 1)
       if (flash) flashTarget(el)
     },
-    [presetGap]
+    [presetGap, cards]
   )
 
   const playingId = items.find(isPresetPlaying)?.id ?? null
@@ -93,6 +112,9 @@ export function PresetsScreen(): React.JSX.Element {
 
   const setFollowPresets = async (follow: boolean): Promise<void> => {
     setSettings(await tt.setSettings({ followPresets: follow }))
+  }
+  const setLayout = async (presetsLayout: ScreenLayout): Promise<void> => {
+    setSettings(await tt.setSettings({ presetsLayout }))
   }
 
   if (items.length === 0) {
@@ -118,6 +140,14 @@ export function PresetsScreen(): React.JSX.Element {
         <div className="flex-1" />
         <div className="flex items-center gap-1.5">
           <button
+            data-tip={cards ? 'View as rows' : 'View as cards'}
+            aria-label={cards ? 'View as rows' : 'View as cards'}
+            onClick={() => void setLayout(cards ? 'rows' : 'cards')}
+            className="no-drag tip-bottom p-2 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 active:scale-90 transition-all"
+          >
+            {cards ? <Rows3 size={16} /> : <LayoutGrid size={16} />}
+          </button>
+          <button
             data-tip="Scroll to the playing preset"
             aria-label="Scroll to the playing preset"
             onClick={() => scrollToPlaying(true)}
@@ -141,23 +171,32 @@ export function PresetsScreen(): React.JSX.Element {
         </div>
       </header>
 
-      {/* pt-1 so the playing card's ring isn't clipped on the top row (matches sources) */}
-      <div ref={setContainerRef} className="flex-1 overflow-y-auto px-8 pb-8 pt-1">
+      {/* pt-1 so the playing item's ring isn't clipped when it's first */}
+      <div ref={setContainerRef} className={cx('flex-1 overflow-y-auto pt-1', cards ? 'px-8 pb-8' : 'px-6 pb-6')}>
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-          <SortableContext items={items.map((p) => p.id as number)} strategy={rectSortingStrategy}>
-            <div
-              className="grid"
-              style={{
-                gridTemplateColumns: presetFillRows
-                  ? `repeat(auto-fill, minmax(${presetCardSize}px, 1fr))`
-                  : `repeat(auto-fill, ${presetCardSize}px)`,
-                gap: presetGap
-              }}
-            >
-              {items.map((preset) => (
-                <PresetCard key={preset.id} preset={preset} playing={isPresetPlaying(preset)} />
-              ))}
-            </div>
+          <SortableContext
+            items={items.map((p) => p.id as number)}
+            strategy={cards ? rectSortingStrategy : verticalListSortingStrategy}
+          >
+            {cards ? (
+              <div
+                className="grid"
+                style={{
+                  gridTemplateColumns: presetFillRows
+                    ? `repeat(auto-fill, minmax(${presetCardSize}px, 1fr))`
+                    : `repeat(auto-fill, ${presetCardSize}px)`,
+                  gap: presetGap
+                }}
+              >
+                {items.map((preset) => (
+                  <PresetCard key={preset.id} preset={preset} playing={isPresetPlaying(preset)} />
+                ))}
+              </div>
+            ) : (
+              items.map((preset) => (
+                <PresetRow key={preset.id} preset={preset} playing={isPresetPlaying(preset)} />
+              ))
+            )}
           </SortableContext>
         </DndContext>
       </div>
@@ -175,6 +214,101 @@ function urlsMatch(a: string, b: string): boolean {
   } catch {
     return false
   }
+}
+
+/** Row view of a preset — mirrors the queue row's anatomy. */
+function PresetRow({ preset, playing }: { preset: PresetItem; playing: boolean }): React.JSX.Element {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: preset.id as number
+  })
+  const [confirmDelete, setConfirmDelete] = useState(false)
+
+  useEffect(() => {
+    if (!confirmDelete) return
+    const t = setTimeout(() => setConfirmDelete(false), 3000)
+    return () => clearTimeout(t)
+  }, [confirmDelete])
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      data-playing={playing || undefined}
+      className={cx(
+        'group grid grid-cols-[26px_44px_1fr_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5',
+        'cursor-default transition-colors',
+        isDragging && 'z-10 bg-raised shadow-xl',
+        playing ? 'row-playing bg-gold/10' : 'hover:bg-veil'
+      )}
+      onClick={() => {
+        if (preset.id != null) void tt.command({ type: 'recallPreset', presetId: preset.id })
+      }}
+    >
+      <div className="flex items-center justify-center">
+        {playing ? (
+          <span className="eqbars text-gold">
+            <span style={{ height: 6 }} />
+            <span style={{ height: 10 }} />
+            <span style={{ height: 5 }} />
+          </span>
+        ) : (
+          <span className="font-mono text-[10.5px] text-faint tabular-nums">
+            {String(preset.id).padStart(2, '0')}
+          </span>
+        )}
+      </div>
+
+      <div className="h-10 w-10 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
+        {preset.art_url ? (
+          <img src={preset.art_url} alt="" loading="lazy" className="h-full w-full object-cover" />
+        ) : (
+          <Radio size={16} className="text-faint" />
+        )}
+      </div>
+
+      <div className="min-w-0">
+        <div className={cx('text-[13.5px] truncate', playing ? 'text-gold' : 'text-ink')}>
+          {preset.name ?? `Preset ${preset.id}`}
+        </div>
+        <div className="text-[12px] text-dim truncate">
+          {preset.class ? preset.class.replace(/^stream\./, '') : ''}
+        </div>
+      </div>
+
+      <button
+        title={confirmDelete ? 'Click again to delete' : 'Delete preset'}
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation()
+          if (!confirmDelete) {
+            setConfirmDelete(true)
+          } else if (preset.id != null) {
+            setConfirmDelete(false)
+            void tt.command({ type: 'presetDelete', presetId: preset.id })
+          }
+        }}
+        className={cx(
+          'flex items-center gap-1 p-1.5 rounded transition-all',
+          confirmDelete
+            ? 'text-alert opacity-100 bg-alert/15'
+            : 'text-faint opacity-0 group-hover:opacity-100 hover:text-alert'
+        )}
+      >
+        <Trash2 size={13} />
+        {confirmDelete && <span className="font-mono text-[9px] uppercase tracking-wide">sure?</span>}
+      </button>
+
+      <button
+        title="Drag to reorder"
+        {...attributes}
+        {...listeners}
+        onClick={(e) => e.stopPropagation()}
+        className="p-1 rounded text-faint opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing"
+      >
+        <GripVertical size={14} />
+      </button>
+    </div>
+  )
 }
 
 function PresetCard({ preset, playing }: { preset: PresetItem; playing: boolean }): React.JSX.Element {

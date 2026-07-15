@@ -190,11 +190,11 @@ export function SettingsScreen(): React.JSX.Element {
 
         {tab === 'layout' && (
         <section className="space-y-3">
-          <div className="microlabel">presets grid</div>
+          <div className="microlabel">card grids</div>
           <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
             <SliderSetting
               label="Card size"
-              hint="Base width of each preset tile."
+              hint="Base width of each card — presets, and the queue when viewed as cards."
               min={120}
               max={280}
               unit="px"

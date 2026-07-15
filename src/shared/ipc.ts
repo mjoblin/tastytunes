@@ -357,6 +357,8 @@ export function sleepTrackKey(ps: ZonePlayState | null): string | null {
 // ---------------------------------------------------------------------- settings
 
 export type Theme = 'dark' | 'light'
+/** How a collection screen lays out its items. */
+export type ScreenLayout = 'rows' | 'cards'
 export type AmbientArtMode = 'off' | 'now-playing' | 'all'
 export type AmbientCoverage = 'main' | 'window'
 export type AlignH = 'left' | 'center' | 'right'
@@ -388,6 +390,9 @@ export interface AppSettings {
   /** Auto-scroll to the current queue row / playing preset. */
   followQueue: boolean
   followPresets: boolean
+  /** Per-screen cards ⇄ rows layout. Card sizing shares the presetCard* settings. */
+  queueLayout: ScreenLayout
+  presetsLayout: ScreenLayout
   /** Remembered sleep-timer action (pause vs standby). The countdown itself is not persisted. */
   sleepAction: SleepAction
   /** Recently Played: collapse continuous sessions (radio/AirPlay/…) to one row, vs a row per song. */
@@ -418,6 +423,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   navCollapsed: false,
   followQueue: true,
   followPresets: false,
+  queueLayout: 'rows',
+  presetsLayout: 'cards',
   sleepAction: 'standby',
   recentsGrouped: true,
   mcp: { enabled: false, bind: 'localhost', port: 8555, disabledClusters: [], disabledTools: [] },
