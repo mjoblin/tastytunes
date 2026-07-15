@@ -1,6 +1,7 @@
 import {
   Cable,
   Cog,
+  Command,
   Disc3,
   HardDrive,
   History,
@@ -13,6 +14,8 @@ import {
 import { tt } from '@/api'
 import { useStore, type Screen } from '@/store'
 import { cx } from '@/lib/format'
+
+const MOD = /mac/i.test(navigator.platform) ? '⌘' : 'Ctrl+'
 
 const ITEMS: Array<{ id: Screen; label: string; icon: typeof Disc3; key: string }> = [
   { id: 'now-playing', label: 'Now Playing', icon: Disc3, key: 'N' },
@@ -29,6 +32,7 @@ export function Nav(): React.JSX.Element {
   const screen = useStore((s) => s.screen)
   const setScreen = useStore((s) => s.setScreen)
   const setInfoOpen = useStore((s) => s.setInfoOpen)
+  const setPaletteOpen = useStore((s) => s.setPaletteOpen)
   const queueTotal = useStore((s) => s.queue?.total ?? null)
   const ambientWindow = useStore((s) => s.ambientWindowActive)
   const settings = useStore((s) => s.settings)
@@ -100,6 +104,24 @@ export function Nav(): React.JSX.Element {
 
       {/* mini player + settings pinned at the bottom, collapse last */}
       <div className={cx('space-y-0.5 pb-3', collapsed ? 'px-2' : 'px-3')}>
+        {/* visible entry point for the palette — the shortcut teaches itself */}
+        <button
+          onClick={() => setPaletteOpen(true)}
+          data-tip={`Command palette (${MOD}K)`}
+          aria-label={`Command palette (${MOD}K)`}
+          className={cx(
+            'w-full flex items-center rounded-lg h-9 text-[13.5px] text-dim hover:text-ink hover:bg-veil transition-colors',
+            collapsed ? 'justify-center px-0' : 'gap-3 px-3'
+          )}
+        >
+          <Command size={16} strokeWidth={1.8} className="shrink-0" />
+          {!collapsed && (
+            <span className="flex-1 min-w-0 flex items-center gap-3 overflow-hidden whitespace-nowrap">
+              <span className="flex-1 text-left">Commands</span>
+              <span className="font-mono text-[9px] text-faint/60">{MOD}K</span>
+            </span>
+          )}
+        </button>
         <button
           onClick={() => void tt.toggleMini()}
           data-tip="Mini player"
