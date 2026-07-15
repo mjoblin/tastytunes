@@ -1,4 +1,3 @@
-import { useEffect } from 'react'
 import {
   Disc3,
   Expand,
@@ -16,6 +15,7 @@ import { useStore } from '@/store'
 import { usePlayhead } from '@/hooks/usePlayhead'
 import { useArtAccent } from '@/hooks/useArtAccent'
 import { useMotionPreference } from '@/hooks/useMotionPreference'
+import { useTheme } from '@/hooks/useTheme'
 import { useWheelVolume } from '@/components/VolumeCluster'
 import { controlSet, cx, deriveNowPlaying, fmtTime } from '@/lib/format'
 
@@ -36,17 +36,14 @@ export function MiniPlayer(): React.JSX.Element {
   const hovered = useStore((s) => s.miniHover)
   const { position, duration } = usePlayhead()
   const onWheel = useWheelVolume()
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('light', settings.theme === 'light')
-  }, [settings.theme])
+  const theme = useTheme(settings.theme)
 
   const connected = connection.phase === 'connected'
   const powered = systemPower?.power === 'ON'
   const active = connected && powered
   const meta = deriveNowPlaying(playState, nowPlaying)
   const controls = controlSet(nowPlaying)
-  useArtAccent(settings.accentFollowsArt && active ? meta.artUrl : null, settings.theme)
+  useArtAccent(settings.accentFollowsArt && active ? meta.artUrl : null, theme)
   useMotionPreference(settings.motion)
 
   const state = playState?.state

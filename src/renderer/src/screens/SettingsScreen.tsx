@@ -6,6 +6,7 @@ import {
   Copy,
   Heart,
   LayoutGrid,
+  Monitor,
   Moon,
   Palette,
   SlidersHorizontal,
@@ -21,7 +22,7 @@ import {
   type McpBind,
   type McpSettings,
   type MotionMode,
-  type Theme
+  type ThemePreference
 } from '@shared/ipc'
 import { tt } from '@/api'
 import { useStore } from '@/store'
@@ -104,14 +105,15 @@ export function SettingsScreen(): React.JSX.Element {
           <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
             <SettingRow
               label="Theme"
-              hint="The faceplate: warm near-black, or warm paper."
+              hint="The faceplate: warm near-black, or warm paper. System follows your OS appearance."
             >
-              <Segmented<Theme>
+              <Segmented<ThemePreference>
                 value={settings.theme}
                 onChange={(theme) => void save({ theme })}
                 options={[
                   { value: 'dark', label: 'Dark', icon: <Moon size={12} /> },
-                  { value: 'light', label: 'Light', icon: <Sun size={12} /> }
+                  { value: 'light', label: 'Light', icon: <Sun size={12} /> },
+                  { value: 'system', label: 'System', icon: <Monitor size={12} /> }
                 ]}
               />
             </SettingRow>

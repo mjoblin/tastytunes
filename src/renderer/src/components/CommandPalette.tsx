@@ -31,6 +31,7 @@ import {
 import { sleepTrackKey, type SleepAction } from '@shared/ipc'
 import { tt } from '@/api'
 import { useStore, type Screen } from '@/store'
+import { systemTheme } from '@/hooks/useTheme'
 import { controlSet, cx, deriveNowPlaying } from '@/lib/format'
 
 type Icon = typeof Play
@@ -371,15 +372,18 @@ export function CommandPalette(): React.JSX.Element {
         run: () => setDisplayMode(!displayMode)
       })
     }
+    // Toggle from the RESOLVED theme (the stored preference may be 'system');
+    // running it always writes an explicit theme, which is what a toggle means.
+    const shownTheme = settings.theme === 'system' ? systemTheme() : settings.theme
     cmds.push({
       id: 'view:theme',
-      label: settings.theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme',
+      label: shownTheme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme',
       group: 'View',
-      icon: settings.theme === 'dark' ? Sun : Moon,
+      icon: shownTheme === 'dark' ? Sun : Moon,
       keywords: 'appearance dark light',
       run: () => {
         void (async () => {
-          const next = await tt.setSettings({ theme: settings.theme === 'dark' ? 'light' : 'dark' })
+          const next = await tt.setSettings({ theme: shownTheme === 'dark' ? 'light' : 'dark' })
           setSettings(next)
         })()
       }

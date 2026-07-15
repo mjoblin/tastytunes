@@ -5,6 +5,7 @@ import { useStore } from '@/store'
 import { useShortcuts } from '@/hooks/useShortcuts'
 import { useArtAccent } from '@/hooks/useArtAccent'
 import { useMotionPreference } from '@/hooks/useMotionPreference'
+import { useTheme } from '@/hooks/useTheme'
 import { deriveNowPlaying } from '@/lib/format'
 import { Nav } from '@/components/Nav'
 import { PlaybackBar } from '@/components/PlaybackBar'
@@ -42,14 +43,11 @@ export default function App(): React.JSX.Element {
   const inStandby = connected && systemPower != null && systemPower.power !== 'ON'
 
   // Per-album accent tint (Plexamp-style), from the current art.
+  const theme = useTheme(settings.theme)
   const meta = deriveNowPlaying(playState, nowPlaying)
   const artActive = connected && !inStandby ? meta.artUrl : null
-  useArtAccent(settings.accentFollowsArt ? artActive : null, settings.theme)
+  useArtAccent(settings.accentFollowsArt ? artActive : null, theme)
   useMotionPreference(settings.motion)
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('light', settings.theme === 'light')
-  }, [settings.theme])
 
   useEffect(() => {
     if (!connected && displayMode) setDisplayMode(false)

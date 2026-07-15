@@ -378,6 +378,8 @@ export function sleepTrackKey(ps: ZonePlayState | null): string | null {
 // ---------------------------------------------------------------------- settings
 
 export type Theme = 'dark' | 'light'
+/** Stored preference: an explicit theme, or follow the OS. */
+export type ThemePreference = Theme | 'system'
 /** How a collection screen lays out its items. */
 export type ScreenLayout = 'rows' | 'cards'
 /** Motion effects: follow the OS Reduce Motion setting, or force on/off. */
@@ -392,7 +394,7 @@ export interface AppSettings {
   mediaKeys: boolean
   volumeLimitPercent: number | null
   notifications: boolean
-  theme: Theme
+  theme: ThemePreference
   /** Blurred album-art backdrop. */
   ambientArt: AmbientArtMode
   /** Backdrop extent: the main content area, or the whole window (nav + bar too). */
