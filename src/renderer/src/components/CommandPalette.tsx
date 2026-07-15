@@ -6,6 +6,7 @@ import {
   CornerDownLeft,
   Disc3,
   HardDrive,
+  History,
   Info,
   Keyboard,
   ListMusic,
@@ -71,6 +72,7 @@ const SCREENS: Array<{ id: Screen; label: string; icon: Icon; key: string }> = [
   { id: 'now-playing', label: 'Now Playing', icon: Disc3, key: 'N' },
   { id: 'queue', label: 'Queue', icon: ListMusic, key: 'Q' },
   { id: 'presets', label: 'Presets', icon: Radio, key: 'P' },
+  { id: 'recently-played', label: 'Recently Played', icon: History, key: 'R' },
   { id: 'sources', label: 'Sources', icon: Cable, key: 'S' },
   { id: 'device', label: 'Device', icon: HardDrive, key: 'D' },
   { id: 'settings', label: 'Settings', icon: Cog, key: 'E' }
@@ -169,13 +171,14 @@ export function CommandPalette(): React.JSX.Element {
           keywords: 'skip back',
           run: () => void tt.command({ type: 'previousTrack' })
         })
-      cmds.push({
-        id: 'stop',
-        label: 'Stop',
-        group: 'Playback',
-        icon: Square,
-        run: () => void tt.command({ type: 'stop' })
-      })
+      if (allow('stop'))
+        cmds.push({
+          id: 'stop',
+          label: 'Stop',
+          group: 'Playback',
+          icon: Square,
+          run: () => void tt.command({ type: 'stop' })
+        })
       const muted = zoneState?.mute ?? false
       cmds.push({
         id: 'mute',

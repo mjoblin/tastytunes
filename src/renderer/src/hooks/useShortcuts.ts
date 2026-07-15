@@ -35,7 +35,10 @@ export function useShortcuts(): void {
       const s = useStore.getState()
 
       if (e.key === 'Escape') {
-        if (s.shortcutsOpen) s.setShortcutsOpen(false)
+        // Palette first: normally its input handles Escape, but if focus has
+        // strayed the cascade must not toggle overlays underneath it.
+        if (s.paletteOpen) s.setPaletteOpen(false)
+        else if (s.shortcutsOpen) s.setShortcutsOpen(false)
         else if (s.infoOpen) s.setInfoOpen(false)
         else if (s.displayMode) s.setDisplayMode(false)
         else if (s.diagnosticsOpen) s.setDiagnosticsOpen(false)
