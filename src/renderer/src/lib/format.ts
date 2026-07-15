@@ -19,6 +19,34 @@ export function fmtKHz(sampleRate: number): string {
   return Number.isInteger(khz) ? `${khz} kHz` : `${khz.toFixed(1)} kHz`
 }
 
+/** Compact "how long ago" for the recently-played log. */
+export function fmtRelative(at: number, now: number = Date.now()): string {
+  const s = Math.max(0, Math.round((now - at) / 1000))
+  if (s < 45) return 'just now'
+  const m = Math.round(s / 60)
+  if (m < 60) return `${m} min ago`
+  const h = Math.round(s / 3600)
+  if (h < 24) return `${h} hr ago`
+  const d = Math.round(s / 86400)
+  if (d === 1) return 'yesterday'
+  if (d < 7) return `${d} days ago`
+  return new Date(at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
+/** Day-bucket header for grouping the recently-played log. */
+export function fmtDayBucket(at: number, now: number = Date.now()): string {
+  const start = (ms: number): number => {
+    const d = new Date(ms)
+    d.setHours(0, 0, 0, 0)
+    return d.getTime()
+  }
+  const days = Math.round((start(now) - start(at)) / 86_400_000)
+  if (days <= 0) return 'Today'
+  if (days === 1) return 'Yesterday'
+  if (days < 7) return new Date(at).toLocaleDateString(undefined, { weekday: 'long' })
+  return new Date(at).toLocaleDateString(undefined, { month: 'long', day: 'numeric' })
+}
+
 export interface NowPlayingMeta {
   title: string | null
   subtitle: string | null // artist, or the "now playing" text on radio

@@ -6,6 +6,7 @@ import type {
   FrameEntry,
   LogEntry,
   PushMessage,
+  RecentTrack,
   SleepAction,
   SleepTimer,
   Snapshot
@@ -23,7 +24,14 @@ import type {
 } from '@shared/smoip'
 import { DEFAULT_SETTINGS } from '@shared/ipc'
 
-export type Screen = 'now-playing' | 'queue' | 'presets' | 'sources' | 'device' | 'settings'
+export type Screen =
+  | 'now-playing'
+  | 'queue'
+  | 'presets'
+  | 'recently-played'
+  | 'sources'
+  | 'device'
+  | 'settings'
 
 const FRAME_RING = 300
 const LOG_RING = 300
@@ -63,6 +71,8 @@ interface TTState {
   miniHover: boolean
   /** Live sleep timer, mirrored from the main process (arm via tt.setSleep). */
   sleep: SleepTimer | null
+  /** Local recently-played log, newest first (mirrored from the main process). */
+  recents: RecentTrack[]
 
   setScreen(screen: Screen): void
   setDiagnosticsOpen(open: boolean): void
@@ -104,6 +114,7 @@ export const useStore = create<TTState>((set) => ({
   ambientWindowActive: false,
   miniHover: false,
   sleep: null,
+  recents: [],
 
   setScreen: (screen) => set({ screen }),
   setDiagnosticsOpen: (diagnosticsOpen) => set({ diagnosticsOpen }),
@@ -134,6 +145,7 @@ export const useStore = create<TTState>((set) => ({
       systemPower: snap.systemPower,
       sources: snap.sources,
       sleep: snap.sleep,
+      recents: snap.recents,
       playhead: snap.position ? { secs: snap.position.position, at: Date.now() } : null,
       frames: snap.frames,
       logs: snap.logs
@@ -185,6 +197,8 @@ export const useStore = create<TTState>((set) => ({
           return { miniHover: msg.hovered }
         case 'sleep':
           return { sleep: msg.sleep }
+        case 'recents':
+          return { recents: msg.data }
       }
     })
 }))

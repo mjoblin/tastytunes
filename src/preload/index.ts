@@ -21,6 +21,8 @@ const api: TastyTunesApi = {
   toggleMini: () => ipcRenderer.invoke(IPC.toggleMini),
   showMain: () => ipcRenderer.invoke(IPC.showMain),
   setSleep: (sleep: SleepTimer | null) => ipcRenderer.invoke(IPC.setSleep, sleep),
+  getRecents: () => ipcRenderer.invoke(IPC.getRecents),
+  clearRecents: () => ipcRenderer.invoke(IPC.clearRecents),
   onPush: (cb: (msg: PushMessage) => void) => {
     const listener = (_e: IpcRendererEvent, msg: PushMessage): void => cb(msg)
     ipcRenderer.on(IPC.push, listener)

@@ -23,7 +23,7 @@ const GROUPS: Array<{ title: string; rows: Array<[string, string]> }> = [
   {
     title: 'Navigate',
     rows: [
-      ['N Q P S D E', 'Now Playing · Queue · Presets · Sources · Device · sEttings'],
+      ['N Q P R S D E', 'Now Playing · Queue · Presets · Recently · Sources · Device · sEttings'],
       ['F', 'Full-screen display mode'],
       ['`', 'SMOIP payload console'],
       ['?', 'This overlay']

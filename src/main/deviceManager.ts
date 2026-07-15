@@ -9,6 +9,7 @@ import {
   type FrameEntry,
   type LogEntry,
   type PushMessage,
+  type RecentTrack,
   type SleepTimer,
   type Snapshot,
   type StreamerCommand
@@ -29,6 +30,7 @@ import { discoverStreamers } from './discovery'
 import { SmoipSocket } from './smoipSocket'
 import * as smoipHttp from './smoipHttp'
 import { getSettings, updateSettings } from './persist'
+import { clearRecents, getRecents, recordRecent } from './recents'
 
 const FRAME_RING_SIZE = 300
 const LOG_RING_SIZE = 300
@@ -307,6 +309,7 @@ export class DeviceManager {
       case '/zone/play_state':
         this.cache.playState = data as ZonePlayState
         this.trackChangeNotification(this.cache.playState)
+        this.recordRecentlyPlayed(this.cache.playState)
         this.sleepBoundaryCheck(this.cache.playState)
         return this.push({ kind: 'playState', data: this.cache.playState })
       case '/zone/play_state/position':
@@ -419,6 +422,37 @@ export class DeviceManager {
     })()
   }
 
+  // ------------------------------------------------------------- recently played
+
+  /**
+   * Log each track that plays. recordRecent() collapses consecutive repeats and
+   * merges in late-arriving art, so this can fire on every play_state push.
+   */
+  private recordRecentlyPlayed(ps: ZonePlayState): void {
+    const md = ps.metadata
+    if (!md) return
+    const isRadio = /radio/i.test(md.class ?? '') || md.station != null
+    const title = md.title ?? null
+    const station = md.station ?? null
+    if (!title && !station) return // nothing identifiable to log
+    const entry: RecentTrack = {
+      at: Date.now(),
+      title,
+      artist: md.artist ?? null,
+      album: md.album ?? null,
+      station,
+      artUrl: md.art_url ?? null,
+      source: this.cache.nowPlaying?.source?.name ?? md.source ?? null,
+      isRadio
+    }
+    const { list, changed } = recordRecent(entry)
+    if (changed) this.push({ kind: 'recents', data: list })
+  }
+
+  clearRecents(): void {
+    this.push({ kind: 'recents', data: clearRecents() })
+  }
+
   // ----------------------------------------------------------------- push relay
 
   private push(msg: PushMessage): void {
@@ -461,6 +495,7 @@ export class DeviceManager {
       settings: getSettings(),
       ...this.cache,
       sleep: this.sleep,
+      recents: getRecents(),
       frames: this.frames,
       logs: this.logs
     }

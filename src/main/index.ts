@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { IPC, type AppSettings, type SleepTimer, type StreamerCommand } from '@shared/ipc'
 import { DeviceManager } from './deviceManager'
 import { getSettings, updateSettings } from './persist'
+import { getRecents } from './recents'
 
 // Pin the identity and settings location: when Electron is launched with a
 // bare file path (dev harnesses), it doesn't read package.json and userData
@@ -148,6 +149,8 @@ function registerIpc(): void {
     return Promise.resolve()
   })
   ipcMain.handle(IPC.setSleep, (_e, sleep: SleepTimer | null) => deviceManager.setSleep(sleep))
+  ipcMain.handle(IPC.getRecents, () => getRecents())
+  ipcMain.handle(IPC.clearRecents, () => deviceManager.clearRecents())
   ipcMain.handle(IPC.toggleMini, () => toggleMiniPlayer())
   ipcMain.handle(IPC.showMain, () => {
     if (!mainWindow || mainWindow.isDestroyed()) createWindow()

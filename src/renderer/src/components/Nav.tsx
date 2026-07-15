@@ -3,6 +3,7 @@ import {
   Cog,
   Disc3,
   HardDrive,
+  History,
   ListMusic,
   PanelLeftClose,
   PanelLeftOpen,
@@ -17,6 +18,7 @@ const ITEMS: Array<{ id: Screen; label: string; icon: typeof Disc3; key: string 
   { id: 'now-playing', label: 'Now Playing', icon: Disc3, key: 'N' },
   { id: 'queue', label: 'Queue', icon: ListMusic, key: 'Q' },
   { id: 'presets', label: 'Presets', icon: Radio, key: 'P' },
+  { id: 'recently-played', label: 'Recently Played', icon: History, key: 'R' },
   { id: 'sources', label: 'Sources', icon: Cable, key: 'S' },
   { id: 'device', label: 'Device', icon: HardDrive, key: 'D' }
 ]

@@ -12,6 +12,7 @@ export function SettingsScreen(): React.JSX.Element {
   const setSettings = useStore((s) => s.setSettings)
   const setShortcutsOpen = useStore((s) => s.setShortcutsOpen)
   const setInfoOpen = useStore((s) => s.setInfoOpen)
+  const recentsCount = useStore((s) => s.recents.length)
 
   const save = async (patch: Partial<AppSettings>): Promise<void> => {
     const next = await tt.setSettings(patch)
@@ -176,6 +177,19 @@ export function SettingsScreen(): React.JSX.Element {
               checked={settings.notifications}
               onChange={(notifications) => void save({ notifications })}
             />
+
+            <SettingRow
+              label="Recently played"
+              hint="A local log of tracks and stations you've played, shown on the Recently Played screen (R). Kept only on this computer."
+            >
+              <button
+                onClick={() => void tt.clearRecents()}
+                disabled={recentsCount === 0}
+                className="shrink-0 text-[12.5px] px-3 py-1.5 rounded-lg ring-1 ring-edge text-dim hover:text-alert hover:ring-edge2 transition-all disabled:opacity-40 disabled:hover:text-dim disabled:hover:ring-edge"
+              >
+                {recentsCount > 0 ? `Clear history (${recentsCount})` : 'History empty'}
+              </button>
+            </SettingRow>
 
             <SettingRow
               label="Keyboard shortcuts"

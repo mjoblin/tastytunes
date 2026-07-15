@@ -14,6 +14,7 @@ import { DisplayMode } from '@/components/DisplayMode'
 import { NowPlayingScreen } from '@/screens/NowPlayingScreen'
 import { QueueScreen } from '@/screens/QueueScreen'
 import { PresetsScreen } from '@/screens/PresetsScreen'
+import { RecentlyPlayedScreen } from '@/screens/RecentlyPlayedScreen'
 import { SourcesScreen } from '@/screens/SourcesScreen'
 import { DeviceScreen } from '@/screens/DeviceScreen'
 import { SettingsScreen } from '@/screens/SettingsScreen'
@@ -65,6 +66,8 @@ export default function App(): React.JSX.Element {
   const content = (() => {
     if (screen === 'device') return <DeviceScreen />
     if (screen === 'settings') return <SettingsScreen />
+    // Recently played is local history — viewable even while disconnected/standby.
+    if (screen === 'recently-played') return <RecentlyPlayedScreen />
     if (!connected) return <ConnectGate />
     if (inStandby) return <StandbyGate />
     switch (screen) {

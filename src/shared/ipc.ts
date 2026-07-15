@@ -44,6 +44,27 @@ export interface FrameEntry {
   frame: SmoipFrame
 }
 
+// --------------------------------------------------------------- recently played
+
+/**
+ * One entry in the local recently-played log. The streamer keeps no history, so
+ * the main process records each track it sees pass through /zone/play_state.
+ * A bounded convenience log — explicitly not a database.
+ */
+export interface RecentTrack {
+  /** When the track first appeared (ms epoch). */
+  at: number
+  title: string | null
+  artist: string | null
+  album: string | null
+  /** Set for internet radio — the station name (title then carries the song). */
+  station: string | null
+  artUrl: string | null
+  /** Human source label (e.g. "Media Library", "AirPlay"), best-effort. */
+  source: string | null
+  isRadio: boolean
+}
+
 // -------------------------------------------------------- main -> renderer push
 
 export type PushMessage =
@@ -60,6 +81,7 @@ export type PushMessage =
   | { kind: 'sources'; data: SystemSources }
   | { kind: 'frame'; entry: FrameEntry }
   | { kind: 'log'; entry: LogEntry }
+  | { kind: 'recents'; data: RecentTrack[] }
   /** Cursor is over the mini window (CSS :hover can't fire over drag regions). */
   | { kind: 'miniHover'; hovered: boolean }
   | { kind: 'sleep'; sleep: SleepTimer | null }
@@ -202,6 +224,7 @@ export interface Snapshot {
   systemPower: SystemPower | null
   sources: SystemSources | null
   sleep: SleepTimer | null
+  recents: RecentTrack[]
   frames: FrameEntry[]
   logs: LogEntry[]
 }
@@ -225,6 +248,10 @@ export interface TastyTunesApi {
   showMain(): Promise<void>
   /** Arm or clear the sleep timer (lives in the main process). */
   setSleep(sleep: SleepTimer | null): Promise<void>
+  /** The local recently-played log, newest first. */
+  getRecents(): Promise<RecentTrack[]>
+  /** Wipe the recently-played log. */
+  clearRecents(): Promise<void>
   onPush(cb: (msg: PushMessage) => void): () => void
 }
 
@@ -241,5 +268,7 @@ export const IPC = {
   toggleMini: 'tt:toggleMini',
   showMain: 'tt:showMain',
   setSleep: 'tt:setSleep',
+  getRecents: 'tt:getRecents',
+  clearRecents: 'tt:clearRecents',
   push: 'tt:push'
 } as const
