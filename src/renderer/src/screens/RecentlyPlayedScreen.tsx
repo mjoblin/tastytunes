@@ -300,7 +300,9 @@ function SessionRow({
   const latest = songText(songs[0] ?? head)
   const subtitle =
     songs.length > 1 ? `${latest} · ${songs.length} songs` : (latest ?? (head.isRadio ? 'Live' : null))
-  const expandable = songs.length > 1
+  // Expandable whenever there's at least one song, so a single-song session
+  // lists its song the same way a multi-song one does.
+  const expandable = songs.length >= 1
   const FallbackIcon = head.isRadio ? Radio : Music
 
   return (
