@@ -287,7 +287,7 @@ function McpSection({
 }): React.JSX.Element {
   const mcp = settings.mcp
   const status = useStore((s) => s.mcpStatus)
-  const [copied, setCopied] = useState(false)
+  const [copied, setCopied] = useState<string | null>(null)
 
   const saveMcp = (patch: Partial<McpSettings>): void => {
     void save({ mcp: { ...mcp, ...patch } })
@@ -307,11 +307,10 @@ function McpSection({
         : [...mcp.disabledTools, name]
     })
 
-  const copy = (): void => {
-    if (!status.url) return
-    void navigator.clipboard.writeText(status.url).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1600)
+  const copy = (key: string, text: string): void => {
+    void navigator.clipboard.writeText(text).then(() => {
+      setCopied(key)
+      setTimeout(() => setCopied(null), 1600)
     })
   }
 
@@ -331,7 +330,7 @@ function McpSection({
           onChange={(enabled) => saveMcp({ enabled })}
         />
 
-        {/* live status + the endpoint to paste into an agent's MCP config */}
+        {/* live status + ways to connect a client */}
         {mcp.enabled && (
           <div className="rounded-lg bg-bg ring-1 ring-edge px-3 py-2.5 space-y-2">
             <div className="flex items-center gap-2.5">
@@ -341,16 +340,26 @@ function McpSection({
               </span>
             </div>
             {status.running && status.url && (
-              <div className="flex items-center gap-2">
-                <code className="flex-1 min-w-0 truncate font-mono text-[11px] text-faint">{status.url}</code>
-                <button
-                  onClick={copy}
-                  data-tip={copied ? 'Copied' : 'Copy endpoint'}
-                  aria-label="Copy MCP endpoint"
-                  className="shrink-0 p-1.5 rounded text-dim hover:text-ink transition-colors"
-                >
-                  {copied ? <Check size={13} className="text-led" /> : <Copy size={13} />}
-                </button>
+              <div className="space-y-1.5 pt-0.5">
+                <CopyRow
+                  label="Endpoint"
+                  text={status.url}
+                  copied={copied === 'endpoint'}
+                  onCopy={() => copy('endpoint', status.url!)}
+                />
+                <CopyRow
+                  label="Claude Code"
+                  text={`claude mcp add --transport http tastytunes ${status.url}`}
+                  copied={copied === 'claude'}
+                  onCopy={() => copy('claude', `claude mcp add --transport http tastytunes ${status.url}`)}
+                />
+                <CopyRow
+                  label="JSON config"
+                  text={`"tastytunes": { "type": "http", "url": "${status.url}" }`}
+                  copied={copied === 'json'}
+                  onCopy={() => copy('json', mcpJsonSnippet(status.url!))}
+                  hint='For clients configured via an "mcpServers" JSON block — copies the full block.'
+                />
               </div>
             )}
           </div>
@@ -431,6 +440,40 @@ function McpSection({
         </div>
       </div>
     </section>
+  )
+}
+
+/** The near-universal "mcpServers" JSON block (Claude Desktop, Cursor, VS Code, …). */
+function mcpJsonSnippet(url: string): string {
+  return JSON.stringify({ mcpServers: { tastytunes: { type: 'http', url } } }, null, 2)
+}
+
+function CopyRow({
+  label,
+  text,
+  copied,
+  onCopy,
+  hint
+}: {
+  label: string
+  text: string
+  copied: boolean
+  onCopy(): void
+  hint?: string
+}): React.JSX.Element {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="microlabel w-24 shrink-0">{label}</span>
+      <code className="flex-1 min-w-0 truncate font-mono text-[11px] text-faint">{text}</code>
+      <button
+        onClick={onCopy}
+        data-tip={copied ? 'Copied' : (hint ?? 'Copy')}
+        aria-label={`Copy ${label}`}
+        className="tip-top shrink-0 p-1.5 rounded text-dim hover:text-ink transition-colors"
+      >
+        {copied ? <Check size={13} className="text-led" /> : <Copy size={13} />}
+      </button>
+    </div>
   )
 }
 
