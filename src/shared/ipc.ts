@@ -91,6 +91,8 @@ export type StreamerCommand =
 // ---------------------------------------------------------------------- settings
 
 export type Theme = 'dark' | 'light'
+/** What the sleep timer does when it expires. */
+export type SleepAction = 'pause' | 'standby'
 export type AmbientArtMode = 'off' | 'now-playing' | 'all'
 export type AmbientCoverage = 'main' | 'window'
 export type AlignH = 'left' | 'center' | 'right'
@@ -122,6 +124,8 @@ export interface AppSettings {
   /** Auto-scroll to the current queue row / playing preset. */
   followQueue: boolean
   followPresets: boolean
+  /** Remembered sleep-timer action (pause vs standby). The countdown itself is not persisted. */
+  sleepAction: SleepAction
   /** Remembered mini-player window position. */
   miniBounds: { x: number; y: number } | null
 }
@@ -144,6 +148,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   navCollapsed: false,
   followQueue: true,
   followPresets: false,
+  sleepAction: 'standby',
   miniBounds: null
 }
 

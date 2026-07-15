@@ -102,7 +102,9 @@ export function VolumeCluster(): React.JSX.Element | null {
   const pendingLevel = scrub != null ? toLevel(scrub) : null
 
   return (
-    <div className="flex items-center gap-2 w-44" onWheel={onWheel}>
+    // min-w keeps the slider usable no matter how tight the right cluster gets —
+    // it never collapses toward zero.
+    <div className="flex items-center gap-2 w-44 min-w-[150px]" onWheel={onWheel}>
       {muteButton}
       <div className={cx('flex-1', muted && 'opacity-40')}>
         <Slider

@@ -18,6 +18,7 @@ import { controlSet, cx, deriveNowPlaying, fmtTime } from '@/lib/format'
 import { Slider } from './Slider'
 import { VolumeCluster } from './VolumeCluster'
 import { SignalLamp } from './SignalLamp'
+import { SleepTimer } from './SleepTimer'
 import { DeviceSwitcher } from './DeviceSwitcher'
 
 export function PlaybackBar(): React.JSX.Element {
@@ -58,7 +59,7 @@ export function PlaybackBar(): React.JSX.Element {
     <footer
       className={cx(
         // side columns flex down on narrow windows instead of squeezing the volume slider
-        'h-[92px] shrink-0 border-t border-edge grid grid-cols-[minmax(160px,280px)_1fr_minmax(215px,280px)] items-center gap-6 px-4 transition-colors',
+        'h-[92px] shrink-0 border-t border-edge grid grid-cols-[minmax(160px,280px)_1fr_minmax(215px,340px)] items-center gap-6 px-4 transition-colors',
         ambientWindow ? 'bg-transparent' : 'bg-panel/80 backdrop-blur'
       )}
     >
@@ -186,6 +187,7 @@ export function PlaybackBar(): React.JSX.Element {
       <div className="flex items-center justify-end gap-2 pr-2">
         {active && <SignalLamp />}
         {active && <VolumeCluster />}
+        {active && <SleepTimer />}
         <DeviceSwitcher />
         <button
           data-tip={powered ? 'Standby' : 'Power on'}
