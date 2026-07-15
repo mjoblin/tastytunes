@@ -72,9 +72,8 @@ export function SettingsScreen(): React.JSX.Element {
                      shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.3)] hover:brightness-110 hover:scale-[1.03] transition-all"
         >
           <Info size={15} strokeWidth={2} />
-          Info &amp;
           <Heart size={15} strokeWidth={2} />
-          Support
+          Info &amp; Support
         </button>
       </header>
 
