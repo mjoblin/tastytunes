@@ -15,21 +15,71 @@ function recentsPath(): string {
   return join(app.getPath('userData'), 'recents.json')
 }
 
-/** Identity used to collapse the same track repeating back-to-back. */
+/**
+ * Identity used to collapse the same track repeating back-to-back. Keyed on the
+ * title alone (station + title for radio, so each song on a station still logs),
+ * NOT the artist: real streamers push a track twice — first a partial frame with
+ * only the title, then the full metadata — and keying on artist would treat those
+ * as two different tracks. Artist/album/art are treated as fields to merge in.
+ */
 function recentKey(e: RecentTrack): string {
-  return e.isRadio
-    ? `r:${e.station ?? ''}:${e.title ?? ''}`
-    : `t:${e.title ?? ''}:${e.artist ?? ''}`
+  return e.isRadio ? `r:${e.station ?? ''}:${e.title ?? ''}` : `t:${e.title ?? ''}`
+}
+
+/** Fill any field missing on `base` from `other`; `base` keeps its identity/time. */
+function mergeEntries(base: RecentTrack, other: RecentTrack): RecentTrack {
+  return {
+    at: base.at,
+    title: base.title ?? other.title,
+    artist: base.artist ?? other.artist,
+    album: base.album ?? other.album,
+    station: base.station ?? other.station,
+    artUrl: base.artUrl ?? other.artUrl,
+    source: base.source ?? other.source,
+    isRadio: base.isRadio
+  }
+}
+
+function sameFields(a: RecentTrack, b: RecentTrack): boolean {
+  return (
+    a.title === b.title &&
+    a.artist === b.artist &&
+    a.album === b.album &&
+    a.station === b.station &&
+    a.artUrl === b.artUrl &&
+    a.source === b.source
+  )
+}
+
+/** Merge any runs of consecutive same-key entries down to one (newest-first list). */
+function collapseConsecutive(list: RecentTrack[]): RecentTrack[] {
+  const out: RecentTrack[] = []
+  for (const e of list) {
+    const prev = out[out.length - 1]
+    if (prev && recentKey(prev) === recentKey(e)) {
+      const merged = mergeEntries(prev, e)
+      merged.at = Math.min(prev.at, e.at) // keep the earliest sighting
+      out[out.length - 1] = merged
+    } else {
+      out.push(e)
+    }
+  }
+  return out
 }
 
 export function getRecents(): RecentTrack[] {
   if (cached) return cached
+  let list: RecentTrack[] = []
   try {
     const raw = JSON.parse(readFileSync(recentsPath(), 'utf-8'))
-    cached = Array.isArray(raw) ? (raw as RecentTrack[]) : []
+    if (Array.isArray(raw)) list = raw as RecentTrack[]
   } catch {
-    cached = []
+    list = []
   }
+  // Heal logs written before dedup was title-based (collapses old duplicates).
+  const collapsed = collapseConsecutive(list)
+  cached = collapsed
+  if (collapsed.length !== list.length) save(collapsed)
   return cached
 }
 
@@ -46,34 +96,20 @@ function save(list: RecentTrack[]): void {
 
 /**
  * Record a played track. Consecutive-dedupes against the newest entry (so a
- * pause/resume or a metadata refinement on the same track doesn't add a row),
- * merging in fields — album art especially — that arrive after the first push.
- * Returns the updated list plus whether anything actually changed, so the caller
- * can skip a redundant push.
+ * pause/resume, a partial-then-full metadata frame, or a repeated push doesn't
+ * add a row), merging in fields — artist, album, art — that arrive after the
+ * first push. Returns the updated list plus whether anything actually changed,
+ * so the caller can skip a redundant push.
  */
 export function recordRecent(entry: RecentTrack): { list: RecentTrack[]; changed: boolean } {
   const list = getRecents()
   const head = list[0]
   if (head && recentKey(head) === recentKey(entry)) {
-    const merged: RecentTrack = {
-      ...head,
-      title: head.title ?? entry.title,
-      artist: head.artist ?? entry.artist,
-      album: head.album ?? entry.album,
-      station: head.station ?? entry.station,
-      artUrl: head.artUrl ?? entry.artUrl,
-      source: head.source ?? entry.source
-    }
-    const changed =
-      merged.artist !== head.artist ||
-      merged.album !== head.album ||
-      merged.artUrl !== head.artUrl ||
-      merged.source !== head.source
-    if (changed) {
-      list[0] = merged
-      save(list)
-    }
-    return { list, changed }
+    const merged = mergeEntries(head, entry)
+    if (sameFields(merged, head)) return { list, changed: false }
+    list[0] = merged
+    save(list)
+    return { list, changed: true }
   }
   const next = [entry, ...list]
   if (next.length > MAX_RECENTS) next.length = MAX_RECENTS
