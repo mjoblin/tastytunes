@@ -35,6 +35,9 @@ import { clearRecents, getRecents, recordRecent } from './recents'
 const FRAME_RING_SIZE = 300
 const LOG_RING_SIZE = 300
 
+const eqCaseless = (a: string, b: string): boolean =>
+  a.trim().toLowerCase() === b.trim().toLowerCase()
+
 interface Cache {
   playState: ZonePlayState | null
   position: ZonePosition | null
@@ -432,9 +435,23 @@ export class DeviceManager {
     const md = ps.metadata
     if (!md) return
     const isRadio = /radio/i.test(md.class ?? '') || md.station != null
-    const title = md.title ?? null
     const station = md.station ?? null
+    let title = md.title ?? null
+    // A radio "song" that's absent, or just the station's own name echoed back,
+    // carries no real track — treat it as songless so it can be hidden later.
+    if (isRadio && (title == null || (station != null && eqCaseless(title, station)))) title = null
     if (!title && !station) return // nothing identifiable to log
+
+    const sourceId = md.source ?? this.cache.nowPlaying?.source?.id ?? null
+    // Continuous sources (radio, AirPlay, Spotify, …) group into one session; a
+    // queued local track has a queue_id and stays a discrete row of its own.
+    const session =
+      ps.queue_id != null
+        ? null
+        : isRadio
+          ? `radio:${station ?? sourceId ?? ''}`
+          : `src:${sourceId ?? 'stream'}`
+
     const entry: RecentTrack = {
       at: Date.now(),
       title,
@@ -443,7 +460,10 @@ export class DeviceManager {
       station,
       artUrl: md.art_url ?? null,
       source: this.cache.nowPlaying?.source?.name ?? md.source ?? null,
-      isRadio
+      sourceId,
+      isRadio,
+      radioId: md.radio_id ?? null,
+      session
     }
     const { list, changed } = recordRecent(entry)
     if (changed) this.push({ kind: 'recents', data: list })

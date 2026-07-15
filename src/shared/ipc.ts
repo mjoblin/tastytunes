@@ -54,6 +54,7 @@ export interface FrameEntry {
 export interface RecentTrack {
   /** When the track first appeared (ms epoch). */
   at: number
+  /** Song title. Null for a songless state (radio that emits no song, or echoes its own name). */
   title: string | null
   artist: string | null
   album: string | null
@@ -62,7 +63,17 @@ export interface RecentTrack {
   artUrl: string | null
   /** Human source label (e.g. "Media Library", "AirPlay"), best-effort. */
   source: string | null
+  /** SMOIP source id (e.g. "AIRPLAY", "IR", "MEDIA_PLAYER") — lets a row re-activate the source. */
+  sourceId: string | null
   isRadio: boolean
+  /** Airable radio id, if any — used to match a station back to a preset for re-tuning. */
+  radioId: number | null
+  /**
+   * Grouping key for continuous sessions. `radio:<station>` or `src:<sourceId>` for
+   * sources whose now-playing song changes over one continuous session; null for a
+   * discrete queued track, which never groups. Optional so pre-upgrade logs still load.
+   */
+  session: string | null
 }
 
 // -------------------------------------------------------- main -> renderer push
@@ -181,6 +192,8 @@ export interface AppSettings {
   followPresets: boolean
   /** Remembered sleep-timer action (pause vs standby). The countdown itself is not persisted. */
   sleepAction: SleepAction
+  /** Recently Played: collapse continuous sessions (radio/AirPlay/…) to one row, vs a row per song. */
+  recentsGrouped: boolean
   /** Remembered mini-player window position. */
   miniBounds: { x: number; y: number } | null
 }
@@ -204,6 +217,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   followQueue: true,
   followPresets: false,
   sleepAction: 'standby',
+  recentsGrouped: true,
   miniBounds: null
 }
 

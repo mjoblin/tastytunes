@@ -36,7 +36,30 @@ function mergeEntries(base: RecentTrack, other: RecentTrack): RecentTrack {
     station: base.station ?? other.station,
     artUrl: base.artUrl ?? other.artUrl,
     source: base.source ?? other.source,
-    isRadio: base.isRadio
+    sourceId: base.sourceId ?? other.sourceId,
+    isRadio: base.isRadio,
+    radioId: base.radioId ?? other.radioId,
+    session: base.session ?? other.session
+  }
+}
+
+/** Backfill fields added in later versions so older logs load with a consistent shape. */
+function normalize(e: RecentTrack): RecentTrack {
+  const isRadio = !!e.isRadio
+  return {
+    at: e.at,
+    title: e.title ?? null,
+    artist: e.artist ?? null,
+    album: e.album ?? null,
+    station: e.station ?? null,
+    artUrl: e.artUrl ?? null,
+    source: e.source ?? null,
+    sourceId: e.sourceId ?? null,
+    isRadio,
+    radioId: e.radioId ?? null,
+    // Legacy rows only knew radio-vs-not; group legacy radio by station, others as discrete.
+    session:
+      e.session !== undefined ? e.session : isRadio ? `radio:${e.station ?? ''}` : null
   }
 }
 
@@ -69,17 +92,20 @@ function collapseConsecutive(list: RecentTrack[]): RecentTrack[] {
 
 export function getRecents(): RecentTrack[] {
   if (cached) return cached
-  let list: RecentTrack[] = []
+  let raw: RecentTrack[] = []
   try {
-    const raw = JSON.parse(readFileSync(recentsPath(), 'utf-8'))
-    if (Array.isArray(raw)) list = raw as RecentTrack[]
+    const parsed = JSON.parse(readFileSync(recentsPath(), 'utf-8'))
+    if (Array.isArray(parsed)) raw = parsed as RecentTrack[]
   } catch {
-    list = []
+    raw = []
   }
-  // Heal logs written before dedup was title-based (collapses old duplicates).
+  // Upgrade older rows to the current shape, then collapse duplicates from the
+  // era before dedup was title-based.
+  const upgraded = raw.some((e) => e.session === undefined || e.sourceId === undefined)
+  const list = raw.map(normalize)
   const collapsed = collapseConsecutive(list)
   cached = collapsed
-  if (collapsed.length !== list.length) save(collapsed)
+  if (upgraded || collapsed.length !== raw.length) save(collapsed)
   return cached
 }
 
