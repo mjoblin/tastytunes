@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useStore } from '@/store'
-import { SIGNAL_COLORS, SIGNAL_LABELS, cx, fmtKHz, signalQuality } from '@/lib/format'
+import { SIGNAL_COLORS, SIGNAL_LABELS, cx, fmtKHz, signalGlow, signalQuality } from '@/lib/format'
 
 /**
  * Roon-style signal light: one glance says how good the stream is; a click shows
@@ -37,7 +37,7 @@ export function SignalLamp(): React.JSX.Element | null {
       >
         <span
           className="block h-2.5 w-2.5 rounded-full"
-          style={{ background: color, boxShadow: `0 0 8px ${color}b0` }}
+          style={{ background: color, boxShadow: signalGlow(color) }}
         />
       </button>
 
@@ -48,7 +48,7 @@ export function SignalLamp(): React.JSX.Element | null {
             <div className="flex items-center gap-2 mb-2.5">
               <span
                 className="block h-2 w-2 rounded-full"
-                style={{ background: color, boxShadow: `0 0 6px ${color}b0` }}
+                style={{ background: color, boxShadow: signalGlow(color) }}
               />
               <span className={cx('microlabel')} style={{ color }}>
                 {SIGNAL_LABELS[quality]}

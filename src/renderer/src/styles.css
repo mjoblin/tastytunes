@@ -5,6 +5,11 @@
 :root {
   --amber-rgb: 240 168 72;
   --gold-rgb: 240 168 72;
+  /* signal-quality lamps (SIGNAL_COLORS in lib/format.ts reads these) */
+  --signal-hires: #f0a848;
+  --signal-lossless: #67dd8b;
+  --signal-lossy: #8d867a;
+  --signal-unknown: #4a453d;
 }
 
 @theme {
@@ -45,14 +50,20 @@
      where a faint tint over near-black already reads as a lit chip. */
   --color-amberdim: rgb(var(--amber-rgb) / 0.18);
   --color-golddim: rgb(var(--gold-rgb) / 0.2);
+  /* Deeper signal colors — the dark theme's bright lamps wash out on paper. */
+  --signal-hires: #b27610;
+  --signal-lossless: #1c9a51;
+  --signal-lossy: #7d7566;
+  --signal-unknown: #a49b89;
   --color-bg: #f2eee6;
   --color-panel: #eae5da;
   --color-raised: #e0dacc;
-  --color-edge: rgb(30 20 5 / 0.1);
-  --color-edge2: rgb(30 20 5 / 0.2);
-  --color-ink: #292219;
-  --color-dim: #6d6455;
-  --color-faint: #9b9280;
+  /* Firmer ink and edges: paper offers no glow to carry definition. */
+  --color-edge: rgb(30 20 5 / 0.14);
+  --color-edge2: rgb(30 20 5 / 0.26);
+  --color-ink: #241d12;
+  --color-dim: #5f5749;
+  --color-faint: #8f8672;
   --color-goldtile: #eee0bd;
   --color-led: #1fa456;
   --color-alert: #c74a35;
@@ -129,7 +140,8 @@ img {
 }
 .led-on {
   background: var(--color-led);
-  box-shadow: 0 0 6px rgb(103 221 139 / 0.8);
+  /* glow follows the themed led color (it used to hardcode the dark green) */
+  box-shadow: 0 0 6px color-mix(in srgb, var(--color-led) 80%, transparent);
 }
 .led-busy {
   background: var(--color-amber);
@@ -138,6 +150,9 @@ img {
 }
 .led-off {
   background: #4a453d;
+}
+:root.light .led-off {
+  background: #cdc5b3;
 }
 @keyframes led-pulse {
   0%,
@@ -207,6 +222,21 @@ img {
     0 0 30px 4px rgb(var(--gold-rgb) / 0.1);
 }
 
+/* Light theme: a glow on paper reads as smudge, not light — the playing
+   highlights keep their gold ring but trade bloom for warm elevation. */
+:root.light .tile-playing {
+  box-shadow:
+    0 0 0 2px rgb(var(--gold-rgb) / 0.9),
+    0 2px 10px rgb(60 42 8 / 0.16),
+    0 8px 26px -8px rgb(60 42 8 / 0.28);
+}
+:root.light .row-playing {
+  box-shadow:
+    0 0 0 2px rgb(var(--gold-rgb) / 0.9),
+    0 2px 8px rgb(60 42 8 / 0.12),
+    0 5px 18px -6px rgb(60 42 8 / 0.2);
+}
+
 /* ambient album-art backdrop behind the whole window */
 .ambient-art {
   position: absolute;
@@ -237,6 +267,12 @@ img {
     0 24px 80px -12px rgb(0 0 0 / 0.85),
     0 0 120px -30px rgb(var(--amber-rgb) / 0.25);
 }
+:root.light .art-glow {
+  box-shadow:
+    0 0 0 1px rgb(30 20 5 / 0.12),
+    0 20px 55px -12px rgb(60 42 8 / 0.38),
+    0 0 90px -30px rgb(var(--amber-rgb) / 0.18);
+}
 
 /* deterministic tooltips for the nav rail (native titles are unreliable in
    frameless windows): appears to the right of the element after a short dwell */
@@ -266,6 +302,11 @@ img {
 [data-tip]:hover::after {
   opacity: 1;
   transition-delay: 0.45s;
+}
+:root.light [data-tip]::after {
+  box-shadow:
+    0 0 0 1px var(--color-edge2),
+    0 8px 24px rgb(40 28 8 / 0.22);
 }
 /* variant: tooltip below the element instead of to the right */
 [data-tip].tip-bottom::after {

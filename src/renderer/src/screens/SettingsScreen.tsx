@@ -25,7 +25,7 @@ import {
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
-import { SIGNAL_COLORS, cx } from '@/lib/format'
+import { SIGNAL_COLORS, cx, signalGlow } from '@/lib/format'
 import { Slider } from '@/components/Slider'
 
 const TABS = [
@@ -534,7 +534,7 @@ function Lamp({ color }: { color: string }): React.JSX.Element {
   return (
     <span
       className="inline-block h-2.5 w-2.5 rounded-full"
-      style={{ background: color, boxShadow: `0 0 8px ${color}b0` }}
+      style={{ background: color, boxShadow: signalGlow(color) }}
     />
   )
 }

@@ -121,13 +121,18 @@ export function signalQuality(playState: ZonePlayState | null): SignalQuality {
   return 'unknown'
 }
 
-/** Fixed (non-accent) lamp colors so quality reads consistently across albums. */
+/** Fixed (non-accent) lamp colors so quality reads consistently across albums.
+    Per-theme values live in styles.css (:root / :root.light). */
 export const SIGNAL_COLORS: Record<SignalQuality, string> = {
-  hires: '#f0a848',
-  lossless: '#67dd8b',
-  lossy: '#8d867a',
-  unknown: '#4a453d'
+  hires: 'var(--signal-hires)',
+  lossless: 'var(--signal-lossless)',
+  lossy: 'var(--signal-lossy)',
+  unknown: 'var(--signal-unknown)'
 }
+
+/** A translucent glow of a signal color (they're CSS vars — no hex-alpha tricks). */
+export const signalGlow = (color: string): string =>
+  `0 0 8px color-mix(in srgb, ${color} 70%, transparent)`
 
 export const SIGNAL_LABELS: Record<SignalQuality, string> = {
   hires: 'hi-res lossless',
