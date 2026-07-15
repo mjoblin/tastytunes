@@ -320,7 +320,7 @@ function QueueCard({ item, isCurrent, playing, sourceActive, currentRef }: Queue
       className={cx(
         // Hover grow matches PresetCard; scale is layout-free so edge-clipped
         // cards simply clip at the scrollport seam.
-        'group text-left rounded-2xl p-2 pb-2.5 transition-all hover:z-10 hover:scale-[1.04]',
+        'group text-left rounded-2xl p-2 pb-2.5 transition-all duration-300 ease-out hover:z-10 hover:scale-[1.04]',
         isDragging && 'z-10 opacity-90',
         isCurrent && sourceActive
           ? 'bg-goldtile/70 tile-playing'
