@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronRight, Disc3, History, Music, Play, Radio, Trash2 } from 'lucide-react'
+import { ChevronRight, Disc3, History, Music, Radio, Trash2 } from 'lucide-react'
 import type { RecentTrack } from '@shared/ipc'
-import type { QueueListItem } from '@shared/smoip'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
@@ -40,10 +39,6 @@ export function RecentlyPlayedScreen(): React.JSX.Element {
   const recents = useStore((s) => s.recents)
   const grouped = useStore((s) => s.settings.recentsGrouped)
   const setSettings = useStore((s) => s.setSettings)
-  const connection = useStore((s) => s.connection)
-  const systemPower = useStore((s) => s.systemPower)
-  const presets = useStore((s) => s.presets)
-  const queue = useStore((s) => s.queue)
 
   const scrollRef = useScrollMemory('recently-played')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -53,59 +48,6 @@ export function RecentlyPlayedScreen(): React.JSX.Element {
     const t = setInterval(() => setNow(Date.now()), 30_000)
     return () => clearInterval(t)
   }, [recents.length])
-
-  const connectedAwake = connection.phase === 'connected' && systemPower?.power === 'ON'
-
-  // Index the current queue so a local row can find its track (by stable id, or
-  // by song if the id has since moved) to replay it.
-  const queueIndex = useMemo(() => {
-    const byId = new Map<number, QueueListItem>()
-    const bySong = new Map<string, QueueListItem>()
-    for (const item of queue?.items ?? []) {
-      if (item.id != null) byId.set(item.id, item)
-      const key = `${item.metadata?.title ?? ''}|${item.metadata?.artist ?? ''}`
-      if (!bySong.has(key)) bySong.set(key, item)
-    }
-    return { byId, bySong }
-  }, [queue])
-
-  const queueItemFor = (e: RecentTrack): QueueListItem | null => {
-    if (e.session != null) return null // only discrete local tracks live in the queue
-    const byId = e.queueId != null ? queueIndex.byId.get(e.queueId) : undefined
-    if (byId && (byId.metadata?.title ?? null) === e.title) return byId
-    return queueIndex.bySong.get(`${e.title ?? ''}|${e.artist ?? ''}`) ?? null
-  }
-
-  // A continuous source can always be re-activated (switch source / recall
-  // preset); a local track only if it's still sitting in the queue.
-  const canActivate = (e: RecentTrack): boolean => {
-    if (!connectedAwake) return false
-    if (e.session != null) return true
-    return queueItemFor(e) != null
-  }
-
-  const activate = (e: RecentTrack): void => {
-    if (!canActivate(e)) return
-    if (e.isRadio) {
-      const preset = presets?.presets?.find(
-        (p) =>
-          (e.radioId != null && p.airable_radio_id === e.radioId) ||
-          (!!p.name && !!e.station && p.name.trim().toLowerCase() === e.station.trim().toLowerCase())
-      )
-      if (preset?.id != null) {
-        void tt.command({ type: 'recallPreset', presetId: preset.id })
-        return
-      }
-    }
-    if (e.session != null) {
-      if (e.sourceId) void tt.command({ type: 'setSource', sourceId: e.sourceId })
-      return
-    }
-    // Discrete local track: actually play it from the queue (setSource alone only
-    // re-selects the parked track without starting playback).
-    const item = queueItemFor(e)
-    if (item?.id != null) void tt.command({ type: 'playQueueId', queueId: item.id })
-  }
 
   const blocks = useMemo(() => buildBlocks(recents), [recents])
 
@@ -189,21 +131,13 @@ export function RecentlyPlayedScreen(): React.JSX.Element {
                         key={block.id}
                         block={block}
                         now={now}
-                        canActivate={canActivate(block.entries[0])}
                         expanded={expanded.has(block.id)}
                         onToggle={() => toggleExpand(block.id)}
-                        onPlay={() => activate(block.entries[0])}
                       />
                     ) : (
                       // Discrete track, or "All songs" mode: one row per entry.
                       block.entries.map((entry, i) => (
-                        <TrackRow
-                          key={`${block.id}-${i}`}
-                          entry={entry}
-                          now={now}
-                          canActivate={canActivate(entry)}
-                          onPlay={() => activate(entry)}
-                        />
+                        <TrackRow key={`${block.id}-${i}`} entry={entry} now={now} />
                       ))
                     )
                   )}
@@ -211,10 +145,7 @@ export function RecentlyPlayedScreen(): React.JSX.Element {
               </div>
             ))}
           </div>
-          <div className="microlabel mt-6 px-1">
-            up to 200 entries · stored locally ·{' '}
-            {connectedAwake ? 'click a row to play it' : 'clears on demand'}
-          </div>
+          <div className="microlabel mt-6 px-1">up to 200 entries · stored locally · clears on demand</div>
         </div>
       )}
     </div>
@@ -223,53 +154,28 @@ export function RecentlyPlayedScreen(): React.JSX.Element {
 
 // ------------------------------------------------------------------- row pieces
 
-function Thumb({
-  entry,
-  canActivate
-}: {
-  entry: RecentTrack
-  canActivate: boolean
-}): React.JSX.Element {
+function Thumb({ entry }: { entry: RecentTrack }): React.JSX.Element {
   const Fallback = entry.isRadio ? Radio : Disc3
   return (
-    <div className="relative h-11 w-11 shrink-0 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
+    <div className="h-11 w-11 shrink-0 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
       {entry.artUrl ? (
         <img src={entry.artUrl} alt="" loading="lazy" className="h-full w-full object-cover" />
       ) : (
         <Fallback size={17} className="text-faint" />
       )}
-      {canActivate && (
-        <span className="absolute inset-0 hidden group-hover:flex items-center justify-center bg-black/55">
-          <Play size={16} className="text-ink" fill="currentColor" />
-        </span>
-      )}
     </div>
   )
 }
 
-function TrackRow({
-  entry,
-  now,
-  canActivate,
-  onPlay
-}: {
-  entry: RecentTrack
-  now: number
-  canActivate: boolean
-  onPlay(): void
-}): React.JSX.Element {
+function TrackRow({ entry, now }: { entry: RecentTrack; now: number }): React.JSX.Element {
   const title = entry.isRadio ? (entry.station ?? entry.title) : entry.title
   const subtitle = entry.isRadio ? entry.title : songText(entry)
   return (
     <div
       data-recent-row="track"
-      onClick={canActivate ? onPlay : undefined}
-      className={cx(
-        'group flex items-center gap-4 rounded-xl px-3 py-2.5 ring-1 ring-edge bg-panel/60',
-        canActivate && 'cursor-pointer hover:bg-raised/70 hover:ring-edge2 transition-colors'
-      )}
+      className="flex items-center gap-4 rounded-xl px-3 py-2.5 ring-1 ring-edge bg-panel/60"
     >
-      <Thumb entry={entry} canActivate={canActivate} />
+      <Thumb entry={entry} />
       <div className="min-w-0 flex-1">
         <div className="text-[13.5px] text-ink truncate">{title ?? '—'}</div>
         {subtitle && <div className="text-[12px] text-dim truncate">{subtitle}</div>}
@@ -282,17 +188,13 @@ function TrackRow({
 function SessionRow({
   block,
   now,
-  canActivate,
   expanded,
-  onToggle,
-  onPlay
+  onToggle
 }: {
   block: Block
   now: number
-  canActivate: boolean
   expanded: boolean
   onToggle(): void
-  onPlay(): void
 }): React.JSX.Element {
   const head = block.entries[0]
   const songs = block.entries.filter((e) => e.title != null)
@@ -309,22 +211,17 @@ function SessionRow({
     <div>
       <div
         data-recent-row="session"
-        onClick={canActivate ? onPlay : undefined}
+        onClick={expandable ? onToggle : undefined}
         className={cx(
-          'group flex items-center gap-4 rounded-xl px-3 py-2.5 ring-1 ring-edge bg-panel/60',
-          canActivate && 'cursor-pointer hover:bg-raised/70 hover:ring-edge2 transition-colors'
+          'flex items-center gap-4 rounded-xl px-3 py-2.5 ring-1 ring-edge bg-panel/60',
+          expandable && 'cursor-pointer hover:bg-raised/70 hover:ring-edge2 transition-colors'
         )}
       >
-        <div className="relative h-11 w-11 shrink-0 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
+        <div className="h-11 w-11 shrink-0 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
           {head.artUrl ? (
             <img src={head.artUrl} alt="" loading="lazy" className="h-full w-full object-cover" />
           ) : (
             <FallbackIcon size={17} className="text-faint" />
-          )}
-          {canActivate && (
-            <span className="absolute inset-0 hidden group-hover:flex items-center justify-center bg-black/55">
-              <Play size={16} className="text-ink" fill="currentColor" />
-            </span>
           )}
         </div>
         <div className="min-w-0 flex-1">
@@ -343,17 +240,12 @@ function SessionRow({
             aria-label={expanded ? 'Hide songs' : 'Show songs'}
             className="shrink-0 p-1 rounded text-faint hover:text-ink transition-colors"
           >
-            <ChevronRight
-              size={16}
-              className={cx('transition-transform', expanded && 'rotate-90')}
-            />
+            <ChevronRight size={16} className={cx('transition-transform', expanded && 'rotate-90')} />
           </button>
         )}
       </div>
 
       {expandable && expanded && (
-        // Songs within a continuous session aren't individually replayable — the
-        // session header plays it. Kept hover-highlighted but not clickable.
         <div className="mt-1 ml-6 pl-4 border-l border-edge space-y-1">
           {songs.map((entry, i) => (
             <div
