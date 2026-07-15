@@ -317,13 +317,15 @@ function QueueCard({ item, isCurrent, playing, sourceActive, currentRef }: Queue
       {...attributes}
       {...listeners}
       className={cx(
-        'group text-left rounded-2xl p-2 pb-2.5 transition-all',
+        // Hover grow matches PresetCard; scale is layout-free so edge-clipped
+        // cards simply clip at the scrollport seam.
+        'group text-left rounded-2xl p-2 pb-2.5 transition-all hover:z-10 hover:scale-[1.02]',
         isDragging && 'z-10 opacity-90',
         isCurrent && sourceActive
           ? 'bg-goldtile/70 tile-playing'
           : isCurrent
-            ? 'bg-veil/60 ring-1 ring-edge2'
-            : 'bg-raised/70 ring-1 ring-edge hover:ring-edge2'
+            ? 'bg-veil/60 ring-1 ring-edge2 hover:shadow-[0_10px_28px_-8px_rgb(0_0_0_/_0.4)]'
+            : 'bg-raised/70 ring-1 ring-edge hover:ring-edge2 hover:shadow-[0_10px_28px_-8px_rgb(0_0_0_/_0.4)]'
       )}
     >
       <button

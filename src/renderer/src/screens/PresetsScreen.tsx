@@ -333,9 +333,13 @@ function PresetCard({ preset, playing }: { preset: PresetItem; playing: boolean 
       className={cx(
         // Inset tile: the gold highlight wraps the gray tile, never the art, so
         // it stays legible on gold/orange album covers.
-        'group text-left rounded-2xl p-2 pb-2.5 transition-all',
+        // Hover: a slight grow + lift (scale is layout-free, so edge-clipped
+        // cards just clip at the scrollport; z-10 keeps the grown card on top).
+        'group text-left rounded-2xl p-2 pb-2.5 transition-all hover:z-10 hover:scale-[1.02]',
         isDragging && 'z-10 opacity-90',
-        playing ? 'bg-goldtile/70 tile-playing' : 'bg-raised/70 ring-1 ring-edge hover:ring-edge2'
+        playing
+          ? 'bg-goldtile/70 tile-playing'
+          : 'bg-raised/70 ring-1 ring-edge hover:ring-edge2 hover:shadow-[0_10px_28px_-8px_rgb(0_0_0_/_0.4)]'
       )}
     >
       <button
