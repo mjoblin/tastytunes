@@ -5,6 +5,7 @@ import {
   CircleDot,
   Copy,
   Heart,
+  Info,
   LayoutGrid,
   Moon,
   Palette,
@@ -70,8 +71,10 @@ export function SettingsScreen(): React.JSX.Element {
           className="no-drag flex items-center gap-2 px-3.5 py-2 rounded-lg bg-gold text-bg text-[12.5px] font-medium
                      shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.3)] hover:brightness-110 hover:scale-[1.03] transition-all"
         >
+          <Info size={15} strokeWidth={2} />
+          Info &amp;
           <Heart size={15} strokeWidth={2} />
-          Info &amp; Support
+          Support
         </button>
       </header>
 
