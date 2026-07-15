@@ -409,7 +409,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   ambientArt: 'now-playing',
   ambientCoverage: 'window',
   vignette: true,
-  accentFollowsArt: true,
+  accentFollowsArt: false,
   presetCardSize: 160,
   presetGap: 12,
   presetFillRows: true,
