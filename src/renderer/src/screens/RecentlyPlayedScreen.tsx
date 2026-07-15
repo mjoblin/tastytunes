@@ -91,8 +91,8 @@ export function RecentlyPlayedScreen(): React.JSX.Element {
               onClick={() => void tt.clearRecents()}
               data-tip="Clear history"
               aria-label="Clear history"
-              className="no-drag flex items-center gap-2 px-3 py-1.5 rounded-lg ring-1 ring-edge text-[12.5px] text-dim
-                         hover:text-alert hover:ring-edge2 transition-all"
+              className="no-drag flex items-center gap-2 px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-[12.5px] text-dim
+                         hover:text-alert hover:ring-edge2 hover:bg-raised/70 transition-all"
             >
               <Trash2 size={14} strokeWidth={1.8} />
               Clear
