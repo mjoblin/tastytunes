@@ -288,18 +288,14 @@ export function SettingsScreen(): React.JSX.Element {
               label="Volume limit (%)"
               hint="Hard cap for pre-amp volume commands. Leave empty for no limit."
             >
-              <input
-                type="number"
+              <NumberField
+                value={settings.volumeLimitPercent}
                 min={10}
                 max={100}
-                value={settings.volumeLimitPercent ?? ''}
+                allowEmpty
                 placeholder="—"
-                onChange={(e) => {
-                  const v =
-                    e.target.value === '' ? null : Math.max(10, Math.min(100, Number(e.target.value)))
-                  void save({ volumeLimitPercent: v })
-                }}
-                className="w-20 bg-bg rounded-lg ring-1 ring-edge focus:ring-edge2 outline-none px-3 py-1.5 text-[13px] font-mono"
+                widthClass="w-20"
+                onCommit={(volumeLimitPercent) => void save({ volumeLimitPercent })}
               />
             </SettingRow>
           </div>
@@ -450,16 +446,12 @@ function McpSection({
           </SettingRow>
 
           <SettingRow label="Port" hint="The HTTP port the MCP endpoint listens on.">
-            <input
-              type="number"
+            <NumberField
+              value={mcp.port}
               min={1024}
               max={65535}
-              value={mcp.port}
-              onChange={(e) => {
-                const v = Math.max(1024, Math.min(65535, Number(e.target.value) || 8555))
-                saveMcp({ port: v })
-              }}
-              className="w-24 bg-bg rounded-lg ring-1 ring-edge focus:ring-edge2 outline-none px-3 py-1.5 text-[13px] font-mono"
+              widthClass="w-24"
+              onCommit={(port) => saveMcp({ port: port ?? 8555 })}
             />
           </SettingRow>
 
@@ -547,6 +539,63 @@ function CopyRow({
 }
 
 // ---------------------------------------------------------------- primitives
+
+/**
+ * Numeric input that lets you actually type: edits live in a draft and are
+ * clamped + committed on blur/Enter (Escape reverts). Clamping per keystroke
+ * made intermediate values impossible — typing "45" became 10, then 100.
+ */
+function NumberField({
+  value,
+  min,
+  max,
+  allowEmpty,
+  placeholder,
+  widthClass,
+  onCommit
+}: {
+  value: number | null
+  min: number
+  max: number
+  allowEmpty?: boolean
+  placeholder?: string
+  widthClass: string
+  onCommit(next: number | null): void
+}): React.JSX.Element {
+  const [draft, setDraft] = useState<string | null>(null)
+
+  const commit = (): void => {
+    if (draft === null) return
+    const trimmed = draft.trim()
+    if (trimmed === '') {
+      if (allowEmpty) onCommit(null)
+    } else {
+      const n = Number(trimmed)
+      if (!Number.isNaN(n)) onCommit(Math.max(min, Math.min(max, Math.round(n))))
+    }
+    setDraft(null)
+  }
+
+  return (
+    <input
+      type="number"
+      min={min}
+      max={max}
+      value={draft ?? (value ?? '')}
+      placeholder={placeholder}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+        else if (e.key === 'Escape') setDraft(null)
+      }}
+      className={cx(
+        widthClass,
+        'bg-bg rounded-lg ring-1 ring-edge focus:ring-edge2 outline-none px-3 py-1.5 text-[13px] font-mono'
+      )}
+    />
+  )
+}
 
 function Lamp({ color }: { color: string }): React.JSX.Element {
   return (
