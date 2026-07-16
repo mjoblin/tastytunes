@@ -4,6 +4,7 @@ import {
   Check,
   CircleDot,
   Copy,
+  Globe,
   Heart,
   LayoutGrid,
   Monitor,
@@ -34,6 +35,7 @@ const TABS = [
   { id: 'appearance', label: 'Appearance', icon: Palette },
   { id: 'layout', label: 'Layout', icon: LayoutGrid },
   { id: 'behavior', label: 'Behavior', icon: SlidersHorizontal },
+  { id: 'connections', label: 'Connections', icon: Globe },
   { id: 'agents', label: 'AI agents', icon: Bot },
   { id: 'lamps', label: 'Status lamps', icon: CircleDot }
 ] as const
@@ -259,28 +261,6 @@ export function SettingsScreen(): React.JSX.Element {
               onChange={(notifications) => void save({ notifications })}
             />
 
-            <Toggle
-              label="Check for updates"
-              hint="Look for a newer release on GitHub at launch and every few hours. A dot on the wordmark and a line in About — nothing downloads or installs itself."
-              checked={settings.updateCheck}
-              onChange={(updateCheck) => void save({ updateCheck })}
-            />
-
-            <Toggle
-              label="Lyrics on Now Playing"
-              hint="Adds a lyrics panel to the Now Playing screen, fetched from lrclib.net when you open it. Sends the current track's title and artist to LRCLIB; off means no requests, ever."
-              checked={settings.lyrics}
-              onChange={(lyrics) => void save({ lyrics })}
-            />
-
-            <Toggle
-              label="Current lyric line"
-              hint="Shows the live synced lyric under the track details on Now Playing (hidden while the full panel is open). Looks tracks up as they change. Hover the line for a quick hide."
-              disabled={!settings.lyrics}
-              checked={settings.lyricsLine}
-              onChange={(lyricsLine) => void save({ lyricsLine })}
-            />
-
             <SettingRow
               label="Recently played"
               hint="A local log of tracks and stations you've played, shown on the Recently Played screen (R). Kept only on this computer."
@@ -320,6 +300,36 @@ export function SettingsScreen(): React.JSX.Element {
                 onCommit={(volumeLimitPercent) => void save({ volumeLimitPercent })}
               />
             </SettingRow>
+          </div>
+        </section>
+        )}
+
+        {tab === 'connections' && (
+        <section className="space-y-3">
+          {/* everything here talks to a service outside the LAN — each row says
+              exactly what leaves the machine, and off always means zero requests */}
+          <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
+            <Toggle
+              label="Check for updates"
+              hint="Look for a newer release on GitHub at launch and every few hours. A dot on the wordmark and a line in About — nothing downloads or installs itself."
+              checked={settings.updateCheck}
+              onChange={(updateCheck) => void save({ updateCheck })}
+            />
+
+            <Toggle
+              label="Lyrics on Now Playing"
+              hint="Adds a lyrics panel to the Now Playing screen, fetched from lrclib.net when you open it. Sends the current track's title and artist to LRCLIB; off means no requests, ever."
+              checked={settings.lyrics}
+              onChange={(lyrics) => void save({ lyrics })}
+            />
+
+            <Toggle
+              label="Current lyric line"
+              hint="Shows the live synced lyric under the track details on Now Playing (hidden while the full panel is open). Looks tracks up as they change."
+              disabled={!settings.lyrics}
+              checked={settings.lyricsLine}
+              onChange={(lyricsLine) => void save({ lyricsLine })}
+            />
           </div>
         </section>
         )}
