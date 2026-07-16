@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import {
   IPC,
   type AppSettings,
+  type LyricsQuery,
   type PushMessage,
   type SleepTimer,
   type StreamerCommand,
@@ -18,6 +19,7 @@ const api: TastyTunesApi = {
   getSettings: () => ipcRenderer.invoke(IPC.getSettings),
   setSettings: (patch: Partial<AppSettings>) => ipcRenderer.invoke(IPC.setSettings, patch),
   fetchArt: (url: string) => ipcRenderer.invoke(IPC.fetchArt, url),
+  fetchLyrics: (query: LyricsQuery) => ipcRenderer.invoke(IPC.fetchLyrics, query),
   toggleMini: () => ipcRenderer.invoke(IPC.toggleMini),
   showMain: () => ipcRenderer.invoke(IPC.showMain),
   setSleep: (sleep: SleepTimer | null) => ipcRenderer.invoke(IPC.setSleep, sleep),

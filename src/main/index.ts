@@ -1,10 +1,18 @@
 import { app, BrowserWindow, globalShortcut, ipcMain, powerMonitor, screen, shell } from 'electron'
 import { join } from 'node:path'
-import { IPC, type AppSettings, type MenuCommand, type SleepTimer, type StreamerCommand } from '@shared/ipc'
+import {
+  IPC,
+  type AppSettings,
+  type LyricsQuery,
+  type MenuCommand,
+  type SleepTimer,
+  type StreamerCommand
+} from '@shared/ipc'
 import { DeviceManager } from './deviceManager'
 import { McpBridge } from './mcpServer'
 import { installAppMenu } from './menu'
 import { checkNow, currentUpdate, startUpdateCheck } from './updateCheck'
+import { fetchLyrics } from './lyrics'
 import { getSettings, updateSettings } from './persist'
 import { getRecents } from './recents'
 
@@ -188,6 +196,11 @@ function registerIpc(): void {
     return Promise.resolve()
   })
   ipcMain.handle(IPC.setSleep, (_e, sleep: SleepTimer | null) => deviceManager.setSleep(sleep))
+  // Belt-and-braces gate: the renderer only asks while the setting is on, but
+  // "off = no requests, ever" should hold even if a stale renderer asks.
+  ipcMain.handle(IPC.fetchLyrics, (_e, q: LyricsQuery) =>
+    getSettings().lyrics ? fetchLyrics(q) : null
+  )
   ipcMain.handle(IPC.getRecents, () => getRecents())
   ipcMain.handle(IPC.clearRecents, () => deviceManager.clearRecents())
   ipcMain.handle(IPC.toggleMini, () => toggleMiniPlayer())

@@ -143,6 +143,23 @@ export interface UpdateInfo {
   url: string
 }
 
+// ------------------------------------------------------------------- lyrics
+
+export interface LyricsQuery {
+  artist: string
+  title: string
+  album: string | null
+  /** Track length in seconds, if known — LRCLIB uses it for exact matching. */
+  duration: number | null
+}
+
+export interface LyricsResult {
+  plain: string | null
+  /** LRC-format synced lyrics ("[mm:ss.xx] line"), when the record has them. */
+  synced: string | null
+  instrumental: boolean
+}
+
 // ------------------------------------------------------ renderer -> main actions
 
 export type StreamerCommand =
@@ -448,6 +465,8 @@ export interface AppSettings {
   motion: MotionMode
   /** Check GitHub releases for a newer version on launch and every few hours. */
   updateCheck: boolean
+  /** Lyrics panel on Now Playing — fetches from LRCLIB on demand when opened. */
+  lyrics: boolean
   /** MCP server for local AI agents. */
   mcp: McpSettings
   /** Last-visited Settings tab (id from the Settings screen's tab rail). */
@@ -480,6 +499,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   recentsGrouped: true,
   motion: 'system',
   updateCheck: true,
+  lyrics: false,
   mcp: { enabled: false, bind: 'localhost', port: 8555, disabledClusters: [], disabledTools: [] },
   settingsTab: 'appearance',
   miniBounds: null
@@ -521,6 +541,8 @@ export interface TastyTunesApi {
   setSettings(patch: Partial<AppSettings>): Promise<AppSettings>
   /** Fetch album art via the main process (bypasses CORS) as a data URL. */
   fetchArt(url: string): Promise<{ dataUrl: string } | null>
+  /** Look up lyrics via LRCLIB (main process, in-memory cached; null = not found). */
+  fetchLyrics(query: LyricsQuery): Promise<LyricsResult | null>
   /** Open/close the mini player window. */
   toggleMini(): Promise<void>
   /** Show and focus the main window. */
@@ -544,6 +566,7 @@ export const IPC = {
   getSettings: 'tt:getSettings',
   setSettings: 'tt:setSettings',
   fetchArt: 'tt:fetchArt',
+  fetchLyrics: 'tt:fetchLyrics',
   toggleMini: 'tt:toggleMini',
   showMain: 'tt:showMain',
   setSleep: 'tt:setSleep',

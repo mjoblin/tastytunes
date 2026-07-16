@@ -70,6 +70,8 @@ interface TTState {
   infoOpen: boolean
   paletteOpen: boolean
   displayMode: boolean
+  /** Lyrics drawer on the Now Playing screen (ephemeral, not persisted). */
+  lyricsOpen: boolean
   /** True while the full-window ambient backdrop is showing — chrome goes transparent. */
   ambientWindowActive: boolean
   /** Mini window only: cursor is over the window (pushed from main). */
@@ -89,6 +91,7 @@ interface TTState {
   setInfoOpen(open: boolean): void
   setPaletteOpen(open: boolean): void
   setDisplayMode(on: boolean): void
+  setLyricsOpen(open: boolean): void
   setAmbientWindowActive(on: boolean): void
   setSleepAction(action: SleepAction): void
   setSettings(settings: AppSettings): void
@@ -124,6 +127,7 @@ export const useStore = create<TTState>((set, get) => ({
   infoOpen: false,
   paletteOpen: false,
   displayMode: false,
+  lyricsOpen: false,
   ambientWindowActive: false,
   miniHover: false,
   sleep: null,
@@ -137,6 +141,7 @@ export const useStore = create<TTState>((set, get) => ({
   setInfoOpen: (infoOpen) => set({ infoOpen }),
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
   setDisplayMode: (displayMode) => set({ displayMode }),
+  setLyricsOpen: (lyricsOpen) => set({ lyricsOpen }),
   setAmbientWindowActive: (ambientWindowActive) => set({ ambientWindowActive }),
   // Local settings echo only — an armed timer's action is updated via
   // tt.setSleep, and the main process pushes the change back.

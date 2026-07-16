@@ -266,6 +266,13 @@ export function SettingsScreen(): React.JSX.Element {
               onChange={(updateCheck) => void save({ updateCheck })}
             />
 
+            <Toggle
+              label="Lyrics on Now Playing"
+              hint="Adds a lyrics panel to the Now Playing screen, fetched from lrclib.net when you open it. Sends the current track's title and artist to LRCLIB; off means no requests, ever."
+              checked={settings.lyrics}
+              onChange={(lyrics) => void save({ lyrics })}
+            />
+
             <SettingRow
               label="Recently played"
               hint="A local log of tracks and stations you've played, shown on the Recently Played screen (R). Kept only on this computer."

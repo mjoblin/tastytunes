@@ -1,7 +1,8 @@
-import { Disc3, Maximize2, RadioTower } from 'lucide-react'
+import { Disc3, Maximize2, MicVocal, RadioTower } from 'lucide-react'
 import { useStore } from '@/store'
 import { cx, deriveNowPlaying } from '@/lib/format'
 import { SignalLamp } from '@/components/SignalLamp'
+import { LyricsPanel } from '@/components/LyricsPanel'
 
 const ALIGN_H = { left: 'justify-start', center: 'justify-center', right: 'justify-end' } as const
 const ALIGN_V = { top: 'items-start', center: 'items-center', bottom: 'items-end' } as const
@@ -10,8 +11,13 @@ export function NowPlayingScreen(): React.JSX.Element {
   const playState = useStore((s) => s.playState)
   const nowPlaying = useStore((s) => s.nowPlaying)
   const setDisplayMode = useStore((s) => s.setDisplayMode)
-  const { nowPlayingAlignH, nowPlayingAlignV } = useStore((s) => s.settings)
+  const lyricsOpen = useStore((s) => s.lyricsOpen)
+  const setLyricsOpen = useStore((s) => s.setLyricsOpen)
+  const { nowPlayingAlignH, nowPlayingAlignV, lyrics: lyricsEnabled } = useStore((s) => s.settings)
   const meta = deriveNowPlaying(playState, nowPlaying)
+
+  // Lyrics need real track metadata — hidden for radio and title-only sources.
+  const lyricsAvailable = lyricsEnabled && !meta.isRadio && !!meta.title && !!meta.subtitle
 
   const sourceName = nowPlaying?.source?.name ?? null
   const queueIndex = playState?.queue_index
@@ -24,6 +30,18 @@ export function NowPlayingScreen(): React.JSX.Element {
   // display-mode button) so the art/text sit where they did with a title.
   const header = (
     <header className="drag-region flex items-center justify-end px-8 pt-8 pb-4 min-h-[83px]">
+      {lyricsAvailable && (
+        <button
+          onClick={() => setLyricsOpen(!lyricsOpen)}
+          title="Lyrics"
+          className={cx(
+            'no-drag p-2 rounded-md transition-colors',
+            lyricsOpen ? 'text-gold' : 'text-faint hover:text-dim'
+          )}
+        >
+          <MicVocal size={16} />
+        </button>
+      )}
       <button
         onClick={() => setDisplayMode(true)}
         title="Full-screen display mode (F)"
@@ -53,6 +71,8 @@ export function NowPlayingScreen(): React.JSX.Element {
     <div className="relative h-full overflow-hidden flex flex-col">
       {/* ambient art backdrop is rendered app-wide by AmbientBackdrop in App */}
       {header}
+
+      {lyricsAvailable && lyricsOpen && <LyricsPanel />}
 
       {/* fixed alignment (settings-chosen) so the layout doesn't shift as track lengths change */}
       <div
