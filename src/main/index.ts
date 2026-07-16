@@ -13,6 +13,7 @@ import { McpBridge } from './mcpServer'
 import { installAppMenu } from './menu'
 import { checkNow, currentUpdate, startUpdateCheck } from './updateCheck'
 import { fetchLyrics } from './lyrics'
+import { scrobbler } from './scrobbler'
 import { getSettings, updateSettings } from './persist'
 import { getRecents } from './recents'
 
@@ -201,6 +202,7 @@ function registerIpc(): void {
   ipcMain.handle(IPC.fetchLyrics, (_e, q: LyricsQuery) =>
     getSettings().lyrics ? fetchLyrics(q) : null
   )
+  ipcMain.handle(IPC.lbValidate, () => scrobbler.validateToken())
   ipcMain.handle(IPC.getRecents, () => getRecents())
   ipcMain.handle(IPC.clearRecents, () => deviceManager.clearRecents())
   ipcMain.handle(IPC.toggleMini, () => toggleMiniPlayer())

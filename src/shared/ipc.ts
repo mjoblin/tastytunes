@@ -471,6 +471,10 @@ export interface AppSettings {
   lyricsLine: boolean
   /** Current synced line in full-screen display mode (toggled from its chrome). */
   displayLyrics: boolean
+  /** Scrobble listens to ListenBrainz (needs a user token; radio is never scrobbled). */
+  lbEnabled: boolean
+  /** ListenBrainz user token, from listenbrainz.org/settings. Stored locally. */
+  lbToken: string
   /** MCP server for local AI agents. */
   mcp: McpSettings
   /** Last-visited Settings tab (id from the Settings screen's tab rail). */
@@ -506,6 +510,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   lyrics: true,
   lyricsLine: true,
   displayLyrics: true,
+  lbEnabled: false,
+  lbToken: '',
   mcp: { enabled: false, bind: 'localhost', port: 8555, disabledClusters: [], disabledTools: [] },
   settingsTab: 'appearance',
   miniBounds: null
@@ -549,6 +555,8 @@ export interface TastyTunesApi {
   fetchArt(url: string): Promise<{ dataUrl: string } | null>
   /** Look up lyrics via LRCLIB (main process, in-memory cached; null = not found). */
   fetchLyrics(query: LyricsQuery): Promise<LyricsResult | null>
+  /** Check the saved ListenBrainz token (null = network failure, not a verdict). */
+  lbValidate(): Promise<{ valid: boolean; userName: string | null } | null>
   /** Open/close the mini player window. */
   toggleMini(): Promise<void>
   /** Show and focus the main window. */
@@ -573,6 +581,7 @@ export const IPC = {
   setSettings: 'tt:setSettings',
   fetchArt: 'tt:fetchArt',
   fetchLyrics: 'tt:fetchLyrics',
+  lbValidate: 'tt:lbValidate',
   toggleMini: 'tt:toggleMini',
   showMain: 'tt:showMain',
   setSleep: 'tt:setSleep',

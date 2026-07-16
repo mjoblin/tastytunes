@@ -32,6 +32,7 @@ import { SmoipSocket } from './smoipSocket'
 import * as smoipHttp from './smoipHttp'
 import { getSettings, updateSettings } from './persist'
 import { clearRecents, getRecents, recordRecent } from './recents'
+import { scrobbler } from './scrobbler'
 
 const FRAME_RING_SIZE = 300
 const LOG_RING_SIZE = 300
@@ -328,6 +329,7 @@ export class DeviceManager {
         this.trackChangeNotification(this.cache.playState)
         this.recordRecentlyPlayed(this.cache.playState)
         this.sleepBoundaryCheck(this.cache.playState)
+        scrobbler.onPlayState(this.cache.playState)
         return this.push({ kind: 'playState', data: this.cache.playState })
       case '/zone/play_state/position':
         this.cache.position = data as ZonePosition
@@ -512,6 +514,9 @@ export class DeviceManager {
 
   private setConnection(state: ConnectionState): void {
     this.connection = state
+    // Wallclock-based listen accounting can't survive a dead link or a device
+    // switch — drop the in-flight track rather than over-count it.
+    if (state.phase !== 'connected') scrobbler.reset()
     this.push({ kind: 'connection', state })
   }
 
