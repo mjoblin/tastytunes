@@ -26,7 +26,7 @@ export function LyricsPanel(): React.JSX.Element {
   return (
     <aside className="no-drag absolute inset-y-0 right-0 z-10 w-[380px] max-w-[45%] flex flex-col bg-panel/60 backdrop-blur-md border-l border-edge">
       <div className="flex items-center justify-between px-6 pt-5 pb-3">
-        <div className="microlabel text-dim flex items-center gap-2">
+        <div className="microlabel text-ink/80 flex items-center gap-2">
           <MicVocal size={13} />
           lyrics
         </div>
@@ -56,7 +56,7 @@ export function LyricsPanel(): React.JSX.Element {
         onMouseLeave={() => setHovered(false)}
       >
         {status === 'loading' && (
-          <div className="text-[13px] text-faint pt-2 motion-safe:animate-pulse">
+          <div className="text-[13px] text-dim pt-2 motion-safe:animate-pulse">
             Retrieving lyrics…
           </div>
         )}
