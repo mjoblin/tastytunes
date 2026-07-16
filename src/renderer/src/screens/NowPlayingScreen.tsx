@@ -39,7 +39,8 @@ export function NowPlayingScreen(): React.JSX.Element {
       {lyricsAvailable && (
         <button
           onClick={() => setLyricsOpen(!lyricsOpen)}
-          title="Lyrics"
+          data-tip="Lyrics"
+          aria-label="Lyrics"
           className={cx(
             'no-drag p-2 rounded-md transition-colors',
             lyricsOpen ? 'text-gold' : 'text-faint hover:text-dim'
@@ -50,7 +51,8 @@ export function NowPlayingScreen(): React.JSX.Element {
       )}
       <button
         onClick={() => setDisplayMode(true)}
-        title="Full-screen display mode (F)"
+        data-tip="Full-screen display mode (F)"
+        aria-label="Full-screen display mode (F)"
         className="no-drag p-2 rounded-md text-faint hover:text-dim transition-colors"
       >
         <Maximize2 size={16} />
@@ -139,14 +141,14 @@ export function NowPlayingScreen(): React.JSX.Element {
             <div className="text-[13px] text-dim">{nowPlaying.display.line3}</div>
           )}
 
-          {/* inline lyric flavor — never alongside the full panel */}
-          {lyricsAvailable && lyricsLine && !lyricsOpen && <LyricLine />}
-
           {queueIndex != null && queueLength != null && queueLength > 0 && (
             <div className="microlabel">
               track {queueIndex + 1} of {queueLength}
             </div>
           )}
+
+          {/* inline lyric flavor — never alongside the full panel */}
+          {lyricsAvailable && lyricsLine && !lyricsOpen && <LyricLine />}
         </div>
       </div>
     </div>

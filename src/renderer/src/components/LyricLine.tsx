@@ -13,8 +13,10 @@ export function LyricLine(): React.JSX.Element | null {
   const setSettings = useStore((s) => s.setSettings)
   const { synced, currentIndex } = useLyrics()
 
-  const line = synced && currentIndex >= 0 ? synced[currentIndex].text : null
-  if (!line) return null
+  if (!synced) return null
+  // LRC files carry empty-text timestamps for intros and instrumental gaps —
+  // hold the line's place with a quiet ♪ instead of blinking out of existence.
+  const line = currentIndex >= 0 ? synced[currentIndex].text : ''
 
   const hide = async (): Promise<void> => {
     const next = await tt.setSettings({ lyricsLine: false })
@@ -23,9 +25,13 @@ export function LyricLine(): React.JSX.Element | null {
 
   return (
     <div className="group flex items-start gap-2 min-h-[28px] max-w-xl">
-      <div className="font-display text-[17px] leading-snug text-gold/90 line-clamp-2">
-        {line}
-      </div>
+      {line ? (
+        <div className="font-display text-[17px] leading-snug text-gold/90 line-clamp-2">
+          {line}
+        </div>
+      ) : (
+        <div className="font-display text-[17px] leading-snug text-faint">♪</div>
+      )}
       <button
         onClick={() => void hide()}
         aria-label="Hide lyric line"

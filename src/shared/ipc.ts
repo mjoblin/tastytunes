@@ -501,7 +501,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   recentsGrouped: true,
   motion: 'system',
   updateCheck: true,
-  lyrics: false,
+  lyrics: true,
   lyricsLine: true,
   mcp: { enabled: false, bind: 'localhost', port: 8555, disabledClusters: [], disabledTools: [] },
   settingsTab: 'appearance',

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { MicVocal, X } from 'lucide-react'
 import { tt } from '@/api'
 import { useStore } from '@/store'
@@ -9,18 +9,22 @@ export function LyricsPanel(): React.JSX.Element {
   const setLyricsOpen = useStore((s) => s.setLyricsOpen)
   const { status, result, synced, currentIndex, isRadio, hasQuery } = useLyrics()
 
-  // Keep the current line centered; jump instead of glide under reduced motion.
+  // Keep the current line centered — but never while the pointer is inside the
+  // panel: recentering mid-hover yanks the line you're about to click away.
+  // Recenters again on pointer leave. Jump instead of glide under reduced motion.
+  const [hovered, setHovered] = useState(false)
   const currentRef = useRef<HTMLButtonElement | null>(null)
   useEffect(() => {
+    if (hovered) return
     const reduce = document.documentElement.classList.contains('reduce-motion')
     currentRef.current?.scrollIntoView({
       block: 'center',
       behavior: reduce ? 'auto' : 'smooth'
     })
-  }, [currentIndex])
+  }, [currentIndex, hovered])
 
   return (
-    <aside className="no-drag absolute inset-y-0 right-0 z-10 w-[380px] max-w-[45%] flex flex-col bg-panel/85 backdrop-blur-md border-l border-edge">
+    <aside className="no-drag absolute inset-y-0 right-0 z-10 w-[380px] max-w-[45%] flex flex-col bg-panel/60 backdrop-blur-md border-l border-edge">
       <div className="flex items-center justify-between px-6 pt-5 pb-3">
         <div className="microlabel flex items-center gap-2">
           <MicVocal size={13} />
@@ -35,8 +39,14 @@ export function LyricsPanel(): React.JSX.Element {
         </button>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-4">
-        {status === 'loading' && <div className="text-[13px] text-faint pt-2">Looking up…</div>}
+      <div
+        className="flex-1 min-h-0 overflow-y-auto px-6 pb-4"
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+      >
+        {status === 'loading' && (
+          <div className="text-[13px] text-faint pt-2">Retrieving lyrics…</div>
+        )}
 
         {status === 'none' && (
           <div className="text-[13px] text-faint pt-2">
