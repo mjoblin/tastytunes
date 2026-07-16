@@ -11,6 +11,16 @@ mac:
   category: public.app-category.music
   target:
     - dmg
+    - zip # electron-updater on macOS updates from the zip, not the dmg
+  # Signing/notarization credentials come from the environment (CSC_LINK,
+  # CSC_KEY_PASSWORD, APPLE_API_KEY/_ID/_ISSUER). Without them the build is
+  # unsigned and notarization is skipped with a warning, so local dry runs
+  # and credential-less CI keep working.
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  notarize: true
 win:
   target:
     - nsis
