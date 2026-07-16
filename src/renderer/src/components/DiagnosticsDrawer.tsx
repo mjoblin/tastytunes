@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowDownLeft, ArrowUpRight, Pause, Play, X } from 'lucide-react'
+import { tt } from '@/api'
 import { useStore } from '@/store'
 import { cx } from '@/lib/format'
 
@@ -12,7 +13,16 @@ export function DiagnosticsDrawer(): React.JSX.Element {
   const logs = useStore((s) => s.logs)
   const netRequests = useStore((s) => s.netRequests)
   const setDiagnosticsOpen = useStore((s) => s.setDiagnosticsOpen)
-  const [tab, setTab] = useState<Tab>('smoip')
+  const settings = useStore((s) => s.settings)
+  const setSettings = useStore((s) => s.setSettings)
+  // Last-selected tab persists; switch locally first so it feels instant.
+  const [tab, setTab] = useState<Tab>(() =>
+    settings.diagnosticsTab === 'requests' ? 'requests' : 'smoip'
+  )
+  const selectTab = (id: Tab): void => {
+    setTab(id)
+    void tt.setSettings({ diagnosticsTab: id }).then(setSettings)
+  }
   const [filter, setFilter] = useState<Filter>('all')
   const [paused, setPaused] = useState(false)
   const [expanded, setExpanded] = useState<number | null>(null)
@@ -43,7 +53,7 @@ export function DiagnosticsDrawer(): React.JSX.Element {
         ).map(([id, label]) => (
           <button
             key={id}
-            onClick={() => setTab(id)}
+            onClick={() => selectTab(id)}
             className={cx(
               'microlabel px-2 py-0.5 rounded transition-colors',
               tab === id ? 'bg-amberdim text-amber' : 'text-faint hover:text-dim'

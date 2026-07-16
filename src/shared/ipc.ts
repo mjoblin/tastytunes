@@ -534,6 +534,8 @@ export interface AppSettings {
   mcp: McpSettings
   /** Last-visited Settings tab (id from the Settings screen's tab rail). */
   settingsTab: string
+  /** Last-selected diagnostics-drawer tab (smoip | requests). */
+  diagnosticsTab: string
   /** Remembered mini-player window position. */
   miniBounds: { x: number; y: number } | null
 }
@@ -571,6 +573,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   schedules: [],
   mcp: { enabled: false, bind: 'localhost', port: 8555, disabledClusters: [], disabledTools: [] },
   settingsTab: 'appearance',
+  diagnosticsTab: 'smoip',
   miniBounds: null
 }
 

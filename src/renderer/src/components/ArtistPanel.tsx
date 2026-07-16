@@ -58,7 +58,7 @@ export function ArtistPanel(): React.JSX.Element {
   return (
     <aside className="no-drag absolute inset-y-0 right-0 z-10 w-[380px] max-w-[45%] flex flex-col bg-panel/60 backdrop-blur-md border-l border-edge">
       <div className="flex items-center justify-between px-6 pt-5 pb-3">
-        <div className="microlabel flex items-center gap-2">
+        <div className="microlabel text-dim flex items-center gap-2">
           <UserRound size={13} />
           artist
         </div>
@@ -68,14 +68,14 @@ export function ArtistPanel(): React.JSX.Element {
             disabled={status === 'loading'}
             aria-label="Refresh artist details"
             data-tip="Refresh artist details"
-            className="tip-bottom tip-end p-1.5 rounded-full text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all disabled:opacity-40 disabled:pointer-events-none"
+            className="tip-bottom tip-end p-1.5 rounded-full text-dim hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all disabled:opacity-40 disabled:pointer-events-none"
           >
             <RotateCw size={13} />
           </button>
           <button
             onClick={() => setArtistOpen(false)}
             aria-label="Close artist panel"
-            className="p-1.5 rounded-full text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
+            className="p-1.5 rounded-full text-dim hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
           >
             <X size={15} />
           </button>
