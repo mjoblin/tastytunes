@@ -467,6 +467,8 @@ export interface AppSettings {
   updateCheck: boolean
   /** Lyrics panel on Now Playing — fetches from LRCLIB on demand when opened. */
   lyrics: boolean
+  /** Inline flavor: current synced line under the Now Playing track details. */
+  lyricsLine: boolean
   /** MCP server for local AI agents. */
   mcp: McpSettings
   /** Last-visited Settings tab (id from the Settings screen's tab rail). */
@@ -500,6 +502,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   motion: 'system',
   updateCheck: true,
   lyrics: false,
+  lyricsLine: true,
   mcp: { enabled: false, bind: 'localhost', port: 8555, disabledClusters: [], disabledTools: [] },
   settingsTab: 'appearance',
   miniBounds: null

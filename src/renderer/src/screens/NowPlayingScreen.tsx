@@ -3,6 +3,7 @@ import { useStore } from '@/store'
 import { cx, deriveNowPlaying } from '@/lib/format'
 import { SignalLamp } from '@/components/SignalLamp'
 import { LyricsPanel } from '@/components/LyricsPanel'
+import { LyricLine } from '@/components/LyricLine'
 
 const ALIGN_H = { left: 'justify-start', center: 'justify-center', right: 'justify-end' } as const
 const ALIGN_V = { top: 'items-start', center: 'items-center', bottom: 'items-end' } as const
@@ -13,7 +14,12 @@ export function NowPlayingScreen(): React.JSX.Element {
   const setDisplayMode = useStore((s) => s.setDisplayMode)
   const lyricsOpen = useStore((s) => s.lyricsOpen)
   const setLyricsOpen = useStore((s) => s.setLyricsOpen)
-  const { nowPlayingAlignH, nowPlayingAlignV, lyrics: lyricsEnabled } = useStore((s) => s.settings)
+  const {
+    nowPlayingAlignH,
+    nowPlayingAlignV,
+    lyrics: lyricsEnabled,
+    lyricsLine
+  } = useStore((s) => s.settings)
   const meta = deriveNowPlaying(playState, nowPlaying)
 
   // Lyrics need real track metadata — hidden for radio and title-only sources.
@@ -132,6 +138,9 @@ export function NowPlayingScreen(): React.JSX.Element {
           {meta.isRadio && nowPlaying?.display?.line3 && (
             <div className="text-[13px] text-dim">{nowPlaying.display.line3}</div>
           )}
+
+          {/* inline lyric flavor — never alongside the full panel */}
+          {lyricsAvailable && lyricsLine && !lyricsOpen && <LyricLine />}
 
           {queueIndex != null && queueLength != null && queueLength > 0 && (
             <div className="microlabel">

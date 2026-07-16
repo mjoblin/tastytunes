@@ -273,6 +273,14 @@ export function SettingsScreen(): React.JSX.Element {
               onChange={(lyrics) => void save({ lyrics })}
             />
 
+            <Toggle
+              label="Current lyric line"
+              hint="Shows the live synced lyric under the track details on Now Playing (hidden while the full panel is open). Looks tracks up as they change. Hover the line for a quick hide."
+              disabled={!settings.lyrics}
+              checked={settings.lyricsLine}
+              onChange={(lyricsLine) => void save({ lyricsLine })}
+            />
+
             <SettingRow
               label="Recently played"
               hint="A local log of tracks and stations you've played, shown on the Recently Played screen (R). Kept only on this computer."

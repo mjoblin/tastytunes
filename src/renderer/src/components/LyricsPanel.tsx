@@ -1,97 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { MicVocal, X } from 'lucide-react'
-import type { LyricsResult } from '@shared/ipc'
 import { tt } from '@/api'
 import { useStore } from '@/store'
-import { cx, deriveNowPlaying } from '@/lib/format'
-
-interface SyncedLine {
-  t: number
-  text: string
-}
-
-// "[mm:ss.xx] line" — repeated tags on one line share the text.
-function parseLrc(lrc: string): SyncedLine[] {
-  const out: SyncedLine[] = []
-  for (const raw of lrc.split('\n')) {
-    const tags = [...raw.matchAll(/\[(\d+):(\d+(?:\.\d+)?)\]/g)]
-    if (tags.length === 0) continue
-    const text = raw.replace(/\[\d+:\d+(?:\.\d+)?\]/g, '').trim()
-    for (const m of tags) out.push({ t: Number(m[1]) * 60 + Number(m[2]), text })
-  }
-  return out.sort((a, b) => a.t - b.t)
-}
-
-type Status = 'loading' | 'ready' | 'none'
+import { cx } from '@/lib/format'
+import { useLyrics } from '@/hooks/useLyrics'
 
 export function LyricsPanel(): React.JSX.Element {
-  const playState = useStore((s) => s.playState)
-  const nowPlaying = useStore((s) => s.nowPlaying)
-  const playhead = useStore((s) => s.playhead)
   const setLyricsOpen = useStore((s) => s.setLyricsOpen)
-
-  const meta = deriveNowPlaying(playState, nowPlaying)
-  const duration = playState?.metadata?.duration ?? null
-  const artist = meta.isRadio ? null : meta.subtitle
-  const trackKey = `${artist}|${meta.title}|${meta.album}|${duration}`
-
-  const [status, setStatus] = useState<Status>('loading')
-  const [result, setResult] = useState<LyricsResult | null>(null)
-
-  useEffect(() => {
-    if (!artist || !meta.title) {
-      setStatus('none')
-      setResult(null)
-      return
-    }
-    let stale = false
-    setStatus('loading')
-    void tt
-      .fetchLyrics({ artist, title: meta.title, album: meta.album, duration })
-      .then((res) => {
-        if (stale) return
-        setResult(res)
-        setStatus(res && (res.plain || res.synced || res.instrumental) ? 'ready' : 'none')
-      })
-      // e.g. IPC failure (stale main process without the handler) — anything
-      // unexpected degrades to "no lyrics" instead of an eternal "Looking up…".
-      .catch(() => {
-        if (!stale) setStatus('none')
-      })
-    return () => {
-      stale = true
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- trackKey covers the query fields
-  }, [trackKey])
-
-  const synced = useMemo(() => (result?.synced ? parseLrc(result.synced) : null), [result])
-
-  // Interpolated playhead, ticking only while the panel shows synced lyrics.
-  const [positionSecs, setPositionSecs] = useState<number | null>(null)
-  const playing = playState?.state === 'play'
-  useEffect(() => {
-    if (!synced) return
-    const tick = (): void => {
-      if (playhead == null) {
-        setPositionSecs(null)
-        return
-      }
-      setPositionSecs(playing ? playhead.secs + (Date.now() - playhead.at) / 1000 : playhead.secs)
-    }
-    tick()
-    const timer = setInterval(tick, 400)
-    return () => clearInterval(timer)
-  }, [synced, playhead, playing])
-
-  const currentIndex = useMemo(() => {
-    if (!synced || positionSecs == null) return -1
-    let idx = -1
-    for (let i = 0; i < synced.length; i++) {
-      if (synced[i].t <= positionSecs) idx = i
-      else break
-    }
-    return idx
-  }, [synced, positionSecs])
+  const { status, result, synced, currentIndex, isRadio, hasQuery } = useLyrics()
 
   // Keep the current line centered; jump instead of glide under reduced motion.
   const currentRef = useRef<HTMLButtonElement | null>(null)
@@ -124,7 +40,7 @@ export function LyricsPanel(): React.JSX.Element {
 
         {status === 'none' && (
           <div className="text-[13px] text-faint pt-2">
-            {meta.isRadio || !artist
+            {isRadio || !hasQuery
               ? 'Lyrics need track metadata — not available for this source.'
               : 'No lyrics found for this track.'}
           </div>
