@@ -331,6 +331,13 @@ export function SettingsScreen(): React.JSX.Element {
               onChange={(lyricsLine) => void save({ lyricsLine })}
             />
 
+            <Toggle
+              label="Artist context"
+              hint="Adds an artist panel to the Now Playing screen: a Wikipedia summary matched via MusicBrainz, fetched when you open it. Sends the current artist's name; off means no requests, ever."
+              checked={settings.artistInfo}
+              onChange={(artistInfo) => void save({ artistInfo })}
+            />
+
             <ListenBrainzSection settings={settings} save={save} />
           </div>
         </section>

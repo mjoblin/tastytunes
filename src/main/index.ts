@@ -14,6 +14,7 @@ import { installAppMenu } from './menu'
 import { checkNow, currentUpdate, startUpdateCheck } from './updateCheck'
 import { fetchLyrics } from './lyrics'
 import { scrobbler } from './scrobbler'
+import { fetchArtistInfo } from './artistInfo'
 import { getSettings, updateSettings } from './persist'
 import { getRecents } from './recents'
 
@@ -203,6 +204,9 @@ function registerIpc(): void {
     getSettings().lyrics ? fetchLyrics(q) : null
   )
   ipcMain.handle(IPC.lbValidate, () => scrobbler.validateToken())
+  ipcMain.handle(IPC.fetchArtistInfo, (_e, artist: string) =>
+    getSettings().artistInfo ? fetchArtistInfo(artist) : null
+  )
   ipcMain.handle(IPC.getRecents, () => getRecents())
   ipcMain.handle(IPC.clearRecents, () => deviceManager.clearRecents())
   ipcMain.handle(IPC.toggleMini, () => toggleMiniPlayer())

@@ -72,6 +72,8 @@ interface TTState {
   displayMode: boolean
   /** Lyrics drawer on the Now Playing screen (ephemeral, not persisted). */
   lyricsOpen: boolean
+  /** Artist-context drawer on Now Playing (mutually exclusive with lyrics). */
+  artistOpen: boolean
   /** True while the full-window ambient backdrop is showing — chrome goes transparent. */
   ambientWindowActive: boolean
   /** Mini window only: cursor is over the window (pushed from main). */
@@ -92,6 +94,7 @@ interface TTState {
   setPaletteOpen(open: boolean): void
   setDisplayMode(on: boolean): void
   setLyricsOpen(open: boolean): void
+  setArtistOpen(open: boolean): void
   setAmbientWindowActive(on: boolean): void
   setSleepAction(action: SleepAction): void
   setSettings(settings: AppSettings): void
@@ -128,6 +131,7 @@ export const useStore = create<TTState>((set, get) => ({
   paletteOpen: false,
   displayMode: false,
   lyricsOpen: false,
+  artistOpen: false,
   ambientWindowActive: false,
   miniHover: false,
   sleep: null,
@@ -141,7 +145,11 @@ export const useStore = create<TTState>((set, get) => ({
   setInfoOpen: (infoOpen) => set({ infoOpen }),
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
   setDisplayMode: (displayMode) => set({ displayMode }),
-  setLyricsOpen: (lyricsOpen) => set({ lyricsOpen }),
+  // The two Now Playing drawers are mutually exclusive — opening one closes
+  // the other here, so every opener (header buttons, future palette entries)
+  // inherits the rule.
+  setLyricsOpen: (lyricsOpen) => set(lyricsOpen ? { lyricsOpen, artistOpen: false } : { lyricsOpen }),
+  setArtistOpen: (artistOpen) => set(artistOpen ? { artistOpen, lyricsOpen: false } : { artistOpen }),
   setAmbientWindowActive: (ambientWindowActive) => set({ ambientWindowActive }),
   // Local settings echo only — an armed timer's action is updated via
   // tt.setSleep, and the main process pushes the change back.

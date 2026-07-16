@@ -143,6 +143,17 @@ export interface UpdateInfo {
   url: string
 }
 
+// ------------------------------------------------------------- artist context
+
+export interface ArtistInfo {
+  /** MusicBrainz's canonical name for the matched artist. */
+  name: string
+  /** Wikipedia summary extract, when the chain resolved one. */
+  summary: string | null
+  wikipediaUrl: string | null
+  musicbrainzUrl: string | null
+}
+
 // ------------------------------------------------------------------- lyrics
 
 export interface LyricsQuery {
@@ -475,6 +486,8 @@ export interface AppSettings {
   lbEnabled: boolean
   /** ListenBrainz user token, from listenbrainz.org/settings. Stored locally. */
   lbToken: string
+  /** Artist bio panel on Now Playing (MusicBrainz + Wikipedia, on demand). */
+  artistInfo: boolean
   /** MCP server for local AI agents. */
   mcp: McpSettings
   /** Last-visited Settings tab (id from the Settings screen's tab rail). */
@@ -512,6 +525,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   displayLyrics: true,
   lbEnabled: false,
   lbToken: '',
+  artistInfo: false,
   mcp: { enabled: false, bind: 'localhost', port: 8555, disabledClusters: [], disabledTools: [] },
   settingsTab: 'appearance',
   miniBounds: null
@@ -557,6 +571,8 @@ export interface TastyTunesApi {
   fetchLyrics(query: LyricsQuery): Promise<LyricsResult | null>
   /** Check the saved ListenBrainz token (null = network failure, not a verdict). */
   lbValidate(): Promise<{ valid: boolean; userName: string | null } | null>
+  /** Artist bio via MusicBrainz + Wikipedia (main process, cached; null = no match). */
+  fetchArtistInfo(artist: string): Promise<ArtistInfo | null>
   /** Open/close the mini player window. */
   toggleMini(): Promise<void>
   /** Show and focus the main window. */
@@ -582,6 +598,7 @@ export const IPC = {
   fetchArt: 'tt:fetchArt',
   fetchLyrics: 'tt:fetchLyrics',
   lbValidate: 'tt:lbValidate',
+  fetchArtistInfo: 'tt:fetchArtistInfo',
   toggleMini: 'tt:toggleMini',
   showMain: 'tt:showMain',
   setSleep: 'tt:setSleep',

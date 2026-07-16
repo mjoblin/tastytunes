@@ -1,10 +1,11 @@
-import { Captions, Disc3, Maximize2, MicVocal, RadioTower } from 'lucide-react'
+import { Captions, Disc3, Maximize2, MicVocal, RadioTower, UserRound } from 'lucide-react'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { cx, deriveNowPlaying } from '@/lib/format'
 import { SignalLamp } from '@/components/SignalLamp'
 import { LyricsPanel } from '@/components/LyricsPanel'
 import { LyricLine } from '@/components/LyricLine'
+import { ArtistPanel } from '@/components/ArtistPanel'
 
 const ALIGN_H = { left: 'justify-start', center: 'justify-center', right: 'justify-end' } as const
 const ALIGN_V = { top: 'items-start', center: 'items-center', bottom: 'items-end' } as const
@@ -15,6 +16,8 @@ export function NowPlayingScreen(): React.JSX.Element {
   const setDisplayMode = useStore((s) => s.setDisplayMode)
   const lyricsOpen = useStore((s) => s.lyricsOpen)
   const setLyricsOpen = useStore((s) => s.setLyricsOpen)
+  const artistOpen = useStore((s) => s.artistOpen)
+  const setArtistOpen = useStore((s) => s.setArtistOpen)
   const setSettings = useStore((s) => s.setSettings)
   const {
     nowPlayingAlignH,
@@ -26,6 +29,8 @@ export function NowPlayingScreen(): React.JSX.Element {
 
   // Lyrics need real track metadata — hidden for radio and title-only sources.
   const lyricsAvailable = lyricsEnabled && !meta.isRadio && !!meta.title && !!meta.subtitle
+  const { artistInfo: artistEnabled } = useStore((s) => s.settings)
+  const artistAvailable = artistEnabled && !meta.isRadio && !!meta.subtitle
 
   const toggleLyricLine = async (): Promise<void> => {
     const next = await tt.setSettings({ lyricsLine: !lyricsLine })
@@ -42,7 +47,9 @@ export function NowPlayingScreen(): React.JSX.Element {
   // Titleless top band: preserves the header's vertical rhythm (and houses the
   // display-mode button) so the art/text sit where they did with a title.
   const header = (
-    <header className="drag-region flex items-center justify-end px-8 pt-8 pb-4 min-h-[83px]">
+    // relative z-20: the right-hand drawers (lyrics/artist, z-10) span the full
+    // height — the header buttons must stay clickable above them.
+    <header className="drag-region relative z-20 flex items-center justify-end px-8 pt-8 pb-4 min-h-[83px]">
       {lyricsAvailable && (
         <button
           onClick={() => void toggleLyricLine()}
@@ -68,6 +75,19 @@ export function NowPlayingScreen(): React.JSX.Element {
           )}
         >
           <MicVocal size={16} />
+        </button>
+      )}
+      {artistAvailable && (
+        <button
+          onClick={() => setArtistOpen(!artistOpen)}
+          data-tip="About the artist"
+          aria-label="About the artist"
+          className={cx(
+            'no-drag tip-bottom tip-end p-2 rounded-md transition-colors',
+            artistOpen ? 'text-gold' : 'text-faint hover:text-dim'
+          )}
+        >
+          <UserRound size={16} />
         </button>
       )}
       <button
@@ -102,6 +122,7 @@ export function NowPlayingScreen(): React.JSX.Element {
       {header}
 
       {lyricsAvailable && lyricsOpen && <LyricsPanel />}
+      {artistAvailable && artistOpen && <ArtistPanel />}
 
       {/* fixed alignment (settings-chosen) so the layout doesn't shift as track lengths change */}
       <div

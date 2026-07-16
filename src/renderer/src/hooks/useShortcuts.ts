@@ -41,6 +41,7 @@ export function useShortcuts(): void {
         else if (s.shortcutsOpen) s.setShortcutsOpen(false)
         else if (s.infoOpen) s.setInfoOpen(false)
         else if (s.lyricsOpen) s.setLyricsOpen(false)
+        else if (s.artistOpen) s.setArtistOpen(false)
         else if (s.displayMode) s.setDisplayMode(false)
         else if (s.diagnosticsOpen) s.setDiagnosticsOpen(false)
         return
