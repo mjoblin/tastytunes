@@ -102,7 +102,7 @@ export function Nav(): React.JSX.Element {
             // grab the window instead of clicking.
             <span
               aria-label="Update available"
-              className="no-drag absolute -top-2.5 -right-4 w-4 h-4 flex items-center justify-center"
+              className="no-drag absolute -top-1.5 -right-4 w-4 h-4 flex items-center justify-center"
             >
               <span className="w-1.5 h-1.5 rounded-full bg-gold" />
             </span>
