@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Disc3,
   Loader2,
@@ -29,7 +29,20 @@ export function PlaybackBar(): React.JSX.Element {
   const setScreen = useStore((s) => s.setScreen)
   const { position, duration } = usePlayhead()
   const [scrub, setScrub] = useState<number | null>(null)
+  // Seek target held after release until the device's playhead catches up —
+  // otherwise the thumb snaps back to the stale position, then jumps forward.
+  const [seekHold, setSeekHold] = useState<number | null>(null)
   const [showRemaining, setShowRemaining] = useState(false)
+
+  useEffect(() => {
+    if (seekHold == null) return
+    if (Math.abs(position - seekHold) < 2) {
+      setSeekHold(null)
+      return
+    }
+    const t = setTimeout(() => setSeekHold(null), 3000)
+    return () => clearTimeout(t)
+  }, [seekHold, position])
 
   const connected = connection.phase === 'connected'
   const powered = systemPower?.power === 'ON'
@@ -52,7 +65,7 @@ export function PlaybackBar(): React.JSX.Element {
   const shuffleOn = playState?.mode_shuffle === 'all'
 
   const active = connected && powered
-  const shownPosition = scrub != null && duration ? scrub * duration : position
+  const shownPosition = scrub != null && duration ? scrub * duration : (seekHold ?? position)
   const ambientWindow = useStore((s) => s.ambientWindowActive)
 
   return (
@@ -164,7 +177,10 @@ export function PlaybackBar(): React.JSX.Element {
               onCancel={() => setScrub(null)}
               onCommit={(v) => {
                 setScrub(null)
-                if (duration) void tt.command({ type: 'seek', positionSecs: v * duration })
+                if (duration) {
+                  setSeekHold(v * duration)
+                  void tt.command({ type: 'seek', positionSecs: v * duration })
+                }
               }}
             />
           </div>
