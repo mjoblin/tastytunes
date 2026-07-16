@@ -15,6 +15,7 @@ import { checkNow, currentUpdate, startUpdateCheck } from './updateCheck'
 import { fetchLyrics } from './lyrics'
 import { scrobbler } from './scrobbler'
 import { fetchArtistInfo } from './artistInfo'
+import { startScheduler } from './scheduler'
 import { getSettings, updateSettings } from './persist'
 import { getRecents } from './recents'
 
@@ -271,6 +272,7 @@ if (!gotLock) {
     syncMediaKeys()
     mcpBridge.sync(getSettings())
     void deviceManager.startup()
+    startScheduler(deviceManager)
     startUpdateCheck((update) => {
       mainWindow?.webContents.send(IPC.push, { kind: 'update', update })
     })

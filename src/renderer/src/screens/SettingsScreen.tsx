@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
+  AlarmClock,
   Bot,
   Check,
   CircleDot,
@@ -10,8 +11,10 @@ import {
   Monitor,
   Moon,
   Palette,
+  Plus,
   SlidersHorizontal,
-  Sun
+  Sun,
+  Trash2
 } from 'lucide-react'
 import {
   MCP_CLUSTERS,
@@ -23,6 +26,7 @@ import {
   type McpBind,
   type McpSettings,
   type MotionMode,
+  type Schedule,
   type ThemePreference
 } from '@shared/ipc'
 import { tt } from '@/api'
@@ -36,6 +40,7 @@ const TABS = [
   { id: 'layout', label: 'Layout', icon: LayoutGrid },
   { id: 'behavior', label: 'Behavior', icon: SlidersHorizontal },
   { id: 'connections', label: 'Connections', icon: Globe },
+  { id: 'schedules', label: 'Schedules', icon: AlarmClock },
   { id: 'agents', label: 'AI agents', icon: Bot },
   { id: 'lamps', label: 'Status lamps', icon: CircleDot }
 ] as const
@@ -343,6 +348,8 @@ export function SettingsScreen(): React.JSX.Element {
         </section>
         )}
 
+        {tab === 'schedules' && <SchedulesSection settings={settings} save={save} />}
+
         {tab === 'agents' && <McpSection settings={settings} save={save} />}
 
         {tab === 'lamps' && (
@@ -580,6 +587,182 @@ function CopyRow({
 }
 
 // ---------------------------------------------------------------- primitives
+
+const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+
+/**
+ * Scheduled actions: BluOS-style alarms. Each schedule is a card — time,
+ * day-of-week chips, wake/standby, and (for wake) optional preset + volume.
+ * Executed by the main process; honest caveat up top about app-must-be-running.
+ */
+function SchedulesSection({
+  settings,
+  save
+}: {
+  settings: AppSettings
+  save(patch: Partial<AppSettings>): Promise<void>
+}): React.JSX.Element {
+  const presets = useStore((s) => s.presets?.presets ?? null)
+  const schedules = settings.schedules
+
+  const update = (id: string, patch: Partial<Schedule>): void => {
+    void save({ schedules: schedules.map((s) => (s.id === id ? { ...s, ...patch } : s)) })
+  }
+  const remove = (id: string): void => {
+    void save({ schedules: schedules.filter((s) => s.id !== id) })
+  }
+  const add = (): void => {
+    const sched: Schedule = {
+      id: Math.random().toString(36).slice(2, 10),
+      enabled: true,
+      time: '07:30',
+      days: [1, 2, 3, 4, 5],
+      action: 'on',
+      presetId: null,
+      volumePercent: null
+    }
+    void save({ schedules: [...schedules, sched] })
+  }
+
+  return (
+    <section className="space-y-3">
+      <p className="text-[11.5px] text-faint px-1">
+        Wake the streamer (optionally recalling a preset and setting a volume) or send it to
+        standby at set times. Schedules fire only while TastyTunes is running and connected.
+      </p>
+
+      {schedules.map((s) => (
+        <div key={s.id} className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-4">
+          <div className="flex items-center gap-3">
+            <input
+              type="time"
+              value={s.time}
+              onChange={(e) => e.target.value && update(s.id, { time: e.target.value })}
+              className="bg-bg rounded-lg ring-1 ring-edge px-2.5 py-1.5 text-[13px] font-mono outline-none focus:ring-edge2"
+            />
+            <Segmented<Schedule['action']>
+              value={s.action}
+              onChange={(action) => update(s.id, { action })}
+              options={[
+                { value: 'on', label: 'Wake' },
+                { value: 'standby', label: 'Standby' }
+              ]}
+            />
+            <div className="flex-1" />
+            <MiniSwitch checked={s.enabled} onChange={(enabled) => update(s.id, { enabled })} />
+            <button
+              onClick={() => remove(s.id)}
+              aria-label="Delete schedule"
+              className="p-1.5 rounded-md text-faint hover:text-alert transition-colors"
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            {DAY_LABELS.map((label, day) => (
+              <button
+                key={day}
+                onClick={() =>
+                  update(s.id, {
+                    days: s.days.includes(day)
+                      ? s.days.filter((d) => d !== day)
+                      : [...s.days, day].sort()
+                  })
+                }
+                aria-label={`Day ${day}`}
+                className={cx(
+                  'w-7 h-7 rounded-full text-[11px] font-mono transition-colors',
+                  s.days.includes(day)
+                    ? 'bg-amberdim text-amber ring-1 ring-amber/40'
+                    : 'text-faint hover:text-dim ring-1 ring-edge'
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {s.action === 'on' && (
+            <div className="flex items-center gap-6">
+              <label className="flex items-center gap-2.5 text-[12.5px] text-dim">
+                Preset
+                <select
+                  value={s.presetId ?? ''}
+                  onChange={(e) =>
+                    update(s.id, { presetId: e.target.value === '' ? null : Number(e.target.value) })
+                  }
+                  className="bg-bg rounded-lg ring-1 ring-edge px-2 py-1.5 text-[12.5px] outline-none focus:ring-edge2 max-w-56"
+                >
+                  <option value="">—</option>
+                  {(presets ?? [])
+                    .filter((p) => p.id != null)
+                    .map((p) => (
+                      <option key={p.id} value={p.id!}>
+                        {p.id} · {p.name ?? 'Preset'}
+                      </option>
+                    ))}
+                  {/* a saved preset that isn't in the current list stays selectable */}
+                  {s.presetId != null && !(presets ?? []).some((p) => p.id === s.presetId) && (
+                    <option value={s.presetId}>{s.presetId}</option>
+                  )}
+                </select>
+              </label>
+              <label className="flex items-center gap-2.5 text-[12.5px] text-dim">
+                Volume
+                <NumberField
+                  value={s.volumePercent}
+                  min={0}
+                  max={100}
+                  allowEmpty
+                  placeholder="—"
+                  widthClass="w-16"
+                  onCommit={(volumePercent) => update(s.id, { volumePercent })}
+                />
+              </label>
+            </div>
+          )}
+        </div>
+      ))}
+
+      <button
+        onClick={add}
+        className="flex items-center gap-2 text-[12.5px] px-3 py-2 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-95 transition-all"
+      >
+        <Plus size={14} />
+        Add schedule
+      </button>
+    </section>
+  )
+}
+
+/** The Toggle's switch without the label row, for inline card use. */
+function MiniSwitch({
+  checked,
+  onChange
+}: {
+  checked: boolean
+  onChange(next: boolean): void
+}): React.JSX.Element {
+  return (
+    <button
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={cx(
+        'relative h-5 w-9 shrink-0 rounded-full transition-colors',
+        checked ? 'bg-gold' : 'bg-veil2 ring-1 ring-edge'
+      )}
+    >
+      <span
+        className={cx(
+          'absolute top-0.5 h-4 w-4 rounded-full bg-bg transition-all',
+          checked ? 'left-[18px]' : 'left-0.5'
+        )}
+      />
+    </button>
+  )
+}
 
 /**
  * ListenBrainz scrobbling: token field + enable toggle + live token status.

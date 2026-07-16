@@ -143,6 +143,26 @@ export interface UpdateInfo {
   url: string
 }
 
+// ----------------------------------------------------------- scheduled actions
+
+/**
+ * A BluOS-style alarm, executed by the main process while the app runs:
+ * wake (power ON, optionally recall a preset and set a volume) or standby.
+ */
+export interface Schedule {
+  id: string
+  enabled: boolean
+  /** Local 24h "HH:MM". */
+  time: string
+  /** Days it fires: 0 = Sunday … 6 = Saturday. Empty = never. */
+  days: number[]
+  action: 'on' | 'standby'
+  /** Wake only: preset to recall after powering on. */
+  presetId: number | null
+  /** Wake only: volume to set after the preset settles. */
+  volumePercent: number | null
+}
+
 // ------------------------------------------------------------- artist context
 
 export interface ArtistInfo {
@@ -488,6 +508,8 @@ export interface AppSettings {
   lbToken: string
   /** Artist bio panel on Now Playing (MusicBrainz + Wikipedia, on demand). */
   artistInfo: boolean
+  /** Scheduled actions (alarms) — fire only while the app is running. */
+  schedules: Schedule[]
   /** MCP server for local AI agents. */
   mcp: McpSettings
   /** Last-visited Settings tab (id from the Settings screen's tab rail). */
@@ -526,6 +548,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   lbEnabled: false,
   lbToken: '',
   artistInfo: false,
+  schedules: [],
   mcp: { enabled: false, bind: 'localhost', port: 8555, disabledClusters: [], disabledTools: [] },
   settingsTab: 'appearance',
   miniBounds: null
