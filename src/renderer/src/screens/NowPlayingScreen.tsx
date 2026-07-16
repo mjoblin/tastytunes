@@ -50,7 +50,7 @@ export function NowPlayingScreen(): React.JSX.Element {
           data-tip={lyricsLine ? 'Hide current lyric line' : 'Show current lyric line'}
           aria-label="Current lyric line"
           className={cx(
-            'no-drag p-2 rounded-md transition-colors disabled:opacity-40',
+            'no-drag tip-bottom tip-end p-2 rounded-md transition-colors disabled:opacity-40',
             lyricsLine ? 'text-gold' : 'text-faint hover:text-dim'
           )}
         >
@@ -63,7 +63,7 @@ export function NowPlayingScreen(): React.JSX.Element {
           data-tip="Lyrics"
           aria-label="Lyrics"
           className={cx(
-            'no-drag p-2 rounded-md transition-colors',
+            'no-drag tip-bottom tip-end p-2 rounded-md transition-colors',
             lyricsOpen ? 'text-gold' : 'text-faint hover:text-dim'
           )}
         >
@@ -74,7 +74,7 @@ export function NowPlayingScreen(): React.JSX.Element {
         onClick={() => setDisplayMode(true)}
         data-tip="Full-screen display mode (F)"
         aria-label="Full-screen display mode (F)"
-        className="no-drag p-2 rounded-md text-faint hover:text-dim transition-colors"
+        className="no-drag tip-bottom tip-end p-2 rounded-md text-faint hover:text-dim transition-colors"
       >
         <Maximize2 size={16} />
       </button>
