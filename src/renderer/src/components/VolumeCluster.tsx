@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Minus, Plus, Volume2, VolumeX } from 'lucide-react'
 import { tt } from '@/api'
 import { useStore } from '@/store'
@@ -31,6 +31,10 @@ export function VolumeCluster(): React.JSX.Element | null {
   const volumeLimit = useStore((s) => s.settings.volumeLimitPercent)
   const onWheel = useWheelVolume()
   const [scrub, setScrub] = useState<number | null>(null)
+  // Level we just committed, held until the device echoes it back — otherwise
+  // the slider snaps to the stale reported volume for a beat after release.
+  const [hold, setHold] = useState<number | null>(null)
+  const lastSent = useRef<{ at: number; level: number } | null>(null)
 
   if (!zoneState) return null
   const preAmp = zoneState.pre_amp_mode === true
@@ -86,17 +90,45 @@ export function VolumeCluster(): React.JSX.Element | null {
 
   // Pre-Amp mode: absolute level. Prefer percent when the model reports it.
   const usingPercent = percent != null
-  const shown = usingPercent ? percent / 100 : step != null ? step / 30 : 0
+  const deviceLevel = usingPercent ? percent : step
+  const levelNow = hold ?? deviceLevel
+  const shown = levelNow != null ? levelNow / (usingPercent ? 100 : 30) : 0
 
   const toLevel = (v: number): number => Math.round(v * (usingPercent ? max : 30))
+  const send = (level: number): void => {
+    if (usingPercent) void tt.command({ type: 'setVolumePercent', percent: level })
+    else void tt.command({ type: 'setVolumeStep', step: level })
+  }
+  // Live volume while dragging, throttled: at most one send per 150ms and only
+  // when the level actually changed.
+  const scrubbing = (v: number): void => {
+    setScrub(v)
+    const level = toLevel(v)
+    const now = Date.now()
+    const last = lastSent.current
+    if (last && (last.level === level || now - last.at < 150)) return
+    lastSent.current = { at: now, level }
+    send(level)
+  }
   const commit = (v: number): void => {
     setScrub(null)
-    if (usingPercent) {
-      void tt.command({ type: 'setVolumePercent', percent: toLevel(v) })
-    } else {
-      void tt.command({ type: 'setVolumeStep', step: toLevel(v) })
-    }
+    const level = toLevel(v)
+    setHold(level)
+    lastSent.current = null
+    send(level)
   }
+
+  // Release the hold once the device reports (about) the committed level, or
+  // give up quietly if it never does.
+  useEffect(() => {
+    if (hold == null) return
+    if (deviceLevel != null && Math.abs(deviceLevel - hold) <= 1) {
+      setHold(null)
+      return
+    }
+    const t = setTimeout(() => setHold(null), 2000)
+    return () => clearTimeout(t)
+  }, [hold, deviceLevel])
 
   // While dragging, show the level about to be set (gold = pending).
   const pendingLevel = scrub != null ? toLevel(scrub) : null
@@ -109,7 +141,7 @@ export function VolumeCluster(): React.JSX.Element | null {
       <div className={cx('flex-1', muted && 'opacity-40')}>
         <Slider
           value={usingPercent ? shown * (100 / max) : shown}
-          onScrub={setScrub}
+          onScrub={scrubbing}
           onCancel={() => setScrub(null)}
           onCommit={commit}
           ariaLabel="Volume"
@@ -123,7 +155,7 @@ export function VolumeCluster(): React.JSX.Element | null {
           pendingLevel != null ? 'text-gold' : 'text-dim'
         )}
       >
-        {pendingLevel ?? (usingPercent ? percent : (step ?? '–'))}
+        {pendingLevel ?? levelNow ?? '–'}
       </span>
     </div>
   )
