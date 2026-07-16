@@ -8,6 +8,7 @@ import type {
   McpStatus,
   MenuCommand,
   PushMessage,
+  UpdateInfo,
   RecentTrack,
   SleepAction,
   SleepTimer,
@@ -79,6 +80,8 @@ interface TTState {
   recents: RecentTrack[]
   /** MCP server state, mirrored from the main process. */
   mcpStatus: McpStatus
+  /** A newer GitHub release, if the update check found one (null = none known). */
+  update: UpdateInfo | null
 
   setScreen(screen: Screen): void
   setDiagnosticsOpen(open: boolean): void
@@ -126,6 +129,7 @@ export const useStore = create<TTState>((set, get) => ({
   sleep: null,
   recents: [],
   mcpStatus: { running: false, url: null, error: null },
+  update: null,
 
   setScreen: (screen) => set({ screen }),
   setDiagnosticsOpen: (diagnosticsOpen) => set({ diagnosticsOpen }),
@@ -214,6 +218,8 @@ export const useStore = create<TTState>((set, get) => ({
           return { recents: msg.data }
         case 'mcpStatus':
           return { mcpStatus: msg.status }
+        case 'update':
+          return { update: msg.update }
         case 'menu':
           return {} // routed to applyMenu in main.tsx; nothing to merge here
       }

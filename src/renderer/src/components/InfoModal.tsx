@@ -8,6 +8,7 @@ const SUPPORT_URL = 'https://punytunes.app/support/'
 
 export function InfoModal(): React.JSX.Element {
   const setInfoOpen = useStore((s) => s.setInfoOpen)
+  const update = useStore((s) => s.update)
 
   return (
     <div
@@ -36,6 +37,23 @@ export function InfoModal(): React.JSX.Element {
         </div>
 
         <div className="mt-6 space-y-3">
+          {update && (
+            <button
+              onClick={() => void tt.openExternal(update.url)}
+              className="w-full flex items-center justify-between rounded-xl ring-1 ring-gold/40 bg-golddim px-4 py-3 text-left hover:ring-gold/70 transition-all"
+            >
+              <span>
+                <span className="block text-[13.5px] text-gold">
+                  v{update.version} is available
+                </span>
+                <span className="block font-mono text-[10.5px] text-faint mt-0.5">
+                  open the release page
+                </span>
+              </span>
+              <ExternalLink size={14} className="text-gold/70 shrink-0" />
+            </button>
+          )}
+
           <button
             onClick={() => void tt.openExternal(REPO_URL)}
             className="w-full flex items-center justify-between rounded-xl ring-1 ring-edge bg-raised/70 px-4 py-3 text-left hover:ring-edge2 transition-all"

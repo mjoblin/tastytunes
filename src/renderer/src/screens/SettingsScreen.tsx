@@ -259,6 +259,13 @@ export function SettingsScreen(): React.JSX.Element {
               onChange={(notifications) => void save({ notifications })}
             />
 
+            <Toggle
+              label="Check for updates"
+              hint="Look for a newer release on GitHub at launch and every few hours. A dot on the wordmark and a line in About — nothing downloads or installs itself."
+              checked={settings.updateCheck}
+              onChange={(updateCheck) => void save({ updateCheck })}
+            />
+
             <SettingRow
               label="Recently played"
               hint="A local log of tracks and stations you've played, shown on the Recently Played screen (R). Kept only on this computer."

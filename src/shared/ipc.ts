@@ -133,6 +133,15 @@ export type PushMessage =
   | { kind: 'sleep'; sleep: SleepTimer | null }
   | { kind: 'mcpStatus'; status: McpStatus }
   | { kind: 'menu'; command: MenuCommand }
+  | { kind: 'update'; update: UpdateInfo }
+
+/** A newer GitHub release than the running version (stage-1 update awareness). */
+export interface UpdateInfo {
+  /** Bare version, no leading v. */
+  version: string
+  /** Release page to open in the browser. */
+  url: string
+}
 
 // ------------------------------------------------------ renderer -> main actions
 
@@ -437,6 +446,8 @@ export interface AppSettings {
   recentsGrouped: boolean
   /** Motion effects (hover growth, eqbars, smooth scrolling). */
   motion: MotionMode
+  /** Check GitHub releases for a newer version on launch and every few hours. */
+  updateCheck: boolean
   /** MCP server for local AI agents. */
   mcp: McpSettings
   /** Last-visited Settings tab (id from the Settings screen's tab rail). */
@@ -468,6 +479,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   sleepAction: 'standby',
   recentsGrouped: true,
   motion: 'system',
+  updateCheck: true,
   mcp: { enabled: false, bind: 'localhost', port: 8555, disabledClusters: [], disabledTools: [] },
   settingsTab: 'appearance',
   miniBounds: null

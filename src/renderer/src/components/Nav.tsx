@@ -37,6 +37,7 @@ export function Nav(): React.JSX.Element {
   const ambientWindow = useStore((s) => s.ambientWindowActive)
   const settings = useStore((s) => s.settings)
   const setSettings = useStore((s) => s.setSettings)
+  const update = useStore((s) => s.update)
 
   const collapsed = settings.navCollapsed
   const toggleCollapsed = async (): Promise<void> => {
@@ -82,9 +83,9 @@ export function Nav(): React.JSX.Element {
       <div className={cx('drag-region pt-11 pb-5', collapsed ? 'px-0 text-center' : 'px-5')}>
         <button
           onClick={() => setInfoOpen(true)}
-          data-tip="About TastyTunes"
+          data-tip={update ? `About TastyTunes — v${update.version} available` : 'About TastyTunes'}
           aria-label="About TastyTunes"
-          className="no-drag font-display font-bold text-[19px] leading-none tracking-tight cursor-pointer"
+          className="no-drag relative font-display font-bold text-[19px] leading-none tracking-tight cursor-pointer"
         >
           {collapsed ? (
             <>
@@ -94,6 +95,12 @@ export function Nav(): React.JSX.Element {
             <>
               tasty<span className="text-gold">tunes</span>
             </>
+          )}
+          {update && (
+            <span
+              aria-label="Update available"
+              className="absolute -top-1 -right-2.5 w-1.5 h-1.5 rounded-full bg-gold"
+            />
           )}
         </button>
       </div>

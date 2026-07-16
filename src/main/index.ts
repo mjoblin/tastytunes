@@ -4,6 +4,7 @@ import { IPC, type AppSettings, type MenuCommand, type SleepTimer, type Streamer
 import { DeviceManager } from './deviceManager'
 import { McpBridge } from './mcpServer'
 import { installAppMenu } from './menu'
+import { checkNow, currentUpdate, startUpdateCheck } from './updateCheck'
 import { getSettings, updateSettings } from './persist'
 import { getRecents } from './recents'
 
@@ -43,6 +44,12 @@ function createWindow(): void {
 
   mainWindow.on('ready-to-show', () => mainWindow?.show())
   mainWindow.on('focus', () => deviceManager.healthCheck())
+
+  // A window created (or reloaded) after a check found an update missed the push.
+  mainWindow.webContents.on('did-finish-load', () => {
+    const update = currentUpdate()
+    if (update) mainWindow?.webContents.send(IPC.push, { kind: 'update', update })
+  })
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:/i.test(url)) void shell.openExternal(url)
@@ -170,6 +177,8 @@ function registerIpc(): void {
     // Only when the limit itself changed — a volume set above the limit from
     // outside the app (device knob) mustn't be ambushed by unrelated saves.
     if ('volumeLimitPercent' in patch) deviceManager.enforceVolumeLimit()
+    // Turning the update check on shouldn't wait up to 4 hours to matter.
+    if (patch.updateCheck === true) void checkNow()
     return next
   })
   ipcMain.handle(IPC.openExternal, (_e, url: string) => {
@@ -241,6 +250,9 @@ if (!gotLock) {
     syncMediaKeys()
     mcpBridge.sync(getSettings())
     void deviceManager.startup()
+    startUpdateCheck((update) => {
+      mainWindow?.webContents.send(IPC.push, { kind: 'update', update })
+    })
 
     powerMonitor.on('resume', () => {
       deviceManager.healthCheck()
