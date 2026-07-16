@@ -91,7 +91,7 @@ export function LyricsPanel(): React.JSX.Element {
       <div className="px-6 py-3 border-t border-edge">
         <button
           onClick={() => void tt.openExternal('https://lrclib.net')}
-          className="microlabel text-faint hover:text-dim transition-colors"
+          className="microlabel inline-flex px-2.5 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
         >
           lyrics from lrclib.net
         </button>

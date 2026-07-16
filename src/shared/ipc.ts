@@ -547,7 +547,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   displayLyrics: true,
   lbEnabled: false,
   lbToken: '',
-  artistInfo: false,
+  artistInfo: true,
   schedules: [],
   mcp: { enabled: false, bind: 'localhost', port: 8555, disabledClusters: [], disabledTools: [] },
   settingsTab: 'appearance',

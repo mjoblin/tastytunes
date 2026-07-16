@@ -96,7 +96,7 @@ export function ArtistPanel(): React.JSX.Element {
           {info.wikipediaUrl && (
             <button
               onClick={() => void tt.openExternal(info.wikipediaUrl!)}
-              className="microlabel text-faint hover:text-dim transition-colors flex items-center gap-1.5"
+              className="microlabel flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
             >
               wikipedia <ExternalLink size={10} />
             </button>
@@ -104,7 +104,7 @@ export function ArtistPanel(): React.JSX.Element {
           {info.musicbrainzUrl && (
             <button
               onClick={() => void tt.openExternal(info.musicbrainzUrl!)}
-              className="microlabel text-faint hover:text-dim transition-colors flex items-center gap-1.5"
+              className="microlabel flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
             >
               musicbrainz <ExternalLink size={10} />
             </button>

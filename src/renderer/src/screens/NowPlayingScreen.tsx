@@ -50,21 +50,22 @@ export function NowPlayingScreen(): React.JSX.Element {
     // relative z-20: the right-hand drawers (lyrics/artist, z-10) span the full
     // height — the header buttons must stay clickable above them.
     <header className="drag-region relative z-20 flex items-center justify-end px-8 pt-8 pb-4 min-h-[83px]">
-      {lyricsAvailable && (
+      {/* while a drawer is open, only its own (gold, acts-as-close) button
+          survives — the rest of the header steps back */}
+      {lyricsAvailable && !lyricsOpen && !artistOpen && (
         <button
           onClick={() => void toggleLyricLine()}
-          disabled={lyricsOpen}
           data-tip={lyricsLine ? 'Hide current lyric line' : 'Show current lyric line'}
           aria-label="Current lyric line"
           className={cx(
-            'no-drag tip-bottom tip-end p-2 rounded-md transition-colors disabled:opacity-40',
+            'no-drag tip-bottom tip-end p-2 rounded-md transition-colors',
             lyricsLine ? 'text-gold' : 'text-faint hover:text-dim'
           )}
         >
           <Captions size={16} />
         </button>
       )}
-      {lyricsAvailable && (
+      {lyricsAvailable && !artistOpen && (
         <button
           onClick={() => setLyricsOpen(!lyricsOpen)}
           data-tip="Lyrics"
@@ -77,7 +78,7 @@ export function NowPlayingScreen(): React.JSX.Element {
           <MicVocal size={16} />
         </button>
       )}
-      {artistAvailable && (
+      {artistAvailable && !lyricsOpen && (
         <button
           onClick={() => setArtistOpen(!artistOpen)}
           data-tip="About the artist"
@@ -90,14 +91,16 @@ export function NowPlayingScreen(): React.JSX.Element {
           <UserRound size={16} />
         </button>
       )}
-      <button
-        onClick={() => setDisplayMode(true)}
-        data-tip="Full-screen display mode (F)"
-        aria-label="Full-screen display mode (F)"
-        className="no-drag tip-bottom tip-end p-2 rounded-md text-faint hover:text-dim transition-colors"
-      >
-        <Maximize2 size={16} />
-      </button>
+      {!lyricsOpen && !artistOpen && (
+        <button
+          onClick={() => setDisplayMode(true)}
+          data-tip="Full-screen display mode (F)"
+          aria-label="Full-screen display mode (F)"
+          className="no-drag tip-bottom tip-end p-2 rounded-md text-faint hover:text-dim transition-colors"
+        >
+          <Maximize2 size={16} />
+        </button>
+      )}
     </header>
   )
 

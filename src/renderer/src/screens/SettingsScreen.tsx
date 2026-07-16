@@ -589,6 +589,27 @@ function CopyRow({
 // ---------------------------------------------------------------- primitives
 
 const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
+/** Plain-English one-liner of exactly what a schedule will (or won't) do. */
+function describeSchedule(s: Schedule): string {
+  if (!s.enabled) return 'Off — flip the switch to arm it.'
+  if (s.days.length === 0) return 'Never fires — no days selected.'
+  const days =
+    s.days.length === 7
+      ? 'every day'
+      : s.days.join(',') === '1,2,3,4,5'
+        ? 'on weekdays'
+        : s.days.join(',') === '0,6'
+          ? 'on weekends'
+          : `on ${s.days.map((d) => DAY_NAMES[d]).join(', ')}`
+  if (s.action === 'standby') return `Puts the streamer in standby at ${s.time} ${days}.`
+  const extras = [
+    s.presetId != null ? `recalls preset ${s.presetId}` : null,
+    s.volumePercent != null ? `sets volume to ${s.volumePercent}%` : null
+  ].filter(Boolean)
+  return `Wakes the streamer${extras.length ? `, ${extras.join(', ')},` : ''} at ${s.time} ${days}.`
+}
 
 /**
  * Scheduled actions: BluOS-style alarms. Each schedule is a card — time,
@@ -614,7 +635,8 @@ function SchedulesSection({
   const add = (): void => {
     const sched: Schedule = {
       id: Math.random().toString(36).slice(2, 10),
-      enabled: true,
+      // Off until armed — adding a card must never schedule anything by itself.
+      enabled: false,
       time: '07:30',
       days: [1, 2, 3, 4, 5],
       action: 'on',
@@ -681,6 +703,10 @@ function SchedulesSection({
                 {label}
               </button>
             ))}
+          </div>
+
+          <div className={cx('text-[11.5px]', s.enabled && s.days.length > 0 ? 'text-dim' : 'text-faint')}>
+            {describeSchedule(s)}
           </div>
 
           {s.action === 'on' && (
@@ -803,14 +829,7 @@ function ListenBrainzSection({
 
   return (
     <div className="space-y-4 pt-1 border-t border-edge">
-      <Toggle
-        label="Scrobble to ListenBrainz"
-        hint="Log what you listen to at listenbrainz.org: artist, title, and album are sent as tracks play. Queue and streamed tracks with real metadata only — radio is never scrobbled."
-        disabled={!hasToken}
-        checked={settings.lbEnabled}
-        onChange={(lbEnabled) => void save({ lbEnabled })}
-      />
-      <SettingRow label="User token" hint={status}>
+      <SettingRow label="ListenBrainz token" hint={status}>
         <div className="flex items-center gap-2">
           <TokenField value={settings.lbToken} onCommit={(lbToken) => void save({ lbToken })} />
           <button
@@ -821,6 +840,17 @@ function ListenBrainzSection({
           </button>
         </div>
       </SettingRow>
+      <Toggle
+        label="Scrobble to ListenBrainz"
+        hint={
+          hasToken
+            ? 'Log what you listen to at listenbrainz.org: artist, title, and album are sent as tracks play. Queue and streamed tracks with real metadata only — radio is never scrobbled.'
+            : 'Add your user token above first — the switch unlocks once a token is saved.'
+        }
+        disabled={!hasToken}
+        checked={settings.lbEnabled}
+        onChange={(lbEnabled) => void save({ lbEnabled })}
+      />
     </div>
   )
 }
