@@ -11,6 +11,7 @@ import {
   Keyboard,
   ListMusic,
   Maximize2,
+  MicVocal,
   Moon,
   PictureInPicture2,
   Play,
@@ -25,6 +26,7 @@ import {
   Sun,
   Terminal,
   Usb,
+  UserRound,
   Volume2,
   VolumeX
 } from 'lucide-react'
@@ -115,6 +117,8 @@ export function CommandPalette(): React.JSX.Element {
   const setShortcutsOpen = useStore((s) => s.setShortcutsOpen)
   const setInfoOpen = useStore((s) => s.setInfoOpen)
   const setDisplayMode = useStore((s) => s.setDisplayMode)
+  const setLyricsOpen = useStore((s) => s.setLyricsOpen)
+  const setArtistOpen = useStore((s) => s.setArtistOpen)
   const setSettings = useStore((s) => s.setSettings)
 
   const connection = useStore((s) => s.connection)
@@ -372,6 +376,37 @@ export function CommandPalette(): React.JSX.Element {
         run: () => setDisplayMode(!displayMode)
       })
     }
+    // The drawers live on Now Playing — running these navigates there first.
+    // Same metadata gating as the screen's header buttons (no radio, needs artist).
+    if (connected && !inStandby) {
+      const npMeta = deriveNowPlaying(playState, nowPlaying)
+      if (settings.lyrics && !npMeta.isRadio && npMeta.title && npMeta.subtitle) {
+        cmds.push({
+          id: 'view:lyrics',
+          label: 'Lyrics',
+          group: 'View',
+          icon: MicVocal,
+          keywords: 'lyrics panel words song',
+          run: () => {
+            setScreen('now-playing')
+            setLyricsOpen(true)
+          }
+        })
+      }
+      if (settings.artistInfo && !npMeta.isRadio && npMeta.subtitle) {
+        cmds.push({
+          id: 'view:artist',
+          label: 'About the artist',
+          group: 'View',
+          icon: UserRound,
+          keywords: 'artist bio wikipedia musicbrainz context',
+          run: () => {
+            setScreen('now-playing')
+            setArtistOpen(true)
+          }
+        })
+      }
+    }
     // Toggle from the RESOLVED theme (the stored preference may be 'system');
     // running it always writes an explicit theme, which is what a toggle means.
     const shownTheme = settings.theme === 'system' ? systemTheme() : settings.theme
@@ -430,6 +465,10 @@ export function CommandPalette(): React.JSX.Element {
     displayMode,
     settings.theme,
     settings.sleepAction,
+    settings.lyrics,
+    settings.artistInfo,
+    setLyricsOpen,
+    setArtistOpen,
     setScreen,
     setDiagnosticsOpen,
     setShortcutsOpen,
