@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Disc3, MicVocal, RadioTower, X } from 'lucide-react'
+import { Captions, Disc3, RadioTower, X } from 'lucide-react'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { usePlayhead } from '@/hooks/usePlayhead'
@@ -89,7 +89,7 @@ export function DisplayMode(): React.JSX.Element {
             cursorIdle ? 'opacity-0' : 'opacity-100'
           )}
         >
-          <MicVocal size={18} />
+          <Captions size={18} />
         </button>
       )}
       <button
