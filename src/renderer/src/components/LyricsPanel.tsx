@@ -53,6 +53,11 @@ export function LyricsPanel(): React.JSX.Element {
         setResult(res)
         setStatus(res && (res.plain || res.synced || res.instrumental) ? 'ready' : 'none')
       })
+      // e.g. IPC failure (stale main process without the handler) — anything
+      // unexpected degrades to "no lyrics" instead of an eternal "Looking up…".
+      .catch(() => {
+        if (!stale) setStatus('none')
+      })
     return () => {
       stale = true
     }
