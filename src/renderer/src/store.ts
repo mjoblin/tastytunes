@@ -9,7 +9,7 @@ import type {
   MenuCommand,
   NetRequestEntry,
   PushMessage,
-  UpdateInfo,
+  UpdateState,
   RecentTrack,
   SleepAction,
   SleepTimer,
@@ -87,8 +87,8 @@ interface TTState {
   recents: RecentTrack[]
   /** MCP server state, mirrored from the main process. */
   mcpStatus: McpStatus
-  /** A newer GitHub release, if the update check found one (null = none known). */
-  update: UpdateInfo | null
+  /** Self-update consent-flow state, mirrored from the main process. */
+  update: UpdateState | null
 
   setScreen(screen: Screen): void
   setDiagnosticsOpen(open: boolean): void
@@ -236,8 +236,8 @@ export const useStore = create<TTState>((set, get) => ({
           return { recents: msg.data }
         case 'mcpStatus':
           return { mcpStatus: msg.status }
-        case 'update':
-          return { update: msg.update }
+        case 'updateState':
+          return { update: msg.state.phase === 'idle' ? null : msg.state }
         case 'netRequest': {
           // start + settle arrive as separate pushes for the same id — upsert
           const idx = s.netRequests.findIndex((e) => e.id === msg.entry.id)

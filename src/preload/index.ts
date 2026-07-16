@@ -22,6 +22,8 @@ const api: TastyTunesApi = {
   fetchLyrics: (query: LyricsQuery, force?: boolean) =>
     ipcRenderer.invoke(IPC.fetchLyrics, query, force),
   lbValidate: () => ipcRenderer.invoke(IPC.lbValidate),
+  updateDownload: () => ipcRenderer.invoke(IPC.updateDownload),
+  updateInstall: () => ipcRenderer.invoke(IPC.updateInstall),
   fetchArtistInfo: (artist: string, force?: boolean) =>
     ipcRenderer.invoke(IPC.fetchArtistInfo, artist, force),
   toggleMini: () => ipcRenderer.invoke(IPC.toggleMini),

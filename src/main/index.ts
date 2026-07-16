@@ -11,7 +11,7 @@ import {
 import { DeviceManager } from './deviceManager'
 import { McpBridge } from './mcpServer'
 import { installAppMenu } from './menu'
-import { checkNow, currentUpdate, startUpdateCheck } from './updateCheck'
+import { checkUpdatesNow, currentUpdateState, downloadUpdate, installUpdate, startUpdater } from './updater'
 import { fetchLyrics } from './lyrics'
 import { scrobbler } from './scrobbler'
 import { fetchArtistInfo } from './artistInfo'
@@ -59,10 +59,12 @@ function createWindow(): void {
   mainWindow.on('ready-to-show', () => mainWindow?.show())
   mainWindow.on('focus', () => deviceManager.healthCheck())
 
-  // A window created (or reloaded) after a check found an update missed the push.
+  // A window created (or reloaded) after a state change missed the push.
   mainWindow.webContents.on('did-finish-load', () => {
-    const update = currentUpdate()
-    if (update) mainWindow?.webContents.send(IPC.push, { kind: 'update', update })
+    const state = currentUpdateState()
+    if (state.phase !== 'idle') {
+      mainWindow?.webContents.send(IPC.push, { kind: 'updateState', state })
+    }
   })
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -192,7 +194,7 @@ function registerIpc(): void {
     // outside the app (device knob) mustn't be ambushed by unrelated saves.
     if ('volumeLimitPercent' in patch) deviceManager.enforceVolumeLimit()
     // Turning the update check on shouldn't wait up to 4 hours to matter.
-    if (patch.updateCheck === true) void checkNow()
+    if (patch.updateCheck === true) checkUpdatesNow()
     return next
   })
   ipcMain.handle(IPC.openExternal, (_e, url: string) => {
@@ -206,6 +208,8 @@ function registerIpc(): void {
     getSettings().lyrics ? fetchLyrics(q, !!force) : null
   )
   ipcMain.handle(IPC.lbValidate, () => scrobbler.validateToken())
+  ipcMain.handle(IPC.updateDownload, () => downloadUpdate())
+  ipcMain.handle(IPC.updateInstall, () => installUpdate())
   ipcMain.handle(IPC.fetchArtistInfo, (_e, artist: string, force?: boolean) =>
     getSettings().artistInfo ? fetchArtistInfo(artist, !!force) : null
   )
@@ -274,8 +278,8 @@ if (!gotLock) {
     mcpBridge.sync(getSettings())
     void deviceManager.startup()
     startScheduler(deviceManager)
-    startUpdateCheck((update) => {
-      mainWindow?.webContents.send(IPC.push, { kind: 'update', update })
+    startUpdater((state) => {
+      mainWindow?.webContents.send(IPC.push, { kind: 'updateState', state })
     })
 
     powerMonitor.on('resume', () => {

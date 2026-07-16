@@ -133,7 +133,7 @@ export type PushMessage =
   | { kind: 'sleep'; sleep: SleepTimer | null }
   | { kind: 'mcpStatus'; status: McpStatus }
   | { kind: 'menu'; command: MenuCommand }
-  | { kind: 'update'; update: UpdateInfo }
+  | { kind: 'updateState'; state: UpdateState }
   /** Sent when a request starts (pending) and again when it settles — upsert by id. */
   | { kind: 'netRequest'; entry: NetRequestEntry }
 
@@ -143,6 +143,27 @@ export interface UpdateInfo {
   version: string
   /** Release page to open in the browser. */
   url: string
+}
+
+/**
+ * The self-update consent flow (Sparkle-style). Nothing downloads or installs
+ * without an explicit user action at each step:
+ * idle → available —[user: Download]→ downloading → downloaded —[user: Restart
+ * now, or silently on next quit]→ installed. `canDownload` is false in
+ * unpackaged/dev builds, where "available" only offers the release page.
+ */
+export interface UpdateState {
+  phase: 'idle' | 'available' | 'downloading' | 'downloaded' | 'error'
+  /** Version on offer (bare, no leading v); null while idle. */
+  version: string | null
+  /** Download progress 0–100 while downloading. */
+  percent: number | null
+  /** In-app download/install possible (packaged build with a release feed). */
+  canDownload: boolean
+  /** Release page — always available as the manual path. */
+  url: string
+  /** Human-readable failure when phase === 'error'. */
+  error: string | null
 }
 
 // ------------------------------------------------------------ requests console
@@ -622,6 +643,10 @@ export interface TastyTunesApi {
   fetchLyrics(query: LyricsQuery, force?: boolean): Promise<LyricsResult | null>
   /** Check the saved ListenBrainz token (null = network failure, not a verdict). */
   lbValidate(): Promise<{ valid: boolean; userName: string | null } | null>
+  /** Consent step 1: start downloading the offered update. */
+  updateDownload(): Promise<void>
+  /** Consent step 2: restart into the downloaded update now. */
+  updateInstall(): Promise<void>
   /** Artist bio via MusicBrainz + Wikipedia (main process, cached; null = no match).
    *  `force` bypasses the cache read — the user-driven refresh. */
   fetchArtistInfo(artist: string, force?: boolean): Promise<ArtistInfo | null>
@@ -650,6 +675,8 @@ export const IPC = {
   fetchArt: 'tt:fetchArt',
   fetchLyrics: 'tt:fetchLyrics',
   lbValidate: 'tt:lbValidate',
+  updateDownload: 'tt:updateDownload',
+  updateInstall: 'tt:updateInstall',
   fetchArtistInfo: 'tt:fetchArtistInfo',
   toggleMini: 'tt:toggleMini',
   showMain: 'tt:showMain',
