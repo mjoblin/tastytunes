@@ -469,6 +469,8 @@ export interface AppSettings {
   lyrics: boolean
   /** Inline flavor: current synced line under the Now Playing track details. */
   lyricsLine: boolean
+  /** Current synced line in full-screen display mode (toggled from its chrome). */
+  displayLyrics: boolean
   /** MCP server for local AI agents. */
   mcp: McpSettings
   /** Last-visited Settings tab (id from the Settings screen's tab rail). */
@@ -503,6 +505,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   updateCheck: true,
   lyrics: true,
   lyricsLine: true,
+  displayLyrics: true,
   mcp: { enabled: false, bind: 'localhost', port: 8555, disabledClusters: [], disabledTools: [] },
   settingsTab: 'appearance',
   miniBounds: null

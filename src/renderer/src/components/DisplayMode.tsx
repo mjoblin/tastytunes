@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { Disc3, RadioTower, X } from 'lucide-react'
+import { Disc3, MicVocal, RadioTower, X } from 'lucide-react'
+import { tt } from '@/api'
 import { useStore } from '@/store'
 import { usePlayhead } from '@/hooks/usePlayhead'
+import { useLyrics } from '@/hooks/useLyrics'
 import { cx, deriveNowPlaying } from '@/lib/format'
 
 /**
@@ -13,6 +15,8 @@ export function DisplayMode(): React.JSX.Element {
   const playState = useStore((s) => s.playState)
   const nowPlaying = useStore((s) => s.nowPlaying)
   const setDisplayMode = useStore((s) => s.setDisplayMode)
+  const settings = useStore((s) => s.settings)
+  const setSettings = useStore((s) => s.setSettings)
   const { position, duration } = usePlayhead()
   const [cursorIdle, setCursorIdle] = useState(false)
   const [clock, setClock] = useState(() => timeNow())
@@ -45,6 +49,12 @@ export function DisplayMode(): React.JSX.Element {
     idleTimer.current = setTimeout(() => setCursorIdle(true), 3000)
   }
 
+  const lyricsToggleable = settings.lyrics && !meta.isRadio && !!meta.subtitle
+  const toggleLyrics = async (): Promise<void> => {
+    const next = await tt.setSettings({ displayLyrics: !settings.displayLyrics })
+    setSettings(next)
+  }
+
   return (
     <div
       className={cx('fixed inset-0 z-40 bg-bg overflow-hidden', cursorIdle && 'cursor-hidden')}
@@ -69,6 +79,19 @@ export function DisplayMode(): React.JSX.Element {
 
       {/* top-RIGHT: the top-left corner belongs to macOS's (hidden but still
           click-swallowing) traffic-light zone in frameless windows */}
+      {lyricsToggleable && (
+        <button
+          onClick={() => void toggleLyrics()}
+          title={settings.displayLyrics ? 'Hide lyrics' : 'Show lyrics'}
+          className={cx(
+            'absolute top-4 right-16 z-20 p-2 rounded-full hover:bg-veil2 transition-opacity',
+            settings.displayLyrics ? 'text-gold' : 'text-dim hover:text-ink',
+            cursorIdle ? 'opacity-0' : 'opacity-100'
+          )}
+        >
+          <MicVocal size={18} />
+        </button>
+      )}
       <button
         onClick={() => setDisplayMode(false)}
         title="Exit display mode (F)"
@@ -79,6 +102,8 @@ export function DisplayMode(): React.JSX.Element {
       >
         <X size={18} />
       </button>
+
+      {lyricsToggleable && settings.displayLyrics && <DisplayLyric />}
 
       <div className="relative h-full flex flex-col items-center justify-center gap-9 px-16">
         {meta.artUrl ? (
@@ -124,6 +149,30 @@ export function DisplayMode(): React.JSX.Element {
           />
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * The current synced line, floating above the progress bar. Absolutely
+ * positioned and pointer-transparent: it never nudges the centered art/text
+ * column, whatever it does. Dim ♪ through LRC gaps/intros (same as the
+ * Now Playing inline line); renders nothing without synced lyrics.
+ */
+function DisplayLyric(): React.JSX.Element | null {
+  const { synced, currentIndex } = useLyrics()
+  if (!synced) return null
+  const line = currentIndex >= 0 ? synced[currentIndex].text : ''
+  return (
+    <div className="absolute inset-x-0 bottom-10 px-16 text-center pointer-events-none">
+      <div
+        className={cx(
+          'font-display text-[clamp(17px,2.8vmin,30px)] leading-snug line-clamp-2 text-balance',
+          line ? 'text-gold/90' : 'text-faint'
+        )}
+      >
+        {line || '♪'}
+      </div>
     </div>
   )
 }
