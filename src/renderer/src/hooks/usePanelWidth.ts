@@ -2,9 +2,9 @@ import { useRef, useState } from 'react'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 
-export const PANEL_DEFAULT_WIDTH = 380
-const MIN_WIDTH = 280
-const MAX_WIDTH = 600
+export const PANEL_DEFAULT_WIDTH = 400
+const MIN_WIDTH = 250
+const MAX_WIDTH = 800
 // The default width acts as a magnetic detent while dragging.
 const SNAP_RANGE = 12
 
@@ -37,7 +37,7 @@ export function usePanelWidth(): {
   const clampSnap = (w: number): number => {
     // Clamp to the viewport-relative cap too, so the logical width never
     // exceeds what the CSS max renders — otherwise the drag has dead travel.
-    const max = Math.min(MAX_WIDTH, Math.floor(window.innerWidth * 0.45))
+    const max = Math.min(MAX_WIDTH, Math.floor(window.innerWidth * 0.6))
     const clamped = Math.max(MIN_WIDTH, Math.min(max, w))
     return Math.abs(clamped - PANEL_DEFAULT_WIDTH) <= SNAP_RANGE ? PANEL_DEFAULT_WIDTH : clamped
   }

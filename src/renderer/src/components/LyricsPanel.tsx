@@ -29,7 +29,7 @@ export function LyricsPanel(): React.JSX.Element {
   return (
     <aside
       style={{ width }}
-      className="no-drag absolute inset-y-0 right-0 z-10 max-w-[45%] flex flex-col bg-panel/60 backdrop-blur-md border-l border-edge"
+      className="no-drag absolute inset-y-0 right-0 z-10 max-w-[60%] flex flex-col bg-panel/60 backdrop-blur-md border-l border-edge"
     >
       <PanelResizeHandle dragging={dragging} snapped={snapped} handleProps={handleProps} />
       <div className="flex items-center justify-between px-6 pt-5 pb-3">

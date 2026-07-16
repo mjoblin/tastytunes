@@ -576,7 +576,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   mcp: { enabled: false, bind: 'localhost', port: 8555, disabledClusters: [], disabledTools: [] },
   settingsTab: 'appearance',
   diagnosticsTab: 'smoip',
-  panelWidth: 380,
+  panelWidth: 400,
   miniBounds: null
 }
 
