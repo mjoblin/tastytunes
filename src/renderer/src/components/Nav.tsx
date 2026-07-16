@@ -97,10 +97,15 @@ export function Nav(): React.JSX.Element {
             </>
           )}
           {update && (
+            // no-drag + a 16px hit box: the dot pokes outside the button's
+            // rect into the title-bar drag region, where un-exempted pixels
+            // grab the window instead of clicking.
             <span
               aria-label="Update available"
-              className="absolute -top-1 -right-2.5 w-1.5 h-1.5 rounded-full bg-gold"
-            />
+              className="no-drag absolute -top-2.5 -right-4 w-4 h-4 flex items-center justify-center"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-gold" />
+            </span>
           )}
         </button>
       </div>
