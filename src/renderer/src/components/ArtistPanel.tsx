@@ -121,7 +121,7 @@ export function ArtistPanel(): React.JSX.Element {
       </div>
 
       {status === 'ready' && info && (
-        <div className="px-6 py-3 border-t border-edge flex items-center gap-4">
+        <div className="px-6 py-3 border-t border-edge flex flex-wrap items-center gap-x-4 gap-y-2">
           {info.wikipediaUrl && (
             <button
               onClick={() => void tt.openExternal(info.wikipediaUrl!)}
