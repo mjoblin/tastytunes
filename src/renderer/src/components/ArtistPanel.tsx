@@ -56,7 +56,7 @@ export function ArtistPanel(): React.JSX.Element {
         <button
           onClick={() => setArtistOpen(false)}
           aria-label="Close artist panel"
-          className="p-1 text-faint hover:text-dim transition-colors"
+          className="p-1.5 rounded-full text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
         >
           <X size={15} />
         </button>

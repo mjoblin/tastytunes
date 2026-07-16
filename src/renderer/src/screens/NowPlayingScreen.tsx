@@ -47,46 +47,42 @@ export function NowPlayingScreen(): React.JSX.Element {
   // Titleless top band: preserves the header's vertical rhythm (and houses the
   // display-mode button) so the art/text sit where they did with a title.
   const header = (
-    // relative z-20: the right-hand drawers (lyrics/artist, z-10) span the full
-    // height — the header buttons must stay clickable above them.
-    <header className="drag-region relative z-20 flex items-center justify-end px-8 pt-8 pb-4 min-h-[83px]">
-      {/* while a drawer is open, only its own (gold, acts-as-close) button
-          survives — the rest of the header steps back */}
+    // relative z-20 keeps the header's buttons clickable above the drawers
+    // (z-10) — but pointer-events-none on the strip itself, restored per
+    // button, so the empty band never eats the drawer ✕ beneath it. Window
+    // dragging is unaffected: app-region is a native hit-test, not CSS.
+    <header className="drag-region relative z-20 pointer-events-none flex items-center justify-end px-8 pt-8 pb-4 min-h-[83px]">
+      {/* while a drawer is open the header goes quiet entirely — the panel's
+          own ✕ (or Escape) is the one way out */}
       {lyricsAvailable && !lyricsOpen && !artistOpen && (
         <button
           onClick={() => void toggleLyricLine()}
           data-tip={lyricsLine ? 'Hide current lyric line' : 'Show current lyric line'}
           aria-label="Current lyric line"
           className={cx(
-            'no-drag tip-bottom tip-end p-2 rounded-md transition-colors',
+            'no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-md transition-colors',
             lyricsLine ? 'text-gold' : 'text-faint hover:text-dim'
           )}
         >
           <Captions size={16} />
         </button>
       )}
-      {lyricsAvailable && !artistOpen && (
+      {lyricsAvailable && !artistOpen && !lyricsOpen && (
         <button
-          onClick={() => setLyricsOpen(!lyricsOpen)}
+          onClick={() => setLyricsOpen(true)}
           data-tip="Lyrics"
           aria-label="Lyrics"
-          className={cx(
-            'no-drag tip-bottom tip-end p-2 rounded-md transition-colors',
-            lyricsOpen ? 'text-gold' : 'text-faint hover:text-dim'
-          )}
+          className="no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-md text-faint hover:text-dim transition-colors"
         >
           <MicVocal size={16} />
         </button>
       )}
-      {artistAvailable && !lyricsOpen && (
+      {artistAvailable && !lyricsOpen && !artistOpen && (
         <button
-          onClick={() => setArtistOpen(!artistOpen)}
+          onClick={() => setArtistOpen(true)}
           data-tip="About the artist"
           aria-label="About the artist"
-          className={cx(
-            'no-drag tip-bottom tip-end p-2 rounded-md transition-colors',
-            artistOpen ? 'text-gold' : 'text-faint hover:text-dim'
-          )}
+          className="no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-md text-faint hover:text-dim transition-colors"
         >
           <UserRound size={16} />
         </button>
@@ -96,7 +92,7 @@ export function NowPlayingScreen(): React.JSX.Element {
           onClick={() => setDisplayMode(true)}
           data-tip="Full-screen display mode (F)"
           aria-label="Full-screen display mode (F)"
-          className="no-drag tip-bottom tip-end p-2 rounded-md text-faint hover:text-dim transition-colors"
+          className="no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-md text-faint hover:text-dim transition-colors"
         >
           <Maximize2 size={16} />
         </button>
