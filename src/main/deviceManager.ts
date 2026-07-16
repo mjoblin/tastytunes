@@ -33,6 +33,7 @@ import * as smoipHttp from './smoipHttp'
 import { getSettings, updateSettings } from './persist'
 import { clearRecents, getRecents, recordRecent } from './recents'
 import { scrobbler } from './scrobbler'
+import { getNetRequests } from './netlog'
 
 const FRAME_RING_SIZE = 300
 const LOG_RING_SIZE = 300
@@ -552,7 +553,8 @@ export class DeviceManager {
       recents: getRecents(),
       mcpStatus: this.mcpStatus,
       frames: this.frames,
-      logs: this.logs
+      logs: this.logs,
+      netRequests: getNetRequests()
     }
   }
 }

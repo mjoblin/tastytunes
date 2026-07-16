@@ -65,9 +65,10 @@ export function ArtistPanel(): React.JSX.Element {
         <div className="flex items-center gap-1">
           <button
             onClick={refresh}
-            aria-label="Refresh artist info"
-            data-tip="Refresh from MusicBrainz + Wikipedia"
-            className="tip-bottom tip-end p-1.5 rounded-full text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
+            disabled={status === 'loading'}
+            aria-label="Refresh artist details"
+            data-tip="Refresh artist details"
+            className="tip-bottom tip-end p-1.5 rounded-full text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all disabled:opacity-40 disabled:pointer-events-none"
           >
             <RotateCw size={13} />
           </button>
@@ -83,7 +84,9 @@ export function ArtistPanel(): React.JSX.Element {
 
       <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-4">
         {status === 'loading' && (
-          <div className="text-[13px] text-faint pt-2">Retrieving artist info…</div>
+          <div className="text-[13px] text-faint pt-2 motion-safe:animate-pulse">
+            Retrieving artist details…
+          </div>
         )}
 
         {status === 'none' && (

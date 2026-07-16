@@ -6,6 +6,7 @@
 // retries cleanly. `force` bypasses the cache read for a user-driven refresh.
 import { version } from '../../package.json'
 import type { LyricsQuery, LyricsResult } from '@shared/ipc'
+import { loggedFetch } from './netlog'
 
 // TASTYTUNES_LYRICS_URL lets test harnesses point lookups at a local server.
 const BASE = process.env['TASTYTUNES_LYRICS_URL'] ?? 'https://lrclib.net/api'
@@ -32,7 +33,7 @@ type Fetched =
 
 async function getJson(url: string): Promise<Fetched> {
   try {
-    const res = await fetch(url, {
+    const res = await loggedFetch('lrclib', url, {
       headers: { 'user-agent': USER_AGENT, accept: 'application/json' },
       signal: AbortSignal.timeout(10_000)
     })
@@ -70,18 +71,20 @@ export async function fetchLyrics(q: LyricsQuery, force = false): Promise<Lyrics
     } else {
       const list = listGot.body as ApiRecord[]
       if (list.length > 0) {
-        rec =
-          q.duration == null
-            ? list[0]
-            : list.reduce((best, c) =>
-                Math.abs((c.duration ?? Infinity) - q.duration!) <
-                Math.abs((best.duration ?? Infinity) - q.duration!)
-                  ? c
-                  : best
-              )
-        syncTrusted =
-          q.duration == null ||
-          (rec.duration != null && Math.abs(rec.duration - q.duration) <= SYNC_TOLERANCE_SECS)
+        // Among duration-plausible candidates, PREFER one with synced lyrics —
+        // search order is arbitrary and a plain-only record can tie a synced
+        // one on duration (Rein Me In taught us this). Only fall back to the
+        // globally closest record (plain text only) when nothing is close.
+        const delta = (c: ApiRecord): number =>
+          q.duration == null ? 0 : Math.abs((c.duration ?? Infinity) - q.duration)
+        const within = list.filter((c) => delta(c) <= SYNC_TOLERANCE_SECS)
+        if (within.length > 0) {
+          rec = within.find((c) => c.syncedLyrics) ?? within[0]
+          syncTrusted = true
+        } else {
+          rec = list.reduce((best, c) => (delta(c) < delta(best) ? c : best))
+          syncTrusted = false
+        }
       }
       // an OK empty search IS an answer: no lyrics exist -> cacheable miss
     }

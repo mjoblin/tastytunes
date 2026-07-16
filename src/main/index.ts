@@ -16,6 +16,7 @@ import { fetchLyrics } from './lyrics'
 import { scrobbler } from './scrobbler'
 import { fetchArtistInfo } from './artistInfo'
 import { startScheduler } from './scheduler'
+import { loggedFetch } from './netlog'
 import { getSettings, updateSettings } from './persist'
 import { getRecents } from './recents'
 
@@ -222,7 +223,7 @@ function registerIpc(): void {
   ipcMain.handle(IPC.fetchArt, async (_e, url: string) => {
     if (!/^https?:/i.test(url)) return null
     try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(5000) })
+      const res = await loggedFetch('art', url, { signal: AbortSignal.timeout(5000) })
       if (!res.ok) return null
       const buf = Buffer.from(await res.arrayBuffer())
       if (buf.length > 3_000_000) return null

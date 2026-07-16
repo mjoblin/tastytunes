@@ -3,6 +3,7 @@
 import { version as appVersion } from '../../package.json'
 import type { UpdateInfo } from '@shared/ipc'
 import { getSettings } from './persist'
+import { loggedFetch } from './netlog'
 
 // TASTYTUNES_UPDATE_URL lets test harnesses point the check at a local server.
 const RELEASES_URL =
@@ -37,7 +38,7 @@ export function currentUpdate(): UpdateInfo | null {
 export async function checkNow(): Promise<void> {
   if (!getSettings().updateCheck) return
   try {
-    const res = await fetch(RELEASES_URL, {
+    const res = await loggedFetch('github', RELEASES_URL, {
       headers: { accept: 'application/vnd.github+json' },
       signal: AbortSignal.timeout(10_000)
     })

@@ -7,6 +7,7 @@ import type {
   LogEntry,
   McpStatus,
   MenuCommand,
+  NetRequestEntry,
   PushMessage,
   UpdateInfo,
   RecentTrack,
@@ -64,6 +65,8 @@ interface TTState {
 
   frames: FrameEntry[]
   logs: LogEntry[]
+  /** Outbound HTTP requests from the main process (diagnostics Requests tab). */
+  netRequests: NetRequestEntry[]
 
   diagnosticsOpen: boolean
   shortcutsOpen: boolean
@@ -124,6 +127,7 @@ export const useStore = create<TTState>((set, get) => ({
 
   frames: [],
   logs: [],
+  netRequests: [],
 
   diagnosticsOpen: false,
   shortcutsOpen: false,
@@ -178,7 +182,8 @@ export const useStore = create<TTState>((set, get) => ({
       mcpStatus: snap.mcpStatus,
       playhead: snap.position ? { secs: snap.position.position, at: Date.now() } : null,
       frames: snap.frames,
-      logs: snap.logs
+      logs: snap.logs,
+      netRequests: snap.netRequests
     }),
 
   applyPush: (msg) =>
@@ -233,6 +238,16 @@ export const useStore = create<TTState>((set, get) => ({
           return { mcpStatus: msg.status }
         case 'update':
           return { update: msg.update }
+        case 'netRequest': {
+          // start + settle arrive as separate pushes for the same id — upsert
+          const idx = s.netRequests.findIndex((e) => e.id === msg.entry.id)
+          const netRequests =
+            idx >= 0
+              ? s.netRequests.map((e, i) => (i === idx ? msg.entry : e))
+              : [...s.netRequests, msg.entry]
+          if (netRequests.length > 200) netRequests.splice(0, netRequests.length - 200)
+          return { netRequests }
+        }
         case 'menu':
           return {} // routed to applyMenu in main.tsx; nothing to merge here
       }

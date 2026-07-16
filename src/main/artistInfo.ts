@@ -8,6 +8,7 @@
 // request retries. `force` bypasses the cache read for a user-driven refresh.
 import { version } from '../../package.json'
 import type { ArtistInfo } from '@shared/ipc'
+import { loggedFetch } from './netlog'
 
 // Env overrides let test harnesses point each hop at a local server.
 const MB = process.env['TASTYTUNES_MB_URL'] ?? 'https://musicbrainz.org'
@@ -25,9 +26,9 @@ type Fetched =
   | { kind: 'missing' }
   | { kind: 'error' }
 
-async function getJson(url: string): Promise<Fetched> {
+async function getJson(service: string, url: string): Promise<Fetched> {
   try {
-    const res = await fetch(url, {
+    const res = await loggedFetch(service, url, {
       headers: { 'user-agent': USER_AGENT, accept: 'application/json' },
       signal: AbortSignal.timeout(10_000)
     })
@@ -47,7 +48,7 @@ function mbFetch(url: string): Promise<Fetched> {
     const wait = mbLastAt + 1100 - Date.now()
     if (wait > 0) await new Promise((r) => setTimeout(r, wait))
     mbLastAt = Date.now()
-    return getJson(url)
+    return getJson('musicbrainz', url)
   })
   mbChain = next.catch(() => null)
   return next
@@ -101,7 +102,7 @@ export async function fetchArtistInfo(artist: string, force = false): Promise<Ar
         const wikidata = rels.find((r) => r.type === 'wikidata')?.url?.resource
         const qid = wikidata?.split('/wiki/')[1]
         if (qid) {
-          const entityGot = await getJson(`${WD}/wiki/Special:EntityData/${qid}.json`)
+          const entityGot = await getJson('wikidata', `${WD}/wiki/Special:EntityData/${qid}.json`)
           if (entityGot.kind === 'error') {
             definitive = false
           } else if (entityGot.kind === 'ok') {
@@ -119,6 +120,7 @@ export async function fetchArtistInfo(artist: string, force = false): Promise<Ar
 
       if (title) {
         const summaryGot = await getJson(
+          'wikipedia',
           `${WIKI}/api/rest_v1/page/summary/${encodeURIComponent(title)}`
         )
         if (summaryGot.kind === 'error') {

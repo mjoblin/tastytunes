@@ -33,9 +33,10 @@ export function LyricsPanel(): React.JSX.Element {
         <div className="flex items-center gap-1">
           <button
             onClick={refresh}
+            disabled={status === 'loading'}
             aria-label="Refresh lyrics"
-            data-tip="Refresh from LRCLIB"
-            className="tip-bottom tip-end p-1.5 rounded-full text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
+            data-tip="Refresh lyrics"
+            className="tip-bottom tip-end p-1.5 rounded-full text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all disabled:opacity-40 disabled:pointer-events-none"
           >
             <RotateCw size={13} />
           </button>
@@ -55,7 +56,9 @@ export function LyricsPanel(): React.JSX.Element {
         onMouseLeave={() => setHovered(false)}
       >
         {status === 'loading' && (
-          <div className="text-[13px] text-faint pt-2">Retrieving lyrics…</div>
+          <div className="text-[13px] text-faint pt-2 motion-safe:animate-pulse">
+            Retrieving lyrics…
+          </div>
         )}
 
         {status === 'none' && (

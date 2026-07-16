@@ -134,6 +134,8 @@ export type PushMessage =
   | { kind: 'mcpStatus'; status: McpStatus }
   | { kind: 'menu'; command: MenuCommand }
   | { kind: 'update'; update: UpdateInfo }
+  /** Sent when a request starts (pending) and again when it settles — upsert by id. */
+  | { kind: 'netRequest'; entry: NetRequestEntry }
 
 /** A newer GitHub release than the running version (stage-1 update awareness). */
 export interface UpdateInfo {
@@ -141,6 +143,24 @@ export interface UpdateInfo {
   version: string
   /** Release page to open in the browser. */
   url: string
+}
+
+// ------------------------------------------------------------ requests console
+
+/** One outbound HTTP request from the main process, for the diagnostics drawer. */
+export interface NetRequestEntry {
+  id: number
+  at: number
+  /** Short service tag: lrclib, musicbrainz, wikidata, wikipedia, listenbrainz, github, art. */
+  service: string
+  method: string
+  url: string
+  /** HTTP status once a response arrived; null while pending. */
+  status: number | null
+  /** Round-trip ms once settled; null while pending. */
+  ms: number | null
+  /** Transport failure — no response at all (DNS, timeout, refused). */
+  error: boolean
 }
 
 // ----------------------------------------------------------- scheduled actions
@@ -575,6 +595,7 @@ export interface Snapshot {
   mcpStatus: McpStatus
   frames: FrameEntry[]
   logs: LogEntry[]
+  netRequests: NetRequestEntry[]
 }
 
 // ------------------------------------------------------------------- preload API

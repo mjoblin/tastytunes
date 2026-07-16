@@ -7,6 +7,7 @@
 import { version } from '../../package.json'
 import type { ZonePlayState } from '@shared/smoip'
 import { getSettings } from './persist'
+import { loggedFetch } from './netlog'
 
 // TASTYTUNES_LB_URL lets test harnesses point submissions at a local server.
 const BASE = process.env['TASTYTUNES_LB_URL'] ?? 'https://api.listenbrainz.org'
@@ -62,7 +63,7 @@ function trackMetadata(meta: TrackMeta): Record<string, unknown> {
 async function post(body: unknown): Promise<boolean> {
   const token = getSettings().lbToken.trim()
   try {
-    const res = await fetch(`${BASE}/1/submit-listens`, {
+    const res = await loggedFetch('listenbrainz', `${BASE}/1/submit-listens`, {
       method: 'POST',
       headers: {
         authorization: `Token ${token}`,
@@ -176,7 +177,7 @@ export const scrobbler = {
     const token = getSettings().lbToken.trim()
     if (!token) return { valid: false, userName: null }
     try {
-      const res = await fetch(`${BASE}/1/validate-token`, {
+      const res = await loggedFetch('listenbrainz', `${BASE}/1/validate-token`, {
         headers: { authorization: `Token ${token}` },
         signal: AbortSignal.timeout(10_000)
       })
