@@ -23,10 +23,6 @@ jobs:
           - os: windows-latest
             args: --win
     runs-on: ${{ matrix.os }}
-    env:
-      # Never scan the runner keychain for identities; macOS signing happens
-      # only via the explicit CSC_LINK imported from secrets below.
-      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
@@ -36,8 +32,10 @@ jobs:
           cache: npm
 
       # Import macOS signing/notarization credentials when the repo secrets
-      # exist. Absent secrets (e.g. on a fork) leave the env unset and the
-      # build falls through to unsigned, notarization skipped — same as before.
+      # exist. Absent secrets (e.g. on a fork) disable identity auto-discovery
+      # so the build falls through to unsigned, notarization skipped.
+      # Note: auto-discovery must stay ON when CSC_LINK is set — it is how
+      # electron-builder finds the imported cert in its temporary keychain.
       - name: Set up macOS signing credentials
         if: matrix.os == 'macos-latest'
         env:
@@ -52,6 +50,8 @@ jobs:
               echo "CSC_LINK=$MAC_CERT_P12"
               echo "CSC_KEY_PASSWORD=$MAC_CERT_PASSWORD"
             } >> "$GITHUB_ENV"
+          else
+            echo "CSC_IDENTITY_AUTO_DISCOVERY=false" >> "$GITHUB_ENV"
           fi
           if [ -n "$APPLE_API_KEY_P8" ]; then
             printf '%s\n' "$APPLE_API_KEY_P8" > "$RUNNER_TEMP/apple_api_key.p8"
