@@ -12,7 +12,9 @@ import { getRecents } from './recents'
 // bare file path (dev harnesses), it doesn't read package.json and userData
 // would silently default to ".../Electron". TASTYTUNES_USER_DATA lets test
 // harnesses run isolated (own settings, own single-instance lock).
-app.setName('tastytunes')
+// Display casing: app.name feeds menu role labels ("Hide/Quit TastyTunes");
+// the settings path stays lowercase via the explicit setPath below.
+app.setName('TastyTunes')
 app.setPath(
   'userData',
   process.env['TASTYTUNES_USER_DATA'] ?? join(app.getPath('appData'), 'tastytunes')
