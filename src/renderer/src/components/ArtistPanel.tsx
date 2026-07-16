@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { ExternalLink, UserRound, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { ExternalLink, RotateCw, UserRound, X } from 'lucide-react'
 import type { ArtistInfo } from '@shared/ipc'
 import { tt } from '@/api'
 import { useStore } from '@/store'
@@ -22,6 +22,8 @@ export function ArtistPanel(): React.JSX.Element {
 
   const [status, setStatus] = useState<Status>('loading')
   const [info, setInfo] = useState<ArtistInfo | null>(null)
+  const [fetchNonce, setFetchNonce] = useState(0)
+  const forceRef = useRef(false)
 
   useEffect(() => {
     if (!artist) {
@@ -29,10 +31,12 @@ export function ArtistPanel(): React.JSX.Element {
       setInfo(null)
       return
     }
+    const force = forceRef.current
+    forceRef.current = false
     let stale = false
     setStatus('loading')
     void tt
-      .fetchArtistInfo(artist)
+      .fetchArtistInfo(artist, force)
       .then((res) => {
         if (stale) return
         setInfo(res)
@@ -44,7 +48,12 @@ export function ArtistPanel(): React.JSX.Element {
     return () => {
       stale = true
     }
-  }, [artist])
+  }, [artist, fetchNonce])
+
+  const refresh = (): void => {
+    forceRef.current = true
+    setFetchNonce((n) => n + 1)
+  }
 
   return (
     <aside className="no-drag absolute inset-y-0 right-0 z-10 w-[380px] max-w-[45%] flex flex-col bg-panel/60 backdrop-blur-md border-l border-edge">
@@ -53,13 +62,23 @@ export function ArtistPanel(): React.JSX.Element {
           <UserRound size={13} />
           artist
         </div>
-        <button
-          onClick={() => setArtistOpen(false)}
-          aria-label="Close artist panel"
-          className="p-1.5 rounded-full text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
-        >
-          <X size={15} />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={refresh}
+            aria-label="Refresh artist info"
+            data-tip="Refresh from MusicBrainz + Wikipedia"
+            className="tip-bottom tip-end p-1.5 rounded-full text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
+          >
+            <RotateCw size={13} />
+          </button>
+          <button
+            onClick={() => setArtistOpen(false)}
+            aria-label="Close artist panel"
+            className="p-1.5 rounded-full text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
+          >
+            <X size={15} />
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-4">

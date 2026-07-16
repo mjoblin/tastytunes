@@ -1,7 +1,9 @@
 // LRCLIB lyrics lookup (lrclib.net) — keyless, no rate limits; they ask only
 // for an identifying User-Agent, which is why this lives in the main process
-// (renderer fetch can't set one). Results — including misses — are cached in
-// memory per track so reopening the panel never re-fetches.
+// (renderer fetch can't set one). Results are cached in memory per track —
+// including DEFINITIVE misses ("LRCLIB answered: no lyrics") — but transient
+// failures (unreachable, timeout, 5xx) are never cached, so the next request
+// retries cleanly. `force` bypasses the cache read for a user-driven refresh.
 import { version } from '../../package.json'
 import type { LyricsQuery, LyricsResult } from '@shared/ipc'
 
@@ -22,31 +24,52 @@ interface ApiRecord {
   duration?: number
 }
 
-async function getJson(url: string): Promise<unknown | null> {
-  const res = await fetch(url, {
-    headers: { 'user-agent': USER_AGENT, accept: 'application/json' },
-    signal: AbortSignal.timeout(10_000)
-  })
-  if (!res.ok) return null
-  return res.json()
+/** ok = an answer; missing = authoritative 404; error = we never really asked. */
+type Fetched =
+  | { kind: 'ok'; body: unknown }
+  | { kind: 'missing' }
+  | { kind: 'error' }
+
+async function getJson(url: string): Promise<Fetched> {
+  try {
+    const res = await fetch(url, {
+      headers: { 'user-agent': USER_AGENT, accept: 'application/json' },
+      signal: AbortSignal.timeout(10_000)
+    })
+    if (res.status === 404) return { kind: 'missing' }
+    if (!res.ok) return { kind: 'error' }
+    return { kind: 'ok', body: await res.json() }
+  } catch {
+    return { kind: 'error' }
+  }
 }
 
-export async function fetchLyrics(q: LyricsQuery): Promise<LyricsResult | null> {
+export async function fetchLyrics(q: LyricsQuery, force = false): Promise<LyricsResult | null> {
   const key = [q.artist, q.title, q.album ?? '', q.duration ?? ''].join('|').toLowerCase()
-  if (cache.has(key)) return cache.get(key) ?? null
+  if (!force && cache.has(key)) return cache.get(key) ?? null
 
   let result: LyricsResult | null = null
-  try {
-    const exact = new URLSearchParams({ artist_name: q.artist, track_name: q.title })
-    if (q.album) exact.set('album_name', q.album)
-    if (q.duration != null) exact.set('duration', String(Math.round(q.duration)))
-    let rec = (await getJson(`${BASE}/get?${exact}`)) as ApiRecord | null
+  // Only a conclusion built purely from real answers goes into the cache.
+  let definitive = true
 
-    let syncTrusted = true
-    if (!rec) {
-      const search = new URLSearchParams({ artist_name: q.artist, track_name: q.title })
-      const list = (await getJson(`${BASE}/search?${search}`)) as ApiRecord[] | null
-      if (list && list.length > 0) {
+  const exact = new URLSearchParams({ artist_name: q.artist, track_name: q.title })
+  if (q.album) exact.set('album_name', q.album)
+  if (q.duration != null) exact.set('duration', String(Math.round(q.duration)))
+  const got = await getJson(`${BASE}/get?${exact}`)
+
+  let rec: ApiRecord | null = got.kind === 'ok' ? (got.body as ApiRecord) : null
+  if (got.kind === 'error') definitive = false
+
+  let syncTrusted = true
+  if (!rec) {
+    const search = new URLSearchParams({ artist_name: q.artist, track_name: q.title })
+    const listGot = await getJson(`${BASE}/search?${search}`)
+    if (listGot.kind !== 'ok') {
+      // search has no 404 shape — anything non-ok is a failure to ask
+      definitive = false
+    } else {
+      const list = listGot.body as ApiRecord[]
+      if (list.length > 0) {
         rec =
           q.duration == null
             ? list[0]
@@ -60,23 +83,25 @@ export async function fetchLyrics(q: LyricsQuery): Promise<LyricsResult | null> 
           q.duration == null ||
           (rec.duration != null && Math.abs(rec.duration - q.duration) <= SYNC_TOLERANCE_SECS)
       }
+      // an OK empty search IS an answer: no lyrics exist -> cacheable miss
     }
-
-    if (rec) {
-      result = {
-        plain: rec.plainLyrics ?? null,
-        synced: syncTrusted ? (rec.syncedLyrics ?? null) : null,
-        instrumental: !!rec.instrumental
-      }
-    }
-  } catch {
-    // offline / LRCLIB down — cache the miss; a track change retries naturally
   }
 
-  if (cache.size >= CACHE_MAX) {
-    const oldest = cache.keys().next().value
-    if (oldest != null) cache.delete(oldest)
+  if (rec) {
+    result = {
+      plain: rec.plainLyrics ?? null,
+      synced: syncTrusted ? (rec.syncedLyrics ?? null) : null,
+      instrumental: !!rec.instrumental
+    }
+    definitive = true // a found record is an answer regardless of the path here
   }
-  cache.set(key, result)
+
+  if (definitive) {
+    if (cache.size >= CACHE_MAX && !cache.has(key)) {
+      const oldest = cache.keys().next().value
+      if (oldest != null) cache.delete(oldest)
+    }
+    cache.set(key, result)
+  }
   return result
 }

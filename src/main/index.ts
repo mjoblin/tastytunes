@@ -201,12 +201,12 @@ function registerIpc(): void {
   ipcMain.handle(IPC.setSleep, (_e, sleep: SleepTimer | null) => deviceManager.setSleep(sleep))
   // Belt-and-braces gate: the renderer only asks while the setting is on, but
   // "off = no requests, ever" should hold even if a stale renderer asks.
-  ipcMain.handle(IPC.fetchLyrics, (_e, q: LyricsQuery) =>
-    getSettings().lyrics ? fetchLyrics(q) : null
+  ipcMain.handle(IPC.fetchLyrics, (_e, q: LyricsQuery, force?: boolean) =>
+    getSettings().lyrics ? fetchLyrics(q, !!force) : null
   )
   ipcMain.handle(IPC.lbValidate, () => scrobbler.validateToken())
-  ipcMain.handle(IPC.fetchArtistInfo, (_e, artist: string) =>
-    getSettings().artistInfo ? fetchArtistInfo(artist) : null
+  ipcMain.handle(IPC.fetchArtistInfo, (_e, artist: string, force?: boolean) =>
+    getSettings().artistInfo ? fetchArtistInfo(artist, !!force) : null
   )
   ipcMain.handle(IPC.getRecents, () => getRecents())
   ipcMain.handle(IPC.clearRecents, () => deviceManager.clearRecents())

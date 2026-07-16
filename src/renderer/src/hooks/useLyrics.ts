@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { LyricsResult } from '@shared/ipc'
 import { tt } from '@/api'
 import { useStore } from '@/store'
@@ -33,6 +33,14 @@ export function useFadedText(text: string): { shown: string; visible: boolean } 
   const [visible, setVisible] = useState(true)
   useEffect(() => {
     if (text === shown) return
+    // Hidden window: timers are throttled to a crawl (Chromium intensive
+    // throttling) — the fade's "show again" step would lag by minutes and the
+    // line would sit at opacity 0. Nobody's watching; swap instantly.
+    if (document.hidden) {
+      setShown(text)
+      setVisible(true)
+      return
+    }
     setVisible(false)
     const t = setTimeout(() => {
       setShown(text)
@@ -55,6 +63,8 @@ export function useLyrics(): {
   currentIndex: number
   isRadio: boolean
   hasQuery: boolean
+  /** User-driven re-fetch that bypasses the main-process cache. */
+  refresh(): void
 } {
   const playState = useStore((s) => s.playState)
   const nowPlaying = useStore((s) => s.nowPlaying)
@@ -68,6 +78,8 @@ export function useLyrics(): {
 
   const [status, setStatus] = useState<LyricsStatus>('loading')
   const [result, setResult] = useState<LyricsResult | null>(null)
+  const [fetchNonce, setFetchNonce] = useState(0)
+  const forceRef = useRef(false)
 
   useEffect(() => {
     if (!artist || !meta.title) {
@@ -75,10 +87,12 @@ export function useLyrics(): {
       setResult(null)
       return
     }
+    const force = forceRef.current
+    forceRef.current = false
     let stale = false
     setStatus('loading')
     void tt
-      .fetchLyrics({ artist, title: meta.title, album: meta.album, duration })
+      .fetchLyrics({ artist, title: meta.title, album: meta.album, duration }, force)
       .then((res) => {
         if (stale) return
         setResult(res)
@@ -93,7 +107,12 @@ export function useLyrics(): {
       stale = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- trackKey covers the query fields
-  }, [trackKey])
+  }, [trackKey, fetchNonce])
+
+  const refresh = useCallback(() => {
+    forceRef.current = true
+    setFetchNonce((n) => n + 1)
+  }, [])
 
   const synced = useMemo(() => (result?.synced ? parseLrc(result.synced) : null), [result])
 
@@ -124,5 +143,5 @@ export function useLyrics(): {
     return idx
   }, [synced, positionSecs])
 
-  return { status, result, synced, currentIndex, isRadio: meta.isRadio, hasQuery }
+  return { status, result, synced, currentIndex, isRadio: meta.isRadio, hasQuery, refresh }
 }

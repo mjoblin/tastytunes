@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { MicVocal, X } from 'lucide-react'
+import { MicVocal, RotateCw, X } from 'lucide-react'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { cx } from '@/lib/format'
@@ -7,7 +7,7 @@ import { useLyrics } from '@/hooks/useLyrics'
 
 export function LyricsPanel(): React.JSX.Element {
   const setLyricsOpen = useStore((s) => s.setLyricsOpen)
-  const { status, result, synced, currentIndex, isRadio, hasQuery } = useLyrics()
+  const { status, result, synced, currentIndex, isRadio, hasQuery, refresh } = useLyrics()
 
   // Keep the current line centered — but never while the pointer is inside the
   // panel: recentering mid-hover yanks the line you're about to click away.
@@ -30,13 +30,23 @@ export function LyricsPanel(): React.JSX.Element {
           <MicVocal size={13} />
           lyrics
         </div>
-        <button
-          onClick={() => setLyricsOpen(false)}
-          aria-label="Close lyrics"
-          className="p-1.5 rounded-full text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
-        >
-          <X size={15} />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={refresh}
+            aria-label="Refresh lyrics"
+            data-tip="Refresh from LRCLIB"
+            className="tip-bottom tip-end p-1.5 rounded-full text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
+          >
+            <RotateCw size={13} />
+          </button>
+          <button
+            onClick={() => setLyricsOpen(false)}
+            aria-label="Close lyrics"
+            className="p-1.5 rounded-full text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
+          >
+            <X size={15} />
+          </button>
+        </div>
       </div>
 
       <div

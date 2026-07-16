@@ -590,12 +590,14 @@ export interface TastyTunesApi {
   setSettings(patch: Partial<AppSettings>): Promise<AppSettings>
   /** Fetch album art via the main process (bypasses CORS) as a data URL. */
   fetchArt(url: string): Promise<{ dataUrl: string } | null>
-  /** Look up lyrics via LRCLIB (main process, in-memory cached; null = not found). */
-  fetchLyrics(query: LyricsQuery): Promise<LyricsResult | null>
+  /** Look up lyrics via LRCLIB (main process, in-memory cached; null = not found).
+   *  `force` bypasses the cache read — the user-driven refresh. */
+  fetchLyrics(query: LyricsQuery, force?: boolean): Promise<LyricsResult | null>
   /** Check the saved ListenBrainz token (null = network failure, not a verdict). */
   lbValidate(): Promise<{ valid: boolean; userName: string | null } | null>
-  /** Artist bio via MusicBrainz + Wikipedia (main process, cached; null = no match). */
-  fetchArtistInfo(artist: string): Promise<ArtistInfo | null>
+  /** Artist bio via MusicBrainz + Wikipedia (main process, cached; null = no match).
+   *  `force` bypasses the cache read — the user-driven refresh. */
+  fetchArtistInfo(artist: string, force?: boolean): Promise<ArtistInfo | null>
   /** Open/close the mini player window. */
   toggleMini(): Promise<void>
   /** Show and focus the main window. */
