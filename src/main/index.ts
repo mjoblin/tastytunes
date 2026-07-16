@@ -145,6 +145,9 @@ function registerIpc(): void {
     const next = updateSettings(patch)
     syncMediaKeys()
     mcpBridge.sync(next)
+    // Only when the limit itself changed — a volume set above the limit from
+    // outside the app (device knob) mustn't be ambushed by unrelated saves.
+    if ('volumeLimitPercent' in patch) deviceManager.enforceVolumeLimit()
     return next
   })
   ipcMain.handle(IPC.openExternal, (_e, url: string) => {

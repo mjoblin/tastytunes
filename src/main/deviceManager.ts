@@ -297,6 +297,18 @@ export class DeviceManager {
     }
   }
 
+  /**
+   * Called when the volume limit setting changes: if the streamer is currently
+   * louder than the new limit, pull it down to the limit right away.
+   */
+  enforceVolumeLimit(): void {
+    const limit = getSettings().volumeLimitPercent
+    const current = this.cache.zoneState?.volume_percent
+    if (limit != null && current != null && current > limit) {
+      void this.command({ type: 'setVolumePercent', percent: limit })
+    }
+  }
+
   private clampVolume(percent: number): number {
     const limit = getSettings().volumeLimitPercent
     const capped = limit != null ? Math.min(percent, limit) : percent
