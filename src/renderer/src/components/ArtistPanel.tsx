@@ -4,6 +4,8 @@ import type { ArtistInfo } from '@shared/ipc'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { deriveNowPlaying } from '@/lib/format'
+import { usePanelWidth } from '@/hooks/usePanelWidth'
+import { PanelResizeHandle } from '@/components/PanelResizeHandle'
 
 type Status = 'loading' | 'ready' | 'none'
 
@@ -19,6 +21,7 @@ export function ArtistPanel(): React.JSX.Element {
 
   const meta = deriveNowPlaying(playState, nowPlaying)
   const artist = meta.isRadio ? null : meta.subtitle
+  const { width, dragging, snapped, handleProps } = usePanelWidth()
 
   const [status, setStatus] = useState<Status>('loading')
   const [info, setInfo] = useState<ArtistInfo | null>(null)
@@ -56,7 +59,11 @@ export function ArtistPanel(): React.JSX.Element {
   }
 
   return (
-    <aside className="no-drag absolute inset-y-0 right-0 z-10 w-[380px] max-w-[45%] flex flex-col bg-panel/60 backdrop-blur-md border-l border-edge">
+    <aside
+      style={{ width }}
+      className="no-drag absolute inset-y-0 right-0 z-10 max-w-[45%] flex flex-col bg-panel/60 backdrop-blur-md border-l border-edge"
+    >
+      <PanelResizeHandle dragging={dragging} snapped={snapped} handleProps={handleProps} />
       <div className="flex items-center justify-between px-6 pt-5 pb-3">
         <div className="microlabel text-ink/80 flex items-center gap-2">
           <UserRound size={13} />

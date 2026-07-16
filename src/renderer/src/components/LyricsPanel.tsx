@@ -4,10 +4,13 @@ import { tt } from '@/api'
 import { useStore } from '@/store'
 import { cx } from '@/lib/format'
 import { useLyrics } from '@/hooks/useLyrics'
+import { usePanelWidth } from '@/hooks/usePanelWidth'
+import { PanelResizeHandle } from '@/components/PanelResizeHandle'
 
 export function LyricsPanel(): React.JSX.Element {
   const setLyricsOpen = useStore((s) => s.setLyricsOpen)
   const { status, result, synced, currentIndex, isRadio, hasQuery, refresh } = useLyrics()
+  const { width, dragging, snapped, handleProps } = usePanelWidth()
 
   // Keep the current line centered — but never while the pointer is inside the
   // panel: recentering mid-hover yanks the line you're about to click away.
@@ -24,7 +27,11 @@ export function LyricsPanel(): React.JSX.Element {
   }, [currentIndex, hovered])
 
   return (
-    <aside className="no-drag absolute inset-y-0 right-0 z-10 w-[380px] max-w-[45%] flex flex-col bg-panel/60 backdrop-blur-md border-l border-edge">
+    <aside
+      style={{ width }}
+      className="no-drag absolute inset-y-0 right-0 z-10 max-w-[45%] flex flex-col bg-panel/60 backdrop-blur-md border-l border-edge"
+    >
+      <PanelResizeHandle dragging={dragging} snapped={snapped} handleProps={handleProps} />
       <div className="flex items-center justify-between px-6 pt-5 pb-3">
         <div className="microlabel text-ink/80 flex items-center gap-2">
           <MicVocal size={13} />
