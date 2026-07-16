@@ -101,6 +101,18 @@ export function recentMatchesPlayState(e: RecentTrack, ps: ZonePlayState | null)
 
 // -------------------------------------------------------- main -> renderer push
 
+/**
+ * An application-menu click that must run in the renderer. Sent to the main
+ * window only (never the mini player); `screen` values are renderer Screen ids.
+ */
+export type MenuCommand =
+  | { id: 'about' }
+  | { id: 'palette' }
+  | { id: 'shortcuts' }
+  | { id: 'displayMode' }
+  | { id: 'toggleNav' }
+  | { id: 'screen'; screen: string }
+
 export type PushMessage =
   | { kind: 'connection'; state: ConnectionState }
   | { kind: 'devices'; devices: DiscoveredDevice[]; discovering: boolean }
@@ -120,6 +132,7 @@ export type PushMessage =
   | { kind: 'miniHover'; hovered: boolean }
   | { kind: 'sleep'; sleep: SleepTimer | null }
   | { kind: 'mcpStatus'; status: McpStatus }
+  | { kind: 'menu'; command: MenuCommand }
 
 // ------------------------------------------------------ renderer -> main actions
 

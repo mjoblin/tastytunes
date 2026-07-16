@@ -12,7 +12,12 @@ import { tt } from './api'
 import { useStore } from './store'
 
 // Subscribe to pushes before fetching the snapshot so nothing slips between them.
-tt.onPush((msg) => useStore.getState().applyPush(msg))
+// Menu clicks carry side effects (settings round-trips) that don't fit
+// applyPush's pure state merge, so they route to their own action.
+tt.onPush((msg) => {
+  if (msg.kind === 'menu') useStore.getState().applyMenu(msg.command)
+  else useStore.getState().applyPush(msg)
+})
 void tt.getSnapshot().then((snapshot) => useStore.getState().init(snapshot))
 
 // The mini-player window loads the same bundle with ?mini=1.

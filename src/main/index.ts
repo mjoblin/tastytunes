@@ -1,8 +1,9 @@
 import { app, BrowserWindow, globalShortcut, ipcMain, powerMonitor, screen, shell } from 'electron'
 import { join } from 'node:path'
-import { IPC, type AppSettings, type SleepTimer, type StreamerCommand } from '@shared/ipc'
+import { IPC, type AppSettings, type MenuCommand, type SleepTimer, type StreamerCommand } from '@shared/ipc'
 import { DeviceManager } from './deviceManager'
 import { McpBridge } from './mcpServer'
+import { installAppMenu } from './menu'
 import { getSettings, updateSettings } from './persist'
 import { getRecents } from './recents'
 
@@ -31,6 +32,9 @@ function createWindow(): void {
     backgroundColor: '#0e0d0b',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     trafficLightPosition: { x: 18, y: 18 },
+    // The app carries its own chrome — on Windows/Linux the menu bar stays
+    // hidden until Alt reveals it (no-op on macOS).
+    autoHideMenuBar: true,
     webPreferences: {
       preload: join(__dirname, '../preload/index.mjs'),
       sandbox: false
@@ -134,6 +138,24 @@ function toggleMiniPlayer(): void {
   }
 }
 
+// Deliver a menu click to the main window's renderer. If the window is gone
+// (closed on macOS while the app lives on), recreate it and send after load —
+// the renderer subscribes to pushes at module scope, so did-finish-load is late
+// enough. Menu commands never go to the mini player.
+function sendMenuCommand(command: MenuCommand): void {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow()
+    mainWindow?.webContents.once('did-finish-load', () => {
+      mainWindow?.webContents.send(IPC.push, { kind: 'menu', command })
+    })
+    return
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
+  mainWindow.webContents.send(IPC.push, { kind: 'menu', command })
+}
+
 function registerIpc(): void {
   ipcMain.handle(IPC.getSnapshot, () => deviceManager.snapshot())
   ipcMain.handle(IPC.discover, () => deviceManager.discover())
@@ -210,6 +232,11 @@ if (!gotLock) {
 
   app.whenReady().then(() => {
     registerIpc()
+    installAppMenu({
+      command: (cmd) => void deviceManager.command(cmd),
+      toggleMini: toggleMiniPlayer,
+      sendToMain: sendMenuCommand
+    })
     createWindow()
     syncMediaKeys()
     mcpBridge.sync(getSettings())

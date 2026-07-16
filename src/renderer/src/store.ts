@@ -6,6 +6,7 @@ import type {
   FrameEntry,
   LogEntry,
   McpStatus,
+  MenuCommand,
   PushMessage,
   RecentTrack,
   SleepAction,
@@ -24,6 +25,7 @@ import type {
   ZoneState
 } from '@shared/smoip'
 import { DEFAULT_SETTINGS } from '@shared/ipc'
+import { tt } from './api'
 
 export type Screen =
   | 'now-playing'
@@ -90,9 +92,11 @@ interface TTState {
   setQueueItems(items: QueueListItem[]): void
   init(snapshot: Snapshot): void
   applyPush(msg: PushMessage): void
+  /** Application-menu clicks forwarded from the main process (main window only). */
+  applyMenu(command: MenuCommand): void
 }
 
-export const useStore = create<TTState>((set) => ({
+export const useStore = create<TTState>((set, get) => ({
   screen: 'now-playing',
   connection: { phase: 'idle' },
   devices: [],
@@ -210,6 +214,35 @@ export const useStore = create<TTState>((set) => ({
           return { recents: msg.data }
         case 'mcpStatus':
           return { mcpStatus: msg.status }
+        case 'menu':
+          return {} // routed to applyMenu in main.tsx; nothing to merge here
       }
-    })
+    }),
+
+  applyMenu: (command) => {
+    const s = get()
+    switch (command.id) {
+      case 'about':
+        s.setInfoOpen(true)
+        break
+      case 'palette':
+        s.setPaletteOpen(!s.paletteOpen)
+        break
+      case 'shortcuts':
+        s.setShortcutsOpen(!s.shortcutsOpen)
+        break
+      case 'displayMode':
+        s.setDisplayMode(!s.displayMode)
+        break
+      case 'toggleNav':
+        // Same round-trip as Nav's collapse button: persist, then adopt.
+        void tt
+          .setSettings({ navCollapsed: !s.settings.navCollapsed })
+          .then((next) => get().setSettings(next))
+        break
+      case 'screen':
+        s.setScreen(command.screen as Screen)
+        break
+    }
+  }
 }))
