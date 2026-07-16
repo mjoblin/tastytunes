@@ -24,6 +24,26 @@ export function parseLrc(lrc: string): SyncedLine[] {
 }
 
 /**
+ * Two-phase crossfade for a changing text line: fade the old text out
+ * (~180ms), swap, fade the new in. Pure opacity — the kind of fade the
+ * reduced-motion pass deliberately keeps.
+ */
+export function useFadedText(text: string): { shown: string; visible: boolean } {
+  const [shown, setShown] = useState(text)
+  const [visible, setVisible] = useState(true)
+  useEffect(() => {
+    if (text === shown) return
+    setVisible(false)
+    const t = setTimeout(() => {
+      setShown(text)
+      setVisible(true)
+    }, 180)
+    return () => clearTimeout(t)
+  }, [text, shown])
+  return { shown, visible }
+}
+
+/**
  * Lyrics for the current track (fetched via main, cached there), plus the
  * playhead-synced current line. Shared by the full panel and the inline line;
  * they never render together, so at most one instance ticks at a time.

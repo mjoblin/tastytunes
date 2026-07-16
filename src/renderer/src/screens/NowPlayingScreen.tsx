@@ -1,4 +1,5 @@
-import { Disc3, Maximize2, MicVocal, RadioTower } from 'lucide-react'
+import { Captions, Disc3, Maximize2, MicVocal, RadioTower } from 'lucide-react'
+import { tt } from '@/api'
 import { useStore } from '@/store'
 import { cx, deriveNowPlaying } from '@/lib/format'
 import { SignalLamp } from '@/components/SignalLamp'
@@ -14,6 +15,7 @@ export function NowPlayingScreen(): React.JSX.Element {
   const setDisplayMode = useStore((s) => s.setDisplayMode)
   const lyricsOpen = useStore((s) => s.lyricsOpen)
   const setLyricsOpen = useStore((s) => s.setLyricsOpen)
+  const setSettings = useStore((s) => s.setSettings)
   const {
     nowPlayingAlignH,
     nowPlayingAlignV,
@@ -24,6 +26,11 @@ export function NowPlayingScreen(): React.JSX.Element {
 
   // Lyrics need real track metadata — hidden for radio and title-only sources.
   const lyricsAvailable = lyricsEnabled && !meta.isRadio && !!meta.title && !!meta.subtitle
+
+  const toggleLyricLine = async (): Promise<void> => {
+    const next = await tt.setSettings({ lyricsLine: !lyricsLine })
+    setSettings(next)
+  }
 
   const sourceName = nowPlaying?.source?.name ?? null
   const queueIndex = playState?.queue_index
@@ -36,6 +43,20 @@ export function NowPlayingScreen(): React.JSX.Element {
   // display-mode button) so the art/text sit where they did with a title.
   const header = (
     <header className="drag-region flex items-center justify-end px-8 pt-8 pb-4 min-h-[83px]">
+      {lyricsAvailable && (
+        <button
+          onClick={() => void toggleLyricLine()}
+          disabled={lyricsOpen}
+          data-tip={lyricsLine ? 'Hide current lyric line' : 'Show current lyric line'}
+          aria-label="Current lyric line"
+          className={cx(
+            'no-drag p-2 rounded-md transition-colors disabled:opacity-40',
+            lyricsLine ? 'text-gold' : 'text-faint hover:text-dim'
+          )}
+        >
+          <Captions size={16} />
+        </button>
+      )}
       {lyricsAvailable && (
         <button
           onClick={() => setLyricsOpen(!lyricsOpen)}

@@ -1,45 +1,32 @@
-import { X } from 'lucide-react'
-import { tt } from '@/api'
-import { useStore } from '@/store'
-import { useLyrics } from '@/hooks/useLyrics'
+import { cx } from '@/lib/format'
+import { useFadedText, useLyrics } from '@/hooks/useLyrics'
 
 /**
  * The inline lyrics flavor: just the current synced line, under the track
- * details on Now Playing. Renders nothing without synced lyrics, and the
- * screen hides it entirely while the full panel is open. The hover ✕ turns
- * it off (persisted; Settings → Behavior brings it back).
+ * details on Now Playing. Renders nothing without synced lyrics; holds a
+ * quiet ♪ through LRC empty-text gaps and intros. Toggled from the screen
+ * header (captions button); the screen hides it while the full panel is open.
+ * Lines crossfade as they change.
  */
 export function LyricLine(): React.JSX.Element | null {
-  const setSettings = useStore((s) => s.setSettings)
   const { synced, currentIndex } = useLyrics()
 
+  const line = synced && currentIndex >= 0 ? synced[currentIndex].text : ''
+  const { shown, visible } = useFadedText(synced ? line || '♪' : '')
   if (!synced) return null
-  // LRC files carry empty-text timestamps for intros and instrumental gaps —
-  // hold the line's place with a quiet ♪ instead of blinking out of existence.
-  const line = currentIndex >= 0 ? synced[currentIndex].text : ''
 
-  const hide = async (): Promise<void> => {
-    const next = await tt.setSettings({ lyricsLine: false })
-    setSettings(next)
-  }
-
+  const placeholder = shown === '♪'
   return (
-    <div className="group flex items-start gap-2 min-h-[28px] max-w-xl">
-      {line ? (
-        <div className="font-display text-[17px] leading-snug text-gold/90 line-clamp-2">
-          {line}
-        </div>
-      ) : (
-        <div className="font-display text-[17px] leading-snug text-faint">♪</div>
-      )}
-      <button
-        onClick={() => void hide()}
-        aria-label="Hide lyric line"
-        data-tip="Hide lyric line"
-        className="opacity-0 group-hover:opacity-100 p-1 mt-0.5 text-faint hover:text-dim transition-opacity shrink-0"
+    <div data-lyric-line className="min-h-[28px] max-w-xl">
+      <div
+        className={cx(
+          'font-display text-[17px] leading-snug line-clamp-2 transition-opacity duration-200',
+          visible ? 'opacity-100' : 'opacity-0',
+          placeholder ? 'text-faint' : 'text-gold/90'
+        )}
       >
-        <X size={13} />
-      </button>
+        {shown}
+      </div>
     </div>
   )
 }

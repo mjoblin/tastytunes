@@ -3,7 +3,7 @@ import { Disc3, MicVocal, RadioTower, X } from 'lucide-react'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { usePlayhead } from '@/hooks/usePlayhead'
-import { useLyrics } from '@/hooks/useLyrics'
+import { useFadedText, useLyrics } from '@/hooks/useLyrics'
 import { cx, deriveNowPlaying } from '@/lib/format'
 
 /**
@@ -161,17 +161,20 @@ export function DisplayMode(): React.JSX.Element {
  */
 function DisplayLyric(): React.JSX.Element | null {
   const { synced, currentIndex } = useLyrics()
+  const line = synced && currentIndex >= 0 ? synced[currentIndex].text : ''
+  const { shown, visible } = useFadedText(synced ? line || '♪' : '')
   if (!synced) return null
-  const line = currentIndex >= 0 ? synced[currentIndex].text : ''
+  const placeholder = shown === '♪'
   return (
     <div className="absolute inset-x-0 bottom-10 px-16 text-center pointer-events-none">
       <div
         className={cx(
-          'font-display text-[clamp(17px,2.8vmin,30px)] leading-snug line-clamp-2 text-balance',
-          line ? 'text-gold/90' : 'text-faint'
+          'font-display text-[clamp(17px,2.8vmin,30px)] leading-snug line-clamp-2 text-balance transition-opacity duration-200',
+          visible ? 'opacity-100' : 'opacity-0',
+          placeholder ? 'text-faint' : 'text-gold/90'
         )}
       >
-        {line || '♪'}
+        {shown}
       </div>
     </div>
   )
