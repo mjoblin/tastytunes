@@ -43,6 +43,9 @@ export function LibraryScreen(): React.JSX.Element {
   const setSettings = useStore((s) => s.setSettings)
   const filter = useStore((s) => s.screenFilters.library)
   const setScreenFilter = useStore((s) => s.setScreenFilter)
+  const playState = useStore((s) => s.playState)
+  const nowPlaying = useStore((s) => s.nowPlaying)
+  const zoneState = useStore((s) => s.zoneState)
   const cards = libraryLayout === 'cards'
 
   const [servers, setServers] = useState<MediaServerInfo[] | null>(null)
@@ -220,6 +223,22 @@ export function LibraryScreen(): React.JSX.Element {
   const containers = shown.filter((n) => n.isContainer)
   const tracks = shown.filter((n) => !n.isContainer)
   const server = servers?.find((s) => s.udn === serverUdn) ?? null
+
+  // Playing-item highlight, queue-screen rules: library items carry no queue
+  // ids, so match the playing metadata by content (title, plus artist/album
+  // when both sides have them), and only while the queue's source is audible.
+  const md = playState?.metadata ?? null
+  const queueSourceActive = (nowPlaying?.source?.id ?? zoneState?.source) === 'MEDIA_PLAYER'
+  const isPlayingState = playState?.state === 'play'
+  const isCurrentTrack = (node: MediaNode): boolean =>
+    md != null &&
+    node.title === md.title &&
+    (node.album == null || md.album == null || node.album === md.album) &&
+    (node.artist == null || md.artist == null || node.artist === md.artist)
+  const isPlayingAlbum = (node: MediaNode): boolean =>
+    md != null &&
+    md.album === node.title &&
+    (node.artist == null || md.artist == null || node.artist === md.artist)
 
   // Album level: header with art + album metadata; tracks drop per-row art.
   const lastCrumbNode = path.length > 0 ? path[path.length - 1].node : undefined
@@ -448,7 +467,7 @@ export function LibraryScreen(): React.JSX.Element {
 
         {!atRoot && state === 'ready' && containers.length > 0 && (
           <div
-            className={cx(!cards && 'divide-y divide-edge/50')}
+            className={cx(!cards && 'divide-y divide-edge/50 -mx-2')}
             style={
               cards
                 ? {
@@ -467,6 +486,8 @@ export function LibraryScreen(): React.JSX.Element {
                 <ContainerCard
                   key={node.id}
                   node={node}
+                  playing={queueSourceActive && isPlayingAlbum(node)}
+                  audible={isPlayingState}
                   onEnter={() => enter(node)}
                   onPlay={(el) => void playContainer(node, el)}
                   onMenu={(e) => openMenu(node, e)}
@@ -475,6 +496,8 @@ export function LibraryScreen(): React.JSX.Element {
                 <ContainerRow
                   key={node.id}
                   node={node}
+                  playing={queueSourceActive && isPlayingAlbum(node)}
+                  audible={isPlayingState}
                   onEnter={() => enter(node)}
                   onMenu={(e) => openMenu(node, e)}
                 />
@@ -484,12 +507,14 @@ export function LibraryScreen(): React.JSX.Element {
         )}
 
         {!atRoot && state === 'ready' && tracks.length > 0 && (
-          <div className={cx('divide-y divide-edge/50', containers.length > 0 && 'mt-4')}>
+          <div className={cx('divide-y divide-edge/50 -mx-2', containers.length > 0 && 'mt-4')}>
             {tracks.map((node) => (
               <TrackRow
                 key={node.id}
                 node={node}
                 showArt={!albumNode}
+                isCurrent={queueSourceActive && isCurrentTrack(node)}
+                audible={isPlayingState}
                 onPlayNow={(el) => void act(node, 'PLAY_NOW', el)}
                 onMenu={(e) => openMenu(node, e)}
               />
@@ -536,11 +561,17 @@ const isAlbumClass = (c: string): boolean => c.includes('musicAlbum')
 
 function ContainerCard({
   node,
+  playing,
+  audible,
   onEnter,
   onPlay,
   onMenu
 }: {
   node: MediaNode
+  /** The playing track belongs to this album (and the queue source is live). */
+  playing: boolean
+  /** Transport is actually in the play state (eqbars animate vs freeze). */
+  audible: boolean
   onEnter(): void
   onPlay(el: HTMLElement | null): void
   onMenu(e: React.MouseEvent): void
@@ -554,7 +585,12 @@ function ContainerCard({
       {/* the card CENTER always enters — play/menu live as corner chips on
           the art (preset-card idiom), never intercepting the open gesture */}
       <button className="block w-full cursor-pointer" onClick={onEnter}>
-        <div className="relative aspect-square w-full rounded-lg overflow-hidden bg-panel/70 ring-1 ring-edge flex items-center justify-center">
+        <div
+          className={cx(
+            'relative aspect-square w-full rounded-lg overflow-hidden bg-panel/70 ring-1 flex items-center justify-center',
+            playing ? 'ring-gold/50' : 'ring-edge'
+          )}
+        >
           <ArtImage
             src={node.artUrl}
             lazy
@@ -566,6 +602,11 @@ function ContainerCard({
               )
             }
           />
+          {playing && (
+            <span className="absolute top-1.5 left-1.5 h-7 w-7 rounded-lg bg-panel/80 ring-1 ring-edge flex items-center justify-center">
+              <Eqbars playing={audible} />
+            </span>
+          )}
           {album && (
             <span
               onClick={(e) => {
@@ -588,7 +629,14 @@ function ContainerCard({
             </span>
           )}
         </div>
-        <div className="pt-1.5 text-[12.5px] text-ink truncate text-left">{node.title}</div>
+        <div
+          className={cx(
+            'pt-1.5 text-[12.5px] truncate text-left',
+            playing ? 'text-gold' : 'text-ink'
+          )}
+        >
+          {node.title}
+        </div>
       </button>
     </div>
   )
@@ -596,10 +644,14 @@ function ContainerCard({
 
 function ContainerRow({
   node,
+  playing,
+  audible,
   onEnter,
   onMenu
 }: {
   node: MediaNode
+  playing: boolean
+  audible: boolean
   onEnter(): void
   onMenu(e: React.MouseEvent): void
 }): React.JSX.Element {
@@ -607,7 +659,10 @@ function ContainerRow({
   const album = isAlbumClass(node.upnpClass)
   return (
     <div
-      className="group grid grid-cols-[44px_1fr_auto] items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer hover:bg-veil transition-colors"
+      className={cx(
+        'group grid grid-cols-[44px_1fr_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer transition-colors',
+        playing ? 'row-playing bg-gold/10' : 'hover:bg-veil'
+      )}
       onClick={onEnter}
       onContextMenu={album ? onMenu : undefined}
       data-library-row
@@ -626,9 +681,12 @@ function ContainerRow({
         />
       </div>
       <div className="min-w-0">
-        <div className="text-[13.5px] text-ink truncate">{node.title}</div>
+        <div className={cx('text-[13.5px] truncate', playing ? 'text-gold' : 'text-ink')}>
+          {node.title}
+        </div>
         {node.artist && <div className="text-[12px] text-faint truncate">{node.artist}</div>}
       </div>
+      {playing ? <Eqbars playing={audible} /> : <span />}
       {album ? (
         <button
           aria-label="More actions"
@@ -647,12 +705,17 @@ function ContainerRow({
 function TrackRow({
   node,
   showArt,
+  isCurrent,
+  audible,
   onPlayNow,
   onMenu
 }: {
   node: MediaNode
   /** Loose tracks in mixed folders get a thumb; album views carry the art in the header. */
   showArt: boolean
+  /** This is what's playing right now (queue source live) — queue-row treatment. */
+  isCurrent: boolean
+  audible: boolean
   onPlayNow(el: HTMLElement | null): void
   onMenu(e: React.MouseEvent): void
 }): React.JSX.Element {
@@ -661,15 +724,17 @@ function TrackRow({
     <div
       ref={ref}
       className={cx(
-        'group grid items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer hover:bg-veil transition-colors',
-        showArt ? 'grid-cols-[26px_44px_1fr_auto_auto]' : 'grid-cols-[26px_1fr_auto_auto]'
+        'group grid items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer transition-colors',
+        showArt ? 'grid-cols-[26px_44px_1fr_auto_auto]' : 'grid-cols-[26px_1fr_auto_auto]',
+        isCurrent ? 'row-playing bg-gold/10' : 'hover:bg-veil'
       )}
       onClick={() => onPlayNow(ref.current)}
       onContextMenu={onMenu}
       data-library-track
     >
-      <span className="font-mono text-[10.5px] text-faint tabular-nums text-right">
-        {node.trackNumber ?? ''}
+      {/* left-justified: numbers sit flush with the header/art above */}
+      <span className="font-mono text-[10.5px] text-faint tabular-nums">
+        {isCurrent ? <Eqbars playing={audible} /> : (node.trackNumber ?? '')}
       </span>
       {showArt && (
         <div className="h-10 w-10 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
@@ -677,7 +742,9 @@ function TrackRow({
         </div>
       )}
       <div className="min-w-0">
-        <div className="text-[13.5px] text-ink truncate">{node.title}</div>
+        <div className={cx('text-[13.5px] truncate', isCurrent ? 'text-gold' : 'text-ink')}>
+          {node.title}
+        </div>
         {node.artist && <div className="text-[12px] text-faint truncate">{node.artist}</div>}
       </div>
       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -704,6 +771,18 @@ function TrackRow({
         {node.durationSecs != null ? fmtTime(node.durationSecs) : ''}
       </span>
     </div>
+  )
+}
+
+/** Gold playing bars (queue idiom); frozen while paused. Rendered only on the
+ *  current item, so always gold. */
+function Eqbars({ playing }: { playing: boolean }): React.JSX.Element {
+  return (
+    <span className={cx('eqbars text-gold', !playing && 'paused')}>
+      <span style={{ height: 6 }} />
+      <span style={{ height: 10 }} />
+      <span style={{ height: 5 }} />
+    </span>
   )
 }
 
