@@ -43,12 +43,9 @@ export function FilterInput({
       />
       {value && (
         <>
-          {/* min-width fits the widest possible count ("30/30") so the box
-              doesn't resize as the shown count's digits change while typing */}
-          <span
-            className="font-mono text-[10.5px] text-dim tabular-nums text-right"
-            style={{ minWidth: `${String(total).length * 2 + 1}ch` }}
-          >
+          {/* fixed floor fitting "1234/1234" so the box width is stable while
+              typing and across screens; absurdly long counts may still grow it */}
+          <span className="font-mono text-[10.5px] text-dim tabular-nums text-right min-w-[9ch]">
             {shown}/{total}
           </span>
           <button
