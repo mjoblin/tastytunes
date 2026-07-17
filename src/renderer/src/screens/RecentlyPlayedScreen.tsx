@@ -6,7 +6,8 @@ import { useStore } from '@/store'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { Segmented } from '@/components/Segmented'
 import { ArtImage } from '@/components/ArtImage'
-import { cx, fmtDayBucket, fmtRelative } from '@/lib/format'
+import { cx, fmtDayBucket, fmtRelative, matchesFilter } from '@/lib/format'
+import { FilterInput } from '@/components/FilterInput'
 
 interface Block {
   session: string | null
@@ -42,13 +43,26 @@ export function RecentlyPlayedScreen(): React.JSX.Element {
   const grouped = useStore((s) => s.settings.recentsGrouped)
   const playState = useStore((s) => s.playState)
   const setSettings = useStore((s) => s.setSettings)
+  const filter = useStore((s) => s.screenFilters['recently-played'])
+  const setScreenFilter = useStore((s) => s.setScreenFilter)
+
+  // Filter entries BEFORE session/day grouping so groups rebuild from matches.
+  const shownRecents = useMemo(
+    () =>
+      filter
+        ? recents.filter((e) =>
+            matchesFilter(filter, [e.title, e.artist, e.album, e.station, e.source])
+          )
+        : recents,
+    [recents, filter]
+  )
 
   // The head entry is "live" while it's what's actually sounding right now.
   const state = playState?.state
   const headIsLive =
-    recents.length > 0 &&
+    shownRecents.length > 0 &&
     (state === 'play' || state === 'buffering') &&
-    recentMatchesPlayState(recents[0], playState)
+    recentMatchesPlayState(shownRecents[0], playState)
 
   const scrollRef = useScrollMemory('recently-played')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -59,7 +73,7 @@ export function RecentlyPlayedScreen(): React.JSX.Element {
     return () => clearInterval(t)
   }, [recents.length])
 
-  const blocks = useMemo(() => buildBlocks(recents), [recents])
+  const blocks = useMemo(() => buildBlocks(shownRecents), [shownRecents])
 
   // Day-bucket the blocks by their newest entry.
   const days: Array<{ label: string; blocks: Block[] }> = []
@@ -88,6 +102,12 @@ export function RecentlyPlayedScreen(): React.JSX.Element {
         <div className="flex-1" />
         {recents.length > 0 && (
           <>
+            <FilterInput
+              value={filter}
+              onChange={(t) => setScreenFilter('recently-played', t)}
+              shown={shownRecents.length}
+              total={recents.length}
+            />
             <Segmented<boolean>
               value={grouped}
               onChange={toggleGrouped}
@@ -122,6 +142,11 @@ export function RecentlyPlayedScreen(): React.JSX.Element {
       ) : (
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-8 pb-8 pt-1">
           <div className="max-w-2xl space-y-6">
+            {days.length === 0 && (
+              <div className="text-[13px] text-faint pt-6 text-center">
+                No matches for “{filter}”.
+              </div>
+            )}
             {days.map((day) => (
               <div key={day.label}>
                 <div className="microlabel mb-2 px-1">{day.label}</div>

@@ -103,6 +103,22 @@ export function controlSet(nowPlaying: ZoneNowPlaying | null): Set<string> {
   return new Set(nowPlaying?.controls ?? [])
 }
 
+// ------------------------------------------------------------------ list filter
+
+/**
+ * Tokenized, case-insensitive list filter: every whitespace-separated token in
+ * `filter` must appear somewhere in the joined haystack, so "maiden beast"
+ * matches across artist + title.
+ */
+export function matchesFilter(filter: string, fields: Array<string | null | undefined>): boolean {
+  const hay = fields.filter(Boolean).join(' ').toLowerCase()
+  return filter
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .every((token) => hay.includes(token))
+}
+
 // ------------------------------------------------------------ signal quality lamp
 
 export type SignalQuality = 'hires' | 'lossless' | 'lossy' | 'unknown'

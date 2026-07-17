@@ -79,6 +79,8 @@ interface TTState {
   artistOpen: boolean
   /** Active tab in the context drawer — remembered for the session only. */
   contextTab: 'artist' | 'album'
+  /** Per-screen list filters — session only; always visible in the screen's header box. */
+  screenFilters: { queue: string; presets: string; 'recently-played': string }
   /** True while the full-window ambient backdrop is showing — chrome goes transparent. */
   ambientWindowActive: boolean
   /** Mini window only: cursor is over the window (pushed from main). */
@@ -101,6 +103,7 @@ interface TTState {
   setLyricsOpen(open: boolean): void
   setArtistOpen(open: boolean): void
   setContextTab(tab: 'artist' | 'album'): void
+  setScreenFilter(screen: 'queue' | 'presets' | 'recently-played', text: string): void
   setAmbientWindowActive(on: boolean): void
   setSleepAction(action: SleepAction): void
   setSettings(settings: AppSettings): void
@@ -140,6 +143,7 @@ export const useStore = create<TTState>((set, get) => ({
   lyricsOpen: false,
   artistOpen: false,
   contextTab: 'artist',
+  screenFilters: { queue: '', presets: '', 'recently-played': '' },
   ambientWindowActive: false,
   miniHover: false,
   sleep: null,
@@ -159,6 +163,8 @@ export const useStore = create<TTState>((set, get) => ({
   setLyricsOpen: (lyricsOpen) => set(lyricsOpen ? { lyricsOpen, artistOpen: false } : { lyricsOpen }),
   setArtistOpen: (artistOpen) => set(artistOpen ? { artistOpen, lyricsOpen: false } : { artistOpen }),
   setContextTab: (contextTab) => set({ contextTab }),
+  setScreenFilter: (screen, text) =>
+    set((s) => ({ screenFilters: { ...s.screenFilters, [screen]: text } })),
   setAmbientWindowActive: (ambientWindowActive) => set({ ambientWindowActive }),
   // Local settings echo only — an armed timer's action is updated via
   // tt.setSleep, and the main process pushes the change back.

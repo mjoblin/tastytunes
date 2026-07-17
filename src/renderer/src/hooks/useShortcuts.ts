@@ -61,6 +61,17 @@ export function useShortcuts(): void {
         return
       }
 
+      // '/' focuses the list filter on screens that have one.
+      if (e.key === '/') {
+        const input = document.querySelector<HTMLInputElement>('[data-filter-input]')
+        if (input) {
+          e.preventDefault()
+          input.focus()
+          input.select()
+        }
+        return
+      }
+
       if (s.connection.phase !== 'connected') return
 
       if (e.key === 'f') {

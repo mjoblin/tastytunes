@@ -32,8 +32,9 @@ import { tt } from '@/api'
 import { useStore } from '@/store'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { flashTarget, scrollToWithContext } from '@/lib/scroll'
-import { cx, fmtTime } from '@/lib/format'
+import { cx, fmtTime, matchesFilter } from '@/lib/format'
 import { ArtImage } from '@/components/ArtImage'
+import { FilterInput } from '@/components/FilterInput'
 
 export function QueueScreen(): React.JSX.Element {
   const queue = useStore((s) => s.queue)
@@ -45,6 +46,8 @@ export function QueueScreen(): React.JSX.Element {
   )
   const setSettings = useStore((s) => s.setSettings)
   const setQueueItems = useStore((s) => s.setQueueItems)
+  const filter = useStore((s) => s.screenFilters.queue)
+  const setScreenFilter = useStore((s) => s.setScreenFilter)
   const cards = queueLayout === 'cards'
   // Follow-current does its own scrolling on entry; otherwise restore the
   // previous position.
@@ -62,7 +65,21 @@ export function QueueScreen(): React.JSX.Element {
     flashTarget(currentRef.current)
   }
 
-  const items = (queue?.items ?? []).filter((i) => i.id != null)
+  const allItems = (queue?.items ?? []).filter((i) => i.id != null)
+  // Filter over everything we hold, displayed or not (genre, class, source).
+  const items = filter
+    ? allItems.filter((i) =>
+        matchesFilter(filter, [
+          i.metadata?.title,
+          i.metadata?.name,
+          i.metadata?.artist,
+          i.metadata?.album,
+          i.metadata?.genre,
+          i.metadata?.class,
+          i.metadata?.source
+        ])
+      )
+    : allItems
   const playId = queue?.play_id ?? playState?.queue_id ?? null
   const playing = playState?.state === 'play'
   // The queue belongs to the MEDIA_PLAYER source. When another source is
@@ -70,7 +87,7 @@ export function QueueScreen(): React.JSX.Element {
   // is just where the queue is parked, and must not claim to be playing.
   const queueSourceActive = (nowPlaying?.source?.id ?? zoneState?.source) === 'MEDIA_PLAYER'
 
-  const totalSecs = items.reduce((acc, i) => acc + (i.metadata?.duration ?? 0), 0)
+  const totalSecs = allItems.reduce((acc, i) => acc + (i.metadata?.duration ?? 0), 0)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
@@ -80,7 +97,8 @@ export function QueueScreen(): React.JSX.Element {
   // reserved for track changes while you're watching.
   const firstFollow = useRef(true)
   useEffect(() => {
-    if (followQueue && currentRef.current) {
+    // Follow pauses while a filter is active — the current row may be hidden.
+    if (followQueue && !filter && currentRef.current) {
       scrollToWithContext(
         currentRef.current,
         cards ? presetGap : 8,
@@ -89,7 +107,7 @@ export function QueueScreen(): React.JSX.Element {
       )
     }
     firstFollow.current = false
-  }, [playId, followQueue, cards, presetGap])
+  }, [playId, followQueue, cards, presetGap, filter])
 
   const onDragEnd = (event: DragEndEvent): void => {
     const { active, over } = event
@@ -104,7 +122,7 @@ export function QueueScreen(): React.JSX.Element {
     void tt.command({ type: 'queueMove', id: active.id as number, from, to })
   }
 
-  if (items.length === 0) {
+  if (allItems.length === 0) {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-4 text-center px-8">
         <ListMusic size={56} strokeWidth={1} className="text-faint/50" />
@@ -121,10 +139,16 @@ export function QueueScreen(): React.JSX.Element {
       <header className="drag-region flex items-center gap-4 px-8 pt-8 pb-4">
         <h1 className="font-display font-bold text-[26px] tracking-tight">Queue</h1>
         <span className="font-mono text-[11px] text-faint">
-          {items.length} tracks · {fmtTime(totalSecs)}
+          {allItems.length} tracks · {fmtTime(totalSecs)}
         </span>
         <div className="flex-1" />
         <div className="flex items-center gap-1.5">
+          <FilterInput
+            value={filter}
+            onChange={(t) => setScreenFilter('queue', t)}
+            shown={items.length}
+            total={allItems.length}
+          />
           <button
             data-tip={cards ? 'View as rows' : 'View as cards'}
             aria-label={cards ? 'View as rows' : 'View as cards'}
@@ -160,7 +184,17 @@ export function QueueScreen(): React.JSX.Element {
       {/* rows: pt-1 keeps the current ring unclipped; cards: pt-2 gives the
           hover grow + glow ring headroom on the top row */}
       <div ref={scrollRef} className={cx('flex-1 overflow-y-auto', cards ? 'px-8 pb-8 pt-2' : 'px-6 pb-6 pt-1 divide-y divide-edge/50')}>
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+        {items.length === 0 && (
+          <div className="text-[13px] text-faint pt-6 text-center">
+            No matches for “{filter}”.
+          </div>
+        )}
+        {/* Reordering a partial list is ambiguous — drags are inert while filtered. */}
+        <DndContext
+          sensors={filter ? [] : sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={onDragEnd}
+        >
           <SortableContext
             items={items.map((i) => i.id as number)}
             strategy={cards ? rectSortingStrategy : verticalListSortingStrategy}

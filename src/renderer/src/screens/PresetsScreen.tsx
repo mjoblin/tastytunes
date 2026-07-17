@@ -32,7 +32,8 @@ import { tt } from '@/api'
 import { useStore } from '@/store'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { flashTarget, scrollToWithContext } from '@/lib/scroll'
-import { cx } from '@/lib/format'
+import { cx, matchesFilter } from '@/lib/format'
+import { FilterInput } from '@/components/FilterInput'
 import { Slider } from '@/components/Slider'
 import { ArtImage } from '@/components/ArtImage'
 
@@ -48,7 +49,13 @@ export function PresetsScreen(): React.JSX.Element {
   const systemInfo = useStore((s) => s.systemInfo)
   const presetVolumes = useStore((s) => s.settings.presetVolumes)
   const cards = presetsLayout === 'cards'
-  const items = (presets?.presets ?? []).filter((p) => p.id != null)
+  const filter = useStore((s) => s.screenFilters.presets)
+  const setScreenFilter = useStore((s) => s.setScreenFilter)
+  const allItems = (presets?.presets ?? []).filter((p) => p.id != null)
+  // type/class are hidden fields but filterable: "radio" / "media" work.
+  const items = filter
+    ? allItems.filter((p) => matchesFilter(filter, [p.name, p.type, p.class]))
+    : allItems
 
   // Feature 10: per-preset volume overrides. Absolute volume needs pre-amp
   // mode — control-bus devices only nudge, so the affordance hides there.
@@ -130,11 +137,12 @@ export function PresetsScreen(): React.JSX.Element {
   // reserved for track changes while you're watching.
   const firstFollow = useRef(true)
   useEffect(() => {
-    if (followPresets && playingId != null) {
+    // Follow pauses while a filter is active — the playing card may be hidden.
+    if (followPresets && playingId != null && !filter) {
       scrollToPlaying(false, firstFollow.current ? 'auto' : undefined)
     }
     firstFollow.current = false
-  }, [followPresets, playingId, scrollToPlaying])
+  }, [followPresets, playingId, scrollToPlaying, filter])
 
   const setFollowPresets = async (follow: boolean): Promise<void> => {
     setSettings(await tt.setSettings({ followPresets: follow }))
@@ -143,7 +151,7 @@ export function PresetsScreen(): React.JSX.Element {
     setSettings(await tt.setSettings({ presetsLayout }))
   }
 
-  if (items.length === 0) {
+  if (allItems.length === 0) {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-4 text-center px-8">
         <Radio size={56} strokeWidth={1} className="text-faint/50" />
@@ -161,10 +169,16 @@ export function PresetsScreen(): React.JSX.Element {
       <header className="drag-region flex items-center gap-4 px-8 pt-8 pb-4">
         <h1 className="font-display font-bold text-[26px] tracking-tight">Presets</h1>
         <span className="font-mono text-[11px] text-faint">
-          {items.length} / {presets?.max_presets ?? '—'} slots
+          {allItems.length} / {presets?.max_presets ?? '—'} slots
         </span>
         <div className="flex-1" />
         <div className="flex items-center gap-1.5">
+          <FilterInput
+            value={filter}
+            onChange={(t) => setScreenFilter('presets', t)}
+            shown={items.length}
+            total={allItems.length}
+          />
           <button
             data-tip={cards ? 'View as rows' : 'View as cards'}
             aria-label={cards ? 'View as rows' : 'View as cards'}
@@ -200,7 +214,17 @@ export function PresetsScreen(): React.JSX.Element {
       {/* rows: pt-1 keeps the playing ring unclipped; cards: pt-2 gives the
           hover grow + glow ring headroom on the top row */}
       <div ref={setContainerRef} className={cx('flex-1 overflow-y-auto', cards ? 'px-8 pb-8 pt-2' : 'px-6 pb-6 pt-1 divide-y divide-edge/50')}>
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+        {items.length === 0 && (
+          <div className="text-[13px] text-faint pt-6 text-center">
+            No matches for “{filter}”.
+          </div>
+        )}
+        {/* Reordering a partial list is ambiguous — drags are inert while filtered. */}
+        <DndContext
+          sensors={filter ? [] : sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={onDragEnd}
+        >
           <SortableContext
             items={items.map((p) => p.id as number)}
             strategy={cards ? rectSortingStrategy : verticalListSortingStrategy}
