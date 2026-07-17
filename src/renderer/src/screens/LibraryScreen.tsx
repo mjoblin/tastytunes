@@ -589,7 +589,7 @@ function TrackRow({
   return (
     <div
       ref={ref}
-      className="group grid grid-cols-[26px_1fr_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer hover:bg-veil transition-colors"
+      className="group grid grid-cols-[26px_44px_1fr_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer hover:bg-veil transition-colors"
       onClick={() => onPlayNow(ref.current)}
       onContextMenu={onMenu}
       data-library-track
@@ -597,6 +597,9 @@ function TrackRow({
       <span className="font-mono text-[10.5px] text-faint tabular-nums text-right">
         {node.trackNumber ?? ''}
       </span>
+      <div className="h-10 w-10 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
+        <ArtImage src={node.artUrl} lazy fallback={<Disc3 size={16} className="text-faint" />} />
+      </div>
       <div className="min-w-0">
         <div className="text-[13.5px] text-ink truncate">{node.title}</div>
         {node.artist && <div className="text-[12px] text-faint truncate">{node.artist}</div>}
