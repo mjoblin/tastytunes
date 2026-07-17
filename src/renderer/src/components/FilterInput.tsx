@@ -34,7 +34,11 @@ export function FilterInput({
       }
     }
     window.addEventListener('pointerdown', onPointerDown)
-    return () => window.removeEventListener('pointerdown', onPointerDown)
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown)
+      // unmounting while focused (screen switch) must restore window dragging
+      document.documentElement.classList.remove('filter-focused')
+    }
   }, [])
 
   return (
@@ -58,6 +62,8 @@ export function FilterInput({
             else (e.target as HTMLInputElement).blur()
           }
         }}
+        onFocus={() => document.documentElement.classList.add('filter-focused')}
+        onBlur={() => document.documentElement.classList.remove('filter-focused')}
         placeholder="Filter"
         spellCheck={false}
         className="w-28 bg-transparent outline-none text-[12.5px] text-ink placeholder:text-faint"

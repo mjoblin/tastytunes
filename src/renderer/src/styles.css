@@ -102,6 +102,12 @@ img {
 .drag-region {
   -webkit-app-region: drag;
 }
+/* While a filter input is focused, drag regions go inert: the native drag
+   hit-test swallows ALL pointer events, so clicks on the header could never
+   reach the DOM to dismiss the caret. Dragging returns the moment it blurs. */
+:root.filter-focused .drag-region {
+  -webkit-app-region: no-drag;
+}
 
 /* mini-player window: transparent page so the rounded strip floats */
 :root.mini body {
