@@ -74,10 +74,20 @@ export function QueueScreen(): React.JSX.Element {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
   const currentRef = useRef<HTMLDivElement | null>(null)
+  // First follow after mount positions INSTANTLY — re-entering the screen
+  // shouldn't replay a glide to a place you already were. The animation is
+  // reserved for track changes while you're watching.
+  const firstFollow = useRef(true)
   useEffect(() => {
     if (followQueue && currentRef.current) {
-      scrollToWithContext(currentRef.current, cards ? presetGap : 8, cards ? 0.5 : 1)
+      scrollToWithContext(
+        currentRef.current,
+        cards ? presetGap : 8,
+        cards ? 0.5 : 1,
+        firstFollow.current ? 'auto' : undefined
+      )
     }
+    firstFollow.current = false
   }, [playId, followQueue, cards, presetGap])
 
   const onDragEnd = (event: DragEndEvent): void => {

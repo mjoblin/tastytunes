@@ -18,7 +18,12 @@ export function flashTarget(el: HTMLElement | null): void {
  * much of that previous item to reserve: 1 (a full row) for lists, 0.5 for
  * card grids, where a whole card of context pushes the target too far down.
  */
-export function scrollToWithContext(el: HTMLElement | null, gapPx = 8, context = 1): void {
+export function scrollToWithContext(
+  el: HTMLElement | null,
+  gapPx = 8,
+  context = 1,
+  behavior?: ScrollBehavior
+): void {
   if (!el) return
   const container = el.closest('.overflow-y-auto') as HTMLElement | null
   if (!container) return
@@ -31,6 +36,8 @@ export function scrollToWithContext(el: HTMLElement | null, gapPx = 8, context =
   container.scrollTo({
     top: container.scrollTop + (eRect.top - cRect.top) - contextOffset,
     // jump instantly under reduced motion (settings.motion resolved on :root)
-    behavior: document.documentElement.classList.contains('reduce-motion') ? 'auto' : 'smooth'
+    behavior:
+      behavior ??
+      (document.documentElement.classList.contains('reduce-motion') ? 'auto' : 'smooth')
   })
 }

@@ -115,17 +115,24 @@ export function PresetsScreen(): React.JSX.Element {
   )
   // Cards get half a card of context above the target; rows get a full row.
   const scrollToPlaying = useCallback(
-    (flash = false): void => {
+    (flash = false, behavior?: ScrollBehavior): void => {
       const el = containerRef.current?.querySelector('[data-playing="true"]') as HTMLElement | null
-      scrollToWithContext(el, cards ? presetGap : 8, cards ? 0.5 : 1)
+      scrollToWithContext(el, cards ? presetGap : 8, cards ? 0.5 : 1, behavior)
       if (flash) flashTarget(el)
     },
     [presetGap, cards]
   )
 
   const playingId = items.find(isPresetPlaying)?.id ?? null
+  // First follow after mount positions INSTANTLY — re-entering the screen
+  // shouldn't replay a glide to a place you already were. The animation is
+  // reserved for track changes while you're watching.
+  const firstFollow = useRef(true)
   useEffect(() => {
-    if (followPresets && playingId != null) scrollToPlaying()
+    if (followPresets && playingId != null) {
+      scrollToPlaying(false, firstFollow.current ? 'auto' : undefined)
+    }
+    firstFollow.current = false
   }, [followPresets, playingId, scrollToPlaying])
 
   const setFollowPresets = async (follow: boolean): Promise<void> => {
