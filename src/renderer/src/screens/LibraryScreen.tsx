@@ -14,6 +14,7 @@ import {
   Usb
 } from 'lucide-react'
 import type { MediaNode, MediaQueueAction, MediaServerInfo, ScreenLayout } from '@shared/ipc'
+import type { QueueListItem } from '@shared/smoip'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { cx, fmtTime, matchesFilter } from '@/lib/format'
@@ -46,6 +47,7 @@ export function LibraryScreen(): React.JSX.Element {
   const playState = useStore((s) => s.playState)
   const nowPlaying = useStore((s) => s.nowPlaying)
   const zoneState = useStore((s) => s.zoneState)
+  const queue = useStore((s) => s.queue)
   const cards = libraryLayout === 'cards'
 
   const [servers, setServers] = useState<MediaServerInfo[] | null>(null)
@@ -173,6 +175,41 @@ export function LibraryScreen(): React.JSX.Element {
     }
   }
 
+  /** Queue entries whose metadata content-matches a library track. */
+  const queueMatches = (node: MediaNode): QueueListItem[] =>
+    (queue?.items ?? []).filter((i) => {
+      const m = i.metadata
+      return (
+        m != null &&
+        i.id != null &&
+        m.title === node.title &&
+        (m.album == null || node.album == null || m.album === node.album) &&
+        (m.artist == null || node.artist == null || m.artist === node.artist)
+      )
+    })
+  const trackQueued = (node: MediaNode): boolean => queueMatches(node).length > 0
+
+  /**
+   * Bare track click: if the track is already in the queue, JUMP to that
+   * queue entry (first occurrence at-or-after the current position) instead
+   * of inserting a duplicate — clicking an album you just queued navigates
+   * it. Only genuinely un-queued tracks insert (PLAY_NOW). The ⋯ verbs stay
+   * literal inserts.
+   */
+  const playTrack = (node: MediaNode, el: HTMLElement | null): void => {
+    const items = queue?.items ?? []
+    const matches = queueMatches(node)
+    if (matches.length > 0) {
+      const playId = queue?.play_id ?? playState?.queue_id ?? null
+      const curIdx = items.findIndex((i) => i.id === playId)
+      const target = matches.find((mi) => items.indexOf(mi) >= curIdx) ?? matches[0]
+      void tt.command({ type: 'playQueueId', queueId: target.id as number })
+      if (el) flashTarget(el)
+      return
+    }
+    void act(node, 'PLAY_NOW', el)
+  }
+
   /** "Play" on a container: replace the queue with it and start at its first track. */
   const playContainer = async (node: MediaNode, el: HTMLElement | null): Promise<void> => {
     if (!serverUdn) return
@@ -255,11 +292,13 @@ export function LibraryScreen(): React.JSX.Element {
           : null))
     : null
   const albumSecs = allTracks.reduce((acc, t) => acc + (t.durationSecs ?? 0), 0)
+  const albumInQueue = allTracks.length > 0 && allTracks.every(trackQueued)
   const albumFacts = albumNode
     ? [
         albumNode.year ?? allTracks[0]?.year ?? null,
         allTracks.length > 0 ? `${allTracks.length} tracks` : null,
-        albumSecs > 0 ? fmtTime(albumSecs) : null
+        albumSecs > 0 ? fmtTime(albumSecs) : null,
+        albumInQueue ? 'in the queue' : null
       ]
         .filter(Boolean)
         .join(' · ')
@@ -515,7 +554,8 @@ export function LibraryScreen(): React.JSX.Element {
                 showArt={!albumNode}
                 isCurrent={queueSourceActive && isCurrentTrack(node)}
                 audible={isPlayingState}
-                onPlayNow={(el) => void act(node, 'PLAY_NOW', el)}
+                queued={trackQueued(node)}
+                onPlayNow={(el) => playTrack(node, el)}
                 onMenu={(e) => openMenu(node, e)}
               />
             ))}
@@ -707,6 +747,7 @@ function TrackRow({
   showArt,
   isCurrent,
   audible,
+  queued,
   onPlayNow,
   onMenu
 }: {
@@ -716,6 +757,8 @@ function TrackRow({
   /** This is what's playing right now (queue source live) — queue-row treatment. */
   isCurrent: boolean
   audible: boolean
+  /** Already in the queue — a click jumps there instead of inserting. */
+  queued: boolean
   onPlayNow(el: HTMLElement | null): void
   onMenu(e: React.MouseEvent): void
 }): React.JSX.Element {
@@ -749,8 +792,8 @@ function TrackRow({
       </div>
       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
         <button
-          aria-label="Play now"
-          data-tip="Play now"
+          aria-label="Play"
+          data-tip={queued ? 'Play — already in the queue' : 'Play now'}
           onClick={(e) => {
             e.stopPropagation()
             onPlayNow(ref.current)
