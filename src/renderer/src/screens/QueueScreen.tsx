@@ -288,12 +288,13 @@ function QueueRow({ item, isCurrent, playing, sourceActive, currentRef }: QueueI
       </span>
 
       <button
-        title="Remove from queue"
+        data-tip="Remove from queue"
+        aria-label="Remove from queue"
         onClick={(e) => {
           e.stopPropagation()
           if (item.id != null) void tt.command({ type: 'queueDelete', id: item.id })
         }}
-        className="p-1.5 rounded text-faint opacity-0 group-hover:opacity-100 hover:text-alert transition-all"
+        className="tip-bottom tip-end p-1.5 rounded text-faint opacity-0 group-hover:opacity-100 hover:text-alert transition-all"
       >
         <X size={14} />
       </button>
@@ -388,13 +389,14 @@ function QueueCard({ item, isCurrent, playing, sourceActive, currentRef }: Queue
           </div>
         </div>
         <button
-          title="Remove from queue"
+          data-tip="Remove from queue"
+        aria-label="Remove from queue"
           onPointerDown={(e) => e.stopPropagation() /* keep dnd-kit's drag sensor out of it */}
           onClick={(e) => {
             e.stopPropagation()
             if (item.id != null) void tt.command({ type: 'queueDelete', id: item.id })
           }}
-          className="p-1 rounded text-faint opacity-0 group-hover:opacity-100 hover:text-alert transition-all"
+          className="tip-bottom tip-end p-1 rounded text-faint opacity-0 group-hover:opacity-100 hover:text-alert transition-all"
         >
           <X size={13} />
         </button>

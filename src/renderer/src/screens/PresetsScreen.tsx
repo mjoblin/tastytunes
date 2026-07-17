@@ -442,21 +442,23 @@ function PresetRow({
       <span className="inline-flex" onPointerDown={(e) => e.stopPropagation()}>
         {volume != null ? (
           <button
-            title={`Recalled at ${volume}% volume — click to change`}
+            data-tip={`Recalled at ${volume}% volume — click to change`}
+          aria-label="Preset volume"
             onClick={pv.openFrom}
             data-preset-volume-badge
-            className="flex items-center gap-1 p-1 rounded font-mono text-[10px] text-faint hover:text-ink transition-colors tabular-nums"
+            className="tip-bottom tip-end flex items-center gap-1 p-1 rounded font-mono text-[10px] text-faint hover:text-ink transition-colors tabular-nums"
           >
             <Volume2 size={11} />
             {volume}%
           </button>
         ) : canSetVolume ? (
           <button
-            title="Preset volume"
+            data-tip="Preset volume"
+            aria-label="Preset volume"
             onClick={pv.openFrom}
             data-preset-volume
             className={cx(
-              'p-1.5 rounded text-faint hover:text-ink transition-all',
+              'tip-bottom tip-end p-1.5 rounded text-faint hover:text-ink transition-all',
               pv.open ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
             )}
           >
@@ -467,7 +469,8 @@ function PresetRow({
       </span>
 
       <button
-        title={confirmDelete ? 'Click again to delete' : 'Delete preset'}
+        data-tip={confirmDelete ? 'Click again to delete' : 'Delete preset'}
+        aria-label="Delete preset"
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => {
           e.stopPropagation()
@@ -479,7 +482,7 @@ function PresetRow({
           }
         }}
         className={cx(
-          'flex items-center gap-1.5 p-1.5 rounded transition-all',
+          'tip-bottom tip-end flex items-center gap-1.5 p-1.5 rounded transition-all',
           confirmDelete
             ? 'bg-alert text-white opacity-100 px-2'
             : 'text-faint opacity-0 group-hover:opacity-100 hover:text-alert'
@@ -589,12 +592,13 @@ function PresetCard({
           tooltip carries the percentage */}
       {(canSetVolume || volume != null) && (
         <button
-          title={volume != null ? `Recalled at ${volume}% volume — click to change` : 'Preset volume'}
+          data-tip={volume != null ? `Recalled at ${volume}% volume — click to change` : 'Preset volume'}
+          aria-label="Preset volume"
           onClick={pv.openFrom}
           onPointerDown={(e) => e.stopPropagation()}
           data-preset-volume
           className={cx(
-            'absolute top-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-md bg-black/55 backdrop-blur-sm transition-all',
+            'tip-bottom tip-end absolute top-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-md bg-black/55 backdrop-blur-sm transition-all',
             volume != null || pv.open
               ? 'opacity-100 text-gold hover:text-white'
               : 'opacity-0 group-hover:opacity-100 text-white/85 hover:text-gold'
@@ -604,7 +608,8 @@ function PresetCard({
         </button>
       )}
       <button
-        title={confirmDelete ? 'Click again to delete' : 'Delete preset'}
+        data-tip={confirmDelete ? 'Click again to delete' : 'Delete preset'}
+        aria-label="Delete preset"
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => {
           e.stopPropagation()
@@ -616,7 +621,7 @@ function PresetCard({
           }
         }}
         className={cx(
-          'absolute bottom-2 right-2 z-10 flex h-7 items-center justify-center gap-1.5 rounded-md backdrop-blur-sm transition-all',
+          'tip-bottom tip-end absolute bottom-2 right-2 z-10 flex h-7 items-center justify-center gap-1.5 rounded-md backdrop-blur-sm transition-all',
           confirmDelete
             ? 'px-2.5 bg-alert text-white opacity-100 shadow-lg'
             : cx('w-7 bg-black/55 text-white/85 hover:text-alert', 'opacity-0 group-hover:opacity-100')

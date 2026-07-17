@@ -297,8 +297,14 @@ img {
 
 /* deterministic tooltips for the nav rail (native titles are unreliable in
    frameless windows): appears to the right of the element after a short dwell */
-[data-tip] {
-  position: relative;
+@layer base {
+  /* positioning context for the ::after tooltip — in @layer base so that
+     explicit positioning utilities (.absolute on the preset art chips) win:
+     unlayered CSS would beat Tailwind's layered utilities regardless of
+     specificity */
+  [data-tip] {
+    position: relative;
+  }
 }
 [data-tip]::after {
   content: attr(data-tip);
