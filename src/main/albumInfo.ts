@@ -22,6 +22,35 @@ interface MbReleaseGroup {
   score?: number
   'first-release-date'?: string
   'primary-type'?: string
+  'secondary-types'?: string[]
+}
+
+// Same-titled release groups tie on search score, and the plain studio album
+// is not always first: Iron Maiden's "The Number of the Beast" surfaces a
+// SINGLE (typed Single) and a 2001 documentary DVD (typed Album, on a video
+// label). MB has no "canonical album" flag, so rank by the studio album's
+// signature: primary type Album beats EP beats Single, NO secondary types
+// beats decorated ones (Compilation/Live/Interview/… — DVDs and comps carry
+// them), earliest first-release-date breaks what's left. When the playing
+// album genuinely IS live/compilation, every same-named candidate carries
+// those secondary types, so the middle rule degrades to a no-op.
+const TYPE_RANK: Record<string, number> = { Album: 0, EP: 1, Single: 2 }
+function rgRank(rg: MbReleaseGroup): [number, number, string] {
+  return [
+    TYPE_RANK[rg['primary-type'] ?? ''] ?? 3,
+    (rg['secondary-types']?.length ?? 0) > 0 ? 1 : 0,
+    rg['first-release-date'] || '9999'
+  ]
+}
+function pickReleaseGroup(candidates: MbReleaseGroup[]): MbReleaseGroup | undefined {
+  return [...candidates].sort((a, b) => {
+    const ra = rgRank(a)
+    const rb = rgRank(b)
+    for (let i = 0; i < ra.length; i++) {
+      if (ra[i] !== rb[i]) return ra[i] < rb[i] ? -1 : 1
+    }
+    return 0
+  })[0]
 }
 
 interface MbTag {
@@ -60,15 +89,10 @@ export async function fetchAlbumInfo(
     // couldn't even search — nothing to show, nothing to remember
     return null
   }
-  // An album and a single can share a title exactly (Iron Maiden's "The
-  // Number of the Beast") and tie on search score, with the single sorted
-  // first. We're resolving an album tag from track metadata, so prefer the
-  // Album-typed release group; fall back to the top result so a genuinely
-  // playing single still resolves.
   const candidates = ((searchGot.body as { 'release-groups'?: MbReleaseGroup[] })[
     'release-groups'
   ] ?? []).filter((rg) => (rg.score ?? 0) >= MIN_MATCH_SCORE)
-  const match = candidates.find((rg) => rg['primary-type'] === 'Album') ?? candidates[0]
+  const match = pickReleaseGroup(candidates)
 
   if (match) {
     result = {
