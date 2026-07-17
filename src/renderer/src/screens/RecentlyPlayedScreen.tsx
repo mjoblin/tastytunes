@@ -5,6 +5,7 @@ import { tt } from '@/api'
 import { useStore } from '@/store'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { Segmented } from '@/components/Segmented'
+import { ArtImage } from '@/components/ArtImage'
 import { cx, fmtDayBucket, fmtRelative } from '@/lib/format'
 
 interface Block {
@@ -164,11 +165,7 @@ function Thumb({ entry }: { entry: RecentTrack }): React.JSX.Element {
   const Fallback = entry.isRadio ? Radio : Disc3
   return (
     <div className="h-11 w-11 shrink-0 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
-      {entry.artUrl ? (
-        <img src={entry.artUrl} alt="" loading="lazy" className="h-full w-full object-cover" />
-      ) : (
-        <Fallback size={17} className="text-faint" />
-      )}
+      <ArtImage src={entry.artUrl} lazy fallback={<Fallback size={17} className="text-faint" />} />
     </div>
   )
 }
@@ -257,11 +254,11 @@ function SessionRow({
         )}
       >
         <div className="h-11 w-11 shrink-0 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
-          {head.artUrl ? (
-            <img src={head.artUrl} alt="" loading="lazy" className="h-full w-full object-cover" />
-          ) : (
-            <FallbackIcon size={17} className="text-faint" />
-          )}
+          <ArtImage
+            src={head.artUrl}
+            lazy
+            fallback={<FallbackIcon size={17} className="text-faint" />}
+          />
         </div>
         <div className="min-w-0 flex-1">
           <div className={cx('flex items-center gap-2 text-[13.5px] truncate', live ? 'text-gold' : 'text-ink')}>

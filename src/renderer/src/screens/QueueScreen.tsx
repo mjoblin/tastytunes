@@ -33,6 +33,7 @@ import { useStore } from '@/store'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { flashTarget, scrollToWithContext } from '@/lib/scroll'
 import { cx, fmtTime } from '@/lib/format'
+import { ArtImage } from '@/components/ArtImage'
 
 export function QueueScreen(): React.JSX.Element {
   const queue = useStore((s) => s.queue)
@@ -267,11 +268,7 @@ function QueueRow({ item, isCurrent, playing, sourceActive, currentRef }: QueueI
       </div>
 
       <div className="h-10 w-10 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
-        {md?.art_url ? (
-          <img src={md.art_url} alt="" loading="lazy" className="h-full w-full object-cover" />
-        ) : (
-          <Disc3 size={16} className="text-faint" />
-        )}
+        <ArtImage src={md?.art_url} lazy fallback={<Disc3 size={16} className="text-faint" />} />
       </div>
 
       <div className="min-w-0">
@@ -347,11 +344,11 @@ function QueueCard({ item, isCurrent, playing, sourceActive, currentRef }: Queue
         }}
       >
         <div className="aspect-square w-full rounded-lg overflow-hidden bg-panel/70 flex items-center justify-center">
-          {md?.art_url ? (
-            <img src={md.art_url} alt="" loading="lazy" className="h-full w-full object-cover" />
-          ) : (
-            <Disc3 size={34} strokeWidth={1.2} className="text-faint" />
-          )}
+          <ArtImage
+            src={md?.art_url}
+            lazy
+            fallback={<Disc3 size={34} strokeWidth={1.2} className="text-faint" />}
+          />
 
           <div className="absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
             <span

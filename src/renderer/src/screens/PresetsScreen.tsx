@@ -34,6 +34,7 @@ import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { flashTarget, scrollToWithContext } from '@/lib/scroll'
 import { cx } from '@/lib/format'
 import { Slider } from '@/components/Slider'
+import { ArtImage } from '@/components/ArtImage'
 
 export function PresetsScreen(): React.JSX.Element {
   const presets = useStore((s) => s.presets)
@@ -423,11 +424,7 @@ function PresetRow({
       </div>
 
       <div className="h-10 w-10 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
-        {preset.art_url ? (
-          <img src={preset.art_url} alt="" loading="lazy" className="h-full w-full object-cover" />
-        ) : (
-          <Radio size={16} className="text-faint" />
-        )}
+        <ArtImage src={preset.art_url} lazy fallback={<Radio size={16} className="text-faint" />} />
       </div>
 
       <div className="min-w-0">
@@ -557,11 +554,11 @@ function PresetCard({
         }}
       >
         <div className="aspect-square w-full rounded-lg overflow-hidden bg-panel/70 flex items-center justify-center">
-          {preset.art_url ? (
-            <img src={preset.art_url} alt="" loading="lazy" className="h-full w-full object-cover" />
-          ) : (
-            <Radio size={34} strokeWidth={1.2} className="text-faint" />
-          )}
+          <ArtImage
+            src={preset.art_url}
+            lazy
+            fallback={<Radio size={34} strokeWidth={1.2} className="text-faint" />}
+          />
 
           {/* hover overlay — the whole card recalls the preset; the chip is the affordance */}
           <div className="absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">

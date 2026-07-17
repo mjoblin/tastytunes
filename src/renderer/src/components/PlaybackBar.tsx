@@ -5,6 +5,7 @@ import {
   Pause,
   Play,
   Power,
+  RadioTower,
   Repeat,
   Shuffle,
   SkipBack,
@@ -16,6 +17,7 @@ import { useStore } from '@/store'
 import { usePlayhead } from '@/hooks/usePlayhead'
 import { controlSet, cx, deriveNowPlaying, fmtTime } from '@/lib/format'
 import { Slider } from './Slider'
+import { ArtImage } from './ArtImage'
 import { VolumeCluster } from './VolumeCluster'
 import { SignalLamp } from './SignalLamp'
 import { SleepTimer } from './SleepTimer'
@@ -86,11 +88,16 @@ export function PlaybackBar(): React.JSX.Element {
         disabled={!active}
       >
         <div className="h-[52px] w-[52px] shrink-0 rounded-md overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
-          {active && meta.artUrl ? (
-            <img src={meta.artUrl} alt="" className="h-full w-full object-cover" />
-          ) : (
-            <Disc3 size={22} className="text-faint" />
-          )}
+          <ArtImage
+            src={active ? meta.artUrl : null}
+            fallback={
+              meta.isRadio && active ? (
+                <RadioTower size={22} className="text-faint" />
+              ) : (
+                <Disc3 size={22} className="text-faint" />
+              )
+            }
+          />
         </div>
         <div className="min-w-0">
           <div className="text-[13px] text-ink truncate">{(active && meta.title) || '—'}</div>

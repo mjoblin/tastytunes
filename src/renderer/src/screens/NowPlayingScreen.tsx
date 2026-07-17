@@ -3,6 +3,7 @@ import { tt } from '@/api'
 import { useStore } from '@/store'
 import { cx, deriveNowPlaying } from '@/lib/format'
 import { SignalLamp } from '@/components/SignalLamp'
+import { ArtImage } from '@/components/ArtImage'
 import { LyricsPanel } from '@/components/LyricsPanel'
 import { LyricLine } from '@/components/LyricLine'
 import { ArtistPanel } from '@/components/ArtistPanel'
@@ -132,21 +133,19 @@ export function NowPlayingScreen(): React.JSX.Element {
         )}
       >
         <div className="shrink-0">
-          {meta.artUrl ? (
-            <img
-              src={meta.artUrl}
-              alt=""
-              className="w-[340px] h-[340px] xl:w-[400px] xl:h-[400px] object-cover rounded-2xl art-glow"
-            />
-          ) : (
-            <div className="w-[340px] h-[340px] xl:w-[400px] xl:h-[400px] rounded-2xl bg-raised ring-1 ring-edge flex items-center justify-center">
-              {meta.isRadio ? (
-                <RadioTower size={72} strokeWidth={1} className="text-faint" />
-              ) : (
-                <Disc3 size={72} strokeWidth={1} className="text-faint" />
-              )}
-            </div>
-          )}
+          <ArtImage
+            src={meta.artUrl}
+            className="w-[340px] h-[340px] xl:w-[400px] xl:h-[400px] object-cover rounded-2xl art-glow"
+            fallback={
+              <div className="w-[340px] h-[340px] xl:w-[400px] xl:h-[400px] rounded-2xl bg-raised ring-1 ring-edge flex items-center justify-center">
+                {meta.isRadio ? (
+                  <RadioTower size={72} strokeWidth={1} className="text-faint" />
+                ) : (
+                  <Disc3 size={72} strokeWidth={1} className="text-faint" />
+                )}
+              </div>
+            }
+          />
         </div>
 
         <div className="min-w-0 max-w-xl space-y-5">

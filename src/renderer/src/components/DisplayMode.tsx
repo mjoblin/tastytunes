@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Captions, Disc3, RadioTower, X } from 'lucide-react'
 import { tt } from '@/api'
 import { useStore } from '@/store'
+import { ArtImage } from '@/components/ArtImage'
 import { usePlayhead } from '@/hooks/usePlayhead'
 import { useFadedText, useLyrics } from '@/hooks/useLyrics'
 import { cx, deriveNowPlaying } from '@/lib/format'
@@ -106,21 +107,19 @@ export function DisplayMode(): React.JSX.Element {
       {lyricsToggleable && settings.displayLyrics && <DisplayLyric />}
 
       <div className="relative h-full flex flex-col items-center justify-center gap-9 px-16">
-        {meta.artUrl ? (
-          <img
-            src={meta.artUrl}
-            alt=""
-            className="w-[46vmin] h-[46vmin] object-cover rounded-2xl art-glow"
-          />
-        ) : (
-          <div className="w-[46vmin] h-[46vmin] rounded-2xl bg-raised ring-1 ring-edge flex items-center justify-center">
-            {meta.isRadio ? (
-              <RadioTower size={90} strokeWidth={1} className="text-faint" />
-            ) : (
-              <Disc3 size={90} strokeWidth={1} className="text-faint" />
-            )}
-          </div>
-        )}
+        <ArtImage
+          src={meta.artUrl}
+          className="w-[46vmin] h-[46vmin] object-cover rounded-2xl art-glow"
+          fallback={
+            <div className="w-[46vmin] h-[46vmin] rounded-2xl bg-raised ring-1 ring-edge flex items-center justify-center">
+              {meta.isRadio ? (
+                <RadioTower size={90} strokeWidth={1} className="text-faint" />
+              ) : (
+                <Disc3 size={90} strokeWidth={1} className="text-faint" />
+              )}
+            </div>
+          }
+        />
 
         <div className="text-center max-w-[70vw] space-y-2.5">
           <div className="font-display font-bold text-[clamp(26px,4.5vmin,52px)] leading-tight tracking-tight text-balance">

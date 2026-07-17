@@ -4,6 +4,7 @@ import {
   Loader2,
   Pause,
   Play,
+  RadioTower,
   SkipBack,
   SkipForward,
   Volume2,
@@ -17,6 +18,7 @@ import { useArtAccent } from '@/hooks/useArtAccent'
 import { useMotionPreference } from '@/hooks/useMotionPreference'
 import { useTheme } from '@/hooks/useTheme'
 import { useWheelVolume } from '@/components/VolumeCluster'
+import { ArtImage } from '@/components/ArtImage'
 import { controlSet, cx, deriveNowPlaying, fmtTime } from '@/lib/format'
 
 /**
@@ -69,11 +71,16 @@ export function MiniPlayer(): React.JSX.Element {
       <div className="h-full w-full rounded-2xl bg-panel ring-1 ring-edge2 overflow-hidden flex shadow-[0_12px_40px_rgb(0_0_0_/_0.5)]">
         {/* art */}
         <div className="h-full aspect-square shrink-0 bg-raised flex items-center justify-center">
-          {active && meta.artUrl ? (
-            <img src={meta.artUrl} alt="" className="h-full w-full object-cover" />
-          ) : (
-            <Disc3 size={30} className="text-faint" />
-          )}
+          <ArtImage
+            src={active ? meta.artUrl : null}
+            fallback={
+              meta.isRadio && active ? (
+                <RadioTower size={30} className="text-faint" />
+              ) : (
+                <Disc3 size={30} className="text-faint" />
+              )
+            }
+          />
         </div>
 
         {/* current track pinned top, next track pinned bottom */}
