@@ -114,38 +114,31 @@ export function LibraryScreen(): React.JSX.Element {
     }
   }, [serverUdn, path, fetchNonce])
 
-  // Backspace goes up a level (arrows stay with transport seek/volume);
-  // above a source's root it lands back on the source list.
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent): void => {
-      const target = e.target as HTMLElement | null
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return
-      if (e.key === 'Backspace' && !e.metaKey && !e.ctrlKey && !e.altKey) {
-        e.preventDefault()
-        if (path.length > 0) setPath(path.slice(0, -1))
-        else if (serverUdn) setServerUdn(null)
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [path, serverUdn])
-
   const rememberScroll = (): void => {
     if (scrollRef.current) scrollMemory.set(nodeKey(serverUdn, path), scrollRef.current.scrollTop)
   }
 
+  // The filter belongs to the folder you're looking at — navigating clears it
+  // (a filter silently carried into a new folder reads as "empty folder").
+  const clearFilter = (): void => {
+    if (filter) setScreenFilter('library', '')
+  }
+
   const enter = (node: MediaNode): void => {
     rememberScroll()
+    clearFilter()
     setPath((p) => [...p, { id: node.id, title: node.title, node }])
   }
   const enterServer = (udn: string): void => {
     rememberScroll()
+    clearFilter()
     setServerUdn(udn)
     setPath([])
   }
   // Crumb trail: Library (source list) › source › folders…
   const jumpTo = (index: number): void => {
     rememberScroll()
+    clearFilter()
     if (index === 0) {
       setServerUdn(null)
       setPath([])
@@ -153,6 +146,38 @@ export function LibraryScreen(): React.JSX.Element {
       setPath((p) => p.slice(0, index - 1))
     }
   }
+  const goUp = (): void => {
+    rememberScroll()
+    clearFilter()
+    if (path.length > 0) setPath(path.slice(0, -1))
+    else if (serverUdn) setServerUdn(null)
+  }
+
+  // Backspace and the mouse back button go up a level (arrows stay with
+  // transport seek/volume); above a source's root they land on the source list.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent): void => {
+      const target = e.target as HTMLElement | null
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return
+      if (e.key === 'Backspace' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault()
+        goUp()
+      }
+    }
+    const onMouseUp = (e: MouseEvent): void => {
+      if (e.button === 3) {
+        e.preventDefault()
+        goUp()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('mouseup', onMouseUp)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [path, serverUdn, filter])
 
   const setLayout = async (libraryLayout: ScreenLayout): Promise<void> => {
     setSettings(await tt.setSettings({ libraryLayout }))
@@ -258,7 +283,12 @@ export function LibraryScreen(): React.JSX.Element {
     ? nodes.filter((n) => matchesFilter(filter, [n.title, n.artist, n.album]))
     : nodes
   const containers = shown.filter((n) => n.isContainer)
-  const tracks = shown.filter((n) => !n.isContainer)
+  const unsortedTracks = shown.filter((n) => !n.isContainer)
+  // Album views sort by track number (USB folders come in filesystem order).
+  const tracks =
+    unsortedTracks.length > 1 && unsortedTracks.every((t) => t.trackNumber != null)
+      ? [...unsortedTracks].sort((a, b) => (a.trackNumber ?? 0) - (b.trackNumber ?? 0))
+      : unsortedTracks
   const server = servers?.find((s) => s.udn === serverUdn) ?? null
 
   // Playing-item highlight, queue-screen rules: library items carry no queue
@@ -307,6 +337,18 @@ export function LibraryScreen(): React.JSX.Element {
     (s) => !filter || matchesFilter(filter, [s.name, s.model])
   )
   const loading = atRoot ? servers == null : state === 'loading'
+
+  // "Retrieving…" only appears when a browse actually takes a moment —
+  // cached/fast responses swap in without a flash of loading copy.
+  const [showLoading, setShowLoading] = useState(false)
+  useEffect(() => {
+    if (!loading) {
+      setShowLoading(false)
+      return
+    }
+    const t = setTimeout(() => setShowLoading(true), 250)
+    return () => clearTimeout(t)
+  }, [loading])
 
   // ------------------------------------------------------------------ render
 
@@ -399,7 +441,7 @@ export function LibraryScreen(): React.JSX.Element {
       )}
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-8 pb-8 pt-1">
-        {loading && (
+        {showLoading && (
           <div className="text-[13px] text-dim pt-4 motion-safe:animate-pulse">
             Retrieving library…
           </div>
@@ -627,13 +669,16 @@ function ContainerCard({
       <button className="block w-full cursor-pointer" onClick={onEnter}>
         <div
           className={cx(
-            'relative aspect-square w-full rounded-lg overflow-hidden bg-panel/70 ring-1 flex items-center justify-center',
+            'relative aspect-square w-full rounded-lg overflow-hidden bg-raised/70 ring-1 flex items-center justify-center card-hover-glow',
             playing ? 'ring-gold/50' : 'ring-edge'
           )}
         >
+          {/* server-generated folder art (Asset's letter tiles etc.) is muted
+              so it recedes into the app's palette; real album art stays vivid */}
           <ArtImage
             src={node.artUrl}
             lazy
+            className={cx('h-full w-full object-cover', !album && 'opacity-60 saturate-[.6]')}
             fallback={
               album ? (
                 <Disc3 size={34} strokeWidth={1.2} className="text-faint" />
@@ -642,6 +687,9 @@ function ContainerCard({
               )
             }
           />
+          {!album && node.artUrl && (
+            <div className="absolute inset-0 pointer-events-none bg-panel/30" />
+          )}
           {playing && (
             <span className="absolute top-1.5 left-1.5 h-7 w-7 rounded-lg bg-panel/80 ring-1 ring-edge flex items-center justify-center">
               <Eqbars playing={audible} />
@@ -711,6 +759,7 @@ function ContainerRow({
         <ArtImage
           src={node.artUrl}
           lazy
+          className={cx('h-full w-full object-cover', !album && 'opacity-60 saturate-[.6]')}
           fallback={
             album ? (
               <Disc3 size={16} className="text-faint" />
