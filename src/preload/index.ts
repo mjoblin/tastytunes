@@ -26,6 +26,8 @@ const api: TastyTunesApi = {
   updateInstall: () => ipcRenderer.invoke(IPC.updateInstall),
   fetchArtistInfo: (artist: string, force?: boolean) =>
     ipcRenderer.invoke(IPC.fetchArtistInfo, artist, force),
+  fetchAlbumInfo: (artist: string, album: string, force?: boolean) =>
+    ipcRenderer.invoke(IPC.fetchAlbumInfo, artist, album, force),
   toggleMini: () => ipcRenderer.invoke(IPC.toggleMini),
   showMain: () => ipcRenderer.invoke(IPC.showMain),
   setSleep: (sleep: SleepTimer | null) => ipcRenderer.invoke(IPC.setSleep, sleep),

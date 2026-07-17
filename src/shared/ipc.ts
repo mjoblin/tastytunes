@@ -220,6 +220,25 @@ export interface ArtistInfo {
   musicbrainzUrl: string | null
 }
 
+export interface AlbumInfo {
+  /** MusicBrainz's canonical title for the matched release group. */
+  title: string
+  /** Year of first release, e.g. "2011". */
+  year: string | null
+  /** Release-group primary type, e.g. "Album", "EP". */
+  type: string | null
+  /** Label of the earliest release, when known. */
+  label: string | null
+  /** MusicBrainz genre tags, most-voted first. */
+  genres: string[]
+  /** Release-level relationship credits (producer etc.), when MB has them. */
+  credits: Array<{ role: string; name: string }>
+  /** Wikipedia summary extract, when the chain resolved one. */
+  summary: string | null
+  wikipediaUrl: string | null
+  musicbrainzUrl: string | null
+}
+
 // ------------------------------------------------------------------- lyrics
 
 export interface LyricsQuery {
@@ -663,6 +682,9 @@ export interface TastyTunesApi {
   /** Artist bio via MusicBrainz + Wikipedia (main process, cached; null = no match).
    *  `force` bypasses the cache read — the user-driven refresh. */
   fetchArtistInfo(artist: string, force?: boolean): Promise<ArtistInfo | null>
+  /** Album details via MusicBrainz + Wikipedia (main process, cached; null = no match).
+   *  `force` bypasses the cache read — the user-driven refresh. */
+  fetchAlbumInfo(artist: string, album: string, force?: boolean): Promise<AlbumInfo | null>
   /** Open/close the mini player window. */
   toggleMini(): Promise<void>
   /** Show and focus the main window. */
@@ -695,6 +717,7 @@ export const IPC = {
   updateDownload: 'tt:updateDownload',
   updateInstall: 'tt:updateInstall',
   fetchArtistInfo: 'tt:fetchArtistInfo',
+  fetchAlbumInfo: 'tt:fetchAlbumInfo',
   toggleMini: 'tt:toggleMini',
   showMain: 'tt:showMain',
   setSleep: 'tt:setSleep',

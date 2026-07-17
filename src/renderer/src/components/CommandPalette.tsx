@@ -119,6 +119,7 @@ export function CommandPalette(): React.JSX.Element {
   const setDisplayMode = useStore((s) => s.setDisplayMode)
   const setLyricsOpen = useStore((s) => s.setLyricsOpen)
   const setArtistOpen = useStore((s) => s.setArtistOpen)
+  const setContextTab = useStore((s) => s.setContextTab)
   const setSettings = useStore((s) => s.setSettings)
 
   const connection = useStore((s) => s.connection)
@@ -402,6 +403,21 @@ export function CommandPalette(): React.JSX.Element {
           keywords: 'artist bio wikipedia musicbrainz context',
           run: () => {
             setScreen('now-playing')
+            setContextTab('artist')
+            setArtistOpen(true)
+          }
+        })
+      }
+      if (settings.artistInfo && !npMeta.isRadio && npMeta.subtitle && npMeta.album) {
+        cmds.push({
+          id: 'view:album',
+          label: 'About the album',
+          group: 'View',
+          icon: Disc3,
+          keywords: 'album release year label credits context',
+          run: () => {
+            setScreen('now-playing')
+            setContextTab('album')
             setArtistOpen(true)
           }
         })
@@ -469,6 +485,7 @@ export function CommandPalette(): React.JSX.Element {
     settings.artistInfo,
     setLyricsOpen,
     setArtistOpen,
+    setContextTab,
     setScreen,
     setDiagnosticsOpen,
     setShortcutsOpen,

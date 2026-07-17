@@ -1,70 +1,24 @@
-// Artist context: MusicBrainz search -> URL relations -> Wikidata sitelink ->
-// Wikipedia summary. MusicBrainz enforces ONE request per second per IP and an
-// identifying User-Agent (violators get 100% declined) — every MB call goes
-// through a spacing gate. Results cache per artist name in a bounded
-// disk-persisted LRU (diskCache.ts), including DEFINITIVE misses ("MB
-// answered: no such artist" / "no Wikipedia linked"); transient failures
-// anywhere in the chain (unreachable, timeout, 5xx) return the best partial
-// answer for the moment but are never cached, so the next request retries.
-// `force` bypasses the cache read for a user-driven refresh.
-import { version } from '../../package.json'
+// Artist context: MusicBrainz search -> URL relations -> Wikipedia summary
+// (shared plumbing in mb.ts, including the 1 rps MusicBrainz gate). Results
+// cache per artist name in a bounded disk-persisted LRU (diskCache.ts),
+// including DEFINITIVE misses ("MB answered: no such artist" / "no Wikipedia
+// linked"); transient failures anywhere in the chain (unreachable, timeout,
+// 5xx) return the best partial answer for the moment but are never cached, so
+// the next request retries. `force` bypasses the cache read for a
+// user-driven refresh.
 import type { ArtistInfo } from '@shared/ipc'
-import { loggedFetch } from './netlog'
 import { DiskCache } from './diskCache'
+import { MB, mbFetch, wikipediaFromRels, type MbRelation } from './mb'
 
-// Env overrides let test harnesses point each hop at a local server.
-const MB = process.env['TASTYTUNES_MB_URL'] ?? 'https://musicbrainz.org'
-const WD = process.env['TASTYTUNES_WD_URL'] ?? 'https://www.wikidata.org'
-const WIKI = process.env['TASTYTUNES_WIKI_URL'] ?? 'https://en.wikipedia.org'
-const USER_AGENT = `TastyTunes/${version} (https://github.com/mjoblin/tastytunes)`
 const CACHE_MAX = 500
 const MIN_MATCH_SCORE = 75
 
 const cache = new DiskCache<ArtistInfo>('artist', CACHE_MAX)
 
-/** ok = an answer; missing = authoritative 404; error = we never really asked. */
-type Fetched =
-  | { kind: 'ok'; body: unknown }
-  | { kind: 'missing' }
-  | { kind: 'error' }
-
-async function getJson(service: string, url: string): Promise<Fetched> {
-  try {
-    const res = await loggedFetch(service, url, {
-      headers: { 'user-agent': USER_AGENT, accept: 'application/json' },
-      signal: AbortSignal.timeout(10_000)
-    })
-    if (res.status === 404) return { kind: 'missing' }
-    if (!res.ok) return { kind: 'error' }
-    return { kind: 'ok', body: await res.json() }
-  } catch {
-    return { kind: 'error' }
-  }
-}
-
-// The MusicBrainz 1 rps gate: calls queue behind each other, spaced >= 1.1s.
-let mbChain: Promise<unknown> = Promise.resolve()
-let mbLastAt = 0
-function mbFetch(url: string): Promise<Fetched> {
-  const next = mbChain.then(async () => {
-    const wait = mbLastAt + 1100 - Date.now()
-    if (wait > 0) await new Promise((r) => setTimeout(r, wait))
-    mbLastAt = Date.now()
-    return getJson('musicbrainz', url)
-  })
-  mbChain = next.catch(() => null)
-  return next
-}
-
 interface MbArtist {
   id: string
   name: string
   score?: number
-}
-
-interface MbRelation {
-  type?: string
-  url?: { resource?: string }
 }
 
 export async function fetchArtistInfo(artist: string, force = false): Promise<ArtistInfo | null> {
@@ -94,53 +48,10 @@ export async function fetchArtistInfo(artist: string, force = false): Promise<Ar
       definitive = false // summary state unknown — show the partial, retry later
     } else {
       const rels = (lookupGot.body as { relations?: MbRelation[] }).relations ?? []
-
-      // Modern MB links to Wikidata; direct Wikipedia rels are legacy but easy.
-      let title: string | null = null
-      const wikipedia = rels.find((r) => r.type === 'wikipedia')?.url?.resource
-      if (wikipedia) {
-        title = decodeURIComponent(wikipedia.split('/wiki/')[1] ?? '')
-      } else {
-        const wikidata = rels.find((r) => r.type === 'wikidata')?.url?.resource
-        const qid = wikidata?.split('/wiki/')[1]
-        if (qid) {
-          const entityGot = await getJson('wikidata', `${WD}/wiki/Special:EntityData/${qid}.json`)
-          if (entityGot.kind === 'error') {
-            definitive = false
-          } else if (entityGot.kind === 'ok') {
-            const entities = (
-              entityGot.body as {
-                entities?: Record<string, { sitelinks?: { enwiki?: { title?: string } } }>
-              }
-            ).entities
-            title = entities?.[qid]?.sitelinks?.enwiki?.title ?? null
-          }
-          // 'missing' = no such entity: an answer, stays definitive
-        }
-        // no wikidata relation at all: an answer — no summary to link
-      }
-
-      if (title) {
-        const summaryGot = await getJson(
-          'wikipedia',
-          `${WIKI}/api/rest_v1/page/summary/${encodeURIComponent(title)}`
-        )
-        if (summaryGot.kind === 'error') {
-          definitive = false
-        } else if (summaryGot.kind === 'ok') {
-          const summary = summaryGot.body as {
-            extract?: string
-            content_urls?: { desktop?: { page?: string } }
-          }
-          if (summary.extract) {
-            result.summary = summary.extract
-            result.wikipediaUrl =
-              summary.content_urls?.desktop?.page ??
-              `https://en.wikipedia.org/wiki/${encodeURIComponent(title)}`
-          }
-        }
-        // 'missing' = the article is gone: an answer, stays definitive
-      }
+      const wiki = await wikipediaFromRels(rels)
+      result.summary = wiki.summary
+      result.wikipediaUrl = wiki.wikipediaUrl
+      if (!wiki.definitive) definitive = false
     }
   }
   // no match / low score with an OK search: an answer — cache the null

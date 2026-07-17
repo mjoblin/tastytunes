@@ -337,8 +337,8 @@ export function SettingsScreen(): React.JSX.Element {
             />
 
             <Toggle
-              label="Artist context"
-              hint="Adds an artist panel to the Now Playing screen: a Wikipedia summary matched via MusicBrainz, fetched when you open it. Sends the current artist's name; off means no requests, ever."
+              label="Artist & album context"
+              hint="Adds a context panel to the Now Playing screen: Wikipedia summaries and release details matched via MusicBrainz, fetched when you open it. Sends the current artist and album names; off means no requests, ever."
               checked={settings.artistInfo}
               onChange={(artistInfo) => void save({ artistInfo })}
             />
@@ -812,7 +812,7 @@ function CacheRow(): React.JSX.Element {
   return (
     <SettingRow
       label="Cached lookups"
-      hint="Lyrics and artist lookups are kept on disk (bounded; least-recently-used entries drop first) so repeat plays don't re-ask the services above. The panels' refresh buttons overwrite the stored copy."
+      hint="Lyrics, artist, and album lookups are kept on disk (bounded; least-recently-used entries drop first) so repeat plays don't re-ask the services above. The panels' refresh buttons overwrite the stored copy."
     >
       <button
         onClick={() => void tt.clearLookupCaches().then(setStats)}

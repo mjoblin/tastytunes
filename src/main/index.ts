@@ -15,6 +15,7 @@ import { checkUpdatesNow, currentUpdateState, downloadUpdate, installUpdate, sta
 import { fetchLyrics } from './lyrics'
 import { scrobbler } from './scrobbler'
 import { fetchArtistInfo } from './artistInfo'
+import { fetchAlbumInfo } from './albumInfo'
 import { clearLookupCaches, flushLookupCaches, lookupCacheStats } from './diskCache'
 import { startScheduler } from './scheduler'
 import { loggedFetch } from './netlog'
@@ -213,6 +214,9 @@ function registerIpc(): void {
   ipcMain.handle(IPC.updateInstall, () => installUpdate())
   ipcMain.handle(IPC.fetchArtistInfo, (_e, artist: string, force?: boolean) =>
     getSettings().artistInfo ? fetchArtistInfo(artist, !!force) : null
+  )
+  ipcMain.handle(IPC.fetchAlbumInfo, (_e, artist: string, album: string, force?: boolean) =>
+    getSettings().artistInfo ? fetchAlbumInfo(artist, album, !!force) : null
   )
   ipcMain.handle(IPC.getRecents, () => getRecents())
   ipcMain.handle(IPC.clearRecents, () => deviceManager.clearRecents())
