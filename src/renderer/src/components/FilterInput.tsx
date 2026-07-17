@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { Search, X } from 'lucide-react'
 import { cx } from '@/lib/format'
 
@@ -18,8 +19,27 @@ export function FilterInput({
   shown: number
   total: number
 }): React.JSX.Element {
+  const wrapRef = useRef<HTMLDivElement | null>(null)
+  const inputRef = useRef<HTMLInputElement | null>(null)
+
+  // Clicks on non-focusable chrome don't move focus off an input, so the
+  // caret would keep blinking — blur explicitly when a press lands outside.
+  useEffect(() => {
+    const onPointerDown = (e: PointerEvent): void => {
+      if (
+        document.activeElement === inputRef.current &&
+        !wrapRef.current?.contains(e.target as Node)
+      ) {
+        inputRef.current?.blur()
+      }
+    }
+    window.addEventListener('pointerdown', onPointerDown)
+    return () => window.removeEventListener('pointerdown', onPointerDown)
+  }, [])
+
   return (
     <div
+      ref={wrapRef}
       className={cx(
         'no-drag flex items-center gap-1.5 h-8 pl-2.5 pr-1.5 rounded-lg ring-1 transition-all',
         value ? 'ring-gold/50 bg-golddim' : 'ring-edge bg-panel/70 focus-within:ring-edge2'
@@ -27,6 +47,7 @@ export function FilterInput({
     >
       <Search size={13} className={value ? 'text-gold' : 'text-faint'} />
       <input
+        ref={inputRef}
         data-filter-input
         value={value}
         onChange={(e) => onChange(e.target.value)}
