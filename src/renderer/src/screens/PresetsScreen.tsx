@@ -258,30 +258,27 @@ interface PresetVolumeProps {
 }
 
 /**
- * Feature 10's whole surface: the always-visible volume badge (when set), the
- * hover-revealed speaker button (when not), and the slider popover both open.
+ * Feature 10's popover, shared by rows and cards. Renders through a portal:
+ * the sortable cards/rows carry a dnd-kit transform, which makes them
+ * containing blocks — a position:fixed child would anchor to the CARD, not
+ * the viewport. Saving is EXPLICIT: the slider only stages a draft and the
+ * gold Set button commits, so clicking away always means "never mind".
  */
-function PresetVolume({
-  volume,
-  canSetVolume,
-  onVolume
-}: PresetVolumeProps): React.JSX.Element | null {
+function usePresetVolumePopover(
+  volume: number | null,
+  onVolume: (level: number | null) => void
+): { open: boolean; openFrom(e: React.MouseEvent): void; popover: React.ReactNode } {
   const [open, setOpen] = useState(false)
-  // Screen-space anchor, captured at open. The popover renders through a
-  // portal: the sortable cards/rows carry a transform, which turns them into
-  // containing blocks — a position:fixed child would anchor to the CARD, not
-  // the viewport (a card-sized "full-screen" click-catcher, popovers clipped
-  // by the scrollport). Portaling to document.body opts out of all of it.
-  const [anchor, setAnchor] = useState<{ right: number; top?: number; bottom?: number } | null>(
+  const [anchor, setAnchor] = useState<{ left: number; top?: number; bottom?: number } | null>(
     null
   )
   const [draft, setDraft] = useState<number | null>(null)
   const zoneVolume = useStore((s) => s.zoneState?.volume_percent)
 
-  if (!canSetVolume && volume == null) return null
   const level = draft ?? volume ?? zoneVolume ?? 25
+  const WIDTH = 240 // keep in step with w-60 below
 
-  const toggle = (e: React.MouseEvent): void => {
+  const openFrom = (e: React.MouseEvent): void => {
     e.stopPropagation()
     if (open) {
       setOpen(false)
@@ -290,39 +287,18 @@ function PresetVolume({
     const r = e.currentTarget.getBoundingClientRect()
     const above = r.top > 300 // flip below the anchor when there's no headroom
     setAnchor({
-      right: Math.max(8, window.innerWidth - r.right),
+      // right-aligned to the anchor, clamped into the viewport so the
+      // left-most card's popover slides right instead of clipping
+      left: Math.min(Math.max(8, r.right - WIDTH), window.innerWidth - WIDTH - 8),
       ...(above ? { bottom: window.innerHeight - r.top + 8 } : { top: r.bottom + 8 })
     })
     setDraft(null)
     setOpen(true)
   }
 
-  return (
-    <span className="relative inline-flex" onPointerDown={(e) => e.stopPropagation()}>
-      {volume != null ? (
-        <button
-          title={`Recalled at ${volume}% volume — click to change`}
-          onClick={toggle}
-          data-preset-volume
-          className="flex items-center gap-1 p-1 rounded font-mono text-[10px] text-faint hover:text-ink transition-colors tabular-nums"
-        >
-          <Volume2 size={11} />
-          {volume}%
-        </button>
-      ) : (
-        <button
-          title="Preset volume"
-          onClick={toggle}
-          data-preset-volume
-          className="p-1.5 rounded text-faint opacity-0 group-hover:opacity-100 hover:text-ink transition-all"
-        >
-          <Volume2 size={13} />
-        </button>
-      )}
-
-      {open &&
-        anchor &&
-        createPortal(
+  const popover =
+    open && anchor
+      ? createPortal(
           <>
             <span
               data-preset-volume-overlay
@@ -337,44 +313,55 @@ function PresetVolume({
               style={anchor}
               className="fixed z-40 w-60 rounded-xl bg-raised ring-1 ring-edge2 shadow-2xl p-3 block cursor-default"
               onClick={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
             >
-            <span className="flex items-center justify-between mb-2">
-              <span className="microlabel text-dim">preset volume</span>
-              <span className="font-mono text-[11px] text-gold tabular-nums">{level}%</span>
-            </span>
-            <Slider
-              value={level / 100}
-              onScrub={(v) => setDraft(Math.round(v * 100))}
-              onCancel={() => setDraft(null)}
-              onCommit={(v) => {
-                setDraft(null)
-                onVolume(Math.round(v * 100))
-              }}
-              ariaLabel="Preset volume"
-              thumb="always"
-            />
-            <span className="block text-[11px] text-faint leading-relaxed mt-2.5">
-              TastyTunes sets this volume whenever it starts this preset. Recalls from the official
-              app or the streamer itself aren't affected.
-            </span>
-            {volume != null && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onVolume(null)
-                  setOpen(false)
-                }}
-                className="mt-2.5 text-[12px] px-2.5 py-1 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-alert hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
-              >
-                Clear
-              </button>
-            )}
+              <span className="flex items-center justify-between mb-2">
+                <span className="microlabel text-dim">preset volume</span>
+                <span className="font-mono text-[11px] text-gold tabular-nums">{level}%</span>
+              </span>
+              <Slider
+                value={level / 100}
+                onScrub={(v) => setDraft(Math.round(v * 100))}
+                onCancel={() => setDraft(null)}
+                onCommit={(v) => setDraft(Math.round(v * 100))}
+                ariaLabel="Preset volume"
+                thumb="always"
+              />
+              <span className="block text-[11px] text-faint leading-relaxed mt-2.5">
+                TastyTunes sets this volume whenever it starts this preset. Recalls from the
+                official app or the streamer itself aren't affected.
+              </span>
+              <span className="flex items-center gap-2 mt-2.5">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onVolume(level)
+                    setOpen(false)
+                  }}
+                  className="text-[12px] px-3 py-1 rounded-lg bg-gold text-bg font-medium hover:brightness-110 motion-safe:active:scale-95 transition-all"
+                >
+                  Set {level}%
+                </button>
+                {volume != null && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onVolume(null)
+                      setOpen(false)
+                    }}
+                    className="text-[12px] px-2.5 py-1 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-alert hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
+                  >
+                    Clear
+                  </button>
+                )}
+              </span>
             </span>
           </>,
           document.body
-        )}
-    </span>
-  )
+        )
+      : null
+
+  return { open, openFrom, popover }
 }
 
 /** Row view of a preset — mirrors the queue row's anatomy. */
@@ -389,6 +376,7 @@ function PresetRow({
     id: preset.id as number
   })
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const pv = usePresetVolumePopover(volume, onVolume)
 
   useEffect(() => {
     if (!confirmDelete) return
@@ -405,7 +393,9 @@ function PresetRow({
         'group grid grid-cols-[26px_44px_1fr_auto_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5',
         'cursor-default transition-colors',
         isDragging && 'z-10 bg-raised shadow-xl',
-        playing ? 'row-playing bg-gold/10' : 'hover:bg-veil'
+        // hold the hover highlight while this row's volume popover is open —
+        // the pointer leaves the row, but the row is still what's being edited
+        playing ? 'row-playing bg-gold/10' : pv.open ? 'bg-veil' : 'hover:bg-veil'
       )}
       onClick={() => {
         if (preset.id != null) void tt.command({ type: 'recallPreset', presetId: preset.id })
@@ -442,7 +432,32 @@ function PresetRow({
         </div>
       </div>
 
-      <PresetVolume volume={volume} canSetVolume={canSetVolume} onVolume={onVolume} />
+      <span className="inline-flex" onPointerDown={(e) => e.stopPropagation()}>
+        {volume != null ? (
+          <button
+            title={`Recalled at ${volume}% volume — click to change`}
+            onClick={pv.openFrom}
+            data-preset-volume-badge
+            className="flex items-center gap-1 p-1 rounded font-mono text-[10px] text-faint hover:text-ink transition-colors tabular-nums"
+          >
+            <Volume2 size={11} />
+            {volume}%
+          </button>
+        ) : canSetVolume ? (
+          <button
+            title="Preset volume"
+            onClick={pv.openFrom}
+            data-preset-volume
+            className={cx(
+              'p-1.5 rounded text-faint hover:text-ink transition-all',
+              pv.open ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+            )}
+          >
+            <Volume2 size={13} />
+          </button>
+        ) : null}
+        {pv.popover}
+      </span>
 
       <button
         title={confirmDelete ? 'Click again to delete' : 'Delete preset'}
@@ -491,6 +506,7 @@ function PresetCard({
     id: preset.id as number
   })
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const pv = usePresetVolumePopover(volume, onVolume)
 
   useEffect(() => {
     if (!confirmDelete) return
@@ -510,9 +526,12 @@ function PresetCard({
         // it stays legible on gold/orange album covers.
         // Hover: a slight grow + lift (scale is layout-free, so edge-clipped
         // cards just clip at the scrollport; z-10 keeps the grown card on top).
-        'group text-left rounded-2xl p-2 pb-2.5 transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]',
+        'group relative text-left rounded-2xl p-2 pb-2.5 transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]',
         isDragging && 'z-10 opacity-90',
-        playing ? 'bg-goldtile/70 tile-playing' : 'bg-raised/70 ring-1 ring-edge card-hover-glow'
+        playing ? 'bg-goldtile/70 tile-playing' : 'bg-raised/70 ring-1 ring-edge card-hover-glow',
+        // held while this card's volume popover is open — the pointer has left,
+        // but the card is still what's being edited
+        pv.open && 'ring-1 ring-edge2'
       )}
     >
       <button
@@ -551,22 +570,28 @@ function PresetCard({
         </div>
       </button>
 
-      <div className="mt-2 px-1 flex items-start gap-1">
-        <div className="flex-1 min-w-0">
-          <div className={cx('text-[12.5px] leading-snug line-clamp-2', playing ? 'text-gold' : 'text-ink')}>
-            {preset.name ?? `Preset ${preset.id}`}
-          </div>
-          <div className="microlabel mt-1 flex items-center gap-1.5">
-            <span>
-              {String(preset.id).padStart(2, '0')}
-              {preset.class ? ` · ${preset.class.replace(/^stream\./, '')}` : ''}
-            </span>
-          </div>
-        </div>
-        <PresetVolume volume={volume} canSetVolume={canSetVolume} onVolume={onVolume} />
+      {/* hover cluster over the art's top-right (playing badge owns top-left):
+          the footer text keeps the card's full width, and the icons stack
+          vertically so they never fight the name for space */}
+      <div
+        onPointerDown={(e) => e.stopPropagation() /* keep dnd-kit's drag sensor out of it */}
+        className={cx(
+          'absolute top-3.5 right-3.5 z-10 flex flex-col items-end gap-1.5 transition-opacity',
+          pv.open || confirmDelete ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+        )}
+      >
+        {canSetVolume && (
+          <button
+            title={volume != null ? `Recalled at ${volume}% volume — click to change` : 'Preset volume'}
+            onClick={pv.openFrom}
+            data-preset-volume
+            className="flex h-7 w-7 items-center justify-center rounded-md bg-black/55 backdrop-blur-sm text-white/85 hover:text-gold transition-colors"
+          >
+            <Volume2 size={13} />
+          </button>
+        )}
         <button
           title={confirmDelete ? 'Click again to delete' : 'Delete preset'}
-          onPointerDown={(e) => e.stopPropagation() /* keep dnd-kit's drag sensor out of it */}
           onClick={(e) => {
             e.stopPropagation()
             if (!confirmDelete) {
@@ -577,16 +602,41 @@ function PresetCard({
             }
           }}
           className={cx(
-            'flex items-center gap-1 p-1 rounded transition-all',
+            'flex h-7 items-center justify-center gap-1 rounded-md backdrop-blur-sm transition-all',
             confirmDelete
-              ? 'text-alert opacity-100 bg-alert/15'
-              : 'text-faint opacity-0 group-hover:opacity-100 hover:text-alert'
+              ? 'px-2 bg-alert/30 text-alert'
+              : 'w-7 bg-black/55 text-white/85 hover:text-alert'
           )}
         >
           <Trash2 size={13} />
           {confirmDelete && <span className="font-mono text-[9px] uppercase tracking-wide">sure?</span>}
         </button>
       </div>
+
+      <div className="mt-2 px-1">
+        <div className={cx('text-[12.5px] leading-snug line-clamp-2', playing ? 'text-gold' : 'text-ink')}>
+          {preset.name ?? `Preset ${preset.id}`}
+        </div>
+        <div className="microlabel mt-1 flex items-center gap-1.5">
+          <span>
+            {String(preset.id).padStart(2, '0')}
+            {preset.class ? ` · ${preset.class.replace(/^stream\./, '')}` : ''}
+          </span>
+          {volume != null && (
+            <button
+              title={`Recalled at ${volume}% volume — click to change`}
+              onClick={pv.openFrom}
+              onPointerDown={(e) => e.stopPropagation()}
+              data-preset-volume-badge
+              className="flex items-center gap-0.5 font-mono text-[10px] text-faint hover:text-ink transition-colors tabular-nums"
+            >
+              <Volume2 size={10} />
+              {volume}%
+            </button>
+          )}
+        </div>
+      </div>
+      {pv.popover}
     </div>
   )
 }
