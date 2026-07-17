@@ -36,15 +36,33 @@ export function VolumeCluster(): React.JSX.Element | null {
   const [hold, setHold] = useState<number | null>(null)
   const lastSent = useRef<{ at: number; level: number } | null>(null)
 
-  if (!zoneState) return null
-  const preAmp = zoneState.pre_amp_mode === true
-  const cbus = zoneState.cbus != null && !/^(off|none)$/i.test(zoneState.cbus)
-  if (!preAmp && !cbus) return null
-
-  const muted = zoneState.mute === true
-  const percent = zoneState.volume_percent
-  const step = zoneState.volume_step
+  const preAmp = zoneState?.pre_amp_mode === true
+  const cbus = zoneState?.cbus != null && !/^(off|none)$/i.test(zoneState.cbus)
+  const muted = zoneState?.mute === true
+  const percent = zoneState?.volume_percent
+  const step = zoneState?.volume_step
   const max = volumeLimit ?? 100
+
+  // Pre-Amp mode: absolute level. Prefer percent when the model reports it.
+  const usingPercent = percent != null
+  const deviceLevel = usingPercent ? percent : step
+
+  // Release the hold once the device reports (about) the committed level, or
+  // give up quietly if it never does. MUST run before the early returns below:
+  // a hook after them crashes React (#310) the moment zone state arrives
+  // after first paint and the render suddenly has one more hook.
+  useEffect(() => {
+    if (hold == null) return
+    if (deviceLevel != null && Math.abs(deviceLevel - hold) <= 1) {
+      setHold(null)
+      return
+    }
+    const t = setTimeout(() => setHold(null), 2000)
+    return () => clearTimeout(t)
+  }, [hold, deviceLevel])
+
+  if (!zoneState) return null
+  if (!preAmp && !cbus) return null
 
   const muteButton = (
     <button
@@ -88,9 +106,6 @@ export function VolumeCluster(): React.JSX.Element | null {
     )
   }
 
-  // Pre-Amp mode: absolute level. Prefer percent when the model reports it.
-  const usingPercent = percent != null
-  const deviceLevel = usingPercent ? percent : step
   const levelNow = hold ?? deviceLevel
   const shown = levelNow != null ? levelNow / (usingPercent ? 100 : 30) : 0
 
@@ -117,18 +132,6 @@ export function VolumeCluster(): React.JSX.Element | null {
     lastSent.current = null
     send(level)
   }
-
-  // Release the hold once the device reports (about) the committed level, or
-  // give up quietly if it never does.
-  useEffect(() => {
-    if (hold == null) return
-    if (deviceLevel != null && Math.abs(deviceLevel - hold) <= 1) {
-      setHold(null)
-      return
-    }
-    const t = setTimeout(() => setHold(null), 2000)
-    return () => clearTimeout(t)
-  }, [hold, deviceLevel])
 
   // While dragging, show the level about to be set (gold = pending).
   const pendingLevel = scrub != null ? toLevel(scrub) : null
