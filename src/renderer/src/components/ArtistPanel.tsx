@@ -136,6 +136,7 @@ export function ArtistPanel(): React.JSX.Element {
       {album && (
         <div className="px-6 pb-3">
           <Segmented<Tab>
+            className="w-fit"
             value={tab}
             onChange={setContextTab}
             options={[
