@@ -26,7 +26,7 @@ const GROUPS: Array<{ title: string; rows: Array<[string, string]> }> = [
     title: 'Navigate',
     rows: [
       [`${MOD} K`, 'Command palette'],
-      ['N Q P R S D E', 'Now Playing · Queue · Presets · Recently · Sources · Device · sEttings'],
+      ['N Q P L R S D E', 'Now Playing · Queue · Presets · Library · Recently · Sources · Device · sEttings'],
       ['F', 'Full-screen display mode'],
       ['/', 'Filter the list (Queue · Presets · Recently)'],
       ['`', 'SMOIP payload console'],

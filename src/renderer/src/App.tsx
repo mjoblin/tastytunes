@@ -18,6 +18,7 @@ import { DisplayMode } from '@/components/DisplayMode'
 import { NowPlayingScreen } from '@/screens/NowPlayingScreen'
 import { QueueScreen } from '@/screens/QueueScreen'
 import { PresetsScreen } from '@/screens/PresetsScreen'
+import { LibraryScreen } from '@/screens/LibraryScreen'
 import { RecentlyPlayedScreen } from '@/screens/RecentlyPlayedScreen'
 import { SourcesScreen } from '@/screens/SourcesScreen'
 import { DeviceScreen } from '@/screens/DeviceScreen'
@@ -83,6 +84,8 @@ export default function App(): React.JSX.Element {
         return <QueueScreen />
       case 'presets':
         return <PresetsScreen />
+      case 'library':
+        return <LibraryScreen />
       case 'sources':
         return <SourcesScreen />
     }

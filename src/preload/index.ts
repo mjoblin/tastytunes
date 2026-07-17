@@ -3,6 +3,7 @@ import {
   IPC,
   type AppSettings,
   type LyricsQuery,
+  type MediaQueueAction,
   type PushMessage,
   type SleepTimer,
   type StreamerCommand,
@@ -35,6 +36,13 @@ const api: TastyTunesApi = {
   clearRecents: () => ipcRenderer.invoke(IPC.clearRecents),
   lookupCacheStats: () => ipcRenderer.invoke(IPC.lookupCacheStats),
   clearLookupCaches: () => ipcRenderer.invoke(IPC.clearLookupCaches),
+  mediaServers: () => ipcRenderer.invoke(IPC.mediaServers),
+  mediaBrowse: (serverUdn: string, objectId: string | null, titlePath: string[]) =>
+    ipcRenderer.invoke(IPC.mediaBrowse, serverUdn, objectId, titlePath),
+  mediaQueueAdd: (serverUdn: string, objectId: string, action: MediaQueueAction, playFromId?: string) =>
+    ipcRenderer.invoke(IPC.mediaQueueAdd, serverUdn, objectId, action, playFromId),
+  mediaPresetSave: (serverUdn: string, objectId: string, slot: number) =>
+    ipcRenderer.invoke(IPC.mediaPresetSave, serverUdn, objectId, slot),
   onPush: (cb: (msg: PushMessage) => void) => {
     const listener = (_e: IpcRendererEvent, msg: PushMessage): void => cb(msg)
     ipcRenderer.on(IPC.push, listener)

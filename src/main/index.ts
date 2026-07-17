@@ -4,6 +4,7 @@ import {
   IPC,
   type AppSettings,
   type LyricsQuery,
+  type MediaQueueAction,
   type MenuCommand,
   type SleepTimer,
   type StreamerCommand
@@ -17,6 +18,7 @@ import { scrobbler } from './scrobbler'
 import { fetchArtistInfo } from './artistInfo'
 import { fetchAlbumInfo } from './albumInfo'
 import { clearLookupCaches, flushLookupCaches, lookupCacheStats } from './diskCache'
+import { browse as mediaBrowse, presetSave, queueAdd, refreshServers } from './upnpBrowser'
 import { startScheduler } from './scheduler'
 import { loggedFetch } from './netlog'
 import { getSettings, updateSettings } from './persist'
@@ -222,6 +224,25 @@ function registerIpc(): void {
   ipcMain.handle(IPC.clearRecents, () => deviceManager.clearRecents())
   ipcMain.handle(IPC.lookupCacheStats, () => lookupCacheStats())
   ipcMain.handle(IPC.clearLookupCaches, () => clearLookupCaches())
+
+  // Media browser — every call needs the connected streamer's host.
+  const streamerHost = (): string => {
+    const conn = deviceManager.snapshot().connection
+    if (conn.phase !== 'connected') throw new Error('not connected to a streamer')
+    return conn.host
+  }
+  ipcMain.handle(IPC.mediaServers, () => refreshServers(streamerHost()))
+  ipcMain.handle(IPC.mediaBrowse, (_e, serverUdn: string, objectId: string | null, titlePath: string[]) =>
+    mediaBrowse(streamerHost(), serverUdn, objectId, titlePath)
+  )
+  ipcMain.handle(
+    IPC.mediaQueueAdd,
+    (_e, serverUdn: string, objectId: string, action: MediaQueueAction, playFromId?: string) =>
+      queueAdd(streamerHost(), serverUdn, objectId, action, playFromId)
+  )
+  ipcMain.handle(IPC.mediaPresetSave, (_e, serverUdn: string, objectId: string, slot: number) =>
+    presetSave(streamerHost(), serverUdn, objectId, slot)
+  )
   ipcMain.handle(IPC.toggleMini, () => toggleMiniPlayer())
   ipcMain.handle(IPC.showMain, () => {
     if (!mainWindow || mainWindow.isDestroyed()) createWindow()

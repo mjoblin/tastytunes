@@ -96,6 +96,7 @@ export function installAppMenu(deps: MenuDeps): void {
     ['now-playing', 'Now Playing'],
     ['queue', 'Queue'],
     ['presets', 'Presets'],
+    ['library', 'Library'],
     ['recently-played', 'Recently Played'],
     ['sources', 'Sources'],
     ['device', 'Device']

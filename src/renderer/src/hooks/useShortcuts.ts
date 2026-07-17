@@ -6,6 +6,7 @@ const SCREEN_KEYS: Record<string, Screen> = {
   n: 'now-playing',
   q: 'queue',
   p: 'presets',
+  l: 'library',
   r: 'recently-played',
   s: 'sources',
   d: 'device',

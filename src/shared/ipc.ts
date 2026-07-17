@@ -554,6 +554,7 @@ export interface AppSettings {
   /** Per-screen cards ⇄ rows layout. Card sizing shares the presetCard* settings. */
   queueLayout: ScreenLayout
   presetsLayout: ScreenLayout
+  libraryLayout: ScreenLayout
   /** Remembered sleep-timer action (pause vs standby). The countdown itself is not persisted. */
   sleepAction: SleepAction
   /** Recently Played: collapse continuous sessions (radio/AirPlay/…) to one row, vs a row per song. */
@@ -614,6 +615,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   followPresets: false,
   queueLayout: 'rows',
   presetsLayout: 'cards',
+  libraryLayout: 'cards',
   sleepAction: 'standby',
   recentsGrouped: true,
   motion: 'system',
@@ -657,6 +659,32 @@ export interface Snapshot {
   netRequests: NetRequestEntry[]
 }
 
+// ------------------------------------------------------------------ media browser
+
+export interface MediaServerInfo {
+  udn: string
+  name: string
+  model: string | null
+  /** True when this "server" is the connected streamer itself (USB storage). */
+  isStreamer: boolean
+}
+
+export interface MediaNode {
+  id: string
+  parentId: string | null
+  title: string
+  upnpClass: string
+  isContainer: boolean
+  artUrl: string | null
+  artist: string | null
+  album: string | null
+  trackNumber: number | null
+  durationSecs: number | null
+}
+
+/** Queue-write verbs of /smoip/queue/add (semantics per vibin's reverse-engineering). */
+export type MediaQueueAction = 'REPLACE' | 'APPEND' | 'PLAY_NEXT' | 'PLAY_NOW' | 'PLAY_FROM_HERE'
+
 // ------------------------------------------------------------------- preload API
 
 export interface TastyTunesApi {
@@ -695,6 +723,21 @@ export interface TastyTunesApi {
   getRecents(): Promise<RecentTrack[]>
   /** Wipe the recently-played log. */
   clearRecents(): Promise<void>
+  /** UPnP media servers known to the streamer (its own USB storage included). */
+  mediaServers(): Promise<MediaServerInfo[]>
+  /** Browse a ContentDirectory container (objectId null = root). `titlePath` is
+   *  the breadcrumb titles from root — used to re-resolve stale ids after the
+   *  streamer's USB ids rot across a standby cycle. */
+  mediaBrowse(serverUdn: string, objectId: string | null, titlePath: string[]): Promise<MediaNode[]>
+  /** Queue a browsed item on the streamer (DIDL stays in the main process). */
+  mediaQueueAdd(
+    serverUdn: string,
+    objectId: string,
+    action: MediaQueueAction,
+    playFromId?: string
+  ): Promise<void>
+  /** Save a browsed item to a preset slot (1-99). */
+  mediaPresetSave(serverUdn: string, objectId: string, slot: number): Promise<void>
   /** Combined size of the on-disk lookup caches (lyrics, artist context). */
   lookupCacheStats(): Promise<{ entries: number; bytes: number }>
   /** Wipe the lookup caches (memory + disk); resolves to the fresh stats. */
@@ -725,5 +768,9 @@ export const IPC = {
   clearRecents: 'tt:clearRecents',
   lookupCacheStats: 'tt:lookupCacheStats',
   clearLookupCaches: 'tt:clearLookupCaches',
+  mediaServers: 'tt:mediaServers',
+  mediaBrowse: 'tt:mediaBrowse',
+  mediaQueueAdd: 'tt:mediaQueueAdd',
+  mediaPresetSave: 'tt:mediaPresetSave',
   push: 'tt:push'
 } as const
