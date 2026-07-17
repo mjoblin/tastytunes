@@ -19,7 +19,17 @@ interface ServerEntry extends MediaServerInfo {
 const parser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: '@_',
-  removeNSPrefix: true
+  removeNSPrefix: true,
+  // The SOAP Result is ESCAPED XML — every tag bracket of the inner DIDL is
+  // an &lt;/&gt; entity, so a large listing (Asset's "[All Album Artists]")
+  // blows straight past fast-xml-parser's default billion-laughs guard of
+  // 1000 expansions ("Couldn't browse this library" on big folders). Keep
+  // the guard, raise the ceilings to fit real library sizes.
+  processEntities: {
+    enabled: true,
+    maxTotalExpansions: 5_000_000,
+    maxExpandedLength: 50_000_000
+  }
 })
 
 let servers = new Map<string, ServerEntry>()
