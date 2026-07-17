@@ -198,7 +198,7 @@ export function PresetsScreen(): React.JSX.Element {
 
       {/* rows: pt-1 keeps the playing ring unclipped; cards: pt-2 gives the
           hover grow + glow ring headroom on the top row */}
-      <div ref={setContainerRef} className={cx('flex-1 overflow-y-auto', cards ? 'px-8 pb-8 pt-2' : 'px-6 pb-6 pt-1')}>
+      <div ref={setContainerRef} className={cx('flex-1 overflow-y-auto', cards ? 'px-8 pb-8 pt-2' : 'px-6 pb-6 pt-1 divide-y divide-edge/50')}>
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
           <SortableContext
             items={items.map((p) => p.id as number)}
@@ -442,7 +442,7 @@ function PresetRow({
       <span className="inline-flex" onPointerDown={(e) => e.stopPropagation()}>
         {volume != null ? (
           <button
-            data-tip={`Recalled at ${volume}% volume — click to change`}
+            data-tip={`Recalled at ${volume}% volume`}
           aria-label="Preset volume"
             onClick={pv.openFrom}
             data-preset-volume-badge
@@ -592,7 +592,7 @@ function PresetCard({
           tooltip carries the percentage */}
       {(canSetVolume || volume != null) && (
         <button
-          data-tip={volume != null ? `Recalled at ${volume}% volume — click to change` : 'Preset volume'}
+          data-tip={volume != null ? `Recalled at ${volume}% volume` : 'Preset volume'}
           aria-label="Preset volume"
           onClick={pv.openFrom}
           onPointerDown={(e) => e.stopPropagation()}

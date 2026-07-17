@@ -158,7 +158,7 @@ export function QueueScreen(): React.JSX.Element {
 
       {/* rows: pt-1 keeps the current ring unclipped; cards: pt-2 gives the
           hover grow + glow ring headroom on the top row */}
-      <div ref={scrollRef} className={cx('flex-1 overflow-y-auto', cards ? 'px-8 pb-8 pt-2' : 'px-6 pb-6 pt-1')}>
+      <div ref={scrollRef} className={cx('flex-1 overflow-y-auto', cards ? 'px-8 pb-8 pt-2' : 'px-6 pb-6 pt-1 divide-y divide-edge/50')}>
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
           <SortableContext
             items={items.map((i) => i.id as number)}

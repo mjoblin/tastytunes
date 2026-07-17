@@ -124,7 +124,7 @@ export function RecentlyPlayedScreen(): React.JSX.Element {
             {days.map((day) => (
               <div key={day.label}>
                 <div className="microlabel mb-2 px-1">{day.label}</div>
-                <div className="space-y-1">
+                <div className="space-y-1 divide-y divide-edge/50">
                   {day.blocks.map((block) =>
                     grouped && block.session != null ? (
                       <SessionRow
