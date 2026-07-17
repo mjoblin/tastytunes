@@ -41,9 +41,14 @@ export function FilterInput({
         spellCheck={false}
         className="w-28 bg-transparent outline-none text-[12.5px] text-ink placeholder:text-faint"
       />
-      {value ? (
+      {value && (
         <>
-          <span className="font-mono text-[10.5px] text-dim tabular-nums">
+          {/* min-width fits the widest possible count ("30/30") so the box
+              doesn't resize as the shown count's digits change while typing */}
+          <span
+            className="font-mono text-[10.5px] text-dim tabular-nums text-right"
+            style={{ minWidth: `${String(total).length * 2 + 1}ch` }}
+          >
             {shown}/{total}
           </span>
           <button
@@ -54,8 +59,6 @@ export function FilterInput({
             <X size={12} />
           </button>
         </>
-      ) : (
-        <span className="font-mono text-[10.5px] text-faint pr-1">/</span>
       )}
     </div>
   )
