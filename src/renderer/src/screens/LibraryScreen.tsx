@@ -478,8 +478,11 @@ function ContainerCard({
   onMenu(e: React.MouseEvent): void
 }): React.JSX.Element {
   const ref = useRef<HTMLDivElement | null>(null)
+  // Queue/preset verbs only make sense on albums — plain folders (artist
+  // dirs, USB volumes, Asset's virtual views) get no chips and no menu.
+  const album = isAlbumClass(node.upnpClass)
   return (
-    <div ref={ref} className="group" onContextMenu={onMenu} data-library-card>
+    <div ref={ref} className="group" onContextMenu={album ? onMenu : undefined} data-library-card>
       {/* the card CENTER always enters — play/menu live as corner chips on
           the art (preset-card idiom), never intercepting the open gesture */}
       <button className="block w-full cursor-pointer" onClick={onEnter}>
@@ -488,14 +491,14 @@ function ContainerCard({
             src={node.artUrl}
             lazy
             fallback={
-              isAlbumClass(node.upnpClass) ? (
+              album ? (
                 <Disc3 size={34} strokeWidth={1.2} className="text-faint" />
               ) : (
                 <Folder size={34} strokeWidth={1.2} className="text-faint" />
               )
             }
           />
-          {isAlbumClass(node.upnpClass) && (
+          {album && (
             <span
               onClick={(e) => {
                 e.stopPropagation()
@@ -507,13 +510,15 @@ function ContainerCard({
               <Play size={15} fill="currentColor" />
             </span>
           )}
-          <span
-            aria-label="More actions"
-            onClick={onMenu}
-            className="absolute bottom-1.5 right-1.5 h-8 w-8 rounded-lg opacity-0 group-hover:opacity-100 bg-panel/80 ring-1 ring-edge text-dim hover:text-ink flex items-center justify-center transition-all"
-          >
-            <MoreHorizontal size={15} />
-          </span>
+          {album && (
+            <span
+              aria-label="More actions"
+              onClick={onMenu}
+              className="absolute bottom-1.5 right-1.5 h-8 w-8 rounded-lg opacity-0 group-hover:opacity-100 bg-panel/80 ring-1 ring-edge text-dim hover:text-ink flex items-center justify-center transition-all"
+            >
+              <MoreHorizontal size={15} />
+            </span>
+          )}
         </div>
         <div className="pt-1.5 text-[12.5px] text-ink truncate text-left">{node.title}</div>
       </button>
@@ -530,11 +535,13 @@ function ContainerRow({
   onEnter(): void
   onMenu(e: React.MouseEvent): void
 }): React.JSX.Element {
+  // Same rule as cards: only albums carry the ⋯ menu.
+  const album = isAlbumClass(node.upnpClass)
   return (
     <div
       className="group grid grid-cols-[44px_1fr_auto] items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer hover:bg-veil transition-colors"
       onClick={onEnter}
-      onContextMenu={onMenu}
+      onContextMenu={album ? onMenu : undefined}
       data-library-row
     >
       <div className="h-10 w-10 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
@@ -542,7 +549,7 @@ function ContainerRow({
           src={node.artUrl}
           lazy
           fallback={
-            isAlbumClass(node.upnpClass) ? (
+            album ? (
               <Disc3 size={16} className="text-faint" />
             ) : (
               <Folder size={16} className="text-faint" />
@@ -554,13 +561,17 @@ function ContainerRow({
         <div className="text-[13.5px] text-ink truncate">{node.title}</div>
         {node.artist && <div className="text-[12px] text-faint truncate">{node.artist}</div>}
       </div>
-      <button
-        aria-label="More actions"
-        onClick={onMenu}
-        className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-all"
-      >
-        <MoreHorizontal size={14} />
-      </button>
+      {album ? (
+        <button
+          aria-label="More actions"
+          onClick={onMenu}
+          className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-all"
+        >
+          <MoreHorizontal size={14} />
+        </button>
+      ) : (
+        <span />
+      )}
     </div>
   )
 }
