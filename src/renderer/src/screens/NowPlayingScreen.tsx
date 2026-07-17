@@ -60,8 +60,8 @@ export function NowPlayingScreen(): React.JSX.Element {
           data-tip={lyricsLine ? 'Hide current lyric line' : 'Show current lyric line'}
           aria-label="Current lyric line"
           className={cx(
-            'no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-md transition-colors',
-            lyricsLine ? 'text-gold' : 'text-faint hover:text-dim'
+            'no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-full hover:bg-veil2 motion-safe:active:scale-90 transition-all',
+            lyricsLine ? 'text-gold hover:text-ink' : 'text-faint hover:text-ink'
           )}
         >
           <Captions size={16} />
@@ -72,7 +72,7 @@ export function NowPlayingScreen(): React.JSX.Element {
           onClick={() => setLyricsOpen(true)}
           data-tip="Lyrics"
           aria-label="Lyrics"
-          className="no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-md text-faint hover:text-dim transition-colors"
+          className="no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-full text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
         >
           <MicVocal size={16} />
         </button>
@@ -82,7 +82,7 @@ export function NowPlayingScreen(): React.JSX.Element {
           onClick={() => setArtistOpen(true)}
           data-tip="About the artist"
           aria-label="About the artist"
-          className="no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-md text-faint hover:text-dim transition-colors"
+          className="no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-full text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
         >
           <UserRound size={16} />
         </button>
@@ -92,7 +92,7 @@ export function NowPlayingScreen(): React.JSX.Element {
           onClick={() => setDisplayMode(true)}
           data-tip="Full-screen display mode (F)"
           aria-label="Full-screen display mode (F)"
-          className="no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-md text-faint hover:text-dim transition-colors"
+          className="no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-full text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
         >
           <Maximize2 size={16} />
         </button>
