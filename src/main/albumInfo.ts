@@ -54,15 +54,23 @@ export async function fetchAlbumInfo(
 
   const query = `releasegroup:${JSON.stringify(album)} AND artist:${JSON.stringify(artist)}`
   const searchGot = await mbFetch(
-    `${MB}/ws/2/release-group?query=${encodeURIComponent(query)}&fmt=json&limit=3`
+    `${MB}/ws/2/release-group?query=${encodeURIComponent(query)}&fmt=json&limit=5`
   )
   if (searchGot.kind !== 'ok') {
     // couldn't even search — nothing to show, nothing to remember
     return null
   }
-  const match = (searchGot.body as { 'release-groups'?: MbReleaseGroup[] })['release-groups']?.[0]
+  // An album and a single can share a title exactly (Iron Maiden's "The
+  // Number of the Beast") and tie on search score, with the single sorted
+  // first. We're resolving an album tag from track metadata, so prefer the
+  // Album-typed release group; fall back to the top result so a genuinely
+  // playing single still resolves.
+  const candidates = ((searchGot.body as { 'release-groups'?: MbReleaseGroup[] })[
+    'release-groups'
+  ] ?? []).filter((rg) => (rg.score ?? 0) >= MIN_MATCH_SCORE)
+  const match = candidates.find((rg) => rg['primary-type'] === 'Album') ?? candidates[0]
 
-  if (match && (match.score ?? 0) >= MIN_MATCH_SCORE) {
+  if (match) {
     result = {
       title: match.title,
       year: match['first-release-date']?.slice(0, 4) || null,
