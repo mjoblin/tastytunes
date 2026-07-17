@@ -534,6 +534,10 @@ function PresetCard({
         pv.open && 'ring-1 ring-edge2'
       )}
     >
+      {/* relative wrapper bounds exactly the art, so the corner chips anchor
+          to the artwork: playing top-left, volume-set bottom-left, hover
+          speaker top-right, hover trash bottom-right */}
+      <div className="relative">
       <button
         className="relative block w-full cursor-pointer"
         onClick={() => {
@@ -570,70 +574,64 @@ function PresetCard({
         </div>
       </button>
 
-      {/* hover cluster over the art's top-right (playing badge owns top-left):
-          the footer text keeps the card's full width, and the icons stack
-          vertically so they never fight the name for space */}
-      <div
-        onPointerDown={(e) => e.stopPropagation() /* keep dnd-kit's drag sensor out of it */}
-        className={cx(
-          'absolute top-3.5 right-3.5 z-10 flex flex-col items-end gap-1.5 transition-opacity',
-          pv.open || confirmDelete ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-        )}
-      >
-        {canSetVolume && (
-          <button
-            title={volume != null ? `Recalled at ${volume}% volume — click to change` : 'Preset volume'}
-            onClick={pv.openFrom}
-            data-preset-volume
-            className="flex h-7 w-7 items-center justify-center rounded-md bg-black/55 backdrop-blur-sm text-white/85 hover:text-gold transition-colors"
-          >
-            <Volume2 size={13} />
-          </button>
-        )}
+      {/* always-visible volume-set indicator — the % lives in the tooltip */}
+      {volume != null && (
         <button
-          title={confirmDelete ? 'Click again to delete' : 'Delete preset'}
-          onClick={(e) => {
-            e.stopPropagation()
-            if (!confirmDelete) {
-              setConfirmDelete(true)
-            } else if (preset.id != null) {
-              setConfirmDelete(false)
-              void tt.command({ type: 'presetDelete', presetId: preset.id })
-            }
-          }}
+          title={`Recalled at ${volume}% volume — click to change`}
+          onClick={pv.openFrom}
+          onPointerDown={(e) => e.stopPropagation()}
+          data-preset-volume-badge
+          className="absolute bottom-2 left-2 z-10 flex items-center rounded-md bg-black/55 backdrop-blur-sm p-1.5 text-gold hover:text-white transition-colors"
+        >
+          <Volume2 size={12} />
+        </button>
+      )}
+
+      {canSetVolume && (
+        <button
+          title={volume != null ? `Recalled at ${volume}% volume — click to change` : 'Preset volume'}
+          onClick={pv.openFrom}
+          onPointerDown={(e) => e.stopPropagation()}
+          data-preset-volume
           className={cx(
-            'flex h-7 items-center justify-center gap-1 rounded-md backdrop-blur-sm transition-all',
-            confirmDelete
-              ? 'px-2 bg-alert/30 text-alert'
-              : 'w-7 bg-black/55 text-white/85 hover:text-alert'
+            'absolute top-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-md bg-black/55 backdrop-blur-sm text-white/85 hover:text-gold transition-all',
+            pv.open ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
           )}
         >
-          <Trash2 size={13} />
-          {confirmDelete && <span className="font-mono text-[9px] uppercase tracking-wide">sure?</span>}
+          <Volume2 size={13} />
         </button>
+      )}
+      <button
+        title={confirmDelete ? 'Click again to delete' : 'Delete preset'}
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation()
+          if (!confirmDelete) {
+            setConfirmDelete(true)
+          } else if (preset.id != null) {
+            setConfirmDelete(false)
+            void tt.command({ type: 'presetDelete', presetId: preset.id })
+          }
+        }}
+        className={cx(
+          'absolute bottom-2 right-2 z-10 flex h-7 items-center justify-center gap-1 rounded-md backdrop-blur-sm transition-all',
+          confirmDelete
+            ? 'px-2 bg-alert/30 text-alert opacity-100'
+            : cx('w-7 bg-black/55 text-white/85 hover:text-alert', 'opacity-0 group-hover:opacity-100')
+        )}
+      >
+        <Trash2 size={13} />
+        {confirmDelete && <span className="font-mono text-[9px] uppercase tracking-wide">sure?</span>}
+      </button>
       </div>
 
       <div className="mt-2 px-1">
         <div className={cx('text-[12.5px] leading-snug line-clamp-2', playing ? 'text-gold' : 'text-ink')}>
           {preset.name ?? `Preset ${preset.id}`}
         </div>
-        <div className="microlabel mt-1 flex items-center gap-1.5">
-          <span>
-            {String(preset.id).padStart(2, '0')}
-            {preset.class ? ` · ${preset.class.replace(/^stream\./, '')}` : ''}
-          </span>
-          {volume != null && (
-            <button
-              title={`Recalled at ${volume}% volume — click to change`}
-              onClick={pv.openFrom}
-              onPointerDown={(e) => e.stopPropagation()}
-              data-preset-volume-badge
-              className="flex items-center gap-0.5 font-mono text-[10px] text-faint hover:text-ink transition-colors tabular-nums"
-            >
-              <Volume2 size={10} />
-              {volume}%
-            </button>
-          )}
+        <div className="microlabel mt-1">
+          {String(preset.id).padStart(2, '0')}
+          {preset.class ? ` · ${preset.class.replace(/^stream\./, '')}` : ''}
         </div>
       </div>
       {pv.popover}
