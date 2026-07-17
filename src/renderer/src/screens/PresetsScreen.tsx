@@ -472,14 +472,16 @@ function PresetRow({
           }
         }}
         className={cx(
-          'flex items-center gap-1 p-1.5 rounded transition-all',
+          'flex items-center gap-1.5 p-1.5 rounded transition-all',
           confirmDelete
-            ? 'text-alert opacity-100 bg-alert/15'
+            ? 'bg-alert text-white opacity-100 px-2'
             : 'text-faint opacity-0 group-hover:opacity-100 hover:text-alert'
         )}
       >
         <Trash2 size={13} />
-        {confirmDelete && <span className="font-mono text-[9px] uppercase tracking-wide">sure?</span>}
+        {confirmDelete && (
+          <span className="font-mono text-[10px] font-semibold uppercase tracking-wide">sure?</span>
+        )}
       </button>
 
       <button
@@ -563,7 +565,8 @@ function PresetCard({
           </div>
 
           {playing && (
-            <span className="absolute top-2 left-2 flex items-center rounded-md bg-black/55 backdrop-blur-sm px-1.5 py-1">
+            // h/w match the corner buttons so the four corners feel weighted
+            <span className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-md bg-black/55 backdrop-blur-sm">
               <span className="eqbars text-gold">
                 <span style={{ height: 6 }} />
                 <span style={{ height: 10 }} />
@@ -574,28 +577,20 @@ function PresetCard({
         </div>
       </button>
 
-      {/* always-visible volume-set indicator — the % lives in the tooltip */}
-      {volume != null && (
-        <button
-          title={`Recalled at ${volume}% volume — click to change`}
-          onClick={pv.openFrom}
-          onPointerDown={(e) => e.stopPropagation()}
-          data-preset-volume-badge
-          className="absolute bottom-2 left-2 z-10 flex items-center rounded-md bg-black/55 backdrop-blur-sm p-1.5 text-gold hover:text-white transition-colors"
-        >
-          <Volume2 size={12} />
-        </button>
-      )}
-
-      {canSetVolume && (
+      {/* ONE speaker: hover-revealed control normally; when a volume is set it
+          stays visible in gold — presence + color IS the indicator, and the
+          tooltip carries the percentage */}
+      {(canSetVolume || volume != null) && (
         <button
           title={volume != null ? `Recalled at ${volume}% volume — click to change` : 'Preset volume'}
           onClick={pv.openFrom}
           onPointerDown={(e) => e.stopPropagation()}
           data-preset-volume
           className={cx(
-            'absolute top-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-md bg-black/55 backdrop-blur-sm text-white/85 hover:text-gold transition-all',
-            pv.open ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+            'absolute top-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-md bg-black/55 backdrop-blur-sm transition-all',
+            volume != null || pv.open
+              ? 'opacity-100 text-gold hover:text-white'
+              : 'opacity-0 group-hover:opacity-100 text-white/85 hover:text-gold'
           )}
         >
           <Volume2 size={13} />
@@ -614,14 +609,16 @@ function PresetCard({
           }
         }}
         className={cx(
-          'absolute bottom-2 right-2 z-10 flex h-7 items-center justify-center gap-1 rounded-md backdrop-blur-sm transition-all',
+          'absolute bottom-2 right-2 z-10 flex h-7 items-center justify-center gap-1.5 rounded-md backdrop-blur-sm transition-all',
           confirmDelete
-            ? 'px-2 bg-alert/30 text-alert opacity-100'
+            ? 'px-2.5 bg-alert text-white opacity-100 shadow-lg'
             : cx('w-7 bg-black/55 text-white/85 hover:text-alert', 'opacity-0 group-hover:opacity-100')
         )}
       >
         <Trash2 size={13} />
-        {confirmDelete && <span className="font-mono text-[9px] uppercase tracking-wide">sure?</span>}
+        {confirmDelete && (
+          <span className="font-mono text-[10px] font-semibold uppercase tracking-wide">sure?</span>
+        )}
       </button>
       </div>
 
