@@ -41,22 +41,22 @@ export function FilterInput({
         spellCheck={false}
         className="w-28 bg-transparent outline-none text-[12.5px] text-ink placeholder:text-faint"
       />
-      {value && (
-        <>
-          {/* fixed floor fitting "1234/1234" so the box width is stable while
-              typing and across screens; absurdly long counts may still grow it */}
-          <span className="font-mono text-[10.5px] text-dim tabular-nums text-right min-w-[9ch]">
-            {shown}/{total}
-          </span>
-          <button
-            aria-label="Clear filter"
-            onClick={() => onChange('')}
-            className="p-1 rounded-full text-dim hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
-          >
-            <X size={12} />
-          </button>
-        </>
-      )}
+      {/* count + clear always occupy their space (9ch floor fits "1234/1234";
+          only an absurd count grows it) so the box width never changes — they
+          just turn invisible while the filter is empty */}
+      <span className="font-mono text-[10.5px] text-dim tabular-nums text-right min-w-[9ch]">
+        {value ? `${shown}/${total}` : ''}
+      </span>
+      <button
+        aria-label="Clear filter"
+        onClick={() => onChange('')}
+        className={cx(
+          'p-1 rounded-full text-dim hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all',
+          !value && 'invisible pointer-events-none'
+        )}
+      >
+        <X size={12} />
+      </button>
     </div>
   )
 }
