@@ -3,6 +3,7 @@
 
 import { BrowserWindow, Notification, nativeImage, webContents } from 'electron'
 import {
+  presetVolumeKey,
   sleepTrackKey,
   type ConnectionState,
   type DiscoveredDevice,
@@ -259,6 +260,16 @@ export class DeviceManager {
         return socket.send('/zone/play_control', { mode_shuffle: cmd.mode })
       case 'recallPreset': {
         socket.send('/zone/recall_preset', { preset: cmd.presetId })
+        // Feature 10: the preset's local volume override rides along on every
+        // recall through the app — after a beat for the source switch — unless
+        // the caller (a schedule with its own volume) opts out.
+        if (!cmd.skipVolume) {
+          const level =
+            getSettings().presetVolumes[presetVolumeKey(this.cache.systemInfo?.udn, cmd.presetId)]
+          if (level != null) {
+            setTimeout(() => void this.command({ type: 'setVolumePercent', percent: level }), 1200)
+          }
+        }
         // The device updates is_playing internally but doesn't reliably push
         // /presets/list (vibin's observation, esp. for UPnP presets). Refetch
         // once quickly (radio) and once late (album recalls switch source and

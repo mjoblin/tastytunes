@@ -204,6 +204,11 @@ export interface Schedule {
   volumePercent: number | null
 }
 
+/** Cache key for a preset volume override — device-scoped so ids don't collide. */
+export function presetVolumeKey(udn: string | null | undefined, presetId: number): string {
+  return `${udn ?? 'device'}|${presetId}`
+}
+
 // ------------------------------------------------------------- artist context
 
 export interface ArtistInfo {
@@ -245,7 +250,8 @@ export type StreamerCommand =
   | { type: 'playQueueId'; queueId: number }
   | { type: 'setRepeat'; mode: 'all' | 'off' }
   | { type: 'setShuffle'; mode: 'all' | 'off' }
-  | { type: 'recallPreset'; presetId: number }
+  /** skipVolume: a schedule bringing its own volume mutes the preset's override. */
+  | { type: 'recallPreset'; presetId: number; skipVolume?: boolean }
   | { type: 'power'; power: 'ON' | 'NETWORK' | 'toggle' }
   | { type: 'setMute'; mute: boolean }
   | { type: 'setSource'; sourceId: string }
@@ -551,6 +557,12 @@ export interface AppSettings {
   artistInfo: boolean
   /** Scheduled actions (alarms) — fire only while the app is running. */
   schedules: Schedule[]
+  /**
+   * Per-preset volume overrides (feature 10): recalling the preset through
+   * TastyTunes also sets this volume. Keyed via presetVolumeKey (device udn +
+   * preset id) so multi-streamer homes never cross-apply.
+   */
+  presetVolumes: Record<string, number>
   /** MCP server for local AI agents. */
   mcp: McpSettings
   /** Last-visited Settings tab (id from the Settings screen's tab rail). */
@@ -594,6 +606,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   lbToken: '',
   artistInfo: true,
   schedules: [],
+  presetVolumes: {},
   mcp: { enabled: false, bind: 'localhost', port: 8555, disabledClusters: [], disabledTools: [] },
   settingsTab: 'appearance',
   diagnosticsTab: 'smoip',

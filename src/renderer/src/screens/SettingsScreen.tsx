@@ -734,7 +734,10 @@ function SchedulesSection({
                   )}
                 </select>
               </label>
-              <label className="flex items-center gap-2.5 text-[12.5px] text-dim">
+              <label
+                className="flex items-center gap-2.5 text-[12.5px] text-dim"
+                title="Overrides the preset's own saved volume, if it has one."
+              >
                 Volume
                 <NumberField
                   value={s.volumePercent}

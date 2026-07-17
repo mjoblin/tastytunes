@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   DndContext,
   PointerSensor,
@@ -22,15 +23,17 @@ import {
   Play,
   Radio,
   Rows3,
-  Trash2
+  Trash2,
+  Volume2
 } from 'lucide-react'
 import type { PresetItem } from '@shared/smoip'
-import type { ScreenLayout } from '@shared/ipc'
+import { presetVolumeKey, type ScreenLayout } from '@shared/ipc'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { flashTarget, scrollToWithContext } from '@/lib/scroll'
 import { cx } from '@/lib/format'
+import { Slider } from '@/components/Slider'
 
 export function PresetsScreen(): React.JSX.Element {
   const presets = useStore((s) => s.presets)
@@ -41,8 +44,23 @@ export function PresetsScreen(): React.JSX.Element {
     (s) => s.settings
   )
   const setSettings = useStore((s) => s.setSettings)
+  const systemInfo = useStore((s) => s.systemInfo)
+  const presetVolumes = useStore((s) => s.settings.presetVolumes)
   const cards = presetsLayout === 'cards'
   const items = (presets?.presets ?? []).filter((p) => p.id != null)
+
+  // Feature 10: per-preset volume overrides. Absolute volume needs pre-amp
+  // mode — control-bus devices only nudge, so the affordance hides there.
+  const canSetVolume = zoneState?.pre_amp_mode === true
+  const volumeFor = (id: number): number | null =>
+    presetVolumes[presetVolumeKey(systemInfo?.udn, id)] ?? null
+  const saveVolume = async (id: number, level: number | null): Promise<void> => {
+    const key = presetVolumeKey(systemInfo?.udn, id)
+    const next = { ...presetVolumes }
+    if (level == null) delete next[key]
+    else next[key] = level
+    setSettings(await tt.setSettings({ presetVolumes: next }))
+  }
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
 
   // The streamer's is_playing flags can't be trusted:
@@ -190,12 +208,26 @@ export function PresetsScreen(): React.JSX.Element {
                 }}
               >
                 {items.map((preset) => (
-                  <PresetCard key={preset.id} preset={preset} playing={isPresetPlaying(preset)} />
+                  <PresetCard
+                    key={preset.id}
+                    preset={preset}
+                    playing={isPresetPlaying(preset)}
+                    volume={volumeFor(preset.id as number)}
+                    canSetVolume={canSetVolume}
+                    onVolume={(level) => void saveVolume(preset.id as number, level)}
+                  />
                 ))}
               </div>
             ) : (
               items.map((preset) => (
-                <PresetRow key={preset.id} preset={preset} playing={isPresetPlaying(preset)} />
+                <PresetRow
+                  key={preset.id}
+                  preset={preset}
+                  playing={isPresetPlaying(preset)}
+                  volume={volumeFor(preset.id as number)}
+                  canSetVolume={canSetVolume}
+                  onVolume={(level) => void saveVolume(preset.id as number, level)}
+                />
               ))
             )}
           </SortableContext>
@@ -217,8 +249,142 @@ function urlsMatch(a: string, b: string): boolean {
   }
 }
 
+interface PresetVolumeProps {
+  /** Saved override, or null. */
+  volume: number | null
+  /** Pre-amp mode only — control-bus devices can't set an absolute level. */
+  canSetVolume: boolean
+  onVolume(level: number | null): void
+}
+
+/**
+ * Feature 10's whole surface: the always-visible volume badge (when set), the
+ * hover-revealed speaker button (when not), and the slider popover both open.
+ */
+function PresetVolume({
+  volume,
+  canSetVolume,
+  onVolume
+}: PresetVolumeProps): React.JSX.Element | null {
+  const [open, setOpen] = useState(false)
+  // Screen-space anchor, captured at open. The popover renders through a
+  // portal: the sortable cards/rows carry a transform, which turns them into
+  // containing blocks — a position:fixed child would anchor to the CARD, not
+  // the viewport (a card-sized "full-screen" click-catcher, popovers clipped
+  // by the scrollport). Portaling to document.body opts out of all of it.
+  const [anchor, setAnchor] = useState<{ right: number; top?: number; bottom?: number } | null>(
+    null
+  )
+  const [draft, setDraft] = useState<number | null>(null)
+  const zoneVolume = useStore((s) => s.zoneState?.volume_percent)
+
+  if (!canSetVolume && volume == null) return null
+  const level = draft ?? volume ?? zoneVolume ?? 25
+
+  const toggle = (e: React.MouseEvent): void => {
+    e.stopPropagation()
+    if (open) {
+      setOpen(false)
+      return
+    }
+    const r = e.currentTarget.getBoundingClientRect()
+    const above = r.top > 300 // flip below the anchor when there's no headroom
+    setAnchor({
+      right: Math.max(8, window.innerWidth - r.right),
+      ...(above ? { bottom: window.innerHeight - r.top + 8 } : { top: r.bottom + 8 })
+    })
+    setDraft(null)
+    setOpen(true)
+  }
+
+  return (
+    <span className="relative inline-flex" onPointerDown={(e) => e.stopPropagation()}>
+      {volume != null ? (
+        <button
+          title={`Recalled at ${volume}% volume — click to change`}
+          onClick={toggle}
+          data-preset-volume
+          className="flex items-center gap-1 p-1 rounded font-mono text-[10px] text-faint hover:text-ink transition-colors tabular-nums"
+        >
+          <Volume2 size={11} />
+          {volume}%
+        </button>
+      ) : (
+        <button
+          title="Preset volume"
+          onClick={toggle}
+          data-preset-volume
+          className="p-1.5 rounded text-faint opacity-0 group-hover:opacity-100 hover:text-ink transition-all"
+        >
+          <Volume2 size={13} />
+        </button>
+      )}
+
+      {open &&
+        anchor &&
+        createPortal(
+          <>
+            <span
+              data-preset-volume-overlay
+              className="fixed inset-0 z-30 cursor-default"
+              onClick={(e) => {
+                e.stopPropagation()
+                setOpen(false)
+              }}
+            />
+            <span
+              data-preset-volume-popover
+              style={anchor}
+              className="fixed z-40 w-60 rounded-xl bg-raised ring-1 ring-edge2 shadow-2xl p-3 block cursor-default"
+              onClick={(e) => e.stopPropagation()}
+            >
+            <span className="flex items-center justify-between mb-2">
+              <span className="microlabel text-dim">preset volume</span>
+              <span className="font-mono text-[11px] text-gold tabular-nums">{level}%</span>
+            </span>
+            <Slider
+              value={level / 100}
+              onScrub={(v) => setDraft(Math.round(v * 100))}
+              onCancel={() => setDraft(null)}
+              onCommit={(v) => {
+                setDraft(null)
+                onVolume(Math.round(v * 100))
+              }}
+              ariaLabel="Preset volume"
+              thumb="always"
+            />
+            <span className="block text-[11px] text-faint leading-relaxed mt-2.5">
+              TastyTunes sets this volume whenever it starts this preset. Recalls from the official
+              app or the streamer itself aren't affected.
+            </span>
+            {volume != null && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onVolume(null)
+                  setOpen(false)
+                }}
+                className="mt-2.5 text-[12px] px-2.5 py-1 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-alert hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
+              >
+                Clear
+              </button>
+            )}
+            </span>
+          </>,
+          document.body
+        )}
+    </span>
+  )
+}
+
 /** Row view of a preset — mirrors the queue row's anatomy. */
-function PresetRow({ preset, playing }: { preset: PresetItem; playing: boolean }): React.JSX.Element {
+function PresetRow({
+  preset,
+  playing,
+  volume,
+  canSetVolume,
+  onVolume
+}: { preset: PresetItem; playing: boolean } & PresetVolumeProps): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: preset.id as number
   })
@@ -236,7 +402,7 @@ function PresetRow({ preset, playing }: { preset: PresetItem; playing: boolean }
       style={{ transform: CSS.Transform.toString(transform), transition }}
       data-playing={playing || undefined}
       className={cx(
-        'group grid grid-cols-[26px_44px_1fr_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5',
+        'group grid grid-cols-[26px_44px_1fr_auto_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5',
         'cursor-default transition-colors',
         isDragging && 'z-10 bg-raised shadow-xl',
         playing ? 'row-playing bg-gold/10' : 'hover:bg-veil'
@@ -276,6 +442,8 @@ function PresetRow({ preset, playing }: { preset: PresetItem; playing: boolean }
         </div>
       </div>
 
+      <PresetVolume volume={volume} canSetVolume={canSetVolume} onVolume={onVolume} />
+
       <button
         title={confirmDelete ? 'Click again to delete' : 'Delete preset'}
         onPointerDown={(e) => e.stopPropagation()}
@@ -312,7 +480,13 @@ function PresetRow({ preset, playing }: { preset: PresetItem; playing: boolean }
   )
 }
 
-function PresetCard({ preset, playing }: { preset: PresetItem; playing: boolean }): React.JSX.Element {
+function PresetCard({
+  preset,
+  playing,
+  volume,
+  canSetVolume,
+  onVolume
+}: { preset: PresetItem; playing: boolean } & PresetVolumeProps): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: preset.id as number
   })
@@ -382,11 +556,14 @@ function PresetCard({ preset, playing }: { preset: PresetItem; playing: boolean 
           <div className={cx('text-[12.5px] leading-snug line-clamp-2', playing ? 'text-gold' : 'text-ink')}>
             {preset.name ?? `Preset ${preset.id}`}
           </div>
-          <div className="microlabel mt-1">
-            {String(preset.id).padStart(2, '0')}
-            {preset.class ? ` · ${preset.class.replace(/^stream\./, '')}` : ''}
+          <div className="microlabel mt-1 flex items-center gap-1.5">
+            <span>
+              {String(preset.id).padStart(2, '0')}
+              {preset.class ? ` · ${preset.class.replace(/^stream\./, '')}` : ''}
+            </span>
           </div>
         </div>
+        <PresetVolume volume={volume} canSetVolume={canSetVolume} onVolume={onVolume} />
         <button
           title={confirmDelete ? 'Click again to delete' : 'Delete preset'}
           onPointerDown={(e) => e.stopPropagation() /* keep dnd-kit's drag sensor out of it */}

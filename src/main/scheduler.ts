@@ -26,7 +26,12 @@ async function fire(dm: DeviceManager, s: Schedule): Promise<void> {
   await dm.command({ type: 'power', power: 'ON' })
   if (s.presetId != null) {
     await settle(2500)
-    await dm.command({ type: 'recallPreset', presetId: s.presetId })
+    // A schedule with its own volume overrides the preset's saved one.
+    await dm.command({
+      type: 'recallPreset',
+      presetId: s.presetId,
+      skipVolume: s.volumePercent != null
+    })
   }
   if (s.volumePercent != null) {
     await settle(1500)
