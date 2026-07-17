@@ -15,6 +15,7 @@ import { checkUpdatesNow, currentUpdateState, downloadUpdate, installUpdate, sta
 import { fetchLyrics } from './lyrics'
 import { scrobbler } from './scrobbler'
 import { fetchArtistInfo } from './artistInfo'
+import { clearLookupCaches, flushLookupCaches, lookupCacheStats } from './diskCache'
 import { startScheduler } from './scheduler'
 import { loggedFetch } from './netlog'
 import { getSettings, updateSettings } from './persist'
@@ -215,6 +216,8 @@ function registerIpc(): void {
   )
   ipcMain.handle(IPC.getRecents, () => getRecents())
   ipcMain.handle(IPC.clearRecents, () => deviceManager.clearRecents())
+  ipcMain.handle(IPC.lookupCacheStats, () => lookupCacheStats())
+  ipcMain.handle(IPC.clearLookupCaches, () => clearLookupCaches())
   ipcMain.handle(IPC.toggleMini, () => toggleMiniPlayer())
   ipcMain.handle(IPC.showMain, () => {
     if (!mainWindow || mainWindow.isDestroyed()) createWindow()
@@ -301,5 +304,6 @@ if (!gotLock) {
     globalShortcut.unregisterAll()
     mcpBridge.stop()
     deviceManager.shutdown()
+    flushLookupCaches()
   })
 }

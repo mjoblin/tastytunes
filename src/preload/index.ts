@@ -31,6 +31,8 @@ const api: TastyTunesApi = {
   setSleep: (sleep: SleepTimer | null) => ipcRenderer.invoke(IPC.setSleep, sleep),
   getRecents: () => ipcRenderer.invoke(IPC.getRecents),
   clearRecents: () => ipcRenderer.invoke(IPC.clearRecents),
+  lookupCacheStats: () => ipcRenderer.invoke(IPC.lookupCacheStats),
+  clearLookupCaches: () => ipcRenderer.invoke(IPC.clearLookupCaches),
   onPush: (cb: (msg: PushMessage) => void) => {
     const listener = (_e: IpcRendererEvent, msg: PushMessage): void => cb(msg)
     ipcRenderer.on(IPC.push, listener)

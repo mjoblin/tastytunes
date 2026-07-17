@@ -1,22 +1,24 @@
 // LRCLIB lyrics lookup (lrclib.net) — keyless, no rate limits; they ask only
 // for an identifying User-Agent, which is why this lives in the main process
-// (renderer fetch can't set one). Results are cached in memory per track —
-// including DEFINITIVE misses ("LRCLIB answered: no lyrics") — but transient
-// failures (unreachable, timeout, 5xx) are never cached, so the next request
-// retries cleanly. `force` bypasses the cache read for a user-driven refresh.
+// (renderer fetch can't set one). Results are cached per track in a bounded
+// disk-persisted LRU (diskCache.ts) — including DEFINITIVE misses ("LRCLIB
+// answered: no lyrics") — but transient failures (unreachable, timeout, 5xx)
+// are never cached, so the next request retries cleanly. `force` bypasses the
+// cache read for a user-driven refresh; its fresh answer overwrites the entry.
 import { version } from '../../package.json'
 import type { LyricsQuery, LyricsResult } from '@shared/ipc'
 import { loggedFetch } from './netlog'
+import { DiskCache } from './diskCache'
 
 // TASTYTUNES_LYRICS_URL lets test harnesses point lookups at a local server.
 const BASE = process.env['TASTYTUNES_LYRICS_URL'] ?? 'https://lrclib.net/api'
 const USER_AGENT = `TastyTunes/${version} (https://github.com/mjoblin/tastytunes)`
-const CACHE_MAX = 100
+const CACHE_MAX = 500
 // Search fallback: a duration this far off is a different recording — its
 // synced timestamps would drift, so keep only the plain text.
 const SYNC_TOLERANCE_SECS = 10
 
-const cache = new Map<string, LyricsResult | null>()
+const cache = new DiskCache<LyricsResult>('lyrics', CACHE_MAX)
 
 interface ApiRecord {
   plainLyrics: string | null
@@ -99,12 +101,6 @@ export async function fetchLyrics(q: LyricsQuery, force = false): Promise<Lyrics
     definitive = true // a found record is an answer regardless of the path here
   }
 
-  if (definitive) {
-    if (cache.size >= CACHE_MAX && !cache.has(key)) {
-      const oldest = cache.keys().next().value
-      if (oldest != null) cache.delete(oldest)
-    }
-    cache.set(key, result)
-  }
+  if (definitive) cache.set(key, result)
   return result
 }

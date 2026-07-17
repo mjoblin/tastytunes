@@ -673,6 +673,10 @@ export interface TastyTunesApi {
   getRecents(): Promise<RecentTrack[]>
   /** Wipe the recently-played log. */
   clearRecents(): Promise<void>
+  /** Combined size of the on-disk lookup caches (lyrics, artist context). */
+  lookupCacheStats(): Promise<{ entries: number; bytes: number }>
+  /** Wipe the lookup caches (memory + disk); resolves to the fresh stats. */
+  clearLookupCaches(): Promise<{ entries: number; bytes: number }>
   onPush(cb: (msg: PushMessage) => void): () => void
 }
 
@@ -696,5 +700,7 @@ export const IPC = {
   setSleep: 'tt:setSleep',
   getRecents: 'tt:getRecents',
   clearRecents: 'tt:clearRecents',
+  lookupCacheStats: 'tt:lookupCacheStats',
+  clearLookupCaches: 'tt:clearLookupCaches',
   push: 'tt:push'
 } as const

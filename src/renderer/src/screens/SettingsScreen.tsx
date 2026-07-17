@@ -344,6 +344,8 @@ export function SettingsScreen(): React.JSX.Element {
             />
 
             <ListenBrainzSection settings={settings} save={save} />
+
+            <CacheRow />
           </div>
         </section>
         )}
@@ -798,6 +800,35 @@ function MiniSwitch({
  * The token is validated against listenbrainz.org whenever it changes (and on
  * mount if present) so the row always says whether scrobbling actually works.
  */
+const fmtBytes = (b: number): string =>
+  b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`
+
+function CacheRow(): React.JSX.Element {
+  const [stats, setStats] = useState<{ entries: number; bytes: number } | null>(null)
+  useEffect(() => {
+    void tt.lookupCacheStats().then(setStats)
+  }, [])
+  const empty = stats != null && stats.entries === 0
+  return (
+    <SettingRow
+      label="Cached lookups"
+      hint="Lyrics and artist lookups are kept on disk (bounded; least-recently-used entries drop first) so repeat plays don't re-ask the services above. The panels' refresh buttons overwrite the stored copy."
+    >
+      <button
+        onClick={() => void tt.clearLookupCaches().then(setStats)}
+        disabled={empty}
+        className="shrink-0 text-[12.5px] px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-alert hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all disabled:opacity-40 disabled:hover:text-dim disabled:hover:ring-edge disabled:hover:bg-panel/70"
+      >
+        {stats == null
+          ? '…'
+          : empty
+            ? 'Cache empty'
+            : `Clear (${stats.entries} · ${fmtBytes(stats.bytes)})`}
+      </button>
+    </SettingRow>
+  )
+}
+
 function ListenBrainzSection({
   settings,
   save

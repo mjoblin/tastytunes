@@ -1,24 +1,26 @@
 // Artist context: MusicBrainz search -> URL relations -> Wikidata sitelink ->
 // Wikipedia summary. MusicBrainz enforces ONE request per second per IP and an
 // identifying User-Agent (violators get 100% declined) — every MB call goes
-// through a spacing gate. Results cache in memory per artist name, including
-// DEFINITIVE misses ("MB answered: no such artist" / "no Wikipedia linked");
-// transient failures anywhere in the chain (unreachable, timeout, 5xx) return
-// the best partial answer for the moment but are never cached, so the next
-// request retries. `force` bypasses the cache read for a user-driven refresh.
+// through a spacing gate. Results cache per artist name in a bounded
+// disk-persisted LRU (diskCache.ts), including DEFINITIVE misses ("MB
+// answered: no such artist" / "no Wikipedia linked"); transient failures
+// anywhere in the chain (unreachable, timeout, 5xx) return the best partial
+// answer for the moment but are never cached, so the next request retries.
+// `force` bypasses the cache read for a user-driven refresh.
 import { version } from '../../package.json'
 import type { ArtistInfo } from '@shared/ipc'
 import { loggedFetch } from './netlog'
+import { DiskCache } from './diskCache'
 
 // Env overrides let test harnesses point each hop at a local server.
 const MB = process.env['TASTYTUNES_MB_URL'] ?? 'https://musicbrainz.org'
 const WD = process.env['TASTYTUNES_WD_URL'] ?? 'https://www.wikidata.org'
 const WIKI = process.env['TASTYTUNES_WIKI_URL'] ?? 'https://en.wikipedia.org'
 const USER_AGENT = `TastyTunes/${version} (https://github.com/mjoblin/tastytunes)`
-const CACHE_MAX = 50
+const CACHE_MAX = 500
 const MIN_MATCH_SCORE = 75
 
-const cache = new Map<string, ArtistInfo | null>()
+const cache = new DiskCache<ArtistInfo>('artist', CACHE_MAX)
 
 /** ok = an answer; missing = authoritative 404; error = we never really asked. */
 type Fetched =
@@ -143,12 +145,6 @@ export async function fetchArtistInfo(artist: string, force = false): Promise<Ar
   }
   // no match / low score with an OK search: an answer — cache the null
 
-  if (definitive) {
-    if (cache.size >= CACHE_MAX && !cache.has(key)) {
-      const oldest = cache.keys().next().value
-      if (oldest != null) cache.delete(oldest)
-    }
-    cache.set(key, result)
-  }
+  if (definitive) cache.set(key, result)
   return result
 }
