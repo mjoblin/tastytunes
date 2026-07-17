@@ -66,10 +66,8 @@ export function LibraryScreen(): React.JSX.Element {
       .mediaServers()
       .then((list) => {
         setServers(list)
-        setServerUdn((cur) => {
-          const still = list.find((s) => s.udn === cur)
-          return still ? still.udn : (list[0]?.udn ?? null)
-        })
+        // a remembered source that vanished falls back to the source list
+        setServerUdn((cur) => (cur && list.some((s) => s.udn === cur) ? cur : null))
       })
       .catch(() => setServers([]))
   }, [])
@@ -81,7 +79,11 @@ export function LibraryScreen(): React.JSX.Element {
   }, [serverUdn, path])
 
   useEffect(() => {
-    if (!serverUdn) return
+    if (!serverUdn) {
+      setNodes([])
+      setState('ready')
+      return
+    }
     let stale = false
     setState('loading')
     void tt
@@ -105,19 +107,21 @@ export function LibraryScreen(): React.JSX.Element {
     }
   }, [serverUdn, path, fetchNonce])
 
-  // Backspace goes up a level (arrows stay with transport seek/volume).
+  // Backspace goes up a level (arrows stay with transport seek/volume);
+  // above a source's root it lands back on the source list.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent): void => {
       const target = e.target as HTMLElement | null
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return
       if (e.key === 'Backspace' && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault()
-        setPath((p) => (p.length > 0 ? p.slice(0, -1) : p))
+        if (path.length > 0) setPath(path.slice(0, -1))
+        else if (serverUdn) setServerUdn(null)
       }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [])
+  }, [path, serverUdn])
 
   const rememberScroll = (): void => {
     if (scrollRef.current) scrollMemory.set(nodeKey(serverUdn, path), scrollRef.current.scrollTop)
@@ -127,9 +131,20 @@ export function LibraryScreen(): React.JSX.Element {
     rememberScroll()
     setPath((p) => [...p, { id: node.id, title: node.title }])
   }
+  const enterServer = (udn: string): void => {
+    rememberScroll()
+    setServerUdn(udn)
+    setPath([])
+  }
+  // Crumb trail: Library (source list) › source › folders…
   const jumpTo = (index: number): void => {
     rememberScroll()
-    setPath((p) => p.slice(0, index))
+    if (index === 0) {
+      setServerUdn(null)
+      setPath([])
+    } else {
+      setPath((p) => p.slice(0, index - 1))
+    }
   }
 
   const setLayout = async (libraryLayout: ScreenLayout): Promise<void> => {
@@ -196,12 +211,17 @@ export function LibraryScreen(): React.JSX.Element {
 
   // -------------------------------------------------------------- derivation
 
+  const atRoot = serverUdn == null
   const shown = filter
     ? nodes.filter((n) => matchesFilter(filter, [n.title, n.artist, n.album]))
     : nodes
   const containers = shown.filter((n) => n.isContainer)
   const tracks = shown.filter((n) => !n.isContainer)
   const server = servers?.find((s) => s.udn === serverUdn) ?? null
+  const shownServers = (servers ?? []).filter(
+    (s) => !filter || matchesFilter(filter, [s.name, s.model])
+  )
+  const loading = atRoot ? servers == null : state === 'loading'
 
   // ------------------------------------------------------------------ render
 
@@ -232,8 +252,8 @@ export function LibraryScreen(): React.JSX.Element {
           <FilterInput
             value={filter}
             onChange={(t) => setScreenFilter('library', t)}
-            shown={shown.length}
-            total={nodes.length}
+            shown={atRoot ? shownServers.length : shown.length}
+            total={atRoot ? (servers?.length ?? 0) : nodes.length}
           />
           <button
             data-tip={cards ? 'View as rows' : 'View as cards'}
@@ -243,36 +263,39 @@ export function LibraryScreen(): React.JSX.Element {
           >
             {cards ? <Rows3 size={16} /> : <LayoutGrid size={16} />}
           </button>
-          {servers && servers.length > 0 && (
-            <SourceChip
-              servers={servers}
-              current={server}
-              onPick={(udn) => {
-                rememberScroll()
-                setServerUdn(udn)
-                setPath([])
-              }}
-            />
-          )}
         </div>
       </header>
 
-      {/* breadcrumbs */}
+      {/* breadcrumbs: Library (source list) › source › folders… */}
       <div className="no-drag flex items-center gap-1 flex-wrap px-8 pb-3 text-[12.5px]">
         <button
           onClick={() => jumpTo(0)}
           className={cx(
             'px-1.5 py-0.5 rounded transition-colors',
-            path.length === 0 ? 'text-ink' : 'text-dim hover:text-ink hover:bg-veil'
+            atRoot ? 'text-ink' : 'text-dim hover:text-ink hover:bg-veil'
           )}
         >
-          {server?.name ?? 'Library'}
+          Library
         </button>
+        {server && (
+          <span className="flex items-center gap-1">
+            <ChevronRight size={12} className="text-faint" />
+            <button
+              onClick={() => jumpTo(1)}
+              className={cx(
+                'px-1.5 py-0.5 rounded transition-colors',
+                path.length === 0 ? 'text-ink' : 'text-dim hover:text-ink hover:bg-veil'
+              )}
+            >
+              {server.name}
+            </button>
+          </span>
+        )}
         {path.map((crumb, i) => (
           <span key={`${crumb.id}-${i}`} className="flex items-center gap-1">
             <ChevronRight size={12} className="text-faint" />
             <button
-              onClick={() => jumpTo(i + 1)}
+              onClick={() => jumpTo(i + 2)}
               className={cx(
                 'px-1.5 py-0.5 rounded transition-colors',
                 i === path.length - 1 ? 'text-ink' : 'text-dim hover:text-ink hover:bg-veil'
@@ -291,12 +314,55 @@ export function LibraryScreen(): React.JSX.Element {
       )}
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-8 pb-8 pt-1">
-        {state === 'loading' && (
+        {loading && (
           <div className="text-[13px] text-dim pt-4 motion-safe:animate-pulse">
             Retrieving library…
           </div>
         )}
-        {state === 'error' && (
+
+        {/* root: sources, grouped like the official app (Servers / USB drives) */}
+        {!loading && atRoot && (
+          <div className="max-w-2xl space-y-6 pt-1">
+            {shownServers.length === 0 && (
+              <div className="text-[15px] text-faint pt-3 px-1">
+                {filter ? `No matches for “${filter}”` : 'Nothing here'}
+              </div>
+            )}
+            {(['servers', 'usb'] as const).map((kind) => {
+              const group = shownServers.filter((s) => (kind === 'usb') === s.isStreamer)
+              if (group.length === 0) return null
+              return (
+                <div key={kind}>
+                  <div className="microlabel mb-2 px-1">
+                    {kind === 'usb' ? 'USB drives' : 'Servers'}
+                  </div>
+                  <div className="divide-y divide-edge/50">
+                    {group.map((s) => (
+                      <div
+                        key={s.udn}
+                        data-library-source
+                        onClick={() => enterServer(s.udn)}
+                        className="group grid grid-cols-[44px_1fr] items-center gap-3 rounded-lg px-2 py-2 cursor-pointer hover:bg-veil transition-colors"
+                      >
+                        <div className="h-10 w-10 rounded ring-1 ring-edge bg-raised flex items-center justify-center text-faint">
+                          {s.isStreamer ? <Usb size={16} /> : <HardDrive size={16} />}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-[13.5px] text-ink truncate">{s.name}</div>
+                          {s.model && (
+                            <div className="text-[12px] text-faint truncate">{s.model}</div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {!atRoot && state === 'error' && (
           <div className="pt-4 space-y-3">
             <div className="text-[15px] text-faint">Couldn't browse this library.</div>
             <button
@@ -307,13 +373,13 @@ export function LibraryScreen(): React.JSX.Element {
             </button>
           </div>
         )}
-        {state === 'ready' && shown.length === 0 && (
+        {!atRoot && state === 'ready' && shown.length === 0 && (
           <div className="text-[15px] text-faint pt-4 px-1">
             {filter ? `No matches for “${filter}”` : 'Nothing here'}
           </div>
         )}
 
-        {state === 'ready' && containers.length > 0 && (
+        {!atRoot && state === 'ready' && containers.length > 0 && (
           <div
             className={cx(!cards && 'divide-y divide-edge/50')}
             style={
@@ -350,7 +416,7 @@ export function LibraryScreen(): React.JSX.Element {
           </div>
         )}
 
-        {state === 'ready' && tracks.length > 0 && (
+        {!atRoot && state === 'ready' && tracks.length > 0 && (
           <div className={cx('divide-y divide-edge/50', containers.length > 0 && 'mt-4')}>
             {tracks.map((node) => (
               <TrackRow
@@ -391,58 +457,6 @@ export function LibraryScreen(): React.JSX.Element {
             setPresetPicker(null)
           }}
         />
-      )}
-    </div>
-  )
-}
-
-// ------------------------------------------------------------------ source chip
-
-function SourceChip({
-  servers,
-  current,
-  onPick
-}: {
-  servers: MediaServerInfo[]
-  current: MediaServerInfo | null
-  onPick(udn: string): void
-}): React.JSX.Element {
-  const [open, setOpen] = useState(false)
-  const Icon = current?.isStreamer ? Usb : HardDrive
-  return (
-    <div className="relative">
-      <button
-        data-tip="Media library source"
-        aria-label="Media library source"
-        onClick={() => setOpen((o) => !o)}
-        className="no-drag tip-bottom tip-end flex items-center gap-2 px-3 h-8 rounded-lg ring-1 ring-edge bg-panel/70 text-[12.5px] text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 transition-all"
-      >
-        <Icon size={14} />
-        <span className="max-w-[140px] truncate">{current?.name ?? '—'}</span>
-      </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-1.5 z-30 min-w-[200px] rounded-xl ring-1 ring-edge2 bg-raised shadow-xl p-1.5 space-y-0.5">
-            {servers.map((s) => (
-              <button
-                key={s.udn}
-                onClick={() => {
-                  setOpen(false)
-                  onPick(s.udn)
-                }}
-                className={cx(
-                  'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left text-[13px] transition-colors',
-                  s.udn === current?.udn ? 'text-gold bg-golddim' : 'text-dim hover:text-ink hover:bg-veil'
-                )}
-              >
-                {s.isStreamer ? <Usb size={14} /> : <HardDrive size={14} />}
-                <span className="min-w-0 flex-1 truncate">{s.name}</span>
-                {s.isStreamer && <span className="microlabel text-faint">usb</span>}
-              </button>
-            ))}
-          </div>
-        </>
       )}
     </div>
   )
