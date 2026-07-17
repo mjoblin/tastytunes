@@ -294,7 +294,7 @@ function QueueRow({ item, isCurrent, playing, sourceActive, currentRef }: QueueI
           e.stopPropagation()
           if (item.id != null) void tt.command({ type: 'queueDelete', id: item.id })
         }}
-        className="tip-bottom tip-end p-1.5 rounded text-faint opacity-0 group-hover:opacity-100 hover:text-alert transition-all"
+        className="tip-bottom p-1.5 rounded text-faint opacity-0 group-hover:opacity-100 hover:text-alert transition-all"
       >
         <X size={14} />
       </button>
@@ -396,7 +396,7 @@ function QueueCard({ item, isCurrent, playing, sourceActive, currentRef }: Queue
             e.stopPropagation()
             if (item.id != null) void tt.command({ type: 'queueDelete', id: item.id })
           }}
-          className="tip-bottom tip-end p-1 rounded text-faint opacity-0 group-hover:opacity-100 hover:text-alert transition-all"
+          className="tip-bottom p-1 rounded text-faint opacity-0 group-hover:opacity-100 hover:text-alert transition-all"
         >
           <X size={13} />
         </button>
