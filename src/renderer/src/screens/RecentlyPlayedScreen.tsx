@@ -143,9 +143,7 @@ export function RecentlyPlayedScreen(): React.JSX.Element {
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-8 pb-8 pt-1">
           <div className="max-w-2xl space-y-6">
             {days.length === 0 && (
-              <div className="text-[13px] text-faint pt-6 text-center">
-                No matches for “{filter}”.
-              </div>
+              <div className="text-[13px] text-faint pt-6 px-1">No matches for “{filter}”</div>
             )}
             {days.map((day) => (
               <div key={day.label}>

@@ -185,9 +185,7 @@ export function QueueScreen(): React.JSX.Element {
           hover grow + glow ring headroom on the top row */}
       <div ref={scrollRef} className={cx('flex-1 overflow-y-auto', cards ? 'px-8 pb-8 pt-2' : 'px-6 pb-6 pt-1 divide-y divide-edge/50')}>
         {items.length === 0 && (
-          <div className="text-[13px] text-faint pt-6 text-center">
-            No matches for “{filter}”.
-          </div>
+          <div className="text-[13px] text-faint pt-6 px-2">No matches for “{filter}”</div>
         )}
         {/* Reordering a partial list is ambiguous — drags are inert while filtered. */}
         <DndContext
