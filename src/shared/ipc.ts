@@ -678,6 +678,8 @@ export interface MediaNode {
   artUrl: string | null
   artist: string | null
   album: string | null
+  /** Release year, when the server sends dc:date (Asset does; the USB server doesn't). */
+  year: string | null
   trackNumber: number | null
   durationSecs: number | null
 }

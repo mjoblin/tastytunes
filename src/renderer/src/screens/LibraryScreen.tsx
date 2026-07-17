@@ -21,7 +21,9 @@ import { flashTarget } from '@/lib/scroll'
 import { ArtImage } from '@/components/ArtImage'
 import { FilterInput } from '@/components/FilterInput'
 
-type Crumb = { id: string; title: string }
+// Crumbs keep the entered node so an album level can render its header
+// (art, artist, year) without re-fetching metadata.
+type Crumb = { id: string; title: string; node?: MediaNode }
 
 // Session memory: where you were browsing survives screen switches.
 let session: { serverUdn: string | null; path: Crumb[] } = { serverUdn: null, path: [] }
@@ -129,7 +131,7 @@ export function LibraryScreen(): React.JSX.Element {
 
   const enter = (node: MediaNode): void => {
     rememberScroll()
-    setPath((p) => [...p, { id: node.id, title: node.title }])
+    setPath((p) => [...p, { id: node.id, title: node.title, node }])
   }
   const enterServer = (udn: string): void => {
     rememberScroll()
@@ -218,6 +220,31 @@ export function LibraryScreen(): React.JSX.Element {
   const containers = shown.filter((n) => n.isContainer)
   const tracks = shown.filter((n) => !n.isContainer)
   const server = servers?.find((s) => s.udn === serverUdn) ?? null
+
+  // Album level: header with art + album metadata; tracks drop per-row art.
+  const lastCrumbNode = path.length > 0 ? path[path.length - 1].node : undefined
+  const albumNode =
+    lastCrumbNode && isAlbumClass(lastCrumbNode.upnpClass) ? lastCrumbNode : null
+  const allTracks = nodes.filter((n) => !n.isContainer)
+  const albumArt = albumNode ? (albumNode.artUrl ?? allTracks[0]?.artUrl ?? null) : null
+  const albumArtist = albumNode
+    ? (albumNode.artist ??
+      (allTracks.length > 0 && allTracks.every((t) => t.artist === allTracks[0].artist)
+        ? allTracks[0].artist
+        : allTracks.length > 0
+          ? 'Various artists'
+          : null))
+    : null
+  const albumSecs = allTracks.reduce((acc, t) => acc + (t.durationSecs ?? 0), 0)
+  const albumFacts = albumNode
+    ? [
+        albumNode.year ?? allTracks[0]?.year ?? null,
+        allTracks.length > 0 ? `${allTracks.length} tracks` : null,
+        albumSecs > 0 ? fmtTime(albumSecs) : null
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : ''
   const shownServers = (servers ?? []).filter(
     (s) => !filter || matchesFilter(filter, [s.name, s.model])
   )
@@ -373,6 +400,46 @@ export function LibraryScreen(): React.JSX.Element {
             </button>
           </div>
         )}
+        {!atRoot && state === 'ready' && albumNode && (
+          <div className="flex items-start gap-6 pb-6 pt-2" data-album-header>
+            <div className="h-[160px] w-[160px] shrink-0 rounded-xl overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
+              <ArtImage
+                src={albumArt}
+                className="h-full w-full object-cover"
+                fallback={<Disc3 size={48} strokeWidth={1} className="text-faint" />}
+              />
+            </div>
+            <div className="min-w-0 pt-1 space-y-1.5">
+              <div className="font-display font-bold text-[24px] tracking-tight leading-tight">
+                {albumNode.title}
+              </div>
+              {albumArtist && <div className="text-[14px] text-dim truncate">{albumArtist}</div>}
+              {albumFacts && <div className="text-[12.5px] text-faint">{albumFacts}</div>}
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  data-tip="Replaces the queue"
+                  onClick={(e) =>
+                    void playContainer(
+                      albumNode,
+                      (e.currentTarget.closest('[data-album-header]') as HTMLElement) ?? null
+                    )
+                  }
+                  className="tip-bottom flex items-center gap-2 px-4 py-2 rounded-full bg-amber text-bg text-[13px] font-medium motion-safe:active:scale-95 transition-all"
+                >
+                  <Play size={14} fill="currentColor" /> Play
+                </button>
+                <button
+                  aria-label="More actions"
+                  onClick={(e) => openMenu(albumNode, e)}
+                  className="p-2 rounded-full ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 transition-all"
+                >
+                  <MoreHorizontal size={16} />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {!atRoot && state === 'ready' && shown.length === 0 && (
           <div className="text-[15px] text-faint pt-4 px-1">
             {filter ? `No matches for “${filter}”` : 'Nothing here'}
@@ -422,6 +489,7 @@ export function LibraryScreen(): React.JSX.Element {
               <TrackRow
                 key={node.id}
                 node={node}
+                showArt={!albumNode}
                 onPlayNow={(el) => void act(node, 'PLAY_NOW', el)}
                 onMenu={(e) => openMenu(node, e)}
               />
@@ -578,10 +646,13 @@ function ContainerRow({
 
 function TrackRow({
   node,
+  showArt,
   onPlayNow,
   onMenu
 }: {
   node: MediaNode
+  /** Loose tracks in mixed folders get a thumb; album views carry the art in the header. */
+  showArt: boolean
   onPlayNow(el: HTMLElement | null): void
   onMenu(e: React.MouseEvent): void
 }): React.JSX.Element {
@@ -589,7 +660,10 @@ function TrackRow({
   return (
     <div
       ref={ref}
-      className="group grid grid-cols-[26px_44px_1fr_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer hover:bg-veil transition-colors"
+      className={cx(
+        'group grid items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer hover:bg-veil transition-colors',
+        showArt ? 'grid-cols-[26px_44px_1fr_auto_auto]' : 'grid-cols-[26px_1fr_auto_auto]'
+      )}
       onClick={() => onPlayNow(ref.current)}
       onContextMenu={onMenu}
       data-library-track
@@ -597,9 +671,11 @@ function TrackRow({
       <span className="font-mono text-[10.5px] text-faint tabular-nums text-right">
         {node.trackNumber ?? ''}
       </span>
-      <div className="h-10 w-10 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
-        <ArtImage src={node.artUrl} lazy fallback={<Disc3 size={16} className="text-faint" />} />
-      </div>
+      {showArt && (
+        <div className="h-10 w-10 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
+          <ArtImage src={node.artUrl} lazy fallback={<Disc3 size={16} className="text-faint" />} />
+        </div>
+      )}
       <div className="min-w-0">
         <div className="text-[13.5px] text-ink truncate">{node.title}</div>
         {node.artist && <div className="text-[12px] text-faint truncate">{node.artist}</div>}

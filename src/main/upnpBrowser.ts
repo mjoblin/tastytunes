@@ -193,8 +193,9 @@ function didlToNodes(didl: string): MediaNode[] {
       upnpClass: text(raw.class) ?? '',
       isContainer,
       artUrl: text(raw.albumArtURI),
-      artist: text(raw.artist),
+      artist: text(raw.artist) ?? text(raw.creator),
       album: text(raw.album),
+      year: text(raw.date)?.slice(0, 4) ?? null,
       trackNumber: raw.originalTrackNumber != null ? Number(text(raw.originalTrackNumber)) : null,
       durationSecs: res ? parseDuration(text(res['@_duration'])) : null
     }
