@@ -4,6 +4,7 @@ import { tt } from '@/api'
 import { useStore } from '@/store'
 import { ArtImage } from '@/components/ArtImage'
 import { usePlayhead } from '@/hooks/usePlayhead'
+import { useArtLoadable } from '@/hooks/useArtLoadable'
 import { useFadedText, useLyrics } from '@/hooks/useLyrics'
 import { cx, deriveNowPlaying } from '@/lib/format'
 
@@ -50,6 +51,7 @@ export function DisplayMode(): React.JSX.Element {
     idleTimer.current = setTimeout(() => setCursorIdle(true), 3000)
   }
 
+  const artLoadable = useArtLoadable(meta.artUrl)
   const lyricsToggleable = settings.lyrics && !meta.isRadio && !!meta.subtitle
   const toggleLyrics = async (): Promise<void> => {
     const next = await tt.setSettings({ displayLyrics: !settings.displayLyrics })
@@ -61,7 +63,7 @@ export function DisplayMode(): React.JSX.Element {
       className={cx('fixed inset-0 z-40 bg-bg overflow-hidden', cursorIdle && 'cursor-hidden')}
       onMouseMove={onMouseMove}
     >
-      {meta.artUrl && (
+      {meta.artUrl && artLoadable && (
         <div
           aria-hidden
           className="absolute inset-0 bg-center bg-cover scale-125 blur-[110px] opacity-25 saturate-150"

@@ -4,6 +4,7 @@ import { tt } from '@/api'
 import { useStore } from '@/store'
 import { useShortcuts } from '@/hooks/useShortcuts'
 import { useArtAccent } from '@/hooks/useArtAccent'
+import { useArtLoadable } from '@/hooks/useArtLoadable'
 import { useMotionPreference } from '@/hooks/useMotionPreference'
 import { useTheme } from '@/hooks/useTheme'
 import { deriveNowPlaying } from '@/lib/format'
@@ -46,6 +47,8 @@ export default function App(): React.JSX.Element {
   const theme = useTheme(settings.theme)
   const meta = deriveNowPlaying(playState, nowPlaying)
   const artActive = connected && !inStandby ? meta.artUrl : null
+  // A dead art URL must not leave the ambient wash/vignette up with no art.
+  const artLoadable = useArtLoadable(artActive)
   useArtAccent(settings.accentFollowsArt ? artActive : null, theme)
   useMotionPreference(settings.motion)
 
@@ -55,6 +58,7 @@ export default function App(): React.JSX.Element {
 
   const ambientVisible =
     artActive != null &&
+    artLoadable &&
     (settings.ambientArt === 'all' ||
       (settings.ambientArt === 'now-playing' && screen === 'now-playing'))
 
