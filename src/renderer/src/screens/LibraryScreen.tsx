@@ -282,7 +282,7 @@ export function LibraryScreen(): React.JSX.Element {
 
   const atRoot = serverUdn == null
   const shown = filter
-    ? nodes.filter((n) => matchesFilter(filter, [n.title, n.artist, n.album]))
+    ? nodes.filter((n) => matchesFilter(filter, [n.title, n.artist, n.album, n.year]))
     : nodes
   const unsortedContainers = shown.filter((n) => n.isContainer)
   // Album-grid sort; missing fields fall back to title so folders stay sane.
