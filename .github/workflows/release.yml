@@ -301,7 +301,12 @@ jobs:
         run: |
           jq -n --arg kid "$APPLE_API_KEY_ID" --arg iss "$APPLE_API_ISSUER_ID" --arg key "$APPLE_API_KEY_P8" \
             '{key_id: $kid, issuer_id: $iss, key: $key, in_house: false}' > "$RUNNER_TEMP/asc_key.json"
-          PKG=$(ls dist/*.pkg | head -1)
+          # The signed pkg lands next to the .app in dist/mas-universal/, not dist/ root.
+          PKG=$(find dist -name '*.pkg' -print -quit)
+          if [ -z "$PKG" ]; then
+            echo "no .pkg found under dist/ — packaging produced:" && find dist -maxdepth 2 -print
+            exit 1
+          fi
           echo "uploading $PKG"
           fastlane pilot upload \
             --api_key_path "$RUNNER_TEMP/asc_key.json" \
@@ -313,5 +318,5 @@ jobs:
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: tastytunes-mas
-          path: dist/*.pkg
+          path: dist/**/*.pkg
           if-no-files-found: ignore
