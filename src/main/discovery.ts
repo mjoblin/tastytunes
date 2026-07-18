@@ -8,8 +8,12 @@ import { createSocket } from 'node:dgram'
 import { XMLParser } from 'fast-xml-parser'
 import type { DiscoveredDevice } from '@shared/ipc'
 
-const SSDP_ADDRESS = '239.255.255.250'
-const SSDP_PORT = 1900
+// TASTYTUNES_SSDP_TARGET ('host:port') lets test harnesses stand in for the
+// LAN: the M-SEARCH goes there unicast instead of to the multicast group, so
+// harness runs never sweep (or find) the real network.
+const OVERRIDE = process.env['TASTYTUNES_SSDP_TARGET']?.split(':')
+const SSDP_ADDRESS = OVERRIDE?.[0] ?? '239.255.255.250'
+const SSDP_PORT = OVERRIDE?.[1] ? Number(OVERRIDE[1]) : 1900
 const SEARCH_TARGET = 'urn:schemas-upnp-org:device:MediaRenderer:1'
 
 function mSearchDatagram(): Buffer {

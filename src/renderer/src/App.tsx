@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Loader2, Power, Search } from 'lucide-react'
 import { tt } from '@/api'
 import { useStore } from '@/store'
@@ -132,10 +132,29 @@ function ConnectGate(): React.JSX.Element {
   const devices = useStore((s) => s.devices)
   const discovering = useStore((s) => s.discovering)
   const setScreen = useStore((s) => s.setScreen)
+  // Never connected to anything = a true first run: the gate doubles as the
+  // welcome screen (connect() stamps lastHost on the first attempt).
+  const firstRun = useStore((s) => s.settings.lastHost == null)
 
   const busy =
     connection.phase === 'connecting' ||
     (connection.phase === 'disconnected' && connection.reconnecting)
+
+  // While the gate sits empty-handed, sweep again every 10s — a streamer
+  // that's slow to answer (or powers on later) gets found hands-free. Count
+  // completed sweeps so the manual-IP hint can surface after a few misses.
+  const [sweeps, setSweeps] = useState(0)
+  const prevDiscovering = useRef(discovering)
+  useEffect(() => {
+    if (prevDiscovering.current && !discovering) setSweeps((n) => n + 1)
+    prevDiscovering.current = discovering
+  }, [discovering])
+  useEffect(() => {
+    if (busy || devices.length > 0) return
+    const t = setInterval(() => void tt.discover(), 10_000)
+    return () => clearInterval(t)
+  }, [busy, devices.length])
+  const stillLooking = !busy && devices.length === 0 && sweeps >= 3
 
   return (
     <div className="h-full flex flex-col items-center justify-center gap-5 text-center px-8">
@@ -150,8 +169,22 @@ function ConnectGate(): React.JSX.Element {
         </>
       ) : (
         <>
-          <Search size={48} strokeWidth={1.2} className="text-faint/60" />
-          <div className="font-display text-2xl text-dim">No streamer connected</div>
+          {firstRun ? (
+            <>
+              <div className="font-display font-bold text-[34px] leading-none tracking-tight">
+                tasty<span className="text-gold">tunes</span>
+              </div>
+              <div className="text-[14px] text-dim max-w-md leading-relaxed">
+                The hi-fi remote for Cambridge Audio StreamMagic streamers. Streamers on
+                your network appear here on their own.
+              </div>
+            </>
+          ) : (
+            <>
+              <Search size={48} strokeWidth={1.2} className="text-faint/60" />
+              <div className="font-display text-2xl text-dim">No streamer connected</div>
+            </>
+          )}
           {devices.length > 0 ? (
             <div className="space-y-2">
               {devices.map((d) => (
@@ -170,6 +203,12 @@ function ConnectGate(): React.JSX.Element {
           ) : (
             <div className="text-[13px] text-faint max-w-sm">
               {discovering ? 'Searching the network…' : 'No StreamMagic devices found yet.'}
+            </div>
+          )}
+          {stillLooking && (
+            <div className="text-[12.5px] text-faint max-w-sm leading-relaxed">
+              Still looking — the search repeats on its own. If the streamer sits on a
+              different subnet or Wi-Fi band, enter its IP manually below.
             </div>
           )}
           <div className="flex items-center gap-4">

@@ -88,10 +88,7 @@ export class DeviceManager {
   async startup(): Promise<void> {
     const { lastHost } = getSettings()
     if (lastHost) this.connect(lastHost)
-    const devices = await this.discover()
-    if (!lastHost && this.connection.phase === 'idle' && devices.length > 0) {
-      this.connect(devices[0].host)
-    }
+    await this.discover()
   }
 
   async discover(): Promise<DiscoveredDevice[]> {
@@ -106,6 +103,13 @@ export class DeviceManager {
     } finally {
       this.discovering = false
       this.pushDevices()
+    }
+    // Never-connected + idle + something found -> just connect. Lives here
+    // (not only in startup) so the connect gate's auto-retry sweeps get the
+    // same courtesy — a streamer that boots a minute after the app does is
+    // picked up hands-free on a first run.
+    if (!getSettings().lastHost && this.connection.phase === 'idle' && this.devices.length > 0) {
+      this.connect(this.devices[0].host)
     }
     return this.devices
   }
