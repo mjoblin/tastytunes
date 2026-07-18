@@ -1,0 +1,18 @@
+{
+  "name": "tastytunes-ipad",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Capacitor shell for the iPad port (spike). Not wired into the desktop build.",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "fast-xml-parser": "^4.5.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  },
+  "//": "At port time (not spike time) add: @capacitor/core, @capacitor/cli, @capacitor/ios, @capacitor/haptics, @capacitor/keyboard, @capacitor/preferences, a zeroconf plugin. Kept out now so the spike needs no install step — the repo root's typescript/fast-xml-parser resolve via directory walk-up."
+}
