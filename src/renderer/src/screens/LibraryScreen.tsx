@@ -285,28 +285,26 @@ export function LibraryScreen(): React.JSX.Element {
   const shown = filter
     ? nodes.filter((n) => matchesFilter(filter, [n.title, n.artist, n.album, n.year]))
     : nodes
-  const unsortedContainers = shown.filter((n) => n.isContainer)
-  // Album-grid sort; missing fields fall back to title so folders stay sane.
-  const sortedContainers =
-    librarySort === 'server'
-      ? unsortedContainers
-      : [...unsortedContainers].sort((a, b) => {
-          if (librarySort === 'artist')
-            return (
-              (a.artist ?? '￿').localeCompare(b.artist ?? '￿') ||
-              a.title.localeCompare(b.title)
-            )
-          if (librarySort === 'year')
-            return (b.year ?? '').localeCompare(a.year ?? '') || a.title.localeCompare(b.title)
-          return a.title.localeCompare(b.title)
-        })
-  const containers = librarySortReversed ? [...sortedContainers].reverse() : sortedContainers
-  const unsortedTracks = shown.filter((n) => !n.isContainer)
-  // Album views sort by track number (USB folders come in filesystem order).
-  const tracks =
-    unsortedTracks.length > 1 && unsortedTracks.every((t) => t.trackNumber != null)
-      ? [...unsortedTracks].sort((a, b) => (a.trackNumber ?? 0) - (b.trackNumber ?? 0))
-      : unsortedTracks
+  // Shared sort for albums AND loose-track listings; missing fields fall
+  // back to title so folders stay sane. Album tracklists are exempt below.
+  const sortNodes = (list: MediaNode[]): MediaNode[] => {
+    const sorted =
+      librarySort === 'server'
+        ? list
+        : [...list].sort((a, b) => {
+            if (librarySort === 'artist')
+              return (
+                (a.artist ?? '￿').localeCompare(b.artist ?? '￿') ||
+                a.title.localeCompare(b.title)
+              )
+            if (librarySort === 'year')
+              return (b.year ?? '').localeCompare(a.year ?? '') || a.title.localeCompare(b.title)
+            return a.title.localeCompare(b.title)
+          })
+    return librarySortReversed ? [...sorted].reverse() : sorted
+  }
+  const containers = sortNodes(shown.filter((n) => n.isContainer))
+  const rawTracks = shown.filter((n) => !n.isContainer)
   const server = servers?.find((s) => s.udn === serverUdn) ?? null
 
   // Playing-item highlight, queue-screen rules: library items carry no queue
@@ -351,6 +349,13 @@ export function LibraryScreen(): React.JSX.Element {
         .filter(Boolean)
         .join(' · ')
     : ''
+  // Track order: album views always by track number (the album's own order);
+  // loose listings (Title views, mixed folders) follow the sort setting.
+  const tracks = albumNode
+    ? rawTracks.length > 1 && rawTracks.every((t) => t.trackNumber != null)
+      ? [...rawTracks].sort((a, b) => (a.trackNumber ?? 0) - (b.trackNumber ?? 0))
+      : rawTracks
+    : sortNodes(rawTracks)
   const shownServers = (servers ?? []).filter(
     (s) => !filter || matchesFilter(filter, [s.name, s.model])
   )
@@ -400,7 +405,7 @@ export function LibraryScreen(): React.JSX.Element {
             shown={atRoot ? shownServers.length : shown.length}
             total={atRoot ? (servers?.length ?? 0) : nodes.length}
           />
-          {!atRoot && containers.length > 1 && (
+          {!atRoot && (containers.length > 1 || (!albumNode && tracks.length > 1)) && (
             <SortChip
               value={librarySort}
               reversed={librarySortReversed}
@@ -721,8 +726,8 @@ function SortChip({
   return (
     <div className="relative">
       <button
-        data-tip="Sort albums"
-        aria-label="Sort albums"
+        data-tip="Sort"
+        aria-label="Sort"
         onClick={() => setOpen((o) => !o)}
         className={cx(
           'no-drag tip-bottom p-2 rounded-lg ring-1 transition-all',
@@ -776,14 +781,14 @@ function SortChip({
 const isAlbumClass = (c: string): boolean => c.includes('musicAlbum')
 
 /**
- * Mute anonymous folder art so it recedes into the app's palette; real media
- * art (album covers, artist portraits) stays vivid. Asset classes its letter
- * tiles ([A..], [All Album Artists]) as musicArtist under Album Artist, so
- * bracketed virtual-view titles are muted regardless of class.
+ * Mute navigation-folder art so it recedes into the app's palette; real
+ * media art stays vivid. The upnp:class LEAF is the discriminator (probed
+ * against Asset): real entities carry the specific classes musicAlbum /
+ * musicArtist, while virtual views and folders are bare containers — Asset's
+ * letter tiles are `object.container.person` (no .musicArtist leaf).
  */
 const isMutedArt = (node: MediaNode): boolean =>
-  !isAlbumClass(node.upnpClass) &&
-  (!node.upnpClass.includes('person') || /^\[.*\]$/.test(node.title))
+  !isAlbumClass(node.upnpClass) && !node.upnpClass.includes('musicArtist')
 
 function ContainerCard({
   node,
