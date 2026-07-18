@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { createPortal } from 'react-dom'
 import {
   ArrowDown,
+  ArrowLeft,
   ArrowUp,
   ArrowUpDown,
   ChevronRight,
@@ -69,14 +70,20 @@ export function LibraryScreen(): React.JSX.Element {
   const [path, setPath] = useState<Crumb[]>(session.path)
   const [nodes, setNodes] = useState<MediaNode[]>([])
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
-  // Whole-library search mode (searchable servers): results replace the
-  // folder listing until navigation or Backspace exits it.
+  // Whole-library search MODE (searchable servers): an explicit state with
+  // its own gold bar and input — visually distinct from folder filtering.
+  const [searchMode, setSearchMode] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
   const [searchState, setSearchState] = useState<{
     query: string
     items: MediaNode[]
     total: number
   } | null>(null)
   const [searching, setSearching] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
+  useEffect(() => {
+    if (searchMode) searchInputRef.current?.focus()
+  }, [searchMode])
   const [notice, setNotice] = useState<string | null>(null)
   const [fetchNonce, setFetchNonce] = useState(0)
   const scrollRef = useRef<HTMLDivElement | null>(null)
@@ -142,9 +149,16 @@ export function LibraryScreen(): React.JSX.Element {
 
   // Each level keeps its own filter: stash the current one, restore the
   // destination's (or empty) whenever navigation happens.
+  const exitSearch = (): void => {
+    setSearchMode(false)
+    setSearchState(null)
+    setSearchQuery('')
+    document.documentElement.classList.remove('filter-focused')
+  }
+
   const moveTo = (udn: string | null, newPath: Crumb[]): void => {
     rememberScroll()
-    setSearchState(null)
+    exitSearch()
     filterMemory.set(nodeKey(serverUdn, path), filter)
     setScreenFilter('library', filterMemory.get(nodeKey(udn, newPath)) ?? '')
     setServerUdn(udn)
@@ -160,7 +174,7 @@ export function LibraryScreen(): React.JSX.Element {
     else moveTo(serverUdn, path.slice(0, index - 1))
   }
   const goUp = (): void => {
-    if (searchState) setSearchState(null) // search exits first, folder stays
+    if (searchMode) exitSearch() // search exits first, folder stays
     else if (path.length > 0) moveTo(serverUdn, path.slice(0, -1))
     else if (serverUdn) moveTo(null, [])
   }
@@ -195,9 +209,8 @@ export function LibraryScreen(): React.JSX.Element {
     setSettings(await tt.setSettings({ libraryLayout }))
   }
 
-  /** Escalate the current filter text to a whole-library server-side search. */
   const runSearch = (): void => {
-    const query = filter.trim()
+    const query = searchQuery.trim()
     if (!serverUdn || !query) return
     // hand the keyboard back to navigation (Backspace = exit search)
     ;(document.activeElement as HTMLElement | null)?.blur?.()
@@ -307,11 +320,15 @@ export function LibraryScreen(): React.JSX.Element {
   // -------------------------------------------------------------- derivation
 
   const atRoot = serverUdn == null
-  // Search mode swaps the folder listing for the server's results (the
-  // filter box still narrows them client-side as you type).
-  const baseNodes = searchState ? searchState.items : nodes
-  const shown = filter
-    ? baseNodes.filter((n) => matchesFilter(filter, [n.title, n.artist, n.album, n.year]))
+  // The filter belongs to listings with playable media (albums/tracks);
+  // navigation folders and the source list don't offer it. Search results
+  // aren't client-filtered — the search input is the text control there.
+  const hasPlayable = nodes.some((n) => !n.isContainer || isAlbumClass(n.upnpClass))
+  const filterAvailable = !searchMode && !atRoot && state === 'ready' && hasPlayable
+  const effFilter = filterAvailable ? filter : ''
+  const baseNodes = searchMode ? (searchState?.items ?? []) : nodes
+  const shown = effFilter
+    ? baseNodes.filter((n) => matchesFilter(effFilter, [n.title, n.artist, n.album, n.year]))
     : baseNodes
   // Shared sort for albums AND loose-track listings; missing fields fall
   // back to title so folders stay sane. Album tracklists are exempt below.
@@ -331,7 +348,10 @@ export function LibraryScreen(): React.JSX.Element {
           })
     return librarySortReversed ? [...sorted].reverse() : sorted
   }
-  const containers = sortNodes(shown.filter((n) => n.isContainer))
+  // Search results keep the server's own order (sort chip is hidden there).
+  const containers = searchMode
+    ? shown.filter((n) => n.isContainer)
+    : sortNodes(shown.filter((n) => n.isContainer))
   const rawTracks = shown.filter((n) => !n.isContainer)
   const server = servers?.find((s) => s.udn === serverUdn) ?? null
 
@@ -354,7 +374,7 @@ export function LibraryScreen(): React.JSX.Element {
   // Album level: header with art + album metadata; tracks drop per-row art.
   const lastCrumbNode = path.length > 0 ? path[path.length - 1].node : undefined
   const albumNode =
-    !searchState && lastCrumbNode && isAlbumClass(lastCrumbNode.upnpClass) ? lastCrumbNode : null
+    !searchMode && lastCrumbNode && isAlbumClass(lastCrumbNode.upnpClass) ? lastCrumbNode : null
   const allTracks = nodes.filter((n) => !n.isContainer)
   const albumArt = albumNode ? (albumNode.artUrl ?? allTracks[0]?.artUrl ?? null) : null
   const albumArtist = albumNode
@@ -383,10 +403,10 @@ export function LibraryScreen(): React.JSX.Element {
     ? rawTracks.length > 1 && rawTracks.every((t) => t.trackNumber != null)
       ? [...rawTracks].sort((a, b) => (a.trackNumber ?? 0) - (b.trackNumber ?? 0))
       : rawTracks
-    : sortNodes(rawTracks)
-  const shownServers = (servers ?? []).filter(
-    (s) => !filter || matchesFilter(filter, [s.name, s.model])
-  )
+    : searchMode
+      ? rawTracks
+      : sortNodes(rawTracks)
+  const shownServers = servers ?? [] // the source list is short — no filter there
   const loading = atRoot ? servers == null : state === 'loading'
 
   // "Retrieving…" only appears when a browse actually takes a moment —
@@ -427,14 +447,25 @@ export function LibraryScreen(): React.JSX.Element {
         <h1 className="font-display font-bold text-[26px] tracking-tight">Library</h1>
         <div className="flex-1" />
         <div className="flex items-center gap-1.5">
-          <FilterInput
-            value={filter}
-            onChange={(t) => setScreenFilter('library', t)}
-            shown={atRoot ? shownServers.length : shown.length}
-            total={atRoot ? (servers?.length ?? 0) : baseNodes.length}
-            onSubmit={server?.searchable ? runSearch : undefined}
-          />
-          {!atRoot && (containers.length > 1 || (!albumNode && tracks.length > 1)) && (
+          {filterAvailable && (
+            <FilterInput
+              value={filter}
+              onChange={(t) => setScreenFilter('library', t)}
+              shown={shown.length}
+              total={baseNodes.length}
+            />
+          )}
+          {!searchMode && !atRoot && server?.searchable && (
+            <button
+              data-library-search-button
+              onClick={() => setSearchMode(true)}
+              className="no-drag flex items-center gap-2 px-3 h-8 rounded-lg ring-1 ring-edge bg-panel/70 text-[12.5px] text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
+            >
+              <Search size={14} />
+              Search {server.name}
+            </button>
+          )}
+          {!searchMode && !atRoot && (containers.length > 1 || (!albumNode && tracks.length > 1)) && (
             <SortChip
               value={librarySort}
               reversed={librarySortReversed}
@@ -457,7 +488,58 @@ export function LibraryScreen(): React.JSX.Element {
         </div>
       </header>
 
+      {/* search mode: an unmistakable gold bar replaces the breadcrumbs */}
+      {searchMode && (
+        <div
+          data-library-search-bar
+          className="no-drag mx-8 mb-3 flex items-center gap-3 px-4 py-2 rounded-xl ring-1 ring-gold/40 bg-golddim"
+        >
+          <Search size={15} className="text-gold shrink-0" />
+          <input
+            ref={searchInputRef}
+            data-filter-input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                runSearch()
+              }
+              if (e.key === 'Escape') {
+                e.stopPropagation()
+                if (searchQuery) setSearchQuery('')
+                else exitSearch()
+              }
+            }}
+            onFocus={() => document.documentElement.classList.add('filter-focused')}
+            onBlur={() => document.documentElement.classList.remove('filter-focused')}
+            placeholder={`Search all of ${server?.name ?? 'this library'}…`}
+            spellCheck={false}
+            className="flex-1 min-w-0 bg-transparent outline-none text-[13.5px] text-ink placeholder:text-gold/50"
+          />
+          {searching ? (
+            <span className="shrink-0 text-[12px] text-gold/80 motion-safe:animate-pulse">
+              searching…
+            </span>
+          ) : searchState ? (
+            <span className="shrink-0 font-mono text-[11px] text-gold/80 tabular-nums">
+              {searchState.total} result{searchState.total === 1 ? '' : 's'}
+              {searchState.total > searchState.items.length &&
+                ` · first ${searchState.items.length}`}
+            </span>
+          ) : null}
+          <button
+            data-library-search-exit
+            onClick={exitSearch}
+            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber text-bg text-[12.5px] font-medium motion-safe:active:scale-95 transition-all"
+          >
+            <ArrowLeft size={13} /> Back to browsing
+          </button>
+        </div>
+      )}
+
       {/* breadcrumbs: Library (source list) › source › folders… */}
+      {!searchMode && (
       <div className="no-drag flex items-center gap-1 flex-wrap px-8 pb-3 text-[12.5px]">
         <button
           onClick={() => jumpTo(0)}
@@ -489,51 +571,14 @@ export function LibraryScreen(): React.JSX.Element {
               onClick={() => jumpTo(i + 2)}
               className={cx(
                 'px-1.5 py-0.5 rounded transition-colors',
-                i === path.length - 1 && !searchState
-                  ? 'text-ink'
-                  : 'text-dim hover:text-ink hover:bg-veil'
+                i === path.length - 1 ? 'text-ink' : 'text-dim hover:text-ink hover:bg-veil'
               )}
             >
               {crumb.title}
             </button>
           </span>
         ))}
-        {searchState && (
-          <span className="flex items-center gap-1">
-            <ChevronRight size={12} className="text-faint" />
-            <span className="px-1.5 py-0.5 text-gold">Search: “{searchState.query}”</span>
-          </span>
-        )}
       </div>
-
-      {/* filter → search escalation, and search-mode status */}
-      {!atRoot && !searchState && !searching && server?.searchable && filter.trim() && (
-        <div className="px-8 pb-2">
-          <button
-            onClick={runSearch}
-            data-library-search-hint
-            className="no-drag flex items-center gap-2 px-3 py-1.5 rounded-lg ring-1 ring-gold/40 bg-golddim text-[12.5px] text-gold hover:brightness-110 motion-safe:active:scale-95 transition-all"
-          >
-            <Search size={13} />
-            Search all of {server.name} for “{filter.trim()}” ⏎
-          </button>
-        </div>
-      )}
-      {searching && (
-        <div className="px-8 pb-2 text-[13px] text-dim motion-safe:animate-pulse">
-          Searching {server?.name}…
-        </div>
-      )}
-      {searchState && !searching && (
-        <div className="px-8 pb-2 text-[12.5px] text-faint" data-library-search-meta>
-          {searchState.total} result{searchState.total === 1 ? '' : 's'} for “{searchState.query}”
-          {searchState.total > searchState.items.length &&
-            ` · showing the first ${searchState.items.length}`}
-          {' · '}
-          <button onClick={() => setSearchState(null)} className="text-dim hover:text-ink underline decoration-edge2 underline-offset-2 transition-colors">
-            back to browsing
-          </button>
-        </div>
       )}
 
       {notice && (
@@ -642,9 +687,20 @@ export function LibraryScreen(): React.JSX.Element {
           </div>
         )}
 
-        {!atRoot && state === 'ready' && shown.length === 0 && (
+        {searchMode && !searchState && !searching && (
           <div className="text-[15px] text-faint pt-4 px-1">
-            {filter ? `No matches for “${filter}”` : 'Nothing here'}
+            Type a search and press Enter — it looks through everything on{' '}
+            {server?.name ?? 'this library'}.
+          </div>
+        )}
+        {searchMode && searchState && !searching && shown.length === 0 && (
+          <div className="text-[15px] text-faint pt-4 px-1">
+            No results for “{searchState.query}”
+          </div>
+        )}
+        {!searchMode && !atRoot && state === 'ready' && shown.length === 0 && (
+          <div className="text-[15px] text-faint pt-4 px-1">
+            {effFilter ? `No matches for “${effFilter}”` : 'Nothing here'}
           </div>
         )}
 
