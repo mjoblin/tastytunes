@@ -225,3 +225,93 @@ jobs:
           retention-days: 7
           path: dist/*.exe
           if-no-files-found: ignore
+
+  # Mac App Store lane: signed universal .pkg uploaded to TestFlight. Store
+  # release stays a manual App Store Connect promotion — this never publishes.
+  # Runs only when the MAS secrets exist; a repo without them (or a fork) gets
+  # a skipped lane, never a red build.
+  mas:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+
+      # Secrets can't be read in step `if:` conditions — surface their
+      # presence as a step output the rest of the lane keys off.
+      - name: Check for Mac App Store secrets
+        id: gate
+        env:
+          MAS_CERT_P12: ${{ secrets.MAS_CERT_P12 }}
+          MAS_PROVISIONING_PROFILE: ${{ secrets.MAS_PROVISIONING_PROFILE }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+        run: |
+          if [ -n "$MAS_CERT_P12" ] && [ -n "$MAS_PROVISIONING_PROFILE" ] && [ -n "$APPLE_API_KEY_P8" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "MAS lane skipped — missing MAS_CERT_P12 / MAS_PROVISIONING_PROFILE / APPLE_API_KEY_P8"
+          fi
+
+      - if: steps.gate.outputs.enabled == 'true'
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - if: steps.gate.outputs.enabled == 'true'
+        run: npm ci
+
+      - if: steps.gate.outputs.enabled == 'true'
+        run: npm run build
+
+      # MAS_CERT_P12 is one base64 .p12 holding BOTH identities the mas target
+      # signs with: "Apple Distribution" (app) and "Mac Installer Distribution"
+      # (pkg). Same CSC_LINK temp-keychain mechanism as the Developer ID lane —
+      # auto-discovery must stay on for electron-builder to find them.
+      - name: Set up Mac App Store signing credentials
+        if: steps.gate.outputs.enabled == 'true'
+        env:
+          MAS_CERT_P12: ${{ secrets.MAS_CERT_P12 }}
+          MAS_CERT_PASSWORD: ${{ secrets.MAS_CERT_PASSWORD }}
+          MAS_PROVISIONING_PROFILE: ${{ secrets.MAS_PROVISIONING_PROFILE }}
+        run: |
+          {
+            echo "CSC_LINK=$MAS_CERT_P12"
+            echo "CSC_KEY_PASSWORD=$MAS_CERT_PASSWORD"
+          } >> "$GITHUB_ENV"
+          printf '%s' "$MAS_PROVISIONING_PROFILE" | base64 -d > "$RUNNER_TEMP/mas.provisionprofile"
+
+      # buildVersion (CFBundleVersion) = run number so every upload is unique;
+      # App Store Connect rejects a reused build number for the same version.
+      - name: Package Mac App Store build
+        if: steps.gate.outputs.enabled == 'true'
+        run: >
+          npx electron-builder --mac mas --universal --publish never
+          -c.mas.provisioningProfile="$RUNNER_TEMP/mas.provisionprofile"
+          -c.buildVersion="$GITHUB_RUN_NUMBER"
+
+      # fastlane ships in the macOS runner image; pilot uploads via the App
+      # Store Connect API key (no Apple ID / 2FA involved). Skip waiting for
+      # processing — TestFlight availability shows up in ASC when Apple's done.
+      - name: Upload to TestFlight
+        if: steps.gate.outputs.enabled == 'true'
+        env:
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: |
+          jq -n --arg kid "$APPLE_API_KEY_ID" --arg iss "$APPLE_API_ISSUER_ID" --arg key "$APPLE_API_KEY_P8" \
+            '{key_id: $kid, issuer_id: $iss, key: $key, in_house: false}' > "$RUNNER_TEMP/asc_key.json"
+          PKG=$(ls dist/*.pkg | head -1)
+          echo "uploading $PKG"
+          fastlane pilot upload \
+            --api_key_path "$RUNNER_TEMP/asc_key.json" \
+            --pkg "$PKG" \
+            --app_platform osx \
+            --skip_waiting_for_build_processing true
+
+      - if: steps.gate.outputs.enabled == 'true'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: tastytunes-mas
+          path: dist/*.pkg
+          if-no-files-found: ignore
