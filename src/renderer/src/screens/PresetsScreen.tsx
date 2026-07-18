@@ -30,6 +30,8 @@ import type { PresetItem } from '@shared/smoip'
 import { presetVolumeKey, type ScreenLayout } from '@shared/ipc'
 import { tt } from '@/api'
 import { useStore } from '@/store'
+import { Eqbars } from '@/components/Eqbars'
+import { EmptyState } from '@/components/EmptyState'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { flashTarget, scrollToWithContext } from '@/lib/scroll'
 import { cx, matchesFilter } from '@/lib/format'
@@ -40,13 +42,13 @@ import { PopoverChrome } from '@/hooks/usePopover'
 
 export function PresetsScreen(): React.JSX.Element {
   const presets = useStore((s) => s.presets)
+  const saveSettings = useStore((s) => s.saveSettings)
   const playState = useStore((s) => s.playState)
   const zoneState = useStore((s) => s.zoneState)
   const nowPlaying = useStore((s) => s.nowPlaying)
   const { presetCardSize, presetGap, presetFillRows, followPresets, presetsLayout } = useStore(
     (s) => s.settings
   )
-  const setSettings = useStore((s) => s.setSettings)
   const systemInfo = useStore((s) => s.systemInfo)
   const presetVolumes = useStore((s) => s.settings.presetVolumes)
   const cards = presetsLayout === 'cards'
@@ -68,7 +70,7 @@ export function PresetsScreen(): React.JSX.Element {
     const next = { ...presetVolumes }
     if (level == null) delete next[key]
     else next[key] = level
-    setSettings(await tt.setSettings({ presetVolumes: next }))
+    await saveSettings({ presetVolumes: next })
   }
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
 
@@ -146,22 +148,20 @@ export function PresetsScreen(): React.JSX.Element {
   }, [followPresets, playingId, scrollToPlaying, filter])
 
   const setFollowPresets = async (follow: boolean): Promise<void> => {
-    setSettings(await tt.setSettings({ followPresets: follow }))
+    await saveSettings({ followPresets: follow })
   }
   const setLayout = async (presetsLayout: ScreenLayout): Promise<void> => {
-    setSettings(await tt.setSettings({ presetsLayout }))
+    await saveSettings({ presetsLayout })
   }
 
   if (allItems.length === 0) {
     return (
-      <div className="h-full flex flex-col items-center justify-center gap-4 text-center px-8">
-        <Radio size={56} strokeWidth={1} className="text-faint/50" />
-        <div className="font-display text-2xl text-dim">No presets</div>
-        <div className="text-[13px] text-faint max-w-sm">
-          Save radio stations or albums to preset slots with the StreamMagic app and they'll appear
-          here for one-click recall.
-        </div>
-      </div>
+      <EmptyState
+        className="h-full"
+        icon={Radio}
+        title="No presets"
+        caption="Save radio stations or albums to preset slots with the StreamMagic app and they'll appear here for one-click recall."
+      />
     )
   }
 
@@ -404,6 +404,9 @@ function PresetRow({
   canSetVolume,
   onVolume
 }: { preset: PresetItem; playing: boolean } & PresetVolumeProps): React.JSX.Element {
+  // pause-aware bars (the inline copies never froze — a divergence from
+  // the queue/library idiom, fixed by adopting the shared component)
+  const audible = useStore((s) => s.playState?.state === 'play')
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: preset.id as number
   })
@@ -435,11 +438,7 @@ function PresetRow({
     >
       <div className="flex items-center justify-center">
         {playing ? (
-          <span className="eqbars text-gold">
-            <span style={{ height: 6 }} />
-            <span style={{ height: 10 }} />
-            <span style={{ height: 5 }} />
-          </span>
+          <Eqbars playing={audible} />
         ) : (
           <span className="font-mono text-[10.5px] text-faint tabular-nums">
             {String(preset.id).padStart(2, '0')}
@@ -535,6 +534,9 @@ function PresetCard({
   canSetVolume,
   onVolume
 }: { preset: PresetItem; playing: boolean } & PresetVolumeProps): React.JSX.Element {
+  // pause-aware bars (the inline copies never froze — a divergence from
+  // the queue/library idiom, fixed by adopting the shared component)
+  const audible = useStore((s) => s.playState?.state === 'play')
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: preset.id as number
   })
@@ -598,11 +600,7 @@ function PresetCard({
           {playing && (
             // h/w match the corner buttons so the four corners feel weighted
             <span className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-md bg-black/55 backdrop-blur-sm">
-              <span className="eqbars text-gold">
-                <span style={{ height: 6 }} />
-                <span style={{ height: 10 }} />
-                <span style={{ height: 5 }} />
-              </span>
+              <Eqbars playing={audible} />
             </span>
           )}
         </div>

@@ -2,15 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Bluetooth,
   Cable,
-  Cog,
   CornerDownLeft,
   Disc3,
   HardDrive,
-  History,
-  Library,
   Info,
   Keyboard,
-  ListMusic,
   Maximize2,
   MicVocal,
   Moon,
@@ -33,9 +29,10 @@ import {
 } from 'lucide-react'
 import { sleepTrackKey, type SleepAction } from '@shared/ipc'
 import { tt } from '@/api'
-import { useStore, type Screen } from '@/store'
+import { useStore } from '@/store'
 import { systemTheme } from '@/hooks/useTheme'
 import { controlSet, cx, deriveNowPlaying } from '@/lib/format'
+import { SCREENS } from '@/lib/screens'
 
 type Icon = typeof Play
 
@@ -72,16 +69,6 @@ const SLEEP_DURATIONS: Array<{ minutes: number; label: string }> = [
   { minutes: 120, label: '2 hr' }
 ]
 
-const SCREENS: Array<{ id: Screen; label: string; icon: Icon; key: string }> = [
-  { id: 'now-playing', label: 'Now Playing', icon: Disc3, key: 'N' },
-  { id: 'queue', label: 'Queue', icon: ListMusic, key: 'Q' },
-  { id: 'presets', label: 'Presets', icon: Radio, key: 'P' },
-  { id: 'library', label: 'Library', icon: Library, key: 'I' },
-  { id: 'recently-played', label: 'Recently Played', icon: History, key: 'R' },
-  { id: 'sources', label: 'Sources', icon: Cable, key: 'S' },
-  { id: 'device', label: 'Device', icon: HardDrive, key: 'D' },
-  { id: 'settings', label: 'Settings', icon: Cog, key: 'E' }
-]
 
 function sourceIcon(klass: string): Icon {
   if (/bluetooth/i.test(klass)) return Bluetooth
@@ -114,6 +101,7 @@ function fuzzyScore(q: string, text: string): number | null {
 
 export function CommandPalette(): React.JSX.Element {
   const setPaletteOpen = useStore((s) => s.setPaletteOpen)
+  const saveSettings = useStore((s) => s.saveSettings)
   const setScreen = useStore((s) => s.setScreen)
   const setDiagnosticsOpen = useStore((s) => s.setDiagnosticsOpen)
   const setShortcutsOpen = useStore((s) => s.setShortcutsOpen)
@@ -436,8 +424,7 @@ export function CommandPalette(): React.JSX.Element {
       keywords: 'appearance dark light',
       run: () => {
         void (async () => {
-          const next = await tt.setSettings({ theme: shownTheme === 'dark' ? 'light' : 'dark' })
-          setSettings(next)
+          await saveSettings({ theme: shownTheme === 'dark' ? 'light' : 'dark' })
         })()
       }
     })

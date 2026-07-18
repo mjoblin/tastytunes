@@ -1,11 +1,11 @@
 import { Captions, Disc3, Maximize2, MicVocal, RadioTower, UserRound } from 'lucide-react'
-import { tt } from '@/api'
 import { useStore } from '@/store'
 import { cx, deriveNowPlaying } from '@/lib/format'
 import { SignalLamp } from '@/components/SignalLamp'
 import { ArtImage } from '@/components/ArtImage'
 import { LyricsPanel } from '@/components/LyricsPanel'
 import { LyricLine } from '@/components/LyricLine'
+import { EmptyState } from '@/components/EmptyState'
 import { ArtistPanel } from '@/components/ArtistPanel'
 
 const ALIGN_H = { left: 'justify-start', center: 'justify-center', right: 'justify-end' } as const
@@ -13,13 +13,13 @@ const ALIGN_V = { top: 'items-start', center: 'items-center', bottom: 'items-end
 
 export function NowPlayingScreen(): React.JSX.Element {
   const playState = useStore((s) => s.playState)
+  const saveSettings = useStore((s) => s.saveSettings)
   const nowPlaying = useStore((s) => s.nowPlaying)
   const setDisplayMode = useStore((s) => s.setDisplayMode)
   const lyricsOpen = useStore((s) => s.lyricsOpen)
   const setLyricsOpen = useStore((s) => s.setLyricsOpen)
   const artistOpen = useStore((s) => s.artistOpen)
   const setArtistOpen = useStore((s) => s.setArtistOpen)
-  const setSettings = useStore((s) => s.setSettings)
   const {
     nowPlayingAlignH,
     nowPlayingAlignV,
@@ -34,8 +34,7 @@ export function NowPlayingScreen(): React.JSX.Element {
   const artistAvailable = artistEnabled && !meta.isRadio && !!meta.subtitle
 
   const toggleLyricLine = async (): Promise<void> => {
-    const next = await tt.setSettings({ lyricsLine: !lyricsLine })
-    setSettings(next)
+    await saveSettings({ lyricsLine: !lyricsLine })
   }
 
   const sourceName = nowPlaying?.source?.name ?? null
@@ -105,13 +104,11 @@ export function NowPlayingScreen(): React.JSX.Element {
     return (
       <div className="h-full flex flex-col">
         {header}
-        <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center px-8">
-          <Disc3 size={56} strokeWidth={1} className="text-faint/50" />
-          <div className="font-display text-2xl text-dim">Nothing playing</div>
-          <div className="text-[13px] text-faint max-w-sm">
-            Start playback from a queue, recall a preset, or stream to the device from another app.
-          </div>
-        </div>
+        <EmptyState
+          icon={Disc3}
+          title="Nothing playing"
+          caption="Start playback from a queue, recall a preset, or stream to the device from another app."
+        />
       </div>
     )
   }

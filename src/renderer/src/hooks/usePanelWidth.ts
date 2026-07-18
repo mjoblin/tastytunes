@@ -1,5 +1,4 @@
 import { useRef, useState } from 'react'
-import { tt } from '@/api'
 import { useStore } from '@/store'
 
 export const PANEL_DEFAULT_WIDTH = 400
@@ -25,7 +24,7 @@ export function usePanelWidth(): {
   }
 } {
   const saved = useStore((s) => s.settings.panelWidth)
-  const setSettings = useStore((s) => s.setSettings)
+  const saveSettings = useStore((s) => s.saveSettings)
   const [draft, setDraft] = useState<number | null>(null)
   const [dragging, setDragging] = useState(false)
   const start = useRef<{ x: number; w: number } | null>(null)
@@ -62,10 +61,7 @@ export function usePanelWidth(): {
         if (!start.current) return
         start.current = null
         setDragging(false)
-        void tt.setSettings({ panelWidth: latest.current }).then((next) => {
-          setSettings(next)
-          setDraft(null)
-        })
+        void saveSettings({ panelWidth: latest.current }).then(() => setDraft(null))
       }
     }
   }

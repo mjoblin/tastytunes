@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowDownLeft, ArrowUpRight, Pause, Play, X } from 'lucide-react'
-import { tt } from '@/api'
 import { useStore } from '@/store'
 import { cx } from '@/lib/format'
 
@@ -10,18 +9,18 @@ type Tab = 'smoip' | 'requests'
 
 export function DiagnosticsDrawer(): React.JSX.Element {
   const frames = useStore((s) => s.frames)
+  const saveSettings = useStore((s) => s.saveSettings)
   const logs = useStore((s) => s.logs)
   const netRequests = useStore((s) => s.netRequests)
   const setDiagnosticsOpen = useStore((s) => s.setDiagnosticsOpen)
   const settings = useStore((s) => s.settings)
-  const setSettings = useStore((s) => s.setSettings)
   // Last-selected tab persists; switch locally first so it feels instant.
   const [tab, setTab] = useState<Tab>(() =>
     settings.diagnosticsTab === 'requests' ? 'requests' : 'smoip'
   )
   const selectTab = (id: Tab): void => {
     setTab(id)
-    void tt.setSettings({ diagnosticsTab: id }).then(setSettings)
+    void saveSettings({ diagnosticsTab: id })
   }
   const [filter, setFilter] = useState<Filter>('all')
   const [paused, setPaused] = useState(false)

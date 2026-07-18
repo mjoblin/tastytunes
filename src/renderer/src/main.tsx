@@ -10,12 +10,18 @@ import '@fontsource-variable/sora'
 import '@fontsource-variable/unbounded'
 import './styles.css'
 
-import React from 'react'
+import React, { Suspense, lazy } from 'react'
 import ReactDOM from 'react-dom/client'
-import App from './App'
-import { MiniPlayer } from './components/MiniPlayer'
 import { tt } from './api'
 import { useStore } from './store'
+
+// Split at the one natural seam: the always-on-top mini strip used to parse
+// the ENTIRE app bundle (all screens, dnd-kit, the palette) and the main
+// window parsed the mini right back. Each window now loads only its chunk.
+const App = lazy(() => import('./App'))
+const MiniPlayer = lazy(() =>
+  import('./components/MiniPlayer').then((m) => ({ default: m.MiniPlayer }))
+)
 
 // Subscribe to pushes before fetching the snapshot so nothing slips between them.
 // Menu clicks carry side effects (settings round-trips) that don't fit
@@ -31,5 +37,7 @@ const isMini = new URLSearchParams(window.location.search).has('mini')
 if (isMini) document.documentElement.classList.add('mini')
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>{isMini ? <MiniPlayer /> : <App />}</React.StrictMode>
+  <React.StrictMode>
+    <Suspense fallback={null}>{isMini ? <MiniPlayer /> : <App />}</Suspense>
+  </React.StrictMode>
 )

@@ -20,7 +20,7 @@ const ACTION_VERB: Record<SleepAction, string> = { pause: 'Pause', standby: 'Sta
 /** Plexamp/Sonos-style sleep timer: pause or standby after a countdown, or at end of track. */
 export function SleepTimer(): React.JSX.Element {
   const sleep = useStore((s) => s.sleep)
-  const setSleepAction = useStore((s) => s.setSleepAction)
+  const saveSettings = useStore((s) => s.saveSettings)
   const stored = useStore((s) => s.settings.sleepAction)
   const playState = useStore((s) => s.playState)
   const nowPlaying = useStore((s) => s.nowPlaying)
@@ -57,8 +57,7 @@ export function SleepTimer(): React.JSX.Element {
     void tt.setSleep({ action, minutes: null, firesAt: null, trackKey: sleepTrackKey(playState) })
   }
   const chooseAction = (next: SleepAction): void => {
-    setSleepAction(next)
-    void tt.setSettings({ sleepAction: next })
+    void saveSettings({ sleepAction: next })
     if (sleep) void tt.setSleep({ ...sleep, action: next })
   }
 

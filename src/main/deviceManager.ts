@@ -28,6 +28,7 @@ import type {
   ZonePosition,
   ZoneState
 } from '@shared/smoip'
+import { isRadioMetadata, radioTrackTitle } from '@shared/smoip'
 import { discoverStreamers } from './discovery'
 import { SmoipSocket } from './smoipSocket'
 import * as smoipHttp from './smoipHttp'
@@ -38,9 +39,6 @@ import { getNetRequests } from './netlog'
 
 const FRAME_RING_SIZE = 300
 const LOG_RING_SIZE = 300
-
-const eqCaseless = (a: string, b: string): boolean =>
-  a.trim().toLowerCase() === b.trim().toLowerCase()
 
 interface Cache {
   playState: ZonePlayState | null
@@ -480,12 +478,11 @@ export class DeviceManager {
     if (ps.state !== 'play' && ps.state !== 'buffering') return
     const md = ps.metadata
     if (!md) return
-    const isRadio = /radio/i.test(md.class ?? '') || md.station != null
+    const isRadio = isRadioMetadata(md)
     const station = md.station ?? null
-    let title = md.title ?? null
-    // A radio "song" that's absent, or just the station's own name echoed back,
-    // carries no real track — treat it as songless so it can be hidden later.
-    if (isRadio && (title == null || (station != null && eqCaseless(title, station)))) title = null
+    // Radio titles normalize through the shared helper (absent / station-echo
+    // "songs" become null) so recording and matching can never drift.
+    const title = isRadio ? radioTrackTitle(md) : (md.title ?? null)
     if (!title && !station) return // nothing identifiable to log
 
     const sourceId = md.source ?? this.cache.nowPlaying?.source?.id ?? null

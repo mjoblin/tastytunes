@@ -49,15 +49,11 @@ type SettingsTab = (typeof TABS)[number]['id']
 
 export function SettingsScreen(): React.JSX.Element {
   const settings = useStore((s) => s.settings)
-  const setSettings = useStore((s) => s.setSettings)
   const setShortcutsOpen = useStore((s) => s.setShortcutsOpen)
   const setInfoOpen = useStore((s) => s.setInfoOpen)
   const recentsCount = useStore((s) => s.recents.length)
 
-  const save = async (patch: Partial<AppSettings>): Promise<void> => {
-    const next = await tt.setSettings(patch)
-    setSettings(next)
-  }
+  const save = useStore((s) => s.saveSettings)
 
   // Last-visited tab persists; switch locally first so the rail feels instant.
   const [tab, setTab] = useState<SettingsTab>(() =>

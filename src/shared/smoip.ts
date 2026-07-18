@@ -50,6 +50,32 @@ export interface ZonePlayStateMetadata {
   radio_id: number | null
 }
 
+/**
+ * Radio-ness of play-state metadata — THE copy, shared by recents recording
+ * (deviceManager), the scrobbler's filter, and recents live-matching
+ * (recentMatchesPlayState). These used to be three hand-mirrored expressions
+ * held in sync by comments alone; a drift breaks recents or scrobbling
+ * silently.
+ */
+export const isRadioMetadata = (
+  md: Pick<ZonePlayStateMetadata, 'class' | 'station'> | null | undefined
+): boolean => md != null && (/radio/i.test(md.class ?? '') || md.station != null)
+
+/**
+ * A radio "title" that's absent or merely echoes the station's own name back
+ * carries no real track — normalize it to null (case/whitespace-insensitive,
+ * matching how recents entries are recorded AND matched).
+ */
+export const radioTrackTitle = (
+  md: Pick<ZonePlayStateMetadata, 'title' | 'station'>
+): string | null => {
+  const title = md.title ?? null
+  const station = md.station ?? null
+  if (title == null) return null
+  if (station != null && title.trim().toLowerCase() === station.trim().toLowerCase()) return null
+  return title
+}
+
 export interface ZonePlayState {
   state: ZonePlayStateState | null
   position: number | null

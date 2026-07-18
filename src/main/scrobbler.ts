@@ -5,7 +5,7 @@
 // and seeks can't cheat. Radio and metadata-less sources are never scrobbled.
 // Failed listens queue in memory (bounded) and flush with the next success.
 import { version } from '../../package.json'
-import type { ZonePlayState } from '@shared/smoip'
+import { isRadioMetadata, type ZonePlayState } from '@shared/smoip'
 import { getSettings } from './persist'
 import { loggedFetch } from './netlog'
 
@@ -117,7 +117,7 @@ export const scrobbler = {
   onPlayState(ps: ZonePlayState): void {
     if (!enabled()) return
     const md = ps.metadata
-    const isRadio = /radio/i.test(md?.class ?? '') || md?.station != null
+    const isRadio = isRadioMetadata(md)
     const artist = md?.artist ?? null
     const title = md?.title ?? null
 

@@ -1,53 +1,26 @@
-import {
-  Cable,
-  Cog,
-  Command,
-  Disc3,
-  HardDrive,
-  History,
-  Library,
-  ListMusic,
-  PanelLeftClose,
-  PanelLeftOpen,
-  PictureInPicture2,
-  Radio
-} from 'lucide-react'
+import { Command, PanelLeftClose, PanelLeftOpen, PictureInPicture2 } from 'lucide-react'
 import { tt } from '@/api'
-import { useStore, type Screen } from '@/store'
+import { useStore } from '@/store'
 import { cx } from '@/lib/format'
-
-const MOD = /mac/i.test(navigator.platform) ? '⌘' : 'Ctrl+'
-
-const ITEMS: Array<{ id: Screen; label: string; icon: typeof Disc3; key: string }> = [
-  { id: 'now-playing', label: 'Now Playing', icon: Disc3, key: 'N' },
-  { id: 'queue', label: 'Queue', icon: ListMusic, key: 'Q' },
-  { id: 'presets', label: 'Presets', icon: Radio, key: 'P' },
-  { id: 'library', label: 'Library', icon: Library, key: 'I' },
-  { id: 'recently-played', label: 'Recently Played', icon: History, key: 'R' },
-  { id: 'sources', label: 'Sources', icon: Cable, key: 'S' },
-  { id: 'device', label: 'Device', icon: HardDrive, key: 'D' }
-]
-
-const SETTINGS_ITEM = { id: 'settings' as Screen, label: 'Settings', icon: Cog, key: 'E' }
+import { MOD, NAV_SCREENS, SETTINGS_SCREEN, type ScreenDef } from '@/lib/screens'
 
 export function Nav(): React.JSX.Element {
   const screen = useStore((s) => s.screen)
+  const saveSettings = useStore((s) => s.saveSettings)
   const setScreen = useStore((s) => s.setScreen)
   const setInfoOpen = useStore((s) => s.setInfoOpen)
   const setPaletteOpen = useStore((s) => s.setPaletteOpen)
   const queueTotal = useStore((s) => s.queue?.total ?? null)
   const ambientWindow = useStore((s) => s.ambientWindowActive)
   const settings = useStore((s) => s.settings)
-  const setSettings = useStore((s) => s.setSettings)
   const update = useStore((s) => s.update)
 
   const collapsed = settings.navCollapsed
   const toggleCollapsed = async (): Promise<void> => {
-    const next = await tt.setSettings({ navCollapsed: !collapsed })
-    setSettings(next)
+    await saveSettings({ navCollapsed: !collapsed })
   }
 
-  const navItem = ({ id, label, icon: Icon, key }: (typeof ITEMS)[number]): React.JSX.Element => (
+  const navItem = ({ id, label, icon: Icon, key }: ScreenDef): React.JSX.Element => (
     <button
       key={id}
       onClick={() => setScreen(id)}
@@ -113,7 +86,7 @@ export function Nav(): React.JSX.Element {
       </div>
 
       <div className={cx('flex-1 space-y-0.5', collapsed ? 'px-2' : 'px-3')}>
-        {ITEMS.map(navItem)}
+        {NAV_SCREENS.map(navItem)}
       </div>
 
       {/* mini player + settings pinned at the bottom, collapse last */}
@@ -152,7 +125,7 @@ export function Nav(): React.JSX.Element {
             </span>
           )}
         </button>
-        {navItem(SETTINGS_ITEM)}
+        {navItem(SETTINGS_SCREEN)}
         <button
           onClick={() => void toggleCollapsed()}
           data-tip={collapsed ? 'Expand menu' : 'Collapse menu'}

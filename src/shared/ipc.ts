@@ -12,6 +12,7 @@ import type {
   ZonePosition,
   ZoneState
 } from './smoip'
+import { isRadioMetadata, radioTrackTitle } from './smoip'
 
 // ------------------------------------------------------------------- connection
 
@@ -90,11 +91,10 @@ export function recentMatchesPlayState(e: RecentTrack, ps: ZonePlayState | null)
   if (!md) return false
   const eq = (a: string | null | undefined, b: string | null | undefined): boolean =>
     (a ?? '').trim().toLowerCase() === (b ?? '').trim().toLowerCase()
-  const isRadio = /radio/i.test(md.class ?? '') || md.station != null
+  const isRadio = isRadioMetadata(md)
   if (e.isRadio !== isRadio) return false
   if (isRadio) {
-    const title = md.title != null && md.station != null && eq(md.title, md.station) ? null : (md.title ?? null)
-    return eq(e.station, md.station) && eq(e.title, title)
+    return eq(e.station, md.station) && eq(e.title, radioTrackTitle(md))
   }
   return e.title != null && eq(e.title, md.title)
 }

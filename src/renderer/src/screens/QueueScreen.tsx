@@ -30,6 +30,8 @@ import type { QueueListItem } from '@shared/smoip'
 import type { ScreenLayout } from '@shared/ipc'
 import { tt } from '@/api'
 import { useStore } from '@/store'
+import { Eqbars } from '@/components/Eqbars'
+import { EmptyState } from '@/components/EmptyState'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { flashTarget, scrollToWithContext } from '@/lib/scroll'
 import { cx, fmtTime, matchesFilter } from '@/lib/format'
@@ -38,13 +40,13 @@ import { FilterInput } from '@/components/FilterInput'
 
 export function QueueScreen(): React.JSX.Element {
   const queue = useStore((s) => s.queue)
+  const saveSettings = useStore((s) => s.saveSettings)
   const playState = useStore((s) => s.playState)
   const nowPlaying = useStore((s) => s.nowPlaying)
   const zoneState = useStore((s) => s.zoneState)
   const { followQueue, queueLayout, presetCardSize, presetGap, presetFillRows } = useStore(
     (s) => s.settings
   )
-  const setSettings = useStore((s) => s.setSettings)
   const setQueueItems = useStore((s) => s.setQueueItems)
   const filter = useStore((s) => s.screenFilters.queue)
   const setScreenFilter = useStore((s) => s.setScreenFilter)
@@ -54,10 +56,10 @@ export function QueueScreen(): React.JSX.Element {
   const scrollRef = useScrollMemory('queue', !followQueue)
 
   const setFollowQueue = async (follow: boolean): Promise<void> => {
-    setSettings(await tt.setSettings({ followQueue: follow }))
+    await saveSettings({ followQueue: follow })
   }
   const setLayout = async (queueLayout: ScreenLayout): Promise<void> => {
-    setSettings(await tt.setSettings({ queueLayout }))
+    await saveSettings({ queueLayout })
   }
   // Cards get half a card of context above the target; rows get a full row.
   const scrollToCurrent = (): void => {
@@ -124,13 +126,12 @@ export function QueueScreen(): React.JSX.Element {
 
   if (allItems.length === 0) {
     return (
-      <div className="h-full flex flex-col items-center justify-center gap-4 text-center px-8">
-        <ListMusic size={56} strokeWidth={1} className="text-faint/50" />
-        <div className="font-display text-2xl text-dim">Queue is empty</div>
-        <div className="text-[13px] text-faint max-w-sm">
-          Queue tracks from the StreamMagic app or another controller — they'll show up here.
-        </div>
-      </div>
+      <EmptyState
+        className="h-full"
+        icon={ListMusic}
+        title="Queue is empty"
+        caption="Queue tracks from the StreamMagic app or another controller — they'll show up here."
+      />
     )
   }
 
@@ -246,22 +247,6 @@ interface QueueItemProps {
   currentRef?: React.MutableRefObject<HTMLDivElement | null>
 }
 
-function Eqbars({ playing, sourceActive }: { playing: boolean; sourceActive: boolean }): React.JSX.Element {
-  return (
-    <span
-      className={cx(
-        'eqbars',
-        sourceActive ? 'text-gold' : 'text-faint',
-        (!playing || !sourceActive) && 'paused'
-      )}
-    >
-      <span style={{ height: 6 }} />
-      <span style={{ height: 10 }} />
-      <span style={{ height: 5 }} />
-    </span>
-  )
-}
-
 function QueueRow({ item, isCurrent, playing, sourceActive, currentRef }: QueueItemProps): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id as number
@@ -291,7 +276,7 @@ function QueueRow({ item, isCurrent, playing, sourceActive, currentRef }: QueueI
     >
       <div className="flex items-center justify-center">
         {isCurrent ? (
-          <Eqbars playing={playing} sourceActive={sourceActive} />
+          <Eqbars playing={playing} dim={!(sourceActive)} />
         ) : (
           <span className="font-mono text-[10.5px] text-faint tabular-nums">
             {(item.position ?? 0) + 1}
@@ -394,7 +379,7 @@ function QueueCard({ item, isCurrent, playing, sourceActive, currentRef }: Queue
 
           {isCurrent && (
             <span className="absolute top-2 left-2 flex items-center rounded-md bg-black/55 backdrop-blur-sm px-1.5 py-1">
-              <Eqbars playing={playing} sourceActive={sourceActive} />
+              <Eqbars playing={playing} dim={!(sourceActive)} />
             </span>
           )}
         </div>

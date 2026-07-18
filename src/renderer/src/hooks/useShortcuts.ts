@@ -1,20 +1,14 @@
 import { useEffect } from 'react'
 import { tt } from '@/api'
 import { useStore, type Screen } from '@/store'
+import { SCREENS } from '@/lib/screens'
 
-// I = library, NOT L: the screen lookup runs before the transport switch,
-// so any key in here shadows a transport shortcut — L belongs to the J/L
-// seek pair (this was once l: 'library', which silently ate seek-forward).
-const SCREEN_KEYS: Record<string, Screen> = {
-  n: 'now-playing',
-  q: 'queue',
-  p: 'presets',
-  i: 'library',
-  r: 'recently-played',
-  s: 'sources',
-  d: 'device',
-  e: 'settings'
-}
+// Derived from the shared registry — the screen lookup runs before the
+// transport switch, so a registry key can shadow a transport shortcut (the
+// old hand-written copy had l: 'library', silently eating seek-forward).
+const SCREEN_KEYS: Record<string, Screen> = Object.fromEntries(
+  SCREENS.map((s) => [s.key.toLowerCase(), s.id])
+)
 
 export function useShortcuts(): void {
   useEffect(() => {

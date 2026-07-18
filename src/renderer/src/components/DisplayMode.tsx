@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { Captions, Disc3, RadioTower, X } from 'lucide-react'
-import { tt } from '@/api'
 import { useStore } from '@/store'
 import { ArtImage } from '@/components/ArtImage'
 import { usePlayhead } from '@/hooks/usePlayhead'
@@ -15,10 +14,10 @@ import { cx, deriveNowPlaying } from '@/lib/format'
  */
 export function DisplayMode(): React.JSX.Element {
   const playState = useStore((s) => s.playState)
+  const saveSettings = useStore((s) => s.saveSettings)
   const nowPlaying = useStore((s) => s.nowPlaying)
   const setDisplayMode = useStore((s) => s.setDisplayMode)
   const settings = useStore((s) => s.settings)
-  const setSettings = useStore((s) => s.setSettings)
   const { position, duration } = usePlayhead()
   const [cursorIdle, setCursorIdle] = useState(false)
   const [clock, setClock] = useState(() => timeNow())
@@ -54,8 +53,7 @@ export function DisplayMode(): React.JSX.Element {
   const artLoadable = useArtLoadable(meta.artUrl)
   const lyricsToggleable = settings.lyrics && !meta.isRadio && !!meta.subtitle
   const toggleLyrics = async (): Promise<void> => {
-    const next = await tt.setSettings({ displayLyrics: !settings.displayLyrics })
-    setSettings(next)
+    await saveSettings({ displayLyrics: !settings.displayLyrics })
   }
 
   return (

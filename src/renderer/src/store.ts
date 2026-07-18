@@ -11,7 +11,6 @@ import type {
   PushMessage,
   UpdateState,
   RecentTrack,
-  SleepAction,
   SleepTimer,
   Snapshot
 } from '@shared/ipc'
@@ -112,8 +111,9 @@ interface TTState {
     text: string
   ): void
   setAmbientWindowActive(on: boolean): void
-  setSleepAction(action: SleepAction): void
   setSettings(settings: AppSettings): void
+  /** THE settings write path: round-trip through main, adopt the result. */
+  saveSettings(patch: Partial<AppSettings>): Promise<void>
   setQueueItems(items: QueueListItem[]): void
   init(snapshot: Snapshot): void
   applyPush(msg: PushMessage): void
@@ -177,11 +177,11 @@ export const useStore = create<TTState>((set, get) => ({
   setScreenFilter: (screen, text) =>
     set((s) => ({ screenFilters: { ...s.screenFilters, [screen]: text } })),
   setAmbientWindowActive: (ambientWindowActive) => set({ ambientWindowActive }),
-  // Local settings echo only — an armed timer's action is updated via
-  // tt.setSleep, and the main process pushes the change back.
-  setSleepAction: (action) =>
-    set((s) => ({ settings: { ...s.settings, sleepAction: action } })),
   setSettings: (settings) => set({ settings }),
+  saveSettings: async (patch) => {
+    const settings = await tt.setSettings(patch)
+    set({ settings })
+  },
   setQueueItems: (items) =>
     set((s) => (s.queue ? { queue: { ...s.queue, items } } : {})),
 

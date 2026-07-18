@@ -3,6 +3,8 @@ import { ChevronRight, Disc3, History, Music, Radio, Trash2 } from 'lucide-react
 import { recentMatchesPlayState, type RecentTrack } from '@shared/ipc'
 import { tt } from '@/api'
 import { useStore } from '@/store'
+import { Eqbars } from '@/components/Eqbars'
+import { EmptyState } from '@/components/EmptyState'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { Segmented } from '@/components/Segmented'
 import { ArtImage } from '@/components/ArtImage'
@@ -40,9 +42,9 @@ const songText = (e: RecentTrack): string | null =>
 /** Read-only local history of tracks the streamer has played. */
 export function RecentlyPlayedScreen(): React.JSX.Element {
   const recents = useStore((s) => s.recents)
+  const saveSettings = useStore((s) => s.saveSettings)
   const grouped = useStore((s) => s.settings.recentsGrouped)
   const playState = useStore((s) => s.playState)
-  const setSettings = useStore((s) => s.setSettings)
   const filter = useStore((s) => s.screenFilters['recently-played'])
   const setScreenFilter = useStore((s) => s.setScreenFilter)
 
@@ -85,7 +87,7 @@ export function RecentlyPlayedScreen(): React.JSX.Element {
   }
 
   const toggleGrouped = (next: boolean): void => {
-    void tt.setSettings({ recentsGrouped: next }).then(setSettings)
+    void saveSettings({ recentsGrouped: next })
   }
   const toggleExpand = (id: string): void =>
     setExpanded((prev) => {
@@ -131,14 +133,11 @@ export function RecentlyPlayedScreen(): React.JSX.Element {
       </header>
 
       {recents.length === 0 ? (
-        <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center px-8">
-          <History size={48} strokeWidth={1.2} className="text-faint/60" />
-          <div className="font-display text-xl text-dim">No history yet</div>
-          <div className="text-[13px] text-faint max-w-sm">
-            Tracks and stations you play will collect here — a local log, kept only on this
-            computer.
-          </div>
-        </div>
+        <EmptyState
+          icon={History}
+          title="No history yet"
+          caption="Tracks and stations you play will collect here — a local log, kept only on this computer."
+        />
       ) : (
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-8 pb-8 pt-1">
           <div className="max-w-2xl space-y-6">
@@ -193,17 +192,6 @@ function Thumb({ entry }: { entry: RecentTrack }): React.JSX.Element {
   )
 }
 
-/** Small animated bars marking the live head entry (matches the queue's). */
-function LiveBars(): React.JSX.Element {
-  return (
-    <span className="eqbars text-gold shrink-0">
-      <span style={{ height: 6 }} />
-      <span style={{ height: 10 }} />
-      <span style={{ height: 5 }} />
-    </span>
-  )
-}
-
 function TrackRow({
   entry,
   now,
@@ -230,7 +218,7 @@ function TrackRow({
       <Thumb entry={entry} />
       <div className="min-w-0 flex-1">
         <div className={cx('flex items-center gap-2 text-[13.5px] truncate', live ? 'text-gold' : 'text-ink')}>
-          {live && <LiveBars />}
+          {live && <Eqbars playing />}
           <span className="truncate">{title ?? '—'}</span>
         </div>
         {subtitle && <div className="text-[12px] text-dim truncate">{subtitle}</div>}
@@ -285,7 +273,7 @@ function SessionRow({
         </div>
         <div className="min-w-0 flex-1">
           <div className={cx('flex items-center gap-2 text-[13.5px] truncate', live ? 'text-gold' : 'text-ink')}>
-            {live && <LiveBars />}
+            {live && <Eqbars playing />}
             <span className="truncate">{primary ?? '—'}</span>
           </div>
           {subtitle && <div className="text-[12px] text-dim truncate">{subtitle}</div>}

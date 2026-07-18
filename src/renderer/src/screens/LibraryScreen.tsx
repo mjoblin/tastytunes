@@ -33,6 +33,7 @@ import { ArtImage } from '@/components/ArtImage'
 import { FilterInput } from '@/components/FilterInput'
 import { ContainerCard, ContainerRow, TrackCard, TrackRow } from '@/components/LibraryCards'
 import { ItemMenu, PresetPicker } from '@/components/LibraryMenus'
+import { EmptyState } from '@/components/EmptyState'
 import { PopoverChrome } from '@/hooks/usePopover'
 
 // Crumbs keep the entered node so an album level can render its header
@@ -68,6 +69,7 @@ export function LibraryScreen(): React.JSX.Element {
   const { libraryLayout, librarySort, librarySortReversed, presetCardSize, presetGap, presetFillRows } =
     useStore((s) => s.settings)
   const setSettings = useStore((s) => s.setSettings)
+  const saveSettings = useStore((s) => s.saveSettings)
   const filter = useStore((s) => s.screenFilters.library)
   const setScreenFilter = useStore((s) => s.setScreenFilter)
   const playState = useStore((s) => s.playState)
@@ -261,7 +263,7 @@ export function LibraryScreen(): React.JSX.Element {
   }, [path, serverUdn, filter, searchState, searchReturn])
 
   const setLayout = async (libraryLayout: ScreenLayout): Promise<void> => {
-    setSettings(await tt.setSettings({ libraryLayout }))
+    await saveSettings({ libraryLayout })
   }
 
   const runSearch = (): void => {
@@ -551,19 +553,19 @@ export function LibraryScreen(): React.JSX.Element {
 
   if (servers != null && servers.length === 0) {
     return (
-      <div className="h-full flex flex-col items-center justify-center gap-4 text-center px-8">
-        <Library size={56} strokeWidth={1} className="text-faint/50" />
-        <div className="font-display text-2xl text-dim">No media libraries found</div>
-        <div className="text-[13px] text-faint max-w-sm">
-          UPnP servers on your network and USB storage attached to the streamer show up here.
-        </div>
+      <EmptyState
+        className="h-full"
+        icon={Library}
+        title="No media libraries found"
+        caption="UPnP servers on your network and USB storage attached to the streamer show up here."
+      >
         <button
           onClick={loadServers}
           className="mt-1 flex items-center gap-2 px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-[12.5px] text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
         >
           <RotateCw size={13} /> Find libraries
         </button>
-      </div>
+      </EmptyState>
     )
   }
 
@@ -595,7 +597,7 @@ export function LibraryScreen(): React.JSX.Element {
             <SortChip
               value={librarySort}
               reversed={librarySortReversed}
-              onChange={(librarySort) => void tt.setSettings({ librarySort }).then(setSettings)}
+              onChange={(librarySort) => void saveSettings({ librarySort })}
               onToggleReverse={() =>
                 void tt
                   .setSettings({ librarySortReversed: !librarySortReversed })

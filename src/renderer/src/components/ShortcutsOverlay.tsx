@@ -1,7 +1,6 @@
 import { X } from 'lucide-react'
 import { useStore } from '@/store'
-
-const MOD = /mac/i.test(navigator.platform) ? '⌘' : 'Ctrl'
+import { MOD, SCREENS } from '@/lib/screens'
 
 const GROUPS: Array<{ title: string; rows: Array<[string, string]> }> = [
   {
@@ -25,8 +24,9 @@ const GROUPS: Array<{ title: string; rows: Array<[string, string]> }> = [
   {
     title: 'Navigate',
     rows: [
-      [`${MOD} K`, 'Command palette'],
-      ['N Q P I R S D E', 'Now Playing · Queue · Presets · lIbrary · Recently · Sources · Device · sEttings'],
+      [`${MOD}K`, 'Command palette'],
+      // letters derive from the shared registry; the prose stays hand-written
+      [SCREENS.map((s) => s.key).join(' '), 'Now Playing · Queue · Presets · lIbrary · Recently · Sources · Device · sEttings'],
       ['F', 'Full-screen display mode'],
       ['/', 'Filter the list (Queue · Presets · Recently)'],
       ['`', 'SMOIP payload console'],
