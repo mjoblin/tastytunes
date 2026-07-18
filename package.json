@@ -10,7 +10,7 @@
   "main": "./out/main/index.js",
   "type": "module",
   "author": "Mike",
-  "license": "MIT",
+  "license": "GPL-3.0-only",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
