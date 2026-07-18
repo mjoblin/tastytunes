@@ -32,6 +32,7 @@ import {
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
+import { DISPLAY_FONTS } from '@/hooks/useDisplayFont'
 import { SIGNAL_COLORS, cx, signalGlow } from '@/lib/format'
 import { Slider } from '@/components/Slider'
 
@@ -123,6 +124,29 @@ export function SettingsScreen(): React.JSX.Element {
                   { value: 'system', label: 'System', icon: <Monitor size={12} /> }
                 ]}
               />
+            </SettingRow>
+
+            <SettingRow
+              label="Display font"
+              hint="The face for titles and big text. Every option previews itself."
+            >
+              <div className="flex flex-wrap justify-end gap-1.5 max-w-[340px]">
+                {DISPLAY_FONTS.map((f) => (
+                  <button
+                    key={f.id}
+                    onClick={() => void save({ displayFont: f.id })}
+                    style={{ fontFamily: f.stack }}
+                    className={cx(
+                      'px-3 py-1.5 rounded-lg ring-1 text-[13px] transition-colors',
+                      settings.displayFont === f.id
+                        ? 'ring-gold/50 bg-golddim text-gold'
+                        : 'ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2'
+                    )}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
             </SettingRow>
 
             <SettingRow

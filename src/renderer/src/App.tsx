@@ -7,6 +7,7 @@ import { useArtAccent } from '@/hooks/useArtAccent'
 import { useArtLoadable } from '@/hooks/useArtLoadable'
 import { useMotionPreference } from '@/hooks/useMotionPreference'
 import { useTheme } from '@/hooks/useTheme'
+import { useDisplayFont } from '@/hooks/useDisplayFont'
 import { deriveNowPlaying } from '@/lib/format'
 import { Nav } from '@/components/Nav'
 import { PlaybackBar } from '@/components/PlaybackBar'
@@ -46,6 +47,7 @@ export default function App(): React.JSX.Element {
 
   // Per-album accent tint (Plexamp-style), from the current art.
   const theme = useTheme(settings.theme)
+  useDisplayFont(settings.displayFont)
   const meta = deriveNowPlaying(playState, nowPlaying)
   const artActive = connected && !inStandby ? meta.artUrl : null
   // A dead art URL must not leave the ambient wash/vignette up with no art.

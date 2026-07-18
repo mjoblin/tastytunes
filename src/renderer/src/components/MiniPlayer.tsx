@@ -17,6 +17,7 @@ import { usePlayhead } from '@/hooks/usePlayhead'
 import { useArtAccent } from '@/hooks/useArtAccent'
 import { useMotionPreference } from '@/hooks/useMotionPreference'
 import { useTheme } from '@/hooks/useTheme'
+import { useDisplayFont } from '@/hooks/useDisplayFont'
 import { useWheelVolume } from '@/components/VolumeCluster'
 import { ArtImage } from '@/components/ArtImage'
 import { controlSet, cx, deriveNowPlaying, fmtTime } from '@/lib/format'
@@ -39,6 +40,7 @@ export function MiniPlayer(): React.JSX.Element {
   const { position, duration } = usePlayhead()
   const onWheel = useWheelVolume()
   const theme = useTheme(settings.theme)
+  useDisplayFont(settings.displayFont)
 
   const connected = connection.phase === 'connected'
   const powered = systemPower?.power === 'ON'

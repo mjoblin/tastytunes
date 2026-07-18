@@ -516,6 +516,9 @@ export function sleepTrackKey(ps: ZonePlayState | null): string | null {
 export type Theme = 'dark' | 'light'
 /** Stored preference: an explicit theme, or follow the OS. */
 export type ThemePreference = Theme | 'system'
+
+/** The display face ("money font") — a curated, bundled set. */
+export type DisplayFont = 'bricolage' | 'fraunces' | 'space-grotesk' | 'sora' | 'unbounded'
 /** How a collection screen lays out its items. */
 export type ScreenLayout = 'rows' | 'cards'
 /** Motion effects: follow the OS Reduce Motion setting, or force on/off. */
@@ -531,6 +534,7 @@ export interface AppSettings {
   volumeLimitPercent: number | null
   notifications: boolean
   theme: ThemePreference
+  displayFont: DisplayFont
   /** Blurred album-art backdrop. */
   ambientArt: AmbientArtMode
   /** Backdrop extent: the main content area, or the whole window (nav + bar too). */
@@ -604,6 +608,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   volumeLimitPercent: null,
   notifications: true,
   theme: 'dark',
+  displayFont: 'bricolage',
   ambientArt: 'now-playing',
   ambientCoverage: 'window',
   vignette: true,
