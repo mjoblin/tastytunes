@@ -16,7 +16,6 @@ import {
   RotateCw,
   Rows3,
   Search,
-  Shuffle,
   Usb
 } from 'lucide-react'
 import type {
@@ -295,99 +294,6 @@ export function LibraryScreen(): React.JSX.Element {
     }
   }
 
-  // ----------------------------------------------------------------- shuffle
-
-  const pickRandom = <T,>(list: T[]): T => list[Math.floor(Math.random() * list.length)]
-
-  /**
-   * Shuffle a folder: queue its content and let the STREAMER's native shuffle
-   * mode do the randomizing — plain browse + queue/add against any UPnP
-   * server, no reliance on server-side tricks like Asset's " [Shuffle
-   * Tracks]". Folders of tracks queue whole, starting at a random track;
-   * folders of albums queue the albums, starting at a random track of a
-   * random album (loose tracks in mixed folders don't ride along). Huge album
-   * folders queue a random sample — the device queue tops out near 500
-   * tracks, so queueing "All Albums" verbatim would truncate arbitrarily
-   * anyway.
-   */
-  const SHUFFLE_ALBUM_CAP = 30
-  const shuffleChildren = async (
-    containerId: string,
-    children: MediaNode[],
-    titles: string[],
-    el: HTMLElement | null
-  ): Promise<void> => {
-    if (!serverUdn) return
-    const tracks = children.filter((n) => !n.isContainer)
-    const containers = children.filter((n) => n.isContainer)
-    let albums = containers.filter((n) => isAlbumClass(n.upnpClass))
-    // Folder-tree servers (USB drives) class their album folders as bare
-    // containers / storageFolders. Entity-classed navigation (artist lists,
-    // Asset's person-classed views) stays out — shuffling those would queue
-    // whole discographies sight unseen.
-    if (albums.length === 0)
-      albums = containers.filter(
-        (n) => n.upnpClass === 'object.container' || n.upnpClass.includes('storageFolder')
-      )
-    try {
-      if (albums.length === 0 && tracks.length > 0) {
-        await tt.mediaQueueAdd(serverUdn, containerId, 'PLAY_FROM_HERE', pickRandom(tracks).id)
-        await tt.command({ type: 'setShuffle', mode: 'all' })
-        if (el) flashTarget(el)
-        return
-      }
-      if (albums.length === 0) {
-        showNotice('Nothing to shuffle here — open a folder with albums or tracks.')
-        return
-      }
-      if (albums.length > SHUFFLE_ALBUM_CAP) {
-        const sampled = new Set<MediaNode>()
-        while (sampled.size < SHUFFLE_ALBUM_CAP) sampled.add(pickRandom(albums))
-        albums = albums.filter((a) => sampled.has(a))
-      }
-      const start = pickRandom(albums)
-      const startTracks = (
-        await tt.mediaBrowse(serverUdn, start.id, [...titles, start.title])
-      ).filter((n) => !n.isContainer)
-      if (startTracks.length > 0)
-        await tt.mediaQueueAdd(serverUdn, start.id, 'PLAY_FROM_HERE', pickRandom(startTracks).id)
-      else await tt.mediaQueueAdd(serverUdn, start.id, 'REPLACE')
-      await tt.command({ type: 'setShuffle', mode: 'all' })
-      if (el) flashTarget(el)
-      // The rest append behind the already-playing start album, in listed
-      // order — under shuffle mode the queue order doesn't steer playback.
-      for (const alb of albums) {
-        if (alb === start) continue
-        await tt.mediaQueueAdd(serverUdn, alb.id, 'APPEND')
-      }
-    } catch {
-      showNotice("Couldn't reach the streamer — nothing was queued.")
-    }
-  }
-
-  /** Shuffle from a container's ⋯ menu or the album header: browse it first. */
-  const shuffleContainer = async (node: MediaNode, el: HTMLElement | null): Promise<void> => {
-    if (!serverUdn) return
-    const titles = [...path.map((c) => c.title), node.title]
-    try {
-      const children = stripFurniture(await tt.mediaBrowse(serverUdn, node.id, titles))
-      await shuffleChildren(node.id, children, titles, el)
-    } catch {
-      showNotice("Couldn't reach the streamer — nothing was queued.")
-    }
-  }
-
-  /** Shuffle the folder currently on screen (its children are already here). */
-  const shuffleHere = (el: HTMLElement | null): void => {
-    if (path.length === 0) return
-    void shuffleChildren(
-      path[path.length - 1].id,
-      nodes,
-      path.map((c) => c.title),
-      el
-    )
-  }
-
   const savePreset = async (node: MediaNode, slot: number): Promise<void> => {
     if (!serverUdn) return
     try {
@@ -502,11 +408,6 @@ export function LibraryScreen(): React.JSX.Element {
       : sortNodes(rawTracks)
   const shownServers = servers ?? [] // the source list is short — no filter there
   const loading = atRoot ? servers == null : state === 'loading'
-  // Folder-level shuffle sits where Asset's " [Shuffle Tracks]" furniture used
-  // to: any browsed folder with albums or tracks in it. Album levels get the
-  // verb in their own header instead.
-  const shuffleAvailable =
-    !searchMode && !atRoot && state === 'ready' && !albumNode && path.length > 0 && hasPlayable
 
   // "Retrieving…" only appears when a browse actually takes a moment —
   // cached/fast responses swap in without a flash of loading copy.
@@ -589,17 +490,6 @@ export function LibraryScreen(): React.JSX.Element {
         <h1 className="font-display font-bold text-[26px] tracking-tight">Library</h1>
         <div className="flex-1" />
         <div className="flex items-center gap-1.5">
-          {shuffleAvailable && (
-            <button
-              data-library-shuffle
-              data-tip="Shuffle this folder — replaces the queue"
-              aria-label="Shuffle this folder"
-              onClick={(e) => shuffleHere(e.currentTarget)}
-              className="no-drag tip-bottom p-2 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
-            >
-              <Shuffle size={16} />
-            </button>
-          )}
           {filterAvailable && (
             <FilterInput
               value={filter}
@@ -829,19 +719,6 @@ export function LibraryScreen(): React.JSX.Element {
                   <Play size={14} fill="currentColor" /> Play
                 </button>
                 <button
-                  aria-label="Shuffle"
-                  data-tip="Shuffle — replaces the queue"
-                  onClick={(e) =>
-                    void shuffleContainer(
-                      albumNode,
-                      (e.currentTarget.closest('[data-album-header]') as HTMLElement) ?? null
-                    )
-                  }
-                  className="tip-bottom p-2 rounded-full ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 transition-all"
-                >
-                  <Shuffle size={16} />
-                </button>
-                <button
                   aria-label="More actions"
                   onClick={(e) => openMenu(albumNode, e)}
                   className="p-2 rounded-full ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 transition-all"
@@ -966,7 +843,6 @@ export function LibraryScreen(): React.JSX.Element {
           onAction={(action, playFromId) => {
             setMenu(null)
             if (action === 'PLAY') void playContainer(menu.node, null)
-            else if (action === 'SHUFFLE') void shuffleContainer(menu.node, null)
             else if (action === 'PLAY_FROM_HERE' && menu.node.parentId != null)
               // needs the parent ALBUM's DIDL, starting from this track
               void act({ ...menu.node, id: menu.node.parentId }, 'PLAY_FROM_HERE', null, playFromId)
@@ -1503,14 +1379,13 @@ function ItemMenu({
 }: {
   menu: { node: MediaNode; x: number; y: number }
   onClose(): void
-  onAction(action: MediaQueueAction | 'PLAY' | 'SHUFFLE', playFromId?: string): void
+  onAction(action: MediaQueueAction | 'PLAY', playFromId?: string): void
   onSavePreset(): void
 }): React.JSX.Element {
   const { node } = menu
   const items: Array<{ label: string; run: () => void }> = node.isContainer
     ? [
         { label: 'Play', run: () => onAction('PLAY') },
-        { label: 'Shuffle', run: () => onAction('SHUFFLE') },
         { label: 'Play next', run: () => onAction('PLAY_NEXT') },
         { label: 'Add to end of queue', run: () => onAction('APPEND') },
         { label: 'Replace queue', run: () => onAction('REPLACE') },
