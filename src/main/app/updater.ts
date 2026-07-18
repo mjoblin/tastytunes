@@ -30,6 +30,12 @@ const RELEASES_PAGE = `${REPO_URL}/releases/latest`;
 const FEED = process.env["TASTYTUNES_UPDATE_FEED"];
 const CHECK_EVERY_MS = 4 * 60 * 60 * 1000;
 
+// Mac App Store builds never self-update (the store owns delivery — shipping
+// an in-app updater is a rejection) and never probe GitHub for releases.
+// Mirrors `storeBuild` in the preload; TASTYTUNES_MAS=1 lets harnesses
+// exercise the store-build behavior in unpackaged runs.
+const STORE_BUILD = process.mas === true || process.env["TASTYTUNES_MAS"] === "1";
+
 let state: UpdateState = {
   phase: "idle",
   version: null,
@@ -55,6 +61,8 @@ const updaterUsable = (): boolean => app.isPackaged || !!FEED;
 
 export function startUpdater(onState: (s: UpdateState) => void): void {
   announce = onState;
+
+  if (STORE_BUILD) return; // state stays idle; Settings explains the store owns updates
 
   if (!updaterUsable()) {
     // Dev build: stage-1 awareness only — the About row offers the release page.
@@ -129,6 +137,7 @@ export function startUpdater(onState: (s: UpdateState) => void): void {
 
 /** Immediate re-check — used when the settings toggle turns on. */
 export function checkUpdatesNow(): void {
+  if (STORE_BUILD) return;
   if (!getSettings().updateCheck) return;
   if (updaterUsable()) void autoUpdater.checkForUpdates().catch(() => {});
   else void legacyCheckNow();
