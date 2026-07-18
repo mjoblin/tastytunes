@@ -11,7 +11,7 @@
 const config = {
   // Placeholder — the iOS bundle id is an Apple-side decision (ASC app
   // record); align before the first archive.
-  appId: 'app.tastytunes.ipad',
+  appId: 'com.redactedcat.tastytunes.ipad',
   appName: 'TastyTunes',
   // The desktop renderer build, reused wholesale (electron-vite emits it
   // here); the iPad responsive/touch pass happens in the renderer itself.
