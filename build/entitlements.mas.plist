@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <!-- Mac App Store builds run under the App Sandbox (not hardened runtime). -->
+    <key>com.apple.security.app-sandbox</key>
+    <true/>
+    <!-- Outbound: SMOIP WebSocket/HTTP to the streamer, UPnP SOAP to media
+         servers, lyrics/MusicBrainz/ListenBrainz lookups. -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+    <!-- Inbound: SSDP discovery replies on the bound UDP socket and the
+         opt-in localhost MCP server. -->
+    <key>com.apple.security.network.server</key>
+    <true/>
+    <!-- Electron's helper processes share the sandbox container via the
+         team-prefixed group (pairs with ElectronTeamID in Info.plist). -->
+    <key>com.apple.security.application-groups</key>
+    <array>
+      <string>36MB9UW7WV.app.tastytunes</string>
+    </array>
+  </dict>
+</plist>

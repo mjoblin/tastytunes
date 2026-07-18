@@ -59,6 +59,26 @@ mac:
     ITSAppUsesNonExemptEncryption: false
 dmg:
   artifactName: ${productName}.${ext}
+
+# Mac App Store flavor (inherits everything under `mac`). Not in the default
+# --mac target list; built explicitly with `electron-builder --mac mas`.
+mas:
+  # The App Sandbox replaces the hardened runtime in store builds.
+  hardenedRuntime: false
+  entitlements: build/entitlements.mas.plist
+  entitlementsInherit: build/entitlements.mas.inherit.plist
+  # Apple notarizes store submissions itself.
+  notarize: false
+  extendInfo:
+    # App Store validation requires the icon as an asset catalog (Assets.car,
+    # regenerated via dev/icon-car.sh) — the .icns alone gets rejected.
+    CFBundleIconName: AppIcon
+    # Electron MAS builds derive helper IPC names from this; pairs with the
+    # application-groups entitlement.
+    ElectronTeamID: 36MB9UW7WV
+  extraResources:
+    - from: build/Assets.car
+      to: Assets.car
 win:
   # x64 plus arm64 in ONE dual-arch installer: NSIS embeds both payloads and
   # picks at install time. A single artifact keeps electron-updater safe (one
