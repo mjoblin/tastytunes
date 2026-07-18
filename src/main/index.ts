@@ -68,6 +68,12 @@ function createWindow(): void {
 
   mainWindow.on('ready-to-show', () => mainWindow?.show())
   mainWindow.on('focus', () => deviceManager.healthCheck())
+  // Null the handle when the window closes (macOS keeps the app alive) —
+  // late callers (updater announce, second-instance) otherwise poke a
+  // destroyed BrowserWindow and throw.
+  mainWindow.on('closed', () => {
+    mainWindow = null
+  })
 
   // A window created (or reloaded) after a state change missed the push.
   mainWindow.webContents.on('did-finish-load', () => {
@@ -198,7 +204,9 @@ function registerIpc(): void {
   ipcMain.handle(IPC.getSettings, () => getSettings())
   ipcMain.handle(IPC.setSettings, (_e, patch: Partial<AppSettings>) => {
     const next = updateSettings(patch)
-    syncMediaKeys()
+    // OS-global shortcut churn only when the toggle itself changed — every
+    // settings write used to unregister/re-register all four media keys.
+    if ('mediaKeys' in patch) syncMediaKeys()
     mcpBridge.sync(next)
     // Only when the limit itself changed — a volume set above the limit from
     // outside the app (device knob) mustn't be ambushed by unrelated saves.
@@ -297,10 +305,11 @@ if (!gotLock) {
   app.quit()
 } else {
   app.on('second-instance', () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore()
-      mainWindow.focus()
-    }
+    // A second launch means "show me the app" — recreate the window if the
+    // first instance is running window-less (macOS after close).
+    if (!mainWindow) return createWindow()
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.focus()
   })
 
   app.whenReady().then(() => {

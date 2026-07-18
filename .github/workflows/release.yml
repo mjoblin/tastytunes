@@ -22,6 +22,8 @@ jobs:
             args: --mac
           - os: windows-latest
             args: --win
+          - os: ubuntu-latest
+            args: --linux
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
@@ -85,4 +87,5 @@ jobs:
             dist/*.dmg
             dist/*.exe
             dist/*.zip
+            dist/*.AppImage
           if-no-files-found: ignore

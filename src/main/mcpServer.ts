@@ -68,6 +68,9 @@ export class McpBridge {
 
   stop(restarting = false): void {
     if (!this.http) return
+    // close() only stops NEW connections — drop live keep-alive sockets too,
+    // or a same-port restart (bind flip) races the drain into EADDRINUSE.
+    this.http.closeAllConnections()
     this.http.close()
     this.http = null
     this.active = null
