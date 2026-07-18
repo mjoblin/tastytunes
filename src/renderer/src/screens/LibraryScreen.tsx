@@ -37,8 +37,10 @@ import { FilterInput } from '@/components/FilterInput'
 // (art, artist, year) without re-fetching metadata.
 type Crumb = { id: string; title: string; node?: MediaNode }
 
-// Session memory: where you were browsing survives screen switches.
-let session: { serverUdn: string | null; path: Crumb[] } = { serverUdn: null, path: [] }
+// Entering the Library always lands on the source list — "Library" in the
+// nav/palette/shortcuts is the front door, not "wherever I last was" (user
+// ask). Per-folder scroll and filter memories below still apply while
+// browsing within a visit.
 const scrollMemory = new Map<string, number>()
 // Per-LEVEL filter memory: each folder keeps its own filter for the session
 // (the store's screenFilters.library always holds the current level's).
@@ -46,6 +48,13 @@ const filterMemory = new Map<string, string>()
 
 const nodeKey = (serverUdn: string | null, path: Crumb[]): string =>
   `${serverUdn ?? ''}|${path.map((c) => c.id).join('/')}`
+
+// Synthetic crumb planted when a search RESULT is entered: the trail reads
+// Library › server › “query” › Artist, and the query crumb (or Backspace)
+// restores the search with its results intact. It never reaches the browse
+// layer — titlePaths strip it (a result's true folder path is unknown, so
+// stale-id rewalks can't recover search-entered branches either way).
+const SEARCH_CRUMB_ID = '__search-results__'
 
 /**
  * Library: browse UPnP media (LAN servers and the streamer's own USB storage)
@@ -66,8 +75,8 @@ export function LibraryScreen(): React.JSX.Element {
   const cards = libraryLayout === 'cards'
 
   const [servers, setServers] = useState<MediaServerInfo[] | null>(null)
-  const [serverUdn, setServerUdn] = useState<string | null>(session.serverUdn)
-  const [path, setPath] = useState<Crumb[]>(session.path)
+  const [serverUdn, setServerUdn] = useState<string | null>(null)
+  const [path, setPath] = useState<Crumb[]>([])
   const [nodes, setNodes] = useState<MediaNode[]>([])
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
   // Whole-library search MODE (searchable servers): an explicit state with
@@ -80,6 +89,14 @@ export function LibraryScreen(): React.JSX.Element {
     total: number
   } | null>(null)
   const [searching, setSearching] = useState(false)
+  // Where to come back to when a search result was entered: the results
+  // themselves plus the folder the search ran over.
+  const [searchReturn, setSearchReturn] = useState<{
+    query: string
+    items: MediaNode[]
+    total: number
+    prevPath: Crumb[]
+  } | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   useEffect(() => {
     if (searchMode) searchInputRef.current?.focus()
@@ -111,10 +128,6 @@ export function LibraryScreen(): React.JSX.Element {
   useEffect(() => loadServers(), [loadServers])
 
   useEffect(() => {
-    session = { serverUdn, path }
-  }, [serverUdn, path])
-
-  useEffect(() => {
     if (!serverUdn) {
       setNodes([])
       setState('ready')
@@ -126,7 +139,7 @@ export function LibraryScreen(): React.JSX.Element {
       .mediaBrowse(
         serverUdn,
         path.length > 0 ? path[path.length - 1].id : null,
-        path.map((c) => c.title)
+        path.filter((c) => c.id !== SEARCH_CRUMB_ID).map((c) => c.title)
       )
       .then((list) => {
         if (stale) return
@@ -165,18 +178,58 @@ export function LibraryScreen(): React.JSX.Element {
     setPath(newPath)
   }
 
-  const enter = (node: MediaNode): void =>
+  // Re-invoking "Library" (nav click, palette, L) while already here resets
+  // to the source list — the nonce bumps on every setScreen('library').
+  const libraryResetNonce = useStore((s) => s.libraryResetNonce)
+  useEffect(() => {
+    moveTo(null, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [libraryResetNonce])
+
+  const enter = (node: MediaNode): void => {
+    if (searchMode && searchState) {
+      // Entering a result: plant the query crumb so the trail offers the
+      // way back, and remember the results for an instant restore.
+      setSearchReturn({ ...searchState, prevPath: path })
+      moveTo(serverUdn, [
+        { id: SEARCH_CRUMB_ID, title: `“${searchState.query}”` },
+        { id: node.id, title: node.title, node }
+      ])
+      return
+    }
     moveTo(serverUdn, [...path, { id: node.id, title: node.title, node }])
+  }
   const enterServer = (udn: string): void => moveTo(udn, [])
+
+  /** Bring the search back exactly as it was left (no refetch). */
+  const returnToSearch = (): void => {
+    if (!searchReturn) return
+    rememberScroll()
+    filterMemory.set(nodeKey(serverUdn, path), filter)
+    setScreenFilter('library', filterMemory.get(nodeKey(serverUdn, searchReturn.prevPath)) ?? '')
+    setPath(searchReturn.prevPath)
+    setSearchMode(true)
+    setSearchQuery(searchReturn.query)
+    setSearchState({
+      query: searchReturn.query,
+      items: searchReturn.items,
+      total: searchReturn.total
+    })
+  }
+
   // Crumb trail: Library (source list) › source › folders…
   const jumpTo = (index: number): void => {
-    if (index === 0) moveTo(null, [])
-    else moveTo(serverUdn, path.slice(0, index - 1))
+    if (index === 0) return moveTo(null, [])
+    const newPath = path.slice(0, index - 1)
+    if (newPath[newPath.length - 1]?.id === SEARCH_CRUMB_ID) return returnToSearch()
+    moveTo(serverUdn, newPath)
   }
   const goUp = (): void => {
     if (searchMode) exitSearch() // search exits first, folder stays
-    else if (path.length > 0) moveTo(serverUdn, path.slice(0, -1))
-    else if (serverUdn) moveTo(null, [])
+    else if (path.length > 0) {
+      if (path[path.length - 2]?.id === SEARCH_CRUMB_ID) return returnToSearch()
+      moveTo(serverUdn, path.slice(0, -1))
+    } else if (serverUdn) moveTo(null, [])
   }
 
   // Backspace and the mouse back button go up a level (arrows stay with
@@ -203,7 +256,7 @@ export function LibraryScreen(): React.JSX.Element {
       window.removeEventListener('mouseup', onMouseUp)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path, serverUdn, filter, searchState])
+  }, [path, serverUdn, filter, searchState, searchReturn])
 
   const setLayout = async (libraryLayout: ScreenLayout): Promise<void> => {
     setSettings(await tt.setSettings({ libraryLayout }))
@@ -423,6 +476,12 @@ export function LibraryScreen(): React.JSX.Element {
 
   // ------------------------------------------------------------------ render
 
+  // Search-result group headings: identical under-gap everywhere (mb-0.5 —
+  // the lists below carry no extra top margin in search mode), identical
+  // above-gap too (mt-2 for whichever group lands first, mt-5 after).
+  const groupLabelClass = (first: boolean): string =>
+    cx('microlabel mb-0.5 px-1', first ? 'mt-2' : 'mt-5')
+
   const containerGrid = (list: MediaNode[]): React.JSX.Element => (
     <div
       className={cx(!cards && 'divide-y divide-edge/50 -mx-2')}
@@ -610,15 +669,28 @@ export function LibraryScreen(): React.JSX.Element {
         {path.map((crumb, i) => (
           <span key={`${crumb.id}-${i}`} className="flex items-center gap-1">
             <ChevronRight size={12} className="text-faint" />
-            <button
-              onClick={() => jumpTo(i + 2)}
-              className={cx(
-                'px-1.5 py-0.5 rounded transition-colors',
-                i === path.length - 1 ? 'text-ink' : 'text-dim hover:text-ink hover:bg-veil'
-              )}
-            >
-              {crumb.title}
-            </button>
+            {crumb.id === SEARCH_CRUMB_ID ? (
+              // the way back to the results this branch was entered from —
+              // gold, matching the search bar's identity
+              <button
+                data-library-search-crumb
+                onClick={() => jumpTo(i + 2)}
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded text-gold/90 hover:text-gold hover:bg-golddim transition-colors"
+              >
+                <Search size={11} />
+                {crumb.title}
+              </button>
+            ) : (
+              <button
+                onClick={() => jumpTo(i + 2)}
+                className={cx(
+                  'px-1.5 py-0.5 rounded transition-colors',
+                  i === path.length - 1 ? 'text-ink' : 'text-dim hover:text-ink hover:bg-veil'
+                )}
+              >
+                {crumb.title}
+              </button>
+            )}
           </span>
         ))}
       </div>
@@ -637,9 +709,12 @@ export function LibraryScreen(): React.JSX.Element {
           </div>
         )}
 
-        {/* root: sources, grouped like the official app (Servers / USB drives) */}
+        {/* root: sources, grouped like the official app (Servers / USB drives).
+            There will only ever be a handful — big preset-card-style tiles
+            (squat 4:3 icon area: these are PLACES, not albums), not a list
+            built for volume. */}
         {!loading && atRoot && (
-          <div className="max-w-2xl space-y-6 pt-1">
+          <div className="space-y-7 pt-1">
             {shownServers.length === 0 && (
               <div className="text-[15px] text-faint pt-3 px-1">
                 {filter ? `No matches for “${filter}”` : 'Nothing here'}
@@ -650,25 +725,38 @@ export function LibraryScreen(): React.JSX.Element {
               if (group.length === 0) return null
               return (
                 <div key={kind}>
-                  <div className="microlabel mb-2 px-1">
+                  <div className="microlabel mb-2.5 px-1">
                     {kind === 'usb' ? 'USB drives' : 'Servers'}
                   </div>
-                  <div className="divide-y divide-edge/50">
+                  <div className="grid grid-cols-[repeat(auto-fill,228px)] gap-4">
                     {group.map((s) => (
                       <div
                         key={s.udn}
                         data-library-source
                         onClick={() => enterServer(s.udn)}
-                        className="group grid grid-cols-[44px_1fr] items-center gap-3 rounded-lg px-2 py-2 cursor-pointer hover:bg-veil transition-colors"
+                        className="group relative rounded-2xl p-3 pb-3.5 bg-raised/70 ring-1 ring-edge card-hover-glow cursor-pointer transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]"
                       >
-                        <div className="h-10 w-10 rounded ring-1 ring-edge bg-raised flex items-center justify-center text-faint">
-                          {s.isStreamer ? <Usb size={16} /> : <HardDrive size={16} />}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-[13.5px] text-ink truncate">{s.name}</div>
-                          {s.model && (
-                            <div className="text-[12px] text-faint truncate">{s.model}</div>
+                        <div className="aspect-[4/3] w-full rounded-xl ring-1 ring-edge bg-panel/70 flex items-center justify-center">
+                          {s.isStreamer ? (
+                            <Usb
+                              size={46}
+                              strokeWidth={1.1}
+                              className="text-faint group-hover:text-dim transition-colors"
+                            />
+                          ) : (
+                            <HardDrive
+                              size={46}
+                              strokeWidth={1.1}
+                              className="text-faint group-hover:text-dim transition-colors"
+                            />
                           )}
+                        </div>
+                        <div className="pt-2.5 font-display font-semibold text-[15.5px] tracking-tight truncate">
+                          {s.name}
+                        </div>
+                        <div className="text-[12px] text-faint truncate">
+                          {s.model ??
+                            (s.isStreamer ? 'Storage on the streamer' : 'Media server')}
                         </div>
                       </div>
                     ))}
@@ -764,19 +852,21 @@ export function LibraryScreen(): React.JSX.Element {
                 <>
                   {albums.length > 0 && (
                     <>
-                      <div className="microlabel mb-0.5 mt-2 px-1">Albums</div>
+                      <div className={groupLabelClass(true)}>Albums</div>
                       {containerGrid(albums)}
                     </>
                   )}
                   {artists.length > 0 && (
                     <>
-                      <div className="microlabel mb-0.5 mt-5 px-1">Artists</div>
+                      <div className={groupLabelClass(albums.length === 0)}>Artists</div>
                       {containerGrid(artists)}
                     </>
                   )}
                   {other.length > 0 && (
                     <>
-                      <div className="microlabel mb-0.5 mt-5 px-1">Folders</div>
+                      <div className={groupLabelClass(albums.length === 0 && artists.length === 0)}>
+                        Folders
+                      </div>
                       {containerGrid(other)}
                     </>
                   )}
@@ -787,14 +877,14 @@ export function LibraryScreen(): React.JSX.Element {
         )}
 
         {searchMode && searchState && state === 'ready' && tracks.length > 0 && (
-          <div className="microlabel mb-0.5 mt-5 px-1">Tracks</div>
+          <div className={groupLabelClass(containers.length === 0)}>Tracks</div>
         )}
 
         {/* loose tracks honor the cards ⇄ rows toggle; album views keep rows
             (the header presents the album — rows are the tracklist idiom) */}
         {!atRoot && state === 'ready' && tracks.length > 0 && cards && !albumNode ? (
           <div
-            className={cx(containers.length > 0 && 'mt-4')}
+            className={cx(containers.length > 0 && !searchMode && 'mt-4')}
             style={{
               display: 'grid',
               gridTemplateColumns: presetFillRows
@@ -818,7 +908,12 @@ export function LibraryScreen(): React.JSX.Element {
             ))}
           </div>
         ) : !atRoot && state === 'ready' && tracks.length > 0 ? (
-          <div className={cx('divide-y divide-edge/50 -mx-2', containers.length > 0 && 'mt-4')}>
+          <div
+            className={cx(
+              'divide-y divide-edge/50 -mx-2',
+              containers.length > 0 && !searchMode && 'mt-4'
+            )}
+          >
             {tracks.map((node) => (
               <TrackRow
                 key={node.id}

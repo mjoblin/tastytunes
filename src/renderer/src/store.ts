@@ -49,6 +49,9 @@ interface PlayheadSync {
 
 interface TTState {
   screen: Screen
+  /** Bumped on every navigation TO the library — the screen resets to its
+   *  source list (nav/palette/shortcut "Library" means the front door). */
+  libraryResetNonce: number
   connection: ConnectionState
   devices: DiscoveredDevice[]
   discovering: boolean
@@ -120,6 +123,7 @@ interface TTState {
 
 export const useStore = create<TTState>((set, get) => ({
   screen: 'now-playing',
+  libraryResetNonce: 0,
   connection: { phase: 'idle' },
   devices: [],
   discovering: false,
@@ -155,7 +159,10 @@ export const useStore = create<TTState>((set, get) => ({
   mcpStatus: { running: false, url: null, error: null },
   update: null,
 
-  setScreen: (screen) => set({ screen }),
+  setScreen: (screen) =>
+    set((s) =>
+      screen === 'library' ? { screen, libraryResetNonce: s.libraryResetNonce + 1 } : { screen }
+    ),
   setDiagnosticsOpen: (diagnosticsOpen) => set({ diagnosticsOpen }),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   setInfoOpen: (infoOpen) => set({ infoOpen }),

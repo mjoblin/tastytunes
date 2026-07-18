@@ -308,6 +308,18 @@ img {
     0 0 90px -30px rgb(var(--amber-rgb) / 0.18);
 }
 
+/* Inline lyric line: a faint gold halo so the current line reads as "lit"
+   against the dark screen. Light theme drops it — glow on paper reads as
+   smudge, not light (same rule as the playing-tile blooms above). */
+.lyric-glow {
+  text-shadow:
+    0 0 10px rgb(var(--gold-rgb) / 0.4),
+    0 0 28px rgb(var(--gold-rgb) / 0.18);
+}
+:root.light .lyric-glow {
+  text-shadow: none;
+}
+
 /* deterministic tooltips for the nav rail (native titles are unreliable in
    frameless windows): appears to the right of the element after a short dwell */
 @layer base {

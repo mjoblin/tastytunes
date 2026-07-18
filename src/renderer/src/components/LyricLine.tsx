@@ -22,7 +22,7 @@ export function LyricLine(): React.JSX.Element | null {
         className={cx(
           'font-display text-[17px] leading-snug line-clamp-2 transition-opacity duration-200',
           visible ? 'opacity-100' : 'opacity-0',
-          placeholder ? 'text-faint' : 'text-gold/90'
+          placeholder ? 'text-faint' : 'text-gold/90 lyric-glow'
         )}
       >
         {shown}
