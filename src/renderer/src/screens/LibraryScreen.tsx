@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   ArrowUpDown,
@@ -748,6 +748,9 @@ function ContainerCard({
   // Queue/preset verbs only make sense on albums — plain folders (artist
   // dirs, USB volumes, Asset's virtual views) get no chips and no menu.
   const album = isAlbumClass(node.upnpClass)
+  // Mute only anonymous folder art (Asset's generated letter tiles, virtual
+  // views) — artists carry real portraits and stay vivid, like albums.
+  const muted = !album && !node.upnpClass.includes('person')
   const subtitle = [node.artist, node.year].filter(Boolean).join(' · ')
   return (
     // Preset-card idiom: inset tile, hover grow + lift + glow; the highlight
@@ -760,8 +763,9 @@ function ContainerCard({
         'group relative text-left rounded-2xl p-2 pb-2.5 transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]',
         playing ? 'bg-goldtile/70 tile-playing' : 'bg-raised/70 ring-1 ring-edge card-hover-glow',
         // held while this card's ⋯ menu / preset picker is open — the pointer
-        // has left, but the card is still what's being acted on
-        menuOpen && 'ring-1 ring-edge2'
+        // has left, but the card is still what's being acted on: keep the
+        // full hover treatment (grow + glow), not just a ring
+        menuOpen && 'ring-1 ring-edge2 z-10 motion-safe:scale-[1.04] card-glow-held'
       )}
     >
       {/* the card CENTER always enters — play/menu are corner chips on the
@@ -769,12 +773,10 @@ function ContainerCard({
           whose whole-card click IS the play action) */}
       <button className="block w-full cursor-pointer" onClick={onEnter}>
         <div className="relative aspect-square w-full rounded-lg overflow-hidden bg-panel/70 flex items-center justify-center">
-          {/* server-generated folder art (Asset's letter tiles etc.) is muted
-              so it recedes into the app's palette; real album art stays vivid */}
           <ArtImage
             src={node.artUrl}
             lazy
-            className={cx('h-full w-full object-cover', !album && 'opacity-60 saturate-[.6]')}
+            className={cx('h-full w-full object-cover', muted && 'opacity-60 saturate-[.6]')}
             fallback={
               album ? (
                 <Disc3 size={34} strokeWidth={1.2} className="text-faint" />
@@ -783,7 +785,7 @@ function ContainerCard({
               )
             }
           />
-          {!album && node.artUrl && (
+          {muted && node.artUrl && (
             <div className="absolute inset-0 pointer-events-none bg-panel/30" />
           )}
           {playing && (
@@ -852,6 +854,7 @@ function ContainerRow({
 }): React.JSX.Element {
   // Same rule as cards: only albums carry the ⋯ menu.
   const album = isAlbumClass(node.upnpClass)
+  const muted = !album && !node.upnpClass.includes('person')
   return (
     <div
       className={cx(
@@ -866,7 +869,7 @@ function ContainerRow({
         <ArtImage
           src={node.artUrl}
           lazy
-          className={cx('h-full w-full object-cover', !album && 'opacity-60 saturate-[.6]')}
+          className={cx('h-full w-full object-cover', muted && 'opacity-60 saturate-[.6]')}
           fallback={
             album ? (
               <Disc3 size={16} className="text-faint" />
@@ -983,6 +986,48 @@ function TrackRow({
   )
 }
 
+/**
+ * Popover plumbing shared by the ⋯ menu and preset picker: Escape closes
+ * (capture phase, so the app's Escape cascade underneath doesn't also fire),
+ * and drag regions go inert while open so the full-window click-catcher can
+ * hear clicks on the header (app-region swallows pointer events natively).
+ */
+function usePopoverChrome(onClose: () => void): void {
+  useEffect(() => {
+    document.documentElement.classList.add('popover-open')
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => {
+      document.documentElement.classList.remove('popover-open')
+      window.removeEventListener('keydown', onKey, true)
+    }
+  }, [onClose])
+}
+
+/** Clamp a click-anchored popover fully on-screen using its MEASURED size. */
+function useClampedPosition(
+  ref: React.RefObject<HTMLDivElement | null>,
+  x: number,
+  y: number
+): { left: number; top: number } {
+  const [pos, setPos] = useState({ left: x, top: y })
+  useLayoutEffect(() => {
+    const r = ref.current?.getBoundingClientRect()
+    if (!r) return
+    setPos({
+      left: Math.max(12, Math.min(x, window.innerWidth - r.width - 12)),
+      top: Math.max(12, Math.min(y, window.innerHeight - r.height - 12))
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [x, y])
+  return pos
+}
+
 /** Gold playing bars (queue idiom); frozen while paused. Rendered only on the
  *  current item, so always gold. */
 function Eqbars({ playing }: { playing: boolean }): React.JSX.Element {
@@ -1033,15 +1078,17 @@ function ItemMenu({
         { label: 'Save to preset…', run: onSavePreset }
       ]
 
+  usePopoverChrome(onClose)
+  const boxRef = useRef<HTMLDivElement | null>(null)
+  const pos = useClampedPosition(boxRef, menu.x, menu.y)
+
   return createPortal(
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} onContextMenu={onClose} />
       <div
+        ref={boxRef}
         className="fixed z-50 w-52 rounded-xl ring-1 ring-edge2 bg-raised shadow-xl p-1.5 space-y-0.5"
-        style={{
-          left: Math.min(menu.x, window.innerWidth - 224),
-          top: Math.min(menu.y, window.innerHeight - items.length * 36 - 16)
-        }}
+        style={pos}
       >
         <div className="px-2.5 pt-1 pb-1.5 text-[11px] text-faint truncate">{node.title}</div>
         {items.map((item) => (
@@ -1079,16 +1126,17 @@ function PresetPicker({
   while (occupied.has(nextFree) && nextFree < 99) nextFree++
   const slotCount = Math.max(24, Math.min(99, (Math.max(0, ...occupied.keys()) ?? 0) + 6))
   const [confirmSlot, setConfirmSlot] = useState<number | null>(null)
+  usePopoverChrome(onClose)
+  const boxRef = useRef<HTMLDivElement | null>(null)
+  const pos = useClampedPosition(boxRef, picker.x, picker.y)
 
   return createPortal(
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
       <div
+        ref={boxRef}
         className="fixed z-50 w-[264px] rounded-xl ring-1 ring-edge2 bg-raised shadow-xl p-3 space-y-2.5"
-        style={{
-          left: Math.min(picker.x, window.innerWidth - 280),
-          top: Math.min(picker.y, window.innerHeight - 260)
-        }}
+        style={pos}
       >
         <div className="text-[11px] text-faint truncate">{picker.node.title}</div>
         <button

@@ -108,6 +108,11 @@ img {
 :root.filter-focused .drag-region {
   -webkit-app-region: no-drag;
 }
+/* Same rule while a library popover (⋯ menu / preset picker) is open — its
+   full-window click-catcher must receive clicks on the header too. */
+:root.popover-open .drag-region {
+  -webkit-app-region: no-drag;
+}
 
 /* mini-player window: transparent page so the rounded strip floats */
 :root.mini body {
@@ -236,13 +241,15 @@ img {
 
 /* Card hover: the playing tile's glow anatomy in neutral grey (dark) /
    neutral elevation (light). Overrides the resting ring utilities on hover. */
-.card-hover-glow:hover {
+.card-hover-glow:hover,
+.card-glow-held {
   box-shadow:
     0 0 0 2px rgb(255 255 255 / 0.32),
     0 0 26px rgb(255 255 255 / 0.12),
     0 0 62px 12px rgb(255 255 255 / 0.07);
 }
-:root.light .card-hover-glow:hover {
+:root.light .card-hover-glow:hover,
+:root.light .card-glow-held {
   box-shadow:
     0 0 0 2px rgb(30 20 5 / 0.35),
     0 2px 10px rgb(60 42 8 / 0.16),
