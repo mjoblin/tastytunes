@@ -17,7 +17,7 @@
          team-prefixed group (pairs with ElectronTeamID in Info.plist). -->
     <key>com.apple.security.application-groups</key>
     <array>
-      <string>36MB9UW7WV.app.tastytunes</string>
+      <string>36MB9UW7WV.com.redactedcat.tastytunes</string>
     </array>
   </dict>
 </plist>
