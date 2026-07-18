@@ -14,6 +14,8 @@ const PAGE_SIZE = 5000 // the streamer's own server ignores RequestedCount=0
 
 interface ServerEntry extends MediaServerInfo {
   controlUrl: string
+  /** Raw SearchCaps: "*" (anything), a CSV of properties, or "" (no search). */
+  searchCaps: string
 }
 
 const parser = new XMLParser({
@@ -71,12 +73,14 @@ export async function refreshServers(host: string): Promise<MediaServerInfo[]> {
     if (!dev.udn || !dev.description_url) continue
     const controlUrl = await contentDirectoryControlUrl(dev.description_url)
     if (!controlUrl) continue // no ContentDirectory — a renderer-only device
+    const searchCaps = await getSearchCaps(controlUrl)
     next.set(dev.udn, {
       udn: dev.udn,
       name: dev.name ?? dev.model ?? 'Media server',
       model: dev.model ?? null,
       isStreamer: new URL(dev.description_url).hostname === streamerIp,
-      searchable: await supportsSearch(controlUrl),
+      searchable: searchCaps.length > 0,
+      searchCaps,
       controlUrl
     })
   }
@@ -91,8 +95,8 @@ export async function refreshServers(host: string): Promise<MediaServerInfo[]> {
   }))
 }
 
-/** Non-empty GetSearchCapabilities = the server answers Search (Asset: "*"). */
-async function supportsSearch(controlUrl: string): Promise<boolean> {
+/** GetSearchCapabilities: "*" = anything, CSV = specific properties, "" = none. */
+async function getSearchCaps(controlUrl: string): Promise<string> {
   try {
     const res = await loggedFetch('upnp', controlUrl, {
       method: 'POST',
@@ -106,14 +110,13 @@ async function supportsSearch(controlUrl: string): Promise<boolean> {
 </s:Envelope>`,
       signal: AbortSignal.timeout(8000)
     })
-    if (!res.ok) return false
+    if (!res.ok) return ''
     const doc = parser.parse(await res.text()) as {
       Envelope?: { Body?: { GetSearchCapabilitiesResponse?: { SearchCaps?: unknown } } }
     }
-    const caps = text(doc.Envelope?.Body?.GetSearchCapabilitiesResponse?.SearchCaps)
-    return caps != null && caps.trim().length > 0
+    return text(doc.Envelope?.Body?.GetSearchCapabilitiesResponse?.SearchCaps)?.trim() ?? ''
   } catch {
-    return false
+    return ''
   }
 }
 
@@ -350,7 +353,10 @@ async function searchScope(
  * Whole-library search. Probed grammar reality (Asset): criteria MUST be
  * scoped with `upnp:class derivedfrom …` to return anything, OR works
  * WITHIN a scope but not across scoped groups — so run one search per
- * entity kind (albums, artists, tracks) and merge, deduped by id.
+ * entity kind (albums, artists, tracks) and merge, deduped by id. Field
+ * clauses only reference properties the server DECLARES searchable
+ * (SearchCaps "*" = all; a CSV limits us — e.g. a title-only server still
+ * gets title search instead of silent zero-result queries).
  */
 export async function search(
   host: string,
@@ -359,13 +365,27 @@ export async function search(
 ): Promise<{ items: MediaNode[]; total: number }> {
   const entry = await entryFor(host, serverUdn)
   const phrase = query.replace(/["\\]/g, '') // criteria-grammar safe
+
+  const caps = entry.searchCaps
+  const has = (prop: string): boolean => caps === '*' || caps.split(',').some((c) => c.trim() === prop)
+  const orClause = (props: string[]): string | null => {
+    const usable = props.filter(has)
+    if (usable.length === 0) return null
+    const inner = usable.map((p) => `${p} contains "${phrase}"`).join(' or ')
+    return usable.length > 1 ? `(${inner})` : inner
+  }
+
   const scopes = [
-    `upnp:class derivedfrom "object.container.album" and (dc:title contains "${phrase}" or upnp:artist contains "${phrase}")`,
-    `upnp:class derivedfrom "object.container.person" and dc:title contains "${phrase}"`,
-    `upnp:class derivedfrom "object.item.audioItem" and (dc:title contains "${phrase}" or upnp:artist contains "${phrase}" or upnp:album contains "${phrase}")`
-  ]
+    { cls: 'object.container.album', fields: orClause(['dc:title', 'upnp:artist']) },
+    { cls: 'object.container.person', fields: orClause(['dc:title']) },
+    { cls: 'object.item.audioItem', fields: orClause(['dc:title', 'upnp:artist', 'upnp:album']) }
+  ].filter((s): s is { cls: string; fields: string } => s.fields != null)
+  if (scopes.length === 0) throw new Error('server declares no searchable text properties')
+
   const results = []
-  for (const criteria of scopes) results.push(await searchScope(entry, criteria))
+  for (const s of scopes) {
+    results.push(await searchScope(entry, `upnp:class derivedfrom "${s.cls}" and ${s.fields}`))
+  }
   if (results.every((r) => r == null)) throw new Error('search failed')
 
   const seen = new Set<string>()
