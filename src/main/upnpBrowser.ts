@@ -76,17 +76,45 @@ export async function refreshServers(host: string): Promise<MediaServerInfo[]> {
       name: dev.name ?? dev.model ?? 'Media server',
       model: dev.model ?? null,
       isStreamer: new URL(dev.description_url).hostname === streamerIp,
+      searchable: await supportsSearch(controlUrl),
       controlUrl
     })
   }
   servers = next
   nodeCache.clear()
-  return [...next.values()].map(({ udn, name, model, isStreamer }) => ({
+  return [...next.values()].map(({ udn, name, model, isStreamer, searchable }) => ({
     udn,
     name,
     model,
-    isStreamer
+    isStreamer,
+    searchable
   }))
+}
+
+/** Non-empty GetSearchCapabilities = the server answers Search (Asset: "*"). */
+async function supportsSearch(controlUrl: string): Promise<boolean> {
+  try {
+    const res = await loggedFetch('upnp', controlUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/xml; charset="utf-8"',
+        SOAPAction: '"urn:schemas-upnp-org:service:ContentDirectory:1#GetSearchCapabilities"'
+      },
+      body: `<?xml version="1.0" encoding="utf-8"?>
+<s:Envelope s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/" xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+  <s:Body><u:GetSearchCapabilities xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"></u:GetSearchCapabilities></s:Body>
+</s:Envelope>`,
+      signal: AbortSignal.timeout(8000)
+    })
+    if (!res.ok) return false
+    const doc = parser.parse(await res.text()) as {
+      Envelope?: { Body?: { GetSearchCapabilitiesResponse?: { SearchCaps?: unknown } } }
+    }
+    const caps = text(doc.Envelope?.Body?.GetSearchCapabilitiesResponse?.SearchCaps)
+    return caps != null && caps.trim().length > 0
+  } catch {
+    return false
+  }
 }
 
 async function contentDirectoryControlUrl(descriptionUrl: string): Promise<string | null> {
@@ -270,6 +298,57 @@ async function rewalk(entry: ServerEntry, titlePath: string[]): Promise<MediaNod
     id = next.id
   }
   return browseChildren(entry, id)
+}
+
+// ----------------------------------------------------------------- Search
+
+const SEARCH_MAX = 500
+
+/**
+ * Whole-library search on a searchable server: ContentDirectory Search from
+ * the root with a contains-criteria across title/artist/album. Results come
+ * back in the server's own (relevance) order, capped at SEARCH_MAX.
+ */
+export async function search(
+  host: string,
+  serverUdn: string,
+  query: string
+): Promise<{ items: MediaNode[]; total: number }> {
+  const entry = await entryFor(host, serverUdn)
+  const phrase = query.replace(/["\\]/g, '') // criteria-grammar safe
+  const criteria = `dc:title contains "${phrase}" or upnp:artist contains "${phrase}" or upnp:album contains "${phrase}"`
+  const body = `<?xml version="1.0" encoding="utf-8"?>
+<s:Envelope s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/" xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+  <s:Body>
+    <u:Search xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1">
+      <ContainerID>0</ContainerID>
+      <SearchCriteria>${xmlEscape(criteria)}</SearchCriteria>
+      <Filter>*</Filter>
+      <StartingIndex>0</StartingIndex>
+      <RequestedCount>${SEARCH_MAX}</RequestedCount>
+      <SortCriteria></SortCriteria>
+    </u:Search>
+  </s:Body>
+</s:Envelope>`
+  const res = await loggedFetch('upnp', entry.controlUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'text/xml; charset="utf-8"',
+      SOAPAction: '"urn:schemas-upnp-org:service:ContentDirectory:1#Search"'
+    },
+    body,
+    signal: AbortSignal.timeout(20_000)
+  })
+  if (!res.ok) throw new Error(`Search -> HTTP ${res.status}`)
+  const doc = parser.parse(await res.text()) as {
+    Envelope?: {
+      Body?: { SearchResponse?: { Result?: unknown; TotalMatches?: number } }
+    }
+  }
+  const sr = doc.Envelope?.Body?.SearchResponse
+  const didl = text(sr?.Result)
+  if (didl == null) throw new Error('Search returned no result')
+  return { items: didlToNodes(didl), total: Number(sr?.TotalMatches ?? 0) }
 }
 
 // --------------------------------------------------------- queue/preset writes

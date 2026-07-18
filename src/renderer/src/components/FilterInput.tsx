@@ -12,12 +12,15 @@ export function FilterInput({
   value,
   onChange,
   shown,
-  total
+  total,
+  onSubmit
 }: {
   value: string
   onChange(value: string): void
   shown: number
   total: number
+  /** Optional Enter action (the Library escalates a filter to a full search). */
+  onSubmit?(): void
 }): React.JSX.Element {
   const wrapRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
@@ -60,6 +63,10 @@ export function FilterInput({
             e.stopPropagation()
             if (value) onChange('')
             else (e.target as HTMLInputElement).blur()
+          }
+          if (e.key === 'Enter' && onSubmit) {
+            e.preventDefault()
+            onSubmit()
           }
         }}
         onFocus={() => document.documentElement.classList.add('filter-focused')}

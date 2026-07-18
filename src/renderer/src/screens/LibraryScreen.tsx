@@ -14,6 +14,7 @@ import {
   Play,
   RotateCw,
   Rows3,
+  Search,
   Usb
 } from 'lucide-react'
 import type {
@@ -68,6 +69,14 @@ export function LibraryScreen(): React.JSX.Element {
   const [path, setPath] = useState<Crumb[]>(session.path)
   const [nodes, setNodes] = useState<MediaNode[]>([])
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
+  // Whole-library search mode (searchable servers): results replace the
+  // folder listing until navigation or Backspace exits it.
+  const [searchState, setSearchState] = useState<{
+    query: string
+    items: MediaNode[]
+    total: number
+  } | null>(null)
+  const [searching, setSearching] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [fetchNonce, setFetchNonce] = useState(0)
   const scrollRef = useRef<HTMLDivElement | null>(null)
@@ -135,6 +144,7 @@ export function LibraryScreen(): React.JSX.Element {
   // destination's (or empty) whenever navigation happens.
   const moveTo = (udn: string | null, newPath: Crumb[]): void => {
     rememberScroll()
+    setSearchState(null)
     filterMemory.set(nodeKey(serverUdn, path), filter)
     setScreenFilter('library', filterMemory.get(nodeKey(udn, newPath)) ?? '')
     setServerUdn(udn)
@@ -150,7 +160,8 @@ export function LibraryScreen(): React.JSX.Element {
     else moveTo(serverUdn, path.slice(0, index - 1))
   }
   const goUp = (): void => {
-    if (path.length > 0) moveTo(serverUdn, path.slice(0, -1))
+    if (searchState) setSearchState(null) // search exits first, folder stays
+    else if (path.length > 0) moveTo(serverUdn, path.slice(0, -1))
     else if (serverUdn) moveTo(null, [])
   }
 
@@ -178,10 +189,24 @@ export function LibraryScreen(): React.JSX.Element {
       window.removeEventListener('mouseup', onMouseUp)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path, serverUdn, filter])
+  }, [path, serverUdn, filter, searchState])
 
   const setLayout = async (libraryLayout: ScreenLayout): Promise<void> => {
     setSettings(await tt.setSettings({ libraryLayout }))
+  }
+
+  /** Escalate the current filter text to a whole-library server-side search. */
+  const runSearch = (): void => {
+    const query = filter.trim()
+    if (!serverUdn || !query) return
+    // hand the keyboard back to navigation (Backspace = exit search)
+    ;(document.activeElement as HTMLElement | null)?.blur?.()
+    setSearching(true)
+    void tt
+      .mediaSearch(serverUdn, query)
+      .then((res) => setSearchState({ query, ...res }))
+      .catch(() => showNotice("Search failed — the server didn't answer."))
+      .finally(() => setSearching(false))
   }
 
   // ----------------------------------------------------------------- actions
@@ -282,9 +307,12 @@ export function LibraryScreen(): React.JSX.Element {
   // -------------------------------------------------------------- derivation
 
   const atRoot = serverUdn == null
+  // Search mode swaps the folder listing for the server's results (the
+  // filter box still narrows them client-side as you type).
+  const baseNodes = searchState ? searchState.items : nodes
   const shown = filter
-    ? nodes.filter((n) => matchesFilter(filter, [n.title, n.artist, n.album, n.year]))
-    : nodes
+    ? baseNodes.filter((n) => matchesFilter(filter, [n.title, n.artist, n.album, n.year]))
+    : baseNodes
   // Shared sort for albums AND loose-track listings; missing fields fall
   // back to title so folders stay sane. Album tracklists are exempt below.
   const sortNodes = (list: MediaNode[]): MediaNode[] => {
@@ -326,7 +354,7 @@ export function LibraryScreen(): React.JSX.Element {
   // Album level: header with art + album metadata; tracks drop per-row art.
   const lastCrumbNode = path.length > 0 ? path[path.length - 1].node : undefined
   const albumNode =
-    lastCrumbNode && isAlbumClass(lastCrumbNode.upnpClass) ? lastCrumbNode : null
+    !searchState && lastCrumbNode && isAlbumClass(lastCrumbNode.upnpClass) ? lastCrumbNode : null
   const allTracks = nodes.filter((n) => !n.isContainer)
   const albumArt = albumNode ? (albumNode.artUrl ?? allTracks[0]?.artUrl ?? null) : null
   const albumArtist = albumNode
@@ -403,7 +431,8 @@ export function LibraryScreen(): React.JSX.Element {
             value={filter}
             onChange={(t) => setScreenFilter('library', t)}
             shown={atRoot ? shownServers.length : shown.length}
-            total={atRoot ? (servers?.length ?? 0) : nodes.length}
+            total={atRoot ? (servers?.length ?? 0) : baseNodes.length}
+            onSubmit={server?.searchable ? runSearch : undefined}
           />
           {!atRoot && (containers.length > 1 || (!albumNode && tracks.length > 1)) && (
             <SortChip
@@ -460,14 +489,52 @@ export function LibraryScreen(): React.JSX.Element {
               onClick={() => jumpTo(i + 2)}
               className={cx(
                 'px-1.5 py-0.5 rounded transition-colors',
-                i === path.length - 1 ? 'text-ink' : 'text-dim hover:text-ink hover:bg-veil'
+                i === path.length - 1 && !searchState
+                  ? 'text-ink'
+                  : 'text-dim hover:text-ink hover:bg-veil'
               )}
             >
               {crumb.title}
             </button>
           </span>
         ))}
+        {searchState && (
+          <span className="flex items-center gap-1">
+            <ChevronRight size={12} className="text-faint" />
+            <span className="px-1.5 py-0.5 text-gold">Search: “{searchState.query}”</span>
+          </span>
+        )}
       </div>
+
+      {/* filter → search escalation, and search-mode status */}
+      {!atRoot && !searchState && !searching && server?.searchable && filter.trim() && (
+        <div className="px-8 pb-2">
+          <button
+            onClick={runSearch}
+            data-library-search-hint
+            className="no-drag flex items-center gap-2 px-3 py-1.5 rounded-lg ring-1 ring-gold/40 bg-golddim text-[12.5px] text-gold hover:brightness-110 motion-safe:active:scale-95 transition-all"
+          >
+            <Search size={13} />
+            Search all of {server.name} for “{filter.trim()}” ⏎
+          </button>
+        </div>
+      )}
+      {searching && (
+        <div className="px-8 pb-2 text-[13px] text-dim motion-safe:animate-pulse">
+          Searching {server?.name}…
+        </div>
+      )}
+      {searchState && !searching && (
+        <div className="px-8 pb-2 text-[12.5px] text-faint" data-library-search-meta>
+          {searchState.total} result{searchState.total === 1 ? '' : 's'} for “{searchState.query}”
+          {searchState.total > searchState.items.length &&
+            ` · showing the first ${searchState.items.length}`}
+          {' · '}
+          <button onClick={() => setSearchState(null)} className="text-dim hover:text-ink underline decoration-edge2 underline-offset-2 transition-colors">
+            back to browsing
+          </button>
+        </div>
+      )}
 
       {notice && (
         <div className="mx-8 mb-2 px-3 py-2 rounded-lg ring-1 ring-alert/40 bg-alert/10 text-[12.5px] text-alert">

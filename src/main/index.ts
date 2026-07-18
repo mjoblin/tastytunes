@@ -18,7 +18,13 @@ import { scrobbler } from './scrobbler'
 import { fetchArtistInfo } from './artistInfo'
 import { fetchAlbumInfo } from './albumInfo'
 import { clearLookupCaches, flushLookupCaches, lookupCacheStats } from './diskCache'
-import { browse as mediaBrowse, presetSave, queueAdd, refreshServers } from './upnpBrowser'
+import {
+  browse as mediaBrowse,
+  presetSave,
+  queueAdd,
+  refreshServers,
+  search as mediaSearch
+} from './upnpBrowser'
 import { startScheduler } from './scheduler'
 import { loggedFetch } from './netlog'
 import { getSettings, updateSettings } from './persist'
@@ -234,6 +240,9 @@ function registerIpc(): void {
   ipcMain.handle(IPC.mediaServers, () => refreshServers(streamerHost()))
   ipcMain.handle(IPC.mediaBrowse, (_e, serverUdn: string, objectId: string | null, titlePath: string[]) =>
     mediaBrowse(streamerHost(), serverUdn, objectId, titlePath)
+  )
+  ipcMain.handle(IPC.mediaSearch, (_e, serverUdn: string, query: string) =>
+    mediaSearch(streamerHost(), serverUdn, query)
   )
   ipcMain.handle(
     IPC.mediaQueueAdd,

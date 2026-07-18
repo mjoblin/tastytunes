@@ -672,6 +672,8 @@ export interface MediaServerInfo {
   model: string | null
   /** True when this "server" is the connected streamer itself (USB storage). */
   isStreamer: boolean
+  /** True when the server answers ContentDirectory Search (non-empty SearchCaps). */
+  searchable: boolean
 }
 
 export interface MediaNode {
@@ -736,6 +738,8 @@ export interface TastyTunesApi {
    *  the breadcrumb titles from root — used to re-resolve stale ids after the
    *  streamer's USB ids rot across a standby cycle. */
   mediaBrowse(serverUdn: string, objectId: string | null, titlePath: string[]): Promise<MediaNode[]>
+  /** Whole-library search on a searchable server (title/artist/album contains). */
+  mediaSearch(serverUdn: string, query: string): Promise<{ items: MediaNode[]; total: number }>
   /** Queue a browsed item on the streamer (DIDL stays in the main process). */
   mediaQueueAdd(
     serverUdn: string,
@@ -777,6 +781,7 @@ export const IPC = {
   clearLookupCaches: 'tt:clearLookupCaches',
   mediaServers: 'tt:mediaServers',
   mediaBrowse: 'tt:mediaBrowse',
+  mediaSearch: 'tt:mediaSearch',
   mediaQueueAdd: 'tt:mediaQueueAdd',
   mediaPresetSave: 'tt:mediaPresetSave',
   push: 'tt:push'
