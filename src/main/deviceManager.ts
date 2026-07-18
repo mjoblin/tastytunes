@@ -112,14 +112,16 @@ export class DeviceManager {
     return this.devices
   }
 
-  connect(host: string): void {
+  connect(host: string, opts?: { remember?: boolean }): void {
     // A timer armed for one device must never act on another.
     if (this.sleep && this.socket && this.socket.host !== host) this.setSleep(null)
     this.socket?.close()
     this.cache = emptyCache()
     this.currentTrackKey = null
     this.lastSourceId = null
-    updateSettings({ lastHost: host })
+    // The demo device passes remember:false — its ephemeral loopback port
+    // must never become the reconnect target of the next launch.
+    if (opts?.remember !== false) updateSettings({ lastHost: host })
 
     // Callbacks from a replaced socket must be ignored: its async close event
     // would otherwise stomp the new connection's state.

@@ -709,6 +709,8 @@ export interface TastyTunesApi {
   discover(): Promise<DiscoveredDevice[]>
   connect(host: string): Promise<void>
   disconnect(): Promise<void>
+  /** Start the built-in demo device and connect to it ("Try without a streamer"). */
+  demoStart(): Promise<void>
   command(cmd: StreamerCommand): Promise<void>
   openExternal(url: string): Promise<void>
   getSettings(): Promise<AppSettings>
@@ -769,6 +771,7 @@ export const IPC = {
   discover: 'tt:discover',
   connect: 'tt:connect',
   disconnect: 'tt:disconnect',
+  demoStart: 'tt:demoStart',
   command: 'tt:command',
   openExternal: 'tt:openExternal',
   getSettings: 'tt:getSettings',

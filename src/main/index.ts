@@ -10,6 +10,7 @@ import {
   type StreamerCommand
 } from '@shared/ipc'
 import { DeviceManager } from './deviceManager'
+import { demoHost, startDemoStreamer, stopDemoStreamer } from './demoStreamer'
 import { McpBridge } from './mcpServer'
 import { installAppMenu } from './menu'
 import { checkUpdatesNow, currentUpdateState, downloadUpdate, installUpdate, startUpdater } from './updater'
@@ -198,8 +199,21 @@ function sendMenuCommand(command: MenuCommand): void {
 function registerIpc(): void {
   ipcMain.handle(IPC.getSnapshot, () => deviceManager.snapshot())
   ipcMain.handle(IPC.discover, () => deviceManager.discover())
-  ipcMain.handle(IPC.connect, (_e, host: string) => deviceManager.connect(host))
-  ipcMain.handle(IPC.disconnect, () => deviceManager.disconnect())
+  ipcMain.handle(IPC.connect, (_e, host: string) => {
+    // Leaving the demo for a real device shuts the demo server down.
+    if (demoHost() && host !== demoHost()) stopDemoStreamer()
+    deviceManager.connect(host)
+  })
+  ipcMain.handle(IPC.disconnect, () => {
+    deviceManager.disconnect()
+    stopDemoStreamer()
+  })
+  ipcMain.handle(IPC.demoStart, async () => {
+    const host = await startDemoStreamer()
+    // remember:false — the ephemeral demo port must not be next launch's
+    // reconnect target (a first run also stays "never connected").
+    deviceManager.connect(host, { remember: false })
+  })
   ipcMain.handle(IPC.command, (_e, cmd: StreamerCommand) => deviceManager.command(cmd))
   ipcMain.handle(IPC.getSettings, () => getSettings())
   ipcMain.handle(IPC.setSettings, (_e, patch: Partial<AppSettings>) => {
@@ -347,6 +361,7 @@ if (!gotLock) {
     globalShortcut.unregisterAll()
     mcpBridge.stop()
     deviceManager.shutdown()
+    stopDemoStreamer()
     flushLookupCaches()
   })
 }

@@ -226,6 +226,12 @@ function ConnectGate(): React.JSX.Element {
               Enter IP manually →
             </button>
           </div>
+          <button
+            onClick={() => void tt.demoStart()}
+            className="text-[13px] text-faint hover:text-ink transition-colors"
+          >
+            Try without a streamer — explore with the built-in demo →
+          </button>
         </>
       )}
     </div>

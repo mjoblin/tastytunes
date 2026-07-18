@@ -15,6 +15,7 @@ const api: TastyTunesApi = {
   discover: () => ipcRenderer.invoke(IPC.discover),
   connect: (host: string) => ipcRenderer.invoke(IPC.connect, host),
   disconnect: () => ipcRenderer.invoke(IPC.disconnect),
+  demoStart: () => ipcRenderer.invoke(IPC.demoStart),
   command: (cmd: StreamerCommand) => ipcRenderer.invoke(IPC.command, cmd),
   openExternal: (url: string) => ipcRenderer.invoke(IPC.openExternal, url),
   getSettings: () => ipcRenderer.invoke(IPC.getSettings),
