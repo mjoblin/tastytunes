@@ -254,6 +254,11 @@ export interface Snapshot {
 // ------------------------------------------------------------------- preload API
 
 export interface TastyTunesApi {
+  /**
+   * True in Mac App Store builds (and under the TASTYTUNES_MAS=1 harness
+   * override): updates arrive through the store, never the in-app updater.
+   */
+  storeBuild: boolean;
   getSnapshot(): Promise<Snapshot>;
   /** Cover Art Archive fallback for an album the server has no art for (null when off or unknown). */
   albumArt(artist: string, album: string): Promise<string | null>;

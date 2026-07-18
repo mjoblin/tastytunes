@@ -16,6 +16,9 @@ import {
 } from "@shared/model";
 
 const api: TastyTunesApi = {
+  // Mirrors the STORE_BUILD gate in main/updater.ts — both sides must agree
+  // on what "a store build" is, harness override included.
+  storeBuild: process.mas === true || process.env["TASTYTUNES_MAS"] === "1",
   getSnapshot: () => ipcRenderer.invoke(IPC.getSnapshot),
   albumArt: (artist, album) => ipcRenderer.invoke(IPC.albumArt, artist, album),
   discover: () => ipcRenderer.invoke(IPC.discover),

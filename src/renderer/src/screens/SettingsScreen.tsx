@@ -1596,15 +1596,27 @@ function UpdatesSection({
           </span>
         </SettingRow>
 
-        <Toggle
-          label="Automatically check for updates"
-          hint="Check for version updates at launch and every few hours. When a new version is available, a dot appears on the tastytunes name in the left nav and on this tab. TastyTunes will not download or install itself."
-          checked={settings.updateCheck}
-          onChange={(updateCheck) => void save({ updateCheck })}
-        />
+        {tt.storeBuild ? (
+          <SettingRow
+            label="Check for updates"
+            hint="This build updates through the Mac App Store. The app never checks GitHub for releases or downloads updates itself."
+          >
+            <span className="shrink-0 text-[11.5px] font-mono text-faint px-2.5 py-1 rounded-md ring-1 ring-edge bg-panel/70">
+              via App Store
+            </span>
+          </SettingRow>
+        ) : (
+          <Toggle
+            label="Automatically check for updates"
+            hint="Check for version updates at launch and every few hours. When a new version is available, a dot appears on the tastytunes name in the left nav and on this tab. TastyTunes will not download or install itself."
+            checked={settings.updateCheck}
+            onChange={(updateCheck) => void save({ updateCheck })}
+          />
+        )}
       </div>
 
-      {update ? (
+      {/* store builds have no updater state — the App Store row above says it all */}
+      {tt.storeBuild ? null : update ? (
         <UpdatePanel />
       ) : (
         <div className="rounded-xl ring-1 ring-edge bg-panel/70 px-4 py-3 flex items-center justify-between gap-3">
