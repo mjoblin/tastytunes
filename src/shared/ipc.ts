@@ -306,6 +306,11 @@ export interface Snapshot {
 // ------------------------------------------------------------------- preload API
 
 export interface TastyTunesApi {
+  /**
+   * True in Mac App Store builds (and under the TASTYTUNES_MAS=1 harness
+   * override): updates arrive through the store, never the in-app updater.
+   */
+  storeBuild: boolean;
   getSnapshot(): Promise<Snapshot>;
   /** Cover Art Archive fallback for an album the server has no art for (null when off or unknown). */
   albumArt(artist: string, album: string): Promise<string | null>;
@@ -683,10 +688,13 @@ export const IPC = {
  * THE CHANNEL TABLE IS THE CONTRACT'S INDEX (0.11.0 sweep): every invoked method of
  * TastyTunesApi has the channel `tt:<method>`, so main's handlers (app/guard handle) and
  * the preload (generated from this table) take their types from TastyTunesApi by name.
- * The two exceptions are the push stream (main → renderer) and the one-way display-mode
- * report (renderer → main, no answer).
+ * The exceptions are the push stream (main → renderer), the one-way display-mode report
+ * (renderer → main, no answer) and the store-build flag (a value the preload sets).
  */
-export type InvokeMethod = Exclude<keyof TastyTunesApi, "onPush" | "reportDisplayMode">;
+export type InvokeMethod = Exclude<
+  keyof TastyTunesApi,
+  "onPush" | "reportDisplayMode" | "storeBuild"
+>;
 /** The method a channel answers for: "tt:getSnapshot" → "getSnapshot". */
 export type MethodOf<C extends string> = C extends `tt:${infer M}` ? M : never;
 /** The channels the renderer invokes (everything but the push stream and the report). */
