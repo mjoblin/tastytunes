@@ -342,6 +342,16 @@ img {
   [data-tip] {
     position: relative;
   }
+
+  /* overflow-y-auto makes overflow-x compute to auto too, and with CLASSIC
+     (always-shown) scrollbars Chromium's scrollable-overflow math conjures a
+     few phantom px under the vertical bar — a horizontal scrollbar with
+     nothing to see (user hit it on the Queue). Vertical scrollers never
+     scroll sideways in this app; anything that genuinely needs both axes
+     says overflow-x-auto explicitly (utilities layer, wins over base). */
+  .overflow-y-auto {
+    overflow-x: hidden;
+  }
 }
 [data-tip]::after {
   content: attr(data-tip);
