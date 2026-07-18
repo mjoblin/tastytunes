@@ -1,4 +1,4 @@
-appId: app.tastytunes
+appId: com.redactedcat.tastytunes
 productName: TastyTunes
 # Where releases live — used by `--publish always` on tag builds AND baked into
 # the app (app-update.yml) so electron-updater knows its feed.
