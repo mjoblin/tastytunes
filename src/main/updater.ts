@@ -14,13 +14,13 @@ import { join } from 'node:path'
 import { app } from 'electron'
 import electronUpdater from 'electron-updater'
 import { version as appVersion } from '../../package.json'
-import type { UpdateState } from '@shared/ipc'
+import { REPO_URL, type UpdateState } from '@shared/ipc'
 import { getSettings } from './persist'
 import { checkNow as legacyCheckNow, startUpdateCheck as startLegacyCheck } from './updateCheck'
 
 const { autoUpdater } = electronUpdater
 
-const RELEASES_PAGE = 'https://github.com/mjoblin/tastytunes/releases/latest'
+const RELEASES_PAGE = `${REPO_URL}/releases/latest`
 const FEED = process.env['TASTYTUNES_UPDATE_FEED']
 const CHECK_EVERY_MS = 4 * 60 * 60 * 1000
 

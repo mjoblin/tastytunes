@@ -1,15 +1,15 @@
 // Version from package.json, not app.getVersion(): under a dev harness that
 // launches Electron with a bare file path, getVersion() is Electron's own.
 import { version as appVersion } from '../../package.json'
-import type { UpdateInfo } from '@shared/ipc'
+import { REPO_URL, type UpdateInfo } from '@shared/ipc'
 import { getSettings } from './persist'
 import { loggedFetch } from './netlog'
 
 // TASTYTUNES_UPDATE_URL lets test harnesses point the check at a local server.
 const RELEASES_URL =
   process.env['TASTYTUNES_UPDATE_URL'] ??
-  'https://api.github.com/repos/mjoblin/tastytunes/releases/latest'
-const RELEASES_PAGE = 'https://github.com/mjoblin/tastytunes/releases/latest'
+  `https://api.github.com/repos/${new URL(REPO_URL).pathname.slice(1)}/releases/latest`
+const RELEASES_PAGE = `${REPO_URL}/releases/latest`
 const CHECK_EVERY_MS = 4 * 60 * 60 * 1000
 
 let latest: UpdateInfo | null = null

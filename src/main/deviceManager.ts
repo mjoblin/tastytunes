@@ -35,7 +35,7 @@ import * as smoipHttp from './smoipHttp'
 import { getSettings, updateSettings } from './persist'
 import { clearRecents, getRecents, recordRecent } from './recents'
 import { scrobbler } from './scrobbler'
-import { getNetRequests } from './netlog'
+import { getNetRequests, loggedFetch } from './netlog'
 
 const FRAME_RING_SIZE = 300
 const LOG_RING_SIZE = 300
@@ -445,7 +445,7 @@ export class DeviceManager {
       let icon
       try {
         if (md?.art_url) {
-          const res = await fetch(md.art_url, { signal: AbortSignal.timeout(2000) })
+          const res = await loggedFetch('art', md.art_url, { signal: AbortSignal.timeout(2000) })
           if (res.ok) icon = nativeImage.createFromBuffer(Buffer.from(await res.arrayBuffer()))
         }
       } catch {

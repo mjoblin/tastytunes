@@ -212,8 +212,27 @@ export const useStore = create<TTState>((set, get) => ({
     set((s) => {
       switch (msg.kind) {
         case 'connection': {
-          // Blank stale streamer state when a connection drops or restarts.
-          if (msg.state.phase !== 'connected') return { connection: msg.state }
+          // Connecting to a DIFFERENT device blanks the previous streamer's
+          // state — its queue/presets otherwise linger until the new device's
+          // pushes land. Same-host reconnects keep state: brief drops must
+          // not flash the UI empty, and fresh pushes overwrite anyway.
+          const prevHost = 'host' in s.connection ? s.connection.host : null
+          const nextHost = 'host' in msg.state ? msg.state.host : null
+          if (msg.state.phase === 'connecting' && prevHost != null && nextHost !== prevHost) {
+            return {
+              connection: msg.state,
+              playState: null,
+              nowPlaying: null,
+              zoneState: null,
+              queue: null,
+              presets: null,
+              systemInfo: null,
+              systemPower: null,
+              sources: null,
+              sleep: null,
+              playhead: null
+            }
+          }
           return { connection: msg.state }
         }
         case 'devices':

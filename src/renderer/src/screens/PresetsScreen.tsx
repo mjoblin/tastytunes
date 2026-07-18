@@ -34,7 +34,7 @@ import { Eqbars } from '@/components/Eqbars'
 import { EmptyState } from '@/components/EmptyState'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { flashTarget, scrollToWithContext } from '@/lib/scroll'
-import { cx, matchesFilter } from '@/lib/format'
+import { activeSourceId, cx, matchesFilter } from '@/lib/format'
 import { FilterInput } from '@/components/FilterInput'
 import { Slider } from '@/components/Slider'
 import { ArtImage } from '@/components/ArtImage'
@@ -85,14 +85,14 @@ export function PresetsScreen(): React.JSX.Element {
   // radio_id is authoritative for stations; album presets are matched by art
   // URL or name against the current track. Stateless means it also works at
   // startup, when every flag reads false.
-  const activeSourceId = zoneState?.source ?? nowPlaying?.source?.id ?? null
+  const activeSource = activeSourceId(zoneState, nowPlaying)
   const radioId = playState?.metadata?.radio_id ?? null
   const md = playState?.metadata ?? null
   const isPresetPlaying = (p: PresetItem): boolean => {
     if (radioId != null && p.airable_radio_id != null) return p.airable_radio_id === radioId
     const klass = p.class ?? ''
     if (klass.startsWith('stream.media')) {
-      if (activeSourceId != null && activeSourceId !== 'MEDIA_PLAYER') return false
+      if (activeSource != null && activeSource !== 'MEDIA_PLAYER') return false
       if (p.is_playing === true) return true // transiently correct after recall
       if (!md) return false
       if (p.art_url != null && md.art_url != null && urlsMatch(p.art_url, md.art_url)) return true
@@ -104,7 +104,7 @@ export function PresetsScreen(): React.JSX.Element {
     }
     // Radio/other presets with no playing radio_id to match against: trust the
     // flag except while local media is the active source.
-    return p.is_playing === true && activeSourceId !== 'MEDIA_PLAYER'
+    return p.is_playing === true && activeSource !== 'MEDIA_PLAYER'
   }
 
   const onDragEnd = (event: DragEndEvent): void => {

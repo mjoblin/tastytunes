@@ -115,7 +115,12 @@ function checkThreshold(): void {
 export const scrobbler = {
   /** Feed every /zone/play_state push through here (DeviceManager does). */
   onPlayState(ps: ZonePlayState): void {
-    if (!enabled()) return
+    if (!enabled()) {
+      // Disabled mid-playback: freeze accumulation AND clear the 5s
+      // threshold timer (the bare return left it ticking as a no-op forever).
+      this.pause()
+      return
+    }
     const md = ps.metadata
     const isRadio = isRadioMetadata(md)
     const artist = md?.artist ?? null

@@ -2,6 +2,11 @@
   "name": "tastytunes",
   "version": "0.1.0",
   "description": "A desktop controller for Cambridge Audio StreamMagic streamers. A bigger, tastier serving than PunyTunes.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mjoblin/tastytunes.git"
+  },
+  "homepage": "https://github.com/mjoblin/tastytunes",
   "main": "./out/main/index.js",
   "type": "module",
   "author": "Mike",

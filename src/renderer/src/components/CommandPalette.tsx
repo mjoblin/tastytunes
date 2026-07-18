@@ -31,7 +31,7 @@ import { sleepTrackKey, type SleepAction } from '@shared/ipc'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { systemTheme } from '@/hooks/useTheme'
-import { controlSet, cx, deriveNowPlaying } from '@/lib/format'
+import { activeSourceId, controlSet, cx, deriveNowPlaying } from '@/lib/format'
 import { SCREENS } from '@/lib/screens'
 
 type Icon = typeof Play
@@ -220,7 +220,7 @@ export function CommandPalette(): React.JSX.Element {
 
     // -------- Sources
     if (connected && !inStandby) {
-      const activeId = zoneState?.source ?? nowPlaying?.source?.id ?? null
+      const activeId = activeSourceId(zoneState, nowPlaying)
       const selectable = (sources?.sources ?? [])
         .filter((s) => s.ui_selectable)
         .sort((a, b) => a.preferred_order - b.preferred_order)

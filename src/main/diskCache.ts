@@ -95,7 +95,9 @@ export class DiskCache<T> {
   }
 
   stats(): { entries: number; bytes: number } {
-    this.flush() // so the file size reflects pending writes
+    // Report the last-flushed file size rather than forcing a synchronous
+    // write on the main thread (Settings polls this); pending entries are
+    // counted in `entries` and reach disk on the normal flush cadence.
     const entries = this.load().size
     let bytes = 0
     try {

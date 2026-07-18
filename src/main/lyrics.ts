@@ -7,12 +7,13 @@
 // cache read for a user-driven refresh; its fresh answer overwrites the entry.
 import { version } from '../../package.json'
 import type { LyricsQuery, LyricsResult } from '@shared/ipc'
+import { REPO_URL } from '@shared/ipc'
 import { loggedFetch } from './netlog'
 import { DiskCache } from './diskCache'
 
 // TASTYTUNES_LYRICS_URL lets test harnesses point lookups at a local server.
 const BASE = process.env['TASTYTUNES_LYRICS_URL'] ?? 'https://lrclib.net/api'
-const USER_AGENT = `TastyTunes/${version} (https://github.com/mjoblin/tastytunes)`
+const USER_AGENT = `TastyTunes/${version} (${REPO_URL})`
 const CACHE_MAX = 500
 // Search fallback: a duration this far off is a different recording — its
 // synced timestamps would drift, so keep only the plain text.

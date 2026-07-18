@@ -1,7 +1,6 @@
 import { app, Menu, shell, type MenuItemConstructorOptions } from 'electron'
 import type { MenuCommand, StreamerCommand } from '@shared/ipc'
-
-const REPO_URL = 'https://github.com/mjoblin/tastytunes'
+import { REPO_URL } from '@shared/ipc'
 
 export interface MenuDeps {
   /** Streamer commands go straight to the DeviceManager (safe no-op offline). */

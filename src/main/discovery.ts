@@ -5,6 +5,7 @@
 // approach PunyTunes and vibin use.
 
 import { createSocket } from 'node:dgram'
+import { loggedFetch } from './netlog'
 import { XMLParser } from 'fast-xml-parser'
 import type { DiscoveredDevice } from '@shared/ipc'
 
@@ -80,7 +81,7 @@ interface DeviceDescription {
 }
 
 async function fetchDescription(location: string): Promise<DeviceDescription | null> {
-  const res = await fetch(location, { signal: AbortSignal.timeout(4000) })
+  const res = await loggedFetch('ssdp', location, { signal: AbortSignal.timeout(4000) })
   if (!res.ok) return null
   const xml = await res.text()
   const parsed = new XMLParser({ ignoreAttributes: true }).parse(xml)

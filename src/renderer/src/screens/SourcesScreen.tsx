@@ -3,7 +3,7 @@ import { AudioLines, Bluetooth, Cable, Disc3, Radio, Usb, Wifi } from 'lucide-re
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
-import { cx } from '@/lib/format'
+import { activeSourceId, cx } from '@/lib/format'
 
 function iconForClass(klass: string): typeof AudioLines {
   if (/bluetooth/i.test(klass)) return Bluetooth
@@ -20,7 +20,7 @@ export function SourcesScreen(): React.JSX.Element {
   const zoneState = useStore((s) => s.zoneState)
   const nowPlaying = useStore((s) => s.nowPlaying)
 
-  const activeId = zoneState?.source ?? nowPlaying?.source?.id ?? null
+  const activeId = activeSourceId(zoneState, nowPlaying)
   const selectable = (sources?.sources ?? [])
     .filter((s) => s.ui_selectable)
     .sort((a, b) => a.preferred_order - b.preferred_order)

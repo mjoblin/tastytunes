@@ -26,7 +26,7 @@ import type {
 import type { QueueListItem } from '@shared/smoip'
 import { tt } from '@/api'
 import { useStore } from '@/store'
-import { cx, fmtTime, matchesFilter } from '@/lib/format'
+import { activeSourceId, cx, fmtTime, matchesFilter } from '@/lib/format'
 import { flashTarget } from '@/lib/scroll'
 import { isAlbumClass, stripFurniture } from '@/lib/media'
 import { ArtImage } from '@/components/ArtImage'
@@ -451,7 +451,7 @@ export function LibraryScreen(): React.JSX.Element {
   // ids, so match the playing metadata by content (title, plus artist/album
   // when both sides have them), and only while the queue's source is audible.
   const md = playState?.metadata ?? null
-  const queueSourceActive = (nowPlaying?.source?.id ?? zoneState?.source) === 'MEDIA_PLAYER'
+  const queueSourceActive = activeSourceId(zoneState, nowPlaying) === 'MEDIA_PLAYER'
   const isPlayingState = playState?.state === 'play'
   const isCurrentTrack = (node: MediaNode): boolean =>
     md != null &&

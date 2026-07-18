@@ -14,6 +14,9 @@ import type {
 } from './smoip'
 import { isRadioMetadata, radioTrackTitle } from './smoip'
 
+/** The one copy of the project URL — user agents, Help menu, release pages. */
+export const REPO_URL = 'https://github.com/mjoblin/tastytunes'
+
 // ------------------------------------------------------------------- connection
 
 export type ConnectionState =

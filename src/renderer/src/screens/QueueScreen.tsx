@@ -34,7 +34,7 @@ import { Eqbars } from '@/components/Eqbars'
 import { EmptyState } from '@/components/EmptyState'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { flashTarget, scrollToWithContext } from '@/lib/scroll'
-import { cx, fmtTime, matchesFilter } from '@/lib/format'
+import { activeSourceId, cx, fmtTime, matchesFilter } from '@/lib/format'
 import { ArtImage } from '@/components/ArtImage'
 import { FilterInput } from '@/components/FilterInput'
 
@@ -87,7 +87,7 @@ export function QueueScreen(): React.JSX.Element {
   // The queue belongs to the MEDIA_PLAYER source. When another source is
   // active (AirPlay, radio, …) the device still reports a play_id — that row
   // is just where the queue is parked, and must not claim to be playing.
-  const queueSourceActive = (nowPlaying?.source?.id ?? zoneState?.source) === 'MEDIA_PLAYER'
+  const queueSourceActive = activeSourceId(zoneState, nowPlaying) === 'MEDIA_PLAYER'
 
   const totalSecs = allItems.reduce((acc, i) => acc + (i.metadata?.duration ?? 0), 0)
 
