@@ -732,8 +732,7 @@ export function LibraryScreen(): React.JSX.Element {
 
         {searchMode && !searchState && !searching && (
           <div className="text-[15px] text-faint pt-4 px-1">
-            Type a search and press Enter — it looks through everything on{' '}
-            {server?.name ?? 'this library'}.
+            Search all the media on {server?.name ?? 'this library'}.
           </div>
         )}
         {searchMode && searchState && !searching && shown.length === 0 && (
@@ -765,19 +764,19 @@ export function LibraryScreen(): React.JSX.Element {
                 <>
                   {albums.length > 0 && (
                     <>
-                      <div className="microlabel mb-2 mt-2 px-1">Albums</div>
+                      <div className="microlabel mb-0.5 mt-2 px-1">Albums</div>
                       {containerGrid(albums)}
                     </>
                   )}
                   {artists.length > 0 && (
                     <>
-                      <div className="microlabel mb-2 mt-5 px-1">Artists</div>
+                      <div className="microlabel mb-0.5 mt-5 px-1">Artists</div>
                       {containerGrid(artists)}
                     </>
                   )}
                   {other.length > 0 && (
                     <>
-                      <div className="microlabel mb-2 mt-5 px-1">Folders</div>
+                      <div className="microlabel mb-0.5 mt-5 px-1">Folders</div>
                       {containerGrid(other)}
                     </>
                   )}
@@ -788,7 +787,7 @@ export function LibraryScreen(): React.JSX.Element {
         )}
 
         {searchMode && searchState && state === 'ready' && tracks.length > 0 && (
-          <div className="microlabel mb-2 mt-5 px-1">Tracks</div>
+          <div className="microlabel mb-0.5 mt-5 px-1">Tracks</div>
         )}
 
         {/* loose tracks honor the cards ⇄ rows toggle; album views keep rows
