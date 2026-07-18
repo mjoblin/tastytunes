@@ -309,15 +309,17 @@ img {
 }
 
 /* Inline lyric line: a faint gold halo so the current line reads as "lit"
-   against the dark screen. Light theme drops it — glow on paper reads as
-   smudge, not light (same rule as the playing-tile blooms above). */
+   against the dark screen. drop-shadow, NOT text-shadow: the element is
+   line-clamped (overflow: hidden), which clips text-shadow into a filled
+   rectangle — the filter runs after clipping and hugs the glyph shapes.
+   Light theme drops it — glow on paper reads as smudge, not light (same
+   rule as the playing-tile blooms above). */
 .lyric-glow {
-  text-shadow:
-    0 0 10px rgb(var(--gold-rgb) / 0.4),
-    0 0 28px rgb(var(--gold-rgb) / 0.18);
+  filter: drop-shadow(0 0 5px rgb(var(--gold-rgb) / 0.5))
+    drop-shadow(0 0 14px rgb(var(--gold-rgb) / 0.22));
 }
 :root.light .lyric-glow {
-  text-shadow: none;
+  filter: none;
 }
 
 /* deterministic tooltips for the nav rail (native titles are unreliable in

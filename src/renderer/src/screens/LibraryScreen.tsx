@@ -710,9 +710,9 @@ export function LibraryScreen(): React.JSX.Element {
         )}
 
         {/* root: sources, grouped like the official app (Servers / USB drives).
-            There will only ever be a handful — big preset-card-style tiles
-            (squat 4:3 icon area: these are PLACES, not albums), not a list
-            built for volume. */}
+            Cards, not a list built for volume — same geometry and the same
+            size/gap/fill settings as every other media card grid, so the
+            card-size slider governs the landing too. */}
         {!loading && atRoot && (
           <div className="space-y-7 pt-1">
             {shownServers.length === 0 && (
@@ -725,36 +725,43 @@ export function LibraryScreen(): React.JSX.Element {
               if (group.length === 0) return null
               return (
                 <div key={kind}>
-                  <div className="microlabel mb-2.5 px-1">
+                  <div className="microlabel mb-0.5 px-1">
                     {kind === 'usb' ? 'USB drives' : 'Servers'}
                   </div>
-                  <div className="grid grid-cols-[repeat(auto-fill,228px)] gap-4">
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: presetFillRows
+                        ? `repeat(auto-fill, minmax(${presetCardSize}px, 1fr))`
+                        : `repeat(auto-fill, ${presetCardSize}px)`,
+                      gap: presetGap,
+                      paddingTop: 8
+                    }}
+                  >
                     {group.map((s) => (
                       <div
                         key={s.udn}
                         data-library-source
                         onClick={() => enterServer(s.udn)}
-                        className="group relative rounded-2xl p-3 pb-3.5 bg-raised/70 ring-1 ring-edge card-hover-glow cursor-pointer transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]"
+                        className="group relative rounded-2xl p-2 pb-2.5 bg-raised/70 ring-1 ring-edge card-hover-glow cursor-pointer transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]"
                       >
-                        <div className="aspect-[4/3] w-full rounded-xl ring-1 ring-edge bg-panel/70 flex items-center justify-center">
+                        <div className="aspect-square w-full rounded-lg ring-1 ring-edge bg-panel/70 flex items-center justify-center">
                           {s.isStreamer ? (
                             <Usb
-                              size={46}
+                              size={40}
                               strokeWidth={1.1}
                               className="text-faint group-hover:text-dim transition-colors"
                             />
                           ) : (
                             <HardDrive
-                              size={46}
+                              size={40}
                               strokeWidth={1.1}
                               className="text-faint group-hover:text-dim transition-colors"
                             />
                           )}
                         </div>
-                        <div className="pt-2.5 font-display font-semibold text-[15.5px] tracking-tight truncate">
-                          {s.name}
-                        </div>
-                        <div className="text-[12px] text-faint truncate">
+                        <div className="pt-1.5 text-[12.5px] truncate">{s.name}</div>
+                        <div className="text-[11.5px] text-faint truncate">
                           {s.model ??
                             (s.isStreamer ? 'Storage on the streamer' : 'Media server')}
                         </div>
