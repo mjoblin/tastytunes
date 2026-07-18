@@ -304,19 +304,10 @@ async function rewalk(entry: ServerEntry, titlePath: string[]): Promise<MediaNod
 
 const SEARCH_MAX = 500
 
-/**
- * Whole-library search on a searchable server: ContentDirectory Search from
- * the root with a contains-criteria across title/artist/album. Results come
- * back in the server's own (relevance) order, capped at SEARCH_MAX.
- */
-export async function search(
-  host: string,
-  serverUdn: string,
-  query: string
-): Promise<{ items: MediaNode[]; total: number }> {
-  const entry = await entryFor(host, serverUdn)
-  const phrase = query.replace(/["\\]/g, '') // criteria-grammar safe
-  const criteria = `dc:title contains "${phrase}" or upnp:artist contains "${phrase}" or upnp:album contains "${phrase}"`
+async function searchScope(
+  entry: ServerEntry,
+  criteria: string
+): Promise<{ items: MediaNode[]; total: number } | null> {
   const body = `<?xml version="1.0" encoding="utf-8"?>
 <s:Envelope s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/" xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
   <s:Body>
@@ -330,25 +321,66 @@ export async function search(
     </u:Search>
   </s:Body>
 </s:Envelope>`
-  const res = await loggedFetch('upnp', entry.controlUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'text/xml; charset="utf-8"',
-      SOAPAction: '"urn:schemas-upnp-org:service:ContentDirectory:1#Search"'
-    },
-    body,
-    signal: AbortSignal.timeout(20_000)
-  })
-  if (!res.ok) throw new Error(`Search -> HTTP ${res.status}`)
-  const doc = parser.parse(await res.text()) as {
-    Envelope?: {
-      Body?: { SearchResponse?: { Result?: unknown; TotalMatches?: number } }
+  try {
+    const res = await loggedFetch('upnp', entry.controlUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/xml; charset="utf-8"',
+        SOAPAction: '"urn:schemas-upnp-org:service:ContentDirectory:1#Search"'
+      },
+      body,
+      signal: AbortSignal.timeout(20_000)
+    })
+    if (!res.ok) return null
+    const doc = parser.parse(await res.text()) as {
+      Envelope?: {
+        Body?: { SearchResponse?: { Result?: unknown; TotalMatches?: number } }
+      }
+    }
+    const sr = doc.Envelope?.Body?.SearchResponse
+    const didl = text(sr?.Result)
+    if (didl == null) return null
+    return { items: didlToNodes(didl), total: Number(sr?.TotalMatches ?? 0) }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Whole-library search. Probed grammar reality (Asset): criteria MUST be
+ * scoped with `upnp:class derivedfrom …` to return anything, OR works
+ * WITHIN a scope but not across scoped groups — so run one search per
+ * entity kind (albums, artists, tracks) and merge, deduped by id.
+ */
+export async function search(
+  host: string,
+  serverUdn: string,
+  query: string
+): Promise<{ items: MediaNode[]; total: number }> {
+  const entry = await entryFor(host, serverUdn)
+  const phrase = query.replace(/["\\]/g, '') // criteria-grammar safe
+  const scopes = [
+    `upnp:class derivedfrom "object.container.album" and (dc:title contains "${phrase}" or upnp:artist contains "${phrase}")`,
+    `upnp:class derivedfrom "object.container.person" and dc:title contains "${phrase}"`,
+    `upnp:class derivedfrom "object.item.audioItem" and (dc:title contains "${phrase}" or upnp:artist contains "${phrase}" or upnp:album contains "${phrase}")`
+  ]
+  const results = []
+  for (const criteria of scopes) results.push(await searchScope(entry, criteria))
+  if (results.every((r) => r == null)) throw new Error('search failed')
+
+  const seen = new Set<string>()
+  const items: MediaNode[] = []
+  let total = 0
+  for (const r of results) {
+    if (!r) continue
+    total += r.total
+    for (const node of r.items) {
+      if (seen.has(node.id)) continue
+      seen.add(node.id)
+      if (items.length < SEARCH_MAX) items.push(node)
     }
   }
-  const sr = doc.Envelope?.Body?.SearchResponse
-  const didl = text(sr?.Result)
-  if (didl == null) throw new Error('Search returned no result')
-  return { items: didlToNodes(didl), total: Number(sr?.TotalMatches ?? 0) }
+  return { items, total }
 }
 
 // --------------------------------------------------------- queue/preset writes
