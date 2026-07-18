@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
+  ArrowUpDown,
   ChevronRight,
   Disc3,
   Folder,
@@ -13,7 +14,13 @@ import {
   Rows3,
   Usb
 } from 'lucide-react'
-import type { MediaNode, MediaQueueAction, MediaServerInfo, ScreenLayout } from '@shared/ipc'
+import type {
+  AppSettings,
+  MediaNode,
+  MediaQueueAction,
+  MediaServerInfo,
+  ScreenLayout
+} from '@shared/ipc'
 import type { QueueListItem } from '@shared/smoip'
 import { tt } from '@/api'
 import { useStore } from '@/store'
@@ -29,6 +36,9 @@ type Crumb = { id: string; title: string; node?: MediaNode }
 // Session memory: where you were browsing survives screen switches.
 let session: { serverUdn: string | null; path: Crumb[] } = { serverUdn: null, path: [] }
 const scrollMemory = new Map<string, number>()
+// Per-LEVEL filter memory: each folder keeps its own filter for the session
+// (the store's screenFilters.library always holds the current level's).
+const filterMemory = new Map<string, string>()
 
 const nodeKey = (serverUdn: string | null, path: Crumb[]): string =>
   `${serverUdn ?? ''}|${path.map((c) => c.id).join('/')}`
@@ -40,7 +50,9 @@ const nodeKey = (serverUdn: string | null, path: Crumb[]): string =>
  * buttons and the ⋯ menu.
  */
 export function LibraryScreen(): React.JSX.Element {
-  const { libraryLayout, presetCardSize, presetGap, presetFillRows } = useStore((s) => s.settings)
+  const { libraryLayout, librarySort, presetCardSize, presetGap, presetFillRows } = useStore(
+    (s) => s.settings
+  )
   const setSettings = useStore((s) => s.setSettings)
   const filter = useStore((s) => s.screenFilters.library)
   const setScreenFilter = useStore((s) => s.setScreenFilter)
@@ -118,39 +130,27 @@ export function LibraryScreen(): React.JSX.Element {
     if (scrollRef.current) scrollMemory.set(nodeKey(serverUdn, path), scrollRef.current.scrollTop)
   }
 
-  // The filter belongs to the folder you're looking at — navigating clears it
-  // (a filter silently carried into a new folder reads as "empty folder").
-  const clearFilter = (): void => {
-    if (filter) setScreenFilter('library', '')
+  // Each level keeps its own filter: stash the current one, restore the
+  // destination's (or empty) whenever navigation happens.
+  const moveTo = (udn: string | null, newPath: Crumb[]): void => {
+    rememberScroll()
+    filterMemory.set(nodeKey(serverUdn, path), filter)
+    setScreenFilter('library', filterMemory.get(nodeKey(udn, newPath)) ?? '')
+    setServerUdn(udn)
+    setPath(newPath)
   }
 
-  const enter = (node: MediaNode): void => {
-    rememberScroll()
-    clearFilter()
-    setPath((p) => [...p, { id: node.id, title: node.title, node }])
-  }
-  const enterServer = (udn: string): void => {
-    rememberScroll()
-    clearFilter()
-    setServerUdn(udn)
-    setPath([])
-  }
+  const enter = (node: MediaNode): void =>
+    moveTo(serverUdn, [...path, { id: node.id, title: node.title, node }])
+  const enterServer = (udn: string): void => moveTo(udn, [])
   // Crumb trail: Library (source list) › source › folders…
   const jumpTo = (index: number): void => {
-    rememberScroll()
-    clearFilter()
-    if (index === 0) {
-      setServerUdn(null)
-      setPath([])
-    } else {
-      setPath((p) => p.slice(0, index - 1))
-    }
+    if (index === 0) moveTo(null, [])
+    else moveTo(serverUdn, path.slice(0, index - 1))
   }
   const goUp = (): void => {
-    rememberScroll()
-    clearFilter()
-    if (path.length > 0) setPath(path.slice(0, -1))
-    else if (serverUdn) setServerUdn(null)
+    if (path.length > 0) moveTo(serverUdn, path.slice(0, -1))
+    else if (serverUdn) moveTo(null, [])
   }
 
   // Backspace and the mouse back button go up a level (arrows stay with
@@ -270,6 +270,8 @@ export function LibraryScreen(): React.JSX.Element {
   const [presetPicker, setPresetPicker] = useState<{ node: MediaNode; x: number; y: number } | null>(
     null
   )
+  // The card/row a popover belongs to holds its hover treatment while open.
+  const menuNodeId = menu?.node.id ?? presetPicker?.node.id ?? null
   const openMenu = (node: MediaNode, e: React.MouseEvent): void => {
     e.preventDefault()
     e.stopPropagation()
@@ -282,7 +284,21 @@ export function LibraryScreen(): React.JSX.Element {
   const shown = filter
     ? nodes.filter((n) => matchesFilter(filter, [n.title, n.artist, n.album]))
     : nodes
-  const containers = shown.filter((n) => n.isContainer)
+  const unsortedContainers = shown.filter((n) => n.isContainer)
+  // Album-grid sort; missing fields fall back to title so folders stay sane.
+  const containers =
+    librarySort === 'server'
+      ? unsortedContainers
+      : [...unsortedContainers].sort((a, b) => {
+          if (librarySort === 'artist')
+            return (
+              (a.artist ?? '￿').localeCompare(b.artist ?? '￿') ||
+              a.title.localeCompare(b.title)
+            )
+          if (librarySort === 'year')
+            return (b.year ?? '').localeCompare(a.year ?? '') || a.title.localeCompare(b.title)
+          return a.title.localeCompare(b.title)
+        })
   const unsortedTracks = shown.filter((n) => !n.isContainer)
   // Album views sort by track number (USB folders come in filesystem order).
   const tracks =
@@ -382,6 +398,12 @@ export function LibraryScreen(): React.JSX.Element {
             shown={atRoot ? shownServers.length : shown.length}
             total={atRoot ? (servers?.length ?? 0) : nodes.length}
           />
+          {!atRoot && containers.length > 1 && (
+            <SortChip
+              value={librarySort}
+              onChange={(librarySort) => void tt.setSettings({ librarySort }).then(setSettings)}
+            />
+          )}
           <button
             data-tip={cards ? 'View as rows' : 'View as cards'}
             aria-label={cards ? 'View as rows' : 'View as cards'}
@@ -569,6 +591,7 @@ export function LibraryScreen(): React.JSX.Element {
                   node={node}
                   playing={queueSourceActive && isPlayingAlbum(node)}
                   audible={isPlayingState}
+                  menuOpen={menuNodeId === node.id}
                   onEnter={() => enter(node)}
                   onPlay={(el) => void playContainer(node, el)}
                   onMenu={(e) => openMenu(node, e)}
@@ -579,6 +602,7 @@ export function LibraryScreen(): React.JSX.Element {
                   node={node}
                   playing={queueSourceActive && isPlayingAlbum(node)}
                   audible={isPlayingState}
+                  menuOpen={menuNodeId === node.id}
                   onEnter={() => enter(node)}
                   onMenu={(e) => openMenu(node, e)}
                 />
@@ -597,6 +621,7 @@ export function LibraryScreen(): React.JSX.Element {
                 isCurrent={queueSourceActive && isCurrentTrack(node)}
                 audible={isPlayingState}
                 queued={trackQueued(node)}
+                menuOpen={menuNodeId === node.id}
                 onPlayNow={(el) => playTrack(node, el)}
                 onMenu={(e) => openMenu(node, e)}
               />
@@ -637,6 +662,64 @@ export function LibraryScreen(): React.JSX.Element {
   )
 }
 
+// ------------------------------------------------------------------ sort chip
+
+const SORTS: Array<{ value: AppSettings['librarySort']; label: string }> = [
+  { value: 'server', label: 'Server order' },
+  { value: 'title', label: 'Title' },
+  { value: 'artist', label: 'Artist' },
+  { value: 'year', label: 'Year (newest first)' }
+]
+
+function SortChip({
+  value,
+  onChange
+}: {
+  value: AppSettings['librarySort']
+  onChange(value: AppSettings['librarySort']): void
+}): React.JSX.Element {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="relative">
+      <button
+        data-tip="Sort albums"
+        aria-label="Sort albums"
+        onClick={() => setOpen((o) => !o)}
+        className={cx(
+          'no-drag tip-bottom p-2 rounded-lg ring-1 transition-all',
+          value !== 'server'
+            ? 'ring-gold/50 bg-golddim text-gold'
+            : 'ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70'
+        )}
+      >
+        <ArrowUpDown size={16} />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full mt-1.5 z-30 w-44 rounded-xl ring-1 ring-edge2 bg-raised shadow-xl p-1.5 space-y-0.5">
+            {SORTS.map((s) => (
+              <button
+                key={s.value}
+                onClick={() => {
+                  setOpen(false)
+                  onChange(s.value)
+                }}
+                className={cx(
+                  'w-full px-2.5 py-1.5 rounded-lg text-left text-[13px] transition-colors',
+                  s.value === value ? 'text-gold bg-golddim' : 'text-dim hover:text-ink hover:bg-veil'
+                )}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 // ------------------------------------------------------------- cards and rows
 
 const isAlbumClass = (c: string): boolean => c.includes('musicAlbum')
@@ -645,6 +728,7 @@ function ContainerCard({
   node,
   playing,
   audible,
+  menuOpen,
   onEnter,
   onPlay,
   onMenu
@@ -654,6 +738,8 @@ function ContainerCard({
   playing: boolean
   /** Transport is actually in the play state (eqbars animate vs freeze). */
   audible: boolean
+  /** This card's ⋯ menu or preset picker is open — hold the hover treatment. */
+  menuOpen: boolean
   onEnter(): void
   onPlay(el: HTMLElement | null): void
   onMenu(e: React.MouseEvent): void
@@ -662,17 +748,27 @@ function ContainerCard({
   // Queue/preset verbs only make sense on albums — plain folders (artist
   // dirs, USB volumes, Asset's virtual views) get no chips and no menu.
   const album = isAlbumClass(node.upnpClass)
+  const subtitle = [node.artist, node.year].filter(Boolean).join(' · ')
   return (
-    <div ref={ref} className="group" onContextMenu={album ? onMenu : undefined} data-library-card>
-      {/* the card CENTER always enters — play/menu live as corner chips on
-          the art (preset-card idiom), never intercepting the open gesture */}
+    // Preset-card idiom: inset tile, hover grow + lift + glow; the highlight
+    // wraps the gray tile so it stays legible over gold/orange covers.
+    <div
+      ref={ref}
+      onContextMenu={album ? onMenu : undefined}
+      data-library-card
+      className={cx(
+        'group relative text-left rounded-2xl p-2 pb-2.5 transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]',
+        playing ? 'bg-goldtile/70 tile-playing' : 'bg-raised/70 ring-1 ring-edge card-hover-glow',
+        // held while this card's ⋯ menu / preset picker is open — the pointer
+        // has left, but the card is still what's being acted on
+        menuOpen && 'ring-1 ring-edge2'
+      )}
+    >
+      {/* the card CENTER always enters — play/menu are corner chips on the
+          art, never intercepting the open gesture (unlike preset cards,
+          whose whole-card click IS the play action) */}
       <button className="block w-full cursor-pointer" onClick={onEnter}>
-        <div
-          className={cx(
-            'relative aspect-square w-full rounded-lg overflow-hidden bg-raised/70 ring-1 flex items-center justify-center card-hover-glow',
-            playing ? 'ring-gold/50' : 'ring-edge'
-          )}
-        >
+        <div className="relative aspect-square w-full rounded-lg overflow-hidden bg-panel/70 flex items-center justify-center">
           {/* server-generated folder art (Asset's letter tiles etc.) is muted
               so it recedes into the app's palette; real album art stays vivid */}
           <ArtImage
@@ -702,16 +798,22 @@ function ContainerCard({
                 onPlay(ref.current)
               }}
               data-tip="Play — replaces the queue"
-              className="tip-bottom absolute bottom-1.5 left-1.5 h-8 w-8 rounded-lg opacity-0 group-hover:opacity-100 bg-amber text-bg flex items-center justify-center transition-all motion-safe:hover:scale-110"
+              className={cx(
+                'tip-bottom absolute bottom-1.5 left-1.5 h-11 w-11 rounded-full bg-amber text-bg flex items-center justify-center transition-all duration-150 motion-safe:hover:scale-110 hover:shadow-[0_0_24px_rgb(var(--amber-rgb)_/_0.6)]',
+                menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+              )}
             >
-              <Play size={15} fill="currentColor" />
+              <Play size={18} fill="currentColor" />
             </span>
           )}
           {album && (
             <span
               aria-label="More actions"
               onClick={onMenu}
-              className="absolute bottom-1.5 right-1.5 h-8 w-8 rounded-lg opacity-0 group-hover:opacity-100 bg-panel/80 ring-1 ring-edge text-dim hover:text-ink flex items-center justify-center transition-all"
+              className={cx(
+                'absolute bottom-1.5 right-1.5 h-8 w-8 rounded-lg bg-panel/80 ring-1 ring-edge text-dim hover:text-ink flex items-center justify-center transition-all',
+                menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+              )}
             >
               <MoreHorizontal size={15} />
             </span>
@@ -725,6 +827,9 @@ function ContainerCard({
         >
           {node.title}
         </div>
+        {subtitle && (
+          <div className="text-[11.5px] text-faint truncate text-left">{subtitle}</div>
+        )}
       </button>
     </div>
   )
@@ -734,12 +839,14 @@ function ContainerRow({
   node,
   playing,
   audible,
+  menuOpen,
   onEnter,
   onMenu
 }: {
   node: MediaNode
   playing: boolean
   audible: boolean
+  menuOpen: boolean
   onEnter(): void
   onMenu(e: React.MouseEvent): void
 }): React.JSX.Element {
@@ -749,7 +856,7 @@ function ContainerRow({
     <div
       className={cx(
         'group grid grid-cols-[44px_1fr_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer transition-colors',
-        playing ? 'row-playing bg-gold/10' : 'hover:bg-veil'
+        playing ? 'row-playing bg-gold/10' : menuOpen ? 'bg-veil' : 'hover:bg-veil'
       )}
       onClick={onEnter}
       onContextMenu={album ? onMenu : undefined}
@@ -780,7 +887,10 @@ function ContainerRow({
         <button
           aria-label="More actions"
           onClick={onMenu}
-          className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-all"
+          className={cx(
+            'p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-all',
+            menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+          )}
         >
           <MoreHorizontal size={14} />
         </button>
@@ -797,6 +907,7 @@ function TrackRow({
   isCurrent,
   audible,
   queued,
+  menuOpen,
   onPlayNow,
   onMenu
 }: {
@@ -808,6 +919,7 @@ function TrackRow({
   audible: boolean
   /** Already in the queue — a click jumps there instead of inserting. */
   queued: boolean
+  menuOpen: boolean
   onPlayNow(el: HTMLElement | null): void
   onMenu(e: React.MouseEvent): void
 }): React.JSX.Element {
@@ -818,7 +930,7 @@ function TrackRow({
       className={cx(
         'group grid items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer transition-colors',
         showArt ? 'grid-cols-[26px_44px_1fr_auto_auto]' : 'grid-cols-[26px_1fr_auto_auto]',
-        isCurrent ? 'row-playing bg-gold/10' : 'hover:bg-veil'
+        isCurrent ? 'row-playing bg-gold/10' : menuOpen ? 'bg-veil' : 'hover:bg-veil'
       )}
       onClick={() => onPlayNow(ref.current)}
       onContextMenu={onMenu}
@@ -839,7 +951,12 @@ function TrackRow({
         </div>
         {node.artist && <div className="text-[12px] text-faint truncate">{node.artist}</div>}
       </div>
-      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div
+        className={cx(
+          'flex items-center gap-0.5 transition-opacity',
+          menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+        )}
+      >
         <button
           aria-label="Play"
           data-tip={queued ? 'Play — already in the queue' : 'Play now'}
@@ -920,15 +1037,13 @@ function ItemMenu({
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} onContextMenu={onClose} />
       <div
-        className="fixed z-50 min-w-[190px] rounded-xl ring-1 ring-edge2 bg-raised shadow-xl p-1.5 space-y-0.5"
+        className="fixed z-50 w-52 rounded-xl ring-1 ring-edge2 bg-raised shadow-xl p-1.5 space-y-0.5"
         style={{
-          left: Math.min(menu.x, window.innerWidth - 210),
+          left: Math.min(menu.x, window.innerWidth - 224),
           top: Math.min(menu.y, window.innerHeight - items.length * 36 - 16)
         }}
       >
-        <div className="px-2.5 pt-1 pb-1.5 text-[11px] text-faint truncate max-w-[220px]">
-          {node.title}
-        </div>
+        <div className="px-2.5 pt-1 pb-1.5 text-[11px] text-faint truncate">{node.title}</div>
         {items.map((item) => (
           <button
             key={item.label}

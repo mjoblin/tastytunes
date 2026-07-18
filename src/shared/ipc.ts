@@ -555,6 +555,8 @@ export interface AppSettings {
   queueLayout: ScreenLayout
   presetsLayout: ScreenLayout
   libraryLayout: ScreenLayout
+  /** Album-grid sort in the Library (tracks always sort by track number). */
+  librarySort: 'server' | 'title' | 'artist' | 'year'
   /** Remembered sleep-timer action (pause vs standby). The countdown itself is not persisted. */
   sleepAction: SleepAction
   /** Recently Played: collapse continuous sessions (radio/AirPlay/…) to one row, vs a row per song. */
@@ -616,6 +618,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   queueLayout: 'rows',
   presetsLayout: 'cards',
   libraryLayout: 'cards',
+  librarySort: 'server',
   sleepAction: 'standby',
   recentsGrouped: true,
   motion: 'system',
