@@ -308,6 +308,16 @@ img {
     0 0 90px -30px rgb(var(--amber-rgb) / 0.18);
 }
 
+/* Big library grids: offscreen cards skip layout and paint entirely
+   (content-visibility implies paint containment — an element's own hover
+   shadow/scale are unaffected; only descendants clip, which never overflow
+   the card). auto-sizing remembers each card's real height once rendered. */
+[data-library-card],
+[data-library-track-card] {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 200px;
+}
+
 /* Inline lyric line: a faint gold halo so the current line reads as "lit"
    against the dark screen. drop-shadow, NOT text-shadow: the element is
    line-clamped (overflow: hidden), which clips text-shadow into a filled

@@ -3,6 +3,7 @@ import { Loader2, MonitorSpeaker, RefreshCw } from 'lucide-react'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { cx } from '@/lib/format'
+import { PopoverChrome } from '@/hooks/usePopover'
 
 /**
  * Roon-zone-style device picker, right in the playback bar — rendered only
@@ -55,6 +56,7 @@ export function DeviceSwitcher(): React.JSX.Element | null {
 
       {open && (
         <>
+          <PopoverChrome onClose={() => setOpen(false)} />
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
           <div className="absolute bottom-11 right-0 z-40 w-72 rounded-xl bg-raised ring-1 ring-edge2 shadow-2xl p-2">
             <div className="flex items-center justify-between px-2 pt-1.5 pb-2">

@@ -36,6 +36,7 @@ import { cx, matchesFilter } from '@/lib/format'
 import { FilterInput } from '@/components/FilterInput'
 import { Slider } from '@/components/Slider'
 import { ArtImage } from '@/components/ArtImage'
+import { PopoverChrome } from '@/hooks/usePopover'
 
 export function PresetsScreen(): React.JSX.Element {
   const presets = useStore((s) => s.presets)
@@ -330,6 +331,7 @@ function usePresetVolumePopover(
     open && anchor
       ? createPortal(
           <>
+            <PopoverChrome onClose={() => setOpen(false)} />
             <span
               data-preset-volume-overlay
               className="fixed inset-0 z-30 cursor-default"

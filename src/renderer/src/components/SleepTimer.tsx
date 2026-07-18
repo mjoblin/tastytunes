@@ -4,6 +4,7 @@ import { sleepTrackKey, type SleepAction } from '@shared/ipc'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { cx, deriveNowPlaying, fmtTime } from '@/lib/format'
+import { PopoverChrome } from '@/hooks/usePopover'
 
 const DURATIONS: Array<{ minutes: number; label: string }> = [
   { minutes: 15, label: '15 min' },
@@ -83,6 +84,7 @@ export function SleepTimer(): React.JSX.Element {
 
       {open && (
         <>
+          <PopoverChrome onClose={() => setOpen(false)} />
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
           <div className="absolute bottom-11 right-0 z-40 w-64 rounded-xl bg-raised ring-1 ring-edge2 shadow-2xl p-3">
             <div className="flex items-center justify-between mb-2.5">

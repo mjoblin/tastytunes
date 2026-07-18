@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useStore } from '@/store'
 import { SIGNAL_COLORS, SIGNAL_LABELS, cx, fmtKHz, signalGlow, signalQuality } from '@/lib/format'
+import { PopoverChrome } from '@/hooks/usePopover'
 
 /**
  * Roon-style signal light: one glance says how good the stream is; a click shows
@@ -43,6 +44,7 @@ export function SignalLamp(): React.JSX.Element | null {
 
       {open && (
         <>
+          <PopoverChrome onClose={() => setOpen(false)} />
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
           <div className="absolute bottom-11 right-0 z-40 w-60 rounded-xl bg-raised ring-1 ring-edge2 shadow-2xl p-3">
             <div className="flex items-center gap-2 mb-2.5">
