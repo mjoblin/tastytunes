@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
+  ArrowDown,
+  ArrowUp,
   ArrowUpDown,
   ChevronRight,
   Disc3,
@@ -50,9 +52,8 @@ const nodeKey = (serverUdn: string | null, path: Crumb[]): string =>
  * buttons and the ⋯ menu.
  */
 export function LibraryScreen(): React.JSX.Element {
-  const { libraryLayout, librarySort, presetCardSize, presetGap, presetFillRows } = useStore(
-    (s) => s.settings
-  )
+  const { libraryLayout, librarySort, librarySortReversed, presetCardSize, presetGap, presetFillRows } =
+    useStore((s) => s.settings)
   const setSettings = useStore((s) => s.setSettings)
   const filter = useStore((s) => s.screenFilters.library)
   const setScreenFilter = useStore((s) => s.setScreenFilter)
@@ -286,7 +287,7 @@ export function LibraryScreen(): React.JSX.Element {
     : nodes
   const unsortedContainers = shown.filter((n) => n.isContainer)
   // Album-grid sort; missing fields fall back to title so folders stay sane.
-  const containers =
+  const sortedContainers =
     librarySort === 'server'
       ? unsortedContainers
       : [...unsortedContainers].sort((a, b) => {
@@ -299,6 +300,7 @@ export function LibraryScreen(): React.JSX.Element {
             return (b.year ?? '').localeCompare(a.year ?? '') || a.title.localeCompare(b.title)
           return a.title.localeCompare(b.title)
         })
+  const containers = librarySortReversed ? [...sortedContainers].reverse() : sortedContainers
   const unsortedTracks = shown.filter((n) => !n.isContainer)
   // Album views sort by track number (USB folders come in filesystem order).
   const tracks =
@@ -401,7 +403,13 @@ export function LibraryScreen(): React.JSX.Element {
           {!atRoot && containers.length > 1 && (
             <SortChip
               value={librarySort}
+              reversed={librarySortReversed}
               onChange={(librarySort) => void tt.setSettings({ librarySort }).then(setSettings)}
+              onToggleReverse={() =>
+                void tt
+                  .setSettings({ librarySortReversed: !librarySortReversed })
+                  .then(setSettings)
+              }
             />
           )}
           <button
@@ -611,7 +619,34 @@ export function LibraryScreen(): React.JSX.Element {
           </div>
         )}
 
-        {!atRoot && state === 'ready' && tracks.length > 0 && (
+        {/* loose tracks honor the cards ⇄ rows toggle; album views keep rows
+            (the header presents the album — rows are the tracklist idiom) */}
+        {!atRoot && state === 'ready' && tracks.length > 0 && cards && !albumNode ? (
+          <div
+            className={cx(containers.length > 0 && 'mt-4')}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: presetFillRows
+                ? `repeat(auto-fill, minmax(${presetCardSize}px, 1fr))`
+                : `repeat(auto-fill, ${presetCardSize}px)`,
+              gap: presetGap,
+              paddingTop: 8
+            }}
+          >
+            {tracks.map((node) => (
+              <TrackCard
+                key={node.id}
+                node={node}
+                isCurrent={queueSourceActive && isCurrentTrack(node)}
+                audible={isPlayingState}
+                queued={trackQueued(node)}
+                menuOpen={menuNodeId === node.id}
+                onPlayNow={(el) => playTrack(node, el)}
+                onMenu={(e) => openMenu(node, e)}
+              />
+            ))}
+          </div>
+        ) : !atRoot && state === 'ready' && tracks.length > 0 ? (
           <div className={cx('divide-y divide-edge/50 -mx-2', containers.length > 0 && 'mt-4')}>
             {tracks.map((node) => (
               <TrackRow
@@ -627,7 +662,7 @@ export function LibraryScreen(): React.JSX.Element {
               />
             ))}
           </div>
-        )}
+        ) : null}
       </div>
 
       {menu && (
@@ -673,10 +708,14 @@ const SORTS: Array<{ value: AppSettings['librarySort']; label: string }> = [
 
 function SortChip({
   value,
-  onChange
+  reversed,
+  onChange,
+  onToggleReverse
 }: {
   value: AppSettings['librarySort']
+  reversed: boolean
   onChange(value: AppSettings['librarySort']): void
+  onToggleReverse(): void
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   return (
@@ -687,7 +726,7 @@ function SortChip({
         onClick={() => setOpen((o) => !o)}
         className={cx(
           'no-drag tip-bottom p-2 rounded-lg ring-1 transition-all',
-          value !== 'server'
+          value !== 'server' || reversed
             ? 'ring-gold/50 bg-golddim text-gold'
             : 'ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70'
         )}
@@ -697,22 +736,34 @@ function SortChip({
       {open && (
         <>
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-1.5 z-30 w-44 rounded-xl ring-1 ring-edge2 bg-raised shadow-xl p-1.5 space-y-0.5">
-            {SORTS.map((s) => (
-              <button
-                key={s.value}
-                onClick={() => {
-                  setOpen(false)
-                  onChange(s.value)
-                }}
-                className={cx(
-                  'w-full px-2.5 py-1.5 rounded-lg text-left text-[13px] transition-colors',
-                  s.value === value ? 'text-gold bg-golddim' : 'text-dim hover:text-ink hover:bg-veil'
-                )}
-              >
-                {s.label}
-              </button>
-            ))}
+          <div className="absolute right-0 top-full mt-1.5 z-30 w-48 rounded-xl ring-1 ring-edge2 bg-raised shadow-xl p-1.5 space-y-0.5">
+            {SORTS.map((s) => {
+              const active = s.value === value
+              return (
+                <button
+                  key={s.value}
+                  onClick={() => {
+                    // clicking the active sort flips its direction
+                    if (active) onToggleReverse()
+                    else {
+                      setOpen(false)
+                      onChange(s.value)
+                    }
+                  }}
+                  aria-label={active ? `${s.label} — click to reverse` : s.label}
+                  className={cx(
+                    'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-[13px] transition-colors',
+                    active ? 'text-gold bg-golddim' : 'text-dim hover:text-ink hover:bg-veil'
+                  )}
+                >
+                  <span className="min-w-0 flex-1 truncate">{s.label}</span>
+                  {active && (reversed ? <ArrowUp size={13} /> : <ArrowDown size={13} />)}
+                </button>
+              )
+            })}
+            <div className="px-2.5 pt-1 pb-0.5 text-[10.5px] text-faint">
+              Click the active sort to reverse it
+            </div>
           </div>
         </>
       )}
@@ -723,6 +774,16 @@ function SortChip({
 // ------------------------------------------------------------- cards and rows
 
 const isAlbumClass = (c: string): boolean => c.includes('musicAlbum')
+
+/**
+ * Mute anonymous folder art so it recedes into the app's palette; real media
+ * art (album covers, artist portraits) stays vivid. Asset classes its letter
+ * tiles ([A..], [All Album Artists]) as musicArtist under Album Artist, so
+ * bracketed virtual-view titles are muted regardless of class.
+ */
+const isMutedArt = (node: MediaNode): boolean =>
+  !isAlbumClass(node.upnpClass) &&
+  (!node.upnpClass.includes('person') || /^\[.*\]$/.test(node.title))
 
 function ContainerCard({
   node,
@@ -748,9 +809,7 @@ function ContainerCard({
   // Queue/preset verbs only make sense on albums — plain folders (artist
   // dirs, USB volumes, Asset's virtual views) get no chips and no menu.
   const album = isAlbumClass(node.upnpClass)
-  // Mute only anonymous folder art (Asset's generated letter tiles, virtual
-  // views) — artists carry real portraits and stay vivid, like albums.
-  const muted = !album && !node.upnpClass.includes('person')
+  const muted = isMutedArt(node)
   const subtitle = [node.artist, node.year].filter(Boolean).join(' · ')
   return (
     // Preset-card idiom: inset tile, hover grow + lift + glow; the highlight
@@ -854,7 +913,7 @@ function ContainerRow({
 }): React.JSX.Element {
   // Same rule as cards: only albums carry the ⋯ menu.
   const album = isAlbumClass(node.upnpClass)
-  const muted = !album && !node.upnpClass.includes('person')
+  const muted = isMutedArt(node)
   return (
     <div
       className={cx(
@@ -982,6 +1041,84 @@ function TrackRow({
       <span className="font-mono text-[11px] text-faint tabular-nums">
         {node.durationSecs != null ? fmtTime(node.durationSecs) : ''}
       </span>
+    </div>
+  )
+}
+
+/** A loose track as a card (Title views, mixed folders) — click = Play now. */
+function TrackCard({
+  node,
+  isCurrent,
+  audible,
+  queued,
+  menuOpen,
+  onPlayNow,
+  onMenu
+}: {
+  node: MediaNode
+  isCurrent: boolean
+  audible: boolean
+  queued: boolean
+  menuOpen: boolean
+  onPlayNow(el: HTMLElement | null): void
+  onMenu(e: React.MouseEvent): void
+}): React.JSX.Element {
+  const ref = useRef<HTMLDivElement | null>(null)
+  return (
+    <div
+      ref={ref}
+      onContextMenu={onMenu}
+      data-library-track-card
+      className={cx(
+        'group relative text-left rounded-2xl p-2 pb-2.5 transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]',
+        isCurrent ? 'bg-goldtile/70 tile-playing' : 'bg-raised/70 ring-1 ring-edge card-hover-glow',
+        menuOpen && 'ring-1 ring-edge2 z-10 motion-safe:scale-[1.04] card-glow-held'
+      )}
+    >
+      <button className="block w-full cursor-pointer" onClick={() => onPlayNow(ref.current)}>
+        <div className="relative aspect-square w-full rounded-lg overflow-hidden bg-panel/70 flex items-center justify-center">
+          <ArtImage
+            src={node.artUrl}
+            lazy
+            fallback={<Disc3 size={34} strokeWidth={1.2} className="text-faint" />}
+          />
+          {isCurrent && (
+            <span className="absolute top-1.5 left-1.5 h-7 w-7 rounded-lg bg-panel/80 ring-1 ring-edge flex items-center justify-center">
+              <Eqbars playing={audible} />
+            </span>
+          )}
+          <span
+            data-tip={queued ? 'Play — already in the queue' : 'Play now'}
+            className={cx(
+              'tip-bottom absolute bottom-1.5 left-1.5 h-11 w-11 rounded-full bg-amber text-bg flex items-center justify-center transition-all duration-150 motion-safe:hover:scale-110 hover:shadow-[0_0_24px_rgb(var(--amber-rgb)_/_0.6)]',
+              menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+            )}
+          >
+            <Play size={18} fill="currentColor" />
+          </span>
+          <span
+            aria-label="More actions"
+            onClick={onMenu}
+            className={cx(
+              'absolute bottom-1.5 right-1.5 h-8 w-8 rounded-lg bg-panel/80 ring-1 ring-edge text-dim hover:text-ink flex items-center justify-center transition-all',
+              menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+            )}
+          >
+            <MoreHorizontal size={15} />
+          </span>
+        </div>
+        <div
+          className={cx(
+            'pt-1.5 text-[12.5px] truncate text-left',
+            isCurrent ? 'text-gold' : 'text-ink'
+          )}
+        >
+          {node.title}
+        </div>
+        {node.artist && (
+          <div className="text-[11.5px] text-faint truncate text-left">{node.artist}</div>
+        )}
+      </button>
     </div>
   )
 }
