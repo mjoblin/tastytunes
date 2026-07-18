@@ -6,7 +6,7 @@ import { INVOKE_METHODS, IPC, type PushMessage, type TastyTunesApi } from "@shar
  * lines, one per method, each a chance to pass the wrong channel or drop an argument).
  * Every invoked method forwards its arguments to its own channel (@shared/ipc
  * INVOKE_METHODS, checked against TastyTunesApi at compile time); the push stream and the
- * one-way display-mode report are the two written out.
+ * one-way display-mode report are the two written out, beside the store-build flag (a value).
  */
 const invokers = Object.fromEntries(
   INVOKE_METHODS.map((m) => [m, (...args: unknown[]) => ipcRenderer.invoke(IPC[m], ...args)]),
@@ -16,6 +16,9 @@ const invokers = Object.fromEntries(
 // registered under the same name, which is typed by the same contract (app/guard handle)
 const api = {
   ...invokers,
+  // Mirrors the STORE_BUILD gate in main/app/updater.ts — both sides must agree
+  // on what "a store build" is, harness override included.
+  storeBuild: process.mas === true || process.env["TASTYTUNES_MAS"] === "1",
   reportDisplayMode: (on: boolean) => ipcRenderer.send(IPC.displayModeReport, on),
   onPush: (cb: (msg: PushMessage) => void) => {
     const listener = (_e: IpcRendererEvent, msg: PushMessage): void => cb(msg);
