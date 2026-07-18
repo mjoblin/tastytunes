@@ -376,15 +376,35 @@ export async function search(
   }
 
   const scopes = [
-    { cls: 'object.container.album', fields: orClause(['dc:title', 'upnp:artist']) },
-    { cls: 'object.container.person', fields: orClause(['dc:title']) },
-    { cls: 'object.item.audioItem', fields: orClause(['dc:title', 'upnp:artist', 'upnp:album']) }
-  ].filter((s): s is { cls: string; fields: string } => s.fields != null)
+    {
+      cls: 'object.container.album',
+      leaf: 'object.container.album.musicAlbum',
+      fields: orClause(['dc:title', 'upnp:artist'])
+    },
+    {
+      cls: 'object.container.person',
+      leaf: 'object.container.person.musicArtist',
+      fields: orClause(['dc:title'])
+    },
+    { cls: 'object.item.audioItem', leaf: null, fields: orClause(['dc:title', 'upnp:artist', 'upnp:album']) }
+  ].filter((s): s is { cls: string; leaf: string | null; fields: string } => s.fields != null)
   if (scopes.length === 0) throw new Error('server declares no searchable text properties')
 
   const results = []
   for (const s of scopes) {
-    results.push(await searchScope(entry, `upnp:class derivedfrom "${s.cls}" and ${s.fields}`))
+    const r = await searchScope(entry, `upnp:class derivedfrom "${s.cls}" and ${s.fields}`)
+    // Asset generalizes classes in Search results to the scoped base class
+    // (an album browses as …album.musicAlbum but searches as bare
+    // object.container.album) — normalize to the specific leaf so the
+    // vividness/chips/album-header rules behave exactly like browsing.
+    if (r && s.leaf != null) {
+      const leaf = s.leaf
+      const tail = leaf.split('.').pop() as string
+      r.items = r.items.map((n) =>
+        n.isContainer && !n.upnpClass.includes(tail) ? { ...n, upnpClass: leaf } : n
+      )
+    }
+    results.push(r)
   }
   if (results.every((r) => r == null)) throw new Error('search failed')
 

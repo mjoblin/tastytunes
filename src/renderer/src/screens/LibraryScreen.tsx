@@ -423,6 +423,49 @@ export function LibraryScreen(): React.JSX.Element {
 
   // ------------------------------------------------------------------ render
 
+  const containerGrid = (list: MediaNode[]): React.JSX.Element => (
+    <div
+      className={cx(!cards && 'divide-y divide-edge/50 -mx-2')}
+      style={
+        cards
+          ? {
+              display: 'grid',
+              gridTemplateColumns: presetFillRows
+                ? `repeat(auto-fill, minmax(${presetCardSize}px, 1fr))`
+                : `repeat(auto-fill, ${presetCardSize}px)`,
+              gap: presetGap,
+              paddingTop: 8
+            }
+          : undefined
+      }
+    >
+      {list.map((node) =>
+        cards ? (
+          <ContainerCard
+            key={node.id}
+            node={node}
+            playing={queueSourceActive && isPlayingAlbum(node)}
+            audible={isPlayingState}
+            menuOpen={menuNodeId === node.id}
+            onEnter={() => enter(node)}
+            onPlay={(el) => void playContainer(node, el)}
+            onMenu={(e) => openMenu(node, e)}
+          />
+        ) : (
+          <ContainerRow
+            key={node.id}
+            node={node}
+            playing={queueSourceActive && isPlayingAlbum(node)}
+            audible={isPlayingState}
+            menuOpen={menuNodeId === node.id}
+            onEnter={() => enter(node)}
+            onMenu={(e) => openMenu(node, e)}
+          />
+        )
+      )}
+    </div>
+  )
+
   if (servers != null && servers.length === 0) {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-4 text-center px-8">
@@ -704,47 +747,48 @@ export function LibraryScreen(): React.JSX.Element {
           </div>
         )}
 
-        {!atRoot && state === 'ready' && containers.length > 0 && (
-          <div
-            className={cx(!cards && 'divide-y divide-edge/50 -mx-2')}
-            style={
-              cards
-                ? {
-                    display: 'grid',
-                    gridTemplateColumns: presetFillRows
-                      ? `repeat(auto-fill, minmax(${presetCardSize}px, 1fr))`
-                      : `repeat(auto-fill, ${presetCardSize}px)`,
-                    gap: presetGap,
-                    paddingTop: 8
-                  }
-                : undefined
-            }
-          >
-            {containers.map((node) =>
-              cards ? (
-                <ContainerCard
-                  key={node.id}
-                  node={node}
-                  playing={queueSourceActive && isPlayingAlbum(node)}
-                  audible={isPlayingState}
-                  menuOpen={menuNodeId === node.id}
-                  onEnter={() => enter(node)}
-                  onPlay={(el) => void playContainer(node, el)}
-                  onMenu={(e) => openMenu(node, e)}
-                />
-              ) : (
-                <ContainerRow
-                  key={node.id}
-                  node={node}
-                  playing={queueSourceActive && isPlayingAlbum(node)}
-                  audible={isPlayingState}
-                  menuOpen={menuNodeId === node.id}
-                  onEnter={() => enter(node)}
-                  onMenu={(e) => openMenu(node, e)}
-                />
+        {!atRoot && state === 'ready' && containers.length > 0 && !searchMode && (
+          containerGrid(containers)
+        )}
+
+        {/* search results come grouped so albums / artists / tracks read
+            at a glance */}
+        {!atRoot && state === 'ready' && searchMode && searchState && (
+          <>
+            {(() => {
+              const albums = containers.filter((c) => isAlbumClass(c.upnpClass))
+              const artists = containers.filter((c) => c.upnpClass.includes('musicArtist'))
+              const other = containers.filter(
+                (c) => !isAlbumClass(c.upnpClass) && !c.upnpClass.includes('musicArtist')
               )
-            )}
-          </div>
+              return (
+                <>
+                  {albums.length > 0 && (
+                    <>
+                      <div className="microlabel mb-2 mt-2 px-1">Albums</div>
+                      {containerGrid(albums)}
+                    </>
+                  )}
+                  {artists.length > 0 && (
+                    <>
+                      <div className="microlabel mb-2 mt-5 px-1">Artists</div>
+                      {containerGrid(artists)}
+                    </>
+                  )}
+                  {other.length > 0 && (
+                    <>
+                      <div className="microlabel mb-2 mt-5 px-1">Folders</div>
+                      {containerGrid(other)}
+                    </>
+                  )}
+                </>
+              )
+            })()}
+          </>
+        )}
+
+        {searchMode && searchState && state === 'ready' && tracks.length > 0 && (
+          <div className="microlabel mb-2 mt-5 px-1">Tracks</div>
         )}
 
         {/* loose tracks honor the cards ⇄ rows toggle; album views keep rows
