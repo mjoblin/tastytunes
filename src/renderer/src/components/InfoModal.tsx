@@ -25,7 +25,7 @@ export function InfoModal(): React.JSX.Element {
               tasty<span className="text-gold">tunes</span>
             </div>
             <div className="microlabel mt-2">
-              v{version} · MIT · a controller for streammagic streamers
+              v{version} · GPLv3 · a controller for streammagic streamers
             </div>
           </div>
           <button
