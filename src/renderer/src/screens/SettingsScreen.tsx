@@ -5,9 +5,12 @@ import {
   Check,
   CircleDot,
   Copy,
+  Eye,
+  EyeOff,
   Globe,
   Heart,
   LayoutGrid,
+  Lock,
   Monitor,
   Moon,
   Palette,
@@ -30,10 +33,17 @@ import {
   type ThemePreference
 } from '@shared/ipc'
 import { tt } from '@/api'
-import { useStore } from '@/store'
+import { useStore, type Screen } from '@/store'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { DISPLAY_FONTS } from '@/hooks/useDisplayFont'
 import { SIGNAL_COLORS, cx, signalGlow } from '@/lib/format'
+import {
+  NAV_SCREENS,
+  NAV_UNHIDEABLE,
+  SETTINGS_SCREEN,
+  sanitizeNavHidden,
+  type ScreenDef
+} from '@/lib/screens'
 import { Slider } from '@/components/Slider'
 
 const TABS = [
@@ -221,6 +231,7 @@ export function SettingsScreen(): React.JSX.Element {
         )}
 
         {tab === 'layout' && (
+        <>
         <section className="space-y-3">
           <div className="microlabel">card grids</div>
           <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
@@ -252,6 +263,9 @@ export function SettingsScreen(): React.JSX.Element {
             />
           </div>
         </section>
+
+        <SidebarSection />
+        </>
         )}
 
         {tab === 'behavior' && (
@@ -1022,6 +1036,87 @@ function LegendRow({
       <span className="w-4 flex justify-center shrink-0">{swatch}</span>
       <span className="text-[12.5px] w-32 shrink-0">{label}</span>
       <span className="text-[11.5px] text-faint">{desc}</span>
+    </div>
+  )
+}
+
+/**
+ * Sidebar card (Layout tab): a row per screen in registry order with an eye
+ * toggle to hide/show it in the left nav — the way to un-hide, mirroring the
+ * right-click "Hide from sidebar" verb on the nav itself. now-playing is locked
+ * (never hideable); Settings is shown locked for completeness even though it
+ * lives in the nav's pinned bottom cluster, not NAV_SCREENS. Hidden screens
+ * stay reachable by their keyboard shortcut and the command palette.
+ */
+function SidebarSection(): React.JSX.Element {
+  const navHidden = useStore((s) => s.settings.navHidden)
+  const save = useStore((s) => s.saveSettings)
+  const hidden = sanitizeNavHidden(navHidden)
+  const hiddenSet = new Set(hidden)
+
+  const setHidden = (id: Screen, hide: boolean): void => {
+    const next = hide ? [...hidden, id] : hidden.filter((s) => s !== id)
+    void save({ navHidden: next })
+  }
+
+  return (
+    <section className="space-y-3">
+      <div className="microlabel">sidebar</div>
+      <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 pt-3">
+        <p className="text-[11.5px] text-faint max-w-md pb-2">
+          Hide screens you don&apos;t use from the left nav. Hidden screens stay reachable by
+          their keyboard shortcut and the command palette.
+        </p>
+        <div className="space-y-0.5">
+          {NAV_SCREENS.map((sc) => (
+            <SidebarRow
+              key={sc.id}
+              sc={sc}
+              locked={NAV_UNHIDEABLE.includes(sc.id)}
+              hidden={hiddenSet.has(sc.id)}
+              onToggle={(hide) => setHidden(sc.id, hide)}
+            />
+          ))}
+          <SidebarRow sc={SETTINGS_SCREEN} locked hidden={false} />
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function SidebarRow({
+  sc,
+  locked,
+  hidden,
+  onToggle
+}: {
+  sc: ScreenDef
+  locked: boolean
+  hidden: boolean
+  onToggle?: (hide: boolean) => void
+}): React.JSX.Element {
+  const Icon = sc.icon
+  return (
+    <div className={cx('flex items-center gap-3 h-9 px-1.5 rounded-lg', hidden && 'opacity-45')}>
+      <Icon size={15} strokeWidth={1.8} className="shrink-0 text-dim" />
+      <span className="flex-1 text-[13px]">{sc.label}</span>
+      {locked ? (
+        <span
+          data-tip="Always shown"
+          className="tip-top tip-end flex items-center justify-center h-7 w-7 text-faint"
+        >
+          <Lock size={13} strokeWidth={1.8} />
+        </span>
+      ) : (
+        <button
+          onClick={() => onToggle?.(!hidden)}
+          data-tip={hidden ? 'Show in sidebar' : 'Hide from sidebar'}
+          aria-label={hidden ? `Show ${sc.label} in sidebar` : `Hide ${sc.label} from sidebar`}
+          className="tip-top tip-end flex items-center justify-center h-7 w-7 rounded-md text-dim hover:text-ink hover:bg-veil motion-safe:active:scale-90 transition-all"
+        >
+          {hidden ? <EyeOff size={15} strokeWidth={1.8} /> : <Eye size={15} strokeWidth={1.8} />}
+        </button>
+      )}
     </div>
   )
 }

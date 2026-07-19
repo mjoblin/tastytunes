@@ -4,6 +4,7 @@ import {
   Cable,
   CornerDownLeft,
   Disc3,
+  EyeOff,
   HardDrive,
   Info,
   Keyboard,
@@ -32,7 +33,7 @@ import { tt } from '@/api'
 import { useStore } from '@/store'
 import { systemTheme } from '@/hooks/useTheme'
 import { activeSourceId, controlSet, cx, deriveNowPlaying } from '@/lib/format'
-import { SCREENS } from '@/lib/screens'
+import { SCREENS, sanitizeNavHidden } from '@/lib/screens'
 import { scrollToVisible } from '@/lib/scroll'
 
 type Icon = typeof Play
@@ -46,6 +47,8 @@ interface Command {
   hint?: string
   icon: Icon
   keywords?: string
+  /** Screen commands only: this screen is hidden from the sidebar (still navigable here). */
+  hidden?: boolean
   run(): void
 }
 
@@ -206,7 +209,9 @@ export function CommandPalette(): React.JSX.Element {
       }
     }
 
-    // -------- Screens (always available)
+    // -------- Screens (always available — hidden-from-sidebar screens included,
+    // flagged so the row shows they won't appear in the nav)
+    const navHidden = new Set(sanitizeNavHidden(settings.navHidden))
     for (const sc of SCREENS) {
       cmds.push({
         id: `screen:${sc.id}`,
@@ -214,7 +219,8 @@ export function CommandPalette(): React.JSX.Element {
         group: 'Screens',
         hint: `Screen · ${sc.key}`,
         icon: sc.icon,
-        keywords: 'go to open view screen',
+        keywords: navHidden.has(sc.id) ? 'go to open view screen hidden sidebar' : 'go to open view screen',
+        hidden: navHidden.has(sc.id),
         run: () => setScreen(sc.id)
       })
     }
@@ -473,6 +479,7 @@ export function CommandPalette(): React.JSX.Element {
     settings.sleepAction,
     settings.lyrics,
     settings.artistInfo,
+    settings.navHidden,
     setLyricsOpen,
     setArtistOpen,
     setContextTab,
@@ -594,6 +601,14 @@ export function CommandPalette(): React.JSX.Element {
                       className={cx('shrink-0', active ? 'text-amber' : 'text-dim')}
                     />
                     <span className="flex-1 min-w-0 truncate text-[13.5px]">{cmd.label}</span>
+                    {cmd.hidden && (
+                      <EyeOff
+                        size={12}
+                        strokeWidth={1.8}
+                        aria-label="Hidden from sidebar"
+                        className="shrink-0 text-faint/70"
+                      />
+                    )}
                     <span className="shrink-0 font-mono text-[10px] text-faint/80">
                       {cmd.hint ?? cmd.group}
                     </span>

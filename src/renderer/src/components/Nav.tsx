@@ -1,8 +1,26 @@
-import { Command, PanelLeftClose, PanelLeftOpen, PictureInPicture2 } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { Command, EyeOff, PanelLeftClose, PanelLeftOpen, PictureInPicture2 } from 'lucide-react'
 import { tt } from '@/api'
-import { useStore } from '@/store'
+import { useStore, type Screen } from '@/store'
 import { cx } from '@/lib/format'
-import { MOD, NAV_SCREENS, SETTINGS_SCREEN, type ScreenDef } from '@/lib/screens'
+import {
+  MOD,
+  NAV_SCREENS,
+  NAV_UNHIDEABLE,
+  SETTINGS_SCREEN,
+  sanitizeNavHidden,
+  type ScreenDef
+} from '@/lib/screens'
+import { usePopoverChrome, useClampedPosition } from '@/hooks/usePopover'
+
+/** Right-click target: which nav screen, and where the cursor was. */
+interface NavMenu {
+  id: Screen
+  label: string
+  x: number
+  y: number
+}
 
 export function Nav(): React.JSX.Element {
   const screen = useStore((s) => s.screen)
@@ -15,16 +33,36 @@ export function Nav(): React.JSX.Element {
   const ambientWindow = useStore((s) => s.ambientWindowActive)
   const settings = useStore((s) => s.settings)
   const update = useStore((s) => s.update)
+  const [menu, setMenu] = useState<NavMenu | null>(null)
 
   const collapsed = settings.navCollapsed
   const toggleCollapsed = async (): Promise<void> => {
     await saveSettings({ navCollapsed: !collapsed })
   }
 
+  const hidden = sanitizeNavHidden(settings.navHidden)
+  const hiddenSet = new Set(hidden)
+  const visibleScreens = NAV_SCREENS.filter((s) => !hiddenSet.has(s.id))
+
+  const hideScreen = (id: Screen): void => {
+    if (!hidden.includes(id)) void saveSettings({ navHidden: [...hidden, id] })
+    setMenu(null)
+  }
+
   const navItem = ({ id, label, icon: Icon, key }: ScreenDef): React.JSX.Element => (
     <button
       key={id}
       onClick={() => setScreen(id)}
+      // Right-click → "Hide from sidebar" (the fast path). Not for the
+      // unhideable screens (now-playing): no menu at all there.
+      onContextMenu={
+        NAV_UNHIDEABLE.includes(id)
+          ? undefined
+          : (e) => {
+              e.preventDefault()
+              setMenu({ id, label, x: e.clientX, y: e.clientY })
+            }
+      }
       data-tip={`${label} (${key})`}
       aria-label={`${label} (${key})`}
       className={cx(
@@ -101,7 +139,7 @@ export function Nav(): React.JSX.Element {
       </div>
 
       <div className={cx('flex-1 space-y-0.5', collapsed ? 'px-2' : 'px-3')}>
-        {NAV_SCREENS.map(navItem)}
+        {visibleScreens.map(navItem)}
       </div>
 
       {/* mini player + settings pinned at the bottom, collapse last */}
@@ -162,6 +200,56 @@ export function Nav(): React.JSX.Element {
           )}
         </button>
       </div>
+
+      {menu && (
+        <NavItemMenu
+          menu={menu}
+          onHide={() => hideScreen(menu.id)}
+          onClose={() => setMenu(null)}
+        />
+      )}
     </nav>
+  )
+}
+
+/**
+ * Right-click menu for a nav item — one verb, "Hide from sidebar". Anchored at
+ * the cursor and clamped on-screen; mounts PopoverChrome (Escape-capture +
+ * inert drag regions, so the full-window click-catcher can hear a click on the
+ * title-bar drag region at the top of the nav). Click-outside / right-click
+ * elsewhere dismisses.
+ */
+function NavItemMenu({
+  menu,
+  onHide,
+  onClose
+}: {
+  menu: NavMenu
+  onHide(): void
+  onClose(): void
+}): React.JSX.Element {
+  usePopoverChrome(onClose)
+  const boxRef = useRef<HTMLDivElement | null>(null)
+  const pos = useClampedPosition(boxRef, menu.x, menu.y)
+
+  return createPortal(
+    <>
+      <div className="fixed inset-0 z-40" onClick={onClose} onContextMenu={onClose} />
+      <div
+        ref={boxRef}
+        className="fixed z-50 w-52 rounded-xl ring-1 ring-edge2 bg-raised shadow-xl p-1.5 space-y-0.5"
+        style={pos}
+      >
+        <div className="px-2.5 pt-1 pb-1.5 text-[11px] text-faint truncate">{menu.label}</div>
+        <button
+          onClick={onHide}
+          className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left text-[13px] text-dim hover:text-ink hover:bg-veil transition-colors"
+        >
+          <EyeOff size={14} strokeWidth={1.8} className="shrink-0" />
+          Hide from sidebar
+        </button>
+      </div>
+    </>,
+    document.body
   )
 }

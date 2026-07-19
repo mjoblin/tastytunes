@@ -566,6 +566,14 @@ export interface AppSettings {
   nowPlayingAlignV: AlignV
   /** Left nav reduced to icons only. */
   navCollapsed: boolean
+  /**
+   * Screens hidden from the left nav. A hide-set (not a visible-list) so
+   * screens added in future app versions default to visible. Persisted as
+   * plain ids; the renderer sanitizes on use (drops unknown ids, never hides
+   * 'now-playing'). Nav-only — hidden screens stay fully reachable via their
+   * keyboard shortcut and the command palette.
+   */
+  navHidden: string[]
   /** Auto-scroll to the current queue row / playing preset. */
   followQueue: boolean
   followPresets: boolean
@@ -642,6 +650,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   nowPlayingAlignH: 'left',
   nowPlayingAlignV: 'center',
   navCollapsed: false,
+  navHidden: [],
   followQueue: true,
   followPresets: false,
   queueLayout: 'rows',
