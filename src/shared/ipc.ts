@@ -597,6 +597,15 @@ export interface AppSettings {
    * preset id) so multi-streamer homes never cross-apply.
    */
   presetVolumes: Record<string, number>
+  /**
+   * queueContentHash of the queue at save time for queue presets saved
+   * through this app, keyed via presetVolumeKey(udn, slot). Lets the
+   * Presets screen recognize a saved queue exactly (all tracks, in order)
+   * even when the recall happened elsewhere or before this launch. Local to
+   * this machine; presets saved by other controllers have no entry and fall
+   * back to collage-fingerprint matching.
+   */
+  queueSignatures: Record<string, string>
   /** MCP server for local AI agents. */
   mcp: McpSettings
   /** Last-visited Settings tab (id from the Settings screen's tab rail). */
@@ -645,6 +654,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   artistInfo: true,
   schedules: [],
   presetVolumes: {},
+  queueSignatures: {},
   mcp: { enabled: false, bind: 'localhost', port: 8555, disabledClusters: [], disabledTools: [] },
   settingsTab: 'appearance',
   diagnosticsTab: 'smoip',

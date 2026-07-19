@@ -26,7 +26,7 @@ import {
   Trash2,
   Volume2
 } from 'lucide-react'
-import type { PresetItem } from '@shared/smoip'
+import { queueContentHash, type PresetItem } from '@shared/smoip'
 import { presetVolumeKey, type ScreenLayout } from '@shared/ipc'
 import { tt } from '@/api'
 import { useStore } from '@/store'
@@ -112,18 +112,34 @@ export function PresetsScreen(): React.JSX.Element {
   //     track better than the album does); input-type presets trust the flag
   //     off local media.
   const lastRecalledPresetId = useStore((s) => s.lastRecalledPresetId)
+  const queueSignatures = useStore((s) => s.settings.queueSignatures)
+  // Exact identity of the live queue (all tracks, in order) — matched against
+  // the signatures recorded when queue presets were saved through this app.
+  const liveQueueHash = useMemo(
+    () => (queue?.items?.length ? queueContentHash(queue.items) : null),
+    [queue]
+  )
   const playingIds = useMemo(() => {
     const lit = new Set<number>()
     const mediaOk = activeSource == null || activeSource === 'MEDIA_PLAYER'
 
+    // Exact signature recorded at save time, when this app did the saving.
+    const sigOf = (p: PresetItem): string | undefined =>
+      p.id != null ? queueSignatures[presetVolumeKey(systemInfo?.udn, p.id)] : undefined
+    const sigMatch = (p: PresetItem): boolean =>
+      mediaOk && liveQueueHash != null && sigOf(p) === liveQueueHash
     // MediaQueue fingerprint: art_urls is the queue's leading distinct-album
     // art sequence at save time — compare against the live queue's sequence.
+    // (Coarser than a signature — only used when no signature exists, i.e.
+    // the preset was saved by another controller.)
     const fingerprint = (p: PresetItem): boolean => {
       if (!mediaOk) return false
       const want = p.art_urls ?? []
       if (want.length === 0 || want.length > queueArts.length) return false
       return want.every((u, i) => urlsMatch(u, queueArts[i]))
     }
+    const mqContent = (p: PresetItem): boolean =>
+      sigOf(p) != null ? sigMatch(p) : fingerprint(p)
     const albumMatch = (p: PresetItem): boolean => {
       if (!mediaOk) return false
       if (p.is_playing === true) return true // transiently correct after recall
@@ -138,7 +154,7 @@ export function PresetsScreen(): React.JSX.Element {
     // null = this preset type has no content to check (inputs etc.)
     const contentCheck = (p: PresetItem): boolean | null => {
       if (p.airable_radio_id != null && radioId != null) return p.airable_radio_id === radioId
-      if (p.type === 'MediaQueue') return fingerprint(p)
+      if (p.type === 'MediaQueue') return mqContent(p)
       if ((p.class ?? '').startsWith('stream.media')) return albumMatch(p)
       return null
     }
@@ -149,8 +165,14 @@ export function PresetsScreen(): React.JSX.Element {
       return lit
     }
 
-    const mqMatches = allItems.filter((p) => p.type === 'MediaQueue' && fingerprint(p))
-    if (mqMatches.length === 1 && mqMatches[0].id != null) lit.add(mqMatches[0].id)
+    // Signature matches are exact (all tracks, in order) — light the first
+    // one even without a recall on record (startup, recalls made from other
+    // controllers). Collage fingerprints stay a tie-breaker-free fallback:
+    // only an unambiguous single match lights.
+    const sigFirst = allItems.find((p) => p.type === 'MediaQueue' && sigMatch(p))
+    const mqMatches = allItems.filter((p) => p.type === 'MediaQueue' && mqContent(p))
+    if (sigFirst?.id != null) lit.add(sigFirst.id)
+    else if (mqMatches.length === 1 && mqMatches[0].id != null) lit.add(mqMatches[0].id)
     for (const p of allItems) {
       if (p.id == null || p.type === 'MediaQueue') continue
       if (p.airable_radio_id != null && radioId != null) {
@@ -158,7 +180,7 @@ export function PresetsScreen(): React.JSX.Element {
         continue
       }
       if ((p.class ?? '').startsWith('stream.media')) {
-        if (mqMatches.length === 0 && albumMatch(p)) lit.add(p.id)
+        if (mqMatches.length === 0 && sigFirst == null && albumMatch(p)) lit.add(p.id)
         continue
       }
       // Radio/input presets with nothing to match: trust the flag except
@@ -166,7 +188,7 @@ export function PresetsScreen(): React.JSX.Element {
       if (p.is_playing === true && activeSource !== 'MEDIA_PLAYER') lit.add(p.id)
     }
     return lit
-  }, [allItems, lastRecalledPresetId, queueArts, radioId, md, activeSource])
+  }, [allItems, lastRecalledPresetId, queueArts, queueSignatures, liveQueueHash, systemInfo, radioId, md, activeSource])
   const isPresetPlaying = (p: PresetItem): boolean => p.id != null && playingIds.has(p.id)
 
   const onDragEnd = (event: DragEndEvent): void => {

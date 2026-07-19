@@ -27,8 +27,8 @@ import {
   Rows3,
   X
 } from 'lucide-react'
-import type { QueueListItem } from '@shared/smoip'
-import type { ScreenLayout } from '@shared/ipc'
+import { queueContentHash, type QueueListItem } from '@shared/smoip'
+import { presetVolumeKey, type ScreenLayout } from '@shared/ipc'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { Eqbars } from '@/components/Eqbars'
@@ -49,6 +49,7 @@ function SaveQueueDialog({ onClose }: { onClose(): void }): React.JSX.Element {
   const presets = useStore((s) => s.presets)
   const trackCount = useStore((s) => s.queue?.items?.length ?? 0)
   const showToast = useStore((s) => s.showToast)
+  const saveSettings = useStore((s) => s.saveSettings)
 
   const occupied = new Map<number, string>()
   for (const p of presets?.presets ?? []) {
@@ -72,6 +73,18 @@ function SaveQueueDialog({ onClose }: { onClose(): void }): React.JSX.Element {
     } catch {
       // the api layer already toasted the failure — keep the dialog open
       return
+    }
+    // Remember exactly what this slot holds (all tracks, in order) so the
+    // Presets screen can recognize this queue coming back — from any
+    // controller, or after a restart.
+    const { queue, systemInfo, settings } = useStore.getState()
+    if (queue?.items?.length) {
+      void saveSettings({
+        queueSignatures: {
+          ...settings.queueSignatures,
+          [presetVolumeKey(systemInfo?.udn, slot)]: queueContentHash(queue.items)
+        }
+      })
     }
     showToast({
       kind: 'success',
