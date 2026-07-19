@@ -27,6 +27,8 @@ export function NowPlayingScreen(): React.JSX.Element {
     lyricsLine
   } = useStore((s) => s.settings)
   const meta = deriveNowPlaying(playState, nowPlaying)
+  // Right placement mirrors the pair: art anchors the right edge, text grows leftward.
+  const mirrored = nowPlayingAlignH === 'right'
 
   // Lyrics need real track metadata — hidden for radio and title-only sources.
   const lyricsAvailable = lyricsEnabled && !meta.isRadio && !!meta.title && !!meta.subtitle
@@ -121,14 +123,18 @@ export function NowPlayingScreen(): React.JSX.Element {
       {lyricsAvailable && lyricsOpen && <LyricsPanel />}
       {artistAvailable && artistOpen && <ArtistPanel />}
 
-      {/* fixed alignment (settings-chosen) so the layout doesn't shift as track lengths change */}
+      {/* fixed alignment (settings-chosen) so the layout doesn't shift as track lengths change.
+          The art+text pair is one inner unit: text always tops-out level with the art
+          (items-start), and right placement mirrors the pair so the art anchors the right
+          edge while text grows leftward. */}
       <div
         className={cx(
-          'relative flex-1 min-h-0 flex gap-8 px-8 pb-10',
+          'relative flex-1 min-h-0 flex px-8 pb-10',
           ALIGN_H[nowPlayingAlignH],
           ALIGN_V[nowPlayingAlignV]
         )}
       >
+        <div className={cx('flex gap-8 items-start min-w-0', mirrored && 'flex-row-reverse')}>
         <div className="shrink-0">
           <ArtImage
             src={meta.artUrl}
@@ -145,8 +151,8 @@ export function NowPlayingScreen(): React.JSX.Element {
           />
         </div>
 
-        <div className="min-w-0 max-w-xl space-y-5">
-          <div className="flex items-center gap-3">
+        <div className={cx('min-w-0 max-w-xl space-y-5', mirrored && 'text-right')}>
+          <div className={cx('flex items-center gap-3', mirrored && 'justify-end')}>
             {sourceName && <span className="badge">{sourceName}</span>}
             {state && state !== 'play' && (
               <span className={cx('microlabel', state === 'pause' ? 'text-amber' : '')}>
@@ -164,7 +170,7 @@ export function NowPlayingScreen(): React.JSX.Element {
           </div>
 
           {meta.badges.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5">
+            <div className={cx('flex flex-wrap items-center gap-1.5', mirrored && 'justify-end')}>
               {meta.badges.map((b) => (
                 <span key={b} className="badge">
                   {b}
@@ -186,6 +192,7 @@ export function NowPlayingScreen(): React.JSX.Element {
 
           {/* inline lyric flavor — never alongside the full panel */}
           {lyricsAvailable && lyricsLine && !lyricsOpen && <LyricLine />}
+        </div>
         </div>
       </div>
     </div>
