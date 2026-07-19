@@ -607,14 +607,19 @@ export function LibraryScreen(): React.JSX.Element {
               }
             />
           )}
-          <button
-            data-tip={cards ? 'View as rows' : 'View as cards'}
-            aria-label={cards ? 'View as rows' : 'View as cards'}
-            onClick={() => void setLayout(cards ? 'rows' : 'cards')}
-            className="no-drag tip-bottom p-2 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
-          >
-            {cards ? <Rows3 size={16} /> : <LayoutGrid size={16} />}
-          </button>
+          {/* the rows⇄cards toggle only governs mid-level browse lists; the
+              root (sources always cards) and album views (tracklist always
+              rows) ignore it, so it's hidden there rather than sitting dead */}
+          {!atRoot && !albumNode && (
+            <button
+              data-tip={cards ? 'View as rows' : 'View as cards'}
+              aria-label={cards ? 'View as rows' : 'View as cards'}
+              onClick={() => void setLayout(cards ? 'rows' : 'cards')}
+              className="no-drag tip-bottom p-2 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
+            >
+              {cards ? <Rows3 size={16} /> : <LayoutGrid size={16} />}
+            </button>
+          )}
         </div>
       </header>
 
