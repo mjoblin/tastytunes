@@ -103,7 +103,7 @@ function SaveQueueDialog({ onClose }: { onClose(): void }): React.JSX.Element {
             />
           </label>
 
-          <label className="block">
+          <label className="flex items-center gap-3">
             <span className="text-[12.5px] text-dim">Preset slot (1–{maxSlots})</span>
             <input
               type="number"
@@ -114,9 +114,9 @@ function SaveQueueDialog({ onClose }: { onClose(): void }): React.JSX.Element {
               onKeyDown={(e) => {
                 if (e.key === 'Enter') void save()
               }}
-              className="mt-1 w-24 bg-bg rounded-lg ring-1 ring-edge focus:ring-edge2 outline-none px-3 py-1.5 text-[13px]"
+              className="w-24 bg-bg rounded-lg ring-1 ring-edge focus:ring-edge2 outline-none px-3 py-1.5 text-[13px]"
             />
-            <span className={cx('ml-3 text-[12px]', existing ? 'text-amber' : 'text-faint')}>
+            <span className={cx('text-[12px]', existing ? 'text-amber' : 'text-faint')}>
               {!valid ? ' ' : existing ? `Replaces “${existing}”` : 'Empty slot'}
             </span>
           </label>
