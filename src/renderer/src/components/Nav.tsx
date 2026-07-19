@@ -87,11 +87,13 @@ export function Nav(): React.JSX.Element {
         {/* demo-mode marker doubles as the exit — the Device screen's
             Disconnect works too, but this makes leaving obvious */}
         {!collapsed && connection.phase !== 'idle' && connection.demo && (
+          // tip-bottom + explicit z: the default right-side tip lands on the
+          // main area's screen title (and loses the paint-order fight there)
           <button
             onClick={() => void tt.disconnect()}
             data-tip="You're in the demo — click to exit"
             aria-label="Exit demo"
-            className="no-drag ml-2 align-[3px] px-1.5 py-0.5 rounded-md ring-1 ring-gold/40 bg-golddim font-mono text-[9px] uppercase tracking-widest text-gold hover:brightness-110 motion-safe:active:scale-95 transition-all"
+            className="no-drag tip-bottom z-[70] ml-2 align-[3px] px-1.5 py-0.5 rounded-md ring-1 ring-gold/40 bg-golddim font-mono text-[9px] uppercase tracking-widest text-gold hover:brightness-110 motion-safe:active:scale-95 transition-all"
           >
             demo
           </button>

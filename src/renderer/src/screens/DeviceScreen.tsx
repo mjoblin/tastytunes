@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ExternalLink, Loader2, RefreshCw, Unplug } from 'lucide-react'
+import { ExternalLink, Loader2, RefreshCw, Sparkles, Unplug } from 'lucide-react'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
@@ -129,6 +129,17 @@ export function DeviceScreen(): React.JSX.Element {
                 </button>
               </div>
             </div>
+
+            {/* same escape hatch the connect gate offers, mirrored here */}
+            {!connectedHost && !busyHost && (
+              <button
+                onClick={() => void tt.demoStart()}
+                className="mt-1 flex items-center gap-2 text-[13px] text-faint hover:text-ink transition-colors"
+              >
+                <Sparkles size={14} className="text-gold/70" />
+                Try without a streamer — explore with the built-in demo →
+              </button>
+            )}
           </div>
         </section>
 
