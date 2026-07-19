@@ -25,6 +25,26 @@ export const presetMove = (host: string, from: number, to: number): Promise<void
   smoipPost(host, '/presets/move', { from, to })
 
 /**
+ * Snapshot the current queue into a device preset (type MediaQueue) — the
+ * query-param GET verb probed live on the Evo 2026-07-18. Both params are
+ * optional: the firmware defaults to the next free slot / "Queue Preset N".
+ */
+export async function queueSavePreset(
+  host: string,
+  slot: number | null,
+  name: string | null
+): Promise<void> {
+  const params = new URLSearchParams()
+  if (slot != null) params.set('preset', String(slot))
+  if (name) params.set('name', name)
+  const qs = params.size > 0 ? `?${params}` : ''
+  const res = await fetch(`http://${host}/smoip/queue/save_preset${qs}`, {
+    signal: AbortSignal.timeout(5000)
+  })
+  if (!res.ok) throw new Error(`GET /smoip/queue/save_preset -> HTTP ${res.status}`)
+}
+
+/**
  * Fetch the preset list over HTTP — how vibin refreshes stale is_playing flags.
  * (A bare WS request for /presets/list is not proven against real hardware.)
  */

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   DndContext,
   PointerSensor,
@@ -16,6 +16,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import {
+  BookmarkPlus,
   Crosshair,
   Disc3,
   Footprints,
@@ -37,6 +38,109 @@ import { flashTarget, scrollToWithContext } from '@/lib/scroll'
 import { activeSourceId, cx, fmtTime, matchesFilter } from '@/lib/format'
 import { ArtImage } from '@/components/ArtImage'
 import { FilterInput } from '@/components/FilterInput'
+import { PopoverChrome } from '@/hooks/usePopover'
+
+/**
+ * Mirror of the official app's queue-save flow: name + slot, then one
+ * device-side call — the streamer stores the whole queue as a MediaQueue
+ * preset (recallable from Presets, the front panel, or any controller).
+ */
+function SaveQueueDialog({ onClose }: { onClose(): void }): React.JSX.Element {
+  const presets = useStore((s) => s.presets)
+  const trackCount = useStore((s) => s.queue?.items?.length ?? 0)
+
+  const occupied = new Map<number, string>()
+  for (const p of presets?.presets ?? []) {
+    if (p.id != null) occupied.set(p.id, p.name ?? `Preset ${p.id}`)
+  }
+  const maxSlots = presets?.max_presets ?? 99
+  const firstFree = ((): number => {
+    for (let i = 1; i <= maxSlots; i++) if (!occupied.has(i)) return i
+    return maxSlots
+  })()
+
+  const [slot, setSlot] = useState(firstFree)
+  const [name, setName] = useState('')
+  const existing = occupied.get(slot)
+  const valid = Number.isInteger(slot) && slot >= 1 && slot <= maxSlots
+
+  const save = async (): Promise<void> => {
+    if (!valid) return
+    await tt.command({ type: 'queueSavePreset', slot, name: name.trim() || null })
+    onClose()
+  }
+
+  return (
+    <div
+      className="absolute inset-0 z-30 bg-black/60 backdrop-blur-sm flex items-center justify-center"
+      onClick={onClose}
+    >
+      <PopoverChrome onClose={onClose} />
+      <div
+        className="w-[400px] rounded-2xl bg-panel ring-1 ring-edge2 p-6 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="font-display font-bold text-[18px] tracking-tight">
+          Save queue as preset
+        </div>
+        <div className="text-[12px] text-faint mt-1">
+          Stores the current {trackCount} tracks on the streamer — recall them any time from
+          Presets.
+        </div>
+
+        <div className="mt-5 space-y-4">
+          <label className="block">
+            <span className="text-[12.5px] text-dim">Name</span>
+            <input
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void save()
+              }}
+              placeholder={`Queue Preset ${slot}`}
+              className="mt-1 w-full bg-bg rounded-lg ring-1 ring-edge focus:ring-edge2 outline-none px-3 py-1.5 text-[13px] placeholder:text-faint"
+            />
+          </label>
+
+          <label className="block">
+            <span className="text-[12.5px] text-dim">Preset slot (1–{maxSlots})</span>
+            <input
+              type="number"
+              min={1}
+              max={maxSlots}
+              value={Number.isNaN(slot) ? '' : slot}
+              onChange={(e) => setSlot(e.target.valueAsNumber)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void save()
+              }}
+              className="mt-1 w-24 bg-bg rounded-lg ring-1 ring-edge focus:ring-edge2 outline-none px-3 py-1.5 text-[13px]"
+            />
+            <span className={cx('ml-3 text-[12px]', existing ? 'text-amber' : 'text-faint')}>
+              {!valid ? ' ' : existing ? `Replaces “${existing}”` : 'Empty slot'}
+            </span>
+          </label>
+        </div>
+
+        <div className="mt-6 flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="text-[12.5px] px-3 h-8 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-95 transition-all"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => void save()}
+            disabled={!valid}
+            className="text-[12.5px] px-4 h-8 rounded-lg bg-amber text-bg font-medium disabled:opacity-40 hover:brightness-110 motion-safe:active:scale-95 transition-all"
+          >
+            Save preset
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export function QueueScreen(): React.JSX.Element {
   const queue = useStore((s) => s.queue)
@@ -51,6 +155,7 @@ export function QueueScreen(): React.JSX.Element {
   const filter = useStore((s) => s.screenFilters.queue)
   const setScreenFilter = useStore((s) => s.setScreenFilter)
   const cards = queueLayout === 'cards'
+  const [saveOpen, setSaveOpen] = useState(false)
   // Follow-current does its own scrolling on entry; otherwise restore the
   // previous position.
   const scrollRef = useScrollMemory('queue', !followQueue)
@@ -151,6 +256,14 @@ export function QueueScreen(): React.JSX.Element {
             total={allItems.length}
           />
           <button
+            data-tip="Save queue as preset"
+            aria-label="Save queue as preset"
+            onClick={() => setSaveOpen(true)}
+            className="no-drag tip-bottom p-2 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
+          >
+            <BookmarkPlus size={16} />
+          </button>
+          <button
             data-tip={cards ? 'View as rows' : 'View as cards'}
             aria-label={cards ? 'View as rows' : 'View as cards'}
             onClick={() => void setLayout(cards ? 'rows' : 'cards')}
@@ -181,6 +294,8 @@ export function QueueScreen(): React.JSX.Element {
           </button>
         </div>
       </header>
+
+      {saveOpen && <SaveQueueDialog onClose={() => setSaveOpen(false)} />}
 
       {/* rows: pt-1 keeps the current ring unclipped; cards: pt-2 gives the
           hover grow + glow ring headroom on the top row */}

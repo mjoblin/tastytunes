@@ -189,6 +189,8 @@ export interface PresetItem {
   state: string | null
   is_playing: boolean | null
   art_url: string | null
+  /** MediaQueue presets (saved queues) carry one art per distinct album. */
+  art_urls?: string[] | null
   airable_radio_id: number | null
 }
 

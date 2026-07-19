@@ -617,6 +617,40 @@ function buildDemo(host: string): {
 <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body><u:BrowseResponse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"><Result>${xmlEsc(result)}</Result><NumberReturned>${parts.length}</NumberReturned><TotalMatches>${all.length}</TotalMatches><UpdateID>1</UpdateID></u:BrowseResponse></s:Body></s:Envelope>`
         )
       }
+      // Snapshot the current queue as a MediaQueue preset (mirrors the real
+      // Evo's GET verb; art_urls = one per distinct album in the queue).
+      if (u.pathname === '/smoip/queue/save_preset') {
+        const list = DATA['/presets/list'] as { presets: Array<Dict & { id: number }> }
+        const used = new Set(list.presets.map((p) => p.id))
+        let slot = Number(u.searchParams.get('preset'))
+        if (!slot) {
+          slot = 1
+          while (used.has(slot)) slot++
+        }
+        const name = u.searchParams.get('name') || `Queue Preset ${slot}`
+        const arts = [
+          ...new Set(
+            (queueList().items ?? []).map((i) => i.metadata.art_url as string | null).filter(Boolean)
+          )
+        ].slice(0, 4) as string[]
+        const presets = list.presets.filter((p) => p.id !== slot)
+        presets.push({
+          id: slot,
+          name,
+          type: 'MediaQueue',
+          class: 'stream.media',
+          state: 'OK',
+          is_playing: false,
+          art_url: arts[0] ?? null,
+          art_urls: arts,
+          airable_radio_id: null
+        })
+        presets.sort((a, b) => a.id - b.id)
+        DATA['/presets/list'] = { ...list, presets }
+        broadcast('/presets/list')
+        res.writeHead(200, { 'content-type': 'application/json' })
+        return res.end('{"zone": "ZONE1"}')
+      }
       if (u.pathname === '/smoip/queue/add') {
         if (req.method === 'POST') {
           const body = JSON.parse((await readBody(req)) || '{}') as Dict

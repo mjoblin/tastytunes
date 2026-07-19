@@ -580,11 +580,25 @@ function PresetCard({
         }}
       >
         <div className="aspect-square w-full rounded-lg overflow-hidden bg-panel/70 flex items-center justify-center">
-          <ArtImage
-            src={preset.art_url}
-            lazy
-            fallback={<Radio size={34} strokeWidth={1.2} className="text-faint" />}
-          />
+          {preset.art_urls && preset.art_urls.length > 1 ? (
+            // saved-queue (MediaQueue) presets: collage of the queue's albums
+            <div
+              className={cx(
+                'grid w-full h-full grid-cols-2',
+                preset.art_urls.length > 2 ? 'grid-rows-2' : 'grid-rows-1'
+              )}
+            >
+              {preset.art_urls.slice(0, 4).map((u) => (
+                <ArtImage key={u} src={u} lazy fallback={<div className="bg-raised/70 h-full w-full" />} />
+              ))}
+            </div>
+          ) : (
+            <ArtImage
+              src={preset.art_url}
+              lazy
+              fallback={<Radio size={34} strokeWidth={1.2} className="text-faint" />}
+            />
+          )}
 
           {/* hover overlay — the whole card recalls the preset; the chip is the affordance */}
           <div className="absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
