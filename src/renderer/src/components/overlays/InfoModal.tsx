@@ -57,29 +57,36 @@ export function InfoModal(): React.JSX.Element | null {
           <ExternalLink size={14} className="text-faint shrink-0" />
         </button>
 
-        <button
-          onClick={() => void tt.openExternal(SUPPORT_URL)}
-          className="w-full flex items-center justify-between rounded-xl ring-1 ring-edge bg-raised/70 px-4 py-3 text-left hover:ring-edge2"
-        >
-          <span>
-            <span className="block text-[13.5px]">Support</span>
-            <span className="block font-mono text-[10.5px] text-faint mt-0.5">
-              tastytunes.app/#support
-            </span>
-          </span>
-          <ExternalLink size={14} className="text-faint shrink-0" />
-        </button>
+        {/* Store builds carry no support link or solicitation copy: the
+            support section offers external payment links, which — even
+            one hop away — draw Apple 3.1.1 rejections. */}
+        {!tt.storeBuild && (
+          <>
+            <button
+              onClick={() => void tt.openExternal(SUPPORT_URL)}
+              className="w-full flex items-center justify-between rounded-xl ring-1 ring-edge bg-raised/70 px-4 py-3 text-left hover:ring-edge2"
+            >
+              <span>
+                <span className="block text-[13.5px]">Support</span>
+                <span className="block font-mono text-[10.5px] text-faint mt-0.5">
+                  tastytunes.app/#support
+                </span>
+              </span>
+              <ExternalLink size={14} className="text-faint shrink-0" />
+            </button>
 
-        <p className="text-[11.5px] text-faint leading-relaxed px-1">
-          Please don't support the app unless you can afford it, but if you enjoy the app and are
-          comfortable contributing, then your support is greatly appreciated{" "}
-          <Heart
-            size={11}
-            className="inline-block text-gold -mt-0.5"
-            fill="currentColor"
-            strokeWidth={0}
-          />
-        </p>
+            <p className="text-[11.5px] text-faint leading-relaxed px-1">
+              Please don't support the app unless you can afford it, but if you enjoy the app and
+              are comfortable contributing, then your support is greatly appreciated{" "}
+              <Heart
+                size={11}
+                className="inline-block text-gold -mt-0.5"
+                fill="currentColor"
+                strokeWidth={0}
+              />
+            </p>
+          </>
+        )}
 
         <div className="pt-3 mt-1 border-t border-edge text-center text-[10.5px] text-faint">
           © 2026 Redacted Cat
