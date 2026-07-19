@@ -99,26 +99,33 @@ export function PresetsScreen(): React.JSX.Element {
     }
     return seen
   }, [queue])
-  const isPresetPlaying = (p: PresetItem): boolean => {
-    if (radioId != null && p.airable_radio_id != null) return p.airable_radio_id === radioId
-    // Saved-queue presets: the firmware never reports is_playing for them
-    // (verified live) and single-art matching lit every queue containing the
-    // playing album. But their collage IS a fingerprint — art_urls is the
-    // queue's leading distinct-album art sequence at save time — so match it
-    // against the LIVE queue's same sequence: the preset lights for every
-    // track of its queue, survives restarts, and sees recalls made from any
-    // controller. (True duplicate saved queues light together, like
-    // identical album presets do.)
-    if (p.type === 'MediaQueue') {
-      if (p.is_playing === true) return true
-      if (activeSource != null && activeSource !== 'MEDIA_PLAYER') return false
+  // ONE preset lights, in this priority:
+  //  1. The preset most recently recalled through this app, while a content
+  //     check confirms its stuff is still what's playing (the check is the
+  //     validity guard — a stale recall goes dark on its own). This is what
+  //     disambiguates duplicate saved queues and stops an album preset from
+  //     stealing the lamp while its album plays inside a recalled queue.
+  //  2. Stateless fallback (startup, recalls made from other controllers):
+  //     radio_id is authoritative; a saved queue lights only when it's the
+  //     UNIQUE fingerprint match; album art/name matching is suppressed while
+  //     the queue is a recognized saved queue (the queue explains the playing
+  //     track better than the album does); input-type presets trust the flag
+  //     off local media.
+  const lastRecalledPresetId = useStore((s) => s.lastRecalledPresetId)
+  const playingIds = useMemo(() => {
+    const lit = new Set<number>()
+    const mediaOk = activeSource == null || activeSource === 'MEDIA_PLAYER'
+
+    // MediaQueue fingerprint: art_urls is the queue's leading distinct-album
+    // art sequence at save time — compare against the live queue's sequence.
+    const fingerprint = (p: PresetItem): boolean => {
+      if (!mediaOk) return false
       const want = p.art_urls ?? []
       if (want.length === 0 || want.length > queueArts.length) return false
       return want.every((u, i) => urlsMatch(u, queueArts[i]))
     }
-    const klass = p.class ?? ''
-    if (klass.startsWith('stream.media')) {
-      if (activeSource != null && activeSource !== 'MEDIA_PLAYER') return false
+    const albumMatch = (p: PresetItem): boolean => {
+      if (!mediaOk) return false
       if (p.is_playing === true) return true // transiently correct after recall
       if (!md) return false
       if (p.art_url != null && md.art_url != null && urlsMatch(p.art_url, md.art_url)) return true
@@ -128,10 +135,39 @@ export function PresetsScreen(): React.JSX.Element {
       }
       return false
     }
-    // Radio/other presets with no playing radio_id to match against: trust the
-    // flag except while local media is the active source.
-    return p.is_playing === true && activeSource !== 'MEDIA_PLAYER'
-  }
+    // null = this preset type has no content to check (inputs etc.)
+    const contentCheck = (p: PresetItem): boolean | null => {
+      if (p.airable_radio_id != null && radioId != null) return p.airable_radio_id === radioId
+      if (p.type === 'MediaQueue') return fingerprint(p)
+      if ((p.class ?? '').startsWith('stream.media')) return albumMatch(p)
+      return null
+    }
+
+    const recalled = allItems.find((p) => p.id === lastRecalledPresetId)
+    if (recalled?.id != null && contentCheck(recalled) === true) {
+      lit.add(recalled.id)
+      return lit
+    }
+
+    const mqMatches = allItems.filter((p) => p.type === 'MediaQueue' && fingerprint(p))
+    if (mqMatches.length === 1 && mqMatches[0].id != null) lit.add(mqMatches[0].id)
+    for (const p of allItems) {
+      if (p.id == null || p.type === 'MediaQueue') continue
+      if (p.airable_radio_id != null && radioId != null) {
+        if (p.airable_radio_id === radioId) lit.add(p.id)
+        continue
+      }
+      if ((p.class ?? '').startsWith('stream.media')) {
+        if (mqMatches.length === 0 && albumMatch(p)) lit.add(p.id)
+        continue
+      }
+      // Radio/input presets with nothing to match: trust the flag except
+      // while local media is the active source.
+      if (p.is_playing === true && activeSource !== 'MEDIA_PLAYER') lit.add(p.id)
+    }
+    return lit
+  }, [allItems, lastRecalledPresetId, queueArts, radioId, md, activeSource])
+  const isPresetPlaying = (p: PresetItem): boolean => p.id != null && playingIds.has(p.id)
 
   const onDragEnd = (event: DragEndEvent): void => {
     const { active, over } = event

@@ -134,6 +134,7 @@ export type PushMessage =
   /** Cursor is over the mini window (CSS :hover can't fire over drag regions). */
   | { kind: 'miniHover'; hovered: boolean }
   | { kind: 'sleep'; sleep: SleepTimer | null }
+  | { kind: 'recalledPreset'; id: number | null }
   | { kind: 'mcpStatus'; status: McpStatus }
   | { kind: 'menu'; command: MenuCommand }
   | { kind: 'updateState'; state: UpdateState }
@@ -668,6 +669,14 @@ export interface Snapshot {
   systemPower: SystemPower | null
   sources: SystemSources | null
   sleep: SleepTimer | null
+  /**
+   * The preset most recently recalled THROUGH THIS APP (renderer, palette,
+   * MCP, schedules) — the firmware keeps no recall state at all (verified
+   * live), so this is the only "which preset did I pick" signal. Null on
+   * startup and after device switches; consumers must content-check it
+   * against what's actually playing before trusting it.
+   */
+  lastRecalledPresetId: number | null
   recents: RecentTrack[]
   mcpStatus: McpStatus
   frames: FrameEntry[]

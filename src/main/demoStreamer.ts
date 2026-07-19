@@ -176,7 +176,7 @@ function buildDemo(host: string): {
         type: 'MEDIA',
         class: 'stream.media.upnp',
         state: 'OK',
-        is_playing: i === 0,
+        is_playing: false, // real firmware never holds this true (verified live)
         art_url: i === 0 ? artUrl(PLAYING_QUEUE_ID) : `${host}/art/p${i + 1}.svg`,
         airable_radio_id: null
       }))

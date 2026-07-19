@@ -115,6 +115,8 @@ interface TTState {
   toast: ToastData | null
   showToast(toast: Omit<ToastData, 'id'>): void
   dismissToast(): void
+  /** In-app recall memory (see Snapshot.lastRecalledPresetId). */
+  lastRecalledPresetId: number | null
   setScreen(screen: Screen): void
   setDiagnosticsOpen(open: boolean): void
   setShortcutsOpen(open: boolean): void
@@ -180,6 +182,7 @@ export const useStore = create<TTState>((set, get) => ({
   toast: null,
   showToast: (toast) => set({ toast: { ...toast, id: ++toastNonce } }),
   dismissToast: () => set({ toast: null }),
+  lastRecalledPresetId: null,
   setScreen: (screen) =>
     set((s) =>
       screen === 'library' ? { screen, libraryResetNonce: s.libraryResetNonce + 1 } : { screen }
@@ -215,6 +218,7 @@ export const useStore = create<TTState>((set, get) => ({
       playState: snap.playState,
       nowPlaying: snap.nowPlaying,
       zoneState: snap.zoneState,
+      lastRecalledPresetId: snap.lastRecalledPresetId,
       queue: snap.queue,
       presets: snap.presets,
       systemInfo: snap.systemInfo,
@@ -294,6 +298,8 @@ export const useStore = create<TTState>((set, get) => ({
           return { miniHover: msg.hovered }
         case 'sleep':
           return { sleep: msg.sleep }
+        case 'recalledPreset':
+          return { lastRecalledPresetId: msg.id }
         case 'recents':
           return { recents: msg.data }
         case 'mcpStatus':
