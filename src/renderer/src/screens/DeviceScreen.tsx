@@ -57,7 +57,7 @@ export function DeviceScreen(): React.JSX.Element {
               {connection.phase !== 'idle' && (
                 <button
                   onClick={() => void tt.disconnect()}
-                  className="flex items-center gap-1.5 text-[12px] text-faint hover:text-dim px-2 py-1 rounded transition-colors"
+                  className="flex items-center gap-1.5 text-[12.5px] px-3 h-8 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-95 transition-all"
                 >
                   <Unplug size={13} /> Disconnect
                 </button>
@@ -70,7 +70,7 @@ export function DeviceScreen(): React.JSX.Element {
                 <button
                   onClick={() => void tt.discover()}
                   disabled={discovering}
-                  className="flex items-center gap-1.5 text-[12px] text-amber hover:brightness-110 px-2 py-1 rounded transition-all disabled:opacity-50"
+                  className="flex items-center gap-1.5 text-[12.5px] px-3 h-8 rounded-lg ring-1 ring-edge bg-panel/70 text-amber hover:brightness-110 hover:ring-edge2 motion-safe:active:scale-95 transition-all disabled:opacity-50"
                 >
                   {discovering ? <Loader2 size={13} className="spin" /> : <RefreshCw size={13} />}
                   {discovering ? 'Searching…' : 'Find devices'}
