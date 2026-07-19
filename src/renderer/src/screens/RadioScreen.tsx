@@ -238,9 +238,9 @@ export function RadioScreen(): React.JSX.Element {
             <button
               onClick={() => setQuery('')}
               aria-label="Clear search"
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-full text-faint hover:text-ink transition-colors"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full text-dim hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
             >
-              <X size={13} />
+              <X size={12} />
             </button>
           )}
         </div>
