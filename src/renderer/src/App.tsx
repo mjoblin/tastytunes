@@ -141,7 +141,7 @@ function ToastHost(): React.JSX.Element | null {
   useEffect(() => {
     if (!toast) return
     // Errors linger a little longer than confirmations.
-    const t = setTimeout(dismissToast, toast.kind === 'error' ? 4000 : 2600)
+    const t = setTimeout(dismissToast, toast.kind === 'error' ? 5000 : 3600)
     return () => clearTimeout(t)
   }, [toast, dismissToast])
 
