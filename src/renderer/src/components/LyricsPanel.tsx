@@ -3,6 +3,7 @@ import { MicVocal, RotateCw, X } from 'lucide-react'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { cx } from '@/lib/format'
+import { scrollToCentered } from '@/lib/scroll'
 import { useLyrics } from '@/hooks/useLyrics'
 import { usePanelWidth } from '@/hooks/usePanelWidth'
 import { PanelResizeHandle } from '@/components/PanelResizeHandle'
@@ -19,11 +20,7 @@ export function LyricsPanel(): React.JSX.Element {
   const currentRef = useRef<HTMLButtonElement | null>(null)
   useEffect(() => {
     if (hovered) return
-    const reduce = document.documentElement.classList.contains('reduce-motion')
-    currentRef.current?.scrollIntoView({
-      block: 'center',
-      behavior: reduce ? 'auto' : 'smooth'
-    })
+    scrollToCentered(currentRef.current)
   }, [currentIndex, hovered])
 
   return (

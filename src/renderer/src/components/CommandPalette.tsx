@@ -33,6 +33,7 @@ import { useStore } from '@/store'
 import { systemTheme } from '@/hooks/useTheme'
 import { activeSourceId, controlSet, cx, deriveNowPlaying } from '@/lib/format'
 import { SCREENS } from '@/lib/screens'
+import { scrollToVisible } from '@/lib/scroll'
 
 type Icon = typeof Play
 
@@ -515,7 +516,7 @@ export function CommandPalette(): React.JSX.Element {
   // Scroll the active row into view.
   useEffect(() => {
     const el = listRef.current?.querySelector<HTMLElement>('[data-selected="true"]')
-    el?.scrollIntoView({ block: 'nearest' })
+    scrollToVisible(el ?? null)
   }, [selected, filtered])
 
   const run = (cmd: Command | undefined): void => {

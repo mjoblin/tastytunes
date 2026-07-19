@@ -41,3 +41,40 @@ export function scrollToWithContext(
       (document.documentElement.classList.contains('reduce-motion') ? 'auto' : 'smooth')
   })
 }
+
+/**
+ * Center the element within its nearest scroll container — and ONLY that
+ * container. Never reach for element.scrollIntoView here: it scrolls every
+ * scrollable ancestor including the window (overflow:hidden merely hides
+ * scrollbars — programmatic scrolling still works), so any stray document
+ * overflow would let a follow-scroll displace the entire app with no way for
+ * the user to scroll it back.
+ */
+export function scrollToCentered(el: HTMLElement | null, behavior?: ScrollBehavior): void {
+  if (!el) return
+  const container = el.closest('.overflow-y-auto') as HTMLElement | null
+  if (!container) return
+  const cRect = container.getBoundingClientRect()
+  const eRect = el.getBoundingClientRect()
+  container.scrollTo({
+    top: container.scrollTop + (eRect.top - cRect.top) - (cRect.height - eRect.height) / 2,
+    behavior:
+      behavior ??
+      (document.documentElement.classList.contains('reduce-motion') ? 'auto' : 'smooth')
+  })
+}
+
+/**
+ * Keep the element visible in its nearest scroll container, nudging by the
+ * smallest amount (the container-scoped equivalent of scrollIntoView's
+ * block: 'nearest' — see scrollToCentered for why scrollIntoView is banned).
+ */
+export function scrollToVisible(el: HTMLElement | null): void {
+  if (!el) return
+  const container = el.closest('.overflow-y-auto') as HTMLElement | null
+  if (!container) return
+  const cRect = container.getBoundingClientRect()
+  const eRect = el.getBoundingClientRect()
+  if (eRect.top < cRect.top) container.scrollTop += eRect.top - cRect.top
+  else if (eRect.bottom > cRect.bottom) container.scrollTop += eRect.bottom - cRect.bottom
+}
