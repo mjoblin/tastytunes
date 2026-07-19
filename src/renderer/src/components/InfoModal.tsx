@@ -1,7 +1,8 @@
-import { ExternalLink, Heart, X } from 'lucide-react'
+import { ExternalLink, Heart } from 'lucide-react'
 import { version } from '../../../../package.json'
 import { tt } from '@/api'
 import { useStore } from '@/store'
+import { CloseButton } from '@/components/CloseButton'
 
 const REPO_URL = 'https://github.com/mjoblin/tastytunes'
 const SUPPORT_URL = 'https://punytunes.app/support/'
@@ -28,12 +29,7 @@ export function InfoModal(): React.JSX.Element {
               v{version} · GPLv3 · a controller for streammagic streamers
             </div>
           </div>
-          <button
-            onClick={() => setInfoOpen(false)}
-            className="p-1 text-faint hover:text-dim transition-colors"
-          >
-            <X size={16} />
-          </button>
+          <CloseButton onClick={() => setInfoOpen(false)} />
         </div>
 
         <div className="mt-6 space-y-3">

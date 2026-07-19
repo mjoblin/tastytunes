@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowDownLeft, ArrowUpRight, Pause, Play, X } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, Pause, Play } from 'lucide-react'
 import { useStore } from '@/store'
 import { cx } from '@/lib/format'
+import { CloseButton } from '@/components/CloseButton'
 
 type Filter = 'all' | 'in' | 'out' | 'logs'
 
@@ -82,9 +83,7 @@ export function DiagnosticsDrawer(): React.JSX.Element {
         >
           {paused ? <Play size={13} /> : <Pause size={13} />}
         </button>
-        <button onClick={() => setDiagnosticsOpen(false)} className="p-1.5 text-faint hover:text-dim">
-          <X size={14} />
-        </button>
+        <CloseButton onClick={() => setDiagnosticsOpen(false)} size={14} />
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto font-mono text-[10.5px] px-3 py-2 select-text">

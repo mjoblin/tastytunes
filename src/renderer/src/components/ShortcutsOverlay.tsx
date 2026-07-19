@@ -1,4 +1,4 @@
-import { X } from 'lucide-react'
+import { CloseButton } from '@/components/CloseButton'
 import { useStore } from '@/store'
 import { MOD, SCREENS } from '@/lib/screens'
 
@@ -49,9 +49,7 @@ export function ShortcutsOverlay(): React.JSX.Element {
       >
         <div className="flex items-center mb-5">
           <h2 className="font-display font-bold text-lg tracking-tight flex-1">Keyboard shortcuts</h2>
-          <button onClick={() => setShortcutsOpen(false)} className="p-1 text-faint hover:text-dim">
-            <X size={16} />
-          </button>
+          <CloseButton onClick={() => setShortcutsOpen(false)} />
         </div>
         <div className="space-y-5">
           {GROUPS.map((group) => (

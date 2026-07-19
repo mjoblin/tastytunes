@@ -8,10 +8,10 @@ import {
   SkipBack,
   SkipForward,
   Volume2,
-  VolumeX,
-  X
+  VolumeX
 } from 'lucide-react'
 import { tt } from '@/api'
+import { CloseButton } from '@/components/CloseButton'
 import { useStore } from '@/store'
 import { usePlayhead } from '@/hooks/usePlayhead'
 import { useArtAccent } from '@/hooks/useArtAccent'
@@ -116,14 +116,13 @@ export function MiniPlayer(): React.JSX.Element {
               >
                 <Expand size={12} />
               </button>
-              <button
-                data-tip="Close mini player"
-                aria-label="Close mini player"
+              <CloseButton
                 onClick={() => void tt.toggleMini()}
-                className="no-drag tip-bottom tip-end p-1 rounded text-faint hover:text-ink transition-colors"
-              >
-                <X size={13} />
-              </button>
+                size={13}
+                label="Close mini player"
+                tip="Close mini player"
+                className="no-drag tip-bottom tip-end"
+              />
             </div>
           </div>
 
