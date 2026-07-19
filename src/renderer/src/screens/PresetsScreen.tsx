@@ -20,6 +20,7 @@ import {
   Footprints,
   GripVertical,
   LayoutGrid,
+  Loader2,
   Play,
   Radio,
   Rows3,
@@ -113,6 +114,25 @@ export function PresetsScreen(): React.JSX.Element {
   //     off local media.
   const lastRecalledPresetId = useStore((s) => s.lastRecalledPresetId)
   const queueSignatures = useStore((s) => s.settings.queueSignatures)
+
+  // A recall takes seconds on the device (source switch, stream connect,
+  // queue load) with no state change until it lands — mirror the Radio
+  // screen's "tuning in" treatment on the recalled tile until the playing
+  // lamp takes over, the command fails, or a dead recall times out.
+  const [tuningId, setTuningId] = useState<number | null>(null)
+  const tuningTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const recall = (presetId: number): void => {
+    setTuningId(presetId)
+    if (tuningTimer.current) clearTimeout(tuningTimer.current)
+    tuningTimer.current = setTimeout(() => setTuningId(null), 15_000)
+    void tt.command({ type: 'recallPreset', presetId }).catch(() => setTuningId(null))
+  }
+  useEffect(
+    () => () => {
+      if (tuningTimer.current) clearTimeout(tuningTimer.current)
+    },
+    []
+  )
   // Exact identity of the live queue (all tracks, in order) — matched against
   // the signatures recorded when queue presets were saved through this app.
   const liveQueueHash = useMemo(
@@ -152,10 +172,19 @@ export function PresetsScreen(): React.JSX.Element {
       return false
     }
     // null = this preset type has no content to check (inputs etc.)
+    // Raw-URL radio presets (saved from the Radio screen) carry no airable id
+    // — the station NAME is their identity, matched against what's playing.
+    const isRadioPreset = (p: PresetItem): boolean =>
+      /radio/i.test(p.class ?? '') || p.type === 'Radio'
+    const stationMatch = (p: PresetItem): boolean => {
+      const station = md?.station?.trim().toLowerCase()
+      return station != null && p.name?.trim().toLowerCase() === station
+    }
     const contentCheck = (p: PresetItem): boolean | null => {
       if (p.airable_radio_id != null && radioId != null) return p.airable_radio_id === radioId
       if (p.type === 'MediaQueue') return mqContent(p)
       if ((p.class ?? '').startsWith('stream.media')) return albumMatch(p)
+      if (isRadioPreset(p)) return stationMatch(p)
       return null
     }
 
@@ -181,6 +210,11 @@ export function PresetsScreen(): React.JSX.Element {
       }
       if ((p.class ?? '').startsWith('stream.media')) {
         if (mqMatches.length === 0 && sigFirst == null && albumMatch(p)) lit.add(p.id)
+        continue
+      }
+      // Raw-URL radio presets: station-name identity (no airable id to hold).
+      if (isRadioPreset(p) && stationMatch(p)) {
+        lit.add(p.id)
         continue
       }
       // Radio/input presets with nothing to match: trust the flag except
@@ -327,6 +361,8 @@ export function PresetsScreen(): React.JSX.Element {
                     key={preset.id}
                     preset={preset}
                     playing={isPresetPlaying(preset)}
+                    tuning={tuningId === preset.id && !isPresetPlaying(preset)}
+                    onRecall={() => preset.id != null && recall(preset.id)}
                     volume={volumeFor(preset.id as number)}
                     canSetVolume={canSetVolume}
                     onVolume={(level) => void saveVolume(preset.id as number, level)}
@@ -339,6 +375,8 @@ export function PresetsScreen(): React.JSX.Element {
                   key={preset.id}
                   preset={preset}
                   playing={isPresetPlaying(preset)}
+                  tuning={tuningId === preset.id && !isPresetPlaying(preset)}
+                  onRecall={() => preset.id != null && recall(preset.id)}
                   volume={volumeFor(preset.id as number)}
                   canSetVolume={canSetVolume}
                   onVolume={(level) => void saveVolume(preset.id as number, level)}
@@ -484,10 +522,17 @@ function usePresetVolumePopover(
 function PresetRow({
   preset,
   playing,
+  tuning,
+  onRecall,
   volume,
   canSetVolume,
   onVolume
-}: { preset: PresetItem; playing: boolean } & PresetVolumeProps): React.JSX.Element {
+}: {
+  preset: PresetItem
+  playing: boolean
+  tuning: boolean
+  onRecall(): void
+} & PresetVolumeProps): React.JSX.Element {
   // pause-aware bars (the inline copies never froze — a divergence from
   // the queue/library idiom, fixed by adopting the shared component)
   const audible = useStore((s) => s.playState?.state === 'play')
@@ -516,13 +561,13 @@ function PresetRow({
         // the pointer leaves the row, but the row is still what's being edited
         playing ? 'row-playing bg-gold/10' : pv.open ? 'bg-veil' : 'hover:bg-veil'
       )}
-      onClick={() => {
-        if (preset.id != null) void tt.command({ type: 'recallPreset', presetId: preset.id })
-      }}
+      onClick={onRecall}
     >
       <div className="flex items-center justify-center">
         {playing ? (
           <Eqbars playing={audible} />
+        ) : tuning ? (
+          <Loader2 data-preset-tuning size={13} className="spin text-gold/80" />
         ) : (
           <span className="font-mono text-[10.5px] text-faint tabular-nums">
             {String(preset.id).padStart(2, '0')}
@@ -614,10 +659,17 @@ function PresetRow({
 function PresetCard({
   preset,
   playing,
+  tuning,
+  onRecall,
   volume,
   canSetVolume,
   onVolume
-}: { preset: PresetItem; playing: boolean } & PresetVolumeProps): React.JSX.Element {
+}: {
+  preset: PresetItem
+  playing: boolean
+  tuning: boolean
+  onRecall(): void
+} & PresetVolumeProps): React.JSX.Element {
   // pause-aware bars (the inline copies never froze — a divergence from
   // the queue/library idiom, fixed by adopting the shared component)
   const audible = useStore((s) => s.playState?.state === 'play')
@@ -657,12 +709,7 @@ function PresetCard({
           to the artwork: playing top-left, volume-set bottom-left, hover
           speaker top-right, hover trash bottom-right */}
       <div className="relative">
-      <button
-        className="relative block w-full cursor-pointer"
-        onClick={() => {
-          if (preset.id != null) void tt.command({ type: 'recallPreset', presetId: preset.id })
-        }}
-      >
+      <button className="relative block w-full cursor-pointer" onClick={onRecall}>
         <div className="aspect-square w-full rounded-lg overflow-hidden bg-panel/70 flex items-center justify-center">
           {preset.art_urls && preset.art_urls.length > 1 ? (
             // saved-queue (MediaQueue) presets: collage of the queue's albums
@@ -699,6 +746,15 @@ function PresetCard({
             // h/w match the corner buttons so the four corners feel weighted
             <span className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-md bg-black/55 backdrop-blur-sm">
               <Eqbars playing={audible} />
+            </span>
+          )}
+          {tuning && (
+            // same corner the playing chip will claim — spinner hands over to bars
+            <span
+              data-preset-tuning
+              className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-md bg-black/55 backdrop-blur-sm"
+            >
+              <Loader2 size={13} className="spin text-gold/90" />
             </span>
           )}
         </div>
@@ -751,7 +807,9 @@ function PresetCard({
       </button>
       </div>
 
-      <div className="mt-2 px-1">
+      {/* the label is part of the card — clicking it recalls too (it used to
+          be a dead zone below the artwork button, which read as a broken card) */}
+      <div className="mt-2 px-1 cursor-pointer" onClick={onRecall}>
         <div className={cx('text-[12.5px] leading-snug line-clamp-2', playing ? 'text-gold' : 'text-ink')}>
           {preset.name ?? `Preset ${preset.id}`}
         </div>

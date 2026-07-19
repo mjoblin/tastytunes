@@ -50,7 +50,9 @@ export function startScheduler(dm: DeviceManager): void {
       if (lastFired.get(s.id) === instance) continue
       if (dm.snapshot().connection.phase !== 'connected') continue
       lastFired.set(s.id, instance)
-      void fire(dm, s)
+      // commands throw on a half-dead socket — a missed schedule is a log
+      // line, never an unhandled rejection
+      void fire(dm, s).catch((e) => console.warn(`schedule ${s.id} failed:`, e?.message ?? e))
     }
   }
   setInterval(check, TICK_MS)

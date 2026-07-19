@@ -110,6 +110,11 @@ export class SmoipSocket {
     })
   }
 
+  /** True when frames can actually reach the device right now. */
+  isOpen(): boolean {
+    return this.ws?.readyState === WebSocket.OPEN
+  }
+
   /** Send a SMOIP frame; silently dropped when the socket isn't open. */
   send(path: string, params?: Record<string, unknown>): void {
     if (this.ws?.readyState !== WebSocket.OPEN) {

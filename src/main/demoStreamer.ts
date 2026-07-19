@@ -380,7 +380,9 @@ function buildDemo(host: string): {
         queue_index: playIdx,
         queue_length: items.length,
         queue_id: playItem.id,
-        metadata: { ...(ps.metadata as Dict), ...md }
+        // radio keys must NOT survive a queue takeover — real firmware
+        // rebuilds metadata per track (library tracks carry no station)
+        metadata: { ...(ps.metadata as Dict), station: null, radio_id: null, ...md }
       }
       const np = DATA['/zone/now_playing'] as Dict
       DATA['/zone/now_playing'] = {
@@ -727,7 +729,7 @@ function buildDemo(host: string): {
           slot = 1
           while (used.has(slot)) slot++
         }
-        const isRadio = meta.class === 'stream.radio'
+        const isRadio = /radio/.test(String(meta.class ?? ''))
         const name =
           ((isRadio ? meta.station || meta.name : meta.title) as string | null) || `Preset ${slot}`
         const presets = list.presets.filter((p) => p.id !== slot)
@@ -849,7 +851,91 @@ function buildDemo(host: string): {
         if (params.update === 1 && frame.path && DATA[frame.path]) push(frame.path)
         else if (frame.path === '/queue/list') push('/queue/list')
         else if (frame.path === '/presets/list') push('/presets/list')
-        else if (frame.path === '/zone/play_control' && typeof params.skip_track === 'number') {
+        else if (frame.path === '/zone/recall_preset' && typeof params.preset === 'number') {
+          // Apply the recall like real firmware — after a beat (source switch
+          // + stream/queue load), so the Presets tuning state shows in demo
+          // exactly like on hardware.
+          const list = DATA['/presets/list'] as { presets: Array<Dict & { id: number }> }
+          const preset = list.presets.find((p) => p.id === params.preset)
+          if (preset) {
+            setTimeout(() => {
+              if (/radio/.test(String(preset.class ?? ''))) {
+                DATA['/zone/state'] = { ...DATA['/zone/state'], source: 'IR' }
+                DATA['/zone/play_state'] = {
+                  state: 'play',
+                  position: 0,
+                  presettable: true,
+                  queue_index: null,
+                  queue_length: null,
+                  queue_id: null,
+                  mode_repeat: 'off',
+                  mode_shuffle: 'off',
+                  metadata: {
+                    class: 'md.radio',
+                    source: 'IR',
+                    name: 'Internet Radio',
+                    station: preset.name,
+                    title: null,
+                    art_url: (preset.art_url as string | null) ?? null,
+                    duration: null,
+                    codec: 'AAC',
+                    bitrate: 128000,
+                    lossless: false,
+                    sample_rate: 44100,
+                    bit_depth: null,
+                    mqa: 'none',
+                    sample_format: null,
+                    encoding: null,
+                    radio_id: (preset.airable_radio_id as number | null) ?? null,
+                    album: null,
+                    artist: null,
+                    genre: null,
+                    track_number: null
+                  }
+                }
+                DATA['/zone/now_playing'] = {
+                  ...DATA['/zone/now_playing'],
+                  source: { id: 'IR', name: 'Internet Radio' },
+                  display: {
+                    line1: preset.name,
+                    line2: null,
+                    line3: null,
+                    art_url: (preset.art_url as string | null) ?? null,
+                    art_file: null,
+                    class: 'md.radio',
+                    format: 'AAC',
+                    mqa: 'none',
+                    playback_source: 'radio',
+                    progress: null,
+                    context: null
+                  },
+                  controls: ['play_pause']
+                }
+                push('/zone/state')
+                push('/zone/play_state')
+                push('/zone/now_playing')
+              } else {
+                // synthetic queue whose album/art match the preset, so the
+                // playing lamp's content check recognizes the recall
+                const items: QueueItem[] = Array.from({ length: 8 }, (_, i) => ({
+                  id: nextQueueId++,
+                  position: i,
+                  metadata: {
+                    title: `${preset.name} — Track ${i + 1}`,
+                    artist: 'The Demo Artists',
+                    album: preset.name,
+                    art_url: (preset.art_url as string | null) ?? null,
+                    duration: 200 + i * 7,
+                    playback_source: 'punnet'
+                  }
+                }))
+                DATA['/zone/state'] = { ...DATA['/zone/state'], source: 'MEDIA_PLAYER' }
+                setQueue(items, items[0])
+                push('/zone/state')
+              }
+            }, 900)
+          }
+        } else if (frame.path === '/zone/play_control' && typeof params.skip_track === 'number') {
           advanceTrack(params.skip_track, push)
         } else if (frame.path === '/zone/state' && typeof params.volume_percent === 'number') {
           // echo volume like a real device (async push back)

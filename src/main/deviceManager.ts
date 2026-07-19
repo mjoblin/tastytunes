@@ -250,6 +250,13 @@ export class DeviceManager {
       this.log('warn', 'command', `ignored ${cmd.type} — not connected`)
       return
     }
+    // A half-dead socket (closed or mid-reconnect) used to swallow commands
+    // silently — the user clicks a preset, the card marks, nothing plays.
+    // Fail loudly instead so the renderer's central catch can toast it.
+    if (!socket.isOpen()) {
+      this.log('warn', 'command', `dropped ${cmd.type} — socket not open`)
+      throw new Error(`streamer socket not open (${cmd.type})`)
+    }
 
     switch (cmd.type) {
       case 'play':
