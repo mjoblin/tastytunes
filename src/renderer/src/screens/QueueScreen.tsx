@@ -48,6 +48,7 @@ import { PopoverChrome } from '@/hooks/usePopover'
 function SaveQueueDialog({ onClose }: { onClose(): void }): React.JSX.Element {
   const presets = useStore((s) => s.presets)
   const trackCount = useStore((s) => s.queue?.items?.length ?? 0)
+  const showToast = useStore((s) => s.showToast)
 
   const occupied = new Map<number, string>()
   for (const p of presets?.presets ?? []) {
@@ -66,7 +67,17 @@ function SaveQueueDialog({ onClose }: { onClose(): void }): React.JSX.Element {
 
   const save = async (): Promise<void> => {
     if (!valid) return
-    await tt.command({ type: 'queueSavePreset', slot, name: name.trim() || null })
+    try {
+      await tt.command({ type: 'queueSavePreset', slot, name: name.trim() || null })
+    } catch {
+      // the api layer already toasted the failure — keep the dialog open
+      return
+    }
+    showToast({
+      kind: 'success',
+      text: `Saved “${name.trim() || `Queue Preset ${slot}`}” to preset ${slot}`,
+      action: { label: 'View', screen: 'presets' }
+    })
     onClose()
   }
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Loader2, Power, Search, Sparkles } from 'lucide-react'
+import { CircleAlert, CircleCheck, Loader2, Power, Search, Sparkles } from 'lucide-react'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { useShortcuts } from '@/hooks/useShortcuts'
@@ -8,7 +8,7 @@ import { useArtLoadable } from '@/hooks/useArtLoadable'
 import { useMotionPreference } from '@/hooks/useMotionPreference'
 import { useTheme } from '@/hooks/useTheme'
 import { useDisplayFont } from '@/hooks/useDisplayFont'
-import { deriveNowPlaying } from '@/lib/format'
+import { cx, deriveNowPlaying } from '@/lib/format'
 import { Nav } from '@/components/Nav'
 import { PlaybackBar } from '@/components/PlaybackBar'
 import { DiagnosticsDrawer } from '@/components/DiagnosticsDrawer'
@@ -114,6 +114,7 @@ export default function App(): React.JSX.Element {
             {!coverWindow && ambient}
             <div className="relative h-full">{content}</div>
             {diagnosticsOpen && <DiagnosticsDrawer />}
+            <ToastHost />
           </main>
         </div>
         <PlaybackBar />
@@ -121,6 +122,57 @@ export default function App(): React.JSX.Element {
         {shortcutsOpen && <ShortcutsOverlay />}
         {paletteOpen && <CommandPalette />}
         {infoOpen && <InfoModal />}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * The single transient-feedback slot (see ToastData in the store). Bottom-
+ * center above the playback bar; click dismisses, the optional action jumps
+ * to the screen where the effect lives. Deliberately NOT wired to Escape —
+ * the Escape cascade belongs to overlays.
+ */
+function ToastHost(): React.JSX.Element | null {
+  const toast = useStore((s) => s.toast)
+  const dismissToast = useStore((s) => s.dismissToast)
+  const setScreen = useStore((s) => s.setScreen)
+
+  useEffect(() => {
+    if (!toast) return
+    // Errors linger a little longer than confirmations.
+    const t = setTimeout(dismissToast, toast.kind === 'error' ? 4000 : 2600)
+    return () => clearTimeout(t)
+  }, [toast, dismissToast])
+
+  if (!toast) return null
+  return (
+    <div key={toast.id} className="toast-in absolute bottom-4 left-1/2 -translate-x-1/2 z-40">
+      <div
+        onClick={dismissToast}
+        className={cx(
+          'flex items-center gap-2.5 rounded-xl px-4 py-2.5 ring-1 bg-raised shadow-2xl text-[12.5px] cursor-pointer max-w-[520px]',
+          toast.kind === 'error' ? 'ring-alert/40' : 'ring-gold/40'
+        )}
+      >
+        {toast.kind === 'error' ? (
+          <CircleAlert size={14} className="text-alert shrink-0" />
+        ) : (
+          <CircleCheck size={14} className="text-gold shrink-0" />
+        )}
+        <span className="min-w-0">{toast.text}</span>
+        {toast.action && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              setScreen(toast.action!.screen)
+              dismissToast()
+            }}
+            className="shrink-0 text-[12px] px-2.5 py-1 rounded-md ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 transition-all"
+          >
+            {toast.action.label}
+          </button>
+        )}
       </div>
     </div>
   )

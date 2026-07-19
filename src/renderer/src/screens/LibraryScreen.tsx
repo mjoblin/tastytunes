@@ -105,17 +105,13 @@ export function LibraryScreen(): React.JSX.Element {
   useEffect(() => {
     if (searchMode) searchInputRef.current?.focus()
   }, [searchMode])
-  const [notice, setNotice] = useState<string | null>(null)
   const [fetchNonce, setFetchNonce] = useState(0)
   const scrollRef = useRef<HTMLDivElement | null>(null)
 
-  // Action feedback: a transient banner for failures, a gold pulse for wins.
-  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const showNotice = (msg: string): void => {
-    setNotice(msg)
-    if (noticeTimer.current) clearTimeout(noticeTimer.current)
-    noticeTimer.current = setTimeout(() => setNotice(null), 4000)
-  }
+  // Action feedback: the app-wide toast for failures, a gold pulse for wins.
+  // (The screen's original local notice banner graduated into the toast.)
+  const showToast = useStore((s) => s.showToast)
+  const showNotice = (msg: string): void => showToast({ kind: 'error', text: msg })
 
   const loadServers = useCallback((): void => {
     setServers(null)
@@ -368,6 +364,12 @@ export function LibraryScreen(): React.JSX.Element {
     if (!serverUdn) return
     try {
       await tt.mediaPresetSave(serverUdn, node.id, slot)
+      // unlike queue-adds there's no in-place flash — the effect lives on Presets
+      showToast({
+        kind: 'success',
+        text: `Saved “${node.title}” to preset ${slot}`,
+        action: { label: 'View', screen: 'presets' }
+      })
     } catch {
       showNotice("Couldn't save the preset.")
     }
@@ -720,12 +722,6 @@ export function LibraryScreen(): React.JSX.Element {
           </span>
         ))}
       </div>
-      )}
-
-      {notice && (
-        <div className="mx-8 mb-2 px-3 py-2 rounded-lg ring-1 ring-alert/40 bg-alert/10 text-[12.5px] text-alert">
-          {notice}
-        </div>
       )}
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-8 pb-8 pt-1">

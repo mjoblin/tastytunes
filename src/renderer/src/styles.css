@@ -442,3 +442,23 @@ img {
 :root.reduce-motion .led-busy {
   animation: none;
 }
+
+/* Toast entrance — slide+fade normally; movement-free fade under reduced
+   motion (fades don't move anything; see the reduce-motion block above). */
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    translate: 0 8px;
+  }
+}
+@keyframes toast-fade {
+  from {
+    opacity: 0;
+  }
+}
+.toast-in {
+  animation: toast-in 0.18s ease-out;
+}
+:root.reduce-motion .toast-in {
+  animation: toast-fade 0.18s ease-out;
+}

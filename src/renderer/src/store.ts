@@ -41,6 +41,21 @@ export type Screen =
 const FRAME_RING = 300
 const LOG_RING = 300
 
+/**
+ * The one transient-feedback slot (single toast, replace-don't-stack).
+ * Reserved for actions whose effect isn't visible from the current screen
+ * and for failed fire-and-forget streamer writes — continuous state (volume,
+ * transport, connection) has its own live surfaces and never toasts.
+ */
+export interface ToastData {
+  /** Monotonic nonce so an identical replacement still restarts the timer. */
+  id: number
+  kind: 'success' | 'error'
+  text: string
+  action?: { label: string; screen: Screen }
+}
+let toastNonce = 0
+
 interface PlayheadSync {
   secs: number
   at: number // Date.now() when received — the UI interpolates from here
@@ -97,6 +112,9 @@ interface TTState {
   /** Self-update consent-flow state, mirrored from the main process. */
   update: UpdateState | null
 
+  toast: ToastData | null
+  showToast(toast: Omit<ToastData, 'id'>): void
+  dismissToast(): void
   setScreen(screen: Screen): void
   setDiagnosticsOpen(open: boolean): void
   setShortcutsOpen(open: boolean): void
@@ -159,6 +177,9 @@ export const useStore = create<TTState>((set, get) => ({
   mcpStatus: { running: false, url: null, error: null },
   update: null,
 
+  toast: null,
+  showToast: (toast) => set({ toast: { ...toast, id: ++toastNonce } }),
+  dismissToast: () => set({ toast: null }),
   setScreen: (screen) =>
     set((s) =>
       screen === 'library' ? { screen, libraryResetNonce: s.libraryResetNonce + 1 } : { screen }
