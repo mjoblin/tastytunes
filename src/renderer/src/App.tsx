@@ -221,7 +221,7 @@ function ConnectGate(): React.JSX.Element {
             </button>
             <button
               onClick={() => setScreen('device')}
-              className="text-[13px] text-dim hover:text-ink transition-colors"
+              className="text-[13px] px-4 py-2 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-95 transition-all"
             >
               Enter IP manually →
             </button>
