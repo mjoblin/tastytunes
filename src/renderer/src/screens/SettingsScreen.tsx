@@ -7,6 +7,7 @@ import {
   Globe,
   Heart,
   History,
+  Info,
   LayoutGrid,
   Library,
   Monitor,
@@ -24,6 +25,7 @@ import {
   type MotionMode,
   type ThemePreference,
 } from "@shared/model";
+import { tt } from "@/api";
 import { useStore } from "@/store";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { DISPLAY_FONTS } from "@/hooks/useDisplayFont";
@@ -105,8 +107,10 @@ export function SettingsScreen(): React.JSX.Element {
           onClick={() => setInfoOpen(true)}
           className="no-drag flex items-center gap-2 px-3.5 py-2 text-[12.5px] motion-safe:hover:scale-[1.03]"
         >
-          <Heart size={15} strokeWidth={2} />
-          Info &amp; Support
+          {/* store builds: no support solicitation (Apple 3.1.1 — external
+              payment links, even one hop away, draw rejections) */}
+          {tt.storeBuild ? <Info size={15} strokeWidth={2} /> : <Heart size={15} strokeWidth={2} />}
+          {tt.storeBuild ? "Info" : "Info & Support"}
         </PrimaryButton>
       </header>
 
