@@ -810,6 +810,8 @@ export interface TastyTunesApi {
   radioSearch(query: string): Promise<RadioStation[]>
   /** The directory's most-listened stations — the Radio screen's default rail. */
   radioTop(): Promise<RadioStation[]>
+  /** Stations for a curated category: any-of the given tags, popularity-ranked. */
+  radioByTags(tags: string[]): Promise<RadioStation[]>
   /** Combined size of the on-disk lookup caches (lyrics, artist context). */
   lookupCacheStats(): Promise<{ entries: number; bytes: number }>
   /** Wipe the lookup caches (memory + disk); resolves to the fresh stats. */
@@ -848,5 +850,6 @@ export const IPC = {
   mediaPresetSave: 'tt:mediaPresetSave',
   radioSearch: 'tt:radioSearch',
   radioTop: 'tt:radioTop',
+  radioByTags: 'tt:radioByTags',
   push: 'tt:push'
 } as const

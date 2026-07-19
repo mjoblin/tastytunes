@@ -18,7 +18,7 @@ import { fetchLyrics } from './lyrics'
 import { scrobbler } from './scrobbler'
 import { fetchArtistInfo } from './artistInfo'
 import { fetchAlbumInfo } from './albumInfo'
-import { radioSearch, radioTop } from './radioBrowser'
+import { radioByTags, radioSearch, radioTop } from './radioBrowser'
 import { clearLookupCaches, flushLookupCaches, lookupCacheStats } from './diskCache'
 import {
   browse as mediaBrowse,
@@ -274,6 +274,7 @@ function registerIpc(): void {
   )
   ipcMain.handle(IPC.radioSearch, (_e, query: string) => radioSearch(query))
   ipcMain.handle(IPC.radioTop, () => radioTop())
+  ipcMain.handle(IPC.radioByTags, (_e, tags: string[]) => radioByTags(tags))
   ipcMain.handle(IPC.mediaPresetSave, (_e, serverUdn: string, objectId: string, slot: number) =>
     presetSave(streamerHost(), serverUdn, objectId, slot)
   )

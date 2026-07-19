@@ -48,6 +48,7 @@ const api: TastyTunesApi = {
     ipcRenderer.invoke(IPC.mediaPresetSave, serverUdn, objectId, slot),
   radioSearch: (query: string) => ipcRenderer.invoke(IPC.radioSearch, query),
   radioTop: () => ipcRenderer.invoke(IPC.radioTop),
+  radioByTags: (tags: string[]) => ipcRenderer.invoke(IPC.radioByTags, tags),
   onPush: (cb: (msg: PushMessage) => void) => {
     const listener = (_e: IpcRendererEvent, msg: PushMessage): void => cb(msg)
     ipcRenderer.on(IPC.push, listener)

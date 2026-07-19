@@ -27,8 +27,33 @@ import { createPortal } from 'react-dom'
 let lastQuery = ''
 let lastResults: RadioStation[] | null = null
 let topCache: RadioStation[] | null = null
+let lastCat: string | null = null
+const catCache = new Map<string, RadioStation[]>()
 
 const DEBOUNCE_MS = 350
+
+/**
+ * The curated category layer — the airable-style rails the official app gets
+ * from its licensed directory, rebuilt on radio-browser tag facets. Each chip
+ * is any-of its tags, popularity-ranked; curation here keeps the community
+ * directory's junk tags out of the UI.
+ */
+const RADIO_CATEGORIES: Array<{ label: string; tags: string[] }> = [
+  { label: 'Pop', tags: ['pop'] },
+  { label: 'Rock', tags: ['rock'] },
+  { label: 'Jazz', tags: ['jazz'] },
+  { label: 'Classical', tags: ['classical'] },
+  { label: 'Dance & Electronic', tags: ['dance', 'electronic', 'house'] },
+  { label: 'Talk & News', tags: ['talk', 'news'] },
+  { label: 'Sport', tags: ['sport', 'sports'] },
+  { label: 'Oldies', tags: ['oldies'] },
+  { label: 'Country', tags: ['country'] },
+  { label: 'Hip-Hop', tags: ['hip hop', 'rap'] },
+  { label: '60s', tags: ['60s'] },
+  { label: '70s', tags: ['70s'] },
+  { label: '80s', tags: ['80s'] },
+  { label: '90s', tags: ['90s'] }
+]
 
 export function RadioScreen(): React.JSX.Element {
   const playState = useStore((s) => s.playState)
@@ -39,6 +64,11 @@ export function RadioScreen(): React.JSX.Element {
   const [results, setResults] = useState<RadioStation[] | null>(lastQuery ? lastResults : null)
   const [searching, setSearching] = useState(false)
   const [topFailed, setTopFailed] = useState(false)
+  const [cat, setCat] = useState<string | null>(lastCat)
+  const [catStations, setCatStations] = useState<RadioStation[] | null>(
+    lastCat ? (catCache.get(lastCat) ?? null) : null
+  )
+  const [catLoading, setCatLoading] = useState(false)
   const [saveFor, setSaveFor] = useState<{ station: RadioStation; x: number; y: number } | null>(
     null
   )
@@ -55,6 +85,56 @@ export function RadioScreen(): React.JSX.Element {
   useEffect(() => {
     if (topCache == null) void loadTop()
   }, [])
+
+  // Category selection — mutually exclusive with search; results cached per
+  // chip for the session so hopping between chips is instant.
+  const catSeq = useRef(0)
+  const loadCat = (label: string): void => {
+    const seq = catSeq.current
+    setCatLoading(true)
+    const def = RADIO_CATEGORIES.find((c) => c.label === label)
+    void tt.radioByTags(def?.tags ?? []).then((stations) => {
+      // an empty answer is indistinguishable from a directory hiccup — don't
+      // cache it, so re-tapping the chip retries
+      if (stations.length > 0) catCache.set(label, stations)
+      if (seq !== catSeq.current) return // selection moved on
+      setCatStations(stations)
+      setCatLoading(false)
+    })
+  }
+  const pickCat = (label: string): void => {
+    const next = cat === label ? null : label
+    catSeq.current++
+    setCat(next)
+    lastCat = next
+    setQuery('')
+    if (!next) {
+      setCatStations(null)
+      setCatLoading(false)
+      return
+    }
+    const cached = catCache.get(next)
+    setCatStations(cached ?? null)
+    if (!cached) loadCat(next)
+  }
+  // Restore path: screen remounts with a chip selected but nothing cached
+  // (e.g. its earlier load came back empty) — fetch again.
+  useEffect(() => {
+    if (cat != null && catStations == null) {
+      catSeq.current++
+      loadCat(cat)
+    }
+    // mount-only
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  const dropCat = (): void => {
+    if (cat == null) return
+    catSeq.current++
+    setCat(null)
+    lastCat = null
+    setCatStations(null)
+    setCatLoading(false)
+  }
 
   // Debounced live search; empty query falls back to the rail.
   const searchSeq = useRef(0)
@@ -104,8 +184,8 @@ export function RadioScreen(): React.JSX.Element {
     })
   }
 
-  const shown = results ?? top
-  const heading = results != null ? 'Search results' : 'Popular stations'
+  const shown = results ?? (cat != null ? catStations : top)
+  const heading = results != null ? 'Search results' : (cat ?? 'Popular stations')
 
   return (
     <div className="h-full flex flex-col">
@@ -119,7 +199,10 @@ export function RadioScreen(): React.JSX.Element {
           />
           <input
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value)
+              if (e.target.value.trim()) dropCat() // typing takes over from the chip
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Escape' && query) {
                 e.stopPropagation()
@@ -142,8 +225,26 @@ export function RadioScreen(): React.JSX.Element {
         </div>
       </header>
 
+      <div className="px-8 pb-3 flex flex-wrap gap-1.5">
+        {RADIO_CATEGORIES.map((c) => (
+          <button
+            key={c.label}
+            onClick={() => pickCat(c.label)}
+            data-radio-cat={c.label}
+            className={cx(
+              'no-drag rounded-full px-3 py-1 text-[12px] ring-1 transition-all motion-safe:active:scale-95',
+              cat === c.label
+                ? 'ring-gold/50 bg-golddim text-gold'
+                : 'ring-edge bg-panel/60 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70'
+            )}
+          >
+            {c.label}
+          </button>
+        ))}
+      </div>
+
       {shown == null ? (
-        topFailed ? (
+        topFailed && cat == null ? (
           <EmptyState
             icon={RadioTower}
             title="Station directory unreachable"
@@ -168,8 +269,10 @@ export function RadioScreen(): React.JSX.Element {
               {heading}
               {searching && <span className="motion-safe:animate-pulse">searching…</span>}
             </div>
-            {shown.length === 0 && !searching && (
-              <div className="text-[15px] text-faint pt-4 px-1">No stations for “{query}”</div>
+            {shown.length === 0 && !searching && !catLoading && (
+              <div className="text-[15px] text-faint pt-4 px-1">
+                {results != null ? `No stations for “${query}”` : 'No stations here right now.'}
+              </div>
             )}
             <div className="space-y-1 divide-y divide-edge/50">
               {shown.map((st) => {

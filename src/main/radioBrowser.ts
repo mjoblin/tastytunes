@@ -30,6 +30,7 @@ interface ApiStation {
   country: string
   codec: string
   bitrate: number
+  clickcount?: number
 }
 
 function toStation(s: ApiStation): RadioStation | null {
@@ -48,29 +49,34 @@ function toStation(s: ApiStation): RadioStation | null {
   }
 }
 
-async function stations(path: string): Promise<RadioStation[]> {
+async function fetchRaw(path: string): Promise<ApiStation[]> {
   try {
     const res = await loggedFetch('radio-browser', `${BASE}${path}`, {
       headers: { 'user-agent': USER_AGENT, accept: 'application/json' },
       signal: AbortSignal.timeout(10_000)
     })
     if (!res.ok) return []
-    const body = (await res.json()) as ApiStation[]
-    const out: RadioStation[] = []
-    const seen = new Set<string>()
-    for (const s of body) {
-      const st = toStation(s)
-      // the directory holds many duplicate registrations of one stream
-      if (st && !seen.has(st.url)) {
-        seen.add(st.url)
-        out.push(st)
-      }
-    }
-    return out
+    return (await res.json()) as ApiStation[]
   } catch {
     return []
   }
 }
+
+/** Map + dedupe (the directory holds many duplicate registrations of one stream). */
+function toStations(raw: ApiStation[]): RadioStation[] {
+  const out: RadioStation[] = []
+  const seen = new Set<string>()
+  for (const s of raw) {
+    const st = toStation(s)
+    if (st && !seen.has(st.url)) {
+      seen.add(st.url)
+      out.push(st)
+    }
+  }
+  return out
+}
+
+const stations = async (path: string): Promise<RadioStation[]> => toStations(await fetchRaw(path))
 
 /** Name search, most-listened first, broken stations filtered by the directory. */
 export function radioSearch(query: string): Promise<RadioStation[]> {
@@ -89,4 +95,27 @@ export function radioSearch(query: string): Promise<RadioStation[]> {
 /** The directory's most-listened stations — the screen's default rail. */
 export function radioTop(): Promise<RadioStation[]> {
   return stations(`/stations/topclick/${LIMIT}?hidebroken=true`)
+}
+
+/**
+ * Stations for a curated category — one popularity query per tag (the
+ * directory's tagList means ALL-of, not any-of), merged, deduped, re-ranked
+ * by listener count so the union reads as one rail.
+ */
+export async function radioByTags(tags: string[]): Promise<RadioStation[]> {
+  const perTag = await Promise.all(
+    tags.map((tag) => {
+      const params = new URLSearchParams({
+        tag,
+        tagExact: 'true',
+        limit: '40',
+        hidebroken: 'true',
+        order: 'clickcount',
+        reverse: 'true'
+      })
+      return fetchRaw(`/stations/search?${params}`)
+    })
+  )
+  const merged = perTag.flat().sort((a, b) => (b.clickcount ?? 0) - (a.clickcount ?? 0))
+  return toStations(merged).slice(0, LIMIT)
 }
