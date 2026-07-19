@@ -10,17 +10,19 @@ import {
   NAV_UNHIDEABLE,
   SETTINGS_SCREEN,
   sanitizeNavHidden,
+  sanitizeNavHiddenTools,
+  type NavTool,
   type ScreenDef
 } from '@/lib/screens'
 import { usePopoverChrome, useClampedPosition } from '@/hooks/usePopover'
 
-/** Right-click target: which nav screen, and where the cursor was. */
-interface NavMenu {
-  id: Screen
-  label: string
-  x: number
-  y: number
-}
+/**
+ * Right-click target: which nav item (a screen or a bottom-cluster tool), and
+ * where the cursor was. Discriminated so onHide writes the right hide-set.
+ */
+type NavMenu =
+  | { kind: 'screen'; id: Screen; label: string; x: number; y: number }
+  | { kind: 'tool'; id: NavTool; label: string; x: number; y: number }
 
 export function Nav(): React.JSX.Element {
   const screen = useStore((s) => s.screen)
@@ -44,9 +46,23 @@ export function Nav(): React.JSX.Element {
   const hiddenSet = new Set(hidden)
   const visibleScreens = NAV_SCREENS.filter((s) => !hiddenSet.has(s.id))
 
-  const hideScreen = (id: Screen): void => {
-    if (!hidden.includes(id)) void saveSettings({ navHidden: [...hidden, id] })
+  const hiddenTools = sanitizeNavHiddenTools(settings.navHiddenTools)
+  const hiddenToolSet = new Set(hiddenTools)
+
+  // One verb for both nav-item kinds; the discriminant picks the hide-set.
+  const hideFromMenu = (m: NavMenu): void => {
+    if (m.kind === 'screen') {
+      if (!hidden.includes(m.id)) void saveSettings({ navHidden: [...hidden, m.id] })
+    } else {
+      if (!hiddenTools.includes(m.id)) void saveSettings({ navHiddenTools: [...hiddenTools, m.id] })
+    }
     setMenu(null)
+  }
+
+  // Right-click a bottom-cluster tool → the same "Hide from sidebar" menu.
+  const openToolMenu = (id: NavTool, label: string) => (e: React.MouseEvent): void => {
+    e.preventDefault()
+    setMenu({ kind: 'tool', id, label, x: e.clientX, y: e.clientY })
   }
 
   const navItem = ({ id, label, icon: Icon, key }: ScreenDef): React.JSX.Element => (
@@ -60,7 +76,7 @@ export function Nav(): React.JSX.Element {
           ? undefined
           : (e) => {
               e.preventDefault()
-              setMenu({ id, label, x: e.clientX, y: e.clientY })
+              setMenu({ kind: 'screen', id, label, x: e.clientX, y: e.clientY })
             }
       }
       data-tip={`${label} (${key})`}
@@ -142,42 +158,50 @@ export function Nav(): React.JSX.Element {
         {visibleScreens.map(navItem)}
       </div>
 
-      {/* mini player + settings pinned at the bottom, collapse last */}
+      {/* mini player + settings pinned at the bottom, collapse last.
+          Commands + Mini player are hideable (right-click → Hide from sidebar,
+          un-hide from Settings); Settings is locked; Collapse is never hideable. */}
       <div className={cx('space-y-0.5 pb-3', collapsed ? 'px-2' : 'px-3')}>
         {/* visible entry point for the palette — the shortcut teaches itself */}
-        <button
-          onClick={() => setPaletteOpen(true)}
-          data-tip={`Command palette (${MOD}K)`}
-          aria-label={`Command palette (${MOD}K)`}
-          className={cx(
-            'w-full flex items-center rounded-lg h-9 text-[13.5px] text-dim hover:text-ink hover:bg-veil transition-colors',
-            collapsed ? 'justify-center px-0' : 'gap-3 px-3'
-          )}
-        >
-          <Command size={16} strokeWidth={1.8} className="shrink-0" />
-          {!collapsed && (
-            <span className="flex-1 min-w-0 flex items-center gap-3 overflow-hidden whitespace-nowrap">
-              <span className="flex-1 text-left">Commands</span>
-              <span className="font-mono text-[9px] text-faint/60">{MOD}K</span>
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => void tt.toggleMini()}
-          data-tip="Mini player"
-          aria-label="Mini player"
-          className={cx(
-            'w-full flex items-center rounded-lg h-9 text-[13.5px] text-dim hover:text-ink hover:bg-veil transition-colors',
-            collapsed ? 'justify-center px-0' : 'gap-3 px-3'
-          )}
-        >
-          <PictureInPicture2 size={16} strokeWidth={1.8} className="shrink-0" />
-          {!collapsed && (
-            <span className="flex-1 min-w-0 overflow-hidden whitespace-nowrap text-left">
-              Mini player
-            </span>
-          )}
-        </button>
+        {!hiddenToolSet.has('commands') && (
+          <button
+            onClick={() => setPaletteOpen(true)}
+            onContextMenu={openToolMenu('commands', 'Commands')}
+            data-tip={`Command palette (${MOD}K)`}
+            aria-label={`Command palette (${MOD}K)`}
+            className={cx(
+              'w-full flex items-center rounded-lg h-9 text-[13.5px] text-dim hover:text-ink hover:bg-veil transition-colors',
+              collapsed ? 'justify-center px-0' : 'gap-3 px-3'
+            )}
+          >
+            <Command size={16} strokeWidth={1.8} className="shrink-0" />
+            {!collapsed && (
+              <span className="flex-1 min-w-0 flex items-center gap-3 overflow-hidden whitespace-nowrap">
+                <span className="flex-1 text-left">Commands</span>
+                <span className="font-mono text-[9px] text-faint/60">{MOD}K</span>
+              </span>
+            )}
+          </button>
+        )}
+        {!hiddenToolSet.has('mini-player') && (
+          <button
+            onClick={() => void tt.toggleMini()}
+            onContextMenu={openToolMenu('mini-player', 'Mini player')}
+            data-tip="Mini player"
+            aria-label="Mini player"
+            className={cx(
+              'w-full flex items-center rounded-lg h-9 text-[13.5px] text-dim hover:text-ink hover:bg-veil transition-colors',
+              collapsed ? 'justify-center px-0' : 'gap-3 px-3'
+            )}
+          >
+            <PictureInPicture2 size={16} strokeWidth={1.8} className="shrink-0" />
+            {!collapsed && (
+              <span className="flex-1 min-w-0 overflow-hidden whitespace-nowrap text-left">
+                Mini player
+              </span>
+            )}
+          </button>
+        )}
         {navItem(SETTINGS_SCREEN)}
         <button
           onClick={() => void toggleCollapsed()}
@@ -204,7 +228,7 @@ export function Nav(): React.JSX.Element {
       {menu && (
         <NavItemMenu
           menu={menu}
-          onHide={() => hideScreen(menu.id)}
+          onHide={() => hideFromMenu(menu)}
           onClose={() => setMenu(null)}
         />
       )}

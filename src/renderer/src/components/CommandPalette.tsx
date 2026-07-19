@@ -33,7 +33,7 @@ import { tt } from '@/api'
 import { useStore } from '@/store'
 import { systemTheme } from '@/hooks/useTheme'
 import { activeSourceId, controlSet, cx, deriveNowPlaying } from '@/lib/format'
-import { SCREENS, sanitizeNavHidden } from '@/lib/screens'
+import { SCREENS, sanitizeNavHidden, sanitizeNavHiddenTools } from '@/lib/screens'
 import { scrollToVisible } from '@/lib/scroll'
 
 type Icon = typeof Play
@@ -355,12 +355,16 @@ export function CommandPalette(): React.JSX.Element {
     }
 
     // -------- View / app
+    // Mirror the hidden-from-sidebar hint the hidden screens get: when the
+    // Mini player nav button is hidden, flag its palette row too (still runs).
+    const miniHiddenFromNav = sanitizeNavHiddenTools(settings.navHiddenTools).includes('mini-player')
     cmds.push({
       id: 'view:mini',
       label: 'Toggle mini player',
       group: 'View',
       icon: PictureInPicture2,
-      keywords: 'miniplayer window',
+      keywords: miniHiddenFromNav ? 'miniplayer window hidden sidebar' : 'miniplayer window',
+      hidden: miniHiddenFromNav,
       run: () => void tt.toggleMini()
     })
     if (connected && !inStandby) {
@@ -480,6 +484,7 @@ export function CommandPalette(): React.JSX.Element {
     settings.lyrics,
     settings.artistInfo,
     settings.navHidden,
+    settings.navHiddenTools,
     setLyricsOpen,
     setArtistOpen,
     setContextTab,

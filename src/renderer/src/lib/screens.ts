@@ -1,11 +1,13 @@
 import {
   Cable,
   Cog,
+  Command,
   Disc3,
   HardDrive,
   History,
   Library,
   ListMusic,
+  PictureInPicture2,
   Radio,
   RadioTower
 } from 'lucide-react'
@@ -40,8 +42,12 @@ export const NAV_SCREENS: ScreenDef[] = [
 export const SETTINGS_SCREEN: ScreenDef = { id: 'settings', label: 'Settings', icon: Cog, key: 'E' }
 export const SCREENS: ScreenDef[] = [...NAV_SCREENS, SETTINGS_SCREEN]
 
-/** Screens that can never be hidden from the nav (feature: hideable nav items). */
-export const NAV_UNHIDEABLE: Screen[] = ['now-playing']
+/**
+ * Screens that can never be hidden from the nav (feature: hideable nav items).
+ * 'settings' lives in the nav's pinned bottom cluster and stays locked — always
+ * shown, no right-click hide menu — same as 'now-playing' up top.
+ */
+export const NAV_UNHIDEABLE: Screen[] = ['now-playing', 'settings']
 
 /**
  * Sanitize a persisted nav hide-set into real, hideable registry ids: drops
@@ -55,6 +61,44 @@ export function sanitizeNavHidden(raw: readonly string[] | null | undefined): Sc
   const out: Screen[] = []
   for (const id of raw) {
     if (hideable.has(id) && !out.includes(id as Screen)) out.push(id as Screen)
+  }
+  return out
+}
+
+/** Hideable nav-tool ids — the pinned bottom-cluster buttons, minus the locked ones. */
+export type NavTool = 'commands' | 'mini-player'
+
+/** A hideable nav tool. Mirrors ScreenDef's id/label/icon (no shortcut key). */
+export interface NavToolDef {
+  id: NavTool
+  label: string
+  icon: typeof Disc3
+}
+
+/**
+ * THE nav-tools registry — the pinned bottom-cluster buttons (below the
+ * screens) that can be hidden from the nav, same as screens. Owned here so the
+ * Nav and the Settings "Sidebar" card agree on ids/labels/icons. Settings and
+ * Collapse are deliberately absent: Settings stays locked, Collapse is the
+ * nav's own control and is never hideable. Every hidden tool keeps an alternate
+ * route (Commands: the palette shortcut; mini player: the palette + View menu).
+ */
+export const NAV_TOOLS: NavToolDef[] = [
+  { id: 'commands', label: 'Commands', icon: Command },
+  { id: 'mini-player', label: 'Mini player', icon: PictureInPicture2 }
+]
+
+/**
+ * Sanitize a persisted nav-tool hide-set into real tool ids: drops anything
+ * that isn't a NAV_TOOLS id and de-dupes. Mirrors sanitizeNavHidden; kept
+ * separate because tool ids and screen ids are different id-spaces.
+ */
+export function sanitizeNavHiddenTools(raw: readonly string[] | null | undefined): NavTool[] {
+  if (!Array.isArray(raw)) return []
+  const known = new Set<string>(NAV_TOOLS.map((t) => t.id))
+  const out: NavTool[] = []
+  for (const id of raw) {
+    if (known.has(id) && !out.includes(id as NavTool)) out.push(id as NavTool)
   }
   return out
 }

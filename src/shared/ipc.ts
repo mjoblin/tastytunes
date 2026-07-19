@@ -574,6 +574,15 @@ export interface AppSettings {
    * keyboard shortcut and the command palette.
    */
   navHidden: string[]
+  /**
+   * Nav tools hidden from the left nav's pinned bottom cluster (Commands,
+   * Mini player). A hide-set (not a visible-list) so tools added in future app
+   * versions default to visible. Persisted as plain ids; the renderer sanitizes
+   * on use (drops unknown ids). Separate from navHidden — tool ids and screen
+   * ids are different id-spaces. Nav-only: Commands stays on the palette
+   * shortcut, the mini player stays in the palette and the View menu.
+   */
+  navHiddenTools: string[]
   /** Auto-scroll to the current queue row / playing preset. */
   followQueue: boolean
   followPresets: boolean
@@ -651,6 +660,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   nowPlayingAlignV: 'center',
   navCollapsed: false,
   navHidden: [],
+  navHiddenTools: [],
   followQueue: true,
   followPresets: false,
   queueLayout: 'rows',

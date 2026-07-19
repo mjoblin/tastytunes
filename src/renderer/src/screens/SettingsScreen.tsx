@@ -38,10 +38,15 @@ import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { DISPLAY_FONTS } from '@/hooks/useDisplayFont'
 import { SIGNAL_COLORS, cx, signalGlow } from '@/lib/format'
 import {
+  MOD,
   NAV_SCREENS,
+  NAV_TOOLS,
   NAV_UNHIDEABLE,
   SETTINGS_SCREEN,
   sanitizeNavHidden,
+  sanitizeNavHiddenTools,
+  type NavTool,
+  type NavToolDef,
   type ScreenDef
 } from '@/lib/screens'
 import { Slider } from '@/components/Slider'
@@ -1044,19 +1049,26 @@ function LegendRow({
  * Sidebar card (Layout tab): a row per screen in registry order with an eye
  * toggle to hide/show it in the left nav — the way to un-hide, mirroring the
  * right-click "Hide from sidebar" verb on the nav itself. now-playing is locked
- * (never hideable); Settings is shown locked for completeness even though it
- * lives in the nav's pinned bottom cluster, not NAV_SCREENS. Hidden screens
- * stay reachable by their keyboard shortcut and the command palette.
+ * (never hideable). Below a divider, the pinned bottom-cluster tools (Commands,
+ * Mini player) get the same toggle; Settings is shown locked, last, for
+ * completeness. Hidden items stay reachable by their keyboard shortcut / route.
  */
 function SidebarSection(): React.JSX.Element {
   const navHidden = useStore((s) => s.settings.navHidden)
+  const navHiddenTools = useStore((s) => s.settings.navHiddenTools)
   const save = useStore((s) => s.saveSettings)
   const hidden = sanitizeNavHidden(navHidden)
   const hiddenSet = new Set(hidden)
+  const hiddenTools = sanitizeNavHiddenTools(navHiddenTools)
+  const hiddenToolSet = new Set(hiddenTools)
 
   const setHidden = (id: Screen, hide: boolean): void => {
     const next = hide ? [...hidden, id] : hidden.filter((s) => s !== id)
     void save({ navHidden: next })
+  }
+  const setToolHidden = (id: NavTool, hide: boolean): void => {
+    const next = hide ? [...hiddenTools, id] : hiddenTools.filter((t) => t !== id)
+    void save({ navHiddenTools: next })
   }
 
   return (
@@ -1064,8 +1076,9 @@ function SidebarSection(): React.JSX.Element {
       <div className="microlabel">sidebar</div>
       <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 pt-3">
         <p className="text-[11.5px] text-faint max-w-md pb-2">
-          Hide screens you don&apos;t use from the left nav. Hidden screens stay reachable by
-          their keyboard shortcut and the command palette.
+          Hide items you don&apos;t use from the left nav. Hidden screens stay reachable by
+          their keyboard shortcut and the command palette; Commands stays on {MOD}K, the mini
+          player in the palette and the View menu.
         </p>
         <div className="space-y-0.5">
           {NAV_SCREENS.map((sc) => (
@@ -1075,6 +1088,16 @@ function SidebarSection(): React.JSX.Element {
               locked={NAV_UNHIDEABLE.includes(sc.id)}
               hidden={hiddenSet.has(sc.id)}
               onToggle={(hide) => setHidden(sc.id, hide)}
+            />
+          ))}
+          <div className="my-1 border-t border-edge/60" />
+          {NAV_TOOLS.map((t) => (
+            <SidebarRow
+              key={t.id}
+              sc={t}
+              locked={false}
+              hidden={hiddenToolSet.has(t.id)}
+              onToggle={(hide) => setToolHidden(t.id, hide)}
             />
           ))}
           <SidebarRow sc={SETTINGS_SCREEN} locked hidden={false} />
@@ -1090,7 +1113,7 @@ function SidebarRow({
   hidden,
   onToggle
 }: {
-  sc: ScreenDef
+  sc: ScreenDef | NavToolDef
   locked: boolean
   hidden: boolean
   onToggle?: (hide: boolean) => void
