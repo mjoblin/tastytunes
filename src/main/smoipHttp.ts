@@ -54,6 +54,34 @@ export async function queueSavePreset(
 }
 
 /**
+ * Play an internet-radio stream by direct URL — probed live on the Evo
+ * 2026-07-18 (accepts airable_radio_id+name OR raw url+name; 400 when either
+ * param is missing, so both are required here).
+ */
+export async function streamRadio(host: string, url: string, name: string): Promise<void> {
+  const qs = new URLSearchParams({ url, name })
+  const res = await fetch(`http://${host}/smoip/stream/radio?${qs}`, {
+    signal: AbortSignal.timeout(5000)
+  })
+  if (!res.ok) throw new Error(`GET /smoip/stream/radio -> HTTP ${res.status}`)
+}
+
+/**
+ * Save the CURRENT playback to a preset slot — /zone/save_preset, probed live
+ * 2026-07-18. Track-level for media (recall replaces the queue with one
+ * track), the natural verb for a playing radio station. The slot is REQUIRED
+ * here on purpose: called bare, the firmware executes with defaults and
+ * silently takes the next free slot.
+ */
+export async function zoneSavePreset(host: string, slot: number): Promise<void> {
+  const qs = new URLSearchParams({ preset: String(slot) })
+  const res = await fetch(`http://${host}/smoip/zone/save_preset?${qs}`, {
+    signal: AbortSignal.timeout(5000)
+  })
+  if (!res.ok) throw new Error(`GET /smoip/zone/save_preset -> HTTP ${res.status}`)
+}
+
+/**
  * Fetch the preset list over HTTP — how vibin refreshes stale is_playing flags.
  * (A bare WS request for /presets/list is not proven against real hardware.)
  */

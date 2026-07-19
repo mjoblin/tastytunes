@@ -6,7 +6,8 @@ import {
   History,
   Library,
   ListMusic,
-  Radio
+  Radio,
+  RadioTower
 } from 'lucide-react'
 import type { Screen } from '@/store'
 
@@ -30,6 +31,8 @@ export const NAV_SCREENS: ScreenDef[] = [
   { id: 'queue', label: 'Queue', icon: ListMusic, key: 'Q' },
   { id: 'presets', label: 'Presets', icon: Radio, key: 'P' },
   { id: 'library', label: 'Library', icon: Library, key: 'I' },
+  // T as in Tuner — the classic hi-fi name for the radio section
+  { id: 'radio', label: 'Radio', icon: RadioTower, key: 'T' },
   { id: 'recently-played', label: 'Recently Played', icon: History, key: 'R' },
   { id: 'sources', label: 'Sources', icon: Cable, key: 'S' },
   { id: 'device', label: 'Device', icon: HardDrive, key: 'D' }

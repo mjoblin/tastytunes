@@ -287,6 +287,11 @@ export type StreamerCommand =
   | { type: 'presetMove'; from: number; to: number }
   /** Rename an existing preset (lets album saves carry a custom name). */
   | { type: 'presetRename'; slot: number; name: string }
+  /** Play an internet-radio stream by direct URL (/stream/radio — url+name both required). */
+  | { type: 'streamRadio'; url: string; name: string }
+  /** Save the CURRENT playback to a preset slot (/zone/save_preset — the
+   *  "save what's playing" verb; track-level for media, the natural verb for radio). */
+  | { type: 'zoneSavePreset'; slot: number }
   /** Snapshot the current queue into a device preset (type MediaQueue).
    *  null slot = firmware picks the next free one; null name = firmware default. */
   | { type: 'queueSavePreset'; slot: number | null; name: string | null }
@@ -726,6 +731,24 @@ export interface MediaNode {
 /** Queue-write verbs of /smoip/queue/add (semantics per vibin's reverse-engineering). */
 export type MediaQueueAction = 'REPLACE' | 'APPEND' | 'PLAY_NEXT' | 'PLAY_NOW' | 'PLAY_FROM_HERE'
 
+// ------------------------------------------------------------------ internet radio
+
+/** A station from the radio-browser.info community directory (main-process lookup). */
+export interface RadioStation {
+  uuid: string
+  name: string
+  /** The playable stream URL (radio-browser's url_resolved — playlists unwrapped). */
+  url: string
+  favicon: string | null
+  homepage: string | null
+  /** Comma-separated tag list as the directory provides it. */
+  tags: string
+  country: string
+  codec: string
+  /** kbps; 0 = unknown. */
+  bitrate: number
+}
+
 // ------------------------------------------------------------------- preload API
 
 export interface TastyTunesApi {
@@ -783,6 +806,10 @@ export interface TastyTunesApi {
   ): Promise<void>
   /** Save a browsed item to a preset slot (1-99). */
   mediaPresetSave(serverUdn: string, objectId: string, slot: number): Promise<void>
+  /** Station search against radio-browser.info (main process; name contains, by popularity). */
+  radioSearch(query: string): Promise<RadioStation[]>
+  /** The directory's most-listened stations — the Radio screen's default rail. */
+  radioTop(): Promise<RadioStation[]>
   /** Combined size of the on-disk lookup caches (lyrics, artist context). */
   lookupCacheStats(): Promise<{ entries: number; bytes: number }>
   /** Wipe the lookup caches (memory + disk); resolves to the fresh stats. */
@@ -819,5 +846,7 @@ export const IPC = {
   mediaSearch: 'tt:mediaSearch',
   mediaQueueAdd: 'tt:mediaQueueAdd',
   mediaPresetSave: 'tt:mediaPresetSave',
+  radioSearch: 'tt:radioSearch',
+  radioTop: 'tt:radioTop',
   push: 'tt:push'
 } as const

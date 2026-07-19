@@ -325,6 +325,11 @@ export class DeviceManager {
       case 'queueSavePreset':
         await smoipHttp.queueSavePreset(host, cmd.slot, cmd.name)
         return this.refreshPresets(socket)
+      case 'streamRadio':
+        return smoipHttp.streamRadio(host, cmd.url, cmd.name)
+      case 'zoneSavePreset':
+        await smoipHttp.zoneSavePreset(host, cmd.slot)
+        return this.refreshPresets(socket)
       case 'presetMove':
         await smoipHttp.presetMove(host, cmd.from, cmd.to)
         return this.refreshPresets(socket)

@@ -33,6 +33,7 @@ export type Screen =
   | 'queue'
   | 'presets'
   | 'library'
+  | 'radio'
   | 'recently-played'
   | 'sources'
   | 'device'

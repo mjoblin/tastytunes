@@ -20,6 +20,7 @@ import { NowPlayingScreen } from '@/screens/NowPlayingScreen'
 import { QueueScreen } from '@/screens/QueueScreen'
 import { PresetsScreen } from '@/screens/PresetsScreen'
 import { LibraryScreen } from '@/screens/LibraryScreen'
+import { RadioScreen } from '@/screens/RadioScreen'
 import { RecentlyPlayedScreen } from '@/screens/RecentlyPlayedScreen'
 import { SourcesScreen } from '@/screens/SourcesScreen'
 import { DeviceScreen } from '@/screens/DeviceScreen'
@@ -88,6 +89,8 @@ export default function App(): React.JSX.Element {
         return <PresetsScreen />
       case 'library':
         return <LibraryScreen />
+      case 'radio':
+        return <RadioScreen />
       case 'sources':
         return <SourcesScreen />
     }

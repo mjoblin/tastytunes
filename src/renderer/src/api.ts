@@ -11,6 +11,8 @@ const raw: TastyTunesApi = window.tastytunes
 const WRITE_FAILURES: Partial<Record<StreamerCommand['type'], string>> = {
   queueSavePreset: "Couldn't save the preset",
   presetRename: "Couldn't rename the preset",
+  streamRadio: "Couldn't play the station",
+  zoneSavePreset: "Couldn't save the preset",
   presetDelete: "Couldn't delete the preset",
   presetMove: "Couldn't reorder the presets",
   queueDelete: "Couldn't remove the track",

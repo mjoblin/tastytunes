@@ -630,6 +630,103 @@ function buildDemo(host: string): {
         res.writeHead(200, { 'content-type': 'application/json' })
         return res.end('{"zone": "ZONE1"}')
       }
+      // Play an internet-radio stream by URL (mirrors the real Evo's GET
+      // verb: url+name both required, 400 when either is missing).
+      if (u.pathname === '/smoip/stream/radio') {
+        const url = u.searchParams.get('url')
+        const name = u.searchParams.get('name')
+        if (!url || !name) {
+          res.writeHead(400, { 'content-type': 'application/json' })
+          return res.end('{"error":"missing params"}')
+        }
+        DATA['/zone/state'] = { ...DATA['/zone/state'], source: 'IR' }
+        DATA['/zone/play_state'] = {
+          state: 'play',
+          position: 0,
+          presettable: true,
+          queue_index: null,
+          queue_length: null,
+          queue_id: null,
+          mode_repeat: 'off',
+          mode_shuffle: 'off',
+          metadata: {
+            class: 'stream.radio',
+            source: 'IR',
+            name,
+            station: name,
+            title: null,
+            art_url: null,
+            duration: null,
+            codec: 'AAC',
+            bitrate: 128000,
+            lossless: false,
+            sample_rate: 44100,
+            bit_depth: null,
+            mqa: 'none',
+            sample_format: null,
+            encoding: null,
+            radio_id: null,
+            album: null,
+            artist: null,
+            genre: null,
+            track_number: null
+          }
+        }
+        DATA['/zone/now_playing'] = {
+          ...DATA['/zone/now_playing'],
+          source: { id: 'IR', name: 'Internet Radio' },
+          display: {
+            line1: name,
+            line2: null,
+            line3: null,
+            art_url: null,
+            art_file: null,
+            class: 'stream.radio',
+            format: 'AAC',
+            mqa: 'none',
+            playback_source: 'radio',
+            progress: null,
+            context: null
+          },
+          controls: ['play_pause']
+        }
+        broadcast('/zone/state')
+        broadcast('/zone/play_state')
+        broadcast('/zone/now_playing')
+        res.writeHead(200, { 'content-type': 'application/json' })
+        return res.end('{"zone": "ZONE1"}')
+      }
+      // Save the CURRENT playback to a preset slot (mirrors the real Evo's
+      // GET verb; called bare it defaults to the next free slot).
+      if (u.pathname === '/smoip/zone/save_preset') {
+        const meta = (DATA['/zone/play_state'].metadata ?? {}) as Dict
+        const list = DATA['/presets/list'] as { presets: Array<Dict & { id: number }> }
+        const used = new Set(list.presets.map((p) => p.id))
+        let slot = Number(u.searchParams.get('preset'))
+        if (!slot) {
+          slot = 1
+          while (used.has(slot)) slot++
+        }
+        const isRadio = meta.class === 'stream.radio'
+        const name =
+          ((isRadio ? meta.station || meta.name : meta.title) as string | null) || `Preset ${slot}`
+        const presets = list.presets.filter((p) => p.id !== slot)
+        presets.push({
+          id: slot,
+          name,
+          type: isRadio ? 'Radio' : 'UPnP',
+          class: isRadio ? 'stream.radio' : 'stream.media.upnp',
+          state: 'OK',
+          is_playing: false,
+          art_url: (meta.art_url as string | null) ?? null,
+          airable_radio_id: (meta.radio_id as string | null) ?? null
+        })
+        presets.sort((a, b) => a.id - b.id)
+        DATA['/presets/list'] = { ...list, presets }
+        broadcast('/presets/list')
+        res.writeHead(200, { 'content-type': 'application/json' })
+        return res.end('{"zone": "ZONE1"}')
+      }
       // Snapshot the current queue as a MediaQueue preset (mirrors the real
       // Evo's GET verb; art_urls = one per distinct album in the queue).
       if (u.pathname === '/smoip/queue/save_preset') {
