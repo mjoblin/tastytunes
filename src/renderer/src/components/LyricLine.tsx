@@ -16,8 +16,12 @@ export function LyricLine(): React.JSX.Element | null {
   if (!synced) return null
 
   const placeholder = shown === '♪'
+  // h-0: the line must never contribute height, or the vertically-centered
+  // art/details block bobs as lyrics wrap between 1 and 2 lines (and jumps
+  // when synced lyrics appear at all). The text simply hangs downward;
+  // line-clamp-2 bounds how far.
   return (
-    <div data-lyric-line className="min-h-[28px] max-w-xl">
+    <div data-lyric-line className="h-0 max-w-xl">
       <div
         className={cx(
           'font-display text-[17px] leading-snug line-clamp-2 transition-opacity duration-200',
