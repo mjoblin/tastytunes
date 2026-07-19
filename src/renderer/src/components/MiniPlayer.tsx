@@ -2,8 +2,10 @@ import {
   Disc3,
   Expand,
   Loader2,
+  Minus,
   Pause,
   Play,
+  Plus,
   RadioTower,
   SkipBack,
   SkipForward,
@@ -18,7 +20,8 @@ import { useArtAccent } from '@/hooks/useArtAccent'
 import { useMotionPreference } from '@/hooks/useMotionPreference'
 import { useTheme } from '@/hooks/useTheme'
 import { useDisplayFont } from '@/hooks/useDisplayFont'
-import { useWheelVolume } from '@/components/VolumeCluster'
+import { useVolumeSlider, useWheelVolume } from '@/components/VolumeCluster'
+import { Slider } from '@/components/Slider'
 import { ArtImage } from '@/components/ArtImage'
 import { controlSet, cx, deriveNowPlaying, fmtTime } from '@/lib/format'
 
@@ -39,6 +42,9 @@ export function MiniPlayer(): React.JSX.Element {
   const hovered = useStore((s) => s.miniHover)
   const { position, duration } = usePlayhead()
   const onWheel = useWheelVolume()
+  // Unconditional — the pre-amp slider's plumbing. Stays above the (currently
+  // absent) early returns so the hook count never shifts (React #310 guard).
+  const vol = useVolumeSlider()
   const theme = useTheme(settings.theme)
   useDisplayFont(settings.displayFont)
 
@@ -58,15 +64,36 @@ export function MiniPlayer(): React.JSX.Element {
   const canPrev = controls.has('track_previous')
 
   const muted = zoneState?.mute === true
-  const hasVolume =
-    zoneState != null &&
-    (zoneState.pre_amp_mode === true ||
-      (zoneState.cbus != null && !/^(off|none)$/i.test(zoneState.cbus)))
+  const preAmp = zoneState?.pre_amp_mode === true
+  const cbus = zoneState?.cbus != null && !/^(off|none)$/i.test(zoneState.cbus)
+  const hasVolume = zoneState != null && (preAmp || cbus)
+
+  const timeText = active
+    ? duration != null
+      ? `${fmtTime(position)} / ${fmtTime(duration)}`
+      : fmtTime(position)
+    : ''
 
   // what's next in the queue
   const items = queue?.items ?? []
   const currentIdx = items.findIndex((i) => i.id === (queue?.play_id ?? playState?.queue_id))
   const next = currentIdx >= 0 ? (items[currentIdx + 1] ?? null) : null
+
+  // Shared mute toggle: same as before (gold when muted). Tooltip also teaches
+  // the invisible wheel-anywhere volume.
+  const muteBtn = (
+    <button
+      data-tip={muted ? 'Unmute — scroll for volume' : 'Mute — scroll for volume'}
+      aria-label={muted ? 'Unmute' : 'Mute'}
+      onClick={() => void tt.command({ type: 'setMute', mute: !muted })}
+      className={cx(
+        'no-drag tip-top p-1 ml-0.5 rounded transition-colors',
+        muted ? 'text-gold' : 'text-faint hover:text-dim'
+      )}
+    >
+      {muted ? <VolumeX size={13} /> : <Volume2 size={13} />}
+    </button>
+  )
 
   return (
     <div className="h-screen w-screen drag-region" onWheel={onWheel}>
@@ -155,28 +182,67 @@ export function MiniPlayer(): React.JSX.Element {
               <SkipForward size={14} />
             </MiniButton>
 
-            {active && hasVolume && (
-              <button
-                data-tip={muted ? 'Unmute' : 'Mute'}
-                aria-label={muted ? 'Unmute' : 'Mute'}
-                onClick={() => void tt.command({ type: 'setMute', mute: !muted })}
-                className={cx(
-                  'no-drag tip-top p-1 ml-0.5 rounded transition-colors',
-                  muted ? 'text-gold' : 'text-faint hover:text-dim'
-                )}
-              >
-                {muted ? <VolumeX size={13} /> : <Volume2 size={13} />}
-              </button>
+            {active && hasVolume && preAmp ? (
+              // Pre-Amp: mute icon, then a hover-reveal slider that cross-fades
+              // with the time readout. The relative box is a fixed-size flex-1
+              // cell, so revealing the slider shifts nothing (no height change,
+              // no vertical jump); collapsed, it's the mute icon + time as before.
+              <>
+                {muteBtn}
+                <div className="mini-vol-cell relative flex-1 flex items-center min-w-0">
+                  <span
+                    className={cx(
+                      'mini-time flex-1 text-right font-mono text-[9.5px] text-faint tabular-nums transition-opacity',
+                      hovered ? 'opacity-0' : 'opacity-100'
+                    )}
+                  >
+                    {timeText}
+                  </span>
+                  <div
+                    className={cx(
+                      'mini-vol-overlay no-drag absolute inset-0 flex items-center transition-opacity',
+                      hovered ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                    )}
+                  >
+                    <div className={cx('flex-1', muted && 'opacity-40')}>
+                      <Slider
+                        value={vol.value}
+                        onScrub={vol.onScrub}
+                        onCancel={vol.onCancel}
+                        onCommit={vol.onCommit}
+                        ariaLabel="Volume"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : active && hasVolume && cbus ? (
+              // Control Bus: no absolute level — nudge buttons flank the mute icon.
+              <>
+                <MiniButton
+                  enabled={active}
+                  tip="Volume down"
+                  onClick={() => void tt.command({ type: 'volumeStepChange', delta: -1 })}
+                >
+                  <Minus size={13} />
+                </MiniButton>
+                {muteBtn}
+                <MiniButton
+                  enabled={active}
+                  tip="Volume up"
+                  onClick={() => void tt.command({ type: 'volumeStepChange', delta: 1 })}
+                >
+                  <Plus size={13} />
+                </MiniButton>
+                <div className="flex-1" />
+                <span className="font-mono text-[9.5px] text-faint tabular-nums shrink-0">{timeText}</span>
+              </>
+            ) : (
+              <>
+                <div className="flex-1" />
+                <span className="font-mono text-[9.5px] text-faint tabular-nums shrink-0">{timeText}</span>
+              </>
             )}
-
-            <div className="flex-1" />
-            <span className="font-mono text-[9.5px] text-faint tabular-nums shrink-0">
-              {active
-                ? duration != null
-                  ? `${fmtTime(position)} / ${fmtTime(duration)}`
-                  : fmtTime(position)
-                : ''}
-            </span>
           </div>
 
           {/* next up */}
