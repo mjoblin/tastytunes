@@ -134,7 +134,7 @@ export function DeviceScreen(): React.JSX.Element {
             {!connectedHost && !busyHost && (
               <button
                 onClick={() => void tt.demoStart()}
-                className="mt-9 flex items-center gap-2 text-[13px] text-faint hover:text-ink transition-colors"
+                className="mt-9 flex items-center gap-2 text-[13px] text-faint hover:text-dim transition-colors"
               >
                 <Sparkles size={14} className="text-gold/70" />
                 Try without a streamer — explore with the built-in demo →
