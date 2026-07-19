@@ -6,6 +6,7 @@ import { MOD, NAV_SCREENS, SETTINGS_SCREEN, type ScreenDef } from '@/lib/screens
 
 export function Nav(): React.JSX.Element {
   const screen = useStore((s) => s.screen)
+  const connection = useStore((s) => s.connection)
   const saveSettings = useStore((s) => s.saveSettings)
   const setScreen = useStore((s) => s.setScreen)
   const setInfoOpen = useStore((s) => s.setInfoOpen)
@@ -83,6 +84,18 @@ export function Nav(): React.JSX.Element {
             </span>
           )}
         </button>
+        {/* demo-mode marker doubles as the exit — the Device screen's
+            Disconnect works too, but this makes leaving obvious */}
+        {!collapsed && connection.phase !== 'idle' && connection.demo && (
+          <button
+            onClick={() => void tt.disconnect()}
+            data-tip="You're in the demo — click to exit"
+            aria-label="Exit demo"
+            className="no-drag ml-2 align-[3px] px-1.5 py-0.5 rounded-md ring-1 ring-gold/40 bg-golddim font-mono text-[9px] uppercase tracking-widest text-gold hover:brightness-110 motion-safe:active:scale-95 transition-all"
+          >
+            demo
+          </button>
+        )}
       </div>
 
       <div className={cx('flex-1 space-y-0.5', collapsed ? 'px-2' : 'px-3')}>

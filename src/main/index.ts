@@ -212,7 +212,7 @@ function registerIpc(): void {
     const host = await startDemoStreamer()
     // remember:false — the ephemeral demo port must not be next launch's
     // reconnect target (a first run also stays "never connected").
-    deviceManager.connect(host, { remember: false })
+    deviceManager.connect(host, { remember: false, demo: true })
   })
   ipcMain.handle(IPC.command, (_e, cmd: StreamerCommand) => deviceManager.command(cmd))
   ipcMain.handle(IPC.getSettings, () => getSettings())

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Loader2, Power, Search } from 'lucide-react'
+import { Loader2, Power, Search, Sparkles } from 'lucide-react'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { useShortcuts } from '@/hooks/useShortcuts'
@@ -228,8 +228,9 @@ function ConnectGate(): React.JSX.Element {
           </div>
           <button
             onClick={() => void tt.demoStart()}
-            className="text-[13px] text-faint hover:text-ink transition-colors"
+            className="flex items-center gap-2 text-[13px] text-faint hover:text-ink transition-colors"
           >
+            <Sparkles size={14} className="text-gold/70" />
             Try without a streamer — explore with the built-in demo →
           </button>
         </>

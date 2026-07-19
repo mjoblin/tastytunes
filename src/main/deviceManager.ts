@@ -78,6 +78,8 @@ export class DeviceManager {
   private queuePresetsTimer: NodeJS.Timeout | null = null
   private sleep: SleepTimer | null = null
   private sleepTimeout: NodeJS.Timeout | null = null
+  /** Connected to the in-process demo device (labels the connection in the UI). */
+  private demo = false
   private mcpStatus: McpStatus = { running: false, url: null, error: null }
 
   // ------------------------------------------------------------------ lifecycle
@@ -112,7 +114,9 @@ export class DeviceManager {
     return this.devices
   }
 
-  connect(host: string, opts?: { remember?: boolean }): void {
+  connect(host: string, opts?: { remember?: boolean; demo?: boolean }): void {
+    // Renderer surfaces label the connection ("built-in demo") off this flag.
+    this.demo = opts?.demo === true
     // A timer armed for one device must never act on another.
     if (this.sleep && this.socket && this.socket.host !== host) this.setSleep(null)
     this.socket?.close()
@@ -156,6 +160,7 @@ export class DeviceManager {
     this.socket?.close()
     this.socket = null
     this.cache = emptyCache()
+    this.demo = false
     this.setConnection({ phase: 'idle' })
   }
 
@@ -528,6 +533,7 @@ export class DeviceManager {
   }
 
   private setConnection(state: ConnectionState): void {
+    if (state.phase !== 'idle' && this.demo) state.demo = true
     this.connection = state
     // Wallclock-based listen accounting can't survive a dead link or a device
     // switch — drop the in-flight track rather than over-count it.

@@ -25,7 +25,7 @@ export function DeviceScreen(): React.JSX.Element {
       case 'connecting':
         return `Connecting to ${connection.host}… (attempt ${connection.attempt})`
       case 'connected':
-        return `Connected to ${connection.host}`
+        return connection.demo ? 'Connected to the built-in demo' : `Connected to ${connection.host}`
       case 'disconnected':
         return connection.reconnecting
           ? `Lost connection to ${connection.host} (${connection.reason}) — reconnecting…`
@@ -149,18 +149,21 @@ export function DeviceScreen(): React.JSX.Element {
                   mono
                 />
               ))}
-              <div className="pt-1">
-                <button
-                  onClick={() => void tt.openExternal(`http://${connectedHost}`)}
-                  className="flex items-center gap-1.5 text-[12.5px] text-amber hover:brightness-110 transition-all"
-                >
-                  Open web admin <ExternalLink size={12} />
-                </button>
-                <div className="text-[11.5px] text-faint mt-1">
-                  Rename, display brightness, standby modes, and firmware updates live in the
-                  streamer's own web interface.
+              {/* the demo device has no web interface to point at */}
+              {!(connection.phase === 'connected' && connection.demo) && (
+                <div className="pt-1">
+                  <button
+                    onClick={() => void tt.openExternal(`http://${connectedHost}`)}
+                    className="flex items-center gap-1.5 text-[12.5px] text-amber hover:brightness-110 transition-all"
+                  >
+                    Open web admin <ExternalLink size={12} />
+                  </button>
+                  <div className="text-[11.5px] text-faint mt-1">
+                    Rename, display brightness, standby modes, and firmware updates live in the
+                    streamer's own web interface.
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </section>
         )}

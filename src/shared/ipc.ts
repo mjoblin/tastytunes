@@ -21,9 +21,9 @@ export const REPO_URL = 'https://github.com/mjoblin/tastytunes'
 
 export type ConnectionState =
   | { phase: 'idle' }
-  | { phase: 'connecting'; host: string; attempt: number }
-  | { phase: 'connected'; host: string }
-  | { phase: 'disconnected'; host: string; reason: string; reconnecting: boolean }
+  | { phase: 'connecting'; host: string; attempt: number; demo?: boolean }
+  | { phase: 'connected'; host: string; demo?: boolean }
+  | { phase: 'disconnected'; host: string; reason: string; reconnecting: boolean; demo?: boolean }
 
 export interface DiscoveredDevice {
   host: string
