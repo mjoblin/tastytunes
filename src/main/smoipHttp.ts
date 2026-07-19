@@ -24,10 +24,17 @@ export const presetDelete = (host: string, presetId: number): Promise<void> =>
 export const presetMove = (host: string, from: number, to: number): Promise<void> =>
   smoipPost(host, '/presets/move', { from, to })
 
+/**
+ * Percent-encode a query value the firmware's way: StreamMagic decodes
+ * %-escapes but takes '+' LITERALLY (probed live 2026-07-19 — a
+ * URLSearchParams-encoded name came back as "102.7+KIIS+FM"), so spaces must
+ * be %20 and never '+'. encodeURIComponent does exactly that.
+ */
+const enc = encodeURIComponent
+
 /** Rename a preset — the query-param GET verb probed live on the Evo. */
 export async function presetRename(host: string, slot: number, name: string): Promise<void> {
-  const qs = new URLSearchParams({ preset: String(slot), name })
-  const res = await fetch(`http://${host}/smoip/presets/rename?${qs}`, {
+  const res = await fetch(`http://${host}/smoip/presets/rename?preset=${slot}&name=${enc(name)}`, {
     signal: AbortSignal.timeout(5000)
   })
   if (!res.ok) throw new Error(`GET /smoip/presets/rename -> HTTP ${res.status}`)
@@ -43,10 +50,10 @@ export async function queueSavePreset(
   slot: number | null,
   name: string | null
 ): Promise<void> {
-  const params = new URLSearchParams()
-  if (slot != null) params.set('preset', String(slot))
-  if (name) params.set('name', name)
-  const qs = params.size > 0 ? `?${params}` : ''
+  const parts: string[] = []
+  if (slot != null) parts.push(`preset=${slot}`)
+  if (name) parts.push(`name=${enc(name)}`)
+  const qs = parts.length > 0 ? `?${parts.join('&')}` : ''
   const res = await fetch(`http://${host}/smoip/queue/save_preset${qs}`, {
     signal: AbortSignal.timeout(5000)
   })
@@ -55,14 +62,15 @@ export async function queueSavePreset(
 
 /**
  * Play an internet-radio stream by direct URL — probed live on the Evo
- * 2026-07-18 (accepts airable_radio_id+name OR raw url+name; 400 when either
- * param is missing, so both are required here).
+ * 2026-07-18/19. Requires url+name AND an explicit zone: without it the
+ * firmware 400s with "'zone/preset' value missing" (the one smoip GET verb
+ * we've met that doesn't default the zone).
  */
 export async function streamRadio(host: string, url: string, name: string): Promise<void> {
-  const qs = new URLSearchParams({ url, name })
-  const res = await fetch(`http://${host}/smoip/stream/radio?${qs}`, {
-    signal: AbortSignal.timeout(5000)
-  })
+  const res = await fetch(
+    `http://${host}/smoip/stream/radio?zone=ZONE1&url=${enc(url)}&name=${enc(name)}`,
+    { signal: AbortSignal.timeout(10_000) }
+  )
   if (!res.ok) throw new Error(`GET /smoip/stream/radio -> HTTP ${res.status}`)
 }
 

@@ -17,6 +17,15 @@ const QUEUE_LEN = 30
 const PLAYING_QUEUE_ID = 28
 
 type Dict = Record<string, unknown>
+
+// StreamMagic's query parser decodes %-escapes but takes '+' LITERALLY
+// (probed live 2026-07-19). Mirror it for name/url params so a
+// URLSearchParams regression app-side renders wrong here too instead of
+// passing silently (same helper in dev/mock-streamer.mjs — deliberate fork).
+function rawParam(u: URL, key: string): string | null {
+  const m = u.search.match(new RegExp(`[?&]${key}=([^&]*)`))
+  return m ? decodeURIComponent(m[1].replace(/\+/g, '%2B')) : null
+}
 type QueueItem = { id: number; position: number; srcId?: string; metadata: Dict }
 
 const xmlEsc = (s: string): string =>
@@ -620,7 +629,7 @@ function buildDemo(host: string): {
       // Rename a preset in place (mirrors the real Evo's GET verb).
       if (u.pathname === '/smoip/presets/rename') {
         const slot = Number(u.searchParams.get('preset'))
-        const name = u.searchParams.get('name') ?? ''
+        const name = rawParam(u, 'name') ?? ''
         const list = DATA['/presets/list'] as { presets: Array<Dict & { id: number }> }
         const p = list.presets.find((x) => x.id === slot)
         if (p && name) {
@@ -631,10 +640,15 @@ function buildDemo(host: string): {
         return res.end('{"zone": "ZONE1"}')
       }
       // Play an internet-radio stream by URL (mirrors the real Evo's GET
-      // verb: url+name both required, 400 when either is missing).
+      // verb: url+name both required, AND an explicit zone — firmware 400s
+      // without it).
       if (u.pathname === '/smoip/stream/radio') {
-        const url = u.searchParams.get('url')
-        const name = u.searchParams.get('name')
+        if (!u.searchParams.get('zone')) {
+          res.writeHead(400, { 'content-type': 'application/json' })
+          return res.end('{"code": 113, "message": "\'zone/preset\' value missing"}')
+        }
+        const url = rawParam(u, 'url')
+        const name = rawParam(u, 'name')
         if (!url || !name) {
           res.writeHead(400, { 'content-type': 'application/json' })
           return res.end('{"error":"missing params"}')
@@ -650,9 +664,10 @@ function buildDemo(host: string): {
           mode_repeat: 'off',
           mode_shuffle: 'off',
           metadata: {
-            class: 'stream.radio',
+            // real firmware reports class "md.radio" for raw-URL streams
+            class: 'md.radio',
             source: 'IR',
-            name,
+            name: 'Internet Radio',
             station: name,
             title: null,
             art_url: null,
@@ -737,7 +752,7 @@ function buildDemo(host: string): {
           slot = 1
           while (used.has(slot)) slot++
         }
-        const name = u.searchParams.get('name') || `Queue Preset ${slot}`
+        const name = rawParam(u, 'name') || `Queue Preset ${slot}`
         const arts = [
           ...new Set(
             (queueList().items ?? []).map((i) => i.metadata.art_url as string | null).filter(Boolean)
