@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { BookmarkPlus, RadioTower, RotateCw, Search, X } from 'lucide-react'
+import { BookmarkPlus, Loader2, RadioTower, RotateCw, Search, X } from 'lucide-react'
 import type { RadioStation } from '@shared/ipc'
 import { isRadioMetadata } from '@shared/smoip'
 import { tt } from '@/api'
@@ -167,10 +167,31 @@ export function RadioScreen(): React.JSX.Element {
       ? (md?.station ?? md?.name)?.trim().toLowerCase()
       : null
 
+  // The device answers the play command instantly but the stream takes a few
+  // seconds to actually start — show a "tuning in" state on the clicked row
+  // until the station lands in play_state (or clearly never will).
+  const [starting, setStarting] = useState<{ url: string; name: string } | null>(null)
+  const startTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const play = async (st: RadioStation): Promise<void> => {
-    // failure is toasted by the api layer; success shows in the row + bar
-    await tt.command({ type: 'streamRadio', url: st.url, name: st.name }).catch(() => {})
+    setStarting({ url: st.url, name: st.name })
+    if (startTimeout.current) clearTimeout(startTimeout.current)
+    // dead-stream fallback: stop indicating if it never lands
+    startTimeout.current = setTimeout(() => setStarting(null), 15_000)
+    try {
+      await tt.command({ type: 'streamRadio', url: st.url, name: st.name })
+    } catch {
+      setStarting(null) // failure is toasted by the api layer
+    }
   }
+  useEffect(() => {
+    if (starting && playingName === starting.name.trim().toLowerCase()) setStarting(null)
+  }, [starting, playingName])
+  useEffect(
+    () => () => {
+      if (startTimeout.current) clearTimeout(startTimeout.current)
+    },
+    []
+  )
 
   const savePlaying = async (slot: number, name: string | null): Promise<void> => {
     await tt.command({ type: 'zoneSavePreset', slot })
@@ -274,7 +295,7 @@ export function RadioScreen(): React.JSX.Element {
                 {results != null ? `No stations for “${query}”` : 'No stations here right now.'}
               </div>
             )}
-            <div className="space-y-1 divide-y divide-edge/50">
+            <div className="space-y-1.5">
               {shown.map((st) => {
                 const playing = playingName != null && st.name.trim().toLowerCase() === playingName
                 return (
@@ -282,6 +303,7 @@ export function RadioScreen(): React.JSX.Element {
                     key={st.uuid}
                     station={st}
                     playing={playing}
+                    tuning={!playing && starting?.url === st.url}
                     onPlay={() => void play(st)}
                     onSave={(x, y) => setSaveFor({ station: st, x, y })}
                   />
@@ -313,11 +335,14 @@ export function RadioScreen(): React.JSX.Element {
 function StationRow({
   station,
   playing,
+  tuning,
   onPlay,
   onSave
 }: {
   station: RadioStation
   playing: boolean
+  /** Play sent, stream not landed yet — the row pre-glows and spins. */
+  tuning: boolean
   onPlay(): void
   onSave(x: number, y: number): void
 }): React.JSX.Element {
@@ -337,7 +362,11 @@ function StationRow({
       onClick={onPlay}
       className={cx(
         'flex items-center gap-4 rounded-xl px-3 py-2.5 cursor-pointer transition-colors',
-        playing ? 'row-playing bg-gold/10' : 'ring-1 ring-edge bg-panel/60 hover:bg-raised/70 hover:ring-edge2'
+        playing
+          ? 'row-playing bg-gold/10'
+          : tuning
+            ? 'ring-1 ring-gold/40 bg-golddim/40' // half-lit: on its way to playing
+            : 'ring-1 ring-edge bg-panel/60 hover:bg-raised/70 hover:ring-edge2'
       )}
     >
       <div className="h-11 w-11 shrink-0 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
@@ -351,16 +380,25 @@ function StationRow({
         <div
           className={cx(
             'flex items-center gap-2 text-[13.5px] truncate',
-            playing ? 'text-gold' : 'text-ink'
+            playing ? 'text-gold' : tuning ? 'text-gold/80' : 'text-ink'
           )}
         >
           {playing && <Eqbars playing />}
+          {tuning && <Loader2 size={13} className="spin shrink-0" />}
           <span className="truncate">{station.name}</span>
         </div>
         {subtitle && <div className="text-[12px] text-dim truncate">{subtitle}</div>}
       </div>
       <div className="shrink-0 flex items-center gap-2">
-        {quality && <span className="text-[10.5px] text-faint/70 font-mono uppercase">{quality}</span>}
+        {tuning ? (
+          <span data-radio-tuning className="text-[10.5px] text-gold/80 motion-safe:animate-pulse">
+            tuning in…
+          </span>
+        ) : (
+          quality && (
+            <span className="text-[10.5px] text-faint/70 font-mono uppercase">{quality}</span>
+          )
+        )}
         {playing && (
           <button
             onClick={(e) => {

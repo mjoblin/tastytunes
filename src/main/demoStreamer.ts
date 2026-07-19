@@ -653,6 +653,12 @@ function buildDemo(host: string): {
           res.writeHead(400, { 'content-type': 'application/json' })
           return res.end('{"error":"missing params"}')
         }
+        // Real firmware answers instantly and pushes the new state only once
+        // the stream connects — keep that beat so the demo's "tuning in" UX
+        // matches the hardware feel.
+        res.writeHead(200, { 'content-type': 'application/json' })
+        res.end('{"zone": "ZONE1"}')
+        await new Promise((r) => setTimeout(r, 900))
         DATA['/zone/state'] = { ...DATA['/zone/state'], source: 'IR' }
         DATA['/zone/play_state'] = {
           state: 'play',
@@ -708,8 +714,7 @@ function buildDemo(host: string): {
         broadcast('/zone/state')
         broadcast('/zone/play_state')
         broadcast('/zone/now_playing')
-        res.writeHead(200, { 'content-type': 'application/json' })
-        return res.end('{"zone": "ZONE1"}')
+        return
       }
       // Save the CURRENT playback to a preset slot (mirrors the real Evo's
       // GET verb; called bare it defaults to the next free slot).
