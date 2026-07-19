@@ -90,6 +90,11 @@ export function PresetsScreen(): React.JSX.Element {
   const md = playState?.metadata ?? null
   const isPresetPlaying = (p: PresetItem): boolean => {
     if (radioId != null && p.airable_radio_id != null) return p.airable_radio_id === radioId
+    // Saved-queue presets are opaque: the firmware never reports is_playing
+    // for them (verified live on the Evo) and their art is a collage of the
+    // queue's albums, so art/name matching would light EVERY saved queue
+    // containing the playing album at once. Only ever trust an explicit flag.
+    if (p.type === 'MediaQueue') return p.is_playing === true
     const klass = p.class ?? ''
     if (klass.startsWith('stream.media')) {
       if (activeSource != null && activeSource !== 'MEDIA_PLAYER') return false
