@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   DndContext,
@@ -44,6 +44,7 @@ export function PresetsScreen(): React.JSX.Element {
   const presets = useStore((s) => s.presets)
   const saveSettings = useStore((s) => s.saveSettings)
   const playState = useStore((s) => s.playState)
+  const queue = useStore((s) => s.queue)
   const zoneState = useStore((s) => s.zoneState)
   const nowPlaying = useStore((s) => s.nowPlaying)
   const { presetCardSize, presetGap, presetFillRows, followPresets, presetsLayout } = useStore(
@@ -88,13 +89,33 @@ export function PresetsScreen(): React.JSX.Element {
   const activeSource = activeSourceId(zoneState, nowPlaying)
   const radioId = playState?.metadata?.radio_id ?? null
   const md = playState?.metadata ?? null
+  // The live queue's leading distinct-album art sequence — the same
+  // fingerprint the firmware bakes into a MediaQueue preset's art_urls.
+  const queueArts = useMemo(() => {
+    const seen: string[] = []
+    for (const it of queue?.items ?? []) {
+      const a = it.metadata?.art_url
+      if (a && !seen.some((s) => urlsMatch(s, a))) seen.push(a)
+    }
+    return seen
+  }, [queue])
   const isPresetPlaying = (p: PresetItem): boolean => {
     if (radioId != null && p.airable_radio_id != null) return p.airable_radio_id === radioId
-    // Saved-queue presets are opaque: the firmware never reports is_playing
-    // for them (verified live on the Evo) and their art is a collage of the
-    // queue's albums, so art/name matching would light EVERY saved queue
-    // containing the playing album at once. Only ever trust an explicit flag.
-    if (p.type === 'MediaQueue') return p.is_playing === true
+    // Saved-queue presets: the firmware never reports is_playing for them
+    // (verified live) and single-art matching lit every queue containing the
+    // playing album. But their collage IS a fingerprint — art_urls is the
+    // queue's leading distinct-album art sequence at save time — so match it
+    // against the LIVE queue's same sequence: the preset lights for every
+    // track of its queue, survives restarts, and sees recalls made from any
+    // controller. (True duplicate saved queues light together, like
+    // identical album presets do.)
+    if (p.type === 'MediaQueue') {
+      if (p.is_playing === true) return true
+      if (activeSource != null && activeSource !== 'MEDIA_PLAYER') return false
+      const want = p.art_urls ?? []
+      if (want.length === 0 || want.length > queueArts.length) return false
+      return want.every((u, i) => urlsMatch(u, queueArts[i]))
+    }
     const klass = p.class ?? ''
     if (klass.startsWith('stream.media')) {
       if (activeSource != null && activeSource !== 'MEDIA_PLAYER') return false
