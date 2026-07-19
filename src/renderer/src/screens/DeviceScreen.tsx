@@ -100,7 +100,7 @@ export function DeviceScreen(): React.JSX.Element {
                   ) : (
                     <button
                       onClick={() => void tt.connect(device.host)}
-                      className="text-[12px] text-amber hover:brightness-110 px-2 py-1"
+                      className="text-[12px] px-3 py-1.5 rounded-lg ring-1 ring-amber/40 bg-amberdim text-amber hover:brightness-110 hover:ring-amber/60 motion-safe:active:scale-95 transition-all"
                     >
                       Connect
                     </button>
