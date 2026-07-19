@@ -941,6 +941,11 @@ function buildDemo(host: string): {
           // echo volume like a real device (async push back)
           DATA['/zone/state'] = { ...DATA['/zone/state'], volume_percent: params.volume_percent }
           setTimeout(() => push('/zone/state'), 120)
+        } else if (frame.path === '/zone/state' && typeof params.mute === 'boolean') {
+          // echo mute like a real device (async push back) — the renderer does
+          // no optimistic update, so without this the mute button never engages
+          DATA['/zone/state'] = { ...DATA['/zone/state'], mute: params.mute }
+          setTimeout(() => push('/zone/state'), 120)
         } else if (frame.path === '/zone/play_control' && typeof params.queue_id === 'number') {
           // play a specific queue entry (Library click-jump, queue-row click)
           const items = queueList().items ?? []
