@@ -319,6 +319,9 @@ export class DeviceManager {
       case 'presetDelete':
         await smoipHttp.presetDelete(host, cmd.presetId)
         return this.refreshPresets(socket)
+      case 'presetRename':
+        await smoipHttp.presetRename(host, cmd.slot, cmd.name)
+        return this.refreshPresets(socket)
       case 'queueSavePreset':
         await smoipHttp.queueSavePreset(host, cmd.slot, cmd.name)
         return this.refreshPresets(socket)

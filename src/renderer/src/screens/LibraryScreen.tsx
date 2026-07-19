@@ -360,19 +360,25 @@ export function LibraryScreen(): React.JSX.Element {
     }
   }
 
-  const savePreset = async (node: MediaNode, slot: number): Promise<void> => {
+  // Throws on failure so the shared panel stays open; closes the picker itself
+  // on success. A custom name rides along via presetRename (the firmware names
+  // media presets from content otherwise).
+  const savePreset = async (node: MediaNode, slot: number, name: string | null): Promise<void> => {
     if (!serverUdn) return
     try {
       await tt.mediaPresetSave(serverUdn, node.id, slot)
-      // unlike queue-adds there's no in-place flash — the effect lives on Presets
-      showToast({
-        kind: 'success',
-        text: `Saved “${node.title}” to preset ${slot}`,
-        action: { label: 'View', screen: 'presets' }
-      })
+      if (name) await tt.command({ type: 'presetRename', slot, name })
     } catch {
       showNotice("Couldn't save the preset.")
+      throw new Error('preset save failed')
     }
+    setPresetPicker(null)
+    // unlike queue-adds there's no in-place flash — the effect lives on Presets
+    showToast({
+      kind: 'success',
+      text: `Saved “${name ?? node.title}” to preset ${slot}`,
+      action: { label: 'View', screen: 'presets' }
+    })
   }
 
   // ------------------------------------------------------------------ menus
@@ -987,10 +993,7 @@ export function LibraryScreen(): React.JSX.Element {
         <PresetPicker
           picker={presetPicker}
           onClose={() => setPresetPicker(null)}
-          onSave={(slot) => {
-            void savePreset(presetPicker.node, slot)
-            setPresetPicker(null)
-          }}
+          onSave={(slot, name) => savePreset(presetPicker.node, slot, name)}
         />
       )}
     </div>

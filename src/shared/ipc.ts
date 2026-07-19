@@ -285,6 +285,8 @@ export type StreamerCommand =
   | { type: 'queueMove'; id: number; from: number; to: number }
   | { type: 'presetDelete'; presetId: number }
   | { type: 'presetMove'; from: number; to: number }
+  /** Rename an existing preset (lets album saves carry a custom name). */
+  | { type: 'presetRename'; slot: number; name: string }
   /** Snapshot the current queue into a device preset (type MediaQueue).
    *  null slot = firmware picks the next free one; null name = firmware default. */
   | { type: 'queueSavePreset'; slot: number | null; name: string | null }

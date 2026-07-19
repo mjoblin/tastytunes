@@ -39,44 +39,23 @@ import { activeSourceId, cx, fmtTime, matchesFilter } from '@/lib/format'
 import { ArtImage } from '@/components/ArtImage'
 import { FilterInput } from '@/components/FilterInput'
 import { PopoverChrome } from '@/hooks/usePopover'
+import { PresetSavePanel } from '@/components/LibraryMenus'
 
 /**
- * Mirror of the official app's queue-save flow: name + slot, then one
- * device-side call — the streamer stores the whole queue as a MediaQueue
- * preset (recallable from Presets, the front panel, or any controller).
+ * Queue → preset: the shared PresetSavePanel in a centered modal. The device
+ * stores the whole queue as a MediaQueue preset (recallable anywhere); we also
+ * record its exact track signature so the Presets screen can recognize it.
  */
 function SaveQueueDialog({ onClose }: { onClose(): void }): React.JSX.Element {
-  const presets = useStore((s) => s.presets)
   const trackCount = useStore((s) => s.queue?.items?.length ?? 0)
   const showToast = useStore((s) => s.showToast)
   const saveSettings = useStore((s) => s.saveSettings)
 
-  const occupied = new Map<number, string>()
-  for (const p of presets?.presets ?? []) {
-    if (p.id != null) occupied.set(p.id, p.name ?? `Preset ${p.id}`)
-  }
-  const maxSlots = presets?.max_presets ?? 99
-  const firstFree = ((): number => {
-    for (let i = 1; i <= maxSlots; i++) if (!occupied.has(i)) return i
-    return maxSlots
-  })()
-
-  const [slot, setSlot] = useState(firstFree)
-  const [name, setName] = useState('')
-  const existing = occupied.get(slot)
-  const valid = Number.isInteger(slot) && slot >= 1 && slot <= maxSlots
-
-  const save = async (): Promise<void> => {
-    if (!valid) return
-    try {
-      await tt.command({ type: 'queueSavePreset', slot, name: name.trim() || null })
-    } catch {
-      // the api layer already toasted the failure — keep the dialog open
-      return
-    }
+  const onSave = async (slot: number, name: string | null): Promise<void> => {
+    // throws on failure (already toasted by the api layer) → panel stays open
+    await tt.command({ type: 'queueSavePreset', slot, name })
     // Remember exactly what this slot holds (all tracks, in order) so the
-    // Presets screen can recognize this queue coming back — from any
-    // controller, or after a restart.
+    // Presets screen recognizes this queue coming back from any controller.
     const { queue, systemInfo, settings } = useStore.getState()
     if (queue?.items?.length) {
       void saveSettings({
@@ -88,7 +67,7 @@ function SaveQueueDialog({ onClose }: { onClose(): void }): React.JSX.Element {
     }
     showToast({
       kind: 'success',
-      text: `Saved “${name.trim() || `Queue Preset ${slot}`}” to preset ${slot}`,
+      text: `Saved “${name ?? `Queue Preset ${slot}`}” to preset ${slot}`,
       action: { label: 'View', screen: 'presets' }
     })
     onClose()
@@ -101,66 +80,18 @@ function SaveQueueDialog({ onClose }: { onClose(): void }): React.JSX.Element {
     >
       <PopoverChrome onClose={onClose} />
       <div
-        className="w-[400px] rounded-2xl bg-panel ring-1 ring-edge2 p-6 shadow-2xl"
+        className="w-[360px] rounded-2xl bg-panel ring-1 ring-edge2 p-5 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="font-display font-bold text-[18px] tracking-tight">
+        <div className="font-display font-bold text-[17px] tracking-tight mb-3">
           Save queue as preset
         </div>
-        <div className="text-[12px] text-faint mt-1">
-          Stores the current {trackCount} tracks on the streamer — recall them any time from
-          Presets.
-        </div>
-
-        <div className="mt-5 space-y-4">
-          <label className="block">
-            <span className="text-[12.5px] text-dim">Name</span>
-            <input
-              autoFocus
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void save()
-              }}
-              placeholder={`Queue Preset ${slot}`}
-              className="mt-1 w-full bg-bg rounded-lg ring-1 ring-edge focus:ring-edge2 outline-none px-3 py-1.5 text-[13px] placeholder:text-faint"
-            />
-          </label>
-
-          <label className="flex items-center gap-3">
-            <span className="text-[12.5px] text-dim">Preset slot (1–{maxSlots})</span>
-            <input
-              type="number"
-              min={1}
-              max={maxSlots}
-              value={Number.isNaN(slot) ? '' : slot}
-              onChange={(e) => setSlot(e.target.valueAsNumber)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void save()
-              }}
-              className="w-24 bg-bg rounded-lg ring-1 ring-edge focus:ring-edge2 outline-none px-3 py-1.5 text-[13px]"
-            />
-            <span className={cx('text-[12px]', existing ? 'text-amber' : 'text-faint')}>
-              {!valid ? ' ' : existing ? `Replaces “${existing}”` : 'Empty slot'}
-            </span>
-          </label>
-        </div>
-
-        <div className="mt-6 flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            className="text-[12.5px] px-3 h-8 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-95 transition-all"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={() => void save()}
-            disabled={!valid}
-            className="text-[12.5px] px-4 h-8 rounded-lg bg-amber text-bg font-medium disabled:opacity-40 hover:brightness-110 motion-safe:active:scale-95 transition-all"
-          >
-            Save preset
-          </button>
-        </div>
+        <PresetSavePanel
+          title="Current queue"
+          subtitle={`${trackCount} tracks — stored on the streamer`}
+          nameAutoFocus
+          onSave={onSave}
+        />
       </div>
     </div>
   )

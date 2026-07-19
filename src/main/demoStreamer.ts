@@ -617,6 +617,19 @@ function buildDemo(host: string): {
 <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body><u:BrowseResponse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"><Result>${xmlEsc(result)}</Result><NumberReturned>${parts.length}</NumberReturned><TotalMatches>${all.length}</TotalMatches><UpdateID>1</UpdateID></u:BrowseResponse></s:Body></s:Envelope>`
         )
       }
+      // Rename a preset in place (mirrors the real Evo's GET verb).
+      if (u.pathname === '/smoip/presets/rename') {
+        const slot = Number(u.searchParams.get('preset'))
+        const name = u.searchParams.get('name') ?? ''
+        const list = DATA['/presets/list'] as { presets: Array<Dict & { id: number }> }
+        const p = list.presets.find((x) => x.id === slot)
+        if (p && name) {
+          p.name = name
+          broadcast('/presets/list')
+        }
+        res.writeHead(200, { 'content-type': 'application/json' })
+        return res.end('{"zone": "ZONE1"}')
+      }
       // Snapshot the current queue as a MediaQueue preset (mirrors the real
       // Evo's GET verb; art_urls = one per distinct album in the queue).
       if (u.pathname === '/smoip/queue/save_preset') {

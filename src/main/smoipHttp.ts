@@ -24,6 +24,15 @@ export const presetDelete = (host: string, presetId: number): Promise<void> =>
 export const presetMove = (host: string, from: number, to: number): Promise<void> =>
   smoipPost(host, '/presets/move', { from, to })
 
+/** Rename a preset — the query-param GET verb probed live on the Evo. */
+export async function presetRename(host: string, slot: number, name: string): Promise<void> {
+  const qs = new URLSearchParams({ preset: String(slot), name })
+  const res = await fetch(`http://${host}/smoip/presets/rename?${qs}`, {
+    signal: AbortSignal.timeout(5000)
+  })
+  if (!res.ok) throw new Error(`GET /smoip/presets/rename -> HTTP ${res.status}`)
+}
+
 /**
  * Snapshot the current queue into a device preset (type MediaQueue) — the
  * query-param GET verb probed live on the Evo 2026-07-18. Both params are
