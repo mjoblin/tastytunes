@@ -736,7 +736,7 @@ function buildDemo(host: string): {
         presets.push({
           id: slot,
           name,
-          type: isRadio ? 'Radio' : 'UPnP',
+          type: isRadio ? 'Stream' : 'UPnP',
           class: isRadio ? 'stream.radio' : 'stream.media.upnp',
           state: 'OK',
           is_playing: false,
