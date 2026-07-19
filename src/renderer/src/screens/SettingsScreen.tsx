@@ -82,7 +82,7 @@ export function SettingsScreen(): React.JSX.Element {
       </header>
 
       {/* pinned header + tab rail; only the per-tab panel scrolls */}
-      <div className="flex-1 min-h-0 flex gap-8 px-8 pb-8 pt-1">
+      <div className="flex-1 min-h-0 flex gap-5 px-8 pb-8 pt-1">
         <nav className="w-44 shrink-0 space-y-0.5">
           {TABS.map(({ id, label, icon: Icon }) => (
             <button

@@ -612,7 +612,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   notifications: true,
   theme: 'dark',
   displayFont: 'bricolage',
-  ambientArt: 'now-playing',
+  ambientArt: 'all',
   ambientCoverage: 'window',
   vignette: true,
   accentFollowsArt: false,
