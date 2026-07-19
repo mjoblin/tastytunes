@@ -47,3 +47,10 @@ Stack: Electron + electron-vite, React 19, TypeScript, Tailwind CSS v4, Zustand,
 
 The streamer is the single source of truth: user actions send commands, the
 streamer applies them and pushes new state, and the UI re-renders from the push.
+
+## License
+
+TastyTunes is free software, released under the
+[GNU General Public License v3.0](LICENSE).
+
+© 2026 Redacted Cat

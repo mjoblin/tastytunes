@@ -158,6 +158,10 @@ export function InfoModal(): React.JSX.Element {
             are comfortable contributing, then your support is greatly appreciated{' '}
             <Heart size={11} className="inline-block text-gold -mt-0.5" fill="currentColor" strokeWidth={0} />
           </p>
+
+          <div className="pt-3 mt-1 border-t border-edge text-center text-[10.5px] text-faint">
+            © 2026 Redacted Cat
+          </div>
         </div>
       </div>
     </div>
