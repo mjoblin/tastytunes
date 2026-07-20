@@ -154,18 +154,20 @@ export function Nav(): React.JSX.Element {
         )}
       </div>
 
-      {/* the screens list is the ONE scrollable region: at short window
-          heights it scrolls (min-h-0 lets it actually shrink) while the
-          wordmark above and the pinned tool cluster below stay put —
-          without this the list overflowed straight into the bottom cluster */}
-      <div className={cx('flex-1 min-h-0 overflow-y-auto space-y-0.5 pb-2', collapsed ? 'px-2' : 'px-3')}>
-        {visibleScreens.map(navItem)}
-      </div>
+      {/* ONE scroller under the wordmark holds screens AND the tool cluster.
+          The tools' mt-auto absorbs the slack at comfortable heights (they
+          read as pinned to the bottom, as ever); once the two groups would
+          meet, the margin is zero and the whole column scrolls as a single
+          block — no measurement, the auto-margin does all the work. */}
+      <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
+        <div className={cx('space-y-0.5 pb-2', collapsed ? 'px-2' : 'px-3')}>
+          {visibleScreens.map(navItem)}
+        </div>
 
-      {/* mini player + settings pinned at the bottom, collapse last.
-          Commands + Mini player are hideable (right-click → Hide from sidebar,
-          un-hide from Settings); Settings is locked; Collapse is never hideable. */}
-      <div className={cx('space-y-0.5 pb-3', collapsed ? 'px-2' : 'px-3')}>
+        {/* mini player + settings at the bottom, collapse last.
+            Commands + Mini player are hideable (right-click → Hide from sidebar,
+            un-hide from Settings); Settings is locked; Collapse is never hideable. */}
+        <div className={cx('mt-auto space-y-0.5 pb-3', collapsed ? 'px-2' : 'px-3')}>
         {/* visible entry point for the palette — the shortcut teaches itself */}
         {!hiddenToolSet.has('commands') && (
           <button
@@ -227,6 +229,7 @@ export function Nav(): React.JSX.Element {
             </span>
           )}
         </button>
+        </div>
       </div>
 
       {menu && (
