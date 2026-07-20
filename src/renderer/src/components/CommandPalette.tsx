@@ -95,15 +95,26 @@ function fuzzyScore(q: string, text: string): number | null {
   const idx = text.indexOf(q)
   if (idx >= 0) return 1000 - idx
   // The subsequence fallback exists for abbreviation typing ("nptrk",
-  // "tnotb") — at 1–2 characters it is near-vacuous ("fa" matched anything
-  // with an f later followed by an a, user catch), so short queries match
-  // by substring only.
+  // "tnotb", "nplay") — at 1–2 characters it is near-vacuous, so short
+  // queries match by substring only.
   if (q.length < 3) return null
+  // Camel-hump rule: a matched character must either START A WORD (previous
+  // char is a non-word boundary — space, ·, -, /) or CONTIGUOUSLY EXTEND the
+  // previous match. Scattered single letters across a long haystack no
+  // longer qualify — e.g. "muse" stops subsequence-matching entries whose
+  // keywords contain "musicbrainz … context" (m-u-s ride "mus", but the
+  // trailing e was stranded in "cont-e-xt"). Pure initials ("tnotb") and
+  // word-prefix runs ("nplay" → Now Playing) still resolve.
+  const isWordStart = (pos: number): boolean => pos === 0 || !/[a-z0-9]/.test(text[pos - 1])
   let ti = 0
   let score = 0
   let streak = 0
   for (const ch of q) {
-    const found = text.indexOf(ch, ti)
+    // first occurrence at/after ti that is contiguous or a word start
+    let found = text.indexOf(ch, ti)
+    while (found >= 0 && found !== ti && !isWordStart(found)) {
+      found = text.indexOf(ch, found + 1)
+    }
     if (found < 0) return null
     streak = found === ti ? streak + 1 : 0
     score += 1 + streak
