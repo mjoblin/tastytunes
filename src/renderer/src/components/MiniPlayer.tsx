@@ -88,8 +88,10 @@ export function MiniPlayer(): React.JSX.Element {
       aria-label={muted ? 'Unmute' : 'Mute'}
       onClick={() => void tt.command({ type: 'setMute', mute: !muted })}
       className={cx(
+        // matches MiniButton (the ± nudges) and the main transport's mute —
+        // one consistent secondary-control treatment across the mini
         'no-drag tip-top p-1 ml-0.5 rounded transition-colors',
-        muted ? 'text-gold' : 'text-faint hover:text-dim'
+        muted ? 'text-gold' : 'text-dim hover:text-ink'
       )}
     >
       {muted ? <VolumeX size={13} /> : <Volume2 size={13} />}
@@ -218,8 +220,10 @@ export function MiniPlayer(): React.JSX.Element {
                 </div>
               </>
             ) : active && hasVolume && cbus ? (
-              // Control Bus: no absolute level — nudge buttons flank the mute icon.
+              // Control Bus: no absolute level — mute then − / + nudges, same
+              // order and treatment as the main transport's cbus cluster.
               <>
+                {muteBtn}
                 <MiniButton
                   enabled={active}
                   tip="Volume down"
@@ -227,7 +231,6 @@ export function MiniPlayer(): React.JSX.Element {
                 >
                   <Minus size={13} />
                 </MiniButton>
-                {muteBtn}
                 <MiniButton
                   enabled={active}
                   tip="Volume up"
