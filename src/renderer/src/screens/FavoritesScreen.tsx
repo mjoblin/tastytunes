@@ -64,16 +64,34 @@ export function FavoritesScreen(): React.JSX.Element {
   }, [favorites])
 
   // Media servers decide whether album/track favorites have a play route.
-  const [servers, setServers] = useState<MediaServerInfo[]>([])
+  // null = NOT YET KNOWN — favorites stay bright on a guess, never dimmed
+  // (the old []-initial state flashed "server is offline" on every visit
+  // while the streamer answered /system/upnp, and a single transient fetch
+  // failure stuck the false "offline" for the whole visit — user report).
+  // A failed fetch retries twice before offline is ever declared.
+  const [servers, setServers] = useState<MediaServerInfo[] | null>(null)
   useEffect(() => {
     if (!connected) {
-      setServers([])
+      setServers(null)
       return
     }
-    void tt
-      .mediaServers()
-      .then(setServers)
-      .catch(() => setServers([]))
+    let stale = false
+    const attempt = (n: number): void => {
+      void tt
+        .mediaServers()
+        .then((list) => {
+          if (!stale) setServers(list)
+        })
+        .catch(() => {
+          if (stale) return
+          if (n < 2) setTimeout(() => attempt(n + 1), 700 * (n + 1))
+          else setServers([])
+        })
+    }
+    attempt(0)
+    return () => {
+      stale = true
+    }
   }, [connected])
 
   const [kind, setKindState] = useState<FavKind>(lastKind)
@@ -328,7 +346,7 @@ export function FavoritesScreen(): React.JSX.Element {
                 {shownAlbums.map((f) => {
                   const key = favoriteKey(f)
                   const active = activeKeys.has(key)
-                  const routed = favoriteHasRoute(f, servers)
+                  const routed = servers == null || favoriteHasRoute(f, servers)
                   return (
                     <div
                       key={key}
@@ -370,7 +388,7 @@ export function FavoritesScreen(): React.JSX.Element {
                 {shownTracks.map((f) => {
                   const key = favoriteKey(f)
                   const active = activeKeys.has(key)
-                  const routed = favoriteHasRoute(f, servers)
+                  const routed = servers == null || favoriteHasRoute(f, servers)
                   const playing = trackPlaying(f)
                   return (
                     <div
