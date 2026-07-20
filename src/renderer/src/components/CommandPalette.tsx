@@ -94,6 +94,11 @@ function fuzzyScore(q: string, text: string): number | null {
   if (!q) return 0
   const idx = text.indexOf(q)
   if (idx >= 0) return 1000 - idx
+  // The subsequence fallback exists for abbreviation typing ("nptrk",
+  // "tnotb") — at 1–2 characters it is near-vacuous ("fa" matched anything
+  // with an f later followed by an a, user catch), so short queries match
+  // by substring only.
+  if (q.length < 3) return null
   let ti = 0
   let score = 0
   let streak = 0
