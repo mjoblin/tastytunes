@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { X } from 'lucide-react'
 import { tt } from '@/api'
 import { useStore } from '@/store'
+import { useClampedPosition, usePopoverChrome } from '@/hooks/usePopover'
 import { cx } from '@/lib/format'
 import { audioCaps, EQ_GAIN_MAX, EQ_GAIN_MIN } from '@shared/smoip'
 
@@ -8,6 +11,24 @@ import { audioCaps, EQ_GAIN_MAX, EQ_GAIN_MIN } from '@shared/smoip'
 // labels only — the live band list still comes from /zone/audio.
 const BAND_LABELS = ['80', '120', '315', '800', '2k', '5k', '8k']
 const GAIN_SPAN = EQ_GAIN_MAX - EQ_GAIN_MIN
+
+/**
+ * Built-in gain-sets. LOCAL curves (conventional shapes within the −6..+3
+ * envelope): the official app's presets are client-side state inside the
+ * Cambridge app — invisible on the wire — so there is nothing to import.
+ * User-saved sets live in settings.eqPresets and render after these.
+ */
+const BUILTIN_EQ_PRESETS: Array<{ name: string; gains: number[] }> = [
+  { name: 'Flat', gains: [0, 0, 0, 0, 0, 0, 0] },
+  { name: 'Bass Boost', gains: [3, 2, 1, 0, 0, 0, 0] },
+  { name: 'Bass Reduction', gains: [-4, -3, -1.5, 0, 0, 0, 0] },
+  { name: 'Voice Clarity', gains: [-1, -1, 0, 1.5, 2.5, 2, 0] },
+  { name: 'Treble Boost', gains: [0, 0, 0, 0, 1, 2.5, 3] },
+  { name: 'Treble Reduction', gains: [0, 0, 0, 0, -1.5, -3, -4] }
+]
+
+const gainsMatch = (bands: Array<{ gain: number }>, gains: number[]): boolean =>
+  gains.length >= bands.length && bands.every((b, i) => Math.abs(b.gain - gains[i]) < 0.05)
 
 /** Round to the slider's 0.5 dB steps and clamp to the official envelope. */
 const snapGain = (g: number): number =>
@@ -27,12 +48,36 @@ const fmtDb = (g: number): string =>
 export function ToneEq(): React.JSX.Element | null {
   const zoneAudio = useStore((s) => s.zoneAudio)
   const spec = useStore((s) => s.audioSpec)
+  const eqPresets = useStore((s) => s.settings.eqPresets)
+  const saveSettings = useStore((s) => s.saveSettings)
+  const [savePos, setSavePos] = useState<{ x: number; y: number } | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const caps = audioCaps(spec)
   if (!caps || !zoneAudio) return null
 
   const eq = zoneAudio.user_eq
   const tilt = zoneAudio.tilt_eq
   const balance = zoneAudio.balance
+
+  /** Apply a gain-set: ONE multi-band frame; a preset tap while the EQ is
+   *  off also switches it on (its own frame — atomic rule) so the tap is
+   *  audible, not a silent no-op. */
+  const applyPreset = (gains: number[]): void => {
+    void tt.command({ type: 'setEqBands', gains })
+    if (eq && !eq.enabled) void tt.command({ type: 'setUserEq', enabled: true })
+  }
+  const saveNewPreset = async (name: string): Promise<void> => {
+    if (!eq) return
+    const gains = eq.bands.slice(0, BAND_LABELS.length).map((b) => b.gain)
+    await saveSettings({
+      eqPresets: [...eqPresets.filter((p) => p.name !== name), { name, gains }]
+    })
+    setSavePos(null)
+  }
+  const deletePreset = async (name: string): Promise<void> => {
+    setConfirmDelete(null)
+    await saveSettings({ eqPresets: eqPresets.filter((p) => p.name !== name) })
+  }
 
   return (
     <section className="space-y-3">
@@ -42,14 +87,6 @@ export function ToneEq(): React.JSX.Element | null {
           <div className="space-y-3">
             <div className="flex items-center gap-3">
               <span className="text-[13px] flex-1">Equalizer</span>
-              <button
-                onClick={() => void tt.command({ type: 'setEqBands', gains: BAND_LABELS.map(() => 0) })}
-                disabled={eq.bands.every((b) => b.gain === 0)}
-                className="text-[12px] px-2.5 h-7 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-95 transition-all disabled:opacity-40 disabled:hover:text-dim disabled:hover:ring-edge disabled:hover:bg-panel/70"
-                data-eq-flat
-              >
-                Flat
-              </button>
               <ToneSwitch
                 checked={eq.enabled}
                 label="Equalizer on"
@@ -74,6 +111,77 @@ export function ToneEq(): React.JSX.Element | null {
                   }
                 />
               ))}
+            </div>
+
+            {/* gain-set chips: built-ins, then user-saved, then Save. The
+                active chip is derived (gains match), so presets applied
+                before a manual tweak un-light themselves honestly. */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-1" data-eq-presets>
+              {BUILTIN_EQ_PRESETS.map((p) => {
+                const active = gainsMatch(eq.bands, p.gains)
+                return (
+                  <button
+                    key={p.name}
+                    onClick={() => applyPreset(p.gains)}
+                    data-eq-preset={p.name}
+                    className={cx(
+                      'rounded-full px-3 py-1 text-[12px] ring-1 transition-all motion-safe:active:scale-95',
+                      active
+                        ? 'ring-gold/50 bg-golddim text-gold'
+                        : 'ring-edge bg-panel/60 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70'
+                    )}
+                  >
+                    {p.name}
+                  </button>
+                )
+              })}
+              {eqPresets.map((p) => {
+                const active = gainsMatch(eq.bands, p.gains)
+                const confirming = confirmDelete === p.name
+                return (
+                  <span
+                    key={p.name}
+                    className={cx(
+                      'group/chip flex items-center rounded-full ring-1 transition-all',
+                      active
+                        ? 'ring-gold/50 bg-golddim text-gold'
+                        : 'ring-edge bg-panel/60 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70'
+                    )}
+                  >
+                    <button
+                      onClick={() => applyPreset(p.gains)}
+                      data-eq-preset={p.name}
+                      className="pl-3 pr-1 py-1 text-[12px] motion-safe:active:scale-95 transition-all"
+                    >
+                      {p.name}
+                    </button>
+                    <button
+                      onClick={() => (confirming ? void deletePreset(p.name) : setConfirmDelete(p.name))}
+                      onMouseLeave={() => confirming && setConfirmDelete(null)}
+                      data-tip={confirming ? undefined : 'Delete preset'}
+                      aria-label={`Delete preset ${p.name}`}
+                      className={cx(
+                        'mr-1 rounded-full p-0.5 transition-all',
+                        confirming
+                          ? 'bg-alert text-white px-1.5 text-[10.5px]'
+                          : 'text-faint hover:text-alert opacity-0 group-hover/chip:opacity-100'
+                      )}
+                    >
+                      {confirming ? 'sure?' : <X size={11} />}
+                    </button>
+                  </span>
+                )
+              })}
+              <button
+                onClick={(e) => {
+                  const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                  setSavePos({ x: r.left, y: r.bottom + 6 })
+                }}
+                data-eq-save-preset
+                className="rounded-full px-3 py-1 text-[12px] ring-1 ring-edge bg-panel/60 text-amber hover:brightness-110 hover:ring-edge2 transition-all motion-safe:active:scale-95"
+              >
+                Save as preset…
+              </button>
             </div>
           </div>
         )}
@@ -125,10 +233,85 @@ export function ToneEq(): React.JSX.Element | null {
 
         <div className="text-[11.5px] text-faint">
           Applied inside the streamer&rsquo;s DSP. Changes made in the Cambridge Audio app show up
-          here too.
+          here too. Presets are TastyTunes&rsquo;s own — the Cambridge app keeps its presets to
+          itself.
         </div>
       </div>
+
+      {savePos && (
+        <SaveEqPresetPopover
+          x={savePos.x}
+          y={savePos.y}
+          existing={eqPresets.map((p) => p.name)}
+          onClose={() => setSavePos(null)}
+          onSave={saveNewPreset}
+        />
+      )}
     </section>
+  )
+}
+
+/** Name-and-save popover for the current gain curve (PresetSavePanel idiom). */
+function SaveEqPresetPopover({
+  x,
+  y,
+  existing,
+  onClose,
+  onSave
+}: {
+  x: number
+  y: number
+  existing: string[]
+  onClose(): void
+  onSave(name: string): Promise<void>
+}): React.JSX.Element {
+  usePopoverChrome(onClose)
+  const boxRef = useRef<HTMLDivElement | null>(null)
+  const pos = useClampedPosition(boxRef, x, y)
+  const [name, setName] = useState('')
+  const trimmed = name.trim()
+  // built-in names stay reserved — a user "Flat" that isn't flat would lie
+  const reserved = BUILTIN_EQ_PRESETS.some(
+    (p) => p.name.toLowerCase() === trimmed.toLowerCase()
+  )
+  const replaces = existing.some((n) => n.toLowerCase() === trimmed.toLowerCase())
+  const canSave = trimmed.length > 0 && !reserved
+  return createPortal(
+    <>
+      <div className="fixed inset-0 z-40" onClick={onClose} />
+      <div
+        ref={boxRef}
+        className="fixed z-50 w-[248px] rounded-xl ring-1 ring-edge2 bg-raised shadow-xl p-3 space-y-2.5"
+        style={pos}
+        data-eq-save-popover
+      >
+        <div className="text-[13px] font-medium">Save current EQ as a preset</div>
+        <input
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && canSave) void onSave(trimmed)
+          }}
+          placeholder="Preset name"
+          className="w-full bg-bg rounded-lg ring-1 ring-edge focus:ring-edge2 outline-none px-3 py-1.5 text-[13px] placeholder:text-faint"
+        />
+        <button
+          onClick={() => void onSave(trimmed)}
+          disabled={!canSave}
+          className="w-full px-3 py-2 rounded-lg bg-amber text-bg text-[13px] font-medium disabled:opacity-50 motion-safe:active:scale-95 transition-all"
+          data-eq-save-commit
+        >
+          {replaces ? 'Replace preset' : 'Save preset'}
+        </button>
+        {reserved && (
+          <div className="text-[10.5px] text-faint leading-snug">
+            That name belongs to a built-in preset — pick another.
+          </div>
+        )}
+      </div>
+    </>,
+    document.body
   )
 }
 
@@ -226,6 +409,8 @@ function BandSlider({
         }}
         onPointerCancel={() => setDragGain(null)}
       >
+        {/* bare track + always-visible thumb — a mixing-desk fader, not a
+            bar chart (a zero-anchored fill read as "gold bars", user pass) */}
         <div ref={trackRef} className="relative w-[3px] h-full rounded-full bg-veil2">
           {/* hairline 0 dB tick across the track */}
           <div
@@ -233,17 +418,12 @@ function BandSlider({
             style={{ bottom: `${zeroRatio * 100}%` }}
           />
           <div
-            className="absolute left-0 right-0 rounded-full bg-gold"
-            style={{
-              bottom: `${Math.min(ratio, zeroRatio) * 100}%`,
-              top: `${(1 - Math.max(ratio, zeroRatio)) * 100}%`
-            }}
-          />
-          <div
             className={cx(
-              'absolute left-1/2 -translate-x-1/2 translate-y-1/2 h-3 w-3 rounded-full bg-gold',
-              'shadow-[0_0_8px_rgb(var(--gold-rgb)_/_0.7)] transition-opacity',
-              dragging ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+              'absolute left-1/2 -translate-x-1/2 translate-y-1/2 h-3.5 w-3.5 rounded-full bg-gold',
+              'transition-shadow',
+              dragging
+                ? 'shadow-[0_0_10px_rgb(var(--gold-rgb)_/_0.8)]'
+                : 'group-hover:shadow-[0_0_8px_rgb(var(--gold-rgb)_/_0.7)]'
             )}
             style={{ bottom: `${ratio * 100}%` }}
           />

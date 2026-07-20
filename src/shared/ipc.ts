@@ -723,6 +723,14 @@ export interface AppSettings {
   panelWidth: number
   /** Remembered mini-player window position. */
   miniBounds: { x: number; y: number } | null
+  /**
+   * User-saved EQ gain-sets (7 gains, dB). LOCAL by design: the firmware has
+   * no preset storage — the official app's EQ presets are client-side too
+   * (confirmed on the wire: tapping/saving one produces zero device traffic),
+   * so its presets and ours can't see each other. Applying = one multi-band
+   * user_eq_bands frame.
+   */
+  eqPresets: Array<{ name: string; gains: number[] }>
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -768,7 +776,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   settingsTab: 'appearance',
   diagnosticsTab: 'smoip',
   panelWidth: 400,
-  miniBounds: null
+  miniBounds: null,
+  eqPresets: []
 }
 
 // -------------------------------------------------------------- boot-time snapshot
