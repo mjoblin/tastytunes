@@ -428,7 +428,8 @@ export function CommandPalette(): React.JSX.Element {
           serverUdn: null,
           serverName: null,
           objectId: null,
-          titlePath: null
+          titlePath: null,
+          durationSecs: playState?.metadata?.duration ?? null
         }
         const active = favorites.some((f) => favoriteKey(f) === favoriteKey(fav as Favorite))
         cmds.push({

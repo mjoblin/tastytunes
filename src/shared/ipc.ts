@@ -140,6 +140,9 @@ export interface FavoriteMedia {
   serverName: string | null
   objectId: string | null
   titlePath: string[] | null
+  /** Track length in seconds, captured at heart time (tracks; null when the
+   *  source had none — favorites hearted before this field show blank). */
+  durationSecs?: number | null
 }
 
 export type Favorite = FavoriteStation | FavoriteMedia

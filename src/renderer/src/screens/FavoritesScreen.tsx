@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Heart, Loader2, Music2, RadioTower } from 'lucide-react'
+import { Heart, Loader2, MoreHorizontal, Music2, Play, RadioTower } from 'lucide-react'
 import {
   favoriteKey,
   type Favorite,
@@ -10,7 +10,7 @@ import {
   type MediaQueueAction,
   type MediaServerInfo
 } from '@shared/ipc'
-import { isRadioMetadata } from '@shared/smoip'
+import { isRadioMetadata, type QueueListItem } from '@shared/smoip'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { ArtImage } from '@/components/ArtImage'
@@ -21,7 +21,7 @@ import { FilterInput } from '@/components/FilterInput'
 import { Segmented } from '@/components/Segmented'
 import { useClampedPosition, usePopoverChrome } from '@/hooks/usePopover'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
-import { activeSourceId, cx, matchesFilter } from '@/lib/format'
+import { activeSourceId, cx, fmtTime, matchesFilter } from '@/lib/format'
 import { favoriteAct, favoriteHasRoute, type FavoriteActResult } from '@/lib/favorites'
 import { flashTarget } from '@/lib/scroll'
 
@@ -199,10 +199,10 @@ export function FavoritesScreen(): React.JSX.Element {
   const queueAction = (f: FavoriteMedia, action: MediaQueueAction, el: HTMLElement | null): void =>
     void act(f, el, (udn, id) => tt.mediaQueueAdd(udn, id, action))
 
-  /** Bare track click, queue-aware like the Library: jump if already queued. */
-  const playTrack = (f: FavoriteMedia, el: HTMLElement | null): void => {
-    const items = queue?.items ?? []
-    const matches = items.filter((i) => {
+  /** Queue entries content-matching a track favorite (shared by the play
+   *  path and the play button's queue-aware tooltip). */
+  const favQueueMatches = (f: FavoriteMedia): QueueListItem[] =>
+    (queue?.items ?? []).filter((i) => {
       const m = i.metadata
       return (
         m?.title === f.title &&
@@ -210,6 +210,11 @@ export function FavoritesScreen(): React.JSX.Element {
         (f.album == null || m?.album == null || m.album === f.album)
       )
     })
+
+  /** Bare track click, queue-aware like the Library: jump if already queued. */
+  const playTrack = (f: FavoriteMedia, el: HTMLElement | null): void => {
+    const items = queue?.items ?? []
+    const matches = favQueueMatches(f)
     if (matches.length > 0) {
       const playId = queue?.play_id ?? playState?.queue_id ?? null
       const curIdx = items.findIndex((i) => i.id === playId)
@@ -429,6 +434,48 @@ export function FavoritesScreen(): React.JSX.Element {
                           {!routed && f.serverName ? ` · ${f.serverName} is offline` : ''}
                         </div>
                       </div>
+                      {/* library TrackRow parity: hover play + ⋯ with the
+                          same queue-aware tips, then the captured duration */}
+                      {routed && active && (
+                        <div className="flex items-center gap-0.5 shrink-0">
+                          <button
+                            aria-label="Play"
+                            data-tip={
+                              favQueueMatches(f).length > 0
+                                ? 'Play — already in the queue'
+                                : 'Play now — slots in after the current track'
+                            }
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              playTrack(
+                                f,
+                                (e.currentTarget as HTMLElement).closest(
+                                  '[data-fav-track]'
+                                ) as HTMLElement
+                              )
+                            }}
+                            className={cx(
+                              'tip-bottom p-1.5 rounded-lg text-dim hover:text-gold hover:bg-veil2 transition-all',
+                              menu?.fav === f ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                            )}
+                          >
+                            <Play size={14} />
+                          </button>
+                          <button
+                            aria-label="More actions"
+                            onClick={(e) => openMenu(f, e)}
+                            className={cx(
+                              'p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-all',
+                              menu?.fav === f ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                            )}
+                          >
+                            <MoreHorizontal size={14} />
+                          </button>
+                        </div>
+                      )}
+                      <span className="font-mono text-[11px] text-faint tabular-nums shrink-0">
+                        {f.durationSecs != null ? fmtTime(f.durationSecs) : ''}
+                      </span>
                       {busyKey === key && <Loader2 size={13} className="spin text-gold/80 shrink-0" />}
                       <HeartButton active={active} onClick={() => toggleHeart(f)} />
                     </div>

@@ -340,7 +340,7 @@ export function TrackRow({
         )}
         <button
           aria-label="Play"
-          data-tip={queued ? 'Play — already in the queue' : 'Play now'}
+          data-tip={queued ? 'Play — already in the queue' : 'Play now — slots in after the current track'}
           onClick={(e) => {
             e.stopPropagation()
             onPlayNow(ref.current)
@@ -418,7 +418,7 @@ export function TrackCard({
             </span>
           )}
           <span
-            data-tip={queued ? 'Play — already in the queue' : 'Play now'}
+            data-tip={queued ? 'Play — already in the queue' : 'Play now — slots in after the current track'}
             className={cx(
               'tip-bottom absolute bottom-1.5 left-1.5 h-11 w-11 rounded-full bg-amber text-bg flex items-center justify-center transition-all duration-150 motion-safe:hover:scale-110 hover:shadow-[0_0_24px_rgb(var(--amber-rgb)_/_0.6)]',
               menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'

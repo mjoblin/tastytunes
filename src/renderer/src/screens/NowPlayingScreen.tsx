@@ -66,7 +66,8 @@ export function NowPlayingScreen(): React.JSX.Element {
           serverUdn: null,
           serverName: null,
           objectId: null,
-          titlePath: null
+          titlePath: null,
+          durationSecs: md?.duration ?? null
         }
       : null
   const heartActive = trackFav

@@ -567,7 +567,8 @@ export function LibraryScreen(): React.JSX.Element {
         ? pathTitles
         : node.isContainer
           ? [...pathTitles, node.title]
-          : pathTitles
+          : pathTitles,
+    durationSecs: node.isContainer ? null : node.durationSecs
   })
   const nodeFavorited = (node: MediaNode): boolean =>
     favKeys.has(favoriteKey(mediaFav(node) as Favorite))
