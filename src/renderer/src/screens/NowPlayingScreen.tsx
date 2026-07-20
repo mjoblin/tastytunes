@@ -202,11 +202,13 @@ export function NowPlayingScreen(): React.JSX.Element {
       >
         <div className={cx('flex gap-8 items-start min-w-0', mirrored && 'flex-row-reverse')}>
         <div className="shrink-0">
+          {/* three width tiers — compact windows get genuinely small art
+              (260) instead of the old two-step 340/400 (user pass) */}
           <ArtImage
             src={meta.artUrl}
-            className="w-[340px] h-[340px] xl:w-[400px] xl:h-[400px] object-cover rounded-2xl art-glow"
+            className="w-[260px] h-[260px] lg:w-[340px] lg:h-[340px] xl:w-[400px] xl:h-[400px] object-cover rounded-2xl art-glow"
             fallback={
-              <div className="w-[340px] h-[340px] xl:w-[400px] xl:h-[400px] rounded-2xl bg-raised ring-1 ring-edge flex items-center justify-center">
+              <div className="w-[260px] h-[260px] lg:w-[340px] lg:h-[340px] xl:w-[400px] xl:h-[400px] rounded-2xl bg-raised ring-1 ring-edge flex items-center justify-center">
                 {meta.isRadio ? (
                   <RadioTower size={72} strokeWidth={1} className="text-faint" />
                 ) : (
