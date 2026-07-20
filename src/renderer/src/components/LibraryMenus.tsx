@@ -12,21 +12,33 @@ export function ItemMenu({
   menu,
   onClose,
   onAction,
-  onSavePreset
+  onSavePreset,
+  favorite
 }: {
   menu: { node: MediaNode; x: number; y: number }
   onClose(): void
   onAction(action: MediaQueueAction | 'PLAY', playFromId?: string): void
   onSavePreset(): void
+  /** When present, the menu grows an Add/Remove favorites entry (last). */
+  favorite?: { active: boolean; toggle(): void }
 }): React.JSX.Element {
   const { node } = menu
+  const favoriteItem = favorite
+    ? [
+        {
+          label: favorite.active ? 'Remove from favorites' : 'Add to favorites',
+          run: favorite.toggle
+        }
+      ]
+    : []
   const items: Array<{ label: string; run: () => void }> = node.isContainer
     ? [
         { label: 'Play', run: () => onAction('PLAY') },
         { label: 'Play next', run: () => onAction('PLAY_NEXT') },
         { label: 'Add to end of queue', run: () => onAction('APPEND') },
         { label: 'Replace queue', run: () => onAction('REPLACE') },
-        { label: 'Save to preset…', run: onSavePreset }
+        { label: 'Save to preset…', run: onSavePreset },
+        ...favoriteItem
       ]
     : [
         { label: 'Play now', run: () => onAction('PLAY_NOW') },
@@ -41,7 +53,8 @@ export function ItemMenu({
               }
             ]
           : []),
-        { label: 'Save to preset…', run: onSavePreset }
+        { label: 'Save to preset…', run: onSavePreset },
+        ...favoriteItem
       ]
 
   usePopoverChrome(onClose)

@@ -22,6 +22,7 @@ import { PresetsScreen } from '@/screens/PresetsScreen'
 import { LibraryScreen } from '@/screens/LibraryScreen'
 import { RadioScreen } from '@/screens/RadioScreen'
 import { RecentlyPlayedScreen } from '@/screens/RecentlyPlayedScreen'
+import { FavoritesScreen } from '@/screens/FavoritesScreen'
 import { SourcesScreen } from '@/screens/SourcesScreen'
 import { DeviceScreen } from '@/screens/DeviceScreen'
 import { SettingsScreen } from '@/screens/SettingsScreen'
@@ -78,6 +79,9 @@ export default function App(): React.JSX.Element {
     if (screen === 'settings') return <SettingsScreen />
     // Recently played is local history — viewable even while disconnected/standby.
     if (screen === 'recently-played') return <RecentlyPlayedScreen />
+    // Favorites is a local collection too — browsable offline; play verbs
+    // surface their own failures through the central toast.
+    if (screen === 'favorites') return <FavoritesScreen />
     if (!connected) return <ConnectGate />
     if (inStandby) return <StandbyGate />
     switch (screen) {

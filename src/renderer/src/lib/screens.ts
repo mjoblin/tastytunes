@@ -4,6 +4,7 @@ import {
   Command,
   Disc3,
   HardDrive,
+  Heart,
   History,
   Library,
   ListMusic,
@@ -35,6 +36,9 @@ export const NAV_SCREENS: ScreenDef[] = [
   { id: 'library', label: 'Library', icon: Library, key: 'I' },
   // T as in Tuner — the classic hi-fi name for the radio section
   { id: 'radio', label: 'Radio', icon: RadioTower, key: 'T' },
+  // V as in faVorites (F belongs to display mode, H was left free for future
+  // transport use) — must stay clear of J/L/K/space/M/F like every screen key
+  { id: 'favorites', label: 'Favorites', icon: Heart, key: 'V' },
   { id: 'recently-played', label: 'Recently Played', icon: History, key: 'R' },
   { id: 'sources', label: 'Sources', icon: Cable, key: 'S' },
   { id: 'device', label: 'Device', icon: HardDrive, key: 'D' }

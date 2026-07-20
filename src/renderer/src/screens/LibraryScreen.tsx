@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Disc3,
   HardDrive,
+  Heart,
   LayoutGrid,
   Library,
   MoreHorizontal,
@@ -16,12 +17,15 @@ import {
   Search,
   Usb
 } from 'lucide-react'
-import type {
-  AppSettings,
-  MediaNode,
-  MediaQueueAction,
-  MediaServerInfo,
-  ScreenLayout
+import {
+  favoriteKey,
+  type AppSettings,
+  type Favorite,
+  type FavoriteMedia,
+  type MediaNode,
+  type MediaQueueAction,
+  type MediaServerInfo,
+  type ScreenLayout
 } from '@shared/ipc'
 import type { QueueListItem } from '@shared/smoip'
 import { tt } from '@/api'
@@ -29,6 +33,7 @@ import { useStore } from '@/store'
 import { activeSourceId, cx, fmtTime, matchesFilter } from '@/lib/format'
 import { flashTarget } from '@/lib/scroll'
 import { isAlbumClass, stripFurniture } from '@/lib/media'
+import { toggleFavorite } from '@/lib/favorites'
 import { ArtImage } from '@/components/ArtImage'
 import { FilterInput } from '@/components/FilterInput'
 import { ContainerCard, ContainerRow, TrackCard, TrackRow } from '@/components/LibraryCards'
@@ -180,8 +185,45 @@ export function LibraryScreen(): React.JSX.Element {
 
   // Re-invoking "Library" (nav click, palette, L) while already here resets
   // to the source list — the nonce bumps on every setScreen('library').
+  // EXCEPT when another screen planted a destination (Favorites → open
+  // album): then this visit lands directly on that node. Intermediate crumbs
+  // carry sentinel ids — clicking one fails the fresh browse and the
+  // title-path re-walk resolves it, the same recovery stale USB ids use.
   const libraryResetNonce = useStore((s) => s.libraryResetNonce)
+  const clearLibraryTarget = useStore((s) => s.clearLibraryTarget)
   useEffect(() => {
+    const target = useStore.getState().libraryTarget
+    if (target) {
+      clearLibraryTarget()
+      const last = target.titlePath.length - 1
+      moveTo(
+        target.serverUdn,
+        target.titlePath.map((title, i) =>
+          i === last
+            ? {
+                id: target.objectId,
+                title,
+                // synthetic album node so the header renders without a
+                // metadata re-fetch (art falls back to the first track's)
+                node: {
+                  id: target.objectId,
+                  parentId: null,
+                  title,
+                  upnpClass: 'object.container.album.musicAlbum',
+                  isContainer: true,
+                  artUrl: null,
+                  artist: null,
+                  album: null,
+                  year: null,
+                  trackNumber: null,
+                  durationSecs: null
+                }
+              }
+            : { id: `__fav-crumb-${i}__`, title }
+        )
+      )
+      return
+    }
     moveTo(null, [])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [libraryResetNonce])
@@ -495,6 +537,39 @@ export function LibraryScreen(): React.JSX.Element {
     : ''
   const shownServers = servers ?? [] // the source list is short — no filter there
   const loading = atRoot ? servers == null : state === 'loading'
+
+  // ---------------------------------------------------------------- favorites
+  const favorites = useStore((s) => s.favorites)
+  const favKeys = useMemo(() => new Set(favorites.map(favoriteKey)), [favorites])
+  const pathTitles = path.filter((c) => c.id !== SEARCH_CRUMB_ID).map((c) => c.title)
+  /**
+   * A library node as a favorite payload. Content identity + resolution
+   * hints: the entered album's titlePath is the current trail (it already
+   * ends in the album); a listed node appends its own title. Search results
+   * carry no trustworthy trail (their true folder is unknown) — null.
+   */
+  const mediaFav = (node: MediaNode): Omit<FavoriteMedia, 'addedAt'> => ({
+    kind: node.isContainer ? 'album' : 'track',
+    title: node.title,
+    artist: node === albumNode ? (albumArtist ?? node.artist) : node.artist,
+    album: node.isContainer ? null : node.album,
+    artUrl: node === albumNode ? (albumArt ?? node.artUrl) : node.artUrl,
+    serverUdn,
+    serverName: server?.name ?? null,
+    objectId: node.id,
+    titlePath: searchMode
+      ? null
+      : node === albumNode
+        ? pathTitles
+        : node.isContainer
+          ? [...pathTitles, node.title]
+          : pathTitles
+  })
+  const nodeFavorited = (node: MediaNode): boolean =>
+    favKeys.has(favoriteKey(mediaFav(node) as Favorite))
+  const heartNode = (node: MediaNode): void => {
+    void toggleFavorite(mediaFav(node))
+  }
 
   // "Retrieving…" only appears when a browse actually takes a moment —
   // cached/fast responses swap in without a flash of loading copy.
@@ -847,6 +922,20 @@ export function LibraryScreen(): React.JSX.Element {
                   <Play size={14} fill="currentColor" /> Play
                 </button>
                 <button
+                  data-tip={nodeFavorited(albumNode) ? 'Remove from favorites' : 'Add to favorites'}
+                  aria-label={nodeFavorited(albumNode) ? 'Remove from favorites' : 'Add to favorites'}
+                  data-album-heart={nodeFavorited(albumNode) ? 'on' : 'off'}
+                  onClick={() => heartNode(albumNode)}
+                  className={cx(
+                    'tip-bottom p-2 rounded-full ring-1 ring-edge bg-panel/70 transition-all motion-safe:active:scale-90',
+                    nodeFavorited(albumNode)
+                      ? 'text-gold hover:text-ink'
+                      : 'text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70'
+                  )}
+                >
+                  <Heart size={16} fill={nodeFavorited(albumNode) ? 'currentColor' : 'none'} />
+                </button>
+                <button
                   aria-label="More actions"
                   onClick={(e) => openMenu(albumNode, e)}
                   className="p-2 rounded-full ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 transition-all"
@@ -987,6 +1076,18 @@ export function LibraryScreen(): React.JSX.Element {
             setPresetPicker({ node: menu.node, x: menu.x, y: menu.y })
             setMenu(null)
           }}
+          // Albums and tracks are heartable; plain folders and artists aren't.
+          favorite={
+            !menu.node.isContainer || isAlbumClass(menu.node.upnpClass)
+              ? {
+                  active: nodeFavorited(menu.node),
+                  toggle: () => {
+                    heartNode(menu.node)
+                    setMenu(null)
+                  }
+                }
+              : undefined
+          }
         />
       )}
       {presetPicker && (

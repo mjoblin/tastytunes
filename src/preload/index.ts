@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import {
   IPC,
   type AppSettings,
+  type Favorite,
   type LyricsQuery,
   type MediaQueueAction,
   type PushMessage,
@@ -35,6 +36,10 @@ const api: TastyTunesApi = {
   setSleep: (sleep: SleepTimer | null) => ipcRenderer.invoke(IPC.setSleep, sleep),
   getRecents: () => ipcRenderer.invoke(IPC.getRecents),
   clearRecents: () => ipcRenderer.invoke(IPC.clearRecents),
+  favoriteAdd: (fav: Favorite) => ipcRenderer.invoke(IPC.favoriteAdd, fav),
+  favoriteRemove: (key: string) => ipcRenderer.invoke(IPC.favoriteRemove, key),
+  favoriteUpdate: (key: string, patch: Partial<Favorite>) =>
+    ipcRenderer.invoke(IPC.favoriteUpdate, key, patch),
   lookupCacheStats: () => ipcRenderer.invoke(IPC.lookupCacheStats),
   clearLookupCaches: () => ipcRenderer.invoke(IPC.clearLookupCaches),
   mediaServers: () => ipcRenderer.invoke(IPC.mediaServers),

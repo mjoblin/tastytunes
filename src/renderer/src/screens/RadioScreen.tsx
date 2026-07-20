@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
-import { BookmarkPlus, Loader2, RadioTower, RotateCw, Search, X } from 'lucide-react'
-import type { RadioStation } from '@shared/ipc'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { BookmarkPlus, Heart, Loader2, RadioTower, RotateCw, Search, X } from 'lucide-react'
+import type { Favorite, RadioStation } from '@shared/ipc'
 import { isRadioMetadata } from '@shared/smoip'
 import { tt } from '@/api'
 import { useStore } from '@/store'
+import { toggleFavorite } from '@/lib/favorites'
 import { ArtImage } from '@/components/ArtImage'
 import { EmptyState } from '@/components/EmptyState'
 import { Eqbars } from '@/components/Eqbars'
@@ -55,9 +56,32 @@ const RADIO_CATEGORIES: Array<{ label: string; tags: string[] }> = [
   { label: '90s', tags: ['90s'] }
 ]
 
+/** The gold favorites chip's sentinel "category" — local, never fetched. */
+const FAV_CAT = '__favorites__'
+
+/** A favorited station rendered through the normal station-row machinery. */
+const favAsStation = (f: Extract<Favorite, { kind: 'station' }>): RadioStation => ({
+  uuid: f.radioBrowserUuid ?? f.url,
+  name: f.name,
+  url: f.url,
+  favicon: f.favicon,
+  homepage: null,
+  tags: '',
+  country: '',
+  codec: '',
+  bitrate: 0
+})
+
 export function RadioScreen(): React.JSX.Element {
   const playState = useStore((s) => s.playState)
   const showToast = useStore((s) => s.showToast)
+  const favorites = useStore((s) => s.favorites)
+  const setLastStation = useStore((s) => s.setLastStation)
+  const favStations = useMemo(
+    () => favorites.filter((f): f is Extract<Favorite, { kind: 'station' }> => f.kind === 'station'),
+    [favorites]
+  )
+  const favUrls = useMemo(() => new Set(favStations.map((f) => f.url)), [favStations])
 
   const [query, setQuery] = useState(lastQuery)
   const [top, setTop] = useState<RadioStation[] | null>(topCache)
@@ -108,7 +132,8 @@ export function RadioScreen(): React.JSX.Element {
     setCat(next)
     lastCat = next
     setQuery('')
-    if (!next) {
+    if (!next || next === FAV_CAT) {
+      // favorites are local store state — nothing to fetch or cache
       setCatStations(null)
       setCatLoading(false)
       return
@@ -120,7 +145,7 @@ export function RadioScreen(): React.JSX.Element {
   // Restore path: screen remounts with a chip selected but nothing cached
   // (e.g. its earlier load came back empty) — fetch again.
   useEffect(() => {
-    if (cat != null && catStations == null) {
+    if (cat != null && cat !== FAV_CAT && catStations == null) {
       catSeq.current++
       loadCat(cat)
     }
@@ -173,6 +198,14 @@ export function RadioScreen(): React.JSX.Element {
   const [starting, setStarting] = useState<{ url: string; name: string } | null>(null)
   const startTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const play = async (st: RadioStation): Promise<void> => {
+    // Session memory for the Now Playing heart: play_state carries no URL,
+    // so this is the only way to heart a stream the app itself started.
+    setLastStation({
+      url: st.url,
+      name: st.name,
+      favicon: st.favicon,
+      radioBrowserUuid: st.uuid !== st.url ? st.uuid : null
+    })
     setStarting({ url: st.url, name: st.name })
     if (startTimeout.current) clearTimeout(startTimeout.current)
     // dead-stream fallback: stop indicating if it never lands
@@ -205,8 +238,10 @@ export function RadioScreen(): React.JSX.Element {
     })
   }
 
-  const shown = results ?? (cat != null ? catStations : top)
-  const heading = results != null ? 'Search results' : (cat ?? 'Popular stations')
+  const shown =
+    results ?? (cat === FAV_CAT ? favStations.map(favAsStation) : cat != null ? catStations : top)
+  const heading =
+    results != null ? 'Search results' : cat === FAV_CAT ? 'Favorites' : (cat ?? 'Popular stations')
 
   return (
     <div className="h-full flex flex-col">
@@ -247,6 +282,22 @@ export function RadioScreen(): React.JSX.Element {
       </header>
 
       <div className="px-8 pb-3 flex flex-wrap gap-1.5">
+        {/* the in-domain view of hearted stations — the union lives on the
+            Favorites screen; chip appears once anything is hearted */}
+        {favStations.length > 0 && (
+          <button
+            onClick={() => pickCat(FAV_CAT)}
+            data-radio-cat="Favorites"
+            className={cx(
+              'no-drag rounded-full px-3 py-1 text-[12px] ring-1 transition-all motion-safe:active:scale-95 flex items-center gap-1.5',
+              cat === FAV_CAT
+                ? 'ring-gold/50 bg-golddim text-gold'
+                : 'ring-gold/30 bg-panel/60 text-gold/80 hover:text-gold hover:ring-gold/50 hover:bg-golddim/40'
+            )}
+          >
+            <Heart size={11} fill="currentColor" /> Favorites
+          </button>
+        )}
         {RADIO_CATEGORIES.map((c) => (
           <button
             key={c.label}
@@ -304,6 +355,16 @@ export function RadioScreen(): React.JSX.Element {
                     station={st}
                     playing={playing}
                     tuning={!playing && starting?.url === st.url}
+                    favorited={favUrls.has(st.url)}
+                    onHeart={() =>
+                      void toggleFavorite({
+                        kind: 'station',
+                        name: st.name,
+                        url: st.url,
+                        favicon: st.favicon,
+                        radioBrowserUuid: st.uuid !== st.url ? st.uuid : null
+                      })
+                    }
                     onPlay={() => void play(st)}
                     onSave={(x, y) => setSaveFor({ station: st, x, y })}
                   />
@@ -336,6 +397,8 @@ function StationRow({
   station,
   playing,
   tuning,
+  favorited,
+  onHeart,
   onPlay,
   onSave
 }: {
@@ -343,6 +406,8 @@ function StationRow({
   playing: boolean
   /** Play sent, stream not landed yet — the row pre-glows and spins. */
   tuning: boolean
+  favorited: boolean
+  onHeart(): void
   onPlay(): void
   onSave(x: number, y: number): void
 }): React.JSX.Element {
@@ -361,7 +426,7 @@ function StationRow({
       data-radio-row
       onClick={onPlay}
       className={cx(
-        'flex items-center gap-4 rounded-xl px-3 py-2.5 cursor-pointer transition-colors',
+        'group flex items-center gap-4 rounded-xl px-3 py-2.5 cursor-pointer transition-colors',
         playing
           ? 'row-playing bg-gold/10'
           : tuning
@@ -399,6 +464,24 @@ function StationRow({
             <span className="text-[10.5px] text-faint/70 font-mono uppercase">{quality}</span>
           )
         )}
+        {/* hover-revealed unless favorited — presence + gold IS the state */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onHeart()
+          }}
+          data-tip={favorited ? 'Remove from favorites' : 'Add to favorites'}
+          aria-label={favorited ? 'Remove from favorites' : 'Add to favorites'}
+          data-station-heart={favorited ? 'on' : 'off'}
+          className={cx(
+            'p-1.5 rounded-full transition-all motion-safe:active:scale-90',
+            favorited
+              ? 'text-gold hover:text-ink'
+              : 'text-dim hover:text-ink hover:bg-veil2 opacity-0 group-hover:opacity-100'
+          )}
+        >
+          <Heart size={15} fill={favorited ? 'currentColor' : 'none'} />
+        </button>
         {playing && (
           <button
             onClick={(e) => {

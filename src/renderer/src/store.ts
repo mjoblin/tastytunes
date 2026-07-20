@@ -3,6 +3,7 @@ import type {
   AppSettings,
   ConnectionState,
   DiscoveredDevice,
+  Favorite,
   FirmwareStatus,
   FrameEntry,
   LogEntry,
@@ -37,10 +38,31 @@ export type Screen =
   | 'presets'
   | 'library'
   | 'radio'
+  | 'favorites'
   | 'recently-played'
   | 'sources'
   | 'device'
   | 'settings'
+
+/** A Library destination planted by another screen (Favorites "open album"):
+ *  the LibraryScreen consumes it on its next mount/reset and navigates there. */
+export interface LibraryTarget {
+  serverUdn: string
+  objectId: string
+  /** Breadcrumb titles from root INCLUDING the target's own title — feeds the
+   *  browse re-walk when the stored objectId has rotted. */
+  titlePath: string[]
+  title: string
+}
+
+/** The station most recently streamed BY THIS APP this session — the only way
+ *  Now Playing can heart a radio stream (play_state carries no URL). */
+export interface LastStation {
+  url: string
+  name: string
+  favicon: string | null
+  radioBrowserUuid: string | null
+}
 
 const FRAME_RING = 300
 const LOG_RING = 300
@@ -108,7 +130,13 @@ interface TTState {
   /** Active tab in the context drawer — remembered for the session only. */
   contextTab: 'artist' | 'album'
   /** Per-screen list filters — session only; always visible in the screen's header box. */
-  screenFilters: { queue: string; presets: string; library: string; 'recently-played': string }
+  screenFilters: {
+    queue: string
+    presets: string
+    library: string
+    favorites: string
+    'recently-played': string
+  }
   /** True while the full-window ambient backdrop is showing — chrome goes transparent. */
   ambientWindowActive: boolean
   /** Mini window only: cursor is over the window (pushed from main). */
@@ -117,6 +145,12 @@ interface TTState {
   sleep: SleepTimer | null
   /** Local recently-played log, newest first (mirrored from the main process). */
   recents: RecentTrack[]
+  /** Local favorites, newest-hearted first (mirrored from the main process). */
+  favorites: Favorite[]
+  /** See LibraryTarget — set by Favorites, consumed by LibraryScreen. */
+  libraryTarget: LibraryTarget | null
+  /** See LastStation — session-only, set by every in-app streamRadio play. */
+  lastStation: LastStation | null
   /** MCP server state, mirrored from the main process. */
   mcpStatus: McpStatus
   /** Self-update consent-flow state, mirrored from the main process. */
@@ -137,9 +171,13 @@ interface TTState {
   setArtistOpen(open: boolean): void
   setContextTab(tab: 'artist' | 'album'): void
   setScreenFilter(
-    screen: 'queue' | 'presets' | 'library' | 'recently-played',
+    screen: 'queue' | 'presets' | 'library' | 'favorites' | 'recently-played',
     text: string
   ): void
+  /** Navigate to the Library opened at a specific node (Favorites → album). */
+  openInLibrary(target: LibraryTarget): void
+  clearLibraryTarget(): void
+  setLastStation(st: LastStation): void
   setAmbientWindowActive(on: boolean): void
   setSettings(settings: AppSettings): void
   /** THE settings write path: round-trip through main, adopt the result. */
@@ -184,11 +222,14 @@ export const useStore = create<TTState>((set, get) => ({
   lyricsOpen: false,
   artistOpen: false,
   contextTab: 'artist',
-  screenFilters: { queue: '', presets: '', library: '', 'recently-played': '' },
+  screenFilters: { queue: '', presets: '', library: '', favorites: '', 'recently-played': '' },
   ambientWindowActive: false,
   miniHover: false,
   sleep: null,
   recents: [],
+  favorites: [],
+  libraryTarget: null,
+  lastStation: null,
   mcpStatus: { running: false, url: null, error: null },
   update: null,
 
@@ -213,6 +254,16 @@ export const useStore = create<TTState>((set, get) => ({
   setContextTab: (contextTab) => set({ contextTab }),
   setScreenFilter: (screen, text) =>
     set((s) => ({ screenFilters: { ...s.screenFilters, [screen]: text } })),
+  // Plant the target BEFORE switching screens: setScreen('library') bumps the
+  // reset nonce, and LibraryScreen's reset effect checks the target last.
+  openInLibrary: (libraryTarget) =>
+    set((s) => ({
+      libraryTarget,
+      screen: 'library',
+      libraryResetNonce: s.libraryResetNonce + 1
+    })),
+  clearLibraryTarget: () => set({ libraryTarget: null }),
+  setLastStation: (lastStation) => set({ lastStation }),
   setAmbientWindowActive: (ambientWindowActive) => set({ ambientWindowActive }),
   setSettings: (settings) => set({ settings }),
   saveSettings: async (patch) => {
@@ -242,6 +293,7 @@ export const useStore = create<TTState>((set, get) => ({
       audioSpec: snap.audioSpec,
       sleep: snap.sleep,
       recents: snap.recents,
+      favorites: snap.favorites,
       mcpStatus: snap.mcpStatus,
       playhead: snap.position ? { secs: snap.position.position, at: Date.now() } : null,
       frames: snap.frames,
@@ -327,6 +379,8 @@ export const useStore = create<TTState>((set, get) => ({
           return { lastRecalledPresetId: msg.id }
         case 'recents':
           return { recents: msg.data }
+        case 'favorites':
+          return { favorites: msg.data }
         case 'mcpStatus':
           return { mcpStatus: msg.status }
         case 'updateState':

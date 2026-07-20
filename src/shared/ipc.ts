@@ -104,6 +104,58 @@ export function recentMatchesPlayState(e: RecentTrack, ps: ZonePlayState | null)
   return e.title != null && eq(e.title, md.title)
 }
 
+// -------------------------------------------------------------------- favorites
+
+/**
+ * A favorited radio station. The stream URL is the identity — playing needs
+ * no resolution at all (streamRadio with the stored url+name). The
+ * radio-browser uuid is a recovery hint for URL rot: an on-demand re-lookup,
+ * user-initiated only (never a click-ping — the privacy stance holds).
+ */
+export interface FavoriteStation {
+  kind: 'station'
+  addedAt: number
+  name: string
+  url: string
+  favicon: string | null
+  radioBrowserUuid: string | null
+}
+
+/**
+ * A favorited album or track, keyed on CONTENT identity (title/artist/album)
+ * — UPnP object ids rot, so `objectId` is only a fast-path hint and playing
+ * falls back to a scoped library search. `serverUdn` is where it was hearted
+ * (null for content-only entries from the Now Playing heart); `titlePath` is
+ * the breadcrumb trail at heart time, feeding the browse re-walk.
+ */
+export interface FavoriteMedia {
+  kind: 'album' | 'track'
+  addedAt: number
+  title: string
+  artist: string | null
+  /** Tracks only — the album the track belongs to. */
+  album: string | null
+  artUrl: string | null
+  serverUdn: string | null
+  serverName: string | null
+  objectId: string | null
+  titlePath: string[] | null
+}
+
+export type Favorite = FavoriteStation | FavoriteMedia
+
+/**
+ * Content identity — dedupe and heart-lit checks. Stations key on the URL;
+ * media keys on lowercased content fields, deliberately WITHOUT the server
+ * (the same album on two servers is the same music).
+ */
+export function favoriteKey(f: Favorite): string {
+  const lc = (s: string | null | undefined): string => (s ?? '').trim().toLowerCase()
+  if (f.kind === 'station') return `station:${f.url}`
+  if (f.kind === 'album') return `album:${lc(f.title)}:${lc(f.artist)}`
+  return `track:${lc(f.title)}:${lc(f.artist)}:${lc(f.album)}`
+}
+
 // -------------------------------------------------------- main -> renderer push
 
 /**
@@ -133,6 +185,7 @@ export type PushMessage =
   | { kind: 'sources'; data: SystemSources }
   | { kind: 'zoneAudio'; data: ZoneAudio | null }
   | { kind: 'audioSpec'; data: ZoneAudioSpec | null }
+  | { kind: 'favorites'; data: Favorite[] }
   | { kind: 'frame'; entry: FrameEntry }
   | { kind: 'log'; entry: LogEntry }
   | { kind: 'recents'; data: RecentTrack[] }
@@ -749,6 +802,8 @@ export interface Snapshot {
    */
   lastRecalledPresetId: number | null
   recents: RecentTrack[]
+  /** Local favorites (stations, albums, tracks), newest-hearted first. */
+  favorites: Favorite[]
   mcpStatus: McpStatus
   frames: FrameEntry[]
   logs: LogEntry[]
@@ -843,6 +898,12 @@ export interface TastyTunesApi {
   getRecents(): Promise<RecentTrack[]>
   /** Wipe the recently-played log. */
   clearRecents(): Promise<void>
+  /** Add a favorite (replaces any same-key entry); resolves to the new list. */
+  favoriteAdd(fav: Favorite): Promise<Favorite[]>
+  /** Remove a favorite by its favoriteKey; resolves to the new list. */
+  favoriteRemove(key: string): Promise<Favorite[]>
+  /** Patch a favorite in place (objectId healing after a search resolve). */
+  favoriteUpdate(key: string, patch: Partial<Favorite>): Promise<Favorite[]>
   /** UPnP media servers known to the streamer (its own USB storage included). */
   mediaServers(): Promise<MediaServerInfo[]>
   /** Browse a ContentDirectory container (objectId null = root). `titlePath` is
@@ -895,6 +956,9 @@ export const IPC = {
   setSleep: 'tt:setSleep',
   getRecents: 'tt:getRecents',
   clearRecents: 'tt:clearRecents',
+  favoriteAdd: 'tt:favoriteAdd',
+  favoriteRemove: 'tt:favoriteRemove',
+  favoriteUpdate: 'tt:favoriteUpdate',
   lookupCacheStats: 'tt:lookupCacheStats',
   clearLookupCaches: 'tt:clearLookupCaches',
   mediaServers: 'tt:mediaServers',

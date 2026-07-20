@@ -484,6 +484,16 @@ function buildDemo(host: string): {
         },
         queue: { ...(np.queue as Dict), length: items.length, position: playIdx }
       }
+      // A queue play announces itself as a source switch to MEDIA_PLAYER —
+      // firmware-faithful (mirror of dev/mock-streamer.mjs setQueue).
+      if ((DATA['/zone/state'] as Dict).source !== 'MEDIA_PLAYER') {
+        DATA['/zone/state'] = { ...DATA['/zone/state'], source: 'MEDIA_PLAYER' }
+        DATA['/zone/now_playing'] = {
+          ...DATA['/zone/now_playing'],
+          source: { id: 'MEDIA_PLAYER', name: 'Media Player' }
+        }
+        broadcast('/zone/state')
+      }
       broadcast('/zone/play_state')
       broadcast('/zone/now_playing')
     }

@@ -5,6 +5,7 @@ import {
   Cable,
   CornerDownLeft,
   Disc3,
+  Heart,
   EyeOff,
   HardDrive,
   Info,
@@ -29,8 +30,9 @@ import {
   Volume2,
   VolumeX
 } from 'lucide-react'
-import { sleepTrackKey, type SleepAction } from '@shared/ipc'
+import { favoriteKey, sleepTrackKey, type Favorite, type SleepAction } from '@shared/ipc'
 import { audioCaps } from '@shared/smoip'
+import { toggleFavorite } from '@/lib/favorites'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { systemTheme } from '@/hooks/useTheme'
@@ -129,6 +131,7 @@ export function CommandPalette(): React.JSX.Element {
   const sleep = useStore((s) => s.sleep)
   const displayMode = useStore((s) => s.displayMode)
   const audioSpec = useStore((s) => s.audioSpec)
+  const favorites = useStore((s) => s.favorites)
   const settings = useStore((s) => s.settings)
 
   const [query, setQuery] = useState('')
@@ -412,6 +415,31 @@ export function CommandPalette(): React.JSX.Element {
           }
         })
       }
+      // Heart the current track — same content-only entry as the Now Playing
+      // header heart (tracks need title+artist; radio hearts live there only,
+      // since they also need the session's lastStation URL).
+      if (!npMeta.isRadio && npMeta.title && npMeta.subtitle) {
+        const fav = {
+          kind: 'track' as const,
+          title: npMeta.title,
+          artist: npMeta.subtitle,
+          album: npMeta.album ?? null,
+          artUrl: npMeta.artUrl ?? null,
+          serverUdn: null,
+          serverName: null,
+          objectId: null,
+          titlePath: null
+        }
+        const active = favorites.some((f) => favoriteKey(f) === favoriteKey(fav as Favorite))
+        cmds.push({
+          id: 'view:favtrack',
+          label: active ? 'Unfavorite this track' : 'Favorite this track',
+          group: 'Playback',
+          icon: Heart,
+          keywords: 'heart favorite like love save track',
+          run: () => void toggleFavorite(fav)
+        })
+      }
       if (settings.artistInfo && !npMeta.isRadio && npMeta.subtitle && npMeta.album) {
         cmds.push({
           id: 'view:album',
@@ -495,6 +523,7 @@ export function CommandPalette(): React.JSX.Element {
     systemPower,
     displayMode,
     audioSpec,
+    favorites,
     settings.theme,
     settings.sleepAction,
     settings.lyrics,

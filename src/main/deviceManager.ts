@@ -38,6 +38,7 @@ import { SmoipSocket } from './smoipSocket'
 import * as smoipHttp from './smoipHttp'
 import { getSettings, updateSettings } from './persist'
 import { clearRecents, getRecents, recordRecent } from './recents'
+import { addFavorite, getFavorites, removeFavorite, updateFavorite } from './favorites'
 import { scrobbler } from './scrobbler'
 import { getNetRequests, loggedFetch } from './netlog'
 
@@ -646,6 +647,27 @@ export class DeviceManager {
     this.push({ kind: 'recents', data: clearRecents() })
   }
 
+  // ------------------------------------------------------------------ favorites
+
+  /** Favorites mutations live here so every window sees the push. */
+  favoriteAdd(fav: Parameters<typeof addFavorite>[0]): ReturnType<typeof getFavorites> {
+    const list = addFavorite(fav)
+    this.push({ kind: 'favorites', data: list })
+    return list
+  }
+
+  favoriteRemove(key: string): ReturnType<typeof getFavorites> {
+    const list = removeFavorite(key)
+    this.push({ kind: 'favorites', data: list })
+    return list
+  }
+
+  favoriteUpdate(key: string, patch: Parameters<typeof updateFavorite>[1]): ReturnType<typeof getFavorites> {
+    const list = updateFavorite(key, patch)
+    this.push({ kind: 'favorites', data: list })
+    return list
+  }
+
   // ----------------------------------------------------------------- push relay
 
   private push(msg: PushMessage): void {
@@ -700,6 +722,7 @@ export class DeviceManager {
       sleep: this.sleep,
       lastRecalledPresetId: this.lastRecalledPresetId,
       recents: getRecents(),
+      favorites: getFavorites(),
       mcpStatus: this.mcpStatus,
       frames: this.frames,
       logs: this.logs,

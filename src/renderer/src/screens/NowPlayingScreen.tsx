@@ -1,5 +1,8 @@
-import { Captions, Disc3, Maximize2, MicVocal, RadioTower, UserRound } from 'lucide-react'
+import { Captions, Disc3, Heart, Maximize2, MicVocal, RadioTower, UserRound } from 'lucide-react'
+import { favoriteKey, type Favorite, type FavoriteMedia } from '@shared/ipc'
+import { tt } from '@/api'
 import { useStore } from '@/store'
+import { toggleFavorite } from '@/lib/favorites'
 import { cx, deriveNowPlaying } from '@/lib/format'
 import { SignalLamp } from '@/components/SignalLamp'
 import { ArtImage } from '@/components/ArtImage'
@@ -35,6 +38,55 @@ export function NowPlayingScreen(): React.JSX.Element {
   const { artistInfo: artistEnabled } = useStore((s) => s.settings)
   const artistAvailable = artistEnabled && !meta.isRadio && !!meta.subtitle
 
+  // The heart: content-only favoriting of whatever is playing. Tracks need
+  // title+artist (the lyrics gating); radio needs a URL to replay, which
+  // play_state never carries — so a stream is heartable only when TT started
+  // it this session (lastStation) or it's already a favorite (unheart).
+  const favorites = useStore((s) => s.favorites)
+  const lastStation = useStore((s) => s.lastStation)
+  const md = playState?.metadata
+  const stationName = meta.isRadio ? ((md?.station ?? md?.name)?.trim() ?? null) : null
+  const stationFav = stationName
+    ? (favorites.find(
+        (f) => f.kind === 'station' && f.name.trim().toLowerCase() === stationName.toLowerCase()
+      ) ?? null)
+    : null
+  const lastMatches =
+    stationName != null &&
+    lastStation != null &&
+    lastStation.name.trim().toLowerCase() === stationName.toLowerCase()
+  const trackFav: Omit<FavoriteMedia, 'addedAt'> | null =
+    !meta.isRadio && meta.title && meta.subtitle
+      ? {
+          kind: 'track',
+          title: meta.title,
+          artist: meta.subtitle,
+          album: meta.album ?? null,
+          artUrl: meta.artUrl ?? null,
+          serverUdn: null,
+          serverName: null,
+          objectId: null,
+          titlePath: null
+        }
+      : null
+  const heartActive = trackFav
+    ? favorites.some((f) => favoriteKey(f) === favoriteKey(trackFav as Favorite))
+    : stationFav != null
+  const heartAvailable = trackFav != null || stationFav != null || lastMatches
+  const toggleHeart = (): void => {
+    if (trackFav) void toggleFavorite(trackFav)
+    else if (stationFav) void tt.favoriteRemove(favoriteKey(stationFav))
+    else if (lastStation && lastMatches)
+      void tt.favoriteAdd({
+        kind: 'station',
+        addedAt: Date.now(),
+        name: lastStation.name,
+        url: lastStation.url,
+        favicon: lastStation.favicon,
+        radioBrowserUuid: lastStation.radioBrowserUuid
+      })
+  }
+
   const toggleLyricLine = async (): Promise<void> => {
     await saveSettings({ lyricsLine: !lyricsLine })
   }
@@ -56,6 +108,20 @@ export function NowPlayingScreen(): React.JSX.Element {
     <header className="drag-region relative z-20 pointer-events-none flex items-center justify-end px-8 pt-8 pb-4 min-h-[83px]">
       {/* while a drawer is open the header goes quiet entirely — the panel's
           own ✕ (or Escape) is the one way out */}
+      {heartAvailable && !lyricsOpen && !artistOpen && (
+        <button
+          onClick={toggleHeart}
+          data-tip={heartActive ? 'Remove from favorites' : 'Add to favorites'}
+          aria-label={heartActive ? 'Remove from favorites' : 'Add to favorites'}
+          data-np-heart={heartActive ? 'on' : 'off'}
+          className={cx(
+            'no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-full hover:bg-veil2 motion-safe:active:scale-90 transition-all',
+            heartActive ? 'text-gold hover:text-ink' : 'text-faint hover:text-ink'
+          )}
+        >
+          <Heart size={16} fill={heartActive ? 'currentColor' : 'none'} />
+        </button>
+      )}
       {lyricsAvailable && !lyricsOpen && !artistOpen && (
         <button
           onClick={() => void toggleLyricLine()}
