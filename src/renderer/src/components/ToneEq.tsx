@@ -252,8 +252,10 @@ export function ToneEq({ label = true }: { label?: boolean } = {}): React.JSX.El
                 onCommit={(b) => void tt.command({ type: 'setBalance', balance: b })}
               />
               <span className="w-12 text-[10.5px] text-faint shrink-0">R</span>
+              {/* centered = "0", matching the tilt readout (a lone middot
+                  here read as a mystery speck — user catch) */}
               <span className="font-mono text-[11px] text-dim w-8 text-right shrink-0" data-balance-value>
-                {balance === 0 ? '·' : balance < 0 ? `L${-balance}` : `R${balance}`}
+                {balance === 0 ? '0' : balance < 0 ? `L${-balance}` : `R${balance}`}
               </span>
             </div>
           </div>
