@@ -17,7 +17,13 @@ const WRITE_FAILURES: Partial<Record<StreamerCommand['type'], string>> = {
   presetDelete: "Couldn't delete the preset",
   presetMove: "Couldn't reorder the presets",
   queueDelete: "Couldn't remove the track",
-  queueMove: "Couldn't reorder the queue"
+  queueMove: "Couldn't reorder the queue",
+  setUserEq: "Couldn't switch the EQ",
+  setEqBandGain: "Couldn't adjust the EQ",
+  setEqBands: "Couldn't reset the EQ",
+  setTiltEq: "Couldn't switch the tone tilt",
+  setTiltIntensity: "Couldn't adjust the tone tilt",
+  setBalance: "Couldn't adjust the balance"
 }
 
 export const tt: TastyTunesApi = {

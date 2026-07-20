@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  AudioLines,
   Bluetooth,
   Cable,
   CornerDownLeft,
@@ -29,6 +30,7 @@ import {
   VolumeX
 } from 'lucide-react'
 import { sleepTrackKey, type SleepAction } from '@shared/ipc'
+import { audioCaps } from '@shared/smoip'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { systemTheme } from '@/hooks/useTheme'
@@ -126,6 +128,7 @@ export function CommandPalette(): React.JSX.Element {
   const nowPlaying = useStore((s) => s.nowPlaying)
   const sleep = useStore((s) => s.sleep)
   const displayMode = useStore((s) => s.displayMode)
+  const audioSpec = useStore((s) => s.audioSpec)
   const settings = useStore((s) => s.settings)
 
   const [query, setQuery] = useState('')
@@ -439,6 +442,18 @@ export function CommandPalette(): React.JSX.Element {
         })()
       }
     })
+    // Gated exactly like the Device-screen section: only when this streamer's
+    // spec advertises writable tone controls (per-model feature detection).
+    if (connected && audioCaps(audioSpec)) {
+      cmds.push({
+        id: 'view:toneeq',
+        label: 'Tone & EQ',
+        group: 'View',
+        icon: AudioLines,
+        keywords: 'equalizer eq tilt balance tone bass treble dsp',
+        run: () => setScreen('device')
+      })
+    }
     cmds.push({
       id: 'view:diagnostics',
       label: 'Open SMOIP payload console',
@@ -479,6 +494,7 @@ export function CommandPalette(): React.JSX.Element {
     sleep,
     systemPower,
     displayMode,
+    audioSpec,
     settings.theme,
     settings.sleepAction,
     settings.lyrics,

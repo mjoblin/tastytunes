@@ -194,7 +194,37 @@ function buildDemo(host: string): {
         art_url: i === 0 ? artUrl(PLAYING_QUEUE_ID) : `${host}/art/p${i + 1}.svg`,
         airable_radio_id: null
       }))
+    },
+    // Tone/EQ chain — read shape captured live off the Evo 150 2026-07-19
+    // (mirror of dev/mock-streamer.mjs minus its MOCK_NO_EQ knobs; the demo
+    // always has tone controls so the section is explorable without hardware).
+    '/zone/audio': {
+      volume_limit_percent: 50,
+      tilt_eq: { enabled: false, intensity: 0 },
+      user_eq: {
+        enabled: false,
+        bands: [
+          [80, 'LOWSHELF', 0.8], [120, 'PEAKING', 1.24], [315, 'PEAKING', 1.24],
+          [800, 'PEAKING', 1.24], [2000, 'PEAKING', 1.24], [5000, 'PEAKING', 1.24],
+          [8000, 'HIGHSHELF', 0.8]
+        ].map(([freq, filter, q], index) => ({ index, filter, freq, gain: 0, q }))
+      },
+      balance: 0,
+      pipeline: 'DSP'
     }
+  }
+
+  const AUDIO_SPEC: Dict = {
+    volume_limit_percent: { minimum: 1, maximum: 100, readonly: false },
+    pipeline: { readonly: false },
+    tilt_eq: { minimum: -15, maximum: 15, readonly: false },
+    user_eq: {
+      bands: 7,
+      filters: { enum: ['PASSTHROUGH', 'PEAKING', 'LOWSHELF', 'HIGHSHELF', 'NOTCH', 'HIGHPASS', 'LOWPASS', 'ALLPASS'] },
+      readonly: false,
+      always_on: false
+    },
+    balance: { minimum: -15, maximum: 15, readonly: false }
   }
 
   // ---- media library: ContentDirectory + /smoip/queue/add (Library screen) --
@@ -354,6 +384,58 @@ function buildDemo(host: string): {
     if (!wssRef) return
     const msg = JSON.stringify({ path, params: { data: DATA[path] } })
     for (const c of wssRef.clients) if (c.readyState === 1) c.send(msg)
+  }
+
+  /**
+   * Apply a /zone/audio write ATOMICALLY (firmware-faithful: one bad field
+   * rejects the whole frame with code 112, nothing applies; out-of-range
+   * gains store verbatim). Mirror of the mock's applyAudioWrite.
+   */
+  function applyAudioWrite(params: Dict): boolean {
+    const next = JSON.parse(JSON.stringify(DATA['/zone/audio'])) as {
+      user_eq: { enabled: boolean; bands: Array<{ freq: number; filter: string; gain: number; q: number }> }
+      tilt_eq: { enabled: boolean; intensity: number }
+      balance: number
+      volume_limit_percent: number
+    }
+    for (const [key, val] of Object.entries(params)) {
+      if (key === 'zone' || key === 'update') continue
+      if (key === 'user_eq') {
+        if (typeof val !== 'boolean') return false // boolean ON WRITE
+        next.user_eq.enabled = val
+      } else if (key === 'user_eq_bands') {
+        if (typeof val !== 'string' || val === '') return false
+        for (const part of val.split('|')) {
+          const [idx, freq, filter, gain, q] = part.split(',')
+          const band = next.user_eq.bands[Number(idx)]
+          if (idx === '' || !band) return false
+          if (freq) band.freq = Number(freq)
+          if (filter) band.filter = filter
+          if (gain) {
+            if (Number.isNaN(Number(gain))) return false
+            band.gain = Number(gain)
+          }
+          if (q) band.q = Number(q)
+        }
+      } else if (key === 'tilt_eq') {
+        if (typeof val !== 'boolean') return false
+        next.tilt_eq.enabled = val
+      } else if (key === 'tilt_intensity') {
+        if (typeof val !== 'number') return false
+        next.tilt_eq.intensity = val
+      } else if (key === 'balance') {
+        if (typeof val !== 'number') return false
+        next.balance = val
+      } else if (key === 'volume_limit_percent') {
+        if (typeof val !== 'number') return false
+        next.volume_limit_percent = val
+      } else {
+        return false
+      }
+    }
+    DATA['/zone/audio'] = next as unknown as Dict
+    broadcast('/zone/audio')
+    return true
   }
 
   let nextQueueId = 1000
@@ -632,6 +714,28 @@ function buildDemo(host: string): {
           `<?xml version="1.0"?>
 <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body><u:BrowseResponse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"><Result>${xmlEsc(result)}</Result><NumberReturned>${parts.length}</NumberReturned><TotalMatches>${all.length}</TotalMatches><UpdateID>1</UpdateID></u:BrowseResponse></s:Body></s:Envelope>`
         )
+      }
+      // Tone/EQ capability spec + state (mirrors the real Evo; reads and
+      // atomic writes, full new state echoed back).
+      if (u.pathname === '/smoip/zone/audio/spec') {
+        res.writeHead(200, { 'content-type': 'application/json' })
+        return res.end(JSON.stringify({ zone: 'ZONE1', data: AUDIO_SPEC }))
+      }
+      if (u.pathname === '/smoip/zone/audio') {
+        const params: Dict = {}
+        for (const [k, v] of u.searchParams) {
+          params[k] =
+            v === 'true' ? true
+            : v === 'false' ? false
+            : k !== 'user_eq_bands' && v !== '' && !Number.isNaN(Number(v)) ? Number(v)
+            : v
+        }
+        if (Object.keys(params).some((k) => k !== 'zone') && !applyAudioWrite(params)) {
+          res.writeHead(400, { 'content-type': 'application/json' })
+          return res.end('{"code": 112, "message": "invalid parameter"}')
+        }
+        res.writeHead(200, { 'content-type': 'application/json' })
+        return res.end(JSON.stringify({ zone: 'ZONE1', data: DATA['/zone/audio'] }))
       }
       // Rename a preset in place (mirrors the real Evo's GET verb).
       if (u.pathname === '/smoip/presets/rename') {
@@ -976,6 +1080,9 @@ function buildDemo(host: string): {
           const next = params.power === 'toggle' ? (powered ? 'NETWORK' : 'ON') : params.power
           DATA['/system/power'] = { power: next }
           setTimeout(() => push('/system/power'), 120)
+        } else if (frame.path === '/zone/audio') {
+          // tone/EQ write over the WS — atomic, /zone/audio pushed on success
+          applyAudioWrite(params)
         }
       })
     })

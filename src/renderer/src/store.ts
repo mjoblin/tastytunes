@@ -22,6 +22,8 @@ import type {
   SystemInfo,
   SystemPower,
   SystemSources,
+  ZoneAudio,
+  ZoneAudioSpec,
   ZoneNowPlaying,
   ZonePlayState,
   ZoneState
@@ -83,6 +85,10 @@ interface TTState {
   /** Read-only streamer firmware status (PASSIVE — shown, never acted on). */
   firmwareUpdate: FirmwareStatus | null
   sources: SystemSources | null
+  /** Tone/EQ state, live-mirrored (the streamer pushes /zone/audio on change). */
+  zoneAudio: ZoneAudio | null
+  /** Tone/EQ capability spec (null = this streamer has no tone controls). */
+  audioSpec: ZoneAudioSpec | null
   playhead: PlayheadSync | null
 
   frames: FrameEntry[]
@@ -162,6 +168,8 @@ export const useStore = create<TTState>((set, get) => ({
   systemPower: null,
   firmwareUpdate: null,
   sources: null,
+  zoneAudio: null,
+  audioSpec: null,
   playhead: null,
 
   frames: [],
@@ -230,6 +238,8 @@ export const useStore = create<TTState>((set, get) => ({
       systemPower: snap.systemPower,
       firmwareUpdate: snap.firmwareUpdate,
       sources: snap.sources,
+      zoneAudio: snap.zoneAudio,
+      audioSpec: snap.audioSpec,
       sleep: snap.sleep,
       recents: snap.recents,
       mcpStatus: snap.mcpStatus,
@@ -261,6 +271,8 @@ export const useStore = create<TTState>((set, get) => ({
               systemPower: null,
               firmwareUpdate: null,
               sources: null,
+              zoneAudio: null,
+              audioSpec: null,
               sleep: null,
               playhead: null
             }
@@ -293,6 +305,10 @@ export const useStore = create<TTState>((set, get) => ({
           return { firmwareUpdate: msg.data }
         case 'sources':
           return { sources: msg.data }
+        case 'zoneAudio':
+          return { zoneAudio: msg.data }
+        case 'audioSpec':
+          return { audioSpec: msg.data }
         case 'frame': {
           const frames = [...s.frames, msg.entry]
           if (frames.length > FRAME_RING) frames.splice(0, frames.length - FRAME_RING)

@@ -7,6 +7,8 @@ import type {
   SystemInfo,
   SystemPower,
   SystemSources,
+  ZoneAudio,
+  ZoneAudioSpec,
   ZoneNowPlaying,
   ZonePlayState,
   ZonePosition,
@@ -129,6 +131,8 @@ export type PushMessage =
   | { kind: 'systemPower'; data: SystemPower }
   | { kind: 'firmwareUpdate'; data: FirmwareStatus }
   | { kind: 'sources'; data: SystemSources }
+  | { kind: 'zoneAudio'; data: ZoneAudio | null }
+  | { kind: 'audioSpec'; data: ZoneAudioSpec | null }
   | { kind: 'frame'; entry: FrameEntry }
   | { kind: 'log'; entry: LogEntry }
   | { kind: 'recents'; data: RecentTrack[] }
@@ -310,6 +314,17 @@ export type StreamerCommand =
   /** Snapshot the current queue into a device preset (type MediaQueue).
    *  null slot = firmware picks the next free one; null name = firmware default. */
   | { type: 'queueSavePreset'; slot: number | null; name: string | null }
+  // ---- /zone/audio tone controls (feature-detected via audioCaps; writes are
+  // ---- ATOMIC on the firmware, so each command is exactly one logical control)
+  /** Master EQ enable — boolean ON WRITE (the read returns an object). */
+  | { type: 'setUserEq'; enabled: boolean }
+  /** One band's gain, dB (clamped to EQ_GAIN_MIN..MAX) — a slider release. */
+  | { type: 'setEqBandGain'; index: number; gain: number }
+  /** All 7 gains in one frame — the "Flat" reset (official-app preset shape). */
+  | { type: 'setEqBands'; gains: number[] }
+  | { type: 'setTiltEq'; enabled: boolean }
+  | { type: 'setTiltIntensity'; intensity: number }
+  | { type: 'setBalance'; balance: number }
 
 // ------------------------------------------------------------------- MCP server
 
@@ -720,6 +735,10 @@ export interface Snapshot {
   systemPower: SystemPower | null
   firmwareUpdate: FirmwareStatus | null
   sources: SystemSources | null
+  /** Tone/EQ state (/zone/audio) — null when the streamer doesn't push it. */
+  zoneAudio: ZoneAudio | null
+  /** Tone/EQ capability spec, probed over HTTP at connect; null = no tone controls. */
+  audioSpec: ZoneAudioSpec | null
   sleep: SleepTimer | null
   /**
    * The preset most recently recalled THROUGH THIS APP (renderer, palette,

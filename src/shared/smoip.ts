@@ -149,6 +149,100 @@ export interface ZoneState {
   cbus: string | null
 }
 
+// -------------------------------------------------------------------- /zone/audio
+
+/**
+ * The DSP/tone chain (7-band EQ, tilt, balance) — per-MODEL: newer streamers
+ * (Evo 150, CXN100) expose it, older ones may not. Everything here is
+ * feature-detected via /zone/audio/spec at connect (see audioCaps below);
+ * never gate by model name.
+ *
+ * READ shape (captured live off the Evo 2026-07-19). The WRITE schema is
+ * different: `user_eq` and `tilt_eq` are booleans on write (`tilt_intensity`
+ * is its own write param), and bands write as the string param
+ * `user_eq_bands="<idx>,<freq>,<filter>,<gain>,<q>"` (blank = keep,
+ * multiple bands pipe-delimited). Writes are ATOMIC — one bad field rejects
+ * the whole frame — so every logical control sends its own frame.
+ */
+export interface ZoneAudioBand {
+  index: number
+  filter: string // LOWSHELF / PEAKING / HIGHSHELF / … (see spec filters enum)
+  freq: number
+  gain: number
+  q: number
+}
+
+export interface ZoneAudio {
+  volume_limit_percent: number | null
+  tilt_eq: { enabled: boolean; intensity: number } | null
+  user_eq: { enabled: boolean; bands: ZoneAudioBand[] } | null
+  balance: number | null
+  /** Observed "DSP" on the Evo; semantics unconfirmed — read-only for us. */
+  pipeline: string | null
+}
+
+// --------------------------------------------------------------- /zone/audio/spec
+
+export interface AudioSpecRange {
+  minimum?: number
+  maximum?: number
+  readonly?: boolean
+}
+
+export interface ZoneAudioSpec {
+  volume_limit_percent?: AudioSpecRange
+  pipeline?: { readonly?: boolean }
+  tilt_eq?: AudioSpecRange
+  user_eq?: {
+    bands?: number
+    filters?: { enum?: string[] }
+    readonly?: boolean
+    always_on?: boolean
+  }
+  balance?: AudioSpecRange
+}
+
+/**
+ * What the connected streamer's tone controls actually support — derived from
+ * the spec, shown-only-when-writable. {endpoint absent, field missing,
+ * readonly:true, fetch error} all collapse to "not supported" (the exact
+ * negative shape on non-EQ hardware is unobserved — treat everything
+ * non-positive as absence).
+ */
+export interface AudioCaps {
+  userEq: boolean
+  tilt: boolean
+  balance: boolean
+  /** From the spec when it publishes a range; UI fallback −15..15. */
+  tiltRange: { min: number; max: number }
+  balanceRange: { min: number; max: number }
+}
+
+/**
+ * The band-gain range is the ONE range the spec does NOT publish. −6..+3 dB is
+ * the official app's client-side clamp (probed live: the firmware itself
+ * stores out-of-range gains verbatim) — matching it keeps both apps' sliders
+ * telling the same story, and Cambridge's boost ceiling reflects DSP headroom.
+ */
+export const EQ_GAIN_MIN = -6
+export const EQ_GAIN_MAX = 3
+
+export function audioCaps(spec: ZoneAudioSpec | null | undefined): AudioCaps | null {
+  if (spec == null) return null
+  const range = (r: AudioSpecRange | undefined, fallbackMin: number, fallbackMax: number) => ({
+    min: r?.minimum ?? fallbackMin,
+    max: r?.maximum ?? fallbackMax
+  })
+  const caps: AudioCaps = {
+    userEq: spec.user_eq != null && spec.user_eq.readonly !== true,
+    tilt: spec.tilt_eq != null && spec.tilt_eq.readonly !== true,
+    balance: spec.balance != null && spec.balance.readonly !== true,
+    tiltRange: range(spec.tilt_eq, -15, 15),
+    balanceRange: range(spec.balance, -15, 15)
+  }
+  return caps.userEq || caps.tilt || caps.balance ? caps : null
+}
+
 // -------------------------------------------------------------------- /queue/list
 
 export interface QueueListItemMetadata {

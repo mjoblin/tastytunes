@@ -90,6 +90,26 @@ export async function zoneSavePreset(host: string, slot: number): Promise<void> 
 }
 
 /**
+ * Fetch /zone/audio/spec — the self-describing tone/EQ capability document
+ * (enum/range/readonly per field; probed live on the Evo 2026-07-19). null =
+ * unreachable / 404 / unparseable, which all mean "no tone controls here":
+ * the exact negative shape on non-EQ models is unobserved, so every
+ * non-positive answer is treated as absence.
+ */
+export async function getAudioSpec(host: string): Promise<unknown | null> {
+  try {
+    const res = await fetch(`http://${host}/smoip/zone/audio/spec?zone=ZONE1`, {
+      signal: AbortSignal.timeout(5000)
+    })
+    if (!res.ok) return null
+    const body = (await res.json().catch(() => null)) as { data?: unknown } | null
+    return body?.data ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
  * Fetch the preset list over HTTP — how vibin refreshes stale is_playing flags.
  * (A bare WS request for /presets/list is not proven against real hardware.)
  */

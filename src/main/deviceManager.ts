@@ -25,12 +25,14 @@ import type {
   SystemPower,
   SystemSources,
   SystemUpdate,
+  ZoneAudio,
+  ZoneAudioSpec,
   ZoneNowPlaying,
   ZonePlayState,
   ZonePosition,
   ZoneState
 } from '@shared/smoip'
-import { isRadioMetadata, radioTrackTitle } from '@shared/smoip'
+import { EQ_GAIN_MAX, EQ_GAIN_MIN, isRadioMetadata, radioTrackTitle } from '@shared/smoip'
 import { discoverStreamers } from './discovery'
 import { SmoipSocket } from './smoipSocket'
 import * as smoipHttp from './smoipHttp'
@@ -41,6 +43,17 @@ import { getNetRequests, loggedFetch } from './netlog'
 
 const FRAME_RING_SIZE = 300
 const LOG_RING_SIZE = 300
+
+/**
+ * The user_eq_bands write string: "<idx>,<freq>,<filter>,<gain>,<q>", blank
+ * fields = keep, bands pipe-delimited. Gain-only writes, exactly like the
+ * official app ("0,,,3.0,|1,,,1.2,|…"); gains clamp to the official client's
+ * −6..+3 dB envelope (the firmware itself stores anything — probed live).
+ */
+const bandString = (bands: [number, number][]): string =>
+  bands
+    .map(([i, g]) => `${i},,,${Math.max(EQ_GAIN_MIN, Math.min(EQ_GAIN_MAX, g)).toFixed(1)},`)
+    .join('|')
 
 interface Cache {
   playState: ZonePlayState | null
@@ -53,6 +66,8 @@ interface Cache {
   systemPower: SystemPower | null
   firmwareUpdate: FirmwareStatus | null
   sources: SystemSources | null
+  zoneAudio: ZoneAudio | null
+  audioSpec: ZoneAudioSpec | null
 }
 
 const emptyCache = (): Cache => ({
@@ -65,7 +80,9 @@ const emptyCache = (): Cache => ({
   systemInfo: null,
   systemPower: null,
   firmwareUpdate: null,
-  sources: null
+  sources: null,
+  zoneAudio: null,
+  audioSpec: null
 })
 
 export class DeviceManager {
@@ -150,7 +167,12 @@ export class DeviceManager {
         if (isCurrent(socket)) this.setConnection({ phase: 'connecting', host, attempt })
       },
       onConnected: () => {
-        if (isCurrent(socket)) this.setConnection({ phase: 'connected', host })
+        if (isCurrent(socket)) {
+          this.setConnection({ phase: 'connected', host })
+          // Tone/EQ capability probe — refreshed every (re)connect. The spec
+          // endpoint isn't proven over the WS, so it rides HTTP like presets.
+          void this.probeAudioSpec(socket)
+        }
       },
       onDisconnected: (reason, reconnecting) => {
         if (isCurrent(socket)) this.setConnection({ phase: 'disconnected', host, reason, reconnecting })
@@ -345,6 +367,36 @@ export class DeviceManager {
         return this.refreshPresets(socket)
       case 'streamRadio':
         return smoipHttp.streamRadio(host, cmd.url, cmd.name)
+      // ---- /zone/audio tone controls. One frame per logical control: writes
+      // are ATOMIC on the firmware (one bad field rejects the whole frame —
+      // the stranded-balance lesson from the 2026-07-19 probe). WS params are
+      // JSON, so the '+'-literal query-encoding trap doesn't apply here.
+      case 'setUserEq':
+        // Boolean ON WRITE — the read returns {enabled, bands}; writing the
+        // object shape 400s with code 112.
+        return socket.send('/zone/audio', { zone: 'ZONE1', user_eq: cmd.enabled })
+      case 'setEqBandGain':
+        return socket.send('/zone/audio', {
+          zone: 'ZONE1',
+          user_eq_bands: bandString([[cmd.index, cmd.gain]])
+        })
+      case 'setEqBands':
+        return socket.send('/zone/audio', {
+          zone: 'ZONE1',
+          user_eq_bands: bandString(cmd.gains.map((g, i) => [i, g]))
+        })
+      case 'setTiltEq':
+        return socket.send('/zone/audio', { zone: 'ZONE1', tilt_eq: cmd.enabled })
+      case 'setTiltIntensity':
+        return socket.send('/zone/audio', {
+          zone: 'ZONE1',
+          tilt_intensity: this.clampSpec(cmd.intensity, this.cache.audioSpec?.tilt_eq)
+        })
+      case 'setBalance':
+        return socket.send('/zone/audio', {
+          zone: 'ZONE1',
+          balance: this.clampSpec(cmd.balance, this.cache.audioSpec?.balance)
+        })
       case 'zoneSavePreset':
         await smoipHttp.zoneSavePreset(host, cmd.slot)
         return this.refreshPresets(socket)
@@ -370,6 +422,24 @@ export class DeviceManager {
     const limit = getSettings().volumeLimitPercent
     const capped = limit != null ? Math.min(percent, limit) : percent
     return Math.max(0, Math.min(100, Math.round(capped)))
+  }
+
+  /** Clamp an integer tone value to the spec's published range (fallback ±15). */
+  private clampSpec(value: number, range?: { minimum?: number; maximum?: number }): number {
+    return Math.max(range?.minimum ?? -15, Math.min(range?.maximum ?? 15, Math.round(value)))
+  }
+
+  /**
+   * Probe /zone/audio/spec after connect: the tone-controls capability
+   * document. Every non-positive outcome (404, timeout, junk) lands as null =
+   * "this streamer has no tone controls" and the UI section stays hidden.
+   */
+  private async probeAudioSpec(socket: SmoipSocket): Promise<void> {
+    const spec = (await smoipHttp.getAudioSpec(socket.host)) as ZoneAudioSpec | null
+    if (this.socket !== socket) return
+    this.cache.audioSpec = spec
+    this.push({ kind: 'audioSpec', data: spec })
+    if (spec) this.log('info', 'audio', 'tone/EQ spec present — controls enabled where writable')
   }
 
   // ------------------------------------------------------------ incoming frames
@@ -425,6 +495,11 @@ export class DeviceManager {
       case '/system/sources':
         this.cache.sources = data as SystemSources
         return this.push({ kind: 'sources', data: this.cache.sources })
+      case '/zone/audio':
+        // Pushed on every tone/EQ change, ours or another controller's
+        // (confirmed live 2026-07-19) — the UI mirrors external tweaks free.
+        this.cache.zoneAudio = data as ZoneAudio
+        return this.push({ kind: 'zoneAudio', data: this.cache.zoneAudio })
       case '/queue/info': {
         // The socket already refetches /queue/list. A queue change is also the
         // only observable signal of an album->album preset recall (same source,

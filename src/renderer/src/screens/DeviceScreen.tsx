@@ -4,6 +4,7 @@ import { tt } from '@/api'
 import { useStore } from '@/store'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { cx } from '@/lib/format'
+import { ToneEq } from '@/components/ToneEq'
 
 export function DeviceScreen(): React.JSX.Element {
   const connection = useStore((s) => s.connection)
@@ -217,6 +218,10 @@ export function DeviceScreen(): React.JSX.Element {
             </div>
           </section>
         )}
+
+        {/* Feature-detected: renders only when this streamer's /zone/audio/spec
+            says its DSP tone controls exist and are writable. */}
+        {connectedHost && <ToneEq />}
 
         <div className="microlabel">
           press <span className="text-dim">`</span> for the smoip payload console
