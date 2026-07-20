@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ExternalLink, Loader2, RefreshCw, Sparkles, Unplug } from 'lucide-react'
+import { ArrowUpCircle, ExternalLink, Loader2, RefreshCw, Sparkles, Unplug } from 'lucide-react'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
@@ -10,6 +10,10 @@ export function DeviceScreen(): React.JSX.Element {
   const devices = useStore((s) => s.devices)
   const discovering = useStore((s) => s.discovering)
   const systemInfo = useStore((s) => s.systemInfo)
+  // PASSIVE firmware awareness: shown here, never acted on. There is no check or
+  // install control anywhere — updating is the user's job via the official app
+  // or the streamer's web admin (the "Open web admin" button below).
+  const firmwareUpdate = useStore((s) => s.firmwareUpdate)
   const [manualHost, setManualHost] = useState('')
 
   const connectedHost = connection.phase === 'connected' ? connection.host : null
@@ -160,6 +164,33 @@ export function DeviceScreen(): React.JSX.Element {
                   mono
                 />
               ))}
+
+              {/* Passive firmware indicator: informational only. No check/install
+                  control — the streamer reports its own self-check and updating
+                  is done in the Cambridge Audio app or the web admin below. */}
+              {firmwareUpdate?.updating ? (
+                <div className="flex items-start gap-2.5 rounded-lg ring-1 ring-gold/40 bg-golddim px-3 py-2.5">
+                  <Loader2 size={14} className="spin text-gold shrink-0 mt-px" />
+                  <div className="min-w-0">
+                    <div className="text-[12.5px] text-gold">Updating firmware…</div>
+                    <div className="text-[11px] text-faint mt-0.5">
+                      The streamer is installing an update. Leave it powered on until it finishes.
+                    </div>
+                  </div>
+                </div>
+              ) : firmwareUpdate?.updateAvailable ? (
+                <div className="flex items-start gap-2.5 rounded-lg ring-1 ring-gold/40 bg-golddim px-3 py-2.5">
+                  <ArrowUpCircle size={14} className="text-gold shrink-0 mt-px" />
+                  <div className="min-w-0">
+                    <div className="text-[12.5px] text-gold">Firmware update available</div>
+                    <div className="text-[11px] text-faint mt-0.5">
+                      Install it in the Cambridge Audio app or the streamer&rsquo;s web admin below —
+                      TastyTunes never updates firmware itself.
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
               {/* the demo device has no web interface to point at */}
               {!(connection.phase === 'connected' && connection.demo) && (
                 <div className="pt-1">

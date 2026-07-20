@@ -7,6 +7,7 @@ import {
   sleepTrackKey,
   type ConnectionState,
   type DiscoveredDevice,
+  type FirmwareStatus,
   type FrameEntry,
   type LogEntry,
   type McpStatus,
@@ -23,6 +24,7 @@ import type {
   SystemInfo,
   SystemPower,
   SystemSources,
+  SystemUpdate,
   ZoneNowPlaying,
   ZonePlayState,
   ZonePosition,
@@ -49,6 +51,7 @@ interface Cache {
   presets: Presets | null
   systemInfo: SystemInfo | null
   systemPower: SystemPower | null
+  firmwareUpdate: FirmwareStatus | null
   sources: SystemSources | null
 }
 
@@ -61,6 +64,7 @@ const emptyCache = (): Cache => ({
   presets: null,
   systemInfo: null,
   systemPower: null,
+  firmwareUpdate: null,
   sources: null
 })
 
@@ -258,6 +262,13 @@ export class DeviceManager {
       throw new Error(`streamer socket not open (${cmd.type})`)
     }
 
+    // PASSIVE-ONLY firmware policy (explicit user decision): there is NO command
+    // that sends /system/update with an `action` param. TastyTunes only ever
+    // SUBSCRIBES to /system/update (read-only, see smoipSocket SUBSCRIBED_PATHS)
+    // to SHOW whether an update is available; it never sends action=CHECK
+    // (refresh availability) or action=UPDATE (install). Updating the streamer's
+    // firmware stays the user's job via the Cambridge Audio app or the
+    // streamer's own web admin. Do not add a firmware check/install command here.
     switch (cmd.type) {
       case 'play':
         return socket.send('/zone/play_control', { action: 'play' })
@@ -399,6 +410,18 @@ export class DeviceManager {
       case '/system/power':
         this.cache.systemPower = data as SystemPower
         return this.push({ kind: 'systemPower', data: this.cache.systemPower })
+      case '/system/update': {
+        // Read-only firmware self-check the streamer pushes to subscribers.
+        // Camelcase the wire shape into the clean FirmwareStatus the UI reads.
+        // We NEVER act on this — see the PASSIVE-ONLY guard in command().
+        const u = data as SystemUpdate
+        this.cache.firmwareUpdate = {
+          updateAvailable: u.update_available === true,
+          updating: u.updating === true,
+          earlyUpdate: u.early_update === true
+        }
+        return this.push({ kind: 'firmwareUpdate', data: this.cache.firmwareUpdate })
+      }
       case '/system/sources':
         this.cache.sources = data as SystemSources
         return this.push({ kind: 'sources', data: this.cache.sources })

@@ -101,6 +101,11 @@ function buildDemo(host: string): {
       api: '1.8'
     },
     '/system/power': { power: 'ON' },
+    // Firmware self-check status the streamer pushes to subscribers. The demo is
+    // always up-to-date (no update shown). Read-only, like the mock — the app
+    // never sends action=CHECK/UPDATE. (Mirror of dev/mock-streamer.mjs, minus
+    // that file's MOCK_FIRMWARE_* scenario knobs — deliberate fork, keep in sync.)
+    '/system/update': { early_update: false, update_available: false, updating: false },
     '/system/sources': {
       sources: [
         { id: 'MEDIA_PLAYER', name: 'Media Player', default_name: 'Media Player', class: 'stream.media', nameable: false, ui_selectable: true, description: '', description_locale: '', preferred_order: 1 },

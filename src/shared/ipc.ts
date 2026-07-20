@@ -127,6 +127,7 @@ export type PushMessage =
   | { kind: 'presets'; data: Presets }
   | { kind: 'systemInfo'; data: SystemInfo }
   | { kind: 'systemPower'; data: SystemPower }
+  | { kind: 'firmwareUpdate'; data: FirmwareStatus }
   | { kind: 'sources'; data: SystemSources }
   | { kind: 'frame'; entry: FrameEntry }
   | { kind: 'log'; entry: LogEntry }
@@ -168,6 +169,20 @@ export interface UpdateState {
   url: string
   /** Human-readable failure when phase === 'error'. */
   error: string | null
+}
+
+/**
+ * Streamer FIRMWARE status, camelCased from the read-only /system/update push
+ * (raw SystemUpdate in smoip.ts). Distinct from UpdateState above, which is the
+ * APP's own self-update flow. PASSIVE ONLY — the streamer reports its own
+ * self-check; TastyTunes surfaces it but never triggers a check or an install
+ * (that stays the user's job via the Cambridge Audio app or the streamer's web
+ * admin). There is deliberately no command to change any of this.
+ */
+export interface FirmwareStatus {
+  updateAvailable: boolean
+  updating: boolean
+  earlyUpdate: boolean
 }
 
 // ------------------------------------------------------------ requests console
@@ -703,6 +718,7 @@ export interface Snapshot {
   presets: Presets | null
   systemInfo: SystemInfo | null
   systemPower: SystemPower | null
+  firmwareUpdate: FirmwareStatus | null
   sources: SystemSources | null
   sleep: SleepTimer | null
   /**

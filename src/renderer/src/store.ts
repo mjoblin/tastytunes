@@ -3,6 +3,7 @@ import type {
   AppSettings,
   ConnectionState,
   DiscoveredDevice,
+  FirmwareStatus,
   FrameEntry,
   LogEntry,
   McpStatus,
@@ -79,6 +80,8 @@ interface TTState {
   presets: Presets | null
   systemInfo: SystemInfo | null
   systemPower: SystemPower | null
+  /** Read-only streamer firmware status (PASSIVE — shown, never acted on). */
+  firmwareUpdate: FirmwareStatus | null
   sources: SystemSources | null
   playhead: PlayheadSync | null
 
@@ -157,6 +160,7 @@ export const useStore = create<TTState>((set, get) => ({
   presets: null,
   systemInfo: null,
   systemPower: null,
+  firmwareUpdate: null,
   sources: null,
   playhead: null,
 
@@ -224,6 +228,7 @@ export const useStore = create<TTState>((set, get) => ({
       presets: snap.presets,
       systemInfo: snap.systemInfo,
       systemPower: snap.systemPower,
+      firmwareUpdate: snap.firmwareUpdate,
       sources: snap.sources,
       sleep: snap.sleep,
       recents: snap.recents,
@@ -254,6 +259,7 @@ export const useStore = create<TTState>((set, get) => ({
               presets: null,
               systemInfo: null,
               systemPower: null,
+              firmwareUpdate: null,
               sources: null,
               sleep: null,
               playhead: null
@@ -283,6 +289,8 @@ export const useStore = create<TTState>((set, get) => ({
           return { systemInfo: msg.data }
         case 'systemPower':
           return { systemPower: msg.data }
+        case 'firmwareUpdate':
+          return { firmwareUpdate: msg.data }
         case 'sources':
           return { sources: msg.data }
         case 'frame': {

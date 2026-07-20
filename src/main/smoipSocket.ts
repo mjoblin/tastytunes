@@ -13,6 +13,10 @@ const SUBSCRIBED_PATHS = [
   '/queue/info',
   '/system/info',
   '/system/power',
+  // Firmware self-check status the streamer PUSHES to subscribers. Subscribing
+  // is READ-ONLY — TastyTunes only ever sends this path with {update:1} and
+  // never with an `action` param (see the PASSIVE-ONLY guard in deviceManager).
+  '/system/update',
   '/system/sources',
   '/zone/now_playing',
   '/zone/play_state',
