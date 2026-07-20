@@ -154,7 +154,11 @@ export function Nav(): React.JSX.Element {
         )}
       </div>
 
-      <div className={cx('flex-1 space-y-0.5', collapsed ? 'px-2' : 'px-3')}>
+      {/* the screens list is the ONE scrollable region: at short window
+          heights it scrolls (min-h-0 lets it actually shrink) while the
+          wordmark above and the pinned tool cluster below stay put —
+          without this the list overflowed straight into the bottom cluster */}
+      <div className={cx('flex-1 min-h-0 overflow-y-auto space-y-0.5 pb-2', collapsed ? 'px-2' : 'px-3')}>
         {visibleScreens.map(navItem)}
       </div>
 
