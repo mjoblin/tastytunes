@@ -12,6 +12,7 @@ import {
   Volume2,
   VolumeX
 } from 'lucide-react'
+import { isCbusMode, isPreAmpMode } from '@shared/smoip'
 import { tt } from '@/api'
 import { CloseButton } from '@/components/CloseButton'
 import { useStore } from '@/store'
@@ -64,8 +65,8 @@ export function MiniPlayer(): React.JSX.Element {
   const canPrev = controls.has('track_previous')
 
   const muted = zoneState?.mute === true
-  const preAmp = zoneState?.pre_amp_mode === true
-  const cbus = zoneState?.cbus != null && !/^(off|none)$/i.test(zoneState.cbus)
+  const preAmp = isPreAmpMode(zoneState)
+  const cbus = isCbusMode(zoneState)
   const hasVolume = zoneState != null && (preAmp || cbus)
 
   const timeText = active

@@ -27,7 +27,7 @@ import {
   Trash2,
   Volume2
 } from 'lucide-react'
-import { queueContentHash, type PresetItem } from '@shared/smoip'
+import { isPreAmpMode, queueContentHash, type PresetItem } from '@shared/smoip'
 import { presetVolumeKey, type ScreenLayout } from '@shared/ipc'
 import { tt } from '@/api'
 import { useStore } from '@/store'
@@ -74,7 +74,7 @@ export function PresetsScreen(): React.JSX.Element {
 
   // Feature 10: per-preset volume overrides. Absolute volume needs pre-amp
   // mode — control-bus devices only nudge, so the affordance hides there.
-  const canSetVolume = zoneState?.pre_amp_mode === true
+  const canSetVolume = isPreAmpMode(zoneState)
   const volumeFor = (id: number): number | null =>
     presetVolumes[presetVolumeKey(systemInfo?.udn, id)] ?? null
   const saveVolume = async (id: number, level: number | null): Promise<void> => {

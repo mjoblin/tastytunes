@@ -243,6 +243,27 @@ export function audioCaps(spec: ZoneAudioSpec | null | undefined): AudioCaps | n
   return caps.userEq || caps.tilt || caps.balance ? caps : null
 }
 
+/**
+ * Control-bus amp mode: the streamer drives an external Cambridge amp/receiver
+ * over the Control Bus and can only send RELATIVE volume nudges
+ * (volume_step_change) — never an absolute level. An ALLOWLIST of cbus values,
+ * matching the two field-tested references (punytunes `isCbusAmpModeEnabled`,
+ * vibin `streammagic.py`), NOT an "anything not off/none" denylist.
+ */
+export const isCbusMode = (z: Pick<ZoneState, 'cbus'> | null | undefined): boolean =>
+  z?.cbus === 'amplifier' || z?.cbus === 'receiver'
+
+/**
+ * Pre-amp mode: the streamer holds an absolute volume it can set. Requires
+ * pre_amp_mode AND pre_amp_state === "on" — matching punytunes
+ * (`isPreAmpModeEnabled`); a mode-enabled-but-not-"on" pre-amp can't take an
+ * absolute level. (Live-confirmed safe on the user's Evo 150: pre_amp_mode
+ * true, pre_amp_state "on".)
+ */
+export const isPreAmpMode = (
+  z: Pick<ZoneState, 'pre_amp_mode' | 'pre_amp_state'> | null | undefined
+): boolean => z?.pre_amp_mode === true && z.pre_amp_state === 'on'
+
 // -------------------------------------------------------------------- /queue/list
 
 export interface QueueListItemMetadata {

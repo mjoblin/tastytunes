@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Minus, Plus, Volume2, VolumeX } from 'lucide-react'
+import { isCbusMode, isPreAmpMode } from '@shared/smoip'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { cx } from '@/lib/format'
@@ -123,8 +124,8 @@ export function VolumeCluster(): React.JSX.Element | null {
   // Above the early returns: keeps the hook count stable (React #310 guard).
   const vol = useVolumeSlider()
 
-  const preAmp = zoneState?.pre_amp_mode === true
-  const cbus = zoneState?.cbus != null && !/^(off|none)$/i.test(zoneState.cbus)
+  const preAmp = isPreAmpMode(zoneState)
+  const cbus = isCbusMode(zoneState)
   const muted = zoneState?.mute === true
 
   if (!zoneState) return null
