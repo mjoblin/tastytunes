@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import { Disc3, Folder, MoreHorizontal, Play } from 'lucide-react'
+import { Disc3, Folder, Heart, MoreHorizontal, Play } from 'lucide-react'
 import type { MediaNode } from '@shared/ipc'
 import { cx, fmtTime } from '@/lib/format'
 import { isAlbumClass, isMutedArt } from '@/lib/media'
@@ -9,11 +9,49 @@ import { Eqbars } from '@/components/Eqbars'
 // The Library's four listing renderers — cards and rows for containers and
 // tracks. Pure presentation: every action arrives as a callback.
 
+/**
+ * Art-corner heart (top-right — the preset-card speaker-chip idiom):
+ * hover-revealed control normally, but a set heart stays visible in gold —
+ * presence + color IS the indicator. Lives INSIDE the card so it scales and
+ * lifts with the hover animation.
+ */
+function HeartChip({
+  favorited,
+  held,
+  onHeart
+}: {
+  favorited: boolean
+  /** The card's menu is open — match the other chips' held visibility. */
+  held: boolean
+  onHeart(): void
+}): React.JSX.Element {
+  return (
+    <span
+      data-tip={favorited ? 'Remove from favorites' : 'Add to favorites'}
+      data-card-heart={favorited ? 'on' : 'off'}
+      onClick={(e) => {
+        e.stopPropagation()
+        onHeart()
+      }}
+      className={cx(
+        'tip-bottom absolute top-1.5 right-1.5 h-8 w-8 rounded-lg bg-panel/80 ring-1 ring-edge flex items-center justify-center transition-all motion-safe:active:scale-90',
+        favorited
+          ? 'text-gold opacity-100'
+          : cx('text-dim hover:text-ink', held ? 'opacity-100' : 'opacity-0 group-hover:opacity-100')
+      )}
+    >
+      <Heart size={14} fill={favorited ? 'currentColor' : 'none'} />
+    </span>
+  )
+}
+
 export function ContainerCard({
   node,
   playing,
   audible,
   menuOpen,
+  favorited,
+  onHeart,
   onEnter,
   onPlay,
   onMenu
@@ -25,6 +63,9 @@ export function ContainerCard({
   audible: boolean
   /** This card's ⋯ menu or preset picker is open — hold the hover treatment. */
   menuOpen: boolean
+  /** With onHeart: the art-corner heart chip (albums only make sense). */
+  favorited?: boolean
+  onHeart?(): void
   onEnter(): void
   onPlay(el: HTMLElement | null): void
   onMenu(e: React.MouseEvent): void
@@ -75,6 +116,9 @@ export function ContainerCard({
             <span className="absolute top-1.5 left-1.5 h-7 w-7 rounded-lg bg-panel/80 ring-1 ring-edge flex items-center justify-center">
               <Eqbars playing={audible} />
             </span>
+          )}
+          {album && onHeart && (
+            <HeartChip favorited={favorited === true} held={menuOpen} onHeart={onHeart} />
           )}
           {album && (
             <span
@@ -276,6 +320,8 @@ export function TrackCard({
   audible,
   queued,
   menuOpen,
+  favorited,
+  onHeart,
   onPlayNow,
   onMenu
 }: {
@@ -284,6 +330,9 @@ export function TrackCard({
   audible: boolean
   queued: boolean
   menuOpen: boolean
+  /** With onHeart: the art-corner heart chip. */
+  favorited?: boolean
+  onHeart?(): void
   onPlayNow(el: HTMLElement | null): void
   onMenu(e: React.MouseEvent): void
 }): React.JSX.Element {
@@ -310,6 +359,9 @@ export function TrackCard({
             <span className="absolute top-1.5 left-1.5 h-7 w-7 rounded-lg bg-panel/80 ring-1 ring-edge flex items-center justify-center">
               <Eqbars playing={audible} />
             </span>
+          )}
+          {onHeart && (
+            <HeartChip favorited={favorited === true} held={menuOpen} onHeart={onHeart} />
           )}
           <span
             data-tip={queued ? 'Play — already in the queue' : 'Play now'}

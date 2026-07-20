@@ -18,18 +18,24 @@ import { ContainerCard } from '@/components/LibraryCards'
 import { EmptyState } from '@/components/EmptyState'
 import { Eqbars } from '@/components/Eqbars'
 import { FilterInput } from '@/components/FilterInput'
+import { Segmented } from '@/components/Segmented'
 import { useClampedPosition, usePopoverChrome } from '@/hooks/usePopover'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { activeSourceId, cx, matchesFilter } from '@/lib/format'
 import { favoriteAct, favoriteHasRoute, type FavoriteActResult } from '@/lib/favorites'
 import { flashTarget } from '@/lib/scroll'
 
+/** Kind visibility — session memory, like the Radio screen's chip state. */
+type FavKind = 'all' | 'station' | 'album' | 'track'
+let lastKind: FavKind = 'all'
+
 /**
  * Favorites: the local cross-source collection — radio stations, albums, and
  * tracks hearted anywhere in the app. Grouped by kind (the search-results
- * idiom: albums render as media cards, stations/tracks as rows). Un-hearting
- * here is SOFT: the item stays for the session (dimmed, hollow heart — one
- * click undoes an accident) and is gone on the next visit.
+ * idiom: albums render as media cards, stations/tracks as rows), with a
+ * kind switch for collections too big to scan. Un-hearting here is SOFT:
+ * the item stays for the session (dimmed, hollow heart — one click undoes
+ * an accident) and is gone on the next visit.
  */
 export function FavoritesScreen(): React.JSX.Element {
   const favorites = useStore((s) => s.favorites)
@@ -70,6 +76,11 @@ export function FavoritesScreen(): React.JSX.Element {
       .catch(() => setServers([]))
   }, [connected])
 
+  const [kind, setKindState] = useState<FavKind>(lastKind)
+  const setKind = (k: FavKind): void => {
+    lastKind = k
+    setKindState(k)
+  }
   const stations = displayed.filter((f): f is FavoriteStation => f.kind === 'station')
   const albums = displayed.filter((f): f is FavoriteMedia => f.kind === 'album')
   const tracks = displayed.filter((f): f is FavoriteMedia => f.kind === 'track')
@@ -78,10 +89,15 @@ export function FavoritesScreen(): React.JSX.Element {
       filter,
       f.kind === 'station' ? [f.name] : [f.title, f.artist, f.album, f.serverName]
     )
-  const shownStations = stations.filter(match)
-  const shownAlbums = albums.filter(match)
-  const shownTracks = tracks.filter(match)
+  const kindShown = (k: Exclude<FavKind, 'all'>): boolean => kind === 'all' || kind === k
+  const shownStations = kindShown('station') ? stations.filter(match) : []
+  const shownAlbums = kindShown('album') ? albums.filter(match) : []
+  const shownTracks = kindShown('track') ? tracks.filter(match) : []
   const shownCount = shownStations.length + shownAlbums.length + shownTracks.length
+  const kindTotal =
+    (kindShown('station') ? stations.length : 0) +
+    (kindShown('album') ? albums.length : 0) +
+    (kindShown('track') ? tracks.length : 0)
 
   // ---------------------------------------------------------------- stations
 
@@ -236,12 +252,24 @@ export function FavoritesScreen(): React.JSX.Element {
         <h1 className="font-display font-bold text-[26px] tracking-tight">Favorites</h1>
         <div className="flex-1" />
         {total > 0 && (
-          <FilterInput
-            value={filter}
-            onChange={(text) => setScreenFilter('favorites', text)}
-            shown={shownCount}
-            total={total}
-          />
+          <>
+            <Segmented
+              value={kind}
+              onChange={setKind}
+              options={[
+                { value: 'all' as const, label: 'All' },
+                { value: 'station' as const, label: 'Stations' },
+                { value: 'album' as const, label: 'Albums' },
+                { value: 'track' as const, label: 'Tracks' }
+              ]}
+            />
+            <FilterInput
+              value={filter}
+              onChange={(text) => setScreenFilter('favorites', text)}
+              shown={shownCount}
+              total={kindTotal}
+            />
+          </>
         )}
       </header>
 
@@ -254,7 +282,9 @@ export function FavoritesScreen(): React.JSX.Element {
       ) : (
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-8 pb-8 pt-1">
           {shownCount === 0 && (
-            <div className="text-[15px] text-faint pt-4 px-1">No matches for “{filter}”</div>
+            <div className="text-[15px] text-faint pt-4 px-1">
+              {filter ? `No matches for “${filter}”` : 'Nothing of this kind favorited yet.'}
+            </div>
           )}
 
           {shownStations.length > 0 && (
@@ -303,20 +333,22 @@ export function FavoritesScreen(): React.JSX.Element {
                       data-fav-album={f.title}
                       className={cx('relative', (!active || !routed) && 'opacity-50')}
                     >
+                      {/* heart rides INSIDE the card (favorited/onHeart) so it
+                          zooms and lifts with the hover animation */}
                       <ContainerCard
                         node={asNode(f)}
                         playing={albumPlaying(f)}
                         audible={audible}
                         menuOpen={menu?.fav === f}
+                        favorited={active}
+                        onHeart={() => toggleHeart(f)}
                         onEnter={() => routed && enterAlbum(f)}
                         onPlay={(el) => routed && playAlbum(f, el)}
                         onMenu={(e) => openMenu(f, e)}
                       />
-                      <FavHeartChip
-                        active={active}
-                        busy={busyKey === key}
-                        onClick={() => toggleHeart(f)}
-                      />
+                      {busyKey === key && (
+                        <Loader2 size={13} className="spin text-gold/80 absolute top-3.5 left-3.5 z-10" />
+                      )}
                       {!routed && f.serverName && (
                         <div className="px-2 pt-0.5 text-[10.5px] text-faint truncate">
                           {f.serverName} is offline
@@ -454,37 +486,6 @@ function HeartButton({
     >
       <Heart size={15} fill={active ? 'currentColor' : 'none'} />
     </button>
-  )
-}
-
-/** Corner heart on an album card (top-right of the art, the chip idiom). */
-function FavHeartChip({
-  active,
-  busy,
-  onClick
-}: {
-  active: boolean
-  busy: boolean
-  onClick(): void
-}): React.JSX.Element {
-  return (
-    <span className="absolute top-3.5 right-3.5 z-10 flex items-center gap-1">
-      {busy && <Loader2 size={12} className="spin text-gold/80" />}
-      <button
-        onClick={(e) => {
-          e.stopPropagation()
-          onClick()
-        }}
-        aria-label={active ? 'Remove from favorites' : 'Add to favorites'}
-        data-fav-heart={active ? 'on' : 'off'}
-        className={cx(
-          'h-8 w-8 rounded-lg bg-panel/80 ring-1 ring-edge flex items-center justify-center transition-all motion-safe:active:scale-90',
-          active ? 'text-gold' : 'text-dim hover:text-ink'
-        )}
-      >
-        <Heart size={14} fill={active ? 'currentColor' : 'none'} />
-      </button>
-    </span>
   )
 }
 

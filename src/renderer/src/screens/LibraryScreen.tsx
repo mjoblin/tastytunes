@@ -615,6 +615,8 @@ export function LibraryScreen(): React.JSX.Element {
             playing={queueSourceActive && isPlayingAlbum(node)}
             audible={isPlayingState}
             menuOpen={menuNodeId === node.id}
+            favorited={isAlbumClass(node.upnpClass) ? nodeFavorited(node) : undefined}
+            onHeart={isAlbumClass(node.upnpClass) ? () => heartNode(node) : undefined}
             onEnter={() => enter(node)}
             onPlay={(el) => void playContainer(node, el)}
             onMenu={(e) => openMenu(node, e)}
@@ -1031,6 +1033,8 @@ export function LibraryScreen(): React.JSX.Element {
                 audible={isPlayingState}
                 queued={trackQueued(node)}
                 menuOpen={menuNodeId === node.id}
+                favorited={nodeFavorited(node)}
+                onHeart={() => heartNode(node)}
                 onPlayNow={(el) => playTrack(node, el)}
                 onMenu={(e) => openMenu(node, e)}
               />
