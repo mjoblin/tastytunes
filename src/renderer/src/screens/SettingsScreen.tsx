@@ -332,7 +332,7 @@ export function SettingsScreen(): React.JSX.Element {
 
             <SettingRow
               label="Volume limit (%)"
-              hint="Hard cap for pre-amp volume commands. Leave empty for no limit."
+              hint="Caps the volume TastyTunes will set — the streamer's own remote and other apps aren't affected. Leave empty for no limit."
             >
               <NumberField
                 value={settings.volumeLimitPercent}
