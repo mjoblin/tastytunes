@@ -22,6 +22,56 @@ const GAIN_SPAN = EQ_GAIN_MAX - EQ_GAIN_MIN
 const gainsMatch = (bands: Array<{ gain: number }>, gains: number[]): boolean =>
   gains.length >= bands.length && bands.every((b, i) => Math.abs(b.gain - gains[i]) < 0.05)
 
+/**
+ * Throttled live writes while a slider drags (~one frame per interval,
+ * trailing edge keeps the latest value) so tilt/balance are HEARD as they
+ * move, not only on release. Value-deduped; the release commit still sends
+ * the definitive value through the normal path.
+ */
+function useLiveWrite(send: (v: number) => void, ms = 150): (v: number) => void {
+  const st = useRef<{
+    lastAt: number
+    lastSent: number | null
+    queued: number | null
+    timer: ReturnType<typeof setTimeout> | null
+  }>({ lastAt: 0, lastSent: null, queued: null, timer: null })
+  const sendRef = useRef(send)
+  sendRef.current = send
+  useEffect(() => {
+    const s = st.current
+    return () => {
+      if (s.timer) clearTimeout(s.timer)
+    }
+  }, [])
+  return (v) => {
+    const s = st.current
+    if (v === s.lastSent || v === s.queued) return
+    const now = Date.now()
+    if (s.timer == null && now - s.lastAt >= ms) {
+      s.lastAt = now
+      s.lastSent = v
+      sendRef.current(v)
+      return
+    }
+    s.queued = v
+    if (s.timer == null) {
+      s.timer = setTimeout(
+        () => {
+          s.timer = null
+          const q = s.queued
+          s.queued = null
+          if (q != null && q !== s.lastSent) {
+            s.lastAt = Date.now()
+            s.lastSent = q
+            sendRef.current(q)
+          }
+        },
+        Math.max(0, ms - (now - s.lastAt))
+      )
+    }
+  }
+}
+
 /** Round to the slider's 0.5 dB steps and clamp to the official envelope. */
 const snapGain = (g: number): number =>
   Math.max(EQ_GAIN_MIN, Math.min(EQ_GAIN_MAX, Math.round(g * 2) / 2))
@@ -71,6 +121,14 @@ export function ToneEq({ label = true }: { label?: boolean } = {}): React.JSX.El
     const t = setTimeout(() => setBalanceHold(null), 3000)
     return () => clearTimeout(t)
   }, [balanceHold])
+
+  // Live drag writes (throttled): the device follows the drag so the change
+  // is heard as it happens. Pre-drag values are remembered for Escape —
+  // intermediate values have already been sent, so cancel must RESTORE.
+  const tiltLive = useLiveWrite((intensity) => void tt.command({ type: 'setTiltIntensity', intensity }))
+  const balanceLive = useLiveWrite((balance) => void tt.command({ type: 'setBalance', balance }))
+  const tiltStart = useRef<number | null>(null)
+  const balanceStart = useRef<number | null>(null)
 
   const caps = audioCaps(spec)
   if (!caps || !zoneAudio) return null
@@ -241,8 +299,17 @@ export function ToneEq({ label = true }: { label?: boolean } = {}): React.JSX.El
                 min={caps.tiltRange.min}
                 max={caps.tiltRange.max}
                 ariaLabel="Tone tilt intensity"
-                onScrub={setTiltHold}
-                onCancel={() => setTiltHold(null)}
+                onScrub={(v) => {
+                  if (tiltHold == null) tiltStart.current = tilt.intensity
+                  setTiltHold(v)
+                  // audible only while the tilt is enabled — no silent writes
+                  if (tilt.enabled) tiltLive(v)
+                }}
+                onCancel={() => {
+                  if (tilt.enabled && tiltStart.current != null)
+                    void tt.command({ type: 'setTiltIntensity', intensity: tiltStart.current })
+                  setTiltHold(tiltStart.current)
+                }}
                 onCommit={(intensity) => {
                   setTiltHold(intensity)
                   void tt.command({ type: 'setTiltIntensity', intensity })
@@ -271,8 +338,16 @@ export function ToneEq({ label = true }: { label?: boolean } = {}): React.JSX.El
                 min={caps.balanceRange.min}
                 max={caps.balanceRange.max}
                 ariaLabel="Balance"
-                onScrub={setBalanceHold}
-                onCancel={() => setBalanceHold(null)}
+                onScrub={(v) => {
+                  if (balanceHold == null) balanceStart.current = balance
+                  setBalanceHold(v)
+                  balanceLive(v)
+                }}
+                onCancel={() => {
+                  if (balanceStart.current != null)
+                    void tt.command({ type: 'setBalance', balance: balanceStart.current })
+                  setBalanceHold(balanceStart.current)
+                }}
                 onCommit={(b) => {
                   setBalanceHold(b)
                   void tt.command({ type: 'setBalance', balance: b })
