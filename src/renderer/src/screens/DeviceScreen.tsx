@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ArrowUpCircle, ExternalLink, Loader2, RefreshCw, Sparkles, Unplug } from 'lucide-react'
+import { ArrowUpCircle, Check, ExternalLink, Loader2, RefreshCw, Sparkles, Unplug } from 'lucide-react'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
@@ -189,6 +189,14 @@ export function DeviceScreen(): React.JSX.Element {
                     </div>
                   </div>
                 </div>
+              ) : firmwareUpdate ? (
+                // Calm positive confirmation (not gold — this is the normal state),
+                // so the user gets the same "you're up to date" reassurance the
+                // streamer's own web page gives.
+                <div className="flex items-center gap-2 text-[12px] text-dim">
+                  <Check size={13} strokeWidth={2.5} className="text-led shrink-0" />
+                  Firmware up to date
+                </div>
               ) : null}
 
               {/* the demo device has no web interface to point at */}
@@ -196,12 +204,12 @@ export function DeviceScreen(): React.JSX.Element {
                 <div className="pt-1">
                   <button
                     onClick={() => void tt.openExternal(`http://${connectedHost}`)}
-                    className="flex items-center gap-1.5 text-[12.5px] text-amber hover:brightness-110 transition-all"
+                    className="flex items-center gap-1.5 text-[12.5px] px-3 h-8 rounded-lg ring-1 ring-edge bg-panel/70 text-amber hover:brightness-110 hover:ring-edge2 motion-safe:active:scale-95 transition-all"
                   >
                     Open web admin <ExternalLink size={12} />
                   </button>
-                  <div className="text-[11.5px] text-faint mt-1">
-                    Rename, display brightness, standby modes, and firmware updates live in the
+                  <div className="text-[11.5px] text-faint mt-1.5">
+                    Renaming, display brightness, standby, and firmware updates live in the
                     streamer's own web interface.
                   </div>
                 </div>
