@@ -53,13 +53,23 @@ export function PresetsScreen(): React.JSX.Element {
   )
   const systemInfo = useStore((s) => s.systemInfo)
   const presetVolumes = useStore((s) => s.settings.presetVolumes)
+  const presetArtists = useStore((s) => s.settings.presetArtists)
   const cards = presetsLayout === 'cards'
   const filter = useStore((s) => s.screenFilters.presets)
   const setScreenFilter = useStore((s) => s.setScreenFilter)
   const allItems = (presets?.presets ?? []).filter((p) => p.id != null)
-  // type/class are hidden fields but filterable: "radio" / "media" work.
+  // type/class are hidden fields but filterable: "radio" / "media" work —
+  // as is the locally-recorded artist (the wire has no artist field; TT
+  // notes it at Library save time), so "iron" finds an Iron Maiden album.
   const items = filter
-    ? allItems.filter((p) => matchesFilter(filter, [p.name, p.type, p.class]))
+    ? allItems.filter((p) =>
+        matchesFilter(filter, [
+          p.name,
+          p.type,
+          p.class,
+          p.id != null ? presetArtists[presetVolumeKey(systemInfo?.udn, p.id)] : null
+        ])
+      )
     : allItems
 
   // Feature 10: per-preset volume overrides. Absolute volume needs pre-amp

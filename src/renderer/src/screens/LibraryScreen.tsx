@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import {
   favoriteKey,
+  presetVolumeKey,
   type AppSettings,
   type Favorite,
   type FavoriteMedia,
@@ -81,6 +82,7 @@ export function LibraryScreen(): React.JSX.Element {
   const nowPlaying = useStore((s) => s.nowPlaying)
   const zoneState = useStore((s) => s.zoneState)
   const queue = useStore((s) => s.queue)
+  const systemInfo = useStore((s) => s.systemInfo)
   const cards = libraryLayout === 'cards'
 
   const [servers, setServers] = useState<MediaServerInfo[] | null>(null)
@@ -417,6 +419,19 @@ export function LibraryScreen(): React.JSX.Element {
     } catch {
       showNotice("Couldn't save the preset.")
       throw new Error('preset save failed')
+    }
+    // Record the artist locally (settings.presetArtists): /presets/list has
+    // no artist field and firmware-derived names are just the album title —
+    // this is what lets the Presets filter match by artist. Read fresh so
+    // back-to-back saves can't clobber each other's keys.
+    const artist = node === albumNode ? (albumArtist ?? node.artist) : node.artist
+    if (artist) {
+      void saveSettings({
+        presetArtists: {
+          ...useStore.getState().settings.presetArtists,
+          [presetVolumeKey(systemInfo?.udn, slot)]: artist
+        }
+      })
     }
     setPresetPicker(null)
     // unlike queue-adds there's no in-place flash — the effect lives on Presets

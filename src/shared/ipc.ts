@@ -729,6 +729,17 @@ export interface AppSettings {
   /** Remembered mini-player window position. */
   miniBounds: { x: number; y: number } | null
   /**
+   * Artist per device preset, keyed by presetVolumeKey(udn, presetId) —
+   * recorded when TastyTunes saves an album/track preset from the Library.
+   * LOCAL-ONLY: /presets/list carries NO artist field and firmware-derived
+   * names are just the album title, so this is what lets the Presets filter
+   * match "iron" against an Iron Maiden album preset. Presets saved by other
+   * controllers have no entry (nothing to record from). Same lifecycle trade
+   * as presetVolumes: entries are keyed by slot and not remapped on
+   * move/delete.
+   */
+  presetArtists: Record<string, string>
+  /**
    * User-saved EQ gain-sets (7 gains, dB). LOCAL by design: the firmware has
    * no preset storage — the official app's EQ presets are client-side too
    * (confirmed on the wire: tapping/saving one produces zero device traffic),
@@ -783,6 +794,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   deviceTab: 'streamer',
   panelWidth: 400,
   miniBounds: null,
+  presetArtists: {},
   eqPresets: []
 }
 
