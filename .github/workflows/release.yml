@@ -33,6 +33,24 @@ jobs:
           node-version: 22
           cache: npm
 
+      # Tag builds refuse to run unless the tag agrees with package.json —
+      # package.json is THE version (electron-builder bakes it into the
+      # artifacts, the app's About, and the update feed); the tag only names
+      # the release. A mismatch would publish a release labeled one version
+      # containing another, and the in-app update check (latest release tag
+      # vs baked version) would offer the "new" version forever.
+      - name: Verify tag matches package.json version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          PKG="v$(node -p "require('./package.json').version")"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::Tag $TAG does not match package.json $PKG — bump package.json on main, then re-tag (dev/tag-release.sh derives the tag for you)."
+            exit 1
+          fi
+          echo "Version check OK: $TAG"
+
       # Import macOS signing/notarization credentials when the repo secrets
       # exist. Absent secrets (e.g. on a fork) disable identity auto-discovery
       # so the build falls through to unsigned, notarization skipped.
