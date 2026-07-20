@@ -7,6 +7,9 @@ import type {
   SystemInfo,
   SystemPower,
   SystemSources,
+  SystemDisplay,
+  SystemDisplaySpec,
+  SystemPowerSpec,
   ZoneAudio,
   ZoneAudioSpec,
   ZoneNowPlaying,
@@ -188,6 +191,9 @@ export type PushMessage =
   | { kind: 'sources'; data: SystemSources }
   | { kind: 'zoneAudio'; data: ZoneAudio | null }
   | { kind: 'audioSpec'; data: ZoneAudioSpec | null }
+  | { kind: 'systemDisplay'; data: SystemDisplay | null }
+  | { kind: 'displaySpec'; data: SystemDisplaySpec | null }
+  | { kind: 'powerSpec'; data: SystemPowerSpec | null }
   | { kind: 'favorites'; data: Favorite[] }
   | { kind: 'frame'; entry: FrameEntry }
   | { kind: 'log'; entry: LogEntry }
@@ -381,6 +387,13 @@ export type StreamerCommand =
   | { type: 'setTiltEq'; enabled: boolean }
   | { type: 'setTiltIntensity'; intensity: number }
   | { type: 'setBalance'; balance: number }
+  // ---- §10 device controls (feature-detected via the /spec probes)
+  /** Front-panel brightness: off | dim | bright. */
+  | { type: 'setBrightness'; brightness: string }
+  /** Standby the unit drops into: ECO_MODE | NETWORK. */
+  | { type: 'setStandbyMode'; mode: string }
+  /** Idle seconds before auto power-down; 0 = never. */
+  | { type: 'setAutoPowerDown'; seconds: number }
 
 // ------------------------------------------------------------------- MCP server
 
@@ -819,6 +832,11 @@ export interface Snapshot {
   zoneAudio: ZoneAudio | null
   /** Tone/EQ capability spec, probed over HTTP at connect; null = no tone controls. */
   audioSpec: ZoneAudioSpec | null
+  /** Front-panel display state (/system/display); null on headless models. */
+  systemDisplay: SystemDisplay | null
+  /** Display + power capability specs, probed at connect. */
+  displaySpec: SystemDisplaySpec | null
+  powerSpec: SystemPowerSpec | null
   sleep: SleepTimer | null
   /**
    * The preset most recently recalled THROUGH THIS APP (renderer, palette,

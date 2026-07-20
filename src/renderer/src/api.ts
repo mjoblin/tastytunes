@@ -23,7 +23,10 @@ const WRITE_FAILURES: Partial<Record<StreamerCommand['type'], string>> = {
   setEqBands: "Couldn't reset the EQ",
   setTiltEq: "Couldn't switch the tone tilt",
   setTiltIntensity: "Couldn't adjust the tone tilt",
-  setBalance: "Couldn't adjust the balance"
+  setBalance: "Couldn't adjust the balance",
+  setBrightness: "Couldn't change the display brightness",
+  setStandbyMode: "Couldn't change the standby mode",
+  setAutoPowerDown: "Couldn't change the auto power-down"
 }
 
 export const tt: TastyTunesApi = {

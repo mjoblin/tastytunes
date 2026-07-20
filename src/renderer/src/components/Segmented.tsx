@@ -4,6 +4,8 @@ export interface SegmentedOption<T> {
   value: T
   label: string
   icon?: React.ReactNode
+  /** Optional hover tooltip (uses the app's data-tip treatment). */
+  tip?: string
 }
 
 /**
@@ -28,8 +30,10 @@ export function Segmented<T extends string | number | boolean>({
         <button
           key={String(opt.value)}
           onClick={() => onChange(opt.value)}
+          data-tip={opt.tip}
           className={cx(
             'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] transition-colors',
+            opt.tip && 'tip-top',
             value === opt.value ? 'bg-golddim text-gold' : 'text-dim hover:text-ink'
           )}
         >

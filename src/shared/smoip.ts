@@ -366,6 +366,51 @@ export interface SystemInfo {
 
 export interface SystemPower {
   power: string // "ON" | "NETWORK" (network standby)
+  /** Which standby the unit drops into (ECO_MODE = deep, NETWORK = instant-on). */
+  standby_mode?: string | null
+  /** Idle seconds before auto power-down; 0 = never. (Evo range 0..7200.) */
+  auto_power_down?: number | null
+}
+
+// ---------------------------------------------------------------- /system/display
+
+/** Front-panel display brightness (off | dim | bright). */
+export interface SystemDisplay {
+  brightness: string
+}
+
+// --------------------------------------------------- /system/display + power specs
+
+export interface SystemDisplaySpec {
+  brightness?: { enum?: string[]; readonly?: boolean }
+}
+
+export interface SystemPowerSpec {
+  power?: { enum?: string[]; readonly?: boolean }
+  standby_mode?: { enum?: string[]; readonly?: boolean }
+  auto_power_down?: { minimum?: number; maximum?: number; readonly?: boolean }
+}
+
+/**
+ * Feature-detection for the §10 device controls — present-and-writable only,
+ * mirroring audioCaps. A headless streamer has no /system/display; readonly
+ * fields (or an absent spec) collapse to "not supported" and the control hides.
+ */
+export const brightnessOptions = (spec: SystemDisplaySpec | null | undefined): string[] | null => {
+  const b = spec?.brightness
+  return b?.enum?.length && b.readonly !== true ? b.enum : null
+}
+export const standbyModeOptions = (spec: SystemPowerSpec | null | undefined): string[] | null => {
+  const s = spec?.standby_mode
+  return s?.enum?.length && s.readonly !== true ? s.enum : null
+}
+export const autoPowerDownRange = (
+  spec: SystemPowerSpec | null | undefined
+): { min: number; max: number } | null => {
+  const r = spec?.auto_power_down
+  return r && r.readonly !== true && r.minimum != null && r.maximum != null
+    ? { min: r.minimum, max: r.maximum }
+    : null
 }
 
 // ----------------------------------------------------------------- /system/update

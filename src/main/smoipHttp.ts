@@ -110,6 +110,26 @@ export async function getAudioSpec(host: string): Promise<unknown | null> {
 }
 
 /**
+ * Fetch a self-describing /spec document (display or power) — the §10
+ * capability probe, mirroring getAudioSpec. null on any non-positive answer
+ * (404 on a headless unit, timeout, junk) = "control not supported".
+ */
+async function getSpec(host: string, path: string): Promise<unknown | null> {
+  try {
+    const res = await fetch(`http://${host}/smoip${path}`, { signal: AbortSignal.timeout(5000) })
+    if (!res.ok) return null
+    const body = (await res.json().catch(() => null)) as { data?: unknown } | null
+    return body?.data ?? null
+  } catch {
+    return null
+  }
+}
+export const getDisplaySpec = (host: string): Promise<unknown | null> =>
+  getSpec(host, '/system/display/spec')
+export const getPowerSpec = (host: string): Promise<unknown | null> =>
+  getSpec(host, '/system/power/spec')
+
+/**
  * Fetch the preset list over HTTP — how vibin refreshes stale is_playing flags.
  * (A bare WS request for /presets/list is not proven against real hardware.)
  */

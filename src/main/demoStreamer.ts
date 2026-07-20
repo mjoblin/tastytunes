@@ -100,7 +100,8 @@ function buildDemo(host: string): {
       max_http_body_size: 65536,
       api: '1.8'
     },
-    '/system/power': { power: 'ON' },
+    '/system/power': { power: 'ON', standby_mode: 'NETWORK', auto_power_down: 3600 },
+    '/system/display': { brightness: 'dim' },
     // Firmware self-check status the streamer pushes to subscribers. The demo is
     // always up-to-date (no update shown). Read-only, like the mock — the app
     // never sends action=CHECK/UPDATE. (Mirror of dev/mock-streamer.mjs, minus
@@ -731,6 +732,23 @@ function buildDemo(host: string): {
         res.writeHead(200, { 'content-type': 'application/json' })
         return res.end(JSON.stringify({ zone: 'ZONE1', data: AUDIO_SPEC }))
       }
+      // §10 device-control specs + display read (mirror of the mock)
+      if (u.pathname === '/smoip/system/display/spec') {
+        res.writeHead(200, { 'content-type': 'application/json' })
+        return res.end(JSON.stringify({ data: { brightness: { enum: ['off', 'dim', 'bright'] } } }))
+      }
+      if (u.pathname === '/smoip/system/display') {
+        res.writeHead(200, { 'content-type': 'application/json' })
+        return res.end(JSON.stringify({ data: DATA['/system/display'] }))
+      }
+      if (u.pathname === '/smoip/system/power/spec') {
+        res.writeHead(200, { 'content-type': 'application/json' })
+        return res.end(JSON.stringify({ data: {
+          power: { enum: ['ON', 'ECO_MODE', 'NETWORK', 'default', 'toggle'], readonly: false },
+          standby_mode: { enum: ['ECO_MODE', 'NETWORK'], readonly: false },
+          auto_power_down: { minimum: 0, maximum: 7200, readonly: false }
+        } }))
+      }
       if (u.pathname === '/smoip/zone/audio') {
         const params: Dict = {}
         for (const [k, v] of u.searchParams) {
@@ -1084,12 +1102,19 @@ function buildDemo(host: string): {
           const next = params.action === 'toggle' ? (state === 'play' ? 'pause' : 'play') : params.action
           DATA['/zone/play_state'] = { ...DATA['/zone/play_state'], state: next }
           setTimeout(() => push('/zone/play_state'), 120)
-        } else if (frame.path === '/system/power' && typeof params.power === 'string') {
-          // echo power: ON / NETWORK / toggle
-          const powered = (DATA['/system/power'] as Dict).power === 'ON'
-          const next = params.power === 'toggle' ? (powered ? 'NETWORK' : 'ON') : params.power
-          DATA['/system/power'] = { power: next }
+        } else if (frame.path === '/system/power') {
+          // partial writes: power / standby_mode / auto_power_down (merge)
+          const cur = DATA['/system/power'] as Dict
+          const next: Dict = { ...cur }
+          if (typeof params.power === 'string')
+            next.power = params.power === 'toggle' ? (cur.power === 'ON' ? 'NETWORK' : 'ON') : params.power
+          if (typeof params.standby_mode === 'string') next.standby_mode = params.standby_mode
+          if (typeof params.auto_power_down === 'number') next.auto_power_down = params.auto_power_down
+          DATA['/system/power'] = next
           setTimeout(() => push('/system/power'), 120)
+        } else if (frame.path === '/system/display' && typeof params.brightness === 'string') {
+          DATA['/system/display'] = { ...DATA['/system/display'], brightness: params.brightness }
+          setTimeout(() => push('/system/display'), 120)
         } else if (frame.path === '/zone/audio') {
           // tone/EQ write over the WS — atomic, /zone/audio pushed on success
           applyAudioWrite(params)

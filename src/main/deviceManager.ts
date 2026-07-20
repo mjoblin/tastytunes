@@ -23,6 +23,9 @@ import type {
   SmoipFrame,
   SystemInfo,
   SystemPower,
+  SystemDisplay,
+  SystemDisplaySpec,
+  SystemPowerSpec,
   SystemSources,
   SystemUpdate,
   ZoneAudio,
@@ -69,6 +72,9 @@ interface Cache {
   sources: SystemSources | null
   zoneAudio: ZoneAudio | null
   audioSpec: ZoneAudioSpec | null
+  systemDisplay: SystemDisplay | null
+  displaySpec: SystemDisplaySpec | null
+  powerSpec: SystemPowerSpec | null
 }
 
 const emptyCache = (): Cache => ({
@@ -83,7 +89,10 @@ const emptyCache = (): Cache => ({
   firmwareUpdate: null,
   sources: null,
   zoneAudio: null,
-  audioSpec: null
+  audioSpec: null,
+  systemDisplay: null,
+  displaySpec: null,
+  powerSpec: null
 })
 
 export class DeviceManager {
@@ -170,9 +179,10 @@ export class DeviceManager {
       onConnected: () => {
         if (isCurrent(socket)) {
           this.setConnection({ phase: 'connected', host })
-          // Tone/EQ capability probe — refreshed every (re)connect. The spec
-          // endpoint isn't proven over the WS, so it rides HTTP like presets.
+          // Capability probes — refreshed every (re)connect. The /spec
+          // endpoints aren't proven over the WS, so they ride HTTP like presets.
           void this.probeAudioSpec(socket)
+          void this.probeSystemSpecs(socket)
         }
       },
       onDisconnected: (reason, reconnecting) => {
@@ -398,6 +408,15 @@ export class DeviceManager {
           zone: 'ZONE1',
           balance: this.clampSpec(cmd.balance, this.cache.audioSpec?.balance)
         })
+      // ---- §10 device controls (writes over the WS like the power command;
+      // ---- standby fields are partial writes to /system/power, so they never
+      // ---- carry `power` and can't trip the re-send-ON reboot guard)
+      case 'setBrightness':
+        return socket.send('/system/display', { brightness: cmd.brightness })
+      case 'setStandbyMode':
+        return socket.send('/system/power', { standby_mode: cmd.mode })
+      case 'setAutoPowerDown':
+        return socket.send('/system/power', { auto_power_down: Math.max(0, Math.round(cmd.seconds)) })
       case 'zoneSavePreset':
         await smoipHttp.zoneSavePreset(host, cmd.slot)
         return this.refreshPresets(socket)
@@ -441,6 +460,23 @@ export class DeviceManager {
     this.cache.audioSpec = spec
     this.push({ kind: 'audioSpec', data: spec })
     if (spec) this.log('info', 'audio', 'tone/EQ spec present — controls enabled where writable')
+  }
+
+  /**
+   * Probe /system/display/spec + /system/power/spec after connect — the §10
+   * brightness/standby capability docs. Every non-positive outcome lands as
+   * null (headless unit, timeout) and the matching control stays hidden.
+   */
+  private async probeSystemSpecs(socket: SmoipSocket): Promise<void> {
+    const [display, power] = await Promise.all([
+      smoipHttp.getDisplaySpec(socket.host) as Promise<SystemDisplaySpec | null>,
+      smoipHttp.getPowerSpec(socket.host) as Promise<SystemPowerSpec | null>
+    ])
+    if (this.socket !== socket) return
+    this.cache.displaySpec = display
+    this.cache.powerSpec = power
+    this.push({ kind: 'displaySpec', data: display })
+    this.push({ kind: 'powerSpec', data: power })
   }
 
   // ------------------------------------------------------------ incoming frames
@@ -501,6 +537,9 @@ export class DeviceManager {
         // (confirmed live 2026-07-19) — the UI mirrors external tweaks free.
         this.cache.zoneAudio = data as ZoneAudio
         return this.push({ kind: 'zoneAudio', data: this.cache.zoneAudio })
+      case '/system/display':
+        this.cache.systemDisplay = data as SystemDisplay
+        return this.push({ kind: 'systemDisplay', data: this.cache.systemDisplay })
       case '/queue/info': {
         // The socket already refetches /queue/list. A queue change is also the
         // only observable signal of an album->album preset recall (same source,

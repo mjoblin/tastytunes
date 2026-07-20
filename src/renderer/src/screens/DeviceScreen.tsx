@@ -7,6 +7,7 @@ import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { cx } from '@/lib/format'
 import { Segmented } from '@/components/Segmented'
 import { ToneEq } from '@/components/ToneEq'
+import { DeviceControls } from '@/components/DeviceControls'
 
 export function DeviceScreen(): React.JSX.Element {
   const connection = useStore((s) => s.connection)
@@ -230,18 +231,21 @@ export function DeviceScreen(): React.JSX.Element {
                 </div>
               ) : null}
 
+              {/* §10 controls — brightness / standby / auto power-down, each
+                  feature-detected via its /spec (hidden on models without it) */}
+              <DeviceControls />
+
               {/* the demo device has no web interface to point at */}
               {!(connection.phase === 'connected' && connection.demo) && (
-                <div className="pt-1">
+                <div className="pt-1 border-t border-edge">
                   <button
                     onClick={() => void tt.openExternal(`http://${connectedHost}`)}
-                    className="flex items-center gap-1.5 text-[12.5px] px-3 h-8 rounded-lg ring-1 ring-edge bg-panel/70 text-amber hover:brightness-110 hover:ring-edge2 motion-safe:active:scale-95 transition-all"
+                    className="mt-3 flex items-center gap-1.5 text-[12.5px] px-3 h-8 rounded-lg ring-1 ring-edge bg-panel/70 text-amber hover:brightness-110 hover:ring-edge2 motion-safe:active:scale-95 transition-all"
                   >
                     Open web admin <ExternalLink size={12} />
                   </button>
                   <div className="text-[11.5px] text-faint mt-1.5">
-                    Renaming, display brightness, standby, and firmware updates live in the
-                    streamer's own web interface.
+                    Renaming and firmware updates live in the streamer&rsquo;s own web interface.
                   </div>
                 </div>
               )}

@@ -20,8 +20,11 @@ import type {
   Presets,
   QueueList,
   QueueListItem,
+  SystemDisplay,
+  SystemDisplaySpec,
   SystemInfo,
   SystemPower,
+  SystemPowerSpec,
   SystemSources,
   ZoneAudio,
   ZoneAudioSpec,
@@ -119,6 +122,10 @@ interface TTState {
   zoneAudio: ZoneAudio | null
   /** Tone/EQ capability spec (null = this streamer has no tone controls). */
   audioSpec: ZoneAudioSpec | null
+  /** Front-panel display + power/standby state and capability specs (§10 controls). */
+  systemDisplay: SystemDisplay | null
+  displaySpec: SystemDisplaySpec | null
+  powerSpec: SystemPowerSpec | null
   playhead: PlayheadSync | null
 
   frames: FrameEntry[]
@@ -216,6 +223,9 @@ export const useStore = create<TTState>((set, get) => ({
   sources: null,
   zoneAudio: null,
   audioSpec: null,
+  systemDisplay: null,
+  displaySpec: null,
+  powerSpec: null,
   playhead: null,
 
   frames: [],
@@ -299,6 +309,9 @@ export const useStore = create<TTState>((set, get) => ({
       sources: snap.sources,
       zoneAudio: snap.zoneAudio,
       audioSpec: snap.audioSpec,
+      systemDisplay: snap.systemDisplay,
+      displaySpec: snap.displaySpec,
+      powerSpec: snap.powerSpec,
       sleep: snap.sleep,
       recents: snap.recents,
       favorites: snap.favorites,
@@ -333,6 +346,9 @@ export const useStore = create<TTState>((set, get) => ({
               sources: null,
               zoneAudio: null,
               audioSpec: null,
+              systemDisplay: null,
+              displaySpec: null,
+              powerSpec: null,
               sleep: null,
               playhead: null
             }
@@ -369,6 +385,12 @@ export const useStore = create<TTState>((set, get) => ({
           return { zoneAudio: msg.data }
         case 'audioSpec':
           return { audioSpec: msg.data }
+        case 'systemDisplay':
+          return { systemDisplay: msg.data }
+        case 'displaySpec':
+          return { displaySpec: msg.data }
+        case 'powerSpec':
+          return { powerSpec: msg.data }
         case 'frame': {
           const frames = [...s.frames, msg.entry]
           if (frames.length > FRAME_RING) frames.splice(0, frames.length - FRAME_RING)

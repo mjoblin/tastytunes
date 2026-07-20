@@ -18,6 +18,9 @@ const SUBSCRIBED_PATHS = [
   // never with an `action` param (see the PASSIVE-ONLY guard in deviceManager).
   '/system/update',
   '/system/sources',
+  // Front-panel brightness — pushed on change (e.g. from the web admin);
+  // headless models simply never answer (gated on /system/display/spec).
+  '/system/display',
   // Tone/EQ chain — per-model; a streamer without it simply never answers
   // (feature detection runs off /zone/audio/spec, probed over HTTP at connect).
   '/zone/audio',
