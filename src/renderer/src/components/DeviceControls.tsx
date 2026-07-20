@@ -26,9 +26,16 @@ const POWER_DOWN_PRESETS = [
 ]
 
 /** Snap the device's reported auto-power-down to the nearest offered preset so
- *  one segment is always highlighted (a web-admin value need not match ours). */
+ *  one segment is always highlighted (a web-admin value need not match ours).
+ *  When the snap is inexact, the row annotates the device's true value — the
+ *  highlight alone must not misreport what the streamer is actually set to. */
 const nearestPreset = (secs: number, presets: number[]): number =>
   presets.reduce((best, p) => (Math.abs(p - secs) < Math.abs(best - secs) ? p : best), presets[0])
+
+/** Human form of an off-preset auto-power-down value (range is 0..2h, so
+ *  minutes cover everything the presets don't). */
+const formatPowerDown = (secs: number): string =>
+  secs === 0 ? 'never' : secs % 3600 === 0 ? `${secs / 3600} h` : `${Math.round(secs / 60)} min`
 
 export function DeviceControls(): React.JSX.Element | null {
   const display = useStore((s) => s.systemDisplay)
@@ -45,6 +52,13 @@ export function DeviceControls(): React.JSX.Element | null {
   const powerDownOptions = powerDown
     ? POWER_DOWN_PRESETS.filter((p) => p.seconds >= powerDown.min && p.seconds <= powerDown.max)
     : []
+  const powerDownActual = power?.auto_power_down ?? 0
+  const powerDownSnapped = powerDownOptions.length
+    ? nearestPreset(
+        powerDownActual,
+        powerDownOptions.map((p) => p.seconds)
+      )
+    : 0
 
   return (
     <div className="border-t border-edge pt-3.5 space-y-3.5" data-device-controls>
@@ -74,14 +88,18 @@ export function DeviceControls(): React.JSX.Element | null {
 
       {powerDown && power && powerDownOptions.length > 0 && (
         <ControlRow label="Auto power-down">
-          <Segmented
-            value={nearestPreset(
-              power.auto_power_down ?? 0,
-              powerDownOptions.map((p) => p.seconds)
+          <div className="flex items-center gap-2.5">
+            <Segmented
+              value={powerDownSnapped}
+              onChange={(secs) => void tt.command({ type: 'setAutoPowerDown', seconds: secs })}
+              options={powerDownOptions.map((p) => ({ value: p.seconds, label: p.label }))}
+            />
+            {powerDownSnapped !== powerDownActual && (
+              <span className="text-[11px] text-faint whitespace-nowrap" data-apd-note>
+                device: {formatPowerDown(powerDownActual)}
+              </span>
             )}
-            onChange={(secs) => void tt.command({ type: 'setAutoPowerDown', seconds: secs })}
-            options={powerDownOptions.map((p) => ({ value: p.seconds, label: p.label }))}
-          />
+          </div>
         </ControlRow>
       )}
     </div>

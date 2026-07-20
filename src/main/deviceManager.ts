@@ -415,8 +415,18 @@ export class DeviceManager {
         return socket.send('/system/display', { brightness: cmd.brightness })
       case 'setStandbyMode':
         return socket.send('/system/power', { standby_mode: cmd.mode })
-      case 'setAutoPowerDown':
-        return socket.send('/system/power', { auto_power_down: Math.max(0, Math.round(cmd.seconds)) })
+      case 'setAutoPowerDown': {
+        // Clamp to the probed spec range like balance/tilt — the UI only
+        // offers in-range presets, but the boundary shouldn't rely on that.
+        const r = this.cache.powerSpec?.auto_power_down
+        const secs = Math.max(0, Math.round(cmd.seconds))
+        return socket.send('/system/power', {
+          auto_power_down:
+            r?.minimum != null && r?.maximum != null
+              ? Math.max(r.minimum, Math.min(r.maximum, secs))
+              : secs
+        })
+      }
       case 'zoneSavePreset':
         await smoipHttp.zoneSavePreset(host, cmd.slot)
         return this.refreshPresets(socket)
