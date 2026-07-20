@@ -44,6 +44,34 @@ export function ToneEq({ label = true }: { label?: boolean } = {}): React.JSX.El
   const saveSettings = useStore((s) => s.saveSettings)
   const [savePos, setSavePos] = useState<{ x: number; y: number } | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+
+  // Live-hold for tilt/balance: shows the drag value while scrubbing and
+  // HOLDS the committed value until the streamer's echo lands (releasing
+  // used to flash the stale value for the round-trip). Cleared when the
+  // store confirms; a 3s fallback reverts honestly if a write ever fails.
+  // (Hooks live above the early return — house rule.)
+  const [tiltHold, setTiltHold] = useState<number | null>(null)
+  const [balanceHold, setBalanceHold] = useState<number | null>(null)
+  const tiltNow = zoneAudio?.tilt_eq?.intensity ?? null
+  const balanceNow = zoneAudio?.balance ?? null
+  useEffect(() => {
+    if (tiltHold != null && tiltNow != null && Math.round(tiltHold) === tiltNow) setTiltHold(null)
+  }, [tiltHold, tiltNow])
+  useEffect(() => {
+    if (balanceHold != null && balanceNow != null && Math.round(balanceHold) === balanceNow)
+      setBalanceHold(null)
+  }, [balanceHold, balanceNow])
+  useEffect(() => {
+    if (tiltHold == null) return
+    const t = setTimeout(() => setTiltHold(null), 3000)
+    return () => clearTimeout(t)
+  }, [tiltHold])
+  useEffect(() => {
+    if (balanceHold == null) return
+    const t = setTimeout(() => setBalanceHold(null), 3000)
+    return () => clearTimeout(t)
+  }, [balanceHold])
+
   const caps = audioCaps(spec)
   if (!caps || !zoneAudio) return null
 
@@ -191,12 +219,6 @@ export function ToneEq({ label = true }: { label?: boolean } = {}): React.JSX.El
                 Save as preset…
               </button>
               </div>
-              {eqPresets.length === 0 && (
-                <div className="text-[11px] text-faint" data-eq-presets-empty>
-                  None saved yet — &ldquo;Save as preset…&rdquo; keeps the current curve for
-                  one-tap recall.
-                </div>
-              )}
             </div>
           </div>
         )}
@@ -215,15 +237,23 @@ export function ToneEq({ label = true }: { label?: boolean } = {}): React.JSX.El
             <div className={cx('flex-1 flex items-center gap-2.5', !tilt.enabled && 'opacity-60')}>
               <span className="w-12 text-right text-[10.5px] text-faint shrink-0">darker</span>
               <CenteredSlider
-                value={tilt.intensity}
+                value={tiltHold ?? tilt.intensity}
                 min={caps.tiltRange.min}
                 max={caps.tiltRange.max}
                 ariaLabel="Tone tilt intensity"
-                onCommit={(intensity) => void tt.command({ type: 'setTiltIntensity', intensity })}
+                onScrub={setTiltHold}
+                onCancel={() => setTiltHold(null)}
+                onCommit={(intensity) => {
+                  setTiltHold(intensity)
+                  void tt.command({ type: 'setTiltIntensity', intensity })
+                }}
               />
               <span className="w-12 text-[10.5px] text-faint shrink-0">brighter</span>
               <span className="font-mono text-[11px] text-dim w-8 text-right shrink-0" data-tilt-value>
-                {tilt.intensity > 0 ? `+${tilt.intensity}` : tilt.intensity}
+                {(() => {
+                  const v = Math.round(tiltHold ?? tilt.intensity)
+                  return v > 0 ? `+${v}` : v
+                })()}
               </span>
             </div>
           </div>
@@ -237,17 +267,25 @@ export function ToneEq({ label = true }: { label?: boolean } = {}): React.JSX.El
             <div className="flex-1 flex items-center gap-2.5">
               <span className="w-12 text-right text-[10.5px] text-faint shrink-0">L</span>
               <CenteredSlider
-                value={balance}
+                value={balanceHold ?? balance}
                 min={caps.balanceRange.min}
                 max={caps.balanceRange.max}
                 ariaLabel="Balance"
-                onCommit={(b) => void tt.command({ type: 'setBalance', balance: b })}
+                onScrub={setBalanceHold}
+                onCancel={() => setBalanceHold(null)}
+                onCommit={(b) => {
+                  setBalanceHold(b)
+                  void tt.command({ type: 'setBalance', balance: b })
+                }}
               />
               <span className="w-12 text-[10.5px] text-faint shrink-0">R</span>
               {/* centered = "0", matching the tilt readout (a lone middot
                   here read as a mystery speck — user catch) */}
               <span className="font-mono text-[11px] text-dim w-8 text-right shrink-0" data-balance-value>
-                {balance === 0 ? '0' : balance < 0 ? `L${-balance}` : `R${balance}`}
+                {(() => {
+                  const v = Math.round(balanceHold ?? balance)
+                  return v === 0 ? '0' : v < 0 ? `L${-v}` : `R${v}`
+                })()}
               </span>
             </div>
           </div>
@@ -375,6 +413,18 @@ function BandSlider({
 }): React.JSX.Element {
   const trackRef = useRef<HTMLDivElement>(null)
   const [dragGain, setDragGain] = useState<number | null>(null)
+  // Committed-but-unconfirmed gain: shown until the streamer's echo lands
+  // (releasing used to flash the stale store value for the round-trip);
+  // cleared on confirmation, 3s fallback reverts honestly on a failed write.
+  const [pending, setPending] = useState<number | null>(null)
+  useEffect(() => {
+    if (pending != null && Math.abs(gain - pending) < 0.05) setPending(null)
+  }, [gain, pending])
+  useEffect(() => {
+    if (pending == null) return
+    const t = setTimeout(() => setPending(null), 3000)
+    return () => clearTimeout(t)
+  }, [pending])
 
   const dragging = dragGain !== null
   useEffect(() => {
@@ -393,7 +443,7 @@ function BandSlider({
     return snapGain(EQ_GAIN_MIN + ratio * GAIN_SPAN)
   }
 
-  const shown = dragGain ?? Math.max(EQ_GAIN_MIN, Math.min(EQ_GAIN_MAX, gain))
+  const shown = dragGain ?? pending ?? Math.max(EQ_GAIN_MIN, Math.min(EQ_GAIN_MAX, gain))
   const ratio = (shown - EQ_GAIN_MIN) / GAIN_SPAN
   const zeroRatio = (0 - EQ_GAIN_MIN) / GAIN_SPAN
 
@@ -418,7 +468,10 @@ function BandSlider({
           if (dragGain === null) return
           const g = dragGain
           setDragGain(null)
-          if (g !== gain) onCommit(g)
+          if (g !== gain) {
+            setPending(g)
+            onCommit(g)
+          }
         }}
         onPointerCancel={() => setDragGain(null)}
       >
@@ -466,12 +519,18 @@ function CenteredSlider({
   min,
   max,
   ariaLabel,
+  onScrub,
+  onCancel,
   onCommit
 }: {
   value: number
   min: number
   max: number
   ariaLabel: string
+  /** Live value on every drag move — feeds the row's readout. */
+  onScrub?(value: number): void
+  /** Drag aborted (Escape) — nothing was committed. */
+  onCancel?(): void
   onCommit(value: number): void
 }): React.JSX.Element {
   const trackRef = useRef<HTMLDivElement>(null)
@@ -481,11 +540,14 @@ function CenteredSlider({
   useEffect(() => {
     if (!dragging) return
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') setDragValue(null)
+      if (e.key === 'Escape') {
+        setDragValue(null)
+        onCancel?.()
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [dragging])
+  }, [dragging, onCancel])
 
   const valueFromEvent = (e: React.PointerEvent): number => {
     const rect = trackRef.current?.getBoundingClientRect()
@@ -508,18 +570,28 @@ function CenteredSlider({
       className="group relative h-4 flex-1 flex items-center cursor-pointer no-drag"
       onPointerDown={(e) => {
         e.currentTarget.setPointerCapture(e.pointerId)
-        setDragValue(valueFromEvent(e))
+        const v = valueFromEvent(e)
+        setDragValue(v)
+        onScrub?.(v)
       }}
       onPointerMove={(e) => {
-        if (dragValue !== null) setDragValue(valueFromEvent(e))
+        if (dragValue === null) return
+        const v = valueFromEvent(e)
+        setDragValue(v)
+        onScrub?.(v)
       }}
       onPointerUp={() => {
         if (dragValue === null) return
         const v = dragValue
         setDragValue(null)
-        if (v !== value) onCommit(v)
+        // always commit: the value prop is the caller's HOLD during a drag,
+        // so a same-value compare here would swallow every release
+        onCommit(v)
       }}
-      onPointerCancel={() => setDragValue(null)}
+      onPointerCancel={() => {
+        setDragValue(null)
+        onCancel?.()
+      }}
     >
       <div ref={trackRef} className="relative h-[3px] w-full rounded-full bg-veil2">
         <div
