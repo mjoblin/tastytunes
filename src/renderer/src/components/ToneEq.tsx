@@ -12,25 +12,12 @@ import { audioCaps, EQ_GAIN_MAX, EQ_GAIN_MIN } from '@shared/smoip'
 const BAND_LABELS = ['80', '120', '315', '800', '2k', '5k', '8k']
 const GAIN_SPAN = EQ_GAIN_MAX - EQ_GAIN_MIN
 
-/**
- * Built-in gain-sets, mirroring the official app's preset NAMES (user
- * expectation) with OUR OWN conventional curves: the Cambridge app's presets
- * are client-side state inside that app — invisible on the wire — so their
- * actual values can't be read or imported, only the list echoed. User-saved
- * sets live in settings.eqPresets and render after these.
- */
-const BUILTIN_EQ_PRESETS: Array<{ name: string; gains: number[] }> = [
-  { name: 'Normal', gains: [0, 0, 0, 0, 0, 0, 0] },
-  { name: 'Bass Boost', gains: [3, 2, 1, 0, 0, 0, 0] },
-  { name: 'Bass Reduction', gains: [-4, -3, -1.5, 0, 0, 0, 0] },
-  { name: 'Voice Clarity', gains: [-1, -1, 0, 1.5, 2.5, 2, 0] },
-  { name: 'Treble Boost', gains: [0, 0, 0, 0, 1, 2.5, 3] },
-  { name: 'Treble Reduction', gains: [0, 0, 0, 0, -1.5, -3, -4] },
-  // the official app's home-theater trio, as sensible speech/cinema/V curves
-  { name: 'TV', gains: [-2, -1, 0.5, 2, 2.5, 1, 0] },
-  { name: 'Movie', gains: [3, 2, 0, -1, -0.5, 1, 2] },
-  { name: 'Gaming', gains: [2.5, 1.5, -0.5, -1.5, -0.5, 1.5, 2.5] }
-]
+// NO built-in preset curves — a deliberate user decision (2026-07-19), don't
+// re-add. Mirroring the official app's preset NAMES with invented curves
+// would mislead: its presets are client-side state inside the Cambridge app
+// (invisible on the wire), so "TV" here could never sound like "TV" there.
+// Presets in TastyTunes are exactly the user's own saved gain-sets
+// (settings.eqPresets); the one built-in affordance is the Flat RESET button.
 
 const gainsMatch = (bands: Array<{ gain: number }>, gains: number[]): boolean =>
   gains.length >= bands.length && bands.every((b, i) => Math.abs(b.gain - gains[i]) < 0.05)
@@ -93,6 +80,15 @@ export function ToneEq({ label = true }: { label?: boolean } = {}): React.JSX.El
           <div className="space-y-3">
             <div className="flex items-center gap-3">
               <span className="text-[13px] flex-1">Equalizer</span>
+              {/* a RESET utility, not a preset — one multi-band all-zeros frame */}
+              <button
+                onClick={() => void tt.command({ type: 'setEqBands', gains: BAND_LABELS.map(() => 0) })}
+                disabled={eq.bands.every((b) => b.gain === 0)}
+                data-eq-flat
+                className="text-[12px] px-2.5 h-7 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-95 transition-all disabled:opacity-40 disabled:hover:text-dim disabled:hover:ring-edge disabled:hover:bg-panel/70"
+              >
+                Flat
+              </button>
               <ToneSwitch
                 checked={eq.enabled}
                 label="Equalizer on"
@@ -136,34 +132,24 @@ export function ToneEq({ label = true }: { label?: boolean } = {}): React.JSX.El
               ))}
             </div>
 
-            {/* gain-set chips: built-ins, then user-saved, then Save. The
-                active chip is derived (gains match), so presets applied
-                before a manual tweak un-light themselves honestly. */}
-            <div className="flex flex-wrap items-center gap-1.5 pt-1" data-eq-presets>
-              {BUILTIN_EQ_PRESETS.map((p) => {
-                const active = gainsMatch(eq.bands, p.gains)
-                return (
-                  <button
-                    key={p.name}
-                    onClick={() => applyPreset(p.gains)}
-                    data-eq-preset={p.name}
-                    className={cx(
-                      'rounded-full px-3 py-1 text-[12px] ring-1 transition-all motion-safe:active:scale-95',
-                      active
-                        ? 'ring-gold/50 bg-golddim text-gold'
-                        : 'ring-edge bg-panel/60 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70'
-                    )}
-                  >
-                    {p.name}
-                  </button>
-                )
-              })}
+            {/* The user's own saved gain-sets, always labeled as TastyTunes's:
+                the Cambridge app's presets are unreadable client-side state
+                in THAT app, and pretending otherwise here would mislead. The
+                active chip is derived (gains match), so a preset un-lights
+                itself honestly after a manual tweak. */}
+            <div className="space-y-1.5 pt-1">
+              <div className="microlabel">tastytunes presets</div>
+              <div className="flex flex-wrap items-center gap-1.5" data-eq-presets>
               {eqPresets.map((p) => {
                 const active = gainsMatch(eq.bands, p.gains)
                 const confirming = confirmDelete === p.name
                 return (
                   <span
                     key={p.name}
+                    // disarm on leaving the WHOLE chip: the ✕→"sure?" morph
+                    // resizes the button, and a leave handler on the button
+                    // itself could disarm mid-morph under a still cursor
+                    onMouseLeave={() => confirming && setConfirmDelete(null)}
                     className={cx(
                       'group/chip flex items-center rounded-full ring-1 transition-all',
                       active
@@ -180,7 +166,6 @@ export function ToneEq({ label = true }: { label?: boolean } = {}): React.JSX.El
                     </button>
                     <button
                       onClick={() => (confirming ? void deletePreset(p.name) : setConfirmDelete(p.name))}
-                      onMouseLeave={() => confirming && setConfirmDelete(null)}
                       data-tip={confirming ? undefined : 'Delete preset'}
                       aria-label={`Delete preset ${p.name}`}
                       className={cx(
@@ -205,6 +190,13 @@ export function ToneEq({ label = true }: { label?: boolean } = {}): React.JSX.El
               >
                 Save as preset…
               </button>
+              </div>
+              {eqPresets.length === 0 && (
+                <div className="text-[11px] text-faint" data-eq-presets-empty>
+                  None saved yet — &ldquo;Save as preset…&rdquo; keeps the current curve for
+                  one-tap recall.
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -300,12 +292,8 @@ function SaveEqPresetPopover({
   const pos = useClampedPosition(boxRef, x, y)
   const [name, setName] = useState('')
   const trimmed = name.trim()
-  // built-in names stay reserved — a user "Flat" that isn't flat would lie
-  const reserved = BUILTIN_EQ_PRESETS.some(
-    (p) => p.name.toLowerCase() === trimmed.toLowerCase()
-  )
   const replaces = existing.some((n) => n.toLowerCase() === trimmed.toLowerCase())
-  const canSave = trimmed.length > 0 && !reserved
+  const canSave = trimmed.length > 0
   return createPortal(
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
@@ -334,11 +322,6 @@ function SaveEqPresetPopover({
         >
           {replaces ? 'Replace preset' : 'Save preset'}
         </button>
-        {reserved && (
-          <div className="text-[10.5px] text-faint leading-snug">
-            That name belongs to a built-in preset — pick another.
-          </div>
-        )}
       </div>
     </>,
     document.body
