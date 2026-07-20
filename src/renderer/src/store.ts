@@ -53,6 +53,14 @@ export interface LibraryTarget {
    *  browse re-walk when the stored objectId has rotted. */
   titlePath: string[]
   title: string
+  /**
+   * The libraryResetNonce this target belongs to. The consuming effect keys
+   * on nonce EQUALITY instead of consume-and-clear: StrictMode double-runs
+   * mount effects in dev, and a cleared target made the second run reset to
+   * the source list (the "lands on top-level Library" bug). A stale nonce
+   * just means "ordinary reset".
+   */
+  nonce: number
 }
 
 /** The station most recently streamed BY THIS APP this session — the only way
@@ -175,7 +183,7 @@ interface TTState {
     text: string
   ): void
   /** Navigate to the Library opened at a specific node (Favorites → album). */
-  openInLibrary(target: LibraryTarget): void
+  openInLibrary(target: Omit<LibraryTarget, 'nonce'>): void
   clearLibraryTarget(): void
   setLastStation(st: LastStation): void
   setAmbientWindowActive(on: boolean): void
@@ -254,11 +262,11 @@ export const useStore = create<TTState>((set, get) => ({
   setContextTab: (contextTab) => set({ contextTab }),
   setScreenFilter: (screen, text) =>
     set((s) => ({ screenFilters: { ...s.screenFilters, [screen]: text } })),
-  // Plant the target BEFORE switching screens: setScreen('library') bumps the
-  // reset nonce, and LibraryScreen's reset effect checks the target last.
-  openInLibrary: (libraryTarget) =>
+  // The target is stamped with the nonce it belongs to — the consuming
+  // effect matches on it (idempotent; see LibraryTarget.nonce).
+  openInLibrary: (target) =>
     set((s) => ({
-      libraryTarget,
+      libraryTarget: { ...target, nonce: s.libraryResetNonce + 1 },
       screen: 'library',
       libraryResetNonce: s.libraryResetNonce + 1
     })),

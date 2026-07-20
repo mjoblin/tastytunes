@@ -193,8 +193,12 @@ export function LibraryScreen(): React.JSX.Element {
   const clearLibraryTarget = useStore((s) => s.clearLibraryTarget)
   useEffect(() => {
     const target = useStore.getState().libraryTarget
-    if (target) {
-      clearLibraryTarget()
+    // Nonce EQUALITY, not consume-and-clear: this effect must be idempotent
+    // (StrictMode double-runs it in dev — clearing on first run made the
+    // second run land on the source list). A leftover target with an older
+    // nonce is stale — drop it and reset normally.
+    if (target && target.nonce !== libraryResetNonce) clearLibraryTarget()
+    if (target && target.nonce === libraryResetNonce) {
       const last = target.titlePath.length - 1
       moveTo(
         target.serverUdn,

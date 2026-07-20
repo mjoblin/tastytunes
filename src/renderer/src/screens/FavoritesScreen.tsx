@@ -283,7 +283,9 @@ export function FavoritesScreen(): React.JSX.Element {
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-8 pb-8 pt-1">
           {shownCount === 0 && (
             <div className="text-[15px] text-faint pt-4 px-1">
-              {filter ? `No matches for “${filter}”` : 'Nothing of this kind favorited yet.'}
+              {filter
+                ? `No matches for “${filter}”`
+                : `No ${kind === 'station' ? 'Stations' : kind === 'album' ? 'Albums' : 'Tracks'} favorited yet.`}
             </div>
           )}
 

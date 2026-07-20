@@ -12,8 +12,10 @@ import { Eqbars } from '@/components/Eqbars'
 /**
  * Art-corner heart (top-right — the preset-card speaker-chip idiom):
  * hover-revealed control normally, but a set heart stays visible in gold —
- * presence + color IS the indicator. Lives INSIDE the card so it scales and
- * lifts with the hover animation.
+ * presence + color IS the indicator. A DIRECT child of the (scaling) card,
+ * not of the art tile: it still zooms with the hover animation, but its
+ * tooltip escapes the art's overflow-hidden clip (tip grows inward via
+ * tip-end so it never pokes past the scrollport either).
  */
 function HeartChip({
   favorited,
@@ -34,7 +36,8 @@ function HeartChip({
         onHeart()
       }}
       className={cx(
-        'tip-bottom absolute top-1.5 right-1.5 h-8 w-8 rounded-lg bg-panel/80 ring-1 ring-edge flex items-center justify-center transition-all motion-safe:active:scale-90',
+        // 14px = the card's p-2 plus the chips' 6px inset from the art corner
+        'tip-bottom tip-end absolute top-3.5 right-3.5 z-10 h-8 w-8 rounded-lg bg-panel/80 ring-1 ring-edge flex items-center justify-center transition-all motion-safe:active:scale-90 cursor-pointer',
         favorited
           ? 'text-gold opacity-100'
           : cx('text-dim hover:text-ink', held ? 'opacity-100' : 'opacity-0 group-hover:opacity-100')
@@ -117,9 +120,6 @@ export function ContainerCard({
               <Eqbars playing={audible} />
             </span>
           )}
-          {album && onHeart && (
-            <HeartChip favorited={favorited === true} held={menuOpen} onHeart={onHeart} />
-          )}
           {album && (
             <span
               onClick={(e) => {
@@ -160,6 +160,9 @@ export function ContainerCard({
           <div className="text-[11.5px] text-faint truncate text-left">{subtitle}</div>
         )}
       </button>
+      {album && onHeart && (
+        <HeartChip favorited={favorited === true} held={menuOpen} onHeart={onHeart} />
+      )}
     </div>
   )
 }
@@ -360,9 +363,6 @@ export function TrackCard({
               <Eqbars playing={audible} />
             </span>
           )}
-          {onHeart && (
-            <HeartChip favorited={favorited === true} held={menuOpen} onHeart={onHeart} />
-          )}
           <span
             data-tip={queued ? 'Play — already in the queue' : 'Play now'}
             className={cx(
@@ -395,6 +395,9 @@ export function TrackCard({
           <div className="text-[11.5px] text-faint truncate text-left">{node.artist}</div>
         )}
       </button>
+      {onHeart && (
+        <HeartChip favorited={favorited === true} held={menuOpen} onHeart={onHeart} />
+      )}
     </div>
   )
 }
