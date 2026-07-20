@@ -13,18 +13,23 @@ const BAND_LABELS = ['80', '120', '315', '800', '2k', '5k', '8k']
 const GAIN_SPAN = EQ_GAIN_MAX - EQ_GAIN_MIN
 
 /**
- * Built-in gain-sets. LOCAL curves (conventional shapes within the −6..+3
- * envelope): the official app's presets are client-side state inside the
- * Cambridge app — invisible on the wire — so there is nothing to import.
- * User-saved sets live in settings.eqPresets and render after these.
+ * Built-in gain-sets, mirroring the official app's preset NAMES (user
+ * expectation) with OUR OWN conventional curves: the Cambridge app's presets
+ * are client-side state inside that app — invisible on the wire — so their
+ * actual values can't be read or imported, only the list echoed. User-saved
+ * sets live in settings.eqPresets and render after these.
  */
 const BUILTIN_EQ_PRESETS: Array<{ name: string; gains: number[] }> = [
-  { name: 'Flat', gains: [0, 0, 0, 0, 0, 0, 0] },
+  { name: 'Normal', gains: [0, 0, 0, 0, 0, 0, 0] },
   { name: 'Bass Boost', gains: [3, 2, 1, 0, 0, 0, 0] },
   { name: 'Bass Reduction', gains: [-4, -3, -1.5, 0, 0, 0, 0] },
   { name: 'Voice Clarity', gains: [-1, -1, 0, 1.5, 2.5, 2, 0] },
   { name: 'Treble Boost', gains: [0, 0, 0, 0, 1, 2.5, 3] },
-  { name: 'Treble Reduction', gains: [0, 0, 0, 0, -1.5, -3, -4] }
+  { name: 'Treble Reduction', gains: [0, 0, 0, 0, -1.5, -3, -4] },
+  // the official app's home-theater trio, as sensible speech/cinema/V curves
+  { name: 'TV', gains: [-2, -1, 0.5, 2, 2.5, 1, 0] },
+  { name: 'Movie', gains: [3, 2, 0, -1, -0.5, 1, 2] },
+  { name: 'Gaming', gains: [2.5, 1.5, -0.5, -1.5, -0.5, 1.5, 2.5] }
 ]
 
 const gainsMatch = (bands: Array<{ gain: number }>, gains: number[]): boolean =>
@@ -45,7 +50,7 @@ const fmtDb = (g: number): string =>
  * are atomic firmware-side). External changes (official app, another
  * controller) arrive as /zone/audio pushes and move these controls live.
  */
-export function ToneEq(): React.JSX.Element | null {
+export function ToneEq({ label = true }: { label?: boolean } = {}): React.JSX.Element | null {
   const zoneAudio = useStore((s) => s.zoneAudio)
   const spec = useStore((s) => s.audioSpec)
   const eqPresets = useStore((s) => s.settings.eqPresets)
@@ -81,7 +86,8 @@ export function ToneEq(): React.JSX.Element | null {
 
   return (
     <section className="space-y-3">
-      <div className="microlabel">tone &amp; eq</div>
+      {/* the Device screen's tab bar names this panel — no double label there */}
+      {label && <div className="microlabel">tone &amp; eq</div>}
       <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-4" data-toneeq>
         {caps.userEq && eq && (
           <div className="space-y-3">
@@ -96,10 +102,27 @@ export function ToneEq(): React.JSX.Element | null {
             {/* Sliders stay live while the EQ is off (the firmware accepts band
                 writes regardless) — the toggle governs whether it's applied. */}
             <div className={cx('flex items-end gap-1 transition-opacity', !eq.enabled && 'opacity-60')}>
-              <div className="flex flex-col justify-between self-stretch pb-9 pr-1.5 text-right">
-                <span className="text-[10px] text-faint leading-none">+{EQ_GAIN_MAX}</span>
-                <span className="text-[10px] text-faint leading-none">0</span>
-                <span className="text-[10px] text-faint leading-none">{EQ_GAIN_MIN}</span>
+              {/* The scale column mirrors a band column's exact structure —
+                  the h-36 block plus INVISIBLE value/freq spacers — so its
+                  labels sit level with the tracks: "0" lands exactly on the
+                  zero tick (it used to float mid-column, user catch). */}
+              <div className="flex flex-col items-end gap-1 pr-1.5">
+                <div className="relative h-36 w-5 text-right">
+                  <span className="absolute right-0 top-0 -translate-y-1/2 text-[10px] text-faint leading-none">
+                    +{EQ_GAIN_MAX}
+                  </span>
+                  <span
+                    className="absolute right-0 translate-y-1/2 text-[10px] text-faint leading-none"
+                    style={{ bottom: `${((0 - EQ_GAIN_MIN) / GAIN_SPAN) * 100}%` }}
+                  >
+                    0
+                  </span>
+                  <span className="absolute right-0 bottom-0 translate-y-1/2 text-[10px] text-faint leading-none">
+                    {EQ_GAIN_MIN}
+                  </span>
+                </div>
+                <span className="font-mono text-[10px] leading-none invisible">0</span>
+                <span className="text-[10.5px] leading-none invisible">80</span>
               </div>
               {eq.bands.slice(0, BAND_LABELS.length).map((band, i) => (
                 <BandSlider
@@ -194,8 +217,11 @@ export function ToneEq(): React.JSX.Element | null {
               label="Tone tilt on"
               onChange={(enabled) => void tt.command({ type: 'setTiltEq', enabled })}
             />
+            {/* end labels carry FIXED widths (and balance mirrors the switch
+                with a spacer) so the tilt and balance tracks span the same
+                pixels — their center ticks line up vertically */}
             <div className={cx('flex-1 flex items-center gap-2.5', !tilt.enabled && 'opacity-60')}>
-              <span className="text-[10.5px] text-faint shrink-0">darker</span>
+              <span className="w-12 text-right text-[10.5px] text-faint shrink-0">darker</span>
               <CenteredSlider
                 value={tilt.intensity}
                 min={caps.tiltRange.min}
@@ -203,7 +229,7 @@ export function ToneEq(): React.JSX.Element | null {
                 ariaLabel="Tone tilt intensity"
                 onCommit={(intensity) => void tt.command({ type: 'setTiltIntensity', intensity })}
               />
-              <span className="text-[10.5px] text-faint shrink-0">brighter</span>
+              <span className="w-12 text-[10.5px] text-faint shrink-0">brighter</span>
               <span className="font-mono text-[11px] text-dim w-8 text-right shrink-0" data-tilt-value>
                 {tilt.intensity > 0 ? `+${tilt.intensity}` : tilt.intensity}
               </span>
@@ -214,8 +240,10 @@ export function ToneEq(): React.JSX.Element | null {
         {caps.balance && balance != null && (
           <div className="flex items-center gap-3 border-t border-edge pt-3.5" data-balance>
             <span className="text-[13px] w-20 shrink-0">Balance</span>
+            {/* stand-in for the tilt row's switch — keeps the tracks aligned */}
+            <span className="w-9 shrink-0" aria-hidden />
             <div className="flex-1 flex items-center gap-2.5">
-              <span className="text-[10.5px] text-faint shrink-0">L</span>
+              <span className="w-12 text-right text-[10.5px] text-faint shrink-0">L</span>
               <CenteredSlider
                 value={balance}
                 min={caps.balanceRange.min}
@@ -223,7 +251,7 @@ export function ToneEq(): React.JSX.Element | null {
                 ariaLabel="Balance"
                 onCommit={(b) => void tt.command({ type: 'setBalance', balance: b })}
               />
-              <span className="text-[10.5px] text-faint shrink-0">R</span>
+              <span className="w-12 text-[10.5px] text-faint shrink-0">R</span>
               <span className="font-mono text-[11px] text-dim w-8 text-right shrink-0" data-balance-value>
                 {balance === 0 ? '·' : balance < 0 ? `L${-balance}` : `R${balance}`}
               </span>

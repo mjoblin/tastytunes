@@ -479,7 +479,11 @@ export function CommandPalette(): React.JSX.Element {
         group: 'View',
         icon: AudioLines,
         keywords: 'equalizer eq tilt balance tone bass treble dsp',
-        run: () => setScreen('device')
+        run: () => {
+          // land on the right Device tab, not just the screen
+          void saveSettings({ deviceTab: 'tone' })
+          setScreen('device')
+        }
       })
     }
     cmds.push({

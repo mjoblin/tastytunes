@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { ArrowUpCircle, Check, ExternalLink, Loader2, RefreshCw, Sparkles, Unplug } from 'lucide-react'
+import { audioCaps } from '@shared/smoip'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { cx } from '@/lib/format'
+import { Segmented } from '@/components/Segmented'
 import { ToneEq } from '@/components/ToneEq'
 
 export function DeviceScreen(): React.JSX.Element {
@@ -15,7 +17,14 @@ export function DeviceScreen(): React.JSX.Element {
   // install control anywhere — updating is the user's job via the official app
   // or the streamer's web admin (the "Open web admin" button below).
   const firmwareUpdate = useStore((s) => s.firmwareUpdate)
+  const audioSpec = useStore((s) => s.audioSpec)
+  const deviceTab = useStore((s) => s.settings.deviceTab)
+  const saveSettings = useStore((s) => s.saveSettings)
   const [manualHost, setManualHost] = useState('')
+  // Tabs exist only when this streamer HAS tone controls; without them the
+  // streamer info stands alone. A persisted 'tone' pick degrades gracefully.
+  const hasToneTab = audioCaps(audioSpec) != null
+  const activeTab = hasToneTab && deviceTab === 'tone' ? 'tone' : 'streamer'
 
   const connectedHost = connection.phase === 'connected' ? connection.host : null
   const busyHost =
@@ -148,11 +157,32 @@ export function DeviceScreen(): React.JSX.Element {
           </div>
         </section>
 
-        {/* -------------------------------------------------------------- streamer */}
+        {/* ------------------------------------------------ streamer / tone & eq */}
+        {/* One tabbed section when the device has tone controls (both panels
+            visible without scrolling); the plain streamer card otherwise.
+            "Streamer" is a generic label, not the device's name — the info
+            rows inside carry the actual name. */}
         {systemInfo && connectedHost && (
           <section className="space-y-3">
-            <div className="microlabel">streamer</div>
-            <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-3">
+            {hasToneTab ? (
+              <Segmented
+                value={activeTab}
+                onChange={(deviceTab) => void saveSettings({ deviceTab })}
+                options={[
+                  { value: 'streamer' as const, label: 'Streamer' },
+                  { value: 'tone' as const, label: 'Tone & EQ' }
+                ]}
+                className="w-fit"
+              />
+            ) : (
+              <div className="microlabel">streamer</div>
+            )}
+            <div
+              className={cx(
+                'rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-3',
+                activeTab !== 'streamer' && 'hidden'
+              )}
+            >
               <InfoRow label="Name" value={systemInfo.name} />
               <InfoRow label="Model" value={systemInfo.model} />
               <InfoRow label="Unit ID" value={systemInfo.unit_id} mono />
@@ -216,12 +246,11 @@ export function DeviceScreen(): React.JSX.Element {
                 </div>
               )}
             </div>
+            {/* feature-detected: ToneEq renders null on streamers whose
+                /zone/audio/spec offers no writable controls */}
+            {activeTab === 'tone' && <ToneEq label={false} />}
           </section>
         )}
-
-        {/* Feature-detected: renders only when this streamer's /zone/audio/spec
-            says its DSP tone controls exist and are writable. */}
-        {connectedHost && <ToneEq />}
 
         <div className="microlabel">
           press <span className="text-dim">`</span> for the smoip payload console

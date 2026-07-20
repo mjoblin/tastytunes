@@ -167,11 +167,46 @@ export function ContainerCard({
   )
 }
 
+/** Row-cluster heart: hover-revealed control, permanently gold when set. */
+function RowHeart({
+  favorited,
+  held,
+  onHeart
+}: {
+  favorited: boolean
+  held: boolean
+  onHeart(): void
+}): React.JSX.Element {
+  return (
+    <button
+      aria-label={favorited ? 'Remove from favorites' : 'Add to favorites'}
+      data-row-heart={favorited ? 'on' : 'off'}
+      onClick={(e) => {
+        e.stopPropagation()
+        onHeart()
+      }}
+      className={cx(
+        'p-1.5 rounded-lg transition-all motion-safe:active:scale-90',
+        favorited
+          ? 'text-gold hover:text-ink'
+          : cx(
+              'text-dim hover:text-ink hover:bg-veil2',
+              held ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+            )
+      )}
+    >
+      <Heart size={13} fill={favorited ? 'currentColor' : 'none'} />
+    </button>
+  )
+}
+
 export function ContainerRow({
   node,
   playing,
   audible,
   menuOpen,
+  favorited,
+  onHeart,
   onEnter,
   onMenu
 }: {
@@ -179,6 +214,9 @@ export function ContainerRow({
   playing: boolean
   audible: boolean
   menuOpen: boolean
+  /** With onHeart: the heart button in the row's action cluster (albums). */
+  favorited?: boolean
+  onHeart?(): void
   onEnter(): void
   onMenu(e: React.MouseEvent): void
 }): React.JSX.Element {
@@ -188,7 +226,7 @@ export function ContainerRow({
   return (
     <div
       className={cx(
-        'group grid grid-cols-[44px_1fr_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer transition-colors',
+        'group grid grid-cols-[44px_1fr_auto_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer transition-colors',
         playing ? 'row-playing bg-gold/10' : menuOpen ? 'bg-veil' : 'hover:bg-veil'
       )}
       onClick={onEnter}
@@ -216,6 +254,11 @@ export function ContainerRow({
         {node.artist && <div className="text-[12px] text-faint truncate">{node.artist}</div>}
       </div>
       {playing ? <Eqbars playing={audible} /> : <span />}
+      {album && onHeart ? (
+        <RowHeart favorited={favorited === true} held={menuOpen} onHeart={onHeart} />
+      ) : (
+        <span />
+      )}
       {album ? (
         <button
           aria-label="More actions"
@@ -241,6 +284,8 @@ export function TrackRow({
   audible,
   queued,
   menuOpen,
+  favorited,
+  onHeart,
   onPlayNow,
   onMenu
 }: {
@@ -253,6 +298,9 @@ export function TrackRow({
   /** Already in the queue — a click jumps there instead of inserting. */
   queued: boolean
   menuOpen: boolean
+  /** With onHeart: the heart button in the row's action cluster. */
+  favorited?: boolean
+  onHeart?(): void
   onPlayNow(el: HTMLElement | null): void
   onMenu(e: React.MouseEvent): void
 }): React.JSX.Element {
@@ -284,12 +332,12 @@ export function TrackRow({
         </div>
         {node.artist && <div className="text-[12px] text-faint truncate">{node.artist}</div>}
       </div>
-      <div
-        className={cx(
-          'flex items-center gap-0.5 transition-opacity',
-          menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+      {/* per-button reveal (not on the wrapper): a set heart must stay
+          visible on the resting row while play/⋯ remain hover-only */}
+      <div className="flex items-center gap-0.5">
+        {onHeart && (
+          <RowHeart favorited={favorited === true} held={menuOpen} onHeart={onHeart} />
         )}
-      >
         <button
           aria-label="Play"
           data-tip={queued ? 'Play — already in the queue' : 'Play now'}
@@ -297,14 +345,20 @@ export function TrackRow({
             e.stopPropagation()
             onPlayNow(ref.current)
           }}
-          className="tip-bottom p-1.5 rounded-lg text-dim hover:text-gold hover:bg-veil2 transition-all"
+          className={cx(
+            'tip-bottom p-1.5 rounded-lg text-dim hover:text-gold hover:bg-veil2 transition-all',
+            menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+          )}
         >
           <Play size={14} />
         </button>
         <button
           aria-label="More actions"
           onClick={onMenu}
-          className="p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-all"
+          className={cx(
+            'p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-all',
+            menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+          )}
         >
           <MoreHorizontal size={14} />
         </button>

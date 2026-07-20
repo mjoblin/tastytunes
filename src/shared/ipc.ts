@@ -719,6 +719,8 @@ export interface AppSettings {
   settingsTab: string
   /** Last-selected diagnostics-drawer tab (smoip | requests). */
   diagnosticsTab: string
+  /** Last-selected Device-screen tab (tabs appear only on tone-capable streamers). */
+  deviceTab: 'streamer' | 'tone'
   /** Width (px) of the Now Playing drawers (lyrics/artist), drag-resizable. */
   panelWidth: number
   /** Remembered mini-player window position. */
@@ -775,6 +777,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   mcp: { enabled: false, bind: 'localhost', port: 8555, disabledClusters: [], disabledTools: [] },
   settingsTab: 'appearance',
   diagnosticsTab: 'smoip',
+  deviceTab: 'streamer',
   panelWidth: 400,
   miniBounds: null,
   eqPresets: []
