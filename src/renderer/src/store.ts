@@ -170,6 +170,11 @@ interface TTState {
   mcpStatus: McpStatus
   /** Self-update consent-flow state, mirrored from the main process. */
   update: UpdateState | null
+  /** One-shot deep link into a Settings tab (e.g. the nav update dot →
+   *  Updates); SettingsScreen consumes and clears it. */
+  settingsJump: string | null
+  jumpToSettingsTab(tab: string): void
+  clearSettingsJump(): void
 
   toast: ToastData | null
   showToast(toast: Omit<ToastData, 'id'>): void
@@ -250,6 +255,12 @@ export const useStore = create<TTState>((set, get) => ({
   lastStation: null,
   mcpStatus: { running: false, url: null, error: null },
   update: null,
+  settingsJump: null,
+  jumpToSettingsTab: (tab) => {
+    get().setScreen('settings')
+    set({ settingsJump: tab })
+  },
+  clearSettingsJump: () => set({ settingsJump: null }),
 
   toast: null,
   showToast: (toast) => set({ toast: { ...toast, id: ++toastNonce } }),

@@ -30,6 +30,7 @@ export function Nav(): React.JSX.Element {
   const saveSettings = useStore((s) => s.saveSettings)
   const setScreen = useStore((s) => s.setScreen)
   const setInfoOpen = useStore((s) => s.setInfoOpen)
+  const jumpToSettingsTab = useStore((s) => s.jumpToSettingsTab)
   const setPaletteOpen = useStore((s) => s.setPaletteOpen)
   const queueTotal = useStore((s) => s.queue?.total ?? null)
   const ambientWindow = useStore((s) => s.ambientWindowActive)
@@ -112,9 +113,11 @@ export function Nav(): React.JSX.Element {
       {/* macOS traffic-light inset + wordmark; draggable like a title bar */}
       <div className={cx('drag-region pt-11 pb-5', collapsed ? 'px-0 text-center' : 'px-5')}>
         <button
-          onClick={() => setInfoOpen(true)}
-          data-tip={update ? `About TastyTunes — v${update.version} available` : 'About TastyTunes'}
-          aria-label="About TastyTunes"
+          // the dot's promise: with an update pending, the wordmark lands on
+          // Settings → Updates (the panel's home); otherwise it opens About
+          onClick={() => (update ? jumpToSettingsTab('updates') : setInfoOpen(true))}
+          data-tip={update ? `v${update.version} available — open Updates` : 'About TastyTunes'}
+          aria-label={update ? `v${update.version} available — open Updates` : 'About TastyTunes'}
           className="no-drag relative font-display font-bold text-[19px] leading-none tracking-tight cursor-pointer"
         >
           {collapsed ? (

@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import {
   AlarmClock,
+  ArrowUpCircle,
   Bot,
   Check,
   CircleDot,
   Copy,
+  ExternalLink,
   Eye,
   EyeOff,
   Globe,
@@ -19,6 +21,7 @@ import {
   Sun,
   Trash2
 } from 'lucide-react'
+import { version } from '../../../../package.json'
 import {
   MCP_CLUSTERS,
   type AlignH,
@@ -56,6 +59,7 @@ const TABS = [
   { id: 'layout', label: 'Layout', icon: LayoutGrid },
   { id: 'behavior', label: 'Behavior', icon: SlidersHorizontal },
   { id: 'connections', label: 'Connections', icon: Globe },
+  { id: 'updates', label: 'Updates', icon: ArrowUpCircle },
   { id: 'schedules', label: 'Schedules', icon: AlarmClock },
   { id: 'agents', label: 'AI agents', icon: Bot },
   { id: 'lamps', label: 'Status lamps', icon: CircleDot }
@@ -79,6 +83,17 @@ export function SettingsScreen(): React.JSX.Element {
     void save({ settingsTab: id })
   }
   const panelRef = useScrollMemory(`settings:${tab}`)
+
+  const update = useStore((s) => s.update)
+  // One-shot deep link (the nav update dot lands on Updates); consume + clear.
+  const settingsJump = useStore((s) => s.settingsJump)
+  const clearSettingsJump = useStore((s) => s.clearSettingsJump)
+  useEffect(() => {
+    if (!settingsJump) return
+    if (TABS.some((t) => t.id === settingsJump)) selectTab(settingsJump as SettingsTab)
+    clearSettingsJump()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settingsJump])
 
   return (
     <div className="h-full flex flex-col">
@@ -110,6 +125,9 @@ export function SettingsScreen(): React.JSX.Element {
             >
               <Icon size={15} strokeWidth={1.8} className="shrink-0" />
               <span className="flex-1 text-left">{label}</span>
+              {id === 'updates' && update && (
+                <span aria-label="Update available" className="w-1.5 h-1.5 rounded-full bg-gold shrink-0" />
+              )}
             </button>
           ))}
         </nav>
@@ -354,13 +372,6 @@ export function SettingsScreen(): React.JSX.Element {
               exactly what leaves the machine, and off always means zero requests */}
           <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
             <Toggle
-              label="Check for updates"
-              hint="Look for version updates at launch and every few hours. When a new version is available, a dot will appear on the tastytunes name in the left nav, and a line will appear in About — nothing downloads or installs itself."
-              checked={settings.updateCheck}
-              onChange={(updateCheck) => void save({ updateCheck })}
-            />
-
-            <Toggle
               label="Lyrics on Now Playing"
               hint="Adds a lyrics panel to the Now Playing screen, fetched (when open) from lrclib.net. Sends the current track's title and artist to LRCLIB; off means no requests, ever."
               checked={settings.lyrics}
@@ -388,6 +399,8 @@ export function SettingsScreen(): React.JSX.Element {
           </div>
         </section>
         )}
+
+        {tab === 'updates' && <UpdatesSection settings={settings} save={save} />}
 
         {tab === 'schedules' && <SchedulesSection settings={settings} save={save} />}
 
@@ -1053,6 +1066,131 @@ function LegendRow({
  * Mini player) get the same toggle; Settings is shown locked, last, for
  * completeness. Hidden items stay reachable by their keyboard shortcut / route.
  */
+function UpdatesSection({
+  settings,
+  save
+}: {
+  settings: AppSettings
+  save(patch: Partial<AppSettings>): Promise<void>
+}): React.JSX.Element {
+  const update = useStore((s) => s.update)
+
+  return (
+    <section className="space-y-3">
+      <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
+        <SettingRow label="Version" hint="The build you're running.">
+          <span className="font-mono text-[12px] text-dim">v{version}</span>
+        </SettingRow>
+
+        <Toggle
+          label="Check for updates"
+          hint="Look for version updates at launch and every few hours. When a new version is available, a dot appears on the tastytunes name in the left nav and on this tab — nothing downloads or installs itself."
+          checked={settings.updateCheck}
+          onChange={(updateCheck) => void save({ updateCheck })}
+        />
+      </div>
+
+      {update ? (
+        <UpdatePanel />
+      ) : (
+        <div className="rounded-xl ring-1 ring-edge bg-panel/70 px-4 py-3 text-[12.5px] text-dim">
+          {settings.updateCheck
+            ? `You're on v${version} — no newer version is known.`
+            : 'Update checks are off — the release page on GitHub is the manual path.'}
+        </div>
+      )}
+    </section>
+  )
+}
+
+/** The self-update consent panel (moved here from the Info modal — Updates
+ *  is its home now; the nav dot deep-links to this tab). */
+function UpdatePanel(): React.JSX.Element | null {
+  const update = useStore((s) => s.update)
+  if (!update) return null
+
+  return (
+    <div className="w-full rounded-xl ring-1 ring-gold/40 bg-golddim px-4 py-3">
+      {update.phase === 'available' && (
+        <div className="flex items-center justify-between gap-3">
+          <span className="min-w-0">
+            <span className="block text-[13.5px] text-gold">v{update.version} is available</span>
+            <span className="block font-mono text-[10.5px] text-faint mt-0.5">
+              {update.canDownload
+                ? 'nothing downloads until you say so'
+                : 'open the release page to download'}
+            </span>
+          </span>
+          {update.canDownload ? (
+            <button
+              onClick={() => void tt.updateDownload()}
+              className="shrink-0 text-[12.5px] px-3.5 py-1.5 rounded-lg bg-gold text-bg font-medium hover:brightness-110 motion-safe:active:scale-95 transition-all"
+            >
+              Download
+            </button>
+          ) : (
+            <button
+              onClick={() => void tt.openExternal(update.url)}
+              className="shrink-0 flex items-center gap-1.5 text-[12.5px] px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
+            >
+              Release page <ExternalLink size={12} />
+            </button>
+          )}
+        </div>
+      )}
+
+      {update.phase === 'downloading' && (
+        <div>
+          <div className="flex items-center justify-between text-[13.5px] text-gold">
+            <span>Downloading v{update.version}…</span>
+            <span className="font-mono text-[11px]">{update.percent ?? 0}%</span>
+          </div>
+          <div className="h-1 rounded-full bg-veil2 mt-2 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-gold transition-[width] duration-300"
+              style={{ width: `${update.percent ?? 0}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {update.phase === 'downloaded' && (
+        <div className="flex items-center justify-between gap-3">
+          <span className="min-w-0">
+            <span className="block text-[13.5px] text-gold">v{update.version} is ready</span>
+            <span className="block font-mono text-[10.5px] text-faint mt-0.5">
+              installs when you quit — or restart now
+            </span>
+          </span>
+          <button
+            onClick={() => void tt.updateInstall()}
+            className="shrink-0 text-[12.5px] px-3.5 py-1.5 rounded-lg bg-gold text-bg font-medium hover:brightness-110 motion-safe:active:scale-95 transition-all"
+          >
+            Restart now
+          </button>
+        </div>
+      )}
+
+      {update.phase === 'error' && (
+        <div className="flex items-center justify-between gap-3">
+          <span className="min-w-0">
+            <span className="block text-[13.5px] text-alert">Update failed</span>
+            <span className="block font-mono text-[10.5px] text-faint mt-0.5 break-all">
+              {update.error}
+            </span>
+          </span>
+          <button
+            onClick={() => void tt.updateDownload()}
+            className="shrink-0 text-[12.5px] px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
+          >
+            Try again
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function SidebarSection(): React.JSX.Element {
   const navHidden = useStore((s) => s.settings.navHidden)
   const navHiddenTools = useStore((s) => s.settings.navHiddenTools)
