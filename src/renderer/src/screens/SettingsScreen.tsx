@@ -242,7 +242,7 @@ export function SettingsScreen(): React.JSX.Element {
           <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
             <SliderSetting
               label="Card size"
-              hint="Base width of each card — presets, and the queue when viewed as cards."
+              hint="Base width of each card."
               min={120}
               max={280}
               unit="px"
@@ -252,7 +252,7 @@ export function SettingsScreen(): React.JSX.Element {
 
             <SliderSetting
               label="Card gap"
-              hint="Space between tiles."
+              hint="Space between cards."
               min={8}
               max={40}
               unit="px"
@@ -278,7 +278,7 @@ export function SettingsScreen(): React.JSX.Element {
           <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
             <SettingRow
               label="Animations"
-              hint="Motion effects — hover growth, the equalizer bars, smooth scrolling. System follows your OS Reduce Motion setting."
+              hint="Motion effects — hover growth, the small equalizer bars that indicate what's playing, smooth scrolling. System follows your OS Reduce Motion setting."
             >
               <Segmented<MotionMode>
                 value={settings.motion}
@@ -355,14 +355,14 @@ export function SettingsScreen(): React.JSX.Element {
           <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
             <Toggle
               label="Check for updates"
-              hint="Look for a newer release on GitHub at launch and every few hours. A dot on the wordmark and a line in About — nothing downloads or installs itself."
+              hint="Look for version updates at launch and every few hours. When a new version is available, a dot will appear on the tastytunes name in the left nav, and a line will appear in About — nothing downloads or installs itself."
               checked={settings.updateCheck}
               onChange={(updateCheck) => void save({ updateCheck })}
             />
 
             <Toggle
               label="Lyrics on Now Playing"
-              hint="Adds a lyrics panel to the Now Playing screen, fetched from lrclib.net when you open it. Sends the current track's title and artist to LRCLIB; off means no requests, ever."
+              hint="Adds a lyrics panel to the Now Playing screen, fetched (when open) from lrclib.net. Sends the current track's title and artist to LRCLIB; off means no requests, ever."
               checked={settings.lyrics}
               onChange={(lyrics) => void save({ lyrics })}
             />
@@ -1077,8 +1077,8 @@ function SidebarSection(): React.JSX.Element {
       <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 pt-3">
         <p className="text-[11.5px] text-faint max-w-md pb-2">
           Hide items you don&apos;t use from the left nav. Hidden screens stay reachable by
-          their keyboard shortcut and the command palette; Commands stays on {MOD}K, the mini
-          player in the palette and the View menu.
+          their keyboard shortcut and the command palette; Commands stays on {MOD}K; the mini
+          player stays in the palette and the View menu.
         </p>
         <div className="space-y-0.5">
           {NAV_SCREENS.map((sc) => (

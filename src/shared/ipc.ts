@@ -444,14 +444,14 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
   {
     id: 'status',
     title: 'Status & lists',
-    description: 'Read-only: what is playing, the queue, presets, sources, devices, history.',
+    description: "Read-only: what's playing, the queue, presets, sources, devices, history.",
     readOnly: true,
     tools: [
       {
         name: 'get_status',
         title: 'Get status',
         description:
-          'One combined snapshot: connection and device, power state, active source, what is playing (title/artist/album/station, format, position/duration), volume and mute, shuffle/repeat, queue position, and any armed sleep timer. Call this first.'
+          "One combined snapshot: connection and device, power state, active source, what's playing (title/artist/album/station, format, position/duration), volume and mute, shuffle/repeat, queue position, and any armed sleep timer. Call this first."
       },
       {
         name: 'list_queue',
