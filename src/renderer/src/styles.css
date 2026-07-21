@@ -402,14 +402,21 @@ img {
   right: 0;
   translate: 0 0;
 }
-/* modifier: prose tooltips (tool descriptions) wrap at a readable measure
-   instead of one endless nowrap line clipped by the window */
+/* modifier: prose tooltips (tool descriptions) wrap at a readable measure.
+   Anchored to the element's LEFT edge, not centered: these live inside
+   scrollports whose overflow-x is hidden (see the phantom-scrollbar rule
+   above), and a centered 300px tip pokes past the scrollport's left edge
+   and gets clipped. Growing rightward from the element stays inside.
+   Pair with tip-top/tip-bottom — the vertical placement comes from those. */
 [data-tip].tip-wide::after {
   white-space: normal;
   width: max-content;
-  max-width: 300px;
+  max-width: min(300px, 70vw);
   text-align: left;
   line-height: 1.45;
+  left: 0;
+  right: auto;
+  translate: 0 0;
 }
 
 /* click feedback for scroll-to-current: a gold pulse just inside the target
