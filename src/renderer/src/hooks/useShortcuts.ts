@@ -127,7 +127,22 @@ export function useShortcuts(): void {
       }
     }
 
+    // Ownership slot: exactly one shortcut listener per window, ever. If an
+    // HMR-orphaned tree left one behind (see main.tsx's idempotence note),
+    // evict it — these fire device commands, which must never fan out N×.
+    window.__ttShortcutsOff?.()
     window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    const off = (): void => window.removeEventListener('keydown', onKeyDown)
+    window.__ttShortcutsOff = off
+    return () => {
+      off()
+      if (window.__ttShortcutsOff === off) window.__ttShortcutsOff = undefined
+    }
   }, [])
+}
+
+declare global {
+  interface Window {
+    __ttShortcutsOff?: () => void
+  }
 }

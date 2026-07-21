@@ -23,10 +23,26 @@ const MiniPlayer = lazy(() =>
   import('./components/MiniPlayer').then((m) => ({ default: m.MiniPlayer }))
 )
 
+// EVERYTHING AT MODULE SCOPE HERE MUST BE IDEMPOTENT. In dev, edits to
+// entry-reachable modules (store, api, this file) hot-update WITHOUT a page
+// reload, re-executing this module. React 18+ roots don't clear the
+// container, so a second bare createRoot APPENDS a second live tree — the
+// orphaned one keeps its window/ipc listeners forever. That was the
+// follow-scroll tug-of-war AND arrows stepping the volume N× (one stale tree
+// per hot edit). Root and push wiring therefore live in window slots:
+// re-execution replaces them instead of stacking.
+declare global {
+  interface Window {
+    __ttRoot?: ReactDOM.Root
+    __ttUnwirePush?: () => void
+  }
+}
+
 // Subscribe to pushes before fetching the snapshot so nothing slips between them.
 // Menu clicks carry side effects (settings round-trips) that don't fit
 // applyPush's pure state merge, so they route to their own action.
-tt.onPush((msg) => {
+window.__ttUnwirePush?.()
+window.__ttUnwirePush = tt.onPush((msg) => {
   if (msg.kind === 'menu') useStore.getState().applyMenu(msg.command)
   else useStore.getState().applyPush(msg)
 })
@@ -36,7 +52,8 @@ void tt.getSnapshot().then((snapshot) => useStore.getState().init(snapshot))
 const isMini = new URLSearchParams(window.location.search).has('mini')
 if (isMini) document.documentElement.classList.add('mini')
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
+const root = (window.__ttRoot ??= ReactDOM.createRoot(document.getElementById('root')!))
+root.render(
   <React.StrictMode>
     <Suspense fallback={null}>{isMini ? <MiniPlayer /> : <App />}</Suspense>
   </React.StrictMode>
