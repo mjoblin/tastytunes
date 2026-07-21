@@ -14,14 +14,16 @@ export function ItemMenu({
   onAction,
   onSavePreset,
   goToAlbum,
+  goToArtist,
   favorite
 }: {
   menu: { node: MediaNode; x: number; y: number }
   onClose(): void
   onAction(action: MediaQueueAction | 'PLAY', playFromId?: string): void
   onSavePreset(): void
-  /** Search results give tracks a navigate verb (the row click still plays). */
+  /** Search results give tracks navigate verbs (the row click still plays). */
   goToAlbum?(): void
+  goToArtist?(): void
   /** When present, the menu grows an Add/Remove favorites entry (last). */
   favorite?: { active: boolean; toggle(): void }
 }): React.JSX.Element {
@@ -57,6 +59,7 @@ export function ItemMenu({
             ]
           : []),
         ...(goToAlbum ? [{ label: 'Go to album', run: goToAlbum }] : []),
+        ...(goToArtist ? [{ label: 'Go to artist', run: goToArtist }] : []),
         { label: 'Save to preset…', run: onSavePreset },
         ...favoriteItem
       ]

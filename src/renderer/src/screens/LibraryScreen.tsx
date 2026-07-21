@@ -290,6 +290,13 @@ export function LibraryScreen(): React.JSX.Element {
     })
   }
 
+  // The result links are INDEX-powered: only offer them when the ready index
+  // actually holds the target pool — a folder-only or artist-less server
+  // simply never shows them (graceful degradation to plain sublines).
+  const serverIndex = useStore((st) => st.mediaIndex.find((x) => x.udn === serverUdn))
+  const albumLinkable = serverIndex?.state === 'ready' && serverIndex.albums > 0
+  const artistLinkable = serverIndex?.state === 'ready' && serverIndex.artists > 0
+
   /** Album-as-link: resolve a track's album by content identity against the
    *  (index-first) search and enter it — same crumb behavior as clicking an
    *  album result, so the search trail stays returnable. */
@@ -310,6 +317,29 @@ export function LibraryScreen(): React.JSX.Element {
       enter(album)
     } catch {
       showNotice(`Couldn't find "${track.album}" in this library.`)
+    }
+  }
+
+  /** Artist-as-link: same content-identity resolution, aimed at the artist
+   *  entity. Failure degrades to a quiet toast, never a broken screen. */
+  const goToArtist = async (track: MediaNode): Promise<void> => {
+    if (!serverUdn || !track.artist) return
+    const lc = (x: string | null): string => (x ?? '').trim().toLowerCase()
+    try {
+      const { items } = await tt.mediaSearch(serverUdn, track.artist)
+      const artist = items.find(
+        (n) =>
+          n.isContainer &&
+          (n.upnpClass.includes('person') || n.upnpClass.includes('Artist')) &&
+          lc(n.title) === lc(track.artist)
+      )
+      if (!artist) {
+        showNotice(`Couldn't find "${track.artist}" in this library.`)
+        return
+      }
+      enter(artist)
+    } catch {
+      showNotice(`Couldn't find "${track.artist}" in this library.`)
     }
   }
 
@@ -897,6 +927,19 @@ export function LibraryScreen(): React.JSX.Element {
             spellCheck={false}
             className="flex-1 min-w-0 bg-transparent outline-none text-[13.5px] text-ink placeholder:text-gold/50"
           />
+          {searching ? (
+            <span className="shrink-0 text-[12px] text-gold/80 motion-safe:animate-pulse">
+              searching…
+            </span>
+          ) : searchState ? (
+            <span className="shrink-0 font-mono text-[11px] text-gold/80 tabular-nums">
+              {searchState.total} result{searchState.total === 1 ? '' : 's'}
+              {searchState.total > searchState.items.length &&
+                ` · first ${searchState.items.length}`}
+            </span>
+          ) : null}
+          {/* right of the count: the count's width changes as results come in,
+              so the x anchors against the stable exit button instead */}
           {searchQuery.length > 0 && (
             <button
               aria-label="Clear search"
@@ -910,17 +953,6 @@ export function LibraryScreen(): React.JSX.Element {
               <X size={13} />
             </button>
           )}
-          {searching ? (
-            <span className="shrink-0 text-[12px] text-gold/80 motion-safe:animate-pulse">
-              searching…
-            </span>
-          ) : searchState ? (
-            <span className="shrink-0 font-mono text-[11px] text-gold/80 tabular-nums">
-              {searchState.total} result{searchState.total === 1 ? '' : 's'}
-              {searchState.total > searchState.items.length &&
-                ` · first ${searchState.items.length}`}
-            </span>
-          ) : null}
           <button
             data-library-search-exit
             onClick={exitSearch}
@@ -1240,7 +1272,8 @@ export function LibraryScreen(): React.JSX.Element {
                 onHeart={() => heartNode(node)}
                 onPlayNow={(el) => playTrack(node, el)}
                 onMenu={(e) => openMenu(node, e)}
-                onAlbumLink={searchMode && node.album ? () => void goToAlbum(node) : undefined}
+                onAlbumLink={searchMode && albumLinkable && node.album ? () => void goToAlbum(node) : undefined}
+                onArtistLink={searchMode && artistLinkable && node.artist ? () => void goToArtist(node) : undefined}
               />
             ))}
           </div>
@@ -1264,7 +1297,8 @@ export function LibraryScreen(): React.JSX.Element {
                 onHeart={() => heartNode(node)}
                 onPlayNow={(el) => playTrack(node, el)}
                 onMenu={(e) => openMenu(node, e)}
-                onAlbumLink={searchMode && node.album ? () => void goToAlbum(node) : undefined}
+                onAlbumLink={searchMode && albumLinkable && node.album ? () => void goToAlbum(node) : undefined}
+                onArtistLink={searchMode && artistLinkable && node.artist ? () => void goToArtist(node) : undefined}
               />
             ))}
           </div>
@@ -1276,10 +1310,18 @@ export function LibraryScreen(): React.JSX.Element {
           menu={menu}
           onClose={() => setMenu(null)}
           goToAlbum={
-            searchMode && !menu.node.isContainer && menu.node.album
+            searchMode && albumLinkable && !menu.node.isContainer && menu.node.album
               ? () => {
                   setMenu(null)
                   void goToAlbum(menu.node)
+                }
+              : undefined
+          }
+          goToArtist={
+            searchMode && artistLinkable && !menu.node.isContainer && menu.node.artist
+              ? () => {
+                  setMenu(null)
+                  void goToArtist(menu.node)
                 }
               : undefined
           }
@@ -1328,8 +1370,13 @@ const SORTS: Array<{ value: AppSettings['librarySort']; label: string }> = [
   { value: 'artist', label: 'Artist' },
   { value: 'year', label: 'Year (newest first)' }
 ]
-const SEARCH_SORTS: Array<{ value: 'relevance' | 'title' | 'artist' | 'year'; label: string }> = [
-  { value: 'relevance', label: 'Relevance' },
+const SEARCH_SORTS: Array<{
+  value: 'relevance' | 'title' | 'artist' | 'year'
+  label: string
+  noReverse?: boolean
+}> = [
+  // reversing relevance is meaningless — "least relevant first" isn't a thing
+  { value: 'relevance', label: 'Relevance', noReverse: true },
   { value: 'title', label: 'Title' },
   { value: 'artist', label: 'Artist' },
   { value: 'year', label: 'Year (newest first)' }
@@ -1343,7 +1390,7 @@ function SortChip<T extends string>({
   onChange,
   onToggleReverse
 }: {
-  sorts: Array<{ value: T; label: string }>
+  sorts: Array<{ value: T; label: string; noReverse?: boolean }>
   /** The unlit default (server order / relevance). */
   neutral: T
   value: T
@@ -1379,20 +1426,22 @@ function SortChip<T extends string>({
                   key={s.value}
                   onClick={() => {
                     // clicking the active sort flips its direction
-                    if (active) onToggleReverse()
-                    else {
+                    if (active) {
+                      if (s.noReverse) return setOpen(false)
+                      onToggleReverse()
+                    } else {
                       setOpen(false)
                       onChange(s.value)
                     }
                   }}
-                  aria-label={active ? `${s.label} — click to reverse` : s.label}
+                  aria-label={active && !s.noReverse ? `${s.label} — click to reverse` : s.label}
                   className={cx(
                     'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-[13px] transition-colors',
                     active ? 'text-gold bg-golddim' : 'text-dim hover:text-ink hover:bg-veil'
                   )}
                 >
                   <span className="min-w-0 flex-1 truncate">{s.label}</span>
-                  {active && (reversed ? <ArrowUp size={13} /> : <ArrowDown size={13} />)}
+                  {active && !s.noReverse && (reversed ? <ArrowUp size={13} /> : <ArrowDown size={13} />)}
                 </button>
               )
             })}

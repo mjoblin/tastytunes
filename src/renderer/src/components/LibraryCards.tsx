@@ -288,7 +288,8 @@ export function TrackRow({
   onHeart,
   onPlayNow,
   onMenu,
-  onAlbumLink
+  onAlbumLink,
+  onArtistLink
 }: {
   node: MediaNode
   /** Loose tracks in mixed folders get a thumb; album views carry the art in the header. */
@@ -307,6 +308,8 @@ export function TrackRow({
   /** Search results: the album name renders as a link that navigates there
    *  (the row itself keeps the app-wide click contract: tracks play). */
   onAlbumLink?(): void
+  /** Search results: the artist name links to the artist entity. */
+  onArtistLink?(): void
 }): React.JSX.Element {
   const ref = useRef<HTMLDivElement | null>(null)
   return (
@@ -336,7 +339,22 @@ export function TrackRow({
         </div>
         {(node.artist || (onAlbumLink && node.album)) && (
           <div className="text-[12px] text-faint truncate">
-            {node.artist}
+            {node.artist &&
+              (onArtistLink ? (
+                <button
+                  data-tip="Go to artist"
+                  aria-label={`Go to artist ${node.artist}`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onArtistLink()
+                  }}
+                  className="tip-bottom hover:text-ink hover:underline underline-offset-2 transition-colors"
+                >
+                  {node.artist}
+                </button>
+              ) : (
+                node.artist
+              ))}
             {onAlbumLink && node.album && (
               <>
                 {node.artist ? ' · ' : ''}
@@ -405,7 +423,8 @@ export function TrackCard({
   onHeart,
   onPlayNow,
   onMenu,
-  onAlbumLink
+  onAlbumLink,
+  onArtistLink
 }: {
   node: MediaNode
   isCurrent: boolean
@@ -419,6 +438,8 @@ export function TrackCard({
   onMenu(e: React.MouseEvent): void
   /** Search results: album name as a navigate link (card click still plays). */
   onAlbumLink?(): void
+  /** Search results: artist name links to the artist entity. */
+  onArtistLink?(): void
 }): React.JSX.Element {
   const ref = useRef<HTMLDivElement | null>(null)
   return (
@@ -474,7 +495,23 @@ export function TrackCard({
         </div>
         {(node.artist || (onAlbumLink && node.album)) && (
           <div className="text-[11.5px] text-faint truncate text-left">
-            {node.artist}
+            {node.artist &&
+              (onArtistLink ? (
+                <span
+                  role="link"
+                  tabIndex={0}
+                  aria-label={`Go to artist ${node.artist}`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onArtistLink()
+                  }}
+                  className="hover:text-ink hover:underline underline-offset-2 transition-colors cursor-pointer"
+                >
+                  {node.artist}
+                </span>
+              ) : (
+                node.artist
+              ))}
             {onAlbumLink && node.album && (
               <>
                 {node.artist ? ' · ' : ''}
