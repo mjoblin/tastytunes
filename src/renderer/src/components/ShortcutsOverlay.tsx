@@ -26,22 +26,11 @@ const GROUPS: Array<{ title: string; rows: Array<[string, string]> }> = [
     rows: [
       [`${MOD}K`, 'Command palette'],
       // letters derive from the shared registry; the prose stays hand-written
-      [SCREENS.map((s) => s.key).join(' '), 'Now Playing · Queue · Presets · lIbrary · Tuner · faVorites · Recently · Sources · Device · sEttings'],
+      [SCREENS.map((s) => s.key).join(' '), 'Now Playing · Queue · Presets · lIbrary · Tuner · faVorites · Recently Played · Sources · Device · sEttings'],
       ['F', 'Full-screen display mode'],
-      ['/', 'Filter the list (Queue · Presets · faVorites · Recently)'],
-      ['`', 'SMOIP payload console'],
+      ['/', 'Filter the list (Queue · Presets · faVorites · Recently Played)'],
+      ['`', 'SMOIP and Requests console'],
       ['?', 'This overlay']
-    ]
-  },
-  {
-    // the app-wide click idioms — one principle: leaf things play, container
-    // things open; a bare click never destroys the queue
-    title: 'Clicking',
-    rows: [
-      ['Tracks', 'Play now — your queue is kept (jumps if already queued)'],
-      ['Albums, folders', 'Open'],
-      ['Presets, stations', 'Play'],
-      ['⋯ menus', 'Play next · add to end · replace the queue · more']
     ]
   }
 ]
