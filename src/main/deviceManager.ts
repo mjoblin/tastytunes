@@ -303,10 +303,27 @@ export class DeviceManager {
     // firmware stays the user's job via the Cambridge Audio app or the
     // streamer's own web admin. Do not add a firmware check/install command here.
     switch (cmd.type) {
-      case 'play':
+      // Cast-style sources (AirPlay live-proven 2026-07-20) advertise ONLY the
+      // toggle verb — now_playing controls say play_pause, never play/pause —
+      // and the firmware SILENTLY IGNORES the explicit verbs there. Honor the
+      // device's own controls contract: translate to toggle when the explicit
+      // verb isn't offered, guarded by current state so pause never resumes.
+      case 'play': {
+        const controls = this.cache.nowPlaying?.controls ?? []
+        if (!controls.includes('play') && controls.includes('play_pause')) {
+          if (this.cache.playState?.state === 'play') return
+          return socket.send('/zone/play_control', { action: 'toggle' })
+        }
         return socket.send('/zone/play_control', { action: 'play' })
-      case 'pause':
+      }
+      case 'pause': {
+        const controls = this.cache.nowPlaying?.controls ?? []
+        if (!controls.includes('pause') && controls.includes('play_pause')) {
+          if (this.cache.playState?.state !== 'play') return
+          return socket.send('/zone/play_control', { action: 'toggle' })
+        }
         return socket.send('/zone/play_control', { action: 'pause' })
+      }
       case 'stop':
         return socket.send('/zone/play_control', { action: 'stop' })
       case 'togglePlayback':
