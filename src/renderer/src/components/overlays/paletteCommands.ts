@@ -779,18 +779,22 @@ export function buildCommands(ctx: CommandContext): Command[] {
     keywords: "settings lamps led legend lossless hi-res",
     run: () => jumpToSettingsTab("lamps"),
   });
-  cmds.push({
-    id: "update:check",
-    label: "Check for updates",
-    group: "View",
-    icon: ArrowUpCircle,
-    keywords: "version new release upgrade now",
-    run: () => {
-      // land where the outcome shows, then ask
-      jumpToSettingsTab("updates");
-      void tt.updateCheckNow();
-    },
-  });
+  // store builds: the App Store owns delivery — no update-check affordance
+  // anywhere, the palette included (main-side checkUpdatesOnDemand also
+  // refuses, but the entry shouldn't exist)
+  if (!tt.storeBuild)
+    cmds.push({
+      id: "update:check",
+      label: "Check for updates",
+      group: "View",
+      icon: ArrowUpCircle,
+      keywords: "version new release upgrade now",
+      run: () => {
+        // land where the outcome shows, then ask
+        jumpToSettingsTab("updates");
+        void tt.updateCheckNow();
+      },
+    });
 
   // -------- Device extras (spec-gated exactly like the Device screen)
   if (connected) {
