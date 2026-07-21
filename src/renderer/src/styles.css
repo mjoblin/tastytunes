@@ -402,6 +402,15 @@ img {
   right: 0;
   translate: 0 0;
 }
+/* modifier: prose tooltips (tool descriptions) wrap at a readable measure
+   instead of one endless nowrap line clipped by the window */
+[data-tip].tip-wide::after {
+  white-space: normal;
+  width: max-content;
+  max-width: 300px;
+  text-align: left;
+  line-height: 1.45;
+}
 
 /* click feedback for scroll-to-current: a gold pulse just inside the target
    row, so it never extends past the scroll container and gets clipped */

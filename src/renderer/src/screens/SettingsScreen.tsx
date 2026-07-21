@@ -586,10 +586,13 @@ function McpSection({
               if (clusters.length === 0) return null
               return (
                 <div key={g.id} className="space-y-3.5">
+                  {/* the group header must out-rank its cluster rows (13.5px
+                      toggles) — a size step up plus the indented rail below */}
                   <div className="pt-1 border-t border-edge/60 first:border-t-0 first:pt-0">
-                    <div className="microlabel pt-2">{g.label}</div>
-                    <div className="text-[11px] text-faint">{g.note}</div>
+                    <div className="pt-2 text-[14.5px] font-medium">{g.label}</div>
+                    <div className="text-[11.5px] text-faint">{g.note}</div>
                   </div>
+                  <div className="pl-4 ml-1 border-l-2 border-edge/50 space-y-3.5">
                   {clusters.map((cluster) => {
                     const on = clusterOn(cluster)
                     const open = openTools[cluster.id] === true
@@ -624,7 +627,7 @@ function McpSection({
                                   aria-pressed={toolOn}
                                   data-tip={t.description}
                                   className={cx(
-                                    'tip-top px-2.5 py-1 rounded-full font-mono text-[10.5px] ring-1 transition-colors',
+                                    'tip-top tip-wide px-2.5 py-1 rounded-full font-mono text-[10.5px] ring-1 transition-colors',
                                     // quiet grays: filled = enabled, hollow + struck = off
                                     toolOn
                                       ? 'ring-edge2 bg-veil2 text-ink/80 hover:text-ink'
@@ -640,6 +643,7 @@ function McpSection({
                       </div>
                     )
                   })}
+                  </div>
                 </div>
               )
             })}
