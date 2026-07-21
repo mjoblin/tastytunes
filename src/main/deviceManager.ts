@@ -11,6 +11,7 @@ import {
   type FrameEntry,
   type LogEntry,
   type McpStatus,
+  type MediaIndexStatus,
   type PushMessage,
   type RecentTrack,
   type SleepTimer,
@@ -114,6 +115,7 @@ export class DeviceManager {
   /** See Snapshot.lastRecalledPresetId — in-app recalls only, content-checked by consumers. */
   private lastRecalledPresetId: number | null = null
   private mcpStatus: McpStatus = { running: false, url: null, error: null }
+  private mediaIndexStatuses: MediaIndexStatus[] = []
 
   // ------------------------------------------------------------------ lifecycle
 
@@ -654,6 +656,11 @@ export class DeviceManager {
   // ------------------------------------------------------------------ MCP status
 
   /** Status pushed by the MCP bridge (null = log only, keep current status). */
+  setMediaIndex(statuses: MediaIndexStatus[]): void {
+    this.mediaIndexStatuses = statuses
+    this.push({ kind: 'mediaIndex', statuses })
+  }
+
   setMcpStatus(status: McpStatus | null, logText: string, level: LogEntry['level'] = 'info'): void {
     this.log(level, 'mcp', logText)
     if (status) {
@@ -790,6 +797,7 @@ export class DeviceManager {
       recents: getRecents(),
       favorites: getFavorites(),
       mcpStatus: this.mcpStatus,
+      mediaIndex: this.mediaIndexStatuses,
       frames: this.frames,
       logs: this.logs,
       netRequests: getNetRequests()

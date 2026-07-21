@@ -311,6 +311,15 @@ async function searchScope(
   entry: ServerEntry,
   criteria: string
 ): Promise<{ items: MediaNode[]; total: number } | null> {
+  return searchPageRaw(entry, criteria, 0, SEARCH_MAX)
+}
+
+async function searchPageRaw(
+  entry: ServerEntry,
+  criteria: string,
+  start: number,
+  count: number
+): Promise<{ items: MediaNode[]; total: number } | null> {
   const body = `<?xml version="1.0" encoding="utf-8"?>
 <s:Envelope s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/" xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
   <s:Body>
@@ -318,8 +327,8 @@ async function searchScope(
       <ContainerID>0</ContainerID>
       <SearchCriteria>${xmlEscape(criteria)}</SearchCriteria>
       <Filter>*</Filter>
-      <StartingIndex>0</StartingIndex>
-      <RequestedCount>${SEARCH_MAX}</RequestedCount>
+      <StartingIndex>${start}</StartingIndex>
+      <RequestedCount>${count}</RequestedCount>
       <SortCriteria></SortCriteria>
     </u:Search>
   </s:Body>
@@ -421,6 +430,61 @@ export async function search(
     }
   }
   return { items, total }
+}
+
+// ------------------------------------------------------ index-crawler primitives
+
+/** One raw-criteria Search page — the index crawler's fast path. */
+export async function searchPage(
+  host: string,
+  serverUdn: string,
+  criteria: string,
+  start: number,
+  count: number
+): Promise<{ items: MediaNode[]; total: number } | null> {
+  const entry = await entryFor(host, serverUdn)
+  return searchPageRaw(entry, criteria, start, count)
+}
+
+/** Direct children of one container (paged internally) — the browse-crawl path. */
+export async function browseChildrenOf(
+  host: string,
+  serverUdn: string,
+  objectId: string
+): Promise<MediaNode[] | null> {
+  const entry = await entryFor(host, serverUdn)
+  return browseChildren(entry, objectId)
+}
+
+/**
+ * The server's SystemUpdateID — a MANDATORY ContentDirectory action, so even
+ * search-less servers answer it. Bumps whenever the library changes; the one
+ * cheap question that keeps the media index honest.
+ */
+export async function getSystemUpdateID(host: string, serverUdn: string): Promise<number | null> {
+  try {
+    const entry = await entryFor(host, serverUdn)
+    const res = await loggedFetch('upnp', entry.controlUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/xml; charset="utf-8"',
+        SOAPAction: '"urn:schemas-upnp-org:service:ContentDirectory:1#GetSystemUpdateID"'
+      },
+      body: `<?xml version="1.0" encoding="utf-8"?>
+<s:Envelope s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/" xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+  <s:Body><u:GetSystemUpdateID xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"></u:GetSystemUpdateID></s:Body>
+</s:Envelope>`,
+      signal: AbortSignal.timeout(10_000)
+    })
+    if (!res.ok) return null
+    const doc = parser.parse(await res.text()) as {
+      Envelope?: { Body?: { GetSystemUpdateIDResponse?: { Id?: unknown } } }
+    }
+    const id = text(doc.Envelope?.Body?.GetSystemUpdateIDResponse?.Id)
+    return id == null ? null : Number(id)
+  } catch {
+    return null
+  }
 }
 
 // --------------------------------------------------------- queue/preset writes

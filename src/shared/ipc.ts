@@ -203,6 +203,7 @@ export type PushMessage =
   | { kind: 'sleep'; sleep: SleepTimer | null }
   | { kind: 'recalledPreset'; id: number | null }
   | { kind: 'mcpStatus'; status: McpStatus }
+  | { kind: 'mediaIndex'; statuses: MediaIndexStatus[] }
   | { kind: 'menu'; command: MenuCommand }
   | { kind: 'updateState'; state: UpdateState }
   /** Sent when a request starts (pending) and again when it settles — upsert by id. */
@@ -1084,6 +1085,8 @@ export interface Snapshot {
   /** Local favorites (stations, albums, tracks), newest-hearted first. */
   favorites: Favorite[]
   mcpStatus: McpStatus
+  /** Local media-index state per known server. */
+  mediaIndex: MediaIndexStatus[]
   frames: FrameEntry[]
   logs: LogEntry[]
   netRequests: NetRequestEntry[]
@@ -1099,6 +1102,25 @@ export interface MediaServerInfo {
   isStreamer: boolean
   /** True when the server answers ContentDirectory Search (non-empty SearchCaps). */
   searchable: boolean
+}
+
+/**
+ * Per-server state of the local media index — a REBUILDABLE CACHE of server
+ * metadata (never user data): built by crawling ContentDirectory, invalidated
+ * wholesale when the server's SystemUpdateID moves (or a TTL passes), gone
+ * without loss if deleted. Searchable servers crawl via paged Search
+ * (seconds); Browse-only servers build on demand by walking containers.
+ */
+export interface MediaIndexStatus {
+  udn: string
+  serverName: string
+  state: 'none' | 'building' | 'ready'
+  strategy: 'search' | 'browse' | null
+  tracks: number
+  albums: number
+  artists: number
+  builtAt: number | null
+  updateId: number | null
 }
 
 export interface MediaNode {
@@ -1203,6 +1225,9 @@ export interface TastyTunesApi {
   /** Save a browsed item to a preset slot (1-99). */
   mediaPresetSave(serverUdn: string, objectId: string, slot: number): Promise<void>
   /** Station search against radio-browser.info (main process; name contains, by popularity). */
+  /** Force a media-index (re)build for one server (also the only way to
+   *  build one for a Browse-only server). */
+  mediaIndexRebuild(serverUdn: string): Promise<void>
   radioSearch(query: string): Promise<RadioStation[]>
   /** The directory's most-listened stations — the Radio screen's default rail. */
   radioTop(): Promise<RadioStation[]>
@@ -1248,6 +1273,7 @@ export const IPC = {
   mediaSearch: 'tt:mediaSearch',
   mediaQueueAdd: 'tt:mediaQueueAdd',
   mediaPresetSave: 'tt:mediaPresetSave',
+  mediaIndexRebuild: 'tt:mediaIndexRebuild',
   radioSearch: 'tt:radioSearch',
   radioTop: 'tt:radioTop',
   radioByTags: 'tt:radioByTags',

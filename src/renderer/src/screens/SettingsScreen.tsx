@@ -401,6 +401,8 @@ export function SettingsScreen(): React.JSX.Element {
             <ListenBrainzSection settings={settings} save={save} />
 
             <CacheRow />
+
+            <MediaIndexRows />
           </div>
         </section>
         )}
@@ -921,6 +923,62 @@ function MiniSwitch({
  */
 const fmtBytes = (b: number): string =>
   b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`
+
+/**
+ * Per-server media-index rows (Connections): the rebuildable metadata cache
+ * behind instant library search. Searchable servers build and refresh
+ * themselves; Browse-only servers get a Build button (a walk can be slow).
+ */
+function MediaIndexRows(): React.JSX.Element | null {
+  const statuses = useStore((s) => s.mediaIndex)
+  if (statuses.length === 0) return null
+
+  const age = (at: number | null): string => {
+    if (at == null) return ''
+    const mins = Math.round((Date.now() - at) / 60000)
+    if (mins < 1) return 'just now'
+    if (mins < 60) return `${mins} min ago`
+    const hours = Math.round(mins / 60)
+    return hours < 48 ? `${hours} h ago` : `${Math.round(hours / 24)} days ago`
+  }
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <div className="text-[13.5px]">Library index</div>
+        <div className="text-[11.5px] text-faint max-w-sm">
+          A local copy of each media server&apos;s track list so library search answers
+          instantly. Rebuilds itself when the server reports changes; nothing here
+          can&apos;t be regenerated.
+        </div>
+      </div>
+      {statuses.map((st) => (
+        <div key={st.udn} className="flex items-center gap-3">
+          <span className="flex-1 min-w-0 text-[12.5px] truncate">
+            {st.serverName}
+            <span className="block font-mono text-[10.5px] text-faint">
+              {st.state === 'building'
+                ? 'building…'
+                : `${st.tracks.toLocaleString()} tracks · ${st.albums.toLocaleString()} albums · updated ${age(st.builtAt)}`}
+            </span>
+          </span>
+          <button
+            onClick={() => void tt.mediaIndexRebuild(st.udn)}
+            disabled={st.state === 'building'}
+            className="shrink-0 flex items-center gap-1.5 text-[12px] px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all disabled:opacity-40 disabled:pointer-events-none"
+          >
+            {st.state === 'building' ? (
+              <Loader2 size={13} className="motion-safe:animate-spin" />
+            ) : (
+              <RefreshCw size={13} />
+            )}
+            {st.state === 'ready' ? 'Rebuild' : 'Build'}
+          </button>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 function CacheRow(): React.JSX.Element {
   const [stats, setStats] = useState<{ entries: number; bytes: number } | null>(null)

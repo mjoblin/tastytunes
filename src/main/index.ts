@@ -14,6 +14,7 @@ import { DeviceManager } from './deviceManager'
 import { demoHost, startDemoStreamer, stopDemoStreamer } from './demoStreamer'
 import { McpBridge } from './mcpServer'
 import { installAppMenu } from './menu'
+import * as mediaIndex from './mediaIndex'
 import {
   checkUpdatesNow,
   checkUpdatesOnDemand,
@@ -274,12 +275,25 @@ function registerIpc(): void {
     if (conn.phase !== 'connected') throw new Error('not connected to a streamer')
     return conn.host
   }
-  ipcMain.handle(IPC.mediaServers, () => refreshServers(streamerHost()))
+  ipcMain.handle(IPC.mediaServers, async () => {
+    const servers = await refreshServers(streamerHost())
+    // Fire-and-forget freshness: Tier A indexes build/rebuild in the
+    // background whenever the Library lists servers; statuses push as they go.
+    mediaIndex.ensureFresh(streamerHost(), servers)
+    return servers
+  })
+  ipcMain.handle(IPC.mediaIndexRebuild, async (_e, serverUdn: string) => {
+    const servers = await refreshServers(streamerHost())
+    const server = servers.find((x) => x.udn === serverUdn)
+    if (server) await mediaIndex.rebuild(streamerHost(), server)
+  })
   ipcMain.handle(IPC.mediaBrowse, (_e, serverUdn: string, objectId: string | null, titlePath: string[]) =>
     mediaBrowse(streamerHost(), serverUdn, objectId, titlePath)
   )
   ipcMain.handle(IPC.mediaSearch, (_e, serverUdn: string, query: string) =>
-    mediaSearch(streamerHost(), serverUdn, query)
+    // Index-first: a fresh local index answers instantly; live search covers
+    // the rest (building, Tier C, or no index yet).
+    mediaIndex.searchServer(streamerHost(), serverUdn, query)
   )
   ipcMain.handle(
     IPC.mediaQueueAdd,
@@ -356,6 +370,7 @@ if (!gotLock) {
     mcpBridge.sync(getSettings())
     void deviceManager.startup()
     startScheduler(deviceManager)
+    mediaIndex.init((statuses) => deviceManager.setMediaIndex(statuses))
     startUpdater((state) => {
       mainWindow?.webContents.send(IPC.push, { kind: 'updateState', state })
     })

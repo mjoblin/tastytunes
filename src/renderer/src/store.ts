@@ -8,6 +8,7 @@ import type {
   FrameEntry,
   LogEntry,
   McpStatus,
+  MediaIndexStatus,
   MenuCommand,
   NetRequestEntry,
   PushMessage,
@@ -168,6 +169,8 @@ interface TTState {
   lastStation: LastStation | null
   /** MCP server state, mirrored from the main process. */
   mcpStatus: McpStatus
+  /** Local media-index state per known server (Settings + Library UI). */
+  mediaIndex: MediaIndexStatus[]
   /** Self-update consent-flow state, mirrored from the main process. */
   update: UpdateState | null
   /** One-shot deep link into a Settings tab (e.g. the nav update dot →
@@ -254,6 +257,7 @@ export const useStore = create<TTState>((set, get) => ({
   libraryTarget: null,
   lastStation: null,
   mcpStatus: { running: false, url: null, error: null },
+  mediaIndex: [],
   update: null,
   settingsJump: null,
   jumpToSettingsTab: (tab) => {
@@ -327,6 +331,7 @@ export const useStore = create<TTState>((set, get) => ({
       recents: snap.recents,
       favorites: snap.favorites,
       mcpStatus: snap.mcpStatus,
+      mediaIndex: snap.mediaIndex,
       playhead: snap.position ? { secs: snap.position.position, at: Date.now() } : null,
       frames: snap.frames,
       logs: snap.logs,
@@ -424,6 +429,8 @@ export const useStore = create<TTState>((set, get) => ({
           return { favorites: msg.data }
         case 'mcpStatus':
           return { mcpStatus: msg.status }
+        case 'mediaIndex':
+          return { mediaIndex: msg.statuses }
         case 'updateState':
           return { update: msg.state.phase === 'idle' ? null : msg.state }
         case 'netRequest': {

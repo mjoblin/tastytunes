@@ -30,7 +30,8 @@ import { getSettings } from './persist'
 import { fetchArtistInfo } from './artistInfo'
 import { fetchLyrics } from './lyrics'
 import { radioSearch } from './radioBrowser'
-import { queueAdd, refreshServers, search as librarySearch } from './upnpBrowser'
+import { queueAdd, refreshServers } from './upnpBrowser'
+import { searchServer as librarySearch } from './mediaIndex'
 
 interface ToolResult {
   content: Array<{ type: 'text'; text: string }>
