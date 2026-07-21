@@ -1096,7 +1096,7 @@ function UpdatesSection({
 
         <Toggle
           label="Automatically check for updates"
-          hint="Look for version updates at launch and every few hours. When a new version is available, a dot appears on the tastytunes name in the left nav and on this tab — nothing downloads or installs itself."
+          hint="Check for version updates at launch and every few hours. When a new version is available, a dot appears on the tastytunes name in the left nav and on this tab — nothing downloads or installs itself."
           checked={settings.updateCheck}
           onChange={(updateCheck) => void save({ updateCheck })}
         />
