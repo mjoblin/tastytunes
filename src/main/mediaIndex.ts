@@ -13,11 +13,11 @@
 //     built only when the user asks (slow on real hardware; ids also rot on
 //     replug, which bumps SystemUpdateID and invalidates anyway).
 //   Tier C (pathological): no index; the Library stays fully live.
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { app } from 'electron'
 import { getSettings } from './persist'
-import type { MediaIndexStatus, MediaNode, MediaServerInfo } from '@shared/ipc'
+import type { MediaIndexStatus, MediaNode, MediaSearchAllGroup, MediaServerInfo } from '@shared/ipc'
 import {
   browseChildrenOf,
   getSystemUpdateID,
@@ -290,6 +290,28 @@ export function searchIndex(udn: string, query: string): { items: MediaNode[]; t
     }
   }
   return { items, total }
+}
+
+/**
+ * Cross-server search: every READY index at once, grouped by server. Nodes
+ * carry serverUdn/serverName stamps so mixed listings can act on them.
+ * Index-only by design — live fallback stays per-server (no SOAP fan-out),
+ * so a searchable-but-unindexed server simply isn't in these results.
+ */
+export function searchAllIndexes(query: string): MediaSearchAllGroup[] {
+  load()
+  const groups: MediaSearchAllGroup[] = []
+  for (const idx of indexes.values()) {
+    const res = searchIndex(idx.udn, query)
+    if (!res || res.total === 0) continue
+    groups.push({
+      udn: idx.udn,
+      serverName: idx.serverName,
+      items: res.items.map((n) => ({ ...n, serverUdn: idx.udn, serverName: idx.serverName })),
+      total: res.total
+    })
+  }
+  return groups
 }
 
 /** Index-first server search with the live ContentDirectory search as fallback. */

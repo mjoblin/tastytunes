@@ -18,7 +18,9 @@ import {
   favoriteKey,
   mcpClusterEnabled,
   sleepTrackKey,
+  type ConnectionState,
   type Favorite,
+  type McpSettings,
   type MediaNode,
   type MediaQueueAction,
   type Snapshot
@@ -31,7 +33,7 @@ import { fetchArtistInfo } from './artistInfo'
 import { fetchLyrics } from './lyrics'
 import { radioSearch } from './radioBrowser'
 import { queueAdd, refreshServers } from './upnpBrowser'
-import { searchServer as librarySearch } from './mediaIndex'
+import { searchServer as librarySearch, status as indexStatus } from './mediaIndex'
 
 interface ToolResult {
   content: Array<{ type: 'text'; text: string }>
@@ -211,14 +213,14 @@ export class McpBridge {
   // --------------------------------------------------------------- tool handlers
 
   /** Snapshot when connected, or a throw that becomes a clean tool error. */
-  private connected(): Snapshot {
+  private connected(): Snapshot & { connection: Extract<ConnectionState, { phase: 'connected' }> } {
     const snap = this.dm.snapshot()
     if (snap.connection.phase !== 'connected') {
       throw new Error(
         'Not connected to a streamer. Use list_devices and connect_device, or open TastyTunes to connect.'
       )
     }
-    return snap
+    return snap as Snapshot & { connection: Extract<ConnectionState, { phase: 'connected' }> }
   }
 
   private toolImpls(): Record<string, ToolImpl> {
@@ -597,13 +599,19 @@ export class McpBridge {
         handler: async () => {
           const s = this.connected()
           const servers = await refreshServers(s.connection.host)
+          const ready = new Set(
+            indexStatus()
+              .filter((x) => x.state === 'ready')
+              .map((x) => x.udn)
+          )
           return ok(
             servers.map((x) => ({
               udn: x.udn,
               name: x.name,
               model: x.model,
               is_streamer_usb: x.isStreamer,
-              searchable: x.searchable
+              searchable: x.searchable,
+              index_ready: ready.has(x.udn)
             }))
           )
         }
@@ -611,22 +619,44 @@ export class McpBridge {
       search_library: {
         inputSchema: {
           query: z.string().min(1).describe('Album, artist, or track name (partial matches ok).'),
-          server_udn: z.string().optional().describe('Limit to one server (see list_media_servers).'),
+          server_udn: z
+            .string()
+            .optional()
+            .describe('Limit to one server (see list_media_servers); omit to search every eligible server.'),
           kind: z.enum(['album', 'artist', 'track']).optional().describe('Only return this kind.')
         },
         handler: async (a) => {
           const s = this.connected()
-          let servers = (await refreshServers(s.connection.host)).filter((x) => x.searchable)
+          const ready = new Set(
+            indexStatus()
+              .filter((x) => x.state === 'ready')
+              .map((x) => x.udn)
+          )
+          // Eligible = answers live Search OR has a ready local index (the
+          // app's own rule) — a Browse-only USB stick with a built index
+          // is searchable here too.
+          let servers = (await refreshServers(s.connection.host)).filter(
+            (x) => x.searchable || ready.has(x.udn)
+          )
           if (typeof a.server_udn === 'string') {
             servers = servers.filter((x) => x.udn === a.server_udn)
             if (servers.length === 0) {
-              return err(`No searchable media server with udn '${a.server_udn}'. Use list_media_servers.`)
+              return err(
+                `No searchable or indexed media server with udn '${a.server_udn}'. Use list_media_servers.`
+              )
             }
           }
           if (servers.length === 0) return err('No searchable media servers are visible right now.')
+          // All-servers mode: ready indexes answer in-memory (no cap on how
+          // many), live SOAP searches stay capped so one query can't hammer
+          // the LAN. A per-server slice keeps the first server from eating
+          // the whole result budget.
+          const fleet = [...servers.filter((x) => ready.has(x.udn)), ...servers.filter((x) => !ready.has(x.udn)).slice(0, 3)]
+          const perServer = fleet.length > 1 ? Math.max(10, Math.ceil(40 / fleet.length)) : 40
           const results: unknown[] = []
-          for (const server of servers.slice(0, 3)) {
+          for (const server of fleet) {
             const { items } = await librarySearch(s.connection.host, server.udn, a.query as string)
+            let added = 0
             for (const n of items) {
               const kind = kindOf(n)
               if (kind === 'folder') continue
@@ -642,7 +672,7 @@ export class McpBridge {
                 year: n.year,
                 duration_seconds: n.durationSecs
               })
-              if (results.length >= 40) break
+              if (++added >= perServer || results.length >= 40) break
             }
             if (results.length >= 40) break
           }

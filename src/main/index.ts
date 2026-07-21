@@ -29,13 +29,7 @@ import { fetchArtistInfo } from './artistInfo'
 import { fetchAlbumInfo } from './albumInfo'
 import { radioByTags, radioSearch, radioTop } from './radioBrowser'
 import { clearLookupCaches, flushLookupCaches, lookupCacheStats } from './diskCache'
-import {
-  browse as mediaBrowse,
-  presetSave,
-  queueAdd,
-  refreshServers,
-  search as mediaSearch
-} from './upnpBrowser'
+import { browse as mediaBrowse, presetSave, queueAdd, refreshServers } from './upnpBrowser'
 import { startScheduler } from './scheduler'
 import { loggedFetch } from './netlog'
 import { getSettings, updateSettings } from './persist'
@@ -295,6 +289,7 @@ function registerIpc(): void {
     // the rest (building, Tier C, or no index yet).
     mediaIndex.searchServer(streamerHost(), serverUdn, query)
   )
+  ipcMain.handle(IPC.mediaSearchAll, (_e, query: string) => mediaIndex.searchAllIndexes(query))
   ipcMain.handle(
     IPC.mediaQueueAdd,
     (_e, serverUdn: string, objectId: string, action: MediaQueueAction, playFromId?: string) =>

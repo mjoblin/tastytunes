@@ -26,6 +26,7 @@ import {
   type FavoriteMedia,
   type MediaNode,
   type MediaQueueAction,
+  type MediaSearchAllGroup,
   type MediaServerInfo,
   type ScreenLayout
 } from '@shared/ipc'
@@ -67,6 +68,34 @@ const nodeKey = (serverUdn: string | null, path: Crumb[]): string =>
 // stale-id rewalks can't recover search-entered branches either way).
 const SEARCH_CRUMB_ID = '__search-results__'
 
+type SearchKind = 'all' | 'albums' | 'artists' | 'tracks'
+type SearchSort = 'relevance' | 'title' | 'artist' | 'year'
+
+const matchesKind = (n: MediaNode, kind: SearchKind): boolean =>
+  kind === 'all'
+    ? true
+    : kind === 'albums'
+      ? isAlbumClass(n.upnpClass)
+      : kind === 'artists'
+        ? n.isContainer && (n.upnpClass.includes('person') || n.upnpClass.includes('Artist'))
+        : !n.isContainer
+
+// Shared result sort — single-server results and every cross-server group
+// order the same way. 'relevance' keeps the index's albums→artists→tracks order.
+const sortSearch = (list: MediaNode[], sort: SearchSort, reversed: boolean): MediaNode[] => {
+  let out = list
+  if (sort !== 'relevance') {
+    out = [...list].sort((a, b) => {
+      if (sort === 'artist')
+        return (a.artist ?? '￿').localeCompare(b.artist ?? '￿') || a.title.localeCompare(b.title)
+      if (sort === 'year')
+        return (b.year ?? '').localeCompare(a.year ?? '') || a.title.localeCompare(b.title)
+      return a.title.localeCompare(b.title)
+    })
+  }
+  return reversed ? [...out].reverse() : out
+}
+
 /**
  * Library: browse UPnP media (LAN servers and the streamer's own USB storage)
  * and act on it — a bare click is never destructive (track click = Play now,
@@ -103,11 +132,14 @@ export function LibraryScreen(): React.JSX.Element {
   } | null>(null)
   const [searching, setSearching] = useState(false)
   // Where to come back to when a search result was entered: the results
-  // themselves plus the folder the search ran over.
+  // themselves plus the folder the search ran over. udn null + cross set =
+  // the root cross-server search.
   const [searchReturn, setSearchReturn] = useState<{
+    udn: string | null
     query: string
     items: MediaNode[]
     total: number
+    cross: MediaSearchAllGroup[] | null
     prevPath: Crumb[]
   } | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
@@ -121,6 +153,22 @@ export function LibraryScreen(): React.JSX.Element {
   const [searchSortReversed, setSearchSortReversed] = useState(false)
   const [fetchNonce, setFetchNonce] = useState(0)
   const scrollRef = useRef<HTMLDivElement | null>(null)
+  const atRoot = serverUdn == null
+
+  // Cross-server search: every READY index at once, grouped by server. It
+  // activates at TWO ready indexes — with one, the scoped per-server flow
+  // already covers everything (and keeps its live fallback).
+  const mediaIndexStatuses = useStore((s) => s.mediaIndex)
+  const readyIndexes = useMemo(
+    () => mediaIndexStatuses.filter((x) => x.state === 'ready'),
+    [mediaIndexStatuses]
+  )
+  const crossAvailable = readyIndexes.length >= 2
+  const [crossState, setCrossState] = useState<{
+    query: string
+    groups: MediaSearchAllGroup[]
+  } | null>(null)
+  const crossMode = searchMode && atRoot
 
   // Action feedback: the app-wide toast for failures, a gold pulse for wins.
   // (The screen's original local notice banner graduated into the toast.)
@@ -186,6 +234,7 @@ export function LibraryScreen(): React.JSX.Element {
       mode: boolean
       query: string
       searchNow: { query: string; items: MediaNode[]; total: number } | null
+      crossNow: { query: string; groups: MediaSearchAllGroup[] } | null
     }>
   >([])
   const restoring = useRef(false)
@@ -193,6 +242,7 @@ export function LibraryScreen(): React.JSX.Element {
   const exitSearch = (): void => {
     setSearchMode(false)
     setSearchState(null)
+    setCrossState(null)
     setSearchQuery('')
     setSearchKind('all')
     setSearchSort('relevance')
@@ -277,6 +327,14 @@ export function LibraryScreen(): React.JSX.Element {
         .mediaIndex.filter((x) => x.state === 'ready')
         .map((x) => x.udn)
     )
+    // Two or more ready indexes → the root cross-server search: no arbitrary
+    // server pick (the reason a default-server setting was rejected). With
+    // one, the scoped flow below keeps its live fallback.
+    if (ready.size >= 2) {
+      moveTo(null, [])
+      setSearchMode(true)
+      return
+    }
     const eligible = (x: MediaServerInfo): boolean => x.searchable || ready.has(x.udn)
     const current = servers.find((x) => x.udn === serverUdn)
     if (current && eligible(current)) {
@@ -291,10 +349,28 @@ export function LibraryScreen(): React.JSX.Element {
   }, [librarySearchTarget, libraryResetNonce, servers, serverUdn])
 
   const enter = (node: MediaNode): void => {
+    if (crossMode && crossState) {
+      // Entering a cross-server result SCOPES to its server; the query crumb
+      // leads back to the root cross view with its groups intact.
+      if (!node.serverUdn) return
+      setSearchReturn({
+        udn: null,
+        query: crossState.query,
+        items: [],
+        total: 0,
+        cross: crossState.groups,
+        prevPath: []
+      })
+      moveTo(node.serverUdn, [
+        { id: SEARCH_CRUMB_ID, title: `“${crossState.query}”` },
+        { id: node.id, title: node.title, node }
+      ])
+      return
+    }
     if (searchMode && searchState) {
       // Entering a result: plant the query crumb so the trail offers the
       // way back, and remember the results for an instant restore.
-      setSearchReturn({ ...searchState, prevPath: path })
+      setSearchReturn({ ...searchState, udn: serverUdn, cross: null, prevPath: path })
       moveTo(serverUdn, [
         { id: SEARCH_CRUMB_ID, title: `“${searchState.query}”` },
         { id: node.id, title: node.title, node }
@@ -310,6 +386,16 @@ export function LibraryScreen(): React.JSX.Element {
     if (!searchReturn) return
     rememberScroll()
     filterMemory.set(nodeKey(serverUdn, path), filter)
+    if (searchReturn.cross) {
+      // the cross-server search lives at the root — leave the scoped server
+      setScreenFilter('library', '')
+      setServerUdn(null)
+      setPath([])
+      setSearchMode(true)
+      setSearchQuery(searchReturn.query)
+      setCrossState({ query: searchReturn.query, groups: searchReturn.cross })
+      return
+    }
     setScreenFilter('library', filterMemory.get(nodeKey(serverUdn, searchReturn.prevPath)) ?? '')
     setPath(searchReturn.prevPath)
     setSearchMode(true)
@@ -324,18 +410,22 @@ export function LibraryScreen(): React.JSX.Element {
   // The result links are INDEX-powered: only offer them when the ready index
   // actually holds the target pool — a folder-only or artist-less server
   // simply never shows them (graceful degradation to plain sublines).
+  // Per-NODE, so cross-server rows gate against their own server's index.
   const serverIndex = useStore((st) => st.mediaIndex.find((x) => x.udn === serverUdn))
-  const albumLinkable = serverIndex?.state === 'ready' && serverIndex.albums > 0
-  const artistLinkable = serverIndex?.state === 'ready' && serverIndex.artists > 0
+  const linkable = (node: MediaNode, pool: 'albums' | 'artists'): boolean => {
+    const idx = mediaIndexStatuses.find((x) => x.udn === nodeUdn(node))
+    return idx?.state === 'ready' && idx[pool] > 0
+  }
 
   /** Album-as-link: resolve a track's album by content identity against the
    *  (index-first) search and enter it — same crumb behavior as clicking an
    *  album result, so the search trail stays returnable. */
   const goToAlbum = async (track: MediaNode): Promise<void> => {
-    if (!serverUdn || !track.album) return
+    const udn = nodeUdn(track)
+    if (!udn || !track.album) return
     const lc = (x: string | null): string => (x ?? '').trim().toLowerCase()
     try {
-      const { items } = await tt.mediaSearch(serverUdn, track.album)
+      const { items } = await tt.mediaSearch(udn, track.album)
       const albums = items.filter((n) => isAlbumClass(n.upnpClass) && lc(n.title) === lc(track.album))
       const album =
         albums.find(
@@ -345,7 +435,8 @@ export function LibraryScreen(): React.JSX.Element {
         showNotice(`Couldn't find "${track.album}" in this library.`)
         return
       }
-      enter(album)
+      // carry the track's server stamp so entering from a cross view scopes right
+      enter(track.serverUdn ? { ...album, serverUdn: udn, serverName: track.serverName } : album)
     } catch {
       showNotice(`Couldn't find "${track.album}" in this library.`)
     }
@@ -354,10 +445,11 @@ export function LibraryScreen(): React.JSX.Element {
   /** Artist-as-link: same content-identity resolution, aimed at the artist
    *  entity. Failure degrades to a quiet toast, never a broken screen. */
   const goToArtist = async (track: MediaNode): Promise<void> => {
-    if (!serverUdn || !track.artist) return
+    const udn = nodeUdn(track)
+    if (!udn || !track.artist) return
     const lc = (x: string | null): string => (x ?? '').trim().toLowerCase()
     try {
-      const { items } = await tt.mediaSearch(serverUdn, track.artist)
+      const { items } = await tt.mediaSearch(udn, track.artist)
       const artist = items.find(
         (n) =>
           n.isContainer &&
@@ -368,7 +460,7 @@ export function LibraryScreen(): React.JSX.Element {
         showNotice(`Couldn't find "${track.artist}" in this library.`)
         return
       }
-      enter(artist)
+      enter(track.serverUdn ? { ...artist, serverUdn: udn, serverName: track.serverName } : artist)
     } catch {
       showNotice(`Couldn't find "${track.artist}" in this library.`)
     }
@@ -391,7 +483,14 @@ export function LibraryScreen(): React.JSX.Element {
 
   const goBack = (): void => {
     if (!searchMode && path.length === 0 && !serverUdn) return // already at the front door
-    const snap = { udn: serverUdn, path, mode: searchMode, query: searchQuery, searchNow: searchState }
+    const snap = {
+      udn: serverUdn,
+      path,
+      mode: searchMode,
+      query: searchQuery,
+      searchNow: searchState,
+      crossNow: crossState
+    }
     restoring.current = true
     try {
       goUp()
@@ -412,6 +511,7 @@ export function LibraryScreen(): React.JSX.Element {
         setSearchMode(true)
         setSearchQuery(snap.query)
         setSearchState(snap.searchNow)
+        setCrossState(snap.crossNow)
       }
     } finally {
       restoring.current = false
@@ -455,7 +555,7 @@ export function LibraryScreen(): React.JSX.Element {
       window.removeEventListener('mouseup', onMouseUp)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path, serverUdn, filter, searchState, searchReturn, searchMode, searchQuery])
+  }, [path, serverUdn, filter, searchState, searchReturn, searchMode, searchQuery, crossState])
 
   const setLayout = async (libraryLayout: ScreenLayout): Promise<void> => {
     await saveSettings({ libraryLayout })
@@ -463,9 +563,20 @@ export function LibraryScreen(): React.JSX.Element {
 
   const runSearch = (): void => {
     const query = searchQuery.trim()
-    if (!serverUdn || !query) return
+    if (!query) return
     // hand the keyboard back to navigation (Backspace = exit search)
     ;(document.activeElement as HTMLElement | null)?.blur?.()
+    if (atRoot) {
+      // cross-server: all ready indexes at once, answered in-memory
+      setSearching(true)
+      void tt
+        .mediaSearchAll(query)
+        .then((groups) => setCrossState({ query, groups }))
+        .catch(() => showNotice('Search failed.'))
+        .finally(() => setSearching(false))
+      return
+    }
+    if (!serverUdn) return
     setSearching(true)
     void tt
       .mediaSearch(serverUdn, query)
@@ -502,7 +613,34 @@ export function LibraryScreen(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, searchMode, indexReady, serverUdn])
 
+  // Cross-server as-you-type: always index-backed (that's the whole design),
+  // so live results while typing come for free.
+  useEffect(() => {
+    if (!searchMode || !atRoot) return
+    const query = searchQuery.trim()
+    if (query.length === 0) {
+      setCrossState(null)
+      return
+    }
+    if (query.length < 2 || crossState?.query === query) return
+    const t = setTimeout(() => {
+      void tt
+        .mediaSearchAll(query)
+        .then((groups) => {
+          // only land results for what's still in the box (fast typing races)
+          if (searchInputRef.current?.value.trim() === query) setCrossState({ query, groups })
+        })
+        .catch(() => {})
+    }, 100)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, searchMode, atRoot])
+
   // ----------------------------------------------------------------- actions
+
+  // Cross-server results carry their own server stamp; everything else
+  // belongs to the screen's current server.
+  const nodeUdn = (node: MediaNode): string | null => node.serverUdn ?? serverUdn
 
   const act = async (
     node: MediaNode,
@@ -510,9 +648,10 @@ export function LibraryScreen(): React.JSX.Element {
     el: HTMLElement | null,
     playFromId?: string
   ): Promise<void> => {
-    if (!serverUdn) return
+    const udn = nodeUdn(node)
+    if (!udn) return
     try {
-      await tt.mediaQueueAdd(serverUdn, node.id, action, playFromId)
+      await tt.mediaQueueAdd(udn, node.id, action, playFromId)
       if (el) flashTarget(el)
     } catch {
       showNotice("Couldn't reach the streamer — nothing was queued.")
@@ -569,17 +708,18 @@ export function LibraryScreen(): React.JSX.Element {
 
   /** "Play" on a container: replace the queue with it and start at its first track. */
   const playContainer = async (node: MediaNode, el: HTMLElement | null): Promise<void> => {
-    if (!serverUdn) return
+    const udn = nodeUdn(node)
+    if (!udn) return
     try {
-      const children = await tt.mediaBrowse(serverUdn, node.id, [
+      const children = await tt.mediaBrowse(udn, node.id, [
         ...path.map((c) => c.title),
         node.title
       ])
       const firstTrack = children.find((c) => !c.isContainer)
       if (firstTrack) {
-        await tt.mediaQueueAdd(serverUdn, node.id, 'PLAY_FROM_HERE', firstTrack.id)
+        await tt.mediaQueueAdd(udn, node.id, 'PLAY_FROM_HERE', firstTrack.id)
       } else {
-        await tt.mediaQueueAdd(serverUdn, node.id, 'REPLACE')
+        await tt.mediaQueueAdd(udn, node.id, 'REPLACE')
       }
       if (el) flashTarget(el)
     } catch {
@@ -591,9 +731,10 @@ export function LibraryScreen(): React.JSX.Element {
   // on success. A custom name rides along via presetRename (the firmware names
   // media presets from content otherwise).
   const savePreset = async (node: MediaNode, slot: number, name: string | null): Promise<void> => {
-    if (!serverUdn) return
+    const udn = nodeUdn(node)
+    if (!udn) return
     try {
-      await tt.mediaPresetSave(serverUdn, node.id, slot)
+      await tt.mediaPresetSave(udn, node.id, slot)
       if (name) await tt.command({ type: 'presetRename', slot, name })
     } catch {
       showNotice("Couldn't save the preset.")
@@ -637,7 +778,6 @@ export function LibraryScreen(): React.JSX.Element {
 
   // -------------------------------------------------------------- derivation
 
-  const atRoot = serverUdn == null
   // The filter belongs to listings with playable media (albums/tracks);
   // navigation folders and the source list don't offer it. Search results
   // aren't client-filtered — the search input is the text control there.
@@ -681,22 +821,8 @@ export function LibraryScreen(): React.JSX.Element {
     // 'relevance' default keeps the index's albums→artists→tracks order).
     let searchShown = shown
     if (searchMode) {
-      if (searchKind === 'albums') searchShown = shown.filter((n) => isAlbumClass(n.upnpClass))
-      else if (searchKind === 'artists')
-        searchShown = shown.filter(
-          (n) => n.isContainer && (n.upnpClass.includes('person') || n.upnpClass.includes('Artist'))
-        )
-      else if (searchKind === 'tracks') searchShown = shown.filter((n) => !n.isContainer)
-      if (searchSort !== 'relevance') {
-        searchShown = [...searchShown].sort((a, b) => {
-          if (searchSort === 'artist')
-            return (a.artist ?? '\uffff').localeCompare(b.artist ?? '\uffff') || a.title.localeCompare(b.title)
-          if (searchSort === 'year')
-            return (b.year ?? '').localeCompare(a.year ?? '') || a.title.localeCompare(b.title)
-          return a.title.localeCompare(b.title)
-        })
-      }
-      if (searchSortReversed) searchShown = [...searchShown].reverse()
+      if (searchKind !== 'all') searchShown = shown.filter((n) => matchesKind(n, searchKind))
+      searchShown = sortSearch(searchShown, searchSort, searchSortReversed)
     }
     const containers = searchMode
       ? searchShown.filter((n) => n.isContainer)
@@ -714,6 +840,36 @@ export function LibraryScreen(): React.JSX.Element {
     return { baseNodes, shown, containers, tracks }
   }, [nodes, searchMode, searchState, effFilter, librarySort, librarySortReversed, albumNode, searchKind, searchSort, searchSortReversed])
   const server = servers?.find((s) => s.udn === serverUdn) ?? null
+
+  // Cross-server results, per-server groups: the kind filter and sort apply
+  // WITHIN each group (the grouping is the point — provenance at a glance).
+  const crossGroups = useMemo(() => {
+    if (!crossState) return []
+    return crossState.groups
+      .map((g) => {
+        const items = sortSearch(
+          searchKind === 'all' ? g.items : g.items.filter((n) => matchesKind(n, searchKind)),
+          searchSort,
+          searchSortReversed
+        )
+        return {
+          udn: g.udn,
+          serverName: g.serverName,
+          total: g.total,
+          albums: items.filter((n) => n.isContainer && isAlbumClass(n.upnpClass)),
+          artists: items.filter((n) => n.isContainer && n.upnpClass.includes('musicArtist')),
+          folders: items.filter(
+            (n) => n.isContainer && !isAlbumClass(n.upnpClass) && !n.upnpClass.includes('musicArtist')
+          ),
+          tracks: items.filter((n) => !n.isContainer)
+        }
+      })
+      .filter((g) => g.albums.length + g.artists.length + g.folders.length + g.tracks.length > 0)
+  }, [crossState, searchKind, searchSort, searchSortReversed])
+  const crossItemCount = crossState
+    ? crossState.groups.reduce((acc, g) => acc + g.items.length, 0)
+    : 0
+  const crossTotal = crossState ? crossState.groups.reduce((acc, g) => acc + g.total, 0) : 0
 
   // Playing-item highlight, queue-screen rules: library items carry no queue
   // ids, so match the playing metadata by content (title, plus artist/album
@@ -772,8 +928,8 @@ export function LibraryScreen(): React.JSX.Element {
     artist: node === albumNode ? (albumArtist ?? node.artist) : node.artist,
     album: node.isContainer ? null : node.album,
     artUrl: node === albumNode ? (albumArt ?? node.artUrl) : node.artUrl,
-    serverUdn,
-    serverName: server?.name ?? null,
+    serverUdn: node.serverUdn ?? serverUdn,
+    serverName: node.serverName ?? server?.name ?? null,
     objectId: node.id,
     titlePath: searchMode
       ? null
@@ -889,6 +1045,18 @@ export function LibraryScreen(): React.JSX.Element {
               total={baseNodes.length}
             />
           )}
+          {/* the root's cross-server search: every built index at once */}
+          {!searchMode && atRoot && crossAvailable && (
+            <button
+              data-library-search-all-button
+              onClick={() => setSearchMode(true)}
+              className="no-drag flex items-center gap-2 px-3.5 h-8 rounded-lg bg-gold text-bg text-[12.5px] font-medium
+                         shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.3)] hover:brightness-110 motion-safe:active:scale-95 transition-all"
+            >
+              <Search size={14} strokeWidth={2.2} />
+              Search libraries
+            </button>
+          )}
           {/* a ready index makes even a Browse-only server searchable */}
           {!searchMode && !atRoot && (server?.searchable || serverIndex?.state === 'ready') && (
             <button
@@ -898,7 +1066,7 @@ export function LibraryScreen(): React.JSX.Element {
                          shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.3)] hover:brightness-110 motion-safe:active:scale-95 transition-all"
             >
               <Search size={14} strokeWidth={2.2} />
-              Search {server.name}
+              Search {server?.name ?? 'this library'}
             </button>
           )}
           {!searchMode && !atRoot && (containers.length > 1 || (!albumNode && tracks.length > 1)) && (
@@ -956,13 +1124,22 @@ export function LibraryScreen(): React.JSX.Element {
             }}
             onFocus={() => document.documentElement.classList.add('filter-focused')}
             onBlur={() => document.documentElement.classList.remove('filter-focused')}
-            placeholder={`Search all of ${server?.name ?? 'this library'}…`}
+            placeholder={
+              crossMode
+                ? `Search ${readyIndexes.map((x) => x.serverName).join(', ')}…`
+                : `Search all of ${server?.name ?? 'this library'}…`
+            }
             spellCheck={false}
             className="flex-1 min-w-0 bg-transparent outline-none text-[13.5px] text-ink placeholder:text-gold/50"
           />
           {searching ? (
             <span className="shrink-0 text-[12px] text-gold/80 motion-safe:animate-pulse">
               searching…
+            </span>
+          ) : crossMode && crossState ? (
+            <span className="shrink-0 font-mono text-[11px] text-gold/80 tabular-nums">
+              {crossTotal} result{crossTotal === 1 ? '' : 's'}
+              {crossTotal > crossItemCount && ` · first ${crossItemCount}`}
             </span>
           ) : searchState ? (
             <span className="shrink-0 font-mono text-[11px] text-gold/80 tabular-nums">
@@ -979,6 +1156,7 @@ export function LibraryScreen(): React.JSX.Element {
               onClick={() => {
                 setSearchQuery('')
                 setSearchState(null)
+                setCrossState(null)
                 searchInputRef.current?.focus()
               }}
               className="shrink-0 p-1 rounded-full text-dim hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
@@ -997,7 +1175,7 @@ export function LibraryScreen(): React.JSX.Element {
       )}
 
       {/* search result controls: kind filter + sort, the shared header idioms */}
-      {searchMode && searchState && (
+      {searchMode && (atRoot ? crossState != null : searchState != null) && (
         <div data-library-search-controls className="no-drag mx-8 mb-3 flex items-center gap-3">
           <Segmented<'all' | 'albums' | 'artists' | 'tracks'>
             value={searchKind}
@@ -1091,7 +1269,7 @@ export function LibraryScreen(): React.JSX.Element {
             Cards, not a list built for volume — same geometry and the same
             size/gap/fill settings as every other media card grid, so the
             card-size slider governs the landing too. */}
-        {!loading && atRoot && (
+        {!loading && atRoot && !searchMode && (
           <div className="space-y-7 pt-1">
             {shownServers.length === 0 && (
               <div className="text-[15px] text-faint pt-3 px-1">
@@ -1217,14 +1395,25 @@ export function LibraryScreen(): React.JSX.Element {
           </div>
         )}
 
-        {searchMode && !searchState && !searching && (
+        {searchMode && !atRoot && !searchState && !searching && (
           <div className="text-[15px] text-faint pt-4 px-1">
             Search all the media on {server?.name ?? 'this library'}.
           </div>
         )}
-        {searchMode && searchState && !searching && shown.length === 0 && (
+        {searchMode && !atRoot && searchState && !searching && shown.length === 0 && (
           <div className="text-[15px] text-faint pt-4 px-1">
             No results for “{searchState.query}”
+          </div>
+        )}
+        {crossMode && !crossState && !searching && (
+          <div className="text-[15px] text-faint pt-4 px-1">
+            Search every built library index at once —{' '}
+            {readyIndexes.map((x) => x.serverName).join(', ')}.
+          </div>
+        )}
+        {crossMode && crossState && !searching && crossGroups.length === 0 && (
+          <div className="text-[15px] text-faint pt-4 px-1">
+            No results for “{crossState.query}”
           </div>
         )}
         {!searchMode && !atRoot && state === 'ready' && shown.length === 0 && (
@@ -1302,12 +1491,90 @@ export function LibraryScreen(): React.JSX.Element {
                 onHeart={() => heartNode(node)}
                 onPlayNow={(el) => playTrack(node, el)}
                 onMenu={(e) => openMenu(node, e)}
-                onAlbumLink={searchMode && albumLinkable && node.album ? () => void goToAlbum(node) : undefined}
-                onArtistLink={searchMode && artistLinkable && node.artist ? () => void goToArtist(node) : undefined}
+                onAlbumLink={searchMode && node.album && linkable(node, 'albums') ? () => void goToAlbum(node) : undefined}
+                onArtistLink={searchMode && node.artist && linkable(node, 'artists') ? () => void goToArtist(node) : undefined}
               />
             ))}
           </div>
         ) : null}
+
+        {/* cross-server results: grouped by SERVER first (provenance at a
+            glance — the same album can live on two servers), then the usual
+            kind clusters within each group. Entering any result scopes the
+            screen to its server; the query crumb leads back here. */}
+        {crossMode &&
+          crossState &&
+          crossGroups.map((g, gi) => {
+            const src = servers?.find((s) => s.udn === g.udn)
+            const kindLabel = (text: string): React.JSX.Element => (
+              <div className="microlabel mb-0.5 mt-2 px-1">{text}</div>
+            )
+            return (
+              <div key={g.udn} data-cross-server-group={g.serverName}>
+                <div className={cx('flex items-center gap-2 px-1', gi === 0 ? 'mt-2' : 'mt-7')}>
+                  {src?.isStreamer ? (
+                    <Usb size={15} className="text-dim" />
+                  ) : (
+                    <HardDrive size={15} className="text-dim" />
+                  )}
+                  <span className="text-[13.5px] font-medium">{g.serverName}</span>
+                  <span className="font-mono text-[11px] text-faint tabular-nums">
+                    {g.total} result{g.total === 1 ? '' : 's'}
+                  </span>
+                </div>
+                {g.albums.length > 0 && (
+                  <>
+                    {kindLabel('Albums')}
+                    {containerGrid(g.albums)}
+                  </>
+                )}
+                {g.artists.length > 0 && (
+                  <>
+                    {kindLabel('Artists')}
+                    {containerGrid(g.artists)}
+                  </>
+                )}
+                {g.folders.length > 0 && (
+                  <>
+                    {kindLabel('Folders')}
+                    {containerGrid(g.folders)}
+                  </>
+                )}
+                {g.tracks.length > 0 && (
+                  <>
+                    {kindLabel('Tracks')}
+                    <div className="divide-y divide-edge/50 -mx-2">
+                      {g.tracks.map((node) => (
+                        <TrackRow
+                          key={node.id}
+                          node={node}
+                          showArt
+                          isCurrent={queueSourceActive && isCurrentTrack(node)}
+                          audible={isPlayingState}
+                          queued={trackQueued(node)}
+                          menuOpen={menuNodeId === node.id}
+                          favorited={nodeFavorited(node)}
+                          onHeart={() => heartNode(node)}
+                          onPlayNow={(el) => playTrack(node, el)}
+                          onMenu={(e) => openMenu(node, e)}
+                          onAlbumLink={
+                            node.album && linkable(node, 'albums')
+                              ? () => void goToAlbum(node)
+                              : undefined
+                          }
+                          onArtistLink={
+                            node.artist && linkable(node, 'artists')
+                              ? () => void goToArtist(node)
+                              : undefined
+                          }
+                        />
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )
+          })}
       </div>
 
       {menu && (
@@ -1315,7 +1582,7 @@ export function LibraryScreen(): React.JSX.Element {
           menu={menu}
           onClose={() => setMenu(null)}
           goToAlbum={
-            searchMode && albumLinkable && !menu.node.isContainer && menu.node.album
+            searchMode && !menu.node.isContainer && menu.node.album && linkable(menu.node, 'albums')
               ? () => {
                   setMenu(null)
                   void goToAlbum(menu.node)
@@ -1323,7 +1590,7 @@ export function LibraryScreen(): React.JSX.Element {
               : undefined
           }
           goToArtist={
-            searchMode && artistLinkable && !menu.node.isContainer && menu.node.artist
+            searchMode && !menu.node.isContainer && menu.node.artist && linkable(menu.node, 'artists')
               ? () => {
                   setMenu(null)
                   void goToArtist(menu.node)

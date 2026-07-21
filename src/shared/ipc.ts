@@ -641,7 +641,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         name: 'search_library',
         title: 'Search library',
         description:
-          'Search for albums, artists, and tracks across the searchable media servers (or one server_udn). Returns object ids for play_media.'
+          'Search for albums, artists, and tracks across every searchable or index-ready media server at once (or one server_udn). Returns object ids for play_media.'
       },
       {
         name: 'play_media',
@@ -1139,6 +1139,22 @@ export interface MediaNode {
   year: string | null
   trackNumber: number | null
   durationSecs: number | null
+  /**
+   * Which server this node came from — stamped ONLY on cross-server search
+   * results, where nodes from several servers share a listing. Everywhere
+   * else the screen's own server context applies and these stay absent.
+   */
+  serverUdn?: string
+  serverName?: string
+}
+
+/** One server's slice of a cross-server (all ready indexes) search. */
+export interface MediaSearchAllGroup {
+  udn: string
+  serverName: string
+  /** Matches, each stamped with serverUdn/serverName. */
+  items: MediaNode[]
+  total: number
 }
 
 /** Queue-write verbs of /smoip/queue/add (semantics per vibin's reverse-engineering). */
@@ -1218,6 +1234,9 @@ export interface TastyTunesApi {
   mediaBrowse(serverUdn: string, objectId: string | null, titlePath: string[]): Promise<MediaNode[]>
   /** Whole-library search on a searchable server (title/artist/album contains). */
   mediaSearch(serverUdn: string, query: string): Promise<{ items: MediaNode[]; total: number }>
+  /** Cross-server search: every READY index at once, grouped by server.
+   *  Index-only by design — live fallback stays per-server (no SOAP fan-out). */
+  mediaSearchAll(query: string): Promise<MediaSearchAllGroup[]>
   /** Queue a browsed item on the streamer (DIDL stays in the main process). */
   mediaQueueAdd(
     serverUdn: string,
@@ -1274,6 +1293,7 @@ export const IPC = {
   mediaServers: 'tt:mediaServers',
   mediaBrowse: 'tt:mediaBrowse',
   mediaSearch: 'tt:mediaSearch',
+  mediaSearchAll: 'tt:mediaSearchAll',
   mediaQueueAdd: 'tt:mediaQueueAdd',
   mediaPresetSave: 'tt:mediaPresetSave',
   mediaIndexRebuild: 'tt:mediaIndexRebuild',
