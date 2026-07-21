@@ -466,7 +466,7 @@ export function LibraryScreen(): React.JSX.Element {
           if (searchInputRef.current?.value.trim() === query) setSearchState({ query, ...res })
         })
         .catch(() => {})
-    }, 150)
+    }, 100)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, searchMode, indexReady, serverUdn])
@@ -862,9 +862,10 @@ export function LibraryScreen(): React.JSX.Element {
             <button
               data-library-search-button
               onClick={() => setSearchMode(true)}
-              className="no-drag flex items-center gap-2 px-3 h-8 rounded-lg ring-1 ring-edge bg-panel/70 text-[12.5px] text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
+              className="no-drag flex items-center gap-2 px-3.5 h-8 rounded-lg bg-gold text-bg text-[12.5px] font-medium
+                         shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.3)] hover:brightness-110 motion-safe:active:scale-95 transition-all"
             >
-              <Search size={14} />
+              <Search size={14} strokeWidth={2.2} />
               Search {server.name}
             </button>
           )}
