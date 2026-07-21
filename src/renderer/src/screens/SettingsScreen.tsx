@@ -575,7 +575,9 @@ function McpSection({
 
           <div className="space-y-4">
             <div>
-              <div className="text-[13.5px]">Tools</div>
+              {/* the top of the three-level ladder: Tools (16 bold) > group
+                  headings (14.5 medium) > cluster toggles (13.5) */}
+              <div className="font-display font-bold text-[16px] tracking-tight">Tools</div>
               <div className="text-[11.5px] text-faint max-w-sm">
                 What connected agents are allowed to do. Switch off whole clusters, or click
                 individual tools to toggle them. Changes apply to the next agent request.
