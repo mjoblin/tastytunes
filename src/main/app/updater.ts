@@ -148,6 +148,9 @@ export function checkUpdatesNow(): void {
  * automatic checks off (the click is the consent) and reports the outcome.
  */
 export async function checkUpdatesOnDemand(): Promise<UpdateCheckResult> {
+  // Store builds never probe GitHub — the UI hides the button, but the
+  // "no requests, ever" promise is enforced here too (belt and braces).
+  if (STORE_BUILD) return { status: "none" };
   if (!updaterUsable()) return legacyCheckOnDemand();
   try {
     const r = await autoUpdater.checkForUpdates();
