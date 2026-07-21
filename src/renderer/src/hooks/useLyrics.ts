@@ -76,13 +76,37 @@ export function useLyrics(): {
   const hasQuery = !!artist && !!meta.title
   const trackKey = `${artist}|${meta.title}|${meta.album}|${duration}`
 
+  // Track-change metadata arrives in STAGES (title first, duration a beat
+  // later — live-proven). Fetching on the first twitch asked LRCLIB with the
+  // PREVIOUS track's duration; the sync-trust window then rejects the true
+  // record, and the degraded plain/miss result gets cached under a poisoned
+  // key (193 such pairs found in one real cache). Let metadata settle before
+  // asking — one query per track, with the duration that belongs to it.
+  const [settled, setSettled] = useState(() => ({
+    key: trackKey,
+    query: artist && meta.title ? { artist, title: meta.title, album: meta.album, duration } : null
+  }))
+  useEffect(() => {
+    if (settled.key === trackKey) return
+    const t = setTimeout(
+      () =>
+        setSettled({
+          key: trackKey,
+          query: artist && meta.title ? { artist, title: meta.title, album: meta.album, duration } : null
+        }),
+      750
+    )
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- trackKey covers the query fields
+  }, [trackKey, settled.key])
+
   const [status, setStatus] = useState<LyricsStatus>('loading')
   const [result, setResult] = useState<LyricsResult | null>(null)
   const [fetchNonce, setFetchNonce] = useState(0)
   const forceRef = useRef(false)
 
   useEffect(() => {
-    if (!artist || !meta.title) {
+    if (!settled.query) {
       setStatus('none')
       setResult(null)
       return
@@ -92,7 +116,7 @@ export function useLyrics(): {
     let stale = false
     setStatus('loading')
     void tt
-      .fetchLyrics({ artist, title: meta.title, album: meta.album, duration }, force)
+      .fetchLyrics(settled.query, force)
       .then((res) => {
         if (stale) return
         setResult(res)
@@ -106,8 +130,7 @@ export function useLyrics(): {
     return () => {
       stale = true
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- trackKey covers the query fields
-  }, [trackKey, fetchNonce])
+  }, [settled, fetchNonce])
 
   const refresh = useCallback(() => {
     forceRef.current = true
@@ -143,5 +166,16 @@ export function useLyrics(): {
     return idx
   }, [synced, positionSecs])
 
-  return { status, result, synced, currentIndex, isRadio: meta.isRadio, hasQuery, refresh }
+  // While the settle timer runs, the previous track's lyrics are stale —
+  // report loading (and hand the panel no lines) rather than showing them.
+  const settling = settled.key !== trackKey
+  return {
+    status: settling ? 'loading' : status,
+    result: settling ? null : result,
+    synced: settling ? null : synced,
+    currentIndex: settling ? -1 : currentIndex,
+    isRadio: meta.isRadio,
+    hasQuery,
+    refresh
+  }
 }
