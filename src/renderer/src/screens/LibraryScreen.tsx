@@ -466,7 +466,7 @@ export function LibraryScreen(): React.JSX.Element {
           if (searchInputRef.current?.value.trim() === query) setSearchState({ query, ...res })
         })
         .catch(() => {})
-    }, 200)
+    }, 150)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, searchMode, indexReady, serverUdn])
