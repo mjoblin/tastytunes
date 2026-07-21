@@ -39,7 +39,7 @@ import { toggleFavorite } from '@/lib/favorites'
 import { ArtImage } from '@/components/ArtImage'
 import { Segmented } from '@/components/Segmented'
 import { FilterInput } from '@/components/FilterInput'
-import { ContainerCard, ContainerRow, TrackCard, TrackRow } from '@/components/LibraryCards'
+import { ContainerCard, ContainerRow, TrackRow } from '@/components/LibraryCards'
 import { ItemMenu, PresetPicker } from '@/components/LibraryMenus'
 import { EmptyState } from '@/components/EmptyState'
 import { PopoverChrome } from '@/hooks/usePopover'
@@ -882,13 +882,13 @@ export function LibraryScreen(): React.JSX.Element {
               }
             />
           )}
-          {/* the rows⇄cards toggle only governs mid-level browse lists; the
-              root (sources always cards) and album views (tracklist always
-              rows) ignore it, so it's hidden there rather than sitting dead */}
-          {!atRoot && !albumNode && (
+          {/* the rows⇄cards toggle governs CONTAINER lists only (tracks are
+              always rows); hidden wherever it would sit dead — the root
+              (sources always cards), album views, and pure-track folders */}
+          {!atRoot && !albumNode && containers.length > 0 && (
             <button
-              data-tip={cards ? 'View as rows' : 'View as cards'}
-              aria-label={cards ? 'View as rows' : 'View as cards'}
+              data-tip={cards ? 'Albums & folders as rows' : 'Albums & folders as cards'}
+              aria-label={cards ? 'Albums & folders as rows' : 'Albums & folders as cards'}
               onClick={() => void setLayout(cards ? 'rows' : 'cards')}
               className="no-drag tip-bottom p-2 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
             >
@@ -1246,38 +1246,10 @@ export function LibraryScreen(): React.JSX.Element {
           <div className={groupLabelClass(containers.length === 0)}>Tracks</div>
         )}
 
-        {/* loose tracks honor the cards ⇄ rows toggle; album views keep rows
-            (the header presents the album — rows are the tracklist idiom) */}
-        {!atRoot && state === 'ready' && tracks.length > 0 && cards && !albumNode ? (
-          <div
-            className={cx(containers.length > 0 && !searchMode && 'mt-4')}
-            style={{
-              display: 'grid',
-              gridTemplateColumns: presetFillRows
-                ? `repeat(auto-fill, minmax(${presetCardSize}px, 1fr))`
-                : `repeat(auto-fill, ${presetCardSize}px)`,
-              gap: presetGap,
-              paddingTop: 8
-            }}
-          >
-            {tracks.map((node) => (
-              <TrackCard
-                key={node.id}
-                node={node}
-                isCurrent={queueSourceActive && isCurrentTrack(node)}
-                audible={isPlayingState}
-                queued={trackQueued(node)}
-                menuOpen={menuNodeId === node.id}
-                favorited={nodeFavorited(node)}
-                onHeart={() => heartNode(node)}
-                onPlayNow={(el) => playTrack(node, el)}
-                onMenu={(e) => openMenu(node, e)}
-                onAlbumLink={searchMode && albumLinkable && node.album ? () => void goToAlbum(node) : undefined}
-                onArtistLink={searchMode && artistLinkable && node.artist ? () => void goToArtist(node) : undefined}
-              />
-            ))}
-          </div>
-        ) : !atRoot && state === 'ready' && tracks.length > 0 ? (
+        {/* tracks are ALWAYS rows — the app-wide idiom (Queue, Recently,
+            Favorites, album tracklists). The cards ⇄ rows toggle governs
+            container lists only. */}
+        {!atRoot && state === 'ready' && tracks.length > 0 ? (
           <div
             className={cx(
               'divide-y divide-edge/50 -mx-2',
