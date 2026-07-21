@@ -241,7 +241,7 @@ export function CommandPalette(): React.JSX.Element {
         group: 'Screens',
         hint: `Screen · ${sc.key}`,
         icon: sc.icon,
-        keywords: navHidden.has(sc.id) ? 'go to open view screen hidden sidebar' : 'go to open view screen',
+        keywords: navHidden.has(sc.id) ? 'go to open view screen hidden sidebar nav' : 'go to open view screen',
         hidden: navHidden.has(sc.id),
         run: () => setScreen(sc.id)
       })
@@ -676,7 +676,7 @@ export function CommandPalette(): React.JSX.Element {
                       <EyeOff
                         size={12}
                         strokeWidth={1.8}
-                        aria-label="Hidden from sidebar"
+                        aria-label="Hidden from left nav"
                         className="shrink-0 text-faint/70"
                       />
                     )}

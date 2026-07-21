@@ -168,7 +168,7 @@ export function Nav(): React.JSX.Element {
         </div>
 
         {/* mini player + settings at the bottom, collapse last.
-            Commands + Mini player are hideable (right-click → Hide from sidebar,
+            Commands + Mini player are hideable (right-click → Hide from left nav,
             un-hide from Settings); Settings is locked; Collapse is never hideable. */}
         <div className={cx('mt-auto space-y-0.5 pb-3', collapsed ? 'px-2' : 'px-3')}>
         {/* visible entry point for the palette — the shortcut teaches itself */}
@@ -247,7 +247,7 @@ export function Nav(): React.JSX.Element {
 }
 
 /**
- * Right-click menu for a nav item — one verb, "Hide from sidebar". Anchored at
+ * Right-click menu for a nav item — one verb, "Hide from left nav". Anchored at
  * the cursor and clamped on-screen; mounts PopoverChrome (Escape-capture +
  * inert drag regions, so the full-window click-catcher can hear a click on the
  * title-bar drag region at the top of the nav). Click-outside / right-click
@@ -280,7 +280,7 @@ function NavItemMenu({
           className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left text-[13px] text-dim hover:text-ink hover:bg-veil transition-colors"
         >
           <EyeOff size={14} strokeWidth={1.8} className="shrink-0" />
-          Hide from sidebar
+          Hide from left nav
         </button>
       </div>
     </>,

@@ -250,7 +250,7 @@ export function SettingsScreen(): React.JSX.Element {
 
             <Toggle
               label="Accent follows album art"
-              hint="Tint controls and glows with the playing album's dominant color. Brand and playing-state gold never change."
+              hint="Tint controls and glows with the playing album's dominant color. The tastytunes gold — the logo and the playing markers — never changes."
               checked={settings.accentFollowsArt}
               onChange={(accentFollowsArt) => void save({ accentFollowsArt })}
             />
@@ -315,7 +315,7 @@ export function SettingsScreen(): React.JSX.Element {
             </SettingRow>
 
             <Toggle
-              label="Keyboard media keys"
+              label="Media keys"
               hint="Play/pause, next, and previous keys control the streamer even when TastyTunes is in the background."
               checked={settings.mediaKeys}
               onChange={(mediaKeys) => void save({ mediaKeys })}
@@ -385,7 +385,7 @@ export function SettingsScreen(): React.JSX.Element {
 
             <Toggle
               label="Current lyric line"
-              hint="Shows the live synced lyric under the track details on Now Playing (hidden while the full panel is open). Looks tracks up as they change."
+              hint="Shows the live synced lyric under the track details on Now Playing (hidden while the full panel is open). Looks up each track as it plays — the same LRCLIB request as above."
               disabled={!settings.lyrics}
               checked={settings.lyricsLine}
               onChange={(lyricsLine) => void save({ lyricsLine })}
@@ -931,7 +931,7 @@ function CacheRow(): React.JSX.Element {
   return (
     <SettingRow
       label="Cached lookups"
-      hint="Lyrics, artist, and album lookups are kept on disk (bounded; least-recently-used entries drop first) so repeat plays don't re-ask the services above. The panels' refresh buttons overwrite the stored copy."
+      hint="Lyrics, artist, and album lookups are kept on disk (a fixed size — the entries you haven't used longest drop first) so repeat plays don't re-ask the services above. The panels' refresh buttons overwrite the stored copy."
     >
       <button
         onClick={() => void tt.clearLookupCaches().then(setStats)}
@@ -1128,7 +1128,7 @@ function LegendRow({
 /**
  * Sidebar card (Layout tab): a row per screen in registry order with an eye
  * toggle to hide/show it in the left nav — the way to un-hide, mirroring the
- * right-click "Hide from sidebar" verb on the nav itself. now-playing is locked
+ * right-click "Hide from left nav" verb on the nav itself. now-playing is locked
  * (never hideable). Below a divider, the pinned bottom-cluster tools (Commands,
  * Mini player) get the same toggle; Settings is shown locked, last, for
  * completeness. Hidden items stay reachable by their keyboard shortcut / route.
@@ -1309,7 +1309,7 @@ function SidebarSection(): React.JSX.Element {
 
   return (
     <section className="space-y-3">
-      <div className="microlabel">sidebar</div>
+      <div className="microlabel">left nav</div>
       <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 pt-3">
         <p className="text-[11.5px] text-faint max-w-md pb-2">
           Hide items you don&apos;t use from the left nav. Hidden screens stay reachable by
@@ -1369,8 +1369,8 @@ function SidebarRow({
       ) : (
         <button
           onClick={() => onToggle?.(!hidden)}
-          data-tip={hidden ? 'Show in sidebar' : 'Hide from sidebar'}
-          aria-label={hidden ? `Show ${sc.label} in sidebar` : `Hide ${sc.label} from sidebar`}
+          data-tip={hidden ? 'Show in left nav' : 'Hide from left nav'}
+          aria-label={hidden ? `Show ${sc.label} in left nav` : `Hide ${sc.label} from left nav`}
           className="tip-top tip-end flex items-center justify-center h-7 w-7 rounded-md text-dim hover:text-ink hover:bg-veil motion-safe:active:scale-90 transition-all"
         >
           {hidden ? <EyeOff size={15} strokeWidth={1.8} /> : <Eye size={15} strokeWidth={1.8} />}
