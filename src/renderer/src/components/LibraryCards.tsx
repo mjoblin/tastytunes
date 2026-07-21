@@ -287,7 +287,8 @@ export function TrackRow({
   favorited,
   onHeart,
   onPlayNow,
-  onMenu
+  onMenu,
+  onAlbumLink
 }: {
   node: MediaNode
   /** Loose tracks in mixed folders get a thumb; album views carry the art in the header. */
@@ -303,6 +304,9 @@ export function TrackRow({
   onHeart?(): void
   onPlayNow(el: HTMLElement | null): void
   onMenu(e: React.MouseEvent): void
+  /** Search results: the album name renders as a link that navigates there
+   *  (the row itself keeps the app-wide click contract: tracks play). */
+  onAlbumLink?(): void
 }): React.JSX.Element {
   const ref = useRef<HTMLDivElement | null>(null)
   return (
@@ -330,7 +334,27 @@ export function TrackRow({
         <div className={cx('text-[13.5px] truncate', isCurrent ? 'text-gold' : 'text-ink')}>
           {node.title}
         </div>
-        {node.artist && <div className="text-[12px] text-faint truncate">{node.artist}</div>}
+        {(node.artist || (onAlbumLink && node.album)) && (
+          <div className="text-[12px] text-faint truncate">
+            {node.artist}
+            {onAlbumLink && node.album && (
+              <>
+                {node.artist ? ' · ' : ''}
+                <button
+                  data-tip="Go to album"
+                  aria-label={`Go to album ${node.album}`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onAlbumLink()
+                  }}
+                  className="tip-bottom hover:text-ink hover:underline underline-offset-2 transition-colors"
+                >
+                  {node.album}
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </div>
       {/* per-button reveal (not on the wrapper): a set heart must stay
           visible on the resting row while play/⋯ remain hover-only */}
@@ -380,7 +404,8 @@ export function TrackCard({
   favorited,
   onHeart,
   onPlayNow,
-  onMenu
+  onMenu,
+  onAlbumLink
 }: {
   node: MediaNode
   isCurrent: boolean
@@ -392,6 +417,8 @@ export function TrackCard({
   onHeart?(): void
   onPlayNow(el: HTMLElement | null): void
   onMenu(e: React.MouseEvent): void
+  /** Search results: album name as a navigate link (card click still plays). */
+  onAlbumLink?(): void
 }): React.JSX.Element {
   const ref = useRef<HTMLDivElement | null>(null)
   return (
@@ -445,8 +472,27 @@ export function TrackCard({
         >
           {node.title}
         </div>
-        {node.artist && (
-          <div className="text-[11.5px] text-faint truncate text-left">{node.artist}</div>
+        {(node.artist || (onAlbumLink && node.album)) && (
+          <div className="text-[11.5px] text-faint truncate text-left">
+            {node.artist}
+            {onAlbumLink && node.album && (
+              <>
+                {node.artist ? ' · ' : ''}
+                <span
+                  role="link"
+                  tabIndex={0}
+                  aria-label={`Go to album ${node.album}`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onAlbumLink()
+                  }}
+                  className="hover:text-ink hover:underline underline-offset-2 transition-colors cursor-pointer"
+                >
+                  {node.album}
+                </span>
+              </>
+            )}
+          </div>
         )}
       </button>
       {onHeart && (

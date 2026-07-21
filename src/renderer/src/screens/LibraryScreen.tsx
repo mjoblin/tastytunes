@@ -15,7 +15,8 @@ import {
   RotateCw,
   Rows3,
   Search,
-  Usb
+  Usb,
+  X
 } from 'lucide-react'
 import {
   favoriteKey,
@@ -36,6 +37,7 @@ import { flashTarget } from '@/lib/scroll'
 import { isAlbumClass, stripFurniture } from '@/lib/media'
 import { toggleFavorite } from '@/lib/favorites'
 import { ArtImage } from '@/components/ArtImage'
+import { Segmented } from '@/components/Segmented'
 import { FilterInput } from '@/components/FilterInput'
 import { ContainerCard, ContainerRow, TrackCard, TrackRow } from '@/components/LibraryCards'
 import { ItemMenu, PresetPicker } from '@/components/LibraryMenus'
@@ -112,6 +114,11 @@ export function LibraryScreen(): React.JSX.Element {
   useEffect(() => {
     if (searchMode) searchInputRef.current?.focus()
   }, [searchMode])
+  // Result controls: kind filter (the Favorites Segmented idiom) + sort.
+  // Both reset when search exits — a fresh search starts neutral.
+  const [searchKind, setSearchKind] = useState<'all' | 'albums' | 'artists' | 'tracks'>('all')
+  const [searchSort, setSearchSort] = useState<'relevance' | 'title' | 'artist' | 'year'>('relevance')
+  const [searchSortReversed, setSearchSortReversed] = useState(false)
   const [fetchNonce, setFetchNonce] = useState(0)
   const scrollRef = useRef<HTMLDivElement | null>(null)
 
@@ -187,6 +194,9 @@ export function LibraryScreen(): React.JSX.Element {
     setSearchMode(false)
     setSearchState(null)
     setSearchQuery('')
+    setSearchKind('all')
+    setSearchSort('relevance')
+    setSearchSortReversed(false)
     document.documentElement.classList.remove('filter-focused')
   }
 
@@ -278,6 +288,29 @@ export function LibraryScreen(): React.JSX.Element {
       items: searchReturn.items,
       total: searchReturn.total
     })
+  }
+
+  /** Album-as-link: resolve a track's album by content identity against the
+   *  (index-first) search and enter it — same crumb behavior as clicking an
+   *  album result, so the search trail stays returnable. */
+  const goToAlbum = async (track: MediaNode): Promise<void> => {
+    if (!serverUdn || !track.album) return
+    const lc = (x: string | null): string => (x ?? '').trim().toLowerCase()
+    try {
+      const { items } = await tt.mediaSearch(serverUdn, track.album)
+      const albums = items.filter((n) => isAlbumClass(n.upnpClass) && lc(n.title) === lc(track.album))
+      const album =
+        albums.find(
+          (n) => track.artist == null || n.artist == null || lc(n.artist) === lc(track.artist)
+        ) ?? albums[0]
+      if (!album) {
+        showNotice(`Couldn't find "${track.album}" in this library.`)
+        return
+      }
+      enter(album)
+    } catch {
+      showNotice(`Couldn't find "${track.album}" in this library.`)
+    }
   }
 
   // Crumb trail: Library (source list) › source › folders…
@@ -583,11 +616,31 @@ export function LibraryScreen(): React.JSX.Element {
             })
       return librarySortReversed ? [...sorted].reverse() : sorted
     }
-    // Search results keep the server's own order (sort chip is hidden there).
+    // Search results: the kind filter narrows, the search sort orders (its
+    // 'relevance' default keeps the index's albums→artists→tracks order).
+    let searchShown = shown
+    if (searchMode) {
+      if (searchKind === 'albums') searchShown = shown.filter((n) => isAlbumClass(n.upnpClass))
+      else if (searchKind === 'artists')
+        searchShown = shown.filter(
+          (n) => n.isContainer && (n.upnpClass.includes('person') || n.upnpClass.includes('Artist'))
+        )
+      else if (searchKind === 'tracks') searchShown = shown.filter((n) => !n.isContainer)
+      if (searchSort !== 'relevance') {
+        searchShown = [...searchShown].sort((a, b) => {
+          if (searchSort === 'artist')
+            return (a.artist ?? '\uffff').localeCompare(b.artist ?? '\uffff') || a.title.localeCompare(b.title)
+          if (searchSort === 'year')
+            return (b.year ?? '').localeCompare(a.year ?? '') || a.title.localeCompare(b.title)
+          return a.title.localeCompare(b.title)
+        })
+      }
+      if (searchSortReversed) searchShown = [...searchShown].reverse()
+    }
     const containers = searchMode
-      ? shown.filter((n) => n.isContainer)
+      ? searchShown.filter((n) => n.isContainer)
       : sortNodes(shown.filter((n) => n.isContainer))
-    const rawTracks = shown.filter((n) => !n.isContainer)
+    const rawTracks = (searchMode ? searchShown : shown).filter((n) => !n.isContainer)
     // Track order: album views always by track number (the album's own
     // order); loose listings (Title views, mixed folders) follow the sort.
     const tracks = albumNode
@@ -598,7 +651,7 @@ export function LibraryScreen(): React.JSX.Element {
         ? rawTracks
         : sortNodes(rawTracks)
     return { baseNodes, shown, containers, tracks }
-  }, [nodes, searchMode, searchState, effFilter, librarySort, librarySortReversed, albumNode])
+  }, [nodes, searchMode, searchState, effFilter, librarySort, librarySortReversed, albumNode, searchKind, searchSort, searchSortReversed])
   const server = servers?.find((s) => s.udn === serverUdn) ?? null
 
   // Playing-item highlight, queue-screen rules: library items carry no queue
@@ -787,6 +840,8 @@ export function LibraryScreen(): React.JSX.Element {
           )}
           {!searchMode && !atRoot && (containers.length > 1 || (!albumNode && tracks.length > 1)) && (
             <SortChip
+              sorts={SORTS}
+              neutral="server"
               value={librarySort}
               reversed={librarySortReversed}
               onChange={(librarySort) => void saveSettings({ librarySort })}
@@ -842,6 +897,19 @@ export function LibraryScreen(): React.JSX.Element {
             spellCheck={false}
             className="flex-1 min-w-0 bg-transparent outline-none text-[13.5px] text-ink placeholder:text-gold/50"
           />
+          {searchQuery.length > 0 && (
+            <button
+              aria-label="Clear search"
+              onClick={() => {
+                setSearchQuery('')
+                setSearchState(null)
+                searchInputRef.current?.focus()
+              }}
+              className="shrink-0 p-1 rounded-full text-dim hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
+            >
+              <X size={13} />
+            </button>
+          )}
           {searching ? (
             <span className="shrink-0 text-[12px] text-gold/80 motion-safe:animate-pulse">
               searching…
@@ -860,6 +928,34 @@ export function LibraryScreen(): React.JSX.Element {
           >
             <ArrowLeft size={13} /> Back to browsing
           </button>
+        </div>
+      )}
+
+      {/* search result controls: kind filter + sort, the shared header idioms */}
+      {searchMode && searchState && (
+        <div data-library-search-controls className="no-drag mx-8 mb-3 flex items-center gap-3">
+          <Segmented<'all' | 'albums' | 'artists' | 'tracks'>
+            value={searchKind}
+            onChange={setSearchKind}
+            options={[
+              { value: 'all', label: 'All' },
+              { value: 'albums', label: 'Albums' },
+              { value: 'artists', label: 'Artists' },
+              { value: 'tracks', label: 'Tracks' }
+            ]}
+          />
+          <div className="flex-1" />
+          <SortChip
+            sorts={SEARCH_SORTS}
+            neutral="relevance"
+            value={searchSort}
+            reversed={searchSortReversed}
+            onChange={(v) => {
+              setSearchSort(v)
+              setSearchSortReversed(false)
+            }}
+            onToggleReverse={() => setSearchSortReversed((r) => !r)}
+          />
         </div>
       )}
 
@@ -1144,6 +1240,7 @@ export function LibraryScreen(): React.JSX.Element {
                 onHeart={() => heartNode(node)}
                 onPlayNow={(el) => playTrack(node, el)}
                 onMenu={(e) => openMenu(node, e)}
+                onAlbumLink={searchMode && node.album ? () => void goToAlbum(node) : undefined}
               />
             ))}
           </div>
@@ -1167,6 +1264,7 @@ export function LibraryScreen(): React.JSX.Element {
                 onHeart={() => heartNode(node)}
                 onPlayNow={(el) => playTrack(node, el)}
                 onMenu={(e) => openMenu(node, e)}
+                onAlbumLink={searchMode && node.album ? () => void goToAlbum(node) : undefined}
               />
             ))}
           </div>
@@ -1177,6 +1275,14 @@ export function LibraryScreen(): React.JSX.Element {
         <ItemMenu
           menu={menu}
           onClose={() => setMenu(null)}
+          goToAlbum={
+            searchMode && !menu.node.isContainer && menu.node.album
+              ? () => {
+                  setMenu(null)
+                  void goToAlbum(menu.node)
+                }
+              : undefined
+          }
           onAction={(action, playFromId) => {
             setMenu(null)
             if (action === 'PLAY') void playContainer(menu.node, null)
@@ -1222,16 +1328,27 @@ const SORTS: Array<{ value: AppSettings['librarySort']; label: string }> = [
   { value: 'artist', label: 'Artist' },
   { value: 'year', label: 'Year (newest first)' }
 ]
+const SEARCH_SORTS: Array<{ value: 'relevance' | 'title' | 'artist' | 'year'; label: string }> = [
+  { value: 'relevance', label: 'Relevance' },
+  { value: 'title', label: 'Title' },
+  { value: 'artist', label: 'Artist' },
+  { value: 'year', label: 'Year (newest first)' }
+]
 
-function SortChip({
+function SortChip<T extends string>({
+  sorts,
+  neutral,
   value,
   reversed,
   onChange,
   onToggleReverse
 }: {
-  value: AppSettings['librarySort']
+  sorts: Array<{ value: T; label: string }>
+  /** The unlit default (server order / relevance). */
+  neutral: T
+  value: T
   reversed: boolean
-  onChange(value: AppSettings['librarySort']): void
+  onChange(value: T): void
   onToggleReverse(): void
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
@@ -1243,7 +1360,7 @@ function SortChip({
         onClick={() => setOpen((o) => !o)}
         className={cx(
           'no-drag tip-bottom p-2 rounded-lg ring-1 transition-all',
-          value !== 'server' || reversed
+          value !== neutral || reversed
             ? 'ring-gold/50 bg-golddim text-gold'
             : 'ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70'
         )}
@@ -1255,7 +1372,7 @@ function SortChip({
           <PopoverChrome onClose={() => setOpen(false)} />
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
           <div className="absolute right-0 top-full mt-1.5 z-30 w-48 rounded-xl ring-1 ring-edge2 bg-raised shadow-xl p-1.5 space-y-0.5">
-            {SORTS.map((s) => {
+            {sorts.map((s) => {
               const active = s.value === value
               return (
                 <button
