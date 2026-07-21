@@ -574,7 +574,9 @@ function McpSection({
           </SettingRow>
 
           <div className="space-y-4">
-            <div>
+            {/* full-strength rule: Tools opens its own region, a step above
+                the groups' softer edge/60 separators */}
+            <div className="pt-4 border-t border-edge">
               {/* the top of the three-level ladder: Tools (16 bold) > group
                   headings (14.5 medium) > cluster toggles (13.5) */}
               <div className="font-display font-bold text-[16px] tracking-tight">Tools</div>
