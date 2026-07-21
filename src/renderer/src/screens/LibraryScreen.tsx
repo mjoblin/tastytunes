@@ -259,6 +259,37 @@ export function LibraryScreen(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [libraryResetNonce])
 
+  // Palette/global "search the library" ask. Nonce-paired with the reset
+  // (the libraryTarget pattern): a request made before this mount still
+  // matches, StrictMode double-runs stay idempotent, and a stale target is
+  // just ignored. Consumed at most once per nonce so exiting search manually
+  // isn't fought by a re-running effect.
+  const librarySearchTarget = useStore((s) => s.librarySearchTarget)
+  const searchReqDone = useRef(-1)
+  useEffect(() => {
+    if (!librarySearchTarget || librarySearchTarget.nonce !== libraryResetNonce) return
+    if (searchReqDone.current === librarySearchTarget.nonce) return
+    if (!servers) return // listing still loading; rerun when it lands
+    searchReqDone.current = librarySearchTarget.nonce
+    const ready = new Set(
+      useStore
+        .getState()
+        .mediaIndex.filter((x) => x.state === 'ready')
+        .map((x) => x.udn)
+    )
+    const eligible = (x: MediaServerInfo): boolean => x.searchable || ready.has(x.udn)
+    const current = servers.find((x) => x.udn === serverUdn)
+    if (current && eligible(current)) {
+      setSearchMode(true)
+      return
+    }
+    const target = servers.find(eligible)
+    if (!target) return
+    moveTo(target.udn, [])
+    setSearchMode(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [librarySearchTarget, libraryResetNonce, servers, serverUdn])
+
   const enter = (node: MediaNode): void => {
     if (searchMode && searchState) {
       // Entering a result: plant the query crumb so the trail offers the
@@ -858,7 +889,8 @@ export function LibraryScreen(): React.JSX.Element {
               total={baseNodes.length}
             />
           )}
-          {!searchMode && !atRoot && server?.searchable && (
+          {/* a ready index makes even a Browse-only server searchable */}
+          {!searchMode && !atRoot && (server?.searchable || serverIndex?.state === 'ready') && (
             <button
               data-library-search-button
               onClick={() => setSearchMode(true)}

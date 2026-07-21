@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  ArrowUpCircle,
   AudioLines,
+  Bot,
+  Library,
+  RefreshCw,
+  Monitor,
   Bluetooth,
   Cable,
   CornerDownLeft,
@@ -31,7 +36,7 @@ import {
   VolumeX
 } from 'lucide-react'
 import { favoriteKey, sleepTrackKey, type Favorite, type SleepAction } from '@shared/ipc'
-import { audioCaps } from '@shared/smoip'
+import { audioCaps, brightnessOptions } from '@shared/smoip'
 import { toggleFavorite } from '@/lib/favorites'
 import { tt } from '@/api'
 import { useStore } from '@/store'
@@ -149,6 +154,11 @@ export function CommandPalette(): React.JSX.Element {
   const audioSpec = useStore((s) => s.audioSpec)
   const favorites = useStore((s) => s.favorites)
   const settings = useStore((s) => s.settings)
+  const displaySpec = useStore((s) => s.displaySpec)
+  const mediaIndex = useStore((s) => s.mediaIndex)
+  const jumpToSettingsTab = useStore((s) => s.jumpToSettingsTab)
+  const requestLibrarySearch = useStore((s) => s.requestLibrarySearch)
+  const showToast = useStore((s) => s.showToast)
 
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState(0)
@@ -529,6 +539,111 @@ export function CommandPalette(): React.JSX.Element {
       run: () => setInfoOpen(true)
     })
 
+    // -------- Library search + index (the media-index feature set)
+    if (connected) {
+      cmds.push({
+        id: 'library:search',
+        label: 'Search library',
+        group: 'Library',
+        icon: Search,
+        keywords: 'find music album artist track search',
+        run: requestLibrarySearch
+      })
+    }
+    for (const idx of mediaIndex) {
+      if (idx.state === 'building') continue
+      cmds.push({
+        id: `library:rebuild:${idx.udn}`,
+        label: `${idx.state === 'ready' ? 'Rebuild' : 'Build'} library index — ${idx.serverName}`,
+        group: 'Library',
+        icon: RefreshCw,
+        keywords: 'index scan media server refresh',
+        run: () => {
+          void tt.mediaIndexRebuild(idx.udn)
+          // palette-site feedback: the building spinner lives in Settings →
+          // Libraries, invisible from wherever the palette left you
+          showToast({
+            kind: 'success',
+            text: `${idx.state === 'ready' ? 'Rebuilding' : 'Building'} the ${idx.serverName} index — progress in Settings → Libraries.`
+          })
+        }
+      })
+    }
+
+    // -------- Settings deep links (the nav-dot jump mechanism, reused)
+    cmds.push({
+      id: 'settings:updates',
+      label: 'Open Updates',
+      group: 'View',
+      icon: ArrowUpCircle,
+      keywords: 'settings version upgrade release',
+      run: () => jumpToSettingsTab('updates')
+    })
+    cmds.push({
+      id: 'settings:libraries',
+      label: 'Open Libraries',
+      group: 'View',
+      icon: Library,
+      keywords: 'settings media index servers',
+      run: () => jumpToSettingsTab('libraries')
+    })
+    cmds.push({
+      id: 'settings:agents',
+      label: 'Open AI agents',
+      group: 'View',
+      icon: Bot,
+      keywords: 'settings mcp tools model context protocol',
+      run: () => jumpToSettingsTab('agents')
+    })
+    cmds.push({
+      id: 'update:check',
+      label: 'Check for updates',
+      group: 'View',
+      icon: ArrowUpCircle,
+      keywords: 'version new release upgrade now',
+      run: () => {
+        // land where the outcome shows, then ask
+        jumpToSettingsTab('updates')
+        void tt.updateCheckNow()
+      }
+    })
+
+    // -------- Device extras (spec-gated exactly like the Device screen)
+    if (connected) {
+      const brightness = brightnessOptions(displaySpec)
+      if (brightness) {
+        const LABEL: Record<string, string> = { off: 'off', dim: 'dim', bright: 'bright' }
+        for (const level of brightness) {
+          cmds.push({
+            id: `display:${level}`,
+            label: `Display ${LABEL[level] ?? level}`,
+            group: 'Device',
+            icon: Monitor,
+            keywords: 'brightness front panel screen',
+            run: () => void tt.command({ type: 'setBrightness', brightness: level })
+          })
+        }
+      }
+      if (audioCaps(audioSpec)) {
+        for (const preset of settings.eqPresets) {
+          cmds.push({
+            id: `eq:${preset.name}`,
+            label: `EQ preset: ${preset.name}`,
+            group: 'Device',
+            icon: AudioLines,
+            keywords: 'equalizer tone sound apply',
+            run: () => {
+              void (async () => {
+                await tt.command({ type: 'setUserEq', enabled: true })
+                await tt.command({ type: 'setEqBands', gains: preset.gains })
+                showToast({ kind: 'success', text: `EQ preset ${preset.name} applied.` })
+              })()
+            }
+          })
+        }
+      }
+    }
+
     return cmds
   }, [
     connected,
@@ -543,6 +658,8 @@ export function CommandPalette(): React.JSX.Element {
     sleep,
     systemPower,
     displayMode,
+    displaySpec,
+    mediaIndex,
     audioSpec,
     favorites,
     settings.theme,

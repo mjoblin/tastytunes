@@ -25,6 +25,7 @@ const GROUPS: Array<{ title: string; rows: Array<[string, string]> }> = [
     title: 'Navigate',
     rows: [
       [`${MOD}K`, 'Command palette'],
+      [`${MOD}F`, 'Search the library — from anywhere'],
       // letters derive from the shared registry; the prose stays hand-written
       [SCREENS.map((s) => s.key).join(' '), 'Now Playing · Queue · Presets · lIbrary · Tuner · faVorites · Recently Played · Sources · Device · sEttings'],
       ['F', 'Full-screen display mode'],

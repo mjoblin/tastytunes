@@ -20,6 +20,12 @@ export function useShortcuts(): void {
         s.setPaletteOpen(!s.paletteOpen)
         return
       }
+      // ⌘F / Ctrl+F: find semantics — the Library search, from anywhere.
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && (e.key === 'f' || e.key === 'F')) {
+        e.preventDefault()
+        useStore.getState().requestLibrarySearch()
+        return
+      }
 
       const target = e.target as HTMLElement | null
       if (

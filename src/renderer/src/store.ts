@@ -178,6 +178,11 @@ interface TTState {
   settingsJump: string | null
   jumpToSettingsTab(tab: string): void
   clearSettingsJump(): void
+  /** One-shot ask: open the Library ready to search (palette / ⌘F). Paired
+   *  with the reset nonce it belongs to — the libraryTarget pattern, safe
+   *  across fresh mounts and StrictMode double-runs. */
+  librarySearchTarget: { nonce: number } | null
+  requestLibrarySearch(): void
 
   toast: ToastData | null
   showToast(toast: Omit<ToastData, 'id'>): void
@@ -265,6 +270,11 @@ export const useStore = create<TTState>((set, get) => ({
     set({ settingsJump: tab })
   },
   clearSettingsJump: () => set({ settingsJump: null }),
+  librarySearchTarget: null,
+  requestLibrarySearch: () => {
+    get().setScreen('library') // bumps libraryResetNonce
+    set({ librarySearchTarget: { nonce: get().libraryResetNonce } })
+  },
 
   toast: null,
   showToast: (toast) => set({ toast: { ...toast, id: ++toastNonce } }),
