@@ -960,6 +960,8 @@ export interface AppSettings {
   /** MCP server for local AI agents. */
   mcp: McpSettings
   /** Last-visited Settings tab (id from the Settings screen's tab rail). */
+  /** Media indexes build/rebuild themselves (off = only from the Libraries buttons). */
+  mediaIndexAuto: boolean
   settingsTab: string
   /** Last-selected diagnostics-drawer tab (smoip | requests). */
   diagnosticsTab: string
@@ -1037,6 +1039,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     enabledClusters: [],
     disabledTools: []
   },
+  mediaIndexAuto: true,
   settingsTab: 'appearance',
   diagnosticsTab: 'smoip',
   deviceTab: 'streamer',

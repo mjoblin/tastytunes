@@ -169,6 +169,20 @@ export function LibraryScreen(): React.JSX.Element {
 
   // Each level keeps its own filter: stash the current one, restore the
   // destination's (or empty) whenever navigation happens.
+  // Browser-style history: back (⌘/Alt-←, Backspace, mouse-4) pushes the spot
+  // being left; forward (⌘/Alt-→, mouse-5) pops it. Any fresh navigation
+  // invalidates the forward stack — browser rules.
+  const fwdStack = useRef<
+    Array<{
+      udn: string | null
+      path: Crumb[]
+      mode: boolean
+      query: string
+      searchNow: { query: string; items: MediaNode[]; total: number } | null
+    }>
+  >([])
+  const restoring = useRef(false)
+
   const exitSearch = (): void => {
     setSearchMode(false)
     setSearchState(null)
@@ -177,6 +191,7 @@ export function LibraryScreen(): React.JSX.Element {
   }
 
   const moveTo = (udn: string | null, newPath: Crumb[]): void => {
+    if (!restoring.current) fwdStack.current = []
     rememberScroll()
     exitSearch()
     filterMemory.set(nodeKey(serverUdn, path), filter)
@@ -280,6 +295,35 @@ export function LibraryScreen(): React.JSX.Element {
     } else if (serverUdn) moveTo(null, [])
   }
 
+  const goBack = (): void => {
+    if (!searchMode && path.length === 0 && !serverUdn) return // already at the front door
+    const snap = { udn: serverUdn, path, mode: searchMode, query: searchQuery, searchNow: searchState }
+    restoring.current = true
+    try {
+      goUp()
+    } finally {
+      restoring.current = false
+    }
+    fwdStack.current.push(snap)
+  }
+
+  const goForward = (): void => {
+    const snap = fwdStack.current.pop()
+    if (!snap) return
+    restoring.current = true
+    try {
+      moveTo(snap.udn, snap.path)
+      if (snap.mode) {
+        // the spot being restored was a search-results view — re-enter it
+        setSearchMode(true)
+        setSearchQuery(snap.query)
+        setSearchState(snap.searchNow)
+      }
+    } finally {
+      restoring.current = false
+    }
+  }
+
   // Backspace and the mouse back button go up a level (arrows stay with
   // transport seek/volume); above a source's root they land on the source list.
   useEffect(() => {
@@ -288,13 +332,26 @@ export function LibraryScreen(): React.JSX.Element {
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return
       if (e.key === 'Backspace' && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault()
-        goUp()
+        goBack()
+      }
+      // browser-style history keys (⌘ on mac, Alt elsewhere)
+      if ((e.metaKey || e.altKey) && !e.ctrlKey && e.key === 'ArrowLeft') {
+        e.preventDefault()
+        goBack()
+      }
+      if ((e.metaKey || e.altKey) && !e.ctrlKey && e.key === 'ArrowRight') {
+        e.preventDefault()
+        goForward()
       }
     }
     const onMouseUp = (e: MouseEvent): void => {
       if (e.button === 3) {
         e.preventDefault()
-        goUp()
+        goBack()
+      }
+      if (e.button === 4) {
+        e.preventDefault()
+        goForward()
       }
     }
     window.addEventListener('keydown', onKeyDown)
@@ -304,7 +361,7 @@ export function LibraryScreen(): React.JSX.Element {
       window.removeEventListener('mouseup', onMouseUp)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path, serverUdn, filter, searchState, searchReturn])
+  }, [path, serverUdn, filter, searchState, searchReturn, searchMode, searchQuery])
 
   const setLayout = async (libraryLayout: ScreenLayout): Promise<void> => {
     await saveSettings({ libraryLayout })
@@ -322,6 +379,34 @@ export function LibraryScreen(): React.JSX.Element {
       .catch(() => showNotice("Search failed — the server didn't answer."))
       .finally(() => setSearching(false))
   }
+
+  // As-you-type search: with a READY local index the lookup is instant and
+  // free (no server round-trip), so results update live while typing. Enter
+  // still runs the full search everywhere — including index-less servers,
+  // where per-keystroke SOAP against the server would be rude.
+  const indexReady = useStore((s) =>
+    s.mediaIndex.some((x) => x.udn === serverUdn && x.state === 'ready')
+  )
+  useEffect(() => {
+    if (!searchMode || !indexReady || !serverUdn) return
+    const query = searchQuery.trim()
+    if (query.length === 0) {
+      setSearchState(null)
+      return
+    }
+    if (query.length < 2 || searchState?.query === query) return
+    const t = setTimeout(() => {
+      void tt
+        .mediaSearch(serverUdn, query)
+        .then((res) => {
+          // only land results for what's still in the box (fast typing races)
+          if (searchInputRef.current?.value.trim() === query) setSearchState({ query, ...res })
+        })
+        .catch(() => {})
+    }, 200)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, searchMode, indexReady, serverUdn])
 
   // ----------------------------------------------------------------- actions
 

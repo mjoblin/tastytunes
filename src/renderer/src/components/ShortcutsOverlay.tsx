@@ -29,6 +29,7 @@ const GROUPS: Array<{ title: string; rows: Array<[string, string]> }> = [
       [SCREENS.map((s) => s.key).join(' '), 'Now Playing · Queue · Presets · lIbrary · Tuner · faVorites · Recently Played · Sources · Device · sEttings'],
       ['F', 'Full-screen display mode'],
       ['/', 'Filter the list (Queue · Presets · faVorites · Recently Played)'],
+      ['⌘← / ⌘→', 'Back / forward in the Library (Backspace and mouse side buttons too)'],
       ['`', 'SMOIP and Requests console'],
       ['?', 'This overlay']
     ]

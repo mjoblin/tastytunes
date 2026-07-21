@@ -16,6 +16,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { app } from 'electron'
+import { getSettings } from './persist'
 import type { MediaIndexStatus, MediaNode, MediaServerInfo } from '@shared/ipc'
 import {
   browseChildrenOf,
@@ -43,6 +44,9 @@ const TTL_MS = 7 * 24 * 3600 * 1000 // recrawl backstop for servers whose counte
 const SEARCH_RESULT_CAP = 500
 
 const indexes = new Map<string, StoredIndex>()
+// Every server the streamer has listed this session — so Settings can show
+// un-indexed ones too (a USB stick deserves its Build button).
+const known = new Map<string, MediaServerInfo>()
 const building = new Set<string>()
 let announce: (statuses: MediaIndexStatus[]) => void = () => {}
 let loaded = false
@@ -94,6 +98,20 @@ export function status(): MediaIndexStatus[] {
       artists: idx.artists.length,
       builtAt: idx.builtAt,
       updateId: idx.updateId
+    })
+  }
+  for (const server of known.values()) {
+    if (indexes.has(server.udn) || building.has(server.udn)) continue
+    out.push({
+      udn: server.udn,
+      serverName: server.name,
+      state: 'none',
+      strategy: null,
+      tracks: 0,
+      albums: 0,
+      artists: 0,
+      builtAt: null,
+      updateId: null
     })
   }
   for (const udn of building) {
@@ -220,6 +238,13 @@ async function build(host: string, server: MediaServerInfo, strategy: 'search' |
  */
 export function ensureFresh(host: string, servers: MediaServerInfo[]): void {
   load()
+  let announceNeeded = false
+  for (const server of servers) {
+    if (!known.has(server.udn)) announceNeeded = true
+    known.set(server.udn, server)
+  }
+  if (announceNeeded) announce(status())
+  if (getSettings().mediaIndexAuto === false) return // user said: buttons only
   for (const server of servers) {
     const existing = indexes.get(server.udn)
     if (!server.searchable && !existing) continue // Tier B: manual first build

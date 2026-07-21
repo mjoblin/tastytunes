@@ -12,6 +12,7 @@ import {
   Globe,
   Heart,
   LayoutGrid,
+  Library,
   Loader2,
   Lock,
   Monitor,
@@ -64,6 +65,7 @@ const TABS = [
   { id: 'layout', label: 'Layout', icon: LayoutGrid },
   { id: 'behavior', label: 'Behavior', icon: SlidersHorizontal },
   { id: 'connections', label: 'Connections', icon: Globe },
+  { id: 'libraries', label: 'Libraries', icon: Library },
   { id: 'updates', label: 'Updates', icon: ArrowUpCircle },
   { id: 'schedules', label: 'Schedules', icon: AlarmClock },
   { id: 'agents', label: 'AI agents', icon: Bot },
@@ -402,10 +404,11 @@ export function SettingsScreen(): React.JSX.Element {
 
             <CacheRow />
 
-            <MediaIndexRows />
           </div>
         </section>
         )}
+
+        {tab === 'libraries' && <LibrariesSection settings={settings} save={save} />}
 
         {tab === 'updates' && <UpdatesSection settings={settings} save={save} />}
 
@@ -925,13 +928,20 @@ const fmtBytes = (b: number): string =>
   b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`
 
 /**
- * Per-server media-index rows (Connections): the rebuildable metadata cache
- * behind instant library search. Searchable servers build and refresh
- * themselves; Browse-only servers get a Build button (a walk can be slow).
+ * The Libraries tab: every media server the streamer has listed, each with
+ * its index state — the rebuildable metadata cache behind instant library
+ * search. Searchable servers build and refresh themselves (unless automatic
+ * building is off); Browse-only servers get a Build button (a walk can be
+ * slow, so it stays the user's call).
  */
-function MediaIndexRows(): React.JSX.Element | null {
+function LibrariesSection({
+  settings,
+  save
+}: {
+  settings: AppSettings
+  save(patch: Partial<AppSettings>): Promise<void>
+}): React.JSX.Element {
   const statuses = useStore((s) => s.mediaIndex)
-  if (statuses.length === 0) return null
 
   const age = (at: number | null): string => {
     if (at == null) return ''
@@ -943,23 +953,40 @@ function MediaIndexRows(): React.JSX.Element | null {
   }
 
   return (
-    <div className="space-y-3">
-      <div>
-        <div className="text-[13.5px]">Library index</div>
-        <div className="text-[11.5px] text-faint max-w-sm">
-          A local copy of each media server&apos;s track list so library search answers
-          instantly. Rebuilds itself when the server reports changes; nothing here
-          can&apos;t be regenerated.
+    <section className="space-y-3">
+      <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
+        <Toggle
+          label="Build indexes automatically"
+          hint="Index each searchable media server when the Library lists it, and rebuild when the server reports changes. Off means indexes only build from the buttons below."
+          checked={settings.mediaIndexAuto}
+          onChange={(mediaIndexAuto) => void save({ mediaIndexAuto })}
+        />
+
+        <div>
+          <div className="text-[13.5px]">Library index</div>
+          <div className="text-[11.5px] text-faint max-w-sm">
+            A local copy of each media server&apos;s track list so library search answers
+            instantly. Rebuilds itself when the server reports changes; nothing here
+            can&apos;t be regenerated.
+          </div>
         </div>
-      </div>
-      {statuses.map((st) => (
+
+        {statuses.length === 0 && (
+          <div className="rounded-lg bg-bg ring-1 ring-edge px-3 py-2.5 text-[12px] text-dim">
+            No media servers seen yet — they appear here once the streamer lists them.
+            Open the Library (I), or attach USB storage to the streamer.
+          </div>
+        )}
+        {statuses.map((st) => (
         <div key={st.udn} className="flex items-center gap-3">
           <span className="flex-1 min-w-0 text-[12.5px] truncate">
             {st.serverName}
             <span className="block font-mono text-[10.5px] text-faint">
               {st.state === 'building'
                 ? 'building…'
-                : `${st.tracks.toLocaleString()} tracks · ${st.albums.toLocaleString()} albums · updated ${age(st.builtAt)}`}
+                : st.state === 'none'
+                  ? 'not indexed — search asks the server live'
+                  : `${st.tracks.toLocaleString()} tracks · ${st.albums.toLocaleString()} albums · updated ${age(st.builtAt)}`}
             </span>
           </span>
           <button
@@ -976,7 +1003,8 @@ function MediaIndexRows(): React.JSX.Element | null {
           </button>
         </div>
       ))}
-    </div>
+      </div>
+    </section>
   )
 }
 
