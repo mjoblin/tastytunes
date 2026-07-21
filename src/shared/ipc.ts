@@ -418,6 +418,9 @@ export interface McpSettings {
   port: number
   /** Cluster ids switched off (everything is on by default). */
   disabledClusters: string[]
+  /** Opt-in cluster ids the user explicitly enabled (write-capable clusters
+   *  are OFF until they appear here). */
+  enabledClusters: string[]
   /** Individual tool names switched off. */
   disabledTools: string[]
 }
@@ -442,7 +445,22 @@ export interface McpClusterInfo {
   /** Written for the human toggling clusters in Settings. */
   description: string
   readOnly?: boolean
+  /** Settings-UI grouping: read = look-never-touch, control = transient
+   *  actions, write = persists changes (queue order, preset slots). */
+  group: 'read' | 'control' | 'write'
+  /** Off until the user explicitly enables it (mcp.enabledClusters) — for
+   *  clusters whose tools change saved things. */
+  optIn?: boolean
   tools: McpToolInfo[]
+}
+
+/** Effective cluster gate — shared by the server and the Settings screen.
+ *  Opt-in clusters require an explicit enable; everything else is on unless
+ *  disabled. */
+export function mcpClusterEnabled(c: McpClusterInfo, mcp: McpSettings): boolean {
+  return c.optIn === true
+    ? (mcp.enabledClusters ?? []).includes(c.id)
+    : !mcp.disabledClusters.includes(c.id)
 }
 
 /**
@@ -453,6 +471,7 @@ export interface McpClusterInfo {
 export const MCP_CLUSTERS: McpClusterInfo[] = [
   {
     id: 'status',
+    group: 'read',
     title: 'Status & lists',
     description: "Read-only: what's playing, the queue, presets, sources, devices, history.",
     readOnly: true,
@@ -494,6 +513,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
   },
   {
     id: 'transport',
+    group: 'control',
     title: 'Transport',
     description: 'Play, pause, skip, seek, queue jumps, shuffle and repeat.',
     tools: [
@@ -518,6 +538,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
   },
   {
     id: 'volume',
+    group: 'control',
     title: 'Volume',
     description: 'Absolute volume, relative nudges, and mute.',
     tools: [
@@ -537,6 +558,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
   },
   {
     id: 'presets',
+    group: 'control',
     title: 'Presets',
     description: 'Recall a numbered preset (station or album).',
     tools: [
@@ -549,6 +571,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
   },
   {
     id: 'sources',
+    group: 'control',
     title: 'Sources',
     description: 'Switch the active audio source.',
     tools: [
@@ -561,6 +584,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
   },
   {
     id: 'power',
+    group: 'control',
     title: 'Power',
     description: 'Wake the streamer or send it to network standby.',
     tools: [
@@ -574,6 +598,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
   },
   {
     id: 'devices',
+    group: 'control',
     title: 'Devices',
     description: 'Switch which streamer the app controls.',
     tools: [
@@ -586,6 +611,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
   },
   {
     id: 'sleep',
+    group: 'control',
     title: 'Sleep timer',
     description: 'Arm or cancel the sleep timer.',
     tools: [
@@ -596,6 +622,197 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
           "Arm the sleep timer: either minutes from now, or at the end of the current track. Action is 'pause' or 'standby' (defaults to the user's configured choice)."
       },
       { name: 'cancel_sleep_timer', title: 'Cancel sleep timer', description: 'Clear any armed sleep timer.' }
+    ]
+  },
+  {
+    id: 'library',
+    title: 'Library',
+    group: 'control',
+    description: 'Search the media servers and play albums or tracks.',
+    tools: [
+      {
+        name: 'list_media_servers',
+        title: 'List media servers',
+        description:
+          'UPnP media servers the streamer can play from: name, udn, and whether the server answers searches.'
+      },
+      {
+        name: 'search_library',
+        title: 'Search library',
+        description:
+          'Search for albums, artists, and tracks across the searchable media servers (or one server_udn). Returns object ids for play_media.'
+      },
+      {
+        name: 'play_media',
+        title: 'Play media',
+        description:
+          "Play an album or track by server_udn + object id (from search_library). mode 'play_now' (default) keeps the queue, 'play_next'/'append' insert into it; 'replace' CLEARS the queue first — only use replace when asked to."
+      }
+    ]
+  },
+  {
+    id: 'radio',
+    title: 'Radio',
+    group: 'control',
+    description:
+      'Search internet radio (the keyless radio-browser.info directory) and play stations. No listening data is ever reported back.',
+    tools: [
+      {
+        name: 'search_radio',
+        title: 'Search radio',
+        description:
+          'Search internet-radio stations by name, genre, or country: returns name, stream URL, country, codec, bitrate, tags.'
+      },
+      {
+        name: 'play_radio',
+        title: 'Play radio',
+        description:
+          'Play an internet-radio stream by URL and display name (from search_radio or a station favorite).'
+      }
+    ]
+  },
+  {
+    id: 'favorites',
+    title: 'Favorites',
+    group: 'control',
+    description: "List, play, and add to the user's favorites (stations, albums, tracks).",
+    tools: [
+      {
+        name: 'list_favorites',
+        title: 'List favorites',
+        description: "The user's favorites with the keys play_favorite needs."
+      },
+      {
+        name: 'play_favorite',
+        title: 'Play favorite',
+        description:
+          'Play a favorite by its key (see list_favorites). Albums and tracks are found by content — a stale library id heals via search.'
+      },
+      {
+        name: 'add_favorite',
+        title: 'Add favorite',
+        description:
+          'With no arguments, favorite the currently playing track. For an internet-radio station, pass station_url + station_name (e.g. from search_radio).'
+      }
+    ]
+  },
+  {
+    id: 'audio',
+    title: 'Tone & EQ',
+    group: 'control',
+    description:
+      'Read and shape the sound: 7-band EQ, tone tilt, balance. Only offered on streamers whose firmware has tone controls; every change is a device setting the user can see and undo on the Device screen.',
+    tools: [
+      {
+        name: 'get_audio_settings',
+        title: 'Get audio settings',
+        description:
+          'Current EQ band gains, tilt, and balance, plus the allowed ranges. Errors on streamers without tone controls.'
+      },
+      {
+        name: 'set_eq_band',
+        title: 'Set EQ band',
+        description:
+          'Set one EQ band gain in dB (band index 0–6, low to high frequency; gains clamp to −6..+3). Enables the user EQ when needed.'
+      },
+      {
+        name: 'set_tilt',
+        title: 'Set tone tilt',
+        description:
+          'Set the tone-tilt intensity (negative = warmer/darker, positive = brighter; range from get_audio_settings). Enables tilt when needed.'
+      },
+      {
+        name: 'set_balance',
+        title: 'Set balance',
+        description: 'Left/right balance (negative = left, positive = right; range from get_audio_settings).'
+      },
+      {
+        name: 'apply_eq_preset',
+        title: 'Apply EQ preset',
+        description: "Apply one of the user's saved EQ presets by name (get_audio_settings lists them)."
+      },
+      {
+        name: 'reset_eq',
+        title: 'Reset EQ',
+        description: 'Set all 7 EQ bands back to 0 dB — the same as the Flat button in the app.'
+      }
+    ]
+  },
+  {
+    id: 'display',
+    title: 'Display',
+    group: 'control',
+    description: "The streamer's front-panel display brightness (models that have a display).",
+    tools: [
+      {
+        name: 'set_display_brightness',
+        title: 'Set display brightness',
+        description: "Front-panel brightness: 'off', 'dim', or 'bright'. Errors on headless models."
+      }
+    ]
+  },
+  {
+    id: 'lookups',
+    title: 'Lookups',
+    group: 'read',
+    readOnly: true,
+    description:
+      "Lyrics and artist context for what's playing. These call the same services as the app's own panels and obey the Connections toggles — while a toggle is off, the matching tool refuses (off means no requests, ever).",
+    tools: [
+      {
+        name: 'get_lyrics',
+        title: 'Get lyrics',
+        description:
+          "Lyrics for the currently playing track via LRCLIB. Refuses when the user has lyrics disabled in Settings → Connections."
+      },
+      {
+        name: 'get_artist_info',
+        title: 'Get artist info',
+        description:
+          'Artist bio via MusicBrainz + Wikipedia — the current artist by default, or a named one. Refuses when the user has artist context disabled in Settings → Connections.'
+      }
+    ]
+  },
+  {
+    id: 'queueedit',
+    title: 'Queue editing',
+    group: 'write',
+    optIn: true,
+    description:
+      'Remove or reorder tracks in the play queue. Removals are immediate and there is no undo — off unless you turn it on.',
+    tools: [
+      {
+        name: 'remove_queue_item',
+        title: 'Remove queue item',
+        description: 'Remove one track from the queue by its id (see list_queue). No undo.'
+      },
+      {
+        name: 'move_queue_item',
+        title: 'Move queue item',
+        description: 'Move a queue track (by id) to a new position (0-based; see list_queue).'
+      }
+    ]
+  },
+  {
+    id: 'presetsave',
+    title: 'Preset saving',
+    group: 'write',
+    optIn: true,
+    description:
+      'Save the queue or the current playback into numbered preset slots. A slot that already holds a preset is only replaced when the tool call says overwrite explicitly — off unless you turn it on.',
+    tools: [
+      {
+        name: 'save_queue_as_preset',
+        title: 'Save queue as preset',
+        description:
+          'Snapshot the whole queue into a preset slot (1–99) with a name. If the slot is occupied the call fails unless overwrite is true — always check list_presets first.'
+      },
+      {
+        name: 'save_playing_to_preset',
+        title: 'Save playing to preset',
+        description:
+          'Save the CURRENT playback (a station, or a single track) to a preset slot (1–99); optional name. Occupied slots need overwrite: true. For whole albums or queues use save_queue_as_preset.'
+      }
     ]
   }
 ]
@@ -811,7 +1028,14 @@ export const DEFAULT_SETTINGS: AppSettings = {
   schedules: [],
   presetVolumes: {},
   queueSignatures: {},
-  mcp: { enabled: false, bind: 'localhost', port: 8555, disabledClusters: [], disabledTools: [] },
+  mcp: {
+    enabled: false,
+    bind: 'localhost',
+    port: 8555,
+    disabledClusters: [],
+    enabledClusters: [],
+    disabledTools: []
+  },
   settingsTab: 'appearance',
   diagnosticsTab: 'smoip',
   deviceTab: 'streamer',

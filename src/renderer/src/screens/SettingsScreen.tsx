@@ -26,6 +26,8 @@ import {
 import { version } from '../../../../package.json'
 import {
   MCP_CLUSTERS,
+  mcpClusterEnabled,
+  type McpClusterInfo,
   type AlignH,
   type AlignV,
   type AmbientArtMode,
@@ -463,14 +465,25 @@ function McpSection({
   const saveMcp = (patch: Partial<McpSettings>): void => {
     void save({ mcp: { ...mcp, ...patch } })
   }
-  const clusterOff = (id: string): boolean => mcp.disabledClusters.includes(id)
-  const toggleCluster = (id: string, on: boolean): void =>
-    saveMcp({
-      disabledClusters: on
-        ? mcp.disabledClusters.filter((c) => c !== id)
-        : [...mcp.disabledClusters, id]
-    })
+  const clusterOn = (c: McpClusterInfo): boolean => mcpClusterEnabled(c, mcp)
+  const toggleCluster = (c: McpClusterInfo, on: boolean): void => {
+    if (c.optIn) {
+      // Opt-in clusters live in an explicit allow-list — absence means off.
+      saveMcp({
+        enabledClusters: on
+          ? [...(mcp.enabledClusters ?? []), c.id]
+          : (mcp.enabledClusters ?? []).filter((x) => x !== c.id)
+      })
+    } else {
+      saveMcp({
+        disabledClusters: on
+          ? mcp.disabledClusters.filter((x) => x !== c.id)
+          : [...mcp.disabledClusters, c.id]
+      })
+    }
+  }
   const toolOff = (name: string): boolean => mcp.disabledTools.includes(name)
+  const [openTools, setOpenTools] = useState<Record<string, boolean>>({})
   const toggleTool = (name: string): void =>
     saveMcp({
       disabledTools: toolOff(name)
@@ -486,7 +499,7 @@ function McpSection({
   }
 
   const enabledTools = MCP_CLUSTERS.reduce(
-    (n, c) => (clusterOff(c.id) ? n : n + c.tools.filter((t) => !toolOff(t.name)).length),
+    (n, c) => (clusterOn(c) ? n + c.tools.filter((t) => !toolOff(t.name)).length : n),
     0
   )
 
@@ -568,37 +581,65 @@ function McpSection({
                 individual tools to toggle them. Changes apply to the next agent request.
               </div>
             </div>
-            {MCP_CLUSTERS.map((cluster) => {
-              const off = clusterOff(cluster.id)
+            {MCP_GROUPS.map((g) => {
+              const clusters = MCP_CLUSTERS.filter((c) => c.group === g.id)
+              if (clusters.length === 0) return null
               return (
-                <div key={cluster.id}>
-                  <Toggle
-                    label={cluster.title}
-                    hint={cluster.description}
-                    checked={!off}
-                    onChange={(on) => toggleCluster(cluster.id, on)}
-                  />
-                  <div className={cx('mt-2 flex flex-wrap gap-1.5', off && 'opacity-40 pointer-events-none')}>
-                    {cluster.tools.map((t) => {
-                      const on = !toolOff(t.name)
-                      return (
-                        <button
-                          key={t.name}
-                          onClick={() => toggleTool(t.name)}
-                          aria-pressed={on}
-                          className={cx(
-                            'px-2.5 py-1 rounded-full font-mono text-[10.5px] ring-1 transition-colors',
-                            // quiet grays: filled = enabled, hollow + struck = off
-                            on
-                              ? 'ring-edge2 bg-veil2 text-ink/80 hover:text-ink'
-                              : 'ring-edge text-faint/70 line-through hover:text-dim'
-                          )}
-                        >
-                          {t.name}
-                        </button>
-                      )
-                    })}
+                <div key={g.id} className="space-y-3.5">
+                  <div className="pt-1 border-t border-edge/60 first:border-t-0 first:pt-0">
+                    <div className="microlabel pt-2">{g.label}</div>
+                    <div className="text-[11px] text-faint">{g.note}</div>
                   </div>
+                  {clusters.map((cluster) => {
+                    const on = clusterOn(cluster)
+                    const open = openTools[cluster.id] === true
+                    const activeCount = cluster.tools.filter((t) => !toolOff(t.name)).length
+                    return (
+                      <div key={cluster.id}>
+                        <Toggle
+                          label={cluster.title}
+                          hint={cluster.description}
+                          checked={on}
+                          onChange={(v) => toggleCluster(cluster, v)}
+                        />
+                        {/* tools stay tucked away — one small line per cluster
+                            instead of a wall of chips */}
+                        <button
+                          onClick={() => setOpenTools((o) => ({ ...o, [cluster.id]: !open }))}
+                          aria-expanded={open}
+                          className="mt-1 font-mono text-[10.5px] text-faint hover:text-dim transition-colors"
+                        >
+                          {open
+                            ? '▾ hide tools'
+                            : `▸ ${activeCount === cluster.tools.length ? cluster.tools.length : `${activeCount} of ${cluster.tools.length}`} tools`}
+                        </button>
+                        {open && (
+                          <div className={cx('mt-2 flex flex-wrap gap-1.5', !on && 'opacity-40 pointer-events-none')}>
+                            {cluster.tools.map((t) => {
+                              const toolOn = !toolOff(t.name)
+                              return (
+                                <button
+                                  key={t.name}
+                                  onClick={() => toggleTool(t.name)}
+                                  aria-pressed={toolOn}
+                                  data-tip={t.description}
+                                  className={cx(
+                                    'tip-top px-2.5 py-1 rounded-full font-mono text-[10.5px] ring-1 transition-colors',
+                                    // quiet grays: filled = enabled, hollow + struck = off
+                                    toolOn
+                                      ? 'ring-edge2 bg-veil2 text-ink/80 hover:text-ink'
+                                      : 'ring-edge text-faint/70 line-through hover:text-dim'
+                                  )}
+                                >
+                                  {t.name}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
               )
             })}
@@ -608,6 +649,21 @@ function McpSection({
     </section>
   )
 }
+
+/** The Settings-side grouping of MCP clusters by what they can affect. */
+const MCP_GROUPS: Array<{ id: McpClusterInfo['group']; label: string; note: string }> = [
+  { id: 'read', label: 'Read-only', note: 'Seeing and looking things up — nothing changes.' },
+  {
+    id: 'control',
+    label: 'Control',
+    note: 'Playing, tuning, and adjusting — transient, like pressing the buttons yourself.'
+  },
+  {
+    id: 'write',
+    label: 'Edits & saves',
+    note: 'Changes saved things (queue order, preset slots) — off until you switch them on. Overwriting an occupied preset slot additionally requires the agent to say so explicitly per call.'
+  }
+]
 
 /** The near-universal "mcpServers" JSON block (Claude Desktop, Cursor, VS Code, …). */
 function mcpJsonSnippet(url: string): string {

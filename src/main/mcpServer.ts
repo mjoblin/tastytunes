@@ -13,10 +13,24 @@ import { networkInterfaces } from 'node:os'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { z, type ZodRawShape } from 'zod'
-import { MCP_CLUSTERS, sleepTrackKey, type McpSettings, type Snapshot } from '@shared/ipc'
+import {
+  MCP_CLUSTERS,
+  favoriteKey,
+  mcpClusterEnabled,
+  sleepTrackKey,
+  type Favorite,
+  type MediaNode,
+  type MediaQueueAction,
+  type Snapshot
+} from '@shared/ipc'
+import { EQ_GAIN_MAX, EQ_GAIN_MIN, audioCaps, brightnessOptions } from '@shared/smoip'
 import { app } from 'electron'
 import type { DeviceManager } from './deviceManager'
 import { getSettings } from './persist'
+import { fetchArtistInfo } from './artistInfo'
+import { fetchLyrics } from './lyrics'
+import { radioSearch } from './radioBrowser'
+import { queueAdd, refreshServers, search as librarySearch } from './upnpBrowser'
 
 interface ToolResult {
   content: Array<{ type: 'text'; text: string }>
@@ -162,10 +176,12 @@ export class McpBridge {
   private buildServer(): McpServer {
     const server = new McpServer({ name: 'tastytunes', version: app.getVersion() })
     const impls = this.toolImpls()
-    const { disabledClusters, disabledTools } = getSettings().mcp
+    const mcp = getSettings().mcp
+    const { disabledTools } = mcp
 
     for (const cluster of MCP_CLUSTERS) {
-      if (disabledClusters.includes(cluster.id)) continue
+      // Opt-in (write-capable) clusters require an explicit enable in Settings.
+      if (!mcpClusterEnabled(cluster, mcp)) continue
       for (const tool of cluster.tools) {
         if (disabledTools.includes(tool.name)) continue
         const impl = impls[tool.name]
@@ -207,6 +223,40 @@ export class McpBridge {
   private toolImpls(): Record<string, ToolImpl> {
     const dm = this.dm
 
+    const lc = (x: string | null | undefined): string => (x ?? '').trim().toLowerCase()
+    const kindOf = (n: MediaNode): 'album' | 'artist' | 'track' | 'folder' =>
+      n.upnpClass.includes('musicAlbum')
+        ? 'album'
+        : n.upnpClass.includes('Artist') || n.upnpClass.includes('person')
+          ? 'artist'
+          : n.upnpClass.includes('audioItem')
+            ? 'track'
+            : 'folder'
+    const QUEUE_MODES: Record<string, MediaQueueAction> = {
+      play_now: 'PLAY_NOW',
+      play_next: 'PLAY_NEXT',
+      append: 'APPEND',
+      replace: 'REPLACE'
+    }
+
+    /** Tone/EQ gate: caps when the streamer has them, a clean error otherwise. */
+    const toneCaps = (): { s: Snapshot; caps: NonNullable<ReturnType<typeof audioCaps>> } => {
+      const s = this.connected()
+      const caps = audioCaps(s.audioSpec)
+      if (!caps) throw new Error('This streamer has no tone/EQ controls.')
+      return { s, caps }
+    }
+
+    /** The preset-save contract: an occupied slot needs overwrite: true. */
+    const guardSlot = (s: Snapshot, slot: number, overwrite: boolean): void => {
+      const existing = (s.presets?.presets ?? []).find((p) => p.id === slot)
+      if (existing && !overwrite) {
+        throw new Error(
+          `Slot ${slot} already holds "${existing.name ?? 'a preset'}". Pass overwrite: true to replace it.`
+        )
+      }
+    }
+
     const status = (): unknown => {
       const s = dm.snapshot()
       if (s.connection.phase !== 'connected') {
@@ -238,6 +288,27 @@ export class McpBridge {
           queue_length: s.playState?.queue_length ?? null,
           shuffle: s.playState?.mode_shuffle ?? null,
           repeat: s.playState?.mode_repeat ?? null,
+          // Track-content match against the favorites (station URLs aren't
+          // knowable from playback metadata, so stations report null here).
+          favorited:
+            md?.title != null && !md.station
+              ? s.favorites.some(
+                  (f) =>
+                    favoriteKey(f) ===
+                    favoriteKey({
+                      kind: 'track',
+                      addedAt: 0,
+                      title: md.title!,
+                      artist: md.artist ?? null,
+                      album: md.album ?? null,
+                      artUrl: null,
+                      serverUdn: null,
+                      serverName: null,
+                      objectId: null,
+                      titlePath: null
+                    })
+                )
+              : null,
           format: md
             ? {
                 codec: md.codec,
@@ -254,6 +325,19 @@ export class McpBridge {
           muted: s.zoneState?.mute ?? null,
           limit_percent: getSettings().volumeLimitPercent
         },
+        // Tone/EQ — present only on streamers whose firmware has the controls.
+        audio: (() => {
+          const caps = audioCaps(s.audioSpec)
+          if (!caps) return null
+          const za = s.zoneAudio
+          return {
+            user_eq_enabled: za?.user_eq?.enabled ?? false,
+            band_gains_db: za?.user_eq?.bands?.map((b) => b.gain) ?? null,
+            tilt: za?.tilt_eq ? { enabled: za.tilt_eq.enabled, intensity: za.tilt_eq.intensity } : null,
+            balance: za?.balance ?? null
+          }
+        })(),
+        display: s.systemDisplay ? { brightness: s.systemDisplay.brightness } : null,
         sleep_timer: s.sleep
           ? {
               action: s.sleep.action,
@@ -504,6 +588,422 @@ export class McpBridge {
         handler: () => {
           dm.setSleep(null)
           return ok('Sleep timer cleared.')
+        }
+      },
+
+      // ---- library
+      list_media_servers: {
+        handler: async () => {
+          const s = this.connected()
+          const servers = await refreshServers(s.connection.host)
+          return ok(
+            servers.map((x) => ({
+              udn: x.udn,
+              name: x.name,
+              model: x.model,
+              is_streamer_usb: x.isStreamer,
+              searchable: x.searchable
+            }))
+          )
+        }
+      },
+      search_library: {
+        inputSchema: {
+          query: z.string().min(1).describe('Album, artist, or track name (partial matches ok).'),
+          server_udn: z.string().optional().describe('Limit to one server (see list_media_servers).'),
+          kind: z.enum(['album', 'artist', 'track']).optional().describe('Only return this kind.')
+        },
+        handler: async (a) => {
+          const s = this.connected()
+          let servers = (await refreshServers(s.connection.host)).filter((x) => x.searchable)
+          if (typeof a.server_udn === 'string') {
+            servers = servers.filter((x) => x.udn === a.server_udn)
+            if (servers.length === 0) {
+              return err(`No searchable media server with udn '${a.server_udn}'. Use list_media_servers.`)
+            }
+          }
+          if (servers.length === 0) return err('No searchable media servers are visible right now.')
+          const results: unknown[] = []
+          for (const server of servers.slice(0, 3)) {
+            const { items } = await librarySearch(s.connection.host, server.udn, a.query as string)
+            for (const n of items) {
+              const kind = kindOf(n)
+              if (kind === 'folder') continue
+              if (a.kind != null && kind !== a.kind) continue
+              results.push({
+                server_udn: server.udn,
+                server: server.name,
+                object_id: n.id,
+                kind,
+                title: n.title,
+                artist: n.artist,
+                album: n.album,
+                year: n.year,
+                duration_seconds: n.durationSecs
+              })
+              if (results.length >= 40) break
+            }
+            if (results.length >= 40) break
+          }
+          return ok({ total: results.length, capped: results.length >= 40, results })
+        }
+      },
+      play_media: {
+        inputSchema: {
+          server_udn: z.string().describe('From search_library / list_media_servers.'),
+          object_id: z.string().describe('From search_library.'),
+          mode: z
+            .enum(['play_now', 'play_next', 'append', 'replace'])
+            .optional()
+            .describe("Default play_now (keeps the queue). 'replace' clears the queue — only when asked to.")
+        },
+        handler: async (a) => {
+          const s = this.connected()
+          const mode = (a.mode as string | undefined) ?? 'play_now'
+          try {
+            await queueAdd(s.connection.host, a.server_udn as string, a.object_id as string, QUEUE_MODES[mode])
+          } catch (e) {
+            return err(
+              `Couldn't queue that item — its object id may be stale; run search_library again. (${(e as Error).message})`
+            )
+          }
+          return ok(
+            mode === 'replace'
+              ? 'Playing — the previous queue was replaced.'
+              : mode === 'play_now'
+                ? 'Playing now (the queue is kept).'
+                : mode === 'play_next'
+                  ? 'Queued to play next.'
+                  : 'Added to the end of the queue.'
+          )
+        }
+      },
+
+      // ---- radio (keyless directory; never any listening telemetry)
+      search_radio: {
+        inputSchema: { query: z.string().min(1).describe('Station name, genre, or place.') },
+        handler: async (a) => {
+          const stations = await radioSearch(a.query as string)
+          return ok(
+            stations.slice(0, 15).map((st) => ({
+              name: st.name,
+              url: st.url,
+              country: st.country,
+              codec: st.codec,
+              tags: st.tags
+            }))
+          )
+        }
+      },
+      play_radio: {
+        inputSchema: {
+          url: z.string().url().describe('Stream URL (from search_radio or a station favorite).'),
+          name: z.string().min(1).describe('Display name for the station.')
+        },
+        handler: async (a) => {
+          this.connected()
+          await dm.command({ type: 'streamRadio', url: a.url as string, name: a.name as string })
+          return ok(`Tuning to ${a.name}.`)
+        }
+      },
+
+      // ---- favorites
+      list_favorites: {
+        handler: () => {
+          const s = dm.snapshot()
+          return ok(
+            s.favorites.map((f) =>
+              f.kind === 'station'
+                ? { key: favoriteKey(f), kind: f.kind, name: f.name, url: f.url }
+                : { key: favoriteKey(f), kind: f.kind, title: f.title, artist: f.artist, album: f.album }
+            )
+          )
+        }
+      },
+      play_favorite: {
+        inputSchema: { key: z.string().describe('Favorite key from list_favorites.') },
+        handler: async (a) => {
+          const s = this.connected()
+          const fav = s.favorites.find((f) => favoriteKey(f) === a.key)
+          if (!fav) return err(`No favorite '${a.key}'. Use list_favorites.`)
+          if (fav.kind === 'station') {
+            await dm.command({ type: 'streamRadio', url: fav.url, name: fav.name })
+            return ok(`Tuning to ${fav.name}.`)
+          }
+          const host = s.connection.host
+          if (fav.serverUdn && fav.objectId) {
+            try {
+              await queueAdd(host, fav.serverUdn, fav.objectId, 'PLAY_NOW')
+              return ok(`Playing ${fav.title}.`)
+            } catch {
+              // stored id went stale — heal by content below (the app's model:
+              // object ids are hints, title/artist identity is the truth)
+            }
+          }
+          for (const server of (await refreshServers(host)).filter((x) => x.searchable)) {
+            const { items } = await librarySearch(host, server.udn, fav.title)
+            const match = items.find(
+              (n) =>
+                kindOf(n) === fav.kind &&
+                lc(n.title) === lc(fav.title) &&
+                (fav.artist == null || n.artist == null || lc(n.artist) === lc(fav.artist))
+            )
+            if (match) {
+              await queueAdd(host, server.udn, match.id, 'PLAY_NOW')
+              dm.favoriteUpdate(a.key as string, {
+                serverUdn: server.udn,
+                serverName: server.name,
+                objectId: match.id
+              })
+              return ok(`Playing ${fav.title} (found on ${server.name}).`)
+            }
+          }
+          return err(`Couldn't find "${fav.title}" on any media server right now.`)
+        }
+      },
+      add_favorite: {
+        inputSchema: {
+          station_url: z.string().url().optional().describe('Favorite a station: its stream URL…'),
+          station_name: z.string().optional().describe('…and its display name (both or neither).')
+        },
+        handler: (a) => {
+          const s = this.connected()
+          let fav: Favorite
+          if (a.station_url != null || a.station_name != null) {
+            if (typeof a.station_url !== 'string' || typeof a.station_name !== 'string') {
+              return err('Pass BOTH station_url and station_name (or neither, to favorite the current track).')
+            }
+            fav = {
+              kind: 'station',
+              addedAt: Date.now(),
+              name: a.station_name,
+              url: a.station_url,
+              favicon: null,
+              radioBrowserUuid: null
+            }
+          } else {
+            const md = s.playState?.metadata
+            if (md?.station) {
+              return err(
+                "For radio, pass station_url + station_name — the stream URL isn't knowable from playback metadata."
+              )
+            }
+            if (!md?.title) return err('Nothing identifiable is playing.')
+            fav = {
+              kind: 'track',
+              addedAt: Date.now(),
+              title: md.title,
+              artist: md.artist ?? null,
+              album: md.album ?? null,
+              artUrl: md.art_url ?? null,
+              serverUdn: null,
+              serverName: null,
+              objectId: null,
+              titlePath: null,
+              durationSecs: md.duration ?? null
+            }
+          }
+          const key = favoriteKey(fav)
+          if (s.favorites.some((f) => favoriteKey(f) === key)) return ok('Already a favorite.')
+          dm.favoriteAdd(fav)
+          return ok(fav.kind === 'station' ? `Favorited station ${fav.name}.` : `Favorited "${fav.title}".`)
+        }
+      },
+
+      // ---- tone & EQ (feature-detected; toneCaps errors cleanly without)
+      get_audio_settings: {
+        handler: () => {
+          const { s, caps } = toneCaps()
+          const za = s.zoneAudio
+          return ok({
+            user_eq_enabled: za?.user_eq?.enabled ?? false,
+            band_gains_db: za?.user_eq?.bands?.map((b) => b.gain) ?? null,
+            tilt: za?.tilt_eq ?? null,
+            balance: za?.balance ?? null,
+            ranges: {
+              band_gain_db: { min: EQ_GAIN_MIN, max: EQ_GAIN_MAX },
+              tilt: caps.tilt ? caps.tiltRange : null,
+              balance: caps.balance ? caps.balanceRange : null
+            },
+            saved_presets: getSettings().eqPresets.map((p) => p.name)
+          })
+        }
+      },
+      set_eq_band: {
+        inputSchema: {
+          band: z.number().int().min(0).max(6).describe('Band index 0 (lowest) … 6 (highest frequency).'),
+          gain_db: z.number().min(EQ_GAIN_MIN).max(EQ_GAIN_MAX)
+        },
+        handler: async (a) => {
+          const { s } = toneCaps()
+          if (s.zoneAudio?.user_eq?.enabled !== true) await dm.command({ type: 'setUserEq', enabled: true })
+          await dm.command({ type: 'setEqBandGain', index: a.band as number, gain: a.gain_db as number })
+          return ok(`Band ${a.band} set to ${a.gain_db} dB.`)
+        }
+      },
+      set_tilt: {
+        inputSchema: {
+          intensity: z
+            .number()
+            .describe('Negative = warmer, positive = brighter (range from get_audio_settings).')
+        },
+        handler: async (a) => {
+          const { s, caps } = toneCaps()
+          if (!caps.tilt) return err('This streamer has no tone tilt.')
+          if (s.zoneAudio?.tilt_eq?.enabled !== true) await dm.command({ type: 'setTiltEq', enabled: true })
+          await dm.command({ type: 'setTiltIntensity', intensity: a.intensity as number })
+          return ok(`Tilt set to ${a.intensity}.`)
+        }
+      },
+      set_balance: {
+        inputSchema: {
+          balance: z.number().describe('Negative = left, positive = right (range from get_audio_settings).')
+        },
+        handler: async (a) => {
+          const { caps } = toneCaps()
+          if (!caps.balance) return err('This streamer has no balance control.')
+          await dm.command({ type: 'setBalance', balance: a.balance as number })
+          return ok(`Balance set to ${a.balance}.`)
+        }
+      },
+      apply_eq_preset: {
+        inputSchema: { name: z.string().describe('A saved preset name from get_audio_settings.') },
+        handler: async (a) => {
+          toneCaps()
+          const preset = getSettings().eqPresets.find((p) => lc(p.name) === lc(a.name as string))
+          if (!preset) return err(`No saved EQ preset named '${a.name}'. get_audio_settings lists them.`)
+          await dm.command({ type: 'setUserEq', enabled: true })
+          await dm.command({ type: 'setEqBands', gains: preset.gains })
+          return ok(`Applied EQ preset "${preset.name}".`)
+        }
+      },
+      reset_eq: {
+        handler: async () => {
+          toneCaps()
+          await dm.command({ type: 'setEqBands', gains: [0, 0, 0, 0, 0, 0, 0] })
+          return ok('EQ reset to flat.')
+        }
+      },
+
+      // ---- display
+      set_display_brightness: {
+        inputSchema: { level: z.enum(['off', 'dim', 'bright']) },
+        handler: async (a) => {
+          const s = this.connected()
+          const options = brightnessOptions(s.displaySpec)
+          if (!options) return err('This streamer has no front-panel display.')
+          if (!options.includes(a.level as string)) {
+            return err(`This display only supports: ${options.join(', ')}.`)
+          }
+          await dm.command({ type: 'setBrightness', brightness: a.level as string })
+          return ok(`Display set to ${a.level}.`)
+        }
+      },
+
+      // ---- lookups (each behind its Connections toggle: off = no requests, ever)
+      get_lyrics: {
+        handler: async () => {
+          if (!getSettings().lyrics) {
+            return err('Lyrics lookups are switched off in Settings → Connections (off means no requests, ever).')
+          }
+          const s = this.connected()
+          const md = s.playState?.metadata
+          if (!md?.title || !md.artist) return err('Need a playing track with a title and artist.')
+          const r = await fetchLyrics({
+            artist: md.artist,
+            title: md.title,
+            album: md.album ?? null,
+            duration: md.duration ?? null
+          })
+          if (!r) return ok('No lyrics found for this track.')
+          if (r.instrumental) return ok('Instrumental — no lyrics.')
+          return ok({ title: md.title, artist: md.artist, lyrics: r.plain ?? r.synced })
+        }
+      },
+      get_artist_info: {
+        inputSchema: { artist: z.string().optional().describe('Defaults to the playing artist.') },
+        handler: async (a) => {
+          if (!getSettings().artistInfo) {
+            return err('Artist context is switched off in Settings → Connections (off means no requests, ever).')
+          }
+          const s = this.connected()
+          const name = (a.artist as string | undefined) ?? s.playState?.metadata?.artist ?? null
+          if (!name) return err('No artist playing — pass artist explicitly.')
+          const info = await fetchArtistInfo(name)
+          if (!info) return ok(`No artist match for "${name}".`)
+          return ok({
+            name: info.name,
+            summary: info.summary,
+            wikipedia: info.wikipediaUrl,
+            musicbrainz: info.musicbrainzUrl
+          })
+        }
+      },
+
+      // ---- queue editing (opt-in cluster)
+      remove_queue_item: {
+        inputSchema: { id: z.number().int().describe('Queue item id from list_queue.') },
+        handler: async (a) => {
+          const s = this.connected()
+          const item = (s.queue?.items ?? []).find((i) => i.id === a.id)
+          if (!item) return err(`No queue item ${a.id}. Use list_queue.`)
+          await dm.command({ type: 'queueDelete', id: a.id as number })
+          return ok(`Removed "${item.metadata?.title ?? `item ${a.id}`}" from the queue.`)
+        }
+      },
+      move_queue_item: {
+        inputSchema: {
+          id: z.number().int().describe('Queue item id from list_queue.'),
+          to_position: z.number().int().min(0).describe('New 0-based position.')
+        },
+        handler: async (a) => {
+          const s = this.connected()
+          const item = (s.queue?.items ?? []).find((i) => i.id === a.id)
+          if (!item || item.position == null) return err(`No queue item ${a.id}. Use list_queue.`)
+          const total = s.queue?.total ?? 0
+          if ((a.to_position as number) >= total) return err(`to_position must be below ${total}.`)
+          await dm.command({
+            type: 'queueMove',
+            id: a.id as number,
+            from: item.position,
+            to: a.to_position as number
+          })
+          return ok(`Moved "${item.metadata?.title ?? `item ${a.id}`}" to position ${a.to_position}.`)
+        }
+      },
+
+      // ---- preset saving (opt-in cluster; explicit-overwrite contract)
+      save_queue_as_preset: {
+        inputSchema: {
+          slot: z.number().int().min(1).max(99).describe('Preset slot 1–99.'),
+          name: z.string().min(1).describe('Name for the saved queue.'),
+          overwrite: z.boolean().optional().describe('Must be true to replace an occupied slot.')
+        },
+        handler: async (a) => {
+          const s = this.connected()
+          if ((s.queue?.total ?? 0) === 0) return err('The queue is empty.')
+          guardSlot(s, a.slot as number, a.overwrite === true)
+          await dm.command({ type: 'queueSavePreset', slot: a.slot as number, name: a.name as string })
+          return ok(`Saved the queue to preset ${a.slot} as "${a.name}".`)
+        }
+      },
+      save_playing_to_preset: {
+        inputSchema: {
+          slot: z.number().int().min(1).max(99).describe('Preset slot 1–99.'),
+          name: z.string().optional().describe('Optional rename (the firmware derives a name otherwise).'),
+          overwrite: z.boolean().optional().describe('Must be true to replace an occupied slot.')
+        },
+        handler: async (a) => {
+          const s = this.connected()
+          if (s.playState?.state !== 'play' && s.playState?.state !== 'pause') {
+            return err('Nothing is playing to save.')
+          }
+          guardSlot(s, a.slot as number, a.overwrite === true)
+          await dm.command({ type: 'zoneSavePreset', slot: a.slot as number })
+          if (typeof a.name === 'string' && a.name.length > 0) {
+            await dm.command({ type: 'presetRename', slot: a.slot as number, name: a.name })
+          }
+          return ok(`Saved the current playback to preset ${a.slot}${a.name ? ` as "${a.name}"` : ''}.`)
         }
       }
     }
