@@ -12,11 +12,13 @@ import {
   Globe,
   Heart,
   LayoutGrid,
+  Loader2,
   Lock,
   Monitor,
   Moon,
   Palette,
   Plus,
+  RefreshCw,
   SlidersHorizontal,
   Sun,
   Trash2
@@ -33,7 +35,8 @@ import {
   type McpSettings,
   type MotionMode,
   type Schedule,
-  type ThemePreference
+  type ThemePreference,
+  type UpdateCheckResult
 } from '@shared/ipc'
 import { tt } from '@/api'
 import { useStore, type Screen } from '@/store'
@@ -1074,6 +1077,15 @@ function UpdatesSection({
   save(patch: Partial<AppSettings>): Promise<void>
 }): React.JSX.Element {
   const update = useStore((s) => s.update)
+  // Manual-check feedback: 'checking' while in flight, then the outcomes the
+  // consent panel won't announce itself ('none' / 'error'; 'update' clears
+  // this — the panel and the dots take over).
+  const [manual, setManual] = useState<'checking' | UpdateCheckResult | null>(null)
+  const checkNow = async (): Promise<void> => {
+    setManual('checking')
+    const res = await tt.updateCheckNow()
+    setManual(res.status === 'update' ? null : res)
+  }
 
   return (
     <section className="space-y-3">
@@ -1093,10 +1105,32 @@ function UpdatesSection({
       {update ? (
         <UpdatePanel />
       ) : (
-        <div className="rounded-xl ring-1 ring-edge bg-panel/70 px-4 py-3 text-[12.5px] text-dim">
-          {settings.updateCheck
-            ? `You're on v${version} — no newer version is known.`
-            : 'Update checks are off — the release page on GitHub is the manual path.'}
+        <div className="rounded-xl ring-1 ring-edge bg-panel/70 px-4 py-3 flex items-center justify-between gap-3">
+          <span className="text-[12.5px] text-dim min-w-0">
+            {manual === 'checking' ? (
+              'Checking…'
+            ) : manual?.status === 'none' ? (
+              `Nothing newer — v${version} is the latest release.`
+            ) : manual?.status === 'error' ? (
+              <span className="text-alert break-all">Couldn&apos;t check: {manual.error}</span>
+            ) : settings.updateCheck ? (
+              `You're on v${version} — no newer version is known.`
+            ) : (
+              'Automatic update checks are off.'
+            )}
+          </span>
+          <button
+            onClick={() => void checkNow()}
+            disabled={manual === 'checking'}
+            className="shrink-0 flex items-center gap-1.5 text-[12.5px] px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all disabled:opacity-50 disabled:pointer-events-none"
+          >
+            {manual === 'checking' ? (
+              <Loader2 size={13} className="motion-safe:animate-spin" />
+            ) : (
+              <RefreshCw size={13} />
+            )}
+            Check now
+          </button>
         </div>
       )}
     </section>

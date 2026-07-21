@@ -14,7 +14,14 @@ import { DeviceManager } from './deviceManager'
 import { demoHost, startDemoStreamer, stopDemoStreamer } from './demoStreamer'
 import { McpBridge } from './mcpServer'
 import { installAppMenu } from './menu'
-import { checkUpdatesNow, currentUpdateState, downloadUpdate, installUpdate, startUpdater } from './updater'
+import {
+  checkUpdatesNow,
+  checkUpdatesOnDemand,
+  currentUpdateState,
+  downloadUpdate,
+  installUpdate,
+  startUpdater
+} from './updater'
 import { fetchLyrics } from './lyrics'
 import { scrobbler } from './scrobbler'
 import { fetchArtistInfo } from './artistInfo'
@@ -244,6 +251,7 @@ function registerIpc(): void {
   ipcMain.handle(IPC.lbValidate, () => scrobbler.validateToken())
   ipcMain.handle(IPC.updateDownload, () => downloadUpdate())
   ipcMain.handle(IPC.updateInstall, () => installUpdate())
+  ipcMain.handle(IPC.updateCheckNow, () => checkUpdatesOnDemand())
   ipcMain.handle(IPC.fetchArtistInfo, (_e, artist: string, force?: boolean) =>
     getSettings().artistInfo ? fetchArtistInfo(artist, !!force) : null
   )

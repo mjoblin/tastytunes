@@ -14,9 +14,14 @@ import { join } from 'node:path'
 import { app } from 'electron'
 import electronUpdater from 'electron-updater'
 import { version as appVersion } from '../../package.json'
-import { REPO_URL, type UpdateState } from '@shared/ipc'
+import { REPO_URL, type UpdateCheckResult, type UpdateState } from '@shared/ipc'
 import { getSettings } from './persist'
-import { checkNow as legacyCheckNow, startUpdateCheck as startLegacyCheck } from './updateCheck'
+import {
+  checkNow as legacyCheckNow,
+  checkOnDemand as legacyCheckOnDemand,
+  isNewer,
+  startUpdateCheck as startLegacyCheck
+} from './updateCheck'
 
 const { autoUpdater } = electronUpdater
 
@@ -119,6 +124,23 @@ export function checkUpdatesNow(): void {
   if (!getSettings().updateCheck) return
   if (updaterUsable()) void autoUpdater.checkForUpdates().catch(() => {})
   else void legacyCheckNow()
+}
+
+/**
+ * User-initiated check (the Updates tab's Check now button) — runs even with
+ * automatic checks off (the click is the consent) and reports the outcome.
+ */
+export async function checkUpdatesOnDemand(): Promise<UpdateCheckResult> {
+  if (!updaterUsable()) return legacyCheckOnDemand()
+  try {
+    const r = await autoUpdater.checkForUpdates()
+    const v = r?.updateInfo?.version
+    // The update-available/-not-available handlers above still drive the
+    // pushed UpdateState; this return only feeds the button's feedback line.
+    return v && isNewer(v, appVersion) ? { status: 'update', version: v } : { status: 'none' }
+  } catch (e) {
+    return { status: 'error', error: e instanceof Error ? e.message : String(e) }
+  }
 }
 
 /** Consent step 1. */

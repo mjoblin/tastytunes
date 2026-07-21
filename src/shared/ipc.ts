@@ -238,6 +238,16 @@ export interface UpdateState {
 }
 
 /**
+ * Outcome of a user-initiated release check (the Updates tab's Check now
+ * button). 'update' also lands through the normal updateState push — the
+ * result exists so the UI can say "nothing new" or show the failure.
+ */
+export type UpdateCheckResult =
+  | { status: 'update'; version: string }
+  | { status: 'none' }
+  | { status: 'error'; error: string }
+
+/**
  * Streamer FIRMWARE status, camelCased from the read-only /system/update push
  * (raw SystemUpdate in smoip.ts). Distinct from UpdateState above, which is the
  * APP's own self-update flow. PASSIVE ONLY — the streamer reports its own
@@ -927,6 +937,8 @@ export interface TastyTunesApi {
   updateDownload(): Promise<void>
   /** Consent step 2: restart into the downloaded update now. */
   updateInstall(): Promise<void>
+  /** User-initiated release check (works with automatic checks off). */
+  updateCheckNow(): Promise<UpdateCheckResult>
   /** Artist bio via MusicBrainz + Wikipedia (main process, cached; null = no match).
    *  `force` bypasses the cache read — the user-driven refresh. */
   fetchArtistInfo(artist: string, force?: boolean): Promise<ArtistInfo | null>
@@ -994,6 +1006,7 @@ export const IPC = {
   lbValidate: 'tt:lbValidate',
   updateDownload: 'tt:updateDownload',
   updateInstall: 'tt:updateInstall',
+  updateCheckNow: 'tt:updateCheckNow',
   fetchArtistInfo: 'tt:fetchArtistInfo',
   fetchAlbumInfo: 'tt:fetchAlbumInfo',
   toggleMini: 'tt:toggleMini',
