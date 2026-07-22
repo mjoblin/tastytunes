@@ -1414,20 +1414,33 @@ export function LibraryScreen(): React.JSX.Element {
               { value: 'tracks', label: 'Tracks' }
             ]}
           />
-          {/* which server's slice (cross mode, >1 contributing server) — a
-              filter like its neighbor, so it lives in the left filter
-              cluster; the sort chip keeps its lone spot on the right */}
-          {crossMode && crossState && crossState.groups.length > 1 && (
+          {/* which server's slice — a filter like its neighbor, so it lives
+              in the left cluster; the sort chip keeps its lone right spot.
+              Options come from the search's COVERAGE (every ready index),
+              not from who matched: a server with no results stays visible
+              but inert, so the control never vanishes mid-session and
+              nobody wonders whether a server dropped off the network. */}
+          {crossMode && crossState && readyIndexes.length > 1 && (
             <div data-library-server-filter>
               <Segmented<string>
                 value={crossServerUdn ?? '__all__'}
                 onChange={(v) => setSearchServerUdn(v === '__all__' ? null : v)}
                 options={[
                   { value: '__all__', label: 'All libraries' },
-                  ...crossState.groups.map((g) => ({
-                    value: g.udn,
-                    label: g.serverName.length > 18 ? `${g.serverName.slice(0, 17)}…` : g.serverName
-                  }))
+                  ...[...readyIndexes]
+                    .sort((a, b) => a.serverName.localeCompare(b.serverName))
+                    .map((x) => {
+                      const hasMatches = crossState.groups.some((g) => g.udn === x.udn)
+                      return {
+                        value: x.udn,
+                        label:
+                          x.serverName.length > 18
+                            ? `${x.serverName.slice(0, 17)}…`
+                            : x.serverName,
+                        disabled: !hasMatches,
+                        tip: hasMatches ? undefined : `No matches on ${x.serverName}`
+                      }
+                    })
                 ]}
               />
             </div>

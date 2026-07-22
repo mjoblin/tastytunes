@@ -6,6 +6,9 @@ export interface SegmentedOption<T> {
   icon?: React.ReactNode
   /** Optional hover tooltip (uses the app's data-tip treatment). */
   tip?: string
+  /** Rendered but inert and dimmed (e.g. a server with no matches) — the
+   *  option stays visible so the control never reshapes with the data. */
+  disabled?: boolean
 }
 
 /**
@@ -29,12 +32,19 @@ export function Segmented<T extends string | number | boolean>({
       {options.map((opt) => (
         <button
           key={String(opt.value)}
-          onClick={() => onChange(opt.value)}
+          onClick={() => {
+            if (!opt.disabled) onChange(opt.value)
+          }}
+          aria-disabled={opt.disabled || undefined}
           data-tip={opt.tip}
           className={cx(
             'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] transition-colors',
             opt.tip && 'tip-top',
-            value === opt.value ? 'bg-golddim text-gold' : 'text-dim hover:text-ink'
+            opt.disabled
+              ? 'text-faint opacity-50 cursor-default'
+              : value === opt.value
+                ? 'bg-golddim text-gold'
+                : 'text-dim hover:text-ink'
           )}
         >
           {opt.icon}
