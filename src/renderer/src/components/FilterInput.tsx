@@ -75,10 +75,13 @@ export function FilterInput({
         spellCheck={false}
         className="w-28 bg-transparent outline-none text-[12.5px] text-ink placeholder:text-faint"
       />
-      {/* count + clear always occupy their space (9ch floor fits "1234/1234";
-          only an absurd count grows it) so the box width never changes — they
-          just turn invisible while the filter is empty */}
-      <span className="font-mono text-[10.5px] text-dim tabular-nums text-right min-w-[9ch]">
+      {/* count + clear always occupy their space so the box never changes
+          width — the slot is sized from THIS listing's total ("345/345"
+          worst case), so no count it can ever show grows it */}
+      <span
+        className="font-mono text-[10.5px] text-dim tabular-nums text-right"
+        style={{ minWidth: `${Math.max(9, String(total).length * 2 + 1)}ch` }}
+      >
         {value ? `${shown}/${total}` : ''}
       </span>
       <button

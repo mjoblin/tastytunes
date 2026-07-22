@@ -227,10 +227,18 @@ function didlToNodes(didl: string): MediaNode[] {
     const title = text(raw.title)
     if (!id || title == null) return null
     const res = asArray(raw.res as Record<string, unknown> | Array<Record<string, unknown>>)[0]
-    // multi-valued: taggers repeat <upnp:genre>; keep them all, in order
-    const genres = asArray(raw.genre as Record<string, unknown> | Array<Record<string, unknown>>)
-      .map((g) => text(g))
-      .filter((g): g is string => g != null && g !== '')
+    // multi-valued two ways: taggers repeat <upnp:genre> AND pack several
+    // into one value ("Pop; Rock" — live-observed on Asset). Split on ';',
+    // dedupe case-insensitively, keep first-seen casing and order.
+    const seenGenres = new Map<string, string>()
+    for (const g of asArray(raw.genre as Record<string, unknown> | Array<Record<string, unknown>>)) {
+      for (const part of (text(g) ?? '').split(';')) {
+        const trimmed = part.trim()
+        if (trimmed && !seenGenres.has(trimmed.toLowerCase()))
+          seenGenres.set(trimmed.toLowerCase(), trimmed)
+      }
+    }
+    const genres = [...seenGenres.values()]
     return {
       ...(genres.length > 0 ? { genre: genres } : {}),
       id,

@@ -260,7 +260,7 @@ function buildDemo(host: string): {
       date: '2014-06-01',
       art: `${host}/art/p2.svg`,
       count: 5,
-      genres: ['Synthpop'],
+      genres: ['Synthpop; Electropop'],
       track: (n) => ({
         ...trackMeta(n),
         title: `Neon Track ${n}`,
@@ -272,6 +272,7 @@ function buildDemo(host: string): {
     }
   ]
 
+  const SYN_GENRES = ['House', 'Techno', 'IDM', 'Trance', 'Breakbeat', 'Dub', 'Chillout', 'Garage', 'Electro', 'Acid']
   const SYN_ALBUMS: Album[] = Array.from({ length: 35 }, (_, i) => ({
     id: `syn-${i + 1}`,
     title: `Synth Album ${i + 1}`,
@@ -279,7 +280,7 @@ function buildDemo(host: string): {
     date: `${1980 + i}-01-01`,
     art: null,
     count: 2,
-    genres: ['Electronic'],
+    genres: [SYN_GENRES[i % 10]],
     track: (n: number) => ({
       ...trackMeta(n),
       title: `Synth ${i + 1}.${n}`,

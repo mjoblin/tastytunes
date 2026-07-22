@@ -42,10 +42,11 @@ interface StoredIndex {
   tracks: MediaNode[]
 }
 
-// v2: nodes carry upnp:genre (multi-valued) — bumped 2026-07-21 for the
-// library lenses. A bump discards stored indexes wholesale; rebuildHints
-// below keeps that from costing Browse-only servers their Build click.
-const VERSION = 2
+// v3: genre values split on ';' ("Pop; Rock" = two genres — live-observed
+// Asset tagging). v2 added upnp:genre. A bump discards stored indexes
+// wholesale; rebuildHints below keeps that from costing Browse-only
+// servers their Build click.
+const VERSION = 3
 const PAGE = 500
 const MAX_TRACKS = 50_000
 const MAX_CONTAINERS = 10_000

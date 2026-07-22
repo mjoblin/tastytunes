@@ -1316,6 +1316,27 @@ export function LibraryScreen(): React.JSX.Element {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => {
+              // Just-landed state (⌘F recall selects the text): the history
+              // keys NAVIGATE — pressing ⌘← to leave is the reflex this
+              // serves. Once the selection collapses (typing, clicking),
+              // ⌘-arrows are ordinary text-editing keys again.
+              if (
+                (e.metaKey || e.altKey) &&
+                !e.ctrlKey &&
+                (e.key === 'ArrowLeft' || e.key === 'ArrowRight')
+              ) {
+                const el = e.currentTarget
+                if (
+                  el.selectionStart === 0 &&
+                  el.selectionEnd === el.value.length &&
+                  el.value.length > 0
+                ) {
+                  e.preventDefault()
+                  if (e.key === 'ArrowLeft') goBack()
+                  else goForward()
+                  return
+                }
+              }
               if (e.key === 'Enter') {
                 e.preventDefault()
                 runSearch()
@@ -1496,7 +1517,10 @@ export function LibraryScreen(): React.JSX.Element {
           if (atRoot && lens === 'albums' && !searchMode) albumsLensScroll = e.currentTarget.scrollTop
         }}
         className={cx(
-          'flex-1 px-8 pt-1',
+          // stable gutter: without it the scrollbar's appearance shifts every
+          // right-aligned control as listings shrink/grow (macOS always-on
+          // scrollbars — the "filter box moves" report)
+          'flex-1 px-8 pt-1 [scrollbar-gutter:stable]',
           // the miller view scrolls its own columns — the page must not
           atRoot && lens === 'artists' && !searchMode
             ? 'overflow-hidden min-h-0 pb-6'

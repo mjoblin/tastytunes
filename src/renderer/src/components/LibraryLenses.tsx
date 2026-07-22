@@ -5,6 +5,7 @@ import { cx, fmtTime, matchesFilter } from '@/lib/format'
 import { isAlbumClass } from '@/lib/media'
 import { ArtImage } from '@/components/ArtImage'
 import { FilterInput } from '@/components/FilterInput'
+import { PopoverChrome } from '@/hooks/usePopover'
 import { SortChip } from '@/components/SortChip'
 import { ContainerCard, ContainerRow, TrackRow } from '@/components/LibraryCards'
 import { Eqbars } from '@/components/Eqbars'
@@ -42,39 +43,100 @@ const nodeKey = (n: MediaNode): string => `${n.serverUdn ?? ''}|${n.id}`
 
 /** Facet chips, the radio-category pill idiom: single-select, click the
  *  active chip to clear (facet-shaped data may earn multi-select someday —
- *  see the partition-vs-facet note in the ROADMAP — but it starts here). */
+ *  see the partition-vs-facet note in the ROADMAP — but it starts here).
+ *  With `max`, the rail shows the top chips and folds the tail behind a
+ *  "+N more" popover — real tag data grows genre lists without bound, and
+ *  a hard cap would silently strand whatever fell off. The active value
+ *  always surfaces in the rail, even when picked from the tail. */
 function ChipRail({
   rail,
   options,
   value,
+  max,
   onChange
 }: {
   rail: string
   options: Array<{ value: string; label: string; count: number }>
   value: string | null
+  max?: number
   onChange(value: string | null): void
 }): React.JSX.Element | null {
+  const [moreOpen, setMoreOpen] = useState(false)
   if (options.length < 2) return null
+  let visible = max != null && options.length > max ? options.slice(0, max) : options
+  if (value && !visible.some((o) => o.value === value)) {
+    const active = options.find((o) => o.value === value)
+    if (active) visible = [...visible.slice(0, -1), active]
+  }
+  const moreCount = options.length - visible.length
+  const chip = (o: { value: string; label: string; count: number }): React.JSX.Element => (
+    <button
+      key={o.value}
+      data-lens-chip={o.label}
+      onClick={() => {
+        onChange(value === o.value ? null : o.value)
+        setMoreOpen(false)
+      }}
+      className={cx(
+        'no-drag rounded-full px-3 py-1 text-[12px] ring-1 transition-all motion-safe:active:scale-95',
+        value === o.value
+          ? 'ring-gold/50 bg-golddim text-gold'
+          : 'ring-edge bg-panel/60 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70'
+      )}
+    >
+      {o.label}
+      <span className={cx('ml-1.5 font-mono text-[10px]', value === o.value ? 'text-gold/70' : 'text-faint')}>
+        {o.count}
+      </span>
+    </button>
+  )
   return (
     <div data-lens-rail={rail} className="flex items-center gap-1.5 flex-wrap">
-      {options.map((o) => (
-        <button
-          key={o.value}
-          data-lens-chip={o.label}
-          onClick={() => onChange(value === o.value ? null : o.value)}
-          className={cx(
-            'no-drag rounded-full px-3 py-1 text-[12px] ring-1 transition-all motion-safe:active:scale-95',
-            value === o.value
-              ? 'ring-gold/50 bg-golddim text-gold'
-              : 'ring-edge bg-panel/60 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70'
+      {visible.map(chip)}
+      {moreCount > 0 && (
+        <div className="relative">
+          <button
+            data-lens-more={rail}
+            onClick={() => setMoreOpen((o) => !o)}
+            className={cx(
+              'no-drag rounded-full px-3 py-1 text-[12px] ring-1 transition-all motion-safe:active:scale-95',
+              moreOpen
+                ? 'ring-edge2 bg-raised text-ink'
+                : 'ring-edge bg-panel/60 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70'
+            )}
+          >
+            +{moreCount} more
+          </button>
+          {moreOpen && (
+            <>
+              <PopoverChrome onClose={() => setMoreOpen(false)} />
+              <div className="fixed inset-0 z-20" onClick={() => setMoreOpen(false)} />
+              <div
+                data-lens-more-popover
+                className="absolute left-0 top-full mt-1.5 z-30 w-56 max-h-72 overflow-y-auto rounded-xl ring-1 ring-edge2 bg-raised shadow-xl p-1.5 space-y-0.5"
+              >
+                {options.map((o) => (
+                  <button
+                    key={o.value}
+                    data-lens-chip={o.label}
+                    onClick={() => {
+                      onChange(value === o.value ? null : o.value)
+                      setMoreOpen(false)
+                    }}
+                    className={cx(
+                      'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-[13px] transition-colors',
+                      value === o.value ? 'text-gold bg-golddim' : 'text-dim hover:text-ink hover:bg-veil'
+                    )}
+                  >
+                    <span className="min-w-0 flex-1 truncate">{o.label}</span>
+                    <span className="font-mono text-[10.5px] text-faint tabular-nums">{o.count}</span>
+                  </button>
+                ))}
+              </div>
+            </>
           )}
-        >
-          {o.label}
-          <span className={cx('ml-1.5 font-mono text-[10px]', value === o.value ? 'text-gold/70' : 'text-faint')}>
-            {o.count}
-          </span>
-        </button>
-      ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -133,10 +195,11 @@ export function AlbumsLens({
         else counts.set(k, { label: g, count: 1 })
       }
     }
+    // no cap here: the rail's `max` shows the top chips and the +N-more
+    // popover carries the whole tail — capping OPTIONS would strand genres
     return [...counts.entries()]
       .map(([value, x]) => ({ value, ...x }))
       .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
-      .slice(0, 12)
   }, [all])
   const decadeOptions = useMemo(() => {
     const counts = new Map<string, number>()
@@ -176,6 +239,7 @@ export function AlbumsLens({
             rail="genre"
             options={genreOptions}
             value={mem.genre}
+            max={8}
             onChange={(genre) => setMem({ genre })}
           />
           <ChipRail
@@ -401,7 +465,18 @@ export function ArtistsLens({
 
   let lastLetter = ''
   return (
-    <div data-lens-artists className="h-full min-h-0 flex gap-6">
+    <div data-lens-artists className="h-full min-h-0 flex flex-col">
+      {/* the filter sits ABOVE the columns (left — over the artists column
+          it scopes), so all three columns' headings and rows stay aligned */}
+      <div className="shrink-0 pb-3">
+        <FilterInput
+          value={mem.filter}
+          onChange={(filter) => setMem({ filter })}
+          shown={shownArtists.length}
+          total={artists.length}
+        />
+      </div>
+      <div className="min-h-0 flex-1 flex gap-6">
       {/* Artists ------------------------------------------------------- */}
       {/* proportional columns: fixed widths starved the tracks column (and
           its titles) at normal window sizes — tracks gets the largest share */}
@@ -410,14 +485,6 @@ export function ArtistsLens({
           'Artists',
           mem.filter ? `${shownArtists.length}/${artists.length}` : String(artists.length)
         )}
-        <div className="pb-2">
-          <FilterInput
-            value={mem.filter}
-            onChange={(filter) => setMem({ filter })}
-            shown={shownArtists.length}
-            total={artists.length}
-          />
-        </div>
         <div className="min-h-0 flex-1 flex gap-1">
           <div
             ref={artistsColRef}
@@ -627,6 +694,7 @@ export function ArtistsLens({
             </div>
           )}
         </div>
+      </div>
       </div>
     </div>
   )
