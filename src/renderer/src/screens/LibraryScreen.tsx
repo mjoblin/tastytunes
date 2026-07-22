@@ -1447,9 +1447,10 @@ export function LibraryScreen(): React.JSX.Element {
         </div>
       )}
 
-      {/* breadcrumbs: Library (source list) › source › folders… */}
-      {!searchMode && (
-      <div className="no-drag flex items-center gap-1 flex-wrap px-8 pb-3 text-[12.5px]">
+      {/* breadcrumbs: Library (source list) › source › folders… — hidden at
+          the bare root, where the screen title already says it */}
+      {!searchMode && (serverUdn != null || lens != null || path.length > 0) && (
+      <div data-library-crumbs className="no-drag flex items-center gap-1 flex-wrap px-8 pb-3 text-[12.5px]">
         <button
           onClick={() => jumpTo(0)}
           className={cx(

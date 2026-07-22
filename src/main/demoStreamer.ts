@@ -276,7 +276,7 @@ function buildDemo(host: string): {
   const SYN_ALBUMS: Album[] = Array.from({ length: 35 }, (_, i) => ({
     id: `syn-${i + 1}`,
     title: `Synth Album ${i + 1}`,
-    artist: 'Demo Artist 2',
+    artist: `Demo Artist ${(i % 30) + 1}`,
     date: `${1980 + i}-01-01`,
     art: null,
     count: 2,
@@ -285,7 +285,7 @@ function buildDemo(host: string): {
       ...trackMeta(n),
       title: `Synth ${i + 1}.${n}`,
       album: `Synth Album ${i + 1}`,
-      artist: 'Demo Artist 2',
+      artist: `Demo Artist ${(i % 30) + 1}`,
       art_url: null,
       duration: 90 + n
     })

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowUpRight, ChevronDown, Disc3, MoreHorizontal, Users } from 'lucide-react'
 import type { MediaIndexPools, MediaNode } from '@shared/ipc'
 import { cx, fmtTime, matchesFilter } from '@/lib/format'
+import { scrollToVisible } from '@/lib/scroll'
 import { isAlbumClass } from '@/lib/media'
 import { ArtImage } from '@/components/ArtImage'
 import { FilterInput } from '@/components/FilterInput'
@@ -512,6 +513,19 @@ export function ArtistsLens({
 
   // A-Z fast travel: letter anchors in the artists column.
   const artistsColRef = useRef<HTMLDivElement | null>(null)
+  const selectedRowRef = useRef<HTMLDivElement | null>(null)
+  // When the filter reshapes the artist list, keep the selection in sight —
+  // clearing "beatles" pops hundreds of rows back in ABOVE the selected one.
+  // Skips the mount run (the saved column scroll is restoring then).
+  const listSettled = useRef(false)
+  useEffect(() => {
+    if (!listSettled.current) {
+      listSettled.current = true
+      return
+    }
+    if (mem.artist && selectedRowRef.current) scrollToVisible(selectedRowRef.current)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shownArtists])
   const albumsColRef = useRef<HTMLDivElement | null>(null)
   const tracksColRef = useRef<HTMLDivElement | null>(null)
   // Restore each column's remembered spot once, after first paint.
@@ -585,6 +599,7 @@ export function ArtistsLens({
                   key={a.key}
                   ref={(el) => {
                     if (anchor && el) letterRefs.current.set(letter, el)
+                    if (selected && el) selectedRowRef.current = el
                   }}
                   data-artist-row={a.name}
                   onClick={() => setMem({ artist: selected ? null : a.key, album: null })}
