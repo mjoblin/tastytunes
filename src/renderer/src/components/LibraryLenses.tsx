@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowUpRight, Disc3, MoreHorizontal, Users } from 'lucide-react'
+import { ArrowUpRight, ChevronDown, Disc3, MoreHorizontal, Users } from 'lucide-react'
 import type { MediaIndexPools, MediaNode } from '@shared/ipc'
 import { cx, fmtTime, matchesFilter } from '@/lib/format'
 import { isAlbumClass } from '@/lib/media'
@@ -53,16 +53,20 @@ function ChipRail({
   options,
   value,
   max,
+  lead,
   onChange
 }: {
   rail: string
   options: Array<{ value: string; label: string; count: number }>
   value: string | null
   max?: number
+  /** A leading control sharing the row (the decade picker pill). */
+  lead?: React.ReactNode
   onChange(value: string | null): void
 }): React.JSX.Element | null {
   const [moreOpen, setMoreOpen] = useState(false)
-  if (options.length < 2) return null
+  const showChips = options.length >= 2
+  if (!showChips && lead == null) return null
   let visible = max != null && options.length > max ? options.slice(0, max) : options
   if (value && !visible.some((o) => o.value === value)) {
     const active = options.find((o) => o.value === value)
@@ -92,8 +96,9 @@ function ChipRail({
   )
   return (
     <div data-lens-rail={rail} className="flex items-center gap-1.5 flex-wrap">
-      {visible.map(chip)}
-      {moreCount > 0 && (
+      {lead}
+      {showChips && visible.map(chip)}
+      {showChips && moreCount > 0 && (
         <div className="relative">
           <button
             data-lens-more={rail}
@@ -136,6 +141,74 @@ function ChipRail({
             </>
           )}
         </div>
+      )}
+    </div>
+  )
+}
+
+/** One pill that opens a picker popover — for bounded facets (decades) that
+ *  shouldn't spend a whole rail row. The chevron marks it as a picker, not a
+ *  toggle chip; an active pick renders gold like any active chip. */
+function PickerPill({
+  id,
+  neutral,
+  options,
+  value,
+  onChange
+}: {
+  id: string
+  neutral: string
+  options: Array<{ value: string; label: string; count: number }>
+  value: string | null
+  onChange(value: string | null): void
+}): React.JSX.Element | null {
+  const [open, setOpen] = useState(false)
+  if (options.length < 2) return null
+  const active = value ? options.find((o) => o.value === value) : null
+  return (
+    <div className="relative">
+      <button
+        data-lens-picker={id}
+        onClick={() => setOpen((o) => !o)}
+        className={cx(
+          'no-drag flex items-center gap-1 rounded-full px-3 py-1 text-[12px] ring-1 transition-all motion-safe:active:scale-95',
+          active
+            ? 'ring-gold/50 bg-golddim text-gold'
+            : open
+              ? 'ring-edge2 bg-raised text-ink'
+              : 'ring-edge bg-panel/60 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70'
+        )}
+      >
+        {active ? active.label : neutral}
+        <ChevronDown size={12} className={active ? 'text-gold/70' : 'text-faint'} />
+      </button>
+      {open && (
+        <>
+          <PopoverChrome onClose={() => setOpen(false)} />
+          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
+          <div
+            data-lens-picker-popover={id}
+            className="absolute left-0 top-full mt-1.5 z-30 w-44 max-h-72 overflow-y-auto rounded-xl ring-1 ring-edge2 bg-raised shadow-xl p-1.5 space-y-0.5"
+          >
+            {options.map((o) => (
+              <button
+                key={o.value}
+                data-lens-chip={o.label}
+                onClick={() => {
+                  onChange(value === o.value ? null : o.value)
+                  setOpen(false)
+                }}
+                className={cx(
+                  'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-[13px] transition-colors',
+                  value === o.value ? 'text-gold bg-golddim' : 'text-dim hover:text-ink hover:bg-veil'
+                )}
+              >
+                <span className="min-w-0 flex-1 truncate">{o.label}</span>
+                <span className="font-mono text-[10.5px] text-faint tabular-nums">{o.count}</span>
+              </button>
+            ))}
+          </div>
+        </>
       )}
     </div>
   )
@@ -234,19 +307,24 @@ export function AlbumsLens({
   return (
     <div data-lens-albums>
       <div className="flex items-start gap-3 pb-3">
-        <div className="flex-1 min-w-0 space-y-2">
+        <div className="flex-1 min-w-0">
+          {/* one row: the decade picker leads, genres chip along after it —
+              a bounded facet doesn't get to spend a whole rail row */}
           <ChipRail
             rail="genre"
             options={genreOptions}
             value={mem.genre}
             max={8}
+            lead={
+              <PickerPill
+                id="decade"
+                neutral="Decade"
+                options={decadeOptions}
+                value={mem.decade}
+                onChange={(decade) => setMem({ decade })}
+              />
+            }
             onChange={(genre) => setMem({ genre })}
-          />
-          <ChipRail
-            rail="decade"
-            options={decadeOptions}
-            value={mem.decade}
-            onChange={(decade) => setMem({ decade })}
           />
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
@@ -415,7 +493,10 @@ export function ArtistsLens({
     return m
   }, [pools])
 
-  const selectedArtist = artists.find((a) => a.key === mem.artist) ?? null
+  // Resolve the selection against the FILTERED list: filtering the selected
+  // artist out empties the albums/tracks columns rather than showing content
+  // for a row that isn't on screen; clearing the filter brings it back.
+  const selectedArtist = shownArtists.find((a) => a.key === mem.artist) ?? null
   const selectedAlbum =
     selectedArtist?.albums.find((a) => nodeKey(a) === mem.album) ?? null
   const albumTracks = selectedAlbum
@@ -468,7 +549,7 @@ export function ArtistsLens({
     <div data-lens-artists className="h-full min-h-0 flex flex-col">
       {/* the filter sits ABOVE the columns (left — over the artists column
           it scopes), so all three columns' headings and rows stay aligned */}
-      <div className="shrink-0 pb-3">
+      <div className="shrink-0 pb-3 flex">
         <FilterInput
           value={mem.filter}
           onChange={(filter) => setMem({ filter })}
