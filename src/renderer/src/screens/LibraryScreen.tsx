@@ -57,6 +57,21 @@ const scrollMemory = new Map<string, number>()
 // Per-LEVEL filter memory: each folder keeps its own filter for the session
 // (the store's screenFilters.library always holds the current level's).
 const filterMemory = new Map<string, string>()
+// Find-recall memory: the session's last search — scope, query, controls,
+// and a results snapshot for scopes that would cost a live round-trip to
+// re-run (index-backed scopes re-execute instead: free and always fresh).
+// ⌘F and the gold search buttons restore it with the query text selected,
+// browser-find style. Session-only, like the memories above — never a
+// setting. The nav's "Library" front door is unaffected.
+let searchMemory: {
+  udn: string | null // null = the root cross-server search
+  query: string
+  kind: SearchKind
+  sort: SearchSort
+  sortReversed: boolean
+  serverFilter: string | null
+  scoped: { query: string; items: MediaNode[]; total: number } | null
+} | null = null
 
 const nodeKey = (serverUdn: string | null, path: Crumb[]): string =>
   `${serverUdn ?? ''}|${path.map((c) => c.id).join('/')}`
@@ -145,7 +160,11 @@ export function LibraryScreen(): React.JSX.Element {
   } | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   useEffect(() => {
-    if (searchMode) searchInputRef.current?.focus()
+    if (searchMode) {
+      searchInputRef.current?.focus()
+      // find idiom: a recalled query arrives selected, so typing replaces it
+      searchInputRef.current?.select()
+    }
   }, [searchMode])
   // Result controls: kind filter (the Favorites Segmented idiom) + sort.
   // Both reset when search exits — a fresh search starts neutral.
@@ -179,6 +198,59 @@ export function LibraryScreen(): React.JSX.Element {
     searchServerUdn && crossState?.groups.some((g) => g.udn === searchServerUdn)
       ? searchServerUdn
       : null
+
+  // Keep the find-recall memory current while searching (a module var write
+  // per state change — the screen unmounts on any nav, so continuous saving
+  // is what makes recall survive a trip to another screen).
+  useEffect(() => {
+    if (!searchMode || !searchQuery.trim()) return
+    searchMemory = {
+      udn: atRoot ? null : serverUdn,
+      query: searchQuery,
+      kind: searchKind,
+      sort: searchSort,
+      sortReversed: searchSortReversed,
+      serverFilter: searchServerUdn,
+      scoped: !atRoot ? searchState : null
+    }
+  }, [searchMode, searchQuery, searchKind, searchSort, searchSortReversed, searchServerUdn, searchState, atRoot, serverUdn])
+
+  /**
+   * Restore the remembered search into the CURRENT scope (call after the
+   * scope is set). Returns false when the memory belongs elsewhere or is
+   * empty — the caller's fresh-search behavior then stands. Index-backed
+   * scopes re-execute (instant + fresh); live-only scopes restore the
+   * snapshot rather than re-firing SOAP at the server.
+   */
+  const restoreSearchMemory = (scope: string | null): boolean => {
+    const mem = searchMemory
+    if (!mem || mem.udn !== scope || !mem.query.trim()) return false
+    setSearchQuery(mem.query)
+    setSearchKind(mem.kind)
+    setSearchSort(mem.sort)
+    setSearchSortReversed(mem.sortReversed)
+    if (scope === null) {
+      setSearchServerUdn(mem.serverFilter)
+      void tt
+        .mediaSearchAll(mem.query)
+        .then((groups) => setCrossState({ query: mem.query, groups }))
+        .catch(() => {})
+    } else if (useStore.getState().mediaIndex.some((x) => x.udn === scope && x.state === 'ready')) {
+      void tt
+        .mediaSearch(scope, mem.query)
+        .then((res) => setSearchState({ query: mem.query, ...res }))
+        .catch(() => {})
+    } else if (mem.scoped) {
+      setSearchState(mem.scoped)
+    }
+    // the [searchMode] focus effect misses re-entry from within search mode
+    // (true → true across the commit) — select the recalled text explicitly
+    requestAnimationFrame(() => {
+      searchInputRef.current?.focus()
+      searchInputRef.current?.select()
+    })
+    return true
+  }
 
   // Action feedback: the app-wide toast for failures, a gold pulse for wins.
   // (The screen's original local notice banner graduated into the toast.)
@@ -338,15 +410,29 @@ export function LibraryScreen(): React.JSX.Element {
         .mediaIndex.filter((x) => x.state === 'ready')
         .map((x) => x.udn)
     )
+    const eligible = (x: MediaServerInfo): boolean => x.searchable || ready.has(x.udn)
+    // Find-recall first: ⌘F brings back the session's last search wholesale
+    // (scope included) when that scope is still eligible; an ineligible or
+    // absent memory falls through to the fresh-search picks below.
+    const mem = searchMemory
+    if (mem?.query.trim()) {
+      const memServer = mem.udn ? servers.find((x) => x.udn === mem.udn) : undefined
+      const memEligible = mem.udn === null ? ready.size >= 2 : memServer != null && eligible(memServer)
+      if (memEligible) {
+        moveTo(mem.udn, [])
+        setSearchMode(true)
+        restoreSearchMemory(mem.udn)
+        return
+      }
+    }
     // Two or more ready indexes → the root cross-server search: no arbitrary
-    // server pick (the reason a default-server setting was rejected). With
-    // one, the scoped flow below keeps its live fallback.
+    // server pick (the reason a default-search-server setting was rejected).
+    // With one, the scoped flow below keeps its live fallback.
     if (ready.size >= 2) {
       moveTo(null, [])
       setSearchMode(true)
       return
     }
-    const eligible = (x: MediaServerInfo): boolean => x.searchable || ready.has(x.udn)
     const current = servers.find((x) => x.udn === serverUdn)
     if (current && eligible(current)) {
       setSearchMode(true)
@@ -1061,7 +1147,10 @@ export function LibraryScreen(): React.JSX.Element {
           {!searchMode && atRoot && crossAvailable && (
             <button
               data-library-search-all-button
-              onClick={() => setSearchMode(true)}
+              onClick={() => {
+                setSearchMode(true)
+                restoreSearchMemory(null)
+              }}
               className="no-drag flex items-center gap-2 px-3.5 h-8 rounded-lg bg-gold text-bg text-[12.5px] font-medium
                          shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.3)] hover:brightness-110 motion-safe:active:scale-95 transition-all"
             >
@@ -1073,7 +1162,10 @@ export function LibraryScreen(): React.JSX.Element {
           {!searchMode && !atRoot && (server?.searchable || serverIndex?.state === 'ready') && (
             <button
               data-library-search-button
-              onClick={() => setSearchMode(true)}
+              onClick={() => {
+                setSearchMode(true)
+                restoreSearchMemory(serverUdn)
+              }}
               className="no-drag flex items-center gap-2 px-3.5 h-8 rounded-lg bg-gold text-bg text-[12.5px] font-medium
                          shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.3)] hover:brightness-110 motion-safe:active:scale-95 transition-all"
             >
