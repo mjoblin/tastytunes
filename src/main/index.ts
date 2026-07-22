@@ -290,6 +290,7 @@ function registerIpc(): void {
     mediaIndex.searchServer(streamerHost(), serverUdn, query)
   )
   ipcMain.handle(IPC.mediaSearchAll, (_e, query: string) => mediaIndex.searchAllIndexes(query))
+  ipcMain.handle(IPC.mediaIndexPools, () => mediaIndex.pools())
   ipcMain.handle(
     IPC.mediaQueueAdd,
     (_e, serverUdn: string, objectId: string, action: MediaQueueAction, playFromId?: string) =>

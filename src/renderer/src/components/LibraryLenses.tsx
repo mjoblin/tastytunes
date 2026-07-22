@@ -1,0 +1,581 @@
+import { useMemo, useRef, useState } from 'react'
+import { ArrowUpRight, Disc3, MoreHorizontal, Users } from 'lucide-react'
+import type { MediaIndexPools, MediaNode } from '@shared/ipc'
+import { cx, fmtTime, matchesFilter } from '@/lib/format'
+import { isAlbumClass } from '@/lib/media'
+import { ArtImage } from '@/components/ArtImage'
+import { FilterInput } from '@/components/FilterInput'
+import { SortChip } from '@/components/SortChip'
+import { ContainerCard, ContainerRow, TrackRow } from '@/components/LibraryCards'
+import { Eqbars } from '@/components/Eqbars'
+
+// The library lenses: OUR views over the union of every ready index —
+// alternative paths to the same leaf views the native flow uses, never a
+// parallel world. The root offers them beside the source doors (places, not
+// modes). Both lenses keep their state in module scope for the session, the
+// scrollMemory pattern: leaving for an album and crumbing back restores the
+// exact spot.
+
+/** Everything a lens needs from LibraryScreen — all node-based, and every
+ *  node here carries a serverUdn/serverName stamp, so the screen's existing
+ *  stamp-aware handlers work unchanged. */
+export interface LensActions {
+  /** Open the shared native album leaf (plants the lens crumb for the way back). */
+  openAlbum(node: MediaNode): void
+  playTrack(node: MediaNode, el: HTMLElement | null): void
+  playContainer(node: MediaNode, el: HTMLElement | null): void
+  openMenu(node: MediaNode, e: React.MouseEvent): void
+  menuNodeId: string | null
+  heartNode(node: MediaNode): void
+  nodeFavorited(node: MediaNode): boolean
+  trackQueued(node: MediaNode): boolean
+  isCurrentTrack(node: MediaNode): boolean
+  isPlayingAlbum(node: MediaNode): boolean
+  audible: boolean
+  /** The playing track's artist while the queue source is live — cheap
+   *  content identity for the artists column (no per-render track scans). */
+  playingArtist: string | null
+}
+
+const lc = (s: string | null | undefined): string => (s ?? '').trim().toLowerCase()
+const nodeKey = (n: MediaNode): string => `${n.serverUdn ?? ''}|${n.id}`
+
+/** Facet chips, the radio-category pill idiom: single-select, click the
+ *  active chip to clear (facet-shaped data may earn multi-select someday —
+ *  see the partition-vs-facet note in the ROADMAP — but it starts here). */
+function ChipRail({
+  rail,
+  options,
+  value,
+  onChange
+}: {
+  rail: string
+  options: Array<{ value: string; label: string; count: number }>
+  value: string | null
+  onChange(value: string | null): void
+}): React.JSX.Element | null {
+  if (options.length < 2) return null
+  return (
+    <div data-lens-rail={rail} className="flex items-center gap-1.5 flex-wrap">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          data-lens-chip={o.label}
+          onClick={() => onChange(value === o.value ? null : o.value)}
+          className={cx(
+            'no-drag rounded-full px-3 py-1 text-[12px] ring-1 transition-all motion-safe:active:scale-95',
+            value === o.value
+              ? 'ring-gold/50 bg-golddim text-gold'
+              : 'ring-edge bg-panel/60 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70'
+          )}
+        >
+          {o.label}
+          <span className={cx('ml-1.5 font-mono text-[10px]', value === o.value ? 'text-gold/70' : 'text-faint')}>
+            {o.count}
+          </span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// ------------------------------------------------------------------- albums
+
+const ALBUM_SORTS: Array<{ value: 'title' | 'artist' | 'year'; label: string }> = [
+  { value: 'title', label: 'Title' },
+  { value: 'artist', label: 'Artist' },
+  { value: 'year', label: 'Year (newest first)' }
+]
+
+// Session memory (never a setting): the lens comes back as it was left.
+let albumsMem: {
+  genre: string | null
+  decade: string | null
+  sort: 'title' | 'artist' | 'year'
+  reversed: boolean
+  filter: string
+} = { genre: null, decade: null, sort: 'title', reversed: false, filter: '' }
+
+export function AlbumsLens({
+  pools,
+  actions,
+  cards,
+  cardSize,
+  cardGap,
+  fillRows
+}: {
+  pools: MediaIndexPools[]
+  actions: LensActions
+  cards: boolean
+  cardSize: number
+  cardGap: number
+  fillRows: boolean
+}): React.JSX.Element {
+  const [mem, setMemState] = useState(albumsMem)
+  const setMem = (patch: Partial<typeof albumsMem>): void => {
+    albumsMem = { ...albumsMem, ...patch }
+    setMemState(albumsMem)
+  }
+
+  const all = useMemo(() => pools.flatMap((g) => g.albums), [pools])
+  const multiServer = useMemo(() => pools.filter((g) => g.albums.length > 0).length > 1, [pools])
+
+  // Facets from the data itself: genres by count (raw tagger strings,
+  // case-normalized by key), decades from dc:date years. Rails render only
+  // when they'd actually distinguish (≥2 options).
+  const genreOptions = useMemo(() => {
+    const counts = new Map<string, { label: string; count: number }>()
+    for (const a of all) {
+      for (const g of a.genre ?? []) {
+        const k = lc(g)
+        const cur = counts.get(k)
+        if (cur) cur.count++
+        else counts.set(k, { label: g, count: 1 })
+      }
+    }
+    return [...counts.entries()]
+      .map(([value, x]) => ({ value, ...x }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+      .slice(0, 12)
+  }, [all])
+  const decadeOptions = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const a of all) {
+      if (!a.year) continue
+      const d = `${Math.floor(Number(a.year) / 10) * 10}s`
+      counts.set(d, (counts.get(d) ?? 0) + 1)
+    }
+    return [...counts.entries()]
+      .map(([value, count]) => ({ value, label: value, count }))
+      .sort((a, b) => b.value.localeCompare(a.value))
+  }, [all])
+
+  const shown = useMemo(() => {
+    let list = all
+    if (mem.genre) list = list.filter((a) => (a.genre ?? []).some((g) => lc(g) === mem.genre))
+    if (mem.decade)
+      list = list.filter(
+        (a) => a.year != null && `${Math.floor(Number(a.year) / 10) * 10}s` === mem.decade
+      )
+    if (mem.filter) list = list.filter((a) => matchesFilter(mem.filter, [a.title, a.artist, a.year]))
+    const sorted = [...list].sort((a, b) => {
+      if (mem.sort === 'artist')
+        return (a.artist ?? '￿').localeCompare(b.artist ?? '￿') || a.title.localeCompare(b.title)
+      if (mem.sort === 'year')
+        return (b.year ?? '').localeCompare(a.year ?? '') || a.title.localeCompare(b.title)
+      return a.title.localeCompare(b.title) || (a.serverName ?? '').localeCompare(b.serverName ?? '')
+    })
+    return mem.reversed ? sorted.reverse() : sorted
+  }, [all, mem])
+
+  return (
+    <div data-lens-albums>
+      <div className="flex items-start gap-3 pb-3">
+        <div className="flex-1 min-w-0 space-y-2">
+          <ChipRail
+            rail="genre"
+            options={genreOptions}
+            value={mem.genre}
+            onChange={(genre) => setMem({ genre })}
+          />
+          <ChipRail
+            rail="decade"
+            options={decadeOptions}
+            value={mem.decade}
+            onChange={(decade) => setMem({ decade })}
+          />
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <FilterInput
+            value={mem.filter}
+            onChange={(filter) => setMem({ filter })}
+            shown={shown.length}
+            total={all.length}
+          />
+          <SortChip
+            sorts={ALBUM_SORTS}
+            neutral="title"
+            value={mem.sort}
+            reversed={mem.reversed}
+            onChange={(sort) => setMem({ sort, reversed: false })}
+            onToggleReverse={() => setMem({ reversed: !mem.reversed })}
+          />
+        </div>
+      </div>
+      {shown.length === 0 ? (
+        <div className="text-[15px] text-faint pt-4 px-1">Nothing matches those filters.</div>
+      ) : (
+        <div
+          className={cx(!cards && 'divide-y divide-edge/50 -mx-2')}
+          style={
+            cards
+              ? {
+                  display: 'grid',
+                  gridTemplateColumns: fillRows
+                    ? `repeat(auto-fill, minmax(${cardSize}px, 1fr))`
+                    : `repeat(auto-fill, ${cardSize}px)`,
+                  gap: cardGap,
+                  paddingTop: 8
+                }
+              : undefined
+          }
+        >
+          {shown.map((node) =>
+            cards ? (
+              <ContainerCard
+                key={nodeKey(node)}
+                node={node}
+                playing={actions.isPlayingAlbum(node)}
+                audible={actions.audible}
+                menuOpen={actions.menuNodeId === node.id}
+                favorited={actions.nodeFavorited(node)}
+                badge={multiServer ? node.serverName : undefined}
+                onHeart={() => actions.heartNode(node)}
+                onEnter={() => actions.openAlbum(node)}
+                onPlay={(el) => void actions.playContainer(node, el)}
+                onMenu={(e) => actions.openMenu(node, e)}
+              />
+            ) : (
+              <ContainerRow
+                key={nodeKey(node)}
+                node={node}
+                playing={actions.isPlayingAlbum(node)}
+                audible={actions.audible}
+                menuOpen={actions.menuNodeId === node.id}
+                favorited={actions.nodeFavorited(node)}
+                badge={multiServer ? node.serverName : undefined}
+                onHeart={() => actions.heartNode(node)}
+                onEnter={() => actions.openAlbum(node)}
+                onMenu={(e) => actions.openMenu(node, e)}
+              />
+            )
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ------------------------------------------------------------------ artists
+
+interface LensArtist {
+  key: string
+  name: string
+  artUrl: string | null
+  albums: MediaNode[]
+  tracks: MediaNode[]
+}
+
+// Session memory: selections survive the round trip through an album leaf.
+let artistsMem: { artist: string | null; album: string | null } = { artist: null, album: null }
+
+/**
+ * The miller view (vibin's Artists screen, adapted): Artists | Albums |
+ * Tracks columns; clicking columns 1–2 is SELECTION (columns to the right
+ * repopulate in place), never navigation. Column 3 keeps the app-wide track
+ * click contract: a bare click PLAYS (queue-aware) — there is deliberately
+ * no "selected track" concept. Artist identity is content identity: entity
+ * nodes and plain artist strings merge by normalized name, so servers
+ * without person entities (the USB stick) still get real artist rows.
+ */
+export function ArtistsLens({
+  pools,
+  actions
+}: {
+  pools: MediaIndexPools[]
+  actions: LensActions
+}): React.JSX.Element {
+  const [mem, setMemState] = useState(artistsMem)
+  const setMem = (patch: Partial<typeof artistsMem>): void => {
+    artistsMem = { ...artistsMem, ...patch }
+    setMemState(artistsMem)
+  }
+
+  const multiServer = useMemo(() => pools.filter((g) => g.albums.length > 0).length > 1, [pools])
+
+  const artists = useMemo(() => {
+    const byKey = new Map<string, LensArtist>()
+    const ensure = (name: string): LensArtist => {
+      const key = lc(name)
+      let a = byKey.get(key)
+      if (!a) {
+        a = { key, name: name.trim(), artUrl: null, albums: [], tracks: [] }
+        byKey.set(key, a)
+      }
+      return a
+    }
+    for (const g of pools) {
+      for (const e of g.artists) {
+        const a = ensure(e.title)
+        a.artUrl ??= e.artUrl
+      }
+      for (const alb of g.albums) if (alb.artist) ensure(alb.artist).albums.push(alb)
+      for (const t of g.tracks) if (t.artist) ensure(t.artist).tracks.push(t)
+    }
+    return [...byKey.values()]
+      .filter((a) => a.albums.length > 0 || a.tracks.length > 0)
+      .map((a) => ({
+        ...a,
+        artUrl: a.artUrl ?? a.albums.find((x) => x.artUrl)?.artUrl ?? null,
+        albums: [...a.albums].sort(
+          (x, y) => (y.year ?? '').localeCompare(x.year ?? '') || x.title.localeCompare(y.title)
+        )
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [pools])
+
+  // Album tracks by content identity: same server + same album title.
+  const tracksByAlbum = useMemo(() => {
+    const m = new Map<string, MediaNode[]>()
+    for (const g of pools) {
+      for (const t of g.tracks) {
+        if (!t.album) continue
+        const k = `${g.udn}|${lc(t.album)}`
+        const list = m.get(k)
+        if (list) list.push(t)
+        else m.set(k, [t])
+      }
+    }
+    for (const list of m.values()) list.sort((a, b) => (a.trackNumber ?? 0) - (b.trackNumber ?? 0))
+    return m
+  }, [pools])
+
+  const selectedArtist = artists.find((a) => a.key === mem.artist) ?? null
+  const selectedAlbum =
+    selectedArtist?.albums.find((a) => nodeKey(a) === mem.album) ?? null
+  const albumTracks = selectedAlbum
+    ? (tracksByAlbum.get(`${selectedAlbum.serverUdn}|${lc(selectedAlbum.title)}`) ?? []).filter(
+        (t) =>
+          // same-titled album on the same server by ANOTHER artist stays out
+          t.artist == null || selectedAlbum.artist == null || lc(t.artist) === lc(selectedAlbum.artist)
+      )
+    : null
+  // an artist with no albums shows their loose tracks directly (vibin rule)
+  const looseTracks =
+    selectedArtist && selectedArtist.albums.length === 0 ? selectedArtist.tracks : null
+
+  // A-Z fast travel: letter anchors in the artists column.
+  const artistsColRef = useRef<HTMLDivElement | null>(null)
+  const letterRefs = useRef(new Map<string, HTMLDivElement>())
+  const letterOf = (name: string): string => {
+    const c = name[0]?.toUpperCase() ?? '#'
+    return c >= 'A' && c <= 'Z' ? c : '#'
+  }
+  const letters = useMemo(() => [...new Set(artists.map((a) => letterOf(a.name)))], [artists])
+  const jumpToLetter = (letter: string): void => {
+    const el = letterRefs.current.get(letter)
+    const col = artistsColRef.current
+    if (el && col) col.scrollTo({ top: el.offsetTop - col.offsetTop })
+  }
+
+  // Playing-artist highlight is content identity, like everything else.
+  const playingArtistKey = actions.playingArtist ? lc(actions.playingArtist) : null
+
+  const colHeading = (label: string, detail?: string): React.JSX.Element => (
+    <div className="shrink-0 pb-1.5 mb-1.5 border-b border-edge flex items-baseline gap-2">
+      <span className="microlabel">{label}</span>
+      {detail && <span className="font-mono text-[10.5px] text-faint tabular-nums">{detail}</span>}
+    </div>
+  )
+
+  let lastLetter = ''
+  return (
+    <div data-lens-artists className="h-full min-h-0 flex gap-6">
+      {/* Artists ------------------------------------------------------- */}
+      {/* proportional columns: fixed widths starved the tracks column (and
+          its titles) at normal window sizes — tracks gets the largest share */}
+      <div className="w-[24%] min-w-[220px] max-w-[320px] shrink-0 min-h-0 flex flex-col">
+        {colHeading('Artists', String(artists.length))}
+        <div className="min-h-0 flex-1 flex gap-1">
+          <div ref={artistsColRef} className="relative min-h-0 flex-1 overflow-y-auto pr-1">
+            {artists.map((a) => {
+              const letter = letterOf(a.name)
+              const anchor = letter !== lastLetter
+              lastLetter = letter
+              const selected = a.key === mem.artist
+              const playing = a.key === playingArtistKey
+              return (
+                <div
+                  key={a.key}
+                  ref={(el) => {
+                    if (anchor && el) letterRefs.current.set(letter, el)
+                  }}
+                  data-artist-row={a.name}
+                  onClick={() => setMem({ artist: selected ? null : a.key, album: null })}
+                  className={cx(
+                    'group grid grid-cols-[36px_1fr_auto] items-center gap-2.5 rounded-lg px-2 py-1.5 cursor-pointer transition-colors',
+                    selected ? 'bg-veil ring-1 ring-edge2' : playing ? 'bg-gold/10' : 'hover:bg-veil'
+                  )}
+                >
+                  <div className="h-9 w-9 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
+                    <ArtImage
+                      src={a.artUrl}
+                      lazy
+                      fallback={<Users size={14} className="text-faint" />}
+                    />
+                  </div>
+                  <div className="min-w-0">
+                    <div className={cx('text-[13px] truncate', playing ? 'text-gold' : 'text-ink')}>
+                      {a.name}
+                    </div>
+                    <div className="text-[11px] text-faint truncate">
+                      {a.albums.length > 0
+                        ? `${a.albums.length} album${a.albums.length === 1 ? '' : 's'}`
+                        : `${a.tracks.length} track${a.tracks.length === 1 ? '' : 's'}`}
+                    </div>
+                  </div>
+                  {playing ? <Eqbars playing={actions.audible} /> : <span />}
+                </div>
+              )
+            })}
+          </div>
+          {/* the A-Z rail: fast travel for a long first column */}
+          <div
+            data-az-rail
+            className="shrink-0 flex flex-col items-center justify-center gap-px pl-0.5 select-none"
+          >
+            {letters.map((l) => (
+              <button
+                key={l}
+                onClick={() => jumpToLetter(l)}
+                className="px-1 text-[9.5px] leading-[13px] font-mono text-faint hover:text-gold transition-colors"
+              >
+                {l}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Albums -------------------------------------------------------- */}
+      <div className="w-[28%] min-w-[250px] max-w-[400px] shrink-0 min-h-0 flex flex-col">
+        {colHeading(
+          'Albums',
+          selectedArtist ? String(selectedArtist.albums.length) : undefined
+        )}
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1" data-lens-albums-col>
+          {!selectedArtist ? (
+            <div className="text-[12.5px] text-faint pt-2 px-1">Pick an artist.</div>
+          ) : selectedArtist.albums.length === 0 ? (
+            <div className="text-[12.5px] text-faint pt-2 px-1">
+              No albums — their tracks are on the right.
+            </div>
+          ) : (
+            selectedArtist.albums.map((alb) => {
+              const selected = nodeKey(alb) === mem.album
+              const playing = actions.isPlayingAlbum(alb)
+              return (
+                <div
+                  key={nodeKey(alb)}
+                  data-lens-album-row={alb.title}
+                  onClick={() => setMem({ album: selected ? null : nodeKey(alb) })}
+                  className={cx(
+                    'group grid grid-cols-[44px_1fr_auto_auto] items-center gap-2.5 rounded-lg px-2 py-1.5 cursor-pointer transition-colors',
+                    selected ? 'bg-veil ring-1 ring-edge2' : playing ? 'bg-gold/10' : 'hover:bg-veil'
+                  )}
+                >
+                  <div className="h-10 w-10 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
+                    <ArtImage
+                      src={alb.artUrl}
+                      lazy
+                      fallback={<Disc3 size={16} className="text-faint" />}
+                    />
+                  </div>
+                  <div className="min-w-0">
+                    <div className={cx('text-[13px] truncate', playing ? 'text-gold' : 'text-ink')}>
+                      {alb.title}
+                    </div>
+                    <div className="flex items-center gap-1.5 min-w-0 text-[11px] text-faint">
+                      {alb.year && <span>{alb.year}</span>}
+                      {multiServer && alb.serverName && (
+                        <span
+                          data-card-badge={alb.serverName}
+                          className="shrink-0 text-[9.5px] px-1.5 py-px rounded-full ring-1 ring-edge"
+                        >
+                          {alb.serverName}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    aria-label={`Open album ${alb.title}`}
+                    data-tip="Open album"
+                    data-lens-open-album={alb.title}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      actions.openAlbum(alb)
+                    }}
+                    className={cx(
+                      'tip-bottom p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-all',
+                      actions.menuNodeId === alb.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                    )}
+                  >
+                    <ArrowUpRight size={14} />
+                  </button>
+                  {isAlbumClass(alb.upnpClass) ? (
+                    <button
+                      aria-label="More actions"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        actions.openMenu(alb, e)
+                      }}
+                      className={cx(
+                        'p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-all',
+                        actions.menuNodeId === alb.id
+                          ? 'opacity-100'
+                          : 'opacity-0 group-hover:opacity-100'
+                      )}
+                    >
+                      <MoreHorizontal size={14} />
+                    </button>
+                  ) : (
+                    <span />
+                  )}
+                </div>
+              )
+            })
+          )}
+        </div>
+      </div>
+
+      {/* Tracks -------------------------------------------------------- */}
+      <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+        {colHeading(
+          'Tracks',
+          selectedAlbum
+            ? `${albumTracks?.length ?? 0} · ${fmtTime(
+                (albumTracks ?? []).reduce((acc, t) => acc + (t.durationSecs ?? 0), 0)
+              )}`
+            : looseTracks
+              ? String(looseTracks.length)
+              : undefined
+        )}
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1" data-lens-tracks-col>
+          {albumTracks || looseTracks ? (
+            <div className="divide-y divide-edge/50">
+              {(albumTracks ?? looseTracks ?? []).map((t) => (
+                <TrackRow
+                  key={nodeKey(t)}
+                  node={t}
+                  showArt={looseTracks != null}
+                  isCurrent={actions.isCurrentTrack(t)}
+                  audible={actions.audible}
+                  queued={actions.trackQueued(t)}
+                  menuOpen={actions.menuNodeId === t.id}
+                  favorited={actions.nodeFavorited(t)}
+                  onHeart={() => actions.heartNode(t)}
+                  onPlayNow={(el) => actions.playTrack(t, el)}
+                  onMenu={(e) => actions.openMenu(t, e)}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="text-[12.5px] text-faint pt-2 px-1">
+              {selectedArtist ? 'Pick an album.' : ''}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}

@@ -17,7 +17,13 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { app } from 'electron'
 import { getSettings } from './persist'
-import type { MediaIndexStatus, MediaNode, MediaSearchAllGroup, MediaServerInfo } from '@shared/ipc'
+import type {
+  MediaIndexPools,
+  MediaIndexStatus,
+  MediaNode,
+  MediaSearchAllGroup,
+  MediaServerInfo
+} from '@shared/ipc'
 import {
   browseChildrenOf,
   getSystemUpdateID,
@@ -331,6 +337,32 @@ export function searchAllIndexes(query: string): MediaSearchAllGroup[] {
     })
   }
   return groups
+}
+
+/**
+ * Full pools of every READY index, nodes stamped with their server — the
+ * Artists/Albums lenses' feedstock. A snapshot copy: callers can't mutate
+ * the index, and the renderer caches it keyed on builtAt signatures.
+ */
+export function pools(): MediaIndexPools[] {
+  load()
+  const out: MediaIndexPools[] = []
+  for (const idx of indexes.values()) {
+    if (building.has(idx.udn)) continue
+    const stamp = (n: MediaNode): MediaNode => ({
+      ...n,
+      serverUdn: idx.udn,
+      serverName: idx.serverName
+    })
+    out.push({
+      udn: idx.udn,
+      serverName: idx.serverName,
+      albums: idx.albums.map(stamp),
+      artists: idx.artists.map(stamp),
+      tracks: idx.tracks.map(stamp)
+    })
+  }
+  return out
 }
 
 /** Index-first server search with the live ContentDirectory search as fallback. */

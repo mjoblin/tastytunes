@@ -54,6 +54,7 @@ export function ContainerCard({
   audible,
   menuOpen,
   favorited,
+  badge,
   onHeart,
   onEnter,
   onPlay,
@@ -68,6 +69,8 @@ export function ContainerCard({
   menuOpen: boolean
   /** With onHeart: the art-corner heart chip (albums only make sense). */
   favorited?: boolean
+  /** Provenance chip on the subtitle line (lens grids pooling several servers). */
+  badge?: string
   onHeart?(): void
   onEnter(): void
   onPlay(el: HTMLElement | null): void
@@ -156,8 +159,20 @@ export function ContainerCard({
         >
           {node.title}
         </div>
-        {subtitle && (
-          <div className="text-[11.5px] text-faint truncate text-left">{subtitle}</div>
+        {(subtitle || badge) && (
+          <div className="flex items-center gap-1.5 min-w-0">
+            {subtitle && (
+              <div className="text-[11.5px] text-faint truncate text-left">{subtitle}</div>
+            )}
+            {badge && (
+              <span
+                data-card-badge={badge}
+                className="shrink-0 text-[9.5px] px-1.5 py-px rounded-full ring-1 ring-edge text-faint"
+              >
+                {badge}
+              </span>
+            )}
+          </div>
         )}
       </button>
       {album && onHeart && (
@@ -206,6 +221,7 @@ export function ContainerRow({
   audible,
   menuOpen,
   favorited,
+  badge,
   onHeart,
   onEnter,
   onMenu
@@ -216,6 +232,8 @@ export function ContainerRow({
   menuOpen: boolean
   /** With onHeart: the heart button in the row's action cluster (albums). */
   favorited?: boolean
+  /** Provenance chip beside the subline (lens listings pooling several servers). */
+  badge?: string
   onHeart?(): void
   onEnter(): void
   onMenu(e: React.MouseEvent): void
@@ -251,7 +269,19 @@ export function ContainerRow({
         <div className={cx('text-[13.5px] truncate', playing ? 'text-gold' : 'text-ink')}>
           {node.title}
         </div>
-        {node.artist && <div className="text-[12px] text-faint truncate">{node.artist}</div>}
+        {(node.artist || badge) && (
+          <div className="flex items-center gap-1.5 min-w-0">
+            {node.artist && <div className="text-[12px] text-faint truncate">{node.artist}</div>}
+            {badge && (
+              <span
+                data-card-badge={badge}
+                className="shrink-0 text-[9.5px] px-1.5 py-px rounded-full ring-1 ring-edge text-faint"
+              >
+                {badge}
+              </span>
+            )}
+          </div>
+        )}
       </div>
       {playing ? <Eqbars playing={audible} /> : <span />}
       {album && onHeart ? (

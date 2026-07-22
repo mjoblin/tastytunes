@@ -1163,6 +1163,15 @@ export interface MediaSearchAllGroup {
   total: number
 }
 
+/** One READY index's full pools, nodes stamped — the library lenses' feedstock. */
+export interface MediaIndexPools {
+  udn: string
+  serverName: string
+  albums: MediaNode[]
+  artists: MediaNode[]
+  tracks: MediaNode[]
+}
+
 /** Queue-write verbs of /smoip/queue/add (semantics per vibin's reverse-engineering). */
 export type MediaQueueAction = 'REPLACE' | 'APPEND' | 'PLAY_NEXT' | 'PLAY_NOW' | 'PLAY_FROM_HERE'
 
@@ -1243,6 +1252,8 @@ export interface TastyTunesApi {
   /** Cross-server search: every READY index at once, grouped by server.
    *  Index-only by design — live fallback stays per-server (no SOAP fan-out). */
   mediaSearchAll(query: string): Promise<MediaSearchAllGroup[]>
+  /** Every ready index's full pools — feeds the Artists/Albums lenses. */
+  mediaIndexPools(): Promise<MediaIndexPools[]>
   /** Queue a browsed item on the streamer (DIDL stays in the main process). */
   mediaQueueAdd(
     serverUdn: string,
@@ -1300,6 +1311,7 @@ export const IPC = {
   mediaBrowse: 'tt:mediaBrowse',
   mediaSearch: 'tt:mediaSearch',
   mediaSearchAll: 'tt:mediaSearchAll',
+  mediaIndexPools: 'tt:mediaIndexPools',
   mediaQueueAdd: 'tt:mediaQueueAdd',
   mediaPresetSave: 'tt:mediaPresetSave',
   mediaIndexRebuild: 'tt:mediaIndexRebuild',

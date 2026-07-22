@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ArrowDown,
   ArrowLeft,
-  ArrowUp,
-  ArrowUpDown,
   ChevronRight,
   Disc3,
   HardDrive,
@@ -16,6 +13,7 @@ import {
   Rows3,
   Search,
   Usb,
+  Users,
   X
 } from 'lucide-react'
 import {
@@ -24,6 +22,7 @@ import {
   type AppSettings,
   type Favorite,
   type FavoriteMedia,
+  type MediaIndexPools,
   type MediaNode,
   type MediaQueueAction,
   type MediaSearchAllGroup,
@@ -41,9 +40,10 @@ import { ArtImage } from '@/components/ArtImage'
 import { Segmented } from '@/components/Segmented'
 import { FilterInput } from '@/components/FilterInput'
 import { ContainerCard, ContainerRow, TrackRow } from '@/components/LibraryCards'
+import { SortChip } from '@/components/SortChip'
+import { AlbumsLens, ArtistsLens, type LensActions } from '@/components/LibraryLenses'
 import { ItemMenu, PresetPicker } from '@/components/LibraryMenus'
 import { EmptyState } from '@/components/EmptyState'
-import { PopoverChrome } from '@/hooks/usePopover'
 
 // Crumbs keep the entered node so an album level can render its header
 // (art, artist, year) without re-fetching metadata.
@@ -82,6 +82,18 @@ const nodeKey = (serverUdn: string | null, path: Crumb[]): string =>
 // layer — titlePaths strip it (a result's true folder path is unknown, so
 // stale-id rewalks can't recover search-entered branches either way).
 const SEARCH_CRUMB_ID = '__search-results__'
+
+// Synthetic crumb planted when a LENS result is opened: the trail reads
+// Library › server › Albums › <album>, and the lens crumb (or Backspace)
+// restores the lens exactly as it was left. Same contract as the search
+// crumb; titlePaths strip it the same way.
+const LENS_CRUMB_ID = '__lens__'
+// Which lens the crumb leads back to (module scope — survives the scoped
+// album detour, like the lens components' own selection memories).
+let lensReturnTo: 'albums' | 'artists' | null = null
+// Pools snapshot cache keyed on the ready indexes' builtAt signature: lens
+// re-entry is instant; a rebuild (new signature) refetches.
+let poolsCache: { sig: string; pools: MediaIndexPools[] } | null = null
 
 type SearchKind = 'all' | 'albums' | 'artists' | 'tracks'
 type SearchSort = 'relevance' | 'title' | 'artist' | 'year'
@@ -184,6 +196,35 @@ export function LibraryScreen(): React.JSX.Element {
     [mediaIndexStatuses]
   )
   const crossAvailable = readyIndexes.length >= 2
+
+  // The lenses: OUR views over the union of ready indexes, offered as doors
+  // at the root beside the sources (places, not modes). One ready index is
+  // enough — for a Browse-only USB stick the lens is the first real library
+  // UI it's ever had.
+  const lensAvailable = readyIndexes.length >= 1
+  const [lens, setLens] = useState<'albums' | 'artists' | null>(null)
+  const [lensPools, setLensPools] = useState<MediaIndexPools[] | null>(null)
+  useEffect(() => {
+    if (!lens) return
+    const sig = readyIndexes
+      .map((x) => `${x.udn}:${x.builtAt}`)
+      .sort()
+      .join('|')
+    if (poolsCache?.sig === sig) {
+      setLensPools(poolsCache.pools)
+      return
+    }
+    let stale = false
+    void tt.mediaIndexPools().then((pools) => {
+      if (stale) return
+      poolsCache = { sig, pools }
+      setLensPools(pools)
+    })
+    return () => {
+      stale = true
+    }
+  }, [lens, readyIndexes])
+
   const [crossState, setCrossState] = useState<{
     query: string
     groups: MediaSearchAllGroup[]
@@ -317,6 +358,7 @@ export function LibraryScreen(): React.JSX.Element {
       query: string
       searchNow: { query: string; items: MediaNode[]; total: number } | null
       crossNow: { query: string; groups: MediaSearchAllGroup[] } | null
+      lens: 'albums' | 'artists' | null
     }>
   >([])
   const restoring = useRef(false)
@@ -337,10 +379,33 @@ export function LibraryScreen(): React.JSX.Element {
     if (!restoring.current) fwdStack.current = []
     rememberScroll()
     exitSearch()
+    setLens(null)
     filterMemory.set(nodeKey(serverUdn, path), filter)
     setScreenFilter('library', filterMemory.get(nodeKey(udn, newPath)) ?? '')
     setServerUdn(udn)
     setPath(newPath)
+  }
+
+  const openLens = (which: 'albums' | 'artists'): void => {
+    if (!restoring.current) fwdStack.current = []
+    lensReturnTo = which
+    setLens(which)
+  }
+
+  /** A lens result opens the SHARED native album leaf, scoped to its server;
+   *  the lens crumb offers the way back with the lens state intact. */
+  const openAlbumFromLens = (node: MediaNode): void => {
+    if (!node.serverUdn || !lens) return
+    lensReturnTo = lens
+    moveTo(node.serverUdn, [
+      { id: LENS_CRUMB_ID, title: lens === 'albums' ? 'Albums' : 'Artists' },
+      { id: node.id, title: node.title, node }
+    ])
+  }
+
+  const returnToLens = (): void => {
+    moveTo(null, [])
+    setLens(lensReturnTo)
   }
 
   // Re-invoking "Library" (nav click, palette, L) while already here resets
@@ -568,25 +633,29 @@ export function LibraryScreen(): React.JSX.Element {
     if (index === 0) return moveTo(null, [])
     const newPath = path.slice(0, index - 1)
     if (newPath[newPath.length - 1]?.id === SEARCH_CRUMB_ID) return returnToSearch()
+    if (newPath[newPath.length - 1]?.id === LENS_CRUMB_ID) return returnToLens()
     moveTo(serverUdn, newPath)
   }
   const goUp = (): void => {
     if (searchMode) exitSearch() // search exits first, folder stays
     else if (path.length > 0) {
       if (path[path.length - 2]?.id === SEARCH_CRUMB_ID) return returnToSearch()
+      if (path[path.length - 2]?.id === LENS_CRUMB_ID) return returnToLens()
       moveTo(serverUdn, path.slice(0, -1))
     } else if (serverUdn) moveTo(null, [])
+    else if (lens) setLens(null) // lens exits to the source list
   }
 
   const goBack = (): void => {
-    if (!searchMode && path.length === 0 && !serverUdn) return // already at the front door
+    if (!searchMode && path.length === 0 && !serverUdn && !lens) return // already at the front door
     const snap = {
       udn: serverUdn,
       path,
       mode: searchMode,
       query: searchQuery,
       searchNow: searchState,
-      crossNow: crossState
+      crossNow: crossState,
+      lens
     }
     restoring.current = true
     try {
@@ -609,6 +678,10 @@ export function LibraryScreen(): React.JSX.Element {
         setSearchQuery(snap.query)
         setSearchState(snap.searchNow)
         setCrossState(snap.crossNow)
+      }
+      if (snap.lens) {
+        lensReturnTo = snap.lens
+        setLens(snap.lens)
       }
     } finally {
       restoring.current = false
@@ -652,7 +725,7 @@ export function LibraryScreen(): React.JSX.Element {
       window.removeEventListener('mouseup', onMouseUp)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path, serverUdn, filter, searchState, searchReturn, searchMode, searchQuery, crossState])
+  }, [path, serverUdn, filter, searchState, searchReturn, searchMode, searchQuery, crossState, lens])
 
   const setLayout = async (libraryLayout: ScreenLayout): Promise<void> => {
     await saveSettings({ libraryLayout })
@@ -1056,6 +1129,23 @@ export function LibraryScreen(): React.JSX.Element {
     return () => clearTimeout(t)
   }, [loading])
 
+  // Everything a lens needs, node-based — the stamps make the existing
+  // handlers server-aware for free.
+  const lensActions: LensActions = {
+    openAlbum: openAlbumFromLens,
+    playTrack,
+    playContainer: (node, el) => void playContainer(node, el),
+    openMenu,
+    menuNodeId,
+    heartNode,
+    nodeFavorited,
+    trackQueued,
+    isCurrentTrack: (node) => queueSourceActive && isCurrentTrack(node),
+    isPlayingAlbum: (node) => queueSourceActive && isPlayingAlbum(node),
+    audible: isPlayingState,
+    playingArtist: queueSourceActive ? (md?.artist ?? null) : null
+  }
+
   // ------------------------------------------------------------------ render
 
   // Search-result group headings: identical under-gap everywhere (mb-0.5 —
@@ -1333,11 +1423,19 @@ export function LibraryScreen(): React.JSX.Element {
           onClick={() => jumpTo(0)}
           className={cx(
             'px-1.5 py-0.5 rounded transition-colors',
-            atRoot ? 'text-ink' : 'text-dim hover:text-ink hover:bg-veil'
+            atRoot && !lens ? 'text-ink' : 'text-dim hover:text-ink hover:bg-veil'
           )}
         >
           Library
         </button>
+        {atRoot && lens && (
+          <span className="flex items-center gap-1">
+            <ChevronRight size={12} className="text-faint" />
+            <span className="px-1.5 py-0.5 text-ink">
+              {lens === 'albums' ? 'Albums' : 'Artists'}
+            </span>
+          </span>
+        )}
         {server && (
           <span className="flex items-center gap-1">
             <ChevronRight size={12} className="text-faint" />
@@ -1382,7 +1480,16 @@ export function LibraryScreen(): React.JSX.Element {
       </div>
       )}
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-8 pb-8 pt-1">
+      <div
+        ref={scrollRef}
+        className={cx(
+          'flex-1 px-8 pt-1',
+          // the miller view scrolls its own columns — the page must not
+          atRoot && lens === 'artists' && !searchMode
+            ? 'overflow-hidden min-h-0 pb-6'
+            : 'overflow-y-auto pb-8'
+        )}
+      >
         {showLoading && (
           <div className="text-[13px] text-dim pt-4 motion-safe:animate-pulse">
             Retrieving library…
@@ -1393,7 +1500,27 @@ export function LibraryScreen(): React.JSX.Element {
             Cards, not a list built for volume — same geometry and the same
             size/gap/fill settings as every other media card grid, so the
             card-size slider governs the landing too. */}
-        {!loading && atRoot && !searchMode && (
+        {/* lenses: our views over the union of ready indexes */}
+        {!loading && atRoot && !searchMode && lens != null && (
+          lensPools == null ? (
+            <div className="text-[13px] text-dim pt-4 motion-safe:animate-pulse">
+              Reading the library index…
+            </div>
+          ) : lens === 'albums' ? (
+            <AlbumsLens
+              pools={lensPools}
+              actions={lensActions}
+              cards={cards}
+              cardSize={presetCardSize}
+              cardGap={presetGap}
+              fillRows={presetFillRows}
+            />
+          ) : (
+            <ArtistsLens pools={lensPools} actions={lensActions} />
+          )
+        )}
+
+        {!loading && atRoot && !searchMode && lens == null && (
           <div className="space-y-7 pt-1">
             {shownServers.length === 0 && (
               <div className="text-[15px] text-faint pt-3 px-1">
@@ -1451,6 +1578,63 @@ export function LibraryScreen(): React.JSX.Element {
                 </div>
               )
             })}
+            {/* the lens doors: our views over EVERY built index at once —
+                same card geometry as the sources; a different kind of room */}
+            {lensAvailable && (
+              <div>
+                <div className="microlabel mb-0.5 px-1">All libraries</div>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: presetFillRows
+                      ? `repeat(auto-fill, minmax(${presetCardSize}px, 1fr))`
+                      : `repeat(auto-fill, ${presetCardSize}px)`,
+                    gap: presetGap,
+                    paddingTop: 8
+                  }}
+                >
+                  {(
+                    [
+                      {
+                        key: 'artists' as const,
+                        title: 'Artists',
+                        icon: Users,
+                        count: readyIndexes.reduce((acc, x) => acc + x.artists, 0),
+                        noun: 'artists'
+                      },
+                      {
+                        key: 'albums' as const,
+                        title: 'Albums',
+                        icon: Disc3,
+                        count: readyIndexes.reduce((acc, x) => acc + x.albums, 0),
+                        noun: 'albums'
+                      }
+                    ]
+                  ).map((door) => (
+                    <div
+                      key={door.key}
+                      data-library-lens={door.key}
+                      onClick={() => openLens(door.key)}
+                      className="group relative rounded-2xl p-2 pb-2.5 bg-raised/70 ring-1 ring-edge card-hover-glow cursor-pointer transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]"
+                    >
+                      <div className="aspect-square w-full rounded-lg ring-1 ring-edge bg-panel/70 flex items-center justify-center">
+                        <door.icon
+                          size={40}
+                          strokeWidth={1.1}
+                          className="text-faint group-hover:text-dim transition-colors"
+                        />
+                      </div>
+                      <div className="pt-1.5 text-[12.5px] truncate">{door.title}</div>
+                      <div className="text-[11.5px] text-faint truncate">
+                        {door.count > 0
+                          ? `${door.count} ${door.noun} · every library`
+                          : 'Across every library'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -1778,76 +1962,4 @@ const SEARCH_SORTS: Array<{
   { value: 'year', label: 'Year (newest first)' }
 ]
 
-function SortChip<T extends string>({
-  sorts,
-  neutral,
-  value,
-  reversed,
-  onChange,
-  onToggleReverse
-}: {
-  sorts: Array<{ value: T; label: string; noReverse?: boolean }>
-  /** The unlit default (server order / relevance). */
-  neutral: T
-  value: T
-  reversed: boolean
-  onChange(value: T): void
-  onToggleReverse(): void
-}): React.JSX.Element {
-  const [open, setOpen] = useState(false)
-  return (
-    <div className="relative">
-      <button
-        data-tip="Sort"
-        aria-label="Sort"
-        onClick={() => setOpen((o) => !o)}
-        className={cx(
-          'no-drag tip-bottom p-2 rounded-lg ring-1 transition-all',
-          value !== neutral || reversed
-            ? 'ring-gold/50 bg-golddim text-gold'
-            : 'ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70'
-        )}
-      >
-        <ArrowUpDown size={16} />
-      </button>
-      {open && (
-        <>
-          <PopoverChrome onClose={() => setOpen(false)} />
-          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-1.5 z-30 w-48 rounded-xl ring-1 ring-edge2 bg-raised shadow-xl p-1.5 space-y-0.5">
-            {sorts.map((s) => {
-              const active = s.value === value
-              return (
-                <button
-                  key={s.value}
-                  onClick={() => {
-                    // clicking the active sort flips its direction
-                    if (active) {
-                      if (s.noReverse) return setOpen(false)
-                      onToggleReverse()
-                    } else {
-                      setOpen(false)
-                      onChange(s.value)
-                    }
-                  }}
-                  aria-label={active && !s.noReverse ? `${s.label} — click to reverse` : s.label}
-                  className={cx(
-                    'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-[13px] transition-colors',
-                    active ? 'text-gold bg-golddim' : 'text-dim hover:text-ink hover:bg-veil'
-                  )}
-                >
-                  <span className="min-w-0 flex-1 truncate">{s.label}</span>
-                  {active && !s.noReverse && (reversed ? <ArrowUp size={13} /> : <ArrowDown size={13} />)}
-                </button>
-              )
-            })}
-            <div className="px-2.5 pt-1 pb-0.5 text-[10.5px] text-faint">
-              Click the active sort to reverse it
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  )
-}
 
