@@ -81,7 +81,8 @@ const matchesKind = (n: MediaNode, kind: SearchKind): boolean =>
         : !n.isContainer
 
 // Shared result sort — single-server results and every cross-server group
-// order the same way. 'relevance' keeps the index's albums→artists→tracks order.
+// order the same way. 'relevance' keeps the index's artists→albums→tracks
+// order (the hierarchy: artists make albums, albums contain tracks).
 const sortSearch = (list: MediaNode[], sort: SearchSort, reversed: boolean): MediaNode[] => {
   let out = list
   if (sort !== 'relevance') {
@@ -169,6 +170,15 @@ export function LibraryScreen(): React.JSX.Element {
     groups: MediaSearchAllGroup[]
   } | null>(null)
   const crossMode = searchMode && atRoot
+  // Which server's slice to show (null = all) — the same transient-narrowing
+  // semantics as the kind filter beside it: dies when search exits, and a
+  // selection whose server has no results for the new query falls back to
+  // all rather than presenting an empty screen.
+  const [searchServerUdn, setSearchServerUdn] = useState<string | null>(null)
+  const crossServerUdn =
+    searchServerUdn && crossState?.groups.some((g) => g.udn === searchServerUdn)
+      ? searchServerUdn
+      : null
 
   // Action feedback: the app-wide toast for failures, a gold pulse for wins.
   // (The screen's original local notice banner graduated into the toast.)
@@ -243,6 +253,7 @@ export function LibraryScreen(): React.JSX.Element {
     setSearchMode(false)
     setSearchState(null)
     setCrossState(null)
+    setSearchServerUdn(null)
     setSearchQuery('')
     setSearchKind('all')
     setSearchSort('relevance')
@@ -818,7 +829,7 @@ export function LibraryScreen(): React.JSX.Element {
       return librarySortReversed ? [...sorted].reverse() : sorted
     }
     // Search results: the kind filter narrows, the search sort orders (its
-    // 'relevance' default keeps the index's albums→artists→tracks order).
+    // 'relevance' default keeps the index's artists→albums→tracks order).
     let searchShown = shown
     if (searchMode) {
       if (searchKind !== 'all') searchShown = shown.filter((n) => matchesKind(n, searchKind))
@@ -846,6 +857,7 @@ export function LibraryScreen(): React.JSX.Element {
   const crossGroups = useMemo(() => {
     if (!crossState) return []
     return crossState.groups
+      .filter((g) => !crossServerUdn || g.udn === crossServerUdn)
       .map((g) => {
         const items = sortSearch(
           searchKind === 'all' ? g.items : g.items.filter((n) => matchesKind(n, searchKind)),
@@ -865,7 +877,7 @@ export function LibraryScreen(): React.JSX.Element {
         }
       })
       .filter((g) => g.albums.length + g.artists.length + g.folders.length + g.tracks.length > 0)
-  }, [crossState, searchKind, searchSort, searchSortReversed])
+  }, [crossState, crossServerUdn, searchKind, searchSort, searchSortReversed])
   const crossItemCount = crossState
     ? crossState.groups.reduce((acc, g) => acc + g.items.length, 0)
     : 0
@@ -1174,7 +1186,9 @@ export function LibraryScreen(): React.JSX.Element {
         </div>
       )}
 
-      {/* search result controls: kind filter + sort, the shared header idioms */}
+      {/* search result controls: kind filter + sort, the shared header idioms.
+          Kind options follow the hierarchy — artists make albums, albums
+          contain tracks — and the sections below render in the same order. */}
       {searchMode && (atRoot ? crossState != null : searchState != null) && (
         <div data-library-search-controls className="no-drag mx-8 mb-3 flex items-center gap-3">
           <Segmented<'all' | 'albums' | 'artists' | 'tracks'>
@@ -1182,11 +1196,29 @@ export function LibraryScreen(): React.JSX.Element {
             onChange={setSearchKind}
             options={[
               { value: 'all', label: 'All' },
-              { value: 'albums', label: 'Albums' },
               { value: 'artists', label: 'Artists' },
+              { value: 'albums', label: 'Albums' },
               { value: 'tracks', label: 'Tracks' }
             ]}
           />
+          {/* which server's slice (cross mode, >1 contributing server) — a
+              filter like its neighbor, so it lives in the left filter
+              cluster; the sort chip keeps its lone spot on the right */}
+          {crossMode && crossState && crossState.groups.length > 1 && (
+            <div data-library-server-filter>
+              <Segmented<string>
+                value={crossServerUdn ?? '__all__'}
+                onChange={(v) => setSearchServerUdn(v === '__all__' ? null : v)}
+                options={[
+                  { value: '__all__', label: 'All libraries' },
+                  ...crossState.groups.map((g) => ({
+                    value: g.udn,
+                    label: g.serverName.length > 18 ? `${g.serverName.slice(0, 17)}…` : g.serverName
+                  }))
+                ]}
+              />
+            </div>
+          )}
           <div className="flex-1" />
           <SortChip
             sorts={SEARCH_SORTS}
@@ -1426,8 +1458,8 @@ export function LibraryScreen(): React.JSX.Element {
           containerGrid(containers)
         )}
 
-        {/* search results come grouped so albums / artists / tracks read
-            at a glance */}
+        {/* search results come grouped so artists / albums / tracks read
+            at a glance (hierarchy order, matching the kind filter) */}
         {!atRoot && state === 'ready' && searchMode && searchState && (
           <>
             {(() => {
@@ -1438,21 +1470,21 @@ export function LibraryScreen(): React.JSX.Element {
               )
               return (
                 <>
-                  {albums.length > 0 && (
-                    <>
-                      <div className={groupLabelClass(true)}>Albums</div>
-                      {containerGrid(albums)}
-                    </>
-                  )}
                   {artists.length > 0 && (
                     <>
-                      <div className={groupLabelClass(albums.length === 0)}>Artists</div>
+                      <div className={groupLabelClass(true)}>Artists</div>
                       {containerGrid(artists)}
+                    </>
+                  )}
+                  {albums.length > 0 && (
+                    <>
+                      <div className={groupLabelClass(artists.length === 0)}>Albums</div>
+                      {containerGrid(albums)}
                     </>
                   )}
                   {other.length > 0 && (
                     <>
-                      <div className={groupLabelClass(albums.length === 0 && artists.length === 0)}>
+                      <div className={groupLabelClass(artists.length === 0 && albums.length === 0)}>
                         Folders
                       </div>
                       {containerGrid(other)}
@@ -1522,16 +1554,16 @@ export function LibraryScreen(): React.JSX.Element {
                     {g.total} result{g.total === 1 ? '' : 's'}
                   </span>
                 </div>
-                {g.albums.length > 0 && (
-                  <>
-                    {kindLabel('Albums')}
-                    {containerGrid(g.albums)}
-                  </>
-                )}
                 {g.artists.length > 0 && (
                   <>
                     {kindLabel('Artists')}
                     {containerGrid(g.artists)}
+                  </>
+                )}
+                {g.albums.length > 0 && (
+                  <>
+                    {kindLabel('Albums')}
+                    {containerGrid(g.albums)}
                   </>
                 )}
                 {g.folders.length > 0 && (

@@ -282,7 +282,9 @@ export function searchIndex(udn: string, query: string): { items: MediaNode[]; t
   }
   const items: MediaNode[] = []
   let total = 0
-  for (const pool of [idx.albums, idx.artists, idx.tracks]) {
+  // Hierarchy order — artists make albums, albums contain tracks — mirrored
+  // by the result sections and the kind filter (user call, 2026-07-21).
+  for (const pool of [idx.artists, idx.albums, idx.tracks]) {
     for (const n of pool) {
       if (!matches(n)) continue
       total++
