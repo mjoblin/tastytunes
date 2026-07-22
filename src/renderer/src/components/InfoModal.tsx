@@ -5,7 +5,7 @@ import { useStore } from '@/store'
 import { CloseButton } from '@/components/CloseButton'
 
 const REPO_URL = 'https://github.com/mjoblin/tastytunes'
-const SUPPORT_URL = 'https://punytunes.app/support/'
+const SUPPORT_URL = 'https://tastytunes.app/#support'
 
 export function InfoModal(): React.JSX.Element {
   const setInfoOpen = useStore((s) => s.setInfoOpen)
@@ -52,16 +52,11 @@ export function InfoModal(): React.JSX.Element {
             <span>
               <span className="block text-[13.5px]">Support</span>
               <span className="block font-mono text-[10.5px] text-faint mt-0.5">
-                punytunes.app/support
+                tastytunes.app/#support
               </span>
             </span>
             <ExternalLink size={14} className="text-faint shrink-0" />
           </button>
-
-          <p className="text-[11.5px] text-faint leading-relaxed px-1">
-            Yep — that's the support link for PunyTunes, not TastyTunes. Same author, same
-            streamers, same inbox. I'm not going to create a different support link.
-          </p>
 
           <p className="text-[11.5px] text-faint leading-relaxed px-1">
             Please don't support the app unless you can afford it, but if you enjoy the app and
