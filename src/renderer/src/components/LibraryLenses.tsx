@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowUpRight, Disc3, MoreHorizontal, Users } from 'lucide-react'
 import type { MediaIndexPools, MediaNode } from '@shared/ipc'
 import { cx, fmtTime, matchesFilter } from '@/lib/format'
@@ -266,8 +266,14 @@ interface LensArtist {
   tracks: MediaNode[]
 }
 
-// Session memory: selections survive the round trip through an album leaf.
-let artistsMem: { artist: string | null; album: string | null } = { artist: null, album: null }
+// Session memory: selections, the artist filter, and each column's scroll
+// spot survive the round trip through an album leaf (and screen switches).
+let artistsMem: {
+  artist: string | null
+  album: string | null
+  filter: string
+  scroll: { artists: number; albums: number; tracks: number }
+} = { artist: null, album: null, filter: '', scroll: { artists: 0, albums: 0, tracks: 0 } }
 
 /**
  * The miller view (vibin's Artists screen, adapted): Artists | Albums |
@@ -324,6 +330,11 @@ export function ArtistsLens({
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [pools])
 
+  const shownArtists = useMemo(
+    () => (mem.filter ? artists.filter((a) => matchesFilter(mem.filter, [a.name])) : artists),
+    [artists, mem.filter]
+  )
+
   // Album tracks by content identity: same server + same album title.
   const tracksByAlbum = useMemo(() => {
     const m = new Map<string, MediaNode[]>()
@@ -356,12 +367,22 @@ export function ArtistsLens({
 
   // A-Z fast travel: letter anchors in the artists column.
   const artistsColRef = useRef<HTMLDivElement | null>(null)
+  const albumsColRef = useRef<HTMLDivElement | null>(null)
+  const tracksColRef = useRef<HTMLDivElement | null>(null)
+  // Restore each column's remembered spot once, after first paint.
+  useEffect(() => {
+    requestAnimationFrame(() => {
+      artistsColRef.current?.scrollTo({ top: artistsMem.scroll.artists })
+      albumsColRef.current?.scrollTo({ top: artistsMem.scroll.albums })
+      tracksColRef.current?.scrollTo({ top: artistsMem.scroll.tracks })
+    })
+  }, [])
   const letterRefs = useRef(new Map<string, HTMLDivElement>())
   const letterOf = (name: string): string => {
     const c = name[0]?.toUpperCase() ?? '#'
     return c >= 'A' && c <= 'Z' ? c : '#'
   }
-  const letters = useMemo(() => [...new Set(artists.map((a) => letterOf(a.name)))], [artists])
+  const letters = useMemo(() => [...new Set(shownArtists.map((a) => letterOf(a.name)))], [shownArtists])
   const jumpToLetter = (letter: string): void => {
     const el = letterRefs.current.get(letter)
     const col = artistsColRef.current
@@ -385,10 +406,27 @@ export function ArtistsLens({
       {/* proportional columns: fixed widths starved the tracks column (and
           its titles) at normal window sizes — tracks gets the largest share */}
       <div className="w-[24%] min-w-[220px] max-w-[320px] shrink-0 min-h-0 flex flex-col">
-        {colHeading('Artists', String(artists.length))}
+        {colHeading(
+          'Artists',
+          mem.filter ? `${shownArtists.length}/${artists.length}` : String(artists.length)
+        )}
+        <div className="pb-2">
+          <FilterInput
+            value={mem.filter}
+            onChange={(filter) => setMem({ filter })}
+            shown={shownArtists.length}
+            total={artists.length}
+          />
+        </div>
         <div className="min-h-0 flex-1 flex gap-1">
-          <div ref={artistsColRef} className="relative min-h-0 flex-1 overflow-y-auto pr-1">
-            {artists.map((a) => {
+          <div
+            ref={artistsColRef}
+            onScroll={(e) => {
+              artistsMem.scroll.artists = e.currentTarget.scrollTop
+            }}
+            className="relative min-h-0 flex-1 overflow-y-auto pr-1"
+          >
+            {shownArtists.map((a) => {
               const letter = letterOf(a.name)
               const anchor = letter !== lastLetter
               lastLetter = letter
@@ -404,7 +442,7 @@ export function ArtistsLens({
                   onClick={() => setMem({ artist: selected ? null : a.key, album: null })}
                   className={cx(
                     'group grid grid-cols-[36px_1fr_auto] items-center gap-2.5 rounded-lg px-2 py-1.5 cursor-pointer transition-colors',
-                    selected ? 'bg-veil ring-1 ring-edge2' : playing ? 'bg-gold/10' : 'hover:bg-veil'
+                    selected ? 'bg-raised ring-1 ring-edge2' : playing ? 'bg-gold/10' : 'hover:bg-veil'
                   )}
                 >
                   <div className="h-9 w-9 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
@@ -453,12 +491,19 @@ export function ArtistsLens({
           'Albums',
           selectedArtist ? String(selectedArtist.albums.length) : undefined
         )}
-        <div className="min-h-0 flex-1 overflow-y-auto pr-1" data-lens-albums-col>
+        <div
+          ref={albumsColRef}
+          onScroll={(e) => {
+            artistsMem.scroll.albums = e.currentTarget.scrollTop
+          }}
+          className="min-h-0 flex-1 overflow-y-auto pr-1"
+          data-lens-albums-col
+        >
           {!selectedArtist ? (
             <div className="text-[12.5px] text-faint pt-2 px-1">Pick an artist.</div>
           ) : selectedArtist.albums.length === 0 ? (
             <div className="text-[12.5px] text-faint pt-2 px-1">
-              No albums — their tracks are on the right.
+              No albums
             </div>
           ) : (
             selectedArtist.albums.map((alb) => {
@@ -471,7 +516,7 @@ export function ArtistsLens({
                   onClick={() => setMem({ album: selected ? null : nodeKey(alb) })}
                   className={cx(
                     'group grid grid-cols-[44px_1fr_auto_auto] items-center gap-2.5 rounded-lg px-2 py-1.5 cursor-pointer transition-colors',
-                    selected ? 'bg-veil ring-1 ring-edge2' : playing ? 'bg-gold/10' : 'hover:bg-veil'
+                    selected ? 'bg-raised ring-1 ring-edge2' : playing ? 'bg-gold/10' : 'hover:bg-veil'
                   )}
                 >
                   <div className="h-10 w-10 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
@@ -550,7 +595,14 @@ export function ArtistsLens({
               ? String(looseTracks.length)
               : undefined
         )}
-        <div className="min-h-0 flex-1 overflow-y-auto pr-1" data-lens-tracks-col>
+        <div
+          ref={tracksColRef}
+          onScroll={(e) => {
+            artistsMem.scroll.tracks = e.currentTarget.scrollTop
+          }}
+          className="min-h-0 flex-1 overflow-y-auto pr-1"
+          data-lens-tracks-col
+        >
           {albumTracks || looseTracks ? (
             <div className="divide-y divide-edge/50">
               {(albumTracks ?? looseTracks ?? []).map((t) => (

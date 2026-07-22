@@ -94,6 +94,9 @@ let lensReturnTo: 'albums' | 'artists' | null = null
 // Pools snapshot cache keyed on the ready indexes' builtAt signature: lens
 // re-entry is instant; a rebuild (new signature) refetches.
 let poolsCache: { sig: string; pools: MediaIndexPools[] } | null = null
+// The Albums lens scrolls the page scroller — its spot is remembered apart
+// from the source list's (they share the root path key otherwise).
+let albumsLensScroll = 0
 
 type SearchKind = 'all' | 'albums' | 'artists' | 'tracks'
 type SearchSort = 'relevance' | 'title' | 'artist' | 'year'
@@ -224,6 +227,10 @@ export function LibraryScreen(): React.JSX.Element {
       stale = true
     }
   }, [lens, readyIndexes])
+  useEffect(() => {
+    if (lens !== 'albums' || lensPools == null) return
+    requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: albumsLensScroll }))
+  }, [lens, lensPools])
 
   const [crossState, setCrossState] = useState<{
     query: string
@@ -1010,6 +1017,15 @@ export function LibraryScreen(): React.JSX.Element {
     return { baseNodes, shown, containers, tracks }
   }, [nodes, searchMode, searchState, effFilter, librarySort, librarySortReversed, albumNode, searchKind, searchSort, searchSortReversed])
   const server = servers?.find((s) => s.udn === serverUdn) ?? null
+  // Sort/layout affordances key off the UNFILTERED level: filtering down to
+  // one match must not unmount them (the header controls would jump around).
+  const { rawContainerCount, rawTrackCount } = useMemo(
+    () => ({
+      rawContainerCount: nodes.filter((n) => n.isContainer).length,
+      rawTrackCount: nodes.filter((n) => !n.isContainer).length
+    }),
+    [nodes]
+  )
 
   // Cross-server results, per-server groups: the kind filter and sort apply
   // WITHIN each group (the grouping is the point — provenance at a glance).
@@ -1237,10 +1253,7 @@ export function LibraryScreen(): React.JSX.Element {
           {!searchMode && atRoot && crossAvailable && (
             <button
               data-library-search-all-button
-              onClick={() => {
-                setSearchMode(true)
-                restoreSearchMemory(null)
-              }}
+              onClick={() => setSearchMode(true)}
               className="no-drag flex items-center gap-2 px-3.5 h-8 rounded-lg bg-gold text-bg text-[12.5px] font-medium
                          shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.3)] hover:brightness-110 motion-safe:active:scale-95 transition-all"
             >
@@ -1252,18 +1265,15 @@ export function LibraryScreen(): React.JSX.Element {
           {!searchMode && !atRoot && (server?.searchable || serverIndex?.state === 'ready') && (
             <button
               data-library-search-button
-              onClick={() => {
-                setSearchMode(true)
-                restoreSearchMemory(serverUdn)
-              }}
+              onClick={() => setSearchMode(true)}
               className="no-drag flex items-center gap-2 px-3.5 h-8 rounded-lg bg-gold text-bg text-[12.5px] font-medium
                          shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.3)] hover:brightness-110 motion-safe:active:scale-95 transition-all"
             >
               <Search size={14} strokeWidth={2.2} />
-              Search {server?.name ?? 'this library'}
+              Search all of {server?.name ?? 'this library'}
             </button>
           )}
-          {!searchMode && !atRoot && (containers.length > 1 || (!albumNode && tracks.length > 1)) && (
+          {!searchMode && !atRoot && (rawContainerCount > 1 || (!albumNode && rawTrackCount > 1)) && (
             <SortChip
               sorts={SORTS}
               neutral="server"
@@ -1280,7 +1290,7 @@ export function LibraryScreen(): React.JSX.Element {
           {/* the rows⇄cards toggle governs CONTAINER lists only (tracks are
               always rows); hidden wherever it would sit dead — the root
               (sources always cards), album views, and pure-track folders */}
-          {!atRoot && !albumNode && containers.length > 0 && (
+          {!atRoot && !albumNode && (searchMode ? containers.length > 0 : rawContainerCount > 0) && (
             <button
               data-tip={cards ? 'Albums & folders as rows' : 'Albums & folders as cards'}
               aria-label={cards ? 'Albums & folders as rows' : 'Albums & folders as cards'}
@@ -1482,6 +1492,9 @@ export function LibraryScreen(): React.JSX.Element {
 
       <div
         ref={scrollRef}
+        onScroll={(e) => {
+          if (atRoot && lens === 'albums' && !searchMode) albumsLensScroll = e.currentTarget.scrollTop
+        }}
         className={cx(
           'flex-1 px-8 pt-1',
           // the miller view scrolls its own columns — the page must not
@@ -1525,6 +1538,64 @@ export function LibraryScreen(): React.JSX.Element {
             {shownServers.length === 0 && (
               <div className="text-[15px] text-faint pt-3 px-1">
                 {filter ? `No matches for “${filter}”` : 'Nothing here'}
+              </div>
+            )}
+            {/* the lens doors LEAD the root: our views over EVERY built
+                index at once — same card geometry as the sources, gold
+                surface marking them as a different kind of door */}
+            {lensAvailable && (
+              <div>
+                <div className="microlabel mb-0.5 px-1">All libraries</div>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: presetFillRows
+                      ? `repeat(auto-fill, minmax(${presetCardSize}px, 1fr))`
+                      : `repeat(auto-fill, ${presetCardSize}px)`,
+                    gap: presetGap,
+                    paddingTop: 8
+                  }}
+                >
+                  {(
+                    [
+                      {
+                        key: 'artists' as const,
+                        title: 'Artists',
+                        icon: Users,
+                        count: readyIndexes.reduce((acc, x) => acc + x.artists, 0),
+                        noun: 'artists'
+                      },
+                      {
+                        key: 'albums' as const,
+                        title: 'Albums',
+                        icon: Disc3,
+                        count: readyIndexes.reduce((acc, x) => acc + x.albums, 0),
+                        noun: 'albums'
+                      }
+                    ]
+                  ).map((door) => (
+                    <div
+                      key={door.key}
+                      data-library-lens={door.key}
+                      onClick={() => openLens(door.key)}
+                      className="group relative rounded-2xl p-2 pb-2.5 bg-raised/70 ring-1 ring-gold/25 card-hover-glow cursor-pointer transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]"
+                    >
+                      <div className="aspect-square w-full rounded-lg ring-1 ring-gold/25 bg-golddim flex items-center justify-center">
+                        <door.icon
+                          size={40}
+                          strokeWidth={1.1}
+                          className="text-gold/70 group-hover:text-gold transition-colors"
+                        />
+                      </div>
+                      <div className="pt-1.5 text-[12.5px] truncate">{door.title}</div>
+                      <div className="text-[11.5px] text-faint truncate">
+                        {door.count > 0
+                          ? `${door.count} ${door.noun} · every library`
+                          : 'Across every library'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
             {(['servers', 'usb'] as const).map((kind) => {
@@ -1578,63 +1649,6 @@ export function LibraryScreen(): React.JSX.Element {
                 </div>
               )
             })}
-            {/* the lens doors: our views over EVERY built index at once —
-                same card geometry as the sources; a different kind of room */}
-            {lensAvailable && (
-              <div>
-                <div className="microlabel mb-0.5 px-1">All libraries</div>
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: presetFillRows
-                      ? `repeat(auto-fill, minmax(${presetCardSize}px, 1fr))`
-                      : `repeat(auto-fill, ${presetCardSize}px)`,
-                    gap: presetGap,
-                    paddingTop: 8
-                  }}
-                >
-                  {(
-                    [
-                      {
-                        key: 'artists' as const,
-                        title: 'Artists',
-                        icon: Users,
-                        count: readyIndexes.reduce((acc, x) => acc + x.artists, 0),
-                        noun: 'artists'
-                      },
-                      {
-                        key: 'albums' as const,
-                        title: 'Albums',
-                        icon: Disc3,
-                        count: readyIndexes.reduce((acc, x) => acc + x.albums, 0),
-                        noun: 'albums'
-                      }
-                    ]
-                  ).map((door) => (
-                    <div
-                      key={door.key}
-                      data-library-lens={door.key}
-                      onClick={() => openLens(door.key)}
-                      className="group relative rounded-2xl p-2 pb-2.5 bg-raised/70 ring-1 ring-edge card-hover-glow cursor-pointer transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]"
-                    >
-                      <div className="aspect-square w-full rounded-lg ring-1 ring-edge bg-panel/70 flex items-center justify-center">
-                        <door.icon
-                          size={40}
-                          strokeWidth={1.1}
-                          className="text-faint group-hover:text-dim transition-colors"
-                        />
-                      </div>
-                      <div className="pt-1.5 text-[12.5px] truncate">{door.title}</div>
-                      <div className="text-[11.5px] text-faint truncate">
-                        {door.count > 0
-                          ? `${door.count} ${door.noun} · every library`
-                          : 'Across every library'}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         )}
 
