@@ -227,7 +227,12 @@ function didlToNodes(didl: string): MediaNode[] {
     const title = text(raw.title)
     if (!id || title == null) return null
     const res = asArray(raw.res as Record<string, unknown> | Array<Record<string, unknown>>)[0]
+    // multi-valued: taggers repeat <upnp:genre>; keep them all, in order
+    const genres = asArray(raw.genre as Record<string, unknown> | Array<Record<string, unknown>>)
+      .map((g) => text(g))
+      .filter((g): g is string => g != null && g !== '')
     return {
+      ...(genres.length > 0 ? { genre: genres } : {}),
       id,
       parentId: text(raw['@_parentID']),
       title,

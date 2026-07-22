@@ -1140,6 +1140,12 @@ export interface MediaNode {
   trackNumber: number | null
   durationSecs: number | null
   /**
+   * upnp:genre values, when the server sends any (multi-valued — real tags
+   * repeat the element). Raw tagger data: case-normalize before faceting.
+   * Absent (not empty) when the server offers none.
+   */
+  genre?: string[]
+  /**
    * Which server this node came from — stamped ONLY on cross-server search
    * results, where nodes from several servers share a listing. Everywhere
    * else the screen's own server context applies and these stay absent.

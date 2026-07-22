@@ -41,9 +41,10 @@ const didlContainer = (
   cls: string,
   art: string | null,
   artist?: string,
-  date?: string
+  date?: string,
+  genres?: string[]
 ): string =>
-  `<container id="${id}" parentID="${parent}" restricted="true"><upnp:class>${cls}</upnp:class><dc:title>${xmlEsc(title)}</dc:title>${art ? `<upnp:albumArtURI>${art}</upnp:albumArtURI>` : ''}${artist ? `<upnp:artist>${xmlEsc(artist)}</upnp:artist>` : ''}${date ? `<dc:date>${date}</dc:date>` : ''}</container>`
+  `<container id="${id}" parentID="${parent}" restricted="true"><upnp:class>${cls}</upnp:class><dc:title>${xmlEsc(title)}</dc:title>${art ? `<upnp:albumArtURI>${art}</upnp:albumArtURI>` : ''}${artist ? `<upnp:artist>${xmlEsc(artist)}</upnp:artist>` : ''}${date ? `<dc:date>${date}</dc:date>` : ''}${(genres ?? []).map((g) => `<upnp:genre>${xmlEsc(g)}</upnp:genre>`).join('')}</container>`
 
 const readBody = (req: IncomingMessage): Promise<string> =>
   new Promise((resolve) => {
@@ -237,6 +238,7 @@ function buildDemo(host: string): {
     date: string
     art: string | null
     count: number
+    genres?: string[]
     track: (n: number) => Dict
   }
 
@@ -248,6 +250,7 @@ function buildDemo(host: string): {
       date: '2011-03-14',
       art: `${host}/art/p1.svg`,
       count: 8,
+      genres: ['Electronic'],
       track: (n) => ({ ...trackMeta(n) })
     },
     {
@@ -257,6 +260,7 @@ function buildDemo(host: string): {
       date: '2014-06-01',
       art: `${host}/art/p2.svg`,
       count: 5,
+      genres: ['Synthpop'],
       track: (n) => ({
         ...trackMeta(n),
         title: `Neon Track ${n}`,
@@ -275,6 +279,7 @@ function buildDemo(host: string): {
     date: `${1980 + i}-01-01`,
     art: null,
     count: 2,
+    genres: ['Electronic'],
     track: (n: number) => ({
       ...trackMeta(n),
       title: `Synth ${i + 1}.${n}`,
@@ -289,7 +294,7 @@ function buildDemo(host: string): {
 
   const didlTrack = (alb: Album, n: number): string => {
     const md = alb.track(n)
-    return `<item id="${alb.id}-t${n}" parentID="${alb.id}" restricted="true"><dc:title>${xmlEsc(String(md.title))}</dc:title><upnp:class>object.item.audioItem.musicTrack</upnp:class><upnp:artist>${xmlEsc(String(md.artist))}</upnp:artist><upnp:album>${xmlEsc(String(md.album))}</upnp:album><upnp:originalTrackNumber>${n}</upnp:originalTrackNumber><upnp:albumArtURI>${md.art_url}</upnp:albumArtURI><res duration="${durFmt(Number(md.duration))}" protocolInfo="*:*:*:*">file:///tmp/usm/1/${alb.id}/${n}.flac</res></item>`
+    return `<item id="${alb.id}-t${n}" parentID="${alb.id}" restricted="true"><dc:title>${xmlEsc(String(md.title))}</dc:title><upnp:class>object.item.audioItem.musicTrack</upnp:class><upnp:artist>${xmlEsc(String(md.artist))}</upnp:artist><upnp:album>${xmlEsc(String(md.album))}</upnp:album>${(alb.genres ?? []).map((g) => `<upnp:genre>${xmlEsc(g)}</upnp:genre>`).join('')}<upnp:originalTrackNumber>${n}</upnp:originalTrackNumber><upnp:albumArtURI>${md.art_url}</upnp:albumArtURI><res duration="${durFmt(Number(md.duration))}" protocolInfo="*:*:*:*">file:///tmp/usm/1/${alb.id}/${n}.flac</res></item>`
   }
 
   const ARTIST_COUNT = 400
@@ -340,7 +345,7 @@ function buildDemo(host: string): {
     if (id === 'lib-music')
       return [
         ...LIB_ALBUMS.map((a) =>
-          didlContainer(a.id, 'lib-music', a.title, 'object.container.album.musicAlbum', a.art, a.artist, a.date)
+          didlContainer(a.id, 'lib-music', a.title, 'object.container.album.musicAlbum', a.art, a.artist, a.date, a.genres)
         ),
         didlTrack(LIB_ALBUMS[0], 1)
       ]
@@ -351,7 +356,7 @@ function buildDemo(host: string): {
         didlContainer(`${id}-alltracks`, id, ' [All Tracks]', 'object.container', null),
         didlContainer(`${id}-shuffle`, id, ' [Shuffle Tracks]', 'object.container', null),
         ...albums.map((a) =>
-          didlContainer(a.id, id, a.title, 'object.container.album.musicAlbum', a.art, a.artist, a.date)
+          didlContainer(a.id, id, a.title, 'object.container.album.musicAlbum', a.art, a.artist, a.date, a.genres)
         )
       ]
     }
@@ -366,7 +371,7 @@ function buildDemo(host: string): {
     if (id === 'lib-singles') return didlContainer('lib-singles', '0', 'Singles', 'object.container', null)
     const alb = albumById(id)
     if (alb)
-      return didlContainer(alb.id, 'lib-music', alb.title, 'object.container.album.musicAlbum', alb.art, alb.artist, alb.date)
+      return didlContainer(alb.id, 'lib-music', alb.title, 'object.container.album.musicAlbum', alb.art, alb.artist, alb.date, alb.genres)
     const m = id.match(/^((?:alb|syn)-\d+)-t(\d+)$/)
     if (m) {
       const a = albumById(m[1])
@@ -674,7 +679,7 @@ function buildDemo(host: string): {
           if (scope.includes('container.album')) {
             for (const a of LIB_ALBUMS)
               if (a.title.toLowerCase().includes(q) || (useArtist && a.artist.toLowerCase().includes(q)))
-                parts.push(didlContainer(a.id, 'lib-music', a.title, 'object.container.album', a.art, a.artist, a.date))
+                parts.push(didlContainer(a.id, 'lib-music', a.title, 'object.container.album', a.art, a.artist, a.date, a.genres))
           } else if (scope.includes('item.audioItem')) {
             for (const a of LIB_ALBUMS)
               for (let n = 1; n <= a.count; n++) {

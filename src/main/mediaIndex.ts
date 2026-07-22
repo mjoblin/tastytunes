@@ -36,7 +36,10 @@ interface StoredIndex {
   tracks: MediaNode[]
 }
 
-const VERSION = 1
+// v2: nodes carry upnp:genre (multi-valued) — bumped 2026-07-21 for the
+// library lenses. A bump discards stored indexes wholesale; rebuildHints
+// below keeps that from costing Browse-only servers their Build click.
+const VERSION = 2
 const PAGE = 500
 const MAX_TRACKS = 50_000
 const MAX_CONTAINERS = 10_000
@@ -44,6 +47,11 @@ const TTL_MS = 7 * 24 * 3600 * 1000 // recrawl backstop for servers whose counte
 const SEARCH_RESULT_CAP = 500
 
 const indexes = new Map<string, StoredIndex>()
+// Strategies salvaged from a stale-VERSION index file: the data is discarded,
+// but remembering HOW each server was crawled lets ensureFresh rebuild
+// Browse-only (manual-first-build) servers automatically after a schema bump
+// instead of demanding a fresh Build click.
+const rebuildHints = new Map<string, 'search' | 'browse'>()
 // Every server the streamer has listed this session — so Settings can show
 // un-indexed ones too (a USB stick deserves its Build button).
 const known = new Map<string, MediaServerInfo>()
@@ -63,6 +71,12 @@ function load(): void {
     }
     if (raw.version === VERSION && Array.isArray(raw.servers)) {
       for (const idx of raw.servers) indexes.set(idx.udn, idx)
+    } else if (Array.isArray(raw.servers)) {
+      for (const idx of raw.servers) {
+        if (idx?.udn && (idx.strategy === 'search' || idx.strategy === 'browse')) {
+          rebuildHints.set(idx.udn, idx.strategy)
+        }
+      }
     }
   } catch {
     // no index yet — built on first listing
@@ -222,6 +236,7 @@ async function build(host: string, server: MediaServerInfo, strategy: 'search' |
     const built = strategy === 'search' ? await crawlSearch(host, server) : await crawlBrowse(host, server)
     if (built) {
       indexes.set(server.udn, built)
+      rebuildHints.delete(server.udn)
       save()
     }
   } finally {
@@ -247,7 +262,9 @@ export function ensureFresh(host: string, servers: MediaServerInfo[]): void {
   if (getSettings().mediaIndexAuto === false) return // user said: buttons only
   for (const server of servers) {
     const existing = indexes.get(server.udn)
-    if (!server.searchable && !existing) continue // Tier B: manual first build
+    // Tier B: manual first build — unless a schema bump salvaged its
+    // strategy, in which case the rebuild is on the house.
+    if (!server.searchable && !existing && !rebuildHints.has(server.udn)) continue
     void (async () => {
       if (existing) {
         const id = await getSystemUpdateID(host, server.udn)
@@ -258,7 +275,7 @@ export function ensureFresh(host: string, servers: MediaServerInfo[]): void {
         await build(host, server, existing.strategy)
         return
       }
-      await build(host, server, 'search')
+      await build(host, server, server.searchable ? 'search' : (rebuildHints.get(server.udn) ?? 'browse'))
     })()
   }
 }
