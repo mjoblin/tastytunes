@@ -389,7 +389,7 @@ export function FavoritesScreen(): React.JSX.Element {
           {shownTracks.length > 0 && (
             <>
               <div className="microlabel mt-5 mb-2 px-1">Tracks</div>
-              <div className="space-y-1 max-w-2xl">
+              <div className="space-y-1.5 max-w-2xl">
                 {shownTracks.map((f) => {
                   const key = favoriteKey(f)
                   const active = activeKeys.has(key)
@@ -404,7 +404,9 @@ export function FavoritesScreen(): React.JSX.Element {
                       }
                       onContextMenu={(e) => openMenu(f, e)}
                       className={cx(
-                        'group flex items-center gap-3 rounded-xl px-3 py-2 transition-colors',
+                        // station-row rhythm (py-2.5 + space-y-1.5) — same ringed
+                        // floating-row idiom on the same screen, same density
+                        'group flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors',
                         routed ? 'cursor-pointer' : 'cursor-default',
                         playing
                           ? 'row-playing bg-gold/10'
