@@ -30,10 +30,16 @@ import { app } from 'electron'
 import type { DeviceManager } from './deviceManager'
 import { getSettings } from './persist'
 import { fetchArtistInfo } from './artistInfo'
+import { fetchAlbumInfo } from './albumInfo'
 import { fetchLyrics } from './lyrics'
 import { radioSearch } from './radioBrowser'
 import { queueAdd, refreshServers } from './upnpBrowser'
-import { searchServer as librarySearch, status as indexStatus } from './mediaIndex'
+import {
+  searchServer as librarySearch,
+  status as indexStatus,
+  pools as indexPools,
+  ensureFresh as indexEnsureFresh
+} from './mediaIndex'
 
 interface ToolResult {
   content: Array<{ type: 'text'; text: string }>
@@ -599,20 +605,35 @@ export class McpBridge {
         handler: async () => {
           const s = this.connected()
           const servers = await refreshServers(s.connection.host)
-          const ready = new Set(
-            indexStatus()
-              .filter((x) => x.state === 'ready')
-              .map((x) => x.udn)
-          )
+          // same freshness semantics as the app's Library screen: listing
+          // servers nudges Tier A index builds in the background (gated on
+          // the user's auto-index setting inside ensureFresh)
+          indexEnsureFresh(s.connection.host, servers)
+          const stats = new Map(indexStatus().map((x) => [x.udn, x]))
           return ok(
-            servers.map((x) => ({
-              udn: x.udn,
-              name: x.name,
-              model: x.model,
-              is_streamer_usb: x.isStreamer,
-              searchable: x.searchable,
-              index_ready: ready.has(x.udn)
-            }))
+            servers.map((x) => {
+              const st = stats.get(x.udn)
+              const ready = st?.state === 'ready'
+              return {
+                udn: x.udn,
+                name: x.name,
+                model: x.model,
+                is_streamer_usb: x.isStreamer,
+                searchable: x.searchable,
+                index_ready: ready,
+                // library counts, so "how many albums do I have" is one call
+                ...(ready && st
+                  ? {
+                      index: {
+                        albums: st.albums,
+                        artists: st.artists,
+                        tracks: st.tracks,
+                        built_at: st.builtAt != null ? new Date(st.builtAt).toISOString() : null
+                      }
+                    }
+                  : {})
+              }
+            })
           )
         }
       },
@@ -677,6 +698,68 @@ export class McpBridge {
             if (results.length >= 40) break
           }
           return ok({ total: results.length, capped: results.length >= 40, results })
+        }
+      },
+      list_albums: {
+        inputSchema: {
+          artist: z.string().optional().describe('Case-insensitive substring match on the album artist.'),
+          genre: z.string().optional().describe("Case-insensitive genre, e.g. 'Rock' (results list each album's genres)."),
+          decade: z.string().optional().describe("e.g. '1990s' (or just '1990')."),
+          server_udn: z.string().optional().describe('Limit to one server (see list_media_servers).'),
+          sort: z
+            .enum(['title', 'artist', 'year'])
+            .optional()
+            .describe("Default 'title'; 'year' sorts newest first."),
+          limit: z.number().int().min(1).max(100).optional().describe('Default 40.'),
+          offset: z.number().int().min(0).optional().describe('For paging; default 0.')
+        },
+        // Purely index-backed (the lenses' feedstock) — works even while the
+        // streamer itself is off, so no connected() gate.
+        handler: (a) => {
+          const groups = indexPools().filter((p) => a.server_udn == null || p.udn === a.server_udn)
+          if (groups.length === 0) {
+            return err(
+              a.server_udn != null
+                ? `No ready index for server '${a.server_udn}'. Use list_media_servers.`
+                : 'No library index is ready yet — the user can build one in Settings → Libraries.'
+            )
+          }
+          const artistNeedle = (a.artist as string | undefined)?.toLowerCase()
+          const genreNeedle = (a.genre as string | undefined)?.toLowerCase()
+          const decade = a.decade != null ? String(a.decade).replace(/s$/i, '') : null
+          let albums = groups.flatMap((p) => p.albums)
+          if (artistNeedle != null)
+            albums = albums.filter((n) => n.artist?.toLowerCase().includes(artistNeedle))
+          if (genreNeedle != null)
+            albums = albums.filter((n) => (n.genre ?? []).some((g) => g.toLowerCase() === genreNeedle))
+          if (decade != null)
+            albums = albums.filter(
+              (n) => n.year != null && String(Math.floor(Number(n.year) / 10) * 10) === decade
+            )
+          const sort = (a.sort as string | undefined) ?? 'title'
+          albums.sort((x, y) => {
+            if (sort === 'artist')
+              return (x.artist ?? '￿').localeCompare(y.artist ?? '￿') || x.title.localeCompare(y.title)
+            if (sort === 'year') return (y.year ?? '').localeCompare(x.year ?? '') || x.title.localeCompare(y.title)
+            return x.title.localeCompare(y.title)
+          })
+          const offset = (a.offset as number | undefined) ?? 0
+          const limit = (a.limit as number | undefined) ?? 40
+          const page = albums.slice(offset, offset + limit)
+          return ok({
+            total: albums.length,
+            offset,
+            returned: page.length,
+            albums: page.map((n) => ({
+              server_udn: n.serverUdn,
+              server: n.serverName,
+              object_id: n.id,
+              title: n.title,
+              artist: n.artist,
+              year: n.year,
+              genres: n.genre ?? []
+            }))
+          })
         }
       },
       play_media: {
@@ -840,6 +923,20 @@ export class McpBridge {
           return ok(fav.kind === 'station' ? `Favorited station ${fav.name}.` : `Favorited "${fav.title}".`)
         }
       },
+      remove_favorite: {
+        inputSchema: { key: z.string().describe('Favorite key from list_favorites.') },
+        handler: (a) => {
+          const s = this.connected()
+          const fav = s.favorites.find((f) => favoriteKey(f) === a.key)
+          if (!fav) return err(`No favorite with key '${a.key}'. Use list_favorites.`)
+          dm.favoriteRemove(a.key as string)
+          return ok(
+            fav.kind === 'station'
+              ? `Removed station ${fav.name} from favorites.`
+              : `Removed "${fav.title}" from favorites.`
+          )
+        }
+      },
 
       // ---- tone & EQ (feature-detected; toneCaps errors cleanly without)
       get_audio_settings: {
@@ -964,6 +1061,37 @@ export class McpBridge {
           if (!info) return ok(`No artist match for "${name}".`)
           return ok({
             name: info.name,
+            summary: info.summary,
+            wikipedia: info.wikipediaUrl,
+            musicbrainz: info.musicbrainzUrl
+          })
+        }
+      },
+      get_album_info: {
+        inputSchema: {
+          artist: z.string().optional().describe('Defaults to the playing artist.'),
+          album: z.string().optional().describe('Defaults to the playing album.')
+        },
+        handler: async (a) => {
+          // one toggle governs both context tabs in the app — same here
+          if (!getSettings().artistInfo) {
+            return err(
+              'Artist & album context is switched off in Settings → Connections (off means no requests, ever).'
+            )
+          }
+          const s = this.connected()
+          const artist = (a.artist as string | undefined) ?? s.playState?.metadata?.artist ?? null
+          const album = (a.album as string | undefined) ?? s.playState?.metadata?.album ?? null
+          if (!artist || !album) return err('No album playing — pass artist and album explicitly.')
+          const info = await fetchAlbumInfo(artist, album)
+          if (!info) return ok(`No album match for "${album}" by ${artist}.`)
+          return ok({
+            title: info.title,
+            year: info.year,
+            type: info.type,
+            label: info.label,
+            genres: info.genres,
+            credits: info.credits,
             summary: info.summary,
             wikipedia: info.wikipediaUrl,
             musicbrainz: info.musicbrainzUrl

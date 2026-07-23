@@ -635,13 +635,19 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         name: 'list_media_servers',
         title: 'List media servers',
         description:
-          'UPnP media servers the streamer can play from: name, udn, and whether the server answers searches.'
+          'UPnP media servers the streamer can play from. Per server: `searchable` = answers LIVE UPnP searches, `index_ready` = TastyTunes holds a local index (search_library and list_albums work with either/the latter). Ready indexes include library counts — sum `index.albums` across servers for questions like "how many albums do I have".'
       },
       {
         name: 'search_library',
         title: 'Search library',
         description:
           'Search for albums, artists, and tracks across every searchable or index-ready media server at once (or one server_udn). Returns object ids for play_media.'
+      },
+      {
+        name: 'list_albums',
+        title: 'List albums',
+        description:
+          'Browse albums from the local library index — filter by artist, genre, or decade; sort by title, artist, or year; page with limit/offset. Returns object ids for play_media. Needs a ready index (see list_media_servers).'
       },
       {
         name: 'play_media',
@@ -676,7 +682,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
     id: 'favorites',
     title: 'Favorites',
     group: 'control',
-    description: "List, play, and add to the user's favorites (stations, albums, tracks).",
+    description: "List, play, add to, and remove from the user's favorites (stations, albums, tracks).",
     tools: [
       {
         name: 'list_favorites',
@@ -694,6 +700,11 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         title: 'Add favorite',
         description:
           'With no arguments, favorite the currently playing track. For an internet-radio station, pass station_url + station_name (e.g. from search_radio).'
+      },
+      {
+        name: 'remove_favorite',
+        title: 'Remove favorite',
+        description: 'Remove a favorite by its key (see list_favorites).'
       }
     ]
   },
@@ -758,7 +769,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
     group: 'read',
     readOnly: true,
     description:
-      "Lyrics and artist context for what's playing. These call the same services as the app's own panels and obey the Connections toggles — while a toggle is off, the matching tool refuses (off means no requests, ever).",
+      "Lyrics and artist/album context for what's playing. These call the same services as the app's own panels and obey the Connections toggles — while a toggle is off, the matching tool refuses (off means no requests, ever).",
     tools: [
       {
         name: 'get_lyrics',
@@ -771,6 +782,12 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         title: 'Get artist info',
         description:
           'Artist bio via MusicBrainz + Wikipedia — the current artist by default, or a named one. Refuses when the user has artist context disabled in Settings → Connections.'
+      },
+      {
+        name: 'get_album_info',
+        title: 'Get album info',
+        description:
+          'Album facts via MusicBrainz + Wikipedia — year, label, genres, credits, summary. The playing album by default, or a named artist + album. Refuses when the user has artist & album context disabled in Settings → Connections.'
       }
     ]
   },
