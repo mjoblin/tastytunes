@@ -136,6 +136,10 @@ const sortSearch = (list: MediaNode[], sort: SearchSort, reversed: boolean): Med
 export function LibraryScreen(): React.JSX.Element {
   const { libraryLayout, librarySort, librarySortReversed, presetCardSize, presetGap, presetFillRows } =
     useStore((s) => s.settings)
+  // Standby honesty: USB source cards dim (the streamer's own ContentDirectory
+  // has no content until wake — probed 2026-07-23); external servers and the
+  // local index browse fine while the device sleeps.
+  const inStandby = useStore((s) => s.systemPower != null && s.systemPower.power !== 'ON')
   const setSettings = useStore((s) => s.setSettings)
   const saveSettings = useStore((s) => s.saveSettings)
   const filter = useStore((s) => s.screenFilters.library)
@@ -1659,7 +1663,15 @@ export function LibraryScreen(): React.JSX.Element {
                         key={s.udn}
                         data-library-source
                         onClick={() => enterServer(s.udn)}
-                        className="group relative rounded-2xl p-2 pb-2.5 bg-raised/70 ring-1 ring-edge card-hover-glow cursor-pointer transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]"
+                        data-tip={
+                          s.isStreamer && inStandby
+                            ? 'In standby — USB content appears once the streamer wakes'
+                            : undefined
+                        }
+                        className={cx(
+                          'group relative rounded-2xl p-2 pb-2.5 bg-raised/70 ring-1 ring-edge card-hover-glow cursor-pointer transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]',
+                          s.isStreamer && inStandby && 'opacity-50 tip-bottom'
+                        )}
                       >
                         <div className="aspect-square w-full rounded-lg ring-1 ring-edge bg-panel/70 flex items-center justify-center">
                           {s.isStreamer ? (

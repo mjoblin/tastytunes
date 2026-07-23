@@ -864,6 +864,7 @@ export class McpBridge {
           const s = this.connected()
           const mode = (a.mode as string | undefined) ?? 'play_now'
           try {
+            await this.dm.ensureAwake() // agents get wake-on-intent too
             await queueAdd(s.connection.host, a.server_udn as string, a.object_id as string, QUEUE_MODES[mode])
           } catch (e) {
             return err(
@@ -951,6 +952,7 @@ export class McpBridge {
             return ok(`Tuning to ${fav.name}.`)
           }
           const host = s.connection.host
+          await dm.ensureAwake() // favorites are wake intents too
           if (fav.serverUdn && fav.objectId) {
             try {
               await queueAdd(host, fav.serverUdn, fav.objectId, 'PLAY_NOW')

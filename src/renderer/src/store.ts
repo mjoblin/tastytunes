@@ -116,6 +116,11 @@ interface TTState {
   presets: Presets | null
   systemInfo: SystemInfo | null
   systemPower: SystemPower | null
+  /** A wake-on-intent is in flight (playing something from standby). */
+  waking: boolean
+  /** Last standby_mode seen from ANY device this session — survives the
+   *  disconnect blanking so the ConnectGate can suggest eco standby. */
+  lastStandbyMode: SystemPower['standby_mode'] | null
   /** Read-only streamer firmware status (PASSIVE — shown, never acted on). */
   firmwareUpdate: FirmwareStatus | null
   sources: SystemSources | null
@@ -232,6 +237,8 @@ export const useStore = create<TTState>((set, get) => ({
   presets: null,
   systemInfo: null,
   systemPower: null,
+  waking: false,
+  lastStandbyMode: null,
   firmwareUpdate: null,
   sources: null,
   zoneAudio: null,
@@ -330,6 +337,11 @@ export const useStore = create<TTState>((set, get) => ({
       presets: snap.presets,
       systemInfo: snap.systemInfo,
       systemPower: snap.systemPower,
+      // The eco hint needs the standby mode even when systemPower arrives via
+      // the boot snapshot rather than a push (fresh launches).
+      ...(snap.systemPower?.standby_mode != null
+        ? { lastStandbyMode: snap.systemPower.standby_mode }
+        : {}),
       firmwareUpdate: snap.firmwareUpdate,
       sources: snap.sources,
       zoneAudio: snap.zoneAudio,
@@ -402,7 +414,9 @@ export const useStore = create<TTState>((set, get) => ({
         case 'systemInfo':
           return { systemInfo: msg.data }
         case 'systemPower':
-          return { systemPower: msg.data }
+          return { systemPower: msg.data, lastStandbyMode: msg.data?.standby_mode ?? s.lastStandbyMode }
+        case 'waking':
+          return { waking: msg.waking }
         case 'firmwareUpdate':
           return { firmwareUpdate: msg.data }
         case 'sources':

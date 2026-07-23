@@ -296,8 +296,12 @@ function registerIpc(): void {
   ipcMain.handle(IPC.mediaIndexPools, () => mediaIndex.pools())
   ipcMain.handle(
     IPC.mediaQueueAdd,
-    (_e, serverUdn: string, objectId: string, action: MediaQueueAction, playFromId?: string) =>
-      queueAdd(streamerHost(), serverUdn, objectId, action, playFromId)
+    async (_e, serverUdn: string, objectId: string, action: MediaQueueAction, playFromId?: string) => {
+      // Library plays are wake intents too — queue writes to a standby
+      // streamer would otherwise land on deaf ears (probed 2026-07-23).
+      await deviceManager.ensureAwake()
+      return queueAdd(streamerHost(), serverUdn, objectId, action, playFromId)
+    }
   )
   ipcMain.handle(IPC.radioSearch, (_e, query: string) => radioSearch(query))
   ipcMain.handle(IPC.radioTop, () => radioTop())

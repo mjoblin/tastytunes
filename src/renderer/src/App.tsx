@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { CircleAlert, CircleCheck, Loader2, Power, Search, Sparkles } from 'lucide-react'
+import { CircleAlert, CircleCheck, Loader2, Moon, Power, Search, Sparkles } from 'lucide-react'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { useShortcuts } from '@/hooks/useShortcuts'
@@ -83,10 +83,14 @@ export default function App(): React.JSX.Element {
     // surface their own failures through the central toast.
     if (screen === 'favorites') return <FavoritesScreen />
     if (!connected) return <ConnectGate />
-    if (inStandby) return <StandbyGate />
+    // Standby is a PRESENCE, not a wall (probed 2026-07-23: every state
+    // endpoint, art path, and WS subscribe still answers in NETWORK
+    // standby) — screens stay browsable and play actions wake the device
+    // (wake-on-intent in DeviceManager). Only Now Playing, which genuinely
+    // has nothing to show, gets the sleeping face.
     switch (screen) {
       case 'now-playing':
-        return <NowPlayingScreen />
+        return inStandby ? <StandbyGate /> : <NowPlayingScreen />
       case 'queue':
         return <QueueScreen />
       case 'presets':
@@ -116,10 +120,11 @@ export default function App(): React.JSX.Element {
       <div className="relative h-full flex flex-col">
         <div className="flex-1 flex min-h-0 relative">
           <Nav />
-          <main className="flex-1 min-w-0 min-h-0 relative">
+          <main className="flex-1 min-w-0 min-h-0 relative flex flex-col">
             {/* main-area-only ambient art, behind the screen content */}
             {!coverWindow && ambient}
-            <div className="relative h-full">{content}</div>
+            {connected && inStandby && screen !== 'now-playing' && <StandbyRibbon />}
+            <div className="relative flex-1 min-h-0">{content}</div>
             {diagnosticsOpen && <DiagnosticsDrawer />}
             <ToastHost />
           </main>
@@ -194,6 +199,10 @@ function ConnectGate(): React.JSX.Element {
   // Never connected to anything = a true first run: the gate doubles as the
   // welcome screen (connect() stamps lastHost on the first attempt).
   const firstRun = useStore((s) => s.settings.lastHost == null)
+  // If the device we lost had ECO standby configured, the honest hint is
+  // that it may have LEFT THE NETWORK on purpose (eco powers the network
+  // interface down — probed 2026-07-23; app-wake is impossible there).
+  const maybeEco = useStore((s) => s.lastStandbyMode === 'ECO_MODE')
 
   const busy =
     connection.phase === 'connecting' ||
@@ -217,6 +226,12 @@ function ConnectGate(): React.JSX.Element {
 
   return (
     <div className="h-full flex flex-col items-center justify-center gap-5 text-center px-8">
+      {maybeEco && (
+        <div data-eco-hint className="flex items-center gap-2 text-[12.5px] text-amber/90 border border-amber/20 bg-amberdim/40 rounded-full px-4 py-1.5">
+          <Moon size={12} strokeWidth={2} />
+          The streamer may be in eco standby — eco turns its network off, so wake it at the device.
+        </div>
+      )}
       {busy ? (
         <>
           <Loader2 size={40} className="spin text-amber" />
@@ -298,25 +313,68 @@ function ConnectGate(): React.JSX.Element {
   )
 }
 
-/** Shown when the streamer is in network standby. */
+/** The slim standby presence on browsable screens: the device sleeps, the
+ *  app doesn't — and a wake-on-intent in flight announces itself here. */
+function StandbyRibbon(): React.JSX.Element {
+  const name = useStore((s) => s.systemInfo?.name ?? 'Streamer')
+  const waking = useStore((s) => s.waking)
+  return (
+    <div
+      data-standby-ribbon
+      className="relative z-10 shrink-0 flex items-center justify-center gap-2 px-4 py-1.5
+                 text-[12px] text-amber border-b border-amber/15 bg-amberdim/40"
+    >
+      {waking ? (
+        <span className="motion-safe:animate-pulse">Waking {name}…</span>
+      ) : (
+        <>
+          <Moon size={12} strokeWidth={2} />
+          <span>
+            {name} is in standby — playing anything will wake it
+          </span>
+        </>
+      )}
+    </div>
+  )
+}
+
+/** Now Playing while the streamer sleeps: nothing is playing, so the screen
+ *  becomes a quiet face — wake lamp, last played, and the standing offer. */
 function StandbyGate(): React.JSX.Element {
   const systemInfo = useStore((s) => s.systemInfo)
+  const waking = useStore((s) => s.waking)
+  const last = useStore((s) => s.recents[0])
 
   return (
-    <div className="h-full flex flex-col items-center justify-center gap-6 text-center px-8">
+    <div data-standby-face className="h-full flex flex-col items-center justify-center gap-6 text-center px-8">
       <button
         onClick={() => void tt.command({ type: 'power', power: 'ON' })}
-        className="h-24 w-24 rounded-full ring-2 ring-amber/50 text-amber flex items-center justify-center
-                   hover:bg-amberdim hover:shadow-[0_0_40px_rgb(var(--amber-rgb)_/_0.35)] transition-all"
+        className={cx(
+          'h-24 w-24 rounded-full ring-2 ring-amber/50 text-amber flex items-center justify-center',
+          'hover:bg-amberdim hover:shadow-[0_0_40px_rgb(var(--amber-rgb)_/_0.35)] transition-all',
+          waking && 'motion-safe:animate-pulse bg-amberdim'
+        )}
         title="Power on"
       >
         <Power size={36} strokeWidth={1.8} />
       </button>
       <div>
-        <div className="font-display text-2xl text-dim">
-          {systemInfo?.name ?? 'Streamer'} is in standby
+        <div className="font-display text-2xl text-dim flex items-center justify-center gap-2.5">
+          <Moon size={20} strokeWidth={1.8} className="text-amber/70" />
+          {systemInfo?.name ?? 'Streamer'} is asleep
         </div>
-        <div className="text-[13px] text-faint mt-1.5">Press the lamp to wake it.</div>
+        <div className="text-[13px] text-faint mt-1.5">
+          {waking ? 'Waking…' : 'Press the lamp — or just play something, from any screen.'}
+        </div>
+        {!waking && last != null && (
+          <div className="text-[12px] text-faint mt-4">
+            Last played:{' '}
+            <span className="text-dim">
+              {last.title ?? last.station}
+              {last.artist ? ` — ${last.artist}` : ''}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   )

@@ -200,6 +200,8 @@ export type PushMessage =
   | { kind: 'recents'; data: RecentTrack[] }
   /** Settings changed OUTSIDE the renderer (e.g. an MCP tool created a schedule). */
   | { kind: 'settings'; settings: AppSettings }
+  /** Wake-on-intent in flight: a play-shaped command is waking the streamer. */
+  | { kind: 'waking'; waking: boolean }
   /** Cursor is over the mini window (CSS :hover can't fire over drag regions). */
   | { kind: 'miniHover'; hovered: boolean }
   | { kind: 'sleep'; sleep: SleepTimer | null }

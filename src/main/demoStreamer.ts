@@ -1078,6 +1078,10 @@ function buildDemo(host: string): {
               }
             }, 900)
           }
+        } else if (frame.path === '/zone/play_control' && (DATA['/system/power'] as Dict).power !== 'ON') {
+          // FIRMWARE TRUTH (live-probed 2026-07-23, mirrored from the mock):
+          // standby refuses every play_control verb (code 114) — nothing
+          // plays, nothing wakes. Wake-on-intent sends power ON first.
         } else if (frame.path === '/zone/play_control' && typeof params.skip_track === 'number') {
           advanceTrack(params.skip_track, push)
         } else if (frame.path === '/zone/state' && typeof params.volume_percent === 'number') {

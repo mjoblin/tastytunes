@@ -282,6 +282,46 @@ export class DeviceManager {
 
   // ------------------------------------------------------------------- commands
 
+  /** Play-shaped commands that should wake a standby streamer first. */
+  private static readonly WAKE_COMMANDS = new Set<StreamerCommand['type']>([
+    'play',
+    'togglePlayback',
+    'playQueueId',
+    'recallPreset',
+    'streamRadio',
+    'setSource'
+  ])
+  private wakePromise: Promise<void> | null = null
+
+  /**
+   * Wake-on-intent: bring a NETWORK-standby streamer to ON and wait for the
+   * zone to be usable. Single-flight — concurrent intents share one wake.
+   * FIRMWARE TRUTH (live-probed 2026-07-23): play verbs do NOT auto-wake;
+   * standby refuses them with code 114, so the app must sequence ON → act.
+   * The 2.5s settle is the scheduler's proven runway before recalls.
+   */
+  async ensureAwake(): Promise<void> {
+    if (this.cache.systemPower == null || this.cache.systemPower.power === 'ON') return
+    if (this.wakePromise) return this.wakePromise
+    this.wakePromise = (async () => {
+      this.push({ kind: 'waking', waking: true })
+      try {
+        await this.command({ type: 'power', power: 'ON' })
+        // Event-driven readiness: the power push flips the cache; the timed
+        // fallback covers a lost push. Then the settle for the zone/source.
+        const deadline = Date.now() + 8000
+        while (this.cache.systemPower?.power !== 'ON' && Date.now() < deadline) {
+          await new Promise((r) => setTimeout(r, 200))
+        }
+        await new Promise((r) => setTimeout(r, 2500))
+      } finally {
+        this.push({ kind: 'waking', waking: false })
+        this.wakePromise = null
+      }
+    })()
+    return this.wakePromise
+  }
+
   async command(cmd: StreamerCommand): Promise<void> {
     const socket = this.socket
     const host = socket?.host
@@ -295,6 +335,13 @@ export class DeviceManager {
     if (!socket.isOpen()) {
       this.log('warn', 'command', `dropped ${cmd.type} — socket not open`)
       throw new Error(`streamer socket not open (${cmd.type})`)
+    }
+    if (
+      DeviceManager.WAKE_COMMANDS.has(cmd.type) &&
+      this.cache.systemPower != null &&
+      this.cache.systemPower.power !== 'ON'
+    ) {
+      await this.ensureAwake()
     }
 
     // PASSIVE-ONLY firmware policy (explicit user decision): there is NO command
@@ -543,9 +590,20 @@ export class DeviceManager {
       case '/system/info':
         this.cache.systemInfo = data as SystemInfo
         return this.push({ kind: 'systemInfo', data: this.cache.systemInfo })
-      case '/system/power':
+      case '/system/power': {
+        const prev = this.cache.systemPower?.power
         this.cache.systemPower = data as SystemPower
+        // Waking from standby: re-request the queue — it may have CHANGED
+        // shape across the cycle (live-probed 2026-07-23: server queues
+        // survive standby, USB queues are dropped; USB remount also lags,
+        // hence the second, late refetch).
+        if (prev != null && prev !== 'ON' && this.cache.systemPower.power === 'ON') {
+          for (const delay of [2500, 10000]) {
+            setTimeout(() => this.socket?.isOpen() && this.socket.send('/queue/list'), delay)
+          }
+        }
         return this.push({ kind: 'systemPower', data: this.cache.systemPower })
+      }
       case '/system/update': {
         // Read-only firmware self-check the streamer pushes to subscribers.
         // Camelcase the wire shape into the clean FirmwareStatus the UI reads.
