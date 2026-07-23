@@ -19,7 +19,9 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            args: --mac
+            # universal = one dmg/zip for Intel AND Apple Silicon (plain
+            # --mac on the arm64 runner would ship Apple-Silicon-only)
+            args: --mac --universal
           - os: windows-latest
             args: --win
           - os: ubuntu-latest
