@@ -657,7 +657,15 @@ export class McpBridge {
             .string()
             .optional()
             .describe('Limit to one server (see list_media_servers); omit to search every eligible server.'),
-          kind: z.enum(['album', 'artist', 'track']).optional().describe('Only return this kind.')
+          kind: z.enum(['album', 'artist', 'track']).optional().describe('Only return this kind.'),
+          match: z
+            .enum(['any', 'title'])
+            .optional()
+            .describe(
+              "'title' = only items whose OWN title contains the query (e.g. songs with 'love' in the track title). Default 'any' — title, artist, or album."
+            ),
+          limit: z.number().int().min(1).max(200).optional().describe('Default 40.'),
+          offset: z.number().int().min(0).optional().describe('For paging; default 0.')
         },
         handler: async (a) => {
           const s = this.connected()
@@ -681,21 +689,30 @@ export class McpBridge {
             }
           }
           if (servers.length === 0) return err('No searchable media servers are visible right now.')
-          // All-servers mode: ready indexes answer in-memory (no cap on how
-          // many), live SOAP searches stay capped so one query can't hammer
-          // the LAN. A per-server slice keeps the first server from eating
-          // the whole result budget.
-          const fleet = [...servers.filter((x) => ready.has(x.udn)), ...servers.filter((x) => !ready.has(x.udn)).slice(0, 3)]
-          const perServer = fleet.length > 1 ? Math.max(10, Math.ceil(40 / fleet.length)) : 40
-          const results: unknown[] = []
+          // Ready indexes answer from memory (every match retrieved, true
+          // totals) — the only real cost is tokens, which limit/offset
+          // govern. The LAN-protection cap that matters is on live SOAP:
+          // at most 3 un-indexed servers per query, each already bounded
+          // by the ContentDirectory search's own 500-result ceiling.
+          const fleet = [
+            ...servers.filter((x) => ready.has(x.udn)),
+            ...servers.filter((x) => !ready.has(x.udn)).slice(0, 3)
+          ]
+          const tokens = (a.query as string).toLowerCase().split(/\s+/).filter(Boolean)
+          const collected: unknown[] = []
+          let sourceCapped = false
           for (const server of fleet) {
-            const { items } = await librarySearch(s.connection.host, server.udn, a.query as string)
-            let added = 0
+            const { items, total } = await librarySearch(s.connection.host, server.udn, a.query as string)
+            if (total > items.length) sourceCapped = true
             for (const n of items) {
               const kind = kindOf(n)
               if (kind === 'folder') continue
               if (a.kind != null && kind !== a.kind) continue
-              results.push({
+              if (a.match === 'title') {
+                const title = n.title.toLowerCase()
+                if (!tokens.every((t) => title.includes(t))) continue
+              }
+              collected.push({
                 server_udn: server.udn,
                 server: server.name,
                 object_id: n.id,
@@ -706,11 +723,20 @@ export class McpBridge {
                 year: n.year,
                 duration_seconds: n.durationSecs
               })
-              if (++added >= perServer || results.length >= 40) break
             }
-            if (results.length >= 40) break
           }
-          return ok({ total: results.length, capped: results.length >= 40, results })
+          const offset = (a.offset as number | undefined) ?? 0
+          const limit = (a.limit as number | undefined) ?? 40
+          const page = collected.slice(offset, offset + limit)
+          return ok({
+            total: collected.length,
+            offset,
+            returned: page.length,
+            ...(sourceCapped
+              ? { note: 'A source hit its internal retrieval cap — total covers only what it returned.' }
+              : {}),
+            results: page
+          })
         }
       },
       list_albums: {

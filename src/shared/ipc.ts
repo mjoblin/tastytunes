@@ -649,7 +649,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         name: 'search_library',
         title: 'Search library',
         description:
-          'Search for albums, artists, and tracks across every searchable or index-ready media server at once (or one server_udn). Returns object ids for play_media.'
+          "Search for albums, artists, and tracks across every searchable or index-ready media server at once (or one server_udn). Returns object ids for play_media, a TRUE total, and pages with limit/offset — page again rather than assuming the first page is everything. match: 'title' scopes to items whose own title contains the query."
       },
       {
         name: 'list_albums',
