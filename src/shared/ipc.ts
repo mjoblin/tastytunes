@@ -198,6 +198,8 @@ export type PushMessage =
   | { kind: 'frame'; entry: FrameEntry }
   | { kind: 'log'; entry: LogEntry }
   | { kind: 'recents'; data: RecentTrack[] }
+  /** Settings changed OUTSIDE the renderer (e.g. an MCP tool created a schedule). */
+  | { kind: 'settings'; settings: AppSettings }
   /** Cursor is over the mini window (CSS :hover can't fire over drag regions). */
   | { kind: 'miniHover'; hovered: boolean }
   | { kind: 'sleep'; sleep: SleepTimer | null }
@@ -509,6 +511,12 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         name: 'list_recently_played',
         title: 'List recently played',
         description: 'Local history of tracks and stations that have played, newest first.'
+      },
+      {
+        name: 'list_schedules',
+        title: 'List schedules',
+        description:
+          "The user's wake/standby schedules (alarms): time, days, action, enabled. Note: schedules fire only while TastyTunes is running and connected."
       }
     ]
   },
@@ -650,6 +658,12 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
           'Browse albums from the local library index — filter by artist, genre, or decade; sort by title, artist, or year; page with limit/offset. Returns object ids for play_media. Needs a ready index (see list_media_servers).'
       },
       {
+        name: 'list_artists',
+        title: 'List artists',
+        description:
+          'Artists from the local library index with album and track counts — filter by name, sort by name or album count, page with limit/offset. Needs a ready index (see list_media_servers).'
+      },
+      {
         name: 'play_media',
         title: 'Play media',
         description:
@@ -668,7 +682,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         name: 'search_radio',
         title: 'Search radio',
         description:
-          'Search internet-radio stations by name, genre, or country: returns name, stream URL, country, codec, bitrate, tags.'
+          "Find internet-radio stations by name (query) and/or style (genre — queried against the directory's tags, the right way to ask for 'some jazz'). Returns name, stream URL, country, codec, tags."
       },
       {
         name: 'play_radio',
@@ -830,6 +844,32 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         title: 'Save playing to preset',
         description:
           'Save the CURRENT playback (a station, or a single track) to a preset slot (1–99); optional name. Occupied slots need overwrite: true. For whole albums or queues use save_queue_as_preset.'
+      }
+    ]
+  },
+  {
+    id: 'schedules',
+    title: 'Schedules',
+    group: 'write',
+    optIn: true,
+    description:
+      'Create, toggle, and delete wake/standby schedules (alarms). These are standing actions that fire on their own later — off unless you turn it on. Reading schedules needs no opt-in (list_schedules, under Status & lists).',
+    tools: [
+      {
+        name: 'create_schedule',
+        title: 'Create schedule',
+        description:
+          'Add a schedule: time (24h HH:MM), days of the week, and wake (power on, optionally recall a preset and set a volume) or standby. Fires only while TastyTunes is running and connected.'
+      },
+      {
+        name: 'set_schedule_enabled',
+        title: 'Enable/disable schedule',
+        description: 'Arm or disarm one schedule by id (see list_schedules) without deleting it.'
+      },
+      {
+        name: 'delete_schedule',
+        title: 'Delete schedule',
+        description: 'Delete one schedule by id (see list_schedules). No undo.'
       }
     ]
   }

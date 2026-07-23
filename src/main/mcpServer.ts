@@ -18,21 +18,24 @@ import {
   favoriteKey,
   mcpClusterEnabled,
   sleepTrackKey,
+  type AppSettings,
   type ConnectionState,
   type Favorite,
   type McpSettings,
   type MediaNode,
   type MediaQueueAction,
+  type Schedule,
   type Snapshot
 } from '@shared/ipc'
 import { EQ_GAIN_MAX, EQ_GAIN_MIN, audioCaps, brightnessOptions } from '@shared/smoip'
 import { app } from 'electron'
 import type { DeviceManager } from './deviceManager'
-import { getSettings } from './persist'
+import { getSettings, updateSettings } from './persist'
+import { randomUUID } from 'node:crypto'
 import { fetchArtistInfo } from './artistInfo'
 import { fetchAlbumInfo } from './albumInfo'
 import { fetchLyrics } from './lyrics'
-import { radioSearch } from './radioBrowser'
+import { radioSearch, radioByTags } from './radioBrowser'
 import { queueAdd, refreshServers } from './upnpBrowser'
 import {
   searchServer as librarySearch,
@@ -72,6 +75,9 @@ function lanAddress(): string | null {
 export class McpBridge {
   private http: Server | null = null
   private active: { bind: McpSettings['bind']; port: number } | null = null
+  /** Fired when an MCP tool mutates settings (schedules) — the renderer
+   *  learns via a {kind:'settings'} push; index.ts wires this to the window. */
+  onSettingsMutated: ((next: AppSettings) => void) | null = null
 
   constructor(private dm: DeviceManager) {}
 
@@ -431,6 +437,13 @@ export class McpBridge {
           )
         }
       },
+      list_schedules: {
+        handler: () =>
+          ok({
+            note: 'Schedules fire only while TastyTunes is running and connected.',
+            schedules: getSettings().schedules.map(scheduleOut)
+          })
+      },
 
       // ---- transport
       play: {
@@ -762,6 +775,56 @@ export class McpBridge {
           })
         }
       },
+      list_artists: {
+        inputSchema: {
+          query: z.string().optional().describe('Case-insensitive substring match on the artist name.'),
+          server_udn: z.string().optional().describe('Limit to one server (see list_media_servers).'),
+          sort: z
+            .enum(['name', 'albums'])
+            .optional()
+            .describe("Default 'name' (A–Z); 'albums' sorts by album count, most first."),
+          limit: z.number().int().min(1).max(200).optional().describe('Default 100.'),
+          offset: z.number().int().min(0).optional().describe('For paging; default 0.')
+        },
+        // index-backed like list_albums — no connected() gate
+        handler: (a) => {
+          const groups = indexPools().filter((p) => a.server_udn == null || p.udn === a.server_udn)
+          if (groups.length === 0) {
+            return err(
+              a.server_udn != null
+                ? `No ready index for server '${a.server_udn}'. Use list_media_servers.`
+                : 'No library index is ready yet — the user can build one in Settings → Libraries.'
+            )
+          }
+          // Derive from the album/track pools (like the Artists lens): albums
+          // and tracks grouped by normalized artist name, first-seen casing.
+          const byName = new Map<string, { name: string; albums: number; tracks: number }>()
+          const bump = (artist: string | null, field: 'albums' | 'tracks'): void => {
+            if (!artist?.trim()) return
+            const k = artist.trim().toLowerCase()
+            const cur = byName.get(k) ?? { name: artist.trim(), albums: 0, tracks: 0 }
+            cur[field]++
+            byName.set(k, cur)
+          }
+          for (const p of groups) {
+            for (const alb of p.albums) bump(alb.artist, 'albums')
+            for (const t of p.tracks) bump(t.artist, 'tracks')
+          }
+          const needle = (a.query as string | undefined)?.toLowerCase()
+          let artists = [...byName.values()]
+          if (needle != null) artists = artists.filter((x) => x.name.toLowerCase().includes(needle))
+          const sort = (a.sort as string | undefined) ?? 'name'
+          artists.sort((x, y) =>
+            sort === 'albums'
+              ? y.albums - x.albums || x.name.localeCompare(y.name)
+              : x.name.localeCompare(y.name)
+          )
+          const offset = (a.offset as number | undefined) ?? 0
+          const limit = (a.limit as number | undefined) ?? 100
+          const page = artists.slice(offset, offset + limit)
+          return ok({ total: artists.length, offset, returned: page.length, artists: page })
+        }
+      },
       play_media: {
         inputSchema: {
           server_udn: z.string().describe('From search_library / list_media_servers.'),
@@ -795,9 +858,26 @@ export class McpBridge {
 
       // ---- radio (keyless directory; never any listening telemetry)
       search_radio: {
-        inputSchema: { query: z.string().min(1).describe('Station name, genre, or place.') },
+        inputSchema: {
+          query: z.string().optional().describe('Station name or place. Optional when genre is given.'),
+          genre: z
+            .string()
+            .optional()
+            .describe("Style tag, e.g. 'jazz' — matched against the directory's tags, most-listened first.")
+        },
         handler: async (a) => {
-          const stations = await radioSearch(a.query as string)
+          const q = (a.query as string | undefined)?.trim()
+          const g = (a.genre as string | undefined)?.trim().toLowerCase()
+          if (!q && !g) return err('Pass query and/or genre.')
+          let stations
+          if (g && !q) stations = await radioByTags([g])
+          else {
+            stations = await radioSearch(q as string)
+            if (g)
+              stations = stations.filter((st) =>
+                st.tags.toLowerCase().split(',').map((t) => t.trim()).includes(g)
+              )
+          }
           return ok(
             stations.slice(0, 15).map((st) => ({
               name: st.name,
@@ -1164,7 +1244,86 @@ export class McpBridge {
           }
           return ok(`Saved the current playback to preset ${a.slot}${a.name ? ` as "${a.name}"` : ''}.`)
         }
+      },
+
+      // ---- schedules (opt-in cluster; list_schedules lives with Status & lists)
+      create_schedule: {
+        inputSchema: {
+          time: z
+            .string()
+            .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+            .describe("Local 24h 'HH:MM', e.g. '07:30'."),
+          days: z
+            .array(z.number().int().min(0).max(6))
+            .min(1)
+            .describe('Days it fires: 0 = Sunday … 6 = Saturday.'),
+          action: z.enum(['wake', 'standby']).describe('wake = power on (optionally recall a preset); standby = power down.'),
+          preset_id: z.number().int().min(1).max(99).optional().describe('Wake only: preset to recall after powering on.'),
+          volume_percent: z.number().int().min(0).max(100).optional().describe('Wake only: volume to set after the preset settles.'),
+          enabled: z.boolean().optional().describe('Default true.')
+        },
+        handler: (a) => {
+          if (a.action === 'standby' && (a.preset_id != null || a.volume_percent != null)) {
+            return err('preset_id and volume_percent only apply to wake schedules.')
+          }
+          const sched: Schedule = {
+            id: randomUUID(),
+            enabled: a.enabled !== false,
+            time: a.time as string,
+            days: [...new Set(a.days as number[])].sort(),
+            action: a.action === 'wake' ? 'on' : 'standby',
+            presetId: (a.preset_id as number | undefined) ?? null,
+            volumePercent: (a.volume_percent as number | undefined) ?? null
+          }
+          this.mutateSchedules((list) => [...list, sched])
+          return ok({
+            created: scheduleOut(sched),
+            note: 'Schedules fire only while TastyTunes is running and connected.'
+          })
+        }
+      },
+      set_schedule_enabled: {
+        inputSchema: {
+          id: z.string().describe('Schedule id from list_schedules.'),
+          enabled: z.boolean()
+        },
+        handler: (a) => {
+          const found = getSettings().schedules.find((x) => x.id === a.id)
+          if (!found) return err(`No schedule '${a.id}'. Use list_schedules.`)
+          this.mutateSchedules((list) =>
+            list.map((x) => (x.id === a.id ? { ...x, enabled: a.enabled as boolean } : x))
+          )
+          return ok(`Schedule ${a.enabled ? 'enabled' : 'disabled'}.`)
+        }
+      },
+      delete_schedule: {
+        inputSchema: { id: z.string().describe('Schedule id from list_schedules.') },
+        handler: (a) => {
+          const found = getSettings().schedules.find((x) => x.id === a.id)
+          if (!found) return err(`No schedule '${a.id}'. Use list_schedules.`)
+          this.mutateSchedules((list) => list.filter((x) => x.id !== a.id))
+          return ok('Schedule deleted.')
+        }
       }
     }
+  }
+
+  /** Persist a schedules change and tell the renderer (settings push). */
+  private mutateSchedules(fn: (list: Schedule[]) => Schedule[]): void {
+    const next = updateSettings({ schedules: fn(getSettings().schedules) })
+    this.onSettingsMutated?.(next)
+  }
+}
+
+/** Agent-facing schedule shape: 'wake' instead of the internal 'on'. */
+function scheduleOut(s: Schedule): Record<string, unknown> {
+  return {
+    id: s.id,
+    enabled: s.enabled,
+    time: s.time,
+    days: s.days,
+    action: s.action === 'on' ? 'wake' : 'standby',
+    preset_id: s.presetId,
+    volume_percent: s.volumePercent
   }
 }

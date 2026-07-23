@@ -51,6 +51,9 @@ const deviceManager = new DeviceManager()
 const mcpBridge = new McpBridge(deviceManager)
 let mainWindow: BrowserWindow | null = null
 let miniWindow: BrowserWindow | null = null
+// MCP tools can mutate settings (schedules) — the renderer must hear about it
+mcpBridge.onSettingsMutated = (settings) =>
+  mainWindow?.webContents.send(IPC.push, { kind: 'settings', settings })
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({

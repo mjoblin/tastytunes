@@ -455,6 +455,10 @@ export const useStore = create<TTState>((set, get) => ({
         }
         case 'menu':
           return {} // routed to applyMenu in main.tsx; nothing to merge here
+        case 'settings':
+          // settings changed outside the renderer (an MCP tool edited
+          // schedules) — adopt wholesale, same as a snapshot would
+          return { settings: msg.settings }
       }
     }),
 
