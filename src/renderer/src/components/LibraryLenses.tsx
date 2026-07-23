@@ -149,16 +149,20 @@ function ChipRail({
 
 /** One pill that opens a picker popover — for bounded facets (decades) that
  *  shouldn't spend a whole rail row. The chevron marks it as a picker, not a
- *  toggle chip; an active pick renders gold like any active chip. */
+ *  toggle chip; an active pick renders gold like any active chip. Clicking the
+ *  active option still toggles it off, but a picker popover reads as
+ *  "choose one" — the explicit clear row is the discoverable way back out. */
 function PickerPill({
   id,
   neutral,
+  clearLabel,
   options,
   value,
   onChange
 }: {
   id: string
   neutral: string
+  clearLabel: string
   options: Array<{ value: string; label: string; count: number }>
   value: string | null
   onChange(value: string | null): void
@@ -191,6 +195,19 @@ function PickerPill({
             data-lens-picker-popover={id}
             className="absolute left-0 top-full mt-1.5 z-30 w-44 max-h-72 overflow-y-auto rounded-xl ring-1 ring-edge2 bg-raised shadow-xl p-1.5 space-y-0.5"
           >
+            <button
+              data-lens-chip={clearLabel}
+              onClick={() => {
+                onChange(null)
+                setOpen(false)
+              }}
+              className={cx(
+                'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-[13px] transition-colors',
+                value === null ? 'text-gold bg-golddim' : 'text-dim hover:text-ink hover:bg-veil'
+              )}
+            >
+              <span className="min-w-0 flex-1 truncate">{clearLabel}</span>
+            </button>
             {options.map((o) => (
               <button
                 key={o.value}
@@ -320,6 +337,7 @@ export function AlbumsLens({
               <PickerPill
                 id="decade"
                 neutral="Decade"
+                clearLabel="All decades"
                 options={decadeOptions}
                 value={mem.decade}
                 onChange={(decade) => setMem({ decade })}
