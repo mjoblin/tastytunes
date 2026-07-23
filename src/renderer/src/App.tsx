@@ -120,11 +120,10 @@ export default function App(): React.JSX.Element {
       <div className="relative h-full flex flex-col">
         <div className="flex-1 flex min-h-0 relative">
           <Nav />
-          <main className="flex-1 min-w-0 min-h-0 relative flex flex-col">
+          <main className="flex-1 min-w-0 min-h-0 relative">
             {/* main-area-only ambient art, behind the screen content */}
             {!coverWindow && ambient}
-            {connected && inStandby && screen !== 'now-playing' && <StandbyRibbon />}
-            <div className="relative flex-1 min-h-0">{content}</div>
+            <div className="relative h-full">{content}</div>
             {diagnosticsOpen && <DiagnosticsDrawer />}
             <ToastHost />
           </main>
@@ -307,31 +306,6 @@ function ConnectGate(): React.JSX.Element {
             <Sparkles size={14} className="text-gold/70" />
             Try without a streamer — explore with the built-in demo →
           </button>
-        </>
-      )}
-    </div>
-  )
-}
-
-/** The slim standby presence on browsable screens: the device sleeps, the
- *  app doesn't — and a wake-on-intent in flight announces itself here. */
-function StandbyRibbon(): React.JSX.Element {
-  const name = useStore((s) => s.systemInfo?.name ?? 'Streamer')
-  const waking = useStore((s) => s.waking)
-  return (
-    <div
-      data-standby-ribbon
-      className="relative z-10 shrink-0 flex items-center justify-center gap-2 px-4 py-1.5
-                 text-[12px] text-amber border-b border-amber/15 bg-amberdim/40"
-    >
-      {waking ? (
-        <span className="motion-safe:animate-pulse">Waking {name}…</span>
-      ) : (
-        <>
-          <Moon size={12} strokeWidth={2} />
-          <span>
-            {name} is in standby — playing anything will wake it
-          </span>
         </>
       )}
     </div>

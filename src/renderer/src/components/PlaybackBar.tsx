@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import {
   Disc3,
   Loader2,
+  Moon,
   Pause,
   Play,
   Power,
@@ -48,6 +49,7 @@ export function PlaybackBar(): React.JSX.Element {
 
   const connected = connection.phase === 'connected'
   const powered = systemPower?.power === 'ON'
+  const waking = useStore((s) => s.waking)
   const meta = deriveNowPlaying(playState, nowPlaying)
   const controls = controlSet(nowPlaying)
 
@@ -208,6 +210,20 @@ export function PlaybackBar(): React.JSX.Element {
 
       {/* signal + volume + devices + power */}
       <div className="flex items-center justify-end gap-2 pr-2">
+        {connected && !powered && (
+          // Standby note lives beside its remedy (the power lamp), in the
+          // space the volume cluster vacates — no layout shift anywhere.
+          <div data-standby-note className="flex items-center gap-1.5 text-[12px] text-amber pr-1">
+            {waking ? (
+              <span className="motion-safe:animate-pulse">Waking…</span>
+            ) : (
+              <>
+                <Moon size={12} strokeWidth={2} />
+                <span>In standby — play anything to wake</span>
+              </>
+            )}
+          </div>
+        )}
         {active && <SignalLamp />}
         {active && <VolumeCluster />}
         {active && <SleepTimer />}
