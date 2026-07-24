@@ -10,6 +10,10 @@
 :root {
   --amber-rgb: 240 168 72;
   --gold-rgb: 240 168 72;
+  /* optical-size correction for the chosen display face (useDisplayFont
+     overrides per face); 1 = Fraunces, the default. Applied via the
+     .font-display zoom rule below so all display text stays visually matched. */
+  --font-display-scale: 1;
   /* signal-quality lamps (SIGNAL_COLORS in lib/format.ts reads these) */
   --signal-hires: #f0a848;
   --signal-lossless: #67dd8b;
@@ -17,10 +21,41 @@
   --signal-unknown: #4a453d;
 }
 
+/* Optical-size match: scale every display-font element by the chosen face's
+   correction so headings/titles read the same visual size across faces. `zoom`
+   re-rasterizes (crisp at any factor) and needs no per-site edits — the family
+   utility and this rule share the .font-display class. The wordmark uses
+   .font-wordmark, so it is deliberately unaffected. */
+.font-display {
+  zoom: var(--font-display-scale, 1);
+}
+
+/* Screen-title labels (Queue, Library, Settings…) are chrome, not content:
+   they hold a fixed line box and stay OUT of the optical zoom so the header
+   height — and everything below it — never shifts when the display face
+   changes. Content moments (Now Playing title/artist, transport) keep the
+   expressive optical scaling. 1.5 == Fraunces' default line-height at 26px, so
+   the default layout is unchanged. */
+.font-display.screen-title {
+  zoom: 1;
+  line-height: 1.5;
+}
+
+/* Opt out of the optical zoom (keep the chosen face, drop the per-face size
+   scaling) for compact spots where a stable line box matters more than optical
+   matching — the mini player's title/artist, so the transport below never
+   shifts when the display face changes. */
+.font-display.no-optical {
+  zoom: 1;
+}
+
 @theme {
-  --font-display: 'Bricolage Grotesque Variable', ui-sans-serif, sans-serif;
+  --font-display: 'Fraunces Variable', Georgia, serif;
   --font-sans: 'Instrument Sans Variable', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'Spline Sans Mono', ui-monospace, 'SF Mono', monospace;
+  /* the wordmark/brand face is pinned to Fraunces — a constant mark that never
+     follows the user's display-font choice (font-wordmark utility). */
+  --font-wordmark: 'Fraunces Variable', Georgia, serif;
 
   /* warm near-black "faceplate" palette (dark is the default theme) */
   --color-bg: #0e0d0b;

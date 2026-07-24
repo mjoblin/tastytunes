@@ -21,7 +21,7 @@ export function InfoModal(): React.JSX.Element {
       >
         <div className="flex items-start">
           <div className="flex-1">
-            <div className="font-display font-bold text-[24px] leading-none tracking-tight">
+            <div className="font-wordmark font-bold text-[24px] leading-none tracking-tight">
               tasty<span className="text-gold">tunes</span>
             </div>
             <div className="microlabel mt-2">

@@ -917,8 +917,19 @@ export type Theme = 'dark' | 'light'
 /** Stored preference: an explicit theme, or follow the OS. */
 export type ThemePreference = Theme | 'system'
 
-/** The display face ("money font") — a curated, bundled set. */
-export type DisplayFont = 'bricolage' | 'fraunces' | 'space-grotesk' | 'sora' | 'unbounded'
+/** The display face ("money font") — a curated, bundled set. The array is the
+ *  single source of truth for valid ids (persist.ts coerces unknown values to
+ *  the default; the renderer builds its labelled picker from the same ids). */
+export const DISPLAY_FONT_IDS = [
+  'fraunces',
+  'unbounded',
+  'newsreader',
+  'hanken',
+  'instrument-serif',
+  'schibsted',
+  'instrument-sans'
+] as const
+export type DisplayFont = (typeof DISPLAY_FONT_IDS)[number]
 /** How a collection screen lays out its items. */
 export type ScreenLayout = 'rows' | 'cards'
 /** Motion effects: follow the OS Reduce Motion setting, or force on/off. */
@@ -1057,7 +1068,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   volumeLimitPercent: null,
   notifications: true,
   theme: 'dark',
-  displayFont: 'bricolage',
+  displayFont: 'fraunces',
   ambientArt: 'all',
   ambientCoverage: 'window',
   vignette: true,

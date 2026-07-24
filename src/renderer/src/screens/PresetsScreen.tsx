@@ -296,7 +296,7 @@ export function PresetsScreen(): React.JSX.Element {
   return (
     <div className="h-full flex flex-col">
       <header className="drag-region flex items-center gap-4 px-8 pt-8 pb-4">
-        <h1 className="font-display font-bold text-[26px] tracking-tight">Presets</h1>
+        <h1 className="font-display screen-title font-bold text-[26px] tracking-tight">Presets</h1>
         <span className="font-mono text-[11px] text-faint">
           {allItems.length} / {presets?.max_presets ?? '—'} slots
         </span>

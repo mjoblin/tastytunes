@@ -1,13 +1,14 @@
-import '@fontsource-variable/bricolage-grotesque'
 import '@fontsource-variable/instrument-sans'
 import '@fontsource/spline-sans-mono/400.css'
 import '@fontsource/spline-sans-mono/500.css'
 // the curated display-font set (Settings → Appearance); only the active
 // face's woff2 is ever fetched
 import '@fontsource-variable/fraunces'
-import '@fontsource-variable/space-grotesk'
-import '@fontsource-variable/sora'
 import '@fontsource-variable/unbounded'
+import '@fontsource-variable/newsreader'
+import '@fontsource-variable/hanken-grotesk'
+import '@fontsource/instrument-serif/400.css'
+import '@fontsource-variable/schibsted-grotesk'
 import './styles.css'
 
 import React, { Suspense, lazy } from 'react'

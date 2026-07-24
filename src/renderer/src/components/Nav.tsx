@@ -80,7 +80,10 @@ export function Nav(): React.JSX.Element {
               setMenu({ kind: 'screen', id, label, x: e.clientX, y: e.clientY })
             }
       }
-      data-tip={`${label} (${key})`}
+      // expanded rows already show the label + shortcut, so the tooltip is
+      // pure redundancy (and its bubble is clipped by the scroller's
+      // overflow-x). Only the collapsed rail, which shows icons alone, needs it.
+      data-tip={collapsed ? `${label} (${key})` : undefined}
       aria-label={`${label} (${key})`}
       className={cx(
         'w-full flex items-center rounded-lg h-9 text-[13.5px] transition-colors',
@@ -118,7 +121,7 @@ export function Nav(): React.JSX.Element {
           onClick={() => (update ? jumpToSettingsTab('updates') : setInfoOpen(true))}
           data-tip={update ? `v${update.version} available — open Updates` : 'About TastyTunes'}
           aria-label={update ? `v${update.version} available — open Updates` : 'About TastyTunes'}
-          className="no-drag relative font-display font-bold text-[19px] leading-none tracking-tight cursor-pointer"
+          className="no-drag relative font-wordmark font-bold text-[19px] leading-none tracking-tight cursor-pointer"
         >
           {collapsed ? (
             <>

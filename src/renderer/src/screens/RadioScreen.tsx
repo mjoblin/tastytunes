@@ -246,7 +246,7 @@ export function RadioScreen(): React.JSX.Element {
   return (
     <div className="h-full flex flex-col">
       <header className="drag-region flex items-center gap-3 px-8 pt-8 pb-4">
-        <h1 className="font-display font-bold text-[26px] tracking-tight">Radio</h1>
+        <h1 className="font-display screen-title font-bold text-[26px] tracking-tight">Radio</h1>
         <div className="flex-1" />
         <div className="no-drag relative">
           <Search

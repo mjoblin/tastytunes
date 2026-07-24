@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { app } from 'electron'
-import { DEFAULT_SETTINGS, type AppSettings } from '@shared/ipc'
+import { DEFAULT_SETTINGS, DISPLAY_FONT_IDS, type AppSettings } from '@shared/ipc'
 
 let cached: AppSettings | null = null
 
@@ -17,6 +17,11 @@ export function getSettings(): AppSettings {
     loaded = { ...DEFAULT_SETTINGS, ...raw }
     // The merge above is shallow — backfill nested objects from older files.
     loaded.mcp = { ...DEFAULT_SETTINGS.mcp, ...loaded.mcp }
+    // Heal a display font that was retired (e.g. an older file naming a face no
+    // longer in the curated set) back to the default so the picker stays in sync.
+    if (!DISPLAY_FONT_IDS.includes(loaded.displayFont)) {
+      loaded.displayFont = DEFAULT_SETTINGS.displayFont
+    }
   } catch {
     loaded = { ...DEFAULT_SETTINGS }
   }
