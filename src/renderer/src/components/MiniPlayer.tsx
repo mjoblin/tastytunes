@@ -100,9 +100,18 @@ export function MiniPlayer(): React.JSX.Element {
 
   return (
     <div className="h-screen w-screen drag-region" onWheel={onWheel}>
-      <div className="h-full w-full rounded-2xl bg-panel ring-1 ring-edge2 overflow-hidden flex shadow-[0_12px_40px_rgb(0_0_0_/_0.5)]">
+      <div className="relative h-full w-full rounded-2xl bg-panel ring-1 ring-edge2 overflow-hidden flex shadow-[0_12px_40px_rgb(0_0_0_/_0.5)]">
+        {/* ambient album-art wash behind the strip — same treatment as the main
+            window, gated on the same ambientArt setting (arrives live via the
+            settings broadcast) */}
+        {active && meta.artUrl && settings.ambientArt !== 'off' && (
+          <div aria-hidden className="absolute inset-0 pointer-events-none">
+            <div className="ambient-art" style={{ backgroundImage: `url(${meta.artUrl})` }} />
+            {settings.vignette && <div className="ambient-vignette" />}
+          </div>
+        )}
         {/* art */}
-        <div className="h-full aspect-square shrink-0 bg-raised flex items-center justify-center">
+        <div className="relative h-full aspect-square shrink-0 bg-raised flex items-center justify-center">
           <ArtImage
             src={active ? meta.artUrl : null}
             fallback={
@@ -116,23 +125,26 @@ export function MiniPlayer(): React.JSX.Element {
         </div>
 
         {/* current track pinned top, next track pinned bottom */}
-        <div className="flex-1 min-w-0 flex flex-col justify-between px-4 py-3.5">
+        <div className="relative flex-1 min-w-0 flex flex-col justify-between px-4 py-3.5">
           {/* title row + window controls (revealed while the cursor is over the window) */}
-          <div className="flex items-start gap-2">
+          <div className="relative flex items-start">
             <div className="flex-1 min-w-0">
               {/* min-heights + nbsp keep both lines occupying space during the
                   brief metadata gap on track changes, so the layout never shifts */}
-              <div className="text-[12.5px] text-ink truncate leading-tight min-h-[15px]">
+              <div className={cx(
+                  'font-display no-optical font-bold tracking-tight text-[14px] text-ink truncate leading-tight min-h-[16px]',
+                  hovered && 'pr-12'
+                )}>
                 {active ? (meta.title ?? ' ') : 'Nothing playing'}
               </div>
-              <div className="text-[11px] text-dim truncate leading-tight mt-0.5 min-h-[13px]">
+              <div className="font-display no-optical tracking-tight text-[12px] text-dim truncate leading-tight mt-0.5 min-h-[14px]">
                 {(active && meta.subtitle) || (connected ? ' ' : 'not connected')}
               </div>
             </div>
             <div
               className={cx(
-                'flex items-center gap-0.5 -mt-0.5 -mr-1 transition-opacity',
-                hovered ? 'opacity-100' : 'opacity-0'
+                'absolute -top-0.5 right-0 flex items-center gap-0.5 transition-opacity',
+                hovered ? 'opacity-100' : 'opacity-0 pointer-events-none'
               )}
             >
               <button

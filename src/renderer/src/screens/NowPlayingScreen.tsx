@@ -234,7 +234,11 @@ export function NowPlayingScreen(): React.JSX.Element {
             <h1 className="font-display font-bold text-[clamp(28px,4vw,46px)] leading-[1.08] tracking-tight text-balance">
               {meta.title}
             </h1>
-            {meta.subtitle && <div className="text-lg text-ink/80 truncate">{meta.subtitle}</div>}
+            {meta.subtitle && (
+              <div className="font-display text-[23px] leading-tight tracking-tight text-ink/80 truncate">
+                {meta.subtitle}
+              </div>
+            )}
             {meta.album && <div className="text-[14px] text-dim truncate">{meta.album}</div>}
           </div>
 

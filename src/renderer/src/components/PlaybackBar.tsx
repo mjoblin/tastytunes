@@ -102,8 +102,12 @@ export function PlaybackBar(): React.JSX.Element {
           />
         </div>
         <div className="min-w-0">
-          <div className="text-[13px] text-ink truncate">{(active && meta.title) || '—'}</div>
-          <div className="text-[12px] text-dim truncate">{(active && meta.subtitle) || ''}</div>
+          <div className="font-display font-bold text-[15px] leading-tight tracking-tight text-ink truncate">
+            {(active && meta.title) || '—'}
+          </div>
+          <div className="font-display text-[13px] leading-tight tracking-tight text-dim truncate mt-0.5">
+            {(active && meta.subtitle) || ''}
+          </div>
         </div>
       </button>
 

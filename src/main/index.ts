@@ -225,6 +225,12 @@ function registerIpc(): void {
   ipcMain.handle(IPC.getSettings, () => getSettings())
   ipcMain.handle(IPC.setSettings, (_e, patch: Partial<AppSettings>) => {
     const next = updateSettings(patch)
+    // Mirror the write to every window so the mini player tracks the main
+    // window live (display font, theme, ambient art…). The sender re-applies
+    // the same object idempotently; the store's 'settings' push just sets state.
+    for (const w of BrowserWindow.getAllWindows()) {
+      w.webContents.send(IPC.push, { kind: 'settings', settings: next })
+    }
     // OS-global shortcut churn only when the toggle itself changed — every
     // settings write used to unregister/re-register all four media keys.
     if ('mediaKeys' in patch) syncMediaKeys()
