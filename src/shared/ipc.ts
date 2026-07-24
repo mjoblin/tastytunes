@@ -1041,6 +1041,8 @@ export interface AppSettings {
   panelWidth: number
   /** Remembered mini-player window position. */
   miniBounds: { x: number; y: number } | null
+  /** Remembered main-window bounds — reopened at this size/position. */
+  mainBounds: { x: number; y: number; width: number; height: number } | null
   /**
    * Artist per device preset, keyed by presetVolumeKey(udn, presetId) —
    * recorded when TastyTunes saves an album/track preset from the Library.
@@ -1115,6 +1117,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   deviceTab: 'streamer',
   panelWidth: 400,
   miniBounds: null,
+  mainBounds: null,
   presetArtists: {},
   eqPresets: []
 }

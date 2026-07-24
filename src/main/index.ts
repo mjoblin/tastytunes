@@ -56,9 +56,22 @@ mcpBridge.onSettingsMutated = (settings) =>
   mainWindow?.webContents.send(IPC.push, { kind: 'settings', settings })
 
 function createWindow(): void {
+  // Reopen at the remembered size/position — but only place it if the saved
+  // spot is still on a connected display (mirrors the mini-player logic).
+  const { mainBounds } = getSettings()
+  const onScreen =
+    mainBounds != null &&
+    screen.getAllDisplays().some(
+      ({ workArea }) =>
+        mainBounds.x >= workArea.x - 40 &&
+        mainBounds.x <= workArea.x + workArea.width - 100 &&
+        mainBounds.y >= workArea.y - 10 &&
+        mainBounds.y <= workArea.y + workArea.height - 60
+    )
   mainWindow = new BrowserWindow({
-    width: 1180,
-    height: 780,
+    width: mainBounds?.width ?? 1180,
+    height: mainBounds?.height ?? 780,
+    ...(onScreen ? { x: mainBounds.x, y: mainBounds.y } : {}),
     minWidth: 800,
     minHeight: 520,
     show: false,
@@ -81,6 +94,26 @@ function createWindow(): void {
   // destroyed BrowserWindow and throw.
   mainWindow.on('closed', () => {
     mainWindow = null
+  })
+
+  // Remember size/position across restarts (debounced during drags; skip
+  // fullscreen/maximized/minimized so we restore the last "normal" bounds).
+  let boundsTimer: ReturnType<typeof setTimeout> | null = null
+  const persistBounds = (): void => {
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    if (mainWindow.isFullScreen() || mainWindow.isMaximized() || mainWindow.isMinimized()) return
+    const { x, y, width, height } = mainWindow.getBounds()
+    updateSettings({ mainBounds: { x, y, width, height } })
+  }
+  const scheduleSave = (): void => {
+    if (boundsTimer) clearTimeout(boundsTimer)
+    boundsTimer = setTimeout(persistBounds, 400)
+  }
+  mainWindow.on('resize', scheduleSave)
+  mainWindow.on('move', scheduleSave)
+  mainWindow.on('close', () => {
+    if (boundsTimer) clearTimeout(boundsTimer)
+    persistBounds()
   })
 
   // A window created (or reloaded) after a state change missed the push.
