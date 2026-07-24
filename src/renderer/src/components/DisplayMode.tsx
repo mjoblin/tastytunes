@@ -22,8 +22,22 @@ export function DisplayMode(): React.JSX.Element {
   const [cursorIdle, setCursorIdle] = useState(false)
   const [clock, setClock] = useState(() => timeNow())
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const fadeRef = useRef<HTMLDivElement>(null)
 
   const meta = deriveNowPlaying(playState, nowPlaying)
+
+  // Fade the art + text in on track change (and on entering display mode)
+  // rather than popping. Web Animations replays the fade without re-mounting
+  // the art (a re-mount would reload/flash it), and the brief old-frame moment
+  // is hidden while opacity is near zero. Opacity-only, so it stays under
+  // reduce-motion.
+  const trackSig = `${meta.artUrl ?? ''}␟${meta.title ?? ''}␟${meta.subtitle ?? ''}`
+  useEffect(() => {
+    fadeRef.current?.animate([{ opacity: 0 }, { opacity: 1 }], {
+      duration: 350,
+      easing: 'ease-out'
+    })
+  }, [trackSig])
 
   // Enter OS fullscreen while mounted; leave on unmount. If the user exits
   // fullscreen (Esc), close display mode too.
@@ -112,7 +126,7 @@ export function DisplayMode(): React.JSX.Element {
             text absolutely beneath it — a longer/shorter title, a missing
             subtitle, or a changing badge count then grow downward instead of
             re-centering the whole group and shifting the art. */}
-        <div className="relative -translate-y-[7vmin]">
+        <div ref={fadeRef} className="relative -translate-y-[7vmin]">
           <ArtImage
             src={meta.artUrl}
             className="w-[46vmin] h-[46vmin] object-cover rounded-2xl art-glow"
