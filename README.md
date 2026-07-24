@@ -24,10 +24,10 @@ account, no cloud — the app opens the SMOIP WebSocket the streamer already
 serves, sends commands down it, and re-renders from the state the streamer
 pushes back. The device is the single source of truth.
 
-It's the bigger, tastier sibling of [PunyTunes](https://punytunes.app) — same
-streamers, same author, but a full desktop app in place of a tray applet: a
-library with its own search, queue and preset editing, synced lyrics, alarms,
-scrobbling, a mini player, and an MCP server for local AI agents.
+It's the desktop sibling of [PunyTunes](https://punytunes.app) — same
+streamers, same author, but a full app in place of a tray applet: a browsable
+library with its own search, queue and preset editing, synced lyrics,
+scrobbling, a mini player, and an optional MCP server.
 
 ## The tour
 
@@ -67,7 +67,7 @@ scrobbling, a mini player, and an MCP server for local AI agents.
 ## MCP server
 
 TastyTunes can host a local MCP server (off by default), so AI agents on your
-machine — Claude Code, Claude Desktop, anything that speaks MCP — can see and
+network — Claude Code, Claude Desktop, anything that speaks MCP — can see and
 control the streamer:
 
 ```bash
@@ -76,15 +76,14 @@ claude mcp add --transport http tastytunes http://127.0.0.1:8555/mcp
 
 > *"what's playing?"* · *"how many albums do I have?"* · *"play a 90s rock album"* · *"put on some jazz radio"* · *"set a sleep timer for the end of this track"*
 
-53 tools across 17 clusters: status, transport, volume, presets, sources,
-power, devices, sleep timer, library, radio, favorites, tone & EQ, display,
-and lyric/context lookups, plus opt-in clusters for queue editing, preset
-saving, and schedules. Every cluster and every tool can be switched off in
-Settings → AI agents, taking effect on the agent's next call; the
-edit-capable clusters are off until you enable them. Bind to localhost, or to
-the LAN to control the streamer from another machine. Agents get the same
-limits as the UI: the volume cap, the power-on reboot guard, and the
-Connections toggles — a lookup that's switched off refuses.
+The tools cover what the app itself does — playback and volume, presets and
+sources, library and radio, favorites, tone and EQ, sleep timers — with the
+editing ones, like queue and preset changes, kept separate and off until you
+turn them on. Every tool has its own switch in Settings → AI agents, effective
+on the agent's next call. Agents inherit the same limits the UI has: the volume
+cap, the power-on guard, the Connections toggles — a lookup that's switched off
+just refuses. Bind it to localhost, or to your network to reach the streamer
+from another machine.
 
 ## Every feature
 
