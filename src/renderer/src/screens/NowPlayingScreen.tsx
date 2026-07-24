@@ -41,7 +41,9 @@ export function NowPlayingScreen(): React.JSX.Element {
     title: meta.title,
     subtitle: meta.subtitle,
     album: meta.album,
-    badges: meta.badges
+    badges: meta.badges,
+    queueIndex: playState?.queue_index,
+    queueLength: playState?.queue_length
   }))
   // Right placement mirrors the pair: art anchors the right edge, text grows leftward.
   const mirrored = nowPlayingAlignH === 'right'
@@ -106,8 +108,6 @@ export function NowPlayingScreen(): React.JSX.Element {
   }
 
   const sourceName = nowPlaying?.source?.name ?? null
-  const queueIndex = playState?.queue_index
-  const queueLength = playState?.queue_length
   const state = playState?.state
 
   const empty = !meta.title && !meta.subtitle
@@ -281,14 +281,31 @@ export function NowPlayingScreen(): React.JSX.Element {
             <div className="text-[13px] text-dim">{nowPlaying.display.line3}</div>
           )}
 
-          {queueIndex != null && queueLength != null && queueLength > 0 && (
-            <div className="microlabel">
-              track {queueIndex + 1} of {queueLength}
+          {shownTrack.queueIndex != null &&
+            shownTrack.queueLength != null &&
+            shownTrack.queueLength > 0 && (
+              <div
+                className={cx(
+                  'microlabel transition-opacity duration-300',
+                  trackVisible ? 'opacity-100' : 'opacity-0'
+                )}
+              >
+                track {shownTrack.queueIndex + 1} of {shownTrack.queueLength}
+              </div>
+            )}
+
+          {/* inline lyric flavor — never alongside the full panel; fades with
+              the track group so it doesn't pop on a change */}
+          {lyricsAvailable && lyricsLine && !lyricsOpen && (
+            <div
+              className={cx(
+                'transition-opacity duration-300',
+                trackVisible ? 'opacity-100' : 'opacity-0'
+              )}
+            >
+              <LyricLine />
             </div>
           )}
-
-          {/* inline lyric flavor — never alongside the full panel */}
-          {lyricsAvailable && lyricsLine && !lyricsOpen && <LyricLine />}
         </div>
         </div>
       </div>
