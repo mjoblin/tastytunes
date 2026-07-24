@@ -22,21 +22,36 @@ export function DisplayMode(): React.JSX.Element {
   const [cursorIdle, setCursorIdle] = useState(false)
   const [clock, setClock] = useState(() => timeNow())
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const textFadeRef = useRef<HTMLDivElement>(null)
-
   const meta = deriveNowPlaying(playState, nowPlaying)
 
-  // On track change (and on entering display mode) the album art crossfades
-  // (CrossfadeArt below) and the text fades in — instead of popping. Both are
-  // opacity-only, so they stay under reduce-motion, and neither re-mounts in a
-  // way that reloads the art.
-  const textSig = `${meta.title ?? ''}␟${meta.subtitle ?? ''}`
+  // Title/artist/badges render from a SETTLED snapshot and fade as one group:
+  // on track change the group fades out, and only once the live metadata stops
+  // changing (the gap between tracks settles) does the snapshot swap and the
+  // new track fade in — so the intermediate/empty gap states never flash.
+  // Opacity-only, so it stays under reduce-motion. (The album art crossfades
+  // independently — see CrossfadeArt.)
+  const liveTextSig = `${meta.title ?? ''}␟${meta.subtitle ?? ''}␟${meta.badges.join('|')}`
+  const [shownText, setShownText] = useState({
+    title: meta.title,
+    subtitle: meta.subtitle,
+    badges: meta.badges
+  })
+  const [textVisible, setTextVisible] = useState(false)
+  const shownTextSig = `${shownText.title ?? ''}␟${shownText.subtitle ?? ''}␟${shownText.badges.join('|')}`
   useEffect(() => {
-    textFadeRef.current?.animate([{ opacity: 0 }, { opacity: 1 }], {
-      duration: 350,
-      easing: 'ease-out'
-    })
-  }, [textSig])
+    // Live matches what's shown (steady state, or a glitch settled back): show it.
+    if (liveTextSig === shownTextSig) {
+      setTextVisible(true)
+      return
+    }
+    // Track changed: fade out now, adopt + fade in once the metadata is stable.
+    setTextVisible(false)
+    const t = setTimeout(() => {
+      setShownText({ title: meta.title, subtitle: meta.subtitle, badges: meta.badges })
+      setTextVisible(true)
+    }, 350)
+    return () => clearTimeout(t)
+  }, [liveTextSig, shownTextSig])
 
   // Enter OS fullscreen while mounted; leave on unmount. If the user exits
   // fullscreen (Esc), close display mode too.
@@ -141,20 +156,22 @@ export function DisplayMode(): React.JSX.Element {
           />
 
           <div
-            ref={textFadeRef}
-            className="absolute top-full left-1/2 -translate-x-1/2 mt-9 w-[70vw] text-center space-y-1"
+            className={cx(
+              'absolute top-full left-1/2 -translate-x-1/2 mt-9 w-[70vw] text-center space-y-1 transition-opacity duration-300',
+              textVisible ? 'opacity-100' : 'opacity-0'
+            )}
           >
             <div className="font-display font-bold text-[clamp(26px,4.5vmin,52px)] leading-tight tracking-tight text-balance">
-              {meta.title ?? 'Nothing playing'}
+              {shownText.title ?? 'Nothing playing'}
             </div>
-            {meta.subtitle && (
+            {shownText.subtitle && (
               <div className="font-display tracking-tight leading-tight text-[clamp(15px,2.2vmin,24px)] text-dim truncate">
-                {meta.subtitle}
+                {shownText.subtitle}
               </div>
             )}
-            {meta.badges.length > 0 && (
+            {shownText.badges.length > 0 && (
               <div className="flex justify-center flex-wrap gap-1.5 pt-6">
-                {meta.badges.map((b) => (
+                {shownText.badges.map((b) => (
                   <span key={b} className="badge">
                     {b}
                   </span>
