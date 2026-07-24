@@ -37,11 +37,29 @@ export function Nav(): React.JSX.Element {
   const settings = useStore((s) => s.settings)
   const update = useStore((s) => s.update)
   const [menu, setMenu] = useState<NavMenu | null>(null)
+  // Collapsed-rail tooltips are portaled to <body> so they escape the screens
+  // scroller's overflow-x clip (a CSS ::after tooltip can't). No-op expanded —
+  // there the label + shortcut already show on the row.
+  const [navTip, setNavTip] = useState<{ label: string; top: number; left: number } | null>(null)
+  const navTipTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const collapsed = settings.navCollapsed
   const toggleCollapsed = async (): Promise<void> => {
     await saveSettings({ navCollapsed: !collapsed })
   }
+  const navTipHandlers = (label: string) => ({
+    onMouseEnter: (e: React.MouseEvent<HTMLElement>) => {
+      if (!collapsed) return
+      const r = e.currentTarget.getBoundingClientRect()
+      const pos = { label, top: r.top + r.height / 2, left: r.right + 10 }
+      if (navTipTimer.current) clearTimeout(navTipTimer.current)
+      navTipTimer.current = setTimeout(() => setNavTip(pos), 450)
+    },
+    onMouseLeave: () => {
+      if (navTipTimer.current) clearTimeout(navTipTimer.current)
+      setNavTip(null)
+    }
+  })
 
   const hidden = sanitizeNavHidden(settings.navHidden)
   const hiddenSet = new Set(hidden)
@@ -80,10 +98,7 @@ export function Nav(): React.JSX.Element {
               setMenu({ kind: 'screen', id, label, x: e.clientX, y: e.clientY })
             }
       }
-      // expanded rows already show the label + shortcut, so the tooltip is
-      // pure redundancy (and its bubble is clipped by the scroller's
-      // overflow-x). Only the collapsed rail, which shows icons alone, needs it.
-      data-tip={collapsed ? `${label} (${key})` : undefined}
+      {...navTipHandlers(`${label} (${key})`)}
       aria-label={`${label} (${key})`}
       className={cx(
         'w-full flex items-center rounded-lg h-9 text-[13.5px] transition-colors',
@@ -179,7 +194,7 @@ export function Nav(): React.JSX.Element {
           <button
             onClick={() => setPaletteOpen(true)}
             onContextMenu={openToolMenu('commands', 'Commands')}
-            data-tip={`Command palette (${MOD}K)`}
+            {...navTipHandlers(`Command palette (${MOD}K)`)}
             aria-label={`Command palette (${MOD}K)`}
             className={cx(
               'w-full flex items-center rounded-lg h-9 text-[13.5px] text-dim hover:text-ink hover:bg-veil transition-colors',
@@ -199,7 +214,7 @@ export function Nav(): React.JSX.Element {
           <button
             onClick={() => void tt.toggleMini()}
             onContextMenu={openToolMenu('mini-player', 'Mini player')}
-            data-tip="Mini player"
+            {...navTipHandlers('Mini player')}
             aria-label="Mini player"
             className={cx(
               'w-full flex items-center rounded-lg h-9 text-[13.5px] text-dim hover:text-ink hover:bg-veil transition-colors',
@@ -217,7 +232,7 @@ export function Nav(): React.JSX.Element {
         {navItem(SETTINGS_SCREEN)}
         <button
           onClick={() => void toggleCollapsed()}
-          data-tip={collapsed ? 'Expand menu' : 'Collapse menu'}
+          {...navTipHandlers(collapsed ? 'Expand menu' : 'Collapse menu')}
           aria-label={collapsed ? 'Expand menu' : 'Collapse menu'}
           className={cx(
             'w-full flex items-center rounded-lg h-9 text-[13.5px] text-faint hover:text-dim hover:bg-veil transition-colors',
@@ -245,6 +260,17 @@ export function Nav(): React.JSX.Element {
           onClose={() => setMenu(null)}
         />
       )}
+      {collapsed &&
+        navTip &&
+        createPortal(
+          <div
+            className="fixed z-[70] pointer-events-none px-2 py-1 rounded-md bg-raised text-ink text-[11px] whitespace-nowrap ring-1 ring-edge2 shadow-[0_8px_24px_rgb(0_0_0_/_0.35)]"
+            style={{ top: navTip.top, left: navTip.left, transform: 'translateY(-50%)' }}
+          >
+            {navTip.label}
+          </div>,
+          document.body
+        )}
     </nav>
   )
 }
