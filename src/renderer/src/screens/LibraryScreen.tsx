@@ -203,6 +203,17 @@ export function LibraryScreen(): React.JSX.Element {
     [mediaIndexStatuses]
   )
   const crossAvailable = readyIndexes.length >= 2
+  // The button used to POP IN when the second index finished building —
+  // confusing (real-user report). While builds that will unlock cross
+  // search are still running, show it disabled with a building tip instead.
+  // aria-disabled (not the HTML attr) keeps the hover tip alive — the
+  // cross-search server filter's precedent.
+  const buildingCount = useMemo(
+    () => mediaIndexStatuses.filter((x) => x.state === 'building').length,
+    [mediaIndexStatuses]
+  )
+  const crossPending =
+    !crossAvailable && buildingCount > 0 && readyIndexes.length + buildingCount >= 2
 
   // The lenses: OUR views over the union of ready indexes, offered as doors
   // at the root beside the sources (places, not modes). One ready index is
@@ -1254,12 +1265,18 @@ export function LibraryScreen(): React.JSX.Element {
             />
           )}
           {/* the root's cross-server search: every built index at once */}
-          {!searchMode && atRoot && crossAvailable && (
+          {!searchMode && atRoot && (crossAvailable || crossPending) && (
             <button
               data-library-search-all-button
-              onClick={() => setSearchMode(true)}
-              className="no-drag flex items-center gap-2 px-3.5 h-8 rounded-lg bg-gold text-bg text-[12.5px] font-medium
-                         shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.3)] hover:brightness-110 motion-safe:active:scale-95 transition-all"
+              aria-disabled={!crossAvailable}
+              data-tip={crossAvailable ? undefined : 'Building library indexes…'}
+              onClick={() => crossAvailable && setSearchMode(true)}
+              className={cx(
+                'no-drag flex items-center gap-2 px-3.5 h-8 rounded-lg text-[12.5px] font-medium transition-all',
+                crossAvailable
+                  ? 'bg-gold text-bg shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.3)] hover:brightness-110 motion-safe:active:scale-95'
+                  : 'tip-bottom tip-end bg-veil2 text-faint cursor-default'
+              )}
             >
               <Search size={14} strokeWidth={2.2} />
               Search libraries
