@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Captions, Disc3, Heart, Maximize2, MicVocal, RadioTower, UserRound } from 'lucide-react'
 import { favoriteKey, type Favorite, type FavoriteMedia } from '@shared/ipc'
 import { tt } from '@/api'
@@ -109,6 +110,18 @@ export function NowPlayingScreen(): React.JSX.Element {
 
   const sourceName = nowPlaying?.source?.name ?? null
   const state = playState?.state
+
+  // Only surface "buffering" once it has persisted a beat — brief buffers on a
+  // seek or track change shouldn't flash a label. Other states show at once.
+  const [bufferingSettled, setBufferingSettled] = useState(false)
+  useEffect(() => {
+    if (state !== 'buffering') {
+      setBufferingSettled(false)
+      return
+    }
+    const t = setTimeout(() => setBufferingSettled(true), 2000)
+    return () => clearTimeout(t)
+  }, [state])
 
   const empty = !meta.title && !meta.subtitle
 
@@ -236,11 +249,13 @@ export function NowPlayingScreen(): React.JSX.Element {
         <div className={cx('min-w-0 max-w-xl space-y-5', mirrored && 'text-right')}>
           <div className={cx('flex items-center gap-3', mirrored && 'justify-end')}>
             {sourceName && <span className="badge">{sourceName}</span>}
-            {state && state !== 'play' && (
-              <span className={cx('microlabel', state === 'pause' ? 'text-amber' : '')}>
-                {state === 'pause' ? 'paused' : state}
-              </span>
-            )}
+            {state &&
+              state !== 'play' &&
+              (state !== 'buffering' || bufferingSettled) && (
+                <span className={cx('microlabel', state === 'pause' ? 'text-amber' : '')}>
+                  {state === 'pause' ? 'paused' : state}
+                </span>
+              )}
           </div>
 
           <div
