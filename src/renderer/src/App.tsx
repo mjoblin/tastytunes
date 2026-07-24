@@ -26,6 +26,9 @@ import { FavoritesScreen } from '@/screens/FavoritesScreen'
 import { SourcesScreen } from '@/screens/SourcesScreen'
 import { DeviceScreen } from '@/screens/DeviceScreen'
 import { SettingsScreen } from '@/screens/SettingsScreen'
+import { AmbientArt } from '@/components/AmbientArt'
+import { useDecodedArt } from '@/hooks/useDecodedArt'
+import { usePrefetchNextArt } from '@/hooks/usePrefetchNextArt'
 
 export default function App(): React.JSX.Element {
   useShortcuts()
@@ -54,15 +57,21 @@ export default function App(): React.JSX.Element {
   const artActive = connected && !inStandby ? meta.artUrl : null
   // A dead art URL must not leave the ambient wash/vignette up with no art.
   const artLoadable = useArtLoadable(artActive)
+  // The wash renders the last DECODED art, so a slow remote cover can't blank
+  // the window while it downloads (see useDecodedArt).
+  const { art: ambientArtUrl } = useDecodedArt(artActive)
   useArtAccent(settings.accentFollowsArt ? artActive : null, theme)
   useMotionPreference(settings.motion)
+  // Queue playback knows the next track's art before it's needed — warm it so
+  // the swap is instant on album/playlist runs.
+  usePrefetchNextArt()
 
   useEffect(() => {
     if (!connected && displayMode) setDisplayMode(false)
   }, [connected, displayMode, setDisplayMode])
 
   const ambientVisible =
-    artActive != null &&
+    ambientArtUrl != null &&
     artLoadable &&
     (settings.ambientArt === 'all' ||
       (settings.ambientArt === 'now-playing' && screen === 'now-playing'))
@@ -104,11 +113,10 @@ export default function App(): React.JSX.Element {
     }
   })()
 
-  const ambient = ambientVisible && (
-    <div aria-hidden className="absolute inset-0 overflow-hidden">
-      <div className="ambient-art" style={{ backgroundImage: `url(${artActive})` }} />
-      {settings.vignette && <div className="ambient-vignette" />}
-    </div>
+  // Always mounted (with a null src when it shouldn't show) so the wash can
+  // fade out on its own instead of vanishing in a frame.
+  const ambient = (
+    <AmbientArt src={ambientVisible ? (ambientArtUrl ?? null) : null} vignette={settings.vignette} />
   )
   const coverWindow = settings.ambientCoverage === 'window'
 

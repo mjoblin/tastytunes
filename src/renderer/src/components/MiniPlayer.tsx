@@ -24,6 +24,8 @@ import { useDisplayFont } from '@/hooks/useDisplayFont'
 import { useVolumeSlider, useWheelVolume } from '@/components/VolumeCluster'
 import { Slider } from '@/components/Slider'
 import { ArtImage } from '@/components/ArtImage'
+import { AmbientArt } from '@/components/AmbientArt'
+import { useDecodedArt } from '@/hooks/useDecodedArt'
 import { controlSet, cx, deriveNowPlaying, fmtTime } from '@/lib/format'
 
 /**
@@ -55,6 +57,8 @@ export function MiniPlayer(): React.JSX.Element {
   const meta = deriveNowPlaying(playState, nowPlaying)
   const controls = controlSet(nowPlaying)
   useArtAccent(settings.accentFollowsArt && active ? meta.artUrl : null, theme)
+  // Wash and tile both render the last DECODED cover (see useDecodedArt).
+  const { art: miniArt } = useDecodedArt(meta.artUrl)
   useMotionPreference(settings.motion)
 
   const state = playState?.state
@@ -103,17 +107,16 @@ export function MiniPlayer(): React.JSX.Element {
       <div className="relative h-full w-full rounded-2xl bg-panel ring-1 ring-edge2 overflow-hidden flex shadow-[0_12px_40px_rgb(0_0_0_/_0.5)]">
         {/* ambient album-art wash behind the strip — same treatment as the main
             window, gated on the same ambientArt setting (arrives live via the
-            settings broadcast) */}
-        {active && meta.artUrl && settings.ambientArt !== 'off' && (
-          <div aria-hidden className="absolute inset-0 pointer-events-none">
-            <div className="ambient-art" style={{ backgroundImage: `url(${meta.artUrl})` }} />
-            {settings.vignette && <div className="ambient-vignette" />}
-          </div>
-        )}
+            settings broadcast), and off the same decoded-art value so it
+            crossfades between covers instead of blanking mid-download */}
+        <AmbientArt
+          src={active && settings.ambientArt !== 'off' ? (miniArt ?? null) : null}
+          vignette={settings.vignette}
+        />
         {/* art */}
         <div className="relative h-full aspect-square shrink-0 bg-raised flex items-center justify-center">
           <ArtImage
-            src={active ? meta.artUrl : null}
+            src={active ? miniArt : null}
             fallback={
               meta.isRadio && active ? (
                 <RadioTower size={30} className="text-faint" />

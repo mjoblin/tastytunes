@@ -6,8 +6,9 @@ import { useStore } from '@/store'
 import { toggleFavorite } from '@/lib/favorites'
 import { cx, deriveNowPlaying } from '@/lib/format'
 import { useSettledSnapshot } from '@/hooks/useSettledSnapshot'
+import { useDecodedArt } from '@/hooks/useDecodedArt'
 import { SignalLamp } from '@/components/SignalLamp'
-import { CrossfadeArt } from '@/components/CrossfadeArt'
+import { ArtImage } from '@/components/ArtImage'
 import { LyricsPanel } from '@/components/LyricsPanel'
 import { LyricLine } from '@/components/LyricLine'
 import { EmptyState } from '@/components/EmptyState'
@@ -116,6 +117,9 @@ export function NowPlayingScreen(): React.JSX.Element {
 
   const sourceName = nowPlaying?.source?.name ?? null
   const state = playState?.state
+  // The tile renders the last DECODED cover (see useDecodedArt) — a hard swap
+  // between two real images, never a swap to an empty box mid-download.
+  const { art: tileArt } = useDecodedArt(meta.artUrl)
   // Live, not snapshotted — the queue moves independently of the track.
   const queueIndex = playState?.queue_index
   const queueLength = playState?.queue_length
@@ -240,8 +244,13 @@ export function NowPlayingScreen(): React.JSX.Element {
         <div className="shrink-0">
           {/* three width tiers — compact windows get genuinely small art
               (260) instead of the old two-step 340/400 (user pass) */}
-          <CrossfadeArt
-            src={meta.artUrl}
+          {/* Art swaps straight over on a track change — no crossfade here (user
+              call 2026-07-24: the text settling and the art dissolving at the
+              same time read as mushy). Display mode keeps its crossfade. The
+              swap is off the DECODED url, so the tile goes cover-to-cover
+              rather than emptying while a slow remote fetch finishes. */}
+          <ArtImage
+            src={tileArt}
             className="w-[260px] h-[260px] lg:w-[340px] lg:h-[340px] xl:w-[400px] xl:h-[400px] object-cover rounded-2xl art-glow"
             fallback={
               <div className="w-[260px] h-[260px] lg:w-[340px] lg:h-[340px] xl:w-[400px] xl:h-[400px] rounded-2xl bg-raised ring-1 ring-edge flex items-center justify-center">
