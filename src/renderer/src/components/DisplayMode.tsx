@@ -106,39 +106,46 @@ export function DisplayMode(): React.JSX.Element {
 
       {lyricsToggleable && settings.displayLyrics && <DisplayLyric />}
 
-      <div className="relative h-full flex flex-col items-center justify-center gap-9 px-16">
-        <ArtImage
-          src={meta.artUrl}
-          className="w-[46vmin] h-[46vmin] object-cover rounded-2xl art-glow"
-          fallback={
-            <div className="w-[46vmin] h-[46vmin] rounded-2xl bg-raised ring-1 ring-edge flex items-center justify-center">
-              {meta.isRadio ? (
-                <RadioTower size={90} strokeWidth={1} className="text-faint" />
-              ) : (
-                <Disc3 size={90} strokeWidth={1} className="text-faint" />
-              )}
-            </div>
-          }
-        />
+      <div className="relative h-full flex flex-col items-center justify-center px-16">
+        {/* Lock the art in place across track changes: it's a fixed size, so
+            we center it (nudged up to leave room for the text) and hang the
+            text absolutely beneath it — a longer/shorter title, a missing
+            subtitle, or a changing badge count then grow downward instead of
+            re-centering the whole group and shifting the art. */}
+        <div className="relative -translate-y-[7vmin]">
+          <ArtImage
+            src={meta.artUrl}
+            className="w-[46vmin] h-[46vmin] object-cover rounded-2xl art-glow"
+            fallback={
+              <div className="w-[46vmin] h-[46vmin] rounded-2xl bg-raised ring-1 ring-edge flex items-center justify-center">
+                {meta.isRadio ? (
+                  <RadioTower size={90} strokeWidth={1} className="text-faint" />
+                ) : (
+                  <Disc3 size={90} strokeWidth={1} className="text-faint" />
+                )}
+              </div>
+            }
+          />
 
-        <div className="text-center max-w-[70vw] space-y-1">
-          <div className="font-display font-bold text-[clamp(26px,4.5vmin,52px)] leading-tight tracking-tight text-balance">
-            {meta.title ?? 'Nothing playing'}
+          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-9 w-[70vw] text-center space-y-1">
+            <div className="font-display font-bold text-[clamp(26px,4.5vmin,52px)] leading-tight tracking-tight text-balance">
+              {meta.title ?? 'Nothing playing'}
+            </div>
+            {meta.subtitle && (
+              <div className="font-display tracking-tight leading-tight text-[clamp(15px,2.2vmin,24px)] text-dim truncate">
+                {meta.subtitle}
+              </div>
+            )}
+            {meta.badges.length > 0 && (
+              <div className="flex justify-center flex-wrap gap-1.5 pt-6">
+                {meta.badges.map((b) => (
+                  <span key={b} className="badge">
+                    {b}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
-          {meta.subtitle && (
-            <div className="font-display tracking-tight leading-tight text-[clamp(15px,2.2vmin,24px)] text-dim truncate">
-              {meta.subtitle}
-            </div>
-          )}
-          {meta.badges.length > 0 && (
-            <div className="flex justify-center flex-wrap gap-1.5 pt-3">
-              {meta.badges.map((b) => (
-                <span key={b} className="badge">
-                  {b}
-                </span>
-              ))}
-            </div>
-          )}
         </div>
       </div>
 
