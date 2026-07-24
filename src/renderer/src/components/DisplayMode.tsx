@@ -22,22 +22,21 @@ export function DisplayMode(): React.JSX.Element {
   const [cursorIdle, setCursorIdle] = useState(false)
   const [clock, setClock] = useState(() => timeNow())
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const fadeRef = useRef<HTMLDivElement>(null)
+  const textFadeRef = useRef<HTMLDivElement>(null)
 
   const meta = deriveNowPlaying(playState, nowPlaying)
 
-  // Fade the art + text in on track change (and on entering display mode)
-  // rather than popping. Web Animations replays the fade without re-mounting
-  // the art (a re-mount would reload/flash it), and the brief old-frame moment
-  // is hidden while opacity is near zero. Opacity-only, so it stays under
-  // reduce-motion.
-  const trackSig = `${meta.artUrl ?? ''}␟${meta.title ?? ''}␟${meta.subtitle ?? ''}`
+  // On track change (and on entering display mode) the album art crossfades
+  // (CrossfadeArt below) and the text fades in — instead of popping. Both are
+  // opacity-only, so they stay under reduce-motion, and neither re-mounts in a
+  // way that reloads the art.
+  const textSig = `${meta.title ?? ''}␟${meta.subtitle ?? ''}`
   useEffect(() => {
-    fadeRef.current?.animate([{ opacity: 0 }, { opacity: 1 }], {
+    textFadeRef.current?.animate([{ opacity: 0 }, { opacity: 1 }], {
       duration: 350,
       easing: 'ease-out'
     })
-  }, [trackSig])
+  }, [textSig])
 
   // Enter OS fullscreen while mounted; leave on unmount. If the user exits
   // fullscreen (Esc), close display mode too.
@@ -126,8 +125,8 @@ export function DisplayMode(): React.JSX.Element {
             text absolutely beneath it — a longer/shorter title, a missing
             subtitle, or a changing badge count then grow downward instead of
             re-centering the whole group and shifting the art. */}
-        <div ref={fadeRef} className="relative -translate-y-[7vmin]">
-          <ArtImage
+        <div className="relative -translate-y-[7vmin]">
+          <CrossfadeArt
             src={meta.artUrl}
             className="w-[46vmin] h-[46vmin] object-cover rounded-2xl art-glow"
             fallback={
@@ -141,7 +140,10 @@ export function DisplayMode(): React.JSX.Element {
             }
           />
 
-          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-9 w-[70vw] text-center space-y-1">
+          <div
+            ref={textFadeRef}
+            className="absolute top-full left-1/2 -translate-x-1/2 mt-9 w-[70vw] text-center space-y-1"
+          >
             <div className="font-display font-bold text-[clamp(26px,4.5vmin,52px)] leading-tight tracking-tight text-balance">
               {meta.title ?? 'Nothing playing'}
             </div>
@@ -171,6 +173,47 @@ export function DisplayMode(): React.JSX.Element {
           />
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * Album art that crossfades when the source changes: the incoming image fades
+ * in over the outgoing one (kept underneath), which is dropped once the fade
+ * finishes — instead of the hard pixel-swap a plain <img> src change gives.
+ */
+function CrossfadeArt({
+  src,
+  className,
+  fallback
+}: {
+  src: string | null | undefined
+  className: string
+  fallback: React.ReactNode
+}): React.JSX.Element {
+  const [cur, setCur] = useState<{ src: string | null | undefined; k: number }>({ src, k: 0 })
+  const [prev, setPrev] = useState<{ src: string | null | undefined; k: number } | null>(null)
+  const curRef = useRef(cur)
+  const kRef = useRef(0)
+  useEffect(() => {
+    if (src === curRef.current.src) return
+    setPrev(curRef.current)
+    const next = { src, k: ++kRef.current }
+    curRef.current = next
+    setCur(next)
+    const t = setTimeout(() => setPrev(null), 500)
+    return () => clearTimeout(t)
+  }, [src])
+  return (
+    <div className="relative">
+      {prev && (
+        <div key={`p${prev.k}`} className="absolute inset-0">
+          <ArtImage src={prev.src} className={className} fallback={fallback} />
+        </div>
+      )}
+      <div key={`c${cur.k}`} className="art-fade-in">
+        <ArtImage src={cur.src} className={className} fallback={fallback} />
+      </div>
     </div>
   )
 }
