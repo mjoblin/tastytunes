@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Command, EyeOff, PanelLeftClose, PanelLeftOpen, PictureInPicture2 } from 'lucide-react'
 import { tt } from '@/api'
@@ -42,6 +42,15 @@ export function Nav(): React.JSX.Element {
   // there the label + shortcut already show on the row.
   const [navTip, setNavTip] = useState<{ label: string; top: number; left: number } | null>(null)
   const navTipTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // The rail outlives every screen, so this only bites on a dev hot-update —
+  // but a pending timer surviving its component is exactly the leak class the
+  // entry-idempotency rules exist for. Clear it on the way out.
+  useEffect(
+    () => () => {
+      if (navTipTimer.current) clearTimeout(navTipTimer.current)
+    },
+    []
+  )
 
   const collapsed = settings.navCollapsed
   const toggleCollapsed = async (): Promise<void> => {

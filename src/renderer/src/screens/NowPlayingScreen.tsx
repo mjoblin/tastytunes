@@ -37,14 +37,20 @@ export function NowPlayingScreen(): React.JSX.Element {
   // group on track change (same idea as display mode): fade out, wait for the
   // metadata to settle, then adopt + fade the new track in — so the gap never
   // flashes intermediate/empty states. The album art crossfades independently.
-  const liveTrackSig = `${meta.title ?? ''}␟${meta.subtitle ?? ''}␟${meta.album ?? ''}␟${meta.badges.join('|')}`
+  //
+  // The signature is the TRACK'S IDENTITY only. Badges ride along in the
+  // snapshot (they swap with the group) but must never drive the settle: the
+  // bitrate badge can tick on its own, and a signature that ticks re-arms the
+  // timer forever — which held the whole block at opacity 0 for as long as the
+  // ticking lasted. Queue position is deliberately NOT snapshotted: it moves
+  // for reasons that have nothing to do with the track (adding, removing or
+  // reordering the queue), so it renders live and merely fades with the group.
+  const liveTrackSig = `${meta.title ?? ''}␟${meta.subtitle ?? ''}␟${meta.album ?? ''}`
   const { shown: shownTrack, visible: trackVisible } = useSettledSnapshot(liveTrackSig, () => ({
     title: meta.title,
     subtitle: meta.subtitle,
     album: meta.album,
-    badges: meta.badges,
-    queueIndex: playState?.queue_index,
-    queueLength: playState?.queue_length
+    badges: meta.badges
   }))
   // Right placement mirrors the pair: art anchors the right edge, text grows leftward.
   const mirrored = nowPlayingAlignH === 'right'
@@ -110,6 +116,9 @@ export function NowPlayingScreen(): React.JSX.Element {
 
   const sourceName = nowPlaying?.source?.name ?? null
   const state = playState?.state
+  // Live, not snapshotted — the queue moves independently of the track.
+  const queueIndex = playState?.queue_index
+  const queueLength = playState?.queue_length
 
   // Only surface "buffering" once it has persisted a beat — brief buffers on a
   // seek or track change shouldn't flash a label. Other states show at once.
@@ -296,18 +305,16 @@ export function NowPlayingScreen(): React.JSX.Element {
             <div className="text-[13px] text-dim">{nowPlaying.display.line3}</div>
           )}
 
-          {shownTrack.queueIndex != null &&
-            shownTrack.queueLength != null &&
-            shownTrack.queueLength > 0 && (
-              <div
-                className={cx(
-                  'microlabel transition-opacity duration-300',
-                  trackVisible ? 'opacity-100' : 'opacity-0'
-                )}
-              >
-                track {shownTrack.queueIndex + 1} of {shownTrack.queueLength}
-              </div>
-            )}
+          {queueIndex != null && queueLength != null && queueLength > 0 && (
+            <div
+              className={cx(
+                'microlabel transition-opacity duration-300',
+                trackVisible ? 'opacity-100' : 'opacity-0'
+              )}
+            >
+              track {queueIndex + 1} of {queueLength}
+            </div>
+          )}
 
           {/* inline lyric flavor — never alongside the full panel; fades with
               the track group so it doesn't pop on a change */}

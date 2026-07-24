@@ -51,29 +51,49 @@ const deviceManager = new DeviceManager()
 const mcpBridge = new McpBridge(deviceManager)
 let mainWindow: BrowserWindow | null = null
 let miniWindow: BrowserWindow | null = null
+/**
+ * Every window hears a settings write — the mini player tracks the main window
+ * live (display font, theme, ambient art), and an MCP-driven change (schedules)
+ * reaches both. The sender re-applies the same object idempotently; the store's
+ * 'settings' push just sets state.
+ */
+function broadcastSettings(settings: AppSettings): void {
+  for (const w of BrowserWindow.getAllWindows()) {
+    w.webContents.send(IPC.push, { kind: 'settings', settings })
+  }
+}
+
 // MCP tools can mutate settings (schedules) — the renderer must hear about it
-mcpBridge.onSettingsMutated = (settings) =>
-  mainWindow?.webContents.send(IPC.push, { kind: 'settings', settings })
+mcpBridge.onSettingsMutated = (settings) => broadcastSettings(settings)
+
+const MIN_WIDTH = 800
+const MIN_HEIGHT = 520
 
 function createWindow(): void {
   // Reopen at the remembered size/position — but only place it if the saved
-  // spot is still on a connected display (mirrors the mini-player logic).
+  // spot is still on a connected display (mirrors the mini-player logic), and
+  // never larger than that display's work area: bounds saved on a big external
+  // monitor must not reopen off the edges of a laptop screen.
   const { mainBounds } = getSettings()
-  const onScreen =
-    mainBounds != null &&
-    screen.getAllDisplays().some(
-      ({ workArea }) =>
-        mainBounds.x >= workArea.x - 40 &&
-        mainBounds.x <= workArea.x + workArea.width - 100 &&
-        mainBounds.y >= workArea.y - 10 &&
-        mainBounds.y <= workArea.y + workArea.height - 60
-    )
+  const home =
+    mainBounds == null
+      ? null
+      : (screen.getAllDisplays().find(
+          ({ workArea }) =>
+            mainBounds.x >= workArea.x - 40 &&
+            mainBounds.x <= workArea.x + workArea.width - 100 &&
+            mainBounds.y >= workArea.y - 10 &&
+            mainBounds.y <= workArea.y + workArea.height - 60
+        ) ?? null)
+  const { workArea } = home ?? screen.getPrimaryDisplay()
+  const fit = (saved: number | undefined, fallback: number, min: number, max: number): number =>
+    Math.max(min, Math.min(saved ?? fallback, max))
   mainWindow = new BrowserWindow({
-    width: mainBounds?.width ?? 1180,
-    height: mainBounds?.height ?? 780,
-    ...(onScreen ? { x: mainBounds.x, y: mainBounds.y } : {}),
-    minWidth: 800,
-    minHeight: 520,
+    width: fit(mainBounds?.width, 1180, MIN_WIDTH, workArea.width),
+    height: fit(mainBounds?.height, 780, MIN_HEIGHT, workArea.height),
+    ...(home && mainBounds ? { x: mainBounds.x, y: mainBounds.y } : {}),
+    minWidth: MIN_WIDTH,
+    minHeight: MIN_HEIGHT,
     show: false,
     backgroundColor: '#0e0d0b',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
@@ -258,12 +278,7 @@ function registerIpc(): void {
   ipcMain.handle(IPC.getSettings, () => getSettings())
   ipcMain.handle(IPC.setSettings, (_e, patch: Partial<AppSettings>) => {
     const next = updateSettings(patch)
-    // Mirror the write to every window so the mini player tracks the main
-    // window live (display font, theme, ambient art…). The sender re-applies
-    // the same object idempotently; the store's 'settings' push just sets state.
-    for (const w of BrowserWindow.getAllWindows()) {
-      w.webContents.send(IPC.push, { kind: 'settings', settings: next })
-    }
+    broadcastSettings(next)
     // OS-global shortcut churn only when the toggle itself changed — every
     // settings write used to unregister/re-register all four media keys.
     if ('mediaKeys' in patch) syncMediaKeys()

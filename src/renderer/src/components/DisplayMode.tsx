@@ -29,7 +29,10 @@ export function DisplayMode(): React.JSX.Element {
   // on track change the group fades out, and only once the metadata settles
   // does it swap and fade the new track in — so the gap never flashes
   // intermediate/empty states. (The album art crossfades independently.)
-  const liveTextSig = `${meta.title ?? ''}␟${meta.subtitle ?? ''}␟${meta.badges.join('|')}`
+  // Signature = the track's identity only; badges ride in the snapshot but
+  // never drive the settle (the bitrate badge ticks on its own — a ticking
+  // signature re-arms the timer forever and the group stays invisible).
+  const liveTextSig = `${meta.title ?? ''}␟${meta.subtitle ?? ''}`
   const { shown: shownText, visible: textVisible } = useSettledSnapshot(liveTextSig, () => ({
     title: meta.title,
     subtitle: meta.subtitle,
