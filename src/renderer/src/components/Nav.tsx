@@ -136,7 +136,7 @@ export function Nav(): React.JSX.Element {
           onClick={() => (update ? jumpToSettingsTab('updates') : setInfoOpen(true))}
           data-tip={update ? `v${update.version} available — open Updates` : 'About TastyTunes'}
           aria-label={update ? `v${update.version} available — open Updates` : 'About TastyTunes'}
-          className="no-drag relative font-wordmark font-bold text-[19px] leading-none tracking-tight cursor-pointer"
+          className="no-drag relative inline-block align-top font-wordmark font-bold text-[21px] leading-none tracking-tight cursor-pointer"
         >
           {collapsed ? (
             <>
