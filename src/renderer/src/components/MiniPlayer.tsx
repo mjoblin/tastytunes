@@ -105,10 +105,16 @@ export function MiniPlayer(): React.JSX.Element {
   return (
     <div className="h-screen w-screen drag-region" onWheel={onWheel}>
       <div className="relative h-full w-full rounded-2xl bg-panel ring-1 ring-edge2 overflow-hidden flex shadow-[0_12px_40px_rgb(0_0_0_/_0.5)]">
-        {/* ambient album-art wash behind the strip — same treatment as the main
-            window, gated on the same ambientArt setting (arrives live via the
-            settings broadcast), and off the same decoded-art value so it
-            crossfades between covers instead of blanking mid-download */}
+        {/* Ambient album-art wash behind the strip — same treatment as the main
+            window, off the same decoded-art value so it crossfades between
+            covers instead of blanking mid-download.
+            GATING (user intent, 2026-07-24): 'off' means OFF EVERYWHERE — turn
+            ambient art off and the mini has none either, which is the whole
+            point of the setting. 'now-playing' DOES show it here: that mode
+            scopes the wash to the now-playing surface rather than disabling it,
+            and the mini is nothing but a now-playing surface. So the one live
+            check is !== 'off' — deliberately, not incidentally. (Arrives live
+            in this window via the settings broadcast.) */}
         <AmbientArt
           src={active && settings.ambientArt !== 'off' ? (miniArt ?? null) : null}
           vignette={settings.vignette}
