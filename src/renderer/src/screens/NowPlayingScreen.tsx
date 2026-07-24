@@ -4,8 +4,9 @@ import { tt } from '@/api'
 import { useStore } from '@/store'
 import { toggleFavorite } from '@/lib/favorites'
 import { cx, deriveNowPlaying } from '@/lib/format'
+import { useSettledSnapshot } from '@/hooks/useSettledSnapshot'
 import { SignalLamp } from '@/components/SignalLamp'
-import { ArtImage } from '@/components/ArtImage'
+import { CrossfadeArt } from '@/components/CrossfadeArt'
 import { LyricsPanel } from '@/components/LyricsPanel'
 import { LyricLine } from '@/components/LyricLine'
 import { EmptyState } from '@/components/EmptyState'
@@ -30,6 +31,18 @@ export function NowPlayingScreen(): React.JSX.Element {
     lyricsLine
   } = useStore((s) => s.settings)
   const meta = deriveNowPlaying(playState, nowPlaying)
+
+  // Title/artist/album/badges render from a SETTLED snapshot and fade as one
+  // group on track change (same idea as display mode): fade out, wait for the
+  // metadata to settle, then adopt + fade the new track in — so the gap never
+  // flashes intermediate/empty states. The album art crossfades independently.
+  const liveTrackSig = `${meta.title ?? ''}␟${meta.subtitle ?? ''}␟${meta.album ?? ''}␟${meta.badges.join('|')}`
+  const { shown: shownTrack, visible: trackVisible } = useSettledSnapshot(liveTrackSig, () => ({
+    title: meta.title,
+    subtitle: meta.subtitle,
+    album: meta.album,
+    badges: meta.badges
+  }))
   // Right placement mirrors the pair: art anchors the right edge, text grows leftward.
   const mirrored = nowPlayingAlignH === 'right'
 
@@ -205,7 +218,7 @@ export function NowPlayingScreen(): React.JSX.Element {
         <div className="shrink-0">
           {/* three width tiers — compact windows get genuinely small art
               (260) instead of the old two-step 340/400 (user pass) */}
-          <ArtImage
+          <CrossfadeArt
             src={meta.artUrl}
             className="w-[260px] h-[260px] lg:w-[340px] lg:h-[340px] xl:w-[400px] xl:h-[400px] object-cover rounded-2xl art-glow"
             fallback={
@@ -230,21 +243,32 @@ export function NowPlayingScreen(): React.JSX.Element {
             )}
           </div>
 
-          <div className="space-y-1">
+          <div
+            className={cx(
+              'space-y-1 transition-opacity duration-300',
+              trackVisible ? 'opacity-100' : 'opacity-0'
+            )}
+          >
             <h1 className="font-display font-bold text-[clamp(28px,4vw,46px)] leading-[1.08] tracking-tight text-balance">
-              {meta.title}
+              {shownTrack.title}
             </h1>
-            {meta.subtitle && (
+            {shownTrack.subtitle && (
               <div className="font-display text-[23px] leading-tight tracking-tight text-ink/80 truncate">
-                {meta.subtitle}
+                {shownTrack.subtitle}
               </div>
             )}
-            {meta.album && <div className="text-[14px] text-dim truncate">{meta.album}</div>}
+            {shownTrack.album && <div className="text-[14px] text-dim truncate">{shownTrack.album}</div>}
           </div>
 
-          {meta.badges.length > 0 && (
-            <div className={cx('flex flex-wrap items-center gap-1.5', mirrored && 'justify-end')}>
-              {meta.badges.map((b) => (
+          {shownTrack.badges.length > 0 && (
+            <div
+              className={cx(
+                'flex flex-wrap items-center gap-1.5 transition-opacity duration-300',
+                trackVisible ? 'opacity-100' : 'opacity-0',
+                mirrored && 'justify-end'
+              )}
+            >
+              {shownTrack.badges.map((b) => (
                 <span key={b} className="badge">
                   {b}
                 </span>

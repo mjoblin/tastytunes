@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { Captions, Disc3, RadioTower, X } from 'lucide-react'
 import { useStore } from '@/store'
-import { ArtImage } from '@/components/ArtImage'
+import { CrossfadeArt } from '@/components/CrossfadeArt'
 import { usePlayhead } from '@/hooks/usePlayhead'
 import { useArtLoadable } from '@/hooks/useArtLoadable'
 import { useFadedText, useLyrics } from '@/hooks/useLyrics'
+import { useSettledSnapshot } from '@/hooks/useSettledSnapshot'
 import { cx, deriveNowPlaying } from '@/lib/format'
 
 /**
@@ -25,33 +26,15 @@ export function DisplayMode(): React.JSX.Element {
   const meta = deriveNowPlaying(playState, nowPlaying)
 
   // Title/artist/badges render from a SETTLED snapshot and fade as one group:
-  // on track change the group fades out, and only once the live metadata stops
-  // changing (the gap between tracks settles) does the snapshot swap and the
-  // new track fade in — so the intermediate/empty gap states never flash.
-  // Opacity-only, so it stays under reduce-motion. (The album art crossfades
-  // independently — see CrossfadeArt.)
+  // on track change the group fades out, and only once the metadata settles
+  // does it swap and fade the new track in — so the gap never flashes
+  // intermediate/empty states. (The album art crossfades independently.)
   const liveTextSig = `${meta.title ?? ''}␟${meta.subtitle ?? ''}␟${meta.badges.join('|')}`
-  const [shownText, setShownText] = useState({
+  const { shown: shownText, visible: textVisible } = useSettledSnapshot(liveTextSig, () => ({
     title: meta.title,
     subtitle: meta.subtitle,
     badges: meta.badges
-  })
-  const [textVisible, setTextVisible] = useState(false)
-  const shownTextSig = `${shownText.title ?? ''}␟${shownText.subtitle ?? ''}␟${shownText.badges.join('|')}`
-  useEffect(() => {
-    // Live matches what's shown (steady state, or a glitch settled back): show it.
-    if (liveTextSig === shownTextSig) {
-      setTextVisible(true)
-      return
-    }
-    // Track changed: fade out now, adopt + fade in once the metadata is stable.
-    setTextVisible(false)
-    const t = setTimeout(() => {
-      setShownText({ title: meta.title, subtitle: meta.subtitle, badges: meta.badges })
-      setTextVisible(true)
-    }, 350)
-    return () => clearTimeout(t)
-  }, [liveTextSig, shownTextSig])
+  }))
 
   // Enter OS fullscreen while mounted; leave on unmount. If the user exits
   // fullscreen (Esc), close display mode too.
@@ -190,47 +173,6 @@ export function DisplayMode(): React.JSX.Element {
           />
         </div>
       )}
-    </div>
-  )
-}
-
-/**
- * Album art that crossfades when the source changes: the incoming image fades
- * in over the outgoing one (kept underneath), which is dropped once the fade
- * finishes — instead of the hard pixel-swap a plain <img> src change gives.
- */
-function CrossfadeArt({
-  src,
-  className,
-  fallback
-}: {
-  src: string | null | undefined
-  className: string
-  fallback: React.ReactNode
-}): React.JSX.Element {
-  const [cur, setCur] = useState<{ src: string | null | undefined; k: number }>({ src, k: 0 })
-  const [prev, setPrev] = useState<{ src: string | null | undefined; k: number } | null>(null)
-  const curRef = useRef(cur)
-  const kRef = useRef(0)
-  useEffect(() => {
-    if (src === curRef.current.src) return
-    setPrev(curRef.current)
-    const next = { src, k: ++kRef.current }
-    curRef.current = next
-    setCur(next)
-    const t = setTimeout(() => setPrev(null), 500)
-    return () => clearTimeout(t)
-  }, [src])
-  return (
-    <div className="relative">
-      {prev && (
-        <div key={`p${prev.k}`} className="absolute inset-0">
-          <ArtImage src={prev.src} className={className} fallback={fallback} />
-        </div>
-      )}
-      <div key={`c${cur.k}`} className="art-fade-in">
-        <ArtImage src={cur.src} className={className} fallback={fallback} />
-      </div>
     </div>
   )
 }
