@@ -271,9 +271,12 @@ export function Nav(): React.JSX.Element {
       )}
       {collapsed &&
         navTip &&
+        // z-50 = the app's menu tier (z-40 overlays, z-50 menus). Portaled to
+        // <body>, so it still paints above same-tier siblings without inventing
+        // a fourth stacking level that outranks every modal.
         createPortal(
           <div
-            className="fixed z-[70] pointer-events-none px-2 py-1 rounded-md bg-raised text-ink text-[11px] whitespace-nowrap ring-1 ring-edge2 shadow-[0_8px_24px_rgb(0_0_0_/_0.35)]"
+            className="fixed z-50 pointer-events-none px-2 py-1 rounded-md bg-raised text-ink text-[11px] whitespace-nowrap ring-1 ring-edge2 shadow-[0_8px_24px_rgb(0_0_0_/_0.35)]"
             style={{ top: navTip.top, left: navTip.left, transform: 'translateY(-50%)' }}
           >
             {navTip.label}

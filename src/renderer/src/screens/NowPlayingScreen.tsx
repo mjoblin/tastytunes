@@ -126,13 +126,20 @@ export function NowPlayingScreen(): React.JSX.Element {
 
   // Only surface "buffering" once it has persisted a beat — brief buffers on a
   // seek or track change shouldn't flash a label. Other states show at once.
+  //
+  // 800ms, not 2s (user call 2026-07-24): long enough to swallow seek and
+  // track-change blips, short enough that a genuinely slow radio start gets
+  // named while you're still wondering. The playback bar's `busy` LED stays
+  // INSTANT on purpose — the two do different jobs. The LED says "something is
+  // happening", which is ambient and belongs immediately; the label NAMES a
+  // state, which is a statement and earns a threshold.
   const [bufferingSettled, setBufferingSettled] = useState(false)
   useEffect(() => {
     if (state !== 'buffering') {
       setBufferingSettled(false)
       return
     }
-    const t = setTimeout(() => setBufferingSettled(true), 2000)
+    const t = setTimeout(() => setBufferingSettled(true), 800)
     return () => clearTimeout(t)
   }, [state])
 

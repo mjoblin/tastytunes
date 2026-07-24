@@ -29,6 +29,7 @@ import { SettingsScreen } from '@/screens/SettingsScreen'
 import { AmbientArt } from '@/components/AmbientArt'
 import { useDecodedArt } from '@/hooks/useDecodedArt'
 import { usePrefetchNextArt } from '@/hooks/usePrefetchNextArt'
+import { useFontScaleGuard } from '@/hooks/useFontScaleGuard'
 
 export default function App(): React.JSX.Element {
   useShortcuts()
@@ -65,6 +66,8 @@ export default function App(): React.JSX.Element {
   // Queue playback knows the next track's art before it's needed — warm it so
   // the swap is instant on album/playlist runs.
   usePrefetchNextArt()
+  // Dev tripwire: nested .font-display would compound the optical zoom.
+  useFontScaleGuard(screen)
 
   useEffect(() => {
     if (!connected && displayMode) setDisplayMode(false)
