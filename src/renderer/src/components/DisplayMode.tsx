@@ -126,7 +126,9 @@ export function DisplayMode(): React.JSX.Element {
             {meta.title ?? 'Nothing playing'}
           </div>
           {meta.subtitle && (
-            <div className="text-[clamp(15px,2.2vmin,24px)] text-dim truncate">{meta.subtitle}</div>
+            <div className="font-display tracking-tight text-[clamp(15px,2.2vmin,24px)] text-dim truncate">
+              {meta.subtitle}
+            </div>
           )}
           {meta.badges.length > 0 && (
             <div className="flex justify-center flex-wrap gap-1.5 pt-1.5">
