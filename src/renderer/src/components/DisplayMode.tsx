@@ -121,17 +121,17 @@ export function DisplayMode(): React.JSX.Element {
           }
         />
 
-        <div className="text-center max-w-[70vw] space-y-2.5">
+        <div className="text-center max-w-[70vw] space-y-1">
           <div className="font-display font-bold text-[clamp(26px,4.5vmin,52px)] leading-tight tracking-tight text-balance">
             {meta.title ?? 'Nothing playing'}
           </div>
           {meta.subtitle && (
-            <div className="font-display tracking-tight text-[clamp(15px,2.2vmin,24px)] text-dim truncate">
+            <div className="font-display tracking-tight leading-tight text-[clamp(15px,2.2vmin,24px)] text-dim truncate">
               {meta.subtitle}
             </div>
           )}
           {meta.badges.length > 0 && (
-            <div className="flex justify-center flex-wrap gap-1.5 pt-1.5">
+            <div className="flex justify-center flex-wrap gap-1.5 pt-3">
               {meta.badges.map((b) => (
                 <span key={b} className="badge">
                   {b}
