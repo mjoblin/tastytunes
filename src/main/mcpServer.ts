@@ -27,7 +27,7 @@ import {
   type Schedule,
   type Snapshot
 } from '@shared/ipc'
-import { EQ_GAIN_MAX, EQ_GAIN_MIN, audioCaps, brightnessOptions } from '@shared/smoip'
+import { EQ_GAIN_MAX, EQ_GAIN_MIN, audioCaps, brightnessOptions, isRadioMetadata } from '@shared/smoip'
 import { app } from 'electron'
 import type { DeviceManager } from './deviceManager'
 import { getSettings, updateSettings } from './persist'
@@ -929,6 +929,126 @@ export class McpBridge {
       },
 
       // ---- favorites
+      list_playlists: {
+        handler: () => {
+          const s = dm.snapshot()
+          return ok(
+            s.playlists.map((p) => ({
+              id: p.id,
+              name: p.name,
+              tracks: p.items.length,
+              seconds: p.items.reduce((n, i) => n + (i.durationSecs ?? 0), 0),
+              last_played: p.lastPlayedAt ?? null,
+              // surfaced because a run that skipped tracks is worth knowing
+              // about before you play it again
+              missing_last_time: p.lastMissing ?? []
+            }))
+          )
+        }
+      },
+      get_playlist: {
+        inputSchema: { id: z.string().describe('Playlist id from list_playlists.') },
+        handler: (a) => {
+          const p = dm.snapshot().playlists.find((x) => x.id === a.id)
+          if (!p) return err(`No playlist '${a.id}'. Use list_playlists.`)
+          return ok({
+            id: p.id,
+            name: p.name,
+            items: p.items.map((i) => ({
+              title: i.title,
+              artist: i.artist,
+              album: i.album,
+              seconds: i.durationSecs ?? null
+            }))
+          })
+        }
+      },
+      play_playlist: {
+        inputSchema: { id: z.string().describe('Playlist id from list_playlists.') },
+        handler: async (a) => {
+          this.connected()
+          const p = dm.snapshot().playlists.find((x) => x.id === a.id)
+          if (!p) return err(`No playlist '${a.id}'. Use list_playlists.`)
+          if (p.items.length === 0) return err(`"${p.name}" is empty.`)
+          const res = await dm.playlistActivate(a.id as string)
+          const missed = res.missed.length
+          // Name a few and count the rest: a long playlist can miss dozens, and
+          // twenty-two titles inline is noise an agent has to wade through.
+          const sample = res.missed.slice(0, 3).join(', ')
+          const more = res.missed.length - 3
+          return ok(
+            missed > 0
+              ? `Queued ${res.added} of ${res.total} from "${p.name}". ${missed} not found on any media server (${sample}${more > 0 ? `, +${more} more` : ''}).`
+              : `Queued ${res.added} ${res.added === 1 ? 'track' : 'tracks'} from "${p.name}".`
+          )
+        }
+      },
+      create_playlist: {
+        inputSchema: {
+          name: z.string().describe('Name for the new playlist.'),
+          from_queue: z
+            .boolean()
+            .optional()
+            .describe('Seed it with the current play queue (default false — creates it empty).')
+        },
+        handler: (a) => {
+          const s = dm.snapshot()
+          const items =
+            a.from_queue === true
+              ? (s.queue?.items ?? [])
+                  .map((i) => i.metadata)
+                  .filter((m): m is NonNullable<typeof m> => m != null)
+                  .map((m) => ({
+                    title: m.title ?? 'Unknown track',
+                    artist: m.artist ?? null,
+                    album: m.album ?? null,
+                    artUrl: m.art_url ?? null,
+                    serverUdn: null,
+                    serverName: null,
+                    objectId: null,
+                    durationSecs: m.duration ?? null
+                  }))
+              : []
+          const list = dm.playlistCreate(a.name as string, items)
+          const made = list.find((p) => p.name === a.name) ?? list[0]
+          return ok(`Created "${made.name}" with ${made.items.length} tracks. id: ${made.id}`)
+        }
+      },
+      add_to_playlist: {
+        inputSchema: { id: z.string().describe('Playlist id from list_playlists.') },
+        handler: (a) => {
+          const s = dm.snapshot()
+          const p = s.playlists.find((x) => x.id === a.id)
+          if (!p) return err(`No playlist '${a.id}'. Use list_playlists.`)
+          const md = s.playState?.metadata
+          // A playlist is an ordered list of TRACKS; a stream has no position
+          // in one, and content identity needs a title and an artist.
+          if (!md || isRadioMetadata(md)) return err('Nothing playing that can go in a playlist.')
+          if (!md.title || !md.artist) return err('The playing track has no title/artist to store.')
+          dm.playlistAppend(a.id as string, [
+            {
+              title: md.title,
+              artist: md.artist,
+              album: md.album ?? null,
+              artUrl: md.art_url ?? null,
+              serverUdn: null,
+              serverName: null,
+              objectId: null,
+              durationSecs: md.duration ?? null
+            }
+          ])
+          return ok(`Added "${md.title}" to "${p.name}".`)
+        }
+      },
+      delete_playlist: {
+        inputSchema: { id: z.string().describe('Playlist id from list_playlists.') },
+        handler: (a) => {
+          const p = dm.snapshot().playlists.find((x) => x.id === a.id)
+          if (!p) return err(`No playlist '${a.id}'. Use list_playlists.`)
+          dm.playlistDelete(a.id as string)
+          return ok(`Deleted "${p.name}".`)
+        }
+      },
       list_favorites: {
         handler: () => {
           const s = dm.snapshot()

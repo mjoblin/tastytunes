@@ -17,8 +17,10 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { Disc3, ListOrdered, Loader2, MoreHorizontal, Pencil, Play, Trash2, X } from 'lucide-react'
+import { queueContentHash } from '@shared/smoip'
 import {
   favoriteKey,
+  playlistContentHash,
   playlistItemKey,
   type Favorite,
   type FavoriteMedia,
@@ -52,6 +54,17 @@ import { cx, fmtDuration, fmtRelative, fmtTime, matchesFilter } from '@/lib/form
 export function PlaylistsScreen(): React.JSX.Element {
   const playlists = useStore((s) => s.playlists)
   const activation = useStore((s) => s.playlistActivation)
+  const queue = useStore((s) => s.queue)
+  /**
+   * Which playlist IS the queue right now — matched on CONTENT, not on a stored
+   * "active playlist" id. Content matching recognises a queue loaded before the
+   * app started or by another controller, and it degrades honestly: edit the
+   * queue and the badge simply goes, because it genuinely isn't that playlist
+   * any more. (A stored active-id plus a "modified" state was considered and
+   * dropped — after you queue an album it would still claim the old playlist
+   * was loaded-but-edited, which is worse than saying nothing.)
+   */
+  const liveHash = useMemo(() => queueContentHash(queue?.items ?? []), [queue])
   const filter = useStore((s) => s.screenFilters.playlists)
   const setScreenFilter = useStore((s) => s.setScreenFilter)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -72,6 +85,11 @@ export function PlaylistsScreen(): React.JSX.Element {
   const [sort, setSort] = useState<PlaylistSort>('updated')
   const [reversed, setReversed] = useState(false)
   const scrollMemory = useScrollMemory('playlists')
+
+  const queuedId = useMemo(() => {
+    if ((queue?.items?.length ?? 0) === 0) return null
+    return playlists.find((p) => playlistContentHash(p.items) === liveHash)?.id ?? null
+  }, [playlists, liveHash, queue])
 
   const shown = useMemo(() => {
     const list = playlists.filter((p) => matchesFilter(filter, [p.name]))
@@ -230,6 +248,7 @@ export function PlaylistsScreen(): React.JSX.Element {
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-[13.5px]">{p.name}</div>
                       <div className="microlabel mt-0.5 truncate">
+                        {queuedId === p.id && <span className="text-gold">in the queue · </span>}
                         {p.items.length} {p.items.length === 1 ? 'track' : 'tracks'}
                         {totalSecs(p) > 0 && ` · ${fmtDuration(totalSecs(p))}`}
                       </div>
@@ -336,6 +355,7 @@ export function PlaylistsScreen(): React.JSX.Element {
                   so the name is never the thing that loses. Facts drop by PANE
                   width, least useful first: created, then artists. */}
               <div className="microlabel truncate mb-3">
+                {queuedId === selected.id && <span className="text-gold">in the queue · </span>}
                 {selected.items.length} {selected.items.length === 1 ? 'track' : 'tracks'}
                 {totalSecs(selected) > 0 && ` · ${fmtDuration(totalSecs(selected))}`}
                 {artistCount(selected) > 1 && (

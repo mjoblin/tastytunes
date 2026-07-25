@@ -227,6 +227,27 @@ export const MAX_PLAYLISTS = 100
 export const MAX_PLAYLIST_ITEMS = 500
 
 /**
+ * A playlist's content hash in the SAME shape queueContentHash produces for a
+ * live queue, so the two can be compared directly. That comparison is how a
+ * playlist knows it's the thing currently queued — content-based, so it also
+ * recognises a queue loaded before the app started, or by another controller,
+ * exactly like the playing-preset match.
+ */
+export function playlistContentHash(items: PlaylistItem[]): string {
+  let h = 0x811c9dc5
+  const mix = (s: string): void => {
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i)
+      h = Math.imul(h, 0x01000193) >>> 0
+    }
+  }
+  for (const it of items) {
+    mix(`${it.title ?? ''}\x00${it.artist ?? ''}\x00${it.album ?? ''}\x01`)
+  }
+  return `${items.length}:${h.toString(16)}`
+}
+
+/**
  * Content identity for a playlist entry — deliberately the same shape as
  * favoriteKey's track form, so an item and a hearted track resolve the same
  * way and the healing path can be shared.
@@ -797,6 +818,59 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         name: 'remove_favorite',
         title: 'Remove favorite',
         description: 'Remove a favorite by its key (see list_favorites).'
+      }
+    ]
+  },
+  {
+    id: 'playlists',
+    title: 'Playlists',
+    group: 'control',
+    description:
+      "The user's stored playlists (local to the app, not the streamer) — list them and load one into the play queue.",
+    tools: [
+      {
+        name: 'list_playlists',
+        title: 'List playlists',
+        description:
+          'Stored playlists with their id, track count, runtime, and when each was last played.'
+      },
+      {
+        name: 'get_playlist',
+        title: 'Get playlist',
+        description: 'The tracks in one playlist, in order.'
+      },
+      {
+        name: 'play_playlist',
+        title: 'Play playlist',
+        description:
+          "Replace the play queue with a playlist's tracks. Slow by nature — the streamer takes entries one at a time — and a track no longer on any media server is reported rather than failing the run."
+      }
+    ]
+  },
+  {
+    id: 'playlistedit',
+    title: 'Playlist editing',
+    group: 'write',
+    optIn: true,
+    description:
+      "Create playlists, add the playing track to one, and delete them. These write the user's own stored collection — off unless you turn it on.",
+    tools: [
+      {
+        name: 'create_playlist',
+        title: 'Create playlist',
+        description:
+          'Create a playlist, optionally seeded with the current play queue (from_queue: true).'
+      },
+      {
+        name: 'add_to_playlist',
+        title: 'Add to playlist',
+        description:
+          "Add the currently playing track to a playlist by id (see list_playlists). Tracks only — a radio stream can't hold a position in an ordered list."
+      },
+      {
+        name: 'delete_playlist',
+        title: 'Delete playlist',
+        description: 'Delete a playlist by id. No undo.'
       }
     ]
   },
