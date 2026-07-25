@@ -177,6 +177,11 @@ function ToastHost(): React.JSX.Element | null {
     <div key={toast.id} className="toast-in absolute bottom-4 left-1/2 -translate-x-1/2 z-40">
       <div
         onClick={dismissToast}
+        style={
+          {
+            '--toast-accent': toast.kind === 'error' ? 'var(--alert-rgb)' : 'var(--gold-rgb)'
+          } as React.CSSProperties
+        }
         className={cx(
           // Translucent + blurred rather than an opaque slab: the toast floats
           // over content and the ambient art wash, and a solid bg-raised panel
@@ -184,7 +189,7 @@ function ToastHost(): React.JSX.Element | null {
           // near-black bg through is what makes it feel lit from the same
           // source as everything else. Roomier too — px-5/py-3, and gap-3 with
           // the action pushed further out so it stops crowding the sentence.
-          'flex items-center gap-3 rounded-xl px-5 py-3 ring-1 backdrop-blur-md',
+          'toast-surface flex items-center gap-3 rounded-xl px-5 py-3 ring-1 backdrop-blur-md',
           'bg-panel/70 shadow-[0_10px_40px_rgb(0_0_0_/_0.55)] text-[12.5px] cursor-pointer max-w-[520px]',
           toast.kind === 'error'
             ? 'ring-alert/45'

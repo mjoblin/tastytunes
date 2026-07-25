@@ -87,7 +87,9 @@
   --color-golddim: rgb(var(--gold-rgb) / 0.16);
   --color-goldtile: #322817; /* playing tile: lifted and warmed toward gold */
   --color-led: #67dd8b;
-  --color-alert: #e0654f;
+  /* triple form so alert can be used at partial alpha the way gold/amber are */
+  --alert-rgb: 224 101 79;
+  --color-alert: rgb(var(--alert-rgb));
   /* neutral overlay tints that flip with the theme (hover washes, tracks) */
   --color-veil: rgb(255 255 255 / 0.05);
   --color-veil2: rgb(255 255 255 / 0.1);
@@ -120,7 +122,8 @@
   --color-faint: #8f8672;
   --color-goldtile: #eee0bd;
   --color-led: #1fa456;
-  --color-alert: #c74a35;
+  --alert-rgb: 199 74 53;
+  --color-alert: rgb(var(--alert-rgb));
   --color-veil: rgb(30 20 5 / 0.05);
   --color-veil2: rgb(30 20 5 / 0.12);
 }
@@ -376,6 +379,18 @@ img {
 }
 :root.light .ambient-vignette {
   background: radial-gradient(120% 95% at 50% 42%, transparent 48%, rgb(40 28 8 / 0.22) 100%);
+}
+
+/* Toast surface: a 12% wash of the toast's OWN accent laid over the translucent
+   panel. An untinted panel read as a grey slab dropped on the warm faceplate —
+   picking the colour up from the ring is what makes it look lit by the app
+   rather than placed on it. The accent is supplied per kind (--toast-accent),
+   so the error variant washes red without a second rule. */
+.toast-surface {
+  background-image: linear-gradient(
+    rgb(var(--toast-accent) / 0.12),
+    rgb(var(--toast-accent) / 0.12)
+  );
 }
 
 /* soft glow behind large album art */
