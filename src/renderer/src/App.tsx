@@ -156,9 +156,10 @@ export default function App(): React.JSX.Element {
 
 /**
  * The single transient-feedback slot (see ToastData in the store). Bottom-
- * center above the playback bar; click dismisses, the optional action jumps
- * to the screen where the effect lives. Deliberately NOT wired to Escape —
- * the Escape cascade belongs to overlays.
+ * center above the playback bar; click dismisses, and the optional action
+ * either jumps to the screen where the effect lives or undoes what just
+ * happened (see ToastAction). Deliberately NOT wired to Escape — the Escape
+ * cascade belongs to overlays.
  */
 function ToastHost(): React.JSX.Element | null {
   const toast = useStore((s) => s.toast)
@@ -167,8 +168,11 @@ function ToastHost(): React.JSX.Element | null {
 
   useEffect(() => {
     if (!toast) return
-    // Errors linger a little longer than confirmations.
-    const t = setTimeout(dismissToast, toast.kind === 'error' ? 5000 : 3600)
+    // Errors linger a little longer than confirmations; an UNDO offer longer
+    // still (half again), because it isn't there to be read — it's there to be
+    // decided on, and noticing "wait, I didn't mean that" takes a beat.
+    const ms = toast.action?.undo ? 5400 : toast.kind === 'error' ? 5000 : 3600
+    const t = setTimeout(dismissToast, ms)
     return () => clearTimeout(t)
   }, [toast, dismissToast])
 
@@ -206,7 +210,9 @@ function ToastHost(): React.JSX.Element | null {
           <button
             onClick={(e) => {
               e.stopPropagation()
-              setScreen(toast.action!.screen)
+              const action = toast.action!
+              if (action.undo) action.undo()
+              else setScreen(action.screen)
               dismissToast()
             }}
             // Tinted to the toast's own accent so it reads as the thing to

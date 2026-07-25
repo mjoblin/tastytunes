@@ -93,8 +93,24 @@ export interface ToastData {
   id: number
   kind: 'success' | 'error'
   text: string
-  action?: { label: string; screen: Screen }
+  action?: ToastAction
 }
+
+/**
+ * A toast's optional button, in two shapes on purpose.
+ *
+ * `screen` JUMPS to where the effect lives — the original doctrine, for an
+ * effect you can't see from here. `undo` REVERSES what just happened, and is
+ * the app's whole undo surface: the offer lives and dies with its toast, so
+ * there is no invisible undo state and no stack to reason about. Replacing the
+ * toast drops the offer, which is exactly the single-slot semantics we want.
+ *
+ * An undo toast also gets a longer window than a plain confirmation (ToastHost)
+ * — reading a confirmation is passive, taking an offer is a decision.
+ */
+export type ToastAction =
+  | { label: string; screen: Screen; undo?: never }
+  | { label: string; undo: () => void; screen?: never }
 let toastNonce = 0
 
 interface PlayheadSync {
