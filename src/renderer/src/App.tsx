@@ -185,7 +185,7 @@ function ToastHost(): React.JSX.Element | null {
           // source as everything else. Roomier too — px-5/py-3, and gap-3 with
           // the action pushed further out so it stops crowding the sentence.
           'flex items-center gap-3 rounded-xl px-5 py-3 ring-1 backdrop-blur-md',
-          'bg-panel/90 shadow-[0_10px_40px_rgb(0_0_0_/_0.55)] text-[12.5px] cursor-pointer max-w-[520px]',
+          'bg-panel/70 shadow-[0_10px_40px_rgb(0_0_0_/_0.55)] text-[12.5px] cursor-pointer max-w-[520px]',
           toast.kind === 'error'
             ? 'ring-alert/45'
             : 'ring-gold/35 shadow-[0_10px_40px_rgb(0_0_0_/_0.55),0_0_24px_rgb(var(--gold-rgb)_/_0.10)]'
