@@ -94,6 +94,7 @@ export function installAppMenu(deps: MenuDeps): void {
   const screens: Array<[string, string]> = [
     ['now-playing', 'Now Playing'],
     ['queue', 'Queue'],
+    ['search', 'Search'],
     ['presets', 'Presets'],
     ['library', 'Library'],
     ['recently-played', 'Recently Played'],

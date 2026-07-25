@@ -10,7 +10,8 @@ import {
   ListOrdered,
   PictureInPicture2,
   Radio,
-  RadioTower
+  RadioTower,
+  Search
 } from 'lucide-react'
 import type { Screen } from '@/store'
 
@@ -36,7 +37,7 @@ export interface ScreenDef {
  * gets long enough to need them:
  *
  *   playing now      Now Playing · Queue
- *   everything       Library
+ *   find / everything Search · Library
  *   set up for later Presets · Playlists · Favorites
  *   dipped into      Radio · Recently Played
  *   system           Device
@@ -55,6 +56,11 @@ export interface ScreenDef {
 export const NAV_SCREENS: ScreenDef[] = [
   { id: 'now-playing', label: 'Now Playing', icon: Disc3, key: 'N' },
   { id: 'queue', label: 'Queue', icon: ListMusic, key: 'Q' },
+  // 'S' was held INERT for this screen since 2026-07-24, when Sources moved to
+  // 'C' — key quality follows visit frequency, and search will be constant.
+  // It leads the finding cluster: search when you don't know where it is,
+  // browse when you do.
+  { id: 'search', label: 'Search', icon: Search, key: 'S' },
   { id: 'library', label: 'Library', icon: Library, key: 'I' },
   { id: 'presets', label: 'Presets', icon: Radio, key: 'P' },
   // 'A' as in plAylists — S is the Search screen's, and P/L are long gone

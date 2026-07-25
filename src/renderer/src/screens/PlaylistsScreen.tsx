@@ -117,6 +117,17 @@ export function PlaylistsScreen(): React.JSX.Element {
     if (selectedId && !playlists.some((p) => p.id === selectedId)) setSelectedId(null)
   }, [playlists, selectedId])
 
+  // A search result OPENS a playlist rather than playing it (containers open,
+  // leaves play), so it plants an id here and this consumes it. Cleared on
+  // arrival — a stale jump must not re-select on a later visit.
+  const playlistsJump = useStore((s) => s.playlistsJump)
+  const clearPlaylistsJump = useStore((s) => s.clearPlaylistsJump)
+  useEffect(() => {
+    if (!playlistsJump) return
+    clearPlaylistsJump()
+    if (playlists.some((p) => p.id === playlistsJump)) setSelectedId(playlistsJump)
+  }, [playlistsJump, playlists, clearPlaylistsJump])
+
   // Pointer AND keyboard: reordering a list you can't drag is otherwise
   // impossible for anyone without a mouse.
   const sensors = useSensors(

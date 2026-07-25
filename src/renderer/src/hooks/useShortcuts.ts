@@ -20,10 +20,21 @@ export function useShortcuts(): void {
         s.setPaletteOpen(!s.paletteOpen)
         return
       }
-      // ⌘F / Ctrl+F: find semantics — the Library search, from anywhere.
+      // ⌘F / Ctrl+F: find semantics, and CONTEXTUAL like a browser's.
+      //
+      // Inside the Library it opens the LIBRARY's own search — that surface has
+      // scoping, cross-server mode and find-recall (⌘F brings back your last
+      // search with its scope, filters and sort), none of which the unified
+      // screen replicates. Pointing ⌘F away from it would have quietly killed
+      // find-recall. Everywhere else it opens the unified Search screen, which
+      // is the "I don't know where it is" tool. Search also has 'S', the nav
+      // row and the palette, so it loses no discoverability by yielding ⌘F on
+      // the one screen with a better answer.
       if ((e.metaKey || e.ctrlKey) && !e.altKey && (e.key === 'f' || e.key === 'F')) {
         e.preventDefault()
-        useStore.getState().requestLibrarySearch()
+        const s = useStore.getState()
+        if (s.screen === 'library') s.requestLibrarySearch()
+        else s.requestSearch()
         return
       }
 

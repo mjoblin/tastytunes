@@ -25,6 +25,7 @@ import { RecentlyPlayedScreen } from '@/screens/RecentlyPlayedScreen'
 import { FavoritesScreen } from '@/screens/FavoritesScreen'
 import { PlaylistsScreen } from '@/screens/PlaylistsScreen'
 import { DeviceScreen } from '@/screens/DeviceScreen'
+import { SearchScreen } from '@/screens/SearchScreen'
 import { SettingsScreen } from '@/screens/SettingsScreen'
 import { AmbientArt } from '@/components/AmbientArt'
 import { useDecodedArt } from '@/hooks/useDecodedArt'
@@ -98,6 +99,10 @@ export default function App(): React.JSX.Element {
     // Favorites and Recently Played. Activating one needs the streamer; the
     // screen's Play button is what surfaces that, not a wall.
     if (screen === 'playlists') return <PlaylistsScreen />
+    // Search spans local collections as well as the streamer, so it stays
+    // usable offline — the library/radio groups simply answer with nothing and
+    // the rows that need a device dim themselves.
+    if (screen === 'search') return <SearchScreen />
     if (!connected) return <ConnectGate />
     // Standby is a PRESENCE, not a wall (probed 2026-07-23: every state
     // endpoint, art path, and WS subscribe still answers in NETWORK

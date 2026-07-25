@@ -41,6 +41,7 @@ import { tt } from './api'
 export type Screen =
   | 'now-playing'
   | 'queue'
+  | 'search'
   | 'presets'
   | 'library'
   | 'radio'
@@ -113,6 +114,9 @@ export type ToastAction =
 let toastNonce = 0
 /** Monotonic id for search asks — see librarySearchTarget. */
 let librarySearchSeq = 0
+/** Monotonic id for unified-search asks — see searchRequest. */
+let searchSeq = 0
+
 
 interface PlayheadSync {
   secs: number
@@ -223,6 +227,19 @@ interface TTState {
   librarySearchTarget: { id: number } | null
   requestLibrarySearch(): void
   clearLibrarySearchTarget(): void
+  /**
+   * One-shot ask: open the unified Search screen with its input focused.
+   * Same id-and-clear contract as librarySearchTarget — a request made before
+   * the screen mounts still lands, and it can't re-fire on a later mount.
+   */
+  searchRequest: { id: number } | null
+  requestSearch(): void
+  clearSearchRequest(): void
+  /** One-shot ask: open Playlists with this playlist selected (search results
+   *  OPEN a playlist rather than playing it — containers open, leaves play). */
+  playlistsJump: string | null
+  jumpToPlaylist(id: string): void
+  clearPlaylistsJump(): void
 
   toast: ToastData | null
   showToast(toast: Omit<ToastData, 'id'>): void
@@ -324,6 +341,12 @@ export const useStore = create<TTState>((set, get) => ({
     // front door, and a ⌘F shouldn't throw away where you were browsing.
     set({ screen: 'library', librarySearchTarget: { id: ++librarySearchSeq } }),
   clearLibrarySearchTarget: () => set({ librarySearchTarget: null }),
+  searchRequest: null,
+  requestSearch: () => set({ screen: 'search', searchRequest: { id: ++searchSeq } }),
+  clearSearchRequest: () => set({ searchRequest: null }),
+  playlistsJump: null,
+  jumpToPlaylist: (id) => set({ screen: 'playlists', playlistsJump: id }),
+  clearPlaylistsJump: () => set({ playlistsJump: null }),
 
   toast: null,
   showToast: (toast) => set({ toast: { ...toast, id: ++toastNonce } }),
