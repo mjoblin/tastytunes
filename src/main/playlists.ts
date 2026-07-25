@@ -5,6 +5,7 @@ import { app } from 'electron'
 import {
   MAX_PLAYLISTS,
   MAX_PLAYLIST_ITEMS,
+  playlistItemKey,
   type Playlist,
   type PlaylistItem
 } from '@shared/ipc'
@@ -71,7 +72,17 @@ function uniqueName(base: string, existing: Playlist[]): string {
   return base
 }
 
-export function createPlaylist(name: string, items: PlaylistItem[]): Playlist[] {
+/**
+ * Returns the created playlist alongside the list: the stored name may have
+ * been uniquified away from what the caller asked for, so anything reporting
+ * the outcome (a toast, an MCP reply with the id) must read it back rather
+ * than assume — finding it by the requested name would land on the OLD
+ * playlist that forced the rename.
+ */
+export function createPlaylist(
+  name: string,
+  items: PlaylistItem[]
+): { list: Playlist[]; created: Playlist } {
   const now = Date.now()
   const playlist: Playlist = {
     id: randomUUID(),
@@ -80,7 +91,7 @@ export function createPlaylist(name: string, items: PlaylistItem[]): Playlist[] 
     updatedAt: now,
     items: boundItems(items)
   }
-  return save([playlist, ...getPlaylists()])
+  return { list: save([playlist, ...getPlaylists()]), created: playlist }
 }
 
 /**
@@ -125,16 +136,26 @@ export function markPlaylistPlayed(id: string, missing: string[]): Playlist[] {
  * Heal one entry's stale server/object id in place after a content re-resolve
  * — the favorites `updateFavorite` move, applied per playlist entry. Indexed
  * rather than keyed by content because a playlist may legitimately hold the
- * same track twice.
+ * same track twice; but activation iterates a SNAPSHOT while the user can
+ * still reorder or remove entries, so the index is only trusted when the
+ * entry there still IS the track that was resolved. On a mismatch the heal is
+ * skipped — the id was a hint, and the next activation re-resolves it anyway.
  */
 export function healPlaylistItem(
   id: string,
   index: number,
+  item: PlaylistItem,
   hint: Pick<PlaylistItem, 'serverUdn' | 'serverName' | 'objectId'>
 ): Playlist[] {
+  const expected = playlistItemKey(item)
   return patch(
     id,
-    (p) => ({ ...p, items: p.items.map((it, i) => (i === index ? { ...it, ...hint } : it)) }),
+    (p) => ({
+      ...p,
+      items: p.items.map((it, i) =>
+        i === index && playlistItemKey(it) === expected ? { ...it, ...hint } : it
+      )
+    }),
     false // system write — must not reorder the user's collection
   )
 }

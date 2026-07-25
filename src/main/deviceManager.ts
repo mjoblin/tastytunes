@@ -13,6 +13,7 @@ import {
   type McpStatus,
   type MediaIndexStatus,
   type MediaQueueAction,
+  type Playlist,
   type PlaylistActivation,
   type PushMessage,
   type RecentTrack,
@@ -837,8 +838,13 @@ export class DeviceManager {
     if (!playlist) throw new Error('No such playlist')
     const host = this.connection.phase === 'connected' ? this.connection.host : null
     if (!host) throw new Error('Not connected')
-
-    await this.ensureAwake() // activating is a play-shaped intent
+    // ONE run at a time. The UI greys its Play buttons during a run, but MCP's
+    // play_playlist has no such gate — two interleaved runs would fight over
+    // REPLACE/APPEND, the batch flags, and this.activation itself. The claim
+    // below is synchronous with this check: no await between them.
+    if (this.activation && !this.activation.finished) {
+      throw new Error(`Already loading "${this.activation.name}" — cancel that run first`)
+    }
 
     this.activationCancelled = false
     this.activation = {
@@ -854,14 +860,20 @@ export class DeviceManager {
     const announce = (): void => this.push({ kind: 'playlistActivation', state: this.activation })
     announce()
 
-    this.queueBatch = true
-    if (this.socket) this.socket.suppressQueueRefetch = true
+    // Nothing has touched the queue until this flips — a run that dies waking
+    // the device must not stamp lastPlayedAt on a playlist it never loaded.
+    let batchStarted = false
 
     // The FIRST successful add REPLACEs (clearing what was there); everything
     // after appends. Keyed off success, not index — if entry one can't be
     // resolved, entry two must still be the one that clears the old queue.
     let replaced = false
     try {
+      await this.ensureAwake() // activating is a play-shaped intent
+
+      this.queueBatch = true
+      batchStarted = true
+      if (this.socket) this.socket.suppressQueueRefetch = true
       for (const [index, item] of playlist.items.entries()) {
         if (this.activationCancelled) break
         const action: MediaQueueAction = replaced ? 'APPEND' : 'REPLACE'
@@ -892,7 +904,7 @@ export class DeviceManager {
               await queueAdd(host, server.udn, match.id, action)
               landed = true
               // heal in place — no updatedAt bump, so the collection keeps its order
-              healPlaylistItem(id, index, {
+              healPlaylistItem(id, index, item, {
                 serverUdn: server.udn,
                 serverName: server.name,
                 objectId: match.id
@@ -916,11 +928,23 @@ export class DeviceManager {
     } finally {
       this.queueBatch = false
       if (this.socket) this.socket.suppressQueueRefetch = false
-      // ONE authoritative read of the truth, whatever happened above.
-      this.socket?.send('/queue/list')
+      if (batchStarted) {
+        // ONE authoritative read of the truth, whatever happened above. The
+        // send throws on a half-dead socket (by design); swallowed HERE only,
+        // so cleanup can't mask the loop's real error — reconnect resubscribes
+        // /queue/list and delivers the same truth anyway.
+        try {
+          this.socket?.send('/queue/list')
+        } catch {
+          /* reconnect refetches */
+        }
+      }
       this.activation.cancelled = this.activationCancelled
       this.activation.finished = true
-      markPlaylistPlayed(id, this.activation.missed)
+      // Stamp the attempt only if the queue was actually touched: a run that
+      // died before the batch began didn't play anything and has no misses to
+      // report — lastPlayedAt claiming otherwise would be a small lie.
+      if (batchStarted) markPlaylistPlayed(id, this.activation.missed)
       announce()
       this.push({ kind: 'playlists', data: getPlaylists() })
     }
@@ -934,8 +958,11 @@ export class DeviceManager {
     return list
   }
 
-  playlistCreate(name: string, items: Parameters<typeof createPlaylist>[1]): ReturnType<typeof getPlaylists> {
-    return this.pushPlaylists(createPlaylist(name, items))
+  /** Returns the CREATED playlist (its stored name may have been uniquified). */
+  playlistCreate(name: string, items: Parameters<typeof createPlaylist>[1]): Playlist {
+    const { list, created } = createPlaylist(name, items)
+    this.pushPlaylists(list)
+    return created
   }
 
   playlistRename(id: string, name: string): ReturnType<typeof getPlaylists> {

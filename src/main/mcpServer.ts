@@ -1009,8 +1009,11 @@ export class McpBridge {
                     durationSecs: m.duration ?? null
                   }))
               : []
-          const list = dm.playlistCreate(a.name as string, items)
-          const made = list.find((p) => p.name === a.name) ?? list[0]
+          // The returned playlist, not a lookup by name: on a name collision
+          // the stored name is uniquified, and finding by the REQUESTED name
+          // would report the old playlist's id — an agent would then edit
+          // the wrong list.
+          const made = dm.playlistCreate(a.name as string, items)
           return ok(`Created "${made.name}" with ${made.items.length} tracks. id: ${made.id}`)
         }
       },

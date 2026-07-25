@@ -88,8 +88,10 @@ export function AddToPlaylistPanel({
         onClose()
         return
       }
-      await tt.playlistCreate(name, items)
-      done(items.length, name)
+      // Toast the STORED name — a collision uniquifies it ("Jazz (2)"), and
+      // the toast naming a playlist that isn't the one just made reads as a bug.
+      const created = await tt.playlistCreate(name, items)
+      done(items.length, created.name)
     } catch {
       showToast({ kind: 'error', text: "Couldn't create the playlist" })
       onClose()

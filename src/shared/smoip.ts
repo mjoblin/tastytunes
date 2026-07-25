@@ -286,13 +286,16 @@ export interface QueueListItem {
 }
 
 /**
- * Order-sensitive content hash of a queue's tracks (title/artist/album per
- * item — durations and art URLs can drift between a save and a later
- * recall). Recorded when a queue is saved to a device preset, then matched
- * against the live queue to recognize that preset's exact queue coming back
- * — including recalls made from other controllers, and at startup.
+ * Order-sensitive FNV-1a over title/artist/album rows — the ONE hash under
+ * both queueContentHash and playlistContentHash (@shared/ipc). Those two are
+ * compared for EQUALITY (a stored playlist recognising itself in the live
+ * queue), so they must never drift apart; sharing the core is what enforces
+ * that. Durations and art URLs are deliberately excluded — they drift between
+ * a save and a later recall.
  */
-export function queueContentHash(items: QueueListItem[]): string {
+export function contentRowsHash(
+  rows: Array<{ title?: string | null; artist?: string | null; album?: string | null }>
+): string {
   let h = 0x811c9dc5
   const mix = (s: string): void => {
     for (let i = 0; i < s.length; i++) {
@@ -300,11 +303,20 @@ export function queueContentHash(items: QueueListItem[]): string {
       h = Math.imul(h, 0x01000193) >>> 0
     }
   }
-  for (const it of items) {
-    const md = it.metadata
-    mix(`${md?.title ?? ''}\x00${md?.artist ?? ''}\x00${md?.album ?? ''}\x01`)
+  for (const r of rows) {
+    mix(`${r.title ?? ''}\x00${r.artist ?? ''}\x00${r.album ?? ''}\x01`)
   }
-  return `${items.length}:${h.toString(16)}`
+  return `${rows.length}:${h.toString(16)}`
+}
+
+/**
+ * Order-sensitive content hash of a queue's tracks. Recorded when a queue is
+ * saved to a device preset, then matched against the live queue to recognize
+ * that preset's exact queue coming back — including recalls made from other
+ * controllers, and at startup.
+ */
+export function queueContentHash(items: QueueListItem[]): string {
+  return contentRowsHash(items.map((it) => it.metadata ?? {}))
 }
 
 export interface QueueList {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   DndContext,
   KeyboardSensor,
@@ -25,6 +25,7 @@ import {
   type Favorite,
   type FavoriteMedia,
   type Playlist,
+  type PlaylistActivation,
   type PlaylistItem
 } from '@shared/ipc'
 import { tt } from '@/api'
@@ -33,8 +34,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { SortChip } from '@/components/SortChip'
 import { FilterInput } from '@/components/FilterInput'
 import { RowAction } from '@/components/RowAction'
-import { createPortal } from 'react-dom'
-import { usePopoverChrome, useClampedPosition } from '@/hooks/usePopover'
+import { RowMenu } from '@/components/RowMenu'
 import { RowHeart } from '@/components/RowHeart'
 import { AddToPlaylistPanel } from '@/components/AddToPlaylistPanel'
 import { toggleFavorite } from '@/lib/favorites'
@@ -108,7 +108,9 @@ export function PlaylistsScreen(): React.JSX.Element {
   /** Is the live activation THIS playlist's? Another one running should grey
    *  this button, not turn it into that run's progress bar. */
   const mine = !!activation && !activation.finished && activation.playlistId === selected?.id
-
+  // Computed once per items change: rowIds walks the whole list, and calling
+  // it per row (as key= and id= once did) is O(n²) at the 500-item ceiling.
+  const ids = useMemo(() => rowIds(selected?.items ?? []), [selected?.items])
 
   // A deleted (or filtered-away) selection must not strand the detail pane.
   useEffect(() => {
@@ -124,7 +126,6 @@ export function PlaylistsScreen(): React.JSX.Element {
 
   const onDragEnd = (e: DragEndEvent): void => {
     if (!selected || !e.over || e.active.id === e.over.id) return
-    const ids = rowIds(selected.items)
     const from = ids.indexOf(String(e.active.id))
     const to = ids.indexOf(String(e.over.id))
     if (from < 0 || to < 0) return
@@ -148,7 +149,17 @@ export function PlaylistsScreen(): React.JSX.Element {
    * "couldn't find these" line afterwards, which outlives any toast.
    */
   const activate = async (p: Playlist): Promise<void> => {
-    const res = await tt.playlistActivate(p.id)
+    let res: PlaylistActivation
+    try {
+      res = await tt.playlistActivate(p.id)
+    } catch {
+      // Rejections (not connected, a run already going, a mid-run network
+      // failure) don't ride the command() path, so its central failure toast
+      // never sees them — this catch is that toast's stand-in. Silence here
+      // was the alternative, and a Play button that does nothing is worse.
+      showToast({ kind: 'error', text: `Couldn't load “${p.name}”` })
+      return
+    }
     const missed = res.missed.length
     showToast({
       kind: res.added > 0 ? 'success' : 'error',
@@ -193,8 +204,9 @@ export function PlaylistsScreen(): React.JSX.Element {
       </header>
 
       {trackMenu && (
-        <TrackMenu
-          menu={trackMenu}
+        <RowMenu
+          title={trackMenu.item.title}
+          at={{ x: trackMenu.x, y: trackMenu.y }}
           onClose={() => setTrackMenu(null)}
           items={[
             {
@@ -381,11 +393,11 @@ export function PlaylistsScreen(): React.JSX.Element {
                   collisionDetection={closestCenter}
                   onDragEnd={onDragEnd}
                 >
-                  <SortableContext items={rowIds(selected.items)} strategy={verticalListSortingStrategy}>
+                  <SortableContext items={ids} strategy={verticalListSortingStrategy}>
                     {selected.items.map((item, i) => (
                       <TrackRow
-                        key={rowIds(selected.items)[i]}
-                        id={rowIds(selected.items)[i]}
+                        key={ids[i]}
+                        id={ids[i]}
                         index={i}
                         item={item}
                         onRemove={() => removeItem(i)}
@@ -501,10 +513,12 @@ function TrackRow({
   const hearted =
     favorite != null && favorites.some((f) => favoriteKey(f) === favoriteKey(favorite as Favorite))
   return (
-    // Same anatomy as a queue row (QueueScreen's QueueRow): position, art,
-    // title/artist, duration, remove, grip — in that order, on the same grid.
+    // Same anatomy as a queue row (QueueScreen's QueueRow): position/handle,
+    // art, title+artist, actions cluster, duration last — on the same grid.
     // Both screens are ordered lists of tracks; there is no reason for a track
     // row to feel like a different object depending on which one you're in.
+    // Unlike the queue's, this row's handle pairs with a KeyboardSensor, so
+    // the list can be reordered without a mouse.
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(lockVertical(transform)), transition }}
@@ -552,11 +566,6 @@ function TrackRow({
       <span className="font-mono text-[11px] text-faint tabular-nums">
         {item.durationSecs != null ? fmtTime(item.durationSecs) : ''}
       </span>
-
-      {/* Grip last, matching the queue. Unlike the queue's it carries an
-          aria-label and pairs with a KeyboardSensor, so the list can be
-          reordered without a mouse. */}
-
     </div>
   )
 }
@@ -585,42 +594,3 @@ function RenameField({
   )
 }
 
-/** The row ⋯ menu — the FavMenu/QueueRowMenu shape, third instance. */
-function TrackMenu({
-  menu,
-  items,
-  onClose
-}: {
-  menu: { item: PlaylistItem; x: number; y: number }
-  items: Array<{ label: string; run: () => void }>
-  onClose(): void
-}): React.JSX.Element {
-  usePopoverChrome(onClose)
-  const boxRef = useRef<HTMLDivElement | null>(null)
-  const pos = useClampedPosition(boxRef, menu.x, menu.y)
-  return createPortal(
-    <>
-      <div className="fixed inset-0 z-40" onClick={onClose} onContextMenu={onClose} />
-      <div
-        ref={boxRef}
-        className="fixed z-50 w-52 rounded-xl ring-1 ring-edge2 bg-raised shadow-xl p-1.5 space-y-0.5"
-        style={pos}
-      >
-        <div className="px-2.5 pt-1 pb-1.5 text-[11px] text-faint truncate">{menu.item.title}</div>
-        {items.map((it) => (
-          <button
-            key={it.label}
-            onClick={() => {
-              onClose()
-              it.run()
-            }}
-            className="w-full px-2.5 py-1.5 rounded-lg text-left text-[13px] text-dim hover:text-ink hover:bg-veil transition-colors"
-          >
-            {it.label}
-          </button>
-        ))}
-      </div>
-    </>,
-    document.body
-  )
-}

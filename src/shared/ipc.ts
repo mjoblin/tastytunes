@@ -17,7 +17,7 @@ import type {
   ZonePosition,
   ZoneState
 } from './smoip'
-import { isRadioMetadata, radioTrackTitle } from './smoip'
+import { contentRowsHash, isRadioMetadata, radioTrackTitle } from './smoip'
 
 /** The one copy of the project URL — user agents, Help menu, release pages. */
 export const REPO_URL = 'https://github.com/mjoblin/tastytunes'
@@ -234,17 +234,9 @@ export const MAX_PLAYLIST_ITEMS = 500
  * exactly like the playing-preset match.
  */
 export function playlistContentHash(items: PlaylistItem[]): string {
-  let h = 0x811c9dc5
-  const mix = (s: string): void => {
-    for (let i = 0; i < s.length; i++) {
-      h ^= s.charCodeAt(i)
-      h = Math.imul(h, 0x01000193) >>> 0
-    }
-  }
-  for (const it of items) {
-    mix(`${it.title ?? ''}\x00${it.artist ?? ''}\x00${it.album ?? ''}\x01`)
-  }
-  return `${items.length}:${h.toString(16)}`
+  // Delegates to the ONE hash core queueContentHash uses — these two are
+  // compared for equality, so a fork here would silently kill the marker.
+  return contentRowsHash(items)
 }
 
 /**
@@ -1469,8 +1461,11 @@ export interface TastyTunesApi {
   favoriteRemove(key: string): Promise<Favorite[]>
   /** Patch a favorite in place (objectId healing after a search resolve). */
   favoriteUpdate(key: string, patch: Partial<Favorite>): Promise<Favorite[]>
-  /** Stored playlists. Writes return the whole list, like the favorites verbs. */
-  playlistCreate(name: string, items: PlaylistItem[]): Promise<Playlist[]>
+  /** Stored playlists. Writes return the whole list, like the favorites verbs —
+   *  except create, which returns the CREATED playlist: its stored name may
+   *  have been uniquified, so reporting the outcome (toast text, an MCP reply
+   *  with the id) must read the result, not echo the request. */
+  playlistCreate(name: string, items: PlaylistItem[]): Promise<Playlist>
   playlistRename(id: string, name: string): Promise<Playlist[]>
   playlistDelete(id: string): Promise<Playlist[]>
   /** Replace a playlist's items wholesale — reorder and remove both land here. */
