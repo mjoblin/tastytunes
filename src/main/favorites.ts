@@ -37,10 +37,22 @@ function save(list: Favorite[]): Favorite[] {
   return list
 }
 
-/** Add (or re-add) a favorite: any same-key entry is replaced, newest first. */
+/**
+ * Add (or re-add) a favorite: any same-key entry is replaced, and the list
+ * stays newest-first.
+ *
+ * Placed BY ITS addedAt rather than simply prepended. For a genuine heart
+ * (addedAt = now) that's the head either way, so nothing changes; it matters
+ * for a RE-heart undoing an accidental unheart, which carries the original
+ * stamp and belongs back in its old slot, not at the top. Prepending made the
+ * "newest first" ordering a side effect of call order — this makes it the rule.
+ */
 export function addFavorite(fav: Favorite): Favorite[] {
   const key = favoriteKey(fav)
-  return save([fav, ...getFavorites().filter((f) => favoriteKey(f) !== key)])
+  const rest = getFavorites().filter((f) => favoriteKey(f) !== key)
+  const at = rest.findIndex((f) => f.addedAt < fav.addedAt)
+  const idx = at === -1 ? rest.length : at
+  return save([...rest.slice(0, idx), fav, ...rest.slice(idx)])
 }
 
 export function removeFavorite(key: string): Favorite[] {

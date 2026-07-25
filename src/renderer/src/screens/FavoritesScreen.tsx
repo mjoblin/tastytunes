@@ -239,7 +239,19 @@ export function FavoritesScreen(): React.JSX.Element {
     })
 
   const unheart = (f: Favorite): void => void tt.favoriteRemove(favoriteKey(f))
-  const reheart = (f: Favorite): void => void tt.favoriteAdd({ ...f, addedAt: Date.now() })
+  /**
+   * Re-hearting on THIS screen is an undo, not a fresh heart — soft removal
+   * leaves the row sitting there with an empty heart precisely so a misclick
+   * costs one click back. So it keeps the ORIGINAL addedAt: stamping Date.now()
+   * (as this did) silently moved the row to the top of a newest-first list, and
+   * you'd only find out next time you opened the screen. Hearting from anywhere
+   * else in the app is a genuine add and still stamps now.
+   *
+   * This is also why there's no undo toast here: the reversal affordance never
+   * left the screen. Toasts are for removals that take their own undo with them
+   * (a playlist track, a whole playlist).
+   */
+  const reheart = (f: Favorite): void => void tt.favoriteAdd(f)
   const toggleHeart = (f: Favorite): void =>
     activeKeys.has(favoriteKey(f)) ? unheart(f) : reheart(f)
 
