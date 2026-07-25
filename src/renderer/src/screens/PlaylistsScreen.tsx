@@ -17,7 +17,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { GripVertical, ListOrdered, Pencil, Play, Trash2, X } from 'lucide-react'
-import type { Playlist, PlaylistActivation, PlaylistItem } from '@shared/ipc'
+import { playlistItemKey, type Playlist, type PlaylistActivation, type PlaylistItem } from '@shared/ipc'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { EmptyState } from '@/components/EmptyState'
@@ -79,8 +79,9 @@ export function PlaylistsScreen(): React.JSX.Element {
 
   const onDragEnd = (e: DragEndEvent): void => {
     if (!selected || !e.over || e.active.id === e.over.id) return
-    const from = selected.items.findIndex((_, i) => rowId(selected, i) === e.active.id)
-    const to = selected.items.findIndex((_, i) => rowId(selected, i) === e.over?.id)
+    const ids = rowIds(selected.items)
+    const from = ids.indexOf(String(e.active.id))
+    const to = ids.indexOf(String(e.over.id))
     if (from < 0 || to < 0) return
     void tt.playlistSetItems(selected.id, arrayMove(selected.items, from, to))
   }
@@ -247,14 +248,11 @@ export function PlaylistsScreen(): React.JSX.Element {
               )}
               <div className="flex-1 min-h-0 overflow-y-auto">
                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-                  <SortableContext
-                    items={selected.items.map((_, i) => rowId(selected, i))}
-                    strategy={verticalListSortingStrategy}
-                  >
+                  <SortableContext items={rowIds(selected.items)} strategy={verticalListSortingStrategy}>
                     {selected.items.map((item, i) => (
                       <TrackRow
-                        key={rowId(selected, i)}
-                        id={rowId(selected, i)}
+                        key={rowIds(selected.items)[i]}
+                        id={rowIds(selected.items)[i]}
                         item={item}
                         onRemove={() => removeItem(i)}
                       />
@@ -311,9 +309,28 @@ function ArtStack({ playlist }: { playlist: Playlist }): React.JSX.Element {
   )
 }
 
-/** Stable per-position id — a playlist may hold the same track twice, so the
- *  content key alone can't identify a row. */
-const rowId = (p: Playlist, index: number): string => `${p.id}:${index}`
+/**
+ * Stable per-ITEM ids, NOT positional ones.
+ *
+ * dnd-kit animates a sortable by its id. With `${playlist}:${index}` the ids
+ * never move — after a swap they're still :0, :1, :2 in that order — so the
+ * dragged element springs back to its original slot while the content changes
+ * underneath it. The reorder works, but it reads as if it failed. Keying on
+ * CONTENT means the id travels with the track and the move animates properly.
+ *
+ * A playlist may legitimately hold the same track twice, so identical entries
+ * are disambiguated by occurrence. Swapping two identical tracks does exchange
+ * their ids, but they're indistinguishable on screen, so nothing reads wrong.
+ */
+function rowIds(items: PlaylistItem[]): string[] {
+  const seen = new Map<string, number>()
+  return items.map((it) => {
+    const key = playlistItemKey(it)
+    const n = (seen.get(key) ?? 0) + 1
+    seen.set(key, n)
+    return `${key}#${n}`
+  })
+}
 
 function TrackRow({
   id,
@@ -326,25 +343,28 @@ function TrackRow({
 }): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
   return (
-    // The WHOLE ROW is the drag handle, matching Queue and Presets — a grip-only
-    // handle looks identical but silently refuses the drag everyone has been
-    // taught by the rest of the app. The grip stays as the visual affordance
-    // (a span, not a button: a second tab stop for the same action is noise).
-    // The distance constraint means clicks on the inner buttons still land.
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      {...attributes}
-      {...listeners}
-      aria-label={`${item.title} — drag or press space to reorder`}
       className={cx(
         'group flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-veil transition-colors',
         isDragging && 'opacity-60'
       )}
     >
-      <span aria-hidden className="cursor-grab text-faint group-hover:text-dim transition-colors">
+      {/* A GRIP, matching the queue's ROW variant exactly — padded hit target,
+          revealed on hover, grab/grabbing cursors. (Only the queue's CARD
+          variant drags whole; rows have always used a handle.) Unlike the
+          queue's, this one keeps an aria-label and pairs with a KeyboardSensor,
+          so it is reorderable without a mouse. */}
+      <button
+        title="Drag to reorder"
+        {...attributes}
+        {...listeners}
+        aria-label={`Reorder ${item.title}`}
+        className="p-1 rounded text-faint opacity-0 group-hover:opacity-100 focus-visible:opacity-100 cursor-grab active:cursor-grabbing transition-opacity"
+      >
         <GripVertical size={14} />
-      </span>
+      </button>
       <div className="h-9 w-9 shrink-0 rounded overflow-hidden bg-raised">
         <ArtImage src={item.artUrl} fallback={<span />} />
       </div>
