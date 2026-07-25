@@ -100,9 +100,19 @@ jobs:
         if: "!startsWith(github.ref, 'refs/tags/v')"
         run: npx electron-builder ${{ matrix.args }} --publish never
 
+      # MANUAL RUNS ONLY. On a tag the installers are already attached to the
+      # GitHub Release by --publish always above, and release assets do NOT
+      # count against the Actions storage allowance — uploading them here too
+      # just stores ~600MB of the same files a second time, per release, where
+      # they DO count. Manual runs have no Release to attach to, so that is the
+      # one case the artifact earns its keep.
+      # Retention is short for the same reason: these are throwaway test builds,
+      # and the default (90 days) is what quietly filled the allowance.
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: "!startsWith(github.ref, 'refs/tags/v')"
         with:
           name: tastytunes-${{ matrix.os }}
+          retention-days: 7
           path: |
             dist/*.dmg
             dist/*.exe
