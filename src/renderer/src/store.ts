@@ -112,6 +112,8 @@ export type ToastAction =
   | { label: string; screen: Screen; undo?: never }
   | { label: string; undo: () => void; screen?: never }
 let toastNonce = 0
+/** Monotonic id for search asks — see librarySearchTarget. */
+let librarySearchSeq = 0
 
 interface PlayheadSync {
   secs: number
@@ -120,8 +122,10 @@ interface PlayheadSync {
 
 interface TTState {
   screen: Screen
-  /** Bumped on every navigation TO the library — the screen resets to its
-   *  source list (nav/palette/shortcut "Library" means the front door). */
+  /** Bumped when the FRONT DOOR is asked for — "Library" re-invoked while
+   *  already on the screen — and by openInLibrary, which plants a destination
+   *  stamped with the new value. A bump means "don't restore the last
+   *  position"; plain navigation back to the library no longer bumps. */
   libraryResetNonce: number
   connection: ConnectionState
   devices: DiscoveredDevice[]
@@ -206,11 +210,20 @@ interface TTState {
   settingsJump: string | null
   jumpToSettingsTab(tab: string): void
   clearSettingsJump(): void
-  /** One-shot ask: open the Library ready to search (palette / ⌘F). Paired
-   *  with the reset nonce it belongs to — the libraryTarget pattern, safe
-   *  across fresh mounts and StrictMode double-runs. */
-  librarySearchTarget: { nonce: number } | null
+  /**
+   * One-shot ask: open the Library ready to search (palette / ⌘F).
+   *
+   * Carries its OWN id rather than pairing with the reset nonce as it used to.
+   * ⌘F must not take the front-door path — resetting the browse tree under a
+   * search means exiting the search drops you at the root instead of where you
+   * were — so it no longer bumps that nonce, which leaves the nonce unable to
+   * tell two consecutive ⌘F presses apart. The consumer claims an id once and
+   * clears the ask (see clearLibrarySearchTarget), which is what keeps a stale
+   * ask from re-firing on a later mount.
+   */
+  librarySearchTarget: { id: number } | null
   requestLibrarySearch(): void
+  clearLibrarySearchTarget(): void
 
   toast: ToastData | null
   showToast(toast: Omit<ToastData, 'id'>): void
@@ -307,18 +320,33 @@ export const useStore = create<TTState>((set, get) => ({
   },
   clearSettingsJump: () => set({ settingsJump: null }),
   librarySearchTarget: null,
-  requestLibrarySearch: () => {
-    get().setScreen('library') // bumps libraryResetNonce
-    set({ librarySearchTarget: { nonce: get().libraryResetNonce } })
-  },
+  requestLibrarySearch: () =>
+    // Deliberately NOT setScreen('library'): from inside the Library that's the
+    // front door, and a ⌘F shouldn't throw away where you were browsing.
+    set({ screen: 'library', librarySearchTarget: { id: ++librarySearchSeq } }),
+  clearLibrarySearchTarget: () => set({ librarySearchTarget: null }),
 
   toast: null,
   showToast: (toast) => set({ toast: { ...toast, id: ++toastNonce } }),
   dismissToast: () => set({ toast: null }),
   lastRecalledPresetId: null,
+  /**
+   * Library is the only screen with a memory to disturb, so it's the only one
+   * with a rule here: asking for Library WHILE ALREADY THERE is the front door
+   * and resets to the source list; ARRIVING from another screen picks up where
+   * the last visit left off.
+   *
+   * This reverses T3 (2026-07-17), which bumped on every navigation because
+   * "Library means the front door" and there was no other way back to the top.
+   * There are two now — re-clicking the nav row from inside the screen, and the
+   * breadcrumb root — so the reset keeps its escape hatch while a browse tree
+   * stops forgetting your place every time you glance at Now Playing.
+   */
   setScreen: (screen) =>
     set((s) =>
-      screen === 'library' ? { screen, libraryResetNonce: s.libraryResetNonce + 1 } : { screen }
+      screen === 'library' && s.screen === 'library'
+        ? { screen, libraryResetNonce: s.libraryResetNonce + 1 }
+        : { screen }
     ),
   setDiagnosticsOpen: (diagnosticsOpen) => set({ diagnosticsOpen }),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),

@@ -74,6 +74,18 @@ let searchMemory: {
   scoped: { query: string; items: MediaNode[]; total: number } | null
 } | null = null
 
+// Where the last visit left off — server, crumb trail, and which lens was open.
+// The screen UNMOUNTS on every navigation away (App renders only the active
+// screen), so component state can't survive the trip; this is the same
+// module-scope, session-only shape as the memories above, and never a setting.
+// Restored on arrival from another screen; deliberately NOT consulted when the
+// front door is asked for explicitly (see the reset effect).
+let positionMemory: {
+  udn: string | null
+  path: Crumb[]
+  lens: 'albums' | 'artists' | null
+} | null = null
+
 const nodeKey = (serverUdn: string | null, path: Crumb[]): string =>
   `${serverUdn ?? ''}|${path.map((c) => c.id).join('/')}`
 
@@ -436,14 +448,20 @@ export function LibraryScreen(): React.JSX.Element {
     setLens(lensReturnTo)
   }
 
-  // Re-invoking "Library" (nav click, palette, L) while already here resets
-  // to the source list — the nonce bumps on every setScreen('library').
-  // EXCEPT when another screen planted a destination (Favorites → open
-  // album): then this visit lands directly on that node. Intermediate crumbs
-  // carry sentinel ids — clicking one fails the fresh browse and the
-  // title-path re-walk resolves it, the same recovery stale USB ids use.
+  // Three ways to arrive, and this effect picks between them.
+  //
+  // A DESTINATION was planted (Favorites → open album): land on that node.
+  // Intermediate crumbs carry sentinel ids — clicking one fails the fresh
+  // browse and the title-path re-walk resolves it, the same recovery stale USB
+  // ids use.
+  // The FRONT DOOR was asked for — "Library" re-invoked while already here, so
+  // the nonce bumped: reset to the source list.
+  // Otherwise you simply CAME BACK from another screen: restore where the last
+  // visit left off. (T3 used to reset here too; see setScreen for why that
+  // reversed.)
   const libraryResetNonce = useStore((s) => s.libraryResetNonce)
   const clearLibraryTarget = useStore((s) => s.clearLibraryTarget)
+  const arrived = useRef(false)
   useEffect(() => {
     const target = useStore.getState().libraryTarget
     // Nonce EQUALITY, not consume-and-clear: this effect must be idempotent
@@ -479,24 +497,49 @@ export function LibraryScreen(): React.JSX.Element {
             : { id: `__fav-crumb-${i}__`, title }
         )
       )
+      arrived.current = true
       return
     }
+    // First run of a fresh mount with no bump behind it = came back from
+    // another screen. A later run can only be a nonce bump, which is the front
+    // door and always resets.
+    if (!arrived.current && positionMemory) {
+      const mem = positionMemory
+      arrived.current = true
+      moveTo(mem.udn, mem.path)
+      setLens(mem.lens) // moveTo clears it; the remembered lens wins
+      return
+    }
+    arrived.current = true
     moveTo(null, [])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [libraryResetNonce])
 
-  // Palette/global "search the library" ask. Nonce-paired with the reset
-  // (the libraryTarget pattern): a request made before this mount still
-  // matches, StrictMode double-runs stay idempotent, and a stale target is
-  // just ignored. Consumed at most once per nonce so exiting search manually
-  // isn't fought by a re-running effect.
+  // Keep the memory current as you browse (a module var write, like the scroll
+  // and find-recall memories — not state, nothing re-renders on it).
+  useEffect(() => {
+    positionMemory = { udn: serverUdn, path, lens }
+  }, [serverUdn, path, lens])
+
+  // Palette/global "search the library" ask, carrying its own id (it no longer
+  // rides the reset nonce — ⌘F must not reset the browse tree underneath the
+  // search, so it doesn't bump it, which left the nonce unable to tell two
+  // consecutive ⌘F presses apart).
+  //
+  // Claimed at most once per id — so exiting search manually isn't fought by a
+  // re-running effect — and CLEARED once claimed, which is what stops a stale
+  // ask re-firing on a later mount. The claim happens after the servers guard,
+  // so an ask made before the listing lands still runs when it does; StrictMode
+  // double-runs see the claim (or the cleared ask) and no-op.
   const librarySearchTarget = useStore((s) => s.librarySearchTarget)
+  const clearLibrarySearchTarget = useStore((s) => s.clearLibrarySearchTarget)
   const searchReqDone = useRef(-1)
   useEffect(() => {
-    if (!librarySearchTarget || librarySearchTarget.nonce !== libraryResetNonce) return
-    if (searchReqDone.current === librarySearchTarget.nonce) return
+    if (!librarySearchTarget) return
+    if (searchReqDone.current === librarySearchTarget.id) return
     if (!servers) return // listing still loading; rerun when it lands
-    searchReqDone.current = librarySearchTarget.nonce
+    searchReqDone.current = librarySearchTarget.id
+    clearLibrarySearchTarget()
     const ready = new Set(
       useStore
         .getState()
@@ -536,7 +579,7 @@ export function LibraryScreen(): React.JSX.Element {
     moveTo(target.udn, [])
     setSearchMode(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [librarySearchTarget, libraryResetNonce, servers, serverUdn])
+  }, [librarySearchTarget, servers, serverUdn])
 
   const enter = (node: MediaNode): void => {
     if (crossMode && crossState) {
