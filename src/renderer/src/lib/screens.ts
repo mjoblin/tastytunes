@@ -40,7 +40,11 @@ export const NAV_SCREENS: ScreenDef[] = [
   // transport use) — must stay clear of J/L/K/space/M/F like every screen key
   { id: 'favorites', label: 'Favorites', icon: Heart, key: 'V' },
   { id: 'recently-played', label: 'Recently Played', icon: History, key: 'R' },
-  { id: 'sources', label: 'Sources', icon: Cable, key: 'S' },
+  // 'C' for sourCes, matching its Cable icon: 'S' is reserved for the Search
+  // screen (unified search), which will be visited far more often than this
+  // one. Rebound ahead of that work so the muscle memory settles before
+  // release rather than churning after it.
+  { id: 'sources', label: 'Sources', icon: Cable, key: 'C' },
   { id: 'device', label: 'Device', icon: HardDrive, key: 'D' }
 ]
 export const SETTINGS_SCREEN: ScreenDef = { id: 'settings', label: 'Settings', icon: Cog, key: 'E' }
