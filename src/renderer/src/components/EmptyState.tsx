@@ -22,6 +22,7 @@ export function EmptyState({
 }): React.JSX.Element {
   return (
     <div
+      data-empty-state={title}
       className={cx(
         'flex-1 flex flex-col items-center justify-center gap-4 text-center px-8',
         className

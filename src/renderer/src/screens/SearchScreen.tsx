@@ -5,6 +5,7 @@ import { favoriteKey } from '@shared/ipc'
 import { tt } from '@/api'
 import { useStore, type Screen } from '@/store'
 import { EmptyState } from '@/components/EmptyState'
+import { SortChip } from '@/components/SortChip'
 import { SearchRow } from '@/components/SearchRow'
 import { StationRow } from '@/components/StationRow'
 import { favoriteAct, toggleFavorite } from '@/lib/favorites'
@@ -15,8 +16,27 @@ import { cx, matchesFilter } from '@/lib/format'
 const RADIO_DEBOUNCE_MS = 350
 /** Below this, a query matches half the library and every station on earth. */
 const MIN_RADIO_CHARS = 2
-/** Per group, before "see all" takes over. Five groups of everything is a wall. */
+/** Per group while several are showing — five groups of everything is a wall. */
 const GROUP_CAP = 6
+/** Narrowed to ONE category, it owns the screen and can show far more. */
+const ISOLATED_CAP = 50
+
+type CategoryId = 'library' | 'favorites' | 'playlists' | 'presets' | 'radio'
+
+/**
+ * Only two sorts GENERALIZE across five heterogeneous groups.
+ *
+ * 'relevance' is each source's own ranking (the index's for library, most-
+ * listened for the directory, recency for the local collections) and is the
+ * neutral, non-reversible default — same contract as the library results chip.
+ * Name is the one field every result has. Artist and year are library-shaped;
+ * a playlist, a preset and a station have neither, and date-added is
+ * favorites-shaped. Those sorts live on the owning screens, which have them.
+ */
+const SEARCH_SORTS: Array<{ value: 'relevance' | 'name'; label: string; noReverse?: boolean }> = [
+  { value: 'relevance', label: 'Relevance', noReverse: true },
+  { value: 'name', label: 'Name' }
+]
 
 /**
  * The session's last query — module scope, like the library's scroll and
@@ -24,6 +44,10 @@ const GROUP_CAP = 6
  * were looking for, and this is never a setting.
  */
 let lastQuery = ''
+/** Hidden categories, and the sort — session-only like the query above. */
+let lastHidden = new Set<CategoryId>()
+let lastSort: 'relevance' | 'name' = 'relevance'
+let lastSortReversed = false
 
 /**
  * Unified search: one box over library, favorites, playlists, presets and
@@ -51,6 +75,9 @@ let lastQuery = ''
  */
 export function SearchScreen(): React.JSX.Element {
   const [query, setQuery] = useState(lastQuery)
+  const [hidden, setHidden] = useState<Set<CategoryId>>(lastHidden)
+  const [sort, setSort] = useState(lastSort)
+  const [sortReversed, setSortReversed] = useState(lastSortReversed)
   const inputRef = useRef<HTMLInputElement | null>(null)
 
   const favorites = useStore((s) => s.favorites)
@@ -66,7 +93,10 @@ export function SearchScreen(): React.JSX.Element {
 
   useEffect(() => {
     lastQuery = query
-  }, [query])
+    lastHidden = hidden
+    lastSort = sort
+    lastSortReversed = sortReversed
+  }, [query, hidden, sort, sortReversed])
 
   // ⌘F / the nav / the palette all land here; the ask carries an id so a
   // request made before this mounted still focuses, and can't re-fire later.
@@ -216,26 +246,160 @@ export function SearchScreen(): React.JSX.Element {
     })()
   }
 
-  const seeAll = (screen: Screen, filterKey: 'favorites' | 'playlists' | 'presets'): void => {
-    // Land on the owning screen already filtered to what you typed, so "see
-    // all" shows the same set rather than making you retype it.
-    setScreenFilter(filterKey, q)
-    setScreen(screen)
-  }
-
   const favStationUrls = useMemo(
     () => new Set(favorites.filter((f) => f.kind === 'station').map((f) => (f as { url: string }).url)),
     [favorites]
   )
 
-  const groups = [
-    { id: 'library', count: libTotal, shown: libResults.length },
-    { id: 'favorites', count: favResults.length, shown: favResults.length },
-    { id: 'playlists', count: playlistResults.length, shown: playlistResults.length },
-    { id: 'presets', count: presetResults.length, shown: presetResults.length },
-    { id: 'radio', count: radio?.length ?? 0, shown: radio?.length ?? 0 }
+  // ---- the five categories, as data. Every group renders from this list, so a
+  // ---- chip, a count, a cap and a sort can't disagree about what a category is.
+
+  const byName = (a: { sortKey: string }, b: { sortKey: string }): number =>
+    a.sortKey.localeCompare(b.sortKey)
+
+  const cats: Array<{
+    id: CategoryId
+    label: string
+    /** What the count MEANS: matches found, which may exceed what's listed. */
+    total: number
+    pending?: boolean
+    rows: Array<{ key: string; sortKey: string; node: React.ReactNode }>
+    /** Where the whole set lives, once this screen can't show more of it. */
+    owner?: { screen: Screen; filterKey: 'favorites' | 'playlists' | 'presets' }
+  }> = [
+    {
+      id: 'library',
+      label: 'Library',
+      total: libTotal,
+      rows: libResults.map((node) => ({
+        key: `${node.serverUdn}:${node.id}`,
+        sortKey: node.title,
+        node: (
+          <SearchRow
+            title={node.title}
+            subtitle={[node.artist, node.serverName].filter(Boolean).join(' — ')}
+            artUrl={node.artUrl}
+            icon={node.isContainer ? Disc3 : Music}
+            onClick={() => playNode(node)}
+          />
+        )
+      }))
+    },
+    {
+      id: 'favorites',
+      label: 'Favorites',
+      total: favResults.length,
+      owner: { screen: 'favorites', filterKey: 'favorites' },
+      rows: favResults.map((f) => ({
+        key: favoriteKey(f),
+        sortKey: f.kind === 'station' ? f.name : f.title,
+        node: (
+          <SearchRow
+            title={f.kind === 'station' ? f.name : f.title}
+            subtitle={
+              f.kind === 'station'
+                ? 'Station'
+                : [f.artist, f.kind === 'album' ? 'Album' : f.album].filter(Boolean).join(' — ')
+            }
+            artUrl={f.kind === 'station' ? f.favicon : f.artUrl}
+            icon={f.kind === 'station' ? Radio : f.kind === 'album' ? Disc3 : Heart}
+            dimmed={!connected}
+            onClick={() => openFavorite(f)}
+          />
+        )
+      }))
+    },
+    {
+      id: 'playlists',
+      label: 'Playlists',
+      total: playlistResults.length,
+      owner: { screen: 'playlists', filterKey: 'playlists' },
+      rows: playlistResults.map((p) => ({
+        key: p.id,
+        sortKey: p.name,
+        node: (
+          <SearchRow
+            title={p.name}
+            subtitle={`${p.items.length} ${p.items.length === 1 ? 'track' : 'tracks'}`}
+            icon={ListOrdered}
+            onClick={() => jumpToPlaylist(p.id)}
+          />
+        )
+      }))
+    },
+    {
+      id: 'presets',
+      label: 'Presets',
+      total: presetResults.length,
+      owner: { screen: 'presets', filterKey: 'presets' },
+      rows: presetResults.map((p) => ({
+        key: String(p.id ?? p.name),
+        sortKey: p.name ?? '',
+        node: (
+          <SearchRow
+            title={p.name ?? `Preset ${p.id}`}
+            subtitle={p.type}
+            artUrl={p.art_url}
+            icon={Radio}
+            meta={p.id != null ? `#${p.id}` : null}
+            playing={p.is_playing === true}
+            dimmed={!connected}
+            onClick={() => {
+              if (p.id != null) void tt.command({ type: 'recallPreset', presetId: p.id })
+            }}
+          />
+        )
+      }))
+    },
+    {
+      id: 'radio',
+      label: 'Internet radio',
+      total: radio?.length ?? 0,
+      pending: radioPending,
+      rows: (radio ?? []).map((st) => ({
+        key: st.uuid,
+        sortKey: st.name,
+        node: (
+          <StationRow
+            station={st}
+            playing={false}
+            tuning={false}
+            favorited={favStationUrls.has(st.url)}
+            onHeart={() =>
+              void toggleFavorite({
+                kind: 'station',
+                name: st.name,
+                url: st.url,
+                favicon: st.favicon,
+                radioBrowserUuid: st.uuid !== st.url ? st.uuid : null
+              })
+            }
+            onPlay={() => void playStation(st)}
+            // Save-to-preset belongs to the Radio screen, where the station is
+            // playing and the panel has room; the row only offers it there.
+            onSave={() => {}}
+          />
+        )
+      }))
+    }
   ]
-  const anyResults = groups.some((g) => g.shown > 0)
+
+  const shownCats = cats.filter((c) => !hidden.has(c.id))
+  // ISOLATED = you've narrowed to one category, so it owns the screen and can
+  // show far more of itself than it could as one group among five.
+  const isolated = shownCats.length === 1
+  const cap = isolated ? ISOLATED_CAP : GROUP_CAP
+  const anyResults = shownCats.some((c) => c.rows.length > 0)
+  const anyPending = shownCats.some((c) => c.pending)
+
+  const toggleCat = (id: CategoryId): void => {
+    const next = new Set(hidden)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    // Hiding the last visible category would leave a blank screen saying
+    // nothing — treat that as "show everything again".
+    setHidden(next.size >= cats.length ? new Set() : next)
+  }
 
   return (
     <div className="h-full flex flex-col">
@@ -277,191 +441,141 @@ export function SearchScreen(): React.JSX.Element {
         </div>
       </header>
 
+      {/* The category rail: what was searched, how much each holds, and which
+          are showing. Counts are the POINT — a category with 0 still gets a
+          chip, because "we looked and found nothing" is an answer and its
+          absence would read as "we didn't look". */}
+      {q && (
+        <div className="no-drag flex items-center gap-1.5 flex-wrap px-8 pb-3">
+          {cats.map((c) => {
+            const on = !hidden.has(c.id)
+            return (
+              <button
+                key={c.id}
+                data-search-chip={c.id}
+                data-on={on}
+                onClick={() => toggleCat(c.id)}
+                aria-pressed={on}
+                className={cx(
+                  'rounded-full px-3 py-1 text-[12px] ring-1 transition-all motion-safe:active:scale-95',
+                  on
+                    ? 'ring-gold/50 bg-golddim text-gold'
+                    : 'ring-edge bg-panel/60 text-faint hover:text-dim hover:ring-edge2'
+                )}
+              >
+                {c.label}{' '}
+                <span className="tabular-nums opacity-70">{c.pending ? '…' : c.total}</span>
+              </button>
+            )
+          })}
+          <div className="flex-1" />
+          {/* Only two sorts generalize across five heterogeneous groups: each
+              source's own ranking, and A–Z. Artist/year are library-shaped and
+              date-added is favorites-shaped — those live on the owning screens,
+              which already sort by them. */}
+          <SortChip
+            sorts={SEARCH_SORTS}
+            neutral="relevance"
+            value={sort}
+            reversed={sortReversed}
+            onChange={(v) => {
+              setSort(v)
+              setSortReversed(false)
+            }}
+            onToggleReverse={() => setSortReversed((r) => !r)}
+          />
+        </div>
+      )}
+
       <div className="flex-1 overflow-y-auto px-8 pb-10 pt-1">
-        <div className="max-w-2xl space-y-6">
-          {!q && (
+        {!q ? (
+          // Centered: with no query there is nothing else on the screen, and a
+          // block hugging the top of an empty page reads as a loading state.
+          <div className="h-full flex items-center justify-center">
             <EmptyState
               icon={Search}
               title="Search everything"
               caption="Your library, favorites, playlists, presets and internet radio — all at once. Press S from anywhere, or ⌘F outside the Library."
             />
-          )}
+          </div>
+        ) : (
+          <div className="max-w-2xl space-y-6">
+            {!anyResults && !anyPending && (
+              <EmptyState
+                icon={Search}
+                title={`Nothing found for “${q}”`}
+                caption={
+                  hidden.size > 0
+                    ? 'Some categories are hidden — try showing them again.'
+                    : 'Try fewer words.'
+                }
+              />
+            )}
 
-          {q && !anyResults && !radioPending && (
-            <EmptyState icon={Search} title={`Nothing found for “${q}”`} caption="Try fewer words." />
-          )}
-
-          {libResults.length > 0 && (
-            <Group
-              label="Library"
-              total={libTotal}
-              shown={Math.min(libResults.length, GROUP_CAP)}
-            >
-              {libResults.slice(0, GROUP_CAP).map((node) => (
-                <SearchRow
-                  key={`${node.serverUdn}:${node.id}`}
-                  title={node.title}
-                  subtitle={[node.artist, node.serverName].filter(Boolean).join(' — ')}
-                  artUrl={node.artUrl}
-                  icon={node.isContainer ? Disc3 : Music}
-                  onClick={() => playNode(node)}
-                />
-              ))}
-            </Group>
-          )}
-
-          {favResults.length > 0 && (
-            <Group
-              label="Favorites"
-              total={favResults.length}
-              shown={Math.min(favResults.length, GROUP_CAP)}
-              onSeeAll={() => seeAll('favorites', 'favorites')}
-            >
-              {favResults.slice(0, GROUP_CAP).map((f) => (
-                <SearchRow
-                  key={favoriteKey(f)}
-                  title={f.kind === 'station' ? f.name : f.title}
-                  subtitle={
-                    f.kind === 'station'
-                      ? 'Station'
-                      : [f.artist, f.kind === 'album' ? 'Album' : f.album].filter(Boolean).join(' — ')
-                  }
-                  artUrl={f.kind === 'station' ? f.favicon : f.artUrl}
-                  icon={f.kind === 'station' ? Radio : f.kind === 'album' ? Disc3 : Heart}
-                  dimmed={!connected}
-                  onClick={() => openFavorite(f)}
-                />
-              ))}
-            </Group>
-          )}
-
-          {playlistResults.length > 0 && (
-            <Group
-              label="Playlists"
-              total={playlistResults.length}
-              shown={Math.min(playlistResults.length, GROUP_CAP)}
-              onSeeAll={() => seeAll('playlists', 'playlists')}
-            >
-              {playlistResults.slice(0, GROUP_CAP).map((p) => (
-                <SearchRow
-                  key={p.id}
-                  title={p.name}
-                  subtitle={`${p.items.length} ${p.items.length === 1 ? 'track' : 'tracks'}`}
-                  icon={ListOrdered}
-                  onClick={() => jumpToPlaylist(p.id)}
-                />
-              ))}
-            </Group>
-          )}
-
-          {presetResults.length > 0 && (
-            <Group
-              label="Presets"
-              total={presetResults.length}
-              shown={Math.min(presetResults.length, GROUP_CAP)}
-              onSeeAll={() => seeAll('presets', 'presets')}
-            >
-              {presetResults.slice(0, GROUP_CAP).map((p) => (
-                <SearchRow
-                  key={p.id ?? p.name}
-                  title={p.name ?? `Preset ${p.id}`}
-                  subtitle={p.type}
-                  artUrl={p.art_url}
-                  icon={Radio}
-                  meta={p.id != null ? `#${p.id}` : null}
-                  playing={p.is_playing === true}
-                  dimmed={!connected}
-                  onClick={() => {
-                    if (p.id != null) void tt.command({ type: 'recallPreset', presetId: p.id })
-                  }}
-                />
-              ))}
-            </Group>
-          )}
-
-          {(radioPending || radioFailed || (radio?.length ?? 0) > 0) && (
-            <Group
-              label="Internet radio"
-              total={radio?.length ?? 0}
-              shown={Math.min(radio?.length ?? 0, GROUP_CAP)}
-              pending={radioPending}
-            >
-              {radioFailed && (
-                <div className="text-[12.5px] text-faint">
-                  Couldn&rsquo;t reach the station directory. Everything above is local and
-                  unaffected.
-                </div>
-              )}
-              {(radio ?? []).slice(0, GROUP_CAP).map((st) => (
-                <StationRow
-                  key={st.uuid}
-                  station={st}
-                  playing={false}
-                  tuning={false}
-                  favorited={favStationUrls.has(st.url)}
-                  onHeart={() =>
-                    void toggleFavorite({
-                      kind: 'station',
-                      name: st.name,
-                      url: st.url,
-                      favicon: st.favicon,
-                      radioBrowserUuid: st.uuid !== st.url ? st.uuid : null
-                    })
-                  }
-                  onPlay={() => void playStation(st)}
-                  // Save-to-preset belongs to the Radio screen, where the
-                  // station is playing and the panel has room; it never fires
-                  // here because the row only offers it while playing.
-                  onSave={() => {}}
-                />
-              ))}
-            </Group>
-          )}
-        </div>
+            {shownCats.map((c) => {
+              if (c.rows.length === 0 && !c.pending && !(c.id === 'radio' && radioFailed)) return null
+              const rows = sort === 'name' ? [...c.rows].sort(byName) : c.rows
+              const ordered = sortReversed ? [...rows].reverse() : rows
+              const more = c.total - Math.min(ordered.length, cap)
+              return (
+                <section key={c.id} className="space-y-1.5">
+                  <div className="flex items-baseline gap-2 px-1">
+                    <span className="microlabel">{c.label}</span>
+                    <span className="text-[11px] text-faint tabular-nums">{c.total}</span>
+                    {c.pending && (
+                      <span className="text-[11px] text-faint motion-safe:animate-pulse">
+                        searching…
+                      </span>
+                    )}
+                    <div className="flex-1" />
+                    {more > 0 &&
+                      (isolated ? (
+                        // Already the whole screen and STILL more — the rest
+                        // lives on the owning screen, which has the room and
+                        // the sorting for it.
+                        c.owner ? (
+                          <button
+                            data-search-more={c.id}
+                            onClick={() => {
+                              setScreenFilter(c.owner!.filterKey, q)
+                              setScreen(c.owner!.screen)
+                            }}
+                            className="text-[11.5px] text-amber hover:brightness-110 transition-all"
+                          >
+                            See all {c.total} in {c.label} →
+                          </button>
+                        ) : (
+                          <span className="text-[11.5px] text-faint">
+                            +{more} more — narrow the search
+                          </span>
+                        )
+                      ) : (
+                        // Not isolated: showing more of THIS is the obvious
+                        // meaning of the click, and it keeps you on the screen.
+                        <button
+                          data-search-more={c.id}
+                          onClick={() => setHidden(new Set(cats.filter((x) => x.id !== c.id).map((x) => x.id)))}
+                          className="text-[11.5px] text-amber hover:brightness-110 transition-all"
+                        >
+                          +{more} more →
+                        </button>
+                      ))}
+                  </div>
+                  {c.id === 'radio' && radioFailed && (
+                    <div className="text-[12.5px] text-faint">
+                      Couldn&rsquo;t reach the station directory. Everything above is local and
+                      unaffected.
+                    </div>
+                  )}
+                  {ordered.slice(0, cap).map((r) => (
+                    <div key={r.key}>{r.node}</div>
+                  ))}
+                </section>
+              )
+            })}
+          </div>
+        )}
       </div>
     </div>
-  )
-}
-
-/** A result group: heading, count, and either "see all" or a plain remainder. */
-function Group({
-  label,
-  total,
-  shown,
-  pending,
-  onSeeAll,
-  children
-}: {
-  label: string
-  total: number
-  shown: number
-  pending?: boolean
-  onSeeAll?: () => void
-  children: React.ReactNode
-}): React.JSX.Element {
-  const more = total - shown
-  return (
-    <section className="space-y-1.5">
-      <div className="flex items-baseline gap-2 px-1">
-        <span className="microlabel">{label}</span>
-        <span className={cx('text-[11px] text-faint tabular-nums', pending && 'opacity-0')}>
-          {total}
-        </span>
-        {pending && <span className="text-[11px] text-faint motion-safe:animate-pulse">searching…</span>}
-        <div className="flex-1" />
-        {more > 0 &&
-          (onSeeAll ? (
-            <button
-              onClick={onSeeAll}
-              className="text-[11.5px] text-amber hover:brightness-110 transition-all"
-            >
-              See all {total} →
-            </button>
-          ) : (
-            <span className="text-[11.5px] text-faint">+{more} more</span>
-          ))}
-      </div>
-      {children}
-    </section>
   )
 }
