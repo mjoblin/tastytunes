@@ -132,12 +132,45 @@ export function PlaylistsScreen(): React.JSX.Element {
     void tt.playlistSetItems(selected.id, arrayMove(selected.items, from, to))
   }
 
+  /**
+   * The × and the ⋯ menu's "Remove from playlist" both land here, so the undo
+   * offer can't belong to only one of them.
+   *
+   * The row is gone the instant you click — no confirm. Removing tracks while
+   * tidying a playlist is something you do repeatedly, and a "Sure?" on every
+   * one punishes the common case to guard the rare mistake; the undo offer
+   * covers the mistake without slowing the habit. (A whole-playlist DELETE
+   * keeps its confirm: rare, and it takes the collection with it.)
+   */
   const removeItem = (index: number): void => {
     if (!selected) return
+    const id = selected.id
+    const item = selected.items[index]
+    if (!item) return
     void tt.playlistSetItems(
       selected.id,
       selected.items.filter((_, i) => i !== index)
     )
+    showToast({
+      kind: 'success',
+      text: `Removed “${item.title}”`,
+      action: { label: 'Undo', undo: () => restoreItem(id, index, item) }
+    })
+  }
+
+  /**
+   * Splice the track back into the playlist as it is NOW, rather than restoring
+   * the array snapshot taken at removal time — undoing must not silently
+   * discard a reorder or a second removal made in the seconds since. Reading the
+   * live playlist out of the store (not the `selected` closure) is what makes
+   * that true even if the selection has moved on.
+   */
+  const restoreItem = (id: string, index: number, item: PlaylistItem): void => {
+    const current = useStore.getState().playlists.find((p) => p.id === id)
+    if (!current) return // the playlist itself was deleted meanwhile
+    const items = [...current.items]
+    items.splice(Math.min(index, items.length), 0, item)
+    void tt.playlistSetItems(id, items)
   }
 
   const running = activation && !activation.finished
@@ -213,16 +246,7 @@ export function PlaylistsScreen(): React.JSX.Element {
               label: 'Add to another playlist…',
               run: () => setCopyTo({ item: trackMenu.item, x: trackMenu.x, y: trackMenu.y })
             },
-            {
-              label: 'Remove from playlist',
-              run: () => {
-                if (!selected) return
-                void tt.playlistSetItems(
-                  selected.id,
-                  selected.items.filter((_, i) => i !== trackMenu.index)
-                )
-              }
-            }
+            { label: 'Remove from playlist', run: () => removeItem(trackMenu.index) }
           ]}
         />
       )}
@@ -345,8 +369,17 @@ export function PlaylistsScreen(): React.JSX.Element {
                 <button
                   onClick={() => {
                     if (confirmDelete === selected.id) {
-                      void tt.playlistDelete(selected.id)
+                      // Snapshot the WHOLE playlist, not its id: undo has to put
+                      // back the name, the items and the timestamps, and after
+                      // the delete there is nowhere left to read them from.
+                      const deleted = selected
+                      void tt.playlistDelete(deleted.id)
                       setConfirmDelete(null)
+                      showToast({
+                        kind: 'success',
+                        text: `Deleted “${deleted.name}”`,
+                        action: { label: 'Undo', undo: () => void tt.playlistRestore(deleted) }
+                      })
                     } else setConfirmDelete(selected.id)
                   }}
                   onBlur={() => setConfirmDelete(null)}

@@ -54,6 +54,7 @@ import {
   healPlaylistItem,
   markPlaylistPlayed,
   renamePlaylist,
+  restorePlaylist,
   setPlaylistItems
 } from './playlists'
 import { queueAdd, refreshServers } from './upnpBrowser'
@@ -971,6 +972,10 @@ export class DeviceManager {
 
   playlistDelete(id: string): ReturnType<typeof getPlaylists> {
     return this.pushPlaylists(deletePlaylist(id))
+  }
+
+  playlistRestore(playlist: Parameters<typeof restorePlaylist>[0]): ReturnType<typeof getPlaylists> {
+    return this.pushPlaylists(restorePlaylist(playlist))
   }
 
   playlistSetItems(id: string, items: Parameters<typeof setPlaylistItems>[1]): ReturnType<typeof getPlaylists> {

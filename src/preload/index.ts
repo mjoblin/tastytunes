@@ -3,6 +3,7 @@ import {
   IPC,
   type AppSettings,
   type Favorite,
+  type Playlist,
   type PlaylistItem,
   type LyricsQuery,
   type MediaQueueAction,
@@ -46,6 +47,7 @@ const api: TastyTunesApi = {
     ipcRenderer.invoke(IPC.playlistCreate, name, items),
   playlistRename: (id: string, name: string) => ipcRenderer.invoke(IPC.playlistRename, id, name),
   playlistDelete: (id: string) => ipcRenderer.invoke(IPC.playlistDelete, id),
+  playlistRestore: (playlist: Playlist) => ipcRenderer.invoke(IPC.playlistRestore, playlist),
   playlistSetItems: (id: string, items: PlaylistItem[]) =>
     ipcRenderer.invoke(IPC.playlistSetItems, id, items),
   playlistAppend: (id: string, items: PlaylistItem[]) =>

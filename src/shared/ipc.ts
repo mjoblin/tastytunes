@@ -1468,6 +1468,9 @@ export interface TastyTunesApi {
   playlistCreate(name: string, items: PlaylistItem[]): Promise<Playlist>
   playlistRename(id: string, name: string): Promise<Playlist[]>
   playlistDelete(id: string): Promise<Playlist[]>
+  /** Undo a delete: puts the playlist back verbatim — same id, name, timestamps
+   *  and place in the collection. NOT a create (see restorePlaylist). */
+  playlistRestore(playlist: Playlist): Promise<Playlist[]>
   /** Replace a playlist's items wholesale — reorder and remove both land here. */
   playlistSetItems(id: string, items: PlaylistItem[]): Promise<Playlist[]>
   /** Append to a playlist (duplicates allowed — an ordered list, not a set). */
@@ -1543,6 +1546,7 @@ export const IPC = {
   playlistCreate: 'tt:playlistCreate',
   playlistRename: 'tt:playlistRename',
   playlistDelete: 'tt:playlistDelete',
+  playlistRestore: 'tt:playlistRestore',
   playlistSetItems: 'tt:playlistSetItems',
   playlistAppend: 'tt:playlistAppend',
   playlistActivate: 'tt:playlistActivate',

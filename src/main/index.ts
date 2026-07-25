@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import {
   IPC,
   type AppSettings,
+  type Playlist,
   type PlaylistItem,
   type Favorite,
   type LyricsQuery,
@@ -325,6 +326,9 @@ function registerIpc(): void {
     deviceManager.playlistRename(id, name)
   )
   ipcMain.handle(IPC.playlistDelete, (_e, id: string) => deviceManager.playlistDelete(id))
+  ipcMain.handle(IPC.playlistRestore, (_e, playlist: Playlist) =>
+    deviceManager.playlistRestore(playlist)
+  )
   ipcMain.handle(IPC.playlistSetItems, (_e, id: string, items: PlaylistItem[]) =>
     deviceManager.playlistSetItems(id, items)
   )

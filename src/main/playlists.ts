@@ -113,6 +113,22 @@ export function deletePlaylist(id: string): Playlist[] {
   return save(getPlaylists().filter((p) => p.id !== id))
 }
 
+/**
+ * Put a deleted playlist back VERBATIM — undo, not a fresh create.
+ * createPlaylist is the wrong verb here on three counts: it mints a new id, it
+ * uniquifies the name (a restore would come back as "Mixtape (2)"), and it
+ * stamps new timestamps, losing createdAt / lastPlayedAt / lastMissing. Keeping
+ * the original updatedAt also matters — save() sorts newest-first, so a
+ * verbatim restore lands back in its old place in the collection instead of
+ * jumping to the top.
+ *
+ * Idempotent: restoring something that already exists (a double-fired undo)
+ * replaces rather than duplicates.
+ */
+export function restorePlaylist(playlist: Playlist): Playlist[] {
+  return save([...getPlaylists().filter((p) => p.id !== playlist.id), playlist])
+}
+
 /** Reorder and remove both land here — the renderer owns the resulting order. */
 export function setPlaylistItems(id: string, items: PlaylistItem[]): Playlist[] {
   return patch(id, (p) => ({ ...p, items: boundItems(items) }))
