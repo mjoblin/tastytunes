@@ -13,6 +13,7 @@ export function ItemMenu({
   onClose,
   onAction,
   onSavePreset,
+  onAddToPlaylist,
   goToAlbum,
   goToArtist,
   favorite
@@ -21,6 +22,9 @@ export function ItemMenu({
   onClose(): void
   onAction(action: MediaQueueAction | 'PLAY', playFromId?: string): void
   onSavePreset(): void
+  /** Adding from wherever you see music is the primary way playlists are built.
+   *  Absent for nodes that can't become tracks (artists, plain folders). */
+  onAddToPlaylist?(): void
   /** Search results give tracks navigate verbs (the row click still plays). */
   goToAlbum?(): void
   goToArtist?(): void
@@ -28,6 +32,9 @@ export function ItemMenu({
   favorite?: { active: boolean; toggle(): void }
 }): React.JSX.Element {
   const { node } = menu
+  const playlistItem = onAddToPlaylist
+    ? [{ label: 'Add to playlist…', run: onAddToPlaylist }]
+    : []
   const favoriteItem = favorite
     ? [
         {
@@ -43,6 +50,7 @@ export function ItemMenu({
         { label: 'Add to end of queue', run: () => onAction('APPEND') },
         { label: 'Replace queue', run: () => onAction('REPLACE') },
         { label: 'Save to preset…', run: onSavePreset },
+        ...playlistItem,
         ...favoriteItem
       ]
     : [
@@ -61,6 +69,7 @@ export function ItemMenu({
         ...(goToAlbum ? [{ label: 'Go to album', run: goToAlbum }] : []),
         ...(goToArtist ? [{ label: 'Go to artist', run: goToArtist }] : []),
         { label: 'Save to preset…', run: onSavePreset },
+        ...playlistItem,
         ...favoriteItem
       ]
 

@@ -42,6 +42,7 @@ import { FilterInput } from '@/components/FilterInput'
 import { ContainerCard, ContainerRow, TrackRow } from '@/components/LibraryCards'
 import { SortChip } from '@/components/SortChip'
 import { AlbumsLens, ArtistsLens, type LensActions } from '@/components/LibraryLenses'
+import { AddToPlaylistPanel, itemFromNode } from '@/components/AddToPlaylistPanel'
 import { ItemMenu, PresetPicker } from '@/components/LibraryMenus'
 import { EmptyState } from '@/components/EmptyState'
 
@@ -153,6 +154,11 @@ export function LibraryScreen(): React.JSX.Element {
 
   const [servers, setServers] = useState<MediaServerInfo[] | null>(null)
   const [serverUdn, setServerUdn] = useState<string | null>(null)
+  const [playlistPicker, setPlaylistPicker] = useState<{
+    node: MediaNode
+    x: number
+    y: number
+  } | null>(null)
   const [path, setPath] = useState<Crumb[]>([])
   const [nodes, setNodes] = useState<MediaNode[]>([])
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
@@ -1998,6 +2004,14 @@ export function LibraryScreen(): React.JSX.Element {
             setPresetPicker({ node: menu.node, x: menu.x, y: menu.y })
             setMenu(null)
           }}
+          onAddToPlaylist={
+            !menu.node.isContainer || isAlbumClass(menu.node.upnpClass)
+              ? () => {
+                  setPlaylistPicker({ node: menu.node, x: menu.x, y: menu.y })
+                  setMenu(null)
+                }
+              : undefined
+          }
           // Albums and tracks are heartable; plain folders and artists aren't.
           favorite={
             !menu.node.isContainer || isAlbumClass(menu.node.upnpClass)
@@ -2010,6 +2024,26 @@ export function LibraryScreen(): React.JSX.Element {
                 }
               : undefined
           }
+        />
+      )}
+      {playlistPicker && (
+        <AddToPlaylistPanel
+          label={playlistPicker.node.title}
+          at={{ x: playlistPicker.x, y: playlistPicker.y }}
+          onClose={() => setPlaylistPicker(null)}
+          resolve={async () => {
+            const node = playlistPicker.node
+            const udn = node.serverUdn ?? serverUdn
+            const name = servers?.find((s) => s.udn === udn)?.name ?? null
+            if (!node.isContainer) return [itemFromNode(node, udn, name)]
+            // An album expands to its TRACKS — a playlist stores tracks, not a
+            // reference that would drift as the server's album changes.
+            if (!udn) return []
+            const children = await tt.mediaBrowse(udn, node.id, [])
+            return children
+              .filter((c) => !c.isContainer)
+              .map((c) => itemFromNode(c, udn, name))
+          }}
         />
       )}
       {presetPicker && (

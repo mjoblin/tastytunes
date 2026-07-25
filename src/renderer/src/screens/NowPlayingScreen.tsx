@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Captions, Disc3, Heart, Maximize2, MicVocal, RadioTower, UserRound } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Captions, Disc3, Heart, ListOrdered, Maximize2, MicVocal, RadioTower, UserRound } from 'lucide-react'
 import { favoriteKey, type Favorite, type FavoriteMedia } from '@shared/ipc'
 import { tt } from '@/api'
 import { useStore } from '@/store'
@@ -7,6 +7,7 @@ import { toggleFavorite } from '@/lib/favorites'
 import { cx, deriveNowPlaying } from '@/lib/format'
 import { useSettledSnapshot } from '@/hooks/useSettledSnapshot'
 import { useDecodedArt } from '@/hooks/useDecodedArt'
+import { AddToPlaylistPanel } from '@/components/AddToPlaylistPanel'
 import { SignalLamp } from '@/components/SignalLamp'
 import { ArtImage } from '@/components/ArtImage'
 import { LyricsPanel } from '@/components/LyricsPanel'
@@ -143,6 +144,13 @@ export function NowPlayingScreen(): React.JSX.Element {
     return () => clearTimeout(t)
   }, [state])
 
+  // Adding what's playing is the other half of "add from wherever you see
+  // music". Tracks only — a radio stream can't hold a position in an ordered
+  // list, so the button simply isn't offered for one.
+  const playlistBtn = useRef<HTMLButtonElement | null>(null)
+  const [playlistAt, setPlaylistAt] = useState<{ x: number; y: number } | null>(null)
+  const playlistAvailable = !meta.isRadio && !!meta.title
+
   const empty = !meta.title && !meta.subtitle
 
   // Titleless top band: preserves the header's vertical rhythm (and houses the
@@ -155,6 +163,20 @@ export function NowPlayingScreen(): React.JSX.Element {
     <header className="drag-region relative z-20 pointer-events-none flex items-center justify-end px-8 pt-8 pb-4 min-h-[83px]">
       {/* while a drawer is open the header goes quiet entirely — the panel's
           own ✕ (or Escape) is the one way out */}
+      {playlistAvailable && !lyricsOpen && !artistOpen && (
+        <button
+          ref={playlistBtn}
+          onClick={() => {
+            const r = playlistBtn.current?.getBoundingClientRect()
+            setPlaylistAt({ x: r ? r.left : 0, y: r ? r.bottom + 6 : 0 })
+          }}
+          data-tip="Add to playlist"
+          aria-label="Add to playlist"
+          className="no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-full text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
+        >
+          <ListOrdered size={18} />
+        </button>
+      )}
       {heartAvailable && !lyricsOpen && !artistOpen && (
         <button
           onClick={toggleHeart}
@@ -233,6 +255,27 @@ export function NowPlayingScreen(): React.JSX.Element {
       {/* ambient art backdrop is rendered app-wide by AmbientBackdrop in App */}
       {header}
 
+      {playlistAt && (
+        <AddToPlaylistPanel
+          label={meta.title ?? 'this track'}
+          at={playlistAt}
+          onClose={() => setPlaylistAt(null)}
+          resolve={async () => [
+            {
+              title: meta.title ?? '',
+              artist: meta.subtitle ?? null,
+              album: meta.album ?? null,
+              artUrl: meta.artUrl ?? null,
+              // play_state carries no library ids — content IS the identity,
+              // and activation resolves it fresh against whatever server has it
+              serverUdn: null,
+              serverName: null,
+              objectId: null,
+              durationSecs: md?.duration ?? null
+            }
+          ]}
+        />
+      )}
       {lyricsAvailable && lyricsOpen && <LyricsPanel />}
       {artistAvailable && artistOpen && <ArtistPanel />}
 
