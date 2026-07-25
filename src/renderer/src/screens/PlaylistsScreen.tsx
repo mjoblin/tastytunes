@@ -513,10 +513,6 @@ function TrackRow({
         </div>
       </div>
 
-      {favorite && (
-        <RowHeart favorited={hearted} held={false} onHeart={() => void toggleFavorite(favorite)} />
-      )}
-
       <RowAction icon={MoreHorizontal} label="More actions" onClick={(e) => onMenu(e)} />
 
       <RowAction
@@ -526,6 +522,11 @@ function TrackRow({
         destructive
         onClick={onRemove}
       />
+
+      {/* persistent state groups with the duration — see QueueRow */}
+      {favorite && (
+        <RowHeart favorited={hearted} held={false} onHeart={() => void toggleFavorite(favorite)} />
+      )}
 
       {/* far right of the content, after the hover actions — see QueueRow */}
       <span className="font-mono text-[11px] text-faint tabular-nums">

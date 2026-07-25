@@ -378,9 +378,6 @@ export function TrackRow({
       {/* per-button reveal (not on the wrapper): a set heart must stay
           visible on the resting row while play/⋯ remain hover-only */}
       <div className="flex items-center gap-0.5">
-        {onHeart && (
-          <RowHeart favorited={favorited === true} held={menuOpen} onHeart={onHeart} />
-        )}
         <RowAction
           icon={Play}
           label="Play"
@@ -389,6 +386,9 @@ export function TrackRow({
           onClick={() => onPlayNow(ref.current)}
         />
         <RowAction icon={MoreHorizontal} label="More actions" pinned={menuOpen} onClick={onMenu} />
+        {/* heart last: persistent state sits beside the duration, not adrift
+            behind the hover-only actions (see QueueRow) */}
+        {onHeart && <RowHeart favorited={favorited === true} held={menuOpen} onHeart={onHeart} />}
       </div>
       <span className="font-mono text-[11px] text-faint tabular-nums">
         {node.durationSecs != null ? fmtTime(node.durationSecs) : ''}

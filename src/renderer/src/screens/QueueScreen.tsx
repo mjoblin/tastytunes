@@ -483,14 +483,6 @@ function QueueRow({ item, isCurrent, playing, sourceActive, currentRef, onMenu }
         </div>
       </div>
 
-      {favorite && (
-        <RowHeart
-          favorited={hearted}
-          held={false}
-          onHeart={() => void toggleFavorite(favorite)}
-        />
-      )}
-
       <RowAction icon={MoreHorizontal} label="More actions" onClick={(e) => onMenu?.(e)} />
 
       <RowAction
@@ -501,6 +493,13 @@ function QueueRow({ item, isCurrent, playing, sourceActive, currentRef, onMenu }
           if (item.id != null) void tt.command({ type: 'queueDelete', id: item.id })
         }}
       />
+
+      {/* The heart is PERSISTENT state, so it groups with the duration at the
+          right edge rather than leading the cluster — a set heart with the
+          hidden ⋯/× columns between it and the time looked stranded. */}
+      {favorite && (
+        <RowHeart favorited={hearted} held={false} onHeart={() => void toggleFavorite(favorite)} />
+      )}
 
       {/* Duration sits at the far right of the CONTENT, after the actions —
           it's always-visible information, so it wants a stable column, while
