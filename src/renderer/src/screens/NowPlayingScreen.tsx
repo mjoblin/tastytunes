@@ -152,6 +152,9 @@ export function NowPlayingScreen(): React.JSX.Element {
   const playlistAvailable = !meta.isRadio && !!meta.title
 
   const empty = !meta.title && !meta.subtitle
+  /** Every header button hides on this pair; naming it once also stopped the two
+   *  lyrics buttons from spelling the same condition in two different orders. */
+  const drawersClosed = !lyricsOpen && !artistOpen
 
   // Titleless top band: preserves the header's vertical rhythm (and houses the
   // display-mode button) so the art/text sit where they did with a title.
@@ -160,79 +163,97 @@ export function NowPlayingScreen(): React.JSX.Element {
     // (z-10) — but pointer-events-none on the strip itself, restored per
     // button, so the empty band never eats the drawer ✕ beneath it. Window
     // dragging is unaffected: app-region is a native hit-test, not CSS.
-    <header className="drag-region relative z-20 pointer-events-none flex items-center justify-end px-8 pt-8 pb-4 min-h-[83px]">
-      {/* while a drawer is open the header goes quiet entirely — the panel's
-          own ✕ (or Escape) is the one way out */}
-      {playlistAvailable && !lyricsOpen && !artistOpen && (
-        <button
-          ref={playlistBtn}
-          onClick={() => {
-            const r = playlistBtn.current?.getBoundingClientRect()
-            setPlaylistAt({ x: r ? r.left : 0, y: r ? r.bottom + 6 : 0 })
-          }}
-          data-tip="Add to playlist"
-          aria-label="Add to playlist"
-          className="no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-full text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
-        >
-          <ListOrdered size={18} />
-        </button>
-      )}
-      {heartAvailable && !lyricsOpen && !artistOpen && (
-        <button
-          onClick={toggleHeart}
-          data-tip={heartActive ? 'Remove from favorites' : 'Add to favorites'}
-          aria-label={heartActive ? 'Remove from favorites' : 'Add to favorites'}
-          data-np-heart={heartActive ? 'on' : 'off'}
-          className={cx(
-            'no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-full hover:bg-veil2 motion-safe:active:scale-90 transition-all',
-            heartActive ? 'text-gold hover:text-ink' : 'text-faint hover:text-ink'
+    <header className="drag-region relative z-20 pointer-events-none flex items-center justify-end gap-6 px-8 pt-8 pb-4 min-h-[83px]">
+      {/* TWO GROUPS, told apart by a gap (user call 2026-07-24). The strip ran
+          six buttons at one even spacing, but they do two different jobs: the
+          first pair WRITES to stored collections, the rest only change what
+          you're LOOKING at. Grouped by proximity rather than a hairline rule —
+          proximity is already the app's grouping device (see the row-action
+          clusters), a rule would be the loudest thing in a strip meant to sit
+          quietly over album art, and since every button here is conditional a
+          divider would need its own logic to avoid floating with nothing left
+          to separate. A gap between two groups just collapses.
+          gap-6 here against the Queue header's gap-4 on purpose: these are bare
+          icons and those are ringed chips, which already separate themselves.
+          The aim is equal PERCEIVED separation, not equal pixels.
+          While a drawer is open the header goes quiet entirely — the panel's
+          own ✕ (or Escape) is the one way out. */}
+      {drawersClosed && (playlistAvailable || heartAvailable) && (
+        <div data-np-group="write" className="flex items-center">
+          {playlistAvailable && (
+            <button
+              ref={playlistBtn}
+              onClick={() => {
+                const r = playlistBtn.current?.getBoundingClientRect()
+                setPlaylistAt({ x: r ? r.left : 0, y: r ? r.bottom + 6 : 0 })
+              }}
+              data-tip="Add to playlist"
+              aria-label="Add to playlist"
+              className="no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-full text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
+            >
+              <ListOrdered size={18} />
+            </button>
           )}
-        >
-          <Heart size={16} fill={heartActive ? 'currentColor' : 'none'} />
-        </button>
-      )}
-      {lyricsAvailable && !lyricsOpen && !artistOpen && (
-        <button
-          onClick={() => void toggleLyricLine()}
-          data-tip={lyricsLine ? 'Hide current lyric line' : 'Show current lyric line'}
-          aria-label="Current lyric line"
-          className={cx(
-            'no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-full hover:bg-veil2 motion-safe:active:scale-90 transition-all',
-            lyricsLine ? 'text-gold hover:text-ink' : 'text-faint hover:text-ink'
+          {heartAvailable && (
+            <button
+              onClick={toggleHeart}
+              data-tip={heartActive ? 'Remove from favorites' : 'Add to favorites'}
+              aria-label={heartActive ? 'Remove from favorites' : 'Add to favorites'}
+              data-np-heart={heartActive ? 'on' : 'off'}
+              className={cx(
+                'no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-full hover:bg-veil2 motion-safe:active:scale-90 transition-all',
+                heartActive ? 'text-gold hover:text-ink' : 'text-faint hover:text-ink'
+              )}
+            >
+              <Heart size={16} fill={heartActive ? 'currentColor' : 'none'} />
+            </button>
           )}
-        >
-          <Captions size={16} />
-        </button>
+        </div>
       )}
-      {lyricsAvailable && !artistOpen && !lyricsOpen && (
-        <button
-          onClick={() => setLyricsOpen(true)}
-          data-tip="Lyrics"
-          aria-label="Lyrics"
-          className="no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-full text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
-        >
-          <MicVocal size={16} />
-        </button>
-      )}
-      {artistAvailable && !lyricsOpen && !artistOpen && (
-        <button
-          onClick={() => setArtistOpen(true)}
-          data-tip="About the artist"
-          aria-label="About the artist"
-          className="no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-full text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
-        >
-          <UserRound size={16} />
-        </button>
-      )}
-      {!lyricsOpen && !artistOpen && (
-        <button
-          onClick={() => setDisplayMode(true)}
-          data-tip="Full-screen display mode (F)"
-          aria-label="Full-screen display mode (F)"
-          className="no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-full text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
-        >
-          <Maximize2 size={16} />
-        </button>
+      {drawersClosed && (
+        <div data-np-group="view" className="flex items-center">
+          {lyricsAvailable && (
+            <button
+              onClick={() => void toggleLyricLine()}
+              data-tip={lyricsLine ? 'Hide current lyric line' : 'Show current lyric line'}
+              aria-label="Current lyric line"
+              className={cx(
+                'no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-full hover:bg-veil2 motion-safe:active:scale-90 transition-all',
+                lyricsLine ? 'text-gold hover:text-ink' : 'text-faint hover:text-ink'
+              )}
+            >
+              <Captions size={16} />
+            </button>
+          )}
+          {lyricsAvailable && (
+            <button
+              onClick={() => setLyricsOpen(true)}
+              data-tip="Lyrics"
+              aria-label="Lyrics"
+              className="no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-full text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
+            >
+              <MicVocal size={16} />
+            </button>
+          )}
+          {artistAvailable && (
+            <button
+              onClick={() => setArtistOpen(true)}
+              data-tip="About the artist"
+              aria-label="About the artist"
+              className="no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-full text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
+            >
+              <UserRound size={16} />
+            </button>
+          )}
+          <button
+            onClick={() => setDisplayMode(true)}
+            data-tip="Full-screen display mode (F)"
+            aria-label="Full-screen display mode (F)"
+            className="no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-full text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
+          >
+            <Maximize2 size={16} />
+          </button>
+        </div>
       )}
     </header>
   )

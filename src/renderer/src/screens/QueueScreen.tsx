@@ -257,59 +257,68 @@ export function QueueScreen(): React.JSX.Element {
           {allItems.length} tracks · {fmtTime(totalSecs)}
         </span>
         <div className="flex-1" />
-        <div className="flex items-center gap-1.5">
-          <FilterInput
-            value={filter}
-            onChange={(t) => setScreenFilter('queue', t)}
-            shown={items.length}
-            total={allItems.length}
-          />
+        {/* Same split as the Now Playing header: the two SAVE verbs create
+            stored things, the three after them only change what you're looking
+            at. Told apart by the wider gap-4 BETWEEN groups against the gap-1.5
+            within one. The filter needs no group of its own — it's an input,
+            already a different shape from the chips. */}
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1.5">
+            <FilterInput
+              value={filter}
+              onChange={(t) => setScreenFilter('queue', t)}
+              shown={items.length}
+              total={allItems.length}
+            />
+            <button
+              data-tip="Save queue as a playlist"
+              aria-label="Save queue as a playlist"
+              onClick={() => void saveAsPlaylist()}
+              disabled={allItems.length === 0}
+              className="no-drag tip-bottom p-2 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 disabled:opacity-40 motion-safe:active:scale-90 transition-all"
+            >
+              <ListOrdered size={16} />
+            </button>
+            <button
+              data-tip="Save queue as preset"
+              aria-label="Save queue as preset"
+              onClick={() => setSaveOpen(true)}
+              className="no-drag tip-bottom p-2 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
+            >
+              <BookmarkPlus size={16} />
+            </button>
+          </div>
+          <div className="flex items-center gap-1.5">
           <button
-            data-tip="Save queue as a playlist"
-            aria-label="Save queue as a playlist"
-            onClick={() => void saveAsPlaylist()}
-            disabled={allItems.length === 0}
-            className="no-drag tip-bottom p-2 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 disabled:opacity-40 motion-safe:active:scale-90 transition-all"
-          >
-            <ListOrdered size={16} />
-          </button>
-          <button
-            data-tip="Save queue as preset"
-            aria-label="Save queue as preset"
-            onClick={() => setSaveOpen(true)}
-            className="no-drag tip-bottom p-2 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
-          >
-            <BookmarkPlus size={16} />
-          </button>
-          <button
-            data-tip={cards ? 'View as rows' : 'View as cards'}
-            aria-label={cards ? 'View as rows' : 'View as cards'}
-            onClick={() => void setLayout(cards ? 'rows' : 'cards')}
-            className="no-drag tip-bottom p-2 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
-          >
-            {cards ? <Rows3 size={16} /> : <LayoutGrid size={16} />}
-          </button>
-          <button
-            data-tip="Scroll to the current track"
-            aria-label="Scroll to the current track"
-            onClick={scrollToCurrent}
-            className="no-drag tip-bottom p-2 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
-          >
-            <Crosshair size={16} />
-          </button>
-          <button
-            data-tip={followQueue ? 'Auto-follow: on' : 'Auto-follow: off'}
-            aria-label={followQueue ? 'Auto-follow: on' : 'Auto-follow: off'}
-            onClick={() => void setFollowQueue(!followQueue)}
-            className={cx(
-              'no-drag tip-bottom p-2 rounded-lg ring-1 transition-all',
-              followQueue
-                ? 'ring-gold/50 bg-golddim text-gold'
-                : 'ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70'
-            )}
-          >
-            <Footprints size={16} />
-          </button>
+              data-tip={cards ? 'View as rows' : 'View as cards'}
+              aria-label={cards ? 'View as rows' : 'View as cards'}
+              onClick={() => void setLayout(cards ? 'rows' : 'cards')}
+              className="no-drag tip-bottom p-2 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
+            >
+              {cards ? <Rows3 size={16} /> : <LayoutGrid size={16} />}
+            </button>
+            <button
+              data-tip="Scroll to the current track"
+              aria-label="Scroll to the current track"
+              onClick={scrollToCurrent}
+              className="no-drag tip-bottom p-2 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
+            >
+              <Crosshair size={16} />
+            </button>
+            <button
+              data-tip={followQueue ? 'Auto-follow: on' : 'Auto-follow: off'}
+              aria-label={followQueue ? 'Auto-follow: on' : 'Auto-follow: off'}
+              onClick={() => void setFollowQueue(!followQueue)}
+              className={cx(
+                'no-drag tip-bottom p-2 rounded-lg ring-1 transition-all',
+                followQueue
+                  ? 'ring-gold/50 bg-golddim text-gold'
+                  : 'ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70'
+              )}
+            >
+              <Footprints size={16} />
+            </button>
+          </div>
         </div>
       </header>
 
