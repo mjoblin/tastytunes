@@ -93,7 +93,7 @@ export function ToneEq({ label = true }: { label?: boolean } = {}): React.JSX.El
   const eqPresets = useStore((s) => s.settings.eqPresets)
   const saveSettings = useStore((s) => s.saveSettings)
   const [savePos, setSavePos] = useState<{ x: number; y: number } | null>(null)
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const showToast = useStore((s) => s.showToast)
 
   // Live-hold for tilt/balance: shows the drag value while scrubbing and
   // HOLDS the committed value until the streamer's echo lands (releasing
@@ -152,9 +152,34 @@ export function ToneEq({ label = true }: { label?: boolean } = {}): React.JSX.El
     })
     setSavePos(null)
   }
+  /**
+   * Instant, with an undo behind it — the two-tap "sure?" that used to guard
+   * this is retired. An EQ preset is one small local item ({name, gains}), so
+   * the rollback is exact, and the standing rule is that a confirm is for what
+   * CAN'T be undone. The device presets keep their confirm precisely because
+   * they can't (no objectId to re-save from, and their names are editable, so
+   * a name isn't a content identity).
+   */
   const deletePreset = async (name: string): Promise<void> => {
-    setConfirmDelete(null)
+    const index = eqPresets.findIndex((p) => p.name === name)
+    const removed = eqPresets[index]
+    if (!removed) return
     await saveSettings({ eqPresets: eqPresets.filter((p) => p.name !== name) })
+    showToast({
+      kind: 'success',
+      text: `Deleted “${name}”`,
+      action: { label: 'Undo', undo: () => restorePreset(index, removed) }
+    })
+  }
+
+  /** Back into the list AS IT IS NOW, at its old spot — a preset saved while
+   *  the offer was up must survive the undo. */
+  const restorePreset = (index: number, preset: { name: string; gains: number[] }): void => {
+    const live = useStore.getState().settings.eqPresets
+    if (live.some((p) => p.name === preset.name)) return
+    const next = [...live]
+    next.splice(Math.min(index, next.length), 0, preset)
+    void saveSettings({ eqPresets: next })
   }
 
   return (
@@ -228,14 +253,9 @@ export function ToneEq({ label = true }: { label?: boolean } = {}): React.JSX.El
               <div className="flex flex-wrap items-center gap-1.5" data-eq-presets>
               {eqPresets.map((p) => {
                 const active = gainsMatch(eq.bands, p.gains)
-                const confirming = confirmDelete === p.name
                 return (
                   <span
                     key={p.name}
-                    // disarm on leaving the WHOLE chip: the ✕→"sure?" morph
-                    // resizes the button, and a leave handler on the button
-                    // itself could disarm mid-morph under a still cursor
-                    onMouseLeave={() => confirming && setConfirmDelete(null)}
                     className={cx(
                       'group/chip flex items-center rounded-full ring-1 transition-all',
                       active
@@ -251,17 +271,12 @@ export function ToneEq({ label = true }: { label?: boolean } = {}): React.JSX.El
                       {p.name}
                     </button>
                     <button
-                      onClick={() => (confirming ? void deletePreset(p.name) : setConfirmDelete(p.name))}
-                      data-tip={confirming ? undefined : 'Delete preset'}
+                      onClick={() => void deletePreset(p.name)}
+                      data-tip="Delete preset"
                       aria-label={`Delete preset ${p.name}`}
-                      className={cx(
-                        'mr-1 rounded-full p-0.5 transition-all',
-                        confirming
-                          ? 'bg-alert text-white px-1.5 text-[10.5px]'
-                          : 'text-faint hover:text-alert opacity-0 group-hover/chip:opacity-100'
-                      )}
+                      className="mr-1 rounded-full p-0.5 text-faint hover:text-alert opacity-0 group-hover/chip:opacity-100 transition-all"
                     >
-                      {confirming ? 'sure?' : <X size={11} />}
+                      <X size={11} />
                     </button>
                   </span>
                 )

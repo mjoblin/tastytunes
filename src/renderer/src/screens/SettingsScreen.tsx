@@ -46,6 +46,7 @@ import { useStore, type Screen } from '@/store'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { DISPLAY_FONTS } from '@/hooks/useDisplayFont'
 import { SIGNAL_COLORS, cx, signalGlow } from '@/lib/format'
+import { clearRecentsWithUndo } from '@/lib/recents'
 import {
   MOD,
   NAV_SCREENS,
@@ -335,7 +336,7 @@ export function SettingsScreen(): React.JSX.Element {
               hint="A local log of tracks and stations you've played, shown on the Recently Played screen (R). Kept only on this computer."
             >
               <button
-                onClick={() => void tt.clearRecents()}
+                onClick={() => void clearRecentsWithUndo()}
                 disabled={recentsCount === 0}
                 className="shrink-0 text-[12.5px] px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-alert hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all disabled:opacity-40 disabled:hover:text-dim disabled:hover:ring-edge disabled:hover:bg-panel/70"
               >
@@ -750,13 +751,38 @@ function SchedulesSection({
   save(patch: Partial<AppSettings>): Promise<void>
 }): React.JSX.Element {
   const presets = useStore((s) => s.presets?.presets ?? null)
+  const showToast = useStore((s) => s.showToast)
   const schedules = settings.schedules
 
   const update = (id: string, patch: Partial<Schedule>): void => {
     void save({ schedules: schedules.map((s) => (s.id === id ? { ...s, ...patch } : s)) })
   }
+  /**
+   * Deleting a schedule was instant with nothing behind it — one click and a
+   * standing instruction to your hi-fi was gone, with no way to see what it
+   * had been. Still instant (it's one small item, and a confirm on every
+   * delete is the trade we've decided against), now with the offer behind it.
+   */
   const remove = (id: string): void => {
+    const index = schedules.findIndex((s) => s.id === id)
+    const removed = schedules[index]
+    if (!removed) return
     void save({ schedules: schedules.filter((s) => s.id !== id) })
+    showToast({
+      kind: 'success',
+      text: `Deleted the ${removed.time} ${removed.action === 'on' ? 'wake' : 'standby'} schedule`,
+      action: { label: 'Undo', undo: () => restore(index, removed) }
+    })
+  }
+
+  /** Splice it back where it was, into the list AS IT IS NOW — undoing must not
+   *  discard a schedule added or edited while the offer was up. */
+  const restore = (index: number, sched: Schedule): void => {
+    const live = useStore.getState().settings.schedules
+    if (live.some((s) => s.id === sched.id)) return
+    const next = [...live]
+    next.splice(Math.min(index, next.length), 0, sched)
+    void save({ schedules: next })
   }
   const add = (): void => {
     const sched: Schedule = {

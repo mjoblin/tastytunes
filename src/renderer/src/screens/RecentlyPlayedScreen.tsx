@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ChevronRight, Disc3, History, Music, Radio, Trash2 } from 'lucide-react'
 import { recentMatchesPlayState, type RecentTrack } from '@shared/ipc'
-import { tt } from '@/api'
 import { useStore } from '@/store'
 import { Eqbars } from '@/components/Eqbars'
 import { EmptyState } from '@/components/EmptyState'
@@ -9,6 +8,7 @@ import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { Segmented } from '@/components/Segmented'
 import { ArtImage } from '@/components/ArtImage'
 import { cx, fmtDayBucket, fmtRelative, matchesFilter } from '@/lib/format'
+import { clearRecentsWithUndo } from '@/lib/recents'
 import { FilterInput } from '@/components/FilterInput'
 
 interface Block {
@@ -119,7 +119,7 @@ export function RecentlyPlayedScreen(): React.JSX.Element {
               ]}
             />
             <button
-              onClick={() => void tt.clearRecents()}
+              onClick={() => void clearRecentsWithUndo()}
               data-tip="Clear history"
               aria-label="Clear history"
               className="no-drag flex items-center gap-2 px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-[12.5px] text-dim

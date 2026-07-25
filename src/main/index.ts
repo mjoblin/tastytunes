@@ -10,6 +10,7 @@ import {
   type LyricsQuery,
   type MediaQueueAction,
   type MenuCommand,
+  type RecentTrack,
   type SleepTimer,
   type StreamerCommand
 } from '@shared/ipc'
@@ -315,6 +316,7 @@ function registerIpc(): void {
   )
   ipcMain.handle(IPC.getRecents, () => getRecents())
   ipcMain.handle(IPC.clearRecents, () => deviceManager.clearRecents())
+  ipcMain.handle(IPC.recentsRestore, (_e, list: RecentTrack[]) => deviceManager.recentsRestore(list))
   ipcMain.handle(IPC.favoriteAdd, (_e, fav: Favorite) => deviceManager.favoriteAdd(fav))
   ipcMain.handle(IPC.favoriteRemove, (_e, key: string) => deviceManager.favoriteRemove(key))
   ipcMain.handle(IPC.favoriteUpdate, (_e, key: string, patch: Partial<Favorite>) =>

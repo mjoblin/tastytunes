@@ -151,3 +151,28 @@ export function clearRecents(): RecentTrack[] {
   save([])
   return cached!
 }
+
+/**
+ * Undo a clear: put the log back.
+ *
+ * MERGES rather than overwrites. Clearing offers an undo for a few seconds, and
+ * the streamer doesn't stop playing while that offer is up — a track that got
+ * recorded in between is newer than everything in the snapshot, and restoring
+ * the snapshot wholesale would silently drop it. Whatever is in the log now
+ * stays on top; the snapshot fills in beneath it.
+ *
+ * Deduped on time + identity so a double-fired undo can't double the log, and
+ * bounded like every other write here.
+ */
+export function restoreRecents(list: RecentTrack[]): RecentTrack[] {
+  const seen = new Set<string>()
+  const merged: RecentTrack[] = []
+  for (const entry of [...getRecents(), ...list.map(normalize)]) {
+    const key = `${entry.at}:${recentKey(entry)}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    merged.push(entry)
+  }
+  save(merged.slice(0, MAX_RECENTS))
+  return cached!
+}

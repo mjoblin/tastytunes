@@ -46,7 +46,7 @@ import { discoverStreamers } from './discovery'
 import { SmoipSocket } from './smoipSocket'
 import * as smoipHttp from './smoipHttp'
 import { getSettings, updateSettings } from './persist'
-import { clearRecents, getRecents, recordRecent } from './recents'
+import { clearRecents, getRecents, recordRecent, restoreRecents } from './recents'
 import { addFavorite, getFavorites, removeFavorite, updateFavorite } from './favorites'
 import {
   appendToPlaylist,
@@ -797,6 +797,10 @@ export class DeviceManager {
 
   clearRecents(): void {
     this.push({ kind: 'recents', data: clearRecents() })
+  }
+
+  recentsRestore(list: Parameters<typeof restoreRecents>[0]): void {
+    this.push({ kind: 'recents', data: restoreRecents(list) })
   }
 
   // ------------------------------------------------------------------ favorites

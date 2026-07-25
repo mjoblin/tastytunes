@@ -1475,6 +1475,8 @@ export interface TastyTunesApi {
   getRecents(): Promise<RecentTrack[]>
   /** Wipe the recently-played log. */
   clearRecents(): Promise<void>
+  /** Undo a clear: merges the snapshot back under anything logged since. */
+  recentsRestore(list: RecentTrack[]): Promise<void>
   /** Add a favorite (replaces any same-key entry); resolves to the new list. */
   favoriteAdd(fav: Favorite): Promise<Favorite[]>
   /** Remove a favorite by its favoriteKey; resolves to the new list. */
@@ -1563,6 +1565,7 @@ export const IPC = {
   setSleep: 'tt:setSleep',
   getRecents: 'tt:getRecents',
   clearRecents: 'tt:clearRecents',
+  recentsRestore: 'tt:recentsRestore',
   favoriteAdd: 'tt:favoriteAdd',
   favoriteRemove: 'tt:favoriteRemove',
   favoriteUpdate: 'tt:favoriteUpdate',
