@@ -24,6 +24,7 @@ import { Eqbars } from '@/components/Eqbars'
 import { EmptyState } from '@/components/EmptyState'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { flashTarget, scrollToWithContext } from '@/lib/scroll'
+import { lockVertical } from '@/lib/dnd'
 import { activeSourceId, cx, fmtTime, matchesFilter } from '@/lib/format'
 import { ArtImage } from '@/components/ArtImage'
 import { FilterInput } from '@/components/FilterInput'
@@ -360,7 +361,7 @@ function QueueRow({ item, isCurrent, playing, sourceActive, currentRef }: QueueI
         setNodeRef(node)
         if (currentRef) currentRef.current = node
       }}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
+      style={{ transform: CSS.Transform.toString(lockVertical(transform)), transition }}
       className={cx(
         'group grid grid-cols-[26px_44px_1fr_auto_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5',
         'cursor-default transition-colors',

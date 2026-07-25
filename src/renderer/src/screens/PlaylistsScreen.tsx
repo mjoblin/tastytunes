@@ -25,6 +25,7 @@ import { SortChip } from '@/components/SortChip'
 import { FilterInput } from '@/components/FilterInput'
 import { ArtImage } from '@/components/ArtImage'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
+import { lockVertical } from '@/lib/dnd'
 import { cx, fmtDuration, fmtRelative, fmtTime, matchesFilter } from '@/lib/format'
 
 /**
@@ -247,7 +248,11 @@ export function PlaylistsScreen(): React.JSX.Element {
                 </div>
               )}
               <div className="flex-1 min-h-0 overflow-y-auto">
-                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={onDragEnd}
+                >
                   <SortableContext items={rowIds(selected.items)} strategy={verticalListSortingStrategy}>
                     {selected.items.map((item, i) => (
                       <TrackRow
@@ -352,7 +357,7 @@ function TrackRow({
     // row to feel like a different object depending on which one you're in.
     <div
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
+      style={{ transform: CSS.Transform.toString(lockVertical(transform)), transition }}
       className={cx(
         'group grid grid-cols-[26px_44px_1fr_auto_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5',
         'transition-colors',

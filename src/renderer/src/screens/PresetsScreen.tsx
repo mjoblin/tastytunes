@@ -35,6 +35,7 @@ import { Eqbars } from '@/components/Eqbars'
 import { EmptyState } from '@/components/EmptyState'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { flashTarget, scrollToWithContext } from '@/lib/scroll'
+import { lockVertical } from '@/lib/dnd'
 import { activeSourceId, cx, matchesFilter } from '@/lib/format'
 import { FilterInput } from '@/components/FilterInput'
 import { Slider } from '@/components/Slider'
@@ -561,7 +562,7 @@ function PresetRow({
   return (
     <div
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
+      style={{ transform: CSS.Transform.toString(lockVertical(transform)), transition }}
       data-playing={playing || undefined}
       className={cx(
         'group grid grid-cols-[26px_44px_1fr_auto_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5',
