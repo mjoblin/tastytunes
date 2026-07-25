@@ -331,6 +331,8 @@ function registerIpc(): void {
   ipcMain.handle(IPC.playlistAppend, (_e, id: string, items: PlaylistItem[]) =>
     deviceManager.playlistAppend(id, items)
   )
+  ipcMain.handle(IPC.playlistActivate, (_e, id: string) => deviceManager.playlistActivate(id))
+  ipcMain.handle(IPC.playlistActivateCancel, () => deviceManager.cancelPlaylistActivation())
   ipcMain.handle(IPC.lookupCacheStats, () => lookupCacheStats())
   ipcMain.handle(IPC.clearLookupCaches, () => clearLookupCaches())
 

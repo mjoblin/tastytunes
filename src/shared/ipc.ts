@@ -196,6 +196,24 @@ export interface Playlist {
 }
 
 /**
+ * Live progress of a playlist activation. Activation is inherently SLOW —
+ * entries can only be added to the streamer's queue one at a time, and each
+ * needs its media server's metadata first, so it is ~2 round-trips per track.
+ * The renderer shows this; `missed` names what couldn't be found rather than
+ * failing the whole run (partial activation is a normal outcome, not an error).
+ */
+export interface PlaylistActivation {
+  playlistId: string
+  name: string
+  total: number
+  done: number
+  added: number
+  missed: string[]
+  cancelled: boolean
+  finished: boolean
+}
+
+/**
  * Bounds that keep "a bounded local file" honest (favorites are unbounded
  * because they're small and deliberate; a playlist collection is neither).
  */
@@ -246,6 +264,7 @@ export type PushMessage =
   | { kind: 'powerSpec'; data: SystemPowerSpec | null }
   | { kind: 'favorites'; data: Favorite[] }
   | { kind: 'playlists'; data: Playlist[] }
+  | { kind: 'playlistActivation'; state: PlaylistActivation | null }
   | { kind: 'frame'; entry: FrameEntry }
   | { kind: 'log'; entry: LogEntry }
   | { kind: 'recents'; data: RecentTrack[] }
@@ -1375,6 +1394,10 @@ export interface TastyTunesApi {
   playlistSetItems(id: string, items: PlaylistItem[]): Promise<Playlist[]>
   /** Append to a playlist (duplicates allowed — an ordered list, not a set). */
   playlistAppend(id: string, items: PlaylistItem[]): Promise<Playlist[]>
+  /** Replace the streamer's queue with a playlist. Resolves when the run ends. */
+  playlistActivate(id: string): Promise<PlaylistActivation>
+  /** Stop an in-flight activation; the queue keeps whatever landed. */
+  playlistActivateCancel(): Promise<void>
   /** UPnP media servers known to the streamer (its own USB storage included). */
   mediaServers(): Promise<MediaServerInfo[]>
   /** Browse a ContentDirectory container (objectId null = root). `titlePath` is
@@ -1444,6 +1467,8 @@ export const IPC = {
   playlistDelete: 'tt:playlistDelete',
   playlistSetItems: 'tt:playlistSetItems',
   playlistAppend: 'tt:playlistAppend',
+  playlistActivate: 'tt:playlistActivate',
+  playlistActivateCancel: 'tt:playlistActivateCancel',
   lookupCacheStats: 'tt:lookupCacheStats',
   clearLookupCaches: 'tt:clearLookupCaches',
   mediaServers: 'tt:mediaServers',

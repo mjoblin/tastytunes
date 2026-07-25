@@ -12,6 +12,8 @@ import {
   type LogEntry,
   type McpStatus,
   type MediaIndexStatus,
+  type MediaQueueAction,
+  type PlaylistActivation,
   type PushMessage,
   type RecentTrack,
   type SleepTimer,
@@ -48,9 +50,12 @@ import {
   createPlaylist,
   deletePlaylist,
   getPlaylists,
+  healPlaylistItem,
   renamePlaylist,
   setPlaylistItems
 } from './playlists'
+import { queueAdd, refreshServers } from './upnpBrowser'
+import { searchServer as librarySearch } from './mediaIndex'
 import { scrobbler } from './scrobbler'
 import { getNetRequests, loggedFetch } from './netlog'
 
@@ -591,6 +596,9 @@ export class DeviceManager {
         return this.push({ kind: 'zoneState', data: this.cache.zoneState })
       case '/queue/list':
         this.cache.queue = data as QueueList
+        // Mid-batch (playlist activation) the cache stays current but the
+        // renderer hears nothing — one authoritative push lands at the end.
+        if (this.queueBatch) return
         return this.push({ kind: 'queue', data: this.cache.queue })
       case '/presets/list':
         this.cache.presets = data as Presets
@@ -793,6 +801,128 @@ export class DeviceManager {
     const list = addFavorite(fav)
     this.push({ kind: 'favorites', data: list })
     return list
+  }
+
+  private queueBatch = false
+  private activation: PlaylistActivation | null = null
+  private activationCancelled = false
+
+  /** Live activation state, for the boot snapshot. */
+  get playlistActivation(): PlaylistActivation | null {
+    return this.activation
+  }
+
+  cancelPlaylistActivation(): void {
+    if (this.activation && !this.activation.finished) this.activationCancelled = true
+  }
+
+  /**
+   * Replace the streamer's queue with a stored playlist.
+   *
+   * Shape dictated by the firmware (confirmed against vibin, which solved this
+   * first): entries go in ONE AT A TIME and each needs its media server's DIDL,
+   * so this is ~2 round-trips per track and genuinely slow — hence progress and
+   * cancellation. Every add also emits /queue/info, which normally refetches the
+   * whole list; the batch suppresses that at the wire AND at the push, then
+   * fetches once at the end. vibin used a bare boolean that cleared before the
+   * adds had settled; the single reconciling fetch is what makes ours safe.
+   *
+   * A stale objectId is not a failure: ids are hints, content is identity, so a
+   * miss re-resolves by search and HEALS the stored entry (the favorites move).
+   * Anything genuinely gone is reported, not silently dropped.
+   */
+  async playlistActivate(id: string): Promise<PlaylistActivation> {
+    const playlist = getPlaylists().find((p) => p.id === id)
+    if (!playlist) throw new Error('No such playlist')
+    const host = this.connection.phase === 'connected' ? this.connection.host : null
+    if (!host) throw new Error('Not connected')
+
+    await this.ensureAwake() // activating is a play-shaped intent
+
+    this.activationCancelled = false
+    this.activation = {
+      playlistId: id,
+      name: playlist.name,
+      total: playlist.items.length,
+      done: 0,
+      added: 0,
+      missed: [],
+      cancelled: false,
+      finished: false
+    }
+    const announce = (): void => this.push({ kind: 'playlistActivation', state: this.activation })
+    announce()
+
+    this.queueBatch = true
+    if (this.socket) this.socket.suppressQueueRefetch = true
+
+    // The FIRST successful add REPLACEs (clearing what was there); everything
+    // after appends. Keyed off success, not index — if entry one can't be
+    // resolved, entry two must still be the one that clears the old queue.
+    let replaced = false
+    try {
+      for (const [index, item] of playlist.items.entries()) {
+        if (this.activationCancelled) break
+        const action: MediaQueueAction = replaced ? 'APPEND' : 'REPLACE'
+        let landed = false
+
+        if (item.serverUdn && item.objectId) {
+          try {
+            await queueAdd(host, item.serverUdn, item.objectId, action)
+            landed = true
+          } catch {
+            // stale id — fall through to the content re-resolve
+          }
+        }
+
+        if (!landed) {
+          const servers = (await refreshServers(host)).filter((x) => x.searchable)
+          for (const server of servers) {
+            if (this.activationCancelled) break
+            try {
+              const { items } = await librarySearch(host, server.udn, item.title)
+              const lc = (v: string | null | undefined): string => (v ?? '').trim().toLowerCase()
+              const match = items.find(
+                (n) =>
+                  lc(n.title) === lc(item.title) &&
+                  (item.artist == null || n.artist == null || lc(n.artist) === lc(item.artist))
+              )
+              if (!match) continue
+              await queueAdd(host, server.udn, match.id, action)
+              landed = true
+              // heal in place — no updatedAt bump, so the collection keeps its order
+              healPlaylistItem(id, index, {
+                serverUdn: server.udn,
+                serverName: server.name,
+                objectId: match.id
+              })
+              break
+            } catch {
+              // try the next server
+            }
+          }
+        }
+
+        if (landed) {
+          replaced = true
+          this.activation.added += 1
+        } else {
+          this.activation.missed.push(item.title)
+        }
+        this.activation.done += 1
+        announce()
+      }
+    } finally {
+      this.queueBatch = false
+      if (this.socket) this.socket.suppressQueueRefetch = false
+      // ONE authoritative read of the truth, whatever happened above.
+      this.socket?.send('/queue/list')
+      this.activation.cancelled = this.activationCancelled
+      this.activation.finished = true
+      announce()
+      this.push({ kind: 'playlists', data: getPlaylists() })
+    }
+    return this.activation
   }
 
   // Playlist writes mirror the favorites verbs: mutate the bounded local file,

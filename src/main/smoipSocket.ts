@@ -94,7 +94,7 @@ export class SmoipSocket {
         this.events.onLog('warn', `unparseable frame: ${raw.toString().slice(0, 200)}`)
         return
       }
-      if (frame.path === '/queue/info') {
+      if (frame.path === '/queue/info' && !this.suppressQueueRefetch) {
         // The queue changed — fetch the full list.
         this.send('/queue/list')
       }
@@ -190,6 +190,14 @@ export class SmoipSocket {
     const delay = Math.min(RECONNECT_BASE_DELAY_MS * 2 ** Math.min(this.attempt, 6), RECONNECT_MAX_DELAY_MS)
     this.reconnectTimer = setTimeout(() => this.connect(), delay)
   }
+
+  /**
+   * Set during a BULK queue write (playlist activation). Queue entries can only
+   * be added one at a time, and each add pushes /queue/info — which would
+   * otherwise refetch the whole list N times for an N-track playlist. The batch
+   * fetches once at the end instead.
+   */
+  public suppressQueueRefetch = false
 
   private startKeepalive(): void {
     this.stopKeepalive()

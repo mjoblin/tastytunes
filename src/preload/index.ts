@@ -50,6 +50,8 @@ const api: TastyTunesApi = {
     ipcRenderer.invoke(IPC.playlistSetItems, id, items),
   playlistAppend: (id: string, items: PlaylistItem[]) =>
     ipcRenderer.invoke(IPC.playlistAppend, id, items),
+  playlistActivate: (id: string) => ipcRenderer.invoke(IPC.playlistActivate, id),
+  playlistActivateCancel: () => ipcRenderer.invoke(IPC.playlistActivateCancel),
   lookupCacheStats: () => ipcRenderer.invoke(IPC.lookupCacheStats),
   clearLookupCaches: () => ipcRenderer.invoke(IPC.clearLookupCaches),
   mediaServers: () => ipcRenderer.invoke(IPC.mediaServers),
