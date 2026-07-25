@@ -483,8 +483,6 @@ function QueueRow({ item, isCurrent, playing, sourceActive, currentRef, onMenu }
         </div>
       </div>
 
-      <RowAction icon={MoreHorizontal} label="More actions" onClick={(e) => onMenu?.(e)} />
-
       <RowAction
         icon={X}
         label="Remove from queue"
@@ -493,6 +491,8 @@ function QueueRow({ item, isCurrent, playing, sourceActive, currentRef, onMenu }
           if (item.id != null) void tt.command({ type: 'queueDelete', id: item.id })
         }}
       />
+
+      <RowAction icon={MoreHorizontal} label="More actions" onClick={(e) => onMenu?.(e)} />
 
       {/* The heart is PERSISTENT state, so it groups with the duration at the
           right edge rather than leading the cluster — a set heart with the

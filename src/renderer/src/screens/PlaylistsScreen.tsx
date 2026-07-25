@@ -513,8 +513,6 @@ function TrackRow({
         </div>
       </div>
 
-      <RowAction icon={MoreHorizontal} label="More actions" onClick={(e) => onMenu(e)} />
-
       <RowAction
         icon={X}
         label={`Remove ${item.title}`}
@@ -522,6 +520,8 @@ function TrackRow({
         destructive
         onClick={onRemove}
       />
+
+      <RowAction icon={MoreHorizontal} label="More actions" onClick={(e) => onMenu(e)} />
 
       {/* persistent state groups with the duration — see QueueRow */}
       {favorite && (
