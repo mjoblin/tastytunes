@@ -3,6 +3,7 @@ import {
   IPC,
   type AppSettings,
   type Favorite,
+  type PlaylistItem,
   type LyricsQuery,
   type MediaQueueAction,
   type PushMessage,
@@ -41,6 +42,14 @@ const api: TastyTunesApi = {
   favoriteRemove: (key: string) => ipcRenderer.invoke(IPC.favoriteRemove, key),
   favoriteUpdate: (key: string, patch: Partial<Favorite>) =>
     ipcRenderer.invoke(IPC.favoriteUpdate, key, patch),
+  playlistCreate: (name: string, items: PlaylistItem[]) =>
+    ipcRenderer.invoke(IPC.playlistCreate, name, items),
+  playlistRename: (id: string, name: string) => ipcRenderer.invoke(IPC.playlistRename, id, name),
+  playlistDelete: (id: string) => ipcRenderer.invoke(IPC.playlistDelete, id),
+  playlistSetItems: (id: string, items: PlaylistItem[]) =>
+    ipcRenderer.invoke(IPC.playlistSetItems, id, items),
+  playlistAppend: (id: string, items: PlaylistItem[]) =>
+    ipcRenderer.invoke(IPC.playlistAppend, id, items),
   lookupCacheStats: () => ipcRenderer.invoke(IPC.lookupCacheStats),
   clearLookupCaches: () => ipcRenderer.invoke(IPC.clearLookupCaches),
   mediaServers: () => ipcRenderer.invoke(IPC.mediaServers),

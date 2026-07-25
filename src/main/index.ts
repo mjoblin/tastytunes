@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import {
   IPC,
   type AppSettings,
+  type PlaylistItem,
   type Favorite,
   type LyricsQuery,
   type MediaQueueAction,
@@ -316,6 +317,19 @@ function registerIpc(): void {
   ipcMain.handle(IPC.favoriteRemove, (_e, key: string) => deviceManager.favoriteRemove(key))
   ipcMain.handle(IPC.favoriteUpdate, (_e, key: string, patch: Partial<Favorite>) =>
     deviceManager.favoriteUpdate(key, patch)
+  )
+  ipcMain.handle(IPC.playlistCreate, (_e, name: string, items: PlaylistItem[]) =>
+    deviceManager.playlistCreate(name, items)
+  )
+  ipcMain.handle(IPC.playlistRename, (_e, id: string, name: string) =>
+    deviceManager.playlistRename(id, name)
+  )
+  ipcMain.handle(IPC.playlistDelete, (_e, id: string) => deviceManager.playlistDelete(id))
+  ipcMain.handle(IPC.playlistSetItems, (_e, id: string, items: PlaylistItem[]) =>
+    deviceManager.playlistSetItems(id, items)
+  )
+  ipcMain.handle(IPC.playlistAppend, (_e, id: string, items: PlaylistItem[]) =>
+    deviceManager.playlistAppend(id, items)
   )
   ipcMain.handle(IPC.lookupCacheStats, () => lookupCacheStats())
   ipcMain.handle(IPC.clearLookupCaches, () => clearLookupCaches())

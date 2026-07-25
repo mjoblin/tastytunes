@@ -15,7 +15,8 @@ import type {
   UpdateState,
   RecentTrack,
   SleepTimer,
-  Snapshot
+  Snapshot,
+  Playlist
 } from '@shared/ipc'
 import type {
   Presets,
@@ -168,6 +169,7 @@ interface TTState {
   recents: RecentTrack[]
   /** Local favorites, newest-hearted first (mirrored from the main process). */
   favorites: Favorite[]
+  playlists: Playlist[]
   /** See LibraryTarget — set by Favorites, consumed by LibraryScreen. */
   libraryTarget: LibraryTarget | null
   /** See LastStation — session-only, set by every in-app streamRadio play. */
@@ -266,6 +268,7 @@ export const useStore = create<TTState>((set, get) => ({
   sleep: null,
   recents: [],
   favorites: [],
+  playlists: [],
   libraryTarget: null,
   lastStation: null,
   mcpStatus: { running: false, url: null, error: null },
@@ -352,6 +355,7 @@ export const useStore = create<TTState>((set, get) => ({
       sleep: snap.sleep,
       recents: snap.recents,
       favorites: snap.favorites,
+      playlists: snap.playlists,
       mcpStatus: snap.mcpStatus,
       mediaIndex: snap.mediaIndex,
       playhead: snap.position ? { secs: snap.position.position, at: Date.now() } : null,
@@ -469,6 +473,8 @@ export const useStore = create<TTState>((set, get) => ({
         }
         case 'menu':
           return {} // routed to applyMenu in main.tsx; nothing to merge here
+        case 'playlists':
+          return { playlists: msg.data }
         case 'settings':
           // settings changed outside the renderer (an MCP tool edited
           // schedules) — adopt wholesale, same as a snapshot would

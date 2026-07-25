@@ -162,6 +162,56 @@ export function favoriteKey(f: Favorite): string {
   return `track:${lc(f.title)}:${lc(f.artist)}:${lc(f.album)}`
 }
 
+// -------------------------------------------------------------------- playlists
+
+/**
+ * One track in a stored playlist.
+ *
+ * IDENTITY DISCIPLINE (the thing that makes playlists survivable): the CONTENT
+ * — title/artist/album — is the durable key, and serverUdn/objectId are a fast
+ * path that gets HEALED when a media server re-indexes. vibin stored bare media
+ * ids and matched on id equality, which is why its playlist activation needs a
+ * "skipped, not found on media server" counter. We already solved this twice
+ * (favoriteKey + objectId healing, queueContentHash); this is the same answer.
+ */
+export interface PlaylistItem {
+  title: string
+  artist: string | null
+  album: string | null
+  artUrl: string | null
+  serverUdn: string | null
+  serverName: string | null
+  /** Fast path only — may be stale, and is re-resolved from content on a miss. */
+  objectId: string | null
+  durationSecs?: number | null
+}
+
+/** A stored, ordered collection of tracks. Bounded local JSON, no database. */
+export interface Playlist {
+  id: string
+  name: string
+  createdAt: number
+  updatedAt: number
+  items: PlaylistItem[]
+}
+
+/**
+ * Bounds that keep "a bounded local file" honest (favorites are unbounded
+ * because they're small and deliberate; a playlist collection is neither).
+ */
+export const MAX_PLAYLISTS = 100
+export const MAX_PLAYLIST_ITEMS = 500
+
+/**
+ * Content identity for a playlist entry — deliberately the same shape as
+ * favoriteKey's track form, so an item and a hearted track resolve the same
+ * way and the healing path can be shared.
+ */
+export function playlistItemKey(i: PlaylistItem): string {
+  const lc = (s: string | null | undefined): string => (s ?? '').trim().toLowerCase()
+  return `track:${lc(i.title)}:${lc(i.artist)}:${lc(i.album)}`
+}
+
 // -------------------------------------------------------- main -> renderer push
 
 /**
@@ -195,6 +245,7 @@ export type PushMessage =
   | { kind: 'displaySpec'; data: SystemDisplaySpec | null }
   | { kind: 'powerSpec'; data: SystemPowerSpec | null }
   | { kind: 'favorites'; data: Favorite[] }
+  | { kind: 'playlists'; data: Playlist[] }
   | { kind: 'frame'; entry: FrameEntry }
   | { kind: 'log'; entry: LogEntry }
   | { kind: 'recents'; data: RecentTrack[] }
@@ -1160,6 +1211,8 @@ export interface Snapshot {
   recents: RecentTrack[]
   /** Local favorites (stations, albums, tracks), newest-hearted first. */
   favorites: Favorite[]
+  /** Stored playlists, newest-updated first. */
+  playlists: Playlist[]
   mcpStatus: McpStatus
   /** Local media-index state per known server. */
   mediaIndex: MediaIndexStatus[]
@@ -1314,6 +1367,14 @@ export interface TastyTunesApi {
   favoriteRemove(key: string): Promise<Favorite[]>
   /** Patch a favorite in place (objectId healing after a search resolve). */
   favoriteUpdate(key: string, patch: Partial<Favorite>): Promise<Favorite[]>
+  /** Stored playlists. Writes return the whole list, like the favorites verbs. */
+  playlistCreate(name: string, items: PlaylistItem[]): Promise<Playlist[]>
+  playlistRename(id: string, name: string): Promise<Playlist[]>
+  playlistDelete(id: string): Promise<Playlist[]>
+  /** Replace a playlist's items wholesale — reorder and remove both land here. */
+  playlistSetItems(id: string, items: PlaylistItem[]): Promise<Playlist[]>
+  /** Append to a playlist (duplicates allowed — an ordered list, not a set). */
+  playlistAppend(id: string, items: PlaylistItem[]): Promise<Playlist[]>
   /** UPnP media servers known to the streamer (its own USB storage included). */
   mediaServers(): Promise<MediaServerInfo[]>
   /** Browse a ContentDirectory container (objectId null = root). `titlePath` is
@@ -1378,6 +1439,11 @@ export const IPC = {
   favoriteAdd: 'tt:favoriteAdd',
   favoriteRemove: 'tt:favoriteRemove',
   favoriteUpdate: 'tt:favoriteUpdate',
+  playlistCreate: 'tt:playlistCreate',
+  playlistRename: 'tt:playlistRename',
+  playlistDelete: 'tt:playlistDelete',
+  playlistSetItems: 'tt:playlistSetItems',
+  playlistAppend: 'tt:playlistAppend',
   lookupCacheStats: 'tt:lookupCacheStats',
   clearLookupCaches: 'tt:clearLookupCaches',
   mediaServers: 'tt:mediaServers',

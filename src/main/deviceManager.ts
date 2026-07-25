@@ -43,6 +43,14 @@ import * as smoipHttp from './smoipHttp'
 import { getSettings, updateSettings } from './persist'
 import { clearRecents, getRecents, recordRecent } from './recents'
 import { addFavorite, getFavorites, removeFavorite, updateFavorite } from './favorites'
+import {
+  appendToPlaylist,
+  createPlaylist,
+  deletePlaylist,
+  getPlaylists,
+  renamePlaylist,
+  setPlaylistItems
+} from './playlists'
 import { scrobbler } from './scrobbler'
 import { getNetRequests, loggedFetch } from './netlog'
 
@@ -787,6 +795,33 @@ export class DeviceManager {
     return list
   }
 
+  // Playlist writes mirror the favorites verbs: mutate the bounded local file,
+  // push the whole list, return it to the caller that asked.
+  private pushPlaylists(list: ReturnType<typeof getPlaylists>): ReturnType<typeof getPlaylists> {
+    this.push({ kind: 'playlists', data: list })
+    return list
+  }
+
+  playlistCreate(name: string, items: Parameters<typeof createPlaylist>[1]): ReturnType<typeof getPlaylists> {
+    return this.pushPlaylists(createPlaylist(name, items))
+  }
+
+  playlistRename(id: string, name: string): ReturnType<typeof getPlaylists> {
+    return this.pushPlaylists(renamePlaylist(id, name))
+  }
+
+  playlistDelete(id: string): ReturnType<typeof getPlaylists> {
+    return this.pushPlaylists(deletePlaylist(id))
+  }
+
+  playlistSetItems(id: string, items: Parameters<typeof setPlaylistItems>[1]): ReturnType<typeof getPlaylists> {
+    return this.pushPlaylists(setPlaylistItems(id, items))
+  }
+
+  playlistAppend(id: string, items: Parameters<typeof appendToPlaylist>[1]): ReturnType<typeof getPlaylists> {
+    return this.pushPlaylists(appendToPlaylist(id, items))
+  }
+
   favoriteRemove(key: string): ReturnType<typeof getFavorites> {
     const list = removeFavorite(key)
     this.push({ kind: 'favorites', data: list })
@@ -854,6 +889,7 @@ export class DeviceManager {
       lastRecalledPresetId: this.lastRecalledPresetId,
       recents: getRecents(),
       favorites: getFavorites(),
+      playlists: getPlaylists(),
       mcpStatus: this.mcpStatus,
       mediaIndex: this.mediaIndexStatuses,
       frames: this.frames,
