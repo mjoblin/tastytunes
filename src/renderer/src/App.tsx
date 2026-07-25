@@ -178,8 +178,17 @@ function ToastHost(): React.JSX.Element | null {
       <div
         onClick={dismissToast}
         className={cx(
-          'flex items-center gap-2.5 rounded-xl px-4 py-2.5 ring-1 bg-raised shadow-2xl text-[12.5px] cursor-pointer max-w-[520px]',
-          toast.kind === 'error' ? 'ring-alert/40' : 'ring-gold/40'
+          // Translucent + blurred rather than an opaque slab: the toast floats
+          // over content and the ambient art wash, and a solid bg-raised panel
+          // read as pasted ON the app rather than part of it. Letting the warm
+          // near-black bg through is what makes it feel lit from the same
+          // source as everything else. Roomier too — px-5/py-3, and gap-3 with
+          // the action pushed further out so it stops crowding the sentence.
+          'flex items-center gap-3 rounded-xl px-5 py-3 ring-1 backdrop-blur-md',
+          'bg-panel/90 shadow-[0_10px_40px_rgb(0_0_0_/_0.55)] text-[12.5px] cursor-pointer max-w-[520px]',
+          toast.kind === 'error'
+            ? 'ring-alert/45'
+            : 'ring-gold/35 shadow-[0_10px_40px_rgb(0_0_0_/_0.55),0_0_24px_rgb(var(--gold-rgb)_/_0.10)]'
         )}
       >
         {toast.kind === 'error' ? (
@@ -187,7 +196,7 @@ function ToastHost(): React.JSX.Element | null {
         ) : (
           <CircleCheck size={14} className="text-gold shrink-0" />
         )}
-        <span className="min-w-0">{toast.text}</span>
+        <span className="flex-1 min-w-0">{toast.text}</span>
         {toast.action && (
           <button
             onClick={(e) => {
@@ -195,7 +204,15 @@ function ToastHost(): React.JSX.Element | null {
               setScreen(toast.action!.screen)
               dismissToast()
             }}
-            className="shrink-0 text-[12px] px-2.5 py-1 rounded-md ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 transition-all"
+            // Tinted to the toast's own accent so it reads as the thing to
+            // click. Neutral ring + text-dim over a translucent surface came
+            // out looking like a disabled field.
+            className={cx(
+              'ml-2 shrink-0 text-[12px] px-3 py-1.5 rounded-md ring-1 font-medium transition-all',
+              toast.kind === 'error'
+                ? 'ring-alert/40 text-alert hover:bg-alert/10 hover:ring-alert/60'
+                : 'ring-gold/35 text-gold hover:bg-golddim hover:ring-gold/55'
+            )}
           >
             {toast.action.label}
           </button>
