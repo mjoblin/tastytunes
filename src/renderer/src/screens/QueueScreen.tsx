@@ -17,7 +17,13 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { BookmarkPlus, Crosshair, Disc3, Footprints, GripVertical, LayoutGrid, ListMusic, ListOrdered, Play, Rows3, X } from 'lucide-react'
 import { queueContentHash, type QueueListItem } from '@shared/smoip'
-import { presetVolumeKey, type ScreenLayout } from '@shared/ipc'
+import {
+  favoriteKey,
+  presetVolumeKey,
+  type Favorite,
+  type FavoriteMedia,
+  type ScreenLayout
+} from '@shared/ipc'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { Eqbars } from '@/components/Eqbars'
@@ -26,6 +32,10 @@ import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { flashTarget, scrollToWithContext } from '@/lib/scroll'
 import { lockVertical } from '@/lib/dnd'
 import { activeSourceId, cx, fmtTime, matchesFilter } from '@/lib/format'
+import { createPortal } from 'react-dom'
+import { toggleFavorite } from '@/lib/favorites'
+import { usePopoverChrome, useClampedPosition } from '@/hooks/usePopover'
+import { AddToPlaylistPanel } from '@/components/AddToPlaylistPanel'
 import { ArtImage } from '@/components/ArtImage'
 import { FilterInput } from '@/components/FilterInput'
 import { PopoverChrome } from '@/hooks/usePopover'
@@ -119,6 +129,14 @@ export function QueueScreen(): React.JSX.Element {
   }
 
   const showToast = useStore((s) => s.showToast)
+  const favorites = useStore((s) => s.favorites)
+  // Right-click rather than a third hover button: the row already carries
+  // remove and a grip, and Favorites established right-click for exactly this
+  // (a local list of tracks whose rows are already busy).
+  const [rowMenu, setRowMenu] = useState<{ item: QueueListItem; x: number; y: number } | null>(null)
+  const [playlistFor, setPlaylistFor] = useState<{ item: QueueListItem; x: number; y: number } | null>(
+    null
+  )
   const allItems = (queue?.items ?? []).filter((i) => i.id != null)
 
   /**
@@ -290,6 +308,42 @@ export function QueueScreen(): React.JSX.Element {
         </div>
       </header>
 
+      {rowMenu && (
+        <QueueRowMenu
+          menu={rowMenu}
+          onClose={() => setRowMenu(null)}
+          items={queueRowActions(rowMenu.item, {
+            favorites,
+            addToPlaylist: () => setPlaylistFor({ item: rowMenu.item, x: rowMenu.x, y: rowMenu.y })
+          })}
+        />
+      )}
+      {playlistFor && (
+        <AddToPlaylistPanel
+          label={playlistFor.item.metadata?.title ?? 'this track'}
+          at={{ x: playlistFor.x, y: playlistFor.y }}
+          onClose={() => setPlaylistFor(null)}
+          resolve={async () => {
+            const md = playlistFor.item.metadata
+            return md
+              ? [
+                  {
+                    title: md.title ?? 'Unknown track',
+                    artist: md.artist ?? null,
+                    album: md.album ?? null,
+                    artUrl: md.art_url ?? null,
+                    // a queue id belongs to THIS queue, not to the library —
+                    // content is the identity, resolved fresh on activation
+                    serverUdn: null,
+                    serverName: null,
+                    objectId: null,
+                    durationSecs: md.duration ?? null
+                  }
+                ]
+              : []
+          }}
+        />
+      )}
       {saveOpen && <SaveQueueDialog onClose={() => setSaveOpen(false)} />}
 
       {/* rows: pt-1 keeps the current ring unclipped; cards: pt-2 gives the
@@ -321,6 +375,11 @@ export function QueueScreen(): React.JSX.Element {
                 {items.map((item) => (
                   <QueueCard
                     key={item.id}
+                    onMenu={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setRowMenu({ item, x: e.clientX, y: e.clientY })
+                    }}
                     item={item}
                     isCurrent={item.id === playId}
                     playing={playing}
@@ -333,6 +392,11 @@ export function QueueScreen(): React.JSX.Element {
               items.map((item) => (
                 <QueueRow
                   key={item.id}
+                  onMenu={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    setRowMenu({ item, x: e.clientX, y: e.clientY })
+                  }}
                   item={item}
                   isCurrent={item.id === playId}
                   playing={playing}
@@ -349,6 +413,7 @@ export function QueueScreen(): React.JSX.Element {
 }
 
 interface QueueItemProps {
+  onMenu?(e: React.MouseEvent): void
   item: QueueListItem
   isCurrent: boolean
   playing: boolean
@@ -357,7 +422,7 @@ interface QueueItemProps {
   currentRef?: React.MutableRefObject<HTMLDivElement | null>
 }
 
-function QueueRow({ item, isCurrent, playing, sourceActive, currentRef }: QueueItemProps): React.JSX.Element {
+function QueueRow({ item, isCurrent, playing, sourceActive, currentRef, onMenu }: QueueItemProps): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id as number
   })
@@ -383,6 +448,7 @@ function QueueRow({ item, isCurrent, playing, sourceActive, currentRef }: QueueI
       onClick={() => {
         if (item.id != null) void tt.command({ type: 'playQueueId', queueId: item.id })
       }}
+      onContextMenu={onMenu}
     >
       <div className="flex items-center justify-center">
         {isCurrent ? (
@@ -437,7 +503,7 @@ function QueueRow({ item, isCurrent, playing, sourceActive, currentRef }: QueueI
 }
 
 /** Card view of a queue track — mirrors PresetCard's inset-tile anatomy. */
-function QueueCard({ item, isCurrent, playing, sourceActive, currentRef }: QueueItemProps): React.JSX.Element {
+function QueueCard({ item, isCurrent, playing, sourceActive, currentRef, onMenu }: QueueItemProps): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id as number
   })
@@ -469,6 +535,7 @@ function QueueCard({ item, isCurrent, playing, sourceActive, currentRef }: Queue
         onClick={() => {
           if (item.id != null) void tt.command({ type: 'playQueueId', queueId: item.id })
         }}
+        onContextMenu={onMenu}
       >
         <div className="aspect-square w-full rounded-lg overflow-hidden bg-panel/70 flex items-center justify-center">
           <ArtImage
@@ -526,5 +593,100 @@ function QueueCard({ item, isCurrent, playing, sourceActive, currentRef }: Queue
         </button>
       </div>
     </div>
+  )
+}
+
+/**
+ * What a queued track offers beyond play and remove. The queue had NO row menu
+ * at all — you could hear a track, want to keep it, and have nowhere to say so
+ * without going to Now Playing and waiting for it to come round.
+ */
+function queueRowActions(
+  item: QueueListItem,
+  deps: { favorites: Favorite[]; addToPlaylist: () => void }
+): Array<{ label: string; run: () => void }> {
+  const md = item.metadata
+  const title = md?.title ?? null
+  const artist = md?.artist ?? null
+  const fav: Omit<FavoriteMedia, 'addedAt'> | null =
+    title && artist
+      ? {
+          kind: 'track',
+          title,
+          artist,
+          album: md?.album ?? null,
+          artUrl: md?.art_url ?? null,
+          serverUdn: null,
+          serverName: null,
+          objectId: null,
+          titlePath: null,
+          durationSecs: md?.duration ?? null
+        }
+      : null
+  const hearted =
+    fav != null && deps.favorites.some((f) => favoriteKey(f) === favoriteKey(fav as Favorite))
+
+  return [
+    { label: 'Add to playlist…', run: deps.addToPlaylist },
+    // A track needs title AND artist to have a content identity; without one
+    // it can't be re-found later, so it isn't offered.
+    ...(fav
+      ? [
+          {
+            label: hearted ? 'Remove from favorites' : 'Add to favorites',
+            run: () => void toggleFavorite(fav)
+          }
+        ]
+      : []),
+    ...(item.id != null
+      ? [
+          {
+            label: 'Remove from queue',
+            run: () => void tt.command({ type: 'queueDelete', id: item.id as number })
+          }
+        ]
+      : [])
+  ]
+}
+
+/** The Favorites right-click menu shape, applied to a queue row. */
+function QueueRowMenu({
+  menu,
+  items,
+  onClose
+}: {
+  menu: { item: QueueListItem; x: number; y: number }
+  items: Array<{ label: string; run: () => void }>
+  onClose(): void
+}): React.JSX.Element {
+  usePopoverChrome(onClose)
+  const boxRef = useRef<HTMLDivElement | null>(null)
+  const pos = useClampedPosition(boxRef, menu.x, menu.y)
+  return createPortal(
+    <>
+      <div className="fixed inset-0 z-40" onClick={onClose} onContextMenu={onClose} />
+      <div
+        ref={boxRef}
+        className="fixed z-50 w-52 rounded-xl ring-1 ring-edge2 bg-raised shadow-xl p-1.5 space-y-0.5"
+        style={pos}
+      >
+        <div className="px-2.5 pt-1 pb-1.5 text-[11px] text-faint truncate">
+          {menu.item.metadata?.title ?? 'Track'}
+        </div>
+        {items.map((item) => (
+          <button
+            key={item.label}
+            onClick={() => {
+              onClose()
+              item.run()
+            }}
+            className="w-full px-2.5 py-1.5 rounded-lg text-left text-[13px] text-dim hover:text-ink hover:bg-veil transition-colors"
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+    </>,
+    document.body
   )
 }

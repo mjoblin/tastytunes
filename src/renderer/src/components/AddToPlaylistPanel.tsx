@@ -4,7 +4,7 @@ import { ListOrdered, Plus } from 'lucide-react'
 import type { PlaylistItem } from '@shared/ipc'
 import { tt } from '@/api'
 import { useStore } from '@/store'
-import { cx, fmtTime } from '@/lib/format'
+import { cx, fmtTime, matchesFilter } from '@/lib/format'
 import { usePopoverChrome, useClampedPosition } from '@/hooks/usePopover'
 
 /**
@@ -32,14 +32,23 @@ export function AddToPlaylistPanel({
   at: { x: number; y: number }
   onClose(): void
 }): React.JSX.Element {
-  const playlists = useStore((s) => s.playlists)
+  const all = useStore((s) => s.playlists)
   const showToast = useStore((s) => s.showToast)
   const [creating, setCreating] = useState(false)
+  const [filter, setFilter] = useState('')
   const [newName, setNewName] = useState('')
   const [busy, setBusy] = useState(false)
   usePopoverChrome(onClose)
   const boxRef = useRef<HTMLDivElement | null>(null)
   const pos = useClampedPosition(boxRef, at.x, at.y)
+
+  // A filter only earns its space once the list is long enough to hunt through.
+  // Below that it's chrome in the way of a two-click action; the list is
+  // newest-updated-first, so the one you just used is already at the top.
+  const showFilter = all.length > 8
+  const playlists = filter
+    ? all.filter((p) => matchesFilter(filter, [p.name]))
+    : all
 
   const done = (count: number, name: string): void => {
     showToast({
@@ -98,6 +107,23 @@ export function AddToPlaylistPanel({
         style={pos}
       >
         <div className="px-2.5 pt-1 pb-1.5 text-[11px] text-faint truncate">Add “{label}” to…</div>
+        {showFilter && (
+          <div className="px-1 pb-1.5">
+            <input
+              autoFocus
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              onKeyDown={(e) => {
+                // Enter with exactly one match is the fast path
+                if (e.key === 'Enter' && playlists.length === 1) void addTo(playlists[0].id, playlists[0].name)
+                if (e.key === 'Escape') (filter ? setFilter('') : onClose())
+              }}
+              placeholder={`Filter ${all.length} playlists`}
+              aria-label="Filter playlists"
+              className="w-full bg-panel ring-1 ring-edge2 rounded px-2 h-7 text-[12.5px]"
+            />
+          </div>
+        )}
 
         <div className="max-h-[280px] overflow-y-auto space-y-0.5">
           {playlists.map((p) => {
@@ -118,7 +144,9 @@ export function AddToPlaylistPanel({
             )
           })}
           {playlists.length === 0 && (
-            <div className="px-2.5 py-2 text-[12px] text-faint">No playlists yet.</div>
+            <div className="px-2.5 py-2 text-[12px] text-faint">
+              {all.length === 0 ? 'No playlists yet.' : 'No playlist matches that.'}
+            </div>
           )}
         </div>
 
