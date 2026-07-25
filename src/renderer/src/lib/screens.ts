@@ -37,14 +37,15 @@ export interface ScreenDef {
  *
  *   playing now      Now Playing · Queue
  *   everything       Library
- *   set up for later Favorites · Playlists · Presets
+ *   set up for later Presets · Playlists · Favorites
  *   dipped into      Radio · Recently Played
  *   system           Device
  *
  * Presets sits with Playlists and Favorites — all three are "things I set up
  * so I can play them later", and that a preset lives in a device slot while a
- * playlist is a local file is OUR distinction, not the listener's. It closing
- * that group also lands it beside Radio, which is what most preset slots hold.
+ * playlist is a local file is OUR distinction, not the listener's. Within the
+ * trio the order runs most-deliberate to most-casual: a preset is a slot you
+ * assigned, a playlist you built, a favorite you merely flagged in passing.
  * Radio and Recently Played sink on FREQUENCY rather than kind (Radio is a
  * browse surface like Library) — the rarely-opened belong near the bottom.
  *
@@ -55,14 +56,14 @@ export const NAV_SCREENS: ScreenDef[] = [
   { id: 'now-playing', label: 'Now Playing', icon: Disc3, key: 'N' },
   { id: 'queue', label: 'Queue', icon: ListMusic, key: 'Q' },
   { id: 'library', label: 'Library', icon: Library, key: 'I' },
-  // V as in faVorites (F belongs to display mode, H was left free for future
-  // transport use) — must stay clear of J/L/K/space/M/F like every screen key
-  { id: 'favorites', label: 'Favorites', icon: Heart, key: 'V' },
+  { id: 'presets', label: 'Presets', icon: Radio, key: 'P' },
   // 'A' as in plAylists — S is the Search screen's, and P/L are long gone
   // (Presets, and L is a transport seek key). ListOrdered rather than
   // ListMusic: the queue owns that one, and a playlist IS a saved ordering.
   { id: 'playlists', label: 'Playlists', icon: ListOrdered, key: 'A' },
-  { id: 'presets', label: 'Presets', icon: Radio, key: 'P' },
+  // V as in faVorites (F belongs to display mode, H was left free for future
+  // transport use) — must stay clear of J/L/K/space/M/F like every screen key
+  { id: 'favorites', label: 'Favorites', icon: Heart, key: 'V' },
   // T as in Tuner — the classic hi-fi name for the radio section
   { id: 'radio', label: 'Radio', icon: RadioTower, key: 'T' },
   { id: 'recently-played', label: 'Recently Played', icon: History, key: 'R' },

@@ -17,7 +17,7 @@ export function DeviceScreen(): React.JSX.Element {
   const systemInfo = useStore((s) => s.systemInfo)
   // PASSIVE firmware awareness: shown here, never acted on. There is no check or
   // install control anywhere — updating is the user's job via the official app
-  // or the streamer's web admin (the "Open web admin" button below).
+  // or the streamer's web admin (the "Open web admin" button beside the tabs).
   const firmwareUpdate = useStore((s) => s.firmwareUpdate)
   const audioSpec = useStore((s) => s.audioSpec)
   const deviceTab = useStore((s) => s.settings.deviceTab)
@@ -172,17 +172,37 @@ export function DeviceScreen(): React.JSX.Element {
             rows inside carry the actual name. */}
         {systemInfo && connectedHost && (
           <section className="space-y-3">
-            <Segmented
-              value={activeTab}
-              onChange={(deviceTab) => void saveSettings({ deviceTab })}
-              options={[
-                { value: 'streamer' as const, label: 'Streamer' },
-                { value: 'sources' as const, label: 'Sources' },
-                // absent entirely on streamers with no writable tone controls
-                ...(hasToneTab ? [{ value: 'tone' as const, label: 'Tone & EQ' }] : [])
-              ]}
-              className="w-fit"
-            />
+            {/* Tabs left, web admin right — the button belongs to the DEVICE,
+                not to one tab (user call 2026-07-25; it used to sit at the
+                bottom of the Streamer card, out of sight and reading as a
+                streamer-info thing). Right-aligned lands it flush with the
+                edge of the tab body below it. */}
+            <div className="flex items-center justify-between gap-4">
+              <Segmented
+                value={activeTab}
+                onChange={(deviceTab) => void saveSettings({ deviceTab })}
+                options={[
+                  { value: 'streamer' as const, label: 'Streamer' },
+                  { value: 'sources' as const, label: 'Sources' },
+                  // absent entirely on streamers with no writable tone controls
+                  ...(hasToneTab ? [{ value: 'tone' as const, label: 'Tone & EQ' }] : [])
+                ]}
+                className="w-fit"
+              />
+              {/* the demo device has no web interface to point at */}
+              {!(connection.phase === 'connected' && connection.demo) && (
+                <button
+                  onClick={() => void tt.openExternal(`http://${connectedHost}`)}
+                  // The line that used to sit under the button becomes its tip:
+                  // the row has no room for a caption, and the app tips
+                  // everything else that needs a "why".
+                  data-tip="Renaming and firmware updates live in the streamer's own web interface"
+                  className="tip-bottom tip-end shrink-0 flex items-center gap-1.5 text-[12.5px] px-3 h-8 rounded-lg ring-1 ring-edge bg-panel/70 text-amber hover:brightness-110 hover:ring-edge2 motion-safe:active:scale-95 transition-all"
+                >
+                  Open web admin <ExternalLink size={12} />
+                </button>
+              )}
+            </div>
             <div
               className={cx(
                 'rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-3',
@@ -204,7 +224,7 @@ export function DeviceScreen(): React.JSX.Element {
 
               {/* Passive firmware indicator: informational only. No check/install
                   control — the streamer reports its own self-check and updating
-                  is done in the Cambridge Audio app or the web admin below. */}
+                  is done in the Cambridge Audio app or the web admin. */}
               {firmwareUpdate?.updating ? (
                 <div className="flex items-start gap-2.5 rounded-lg ring-1 ring-gold/40 bg-golddim px-3 py-2.5">
                   <Loader2 size={14} className="spin text-gold shrink-0 mt-px" />
@@ -221,7 +241,7 @@ export function DeviceScreen(): React.JSX.Element {
                   <div className="min-w-0">
                     <div className="text-[12.5px] text-gold">Firmware update available</div>
                     <div className="text-[11px] text-faint mt-0.5">
-                      Install it in the Cambridge Audio app or the streamer&rsquo;s web admin below —
+                      Install it in the Cambridge Audio app or the streamer&rsquo;s web admin —
                       TastyTunes never updates firmware itself.
                     </div>
                   </div>
@@ -240,20 +260,6 @@ export function DeviceScreen(): React.JSX.Element {
                   feature-detected via its /spec (hidden on models without it) */}
               <DeviceControls />
 
-              {/* the demo device has no web interface to point at */}
-              {!(connection.phase === 'connected' && connection.demo) && (
-                <div className="pt-1 border-t border-edge">
-                  <button
-                    onClick={() => void tt.openExternal(`http://${connectedHost}`)}
-                    className="mt-3 flex items-center gap-1.5 text-[12.5px] px-3 h-8 rounded-lg ring-1 ring-edge bg-panel/70 text-amber hover:brightness-110 hover:ring-edge2 motion-safe:active:scale-95 transition-all"
-                  >
-                    Open web admin <ExternalLink size={12} />
-                  </button>
-                  <div className="text-[11.5px] text-faint mt-1.5">
-                    Renaming and firmware updates live in the streamer&rsquo;s own web interface.
-                  </div>
-                </div>
-              )}
             </div>
             {/* Sources: the streamer's inputs, one click to switch. Bare rows
                 rather than a ring-and-panel card — they ARE the panel, same as
