@@ -443,7 +443,7 @@ function QueueRow({ item, isCurrent, playing, sourceActive, currentRef, onMenu }
       }}
       style={{ transform: CSS.Transform.toString(lockVertical(transform)), transition }}
       className={cx(
-        'group grid grid-cols-[26px_44px_1fr_auto_auto_auto_auto] items-center gap-2 rounded-lg px-2 py-1.5',
+        'group grid grid-cols-[26px_44px_1fr_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5',
         'cursor-default transition-colors',
         isDragging && 'z-10 bg-raised shadow-xl',
         // current + queue audible: full playing treatment; current while another
@@ -483,23 +483,28 @@ function QueueRow({ item, isCurrent, playing, sourceActive, currentRef, onMenu }
         </div>
       </div>
 
+      {/* One cluster, gap-0.5 — the library and favorites rows group their
+          actions this way, and having these as separate GRID cells made them
+          inherit the row's gap-2 and sit visibly further apart. */}
+      <div className="flex items-center gap-0.5">
       <RowAction
-        icon={X}
-        label="Remove from queue"
-        destructive
-        onClick={() => {
-          if (item.id != null) void tt.command({ type: 'queueDelete', id: item.id })
-        }}
-      />
+            icon={X}
+            label="Remove from queue"
+            destructive
+            onClick={() => {
+              if (item.id != null) void tt.command({ type: 'queueDelete', id: item.id })
+            }}
+          />
 
-      <RowAction icon={MoreHorizontal} label="More actions" onClick={(e) => onMenu?.(e)} />
+          <RowAction icon={MoreHorizontal} label="More actions" onClick={(e) => onMenu?.(e)} />
 
-      {/* The heart is PERSISTENT state, so it groups with the duration at the
-          right edge rather than leading the cluster — a set heart with the
-          hidden ⋯/× columns between it and the time looked stranded. */}
-      {favorite && (
-        <RowHeart favorited={hearted} held={false} onHeart={() => void toggleFavorite(favorite)} />
-      )}
+          {/* The heart is PERSISTENT state, so it groups with the duration at the
+              right edge rather than leading the cluster — a set heart with the
+              hidden ⋯/× columns between it and the time looked stranded. */}
+          {favorite && (
+            <RowHeart favorited={hearted} held={false} onHeart={() => void toggleFavorite(favorite)} />
+          )}
+      </div>
 
       {/* Duration sits at the far right of the CONTENT, after the actions —
           it's always-visible information, so it wants a stable column, while

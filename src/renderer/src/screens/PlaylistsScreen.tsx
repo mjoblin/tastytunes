@@ -489,7 +489,7 @@ function TrackRow({
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(lockVertical(transform)), transition }}
       className={cx(
-        'group grid grid-cols-[26px_44px_1fr_auto_auto_auto_auto] items-center gap-2 rounded-lg px-2 py-1.5',
+        'group grid grid-cols-[26px_44px_1fr_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5',
         'transition-colors',
         isDragging ? 'z-10 bg-raised shadow-xl' : 'hover:bg-veil'
       )}
@@ -513,20 +513,20 @@ function TrackRow({
         </div>
       </div>
 
-      <RowAction
-        icon={X}
-        label={`Remove ${item.title}`}
-        tip="Remove from playlist"
-        destructive
-        onClick={onRemove}
-      />
-
-      <RowAction icon={MoreHorizontal} label="More actions" onClick={(e) => onMenu(e)} />
-
-      {/* persistent state groups with the duration — see QueueRow */}
-      {favorite && (
-        <RowHeart favorited={hearted} held={false} onHeart={() => void toggleFavorite(favorite)} />
-      )}
+      {/* one cluster at gap-0.5, matching the library and favorites rows */}
+      <div className="flex items-center gap-0.5">
+        <RowAction
+          icon={X}
+          label={`Remove ${item.title}`}
+          tip="Remove from playlist"
+          destructive
+          onClick={onRemove}
+        />
+        <RowAction icon={MoreHorizontal} label="More actions" onClick={(e) => onMenu(e)} />
+        {favorite && (
+          <RowHeart favorited={hearted} held={false} onHeart={() => void toggleFavorite(favorite)} />
+        )}
+      </div>
 
       {/* far right of the content, after the hover actions — see QueueRow */}
       <span className="font-mono text-[11px] text-faint tabular-nums">
