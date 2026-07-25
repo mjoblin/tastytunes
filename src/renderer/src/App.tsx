@@ -24,7 +24,6 @@ import { RadioScreen } from '@/screens/RadioScreen'
 import { RecentlyPlayedScreen } from '@/screens/RecentlyPlayedScreen'
 import { FavoritesScreen } from '@/screens/FavoritesScreen'
 import { PlaylistsScreen } from '@/screens/PlaylistsScreen'
-import { SourcesScreen } from '@/screens/SourcesScreen'
 import { DeviceScreen } from '@/screens/DeviceScreen'
 import { SettingsScreen } from '@/screens/SettingsScreen'
 import { AmbientArt } from '@/components/AmbientArt'
@@ -116,8 +115,6 @@ export default function App(): React.JSX.Element {
         return <LibraryScreen />
       case 'radio':
         return <RadioScreen />
-      case 'sources':
-        return <SourcesScreen />
     }
   })()
 

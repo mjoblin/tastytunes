@@ -6,6 +6,7 @@ import { useStore } from '@/store'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { cx } from '@/lib/format'
 import { Segmented } from '@/components/Segmented'
+import { SourcesPanel } from '@/components/SourcesPanel'
 import { ToneEq } from '@/components/ToneEq'
 import { DeviceControls } from '@/components/DeviceControls'
 
@@ -22,10 +23,16 @@ export function DeviceScreen(): React.JSX.Element {
   const deviceTab = useStore((s) => s.settings.deviceTab)
   const saveSettings = useStore((s) => s.saveSettings)
   const [manualHost, setManualHost] = useState('')
-  // Tabs exist only when this streamer HAS tone controls; without them the
-  // streamer info stands alone. A persisted 'tone' pick degrades gracefully.
+  // Tabs are UNCONDITIONAL now: every streamer has inputs, so there are always
+  // at least Streamer and Sources. Tone & EQ stays feature-detected — it's an
+  // option that may be absent, no longer the reason the tab bar exists (which
+  // is what retired the old bare "streamer" microlabel fallback).
   const hasToneTab = audioCaps(audioSpec) != null
-  const activeTab = hasToneTab && deviceTab === 'tone' ? 'tone' : 'streamer'
+  // Resolve the persisted pick against what this streamer actually offers, the
+  // way settingsTab and the retired display-font ids are resolved: anything
+  // unknown or unavailable falls back to the default rather than showing blank.
+  const activeTab =
+    deviceTab === 'sources' ? 'sources' : hasToneTab && deviceTab === 'tone' ? 'tone' : 'streamer'
 
   const connectedHost = connection.phase === 'connected' ? connection.host : null
   const busyHost =
@@ -165,19 +172,17 @@ export function DeviceScreen(): React.JSX.Element {
             rows inside carry the actual name. */}
         {systemInfo && connectedHost && (
           <section className="space-y-3">
-            {hasToneTab ? (
-              <Segmented
-                value={activeTab}
-                onChange={(deviceTab) => void saveSettings({ deviceTab })}
-                options={[
-                  { value: 'streamer' as const, label: 'Streamer' },
-                  { value: 'tone' as const, label: 'Tone & EQ' }
-                ]}
-                className="w-fit"
-              />
-            ) : (
-              <div className="microlabel">streamer</div>
-            )}
+            <Segmented
+              value={activeTab}
+              onChange={(deviceTab) => void saveSettings({ deviceTab })}
+              options={[
+                { value: 'streamer' as const, label: 'Streamer' },
+                { value: 'sources' as const, label: 'Sources' },
+                // absent entirely on streamers with no writable tone controls
+                ...(hasToneTab ? [{ value: 'tone' as const, label: 'Tone & EQ' }] : [])
+              ]}
+              className="w-fit"
+            />
             <div
               className={cx(
                 'rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-3',
@@ -250,6 +255,10 @@ export function DeviceScreen(): React.JSX.Element {
                 </div>
               )}
             </div>
+            {/* Sources: the streamer's inputs, one click to switch. Bare rows
+                rather than a ring-and-panel card — they ARE the panel, same as
+                the list had on its own screen. */}
+            {activeTab === 'sources' && <SourcesPanel />}
             {/* feature-detected: ToneEq renders null on streamers whose
                 /zone/audio/spec offers no writable controls */}
             {activeTab === 'tone' && <ToneEq label={false} />}

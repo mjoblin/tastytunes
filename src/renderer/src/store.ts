@@ -47,7 +47,6 @@ export type Screen =
   | 'favorites'
   | 'playlists'
   | 'recently-played'
-  | 'sources'
   | 'device'
   | 'settings'
 

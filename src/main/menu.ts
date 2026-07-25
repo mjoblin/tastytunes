@@ -97,7 +97,6 @@ export function installAppMenu(deps: MenuDeps): void {
     ['presets', 'Presets'],
     ['library', 'Library'],
     ['recently-played', 'Recently Played'],
-    ['sources', 'Sources'],
     ['device', 'Device']
   ]
   const goMenu: MenuItemConstructorOptions = {

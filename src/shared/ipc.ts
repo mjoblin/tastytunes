@@ -1198,7 +1198,7 @@ export interface AppSettings {
   /** Last-selected diagnostics-drawer tab (smoip | requests). */
   diagnosticsTab: string
   /** Last-selected Device-screen tab (tabs appear only on tone-capable streamers). */
-  deviceTab: 'streamer' | 'tone'
+  deviceTab: 'streamer' | 'sources' | 'tone'
   /** Width (px) of the Now Playing drawers (lyrics/artist), drag-resizable. */
   panelWidth: number
   /** Remembered mini-player window position. */

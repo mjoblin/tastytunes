@@ -258,6 +258,22 @@ export function CommandPalette(): React.JSX.Element {
     }
 
     // -------- Sources
+    // Sources lost its nav row in the Device merge (2026-07-25), so the palette
+    // carries the way TO the surface as well as the direct switches below —
+    // a rarely-used screen shouldn't get harder to find for having moved.
+    // Writing deviceTab is what clicking the tab does, so the pick persists the
+    // same way either route is taken.
+    cmds.push({
+      id: 'device:sources',
+      label: 'Open Sources',
+      group: 'View',
+      icon: Cable,
+      keywords: 'device input switch source',
+      run: () => {
+        void saveSettings({ deviceTab: 'sources' })
+        setScreen('device')
+      }
+    })
     if (connected && !inStandby) {
       const activeId = activeSourceId(zoneState, nowPlaying)
       const selectable = (sources?.sources ?? [])

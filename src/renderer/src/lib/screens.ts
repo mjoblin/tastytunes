@@ -1,5 +1,4 @@
 import {
-  Cable,
   Cog,
   Command,
   Disc3,
@@ -30,13 +29,32 @@ export interface ScreenDef {
   key: string
 }
 
+/**
+ * ORDER IS BY THE USER'S MENTAL MODEL, not by how the data is stored (user
+ * call 2026-07-25). Four runs, no dividers — the grouping has to survive rows
+ * being hidden, and visual sections stay an unspent lever for if the rail ever
+ * gets long enough to need them:
+ *
+ *   playing now      Now Playing · Queue
+ *   everything       Library
+ *   set up for later Favorites · Playlists · Presets
+ *   dipped into      Radio · Recently Played
+ *   system           Device
+ *
+ * Presets sits with Playlists and Favorites — all three are "things I set up
+ * so I can play them later", and that a preset lives in a device slot while a
+ * playlist is a local file is OUR distinction, not the listener's. It closing
+ * that group also lands it beside Radio, which is what most preset slots hold.
+ * Radio and Recently Played sink on FREQUENCY rather than kind (Radio is a
+ * browse surface like Library) — the rarely-opened belong near the bottom.
+ *
+ * KEYS ARE INDEPENDENT OF ORDER and must stay put when this list is
+ * rearranged: muscle memory is the whole point of them.
+ */
 export const NAV_SCREENS: ScreenDef[] = [
   { id: 'now-playing', label: 'Now Playing', icon: Disc3, key: 'N' },
   { id: 'queue', label: 'Queue', icon: ListMusic, key: 'Q' },
-  { id: 'presets', label: 'Presets', icon: Radio, key: 'P' },
   { id: 'library', label: 'Library', icon: Library, key: 'I' },
-  // T as in Tuner — the classic hi-fi name for the radio section
-  { id: 'radio', label: 'Radio', icon: RadioTower, key: 'T' },
   // V as in faVorites (F belongs to display mode, H was left free for future
   // transport use) — must stay clear of J/L/K/space/M/F like every screen key
   { id: 'favorites', label: 'Favorites', icon: Heart, key: 'V' },
@@ -44,12 +62,13 @@ export const NAV_SCREENS: ScreenDef[] = [
   // (Presets, and L is a transport seek key). ListOrdered rather than
   // ListMusic: the queue owns that one, and a playlist IS a saved ordering.
   { id: 'playlists', label: 'Playlists', icon: ListOrdered, key: 'A' },
+  { id: 'presets', label: 'Presets', icon: Radio, key: 'P' },
+  // T as in Tuner — the classic hi-fi name for the radio section
+  { id: 'radio', label: 'Radio', icon: RadioTower, key: 'T' },
   { id: 'recently-played', label: 'Recently Played', icon: History, key: 'R' },
-  // 'C' for sourCes, matching its Cable icon: 'S' is reserved for the Search
-  // screen (unified search), which will be visited far more often than this
-  // one. Rebound ahead of that work so the muscle memory settles before
-  // release rather than churning after it.
-  { id: 'sources', label: 'Sources', icon: Cable, key: 'C' },
+  // Sources USED to be its own row (key 'C'); it's a section of the Device
+  // screen now — both are "system, not music", and Sources is one rarely-used
+  // action. 'C' is free again and deliberately not reused.
   { id: 'device', label: 'Device', icon: HardDrive, key: 'D' }
 ]
 export const SETTINGS_SCREEN: ScreenDef = { id: 'settings', label: 'Settings', icon: Cog, key: 'E' }

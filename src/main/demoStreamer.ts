@@ -1093,6 +1093,23 @@ function buildDemo(host: string): {
           // no optimistic update, so without this the mute button never engages
           DATA['/zone/state'] = { ...DATA['/zone/state'], mute: params.mute }
           setTimeout(() => push('/zone/state'), 120)
+        } else if (frame.path === '/zone/state' && typeof params.source === 'string') {
+          // echo an input switch (mirrors mock-streamer.mjs — neither handled
+          // this before 2026-07-25, so switching a source in the demo did
+          // nothing at all). now_playing carries the source too; both move
+          // together like the real device.
+          const id = params.source as string
+          const sources = (DATA['/system/sources'] as Dict).sources as Dict[] | undefined
+          const known = (sources ?? []).find((s) => s.id === id)
+          DATA['/zone/state'] = { ...DATA['/zone/state'], source: id }
+          DATA['/zone/now_playing'] = {
+            ...DATA['/zone/now_playing'],
+            source: { id, name: (known?.name as string) ?? id }
+          }
+          setTimeout(() => {
+            push('/zone/state')
+            push('/zone/now_playing')
+          }, 120)
         } else if (frame.path === '/zone/play_control' && typeof params.queue_id === 'number') {
           // play a specific queue entry (Library click-jump, queue-row click)
           const items = queueList().items ?? []
