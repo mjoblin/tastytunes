@@ -20,8 +20,10 @@ import { queueContentHash, type QueueListItem } from '@shared/smoip'
 import {
   favoriteKey,
   presetVolumeKey,
+  type ContentRef,
   type Favorite,
   type FavoriteMedia,
+  type QueueRestoreResult,
   type ScreenLayout
 } from '@shared/ipc'
 import { tt } from '@/api'
@@ -416,6 +418,57 @@ export function QueueScreen(): React.JSX.Element {
   )
 }
 
+/**
+ * Remove a queued track, offering to put it back. The row ×, the card × and
+ * the ⋯ menu all come here so the offer can't belong to only one of them.
+ *
+ * No confirm, deliberately: the queue is the app's most-edited list, and
+ * playing an album REPLACES it wholesale with no confirm at all — guarding one
+ * row while the wipe goes unguarded would protect the wrong thing.
+ */
+function removeFromQueue(item: QueueListItem): void {
+  if (item.id == null) return
+  const md = item.metadata
+  const title = md?.title ?? null
+  const position = item.position ?? 0
+  void tt.command({ type: 'queueDelete', id: item.id })
+  // No title, no content identity, nothing to find it by later — so no offer.
+  // (Same rule as the row's heart: see queueItemFavorite.)
+  if (!title) return
+  useStore.getState().showToast({
+    kind: 'success',
+    text: `Removed “${title}”`,
+    action: {
+      label: 'Undo',
+      undo: () =>
+        void restoreToQueue({ title, artist: md?.artist ?? null, album: md?.album ?? null }, position)
+    }
+  })
+}
+
+/**
+ * Success is SILENT: you're looking at the queue, and the row reappearing in
+ * place is better feedback than a toast saying so. Only the ways it can fail
+ * get one — a restore that quietly did nothing is the thing worth avoiding.
+ */
+async function restoreToQueue(ref: ContentRef, position: number): Promise<void> {
+  const showToast = useStore.getState().showToast
+  let result: QueueRestoreResult
+  try {
+    result = await tt.queueRestore(ref, position)
+  } catch {
+    result = 'failed'
+  }
+  if (result === 'ok') return
+  showToast({
+    kind: 'error',
+    text:
+      result === 'not-found'
+        ? `Couldn't find “${ref.title}” to put back`
+        : `Couldn't put “${ref.title}” back`
+  })
+}
+
 interface QueueItemProps {
   onMenu?(e: React.MouseEvent): void
   item: QueueListItem
@@ -492,9 +545,7 @@ function QueueRow({ item, isCurrent, playing, sourceActive, currentRef, onMenu }
           icon={X}
           label="Remove from queue"
           destructive
-          onClick={() => {
-            if (item.id != null) void tt.command({ type: 'queueDelete', id: item.id })
-          }}
+          onClick={() => removeFromQueue(item)}
         />
         <RowAction icon={MoreHorizontal} label="More actions" onClick={(e) => onMenu?.(e)} />
         {/* The heart is PERSISTENT state, so it groups with the duration at the
@@ -675,7 +726,7 @@ function queueRowActions(
       ? [
           {
             label: 'Remove from queue',
-            run: () => void tt.command({ type: 'queueDelete', id: item.id as number })
+            run: () => removeFromQueue(item)
           }
         ]
       : [])

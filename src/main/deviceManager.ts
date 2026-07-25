@@ -6,6 +6,7 @@ import {
   presetVolumeKey,
   sleepTrackKey,
   type ConnectionState,
+  type ContentRef,
   type DiscoveredDevice,
   type FirmwareStatus,
   type FrameEntry,
@@ -16,6 +17,7 @@ import {
   type Playlist,
   type PlaylistActivation,
   type PushMessage,
+  type QueueRestoreResult,
   type RecentTrack,
   type SleepTimer,
   type Snapshot,
@@ -57,8 +59,8 @@ import {
   restorePlaylist,
   setPlaylistItems
 } from './playlists'
-import { queueAdd, refreshServers } from './upnpBrowser'
-import { searchServer as librarySearch } from './mediaIndex'
+import { queueAdd } from './upnpBrowser'
+import { resolveContent } from './resolveContent'
 import { scrobbler } from './scrobbler'
 import { getNetRequests, loggedFetch } from './netlog'
 
@@ -889,30 +891,19 @@ export class DeviceManager {
           }
         }
 
-        if (!landed) {
-          const servers = (await refreshServers(host)).filter((x) => x.searchable)
-          for (const server of servers) {
-            if (this.activationCancelled) break
+        if (!landed && !this.activationCancelled) {
+          // Content re-resolve. This used to walk `searchable` servers only,
+          // which meant an entry living on a Browse-only server (USB) could
+          // never heal; resolveContent asks the indexes first, so it can.
+          const found = await resolveContent(host, item)
+          if (found) {
             try {
-              const { items } = await librarySearch(host, server.udn, item.title)
-              const lc = (v: string | null | undefined): string => (v ?? '').trim().toLowerCase()
-              const match = items.find(
-                (n) =>
-                  lc(n.title) === lc(item.title) &&
-                  (item.artist == null || n.artist == null || lc(n.artist) === lc(item.artist))
-              )
-              if (!match) continue
-              await queueAdd(host, server.udn, match.id, action)
+              await queueAdd(host, found.serverUdn, found.objectId, action)
               landed = true
               // heal in place — no updatedAt bump, so the collection keeps its order
-              healPlaylistItem(id, index, item, {
-                serverUdn: server.udn,
-                serverName: server.name,
-                objectId: match.id
-              })
-              break
+              healPlaylistItem(id, index, item, found)
             } catch {
-              // try the next server
+              // couldn't add it after all — counted as missed below
             }
           }
         }
@@ -976,6 +967,78 @@ export class DeviceManager {
 
   playlistRestore(playlist: Parameters<typeof restorePlaylist>[0]): ReturnType<typeof getPlaylists> {
     return this.pushPlaylists(restorePlaylist(playlist))
+  }
+
+  /**
+   * Put a removed track back in the queue at `position` — the undo behind the
+   * queue's ×.
+   *
+   * BEST-EFFORT BY NATURE, and the honesty matters more than the success rate.
+   * A queue row carries no serverUdn/objectId (QueueListItem is id/position/
+   * metadata), and the firmware's queue/add needs DIDL for a specific object,
+   * so this is a re-RESOLVE and re-ADD, not a rollback: find the track by
+   * content, append it, then move it from the end back to where it was. Every
+   * path that fills a queue goes through a media server, so in practice the
+   * resolve succeeds; when it can't, the caller says so rather than pretending.
+   *
+   * The position restore is deliberately not fatal — a track back in the wrong
+   * slot beats a track that didn't come back.
+   */
+  async queueRestore(ref: ContentRef, position: number): Promise<QueueRestoreResult> {
+    const conn = this.snapshot().connection
+    if (conn.phase !== 'connected') return 'failed'
+    const host = conn.host
+
+    const found = await resolveContent(host, ref)
+    if (!found) return 'not-found'
+
+    const before = this.cache.queue?.items?.length ?? 0
+    try {
+      await queueAdd(host, found.serverUdn, found.objectId, 'APPEND')
+    } catch {
+      return 'failed'
+    }
+
+    // APPEND lands at the end, but the id it landed under only arrives with the
+    // next /queue/list push — ask for one and wait for the queue to actually
+    // grow rather than assuming a fixed delay.
+    try {
+      this.socket?.send('/queue/list')
+    } catch {
+      return 'ok' // it IS in the queue; reconnect will refetch and show it
+    }
+    const grown = await this.waitForQueue((q) => (q.items?.length ?? 0) > before, 4000)
+    if (!grown) return 'ok'
+
+    const items = grown.items ?? []
+    const from = items.length - 1
+    const landed = items[from]
+    const to = Math.max(0, Math.min(position, from))
+    if (landed?.id != null && to !== from) {
+      try {
+        await smoipHttp.queueMove(host, landed.id, from, to)
+      } catch {
+        // it's in the queue, just not where it was — see the doc comment
+      }
+    }
+    return 'ok'
+  }
+
+  /** Resolve with the first cached queue satisfying `test`, or null on timeout. */
+  private waitForQueue(test: (q: QueueList) => boolean, timeoutMs: number): Promise<QueueList | null> {
+    if (this.cache.queue && test(this.cache.queue)) return Promise.resolve(this.cache.queue)
+    return new Promise((resolve) => {
+      const started = Date.now()
+      const tick = setInterval(() => {
+        if (this.cache.queue && test(this.cache.queue)) {
+          clearInterval(tick)
+          resolve(this.cache.queue)
+        } else if (Date.now() - started >= timeoutMs) {
+          clearInterval(tick)
+          resolve(null)
+        }
+      }, 120)
+    })
   }
 
   playlistSetItems(id: string, items: Parameters<typeof setPlaylistItems>[1]): ReturnType<typeof getPlaylists> {

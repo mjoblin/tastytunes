@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import {
   IPC,
   type AppSettings,
+  type ContentRef,
   type Favorite,
   type Playlist,
   type PlaylistItem,
@@ -48,6 +49,8 @@ const api: TastyTunesApi = {
   playlistRename: (id: string, name: string) => ipcRenderer.invoke(IPC.playlistRename, id, name),
   playlistDelete: (id: string) => ipcRenderer.invoke(IPC.playlistDelete, id),
   playlistRestore: (playlist: Playlist) => ipcRenderer.invoke(IPC.playlistRestore, playlist),
+  queueRestore: (ref: ContentRef, position: number) =>
+    ipcRenderer.invoke(IPC.queueRestore, ref, position),
   playlistSetItems: (id: string, items: PlaylistItem[]) =>
     ipcRenderer.invoke(IPC.playlistSetItems, id, items),
   playlistAppend: (id: string, items: PlaylistItem[]) =>

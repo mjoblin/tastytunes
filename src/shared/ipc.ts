@@ -186,6 +186,26 @@ export interface PlaylistItem {
   durationSecs?: number | null
 }
 
+/**
+ * A track identified by CONTENT alone — the one currency both content-resolve
+ * callers speak (a playlist entry whose objectId rotted, a removed queue row
+ * that never had one). Defined once here so the two can't drift apart.
+ */
+export interface ContentRef {
+  title: string
+  artist?: string | null
+  album?: string | null
+}
+
+/**
+ * Queue undo is a re-resolve, not a rollback, so it reports which happened:
+ * 'not-found' = the track couldn't be found on any server (say so — the user
+ * is looking at a queue it didn't reappear in), 'failed' = the streamer or the
+ * connection refused, 'ok' = it's back (possibly not in its old slot; see
+ * queueRestore).
+ */
+export type QueueRestoreResult = 'ok' | 'not-found' | 'failed'
+
 /** A stored, ordered collection of tracks. Bounded local JSON, no database. */
 export interface Playlist {
   id: string
@@ -1471,6 +1491,9 @@ export interface TastyTunesApi {
   /** Undo a delete: puts the playlist back verbatim — same id, name, timestamps
    *  and place in the collection. NOT a create (see restorePlaylist). */
   playlistRestore(playlist: Playlist): Promise<Playlist[]>
+  /** Undo a queue removal: re-resolve the track by content, re-add it, and move
+   *  it back to `position`. Best-effort — see QueueRestoreResult. */
+  queueRestore(ref: ContentRef, position: number): Promise<QueueRestoreResult>
   /** Replace a playlist's items wholesale — reorder and remove both land here. */
   playlistSetItems(id: string, items: PlaylistItem[]): Promise<Playlist[]>
   /** Append to a playlist (duplicates allowed — an ordered list, not a set). */
@@ -1547,6 +1570,7 @@ export const IPC = {
   playlistRename: 'tt:playlistRename',
   playlistDelete: 'tt:playlistDelete',
   playlistRestore: 'tt:playlistRestore',
+  queueRestore: 'tt:queueRestore',
   playlistSetItems: 'tt:playlistSetItems',
   playlistAppend: 'tt:playlistAppend',
   playlistActivate: 'tt:playlistActivate',
