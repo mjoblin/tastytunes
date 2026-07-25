@@ -1,5 +1,14 @@
-import { useState } from 'react'
-import { ArrowUpCircle, Check, ExternalLink, Loader2, RefreshCw, Sparkles, Unplug } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import {
+  ArrowUpCircle,
+  Check,
+  ChevronDown,
+  ExternalLink,
+  Loader2,
+  RefreshCw,
+  Sparkles,
+  Unplug
+} from 'lucide-react'
 import { audioCaps } from '@shared/smoip'
 import { tt } from '@/api'
 import { useStore } from '@/store'
@@ -24,7 +33,7 @@ export function DeviceScreen(): React.JSX.Element {
   const saveSettings = useStore((s) => s.saveSettings)
   const [manualHost, setManualHost] = useState('')
   // Tabs are UNCONDITIONAL now: every streamer has inputs, so there are always
-  // at least Streamer and Sources. Tone & EQ stays feature-detected — it's an
+  // at least System and Sources. Tone & EQ stays feature-detected — it's an
   // option that may be absent, no longer the reason the tab bar exists (which
   // is what retired the old bare "streamer" microlabel fallback).
   const hasToneTab = audioCaps(audioSpec) != null
@@ -35,6 +44,26 @@ export function DeviceScreen(): React.JSX.Element {
     deviceTab === 'sources' ? 'sources' : hasToneTab && deviceTab === 'tone' ? 'tone' : 'streamer'
 
   const connectedHost = connection.phase === 'connected' ? connection.host : null
+  const connected = connection.phase === 'connected'
+
+  /**
+   * The connection card COLLAPSES to its status line once you're connected.
+   *
+   * It's a first-run and troubleshooting surface — discovery, the manual host
+   * box, the demo hatch — and once you're on a streamer you stop looking at it,
+   * while it holds the top of the page above everything you DO look at. So:
+   * connected shows one line, anything else shows the lot, since that's exactly
+   * when you need the controls.
+   *
+   * The override is session-only state, not a setting (a better default beats a
+   * knob), and it RESETS on any phase change — a drop-out must reveal the
+   * controls regardless of what you collapsed a minute earlier.
+   */
+  const [expandedOverride, setExpandedOverride] = useState<boolean | null>(null)
+  useEffect(() => {
+    setExpandedOverride(null)
+  }, [connection.phase])
+  const expanded = expandedOverride ?? !connected
   const busyHost =
     connection.phase === 'connecting' || (connection.phase === 'disconnected' && connection.reconnecting)
       ? connection.host
@@ -84,73 +113,94 @@ export function DeviceScreen(): React.JSX.Element {
                   <Unplug size={13} /> Disconnect
                 </button>
               )}
-            </div>
-
-            <div className="border-t border-edge pt-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[12.5px] text-dim">Discovered streamers</span>
+              {/* Only offered while connected — the rest of the time the card is
+                  open anyway and there is nothing to reveal. */}
+              {connected && (
                 <button
-                  onClick={() => void tt.discover()}
-                  disabled={discovering}
-                  className="flex items-center gap-1.5 text-[12.5px] px-3 h-8 rounded-lg ring-1 ring-edge bg-panel/70 text-amber hover:brightness-110 hover:ring-edge2 motion-safe:active:scale-95 transition-all disabled:opacity-50"
+                  onClick={() => setExpandedOverride(!expanded)}
+                  data-connection-toggle
+                  data-tip={expanded ? 'Hide connection options' : 'Find or switch streamers'}
+                  aria-label={expanded ? 'Hide connection options' : 'Show connection options'}
+                  aria-expanded={expanded}
+                  className="tip-bottom tip-end shrink-0 p-1.5 rounded-lg text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
                 >
-                  {discovering ? <Loader2 size={13} className="spin" /> : <RefreshCw size={13} />}
-                  {discovering ? 'Searching…' : 'Find devices'}
+                  <ChevronDown
+                    size={16}
+                    className={cx('transition-transform', expanded && 'rotate-180')}
+                  />
                 </button>
-              </div>
-
-              {devices.length === 0 && !discovering && (
-                <div className="text-[12.5px] text-faint">
-                  Nothing found yet. Ensure the streamer is on the same network, or enter its IP
-                  below.
-                </div>
               )}
+            </div>
 
-              {devices.map((device) => (
-                <div
-                  key={device.udn || device.host}
-                  className="flex items-center gap-3 rounded-lg bg-raised/70 ring-1 ring-edge px-3 py-2"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[13px] truncate">{device.friendlyName}</div>
-                    <div className="font-mono text-[10.5px] text-faint truncate">
-                      {device.model} · {device.host}
-                    </div>
-                  </div>
-                  {device.host === connectedHost ? (
-                    <span className="microlabel text-led!">connected</span>
-                  ) : (
-                    <button
-                      onClick={() => void tt.connect(device.host)}
-                      className="text-[12px] px-3 py-1.5 rounded-lg ring-1 ring-amber/40 bg-amberdim text-amber hover:brightness-110 hover:ring-amber/60 motion-safe:active:scale-95 transition-all"
-                    >
-                      Connect
-                    </button>
-                  )}
+            {expanded && (
+              <div className="border-t border-edge pt-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[12.5px] text-dim">Discovered streamers</span>
+                  <button
+                    onClick={() => void tt.discover()}
+                    disabled={discovering}
+                    className="flex items-center gap-1.5 text-[12.5px] px-3 h-8 rounded-lg ring-1 ring-edge bg-panel/70 text-amber hover:brightness-110 hover:ring-edge2 motion-safe:active:scale-95 transition-all disabled:opacity-50"
+                  >
+                    {discovering ? <Loader2 size={13} className="spin" /> : <RefreshCw size={13} />}
+                    {discovering ? 'Searching…' : 'Find devices'}
+                  </button>
                 </div>
-              ))}
-            </div>
 
-            <div className="border-t border-edge pt-3">
-              <div className="flex gap-2">
-                <input
-                  value={manualHost}
-                  onChange={(e) => setManualHost(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && manualHost.trim()) void tt.connect(manualHost.trim())
-                  }}
-                  placeholder="Hostname or IP (e.g. 192.168.1.42)"
-                  className="flex-1 bg-bg rounded-lg ring-1 ring-edge focus:ring-edge2 outline-none px-3 py-1.5 text-[13px] placeholder:text-faint"
-                />
-                <button
-                  disabled={!manualHost.trim()}
-                  onClick={() => void tt.connect(manualHost.trim())}
-                  className="text-[12.5px] px-3 py-1.5 rounded-lg bg-amber text-bg font-medium disabled:opacity-40 hover:brightness-110 transition-all"
-                >
-                  Connect
-                </button>
+                {devices.length === 0 && !discovering && (
+                  <div className="text-[12.5px] text-faint">
+                    Nothing found yet. Ensure the streamer is on the same network, or enter its IP
+                    below.
+                  </div>
+                )}
+
+                {devices.map((device) => (
+                  <div
+                    key={device.udn || device.host}
+                    className="flex items-center gap-3 rounded-lg bg-raised/70 ring-1 ring-edge px-3 py-2"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[13px] truncate">{device.friendlyName}</div>
+                      <div className="font-mono text-[10.5px] text-faint truncate">
+                        {device.model} · {device.host}
+                      </div>
+                    </div>
+                    {device.host === connectedHost ? (
+                      <span className="microlabel text-led!">connected</span>
+                    ) : (
+                      <button
+                        onClick={() => void tt.connect(device.host)}
+                        className="text-[12px] px-3 py-1.5 rounded-lg ring-1 ring-amber/40 bg-amberdim text-amber hover:brightness-110 hover:ring-amber/60 motion-safe:active:scale-95 transition-all"
+                      >
+                        Connect
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
-            </div>
+            )}
+
+            {expanded && (
+              <div className="border-t border-edge pt-3">
+                <div className="flex gap-2">
+                  <input
+                    value={manualHost}
+                    onChange={(e) => setManualHost(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && manualHost.trim()) void tt.connect(manualHost.trim())
+                    }}
+                    placeholder="Hostname or IP (e.g. 192.168.1.42)"
+                    className="flex-1 bg-bg rounded-lg ring-1 ring-edge focus:ring-edge2 outline-none px-3 py-1.5 text-[13px] placeholder:text-faint"
+                  />
+                  <button
+                    disabled={!manualHost.trim()}
+                    onClick={() => void tt.connect(manualHost.trim())}
+                    className="text-[12.5px] px-3 py-1.5 rounded-lg bg-amber text-bg font-medium disabled:opacity-40 hover:brightness-110 transition-all"
+                  >
+                    Connect
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* same escape hatch the connect gate offers, mirrored here */}
             {!connectedHost && !busyHost && (
@@ -165,11 +215,13 @@ export function DeviceScreen(): React.JSX.Element {
           </div>
         </section>
 
-        {/* ------------------------------------------------ streamer / tone & eq */}
-        {/* One tabbed section when the device has tone controls (both panels
-            visible without scrolling); the plain streamer card otherwise.
-            "Streamer" is a generic label, not the device's name — the info
-            rows inside carry the actual name. */}
+        {/* ------------------------------------------------- system / sources / eq */}
+        {/* The tab labelled "System" holds identity + the §10 device controls.
+            It was "Streamer", which said nothing on a screen that is entirely
+            the streamer (user call 2026-07-25). The STORED id stays 'streamer'
+            — renaming it would cost a settings migration for no visible gain.
+            "Info & Settings" was considered and rejected: "Settings" collides
+            with the app's own Settings screen. */}
         {systemInfo && connectedHost && (
           <section className="space-y-3">
             {/* Tabs left, web admin right — the button belongs to the DEVICE,
@@ -182,7 +234,7 @@ export function DeviceScreen(): React.JSX.Element {
                 value={activeTab}
                 onChange={(deviceTab) => void saveSettings({ deviceTab })}
                 options={[
-                  { value: 'streamer' as const, label: 'Streamer' },
+                  { value: 'streamer' as const, label: 'System' },
                   { value: 'sources' as const, label: 'Sources' },
                   // absent entirely on streamers with no writable tone controls
                   ...(hasToneTab ? [{ value: 'tone' as const, label: 'Tone & EQ' }] : [])
