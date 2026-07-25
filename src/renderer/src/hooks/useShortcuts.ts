@@ -34,6 +34,15 @@ export function useShortcuts(): void {
       ) {
         return
       }
+      // A focused drag handle OWNS space and the arrows: dnd-kit's keyboard
+      // sensor uses exactly those to pick up, move and drop. Without this the
+      // global bindings fire too — space toggles playback and the arrows seek
+      // and change volume — so a keyboard reorder plays havoc with the streamer
+      // while it works. dnd-kit marks its activators with aria-roledescription
+      // ('sortable' from useSortable, 'draggable' from bare useDraggable).
+      if (target?.closest('[aria-roledescription="sortable"], [aria-roledescription="draggable"]')) {
+        return
+      }
       if (e.metaKey || e.ctrlKey || e.altKey) return
 
       const s = useStore.getState()
