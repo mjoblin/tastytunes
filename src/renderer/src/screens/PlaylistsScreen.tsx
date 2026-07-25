@@ -230,22 +230,25 @@ function TrackRow({
 }): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
   return (
+    // The WHOLE ROW is the drag handle, matching Queue and Presets — a grip-only
+    // handle looks identical but silently refuses the drag everyone has been
+    // taught by the rest of the app. The grip stays as the visual affordance
+    // (a span, not a button: a second tab stop for the same action is noise).
+    // The distance constraint means clicks on the inner buttons still land.
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
+      {...attributes}
+      {...listeners}
+      aria-label={`${item.title} — drag or press space to reorder`}
       className={cx(
         'group flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-veil transition-colors',
         isDragging && 'opacity-60'
       )}
     >
-      <button
-        {...attributes}
-        {...listeners}
-        aria-label={`Reorder ${item.title}`}
-        className="no-drag cursor-grab text-faint hover:text-dim focus-visible:text-amber transition-colors"
-      >
+      <span aria-hidden className="cursor-grab text-faint group-hover:text-dim transition-colors">
         <GripVertical size={14} />
-      </button>
+      </span>
       <div className="h-9 w-9 shrink-0 rounded overflow-hidden bg-raised">
         <ArtImage src={item.artUrl} fallback={<span />} />
       </div>
