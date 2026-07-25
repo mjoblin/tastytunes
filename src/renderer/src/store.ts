@@ -45,6 +45,7 @@ export type Screen =
   | 'library'
   | 'radio'
   | 'favorites'
+  | 'playlists'
   | 'recently-played'
   | 'sources'
   | 'device'
@@ -158,6 +159,7 @@ interface TTState {
     presets: string
     library: string
     favorites: string
+    playlists: string
     'recently-played': string
   }
   /** True while the full-window ambient backdrop is showing — chrome goes transparent. */
@@ -208,10 +210,7 @@ interface TTState {
   setLyricsOpen(open: boolean): void
   setArtistOpen(open: boolean): void
   setContextTab(tab: 'artist' | 'album'): void
-  setScreenFilter(
-    screen: 'queue' | 'presets' | 'library' | 'favorites' | 'recently-played',
-    text: string
-  ): void
+  setScreenFilter(screen: keyof TTState['screenFilters'], text: string): void
   /** Navigate to the Library opened at a specific node (Favorites → album). */
   openInLibrary(target: Omit<LibraryTarget, 'nonce'>): void
   clearLibraryTarget(): void
@@ -265,7 +264,14 @@ export const useStore = create<TTState>((set, get) => ({
   lyricsOpen: false,
   artistOpen: false,
   contextTab: 'artist',
-  screenFilters: { queue: '', presets: '', library: '', favorites: '', 'recently-played': '' },
+  screenFilters: {
+    queue: '',
+    presets: '',
+    library: '',
+    favorites: '',
+    playlists: '',
+    'recently-played': ''
+  },
   ambientWindowActive: false,
   miniHover: false,
   sleep: null,

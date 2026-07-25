@@ -15,18 +15,7 @@ import {
   verticalListSortingStrategy
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import {
-  BookmarkPlus,
-  Crosshair,
-  Disc3,
-  Footprints,
-  GripVertical,
-  LayoutGrid,
-  ListMusic,
-  Play,
-  Rows3,
-  X
-} from 'lucide-react'
+import { BookmarkPlus, Crosshair, Disc3, Footprints, GripVertical, LayoutGrid, ListMusic, ListOrdered, Play, Rows3, X } from 'lucide-react'
 import { queueContentHash, type QueueListItem } from '@shared/smoip'
 import { presetVolumeKey, type ScreenLayout } from '@shared/ipc'
 import { tt } from '@/api'
@@ -49,6 +38,7 @@ import { PresetSavePanel } from '@/components/LibraryMenus'
 function SaveQueueDialog({ onClose }: { onClose(): void }): React.JSX.Element {
   const trackCount = useStore((s) => s.queue?.items?.length ?? 0)
   const showToast = useStore((s) => s.showToast)
+
   const saveSettings = useStore((s) => s.saveSettings)
 
   const onSave = async (slot: number, name: string | null): Promise<void> => {
@@ -127,7 +117,39 @@ export function QueueScreen(): React.JSX.Element {
     flashTarget(currentRef.current)
   }
 
+  const showToast = useStore((s) => s.showToast)
   const allItems = (queue?.items ?? []).filter((i) => i.id != null)
+
+  /**
+   * Snapshot the queue as a stored playlist. Entries carry CONTENT (the durable
+   * key) plus the server/object id as a fast path — the id is a hint that heals
+   * on activation, never the identity. Named for when it was taken, because the
+   * alternative is a modal in the way of a one-click action; rename is one
+   * click away on the Playlists screen.
+   */
+  const saveAsPlaylist = async (): Promise<void> => {
+    const items = allItems
+      .map((i) => i.metadata)
+      .filter((m): m is NonNullable<typeof m> => m != null)
+      .map((m) => ({
+        title: m.title ?? 'Unknown track',
+        artist: m.artist ?? null,
+        album: m.album ?? null,
+        artUrl: m.art_url ?? null,
+        serverUdn: null,
+        serverName: null,
+        objectId: null,
+        durationSecs: m.duration ?? null
+      }))
+    if (items.length === 0) return
+    const name = `Queue — ${new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
+    await tt.playlistCreate(name, items)
+    showToast({
+      kind: 'success',
+      text: `Saved ${items.length} tracks as “${name}”`,
+      action: { label: 'Open Playlists', screen: 'playlists' }
+    })
+  }
   // Filter over everything we hold, displayed or not (genre, class, source).
   const items = filter
     ? allItems.filter((i) =>
@@ -210,6 +232,15 @@ export function QueueScreen(): React.JSX.Element {
             shown={items.length}
             total={allItems.length}
           />
+          <button
+            data-tip="Save queue as a playlist"
+            aria-label="Save queue as a playlist"
+            onClick={() => void saveAsPlaylist()}
+            disabled={allItems.length === 0}
+            className="no-drag tip-bottom p-2 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 disabled:opacity-40 motion-safe:active:scale-90 transition-all"
+          >
+            <ListOrdered size={16} />
+          </button>
           <button
             data-tip="Save queue as preset"
             aria-label="Save queue as preset"

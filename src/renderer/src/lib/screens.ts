@@ -8,6 +8,7 @@ import {
   History,
   Library,
   ListMusic,
+  ListOrdered,
   PictureInPicture2,
   Radio,
   RadioTower
@@ -39,6 +40,10 @@ export const NAV_SCREENS: ScreenDef[] = [
   // V as in faVorites (F belongs to display mode, H was left free for future
   // transport use) — must stay clear of J/L/K/space/M/F like every screen key
   { id: 'favorites', label: 'Favorites', icon: Heart, key: 'V' },
+  // 'A' as in plAylists — S is the Search screen's, and P/L are long gone
+  // (Presets, and L is a transport seek key). ListOrdered rather than
+  // ListMusic: the queue owns that one, and a playlist IS a saved ordering.
+  { id: 'playlists', label: 'Playlists', icon: ListOrdered, key: 'A' },
   { id: 'recently-played', label: 'Recently Played', icon: History, key: 'R' },
   // 'C' for sourCes, matching its Cable icon: 'S' is reserved for the Search
   // screen (unified search), which will be visited far more often than this

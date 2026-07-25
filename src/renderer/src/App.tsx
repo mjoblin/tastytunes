@@ -23,6 +23,7 @@ import { LibraryScreen } from '@/screens/LibraryScreen'
 import { RadioScreen } from '@/screens/RadioScreen'
 import { RecentlyPlayedScreen } from '@/screens/RecentlyPlayedScreen'
 import { FavoritesScreen } from '@/screens/FavoritesScreen'
+import { PlaylistsScreen } from '@/screens/PlaylistsScreen'
 import { SourcesScreen } from '@/screens/SourcesScreen'
 import { DeviceScreen } from '@/screens/DeviceScreen'
 import { SettingsScreen } from '@/screens/SettingsScreen'
@@ -94,6 +95,10 @@ export default function App(): React.JSX.Element {
     // Favorites is a local collection too — browsable offline; play verbs
     // surface their own failures through the central toast.
     if (screen === 'favorites') return <FavoritesScreen />
+    // Playlists are local user data — browsable while disconnected, like
+    // Favorites and Recently Played. Activating one needs the streamer; the
+    // screen's Play button is what surfaces that, not a wall.
+    if (screen === 'playlists') return <PlaylistsScreen />
     if (!connected) return <ConnectGate />
     // Standby is a PRESENCE, not a wall (probed 2026-07-23: every state
     // endpoint, art path, and WS subscribe still answers in NETWORK
