@@ -489,7 +489,7 @@ function TrackRow({
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(lockVertical(transform)), transition }}
       className={cx(
-        'group grid grid-cols-[26px_44px_1fr_auto_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5',
+        'group grid grid-cols-[26px_44px_1fr_auto_auto_auto_auto] items-center gap-2 rounded-lg px-2 py-1.5',
         'transition-colors',
         isDragging ? 'z-10 bg-raised shadow-xl' : 'hover:bg-veil'
       )}
