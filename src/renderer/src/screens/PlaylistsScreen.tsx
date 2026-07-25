@@ -221,19 +221,19 @@ export function PlaylistsScreen(): React.JSX.Element {
                   disabled={(!!running && !mine) || selected.items.length === 0}
                   data-tip={mine ? 'Stop loading' : 'Replace the queue with this playlist'}
                   aria-label={mine ? 'Stop loading playlist' : 'Play playlist'}
-                  className="no-drag tip-bottom relative overflow-hidden flex items-center gap-1.5 rounded-lg px-3 h-8 text-[12.5px] bg-amberdim text-amber hover:brightness-110 disabled:opacity-40 transition-all"
+                  className="no-drag tip-bottom relative overflow-hidden flex items-center gap-2 px-3.5 h-8 rounded-lg bg-gold text-bg text-[12.5px] font-medium shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.3)] hover:brightness-110 disabled:opacity-40 disabled:shadow-none motion-safe:active:scale-95 transition-all"
                 >
                   {mine && (
                     <span
                       aria-hidden
-                      className="absolute inset-y-0 left-0 bg-amber/20 transition-[width] duration-200"
+                      className="absolute inset-y-0 left-0 bg-bg/20 transition-[width] duration-200"
                       style={{
                         width: `${Math.round((activation.done / Math.max(1, activation.total)) * 100)}%`
                       }}
                     />
                   )}
                   <span className="relative flex items-center gap-1.5">
-                    <Play size={14} />
+                    <Play size={14} strokeWidth={2.2} />
                     {mine ? `${activation.done} / ${activation.total}` : 'Play'}
                   </span>
                 </button>
@@ -241,9 +241,9 @@ export function PlaylistsScreen(): React.JSX.Element {
                   onClick={() => setRenaming(selected.id)}
                   data-tip="Rename"
                   aria-label="Rename playlist"
-                  className="no-drag tip-bottom p-1.5 rounded text-faint hover:text-ink transition-colors"
+                  className="no-drag tip-bottom p-2 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
                 >
-                  <Pencil size={14} />
+                  <Pencil size={16} />
                 </button>
                 <button
                   onClick={() => {
@@ -256,13 +256,13 @@ export function PlaylistsScreen(): React.JSX.Element {
                   data-tip="Delete playlist"
                   aria-label="Delete playlist"
                   className={cx(
-                    'no-drag tip-bottom tip-end rounded px-2 h-7 text-[11.5px] transition-colors',
+                    'no-drag tip-bottom tip-end rounded-lg motion-safe:active:scale-90 transition-all',
                     confirmDelete === selected.id
-                      ? 'bg-alert text-white'
-                      : 'p-1.5 text-faint hover:text-alert'
+                      ? 'px-2.5 h-9 text-[11.5px] bg-alert text-white'
+                      : 'p-2 ring-1 ring-edge bg-panel/70 text-dim hover:text-alert hover:ring-edge2 hover:bg-raised/70'
                   )}
                 >
-                  {confirmDelete === selected.id ? 'Sure?' : <Trash2 size={14} />}
+                  {confirmDelete === selected.id ? 'Sure?' : <Trash2 size={16} />}
                 </button>
               </div>
 
