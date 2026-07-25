@@ -70,24 +70,6 @@ export function PlaylistsScreen(): React.JSX.Element {
    *  this button, not turn it into that run's progress bar. */
   const mine = !!activation && !activation.finished && activation.playlistId === selected?.id
 
-  /**
-   * The COUNT only earns its place once the run lasts long enough to read it.
-   * A short playlist flashes "1 / 8" and is gone before you can parse it, which
-   * is worse than no detail — so the button shows a spinner first and adopts
-   * the count only if it's still going. Keyed on TIME, not track count: eight
-   * tracks over a slow server can outlast forty over a fast one, so a count
-   * threshold would reveal digits exactly when there's no time for them. Same
-   * 800ms and the same reasoning as the buffering label.
-   */
-  const [countReadable, setCountReadable] = useState(false)
-  useEffect(() => {
-    if (!mine) {
-      setCountReadable(false)
-      return
-    }
-    const t = setTimeout(() => setCountReadable(true), 800)
-    return () => clearTimeout(t)
-  }, [mine])
 
   // A deleted (or filtered-away) selection must not strand the detail pane.
   useEffect(() => {
@@ -238,7 +220,11 @@ export function PlaylistsScreen(): React.JSX.Element {
                 <button
                   onClick={() => (mine ? void tt.playlistActivateCancel() : void activate(selected))}
                   disabled={(!!running && !mine) || selected.items.length === 0}
-                  data-tip={mine ? 'Stop loading' : 'Replace the queue with this playlist'}
+                  data-tip={
+                    mine
+                      ? `Loading ${activation.done} of ${activation.total} — click to stop`
+                      : 'Replace the queue with this playlist'
+                  }
                   aria-label={mine ? 'Stop loading playlist' : 'Play playlist'}
                   className="no-drag tip-bottom relative overflow-hidden flex items-center gap-2 px-3.5 h-8 rounded-lg bg-gold text-bg text-[12.5px] font-medium shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.3)] hover:brightness-110 disabled:opacity-40 disabled:shadow-none motion-safe:active:scale-95 transition-all"
                 >
@@ -251,13 +237,19 @@ export function PlaylistsScreen(): React.JSX.Element {
                       }}
                     />
                   )}
+                  {/* The LABEL never changes and the icon carries the state, so
+                      the button can't resize mid-run — the sleep timer settled
+                      this exact question when an in-bar countdown grew the
+                      right cluster and squeezed the volume slider. The live
+                      count lives in the tooltip, where it can be read at
+                      leisure rather than glimpsed. */}
                   <span className="relative flex items-center gap-2">
                     {mine ? (
                       <Loader2 size={14} strokeWidth={2.2} className="motion-safe:animate-spin" />
                     ) : (
                       <Play size={14} strokeWidth={2.2} />
                     )}
-                    {!mine ? 'Play' : countReadable ? `${activation.done} / ${activation.total}` : 'Loading'}
+                    Play
                   </span>
                 </button>
                 <button
@@ -310,7 +302,9 @@ export function PlaylistsScreen(): React.JSX.Element {
                   <span className="text-faint">{selected.lastMissing?.join(', ')}</span>
                 </div>
               )}
-              <div className="flex-1 min-h-0 overflow-y-auto">
+              {/* divide-y divide-edge/50: the same hairline the queue and the
+                  library's track lists use between rows */}
+              <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-edge/50">
                 <DndContext
                   sensors={sensors}
                   collisionDetection={closestCenter}
