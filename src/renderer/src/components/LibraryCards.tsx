@@ -3,6 +3,7 @@ import { Disc3, Folder, Heart, MoreHorizontal, Play } from 'lucide-react'
 import type { MediaNode } from '@shared/ipc'
 import { cx, fmtTime } from '@/lib/format'
 import { isAlbumClass, isMutedArt } from '@/lib/media'
+import { RowAction } from '@/components/RowAction'
 import { ArtImage } from '@/components/ArtImage'
 import { Eqbars } from '@/components/Eqbars'
 
@@ -410,30 +411,14 @@ export function TrackRow({
         {onHeart && (
           <RowHeart favorited={favorited === true} held={menuOpen} onHeart={onHeart} />
         )}
-        <button
-          aria-label="Play"
-          data-tip={queued ? 'Play — already in the queue' : 'Play now — slots in after the current track'}
-          onClick={(e) => {
-            e.stopPropagation()
-            onPlayNow(ref.current)
-          }}
-          className={cx(
-            'tip-bottom p-1.5 rounded-lg text-dim hover:text-gold hover:bg-veil2 transition-all',
-            menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-          )}
-        >
-          <Play size={14} />
-        </button>
-        <button
-          aria-label="More actions"
-          onClick={onMenu}
-          className={cx(
-            'p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-all',
-            menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-          )}
-        >
-          <MoreHorizontal size={14} />
-        </button>
+        <RowAction
+          icon={Play}
+          label="Play"
+          tip={queued ? 'Play — already in the queue' : 'Play now — slots in after the current track'}
+          pinned={menuOpen}
+          onClick={() => onPlayNow(ref.current)}
+        />
+        <RowAction icon={MoreHorizontal} label="More actions" pinned={menuOpen} onClick={onMenu} />
       </div>
       <span className="font-mono text-[11px] text-faint tabular-nums">
         {node.durationSecs != null ? fmtTime(node.durationSecs) : ''}

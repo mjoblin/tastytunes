@@ -23,6 +23,7 @@ import { useStore } from '@/store'
 import { EmptyState } from '@/components/EmptyState'
 import { SortChip } from '@/components/SortChip'
 import { FilterInput } from '@/components/FilterInput'
+import { RowAction } from '@/components/RowAction'
 import { ArtImage } from '@/components/ArtImage'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { lockVertical } from '@/lib/dnd'
@@ -436,32 +437,34 @@ function TrackRow({
         </div>
       </div>
 
-      <span className="font-mono text-[11px] text-faint tabular-nums">
-        {item.durationSecs != null ? fmtTime(item.durationSecs) : ''}
-      </span>
-
-      <button
-        data-tip="Remove from playlist"
-        aria-label={`Remove ${item.title}`}
-        onClick={onRemove}
-        className="tip-bottom p-1.5 rounded text-faint opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-alert transition-all"
-      >
-        <X size={14} />
-      </button>
-
-      {/* Grip last, matching the queue. Unlike the queue's it carries an
-          aria-label and pairs with a KeyboardSensor, so the list can be
-          reordered without a mouse. */}
       <button
         title="Drag to reorder"
         {...attributes}
         {...listeners}
         aria-label={`Reorder ${item.title}`}
         onClick={(e) => e.stopPropagation()}
-        className="p-1 rounded text-faint opacity-0 group-hover:opacity-100 focus-visible:opacity-100 cursor-grab active:cursor-grabbing transition-opacity"
+        className="p-1.5 rounded-lg text-dim hover:bg-veil2 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 cursor-grab active:cursor-grabbing transition-all"
       >
         <GripVertical size={14} />
       </button>
+
+      <RowAction
+        icon={X}
+        label={`Remove ${item.title}`}
+        tip="Remove from playlist"
+        destructive
+        onClick={onRemove}
+      />
+
+      {/* far right of the content, after the hover actions — see QueueRow */}
+      <span className="font-mono text-[11px] text-faint tabular-nums">
+        {item.durationSecs != null ? fmtTime(item.durationSecs) : ''}
+      </span>
+
+      {/* Grip last, matching the queue. Unlike the queue's it carries an
+          aria-label and pairs with a KeyboardSensor, so the list can be
+          reordered without a mouse. */}
+
     </div>
   )
 }

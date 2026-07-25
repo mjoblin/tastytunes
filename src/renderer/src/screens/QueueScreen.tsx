@@ -15,7 +15,7 @@ import {
   verticalListSortingStrategy
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { BookmarkPlus, Crosshair, Disc3, Footprints, GripVertical, LayoutGrid, ListMusic, ListOrdered, Play, Rows3, X } from 'lucide-react'
+import { BookmarkPlus, Crosshair, Disc3, Footprints, GripVertical, LayoutGrid, ListMusic, ListOrdered, MoreHorizontal, Play, Rows3, X } from 'lucide-react'
 import { queueContentHash, type QueueListItem } from '@shared/smoip'
 import {
   favoriteKey,
@@ -36,6 +36,7 @@ import { createPortal } from 'react-dom'
 import { toggleFavorite } from '@/lib/favorites'
 import { usePopoverChrome, useClampedPosition } from '@/hooks/usePopover'
 import { AddToPlaylistPanel } from '@/components/AddToPlaylistPanel'
+import { RowAction } from '@/components/RowAction'
 import { ArtImage } from '@/components/ArtImage'
 import { FilterInput } from '@/components/FilterInput'
 import { PopoverChrome } from '@/hooks/usePopover'
@@ -436,7 +437,7 @@ function QueueRow({ item, isCurrent, playing, sourceActive, currentRef, onMenu }
       }}
       style={{ transform: CSS.Transform.toString(lockVertical(transform)), transition }}
       className={cx(
-        'group grid grid-cols-[26px_44px_1fr_auto_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5',
+        'group grid grid-cols-[26px_44px_1fr_auto_auto_auto_auto] items-center gap-2 rounded-lg px-2 py-1.5',
         'cursor-default transition-colors',
         isDragging && 'z-10 bg-raised shadow-xl',
         // current + queue audible: full playing treatment; current while another
@@ -448,7 +449,6 @@ function QueueRow({ item, isCurrent, playing, sourceActive, currentRef, onMenu }
       onClick={() => {
         if (item.id != null) void tt.command({ type: 'playQueueId', queueId: item.id })
       }}
-      onContextMenu={onMenu}
     >
       <div className="flex items-center justify-center">
         {isCurrent ? (
@@ -473,31 +473,36 @@ function QueueRow({ item, isCurrent, playing, sourceActive, currentRef, onMenu }
         </div>
       </div>
 
+      <button
+        title="Drag to reorder"
+        aria-label="Reorder"
+        {...attributes}
+        {...listeners}
+        onClick={(e) => e.stopPropagation()}
+        className="p-1.5 rounded-lg text-dim hover:bg-veil2 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 cursor-grab active:cursor-grabbing transition-all"
+      >
+        <GripVertical size={14} />
+      </button>
+
+      <RowAction icon={MoreHorizontal} label="More actions" onClick={(e) => onMenu?.(e)} />
+
+      <RowAction
+        icon={X}
+        label="Remove from queue"
+        destructive
+        onClick={() => {
+          if (item.id != null) void tt.command({ type: 'queueDelete', id: item.id })
+        }}
+      />
+
+      {/* Duration sits at the far right of the CONTENT, after the actions —
+          it's always-visible information, so it wants a stable column, while
+          the actions come and go with hover. */}
       <span className="font-mono text-[11px] text-faint tabular-nums">
         {fmtTime(md?.duration)}
       </span>
 
-      <button
-        data-tip="Remove from queue"
-        aria-label="Remove from queue"
-        onClick={(e) => {
-          e.stopPropagation()
-          if (item.id != null) void tt.command({ type: 'queueDelete', id: item.id })
-        }}
-        className="tip-bottom p-1.5 rounded text-faint opacity-0 group-hover:opacity-100 hover:text-alert transition-all"
-      >
-        <X size={14} />
-      </button>
 
-      <button
-        title="Drag to reorder"
-        {...attributes}
-        {...listeners}
-        onClick={(e) => e.stopPropagation()}
-        className="p-1 rounded text-faint opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing"
-      >
-        <GripVertical size={14} />
-      </button>
     </div>
   )
 }
@@ -530,12 +535,24 @@ function QueueCard({ item, isCurrent, playing, sourceActive, currentRef, onMenu 
             : 'bg-raised/70 ring-1 ring-edge card-hover-glow'
       )}
     >
+      {/* Cards get the same visible ⋯ as the rows — an art-corner chip, the
+          treatment presets already use for their hover controls. */}
+      <button
+        aria-label="More actions"
+        onClick={(e) => {
+          e.stopPropagation()
+          onMenu?.(e)
+        }}
+        className="absolute top-3 right-3 z-10 h-7 w-7 rounded-full grid place-items-center bg-bg/70 text-dim opacity-0 group-hover:opacity-100 hover:text-ink backdrop-blur-sm transition-all"
+      >
+        <MoreHorizontal size={14} />
+      </button>
+
       <button
         className="relative block w-full cursor-pointer"
         onClick={() => {
           if (item.id != null) void tt.command({ type: 'playQueueId', queueId: item.id })
         }}
-        onContextMenu={onMenu}
       >
         <div className="aspect-square w-full rounded-lg overflow-hidden bg-panel/70 flex items-center justify-center">
           <ArtImage

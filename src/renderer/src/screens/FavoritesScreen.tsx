@@ -13,6 +13,7 @@ import {
 import { isRadioMetadata, type QueueListItem } from '@shared/smoip'
 import { tt } from '@/api'
 import { useStore } from '@/store'
+import { RowAction } from '@/components/RowAction'
 import { ArtImage } from '@/components/ArtImage'
 import { ContainerCard } from '@/components/LibraryCards'
 import { EmptyState } from '@/components/EmptyState'
@@ -440,46 +441,42 @@ export function FavoritesScreen(): React.JSX.Element {
                           same queue-aware tips, then the captured duration */}
                       {routed && active && (
                         <div className="flex items-center gap-0.5 shrink-0">
-                          <button
-                            aria-label="Play"
-                            data-tip={
+                          <RowAction
+                            icon={Play}
+                            label="Play"
+                            tip={
                               favQueueMatches(f).length > 0
                                 ? 'Play — already in the queue'
                                 : 'Play now — slots in after the current track'
                             }
-                            onClick={(e) => {
-                              e.stopPropagation()
+                            pinned={menu?.fav === f}
+                            onClick={(e: React.MouseEvent) =>
                               playTrack(
                                 f,
                                 (e.currentTarget as HTMLElement).closest(
                                   '[data-fav-track]'
                                 ) as HTMLElement
                               )
-                            }}
-                            className={cx(
-                              'tip-bottom p-1.5 rounded-lg text-dim hover:text-gold hover:bg-veil2 transition-all',
-                              menu?.fav === f ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-                            )}
-                          >
-                            <Play size={14} />
-                          </button>
-                          <button
-                            aria-label="More actions"
+                            }
+                          />
+                          <RowAction
+                            icon={MoreHorizontal}
+                            label="More actions"
+                            pinned={menu?.fav === f}
                             onClick={(e) => openMenu(f, e)}
-                            className={cx(
-                              'p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-all',
-                              menu?.fav === f ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-                            )}
-                          >
-                            <MoreHorizontal size={14} />
-                          </button>
+                          />
                         </div>
                       )}
+                      {busyKey === key && <Loader2 size={13} className="spin text-gold/80 shrink-0" />}
+                      <HeartButton active={active} onClick={() => toggleHeart(f)} />
+                      {/* Duration LAST, matching the library's track row — the
+                          most developed of these and the one the others drifted
+                          from. Actions cluster to its left; the heart is part of
+                          that cluster (as in the library) rather than trailing
+                          it, so the final column is always the duration. */}
                       <span className="font-mono text-[11px] text-faint tabular-nums shrink-0">
                         {f.durationSecs != null ? fmtTime(f.durationSecs) : ''}
                       </span>
-                      {busyKey === key && <Loader2 size={13} className="spin text-gold/80 shrink-0" />}
-                      <HeartButton active={active} onClick={() => toggleHeart(f)} />
                     </div>
                   )
                 })}
