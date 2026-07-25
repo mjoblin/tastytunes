@@ -16,7 +16,7 @@ import {
   verticalListSortingStrategy
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, ListOrdered, Pencil, Play, Trash2, X } from 'lucide-react'
+import { Disc3, GripVertical, ListOrdered, Pencil, Play, Trash2, X } from 'lucide-react'
 import { playlistItemKey, type Playlist, type PlaylistActivation, type PlaylistItem } from '@shared/ipc'
 import { tt } from '@/api'
 import { useStore } from '@/store'
@@ -253,6 +253,7 @@ export function PlaylistsScreen(): React.JSX.Element {
                       <TrackRow
                         key={rowIds(selected.items)[i]}
                         id={rowIds(selected.items)[i]}
+                        index={i}
                         item={item}
                         onRemove={() => removeItem(i)}
                       />
@@ -334,56 +335,70 @@ function rowIds(items: PlaylistItem[]): string[] {
 
 function TrackRow({
   id,
+  index,
   item,
   onRemove
 }: {
   id: string
+  index: number
   item: PlaylistItem
   onRemove: () => void
 }): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
   return (
+    // Same anatomy as a queue row (QueueScreen's QueueRow): position, art,
+    // title/artist, duration, remove, grip — in that order, on the same grid.
+    // Both screens are ordered lists of tracks; there is no reason for a track
+    // row to feel like a different object depending on which one you're in.
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cx(
-        'group flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-veil transition-colors',
-        isDragging && 'opacity-60'
+        'group grid grid-cols-[26px_44px_1fr_auto_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5',
+        'transition-colors',
+        isDragging ? 'z-10 bg-raised shadow-xl' : 'hover:bg-veil'
       )}
     >
-      {/* A GRIP, matching the queue's ROW variant exactly — padded hit target,
-          revealed on hover, grab/grabbing cursors. (Only the queue's CARD
-          variant drags whole; rows have always used a handle.) Unlike the
-          queue's, this one keeps an aria-label and pairs with a KeyboardSensor,
-          so it is reorderable without a mouse. */}
+      <div className="flex items-center justify-center">
+        <span className="font-mono text-[10.5px] text-faint tabular-nums">{index + 1}</span>
+      </div>
+
+      <div className="h-10 w-10 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
+        <ArtImage src={item.artUrl} lazy fallback={<Disc3 size={16} className="text-faint" />} />
+      </div>
+
+      <div className="min-w-0">
+        <div className="text-[13.5px] truncate text-ink">{item.title}</div>
+        <div className="text-[12px] text-dim truncate">
+          {[item.artist, item.album].filter(Boolean).join(' — ')}
+        </div>
+      </div>
+
+      <span className="font-mono text-[11px] text-faint tabular-nums">
+        {item.durationSecs != null ? fmtTime(item.durationSecs) : ''}
+      </span>
+
+      <button
+        data-tip="Remove from playlist"
+        aria-label={`Remove ${item.title}`}
+        onClick={onRemove}
+        className="tip-bottom p-1.5 rounded text-faint opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-alert transition-all"
+      >
+        <X size={14} />
+      </button>
+
+      {/* Grip last, matching the queue. Unlike the queue's it carries an
+          aria-label and pairs with a KeyboardSensor, so the list can be
+          reordered without a mouse. */}
       <button
         title="Drag to reorder"
         {...attributes}
         {...listeners}
         aria-label={`Reorder ${item.title}`}
+        onClick={(e) => e.stopPropagation()}
         className="p-1 rounded text-faint opacity-0 group-hover:opacity-100 focus-visible:opacity-100 cursor-grab active:cursor-grabbing transition-opacity"
       >
         <GripVertical size={14} />
-      </button>
-      <div className="h-9 w-9 shrink-0 rounded overflow-hidden bg-raised">
-        <ArtImage src={item.artUrl} fallback={<span />} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-[13px] text-ink">{item.title}</div>
-        <div className="truncate text-[11.5px] text-dim">
-          {[item.artist, item.album].filter(Boolean).join(' — ') || ' '}
-        </div>
-      </div>
-      {item.durationSecs != null && (
-        <span className="font-mono text-[11px] text-faint">{fmtTime(item.durationSecs)}</span>
-      )}
-      <button
-        onClick={onRemove}
-        aria-label={`Remove ${item.title}`}
-        data-tip="Remove"
-        className="no-drag tip-top tip-end p-1 rounded text-faint opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-alert transition-all"
-      >
-        <X size={13} />
       </button>
     </div>
   )
