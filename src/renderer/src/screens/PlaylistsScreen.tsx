@@ -21,10 +21,11 @@ import type { Playlist, PlaylistActivation, PlaylistItem } from '@shared/ipc'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { EmptyState } from '@/components/EmptyState'
+import { SortChip } from '@/components/SortChip'
 import { FilterInput } from '@/components/FilterInput'
 import { ArtImage } from '@/components/ArtImage'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
-import { cx, fmtTime, matchesFilter } from '@/lib/format'
+import { cx, fmtDuration, fmtRelative, fmtTime, matchesFilter } from '@/lib/format'
 
 /**
  * Stored playlists: the collection on the left, the selected playlist's tracks
@@ -41,12 +42,27 @@ export function PlaylistsScreen(): React.JSX.Element {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  // A sort picker rather than manual ordering (user call 2026-07-24): manual
+  // order fights the recency sort that already does useful work and needs an
+  // `order` field maintained forever, for control a picker gives at a fraction
+  // of the cost. 'updated' is the neutral default the store already writes in.
+  const [sort, setSort] = useState<PlaylistSort>('updated')
+  const [reversed, setReversed] = useState(false)
   const scrollMemory = useScrollMemory('playlists')
 
-  const shown = useMemo(
-    () => playlists.filter((p) => matchesFilter(filter, [p.name])),
-    [playlists, filter]
-  )
+  const shown = useMemo(() => {
+    const list = playlists.filter((p) => matchesFilter(filter, [p.name]))
+    const by: Record<PlaylistSort, (a: Playlist, b: Playlist) => number> = {
+      updated: (a, b) => b.updatedAt - a.updatedAt,
+      created: (a, b) => b.createdAt - a.createdAt,
+      // never-played sorts last rather than pretending to be oldest
+      played: (a, b) => (b.lastPlayedAt ?? 0) - (a.lastPlayedAt ?? 0),
+      name: (a, b) => a.name.localeCompare(b.name),
+      length: (a, b) => totalSecs(b) - totalSecs(a)
+    }
+    const sorted = [...list].sort(by[sort])
+    return reversed ? sorted.reverse() : sorted
+  }, [playlists, filter, sort, reversed])
   const selected = playlists.find((p) => p.id === selectedId) ?? shown[0] ?? null
 
   // A deleted (or filtered-away) selection must not strand the detail pane.
@@ -85,6 +101,22 @@ export function PlaylistsScreen(): React.JSX.Element {
         <h1 className="font-display screen-title font-bold text-[26px] tracking-tight">Playlists</h1>
         <div className="flex-1" />
         {playlists.length > 0 && (
+          <SortChip
+            sorts={[
+              { value: 'updated', label: 'Recently updated' },
+              { value: 'played', label: 'Recently played' },
+              { value: 'created', label: 'Recently created' },
+              { value: 'name', label: 'Name' },
+              { value: 'length', label: 'Length' }
+            ]}
+            neutral="updated"
+            value={sort}
+            reversed={reversed}
+            onChange={(v) => setSort(v)}
+            onToggleReverse={() => setReversed((r) => !r)}
+          />
+        )}
+        {playlists.length > 0 && (
           <FilterInput
             value={filter}
             onChange={(v) => setScreenFilter('playlists', v)}
@@ -122,9 +154,18 @@ export function PlaylistsScreen(): React.JSX.Element {
                     selected?.id === p.id ? 'bg-amberdim text-amber' : 'hover:bg-veil text-ink'
                   )}
                 >
-                  <div className="truncate text-[13.5px]">{p.name}</div>
-                  <div className="microlabel mt-0.5">
-                    {p.items.length} {p.items.length === 1 ? 'track' : 'tracks'}
+                  <div className="flex items-center gap-2.5">
+                    <ArtStack playlist={p} />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[13.5px]">{p.name}</div>
+                      <div className="microlabel mt-0.5 truncate">
+                        {p.items.length} {p.items.length === 1 ? 'track' : 'tracks'}
+                        {totalSecs(p) > 0 && ` · ${fmtDuration(totalSecs(p))}`}
+                      </div>
+                      <div className="microlabel truncate">
+                        {p.lastPlayedAt ? `played ${fmtRelative(p.lastPlayedAt)}` : 'not played yet'}
+                      </div>
+                    </div>
                   </div>
                 </button>
               ))}
@@ -149,6 +190,17 @@ export function PlaylistsScreen(): React.JSX.Element {
                   </h2>
                 )}
                 <div className="flex-1" />
+                <div className="microlabel text-right leading-tight mr-1 hidden sm:block">
+                  <div>
+                    {selected.items.length} {selected.items.length === 1 ? 'track' : 'tracks'}
+                    {totalSecs(selected) > 0 && ` · ${fmtDuration(totalSecs(selected))}`}
+                    {artistCount(selected) > 1 && ` · ${artistCount(selected)} artists`}
+                  </div>
+                  <div>
+                    created {fmtRelative(selected.createdAt)}
+                    {selected.lastPlayedAt && ` · played ${fmtRelative(selected.lastPlayedAt)}`}
+                  </div>
+                </div>
                 <button
                   onClick={() => void tt.playlistActivate(selected.id)}
                   disabled={!!running || selected.items.length === 0}
@@ -187,6 +239,12 @@ export function PlaylistsScreen(): React.JSX.Element {
                 </button>
               </div>
 
+              {(selected.lastMissing?.length ?? 0) > 0 && (
+                <div className="mb-2 text-[11.5px] text-dim">
+                  Last played, {selected.lastMissing?.length} could not be found:{' '}
+                  <span className="text-faint">{selected.lastMissing?.join(', ')}</span>
+                </div>
+              )}
               <div className="flex-1 min-h-0 overflow-y-auto">
                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
                   <SortableContext
@@ -211,6 +269,44 @@ export function PlaylistsScreen(): React.JSX.Element {
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+type PlaylistSort = 'updated' | 'created' | 'played' | 'name' | 'length'
+
+/** Total runtime; null durations (servers that don't report one) just don't add. */
+const totalSecs = (p: Playlist): number => p.items.reduce((n, i) => n + (i.durationSecs ?? 0), 0)
+
+/** How many distinct artists — a cheap read on how varied a playlist is. */
+const artistCount = (p: Playlist): number =>
+  new Set(p.items.map((i) => (i.artist ?? '').trim().toLowerCase()).filter(Boolean)).size
+
+/**
+ * The first few covers, stacked. Playlists are far easier to recognise by their
+ * art than by a line of text, and we already store artUrl per entry — so this
+ * costs nothing but makes the collection scannable.
+ */
+function ArtStack({ playlist }: { playlist: Playlist }): React.JSX.Element {
+  const covers = [...new Set(playlist.items.map((i) => i.artUrl).filter(Boolean))].slice(0, 3)
+  if (covers.length === 0) {
+    return (
+      <div className="h-10 w-10 shrink-0 rounded bg-raised ring-1 ring-edge flex items-center justify-center">
+        <ListOrdered size={14} className="text-faint" />
+      </div>
+    )
+  }
+  return (
+    <div className="relative h-10 w-10 shrink-0">
+      {covers.map((src, i) => (
+        <div
+          key={src}
+          className="absolute h-8 w-8 rounded overflow-hidden ring-1 ring-edge2 bg-raised"
+          style={{ left: i * 4, top: i * 2, zIndex: covers.length - i }}
+        >
+          <ArtImage src={src} fallback={<span />} />
+        </div>
+      ))}
     </div>
   )
 }

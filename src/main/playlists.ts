@@ -98,6 +98,15 @@ export function appendToPlaylist(id: string, items: PlaylistItem[]): Playlist[] 
 }
 
 /**
+ * Stamp an activation: when it ran and what it couldn't find. A SYSTEM write —
+ * no updatedAt bump, so playing a playlist doesn't reshuffle a collection
+ * sorted by recent edits.
+ */
+export function markPlaylistPlayed(id: string, missing: string[]): Playlist[] {
+  return patch(id, (p) => ({ ...p, lastPlayedAt: Date.now(), lastMissing: missing }), false)
+}
+
+/**
  * Heal one entry's stale server/object id in place after a content re-resolve
  * — the favorites `updateFavorite` move, applied per playlist entry. Indexed
  * rather than keyed by content because a playlist may legitimately hold the

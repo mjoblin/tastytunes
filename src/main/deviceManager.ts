@@ -51,6 +51,7 @@ import {
   deletePlaylist,
   getPlaylists,
   healPlaylistItem,
+  markPlaylistPlayed,
   renamePlaylist,
   setPlaylistItems
 } from './playlists'
@@ -919,6 +920,7 @@ export class DeviceManager {
       this.socket?.send('/queue/list')
       this.activation.cancelled = this.activationCancelled
       this.activation.finished = true
+      markPlaylistPlayed(id, this.activation.missed)
       announce()
       this.push({ kind: 'playlists', data: getPlaylists() })
     }

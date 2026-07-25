@@ -192,6 +192,12 @@ export interface Playlist {
   name: string
   createdAt: number
   updatedAt: number
+  /** Last time this playlist was activated. Optional: playlists stored before
+   *  this field existed simply have no last-played date to show. */
+  lastPlayedAt?: number | null
+  /** Titles the last activation couldn't find on any server. Kept so the gap
+   *  is visible later, not just in the banner you dismissed at the time. */
+  lastMissing?: string[]
   items: PlaylistItem[]
 }
 

@@ -14,6 +14,19 @@ export function fmtTime(secs: number | null | undefined): string {
   return `${h > 0 ? `${h}:` : ''}${mm}:${String(sec).padStart(2, '0')}`
 }
 
+/**
+ * A COLLECTION's runtime, in words — "1 hr 12 min", "42 min". fmtTime's clock
+ * form is right for a playhead but reads badly for a total (a 72-minute
+ * playlist as "72:00" invites being misread as 72 hours or 72 seconds).
+ */
+export function fmtDuration(secs: number): string {
+  const total = Math.max(0, Math.floor(secs))
+  const h = Math.floor(total / 3600)
+  const m = Math.round((total % 3600) / 60)
+  if (h === 0) return `${m} min`
+  return m > 0 ? `${h} hr ${m} min` : `${h} hr`
+}
+
 export function fmtKHz(sampleRate: number): string {
   const khz = sampleRate / 1000
   return Number.isInteger(khz) ? `${khz} kHz` : `${khz.toFixed(1)} kHz`
