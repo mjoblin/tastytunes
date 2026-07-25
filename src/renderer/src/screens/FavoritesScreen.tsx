@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { Heart, Loader2, MoreHorizontal, Music2, Play, RadioTower } from 'lucide-react'
 import {
   favoriteKey,
@@ -20,7 +19,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { Eqbars } from '@/components/Eqbars'
 import { FilterInput } from '@/components/FilterInput'
 import { Segmented } from '@/components/Segmented'
-import { useClampedPosition, usePopoverChrome } from '@/hooks/usePopover'
+import { RowMenu } from '@/components/RowMenu'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { activeSourceId, cx, fmtTime, matchesFilter } from '@/lib/format'
 import { favoriteAct, favoriteHasRoute, type FavoriteActResult } from '@/lib/favorites'
@@ -487,8 +486,9 @@ export function FavoritesScreen(): React.JSX.Element {
       )}
 
       {menu && (
-        <FavMenu
-          menu={menu}
+        <RowMenu
+          title={menu.fav.title}
+          at={{ x: menu.x, y: menu.y }}
           onClose={() => setMenu(null)}
           items={
             menu.fav.kind === 'album'
@@ -612,41 +612,3 @@ function StationFavRow({
 }
 
 /** Small portal menu (the ItemMenu idiom, but favorites-shaped items). */
-function FavMenu({
-  menu,
-  items,
-  onClose
-}: {
-  menu: { fav: FavoriteMedia; x: number; y: number }
-  items: Array<{ label: string; run: () => void }>
-  onClose(): void
-}): React.JSX.Element {
-  usePopoverChrome(onClose)
-  const boxRef = useRef<HTMLDivElement | null>(null)
-  const pos = useClampedPosition(boxRef, menu.x, menu.y)
-  return createPortal(
-    <>
-      <div className="fixed inset-0 z-40" onClick={onClose} onContextMenu={onClose} />
-      <div
-        ref={boxRef}
-        className="fixed z-50 w-52 rounded-xl ring-1 ring-edge2 bg-raised shadow-xl p-1.5 space-y-0.5"
-        style={pos}
-      >
-        <div className="px-2.5 pt-1 pb-1.5 text-[11px] text-faint truncate">{menu.fav.title}</div>
-        {items.map((item) => (
-          <button
-            key={item.label}
-            onClick={() => {
-              onClose()
-              item.run()
-            }}
-            className="w-full px-2.5 py-1.5 rounded-lg text-left text-[13px] text-dim hover:text-ink hover:bg-veil transition-colors"
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
-    </>,
-    document.body
-  )
-}

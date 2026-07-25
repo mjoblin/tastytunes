@@ -32,10 +32,9 @@ import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { flashTarget, scrollToWithContext } from '@/lib/scroll'
 import { lockVertical } from '@/lib/dnd'
 import { activeSourceId, cx, fmtTime, matchesFilter } from '@/lib/format'
-import { createPortal } from 'react-dom'
 import { toggleFavorite } from '@/lib/favorites'
-import { usePopoverChrome, useClampedPosition } from '@/hooks/usePopover'
 import { AddToPlaylistPanel } from '@/components/AddToPlaylistPanel'
+import { RowMenu } from '@/components/RowMenu'
 import { RowAction } from '@/components/RowAction'
 import { RowHeart } from '@/components/RowHeart'
 import { OrderHandle } from '@/components/OrderHandle'
@@ -173,10 +172,11 @@ export function QueueScreen(): React.JSX.Element {
       hour: 'numeric',
       minute: '2-digit'
     })}`
-    await tt.playlistCreate(name, items)
+    // Toast the STORED name (two saves in the same minute uniquify to "… (2)").
+    const created = await tt.playlistCreate(name, items)
     showToast({
       kind: 'success',
-      text: `Saved ${items.length} tracks as “${name}”`,
+      text: `Saved ${items.length} tracks as “${created.name}”`,
       action: { label: 'Open Playlists', screen: 'playlists' }
     })
   }
@@ -312,8 +312,9 @@ export function QueueScreen(): React.JSX.Element {
       </header>
 
       {rowMenu && (
-        <QueueRowMenu
-          menu={rowMenu}
+        <RowMenu
+          title={rowMenu.item.metadata?.title ?? 'Track'}
+          at={{ x: rowMenu.x, y: rowMenu.y }}
           onClose={() => setRowMenu(null)}
           items={queueRowActions(rowMenu.item, {
             favorites,
@@ -487,23 +488,21 @@ function QueueRow({ item, isCurrent, playing, sourceActive, currentRef, onMenu }
           actions this way, and having these as separate GRID cells made them
           inherit the row's gap-2 and sit visibly further apart. */}
       <div className="flex items-center gap-0.5">
-      <RowAction
-            icon={X}
-            label="Remove from queue"
-            destructive
-            onClick={() => {
-              if (item.id != null) void tt.command({ type: 'queueDelete', id: item.id })
-            }}
-          />
-
-          <RowAction icon={MoreHorizontal} label="More actions" onClick={(e) => onMenu?.(e)} />
-
-          {/* The heart is PERSISTENT state, so it groups with the duration at the
-              right edge rather than leading the cluster — a set heart with the
-              hidden ⋯/× columns between it and the time looked stranded. */}
-          {favorite && (
-            <RowHeart favorited={hearted} held={false} onHeart={() => void toggleFavorite(favorite)} />
-          )}
+        <RowAction
+          icon={X}
+          label="Remove from queue"
+          destructive
+          onClick={() => {
+            if (item.id != null) void tt.command({ type: 'queueDelete', id: item.id })
+          }}
+        />
+        <RowAction icon={MoreHorizontal} label="More actions" onClick={(e) => onMenu?.(e)} />
+        {/* The heart is PERSISTENT state, so it groups with the duration at the
+            right edge rather than leading the cluster — a set heart with the
+            hidden ⋯/× columns between it and the time looked stranded. */}
+        {favorite && (
+          <RowHeart favorited={hearted} held={false} onHeart={() => void toggleFavorite(favorite)} />
+        )}
       </div>
 
       {/* Duration sits at the far right of the CONTENT, after the actions —
@@ -512,8 +511,6 @@ function QueueRow({ item, isCurrent, playing, sourceActive, currentRef, onMenu }
       <span className="font-mono text-[11px] text-faint tabular-nums">
         {fmtTime(md?.duration)}
       </span>
-
-
     </div>
   )
 }
@@ -609,7 +606,7 @@ function QueueCard({ item, isCurrent, playing, sourceActive, currentRef, onMenu 
         </div>
         <button
           data-tip="Remove from queue"
-        aria-label="Remove from queue"
+          aria-label="Remove from queue"
           onPointerDown={(e) => e.stopPropagation() /* keep dnd-kit's drag sensor out of it */}
           onClick={(e) => {
             e.stopPropagation()
@@ -624,11 +621,6 @@ function QueueCard({ item, isCurrent, playing, sourceActive, currentRef, onMenu 
   )
 }
 
-/**
- * What a queued track offers beyond play and remove. The queue had NO row menu
- * at all — you could hear a track, want to keep it, and have nowhere to say so
- * without going to Now Playing and waiting for it to come round.
- */
 /**
  * A queued track as a favorite — or null when it can't be one. Favorites key on
  * CONTENT, so a track with no title or no artist has no identity to store and
@@ -654,6 +646,11 @@ export function queueItemFavorite(item: QueueListItem): Omit<FavoriteMedia, 'add
   }
 }
 
+/**
+ * What a queued track offers beyond play and remove. The queue had NO row menu
+ * at all — you could hear a track, want to keep it, and have nowhere to say so
+ * without going to Now Playing and waiting for it to come round.
+ */
 function queueRowActions(
   item: QueueListItem,
   deps: { favorites: Favorite[]; addToPlaylist: () => void }
@@ -683,46 +680,4 @@ function queueRowActions(
         ]
       : [])
   ]
-}
-
-/** The Favorites right-click menu shape, applied to a queue row. */
-function QueueRowMenu({
-  menu,
-  items,
-  onClose
-}: {
-  menu: { item: QueueListItem; x: number; y: number }
-  items: Array<{ label: string; run: () => void }>
-  onClose(): void
-}): React.JSX.Element {
-  usePopoverChrome(onClose)
-  const boxRef = useRef<HTMLDivElement | null>(null)
-  const pos = useClampedPosition(boxRef, menu.x, menu.y)
-  return createPortal(
-    <>
-      <div className="fixed inset-0 z-40" onClick={onClose} onContextMenu={onClose} />
-      <div
-        ref={boxRef}
-        className="fixed z-50 w-52 rounded-xl ring-1 ring-edge2 bg-raised shadow-xl p-1.5 space-y-0.5"
-        style={pos}
-      >
-        <div className="px-2.5 pt-1 pb-1.5 text-[11px] text-faint truncate">
-          {menu.item.metadata?.title ?? 'Track'}
-        </div>
-        {items.map((item) => (
-          <button
-            key={item.label}
-            onClick={() => {
-              onClose()
-              item.run()
-            }}
-            className="w-full px-2.5 py-1.5 rounded-lg text-left text-[13px] text-dim hover:text-ink hover:bg-veil transition-colors"
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
-    </>,
-    document.body
-  )
 }
