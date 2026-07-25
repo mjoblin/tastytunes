@@ -565,7 +565,10 @@ function PresetRow({
       style={{ transform: CSS.Transform.toString(lockVertical(transform)), transition }}
       data-playing={playing || undefined}
       className={cx(
-        'group grid grid-cols-[26px_44px_1fr_auto_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5',
+        // FIVE columns for five children — the sixth column outlived the
+        // trailing grip when it moved into the position cell (OrderHandle),
+        // and an empty grid track still costs its gap.
+        'group grid grid-cols-[26px_44px_1fr_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5',
         'cursor-default transition-colors',
         isDragging && 'z-10 bg-raised shadow-xl',
         // hold the hover highlight while this row's volume popover is open —
@@ -607,7 +610,7 @@ function PresetRow({
         {volume != null ? (
           <button
             data-tip={`Recalled at ${volume}% volume`}
-          aria-label="Preset volume"
+            aria-label="Preset volume"
             onClick={pv.openFrom}
             data-preset-volume-badge
             className="tip-bottom flex items-center gap-1 p-1 rounded font-mono text-[10px] text-faint hover:text-ink transition-colors tabular-nums"
@@ -657,8 +660,6 @@ function PresetRow({
           <span className="font-mono text-[10px] font-semibold uppercase tracking-wide">sure?</span>
         )}
       </button>
-
-      
     </div>
   )
 }

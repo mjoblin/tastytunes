@@ -20,9 +20,11 @@ export function fmtTime(secs: number | null | undefined): string {
  * playlist as "72:00" invites being misread as 72 hours or 72 seconds).
  */
 export function fmtDuration(secs: number): string {
-  const total = Math.max(0, Math.floor(secs))
-  const h = Math.floor(total / 3600)
-  const m = Math.round((total % 3600) / 60)
+  // Round to whole minutes FIRST, then split — rounding the remainder after
+  // splitting can produce 60 ("1 hr 60 min" at 1:59:36, "60 min" at 59:40).
+  const mins = Math.round(Math.max(0, secs) / 60)
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
   if (h === 0) return `${m} min`
   return m > 0 ? `${h} hr ${m} min` : `${h} hr`
 }
