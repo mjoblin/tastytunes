@@ -1022,6 +1022,7 @@ export class DeviceManager {
       recents: getRecents(),
       favorites: getFavorites(),
       playlists: getPlaylists(),
+      playlistActivation: this.activation,
       mcpStatus: this.mcpStatus,
       mediaIndex: this.mediaIndexStatuses,
       frames: this.frames,

@@ -366,6 +366,7 @@ export const useStore = create<TTState>((set, get) => ({
       recents: snap.recents,
       favorites: snap.favorites,
       playlists: snap.playlists,
+      playlistActivation: snap.playlistActivation,
       mcpStatus: snap.mcpStatus,
       mediaIndex: snap.mediaIndex,
       playhead: snap.position ? { secs: snap.position.position, at: Date.now() } : null,

@@ -1238,6 +1238,9 @@ export interface Snapshot {
   favorites: Favorite[]
   /** Stored playlists, newest-updated first. */
   playlists: Playlist[]
+  /** An activation in flight, so a window opened or reloaded mid-run shows it
+   *  rather than a stale idle button (the did-finish-load rule). */
+  playlistActivation: PlaylistActivation | null
   mcpStatus: McpStatus
   /** Local media-index state per known server. */
   mediaIndex: MediaIndexStatus[]

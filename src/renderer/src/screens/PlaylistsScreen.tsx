@@ -16,7 +16,7 @@ import {
   verticalListSortingStrategy
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Disc3, GripVertical, ListOrdered, Pencil, Play, Trash2, X } from 'lucide-react'
+import { Disc3, GripVertical, ListOrdered, Loader2, Pencil, Play, Trash2, X } from 'lucide-react'
 import { playlistItemKey, type Playlist, type PlaylistItem } from '@shared/ipc'
 import { tt } from '@/api'
 import { useStore } from '@/store'
@@ -69,6 +69,25 @@ export function PlaylistsScreen(): React.JSX.Element {
   /** Is the live activation THIS playlist's? Another one running should grey
    *  this button, not turn it into that run's progress bar. */
   const mine = !!activation && !activation.finished && activation.playlistId === selected?.id
+
+  /**
+   * The COUNT only earns its place once the run lasts long enough to read it.
+   * A short playlist flashes "1 / 8" and is gone before you can parse it, which
+   * is worse than no detail — so the button shows a spinner first and adopts
+   * the count only if it's still going. Keyed on TIME, not track count: eight
+   * tracks over a slow server can outlast forty over a fast one, so a count
+   * threshold would reveal digits exactly when there's no time for them. Same
+   * 800ms and the same reasoning as the buffering label.
+   */
+  const [countReadable, setCountReadable] = useState(false)
+  useEffect(() => {
+    if (!mine) {
+      setCountReadable(false)
+      return
+    }
+    const t = setTimeout(() => setCountReadable(true), 800)
+    return () => clearTimeout(t)
+  }, [mine])
 
   // A deleted (or filtered-away) selection must not strand the detail pane.
   useEffect(() => {
@@ -232,9 +251,13 @@ export function PlaylistsScreen(): React.JSX.Element {
                       }}
                     />
                   )}
-                  <span className="relative flex items-center gap-1.5">
-                    <Play size={14} strokeWidth={2.2} />
-                    {mine ? `${activation.done} / ${activation.total}` : 'Play'}
+                  <span className="relative flex items-center gap-2">
+                    {mine ? (
+                      <Loader2 size={14} strokeWidth={2.2} className="motion-safe:animate-spin" />
+                    ) : (
+                      <Play size={14} strokeWidth={2.2} />
+                    )}
+                    {!mine ? 'Play' : countReadable ? `${activation.done} / ${activation.total}` : 'Loading'}
                   </span>
                 </button>
                 <button
