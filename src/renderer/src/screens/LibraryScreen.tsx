@@ -461,13 +461,26 @@ export function LibraryScreen(): React.JSX.Element {
   // reversed.)
   const libraryResetNonce = useStore((s) => s.libraryResetNonce)
   const clearLibraryTarget = useStore((s) => s.clearLibraryTarget)
-  const arrived = useRef(false)
+  /** Nonce this mount has already acted on — null until the first run. */
+  const handledNonce = useRef<number | null>(null)
   useEffect(() => {
+    // At most ONE action per nonce value per mount. StrictMode double-invokes
+    // mount effects in dev (refs intact), and this effect is no longer
+    // naturally idempotent the way the old always-reset version was: its first
+    // run RESTORES, so a second run falling through to moveTo(null, []) undoes
+    // the restore it just made — the screen restored and instantly reset,
+    // which read as "restore doesn't work" in dev while the built app was
+    // fine. The skip is the idempotence now.
+    if (handledNonce.current === libraryResetNonce) return
+    // First action of a fresh mount = plain navigation back (a front-door
+    // bump while mounted re-runs this effect with a CHANGED nonce instead).
+    const cameBack = handledNonce.current === null
+    handledNonce.current = libraryResetNonce
     const target = useStore.getState().libraryTarget
-    // Nonce EQUALITY, not consume-and-clear: this effect must be idempotent
-    // (StrictMode double-runs it in dev — clearing on first run made the
-    // second run land on the source list). A leftover target with an older
-    // nonce is stale — drop it and reset normally.
+    // Nonce EQUALITY, not consume-and-clear (a StrictMode double-run must
+    // find the target intact — it skips above, but a THIRD mount shouldn't
+    // chase it either). A leftover target with an older nonce is stale — drop
+    // it and reset normally.
     if (target && target.nonce !== libraryResetNonce) clearLibraryTarget()
     if (target && target.nonce === libraryResetNonce) {
       const last = target.titlePath.length - 1
@@ -497,26 +510,26 @@ export function LibraryScreen(): React.JSX.Element {
             : { id: `__fav-crumb-${i}__`, title }
         )
       )
-      arrived.current = true
       return
     }
-    // First run of a fresh mount with no bump behind it = came back from
-    // another screen. A later run can only be a nonce bump, which is the front
-    // door and always resets.
-    if (!arrived.current && positionMemory) {
+    if (cameBack && positionMemory) {
       const mem = positionMemory
-      arrived.current = true
       moveTo(mem.udn, mem.path)
       setLens(mem.lens) // moveTo clears it; the remembered lens wins
       return
     }
-    arrived.current = true
     moveTo(null, [])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [libraryResetNonce])
 
   // Keep the memory current as you browse (a module var write, like the scroll
   // and find-recall memories — not state, nothing re-renders on it).
+  // DECLARATION ORDER MATTERS: this must stay BELOW the arrival effect. On a
+  // return-mount both run, in order — arrival reads the memory and queues the
+  // restore, then this one overwrites it with the mount's initial (empty)
+  // state; the restore's re-render writes the real values back a beat later.
+  // Declared above the arrival effect, the clobber would come first and there
+  // would be nothing left to restore.
   useEffect(() => {
     positionMemory = { udn: serverUdn, path, lens }
   }, [serverUdn, path, lens])
