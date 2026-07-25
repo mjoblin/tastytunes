@@ -314,9 +314,15 @@ jobs:
             --app_platform osx \
             --skip_waiting_for_build_processing true
 
+      # Unlike the Developer ID lane this pkg is NOT attached to a Release —
+      # it goes to TestFlight — so the artifact is the only local copy and is
+      # worth keeping. Short retention all the same: TestFlight holds the build,
+      # and a ~200MB pkg per run at the 90-day default is what filled the
+      # Actions storage allowance.
       - if: steps.gate.outputs.enabled == 'true'
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: tastytunes-mas
+          retention-days: 7
           path: dist/**/*.pkg
           if-no-files-found: ignore
