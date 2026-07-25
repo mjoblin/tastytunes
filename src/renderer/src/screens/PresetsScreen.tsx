@@ -18,7 +18,6 @@ import { CSS } from '@dnd-kit/utilities'
 import {
   Crosshair,
   Footprints,
-  GripVertical,
   LayoutGrid,
   Loader2,
   Play,
@@ -36,6 +35,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { flashTarget, scrollToWithContext } from '@/lib/scroll'
 import { lockVertical } from '@/lib/dnd'
+import { OrderHandle } from '@/components/OrderHandle'
 import { activeSourceId, cx, matchesFilter } from '@/lib/format'
 import { FilterInput } from '@/components/FilterInput'
 import { Slider } from '@/components/Slider'
@@ -574,7 +574,11 @@ function PresetRow({
       )}
       onClick={onRecall}
     >
-      <div className="flex items-center justify-center">
+      <OrderHandle
+        label={`Reorder preset ${preset.id}`}
+        attributes={attributes}
+        listeners={listeners}
+      >
         {playing ? (
           <Eqbars playing={audible} />
         ) : tuning ? (
@@ -584,7 +588,7 @@ function PresetRow({
             {String(preset.id).padStart(2, '0')}
           </span>
         )}
-      </div>
+      </OrderHandle>
 
       <div className="h-10 w-10 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
         <ArtImage src={preset.art_url} lazy fallback={<Radio size={16} className="text-faint" />} />
@@ -654,15 +658,7 @@ function PresetRow({
         )}
       </button>
 
-      <button
-        title="Drag to reorder"
-        {...attributes}
-        {...listeners}
-        onClick={(e) => e.stopPropagation()}
-        className="p-1 rounded text-faint opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing"
-      >
-        <GripVertical size={14} />
-      </button>
+      
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   DndContext,
   KeyboardSensor,
@@ -16,14 +16,27 @@ import {
   verticalListSortingStrategy
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Disc3, GripVertical, ListOrdered, Loader2, Pencil, Play, Trash2, X } from 'lucide-react'
-import { playlistItemKey, type Playlist, type PlaylistItem } from '@shared/ipc'
+import { Disc3, ListOrdered, Loader2, MoreHorizontal, Pencil, Play, Trash2, X } from 'lucide-react'
+import {
+  favoriteKey,
+  playlistItemKey,
+  type Favorite,
+  type FavoriteMedia,
+  type Playlist,
+  type PlaylistItem
+} from '@shared/ipc'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { EmptyState } from '@/components/EmptyState'
 import { SortChip } from '@/components/SortChip'
 import { FilterInput } from '@/components/FilterInput'
 import { RowAction } from '@/components/RowAction'
+import { createPortal } from 'react-dom'
+import { usePopoverChrome, useClampedPosition } from '@/hooks/usePopover'
+import { RowHeart } from '@/components/RowHeart'
+import { AddToPlaylistPanel } from '@/components/AddToPlaylistPanel'
+import { toggleFavorite } from '@/lib/favorites'
+import { OrderHandle } from '@/components/OrderHandle'
 import { ArtImage } from '@/components/ArtImage'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { lockVertical } from '@/lib/dnd'
@@ -44,6 +57,13 @@ export function PlaylistsScreen(): React.JSX.Element {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const [trackMenu, setTrackMenu] = useState<{
+    item: PlaylistItem
+    index: number
+    x: number
+    y: number
+  } | null>(null)
+  const [copyTo, setCopyTo] = useState<{ item: PlaylistItem; x: number; y: number } | null>(null)
   // A sort picker rather than manual ordering (user call 2026-07-24): manual
   // order fights the recency sort that already does useful work and needs an
   // `order` field maintained forever, for control a picker gives at a fraction
@@ -154,6 +174,36 @@ export function PlaylistsScreen(): React.JSX.Element {
         )}
       </header>
 
+      {trackMenu && (
+        <TrackMenu
+          menu={trackMenu}
+          onClose={() => setTrackMenu(null)}
+          items={[
+            {
+              label: 'Add to another playlist…',
+              run: () => setCopyTo({ item: trackMenu.item, x: trackMenu.x, y: trackMenu.y })
+            },
+            {
+              label: 'Remove from playlist',
+              run: () => {
+                if (!selected) return
+                void tt.playlistSetItems(
+                  selected.id,
+                  selected.items.filter((_, i) => i !== trackMenu.index)
+                )
+              }
+            }
+          ]}
+        />
+      )}
+      {copyTo && (
+        <AddToPlaylistPanel
+          label={copyTo.item.title}
+          at={{ x: copyTo.x, y: copyTo.y }}
+          onClose={() => setCopyTo(null)}
+          resolve={async () => [copyTo.item]}
+        />
+      )}
       {playlists.length === 0 ? (
         <EmptyState
           icon={ListOrdered}
@@ -319,6 +369,7 @@ export function PlaylistsScreen(): React.JSX.Element {
                         index={i}
                         item={item}
                         onRemove={() => removeItem(i)}
+                        onMenu={(e) => setTrackMenu({ item, index: i, x: e.clientX, y: e.clientY })}
                       />
                     ))}
                   </SortableContext>
@@ -400,14 +451,35 @@ function TrackRow({
   id,
   index,
   item,
-  onRemove
+  onRemove,
+  onMenu
 }: {
   id: string
   index: number
   item: PlaylistItem
   onRemove: () => void
+  onMenu: (e: React.MouseEvent) => void
 }): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
+  const favorites = useStore((s) => s.favorites)
+  // A playlist entry already carries the content identity favorites need.
+  const favorite: Omit<FavoriteMedia, 'addedAt'> | null =
+    item.title && item.artist
+      ? {
+          kind: 'track',
+          title: item.title,
+          artist: item.artist,
+          album: item.album,
+          artUrl: item.artUrl,
+          serverUdn: item.serverUdn,
+          serverName: item.serverName,
+          objectId: item.objectId,
+          titlePath: null,
+          durationSecs: item.durationSecs ?? null
+        }
+      : null
+  const hearted =
+    favorite != null && favorites.some((f) => favoriteKey(f) === favoriteKey(favorite as Favorite))
   return (
     // Same anatomy as a queue row (QueueScreen's QueueRow): position, art,
     // title/artist, duration, remove, grip — in that order, on the same grid.
@@ -422,9 +494,13 @@ function TrackRow({
         isDragging ? 'z-10 bg-raised shadow-xl' : 'hover:bg-veil'
       )}
     >
-      <div className="flex items-center justify-center">
+      <OrderHandle
+        label={`Reorder ${item.title}`}
+        attributes={attributes}
+        listeners={listeners}
+      >
         <span className="font-mono text-[10.5px] text-faint tabular-nums">{index + 1}</span>
-      </div>
+      </OrderHandle>
 
       <div className="h-10 w-10 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
         <ArtImage src={item.artUrl} lazy fallback={<Disc3 size={16} className="text-faint" />} />
@@ -437,16 +513,11 @@ function TrackRow({
         </div>
       </div>
 
-      <button
-        title="Drag to reorder"
-        {...attributes}
-        {...listeners}
-        aria-label={`Reorder ${item.title}`}
-        onClick={(e) => e.stopPropagation()}
-        className="p-1.5 rounded-lg text-dim hover:bg-veil2 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 cursor-grab active:cursor-grabbing transition-all"
-      >
-        <GripVertical size={14} />
-      </button>
+      {favorite && (
+        <RowHeart favorited={hearted} held={false} onHeart={() => void toggleFavorite(favorite)} />
+      )}
+
+      <RowAction icon={MoreHorizontal} label="More actions" onClick={(e) => onMenu(e)} />
 
       <RowAction
         icon={X}
@@ -490,5 +561,45 @@ function RenameField({
       aria-label="Playlist name"
       className="bg-raised ring-1 ring-edge2 rounded px-2 h-8 text-[15px] font-display tracking-tight min-w-0 flex-1 max-w-[320px]"
     />
+  )
+}
+
+/** The row ⋯ menu — the FavMenu/QueueRowMenu shape, third instance. */
+function TrackMenu({
+  menu,
+  items,
+  onClose
+}: {
+  menu: { item: PlaylistItem; x: number; y: number }
+  items: Array<{ label: string; run: () => void }>
+  onClose(): void
+}): React.JSX.Element {
+  usePopoverChrome(onClose)
+  const boxRef = useRef<HTMLDivElement | null>(null)
+  const pos = useClampedPosition(boxRef, menu.x, menu.y)
+  return createPortal(
+    <>
+      <div className="fixed inset-0 z-40" onClick={onClose} onContextMenu={onClose} />
+      <div
+        ref={boxRef}
+        className="fixed z-50 w-52 rounded-xl ring-1 ring-edge2 bg-raised shadow-xl p-1.5 space-y-0.5"
+        style={pos}
+      >
+        <div className="px-2.5 pt-1 pb-1.5 text-[11px] text-faint truncate">{menu.item.title}</div>
+        {items.map((it) => (
+          <button
+            key={it.label}
+            onClick={() => {
+              onClose()
+              it.run()
+            }}
+            className="w-full px-2.5 py-1.5 rounded-lg text-left text-[13px] text-dim hover:text-ink hover:bg-veil transition-colors"
+          >
+            {it.label}
+          </button>
+        ))}
+      </div>
+    </>,
+    document.body
   )
 }

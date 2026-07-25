@@ -15,7 +15,7 @@ import {
   verticalListSortingStrategy
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { BookmarkPlus, Crosshair, Disc3, Footprints, GripVertical, LayoutGrid, ListMusic, ListOrdered, MoreHorizontal, Play, Rows3, X } from 'lucide-react'
+import { BookmarkPlus, Crosshair, Disc3, Footprints, LayoutGrid, ListMusic, ListOrdered, MoreHorizontal, Play, Rows3, X } from 'lucide-react'
 import { queueContentHash, type QueueListItem } from '@shared/smoip'
 import {
   favoriteKey,
@@ -38,6 +38,7 @@ import { usePopoverChrome, useClampedPosition } from '@/hooks/usePopover'
 import { AddToPlaylistPanel } from '@/components/AddToPlaylistPanel'
 import { RowAction } from '@/components/RowAction'
 import { RowHeart } from '@/components/RowHeart'
+import { OrderHandle } from '@/components/OrderHandle'
 import { ArtImage } from '@/components/ArtImage'
 import { FilterInput } from '@/components/FilterInput'
 import { PopoverChrome } from '@/hooks/usePopover'
@@ -442,7 +443,7 @@ function QueueRow({ item, isCurrent, playing, sourceActive, currentRef, onMenu }
       }}
       style={{ transform: CSS.Transform.toString(lockVertical(transform)), transition }}
       className={cx(
-        'group grid grid-cols-[26px_44px_1fr_auto_auto_auto_auto_auto] items-center gap-2 rounded-lg px-2 py-1.5',
+        'group grid grid-cols-[26px_44px_1fr_auto_auto_auto_auto] items-center gap-2 rounded-lg px-2 py-1.5',
         'cursor-default transition-colors',
         isDragging && 'z-10 bg-raised shadow-xl',
         // current + queue audible: full playing treatment; current while another
@@ -455,15 +456,19 @@ function QueueRow({ item, isCurrent, playing, sourceActive, currentRef, onMenu }
         if (item.id != null) void tt.command({ type: 'playQueueId', queueId: item.id })
       }}
     >
-      <div className="flex items-center justify-center">
+      <OrderHandle
+        label={`Reorder ${md?.title ?? 'track'}`}
+        attributes={attributes}
+        listeners={listeners}
+      >
         {isCurrent ? (
-          <Eqbars playing={playing} dim={!(sourceActive)} />
+          <Eqbars playing={playing} dim={!sourceActive} />
         ) : (
           <span className="font-mono text-[10.5px] text-faint tabular-nums">
             {(item.position ?? 0) + 1}
           </span>
         )}
-      </div>
+      </OrderHandle>
 
       <div className="h-10 w-10 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
         <ArtImage src={md?.art_url} lazy fallback={<Disc3 size={16} className="text-faint" />} />
@@ -485,17 +490,6 @@ function QueueRow({ item, isCurrent, playing, sourceActive, currentRef, onMenu }
           onHeart={() => void toggleFavorite(favorite)}
         />
       )}
-
-      <button
-        title="Drag to reorder"
-        aria-label="Reorder"
-        {...attributes}
-        {...listeners}
-        onClick={(e) => e.stopPropagation()}
-        className="p-1.5 rounded-lg text-dim hover:bg-veil2 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 cursor-grab active:cursor-grabbing transition-all"
-      >
-        <GripVertical size={14} />
-      </button>
 
       <RowAction icon={MoreHorizontal} label="More actions" onClick={(e) => onMenu?.(e)} />
 
