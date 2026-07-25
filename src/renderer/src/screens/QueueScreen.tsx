@@ -37,6 +37,7 @@ import { toggleFavorite } from '@/lib/favorites'
 import { usePopoverChrome, useClampedPosition } from '@/hooks/usePopover'
 import { AddToPlaylistPanel } from '@/components/AddToPlaylistPanel'
 import { RowAction } from '@/components/RowAction'
+import { RowHeart } from '@/components/RowHeart'
 import { ArtImage } from '@/components/ArtImage'
 import { FilterInput } from '@/components/FilterInput'
 import { PopoverChrome } from '@/hooks/usePopover'
@@ -428,6 +429,10 @@ function QueueRow({ item, isCurrent, playing, sourceActive, currentRef, onMenu }
     id: item.id as number
   })
   const md = item.metadata
+  const favorites = useStore((s) => s.favorites)
+  const favorite = queueItemFavorite(item)
+  const hearted =
+    favorite != null && favorites.some((f) => favoriteKey(f) === favoriteKey(favorite as Favorite))
 
   return (
     <div
@@ -437,7 +442,7 @@ function QueueRow({ item, isCurrent, playing, sourceActive, currentRef, onMenu }
       }}
       style={{ transform: CSS.Transform.toString(lockVertical(transform)), transition }}
       className={cx(
-        'group grid grid-cols-[26px_44px_1fr_auto_auto_auto_auto] items-center gap-2 rounded-lg px-2 py-1.5',
+        'group grid grid-cols-[26px_44px_1fr_auto_auto_auto_auto_auto] items-center gap-2 rounded-lg px-2 py-1.5',
         'cursor-default transition-colors',
         isDragging && 'z-10 bg-raised shadow-xl',
         // current + queue audible: full playing treatment; current while another
@@ -472,6 +477,14 @@ function QueueRow({ item, isCurrent, playing, sourceActive, currentRef, onMenu }
           {[md?.artist, md?.album].filter(Boolean).join(' — ')}
         </div>
       </div>
+
+      {favorite && (
+        <RowHeart
+          favorited={hearted}
+          held={false}
+          onHeart={() => void toggleFavorite(favorite)}
+        />
+      )}
 
       <button
         title="Drag to reorder"
@@ -618,28 +631,36 @@ function QueueCard({ item, isCurrent, playing, sourceActive, currentRef, onMenu 
  * at all — you could hear a track, want to keep it, and have nowhere to say so
  * without going to Now Playing and waiting for it to come round.
  */
+/**
+ * A queued track as a favorite — or null when it can't be one. Favorites key on
+ * CONTENT, so a track with no title or no artist has no identity to store and
+ * could never be found again; offering a heart there would be a lie. Shared by
+ * the row's heart and its ⋯ menu so the two can't disagree.
+ */
+export function queueItemFavorite(item: QueueListItem): Omit<FavoriteMedia, 'addedAt'> | null {
+  const md = item.metadata
+  const title = md?.title ?? null
+  const artist = md?.artist ?? null
+  if (!title || !artist) return null
+  return {
+    kind: 'track',
+    title,
+    artist,
+    album: md?.album ?? null,
+    artUrl: md?.art_url ?? null,
+    serverUdn: null,
+    serverName: null,
+    objectId: null,
+    titlePath: null,
+    durationSecs: md?.duration ?? null
+  }
+}
+
 function queueRowActions(
   item: QueueListItem,
   deps: { favorites: Favorite[]; addToPlaylist: () => void }
 ): Array<{ label: string; run: () => void }> {
-  const md = item.metadata
-  const title = md?.title ?? null
-  const artist = md?.artist ?? null
-  const fav: Omit<FavoriteMedia, 'addedAt'> | null =
-    title && artist
-      ? {
-          kind: 'track',
-          title,
-          artist,
-          album: md?.album ?? null,
-          artUrl: md?.art_url ?? null,
-          serverUdn: null,
-          serverName: null,
-          objectId: null,
-          titlePath: null,
-          durationSecs: md?.duration ?? null
-        }
-      : null
+  const fav = queueItemFavorite(item)
   const hearted =
     fav != null && deps.favorites.some((f) => favoriteKey(f) === favoriteKey(fav as Favorite))
 

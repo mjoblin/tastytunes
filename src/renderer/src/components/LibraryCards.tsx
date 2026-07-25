@@ -4,6 +4,7 @@ import type { MediaNode } from '@shared/ipc'
 import { cx, fmtTime } from '@/lib/format'
 import { isAlbumClass, isMutedArt } from '@/lib/media'
 import { RowAction } from '@/components/RowAction'
+import { RowHeart } from '@/components/RowHeart'
 import { ArtImage } from '@/components/ArtImage'
 import { Eqbars } from '@/components/Eqbars'
 
@@ -184,37 +185,6 @@ export function ContainerCard({
 }
 
 /** Row-cluster heart: hover-revealed control, permanently gold when set. */
-function RowHeart({
-  favorited,
-  held,
-  onHeart
-}: {
-  favorited: boolean
-  held: boolean
-  onHeart(): void
-}): React.JSX.Element {
-  return (
-    <button
-      aria-label={favorited ? 'Remove from favorites' : 'Add to favorites'}
-      data-row-heart={favorited ? 'on' : 'off'}
-      onClick={(e) => {
-        e.stopPropagation()
-        onHeart()
-      }}
-      className={cx(
-        'p-1.5 rounded-lg transition-all motion-safe:active:scale-90',
-        favorited
-          ? 'text-gold hover:text-ink'
-          : cx(
-              'text-dim hover:text-ink hover:bg-veil2',
-              held ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-            )
-      )}
-    >
-      <Heart size={13} fill={favorited ? 'currentColor' : 'none'} />
-    </button>
-  )
-}
 
 export function ContainerRow({
   node,
