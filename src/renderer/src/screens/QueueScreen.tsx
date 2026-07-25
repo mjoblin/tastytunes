@@ -143,7 +143,15 @@ export function QueueScreen(): React.JSX.Element {
         durationSecs: m.duration ?? null
       }))
     if (items.length === 0) return
-    const name = `Queue — ${new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
+    // Date alone collides the second time you save in a day — and two rows
+    // reading "Queue — Jul 24" are indistinguishable. The time makes it unique
+    // in practice AND tells you which session it was.
+    const name = `Queue — ${new Date().toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    })}`
     await tt.playlistCreate(name, items)
     showToast({
       kind: 'success',

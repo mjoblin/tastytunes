@@ -56,11 +56,26 @@ function boundItems(items: PlaylistItem[]): PlaylistItem[] {
   return items.slice(0, MAX_PLAYLIST_ITEMS)
 }
 
+/**
+ * Make a name unique within the collection. Auto-names carry a timestamp, but
+ * two saves inside the same minute still collide — and two rows reading
+ * "Queue — Jul 24, 7:49 PM" are indistinguishable to the person who made them.
+ */
+function uniqueName(base: string, existing: Playlist[]): string {
+  const taken = new Set(existing.map((p) => p.name))
+  if (!taken.has(base)) return base
+  for (let n = 2; n < 1000; n++) {
+    const candidate = `${base} (${n})`
+    if (!taken.has(candidate)) return candidate
+  }
+  return base
+}
+
 export function createPlaylist(name: string, items: PlaylistItem[]): Playlist[] {
   const now = Date.now()
   const playlist: Playlist = {
     id: randomUUID(),
-    name: name.trim() || 'Untitled playlist',
+    name: uniqueName(name.trim() || 'Untitled playlist', getPlaylists()),
     createdAt: now,
     updatedAt: now,
     items: boundItems(items)

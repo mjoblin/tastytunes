@@ -17,7 +17,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { Disc3, GripVertical, ListOrdered, Pencil, Play, Trash2, X } from 'lucide-react'
-import { playlistItemKey, type Playlist, type PlaylistActivation, type PlaylistItem } from '@shared/ipc'
+import { playlistItemKey, type Playlist, type PlaylistItem } from '@shared/ipc'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { EmptyState } from '@/components/EmptyState'
@@ -47,6 +47,7 @@ export function PlaylistsScreen(): React.JSX.Element {
   // order fights the recency sort that already does useful work and needs an
   // `order` field maintained forever, for control a picker gives at a fraction
   // of the cost. 'updated' is the neutral default the store already writes in.
+  const showToast = useStore((s) => s.showToast)
   const [sort, setSort] = useState<PlaylistSort>('updated')
   const [reversed, setReversed] = useState(false)
   const scrollMemory = useScrollMemory('playlists')
@@ -65,6 +66,9 @@ export function PlaylistsScreen(): React.JSX.Element {
     return reversed ? sorted.reverse() : sorted
   }, [playlists, filter, sort, reversed])
   const selected = playlists.find((p) => p.id === selectedId) ?? shown[0] ?? null
+  /** Is the live activation THIS playlist's? Another one running should grey
+   *  this button, not turn it into that run's progress bar. */
+  const mine = !!activation && !activation.finished && activation.playlistId === selected?.id
 
   // A deleted (or filtered-away) selection must not strand the detail pane.
   useEffect(() => {
@@ -97,6 +101,26 @@ export function PlaylistsScreen(): React.JSX.Element {
 
   const running = activation && !activation.finished
 
+  /**
+   * Activating replaces the QUEUE — an effect you can't see from this screen —
+   * so the outcome is a toast, which is what the app's doctrine reserves them
+   * for. The per-track detail isn't repeated here: a playlist keeps its own
+   * "couldn't find these" line afterwards, which outlives any toast.
+   */
+  const activate = async (p: Playlist): Promise<void> => {
+    const res = await tt.playlistActivate(p.id)
+    const missed = res.missed.length
+    showToast({
+      kind: res.added > 0 ? 'success' : 'error',
+      text: res.cancelled
+        ? `Stopped — ${res.added} of ${res.total} loaded`
+        : missed > 0
+          ? `Loaded ${res.added} of ${res.total} — ${missed} not found`
+          : `Loaded ${res.added} ${res.added === 1 ? 'track' : 'tracks'} from “${p.name}”`,
+      action: { label: 'Open Queue', screen: 'queue' }
+    })
+  }
+
   return (
     <div className="h-full flex flex-col">
       <header className="px-8 pt-8 pb-4 flex items-center gap-4">
@@ -127,13 +151,6 @@ export function PlaylistsScreen(): React.JSX.Element {
           />
         )}
       </header>
-
-      {activation && (
-        <ActivationBanner
-          activation={activation}
-          onCancel={() => void tt.playlistActivateCancel()}
-        />
-      )}
 
       {playlists.length === 0 ? (
         <EmptyState
@@ -176,8 +193,12 @@ export function PlaylistsScreen(): React.JSX.Element {
 
           {/* the selected playlist */}
           {selected && (
-            <div className="flex-1 min-w-0 min-h-0 flex flex-col">
-              <div className="flex items-center gap-2 mb-3">
+            // @container: what fits is a question about THIS PANE, not the
+            // window. The rail is a fixed 280px, so a wide window can still
+            // leave this column cramped — viewport breakpoints (sm:) answered
+            // the wrong question and let the metadata strangle the title.
+            <div className="@container flex-1 min-w-0 min-h-0 flex flex-col">
+              <div className="flex items-center gap-2 mb-1">
                 {renaming === selected.id ? (
                   <RenameField
                     initial={selected.name}
@@ -187,30 +208,34 @@ export function PlaylistsScreen(): React.JSX.Element {
                     }}
                   />
                 ) : (
-                  <h2 className="font-display font-bold text-[19px] tracking-tight truncate">
+                  <h2 className="flex-1 min-w-0 font-display font-bold text-[19px] tracking-tight truncate">
                     {selected.name}
                   </h2>
                 )}
-                <div className="flex-1" />
-                <div className="microlabel text-right leading-tight mr-1 hidden sm:block">
-                  <div>
-                    {selected.items.length} {selected.items.length === 1 ? 'track' : 'tracks'}
-                    {totalSecs(selected) > 0 && ` · ${fmtDuration(totalSecs(selected))}`}
-                    {artistCount(selected) > 1 && ` · ${artistCount(selected)} artists`}
-                  </div>
-                  <div>
-                    created {fmtRelative(selected.createdAt)}
-                    {selected.lastPlayedAt && ` · played ${fmtRelative(selected.lastPlayedAt)}`}
-                  </div>
-                </div>
+                {/* Progress lives IN the button that started it — the button is
+                    already inert during the run, and an inserted banner pushed
+                    the whole list down and back up again. Clicking mid-run
+                    cancels, so one control owns the whole interaction. */}
                 <button
-                  onClick={() => void tt.playlistActivate(selected.id)}
-                  disabled={!!running || selected.items.length === 0}
-                  data-tip="Replace the queue with this playlist"
-                  aria-label="Play playlist"
-                  className="no-drag tip-bottom flex items-center gap-1.5 rounded-lg px-3 h-8 text-[12.5px] bg-amberdim text-amber hover:brightness-110 disabled:opacity-40 transition-all"
+                  onClick={() => (mine ? void tt.playlistActivateCancel() : void activate(selected))}
+                  disabled={(!!running && !mine) || selected.items.length === 0}
+                  data-tip={mine ? 'Stop loading' : 'Replace the queue with this playlist'}
+                  aria-label={mine ? 'Stop loading playlist' : 'Play playlist'}
+                  className="no-drag tip-bottom relative overflow-hidden flex items-center gap-1.5 rounded-lg px-3 h-8 text-[12.5px] bg-amberdim text-amber hover:brightness-110 disabled:opacity-40 transition-all"
                 >
-                  <Play size={14} /> Play
+                  {mine && (
+                    <span
+                      aria-hidden
+                      className="absolute inset-y-0 left-0 bg-amber/20 transition-[width] duration-200"
+                      style={{
+                        width: `${Math.round((activation.done / Math.max(1, activation.total)) * 100)}%`
+                      }}
+                    />
+                  )}
+                  <span className="relative flex items-center gap-1.5">
+                    <Play size={14} />
+                    {mine ? `${activation.done} / ${activation.total}` : 'Play'}
+                  </span>
                 </button>
                 <button
                   onClick={() => setRenaming(selected.id)}
@@ -239,6 +264,21 @@ export function PlaylistsScreen(): React.JSX.Element {
                 >
                   {confirmDelete === selected.id ? 'Sure?' : <Trash2 size={14} />}
                 </button>
+              </div>
+
+              {/* Its own line, under the title — stacked rather than competing,
+                  so the name is never the thing that loses. Facts drop by PANE
+                  width, least useful first: created, then artists. */}
+              <div className="microlabel truncate mb-3">
+                {selected.items.length} {selected.items.length === 1 ? 'track' : 'tracks'}
+                {totalSecs(selected) > 0 && ` · ${fmtDuration(totalSecs(selected))}`}
+                {artistCount(selected) > 1 && (
+                  <span className="hidden @sm:inline"> · {artistCount(selected)} artists</span>
+                )}
+                {selected.lastPlayedAt && (
+                  <span className="hidden @xs:inline"> · played {fmtRelative(selected.lastPlayedAt)}</span>
+                )}
+                <span className="hidden @lg:inline"> · created {fmtRelative(selected.createdAt)}</span>
               </div>
 
               {(selected.lastMissing?.length ?? 0) > 0 && (
@@ -430,57 +470,5 @@ function RenameField({
       aria-label="Playlist name"
       className="bg-raised ring-1 ring-edge2 rounded px-2 h-8 text-[15px] font-display tracking-tight min-w-0 flex-1 max-w-[320px]"
     />
-  )
-}
-
-/**
- * Progress while a playlist loads, and the honest aftermath. Activation is
- * ~2 round-trips per track, so a long playlist takes real time — and a partial
- * result (tracks no longer on any server) is a normal outcome worth naming,
- * not an error to swallow.
- */
-function ActivationBanner({
-  activation: a,
-  onCancel
-}: {
-  activation: PlaylistActivation
-  onCancel: () => void
-}): React.JSX.Element | null {
-  const [dismissed, setDismissed] = useState(false)
-  useEffect(() => {
-    setDismissed(false)
-  }, [a.name, a.finished])
-  if (a.finished && (dismissed || (a.missed.length === 0 && !a.cancelled))) return null
-
-  return (
-    <div className="mx-8 mb-3 flex items-center gap-3 rounded-lg bg-raised ring-1 ring-edge px-3 py-2 text-[12.5px]">
-      {!a.finished ? (
-        <>
-          <span className="text-dim">
-            Loading “{a.name}” — {a.done} of {a.total}
-          </span>
-          <div className="flex-1" />
-          <button onClick={onCancel} className="no-drag text-faint hover:text-ink transition-colors">
-            Cancel
-          </button>
-        </>
-      ) : (
-        <>
-          <span className="text-dim">
-            {a.cancelled ? 'Stopped — ' : ''}
-            {a.added} of {a.total} loaded
-            {a.missed.length > 0 && `; couldn't find ${a.missed.join(', ')}`}
-          </span>
-          <div className="flex-1" />
-          <button
-            onClick={() => setDismissed(true)}
-            aria-label="Dismiss"
-            className="no-drag text-faint hover:text-ink transition-colors"
-          >
-            <X size={13} />
-          </button>
-        </>
-      )}
-    </div>
   )
 }
