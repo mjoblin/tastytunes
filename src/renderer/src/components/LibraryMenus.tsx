@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import type { MediaNode, MediaQueueAction } from '@shared/ipc'
 import { useStore } from '@/store'
 import { cx } from '@/lib/format'
+import { isArtistClass } from '@/lib/media'
 import { usePopoverChrome, useClampedPosition } from '@/hooks/usePopover'
 import { ArtImage } from '@/components/ArtImage'
 
@@ -60,7 +61,15 @@ export function ItemMenu({
         }
       ]
     : []
-  const items: Array<{ label: string; run: () => void }> = node.isContainer
+  // An ARTIST'S menu is the pivot alone. The queue/preset verbs don't apply
+  // (an artist container holds albums, not a playable track list — "queue a
+  // whole artist" is a decision that hasn't been made), and favorites key on
+  // album/track content identity. One item is thin, but it's the one
+  // cross-collection question an artist can answer, and the menu gives any
+  // future artist verb a home.
+  const items: Array<{ label: string; run: () => void }> = isArtistClass(node.upnpClass) && node.isContainer
+    ? [...pivotItem]
+    : node.isContainer
     ? [
         { label: 'Play', run: () => onAction('PLAY') },
         { label: 'Play next', run: () => onAction('PLAY_NEXT') },

@@ -23,12 +23,16 @@ export const isAlbumClass = (c: string): boolean => c.includes('musicAlbum')
  */
 export type MediaKind = 'artist' | 'album' | 'track'
 
+/** A PERSON container (musicArtist etc.) — strictly class-matched, so a plain
+ *  storage folder can never pass. The index's artist pool is built on this. */
+export const isArtistClass = (c: string): boolean => c.includes('person') || c.includes('Artist')
+
 export const mediaKind = (upnpClass: string, isContainer: boolean): MediaKind =>
   !isContainer
     ? 'track'
     : isAlbumClass(upnpClass)
       ? 'album'
-      : upnpClass.includes('person') || upnpClass.includes('Artist')
+      : isArtistClass(upnpClass)
         ? 'artist'
         : // Unreachable from an index (see above); an unfiled container is far
           // likelier to be album-shaped than a person, so this is the safe read.

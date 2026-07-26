@@ -2,7 +2,7 @@ import { useRef } from 'react'
 import { Disc3, Folder, Heart, MoreHorizontal, Play } from 'lucide-react'
 import type { MediaNode } from '@shared/ipc'
 import { cx, fmtTime } from '@/lib/format'
-import { isAlbumClass, isMutedArt } from '@/lib/media'
+import { isAlbumClass, isArtistClass, isMutedArt } from '@/lib/media'
 import { RowAction } from '@/components/RowAction'
 import { RowHeart } from '@/components/RowHeart'
 import { ArtImage } from '@/components/ArtImage'
@@ -79,9 +79,12 @@ export function ContainerCard({
   onMenu(e: React.MouseEvent): void
 }): React.JSX.Element {
   const ref = useRef<HTMLDivElement | null>(null)
-  // Queue/preset verbs only make sense on albums — plain folders (artist
-  // dirs, USB volumes, Asset's virtual views) get no chips and no menu.
+  // Queue/preset verbs only make sense on albums — plain folders (USB
+  // volumes, Asset's virtual views) get no chips and no menu. ARTIST
+  // containers carry the ⋯ (their menu holds only the search-everywhere
+  // pivot — see ItemMenu) but never the play chip.
   const album = isAlbumClass(node.upnpClass)
+  const menuable = album || isArtistClass(node.upnpClass)
   const muted = isMutedArt(node)
   const subtitle = [node.artist, node.year].filter(Boolean).join(' · ')
   return (
@@ -89,7 +92,7 @@ export function ContainerCard({
     // wraps the gray tile so it stays legible over gold/orange covers.
     <div
       ref={ref}
-      onContextMenu={album ? onMenu : undefined}
+      onContextMenu={menuable ? onMenu : undefined}
       data-library-card
       className={cx(
         'group relative text-left rounded-2xl p-2 pb-2.5 transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]',
@@ -140,7 +143,7 @@ export function ContainerCard({
               <Play size={18} fill="currentColor" />
             </span>
           )}
-          {album && (
+          {menuable && (
             <span
               aria-label="More actions"
               onClick={onMenu}
@@ -209,8 +212,11 @@ export function ContainerRow({
   onEnter(): void
   onMenu(e: React.MouseEvent): void
 }): React.JSX.Element {
-  // Same rule as cards: only albums carry the ⋯ menu.
+  // Same rule as cards: albums carry the full ⋯ menu; ARTISTS carry it too now
+  // (theirs holds only the search-everywhere pivot — see ItemMenu). Plain
+  // folders stay menu-less: a folder is filing, and none of the verbs apply.
   const album = isAlbumClass(node.upnpClass)
+  const menuable = album || isArtistClass(node.upnpClass)
   const muted = isMutedArt(node)
   return (
     <div
@@ -219,7 +225,7 @@ export function ContainerRow({
         playing ? 'row-playing bg-gold/10' : menuOpen ? 'bg-veil' : 'hover:bg-veil'
       )}
       onClick={onEnter}
-      onContextMenu={album ? onMenu : undefined}
+      onContextMenu={menuable ? onMenu : undefined}
       data-library-row
     >
       <div className="h-10 w-10 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
@@ -260,7 +266,7 @@ export function ContainerRow({
       ) : (
         <span />
       )}
-      {album ? (
+      {menuable ? (
         <button
           aria-label="More actions"
           onClick={onMenu}
