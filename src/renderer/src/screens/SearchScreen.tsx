@@ -4,7 +4,7 @@ import type { MediaNode, RadioStation } from '@shared/model'
 import type { Favorite, FavoriteMedia, PlaylistItem } from '@shared/model'
 import { favoriteKey } from '@shared/model'
 import { mediaKind, type MediaKind } from '@/lib/media'
-import { sanitizeNavHidden } from '@/lib/screens'
+import { sanitizeNavHidden, sanitizeNavOrder } from '@/lib/screens'
 import { tt } from '@/api'
 import { useStore, type Screen } from '@/store'
 import { EmptyState } from '@/components/EmptyState'
@@ -42,8 +42,10 @@ const GROUP_CAP = 6
 const ISOLATED_CAP = 50
 
 type CategoryId = 'library' | 'favorites' | 'playlists' | 'presets' | 'radio'
-/** Every category id is also a nav screen id — that 1:1 is what lets the rail
- *  seed the search rail (see hiddenSeeded). */
+/** Every category id is also a nav screen id — that 1:1 is what lets the nav
+ *  seed this rail's hidden set (see hiddenSeeded) AND order it (see navRank).
+ *  MEMBERSHIP ONLY: this list's own order carries no meaning — the rendered
+ *  order comes from the user's nav order, applied to `cats` below. */
 const CATEGORY_IDS: CategoryId[] = ['library', 'favorites', 'playlists', 'presets', 'radio']
 
 /**
@@ -108,6 +110,7 @@ let lastSortReversed = false
 export function SearchScreen(): React.JSX.Element {
   const [query, setQuery] = useState(lastQuery)
   const navHidden = useStore((s) => s.settings.navHidden)
+  const navOrder = useStore((s) => s.settings.navOrder)
   const [hidden, setHidden] = useState<Set<CategoryId>>(() => {
     if (!hiddenSeeded) {
       hiddenSeeded = true
@@ -469,11 +472,16 @@ export function SearchScreen(): React.JSX.Element {
 
   // ---- The five categories, as data. Every group renders from this list, so a
   // ---- chip, a count, a cap and a sort can't disagree about what a category
-  // ---- is — and the ORDER is the NAV RAIL'S (user, 2026-07-25):
-  // ---- Library · Presets · Playlists · Favorites · Radio. One spatial habit
+  // ---- is. The ORDER is the NAV RAIL'S (user, 2026-07-25): one spatial habit
   // ---- for the whole app, so scanning results reuses the muscle memory the
-  // ---- sidebar already built. Radio lands last either way, which suits the
-  // ---- one group that arrives late.
+  // ---- sidebar built. Since the rail became user-reorderable (2026-07-26)
+  // ---- that means the USER'S order, read live below — the rationale transfers
+  // ---- wholesale, and a rail someone deliberately arranged is a stronger
+  // ---- claim on their muscle memory than our default ever was. The literal's
+  // ---- own order is now just a starting point for that sort.
+  // ---- (Radio used to be defended as "last anyway, which suits the group that
+  // ---- arrives late". It isn't a rule: if the user puts Radio first, Radio
+  // ---- goes first, and its own pending state already handles arriving late.)
 
   const byName = (a: { sortKey: string }, b: { sortKey: string }): number =>
     a.sortKey.localeCompare(b.sortKey)
@@ -682,6 +690,14 @@ export function SearchScreen(): React.JSX.Element {
       }
     )
   }
+
+  // THE USER'S NAV ORDER, applied live (not seeded once like `hidden` — a
+  // reorder should land on this screen immediately, whereas a hide is a
+  // starting point the chips then own for the session). Sorting the built list
+  // rather than reordering its construction keeps every count, cap and row
+  // exactly where it was; only the sequence moves.
+  const navRank = new Map(sanitizeNavOrder(navOrder).map((id, i) => [id as string, i]))
+  cats.sort((a, b) => (navRank.get(a.id) ?? 99) - (navRank.get(b.id) ?? 99))
 
   // An empty category is never "shown" — it has nothing to show, and counting
   // it would make the isolation arithmetic wrong (chips vs one result set).

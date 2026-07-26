@@ -32,9 +32,15 @@ export interface ScreenDef {
 
 /**
  * ORDER IS BY THE USER'S MENTAL MODEL, not by how the data is stored (user
- * call 2026-07-25). Four runs, no dividers — the grouping has to survive rows
- * being hidden, and visual sections stay an unspent lever for if the rail ever
- * gets long enough to need them:
+ * call 2026-07-25). Since 2026-07-26 this is the DEFAULT rather than the last
+ * word: the rail is user-reorderable (settings.navOrder, resolved through
+ * sanitizeNavOrder below), and this array is what an untouched install shows
+ * and what "Reset order" returns to. Everything below still describes why the
+ * default is what it is — a good default is most of the feature.
+ *
+ * Four runs, no dividers — the grouping has to survive rows being hidden, and
+ * visual sections stay an unspent lever for if the rail ever gets long enough
+ * to need them:
  *
  *   playing now      Now Playing · Queue
  *   find / everything Search · Library
@@ -102,6 +108,58 @@ export function sanitizeNavHidden(raw: readonly string[] | null | undefined): Sc
     if (hideable.has(id) && !out.includes(id as Screen)) out.push(id as Screen)
   }
   return out
+}
+
+/**
+ * Resolve the user's stored nav order into the real, ordered list of nav-rail
+ * screen ids. ALWAYS returns every NAV_SCREENS id exactly once, so callers can
+ * map it directly; `[]`, garbage, or a partial list all resolve to something
+ * complete and sane. Owned by the registry so the nav, the Settings list and
+ * the search rail can't disagree about what "the user's order" is.
+ *
+ * THE SUBTLE RULE — an id missing from the stored order is inserted at its
+ * REGISTRY POSITION, never appended. Appending is the obvious implementation
+ * and it is wrong: the day a twelfth screen ships, every user who has ever
+ * dragged this list would find it dumped at the bottom instead of where the
+ * curated default puts it. So a missing id lands directly after its nearest
+ * earlier registry neighbour that IS placed (or at the top if it has none),
+ * which means a whole run of new screens arrives in registry order, in the
+ * right neighbourhood, without disturbing anything the user arranged.
+ *
+ * Hidden screens are NOT filtered here — they hold their slot so unhiding
+ * restores position. Filtering is the nav's job, after ordering.
+ */
+export function sanitizeNavOrder(raw: readonly string[] | null | undefined): Screen[] {
+  const registry = NAV_SCREENS.map((s) => s.id)
+  if (!Array.isArray(raw) || raw.length === 0) return registry
+
+  const known = new Set<string>(registry)
+  const out: Screen[] = []
+  for (const id of raw) {
+    if (known.has(id) && !out.includes(id as Screen)) out.push(id as Screen)
+  }
+
+  // Walk the registry FORWARD so a run of consecutive newcomers keeps its own
+  // relative order as it is threaded back in.
+  registry.forEach((id, i) => {
+    if (out.includes(id)) return
+    let at = 0
+    for (let j = i - 1; j >= 0; j--) {
+      const placed = out.indexOf(registry[j])
+      if (placed >= 0) {
+        at = placed + 1
+        break
+      }
+    }
+    out.splice(at, 0, id)
+  })
+  return out
+}
+
+/** NAV_SCREENS in the user's order — the one list every nav surface renders. */
+export function orderedNavScreens(raw: readonly string[] | null | undefined): ScreenDef[] {
+  const byId = new Map(NAV_SCREENS.map((s) => [s.id, s]))
+  return sanitizeNavOrder(raw).map((id) => byId.get(id)!)
 }
 
 /** Hideable nav-tool ids — the pinned bottom-cluster buttons, minus the locked ones. */

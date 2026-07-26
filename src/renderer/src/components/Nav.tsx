@@ -6,7 +6,7 @@ import { useStore, type Screen } from '@/store'
 import { cx } from '@/lib/format'
 import {
   MOD,
-  NAV_SCREENS,
+  orderedNavScreens,
   NAV_UNHIDEABLE,
   SETTINGS_SCREEN,
   sanitizeNavHidden,
@@ -72,7 +72,9 @@ export function Nav(): React.JSX.Element {
 
   const hidden = sanitizeNavHidden(settings.navHidden)
   const hiddenSet = new Set(hidden)
-  const visibleScreens = NAV_SCREENS.filter((s) => !hiddenSet.has(s.id))
+  // ORDER FIRST, then hide. A hidden screen keeps its slot in navOrder, so
+  // unhiding puts it back where it was rather than at the bottom.
+  const visibleScreens = orderedNavScreens(settings.navOrder).filter((s) => !hiddenSet.has(s.id))
 
   const hiddenTools = sanitizeNavHiddenTools(settings.navHiddenTools)
   const hiddenToolSet = new Set(hiddenTools)

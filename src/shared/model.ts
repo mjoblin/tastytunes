@@ -550,6 +550,22 @@ export interface AppSettings {
    * shortcut, the mini player stays in the palette and the View menu.
    */
   navHiddenTools: string[]
+  /**
+   * The user's own nav-rail order — screen ids, top to bottom. `[]` means the
+   * registry's curated default, which is what almost everyone keeps.
+   *
+   * An ORDER, unlike navHidden's hide-set, can't default-by-omission, so the
+   * sanitizer carries the rule instead: an id missing from a stored order is
+   * inserted at its REGISTRY position, never appended. That is what stops a
+   * screen added in a future version from landing below Device for everyone
+   * who has ever touched this list. Hidden screens keep their slot here —
+   * hidden means decluttered, not deleted, and unhiding restores position.
+   *
+   * Nav-rail screens only: the pinned bottom cluster (Commands, Mini player,
+   * Settings) is fixed. KEYS DO NOT TRAVEL WITH POSITION — see the registry
+   * header in lib/screens.ts.
+   */
+  navOrder: string[]
   /** Auto-scroll to the current queue row / playing preset. */
   followQueue: boolean
   followPresets: boolean
@@ -660,6 +676,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   navCollapsed: false,
   navHidden: [],
   navHiddenTools: [],
+  navOrder: [],
   followQueue: true,
   followPresets: false,
   queueLayout: 'rows',
