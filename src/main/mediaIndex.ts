@@ -13,10 +13,11 @@
 //     built only when the user asks (slow on real hardware; ids also rot on
 //     replug, which bumps SystemUpdateID and invalidates anyway).
 //   Tier C (pathological): no index; the Library stays fully live.
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { app } from 'electron'
 import { getSettings } from './persist'
+import { atomicWriteFileSync } from './jsonStore'
 import type {
   MediaIndexPools,
   MediaIndexStatus,
@@ -92,8 +93,9 @@ function load(): void {
 
 function save(): void {
   try {
-    mkdirSync(join(app.getPath('userData'), 'cache'), { recursive: true })
-    writeFileSync(file(), JSON.stringify({ version: VERSION, servers: [...indexes.values()] }))
+    // atomic like the user-data stores — a torn index only costs a rebuild,
+    // but a rebuild of a big Asset library is minutes, not milliseconds
+    atomicWriteFileSync(file(), JSON.stringify({ version: VERSION, servers: [...indexes.values()] }))
   } catch {
     // disk trouble only costs a rebuild next launch
   }

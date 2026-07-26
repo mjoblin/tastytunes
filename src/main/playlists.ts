@@ -1,7 +1,7 @@
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
-import { join, dirname } from 'node:path'
+import { join } from 'node:path'
 import { app } from 'electron'
+import { jsonFileStore } from './jsonStore'
 import {
   MAX_PLAYLISTS,
   MAX_PLAYLIST_ITEMS,
@@ -18,38 +18,22 @@ import {
 // changes every objectId, and a playlist that can't survive that isn't worth
 // storing. Ids ride along as a fast path and are healed on activation.
 
-let cached: Playlist[] | null = null
-
-function playlistsPath(): string {
-  return join(app.getPath('userData'), 'playlists.json')
-}
-
 function sortNewest(list: Playlist[]): Playlist[] {
   return [...list].sort((a, b) => b.updatedAt - a.updatedAt)
 }
 
+const store = jsonFileStore<Playlist[]>({
+  pathOf: () => join(app.getPath('userData'), 'playlists.json'),
+  scope: 'playlists',
+  load: (parsed) => (Array.isArray(parsed) ? sortNewest(parsed as Playlist[]) : [])
+})
+
 export function getPlaylists(): Playlist[] {
-  if (cached) return cached
-  try {
-    const parsed = JSON.parse(readFileSync(playlistsPath(), 'utf-8'))
-    cached = Array.isArray(parsed) ? sortNewest(parsed as Playlist[]) : []
-  } catch {
-    cached = []
-  }
-  return cached
+  return store.get()
 }
 
 function save(list: Playlist[]): Playlist[] {
-  const next = sortNewest(list).slice(0, MAX_PLAYLISTS)
-  cached = next
-  try {
-    const path = playlistsPath()
-    mkdirSync(dirname(path), { recursive: true })
-    writeFileSync(path, JSON.stringify(next))
-  } catch (err) {
-    console.error('failed to persist playlists', err)
-  }
-  return next
+  return store.set(sortNewest(list).slice(0, MAX_PLAYLISTS))
 }
 
 /** Trim to the item ceiling — applied on every write path, not just create. */

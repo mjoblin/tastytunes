@@ -1,41 +1,25 @@
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
-import { join, dirname } from 'node:path'
+import { join } from 'node:path'
 import { app } from 'electron'
 import { favoriteKey, type Favorite } from '@shared/ipc'
+import { jsonFileStore } from './jsonStore'
 
 // The local favorites collection (stations, albums, tracks), persisted beside
-// settings.json — the recents.ts pattern. User-curated and unbounded (it's a
-// small JSON of things someone deliberately hearted, not a churning log).
-// Newest-hearted first; identity = favoriteKey (content, not object ids).
+// settings.json. User-curated and unbounded (it's a small JSON of things
+// someone deliberately hearted, not a churning log). Newest-hearted first;
+// identity = favoriteKey (content, not object ids). Load/save (cached,
+// atomic) live in jsonStore; only the domain verbs live here.
 
-let cached: Favorite[] | null = null
-
-function favoritesPath(): string {
-  return join(app.getPath('userData'), 'favorites.json')
-}
+const store = jsonFileStore<Favorite[]>({
+  pathOf: () => join(app.getPath('userData'), 'favorites.json'),
+  scope: 'favorites',
+  load: (parsed) => (Array.isArray(parsed) ? (parsed as Favorite[]) : [])
+})
 
 export function getFavorites(): Favorite[] {
-  if (cached) return cached
-  try {
-    const parsed = JSON.parse(readFileSync(favoritesPath(), 'utf-8'))
-    cached = Array.isArray(parsed) ? (parsed as Favorite[]) : []
-  } catch {
-    cached = []
-  }
-  return cached
+  return store.get()
 }
 
-function save(list: Favorite[]): Favorite[] {
-  cached = list
-  try {
-    const path = favoritesPath()
-    mkdirSync(dirname(path), { recursive: true })
-    writeFileSync(path, JSON.stringify(list))
-  } catch (err) {
-    console.error('failed to persist favorites', err)
-  }
-  return list
-}
+const save = (list: Favorite[]): Favorite[] => store.set(list)
 
 /**
  * Add (or re-add) a favorite: any same-key entry is replaced, and the list

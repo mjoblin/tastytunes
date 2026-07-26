@@ -1,7 +1,8 @@
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
-import { join, dirname } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { app } from 'electron'
 import type { RecentTrack } from '@shared/ipc'
+import { atomicWriteFileSync } from './jsonStore'
 
 // A bounded ring of recently-played tracks, persisted beside settings.json.
 // Kept out of settings.json on purpose: it's a churning log, cleared on its own,
@@ -116,9 +117,10 @@ export function getRecents(): RecentTrack[] {
 function save(list: RecentTrack[]): void {
   cached = list
   try {
-    const path = recentsPath()
-    mkdirSync(dirname(path), { recursive: true })
-    writeFileSync(path, JSON.stringify(list))
+    // atomic (temp + rename): a crash mid-write must not truncate the log.
+    // The load side stays local — its upgrade/collapse pass is domain logic,
+    // not persistence (see jsonStore for the stores that fit the factory).
+    atomicWriteFileSync(recentsPath(), JSON.stringify(list))
   } catch (err) {
     console.error('failed to persist recents', err)
   }

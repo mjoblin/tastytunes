@@ -1,7 +1,8 @@
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
-import { join, dirname } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { app } from 'electron'
 import { DEFAULT_SETTINGS, DISPLAY_FONT_IDS, type AppSettings } from '@shared/ipc'
+import { atomicWriteFileSync } from './jsonStore'
 
 let cached: AppSettings | null = null
 
@@ -33,9 +34,9 @@ export function updateSettings(patch: Partial<AppSettings>): AppSettings {
   const next = { ...getSettings(), ...patch }
   cached = next
   try {
-    const path = settingsPath()
-    mkdirSync(dirname(path), { recursive: true })
-    writeFileSync(path, JSON.stringify(next, null, 2))
+    // atomic (temp + rename) — a crash mid-write must not truncate settings.
+    // Pretty-printed: this is the one file the user might open or diff.
+    atomicWriteFileSync(settingsPath(), JSON.stringify(next, null, 2))
   } catch (err) {
     console.error('failed to persist settings', err)
   }
