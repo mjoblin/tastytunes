@@ -25,7 +25,6 @@ import {
   type Favorite,
   type FavoriteMedia,
   type Playlist,
-  type PlaylistActivation,
   type PlaylistItem
 } from '@shared/ipc'
 import { tt } from '@/api'
@@ -38,6 +37,7 @@ import { RowMenu } from '@/components/RowMenu'
 import { RowHeart } from '@/components/RowHeart'
 import { AddToPlaylistPanel } from '@/components/AddToPlaylistPanel'
 import { toggleFavorite } from '@/lib/favorites'
+import { activatePlaylist } from '@/lib/playlists'
 import { OrderHandle } from '@/components/OrderHandle'
 import { ArtImage } from '@/components/ArtImage'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
@@ -186,35 +186,10 @@ export function PlaylistsScreen(): React.JSX.Element {
 
   const running = activation && !activation.finished
 
-  /**
-   * Activating replaces the QUEUE — an effect you can't see from this screen —
-   * so the outcome is a toast, which is what the app's doctrine reserves them
-   * for. The per-track detail isn't repeated here: a playlist keeps its own
-   * "couldn't find these" line afterwards, which outlives any toast.
-   */
-  const activate = async (p: Playlist): Promise<void> => {
-    let res: PlaylistActivation
-    try {
-      res = await tt.playlistActivate(p.id)
-    } catch {
-      // Rejections (not connected, a run already going, a mid-run network
-      // failure) don't ride the command() path, so its central failure toast
-      // never sees them — this catch is that toast's stand-in. Silence here
-      // was the alternative, and a Play button that does nothing is worse.
-      showToast({ kind: 'error', text: `Couldn't load “${p.name}”` })
-      return
-    }
-    const missed = res.missed.length
-    showToast({
-      kind: res.added > 0 ? 'success' : 'error',
-      text: res.cancelled
-        ? `Stopped — ${res.added} of ${res.total} loaded`
-        : missed > 0
-          ? `Loaded ${res.added} of ${res.total} — ${missed} not found`
-          : `Loaded ${res.added} ${res.added === 1 ? 'track' : 'tracks'} from “${p.name}”`,
-      action: { label: 'Open Queue', screen: 'queue' }
-    })
-  }
+  // Activation reporting lives in lib/playlists (activatePlaylist), shared
+  // with unified search. The per-track detail isn't repeated in its toast: a
+  // playlist keeps its own "couldn't find these" line afterwards, which
+  // outlives any toast.
 
   return (
     <div className="h-full flex flex-col">
@@ -335,7 +310,9 @@ export function PlaylistsScreen(): React.JSX.Element {
                     the whole list down and back up again. Clicking mid-run
                     cancels, so one control owns the whole interaction. */}
                 <button
-                  onClick={() => (mine ? void tt.playlistActivateCancel() : void activate(selected))}
+                  onClick={() =>
+                    mine ? void tt.playlistActivateCancel() : void activatePlaylist(selected)
+                  }
                   disabled={(!!running && !mine) || selected.items.length === 0}
                   data-tip={
                     mine
