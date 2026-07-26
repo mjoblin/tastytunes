@@ -1172,6 +1172,13 @@ export interface AppSettings {
   lbToken: string
   /** Artist bio panel on Now Playing (MusicBrainz + Wikipedia, on demand). */
   artistInfo: boolean
+  /**
+   * Look stations up in the radio-browser.info directory. OFF means the app
+   * never contacts it — not from the Radio screen, not from unified search,
+   * not from an agent. Favorited stations still play: a favorite carries its
+   * own stream URL and needs no directory at all.
+   */
+  radioDirectory: boolean
   /** Scheduled actions (alarms) — fire only while the app is running. */
   schedules: Schedule[]
   /**
@@ -1262,6 +1269,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   lbEnabled: false,
   lbToken: '',
   artistInfo: true,
+  radioDirectory: true,
   schedules: [],
   presetVolumes: {},
   queueSignatures: {},

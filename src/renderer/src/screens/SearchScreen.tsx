@@ -3,6 +3,7 @@ import { Disc3, ListOrdered, Music, Play, Radio, Search, UserRound, X } from 'lu
 import type { Favorite, FavoriteMedia, MediaNode, RadioStation } from '@shared/ipc'
 import { favoriteKey } from '@shared/ipc'
 import { mediaKind, type MediaKind } from '@/lib/media'
+import { sanitizeNavHidden } from '@/lib/screens'
 import { tt } from '@/api'
 import { useStore, type Screen } from '@/store'
 import { EmptyState } from '@/components/EmptyState'
@@ -26,6 +27,9 @@ const GROUP_CAP = 6
 const ISOLATED_CAP = 50
 
 type CategoryId = 'library' | 'favorites' | 'playlists' | 'presets' | 'radio'
+/** Every category id is also a nav screen id — that 1:1 is what lets the rail
+ *  seed the search rail (see hiddenSeeded). */
+const CATEGORY_IDS: CategoryId[] = ['library', 'favorites', 'playlists', 'presets', 'radio']
 
 /**
  * Only two sorts GENERALIZE across five heterogeneous groups.
@@ -50,6 +54,15 @@ const SEARCH_SORTS: Array<{ value: 'relevance' | 'name'; label: string; noRevers
 let lastQuery = ''
 /** Hidden categories, and the sort — session-only like the query above. */
 let lastHidden = new Set<CategoryId>()
+/**
+ * Seeded ONCE per session from navHidden. A row you've hidden from the rail is
+ * a row you've said you don't use, so search starts without it — but only as a
+ * DEFAULT: the chip is still there, still counted, one click from coming back.
+ * `navHidden` has never meant "disabled" (a hidden screen keeps its shortcut,
+ * its palette entry and its Go-menu item) and this doesn't change that.
+ * Changing the setting mid-session won't re-seed; the chips are the live control.
+ */
+let hiddenSeeded = false
 let lastSort: 'relevance' | 'name' = 'relevance'
 let lastSortReversed = false
 
@@ -79,7 +92,17 @@ let lastSortReversed = false
  */
 export function SearchScreen(): React.JSX.Element {
   const [query, setQuery] = useState(lastQuery)
-  const [hidden, setHidden] = useState<Set<CategoryId>>(lastHidden)
+  const navHidden = useStore((s) => s.settings.navHidden)
+  const [hidden, setHidden] = useState<Set<CategoryId>>(() => {
+    if (!hiddenSeeded) {
+      hiddenSeeded = true
+      const ids = new Set<string>(CATEGORY_IDS)
+      lastHidden = new Set(
+        sanitizeNavHidden(navHidden).filter((id): id is CategoryId => ids.has(id))
+      )
+    }
+    return lastHidden
+  })
   const [sort, setSort] = useState(lastSort)
   const [sortReversed, setSortReversed] = useState(lastSortReversed)
   const [libKind, setLibKind] = useState<'all' | 'artists' | 'albums' | 'tracks'>('all')
@@ -95,6 +118,10 @@ export function SearchScreen(): React.JSX.Element {
   const setScreenFilter = useStore((s) => s.setScreenFilter)
   const showToast = useStore((s) => s.showToast)
   const connected = connection.phase === 'connected'
+  // OFF is absolute — the category isn't offered at all, so there is no chip to
+  // switch back on and no way to reach the directory from here. HIDDEN is the
+  // softer state above it: offered, off by default, one click away.
+  const radioDirectory = useStore((s) => s.settings.radioDirectory)
 
   useEffect(() => {
     lastQuery = query
@@ -192,7 +219,7 @@ export function SearchScreen(): React.JSX.Element {
     // requests — hiding the group while still querying every keystroke would
     // break that quietly. There is no separate "disable radio" setting; this
     // chip is it, and it persists for the session like the rest of the rail.
-    if (hidden.has('radio') || q.length < MIN_RADIO_CHARS) {
+    if (!radioDirectory || hidden.has('radio') || q.length < MIN_RADIO_CHARS) {
       radioSeq.current++
       setRadio(null)
       setRadioPending(false)
@@ -216,7 +243,7 @@ export function SearchScreen(): React.JSX.Element {
       }
     }, RADIO_DEBOUNCE_MS)
     return () => clearTimeout(t)
-  }, [q, hidden])
+  }, [q, hidden, radioDirectory])
 
   // ---- actions. Every one delegates to the same helper its own screen uses.
 
@@ -449,45 +476,53 @@ export function SearchScreen(): React.JSX.Element {
           />
         )
       }))
-    },
-    {
-      id: 'radio',
-      label: 'Internet radio',
-      total: radio?.length ?? 0,
-      pending: radioPending,
-      // Hidden and never asked: we don't KNOW the count, and printing 0 would
-      // claim we looked. The chip stays live so it can be switched back on.
-      unknown: hidden.has('radio') && radio === null,
-      rows: (radio ?? []).map((st) => ({
-        key: st.uuid,
-        sortKey: st.name,
-        node: (
-          <StationRow
-            station={st}
-            playing={false}
-            tuning={false}
-            favorited={favStationUrls.has(st.url)}
-            onHeart={() =>
-              void toggleFavorite({
-                kind: 'station',
-                name: st.name,
-                url: st.url,
-                favicon: st.favicon,
-                radioBrowserUuid: st.uuid !== st.url ? st.uuid : null
-              })
-            }
-            onPlay={() => void playStation(st)}
-            // Save-to-preset belongs to the Radio screen, where the station is
-            // playing and the panel has room; the row only offers it there.
-            onSave={() => {}}
-          />
-        )
-      }))
     }
   ]
 
+  // The directory setting decides whether this category EXISTS. Pushed after
+  // the literal rather than filtered out of it, so "off" leaves no chip, no
+  // count and no way to reach radio-browser from this screen at all.
+  if (radioDirectory) {
+    cats.push(
+      {
+        id: 'radio',
+        label: 'Internet radio',
+        total: radio?.length ?? 0,
+        pending: radioPending,
+        // Hidden and never asked: we don't KNOW the count, and printing 0 would
+        // claim we looked. The chip stays live so it can be switched back on.
+        unknown: hidden.has('radio') && radio === null,
+        rows: (radio ?? []).map((st) => ({
+          key: st.uuid,
+          sortKey: st.name,
+          node: (
+            <StationRow
+              station={st}
+              playing={false}
+              tuning={false}
+              favorited={favStationUrls.has(st.url)}
+              onHeart={() =>
+                void toggleFavorite({
+                  kind: 'station',
+                  name: st.name,
+                  url: st.url,
+                  favicon: st.favicon,
+                  radioBrowserUuid: st.uuid !== st.url ? st.uuid : null
+                })
+              }
+              onPlay={() => void playStation(st)}
+              // Save-to-preset belongs to the Radio screen, where the station is
+              // playing and the panel has room; the row only offers it there.
+              onSave={() => {}}
+            />
+          )
+        }))
+      }
+    )
+  }
+
   // An empty category is never "shown" — it has nothing to show, and counting
-  // it would make isolation arithmetic wrong (five chips, one result set).
+  // it would make the isolation arithmetic wrong (chips vs one result set).
   const shownCats = cats.filter((c) => !hidden.has(c.id) && (c.total > 0 || c.pending))
   // ISOLATED = you've narrowed to one category, so it owns the screen and can
   // show far more of itself than it could as one group among five.

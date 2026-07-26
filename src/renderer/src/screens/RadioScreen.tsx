@@ -87,6 +87,8 @@ export function RadioScreen(): React.JSX.Element {
   const [results, setResults] = useState<RadioStation[] | null>(lastQuery ? lastResults : null)
   const [searching, setSearching] = useState(false)
   const [topFailed, setTopFailed] = useState(false)
+  const radioDirectory = useStore((s) => s.settings.radioDirectory)
+  const jumpToSettingsTab = useStore((s) => s.jumpToSettingsTab)
   const [cat, setCat] = useState<string | null>(lastCat)
   const [catStations, setCatStations] = useState<RadioStation[] | null>(
     lastCat ? (catCache.get(lastCat) ?? null) : null
@@ -305,7 +307,23 @@ export function RadioScreen(): React.JSX.Element {
         ))}
       </div>
 
-      {shown == null ? (
+      {/* Directory OFF: say so plainly rather than showing an empty screen that
+          looks broken. Favorites still work — a favorited station carries its
+          own stream URL and never needed the directory. */}
+      {!radioDirectory && cat == null ? (
+        <EmptyState
+          icon={RadioTower}
+          title="Station lookups are off"
+          caption="TastyTunes isn't contacting the radio directory. Your favorited stations still play — turn lookups back on in Settings to search for new ones."
+        >
+          <button
+            onClick={() => jumpToSettingsTab('behavior')}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-[12.5px] text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 transition-all"
+          >
+            Open Settings
+          </button>
+        </EmptyState>
+      ) : shown == null ? (
         topFailed && cat == null ? (
           <EmptyState
             icon={RadioTower}

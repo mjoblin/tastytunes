@@ -11,6 +11,7 @@ import { version } from '../../package.json'
 import type { RadioStation } from '@shared/ipc'
 import { REPO_URL } from '@shared/ipc'
 import { loggedFetch } from './netlog'
+import { getSettings } from './persist'
 
 // TASTYTUNES_RADIO_URL lets test harnesses point lookups at a local server.
 // all.api.radio-browser.info is the project's round-robin DNS over its
@@ -49,7 +50,18 @@ function toStation(s: ApiStation): RadioStation | null {
   }
 }
 
+/**
+ * THE gate for every outbound directory call. Placed at the source rather than
+ * at each caller so "off means no requests, ever" holds by construction — the
+ * Radio screen, unified search and the MCP search_radio tool all funnel here,
+ * and a future caller inherits the promise without knowing about it.
+ */
+function directoryAllowed(): boolean {
+  return getSettings().radioDirectory !== false
+}
+
 async function fetchRaw(path: string): Promise<ApiStation[]> {
+  if (!directoryAllowed()) return []
   try {
     const res = await loggedFetch('radio-browser', `${BASE}${path}`, {
       headers: { 'user-agent': USER_AGENT, accept: 'application/json' },

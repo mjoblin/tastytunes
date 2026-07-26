@@ -401,6 +401,13 @@ export function SettingsScreen(): React.JSX.Element {
               onChange={(artistInfo) => void save({ artistInfo })}
             />
 
+            <Toggle
+              label="Internet radio directory"
+              hint="Finds stations through radio-browser.info — the Radio screen's search and top lists, and the radio results in unified search. Sends what you type; off means no requests, ever. Favorited stations still play either way: a favorite carries its own stream URL."
+              checked={settings.radioDirectory}
+              onChange={(radioDirectory) => void save({ radioDirectory })}
+            />
+
             <ListenBrainzSection settings={settings} save={save} />
 
             <CacheRow />
