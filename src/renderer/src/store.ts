@@ -228,16 +228,21 @@ interface TTState {
    * clears the ask (see clearLibrarySearchTarget), which is what keeps a stale
    * ask from re-firing on a later mount.
    */
-  librarySearchTarget: { id: number } | null
-  requestLibrarySearch(): void
+  librarySearchTarget: { id: number; query?: string } | null
+  /** `query` seeds the search box (the Search→Library handoff: "See all N in
+   *  the Library" brings the unified query along). Without it, ⌘F semantics —
+   *  find-recall brings back the last search. */
+  requestLibrarySearch(query?: string): void
   clearLibrarySearchTarget(): void
   /**
    * One-shot ask: open the unified Search screen with its input focused.
    * Same id-and-clear contract as librarySearchTarget — a request made before
    * the screen mounts still lands, and it can't re-fire on a later mount.
+   * `query` seeds the box (the Library→Search pivot: "Search everywhere for
+   * <artist>"); without it the recalled query is merely selected.
    */
-  searchRequest: { id: number } | null
-  requestSearch(): void
+  searchRequest: { id: number; query?: string } | null
+  requestSearch(query?: string): void
   clearSearchRequest(): void
   /** One-shot ask: open Playlists with this playlist selected (search results
    *  OPEN a playlist rather than playing it — containers open, leaves play). */
@@ -340,13 +345,14 @@ export const useStore = create<TTState>((set, get) => ({
   },
   clearSettingsJump: () => set({ settingsJump: null }),
   librarySearchTarget: null,
-  requestLibrarySearch: () =>
+  requestLibrarySearch: (query) =>
     // Deliberately NOT setScreen('library'): from inside the Library that's the
     // front door, and a ⌘F shouldn't throw away where you were browsing.
-    set({ screen: 'library', librarySearchTarget: { id: ++librarySearchSeq } }),
+    set({ screen: 'library', librarySearchTarget: { id: ++librarySearchSeq, query } }),
   clearLibrarySearchTarget: () => set({ librarySearchTarget: null }),
   searchRequest: null,
-  requestSearch: () => set({ screen: 'search', searchRequest: { id: ++searchSeq } }),
+  requestSearch: (query) =>
+    set({ screen: 'search', searchRequest: { id: ++searchSeq, query } }),
   clearSearchRequest: () => set({ searchRequest: null }),
   playlistsJump: null,
   jumpToPlaylist: (id) => set({ screen: 'playlists', playlistsJump: id }),

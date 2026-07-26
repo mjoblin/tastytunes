@@ -33,6 +33,7 @@ import type { QueueListItem } from '@shared/smoip'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { activeSourceId, cx, fmtTime, matchesFilter } from '@/lib/format'
+import { MOD } from '@/lib/screens'
 import { flashTarget } from '@/lib/scroll'
 import { mediaKind, isAlbumClass, stripFurniture } from '@/lib/media'
 import { toggleFavorite } from '@/lib/favorites'
@@ -163,6 +164,7 @@ export function LibraryScreen(): React.JSX.Element {
   const filter = useStore((s) => s.screenFilters.library)
   const setScreenFilter = useStore((s) => s.setScreenFilter)
   const setScreen = useStore((s) => s.setScreen)
+  const requestSearch = useStore((s) => s.requestSearch)
   const playState = useStore((s) => s.playState)
   const nowPlaying = useStore((s) => s.nowPlaying)
   const zoneState = useStore((s) => s.zoneState)
@@ -563,6 +565,11 @@ export function LibraryScreen(): React.JSX.Element {
     if (searchReqDone.current === librarySearchTarget.id) return
     if (!servers) return // listing still loading; rerun when it lands
     searchReqDone.current = librarySearchTarget.id
+    // A SEEDED ask (the Search→Library handoff: "See all N in the Library")
+    // brings the unified query along and skips find-recall below — restoring
+    // yesterday's search over an explicit ask would answer a question nobody
+    // asked.
+    const seeded = librarySearchTarget.query?.trim() || null
     clearLibrarySearchTarget()
     const ready = new Set(
       useStore
@@ -574,7 +581,7 @@ export function LibraryScreen(): React.JSX.Element {
     // Find-recall first: ⌘F brings back the session's last search wholesale
     // (scope included) when that scope is still eligible; an ineligible or
     // absent memory falls through to the fresh-search picks below.
-    const mem = searchMemory
+    const mem = seeded == null ? searchMemory : null
     if (mem?.query.trim()) {
       const memServer = mem.udn ? servers.find((x) => x.udn === mem.udn) : undefined
       const memEligible = mem.udn === null ? ready.size >= 2 : memServer != null && eligible(memServer)
@@ -591,17 +598,20 @@ export function LibraryScreen(): React.JSX.Element {
     if (ready.size >= 2) {
       moveTo(null, [])
       setSearchMode(true)
+      if (seeded != null) setSearchQuery(seeded)
       return
     }
     const current = servers.find((x) => x.udn === serverUdn)
     if (current && eligible(current)) {
       setSearchMode(true)
+      if (seeded != null) setSearchQuery(seeded)
       return
     }
     const target = servers.find(eligible)
     if (!target) return
     moveTo(target.udn, [])
     setSearchMode(true)
+    if (seeded != null) setSearchQuery(seeded)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [librarySearchTarget, servers, serverUdn])
 
@@ -1353,13 +1363,15 @@ export function LibraryScreen(): React.JSX.Element {
             <button
               data-library-search-all-button
               aria-disabled={!crossAvailable}
-              data-tip={crossAvailable ? undefined : 'Building library indexes…'}
+              // the shortcut in the tip: ⌘F is contextual (the library's own
+              // search HERE, unified Search elsewhere) and nothing else says so
+              data-tip={crossAvailable ? `${MOD}F` : 'Building library indexes…'}
               onClick={() => crossAvailable && setSearchMode(true)}
               className={cx(
-                'no-drag flex items-center gap-2 px-3.5 h-8 rounded-lg text-[12.5px] font-medium transition-all',
+                'no-drag tip-bottom tip-end flex items-center gap-2 px-3.5 h-8 rounded-lg text-[12.5px] font-medium transition-all',
                 crossAvailable
                   ? 'bg-gold text-bg shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.3)] hover:brightness-110 motion-safe:active:scale-95'
-                  : 'tip-bottom tip-end bg-veil2 text-faint cursor-default'
+                  : 'bg-veil2 text-faint cursor-default'
               )}
             >
               <Search size={14} strokeWidth={2.2} />
@@ -1370,8 +1382,9 @@ export function LibraryScreen(): React.JSX.Element {
           {!searchMode && !atRoot && (server?.searchable || serverIndex?.state === 'ready') && (
             <button
               data-library-search-button
+              data-tip={`${MOD}F`}
               onClick={() => setSearchMode(true)}
-              className="no-drag flex items-center gap-2 px-3.5 h-8 rounded-lg bg-gold text-bg text-[12.5px] font-medium
+              className="no-drag tip-bottom tip-end flex items-center gap-2 px-3.5 h-8 rounded-lg bg-gold text-bg text-[12.5px] font-medium
                          shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.3)] hover:brightness-110 motion-safe:active:scale-95 transition-all"
             >
               <Search size={14} strokeWidth={2.2} />
@@ -2095,6 +2108,25 @@ export function LibraryScreen(): React.JSX.Element {
                 }
               : undefined
           }
+          // The cross-collection pivot: artists pivot on their own name,
+          // albums and tracks on their artist (that's the "what ELSE do I
+          // have of this?" question) with the title as fallback. Plain
+          // folders are filing, not entities — no pivot.
+          searchEverywhere={(() => {
+            const kind = mediaKind(menu.node.upnpClass, menu.node.isContainer)
+            if (menu.node.isContainer && kind === 'album' && !isAlbumClass(menu.node.upnpClass))
+              return undefined // the classifier's unfiled-container fallback — a folder
+            const entity =
+              kind === 'artist' ? menu.node.title : (menu.node.artist ?? menu.node.title)
+            if (!entity.trim()) return undefined
+            return {
+              entity,
+              run: () => {
+                setMenu(null)
+                requestSearch(entity)
+              }
+            }
+          })()}
           // Albums and tracks are heartable; plain folders and artists aren't.
           favorite={
             !menu.node.isContainer || isAlbumClass(menu.node.upnpClass)

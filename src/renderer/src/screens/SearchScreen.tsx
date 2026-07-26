@@ -115,6 +115,8 @@ export function SearchScreen(): React.JSX.Element {
   const presets = useStore((s) => s.presets?.presets ?? null)
   const connection = useStore((s) => s.connection)
   const openInLibrary = useStore((s) => s.openInLibrary)
+  const requestLibrarySearch = useStore((s) => s.requestLibrarySearch)
+  const mediaIndex = useStore((s) => s.mediaIndex)
   const jumpToPlaylist = useStore((s) => s.jumpToPlaylist)
   const setScreen = useStore((s) => s.setScreen)
   const setScreenFilter = useStore((s) => s.setScreenFilter)
@@ -141,6 +143,10 @@ export function SearchScreen(): React.JSX.Element {
     const asked = searchRequest != null && doneReq.current !== searchRequest.id
     if (searchRequest) {
       doneReq.current = searchRequest.id
+      // A seeded ask (the Library→Search pivot: "Search everywhere for X")
+      // replaces the recalled query. Chips stay as they are — the point of a
+      // pivot is seeing which collections answer, so nothing gets hidden.
+      if (asked && searchRequest.query != null) setQuery(searchRequest.query)
       clearSearchRequest()
     }
     // FOCUS ON THE NEXT FRAME, never synchronously in the effect. Arriving here
@@ -333,6 +339,12 @@ export function SearchScreen(): React.JSX.Element {
     () => new Set(favorites.filter((f) => f.kind === 'station').map((f) => (f as { url: string }).url)),
     [favorites]
   )
+
+  // The library group answers from the INDEXES only; a server that isn't
+  // indexed (yet, or ever) is invisible here while the Library's own search
+  // still reaches it live. Silent disagreement between the two searches is
+  // what erodes trust — so when that gap exists, this screen says so.
+  const libUnindexed = useMemo(() => mediaIndex.filter((x) => x.state !== 'ready'), [mediaIndex])
 
   // Station rows light up like the Radio screen's — same audible-name match,
   // same tuning-in window, from the same shared helpers, so the row for a
@@ -678,7 +690,7 @@ export function SearchScreen(): React.JSX.Element {
             <EmptyState
               icon={Search}
               title="Search everything"
-              caption="Your library, favorites, playlists, presets and internet radio — all at once. Press S from anywhere, or ⌘F outside the Library."
+              caption="Your library, favorites, playlists, presets and internet radio — all at once. Press S from anywhere, or ⇧⌘F even inside the Library (whose own ⌘F search digs deeper there)."
             />
           </div>
         ) : (
@@ -732,6 +744,20 @@ export function SearchScreen(): React.JSX.Element {
                           >
                             See all {c.total} in {c.label} →
                           </button>
+                        ) : c.id === 'library' ? (
+                          // The library's deeper tool IS its own search —
+                          // complete results, four sorts, live reach into
+                          // unindexed servers. Handing the query over (rather
+                          // than dead-ending at "narrow the search") is what
+                          // teaches the two-tier model: Search skims, the
+                          // Library digs.
+                          <button
+                            data-search-more={c.id}
+                            onClick={() => requestLibrarySearch(q)}
+                            className="text-[11.5px] text-amber hover:brightness-110 transition-all"
+                          >
+                            See all {c.total} in the Library →
+                          </button>
                         ) : (
                           <span className="text-[11.5px] text-faint">
                             +{more} more — narrow the search
@@ -783,6 +809,26 @@ export function SearchScreen(): React.JSX.Element {
                 </section>
               )
             })}
+
+            {/* The coverage confession — deliberately OUTSIDE the sections, so
+                it still shows when the library group found nothing precisely
+                BECAUSE the content lives on an unindexed server. */}
+            {libUnindexed.length > 0 && !hidden.has('library') && (
+              <div data-search-unindexed className="flex items-baseline gap-2 text-[12px] text-faint">
+                <span className="min-w-0">
+                  {libUnindexed.length === 1
+                    ? `${libUnindexed[0].serverName} isn't in the search index`
+                    : `${libUnindexed.length} media servers aren't in the search index`}
+                  {' — the Library’s own search reaches unindexed servers live.'}
+                </span>
+                <button
+                  onClick={() => requestLibrarySearch(q)}
+                  className="shrink-0 text-amber hover:brightness-110 transition-all"
+                >
+                  Search the Library →
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
