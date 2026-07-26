@@ -18,13 +18,7 @@ import { join } from 'node:path'
 import { app } from 'electron'
 import { getSettings } from './persist'
 import { atomicWriteFileSync } from './jsonStore'
-import type {
-  MediaIndexPools,
-  MediaIndexStatus,
-  MediaNode,
-  MediaSearchAllGroup,
-  MediaServerInfo
-} from '@shared/ipc'
+import type { MediaIndexPools, MediaIndexStatus, MediaNode, MediaSearchAllGroup, MediaServerInfo } from '@shared/model'
 import {
   browseChildrenOf,
   getSystemUpdateID,

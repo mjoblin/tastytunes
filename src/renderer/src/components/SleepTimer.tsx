@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Moon } from 'lucide-react'
-import { sleepTrackKey, type SleepAction } from '@shared/ipc'
+import { sleepTrackKey, type SleepAction } from '@shared/model'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { cx, deriveNowPlaying, fmtTime } from '@/lib/format'

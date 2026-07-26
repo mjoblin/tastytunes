@@ -13,16 +13,8 @@ import { networkInterfaces } from 'node:os'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { z, type ZodRawShape } from 'zod'
-import {
-  sleepTrackKey,
-  type AppSettings,
-  type ConnectionState,
-  type McpSettings,
-  type MediaNode,
-  type MediaQueueAction,
-  type Schedule,
-  type Snapshot
-} from '@shared/ipc'
+import { type Snapshot } from '@shared/ipc'
+import { sleepTrackKey, type AppSettings, type ConnectionState, type McpSettings, type MediaNode, type MediaQueueAction, type Schedule } from '@shared/model'
 import { favoriteKey, type Favorite } from '@shared/model'
 import { MCP_CLUSTERS, mcpClusterEnabled } from '@shared/mcpCatalog'
 import { EQ_GAIN_MAX, EQ_GAIN_MIN, audioCaps, brightnessOptions, isRadioMetadata } from '@shared/smoip'

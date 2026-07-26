@@ -3,7 +3,7 @@
 // alarms fire only while the app is running — the UI says so. A schedule that
 // matches while the streamer is disconnected retries on later ticks within
 // its minute (device may reconnect mid-minute) but is never fired late.
-import type { Schedule } from '@shared/ipc'
+import type { Schedule } from '@shared/model'
 import type { DeviceManager } from './deviceManager'
 import { getSettings } from './persist'
 

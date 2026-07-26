@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Disc3, ExternalLink, RotateCw, UserRound, X } from 'lucide-react'
-import type { AlbumInfo, ArtistInfo } from '@shared/ipc'
+import type { AlbumInfo, ArtistInfo } from '@shared/model'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { deriveNowPlaying } from '@/lib/format'

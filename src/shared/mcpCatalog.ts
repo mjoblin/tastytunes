@@ -10,7 +10,7 @@
 // tools change saved things gets `optIn: true` and stays off until the user
 // says otherwise.
 
-import type { McpSettings } from './ipc'
+import type { McpSettings } from './model'
 
 export interface McpToolInfo {
   name: string

@@ -27,7 +27,7 @@ import {
   Volume2
 } from 'lucide-react'
 import { isPreAmpMode, queueContentHash, type PresetItem } from '@shared/smoip'
-import { presetVolumeKey, type ScreenLayout } from '@shared/ipc'
+import { presetVolumeKey, type ScreenLayout } from '@shared/model'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { Eqbars } from '@/components/Eqbars'

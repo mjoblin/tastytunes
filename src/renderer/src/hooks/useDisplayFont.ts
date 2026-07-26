@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import type { DisplayFont } from '@shared/ipc'
+import type { DisplayFont } from '@shared/model'
 
 /**
  * The curated display faces. Every face ships in the bundle (fontsource

@@ -5,7 +5,7 @@
 // including DEFINITIVE misses; transient failures return the best partial
 // answer but are never cached, so the next request retries. `force` bypasses
 // the cache read for the panel's refresh.
-import type { AlbumInfo } from '@shared/ipc'
+import type { AlbumInfo } from '@shared/model'
 import { DiskCache } from './diskCache'
 import { MB, mbFetch, wikipediaFromRels, type MbRelation } from './mb'
 

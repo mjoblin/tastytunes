@@ -1,20 +1,6 @@
 import { create } from 'zustand'
-import type {
-  AppSettings,
-  ConnectionState,
-  DiscoveredDevice,
-  FirmwareStatus,
-  FrameEntry,
-  LogEntry,
-  McpStatus,
-  MediaIndexStatus,
-  MenuCommand,
-  NetRequestEntry,
-  PushMessage,
-  UpdateState,
-  SleepTimer,
-  Snapshot
-} from '@shared/ipc'
+import type { MenuCommand, PushMessage, Snapshot } from '@shared/ipc'
+import type { AppSettings, ConnectionState, DiscoveredDevice, FirmwareStatus, FrameEntry, LogEntry, McpStatus, MediaIndexStatus, NetRequestEntry, UpdateState, SleepTimer } from '@shared/model'
 import type { Favorite, RecentTrack, Playlist, PlaylistActivation } from '@shared/model'
 import type {
   Presets,
@@ -32,7 +18,7 @@ import type {
   ZonePlayState,
   ZoneState
 } from '@shared/smoip'
-import { DEFAULT_SETTINGS } from '@shared/ipc'
+import { DEFAULT_SETTINGS } from '@shared/model'
 import { tt } from './api'
 
 export type Screen =

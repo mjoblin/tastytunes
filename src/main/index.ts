@@ -1,14 +1,7 @@
 import { app, BrowserWindow, globalShortcut, ipcMain, powerMonitor, screen, shell } from 'electron'
 import { join } from 'node:path'
-import {
-  IPC,
-  type AppSettings,
-  type LyricsQuery,
-  type MediaQueueAction,
-  type MenuCommand,
-  type SleepTimer,
-  type StreamerCommand
-} from '@shared/ipc'
+import { IPC, type MenuCommand, type StreamerCommand } from '@shared/ipc'
+import { type AppSettings, type LyricsQuery, type MediaQueueAction, type SleepTimer } from '@shared/model'
 import {
   type ContentRef,
   type Playlist,

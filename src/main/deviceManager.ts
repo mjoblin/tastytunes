@@ -2,21 +2,8 @@
 // to renderer windows. Mirrors PunyTunes' StreamMagicManager, translated to Node.
 
 import { BrowserWindow, Notification, nativeImage, webContents } from 'electron'
-import {
-  presetVolumeKey,
-  sleepTrackKey,
-  type ConnectionState,
-  type DiscoveredDevice,
-  type FirmwareStatus,
-  type FrameEntry,
-  type LogEntry,
-  type McpStatus,
-  type MediaIndexStatus,
-  type PushMessage,
-  type SleepTimer,
-  type Snapshot,
-  type StreamerCommand
-} from '@shared/ipc'
+import { type PushMessage, type Snapshot, type StreamerCommand } from '@shared/ipc'
+import { presetVolumeKey, sleepTrackKey, type ConnectionState, type DiscoveredDevice, type FirmwareStatus, type FrameEntry, type LogEntry, type McpStatus, type MediaIndexStatus, type SleepTimer } from '@shared/model'
 import {
   type ContentRef,
   type Playlist,

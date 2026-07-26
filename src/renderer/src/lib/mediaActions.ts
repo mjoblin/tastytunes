@@ -1,4 +1,4 @@
-import { presetVolumeKey } from '@shared/ipc'
+import { presetVolumeKey } from '@shared/model'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { refToContentRef, type MediaRef } from '@/lib/mediaRef'

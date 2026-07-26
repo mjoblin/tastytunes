@@ -1,14 +1,6 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
-import {
-  IPC,
-  type AppSettings,
-  type LyricsQuery,
-  type MediaQueueAction,
-  type PushMessage,
-  type SleepTimer,
-  type StreamerCommand,
-  type TastyTunesApi
-} from '@shared/ipc'
+import { IPC, type PushMessage, type StreamerCommand, type TastyTunesApi } from '@shared/ipc'
+import { type AppSettings, type LyricsQuery, type MediaQueueAction, type SleepTimer } from '@shared/model'
 import {
   type ContentRef,
   type Favorite,

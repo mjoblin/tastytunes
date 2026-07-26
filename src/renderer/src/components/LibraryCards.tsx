@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import { Disc3, Folder, Heart, MoreHorizontal, Play } from 'lucide-react'
-import type { MediaNode } from '@shared/ipc'
+import type { MediaNode } from '@shared/model'
 import { cx } from '@/lib/format'
 import { isAlbumClass, isArtistClass, isMutedArt } from '@/lib/media'
 import { RowAction } from '@/components/RowAction'

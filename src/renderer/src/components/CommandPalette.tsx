@@ -35,7 +35,7 @@ import {
   Volume2,
   VolumeX
 } from 'lucide-react'
-import { sleepTrackKey, type SleepAction } from '@shared/ipc'
+import { sleepTrackKey, type SleepAction } from '@shared/model'
 import { favoriteKey, type Favorite } from '@shared/model'
 import { audioCaps, brightnessOptions } from '@shared/smoip'
 import { toggleFavorite } from '@/lib/favorites'

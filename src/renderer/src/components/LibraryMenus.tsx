@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { MediaNode, MediaQueueAction } from '@shared/ipc'
+import type { MediaNode, MediaQueueAction } from '@shared/model'
 import { useStore } from '@/store'
 import { cx } from '@/lib/format'
 import { isAlbumClass, isArtistClass } from '@/lib/media'

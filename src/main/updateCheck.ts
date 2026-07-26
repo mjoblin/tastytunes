@@ -1,7 +1,8 @@
 // Version from package.json, not app.getVersion(): under a dev harness that
 // launches Electron with a bare file path, getVersion() is Electron's own.
 import { version as appVersion } from '../../package.json'
-import { REPO_URL, type UpdateCheckResult, type UpdateInfo } from '@shared/ipc'
+import { REPO_URL } from '@shared/ipc'
+import { type UpdateCheckResult, type UpdateInfo } from '@shared/model'
 import { getSettings } from './persist'
 import { loggedFetch } from './netlog'
 

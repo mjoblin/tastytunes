@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { LyricsResult } from '@shared/ipc'
+import type { LyricsResult } from '@shared/model'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { deriveNowPlaying } from '@/lib/format'

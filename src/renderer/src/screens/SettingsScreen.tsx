@@ -25,19 +25,7 @@ import {
   Trash2
 } from 'lucide-react'
 import { version } from '../../../../package.json'
-import {
-  type AlignH,
-  type AlignV,
-  type AmbientArtMode,
-  type AmbientCoverage,
-  type AppSettings,
-  type McpBind,
-  type McpSettings,
-  type MotionMode,
-  type Schedule,
-  type ThemePreference,
-  type UpdateCheckResult
-} from '@shared/ipc'
+import { type AlignH, type AlignV, type AmbientArtMode, type AmbientCoverage, type AppSettings, type McpBind, type McpSettings, type MotionMode, type Schedule, type ThemePreference, type UpdateCheckResult } from '@shared/model'
 import { MCP_CLUSTERS, mcpClusterEnabled, type McpClusterInfo } from '@shared/mcpCatalog'
 import { tt } from '@/api'
 import { useStore, type Screen } from '@/store'

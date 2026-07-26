@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { app } from 'electron'
-import { DEFAULT_SETTINGS, DISPLAY_FONT_IDS, type AppSettings } from '@shared/ipc'
+import { DEFAULT_SETTINGS, DISPLAY_FONT_IDS, type AppSettings } from '@shared/model'
 import { atomicWriteFileSync } from './jsonStore'
 
 let cached: AppSettings | null = null

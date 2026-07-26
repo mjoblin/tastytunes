@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import type { MotionMode } from '@shared/ipc'
+import type { MotionMode } from '@shared/model'
 
 /**
  * Resolve settings.motion against the OS Reduce Motion preference and stamp

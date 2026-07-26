@@ -8,7 +8,7 @@
 // it would report listening activity to a third party; revisit only as an
 // opt-in (privacy table in the README is a promise).
 import { version } from '../../package.json'
-import type { RadioStation } from '@shared/ipc'
+import type { RadioStation } from '@shared/model'
 import { REPO_URL } from '@shared/ipc'
 import { loggedFetch } from './netlog'
 import { getSettings } from './persist'

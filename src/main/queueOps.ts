@@ -1,5 +1,6 @@
 import type { ContentRef, PlaylistActivation, QueueRestoreResult } from '@shared/model'
-import type { MediaQueueAction, PushMessage } from '@shared/ipc'
+import type { PushMessage } from '@shared/ipc'
+import type { MediaQueueAction } from '@shared/model'
 import type { QueueList } from '@shared/smoip'
 import type { SmoipSocket } from './smoipSocket'
 import * as smoipHttp from './smoipHttp'

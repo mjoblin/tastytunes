@@ -7,7 +7,7 @@
 // (action=PRESET — preset saves). Streamer-directed SMOIP traffic is
 // unlogged (it has its own console); media-server traffic logs as 'upnp'.
 import { XMLParser } from 'fast-xml-parser'
-import type { MediaNode, MediaQueueAction, MediaServerInfo } from '@shared/ipc'
+import type { MediaNode, MediaQueueAction, MediaServerInfo } from '@shared/model'
 import { loggedFetch } from './netlog'
 
 const PAGE_SIZE = 5000 // the streamer's own server ignores RequestedCount=0

@@ -17,7 +17,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { BookmarkPlus, Crosshair, Disc3, Footprints, LayoutGrid, ListMusic, ListOrdered, MoreHorizontal, Play, Rows3, X } from 'lucide-react'
 import { queueContentHash, type QueueListItem } from '@shared/smoip'
-import { presetVolumeKey, type ScreenLayout } from '@shared/ipc'
+import { presetVolumeKey, type ScreenLayout } from '@shared/model'
 import {
   favoriteKey,
   type ContentRef,

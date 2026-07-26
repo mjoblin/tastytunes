@@ -13,7 +13,7 @@
 // file may read from it (a recent entry is matched against a play_state, a
 // playlist hashes with the same core a live queue does); it never writes to it.
 
-import type { ZonePlayState } from './smoip'
+import type { SmoipFrame, ZonePlayState } from './smoip'
 import { contentRowsHash, isRadioMetadata, radioTrackTitle } from './smoip'
 
 // --------------------------------------------------------------- recently played
@@ -230,4 +230,570 @@ export function playlistContentHash(items: PlaylistItem[]): string {
 export function playlistItemKey(i: PlaylistItem): string {
   const lc = (s: string | null | undefined): string => (s ?? '').trim().toLowerCase()
   return `track:${lc(i.title)}:${lc(i.artist)}:${lc(i.album)}`
+}
+
+// ===========================================================================
+// Second pass (2026-07-26): everything below moved from ipc.ts under the
+// rule stated in this file's header — each of these would still mean
+// something with the IPC layer deleted. Connection and MCP status are
+// runtime DOMAIN state (the manager tracks them regardless of transport);
+// settings are the persisted domain par excellence; the media-browser,
+// radio, schedule, lyrics, artist, sleep, update and diagnostics shapes are
+// what the app reasons about, not how it talks about them.
+// ===========================================================================
+
+// ------------------------------------------------------------------- connection
+
+export type ConnectionState =
+  | { phase: 'idle' }
+  | { phase: 'connecting'; host: string; attempt: number; demo?: boolean }
+  | { phase: 'connected'; host: string; demo?: boolean }
+  | { phase: 'disconnected'; host: string; reason: string; reconnecting: boolean; demo?: boolean }
+
+export interface DiscoveredDevice {
+  host: string
+  friendlyName: string
+  model: string
+  udn: string
+  descriptionUrl: string
+}
+
+// ------------------------------------------------------------------ diagnostics
+
+export interface LogEntry {
+  at: number
+  level: 'info' | 'warn' | 'error'
+  scope: string
+  text: string
+}
+
+export interface FrameEntry {
+  at: number
+  dir: 'in' | 'out'
+  frame: SmoipFrame
+}
+
+/** A newer GitHub release than the running version (stage-1 update awareness). */
+export interface UpdateInfo {
+  /** Bare version, no leading v. */
+  version: string
+  /** Release page to open in the browser. */
+  url: string
+}
+
+/**
+ * The self-update consent flow (Sparkle-style). Nothing downloads or installs
+ * without an explicit user action at each step:
+ * idle → available —[user: Download]→ downloading → downloaded —[user: Restart
+ * now, or silently on next quit]→ installed. `canDownload` is false in
+ * unpackaged/dev builds, where "available" only offers the release page.
+ */
+export interface UpdateState {
+  phase: 'idle' | 'available' | 'downloading' | 'downloaded' | 'error'
+  /** Version on offer (bare, no leading v); null while idle. */
+  version: string | null
+  /** Download progress 0–100 while downloading. */
+  percent: number | null
+  /** In-app download/install possible (packaged build with a release feed). */
+  canDownload: boolean
+  /** Release page — always available as the manual path. */
+  url: string
+  /** Human-readable failure when phase === 'error'. */
+  error: string | null
+}
+
+/**
+ * Outcome of a user-initiated release check (the Updates tab's Check now
+ * button). 'update' also lands through the normal updateState push — the
+ * result exists so the UI can say "nothing new" or show the failure.
+ */
+export type UpdateCheckResult =
+  | { status: 'update'; version: string }
+  | { status: 'none' }
+  | { status: 'error'; error: string }
+
+/**
+ * Streamer FIRMWARE status, camelCased from the read-only /system/update push
+ * (raw SystemUpdate in smoip.ts). Distinct from UpdateState above, which is the
+ * APP's own self-update flow. PASSIVE ONLY — the streamer reports its own
+ * self-check; TastyTunes surfaces it but never triggers a check or an install
+ * (that stays the user's job via the Cambridge Audio app or the streamer's web
+ * admin). There is deliberately no command to change any of this.
+ */
+export interface FirmwareStatus {
+  updateAvailable: boolean
+  updating: boolean
+  earlyUpdate: boolean
+}
+
+// ------------------------------------------------------------ requests console
+
+/** One outbound HTTP request from the main process, for the diagnostics drawer. */
+export interface NetRequestEntry {
+  id: number
+  at: number
+  /** Short service tag: lrclib, musicbrainz, wikidata, wikipedia, listenbrainz, github, art. */
+  service: string
+  method: string
+  url: string
+  /** HTTP status once a response arrived; null while pending. */
+  status: number | null
+  /** Round-trip ms once settled; null while pending. */
+  ms: number | null
+  /** Transport failure — no response at all (DNS, timeout, refused). */
+  error: boolean
+}
+
+// ----------------------------------------------------------- scheduled actions
+
+/**
+ * A BluOS-style alarm, executed by the main process while the app runs:
+ * wake (power ON, optionally recall a preset and set a volume) or standby.
+ */
+export interface Schedule {
+  id: string
+  enabled: boolean
+  /** Local 24h "HH:MM". */
+  time: string
+  /** Days it fires: 0 = Sunday … 6 = Saturday. Empty = never. */
+  days: number[]
+  action: 'on' | 'standby'
+  /** Wake only: preset to recall after powering on. */
+  presetId: number | null
+  /** Wake only: volume to set after the preset settles. */
+  volumePercent: number | null
+}
+
+/** Cache key for a preset volume override — device-scoped so ids don't collide. */
+export function presetVolumeKey(udn: string | null | undefined, presetId: number): string {
+  return `${udn ?? 'device'}|${presetId}`
+}
+
+// ------------------------------------------------------------- artist context
+
+export interface ArtistInfo {
+  /** MusicBrainz's canonical name for the matched artist. */
+  name: string
+  /** Wikipedia summary extract, when the chain resolved one. */
+  summary: string | null
+  wikipediaUrl: string | null
+  musicbrainzUrl: string | null
+}
+
+export interface AlbumInfo {
+  /** MusicBrainz's canonical title for the matched release group. */
+  title: string
+  /** Year of first release, e.g. "2011". */
+  year: string | null
+  /** Release-group primary type, e.g. "Album", "EP". */
+  type: string | null
+  /** Label of the earliest release, when known. */
+  label: string | null
+  /** MusicBrainz genre tags, most-voted first. */
+  genres: string[]
+  /** Release-level relationship credits (producer etc.), when MB has them. */
+  credits: Array<{ role: string; name: string }>
+  /** Wikipedia summary extract, when the chain resolved one. */
+  summary: string | null
+  wikipediaUrl: string | null
+  musicbrainzUrl: string | null
+}
+
+// ------------------------------------------------------------------- lyrics
+
+export interface LyricsQuery {
+  artist: string
+  title: string
+  album: string | null
+  /** Track length in seconds, if known — LRCLIB uses it for exact matching. */
+  duration: number | null
+}
+
+export interface LyricsResult {
+  plain: string | null
+  /** LRC-format synced lyrics ("[mm:ss.xx] line"), when the record has them. */
+  synced: string | null
+  instrumental: boolean
+}
+
+// ------------------------------------------------------------------- MCP server
+
+/** Which interface the MCP server binds to. */
+export type McpBind = 'localhost' | 'lan'
+
+export interface McpSettings {
+  /** Master switch — the server only exists while this is on. */
+  enabled: boolean
+  /** localhost = this computer only; lan = any machine on the network. */
+  bind: McpBind
+  port: number
+  /** Cluster ids switched off (everything is on by default). */
+  disabledClusters: string[]
+  /** Opt-in cluster ids the user explicitly enabled (write-capable clusters
+   *  are OFF until they appear here). */
+  enabledClusters: string[]
+  /** Individual tool names switched off. */
+  disabledTools: string[]
+}
+
+export interface McpStatus {
+  running: boolean
+  /** Reachable endpoint while running, e.g. http://192.168.1.20:8555/mcp. */
+  url: string | null
+  error: string | null
+}
+
+// The CATALOG — MCP_CLUSTERS, McpClusterInfo, McpToolInfo, mcpClusterEnabled —
+// lives in mcpCatalog.ts (2026-07-26). What the server is configured WITH stays
+// here (it is part of AppSettings); what it OFFERS is the catalog's business.
+
+// ------------------------------------------------------------------- sleep timer
+
+/** What the sleep timer does when it expires. */
+export type SleepAction = 'pause' | 'standby'
+
+/**
+ * A live sleep timer. Ephemeral by design — a countdown shouldn't survive a
+ * restart. Owned by the main process (so it outlives the window on macOS);
+ * renderers arm/disarm via setSleep and mirror state from pushes.
+ * `minutes: null` means "end of the current track", in which case `trackKey`
+ * is the armed track's identity and `firesAt` is unused.
+ */
+export interface SleepTimer {
+  action: SleepAction
+  minutes: number | null
+  firesAt: number | null
+  trackKey: string | null
+}
+
+/**
+ * Identity of the currently-playing track, used to detect the boundary for an
+ * "end of track" sleep timer. Queue playback gives a stable per-item id; other
+ * sources (AirPlay, USB) fall back to title/artist. Null when nothing
+ * identifiable is playing. Shared so the arming renderer and the firing main
+ * process can never disagree.
+ */
+export function sleepTrackKey(ps: ZonePlayState | null): string | null {
+  if (!ps) return null
+  if (ps.queue_id != null) return `q${ps.queue_id}`
+  const md = ps.metadata
+  if (md?.title) return `t:${md.title}:${md.artist ?? ''}`
+  return null
+}
+
+// ---------------------------------------------------------------------- settings
+
+export type Theme = 'dark' | 'light'
+/** Stored preference: an explicit theme, or follow the OS. */
+export type ThemePreference = Theme | 'system'
+
+/** The display face ("money font") — a curated, bundled set. The array is the
+ *  single source of truth for valid ids (persist.ts coerces unknown values to
+ *  the default; the renderer builds its labelled picker from the same ids). */
+export const DISPLAY_FONT_IDS = [
+  'fraunces',
+  'unbounded',
+  'newsreader',
+  'hanken',
+  'instrument-serif',
+  'schibsted',
+  'instrument-sans'
+] as const
+export type DisplayFont = (typeof DISPLAY_FONT_IDS)[number]
+/** How a collection screen lays out its items. */
+export type ScreenLayout = 'rows' | 'cards'
+/** Motion effects: follow the OS Reduce Motion setting, or force on/off. */
+export type MotionMode = 'system' | 'on' | 'off'
+export type AmbientArtMode = 'off' | 'now-playing' | 'all'
+export type AmbientCoverage = 'main' | 'window'
+export type AlignH = 'left' | 'center' | 'right'
+export type AlignV = 'top' | 'center' | 'bottom'
+
+export interface AppSettings {
+  lastHost: string | null
+  mediaKeys: boolean
+  volumeLimitPercent: number | null
+  notifications: boolean
+  theme: ThemePreference
+  displayFont: DisplayFont
+  /** Blurred album-art backdrop. */
+  ambientArt: AmbientArtMode
+  /** Backdrop extent: the main content area, or the whole window (nav + bar too). */
+  ambientCoverage: AmbientCoverage
+  vignette: boolean
+  accentFollowsArt: boolean
+  /** Preset grid: base card width in px. */
+  presetCardSize: number
+  /** Preset grid: gap between cards in px. */
+  presetGap: number
+  /** Preset grid: stretch cards to fill each row (true) or keep them exact-size (false). */
+  presetFillRows: boolean
+  /** Now Playing content placement. */
+  nowPlayingAlignH: AlignH
+  nowPlayingAlignV: AlignV
+  /** Left nav reduced to icons only. */
+  navCollapsed: boolean
+  /**
+   * Screens hidden from the left nav. A hide-set (not a visible-list) so
+   * screens added in future app versions default to visible. Persisted as
+   * plain ids; the renderer sanitizes on use (drops unknown ids, never hides
+   * 'now-playing'). Nav-only — hidden screens stay fully reachable via their
+   * keyboard shortcut and the command palette.
+   */
+  navHidden: string[]
+  /**
+   * Nav tools hidden from the left nav's pinned bottom cluster (Commands,
+   * Mini player). A hide-set (not a visible-list) so tools added in future app
+   * versions default to visible. Persisted as plain ids; the renderer sanitizes
+   * on use (drops unknown ids). Separate from navHidden — tool ids and screen
+   * ids are different id-spaces. Nav-only: Commands stays on the palette
+   * shortcut, the mini player stays in the palette and the View menu.
+   */
+  navHiddenTools: string[]
+  /** Auto-scroll to the current queue row / playing preset. */
+  followQueue: boolean
+  followPresets: boolean
+  /** Per-screen cards ⇄ rows layout. Card sizing shares the presetCard* settings. */
+  queueLayout: ScreenLayout
+  presetsLayout: ScreenLayout
+  libraryLayout: ScreenLayout
+  /** Album-grid sort in the Library (tracks always sort by track number). */
+  librarySort: 'server' | 'title' | 'artist' | 'year'
+  librarySortReversed: boolean
+  /** Remembered sleep-timer action (pause vs standby). The countdown itself is not persisted. */
+  sleepAction: SleepAction
+  /** Recently Played: collapse continuous sessions (radio/AirPlay/…) to one row, vs a row per song. */
+  recentsGrouped: boolean
+  /** Motion effects (hover growth, eqbars, smooth scrolling). */
+  motion: MotionMode
+  /** Check GitHub releases for a newer version on launch and every few hours. */
+  updateCheck: boolean
+  /** Lyrics panel on Now Playing — fetches from LRCLIB on demand when opened. */
+  lyrics: boolean
+  /** Inline flavor: current synced line under the Now Playing track details. */
+  lyricsLine: boolean
+  /** Current synced line in full-screen display mode (toggled from its chrome). */
+  displayLyrics: boolean
+  /** Scrobble listens to ListenBrainz (needs a user token; radio is never scrobbled). */
+  lbEnabled: boolean
+  /** ListenBrainz user token, from listenbrainz.org/settings. Stored locally. */
+  lbToken: string
+  /** Artist bio panel on Now Playing (MusicBrainz + Wikipedia, on demand). */
+  artistInfo: boolean
+  /**
+   * Look stations up in the radio-browser.info directory. OFF means the app
+   * never contacts it — not from the Radio screen, not from unified search,
+   * not from an agent. Favorited stations still play: a favorite carries its
+   * own stream URL and needs no directory at all.
+   */
+  radioDirectory: boolean
+  /** Scheduled actions (alarms) — fire only while the app is running. */
+  schedules: Schedule[]
+  /**
+   * Per-preset volume overrides (feature 10): recalling the preset through
+   * TastyTunes also sets this volume. Keyed via presetVolumeKey (device udn +
+   * preset id) so multi-streamer homes never cross-apply.
+   */
+  presetVolumes: Record<string, number>
+  /**
+   * queueContentHash of the queue at save time for queue presets saved
+   * through this app, keyed via presetVolumeKey(udn, slot). Lets the
+   * Presets screen recognize a saved queue exactly (all tracks, in order)
+   * even when the recall happened elsewhere or before this launch. Local to
+   * this machine; presets saved by other controllers have no entry and fall
+   * back to collage-fingerprint matching.
+   */
+  queueSignatures: Record<string, string>
+  /** MCP server for local AI agents. */
+  mcp: McpSettings
+  /** Last-visited Settings tab (id from the Settings screen's tab rail). */
+  /** Media indexes build/rebuild themselves (off = only from the Libraries buttons). */
+  mediaIndexAuto: boolean
+  settingsTab: string
+  /** Last-selected diagnostics-drawer tab (smoip | requests). */
+  diagnosticsTab: string
+  /** Last-selected Device-screen tab (tabs appear only on tone-capable streamers). */
+  deviceTab: 'streamer' | 'sources' | 'tone'
+  /** Width (px) of the Now Playing drawers (lyrics/artist), drag-resizable. */
+  panelWidth: number
+  /** Remembered mini-player window position. */
+  miniBounds: { x: number; y: number } | null
+  /** Remembered main-window bounds — reopened at this size/position. */
+  mainBounds: { x: number; y: number; width: number; height: number } | null
+  /**
+   * Artist per device preset, keyed by presetVolumeKey(udn, presetId) —
+   * recorded when TastyTunes saves an album/track preset from the Library.
+   * LOCAL-ONLY: /presets/list carries NO artist field and firmware-derived
+   * names are just the album title, so this is what lets the Presets filter
+   * match "iron" against an Iron Maiden album preset. Presets saved by other
+   * controllers have no entry (nothing to record from). Same lifecycle trade
+   * as presetVolumes: entries are keyed by slot and not remapped on
+   * move/delete.
+   */
+  presetArtists: Record<string, string>
+  /**
+   * User-saved EQ gain-sets (7 gains, dB). LOCAL by design: the firmware has
+   * no preset storage — the official app's EQ presets are client-side too
+   * (confirmed on the wire: tapping/saving one produces zero device traffic),
+   * so its presets and ours can't see each other. Applying = one multi-band
+   * user_eq_bands frame.
+   */
+  eqPresets: Array<{ name: string; gains: number[] }>
+}
+
+export const DEFAULT_SETTINGS: AppSettings = {
+  lastHost: null,
+  mediaKeys: true,
+  volumeLimitPercent: null,
+  notifications: true,
+  theme: 'dark',
+  displayFont: 'fraunces',
+  ambientArt: 'all',
+  ambientCoverage: 'window',
+  vignette: true,
+  accentFollowsArt: false,
+  presetCardSize: 160,
+  presetGap: 12,
+  presetFillRows: true,
+  nowPlayingAlignH: 'left',
+  nowPlayingAlignV: 'center',
+  navCollapsed: false,
+  navHidden: [],
+  navHiddenTools: [],
+  followQueue: true,
+  followPresets: false,
+  queueLayout: 'rows',
+  presetsLayout: 'cards',
+  libraryLayout: 'cards',
+  librarySort: 'server',
+  librarySortReversed: false,
+  sleepAction: 'standby',
+  recentsGrouped: true,
+  motion: 'system',
+  updateCheck: true,
+  lyrics: true,
+  lyricsLine: true,
+  displayLyrics: true,
+  lbEnabled: false,
+  lbToken: '',
+  artistInfo: true,
+  radioDirectory: true,
+  schedules: [],
+  presetVolumes: {},
+  queueSignatures: {},
+  mcp: {
+    enabled: false,
+    bind: 'localhost',
+    port: 8555,
+    disabledClusters: [],
+    enabledClusters: [],
+    disabledTools: []
+  },
+  mediaIndexAuto: true,
+  settingsTab: 'appearance',
+  diagnosticsTab: 'smoip',
+  deviceTab: 'streamer',
+  panelWidth: 400,
+  miniBounds: null,
+  mainBounds: null,
+  presetArtists: {},
+  eqPresets: []
+}
+
+// ------------------------------------------------------------------ media browser
+
+export interface MediaServerInfo {
+  udn: string
+  name: string
+  model: string | null
+  /** True when this "server" is the connected streamer itself (USB storage). */
+  isStreamer: boolean
+  /** True when the server answers ContentDirectory Search (non-empty SearchCaps). */
+  searchable: boolean
+}
+
+/**
+ * Per-server state of the local media index — a REBUILDABLE CACHE of server
+ * metadata (never user data): built by crawling ContentDirectory, invalidated
+ * wholesale when the server's SystemUpdateID moves (or a TTL passes), gone
+ * without loss if deleted. Searchable servers crawl via paged Search
+ * (seconds); Browse-only servers build on demand by walking containers.
+ */
+export interface MediaIndexStatus {
+  udn: string
+  serverName: string
+  state: 'none' | 'building' | 'ready'
+  strategy: 'search' | 'browse' | null
+  tracks: number
+  albums: number
+  artists: number
+  builtAt: number | null
+  updateId: number | null
+}
+
+export interface MediaNode {
+  id: string
+  parentId: string | null
+  title: string
+  upnpClass: string
+  isContainer: boolean
+  artUrl: string | null
+  artist: string | null
+  album: string | null
+  /** Release year, when the server sends dc:date (Asset does; the USB server doesn't). */
+  year: string | null
+  trackNumber: number | null
+  durationSecs: number | null
+  /**
+   * upnp:genre values, when the server sends any (multi-valued — real tags
+   * repeat the element). Raw tagger data: case-normalize before faceting.
+   * Absent (not empty) when the server offers none.
+   */
+  genre?: string[]
+  /**
+   * Which server this node came from — stamped ONLY on cross-server search
+   * results, where nodes from several servers share a listing. Everywhere
+   * else the screen's own server context applies and these stay absent.
+   */
+  serverUdn?: string
+  serverName?: string
+}
+
+/** One server's slice of a cross-server (all ready indexes) search. */
+export interface MediaSearchAllGroup {
+  udn: string
+  serverName: string
+  /** Matches, each stamped with serverUdn/serverName. */
+  items: MediaNode[]
+  total: number
+}
+
+/** One READY index's full pools, nodes stamped — the library lenses' feedstock. */
+export interface MediaIndexPools {
+  udn: string
+  serverName: string
+  albums: MediaNode[]
+  artists: MediaNode[]
+  tracks: MediaNode[]
+}
+
+/** Queue-write verbs of /smoip/queue/add (semantics per vibin's reverse-engineering). */
+export type MediaQueueAction = 'REPLACE' | 'APPEND' | 'PLAY_NEXT' | 'PLAY_NOW' | 'PLAY_FROM_HERE'
+
+// ------------------------------------------------------------------ internet radio
+
+/** A station from the radio-browser.info community directory (main-process lookup). */
+export interface RadioStation {
+  uuid: string
+  name: string
+  /** The playable stream URL (radio-browser's url_resolved — playlists unwrapped). */
+  url: string
+  favicon: string | null
+  homepage: string | null
+  /** Comma-separated tag list as the directory provides it. */
+  tags: string
+  country: string
+  codec: string
+  /** kbps; 0 = unknown. */
+  bitrate: number
 }

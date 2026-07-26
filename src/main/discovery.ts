@@ -7,7 +7,7 @@
 import { createSocket } from 'node:dgram'
 import { loggedFetch } from './netlog'
 import { XMLParser } from 'fast-xml-parser'
-import type { DiscoveredDevice } from '@shared/ipc'
+import type { DiscoveredDevice } from '@shared/model'
 
 // TASTYTUNES_SSDP_TARGET ('host:port') lets test harnesses stand in for the
 // LAN: the M-SEARCH goes there unicast instead of to the multicast group, so

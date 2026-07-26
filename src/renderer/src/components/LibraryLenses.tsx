@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowUpRight, ChevronDown, MoreHorizontal } from 'lucide-react'
-import type { MediaIndexPools, MediaNode } from '@shared/ipc'
+import type { MediaIndexPools, MediaNode } from '@shared/model'
 import { cx, fmtTime, matchesFilter } from '@/lib/format'
 import { scrollToVisible } from '@/lib/scroll'
 import { isAlbumClass } from '@/lib/media'

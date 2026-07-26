@@ -14,7 +14,8 @@ import { join } from 'node:path'
 import { app } from 'electron'
 import electronUpdater from 'electron-updater'
 import { version as appVersion } from '../../package.json'
-import { REPO_URL, type UpdateCheckResult, type UpdateState } from '@shared/ipc'
+import { REPO_URL } from '@shared/ipc'
+import { type UpdateCheckResult, type UpdateState } from '@shared/model'
 import { getSettings } from './persist'
 import {
   checkNow as legacyCheckNow,

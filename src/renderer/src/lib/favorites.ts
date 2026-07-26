@@ -1,4 +1,4 @@
-import { type MediaNode, type MediaServerInfo } from '@shared/ipc'
+import { type MediaNode, type MediaServerInfo } from '@shared/model'
 import { favoriteKey, type Favorite, type FavoriteMedia } from '@shared/model'
 import { tt } from '@/api'
 import { useStore } from '@/store'

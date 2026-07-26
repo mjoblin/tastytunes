@@ -6,7 +6,7 @@
 // 5xx) return the best partial answer for the moment but are never cached, so
 // the next request retries. `force` bypasses the cache read for a
 // user-driven refresh.
-import type { ArtistInfo } from '@shared/ipc'
+import type { ArtistInfo } from '@shared/model'
 import { DiskCache } from './diskCache'
 import { MB, mbFetch, wikipediaFromRels, type MbRelation } from './mb'
 

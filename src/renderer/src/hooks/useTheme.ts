@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { Theme, ThemePreference } from '@shared/ipc'
+import type { Theme, ThemePreference } from '@shared/model'
 
 /** The OS-resolved theme for a 'system' preference. */
 export function systemTheme(): Theme {

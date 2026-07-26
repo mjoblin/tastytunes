@@ -1,4 +1,4 @@
-import type { MediaNode } from '@shared/ipc'
+import type { MediaNode } from '@shared/model'
 import type { ContentRef, Favorite, PlaylistItem, RecentTrack } from '@shared/model'
 import type { QueueListItem } from '@shared/smoip'
 import type { NewFavorite } from '@/lib/favorites'

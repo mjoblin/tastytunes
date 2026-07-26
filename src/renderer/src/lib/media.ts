@@ -1,4 +1,4 @@
-import type { MediaNode } from '@shared/ipc'
+import type { MediaNode } from '@shared/model'
 
 // UPnP class-shape helpers shared by the Library screen and its cards.
 

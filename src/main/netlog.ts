@@ -3,7 +3,7 @@
 // the request starts (pending) and one when it settles — the renderer upserts
 // by id. Bounded ring; no payloads, just method/url/status/timing.
 import { webContents } from 'electron'
-import type { NetRequestEntry } from '@shared/ipc'
+import type { NetRequestEntry } from '@shared/model'
 
 const RING = 200
 

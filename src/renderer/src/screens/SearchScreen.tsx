@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { MoreHorizontal, Play, Search, X } from 'lucide-react'
-import type { MediaNode, RadioStation } from '@shared/ipc'
+import type { MediaNode, RadioStation } from '@shared/model'
 import type { Favorite, FavoriteMedia, PlaylistItem } from '@shared/model'
 import { favoriteKey } from '@shared/model'
 import { mediaKind, type MediaKind } from '@/lib/media'

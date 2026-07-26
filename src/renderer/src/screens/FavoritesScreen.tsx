@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Heart, Loader2, MoreHorizontal, Play } from 'lucide-react'
-import { type MediaNode, type MediaQueueAction, type MediaServerInfo } from '@shared/ipc'
+import { type MediaNode, type MediaQueueAction, type MediaServerInfo } from '@shared/model'
 import {
   favoriteKey,
   type Favorite,

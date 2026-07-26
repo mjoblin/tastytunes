@@ -1,6 +1,6 @@
 import { searchAllIndexes, searchServer as librarySearch } from './mediaIndex'
 import { refreshServers } from './upnpBrowser'
-import type { MediaNode } from '@shared/ipc'
+import type { MediaNode } from '@shared/model'
 import type { ContentRef } from '@shared/model'
 
 /**

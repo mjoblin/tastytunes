@@ -1,5 +1,5 @@
 import { BookmarkPlus } from 'lucide-react'
-import type { RadioStation } from '@shared/ipc'
+import type { RadioStation } from '@shared/model'
 import { MediaRow } from '@/components/MediaRow'
 import { RowAction } from '@/components/RowAction'
 import { RowHeart } from '@/components/RowHeart'
