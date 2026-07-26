@@ -11,10 +11,12 @@ import { SortChip } from '@/components/SortChip'
 import { SearchRow } from '@/components/SearchRow'
 import { StationRow } from '@/components/StationRow'
 import { favoriteAct, toggleFavorite, type NewFavorite } from '@/lib/favorites'
+import { activatePlaylist } from '@/lib/playlists'
 import { RowAction } from '@/components/RowAction'
 import { RowHeart } from '@/components/RowHeart'
 import { Segmented } from '@/components/Segmented'
-import { playStation } from '@/lib/radio'
+import { playStation, playingStationName } from '@/lib/radio'
+import { useStationTuning } from '@/hooks/useStationTuning'
 import { cx, matchesFilter } from '@/lib/format'
 
 /** Radio is a network call — same debounce the Radio screen uses. */
@@ -332,6 +334,13 @@ export function SearchScreen(): React.JSX.Element {
     [favorites]
   )
 
+  // Station rows light up like the Radio screen's — same audible-name match,
+  // same tuning-in window, from the same shared helpers, so the row for a
+  // playing stream can't be lit on one screen and dead on the other.
+  const playState = useStore((s) => s.playState)
+  const radioPlayingName = playingStationName(playState)
+  const { tuningUrl, play: playRadio } = useStationTuning(radioPlayingName)
+
   // ---- The five categories, as data. Every group renders from this list, so a
   // ---- chip, a count, a cap and a sort can't disagree about what a category
   // ---- is — and the ORDER is the NAV RAIL'S (user, 2026-07-25):
@@ -436,12 +445,14 @@ export function SearchScreen(): React.JSX.Element {
             subtitle={`${p.items.length} ${p.items.length === 1 ? 'track' : 'tracks'}`}
             icon={ListOrdered}
             badge="Playlist"
-            dimmed={!connected && false}
+            // never dimmed: the row's CLICK opens the playlist, which is local
+            // and fine offline — only the Play action needs the streamer, and
+            // activatePlaylist reports that failure itself
             actions={
               <RowAction
                 icon={Play}
                 label={`Play ${p.name}`}
-                onClick={() => void tt.playlistActivate(p.id).catch(() => {})}
+                onClick={() => void activatePlaylist(p)}
               />
             }
             onClick={() => jumpToPlaylist(p.id)}
@@ -492,31 +503,34 @@ export function SearchScreen(): React.JSX.Element {
         // Hidden and never asked: we don't KNOW the count, and printing 0 would
         // claim we looked. The chip stays live so it can be switched back on.
         unknown: hidden.has('radio') && radio === null,
-        rows: (radio ?? []).map((st) => ({
-          key: st.uuid,
-          sortKey: st.name,
-          node: (
-            <StationRow
-              station={st}
-              playing={false}
-              tuning={false}
-              favorited={favStationUrls.has(st.url)}
-              onHeart={() =>
-                void toggleFavorite({
-                  kind: 'station',
-                  name: st.name,
-                  url: st.url,
-                  favicon: st.favicon,
-                  radioBrowserUuid: st.uuid !== st.url ? st.uuid : null
-                })
-              }
-              onPlay={() => void playStation(st)}
-              // Save-to-preset belongs to the Radio screen, where the station is
-              // playing and the panel has room; the row only offers it there.
-              onSave={() => {}}
-            />
-          )
-        }))
+        rows: (radio ?? []).map((st) => {
+          const playing =
+            radioPlayingName != null && st.name.trim().toLowerCase() === radioPlayingName
+          return {
+            key: st.uuid,
+            sortKey: st.name,
+            node: (
+              <StationRow
+                station={st}
+                playing={playing}
+                tuning={!playing && tuningUrl === st.url}
+                favorited={favStationUrls.has(st.url)}
+                onHeart={() =>
+                  void toggleFavorite({
+                    kind: 'station',
+                    name: st.name,
+                    url: st.url,
+                    favicon: st.favicon,
+                    radioBrowserUuid: st.uuid !== st.url ? st.uuid : null
+                  })
+                }
+                onPlay={() => void playRadio(st)}
+                // no onSave: save-to-preset belongs to the Radio screen, where
+                // the panel has room — omitting the prop omits the button
+              />
+            )
+          }
+        })
       }
     )
   }

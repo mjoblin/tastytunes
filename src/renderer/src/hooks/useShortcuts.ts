@@ -81,7 +81,12 @@ export function useShortcuts(): void {
 
       const screen = SCREEN_KEYS[e.key]
       if (screen) {
-        s.setScreen(screen)
+        // Search's key is an ASK, not just navigation: "Press S from anywhere"
+        // promises a focused box, and a plain setScreen is a no-op when you're
+        // already there (same-value set, no re-render, box stays blurred).
+        // requestSearch bumps the ask id, which focuses-and-selects either way.
+        if (screen === 'search') s.requestSearch()
+        else s.setScreen(screen)
         return
       }
 
