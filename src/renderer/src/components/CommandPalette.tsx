@@ -158,6 +158,7 @@ export function CommandPalette(): React.JSX.Element {
   const mediaIndex = useStore((s) => s.mediaIndex)
   const jumpToSettingsTab = useStore((s) => s.jumpToSettingsTab)
   const requestLibrarySearch = useStore((s) => s.requestLibrarySearch)
+  const requestSearch = useStore((s) => s.requestSearch)
   const showToast = useStore((s) => s.showToast)
 
   const [query, setQuery] = useState('')
@@ -555,15 +556,25 @@ export function CommandPalette(): React.JSX.Element {
       run: () => setInfoOpen(true)
     })
 
+    // -------- Search: the pair reads together — "everything" is the app-wide
+    // -------- screen, "the library" is the library's own deeper search.
+    cmds.push({
+      id: 'search:everything',
+      label: 'Search everything',
+      group: 'Library',
+      icon: Search,
+      keywords: 'find music search unified radio playlists presets favorites everywhere',
+      run: () => requestSearch()
+    })
     // -------- Library search + index (the media-index feature set)
     if (connected) {
       cmds.push({
         id: 'library:search',
-        label: 'Search library',
+        label: 'Search the library',
         group: 'Library',
         icon: Search,
-        keywords: 'find music album artist track search',
-        run: requestLibrarySearch
+        keywords: 'find music album artist track search deep',
+        run: () => requestLibrarySearch()
       })
     }
     for (const idx of mediaIndex) {

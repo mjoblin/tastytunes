@@ -33,7 +33,12 @@ export function useShortcuts(): void {
       if ((e.metaKey || e.ctrlKey) && !e.altKey && (e.key === 'f' || e.key === 'F')) {
         e.preventDefault()
         const s = useStore.getState()
-        if (s.screen === 'library') s.requestLibrarySearch()
+        // ⌘⇧F is the editor idiom: find HERE (⌘F, contextual) vs search
+        // EVERYWHERE (⌘⇧F, unconditional). The shift form is what reaches the
+        // unified screen from inside the Library — where plain ⌘F rightly
+        // belongs to the library's own search and its find-recall.
+        if (e.shiftKey) s.requestSearch()
+        else if (s.screen === 'library') s.requestLibrarySearch()
         else s.requestSearch()
         return
       }

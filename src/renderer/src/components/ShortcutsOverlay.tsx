@@ -22,14 +22,23 @@ const GROUPS: Array<{ title: string; rows: Array<[string, string]> }> = [
     ]
   },
   {
+    title: 'Find',
+    // Three tiers, one line each: filter narrows what's on screen, Search
+    // spans everything you own, the Library's own search digs one collection.
+    rows: [
+      ['/', 'Filter the current list — narrows what’s already on screen'],
+      ['S', 'Search everything — library, playlists, presets, favorites, radio'],
+      [`${MOD}F`, 'Find here: the Library’s own search on the Library, Search everywhere else'],
+      [`⇧${MOD}F`, 'Search everything, from anywhere — including inside the Library']
+    ]
+  },
+  {
     title: 'Navigate',
     rows: [
       [`${MOD}K`, 'Command palette'],
-      [`${MOD}F`, 'Search the library — from anywhere'],
       // letters derive from the shared registry; the prose stays hand-written
-      [SCREENS.map((s) => s.key).join(' '), 'Now Playing · Queue · Presets · lIbrary · Tuner · faVorites · Recently Played · Sources · Device · sEttings'],
+      [SCREENS.map((s) => s.key).join(' '), 'Now Playing · Queue · Search · lIbrary · Presets · plAylists · faVorites · Tuner · Recently Played · Device · sEttings'],
       ['F', 'Full-screen display mode'],
-      ['/', 'Filter the list (Queue · Presets · faVorites · Recently Played)'],
       ['⌘← / ⌘→', 'Back / forward in the Library (Backspace and mouse side buttons too)'],
       ['`', 'SMOIP and Requests console'],
       ['?', 'This overlay']
