@@ -60,6 +60,10 @@ export interface LibraryTarget {
    *  browse re-walk when the stored objectId has rotted. */
   titlePath: string[]
   title: string
+  /** Planted by unified search: the Library shows a "Search" crumb that leads
+   *  BACK to the Search screen, instead of stranding you in a browse tree you
+   *  never navigated into. */
+  fromSearch?: boolean
   /**
    * The libraryResetNonce this target belongs to. The consuming effect keys
    * on nonce EQUALITY instead of consume-and-clear: StrictMode double-runs

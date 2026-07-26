@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Disc3, Heart, ListOrdered, Music, Radio, Search, X } from 'lucide-react'
+import { Disc3, ListOrdered, Music, Play, Radio, Search, UserRound, X } from 'lucide-react'
 import type { Favorite, FavoriteMedia, MediaNode, RadioStation } from '@shared/ipc'
 import { favoriteKey } from '@shared/ipc'
+import { isAlbumClass } from '@/lib/media'
 import { tt } from '@/api'
 import { useStore, type Screen } from '@/store'
 import { EmptyState } from '@/components/EmptyState'
 import { SortChip } from '@/components/SortChip'
 import { SearchRow } from '@/components/SearchRow'
 import { StationRow } from '@/components/StationRow'
-import { favoriteAct, toggleFavorite } from '@/lib/favorites'
+import { favoriteAct, toggleFavorite, type NewFavorite } from '@/lib/favorites'
+import { RowAction } from '@/components/RowAction'
+import { RowHeart } from '@/components/RowHeart'
+import { Segmented } from '@/components/Segmented'
 import { playStation } from '@/lib/radio'
 import { cx, matchesFilter } from '@/lib/format'
 
@@ -78,6 +82,7 @@ export function SearchScreen(): React.JSX.Element {
   const [hidden, setHidden] = useState<Set<CategoryId>>(lastHidden)
   const [sort, setSort] = useState(lastSort)
   const [sortReversed, setSortReversed] = useState(lastSortReversed)
+  const [libKind, setLibKind] = useState<'all' | 'artists' | 'albums' | 'tracks'>('all')
   const inputRef = useRef<HTMLInputElement | null>(null)
 
   const favorites = useStore((s) => s.favorites)
@@ -214,7 +219,13 @@ export function SearchScreen(): React.JSX.Element {
     const udn = node.serverUdn
     if (!udn) return
     if (node.isContainer) {
-      openInLibrary({ serverUdn: udn, objectId: node.id, titlePath: [node.title], title: node.title })
+      openInLibrary({
+        serverUdn: udn,
+        objectId: node.id,
+        titlePath: [node.title],
+        title: node.title,
+        fromSearch: true
+      })
       return
     }
     void tt.mediaQueueAdd(udn, node.id, 'PLAY_NOW')
@@ -233,7 +244,8 @@ export function SearchScreen(): React.JSX.Element {
           serverUdn: udn,
           objectId: id,
           titlePath: media.titlePath ?? [media.title],
-          title: media.title
+          title: media.title,
+          fromSearch: true
         })
       })
       return
@@ -245,6 +257,49 @@ export function SearchScreen(): React.JSX.Element {
       }
     })()
   }
+
+  // WHAT a library result is. The index returns artists, albums AND tracks
+  // (hierarchy order), and until this was on the row the click contract read as
+  // arbitrary — a track played, an album navigated, and nothing said which was
+  // which. Same classification the Library's own results filter uses.
+  const nodeKind = (n: MediaNode): 'Artist' | 'Album' | 'Track' =>
+    !n.isContainer
+      ? 'Track'
+      : isAlbumClass(n.upnpClass)
+        ? 'Album'
+        : n.upnpClass.includes('person') || n.upnpClass.includes('Artist')
+          ? 'Artist'
+          : 'Album'
+
+  /** Artists aren't heartable — favorites key on album/track content identity. */
+  const heartableNode = (n: MediaNode): boolean => nodeKind(n) !== 'Artist'
+  const nodeFav = (n: MediaNode): NewFavorite => ({
+    kind: n.isContainer ? 'album' : 'track',
+    title: n.title,
+    artist: n.artist,
+    album: n.album,
+    artUrl: n.artUrl,
+    serverUdn: n.serverUdn ?? null,
+    serverName: n.serverName ?? null,
+    objectId: n.id,
+    // A search result's folder path is unknown — same as the library's own
+    // search-mode hearts, which also store null here.
+    titlePath: null,
+    durationSecs: n.isContainer ? null : n.durationSecs
+  })
+  const favKeys = useMemo(() => new Set(favorites.map(favoriteKey)), [favorites])
+  const nodeFavorited = (n: MediaNode): boolean => favKeys.has(favoriteKey(nodeFav(n) as Favorite))
+
+  // Library sub-filter, offered only when the library IS the screen — the same
+  // All/Artists/Albums/Tracks partition its own results screen uses.
+  const libShown = useMemo(
+    () =>
+      libKind === 'all'
+        ? libResults
+        : libResults.filter((n) => `${nodeKind(n).toLowerCase()}s` === libKind),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [libResults, libKind]
+  )
 
   const favStationUrls = useMemo(
     () => new Set(favorites.filter((f) => f.kind === 'station').map((f) => (f as { url: string }).url)),
@@ -271,7 +326,7 @@ export function SearchScreen(): React.JSX.Element {
       id: 'library',
       label: 'Library',
       total: libTotal,
-      rows: libResults.map((node) => ({
+      rows: libShown.map((node) => ({
         key: `${node.serverUdn}:${node.id}`,
         sortKey: node.title,
         node: (
@@ -279,7 +334,30 @@ export function SearchScreen(): React.JSX.Element {
             title={node.title}
             subtitle={[node.artist, node.serverName].filter(Boolean).join(' — ')}
             artUrl={node.artUrl}
-            icon={node.isContainer ? Disc3 : Music}
+            icon={nodeKind(node) === 'Track' ? Music : nodeKind(node) === 'Artist' ? UserRound : Disc3}
+            badge={nodeKind(node)}
+            actions={
+              <>
+                {/* A container's click OPENS it, so playing needs its own
+                    button; a track's click already plays. */}
+                {node.isContainer && (
+                  <RowAction
+                    icon={Play}
+                    label={`Play ${node.title}`}
+                    onClick={() => {
+                      if (node.serverUdn) void tt.mediaQueueAdd(node.serverUdn, node.id, 'PLAY_NOW')
+                    }}
+                  />
+                )}
+                {heartableNode(node) && (
+                  <RowHeart
+                    favorited={nodeFavorited(node)}
+                    held={false}
+                    onHeart={() => void toggleFavorite(nodeFav(node))}
+                  />
+                )}
+              </>
+            }
             onClick={() => playNode(node)}
           />
         )
@@ -302,8 +380,12 @@ export function SearchScreen(): React.JSX.Element {
                 : [f.artist, f.kind === 'album' ? 'Album' : f.album].filter(Boolean).join(' — ')
             }
             artUrl={f.kind === 'station' ? f.favicon : f.artUrl}
-            icon={f.kind === 'station' ? Radio : f.kind === 'album' ? Disc3 : Heart}
+            icon={f.kind === 'station' ? Radio : f.kind === 'album' ? Disc3 : Music}
+            badge={f.kind === 'station' ? 'Station' : f.kind === 'album' ? 'Album' : 'Track'}
             dimmed={!connected}
+            actions={
+              <RowHeart favorited held={false} onHeart={() => void tt.favoriteRemove(favoriteKey(f))} />
+            }
             onClick={() => openFavorite(f)}
           />
         )
@@ -322,6 +404,15 @@ export function SearchScreen(): React.JSX.Element {
             title={p.name}
             subtitle={`${p.items.length} ${p.items.length === 1 ? 'track' : 'tracks'}`}
             icon={ListOrdered}
+            badge="Playlist"
+            dimmed={!connected && false}
+            actions={
+              <RowAction
+                icon={Play}
+                label={`Play ${p.name}`}
+                onClick={() => void tt.playlistActivate(p.id).catch(() => {})}
+              />
+            }
             onClick={() => jumpToPlaylist(p.id)}
           />
         )
@@ -341,6 +432,7 @@ export function SearchScreen(): React.JSX.Element {
             subtitle={p.type}
             artUrl={p.art_url}
             icon={Radio}
+            badge="Preset"
             meta={p.id != null ? `#${p.id}` : null}
             playing={p.is_playing === true}
             dimmed={!connected}
@@ -384,7 +476,9 @@ export function SearchScreen(): React.JSX.Element {
     }
   ]
 
-  const shownCats = cats.filter((c) => !hidden.has(c.id))
+  // An empty category is never "shown" — it has nothing to show, and counting
+  // it would make isolation arithmetic wrong (five chips, one result set).
+  const shownCats = cats.filter((c) => !hidden.has(c.id) && (c.total > 0 || c.pending))
   // ISOLATED = you've narrowed to one category, so it owns the screen and can
   // show far more of itself than it could as one group among five.
   const isolated = shownCats.length === 1
@@ -448,19 +542,30 @@ export function SearchScreen(): React.JSX.Element {
       {q && (
         <div className="no-drag flex items-center gap-1.5 flex-wrap px-8 pb-3">
           {cats.map((c) => {
-            const on = !hidden.has(c.id)
+            // THREE states, not two: matched-and-showing, matched-and-hidden,
+            // and NOTHING TO SHOW. The third is disabled rather than merely
+            // unlit — a chip you can toggle to no effect is a lie about what
+            // is behind it. It still renders, because "we looked here and
+            // found nothing" is the answer it exists to give.
+            const empty = c.total === 0 && !c.pending
+            const on = !hidden.has(c.id) && !empty
             return (
               <button
                 key={c.id}
                 data-search-chip={c.id}
                 data-on={on}
-                onClick={() => toggleCat(c.id)}
+                data-empty={empty || undefined}
+                onClick={() => !empty && toggleCat(c.id)}
+                disabled={empty}
                 aria-pressed={on}
+                title={empty ? `No ${c.label.toLowerCase()} matches` : undefined}
                 className={cx(
-                  'rounded-full px-3 py-1 text-[12px] ring-1 transition-all motion-safe:active:scale-95',
-                  on
-                    ? 'ring-gold/50 bg-golddim text-gold'
-                    : 'ring-edge bg-panel/60 text-faint hover:text-dim hover:ring-edge2'
+                  'rounded-full px-3 py-1 text-[12px] ring-1 transition-all',
+                  empty
+                    ? 'ring-edge/60 bg-panel/40 text-faint/50 cursor-default'
+                    : on
+                      ? 'ring-gold/50 bg-golddim text-gold motion-safe:active:scale-95'
+                      : 'ring-edge bg-panel/60 text-faint hover:text-dim hover:ring-edge2 motion-safe:active:scale-95'
                 )}
               >
                 {c.label}{' '}
@@ -468,6 +573,23 @@ export function SearchScreen(): React.JSX.Element {
               </button>
             )
           })}
+          {/* The library is the only category with KINDS inside it (the index
+              answers artists, albums and tracks). Its partition appears once
+              the library is the screen — same All/Artists/Albums/Tracks
+              Segmented its own results use, and a partition is single-select
+              by the app's rule, unlike the multi-select category chips. */}
+          {isolated && shownCats[0]?.id === 'library' && (
+            <Segmented<'all' | 'artists' | 'albums' | 'tracks'>
+              value={libKind}
+              onChange={setLibKind}
+              options={[
+                { value: 'all', label: 'All' },
+                { value: 'artists', label: 'Artists' },
+                { value: 'albums', label: 'Albums' },
+                { value: 'tracks', label: 'Tracks' }
+              ]}
+            />
+          )}
           <div className="flex-1" />
           {/* Only two sorts generalize across five heterogeneous groups: each
               source's own ranking, and A–Z. Artist/year are library-shaped and

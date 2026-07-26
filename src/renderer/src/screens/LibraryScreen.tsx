@@ -101,6 +101,17 @@ const SEARCH_CRUMB_ID = '__search-results__'
 // restores the lens exactly as it was left. Same contract as the search
 // crumb; titlePaths strip it the same way.
 const LENS_CRUMB_ID = '__lens__'
+/**
+ * Planted when a UNIFIED SEARCH result opens here: the trail reads
+ * Search › <server> › <album>, and that crumb — or Backspace, or ⌘← — returns
+ * to the Search screen with its query intact (the screen remembers it).
+ *
+ * Same idiom as the two above, with one difference worth stating: this crumb
+ * leads OFF this screen. Without it, arriving from search left you in a browse
+ * tree you never navigated into, and back went to the source list — reported
+ * as "⌘← takes me to the top of the library".
+ */
+const UNIFIED_SEARCH_CRUMB_ID = '__from-search__'
 // Which lens the crumb leads back to (module scope — survives the scoped
 // album detour, like the lens components' own selection memories).
 let lensReturnTo: 'albums' | 'artists' | null = null
@@ -157,6 +168,7 @@ export function LibraryScreen(): React.JSX.Element {
   const saveSettings = useStore((s) => s.saveSettings)
   const filter = useStore((s) => s.screenFilters.library)
   const setScreenFilter = useStore((s) => s.setScreenFilter)
+  const setScreen = useStore((s) => s.setScreen)
   const playState = useStore((s) => s.playState)
   const nowPlaying = useStore((s) => s.nowPlaying)
   const zoneState = useStore((s) => s.zoneState)
@@ -364,7 +376,9 @@ export function LibraryScreen(): React.JSX.Element {
       .mediaBrowse(
         serverUdn,
         path.length > 0 ? path[path.length - 1].id : null,
-        path.filter((c) => c.id !== SEARCH_CRUMB_ID).map((c) => c.title)
+        path
+          .filter((c) => c.id !== SEARCH_CRUMB_ID && c.id !== UNIFIED_SEARCH_CRUMB_ID)
+          .map((c) => c.title)
       )
       .then((list) => {
         if (stale) return
@@ -510,6 +524,9 @@ export function LibraryScreen(): React.JSX.Element {
             : { id: `__fav-crumb-${i}__`, title }
         )
       )
+      if (target.fromSearch) {
+        setPath((p) => [{ id: UNIFIED_SEARCH_CRUMB_ID, title: 'Search' }, ...p])
+      }
       return
     }
     if (cameBack && positionMemory) {
@@ -714,8 +731,13 @@ export function LibraryScreen(): React.JSX.Element {
 
   // Crumb trail: Library (source list) › source › folders…
   const jumpTo = (index: number): void => {
-    if (index === 0) return moveTo(null, [])
+    if (index === 0) {
+      // The root crumb reads "Search" on a from-search trail, and leads back.
+      if (path[0]?.id === UNIFIED_SEARCH_CRUMB_ID) return setScreen('search')
+      return moveTo(null, [])
+    }
     const newPath = path.slice(0, index - 1)
+    if (newPath[newPath.length - 1]?.id === UNIFIED_SEARCH_CRUMB_ID) return setScreen('search')
     if (newPath[newPath.length - 1]?.id === SEARCH_CRUMB_ID) return returnToSearch()
     if (newPath[newPath.length - 1]?.id === LENS_CRUMB_ID) return returnToLens()
     moveTo(serverUdn, newPath)
@@ -723,6 +745,8 @@ export function LibraryScreen(): React.JSX.Element {
   const goUp = (): void => {
     if (searchMode) exitSearch() // search exits first, folder stays
     else if (path.length > 0) {
+      if (path[path.length - 2]?.id === UNIFIED_SEARCH_CRUMB_ID) return setScreen('search')
+      if (path.length === 1 && path[0]?.id === UNIFIED_SEARCH_CRUMB_ID) return setScreen('search')
       if (path[path.length - 2]?.id === SEARCH_CRUMB_ID) return returnToSearch()
       if (path[path.length - 2]?.id === LENS_CRUMB_ID) return returnToLens()
       moveTo(serverUdn, path.slice(0, -1))
@@ -731,6 +755,10 @@ export function LibraryScreen(): React.JSX.Element {
   }
 
   const goBack = (): void => {
+    // Arrived from unified search and still on that arrival trail: back means
+    // back to SEARCH, not to a library position you never visited. Deeper than
+    // that and normal history takes over, one level at a time.
+    if (path[0]?.id === UNIFIED_SEARCH_CRUMB_ID && path.length <= 2) return setScreen('search')
     if (!searchMode && path.length === 0 && !serverUdn && !lens) return // already at the front door
     const snap = {
       udn: serverUdn,
@@ -1547,6 +1575,9 @@ export function LibraryScreen(): React.JSX.Element {
           the bare root, where the screen title already says it */}
       {!searchMode && (serverUdn != null || lens != null || path.length > 0) && (
       <div data-library-crumbs className="no-drag flex items-center gap-1 flex-wrap px-8 pb-3 text-[12.5px]">
+        {/* Arriving from unified search, the trail LEADS with Search rather
+            than burying it mid-trail: you didn't come through the library root,
+            and the first crumb is the way back to where you did come from. */}
         <button
           onClick={() => jumpTo(0)}
           className={cx(
@@ -1554,7 +1585,7 @@ export function LibraryScreen(): React.JSX.Element {
             atRoot && !lens ? 'text-ink' : 'text-dim hover:text-ink hover:bg-veil'
           )}
         >
-          Library
+          {path[0]?.id === UNIFIED_SEARCH_CRUMB_ID ? 'Search' : 'Library'}
         </button>
         {atRoot && lens && (
           <span className="flex items-center gap-1">
@@ -1578,7 +1609,8 @@ export function LibraryScreen(): React.JSX.Element {
             </button>
           </span>
         )}
-        {path.map((crumb, i) => (
+        {path.map((crumb, i) =>
+          crumb.id === UNIFIED_SEARCH_CRUMB_ID ? null : (
           <span key={`${crumb.id}-${i}`} className="flex items-center gap-1">
             <ChevronRight size={12} className="text-faint" />
             {crumb.id === SEARCH_CRUMB_ID ? (
@@ -1604,7 +1636,8 @@ export function LibraryScreen(): React.JSX.Element {
               </button>
             )}
           </span>
-        ))}
+          )
+        )}
       </div>
       )}
 
