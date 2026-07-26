@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   DndContext,
+  KeyboardSensor,
   PointerSensor,
   closestCenter,
   useSensor,
@@ -11,6 +12,7 @@ import {
 import {
   SortableContext,
   rectSortingStrategy,
+  sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy
 } from '@dnd-kit/sortable'
@@ -87,7 +89,12 @@ export function PresetsScreen(): React.JSX.Element {
     else next[key] = level
     await saveSettings({ presetVolumes: next })
   }
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
+  // Pointer AND keyboard (the playlists pattern): device presets deserve the
+  // same reorderability without a mouse as everything else that sorts.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  )
 
   // The streamer's is_playing flags can't be trusted:
   //  - radio presets aren't cleared when switching to local media (vibin's

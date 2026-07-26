@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   DndContext,
+  KeyboardSensor,
   PointerSensor,
   closestCenter,
   useSensor,
@@ -11,6 +12,7 @@ import {
   SortableContext,
   arrayMove,
   rectSortingStrategy,
+  sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy
 } from '@dnd-kit/sortable'
@@ -202,7 +204,13 @@ export function QueueScreen(): React.JSX.Element {
 
   const totalSecs = allItems.reduce((acc, i) => acc + (i.metadata?.duration ?? 0), 0)
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
+  // Pointer AND keyboard (the playlists pattern): reordering a list you can't
+  // drag is otherwise impossible for anyone without a mouse. The focused
+  // handle owns space and the arrows — useShortcuts yields to it globally.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  )
 
   const currentRef = useRef<HTMLDivElement | null>(null)
   // First follow after mount positions INSTANTLY — re-entering the screen
