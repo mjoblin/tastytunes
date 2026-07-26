@@ -121,6 +121,17 @@ let librarySearchSeq = 0
 /** Monotonic id for unified-search asks — see searchRequest. */
 let searchSeq = 0
 
+/**
+ * What a Search pivot left behind — enough to go BACK to it. `librarySearch`
+ * marks a pivot out of the library's search mode: its browse position during a
+ * search is just the scope root, so going back means restoring the SEARCH
+ * (find-recall holds it wholesale), not the position.
+ */
+export interface SearchBack {
+  screen: Screen
+  librarySearch?: boolean
+}
+
 
 interface PlayheadSync {
   secs: number
@@ -242,14 +253,19 @@ interface TTState {
    * <artist>"); without it the recalled query is merely selected.
    */
   searchRequest: { id: number; query?: string } | null
-  /** `from` records the screen a PIVOT left (Library ⋯ → "Search everywhere"),
+  /** `from` records where a PIVOT left (Library ⋯ → "Search everywhere"),
    *  so ⌘← on Search can return there — the mirror of the Library's
    *  from-search crumb. Any other navigation clears it; a plain S/⌘F ask has
    *  no "back", the same way a typed URL has none. */
-  requestSearch(query?: string, from?: Screen): void
+  requestSearch(query?: string, from?: SearchBack): void
   clearSearchRequest(): void
   /** Where ⌘← on the Search screen returns to, when a pivot brought you here. */
-  searchBack: Screen | null
+  searchBack: SearchBack | null
+  /** Consume searchBack: return where the pivot left. A pivot out of the
+   *  library's SEARCH MODE goes back via find-recall (the browse position
+   *  during a search is just the search's scope root — restoring it would
+   *  land at the top of the Library, not in the results you left). */
+  searchGoBack(): void
   /** One-shot ask: open Playlists with this playlist selected (search results
    *  OPEN a playlist rather than playing it — containers open, leaves play). */
   playlistsJump: string | null
@@ -365,6 +381,13 @@ export const useStore = create<TTState>((set, get) => ({
     set({ screen: 'search', searchRequest: { id: ++searchSeq, query }, searchBack: from ?? null }),
   clearSearchRequest: () => set({ searchRequest: null }),
   searchBack: null,
+  searchGoBack: () => {
+    const back = get().searchBack
+    if (!back) return
+    // both paths clear searchBack themselves (requestLibrarySearch / setScreen)
+    if (back.screen === 'library' && back.librarySearch) get().requestLibrarySearch()
+    else get().setScreen(back.screen)
+  },
   playlistsJump: null,
   jumpToPlaylist: (id) => set({ screen: 'playlists', playlistsJump: id, searchBack: null }),
   clearPlaylistsJump: () => set({ playlistsJump: null }),

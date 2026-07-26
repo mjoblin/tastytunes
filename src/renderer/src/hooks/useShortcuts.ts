@@ -58,7 +58,7 @@ export function useShortcuts(): void {
         const s = useStore.getState()
         if (s.screen === 'search' && s.searchBack) {
           e.preventDefault()
-          s.setScreen(s.searchBack)
+          s.searchGoBack()
           return
         }
       }

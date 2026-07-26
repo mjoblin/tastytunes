@@ -2123,9 +2123,11 @@ export function LibraryScreen(): React.JSX.Element {
               entity,
               run: () => {
                 setMenu(null)
-                // 'library' rides along so ⌘← on Search comes back HERE —
-                // and the position restore lands it on this very folder
-                requestSearch(entity, 'library')
+                // where we are rides along so ⌘← on Search comes back HERE —
+                // a browse pivot returns via the position restore, a pivot out
+                // of SEARCH MODE returns via find-recall (its browse position
+                // is just the search's scope root)
+                requestSearch(entity, { screen: 'library', librarySearch: searchMode })
               }
             }
           })()}

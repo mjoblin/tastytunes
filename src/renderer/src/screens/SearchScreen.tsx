@@ -600,15 +600,15 @@ export function SearchScreen(): React.JSX.Element {
               // handled globally (useShortcuts).
               if ((e.metaKey || e.altKey) && !e.ctrlKey && e.key === 'ArrowLeft') {
                 const el = e.currentTarget
-                const back = useStore.getState().searchBack
+                const s = useStore.getState()
                 if (
-                  back &&
+                  s.searchBack &&
                   el.selectionStart === 0 &&
                   el.selectionEnd === el.value.length &&
                   el.value.length > 0
                 ) {
                   e.preventDefault()
-                  setScreen(back)
+                  s.searchGoBack()
                   return
                 }
               }
