@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { tt } from '@/api'
 import { useStore } from '@/store'
-import { useClampedPosition, usePopoverChrome } from '@/hooks/usePopover'
+import { PopoverCard } from '@/components/Overlay'
 import { cx } from '@/lib/format'
+import { HeaderChip } from '@/components/Chrome'
 import { audioCaps, EQ_GAIN_MAX, EQ_GAIN_MIN } from '@shared/smoip'
 
 // The 7-band table is fixed firmware-side (freq/filter/q never written by us);
@@ -192,14 +192,14 @@ export function ToneEq({ label = true }: { label?: boolean } = {}): React.JSX.El
             <div className="flex items-center gap-3">
               <span className="text-[13px] flex-1">Equalizer</span>
               {/* a RESET utility, not a preset — one multi-band all-zeros frame */}
-              <button
+              <HeaderChip
                 onClick={() => void tt.command({ type: 'setEqBands', gains: BAND_LABELS.map(() => 0) })}
                 disabled={eq.bands.every((b) => b.gain === 0)}
                 data-eq-flat
-                className="text-[12px] px-2.5 h-7 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-95 transition-all disabled:opacity-40 disabled:hover:text-dim disabled:hover:ring-edge disabled:hover:bg-panel/70"
+                className="text-[12px] px-2.5 h-7 motion-safe:active:scale-95 disabled:opacity-40 disabled:hover:text-dim disabled:hover:ring-edge disabled:hover:bg-panel/70"
               >
                 Flat
-              </button>
+              </HeaderChip>
               <ToneSwitch
                 checked={eq.enabled}
                 label="Equalizer on"
@@ -415,44 +415,38 @@ function SaveEqPresetPopover({
   onClose(): void
   onSave(name: string): Promise<void>
 }): React.JSX.Element {
-  usePopoverChrome(onClose)
-  const boxRef = useRef<HTMLDivElement | null>(null)
-  const pos = useClampedPosition(boxRef, x, y)
   const [name, setName] = useState('')
   const trimmed = name.trim()
   const replaces = existing.some((n) => n.toLowerCase() === trimmed.toLowerCase())
   const canSave = trimmed.length > 0
-  return createPortal(
-    <>
-      <div className="fixed inset-0 z-40" onClick={onClose} />
-      <div
-        ref={boxRef}
-        className="fixed z-50 w-[248px] rounded-xl ring-1 ring-edge2 bg-raised shadow-xl p-3 space-y-2.5"
-        style={pos}
-        data-eq-save-popover
+  return (
+    <PopoverCard
+      at={{ x, y }}
+      width="w-[248px]"
+      onClose={onClose}
+      className="p-3 space-y-2.5"
+      data-eq-save-popover
+    >
+      <div className="text-[13px] font-medium">Save current EQ as a preset</div>
+      <input
+        autoFocus
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && canSave) void onSave(trimmed)
+        }}
+        placeholder="Preset name"
+        className="w-full bg-bg rounded-lg ring-1 ring-edge focus:ring-edge2 outline-none px-3 py-1.5 text-[13px] placeholder:text-faint"
+      />
+      <button
+        onClick={() => void onSave(trimmed)}
+        disabled={!canSave}
+        className="w-full px-3 py-2 rounded-lg bg-amber text-bg text-[13px] font-medium disabled:opacity-50 motion-safe:active:scale-95 transition-all"
+        data-eq-save-commit
       >
-        <div className="text-[13px] font-medium">Save current EQ as a preset</div>
-        <input
-          autoFocus
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && canSave) void onSave(trimmed)
-          }}
-          placeholder="Preset name"
-          className="w-full bg-bg rounded-lg ring-1 ring-edge focus:ring-edge2 outline-none px-3 py-1.5 text-[13px] placeholder:text-faint"
-        />
-        <button
-          onClick={() => void onSave(trimmed)}
-          disabled={!canSave}
-          className="w-full px-3 py-2 rounded-lg bg-amber text-bg text-[13px] font-medium disabled:opacity-50 motion-safe:active:scale-95 transition-all"
-          data-eq-save-commit
-        >
-          {replaces ? 'Replace preset' : 'Save preset'}
-        </button>
-      </div>
-    </>,
-    document.body
+        {replaces ? 'Replace preset' : 'Save preset'}
+      </button>
+    </PopoverCard>
   )
 }
 

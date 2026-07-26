@@ -7,6 +7,7 @@ import { deriveNowPlaying } from '@/lib/format'
 import { usePanelWidth } from '@/hooks/usePanelWidth'
 import { PanelResizeHandle } from '@/components/PanelResizeHandle'
 import { Segmented } from '@/components/Segmented'
+import { HeaderChip } from '@/components/Chrome'
 
 type Status = 'loading' | 'ready' | 'none'
 type Tab = 'artist' | 'album'
@@ -230,20 +231,20 @@ export function ArtistPanel(): React.JSX.Element {
       {status === 'ready' && footerInfo && (
         <div className="px-6 py-3 border-t border-edge flex flex-wrap items-center gap-x-4 gap-y-2">
           {footerInfo.wikipediaUrl && (
-            <button
+            <HeaderChip
               onClick={() => void tt.openExternal(footerInfo.wikipediaUrl!)}
-              className="microlabel flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
+              className="microlabel flex items-center gap-1.5 px-2.5 py-1.5 motion-safe:active:scale-90"
             >
               wikipedia <ExternalLink size={10} />
-            </button>
+            </HeaderChip>
           )}
           {footerInfo.musicbrainzUrl && (
-            <button
+            <HeaderChip
               onClick={() => void tt.openExternal(footerInfo.musicbrainzUrl!)}
-              className="microlabel flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
+              className="microlabel flex items-center gap-1.5 px-2.5 py-1.5 motion-safe:active:scale-90"
             >
               musicbrainz <ExternalLink size={10} />
-            </button>
+            </HeaderChip>
           )}
         </div>
       )}

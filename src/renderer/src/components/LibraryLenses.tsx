@@ -7,6 +7,8 @@ import { isAlbumClass } from '@/lib/media'
 import { MediaArt } from '@/components/MediaArt'
 import { FilterInput } from '@/components/FilterInput'
 import { PopoverChrome } from '@/hooks/usePopover'
+import { POPOVER_CARD } from '@/components/Overlay'
+import { Chip } from '@/components/Chrome'
 import { SortChip } from '@/components/SortChip'
 import { ContainerCard, ContainerRow, TrackRow } from '@/components/LibraryCards'
 import { Eqbars } from '@/components/Eqbars'
@@ -75,25 +77,21 @@ function ChipRail({
   }
   const moreCount = options.length - visible.length
   const chip = (o: { value: string; label: string; count: number }): React.JSX.Element => (
-    <button
+    <Chip
       key={o.value}
+      state={value === o.value ? 'active' : 'idle'}
       data-lens-chip={o.label}
       onClick={() => {
         onChange(value === o.value ? null : o.value)
         setMoreOpen(false)
       }}
-      className={cx(
-        'no-drag rounded-full px-3 py-1 text-[12px] ring-1 transition-all motion-safe:active:scale-95',
-        value === o.value
-          ? 'ring-gold/50 bg-golddim text-gold'
-          : 'ring-edge bg-panel/60 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70'
-      )}
+      className="no-drag motion-safe:active:scale-95"
     >
       {o.label}
       <span className={cx('ml-1.5 font-mono text-[10px]', value === o.value ? 'text-gold/70' : 'text-faint')}>
         {o.count}
       </span>
-    </button>
+    </Chip>
   )
   return (
     <div data-lens-rail={rail} className="flex items-center gap-1.5 flex-wrap">
@@ -101,25 +99,25 @@ function ChipRail({
       {showChips && visible.map(chip)}
       {showChips && moreCount > 0 && (
         <div className="relative">
-          <button
+          <Chip
+            state={moreOpen ? 'open' : 'idle'}
             data-lens-more={rail}
             onClick={() => setMoreOpen((o) => !o)}
-            className={cx(
-              'no-drag rounded-full px-3 py-1 text-[12px] ring-1 transition-all motion-safe:active:scale-95',
-              moreOpen
-                ? 'ring-edge2 bg-raised text-ink'
-                : 'ring-edge bg-panel/60 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70'
-            )}
+            className="no-drag motion-safe:active:scale-95"
           >
             +{moreCount} more
-          </button>
+          </Chip>
           {moreOpen && (
             <>
               <PopoverChrome onClose={() => setMoreOpen(false)} />
               <div className="fixed inset-0 z-20" onClick={() => setMoreOpen(false)} />
               <div
                 data-lens-more-popover
-                className="absolute left-0 top-full mt-1.5 z-30 w-56 max-h-72 overflow-y-auto rounded-xl ring-1 ring-edge2 bg-raised shadow-xl p-1.5 space-y-0.5"
+                className={cx(
+                  'absolute left-0 top-full mt-1.5 z-30 w-56 max-h-72 overflow-y-auto',
+                  POPOVER_CARD,
+                  'p-1.5 space-y-0.5'
+                )}
               >
                 {options.map((o) => (
                   <button
@@ -172,28 +170,26 @@ function PickerPill({
   const active = value ? options.find((o) => o.value === value) : null
   return (
     <div className="relative">
-      <button
+      <Chip
+        state={active ? 'active' : open ? 'open' : 'idle'}
         data-lens-picker={id}
         onClick={() => setOpen((o) => !o)}
-        className={cx(
-          'no-drag flex items-center gap-1 rounded-full px-3 py-1 text-[12px] ring-1 transition-all motion-safe:active:scale-95',
-          active
-            ? 'ring-gold/50 bg-golddim text-gold'
-            : open
-              ? 'ring-edge2 bg-raised text-ink'
-              : 'ring-edge bg-panel/60 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70'
-        )}
+        className="no-drag flex items-center gap-1 motion-safe:active:scale-95"
       >
         {active ? active.label : neutral}
         <ChevronDown size={12} className={active ? 'text-gold/70' : 'text-faint'} />
-      </button>
+      </Chip>
       {open && (
         <>
           <PopoverChrome onClose={() => setOpen(false)} />
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
           <div
             data-lens-picker-popover={id}
-            className="absolute left-0 top-full mt-1.5 z-30 w-44 max-h-72 overflow-y-auto rounded-xl ring-1 ring-edge2 bg-raised shadow-xl p-1.5 space-y-0.5"
+            className={cx(
+              'absolute left-0 top-full mt-1.5 z-30 w-44 max-h-72 overflow-y-auto',
+              POPOVER_CARD,
+              'p-1.5 space-y-0.5'
+            )}
           >
             <button
               data-lens-chip={clearLabel}

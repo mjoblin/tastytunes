@@ -9,10 +9,10 @@ import { useStationTuning } from '@/hooks/useStationTuning'
 import { EmptyState } from '@/components/EmptyState'
 import { StationRow } from '@/components/StationRow'
 import { PresetSavePanel } from '@/components/LibraryMenus'
-import { useClampedPosition, usePopoverChrome } from '@/hooks/usePopover'
+import { PopoverCard } from '@/components/Overlay'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { cx } from '@/lib/format'
-import { createPortal } from 'react-dom'
+import { Chip, ScreenTitle } from '@/components/Chrome'
 
 /**
  * Internet radio via the radio-browser.info community directory (keyless —
@@ -211,7 +211,7 @@ export function RadioScreen(): React.JSX.Element {
   return (
     <div className="h-full flex flex-col">
       <header className="drag-region flex items-center gap-3 px-8 pt-8 pb-4">
-        <h1 className="font-display screen-title font-bold text-[26px] tracking-tight">Radio</h1>
+        <ScreenTitle>Radio</ScreenTitle>
         <div className="flex-1" />
         <div className="no-drag relative">
           <Search
@@ -247,8 +247,11 @@ export function RadioScreen(): React.JSX.Element {
       </header>
 
       <div className="px-8 pb-3 flex flex-wrap gap-1.5">
-        {/* the in-domain view of hearted stations — the union lives on the
-            Favorites screen; chip appears once anything is hearted */}
+        {/* The in-domain view of hearted stations — the union lives on the
+            Favorites screen; chip appears once anything is hearted. NOT a
+            <Chip>: its unselected skin is gold-tinted (a ring that says "yours"
+            before you pick it), which no other chip wants — one site, so it
+            stays hand-written rather than becoming a fifth Chip state. */}
         {favStations.length > 0 && (
           <button
             onClick={() => pickCat(FAV_CAT)}
@@ -264,19 +267,15 @@ export function RadioScreen(): React.JSX.Element {
           </button>
         )}
         {RADIO_CATEGORIES.map((c) => (
-          <button
+          <Chip
             key={c.label}
+            state={cat === c.label ? 'active' : 'idle'}
             onClick={() => pickCat(c.label)}
             data-radio-cat={c.label}
-            className={cx(
-              'no-drag rounded-full px-3 py-1 text-[12px] ring-1 transition-all motion-safe:active:scale-95',
-              cat === c.label
-                ? 'ring-gold/50 bg-golddim text-gold'
-                : 'ring-edge bg-panel/60 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70'
-            )}
+            className="no-drag motion-safe:active:scale-95"
           >
             {c.label}
-          </button>
+          </Chip>
         ))}
       </div>
 
@@ -389,24 +388,13 @@ function SaveStationPopover({
   onClose(): void
   onSave(slot: number, name: string | null): Promise<void>
 }): React.JSX.Element {
-  usePopoverChrome(onClose)
-  const boxRef = useRef<HTMLDivElement | null>(null)
-  const pos = useClampedPosition(boxRef, x, y)
-  return createPortal(
-    <>
-      <div className="fixed inset-0 z-40" onClick={onClose} />
-      <div
-        ref={boxRef}
-        className="fixed z-50 w-[272px] rounded-xl ring-1 ring-edge2 bg-raised shadow-xl p-3"
-        style={pos}
-      >
-        <PresetSavePanel
-          title={station.name}
-          subtitle="Saves what's playing on the streamer"
-          onSave={onSave}
-        />
-      </div>
-    </>,
-    document.body
+  return (
+    <PopoverCard at={{ x, y }} width="w-[272px]" onClose={onClose} className="p-3">
+      <PresetSavePanel
+        title={station.name}
+        subtitle="Saves what's playing on the streamer"
+        onSave={onSave}
+      />
+    </PopoverCard>
   )
 }

@@ -60,6 +60,8 @@ import {
   type ScreenDef
 } from '@/lib/screens'
 import { Slider } from '@/components/Slider'
+import { HeaderChip, PrimaryButton, ScreenTitle } from '@/components/Chrome'
+import { useOneShotAsk } from '@/hooks/useOneShotAsk'
 
 const TABS = [
   { id: 'appearance', label: 'Appearance', icon: Palette },
@@ -96,27 +98,27 @@ export function SettingsScreen(): React.JSX.Element {
   // One-shot deep link (the nav update dot lands on Updates); consume + clear.
   const settingsJump = useStore((s) => s.settingsJump)
   const clearSettingsJump = useStore((s) => s.clearSettingsJump)
-  useEffect(() => {
-    if (!settingsJump) return
-    if (TABS.some((t) => t.id === settingsJump)) selectTab(settingsJump as SettingsTab)
-    clearSettingsJump()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settingsJump])
+  useOneShotAsk(
+    settingsJump,
+    (tab) => {
+      if (TABS.some((t) => t.id === tab)) selectTab(tab as SettingsTab)
+    },
+    { clear: clearSettingsJump }
+  )
 
   return (
     <div className="h-full flex flex-col">
       <header className="drag-region flex items-center gap-4 px-8 pt-8 pb-4">
-        <h1 className="font-display screen-title font-bold text-[26px] tracking-tight">Settings</h1>
+        <ScreenTitle>Settings</ScreenTitle>
         <span className="font-mono text-[11px] text-faint">saved automatically</span>
         <div className="flex-1" />
-        <button
+        <PrimaryButton
           onClick={() => setInfoOpen(true)}
-          className="no-drag flex items-center gap-2 px-3.5 py-2 rounded-lg bg-gold text-bg text-[12.5px] font-medium
-                     shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.3)] hover:brightness-110 motion-safe:hover:scale-[1.03] transition-all"
+          className="no-drag flex items-center gap-2 px-3.5 py-2 text-[12.5px] motion-safe:hover:scale-[1.03]"
         >
           <Heart size={15} strokeWidth={2} />
           Info &amp; Support
-        </button>
+        </PrimaryButton>
       </header>
 
       {/* pinned header + tab rail; only the per-tab panel scrolls */}
@@ -348,12 +350,12 @@ export function SettingsScreen(): React.JSX.Element {
               label="Keyboard shortcuts"
               hint="Press ? anywhere in the app for the full list. Key hints also appear in menu items and control tooltips."
             >
-              <button
+              <HeaderChip
                 onClick={() => setShortcutsOpen(true)}
-                className="shrink-0 text-[12.5px] px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
+                className="shrink-0 text-[12.5px] px-3 py-1.5 motion-safe:active:scale-90"
               >
                 View shortcuts
-              </button>
+              </HeaderChip>
             </SettingRow>
 
             <SettingRow
@@ -913,13 +915,13 @@ function SchedulesSection({
         </div>
       ))}
 
-      <button
+      <HeaderChip
         onClick={add}
-        className="flex items-center gap-2 text-[12.5px] px-3 py-2 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-95 transition-all"
+        className="flex items-center gap-2 text-[12.5px] px-3 py-2 motion-safe:active:scale-95"
       >
         <Plus size={14} />
         Add schedule
-      </button>
+      </HeaderChip>
     </section>
   )
 }
@@ -1022,10 +1024,10 @@ function LibrariesSection({
                   : `${st.tracks.toLocaleString()} tracks · ${st.albums.toLocaleString()} albums · updated ${age(st.builtAt)}`}
             </span>
           </span>
-          <button
+          <HeaderChip
             onClick={() => void tt.mediaIndexRebuild(st.udn)}
             disabled={st.state === 'building'}
-            className="shrink-0 flex items-center gap-1.5 text-[12px] px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all disabled:opacity-40 disabled:pointer-events-none"
+            className="shrink-0 flex items-center gap-1.5 text-[12px] px-3 py-1.5 motion-safe:active:scale-90 disabled:opacity-40 disabled:pointer-events-none"
           >
             {st.state === 'building' ? (
               <Loader2 size={13} className="motion-safe:animate-spin" />
@@ -1033,7 +1035,7 @@ function LibrariesSection({
               <RefreshCw size={13} />
             )}
             {st.state === 'ready' ? 'Rebuild' : 'Build'}
-          </button>
+          </HeaderChip>
         </div>
       ))}
       </div>
@@ -1104,12 +1106,12 @@ function ListenBrainzSection({
       <SettingRow label="ListenBrainz token" hint={status}>
         <div className="flex items-center gap-2">
           <TokenField value={settings.lbToken} onCommit={(lbToken) => void save({ lbToken })} />
-          <button
+          <HeaderChip
             onClick={() => void tt.openExternal('https://listenbrainz.org/settings/')}
-            className="shrink-0 text-[12.5px] px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
+            className="shrink-0 text-[12.5px] px-3 py-1.5 motion-safe:active:scale-90"
           >
             Get token
-          </button>
+          </HeaderChip>
         </div>
       </SettingRow>
       <Toggle
@@ -1302,10 +1304,10 @@ function UpdatesSection({
               'Automatic update checks are off.'
             )}
           </span>
-          <button
+          <HeaderChip
             onClick={() => void checkNow()}
             disabled={manual === 'checking'}
-            className="shrink-0 flex items-center gap-1.5 text-[12.5px] px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all disabled:opacity-50 disabled:pointer-events-none"
+            className="shrink-0 flex items-center gap-1.5 text-[12.5px] px-3 py-1.5 motion-safe:active:scale-90 disabled:opacity-50 disabled:pointer-events-none"
           >
             {manual === 'checking' ? (
               <Loader2 size={13} className="motion-safe:animate-spin" />
@@ -1313,7 +1315,7 @@ function UpdatesSection({
               <RefreshCw size={13} />
             )}
             Check now
-          </button>
+          </HeaderChip>
         </div>
       )}
     </section>
@@ -1339,19 +1341,19 @@ function UpdatePanel(): React.JSX.Element | null {
             </span>
           </span>
           {update.canDownload ? (
-            <button
+            <PrimaryButton
               onClick={() => void tt.updateDownload()}
-              className="shrink-0 text-[12.5px] px-3.5 py-1.5 rounded-lg bg-gold text-bg font-medium hover:brightness-110 motion-safe:active:scale-95 transition-all"
+              className="shrink-0 text-[12.5px] px-3.5 py-1.5"
             >
               Download
-            </button>
+            </PrimaryButton>
           ) : (
-            <button
+            <HeaderChip
               onClick={() => void tt.openExternal(update.url)}
-              className="shrink-0 flex items-center gap-1.5 text-[12.5px] px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
+              className="shrink-0 flex items-center gap-1.5 text-[12.5px] px-3 py-1.5 motion-safe:active:scale-90"
             >
               Release page <ExternalLink size={12} />
-            </button>
+            </HeaderChip>
           )}
         </div>
       )}
@@ -1379,12 +1381,12 @@ function UpdatePanel(): React.JSX.Element | null {
               installs when you quit — or restart now
             </span>
           </span>
-          <button
+          <PrimaryButton
             onClick={() => void tt.updateInstall()}
-            className="shrink-0 text-[12.5px] px-3.5 py-1.5 rounded-lg bg-gold text-bg font-medium hover:brightness-110 motion-safe:active:scale-95 transition-all"
+            className="shrink-0 text-[12.5px] px-3.5 py-1.5"
           >
             Restart now
-          </button>
+          </PrimaryButton>
         </div>
       )}
 
@@ -1396,12 +1398,12 @@ function UpdatePanel(): React.JSX.Element | null {
               {update.error}
             </span>
           </span>
-          <button
+          <HeaderChip
             onClick={() => void tt.updateDownload()}
-            className="shrink-0 text-[12.5px] px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
+            className="shrink-0 text-[12.5px] px-3 py-1.5 motion-safe:active:scale-90"
           >
             Try again
-          </button>
+          </HeaderChip>
         </div>
       )}
     </div>

@@ -46,8 +46,9 @@ import { ArtImage } from '@/components/ArtImage'
 import { MediaArt } from '@/components/MediaArt'
 import { DurationCell } from '@/components/DurationCell'
 import { FilterInput } from '@/components/FilterInput'
-import { PopoverChrome } from '@/hooks/usePopover'
+import { ModalShell } from '@/components/Overlay'
 import { PresetSavePanel, PresetPicker } from '@/components/LibraryMenus'
+import { HeaderChip, ScreenTitle } from '@/components/Chrome'
 
 /**
  * Queue → preset: the shared PresetSavePanel in a centered modal. The device
@@ -83,26 +84,17 @@ function SaveQueueDialog({ onClose }: { onClose(): void }): React.JSX.Element {
   }
 
   return (
-    <div
-      className="absolute inset-0 z-30 bg-black/60 backdrop-blur-sm flex items-center justify-center"
-      onClick={onClose}
-    >
-      <PopoverChrome onClose={onClose} />
-      <div
-        className="w-[360px] rounded-2xl bg-panel ring-1 ring-edge2 p-5 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="font-display font-bold text-[17px] tracking-tight mb-3">
-          Save queue as preset
-        </div>
-        <PresetSavePanel
-          title="Current queue"
-          subtitle={`${trackCount} tracks — stored on the streamer`}
-          nameAutoFocus
-          onSave={onSave}
-        />
+    <ModalShell onClose={onClose} escapeCloses className="w-[360px] p-5">
+      <div className="font-display font-bold text-[17px] tracking-tight mb-3">
+        Save queue as preset
       </div>
-    </div>
+      <PresetSavePanel
+        title="Current queue"
+        subtitle={`${trackCount} tracks — stored on the streamer`}
+        nameAutoFocus
+        onSave={onSave}
+      />
+    </ModalShell>
   )
 }
 
@@ -258,7 +250,7 @@ export function QueueScreen(): React.JSX.Element {
   return (
     <div className="h-full flex flex-col">
       <header className="drag-region flex items-center gap-4 px-8 pt-8 pb-4">
-        <h1 className="font-display screen-title font-bold text-[26px] tracking-tight">Queue</h1>
+        <ScreenTitle>Queue</ScreenTitle>
         <span className="font-mono text-[11px] text-faint">
           {allItems.length} tracks · {fmtTime(totalSecs)}
         </span>
@@ -276,54 +268,50 @@ export function QueueScreen(): React.JSX.Element {
               shown={items.length}
               total={allItems.length}
             />
-            <button
+            <HeaderChip
               data-tip="Save queue as a playlist"
               aria-label="Save queue as a playlist"
               onClick={() => void saveAsPlaylist()}
               disabled={allItems.length === 0}
-              className="no-drag tip-bottom p-2 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 disabled:opacity-40 motion-safe:active:scale-90 transition-all"
+              className="no-drag tip-bottom p-2 disabled:opacity-40 motion-safe:active:scale-90"
             >
               <ListOrdered size={16} />
-            </button>
-            <button
+            </HeaderChip>
+            <HeaderChip
               data-tip="Save queue as preset"
               aria-label="Save queue as preset"
               onClick={() => setSaveOpen(true)}
-              className="no-drag tip-bottom p-2 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
+              className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
             >
               <BookmarkPlus size={16} />
-            </button>
+            </HeaderChip>
           </div>
           <div className="flex items-center gap-1.5">
-          <button
+          <HeaderChip
               data-tip={cards ? 'View as rows' : 'View as cards'}
               aria-label={cards ? 'View as rows' : 'View as cards'}
               onClick={() => void setLayout(cards ? 'rows' : 'cards')}
-              className="no-drag tip-bottom p-2 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
+              className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
             >
               {cards ? <Rows3 size={16} /> : <LayoutGrid size={16} />}
-            </button>
-            <button
+            </HeaderChip>
+            <HeaderChip
               data-tip="Scroll to the current track"
               aria-label="Scroll to the current track"
               onClick={scrollToCurrent}
-              className="no-drag tip-bottom p-2 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
+              className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
             >
               <Crosshair size={16} />
-            </button>
-            <button
+            </HeaderChip>
+            <HeaderChip
+              active={followQueue}
               data-tip={followQueue ? 'Auto-follow: on' : 'Auto-follow: off'}
               aria-label={followQueue ? 'Auto-follow: on' : 'Auto-follow: off'}
               onClick={() => void setFollowQueue(!followQueue)}
-              className={cx(
-                'no-drag tip-bottom p-2 rounded-lg ring-1 transition-all',
-                followQueue
-                  ? 'ring-gold/50 bg-golddim text-gold'
-                  : 'ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70'
-              )}
+              className="no-drag tip-bottom p-2"
             >
               <Footprints size={16} />
-            </button>
+            </HeaderChip>
           </div>
         </div>
       </header>

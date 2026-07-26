@@ -41,6 +41,8 @@ import { FilterInput } from '@/components/FilterInput'
 import { Slider } from '@/components/Slider'
 import { ArtImage } from '@/components/ArtImage'
 import { PopoverChrome } from '@/hooks/usePopover'
+import { HeaderChip, ScreenTitle } from '@/components/Chrome'
+import { useConfirmTap } from '@/hooks/useConfirmTap'
 
 export function PresetsScreen(): React.JSX.Element {
   const presets = useStore((s) => s.presets)
@@ -297,7 +299,7 @@ export function PresetsScreen(): React.JSX.Element {
   return (
     <div className="h-full flex flex-col">
       <header className="drag-region flex items-center gap-4 px-8 pt-8 pb-4">
-        <h1 className="font-display screen-title font-bold text-[26px] tracking-tight">Presets</h1>
+        <ScreenTitle>Presets</ScreenTitle>
         <span className="font-mono text-[11px] text-faint">
           {allItems.length} / {presets?.max_presets ?? '—'} slots
         </span>
@@ -309,35 +311,31 @@ export function PresetsScreen(): React.JSX.Element {
             shown={items.length}
             total={allItems.length}
           />
-          <button
+          <HeaderChip
             data-tip={cards ? 'View as rows' : 'View as cards'}
             aria-label={cards ? 'View as rows' : 'View as cards'}
             onClick={() => void setLayout(cards ? 'rows' : 'cards')}
-            className="no-drag tip-bottom p-2 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
+            className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
           >
             {cards ? <Rows3 size={16} /> : <LayoutGrid size={16} />}
-          </button>
-          <button
+          </HeaderChip>
+          <HeaderChip
             data-tip="Scroll to the playing preset"
             aria-label="Scroll to the playing preset"
             onClick={() => scrollToPlaying(true)}
-            className="no-drag tip-bottom p-2 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
+            className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
           >
             <Crosshair size={16} />
-          </button>
-          <button
+          </HeaderChip>
+          <HeaderChip
+            active={followPresets}
             data-tip={followPresets ? 'Auto-follow: on' : 'Auto-follow: off'}
             aria-label={followPresets ? 'Auto-follow: on' : 'Auto-follow: off'}
             onClick={() => void setFollowPresets(!followPresets)}
-            className={cx(
-              'no-drag tip-bottom p-2 rounded-lg ring-1 transition-all',
-              followPresets
-                ? 'ring-gold/50 bg-golddim text-gold'
-                : 'ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70'
-            )}
+            className="no-drag tip-bottom p-2"
           >
             <Footprints size={16} />
-          </button>
+          </HeaderChip>
         </div>
       </header>
 
@@ -550,14 +548,8 @@ function PresetRow({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: preset.id as number
   })
-  const [confirmDelete, setConfirmDelete] = useState(false)
+  const confirmDelete = useConfirmTap()
   const pv = usePresetVolumePopover(volume, onVolume)
-
-  useEffect(() => {
-    if (!confirmDelete) return
-    const t = setTimeout(() => setConfirmDelete(false), 3000)
-    return () => clearTimeout(t)
-  }, [confirmDelete])
 
   return (
     <div
@@ -636,27 +628,24 @@ function PresetRow({
       </span>
 
       <button
-        data-tip={confirmDelete ? 'Click again to delete' : 'Delete preset'}
+        data-tip={confirmDelete.isArmed() ? 'Click again to delete' : 'Delete preset'}
         aria-label="Delete preset"
         onPointerDown={(e) => e.stopPropagation()}
+        {...confirmDelete.blurProps}
         onClick={(e) => {
           e.stopPropagation()
-          if (!confirmDelete) {
-            setConfirmDelete(true)
-          } else if (preset.id != null) {
-            setConfirmDelete(false)
+          if (confirmDelete.tap() && preset.id != null)
             void tt.command({ type: 'presetDelete', presetId: preset.id })
-          }
         }}
         className={cx(
           'tip-bottom flex items-center gap-1.5 p-1.5 rounded transition-all',
-          confirmDelete
+          confirmDelete.isArmed()
             ? 'bg-alert text-white opacity-100 px-2'
             : 'text-faint opacity-0 group-hover:opacity-100 hover:text-alert'
         )}
       >
         <Trash2 size={13} />
-        {confirmDelete && (
+        {confirmDelete.isArmed() && (
           <span className="font-mono text-[10px] font-semibold uppercase tracking-wide">sure?</span>
         )}
       </button>
@@ -684,14 +673,8 @@ function PresetCard({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: preset.id as number
   })
-  const [confirmDelete, setConfirmDelete] = useState(false)
+  const confirmDelete = useConfirmTap()
   const pv = usePresetVolumePopover(volume, onVolume)
-
-  useEffect(() => {
-    if (!confirmDelete) return
-    const t = setTimeout(() => setConfirmDelete(false), 3000)
-    return () => clearTimeout(t)
-  }, [confirmDelete])
 
   return (
     <div
@@ -789,27 +772,24 @@ function PresetCard({
         </button>
       )}
       <button
-        data-tip={confirmDelete ? 'Click again to delete' : 'Delete preset'}
+        data-tip={confirmDelete.isArmed() ? 'Click again to delete' : 'Delete preset'}
         aria-label="Delete preset"
         onPointerDown={(e) => e.stopPropagation()}
+        {...confirmDelete.blurProps}
         onClick={(e) => {
           e.stopPropagation()
-          if (!confirmDelete) {
-            setConfirmDelete(true)
-          } else if (preset.id != null) {
-            setConfirmDelete(false)
+          if (confirmDelete.tap() && preset.id != null)
             void tt.command({ type: 'presetDelete', presetId: preset.id })
-          }
         }}
         className={cx(
           'tip-bottom absolute bottom-2 right-2 z-10 flex h-7 items-center justify-center gap-1.5 rounded-lg transition-all',
-          confirmDelete
+          confirmDelete.isArmed()
             ? 'px-2.5 bg-alert text-white opacity-100 shadow-lg'
             : cx('w-7 bg-panel/80 ring-1 ring-edge text-dim hover:text-alert', 'opacity-0 group-hover:opacity-100')
         )}
       >
         <Trash2 size={13} />
-        {confirmDelete && (
+        {confirmDelete.isArmed() && (
           <span className="font-mono text-[10px] font-semibold uppercase tracking-wide">sure?</span>
         )}
       </button>

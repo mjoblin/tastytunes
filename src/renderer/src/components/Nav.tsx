@@ -14,7 +14,7 @@ import {
   type NavTool,
   type ScreenDef
 } from '@/lib/screens'
-import { usePopoverChrome, useClampedPosition } from '@/hooks/usePopover'
+import { PopoverCard } from '@/components/Overlay'
 
 /**
  * Right-click target: which nav item (a screen or a bottom-cluster tool), and
@@ -288,11 +288,10 @@ export function Nav(): React.JSX.Element {
 }
 
 /**
- * Right-click menu for a nav item — one verb, "Hide from left nav". Anchored at
- * the cursor and clamped on-screen; mounts PopoverChrome (Escape-capture +
- * inert drag regions, so the full-window click-catcher can hear a click on the
- * title-bar drag region at the top of the nav). Click-outside / right-click
- * elsewhere dismisses.
+ * Right-click menu for a nav item — one verb, "Hide from left nav". PopoverCard
+ * anchors it at the cursor, clamps it on-screen and mounts the popover chrome
+ * (Escape-capture + inert drag regions, so the full-window click-catcher can
+ * hear a click on the title-bar drag region at the top of the nav).
  */
 function NavItemMenu({
   menu,
@@ -303,28 +302,22 @@ function NavItemMenu({
   onHide(): void
   onClose(): void
 }): React.JSX.Element {
-  usePopoverChrome(onClose)
-  const boxRef = useRef<HTMLDivElement | null>(null)
-  const pos = useClampedPosition(boxRef, menu.x, menu.y)
-
-  return createPortal(
-    <>
-      <div className="fixed inset-0 z-40" onClick={onClose} onContextMenu={onClose} />
-      <div
-        ref={boxRef}
-        className="fixed z-50 w-52 rounded-xl ring-1 ring-edge2 bg-raised shadow-xl p-1.5 space-y-0.5"
-        style={pos}
+  return (
+    <PopoverCard
+      at={menu}
+      width="w-52"
+      onClose={onClose}
+      rightClickCloses
+      className="p-1.5 space-y-0.5"
+    >
+      <div className="px-2.5 pt-1 pb-1.5 text-[11px] text-faint truncate">{menu.label}</div>
+      <button
+        onClick={onHide}
+        className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left text-[13px] text-dim hover:text-ink hover:bg-veil transition-colors"
       >
-        <div className="px-2.5 pt-1 pb-1.5 text-[11px] text-faint truncate">{menu.label}</div>
-        <button
-          onClick={onHide}
-          className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left text-[13px] text-dim hover:text-ink hover:bg-veil transition-colors"
-        >
-          <EyeOff size={14} strokeWidth={1.8} className="shrink-0" />
-          Hide from left nav
-        </button>
-      </div>
-    </>,
-    document.body
+        <EyeOff size={14} strokeWidth={1.8} className="shrink-0" />
+        Hide from left nav
+      </button>
+    </PopoverCard>
   )
 }

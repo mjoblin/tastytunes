@@ -31,6 +31,7 @@ import { AmbientArt } from '@/components/AmbientArt'
 import { useDecodedArt } from '@/hooks/useDecodedArt'
 import { usePrefetchNextArt } from '@/hooks/usePrefetchNextArt'
 import { useFontScaleGuard } from '@/hooks/useFontScaleGuard'
+import { HeaderChip } from '@/components/Chrome'
 
 export default function App(): React.JSX.Element {
   useShortcuts()
@@ -338,12 +339,12 @@ function ConnectGate(): React.JSX.Element {
             >
               {discovering ? 'Searching…' : 'Find devices'}
             </button>
-            <button
+            <HeaderChip
               onClick={() => setScreen('device')}
-              className="text-[13px] px-4 py-2 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-95 transition-all"
+              className="text-[13px] px-4 py-2 motion-safe:active:scale-95"
             >
               Enter IP manually →
-            </button>
+            </HeaderChip>
           </div>
           <button
             onClick={() => void tt.demoStart()}

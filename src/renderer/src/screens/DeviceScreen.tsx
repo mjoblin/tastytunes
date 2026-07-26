@@ -18,6 +18,7 @@ import { Segmented } from '@/components/Segmented'
 import { SourcesPanel } from '@/components/SourcesPanel'
 import { ToneEq } from '@/components/ToneEq'
 import { DeviceControls } from '@/components/DeviceControls'
+import { HeaderChip, ScreenTitle } from '@/components/Chrome'
 
 export function DeviceScreen(): React.JSX.Element {
   const connection = useStore((s) => s.connection)
@@ -87,7 +88,7 @@ export function DeviceScreen(): React.JSX.Element {
   return (
     <div className="h-full flex flex-col">
       <header className="drag-region flex items-center gap-4 px-8 pt-8 pb-4">
-        <h1 className="font-display screen-title font-bold text-[26px] tracking-tight">Device</h1>
+        <ScreenTitle>Device</ScreenTitle>
       </header>
 
       {/* pinned header; only the content scrolls (house pattern) */}
@@ -106,12 +107,12 @@ export function DeviceScreen(): React.JSX.Element {
               />
               <span className="text-[13.5px] flex-1">{statusText}</span>
               {connection.phase !== 'idle' && (
-                <button
+                <HeaderChip
                   onClick={() => void tt.disconnect()}
-                  className="flex items-center gap-1.5 text-[12.5px] px-3 h-8 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-95 transition-all"
+                  className="flex items-center gap-1.5 text-[12.5px] px-3 h-8 motion-safe:active:scale-95"
                 >
                   <Unplug size={13} /> Disconnect
-                </button>
+                </HeaderChip>
               )}
               {/* Only offered while connected — the rest of the time the card is
                   open anyway and there is nothing to reveal. */}

@@ -19,6 +19,7 @@ import { trackMenuItems, type MediaMenuItem } from '@/lib/mediaMenus'
 import { cx, fmtDayBucket, fmtRelative, matchesFilter } from '@/lib/format'
 import { clearRecentsWithUndo } from '@/lib/recents'
 import { FilterInput } from '@/components/FilterInput'
+import { ScreenTitle } from '@/components/Chrome'
 
 interface Block {
   session: string | null
@@ -152,7 +153,7 @@ export function RecentlyPlayedScreen(): React.JSX.Element {
   return (
     <div className="h-full flex flex-col">
       <header className="drag-region flex items-center gap-3 px-8 pt-8 pb-4">
-        <h1 className="font-display screen-title font-bold text-[26px] tracking-tight">Recently Played</h1>
+        <ScreenTitle>Recently Played</ScreenTitle>
         <div className="flex-1" />
         {recents.length > 0 && (
           <>

@@ -30,6 +30,7 @@ import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { activeSourceId, cx, matchesFilter } from '@/lib/format'
 import { favoriteAct, favoriteHasRoute, type FavoriteActResult } from '@/lib/favorites'
 import { flashTarget } from '@/lib/scroll'
+import { ScreenTitle } from '@/components/Chrome'
 
 /** Kind visibility — session memory, like the Radio screen's chip state. */
 type FavKind = 'all' | 'station' | 'album' | 'track'
@@ -320,7 +321,7 @@ export function FavoritesScreen(): React.JSX.Element {
   return (
     <div className="h-full flex flex-col">
       <header className="drag-region flex items-center gap-3 px-8 pt-8 pb-4">
-        <h1 className="font-display screen-title font-bold text-[26px] tracking-tight">Favorites</h1>
+        <ScreenTitle>Favorites</ScreenTitle>
         <div className="flex-1" />
         {total > 0 && (
           <>

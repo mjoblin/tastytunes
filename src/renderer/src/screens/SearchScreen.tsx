@@ -29,6 +29,7 @@ import { Segmented } from '@/components/Segmented'
 import { playStation, playingStationName } from '@/lib/radio'
 import { useStationTuning } from '@/hooks/useStationTuning'
 import { cx, matchesFilter } from '@/lib/format'
+import { Chip, ScreenTitle } from '@/components/Chrome'
 
 /** Radio is a network call — same debounce the Radio screen uses. */
 const RADIO_DEBOUNCE_MS = 350
@@ -703,7 +704,7 @@ export function SearchScreen(): React.JSX.Element {
   return (
     <div className="h-full flex flex-col">
       <header className="drag-region flex items-center gap-4 px-8 pt-8 pb-4">
-        <h1 className="font-display screen-title font-bold text-[26px] tracking-tight">Search</h1>
+        <ScreenTitle>Search</ScreenTitle>
         <div className="relative flex-1 max-w-xl">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-faint" />
           <input
@@ -818,8 +819,9 @@ export function SearchScreen(): React.JSX.Element {
             const empty = c.total === 0 && !c.pending && !c.unknown
             const on = !hidden.has(c.id) && !empty
             return (
-              <button
+              <Chip
                 key={c.id}
+                state={empty ? 'disabled' : on ? 'active' : 'idle'}
                 data-search-chip={c.id}
                 data-on={on}
                 data-empty={empty || undefined}
@@ -827,20 +829,13 @@ export function SearchScreen(): React.JSX.Element {
                 disabled={empty}
                 aria-pressed={on}
                 title={empty ? `No ${c.label.toLowerCase()} matches` : undefined}
-                className={cx(
-                  'rounded-full px-3 py-1 text-[12px] ring-1 transition-all',
-                  empty
-                    ? 'ring-edge/60 bg-panel/40 text-faint/50 cursor-default'
-                    : on
-                      ? 'ring-gold/50 bg-golddim text-gold motion-safe:active:scale-95'
-                      : 'ring-edge bg-panel/60 text-faint hover:text-dim hover:ring-edge2 motion-safe:active:scale-95'
-                )}
+                className={cx(!empty && 'motion-safe:active:scale-95')}
               >
                 {c.label}{' '}
                 <span className="tabular-nums opacity-70">
                   {c.pending ? '…' : c.unknown ? '—' : c.total}
                 </span>
-              </button>
+              </Chip>
             )
           })}
           <div className="flex-1" />

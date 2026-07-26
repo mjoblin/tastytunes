@@ -7,6 +7,7 @@ import { scrollToCentered } from '@/lib/scroll'
 import { useLyrics } from '@/hooks/useLyrics'
 import { usePanelWidth } from '@/hooks/usePanelWidth'
 import { PanelResizeHandle } from '@/components/PanelResizeHandle'
+import { HeaderChip } from '@/components/Chrome'
 
 export function LyricsPanel(): React.JSX.Element {
   const setLyricsOpen = useStore((s) => s.setLyricsOpen)
@@ -112,12 +113,12 @@ export function LyricsPanel(): React.JSX.Element {
       </div>
 
       <div className="px-6 py-3 border-t border-edge">
-        <button
+        <HeaderChip
           onClick={() => void tt.openExternal('https://lrclib.net')}
-          className="microlabel inline-flex px-2.5 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
+          className="microlabel inline-flex px-2.5 py-1.5 motion-safe:active:scale-90"
         >
           lyrics from lrclib.net
-        </button>
+        </HeaderChip>
       </div>
     </aside>
   )

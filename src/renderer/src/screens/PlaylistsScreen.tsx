@@ -49,6 +49,9 @@ import { PresetPicker } from '@/components/LibraryMenus'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { lockVertical } from '@/lib/dnd'
 import { cx, fmtDuration, fmtRelative, matchesFilter } from '@/lib/format'
+import { HeaderChip, PrimaryButton, ScreenTitle } from '@/components/Chrome'
+import { useConfirmTap } from '@/hooks/useConfirmTap'
+import { useOneShotAsk } from '@/hooks/useOneShotAsk'
 
 /**
  * Stored playlists: the collection on the left, the selected playlist's tracks
@@ -75,7 +78,7 @@ export function PlaylistsScreen(): React.JSX.Element {
   const setScreenFilter = useStore((s) => s.setScreenFilter)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const confirmDelete = useConfirmTap<string>()
   const [trackMenu, setTrackMenu] = useState<{
     item: PlaylistItem
     index: number
@@ -131,11 +134,13 @@ export function PlaylistsScreen(): React.JSX.Element {
   // arrival — a stale jump must not re-select on a later visit.
   const playlistsJump = useStore((s) => s.playlistsJump)
   const clearPlaylistsJump = useStore((s) => s.clearPlaylistsJump)
-  useEffect(() => {
-    if (!playlistsJump) return
-    clearPlaylistsJump()
-    if (playlists.some((p) => p.id === playlistsJump)) setSelectedId(playlistsJump)
-  }, [playlistsJump, playlists, clearPlaylistsJump])
+  useOneShotAsk(
+    playlistsJump,
+    (id) => {
+      if (playlists.some((p) => p.id === id)) setSelectedId(id)
+    },
+    { clear: clearPlaylistsJump }
+  )
 
   // Pointer AND keyboard: reordering a list you can't drag is otherwise
   // impossible for anyone without a mouse.
@@ -203,7 +208,7 @@ export function PlaylistsScreen(): React.JSX.Element {
   return (
     <div className="h-full flex flex-col">
       <header className="px-8 pt-8 pb-4 flex items-center gap-4">
-        <h1 className="font-display screen-title font-bold text-[26px] tracking-tight">Playlists</h1>
+        <ScreenTitle>Playlists</ScreenTitle>
         <div className="flex-1" />
         {playlists.length > 0 && (
           <SortChip
@@ -329,7 +334,7 @@ export function PlaylistsScreen(): React.JSX.Element {
                     already inert during the run, and an inserted banner pushed
                     the whole list down and back up again. Clicking mid-run
                     cancels, so one control owns the whole interaction. */}
-                <button
+                <PrimaryButton
                   onClick={() =>
                     mine ? void tt.playlistActivateCancel() : void activatePlaylist(selected)
                   }
@@ -340,7 +345,7 @@ export function PlaylistsScreen(): React.JSX.Element {
                       : 'Replace the queue with this playlist'
                   }
                   aria-label={mine ? 'Stop loading playlist' : 'Play playlist'}
-                  className="no-drag tip-bottom relative overflow-hidden flex items-center gap-2 px-3.5 h-8 rounded-lg bg-gold text-bg text-[12.5px] font-medium shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.3)] hover:brightness-110 disabled:opacity-40 disabled:shadow-none motion-safe:active:scale-95 transition-all"
+                  className="no-drag tip-bottom relative overflow-hidden flex items-center gap-2 px-3.5 h-8 text-[12.5px]"
                 >
                   {mine && (
                     <span
@@ -365,42 +370,40 @@ export function PlaylistsScreen(): React.JSX.Element {
                     )}
                     Play
                   </span>
-                </button>
-                <button
+                </PrimaryButton>
+                <HeaderChip
                   onClick={() => setRenaming(selected.id)}
                   data-tip="Rename"
                   aria-label="Rename playlist"
-                  className="no-drag tip-bottom p-2 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
+                  className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
                 >
                   <Pencil size={16} />
-                </button>
+                </HeaderChip>
                 <button
                   onClick={() => {
-                    if (confirmDelete === selected.id) {
-                      // Snapshot the WHOLE playlist, not its id: undo has to put
-                      // back the name, the items and the timestamps, and after
-                      // the delete there is nowhere left to read them from.
-                      const deleted = selected
-                      void tt.playlistDelete(deleted.id)
-                      setConfirmDelete(null)
-                      showToast({
-                        kind: 'success',
-                        text: `Deleted “${deleted.name}”`,
-                        action: { label: 'Undo', undo: () => void tt.playlistRestore(deleted) }
-                      })
-                    } else setConfirmDelete(selected.id)
+                    if (!confirmDelete.tap(selected.id)) return
+                    // Snapshot the WHOLE playlist, not its id: undo has to put
+                    // back the name, the items and the timestamps, and after
+                    // the delete there is nowhere left to read them from.
+                    const deleted = selected
+                    void tt.playlistDelete(deleted.id)
+                    showToast({
+                      kind: 'success',
+                      text: `Deleted “${deleted.name}”`,
+                      action: { label: 'Undo', undo: () => void tt.playlistRestore(deleted) }
+                    })
                   }}
-                  onBlur={() => setConfirmDelete(null)}
+                  {...confirmDelete.blurProps}
                   data-tip="Delete playlist"
                   aria-label="Delete playlist"
                   className={cx(
                     'no-drag tip-bottom tip-end rounded-lg motion-safe:active:scale-90 transition-all',
-                    confirmDelete === selected.id
+                    confirmDelete.isArmed(selected.id)
                       ? 'px-2.5 h-9 text-[11.5px] bg-alert text-white'
                       : 'p-2 ring-1 ring-edge bg-panel/70 text-dim hover:text-alert hover:ring-edge2 hover:bg-raised/70'
                   )}
                 >
-                  {confirmDelete === selected.id ? 'Sure?' : <Trash2 size={16} />}
+                  {confirmDelete.isArmed(selected.id) ? 'Sure?' : <Trash2 size={16} />}
                 </button>
               </div>
 

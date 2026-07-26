@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
 import { cx } from '@/lib/format'
 import { PopoverChrome } from '@/hooks/usePopover'
+import { POPOVER_CARD } from '@/components/Overlay'
+import { HeaderChip } from '@/components/Chrome'
 
 /**
  * The sort control chip + popover (lifted from LibraryScreen so the library
@@ -27,24 +29,20 @@ export function SortChip<T extends string>({
   const [open, setOpen] = useState(false)
   return (
     <div className="relative">
-      <button
+      <HeaderChip
+        active={value !== neutral || reversed}
         data-tip="Sort"
         aria-label="Sort"
         onClick={() => setOpen((o) => !o)}
-        className={cx(
-          'no-drag tip-bottom p-2 rounded-lg ring-1 transition-all',
-          value !== neutral || reversed
-            ? 'ring-gold/50 bg-golddim text-gold'
-            : 'ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70'
-        )}
+        className="no-drag tip-bottom p-2"
       >
         <ArrowUpDown size={16} />
-      </button>
+      </HeaderChip>
       {open && (
         <>
           <PopoverChrome onClose={() => setOpen(false)} />
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-1.5 z-30 w-48 rounded-xl ring-1 ring-edge2 bg-raised shadow-xl p-1.5 space-y-0.5">
+          <div className={cx('absolute right-0 top-full mt-1.5 z-30 w-48', POPOVER_CARD, 'p-1.5 space-y-0.5')}>
             {sorts.map((s) => {
               const active = s.value === value
               return (

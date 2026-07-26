@@ -46,6 +46,8 @@ import { AlbumsLens, ArtistsLens, type LensActions } from '@/components/LibraryL
 import { AddToPlaylistPanel, itemFromNode } from '@/components/AddToPlaylistPanel'
 import { ItemMenu, PresetPicker } from '@/components/LibraryMenus'
 import { EmptyState } from '@/components/EmptyState'
+import { HeaderChip, PrimaryButton, ScreenTitle } from '@/components/Chrome'
+import { useOneShotAsk } from '@/hooks/useOneShotAsk'
 
 // Crumbs keep the entered node so an album level can render its header
 // (art, artist, year) without re-fetching metadata.
@@ -553,66 +555,68 @@ export function LibraryScreen(): React.JSX.Element {
   //
   // Claimed at most once per id — so exiting search manually isn't fought by a
   // re-running effect — and CLEARED once claimed, which is what stops a stale
-  // ask re-firing on a later mount. The claim happens after the servers guard,
-  // so an ask made before the listing lands still runs when it does; StrictMode
-  // double-runs see the claim (or the cleared ask) and no-op.
+  // ask re-firing on a later mount. `ready` parks the ask until the server
+  // listing lands rather than consuming it into nothing; see useOneShotAsk.
   const librarySearchTarget = useStore((s) => s.librarySearchTarget)
   const clearLibrarySearchTarget = useStore((s) => s.clearLibrarySearchTarget)
-  const searchReqDone = useRef(-1)
-  useEffect(() => {
-    if (!librarySearchTarget) return
-    if (searchReqDone.current === librarySearchTarget.id) return
-    if (!servers) return // listing still loading; rerun when it lands
-    searchReqDone.current = librarySearchTarget.id
-    // A SEEDED ask (the Search→Library handoff: "See all N in the Library")
-    // brings the unified query along and skips find-recall below — restoring
-    // yesterday's search over an explicit ask would answer a question nobody
-    // asked.
-    const seeded = librarySearchTarget.query?.trim() || null
-    clearLibrarySearchTarget()
-    const ready = new Set(
-      useStore
-        .getState()
-        .mediaIndex.filter((x) => x.state === 'ready')
-        .map((x) => x.udn)
-    )
-    const eligible = (x: MediaServerInfo): boolean => x.searchable || ready.has(x.udn)
-    // Find-recall first: ⌘F brings back the session's last search wholesale
-    // (scope included) when that scope is still eligible; an ineligible or
-    // absent memory falls through to the fresh-search picks below.
-    const mem = seeded == null ? searchMemory : null
-    if (mem?.query.trim()) {
-      const memServer = mem.udn ? servers.find((x) => x.udn === mem.udn) : undefined
-      const memEligible = mem.udn === null ? ready.size >= 2 : memServer != null && eligible(memServer)
-      if (memEligible) {
-        moveTo(mem.udn, [])
+  useOneShotAsk(
+    librarySearchTarget,
+    (ask) => {
+      if (!servers) return
+      // A SEEDED ask (the Search→Library handoff: "See all N in the Library")
+      // brings the unified query along and skips find-recall below — restoring
+      // yesterday's search over an explicit ask would answer a question nobody
+      // asked.
+      const seeded = ask.query?.trim() || null
+      const ready = new Set(
+        useStore
+          .getState()
+          .mediaIndex.filter((x) => x.state === 'ready')
+          .map((x) => x.udn)
+      )
+      const eligible = (x: MediaServerInfo): boolean => x.searchable || ready.has(x.udn)
+      // Find-recall first: ⌘F brings back the session's last search wholesale
+      // (scope included) when that scope is still eligible; an ineligible or
+      // absent memory falls through to the fresh-search picks below.
+      const mem = seeded == null ? searchMemory : null
+      if (mem?.query.trim()) {
+        const memServer = mem.udn ? servers.find((x) => x.udn === mem.udn) : undefined
+        const memEligible =
+          mem.udn === null ? ready.size >= 2 : memServer != null && eligible(memServer)
+        if (memEligible) {
+          moveTo(mem.udn, [])
+          setSearchMode(true)
+          restoreSearchMemory(mem.udn)
+          return
+        }
+      }
+      // Two or more ready indexes → the root cross-server search: no arbitrary
+      // server pick (the reason a default-search-server setting was rejected).
+      // With one, the scoped flow below keeps its live fallback.
+      if (ready.size >= 2) {
+        moveTo(null, [])
         setSearchMode(true)
-        restoreSearchMemory(mem.udn)
+        if (seeded != null) setSearchQuery(seeded)
         return
       }
-    }
-    // Two or more ready indexes → the root cross-server search: no arbitrary
-    // server pick (the reason a default-search-server setting was rejected).
-    // With one, the scoped flow below keeps its live fallback.
-    if (ready.size >= 2) {
-      moveTo(null, [])
+      const current = servers.find((x) => x.udn === serverUdn)
+      if (current && eligible(current)) {
+        setSearchMode(true)
+        if (seeded != null) setSearchQuery(seeded)
+        return
+      }
+      const target = servers.find(eligible)
+      if (!target) return
+      moveTo(target.udn, [])
       setSearchMode(true)
       if (seeded != null) setSearchQuery(seeded)
-      return
+    },
+    {
+      claim: librarySearchTarget?.id,
+      clear: clearLibrarySearchTarget,
+      ready: servers != null // listing still loading; runs when it lands
     }
-    const current = servers.find((x) => x.udn === serverUdn)
-    if (current && eligible(current)) {
-      setSearchMode(true)
-      if (seeded != null) setSearchQuery(seeded)
-      return
-    }
-    const target = servers.find(eligible)
-    if (!target) return
-    moveTo(target.udn, [])
-    setSearchMode(true)
-    if (seeded != null) setSearchQuery(seeded)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [librarySearchTarget, servers, serverUdn])
+  )
 
   const enter = (node: MediaNode): void => {
     if (crossMode && crossState) {
@@ -1346,7 +1350,7 @@ export function LibraryScreen(): React.JSX.Element {
   return (
     <div className="h-full flex flex-col">
       <header className="drag-region flex items-center gap-4 px-8 pt-8 pb-2">
-        <h1 className="font-display screen-title font-bold text-[26px] tracking-tight">Library</h1>
+        <ScreenTitle>Library</ScreenTitle>
         <div className="flex-1" />
         <div className="flex items-center gap-1.5">
           {filterAvailable && (
@@ -1379,16 +1383,15 @@ export function LibraryScreen(): React.JSX.Element {
           )}
           {/* a ready index makes even a Browse-only server searchable */}
           {!searchMode && !atRoot && (server?.searchable || serverIndex?.state === 'ready') && (
-            <button
+            <PrimaryButton
               data-library-search-button
               data-tip={`${MOD}F`}
               onClick={() => setSearchMode(true)}
-              className="no-drag tip-bottom tip-end flex items-center gap-2 px-3.5 h-8 rounded-lg bg-gold text-bg text-[12.5px] font-medium
-                         shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.3)] hover:brightness-110 motion-safe:active:scale-95 transition-all"
+              className="no-drag tip-bottom tip-end flex items-center gap-2 px-3.5 h-8 text-[12.5px]"
             >
               <Search size={14} strokeWidth={2.2} />
               Search all of {server?.name ?? 'this library'}
-            </button>
+            </PrimaryButton>
           )}
           {!searchMode && !atRoot && (rawContainerCount > 1 || (!albumNode && rawTrackCount > 1)) && (
             <SortChip
@@ -1408,14 +1411,14 @@ export function LibraryScreen(): React.JSX.Element {
               always rows); hidden wherever it would sit dead — the root
               (sources always cards), album views, and pure-track folders */}
           {!atRoot && !albumNode && (searchMode ? containers.length > 0 : rawContainerCount > 0) && (
-            <button
+            <HeaderChip
               data-tip={cards ? 'Albums & folders as rows' : 'Albums & folders as cards'}
               aria-label={cards ? 'Albums & folders as rows' : 'Albums & folders as cards'}
               onClick={() => void setLayout(cards ? 'rows' : 'cards')}
-              className="no-drag tip-bottom p-2 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
+              className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
             >
               {cards ? <Rows3 size={16} /> : <LayoutGrid size={16} />}
-            </button>
+            </HeaderChip>
           )}
         </div>
       </header>
@@ -1873,13 +1876,14 @@ export function LibraryScreen(): React.JSX.Element {
                 >
                   <Heart size={16} fill={nodeFavorited(albumNode) ? 'currentColor' : 'none'} />
                 </button>
-                <button
+                <HeaderChip
                   aria-label="More actions"
                   onClick={(e) => openMenu(albumNode, e)}
-                  className="p-2 rounded-full ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 transition-all"
+                  shape="full"
+                  className="p-2"
                 >
                   <MoreHorizontal size={16} />
-                </button>
+                </HeaderChip>
               </div>
             </div>
           </div>

@@ -1,5 +1,4 @@
-import { useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { useState } from 'react'
 import type { MediaNode, MediaQueueAction } from '@shared/ipc'
 import { useStore } from '@/store'
 import { cx } from '@/lib/format'
@@ -13,7 +12,8 @@ import {
   type MediaMenuItem
 } from '@/lib/mediaMenus'
 import type { SearchBack } from '@/store'
-import { usePopoverChrome, useClampedPosition } from '@/hooks/usePopover'
+import { PopoverCard } from '@/components/Overlay'
+import { useConfirmTap } from '@/hooks/useConfirmTap'
 import { ArtImage } from '@/components/ArtImage'
 
 // ------------------------------------------------------------------- ⋯ menu
@@ -83,37 +83,31 @@ export function ItemMenu({
           ? albumMenuItems(ref, caps)
           : trackMenuItems(ref, caps)
 
-  usePopoverChrome(onClose)
-  const boxRef = useRef<HTMLDivElement | null>(null)
-  const pos = useClampedPosition(boxRef, menu.x, menu.y)
-
-  return createPortal(
-    <>
-      <div className="fixed inset-0 z-40" onClick={onClose} onContextMenu={onClose} />
-      <div
-        ref={boxRef}
-        className="fixed z-50 w-52 rounded-xl ring-1 ring-edge2 bg-raised shadow-xl p-1.5 space-y-0.5"
-        style={pos}
-      >
-        <div className="px-2.5 pt-1 pb-1.5 text-[11px] text-faint truncate">{node.title}</div>
-        {items.map((item) => (
-          <button
-            key={item.label}
-            onClick={() => {
-              // close-then-run, the RowMenu contract — builder items (pivot,
-              // heart) don't know about this menu's state, and callers that
-              // also close themselves just close twice, harmlessly
-              onClose()
-              item.run()
-            }}
-            className="w-full px-2.5 py-1.5 rounded-lg text-left text-[13px] text-dim hover:text-ink hover:bg-veil transition-colors"
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
-    </>,
-    document.body
+  return (
+    <PopoverCard
+      at={menu}
+      width="w-52"
+      onClose={onClose}
+      rightClickCloses
+      className="p-1.5 space-y-0.5"
+    >
+      <div className="px-2.5 pt-1 pb-1.5 text-[11px] text-faint truncate">{node.title}</div>
+      {items.map((item) => (
+        <button
+          key={item.label}
+          onClick={() => {
+            // close-then-run, the RowMenu contract — builder items (pivot,
+            // heart) don't know about this menu's state, and callers that
+            // also close themselves just close twice, harmlessly
+            onClose()
+            item.run()
+          }}
+          className="w-full px-2.5 py-1.5 rounded-lg text-left text-[13px] text-dim hover:text-ink hover:bg-veil transition-colors"
+        >
+          {item.label}
+        </button>
+      ))}
+    </PopoverCard>
   )
 }
 
@@ -148,7 +142,7 @@ export function PresetSavePanel({
   while (occupied.has(nextFree) && nextFree < maxSlots) nextFree++
   const slotCount = Math.max(24, Math.min(maxSlots, (Math.max(0, ...occupied.keys()) || 0) + 6))
   const [name, setName] = useState('')
-  const [confirmSlot, setConfirmSlot] = useState<number | null>(null)
+  const overwrite = useConfirmTap<number>()
   const [busy, setBusy] = useState(false)
 
   const commit = async (slot: number): Promise<void> => {
@@ -159,7 +153,7 @@ export function PresetSavePanel({
       // success → the wrapper has closed; leave state as-is
     } catch {
       // failure was toasted upstream — reset so the user can retry
-      setConfirmSlot(null)
+      overwrite.disarm()
       setBusy(false)
     }
   }
@@ -192,15 +186,17 @@ export function PresetSavePanel({
         {Array.from({ length: slotCount }, (_, i) => i + 1).map((slot) => {
           const occ = occupied.get(slot)
           const taken = occ != null
-          const confirming = confirmSlot === slot
+          const confirming = overwrite.isArmed(slot)
           return (
             <button
               key={slot}
               onClick={() => {
-                if (!taken) return void commit(slot)
-                if (confirming) return void commit(slot)
-                setConfirmSlot(slot)
+                // A free slot saves on the first click; an occupied one arms,
+                // then commits on the second (and disarms on a timer or on the
+                // focus leaving it — useConfirmTap's rule, app-wide).
+                if (!taken || overwrite.tap(slot)) void commit(slot)
               }}
+              {...overwrite.blurProps}
               data-tip={taken ? `Overwrite “${occ?.name}”` : `Preset ${slot}`}
               className={cx(
                 'relative aspect-square rounded-md overflow-hidden ring-1 flex items-center justify-center text-[10.5px] font-mono transition-all',
@@ -235,21 +231,9 @@ export function PresetPicker({
   onClose(): void
   onSave(slot: number, name: string | null): Promise<void>
 }): React.JSX.Element {
-  usePopoverChrome(onClose)
-  const boxRef = useRef<HTMLDivElement | null>(null)
-  const pos = useClampedPosition(boxRef, picker.x, picker.y)
-
-  return createPortal(
-    <>
-      <div className="fixed inset-0 z-40" onClick={onClose} />
-      <div
-        ref={boxRef}
-        className="fixed z-50 w-[272px] rounded-xl ring-1 ring-edge2 bg-raised shadow-xl p-3"
-        style={pos}
-      >
-        <PresetSavePanel title={picker.node.title} onSave={onSave} />
-      </div>
-    </>,
-    document.body
+  return (
+    <PopoverCard at={picker} width="w-[272px]" onClose={onClose} className="p-3">
+      <PresetSavePanel title={picker.node.title} onSave={onSave} />
+    </PopoverCard>
   )
 }
