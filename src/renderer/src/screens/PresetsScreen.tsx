@@ -752,7 +752,7 @@ function PresetCard({
 
           {playing && (
             // h/w match the corner buttons so the four corners feel weighted
-            <span className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-md bg-black/55 backdrop-blur-sm">
+            <span className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-lg bg-panel/80 ring-1 ring-edge">
               <Eqbars playing={audible} />
             </span>
           )}
@@ -760,7 +760,7 @@ function PresetCard({
             // same corner the playing chip will claim — spinner hands over to bars
             <span
               data-preset-tuning
-              className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-md bg-black/55 backdrop-blur-sm"
+              className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-lg bg-panel/80 ring-1 ring-edge"
             >
               <Loader2 size={13} className="spin text-gold/90" />
             </span>
@@ -779,10 +779,10 @@ function PresetCard({
           onPointerDown={(e) => e.stopPropagation()}
           data-preset-volume
           className={cx(
-            'tip-bottom absolute top-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-md bg-black/55 backdrop-blur-sm transition-all',
+            'tip-bottom absolute top-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-lg bg-panel/80 ring-1 ring-edge transition-all',
             volume != null || pv.open
-              ? 'opacity-100 text-gold hover:text-white'
-              : 'opacity-0 group-hover:opacity-100 text-white/85 hover:text-gold'
+              ? 'opacity-100 text-gold hover:text-ink'
+              : 'opacity-0 group-hover:opacity-100 text-dim hover:text-gold'
           )}
         >
           <Volume2 size={13} />
@@ -802,10 +802,10 @@ function PresetCard({
           }
         }}
         className={cx(
-          'tip-bottom absolute bottom-2 right-2 z-10 flex h-7 items-center justify-center gap-1.5 rounded-md backdrop-blur-sm transition-all',
+          'tip-bottom absolute bottom-2 right-2 z-10 flex h-7 items-center justify-center gap-1.5 rounded-lg transition-all',
           confirmDelete
             ? 'px-2.5 bg-alert text-white opacity-100 shadow-lg'
-            : cx('w-7 bg-black/55 text-white/85 hover:text-alert', 'opacity-0 group-hover:opacity-100')
+            : cx('w-7 bg-panel/80 ring-1 ring-edge text-dim hover:text-alert', 'opacity-0 group-hover:opacity-100')
         )}
       >
         <Trash2 size={13} />
