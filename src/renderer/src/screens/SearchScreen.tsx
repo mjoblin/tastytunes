@@ -139,6 +139,8 @@ export function SearchScreen(): React.JSX.Element {
   const searchRequest = useStore((s) => s.searchRequest)
   const clearSearchRequest = useStore((s) => s.clearSearchRequest)
   const doneReq = useRef(-1)
+  /** A seeded query whose select() must wait for its VALUE to commit. */
+  const selectPending = useRef<string | null>(null)
   useEffect(() => {
     const asked = searchRequest != null && doneReq.current !== searchRequest.id
     if (searchRequest) {
@@ -146,7 +148,14 @@ export function SearchScreen(): React.JSX.Element {
       // A seeded ask (the Library→Search pivot: "Search everywhere for X")
       // replaces the recalled query. Chips stay as they are — the point of a
       // pivot is seeing which collections answer, so nothing gets hidden.
-      if (asked && searchRequest.query != null) setQuery(searchRequest.query)
+      // The select happens in the [query] effect below, NOT here: selecting in
+      // this effect's frame grabs the OLD value, and the seeded value's commit
+      // then collapses the caret to the end — which silently killed ⌘←'s
+      // just-landed navigation after a pivot.
+      if (asked && searchRequest.query != null) {
+        selectPending.current = searchRequest.query
+        setQuery(searchRequest.query)
+      }
       clearSearchRequest()
     }
     // FOCUS ON THE NEXT FRAME, never synchronously in the effect. Arriving here
@@ -158,10 +167,17 @@ export function SearchScreen(): React.JSX.Element {
       inputRef.current?.focus()
       // find idiom: an asked-for search arrives with the recalled query
       // selected, so typing replaces it. A plain visit leaves the caret alone.
-      if (asked) inputRef.current?.select()
+      if (asked && selectPending.current == null) inputRef.current?.select()
     })
     return () => cancelAnimationFrame(raf)
   }, [searchRequest, clearSearchRequest])
+  // The seeded-ask select, once the value it belongs to is really in the box.
+  useEffect(() => {
+    if (selectPending.current == null || query !== selectPending.current) return
+    selectPending.current = null
+    inputRef.current?.focus()
+    inputRef.current?.select()
+  }, [query])
 
   const q = query.trim()
 
@@ -577,6 +593,25 @@ export function SearchScreen(): React.JSX.Element {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
+              // Just-landed after a pivot (the seeded query arrives selected):
+              // ⌘← NAVIGATES back to where the pivot left — the library search
+              // bar's exact rule. Once the selection collapses, ⌘-arrows are
+              // ordinary text-editing keys again; the blurred-box case is
+              // handled globally (useShortcuts).
+              if ((e.metaKey || e.altKey) && !e.ctrlKey && e.key === 'ArrowLeft') {
+                const el = e.currentTarget
+                const back = useStore.getState().searchBack
+                if (
+                  back &&
+                  el.selectionStart === 0 &&
+                  el.selectionEnd === el.value.length &&
+                  el.value.length > 0
+                ) {
+                  e.preventDefault()
+                  setScreen(back)
+                  return
+                }
+              }
               if (e.key !== 'Escape') return
               // Escape clears, then LETS GO. The box takes focus on arrival and
               // screen keys are suppressed while an input has it, so without the

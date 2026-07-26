@@ -43,6 +43,26 @@ export function useShortcuts(): void {
         return
       }
 
+      // ⌘/Alt-← on a PIVOTED Search screen returns where the pivot left
+      // ("Search everywhere for X" from the Library) — the browser-back reflex,
+      // and the mirror of the Library's own from-search crumb. The library's
+      // position restore means landing back exactly where you were browsing.
+      // Runs above the input guard so a blurred box isn't required… but only
+      // when no input has focus; the search box handles its own just-landed
+      // case (SearchScreen), the same split the Library's search bar uses.
+      if (
+        (e.metaKey || e.ctrlKey || e.altKey) &&
+        e.key === 'ArrowLeft' &&
+        !(e.target as HTMLElement | null)?.matches?.('input, textarea')
+      ) {
+        const s = useStore.getState()
+        if (s.screen === 'search' && s.searchBack) {
+          e.preventDefault()
+          s.setScreen(s.searchBack)
+          return
+        }
+      }
+
       const target = e.target as HTMLElement | null
       if (
         target &&

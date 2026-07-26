@@ -2123,7 +2123,9 @@ export function LibraryScreen(): React.JSX.Element {
               entity,
               run: () => {
                 setMenu(null)
-                requestSearch(entity)
+                // 'library' rides along so ⌘← on Search comes back HERE —
+                // and the position restore lands it on this very folder
+                requestSearch(entity, 'library')
               }
             }
           })()}

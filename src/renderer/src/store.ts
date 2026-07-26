@@ -242,8 +242,14 @@ interface TTState {
    * <artist>"); without it the recalled query is merely selected.
    */
   searchRequest: { id: number; query?: string } | null
-  requestSearch(query?: string): void
+  /** `from` records the screen a PIVOT left (Library ⋯ → "Search everywhere"),
+   *  so ⌘← on Search can return there — the mirror of the Library's
+   *  from-search crumb. Any other navigation clears it; a plain S/⌘F ask has
+   *  no "back", the same way a typed URL has none. */
+  requestSearch(query?: string, from?: Screen): void
   clearSearchRequest(): void
+  /** Where ⌘← on the Search screen returns to, when a pivot brought you here. */
+  searchBack: Screen | null
   /** One-shot ask: open Playlists with this playlist selected (search results
    *  OPEN a playlist rather than playing it — containers open, leaves play). */
   playlistsJump: string | null
@@ -348,14 +354,19 @@ export const useStore = create<TTState>((set, get) => ({
   requestLibrarySearch: (query) =>
     // Deliberately NOT setScreen('library'): from inside the Library that's the
     // front door, and a ⌘F shouldn't throw away where you were browsing.
-    set({ screen: 'library', librarySearchTarget: { id: ++librarySearchSeq, query } }),
+    set({
+      screen: 'library',
+      librarySearchTarget: { id: ++librarySearchSeq, query },
+      searchBack: null
+    }),
   clearLibrarySearchTarget: () => set({ librarySearchTarget: null }),
   searchRequest: null,
-  requestSearch: (query) =>
-    set({ screen: 'search', searchRequest: { id: ++searchSeq, query } }),
+  requestSearch: (query, from) =>
+    set({ screen: 'search', searchRequest: { id: ++searchSeq, query }, searchBack: from ?? null }),
   clearSearchRequest: () => set({ searchRequest: null }),
+  searchBack: null,
   playlistsJump: null,
-  jumpToPlaylist: (id) => set({ screen: 'playlists', playlistsJump: id }),
+  jumpToPlaylist: (id) => set({ screen: 'playlists', playlistsJump: id, searchBack: null }),
   clearPlaylistsJump: () => set({ playlistsJump: null }),
 
   toast: null,
@@ -375,11 +386,14 @@ export const useStore = create<TTState>((set, get) => ({
    * stops forgetting your place every time you glance at Now Playing.
    */
   setScreen: (screen) =>
-    set((s) =>
-      screen === 'library' && s.screen === 'library'
+    set((s) => ({
+      // any plain navigation invalidates the pivot's back-link — browser
+      // rules: going somewhere new kills the stale "back"
+      searchBack: null,
+      ...(screen === 'library' && s.screen === 'library'
         ? { screen, libraryResetNonce: s.libraryResetNonce + 1 }
-        : { screen }
-    ),
+        : { screen })
+    })),
   setDiagnosticsOpen: (diagnosticsOpen) => set({ diagnosticsOpen }),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   setInfoOpen: (infoOpen) => set({ infoOpen }),
@@ -399,7 +413,8 @@ export const useStore = create<TTState>((set, get) => ({
     set((s) => ({
       libraryTarget: { ...target, nonce: s.libraryResetNonce + 1 },
       screen: 'library',
-      libraryResetNonce: s.libraryResetNonce + 1
+      libraryResetNonce: s.libraryResetNonce + 1,
+      searchBack: null
     })),
   clearLibraryTarget: () => set({ libraryTarget: null }),
   setLastStation: (lastStation) => set({ lastStation }),
