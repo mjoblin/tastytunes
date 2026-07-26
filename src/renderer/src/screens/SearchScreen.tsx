@@ -187,7 +187,12 @@ export function SearchScreen(): React.JSX.Element {
   const [radioFailed, setRadioFailed] = useState(false)
   const radioSeq = useRef(0)
   useEffect(() => {
-    if (q.length < MIN_RADIO_CHARS) {
+    // Hidden means DON'T ASK. radio-browser is the only third party this screen
+    // touches, and the app promises that a lookup you've turned off makes zero
+    // requests — hiding the group while still querying every keystroke would
+    // break that quietly. There is no separate "disable radio" setting; this
+    // chip is it, and it persists for the session like the rest of the rail.
+    if (hidden.has('radio') || q.length < MIN_RADIO_CHARS) {
       radioSeq.current++
       setRadio(null)
       setRadioPending(false)
@@ -211,7 +216,7 @@ export function SearchScreen(): React.JSX.Element {
       }
     }, RADIO_DEBOUNCE_MS)
     return () => clearTimeout(t)
-  }, [q])
+  }, [q, hidden])
 
   // ---- actions. Every one delegates to the same helper its own screen uses.
 
@@ -317,6 +322,8 @@ export function SearchScreen(): React.JSX.Element {
     /** What the count MEANS: matches found, which may exceed what's listed. */
     total: number
     pending?: boolean
+    /** Not asked (a hidden lookup) — show no count rather than a false zero. */
+    unknown?: boolean
     rows: Array<{ key: string; sortKey: string; kind?: MediaKind; node: React.ReactNode }>
     /** Where the whole set lives, once this screen can't show more of it. */
     owner?: { screen: Screen; filterKey: 'favorites' | 'playlists' | 'presets' }
@@ -448,6 +455,9 @@ export function SearchScreen(): React.JSX.Element {
       label: 'Internet radio',
       total: radio?.length ?? 0,
       pending: radioPending,
+      // Hidden and never asked: we don't KNOW the count, and printing 0 would
+      // claim we looked. The chip stays live so it can be switched back on.
+      unknown: hidden.has('radio') && radio === null,
       rows: (radio ?? []).map((st) => ({
         key: st.uuid,
         sortKey: st.name,
@@ -547,7 +557,7 @@ export function SearchScreen(): React.JSX.Element {
             // unlit — a chip you can toggle to no effect is a lie about what
             // is behind it. It still renders, because "we looked here and
             // found nothing" is the answer it exists to give.
-            const empty = c.total === 0 && !c.pending
+            const empty = c.total === 0 && !c.pending && !c.unknown
             const on = !hidden.has(c.id) && !empty
             return (
               <button
@@ -569,7 +579,9 @@ export function SearchScreen(): React.JSX.Element {
                 )}
               >
                 {c.label}{' '}
-                <span className="tabular-nums opacity-70">{c.pending ? '…' : c.total}</span>
+                <span className="tabular-nums opacity-70">
+                  {c.pending ? '…' : c.unknown ? '—' : c.total}
+                </span>
               </button>
             )
           })}
@@ -698,10 +710,11 @@ export function SearchScreen(): React.JSX.Element {
                       taxonomy is closed at three (lib/media), and the Library's
                       own results already read artists → albums → tracks — the
                       hierarchy order, artists make albums, albums contain
-                      tracks. Mixed into one list, six artists above six albums
-                      looked like an unsorted jumble. Only while ISOLATED: six
-                      rows split three ways is worse than six rows. */}
-                  {c.id === 'library' && isolated
+                      tracks. Mixed into one list it read as an unsorted jumble:
+                      the order was always artists→albums→tracks, but nothing
+                      said so. Headings ALWAYS (user, 2026-07-25) — six rows
+                      split three ways still beats six rows that look shuffled. */}
+                  {c.id === 'library'
                     ? (['artist', 'album', 'track'] as const).map((k) => {
                         const inKind = ordered.slice(0, cap).filter((r) => r.kind === k)
                         if (inKind.length === 0) return null
