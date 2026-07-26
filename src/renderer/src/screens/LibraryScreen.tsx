@@ -53,10 +53,11 @@ import { useOneShotAsk } from '@/hooks/useOneShotAsk'
 // (art, artist, year) without re-fetching metadata.
 type Crumb = { id: string; title: string; node?: MediaNode }
 
-// Entering the Library always lands on the source list — "Library" in the
-// nav/palette/shortcuts is the front door, not "wherever I last was" (user
-// ask). Per-folder scroll and filter memories below still apply while
-// browsing within a visit.
+// Returning to the Library RESTORES where the last visit left off
+// (positionMemory below) — the T3 "always the front door" rule was reversed
+// 2026-07-24 (user ask); the reset now lives behind re-invoking Library while
+// already here, or the breadcrumb root. Per-folder scroll and filter memories
+// apply while browsing within a visit.
 const scrollMemory = new Map<string, number>()
 // Per-LEVEL filter memory: each folder keeps its own filter for the session
 // (the store's screenFilters.library always holds the current level's).
