@@ -389,6 +389,7 @@ function registerIpc(): void {
   ipcMain.handle(IPC.mediaPresetSave, (_e, serverUdn: string, objectId: string, slot: number) =>
     presetSave(streamerHost(), serverUdn, objectId, slot)
   )
+  ipcMain.handle(IPC.contentResolve, (_e, ref: ContentRef) => deviceManager.contentResolve(ref))
   ipcMain.handle(IPC.toggleMini, () => toggleMiniPlayer())
   ipcMain.handle(IPC.showMain, () => {
     if (!mainWindow || mainWindow.isDestroyed()) createWindow()

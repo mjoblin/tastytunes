@@ -60,7 +60,7 @@ import {
   setPlaylistItems
 } from './playlists'
 import { queueAdd } from './upnpBrowser'
-import { resolveContent } from './resolveContent'
+import { resolveContent, type ResolvedContent } from './resolveContent'
 import { scrobbler } from './scrobbler'
 import { getNetRequests, loggedFetch } from './netlog'
 
@@ -1026,6 +1026,18 @@ export class DeviceManager {
       }
     }
     return 'ok'
+  }
+
+  /**
+   * Renderer-facing content resolution — the same index-first, live-fallback
+   * search queue undo and playlist healing use, exposed so ANY surface can act
+   * on a track it knows only by content (a recently-played entry, a favorite
+   * whose server changed). Null when disconnected or nothing matches.
+   */
+  async contentResolve(ref: ContentRef): Promise<ResolvedContent | null> {
+    const conn = this.snapshot().connection
+    if (conn.phase !== 'connected') return null
+    return resolveContent(conn.host, ref)
   }
 
   /** Resolve with the first cached queue satisfying `test`, or null on timeout. */

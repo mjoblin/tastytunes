@@ -1534,6 +1534,12 @@ export interface TastyTunesApi {
   ): Promise<void>
   /** Save a browsed item to a preset slot (1-99). */
   mediaPresetSave(serverUdn: string, objectId: string, slot: number): Promise<void>
+  /** Find a track by CONTENT on any server (index first, live fallback) —
+   *  the renderer-facing face of main's resolveContent. Null when nothing
+   *  matches or the device is disconnected. */
+  contentResolve(
+    ref: ContentRef
+  ): Promise<{ serverUdn: string; serverName: string; objectId: string } | null>
   /** Station search against radio-browser.info (main process; name contains, by popularity). */
   /** Force a media-index (re)build for one server (also the only way to
    *  build one for a Browse-only server). */
@@ -1595,6 +1601,7 @@ export const IPC = {
   mediaIndexPools: 'tt:mediaIndexPools',
   mediaQueueAdd: 'tt:mediaQueueAdd',
   mediaPresetSave: 'tt:mediaPresetSave',
+  contentResolve: 'tt:contentResolve',
   mediaIndexRebuild: 'tt:mediaIndexRebuild',
   radioSearch: 'tt:radioSearch',
   radioTop: 'tt:radioTop',
