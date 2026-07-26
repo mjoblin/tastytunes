@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Heart, RadioTower, RotateCw, Search, X } from 'lucide-react'
 import type { Favorite, RadioStation } from '@shared/ipc'
-import { isRadioMetadata } from '@shared/smoip'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { toggleFavorite } from '@/lib/favorites'
-import { playStation } from '@/lib/radio'
+import { playingStationName } from '@/lib/radio'
+import { useStationTuning } from '@/hooks/useStationTuning'
 import { EmptyState } from '@/components/EmptyState'
 import { StationRow } from '@/components/StationRow'
 import { PresetSavePanel } from '@/components/LibraryMenus'
@@ -185,38 +185,11 @@ export function RadioScreen(): React.JSX.Element {
     return () => clearTimeout(t)
   }, [query])
 
-  // The station whose stream the device is playing right now — name-matched,
-  // the same identity radio presets use (play_state has no stream URL).
-  const md = playState?.metadata
-  const playingName =
-    isRadioMetadata(md) && (playState?.state === 'play' || playState?.state === 'buffering')
-      ? (md?.station ?? md?.name)?.trim().toLowerCase()
-      : null
-
-  // The device answers the play command instantly but the stream takes a few
-  // seconds to actually start — show a "tuning in" state on the clicked row
-  // until the station lands in play_state (or clearly never will).
-  const [starting, setStarting] = useState<{ url: string; name: string } | null>(null)
-  const startTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const play = async (st: RadioStation): Promise<void> => {
-    // The command and its lastStation side effect live in lib/radio so search
-    // plays a station exactly the same way; the "tuning in…" state below is
-    // this screen's own, layered on top.
-    setStarting({ url: st.url, name: st.name })
-    if (startTimeout.current) clearTimeout(startTimeout.current)
-    // dead-stream fallback: stop indicating if it never lands
-    startTimeout.current = setTimeout(() => setStarting(null), 15_000)
-    if (!(await playStation(st))) setStarting(null) // failure is toasted centrally
-  }
-  useEffect(() => {
-    if (starting && playingName === starting.name.trim().toLowerCase()) setStarting(null)
-  }, [starting, playingName])
-  useEffect(
-    () => () => {
-      if (startTimeout.current) clearTimeout(startTimeout.current)
-    },
-    []
-  )
+  // What's audible and what's on its way both live in shared helpers now
+  // (playingStationName, useStationTuning) — unified search lights the same
+  // rows the same way, from the same code.
+  const playingName = playingStationName(playState)
+  const { tuningUrl, play } = useStationTuning(playingName)
 
   const savePlaying = async (slot: number, name: string | null): Promise<void> => {
     await tt.command({ type: 'zoneSavePreset', slot })
@@ -362,7 +335,7 @@ export function RadioScreen(): React.JSX.Element {
                     key={st.uuid}
                     station={st}
                     playing={playing}
-                    tuning={!playing && starting?.url === st.url}
+                    tuning={!playing && tuningUrl === st.url}
                     favorited={favUrls.has(st.url)}
                     onHeart={() =>
                       void toggleFavorite({

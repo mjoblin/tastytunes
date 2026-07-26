@@ -32,7 +32,10 @@ export function StationRow({
   favorited: boolean
   onHeart(): void
   onPlay(): void
-  onSave(x: number, y: number): void
+  /** Save-to-preset, offered on the PLAYING row. Optional: search omits it —
+   *  the save panel belongs to the Radio screen, which has the room for it —
+   *  and the button simply isn't rendered rather than wired to a no-op. */
+  onSave?(x: number, y: number): void
 }): React.JSX.Element {
   const tags = station.tags
     .split(',')
@@ -105,7 +108,7 @@ export function StationRow({
         >
           <Heart size={15} fill={favorited ? 'currentColor' : 'none'} />
         </button>
-        {playing && (
+        {playing && onSave && (
           <button
             onClick={(e) => {
               e.stopPropagation()

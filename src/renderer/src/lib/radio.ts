@@ -1,5 +1,19 @@
+import { isRadioMetadata, type ZonePlayState } from '@shared/smoip'
 import { tt } from '@/api'
 import { useStore } from '@/store'
+
+/**
+ * The station name the device is playing right now, lowercased — or null when
+ * radio isn't what's audible. NAME-matched because play_state carries no
+ * stream URL; the same identity radio presets use. Shared by the Radio screen
+ * and unified search so the two light the same row for the same stream.
+ */
+export function playingStationName(playState: ZonePlayState | null): string | null {
+  const md = playState?.metadata
+  return isRadioMetadata(md) && (playState?.state === 'play' || playState?.state === 'buffering')
+    ? ((md?.station ?? md?.name)?.trim().toLowerCase() ?? null)
+    : null
+}
 
 /**
  * What playing a station actually needs. Structural rather than `RadioStation`
@@ -28,6 +42,15 @@ export interface PlayableStation {
  * that show their own pending state (the Radio screen's "tuning in…").
  */
 export async function playStation(station: PlayableStation): Promise<boolean> {
+  try {
+    await tt.command({ type: 'streamRadio', url: station.url, name: station.name })
+  } catch {
+    return false
+  }
+  // Recorded only once the command LANDED: a station that never played must
+  // not become the heartable "last station". The command resolves on the
+  // device's instant GET reply, seconds before the stream itself starts, so
+  // this is still in place well before anyone can reach for the heart.
   useStore.getState().setLastStation({
     url: station.url,
     name: station.name,
@@ -35,10 +58,5 @@ export async function playStation(station: PlayableStation): Promise<boolean> {
     // radio-browser uses the URL as the uuid for hand-entered stations
     radioBrowserUuid: station.uuid && station.uuid !== station.url ? station.uuid : null
   })
-  try {
-    await tt.command({ type: 'streamRadio', url: station.url, name: station.name })
-    return true
-  } catch {
-    return false
-  }
+  return true
 }
