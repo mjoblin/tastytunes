@@ -586,6 +586,23 @@ export function SearchScreen(): React.JSX.Element {
           absence would read as "we didn't look". */}
       {q && (
         <div className="no-drag flex items-center gap-1.5 flex-wrap px-8 pb-3">
+          {/* The library is the only category with KINDS inside it (the index
+              answers artists, albums and tracks). Its partition appears once
+              the library is the screen — same All/Artists/Albums/Tracks
+              Segmented its own results use, and a partition is single-select
+              by the app's rule, unlike the multi-select category chips. */}
+          {isolated && shownCats[0]?.id === 'library' && (
+            <Segmented<'all' | 'artists' | 'albums' | 'tracks'>
+              value={libKind}
+              onChange={setLibKind}
+              options={[
+                { value: 'all', label: 'All' },
+                { value: 'artists', label: 'Artists' },
+                { value: 'albums', label: 'Albums' },
+                { value: 'tracks', label: 'Tracks' }
+              ]}
+            />
+          )}
           {cats.map((c) => {
             // THREE states, not two: matched-and-showing, matched-and-hidden,
             // and NOTHING TO SHOW. The third is disabled rather than merely
@@ -620,23 +637,6 @@ export function SearchScreen(): React.JSX.Element {
               </button>
             )
           })}
-          {/* The library is the only category with KINDS inside it (the index
-              answers artists, albums and tracks). Its partition appears once
-              the library is the screen — same All/Artists/Albums/Tracks
-              Segmented its own results use, and a partition is single-select
-              by the app's rule, unlike the multi-select category chips. */}
-          {isolated && shownCats[0]?.id === 'library' && (
-            <Segmented<'all' | 'artists' | 'albums' | 'tracks'>
-              value={libKind}
-              onChange={setLibKind}
-              options={[
-                { value: 'all', label: 'All' },
-                { value: 'artists', label: 'Artists' },
-                { value: 'albums', label: 'Albums' },
-                { value: 'tracks', label: 'Tracks' }
-              ]}
-            />
-          )}
           <div className="flex-1" />
           {/* Only two sorts generalize across five heterogeneous groups: each
               source's own ranking, and A–Z. Artist/year are library-shaped and
