@@ -893,6 +893,15 @@ export class McpBridge {
             .describe("Style tag, e.g. 'jazz' — matched against the directory's tags, most-listened first.")
         },
         handler: async (a) => {
+          // The directory gate lives at the source (radioBrowser.fetchRaw), so
+          // with the setting off this tool would "work" and return [] — which
+          // an agent reads as "no stations matched", not "lookups are off".
+          // Humans get a disabled chip for this state; the agent gets told.
+          if (getSettings().radioDirectory === false) {
+            return err(
+              'The internet-radio directory is turned off in Settings (Behavior → Internet radio directory), so station lookups are unavailable. Favorited stations still play.'
+            )
+          }
           const q = (a.query as string | undefined)?.trim()
           const g = (a.genre as string | undefined)?.trim().toLowerCase()
           if (!q && !g) return err('Pass query and/or genre.')
