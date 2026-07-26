@@ -306,8 +306,13 @@ export function SearchScreen(): React.JSX.Element {
     [favorites]
   )
 
-  // ---- the five categories, as data. Every group renders from this list, so a
-  // ---- chip, a count, a cap and a sort can't disagree about what a category is.
+  // ---- The five categories, as data. Every group renders from this list, so a
+  // ---- chip, a count, a cap and a sort can't disagree about what a category
+  // ---- is — and the ORDER is the NAV RAIL'S (user, 2026-07-25):
+  // ---- Library · Presets · Playlists · Favorites · Radio. One spatial habit
+  // ---- for the whole app, so scanning results reuses the muscle memory the
+  // ---- sidebar already built. Radio lands last either way, which suits the
+  // ---- one group that arrives late.
 
   const byName = (a: { sortKey: string }, b: { sortKey: string }): number =>
     a.sortKey.localeCompare(b.sortKey)
@@ -364,29 +369,26 @@ export function SearchScreen(): React.JSX.Element {
       }))
     },
     {
-      id: 'favorites',
-      label: 'Favorites',
-      total: favResults.length,
-      owner: { screen: 'favorites', filterKey: 'favorites' },
-      rows: favResults.map((f) => ({
-        key: favoriteKey(f),
-        sortKey: f.kind === 'station' ? f.name : f.title,
+      id: 'presets',
+      label: 'Presets',
+      total: presetResults.length,
+      owner: { screen: 'presets', filterKey: 'presets' },
+      rows: presetResults.map((p) => ({
+        key: String(p.id ?? p.name),
+        sortKey: p.name ?? '',
         node: (
           <SearchRow
-            title={f.kind === 'station' ? f.name : f.title}
-            subtitle={
-              f.kind === 'station'
-                ? 'Station'
-                : [f.artist, f.kind === 'album' ? 'Album' : f.album].filter(Boolean).join(' — ')
-            }
-            artUrl={f.kind === 'station' ? f.favicon : f.artUrl}
-            icon={f.kind === 'station' ? Radio : f.kind === 'album' ? Disc3 : Music}
-            badge={f.kind === 'station' ? 'Station' : f.kind === 'album' ? 'Album' : 'Track'}
+            title={p.name ?? `Preset ${p.id}`}
+            subtitle={p.type}
+            artUrl={p.art_url}
+            icon={Radio}
+            badge="Preset"
+            meta={p.id != null ? `#${p.id}` : null}
+            playing={p.is_playing === true}
             dimmed={!connected}
-            actions={
-              <RowHeart favorited held={false} onHeart={() => void tt.favoriteRemove(favoriteKey(f))} />
-            }
-            onClick={() => openFavorite(f)}
+            onClick={() => {
+              if (p.id != null) void tt.command({ type: 'recallPreset', presetId: p.id })
+            }}
           />
         )
       }))
@@ -419,26 +421,29 @@ export function SearchScreen(): React.JSX.Element {
       }))
     },
     {
-      id: 'presets',
-      label: 'Presets',
-      total: presetResults.length,
-      owner: { screen: 'presets', filterKey: 'presets' },
-      rows: presetResults.map((p) => ({
-        key: String(p.id ?? p.name),
-        sortKey: p.name ?? '',
+      id: 'favorites',
+      label: 'Favorites',
+      total: favResults.length,
+      owner: { screen: 'favorites', filterKey: 'favorites' },
+      rows: favResults.map((f) => ({
+        key: favoriteKey(f),
+        sortKey: f.kind === 'station' ? f.name : f.title,
         node: (
           <SearchRow
-            title={p.name ?? `Preset ${p.id}`}
-            subtitle={p.type}
-            artUrl={p.art_url}
-            icon={Radio}
-            badge="Preset"
-            meta={p.id != null ? `#${p.id}` : null}
-            playing={p.is_playing === true}
+            title={f.kind === 'station' ? f.name : f.title}
+            subtitle={
+              f.kind === 'station'
+                ? 'Station'
+                : [f.artist, f.kind === 'album' ? 'Album' : f.album].filter(Boolean).join(' — ')
+            }
+            artUrl={f.kind === 'station' ? f.favicon : f.artUrl}
+            icon={f.kind === 'station' ? Radio : f.kind === 'album' ? Disc3 : Music}
+            badge={f.kind === 'station' ? 'Station' : f.kind === 'album' ? 'Album' : 'Track'}
             dimmed={!connected}
-            onClick={() => {
-              if (p.id != null) void tt.command({ type: 'recallPreset', presetId: p.id })
-            }}
+            actions={
+              <RowHeart favorited held={false} onHeart={() => void tt.favoriteRemove(favoriteKey(f))} />
+            }
+            onClick={() => openFavorite(f)}
           />
         )
       }))
