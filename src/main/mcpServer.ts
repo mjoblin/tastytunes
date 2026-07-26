@@ -14,19 +14,17 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { z, type ZodRawShape } from 'zod'
 import {
-  MCP_CLUSTERS,
-  favoriteKey,
-  mcpClusterEnabled,
   sleepTrackKey,
   type AppSettings,
   type ConnectionState,
-  type Favorite,
   type McpSettings,
   type MediaNode,
   type MediaQueueAction,
   type Schedule,
   type Snapshot
 } from '@shared/ipc'
+import { favoriteKey, type Favorite } from '@shared/model'
+import { MCP_CLUSTERS, mcpClusterEnabled } from '@shared/mcpCatalog'
 import { EQ_GAIN_MAX, EQ_GAIN_MIN, audioCaps, brightnessOptions, isRadioMetadata } from '@shared/smoip'
 import { app } from 'electron'
 import type { DeviceManager } from './deviceManager'

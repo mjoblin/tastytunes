@@ -3,7 +3,6 @@ import type {
   AppSettings,
   ConnectionState,
   DiscoveredDevice,
-  Favorite,
   FirmwareStatus,
   FrameEntry,
   LogEntry,
@@ -13,12 +12,10 @@ import type {
   NetRequestEntry,
   PushMessage,
   UpdateState,
-  RecentTrack,
   SleepTimer,
-  Snapshot,
-  Playlist,
-  PlaylistActivation
+  Snapshot
 } from '@shared/ipc'
+import type { Favorite, RecentTrack, Playlist, PlaylistActivation } from '@shared/model'
 import type {
   Presets,
   QueueList,

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Heart, RadioTower, RotateCw, Search, X } from 'lucide-react'
-import type { Favorite, RadioStation } from '@shared/ipc'
+import type { RadioStation } from '@shared/ipc'
+import type { Favorite } from '@shared/model'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { toggleFavorite } from '@/lib/favorites'

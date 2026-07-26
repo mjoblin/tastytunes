@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { app } from 'electron'
-import type { RecentTrack } from '@shared/ipc'
+import type { RecentTrack } from '@shared/model'
 import { atomicWriteFileSync } from './jsonStore'
 
 // A bounded ring of recently-played tracks, persisted beside settings.json.

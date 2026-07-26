@@ -1,6 +1,7 @@
 import { searchAllIndexes, searchServer as librarySearch } from './mediaIndex'
 import { refreshServers } from './upnpBrowser'
-import type { ContentRef, MediaNode } from '@shared/ipc'
+import type { MediaNode } from '@shared/ipc'
+import type { ContentRef } from '@shared/model'
 
 /**
  * Finding a track that is known only by its CONTENT.

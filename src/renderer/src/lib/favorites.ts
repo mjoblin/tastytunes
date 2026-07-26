@@ -1,10 +1,5 @@
-import {
-  favoriteKey,
-  type Favorite,
-  type FavoriteMedia,
-  type MediaNode,
-  type MediaServerInfo
-} from '@shared/ipc'
+import { type MediaNode, type MediaServerInfo } from '@shared/ipc'
+import { favoriteKey, type Favorite, type FavoriteMedia } from '@shared/model'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { isAlbumClass } from '@/lib/media'

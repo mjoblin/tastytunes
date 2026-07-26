@@ -3,17 +3,19 @@ import { join } from 'node:path'
 import {
   IPC,
   type AppSettings,
+  type LyricsQuery,
+  type MediaQueueAction,
+  type MenuCommand,
+  type SleepTimer,
+  type StreamerCommand
+} from '@shared/ipc'
+import {
   type ContentRef,
   type Playlist,
   type PlaylistItem,
   type Favorite,
-  type LyricsQuery,
-  type MediaQueueAction,
-  type MenuCommand,
-  type RecentTrack,
-  type SleepTimer,
-  type StreamerCommand
-} from '@shared/ipc'
+  type RecentTrack
+} from '@shared/model'
 import { DeviceManager } from './deviceManager'
 import { demoHost, startDemoStreamer, stopDemoStreamer } from './demoStreamer'
 import { McpBridge } from './mcpServer'

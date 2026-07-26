@@ -2,18 +2,20 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import {
   IPC,
   type AppSettings,
-  type ContentRef,
-  type Favorite,
-  type Playlist,
-  type PlaylistItem,
   type LyricsQuery,
   type MediaQueueAction,
   type PushMessage,
-  type RecentTrack,
   type SleepTimer,
   type StreamerCommand,
   type TastyTunesApi
 } from '@shared/ipc'
+import {
+  type ContentRef,
+  type Favorite,
+  type Playlist,
+  type PlaylistItem,
+  type RecentTrack
+} from '@shared/model'
 
 const api: TastyTunesApi = {
   getSnapshot: () => ipcRenderer.invoke(IPC.getSnapshot),

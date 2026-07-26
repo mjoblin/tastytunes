@@ -1,10 +1,5 @@
-import type {
-  ContentRef,
-  Favorite,
-  MediaNode,
-  PlaylistItem,
-  RecentTrack
-} from '@shared/ipc'
+import type { MediaNode } from '@shared/ipc'
+import type { ContentRef, Favorite, PlaylistItem, RecentTrack } from '@shared/model'
 import type { QueueListItem } from '@shared/smoip'
 import type { NewFavorite } from '@/lib/favorites'
 import { mediaKind } from '@/lib/media'

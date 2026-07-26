@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ChevronRight, History, MoreHorizontal, Play, Trash2 } from 'lucide-react'
-import { favoriteKey, recentMatchesPlayState, type Favorite, type RecentTrack } from '@shared/ipc'
+import {
+  favoriteKey,
+  recentMatchesPlayState,
+  type Favorite,
+  type RecentTrack
+} from '@shared/model'
 import { useStore } from '@/store'
 import { Eqbars } from '@/components/Eqbars'
 import { EmptyState } from '@/components/EmptyState'

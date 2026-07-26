@@ -26,7 +26,7 @@ import {
   type FavoriteMedia,
   type Playlist,
   type PlaylistItem
-} from '@shared/ipc'
+} from '@shared/model'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { EmptyState } from '@/components/EmptyState'

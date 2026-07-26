@@ -8,7 +8,7 @@ import {
   playlistItemKey,
   type Playlist,
   type PlaylistItem
-} from '@shared/ipc'
+} from '@shared/model'
 
 // Stored playlists, persisted beside settings.json and favorites.json — the
 // same bounded-local-file pattern, no database. Newest-UPDATED first, because

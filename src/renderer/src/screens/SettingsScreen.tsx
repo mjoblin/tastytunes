@@ -26,9 +26,6 @@ import {
 } from 'lucide-react'
 import { version } from '../../../../package.json'
 import {
-  MCP_CLUSTERS,
-  mcpClusterEnabled,
-  type McpClusterInfo,
   type AlignH,
   type AlignV,
   type AmbientArtMode,
@@ -41,6 +38,7 @@ import {
   type ThemePreference,
   type UpdateCheckResult
 } from '@shared/ipc'
+import { MCP_CLUSTERS, mcpClusterEnabled, type McpClusterInfo } from '@shared/mcpCatalog'
 import { tt } from '@/api'
 import { useStore, type Screen } from '@/store'
 import { useScrollMemory } from '@/hooks/useScrollMemory'

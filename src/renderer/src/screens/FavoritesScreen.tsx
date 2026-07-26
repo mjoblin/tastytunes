@@ -1,15 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Heart, Loader2, MoreHorizontal, Play } from 'lucide-react'
+import { type MediaNode, type MediaQueueAction, type MediaServerInfo } from '@shared/ipc'
 import {
   favoriteKey,
   type Favorite,
   type FavoriteMedia,
   type FavoriteStation,
-  type MediaNode,
-  type MediaQueueAction,
-  type MediaServerInfo,
   type PlaylistItem
-} from '@shared/ipc'
+} from '@shared/model'
 import { isRadioMetadata, type QueueListItem } from '@shared/smoip'
 import { tt } from '@/api'
 import { useStore } from '@/store'

@@ -1,4 +1,4 @@
-import type { PlaylistActivation } from '@shared/ipc'
+import type { PlaylistActivation } from '@shared/model'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 

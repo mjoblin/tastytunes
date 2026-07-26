@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ListOrdered, Plus } from 'lucide-react'
-import type { PlaylistItem } from '@shared/ipc'
+import type { PlaylistItem } from '@shared/model'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { cx, fmtTime, matchesFilter } from '@/lib/format'

@@ -6,23 +6,24 @@ import {
   presetVolumeKey,
   sleepTrackKey,
   type ConnectionState,
-  type ContentRef,
   type DiscoveredDevice,
   type FirmwareStatus,
   type FrameEntry,
   type LogEntry,
   type McpStatus,
   type MediaIndexStatus,
-  type MediaQueueAction,
-  type Playlist,
-  type PlaylistActivation,
   type PushMessage,
-  type QueueRestoreResult,
-  type RecentTrack,
   type SleepTimer,
   type Snapshot,
   type StreamerCommand
 } from '@shared/ipc'
+import {
+  type ContentRef,
+  type Playlist,
+  type PlaylistActivation,
+  type QueueRestoreResult,
+  type RecentTrack
+} from '@shared/model'
 import type {
   Presets,
   QueueList,
@@ -53,14 +54,12 @@ import {
   createPlaylist,
   deletePlaylist,
   getPlaylists,
-  healPlaylistItem,
-  markPlaylistPlayed,
   renamePlaylist,
   restorePlaylist,
   setPlaylistItems
 } from './playlists'
-import { queueAdd } from './upnpBrowser'
-import { resolveContent, type ResolvedContent } from './resolveContent'
+import { QueueOps } from './queueOps'
+import type { ResolvedContent } from './resolveContent'
 import { scrobbler } from './scrobbler'
 import { getNetRequests, loggedFetch } from './netlog'
 
@@ -603,7 +602,7 @@ export class DeviceManager {
         this.cache.queue = data as QueueList
         // Mid-batch (playlist activation) the cache stays current but the
         // renderer hears nothing — one authoritative push lands at the end.
-        if (this.queueBatch) return
+        if (this.queueOps.batching) return
         return this.push({ kind: 'queue', data: this.cache.queue })
       case '/presets/list':
         this.cache.presets = data as Presets
@@ -812,139 +811,35 @@ export class DeviceManager {
     return list
   }
 
-  private queueBatch = false
-  private activation: PlaylistActivation | null = null
-  private activationCancelled = false
+  /**
+   * The queue-writing engine (playlist activation, queue undo, content
+   * resolve). ONE instance, owned here; the invariants that make batched queue
+   * writes safe travel with it — see queueOps.ts. The methods below delegate so
+   * the IPC surface and mcpServer see no change.
+   *
+   * The closures read live state rather than copying it: `socket` and the
+   * cached queue both move under a run as frames arrive.
+   */
+  private readonly queueOps = new QueueOps({
+    host: () => (this.connection.phase === 'connected' ? this.connection.host : null),
+    socket: () => this.socket,
+    queue: () => this.cache.queue ?? null,
+    push: (msg) => this.push(msg),
+    ensureAwake: () => this.ensureAwake()
+  })
 
   /** Live activation state, for the boot snapshot. */
   get playlistActivation(): PlaylistActivation | null {
-    return this.activation
+    return this.queueOps.activation
   }
 
   cancelPlaylistActivation(): void {
-    if (this.activation && !this.activation.finished) this.activationCancelled = true
+    this.queueOps.cancelActivation()
   }
 
-  /**
-   * Replace the streamer's queue with a stored playlist.
-   *
-   * Shape dictated by the firmware (confirmed against vibin, which solved this
-   * first): entries go in ONE AT A TIME and each needs its media server's DIDL,
-   * so this is ~2 round-trips per track and genuinely slow — hence progress and
-   * cancellation. Every add also emits /queue/info, which normally refetches the
-   * whole list; the batch suppresses that at the wire AND at the push, then
-   * fetches once at the end. vibin used a bare boolean that cleared before the
-   * adds had settled; the single reconciling fetch is what makes ours safe.
-   *
-   * A stale objectId is not a failure: ids are hints, content is identity, so a
-   * miss re-resolves by search and HEALS the stored entry (the favorites move).
-   * Anything genuinely gone is reported, not silently dropped.
-   */
+  /** See QueueOps.playlistActivate — one run at a time, batched, self-healing. */
   async playlistActivate(id: string): Promise<PlaylistActivation> {
-    const playlist = getPlaylists().find((p) => p.id === id)
-    if (!playlist) throw new Error('No such playlist')
-    const host = this.connection.phase === 'connected' ? this.connection.host : null
-    if (!host) throw new Error('Not connected')
-    // ONE run at a time. The UI greys its Play buttons during a run, but MCP's
-    // play_playlist has no such gate — two interleaved runs would fight over
-    // REPLACE/APPEND, the batch flags, and this.activation itself. The claim
-    // below is synchronous with this check: no await between them.
-    if (this.activation && !this.activation.finished) {
-      throw new Error(`Already loading "${this.activation.name}" — cancel that run first`)
-    }
-
-    this.activationCancelled = false
-    this.activation = {
-      playlistId: id,
-      name: playlist.name,
-      total: playlist.items.length,
-      done: 0,
-      added: 0,
-      missed: [],
-      cancelled: false,
-      finished: false
-    }
-    const announce = (): void => this.push({ kind: 'playlistActivation', state: this.activation })
-    announce()
-
-    // Nothing has touched the queue until this flips — a run that dies waking
-    // the device must not stamp lastPlayedAt on a playlist it never loaded.
-    let batchStarted = false
-
-    // The FIRST successful add REPLACEs (clearing what was there); everything
-    // after appends. Keyed off success, not index — if entry one can't be
-    // resolved, entry two must still be the one that clears the old queue.
-    let replaced = false
-    try {
-      await this.ensureAwake() // activating is a play-shaped intent
-
-      this.queueBatch = true
-      batchStarted = true
-      if (this.socket) this.socket.suppressQueueRefetch = true
-      for (const [index, item] of playlist.items.entries()) {
-        if (this.activationCancelled) break
-        const action: MediaQueueAction = replaced ? 'APPEND' : 'REPLACE'
-        let landed = false
-
-        if (item.serverUdn && item.objectId) {
-          try {
-            await queueAdd(host, item.serverUdn, item.objectId, action)
-            landed = true
-          } catch {
-            // stale id — fall through to the content re-resolve
-          }
-        }
-
-        if (!landed && !this.activationCancelled) {
-          // Content re-resolve. This used to walk `searchable` servers only,
-          // which meant an entry living on a Browse-only server (USB) could
-          // never heal; resolveContent asks the indexes first, so it can.
-          const found = await resolveContent(host, item)
-          if (found) {
-            try {
-              await queueAdd(host, found.serverUdn, found.objectId, action)
-              landed = true
-              // heal in place — no updatedAt bump, so the collection keeps its order
-              healPlaylistItem(id, index, item, found)
-            } catch {
-              // couldn't add it after all — counted as missed below
-            }
-          }
-        }
-
-        if (landed) {
-          replaced = true
-          this.activation.added += 1
-        } else {
-          this.activation.missed.push(item.title)
-        }
-        this.activation.done += 1
-        announce()
-      }
-    } finally {
-      this.queueBatch = false
-      if (this.socket) this.socket.suppressQueueRefetch = false
-      if (batchStarted) {
-        // ONE authoritative read of the truth, whatever happened above. The
-        // send throws on a half-dead socket (by design); swallowed HERE only,
-        // so cleanup can't mask the loop's real error — reconnect resubscribes
-        // /queue/list and delivers the same truth anyway.
-        try {
-          this.socket?.send('/queue/list')
-        } catch {
-          /* reconnect refetches */
-        }
-      }
-      this.activation.cancelled = this.activationCancelled
-      this.activation.finished = true
-      // Stamp the attempt only if the queue was actually touched: a run that
-      // died before the batch began didn't play anything and has no misses to
-      // report — lastPlayedAt claiming otherwise would be a small lie.
-      if (batchStarted) markPlaylistPlayed(id, this.activation.missed)
-      announce()
-      this.push({ kind: 'playlists', data: getPlaylists() })
-    }
-    return this.activation
+    return this.queueOps.playlistActivate(id)
   }
 
   // Playlist writes mirror the favorites verbs: mutate the bounded local file,
@@ -973,88 +868,15 @@ export class DeviceManager {
     return this.pushPlaylists(restorePlaylist(playlist))
   }
 
-  /**
-   * Put a removed track back in the queue at `position` — the undo behind the
-   * queue's ×.
-   *
-   * BEST-EFFORT BY NATURE, and the honesty matters more than the success rate.
-   * A queue row carries no serverUdn/objectId (QueueListItem is id/position/
-   * metadata), and the firmware's queue/add needs DIDL for a specific object,
-   * so this is a re-RESOLVE and re-ADD, not a rollback: find the track by
-   * content, append it, then move it from the end back to where it was. Every
-   * path that fills a queue goes through a media server, so in practice the
-   * resolve succeeds; when it can't, the caller says so rather than pretending.
-   *
-   * The position restore is deliberately not fatal — a track back in the wrong
-   * slot beats a track that didn't come back.
-   */
+  /** See QueueOps.queueRestore — the undo behind the queue's ×. */
   async queueRestore(ref: ContentRef, position: number): Promise<QueueRestoreResult> {
-    const conn = this.snapshot().connection
-    if (conn.phase !== 'connected') return 'failed'
-    const host = conn.host
-
-    const found = await resolveContent(host, ref)
-    if (!found) return 'not-found'
-
-    const before = this.cache.queue?.items?.length ?? 0
-    try {
-      await queueAdd(host, found.serverUdn, found.objectId, 'APPEND')
-    } catch {
-      return 'failed'
-    }
-
-    // APPEND lands at the end, but the id it landed under only arrives with the
-    // next /queue/list push — ask for one and wait for the queue to actually
-    // grow rather than assuming a fixed delay.
-    try {
-      this.socket?.send('/queue/list')
-    } catch {
-      return 'ok' // it IS in the queue; reconnect will refetch and show it
-    }
-    const grown = await this.waitForQueue((q) => (q.items?.length ?? 0) > before, 4000)
-    if (!grown) return 'ok'
-
-    const items = grown.items ?? []
-    const from = items.length - 1
-    const landed = items[from]
-    const to = Math.max(0, Math.min(position, from))
-    if (landed?.id != null && to !== from) {
-      try {
-        await smoipHttp.queueMove(host, landed.id, from, to)
-      } catch {
-        // it's in the queue, just not where it was — see the doc comment
-      }
-    }
-    return 'ok'
+    return this.queueOps.queueRestore(ref, position)
   }
 
-  /**
-   * Renderer-facing content resolution — the same index-first, live-fallback
-   * search queue undo and playlist healing use, exposed so ANY surface can act
-   * on a track it knows only by content (a recently-played entry, a favorite
-   * whose server changed). Null when disconnected or nothing matches.
-   */
+  /** See QueueOps.contentResolve — index-first resolution of a track known
+   *  only by its content. */
   async contentResolve(ref: ContentRef): Promise<ResolvedContent | null> {
-    const conn = this.snapshot().connection
-    if (conn.phase !== 'connected') return null
-    return resolveContent(conn.host, ref)
-  }
-
-  /** Resolve with the first cached queue satisfying `test`, or null on timeout. */
-  private waitForQueue(test: (q: QueueList) => boolean, timeoutMs: number): Promise<QueueList | null> {
-    if (this.cache.queue && test(this.cache.queue)) return Promise.resolve(this.cache.queue)
-    return new Promise((resolve) => {
-      const started = Date.now()
-      const tick = setInterval(() => {
-        if (this.cache.queue && test(this.cache.queue)) {
-          clearInterval(tick)
-          resolve(this.cache.queue)
-        } else if (Date.now() - started >= timeoutMs) {
-          clearInterval(tick)
-          resolve(null)
-        }
-      }, 120)
-    })
+    return this.queueOps.contentResolve(ref)
   }
 
   playlistSetItems(id: string, items: Parameters<typeof setPlaylistItems>[1]): ReturnType<typeof getPlaylists> {
@@ -1133,7 +955,7 @@ export class DeviceManager {
       recents: getRecents(),
       favorites: getFavorites(),
       playlists: getPlaylists(),
-      playlistActivation: this.activation,
+      playlistActivation: this.queueOps.activation,
       mcpStatus: this.mcpStatus,
       mediaIndex: this.mediaIndexStatuses,
       frames: this.frames,

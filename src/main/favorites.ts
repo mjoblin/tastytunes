@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { app } from 'electron'
-import { favoriteKey, type Favorite } from '@shared/ipc'
+import { favoriteKey, type Favorite } from '@shared/model'
 import { jsonFileStore } from './jsonStore'
 
 // The local favorites collection (stations, albums, tracks), persisted beside

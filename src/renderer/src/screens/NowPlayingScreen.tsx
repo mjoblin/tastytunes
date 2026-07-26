@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Captions, Disc3, Heart, ListOrdered, Maximize2, MicVocal, RadioTower, UserRound } from 'lucide-react'
-import { favoriteKey, type Favorite, type FavoriteMedia } from '@shared/ipc'
+import { favoriteKey, type Favorite, type FavoriteMedia } from '@shared/model'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { toggleFavorite } from '@/lib/favorites'

@@ -1,4 +1,4 @@
-import { favoriteKey, type Favorite } from '@shared/ipc'
+import { favoriteKey, type Favorite } from '@shared/model'
 import { useStore, type SearchBack } from '@/store'
 import { toggleFavorite } from '@/lib/favorites'
 import { refToFavorite, type MediaRef } from '@/lib/mediaRef'

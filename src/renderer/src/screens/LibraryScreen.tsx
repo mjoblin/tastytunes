@@ -17,11 +17,8 @@ import {
   X
 } from 'lucide-react'
 import {
-  favoriteKey,
   presetVolumeKey,
   type AppSettings,
-  type Favorite,
-  type FavoriteMedia,
   type MediaIndexPools,
   type MediaNode,
   type MediaQueueAction,
@@ -29,6 +26,7 @@ import {
   type MediaServerInfo,
   type ScreenLayout
 } from '@shared/ipc'
+import { favoriteKey, type Favorite, type FavoriteMedia } from '@shared/model'
 import type { QueueListItem } from '@shared/smoip'
 import { tt } from '@/api'
 import { useStore } from '@/store'
