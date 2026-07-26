@@ -34,7 +34,7 @@ import { tt } from '@/api'
 import { useStore } from '@/store'
 import { activeSourceId, cx, fmtTime, matchesFilter } from '@/lib/format'
 import { flashTarget } from '@/lib/scroll'
-import { isAlbumClass, stripFurniture } from '@/lib/media'
+import { mediaKind, isAlbumClass, stripFurniture } from '@/lib/media'
 import { toggleFavorite } from '@/lib/favorites'
 import { ArtImage } from '@/components/ArtImage'
 import { Segmented } from '@/components/Segmented'
@@ -126,13 +126,7 @@ type SearchKind = 'all' | 'albums' | 'artists' | 'tracks'
 type SearchSort = 'relevance' | 'title' | 'artist' | 'year'
 
 const matchesKind = (n: MediaNode, kind: SearchKind): boolean =>
-  kind === 'all'
-    ? true
-    : kind === 'albums'
-      ? isAlbumClass(n.upnpClass)
-      : kind === 'artists'
-        ? n.isContainer && (n.upnpClass.includes('person') || n.upnpClass.includes('Artist'))
-        : !n.isContainer
+  kind === 'all' ? true : `${mediaKind(n.upnpClass, n.isContainer)}s` === kind
 
 // Shared result sort — single-server results and every cross-server group
 // order the same way. 'relevance' keeps the index's artists→albums→tracks

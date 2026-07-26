@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Disc3, ListOrdered, Music, Play, Radio, Search, UserRound, X } from 'lucide-react'
 import type { Favorite, FavoriteMedia, MediaNode, RadioStation } from '@shared/ipc'
 import { favoriteKey } from '@shared/ipc'
-import { isAlbumClass } from '@/lib/media'
+import { mediaKind, type MediaKind } from '@/lib/media'
 import { tt } from '@/api'
 import { useStore, type Screen } from '@/store'
 import { EmptyState } from '@/components/EmptyState'
@@ -258,21 +258,15 @@ export function SearchScreen(): React.JSX.Element {
     })()
   }
 
-  // WHAT a library result is. The index returns artists, albums AND tracks
-  // (hierarchy order), and until this was on the row the click contract read as
-  // arbitrary — a track played, an album navigated, and nothing said which was
-  // which. Same classification the Library's own results filter uses.
-  const nodeKind = (n: MediaNode): 'Artist' | 'Album' | 'Track' =>
-    !n.isContainer
-      ? 'Track'
-      : isAlbumClass(n.upnpClass)
-        ? 'Album'
-        : n.upnpClass.includes('person') || n.upnpClass.includes('Artist')
-          ? 'Artist'
-          : 'Album'
+  // WHAT a library result is — the ONE classifier (lib/media), shared with the
+  // Library's own results filter. The index returns artists, albums AND tracks,
+  // and until the kind was on the row the click contract read as arbitrary: a
+  // track played, an album navigated, and nothing said which was which.
+  const nodeKind = (n: MediaNode): MediaKind => mediaKind(n.upnpClass, n.isContainer)
+  const kindLabel = (k: MediaKind): string => k[0].toUpperCase() + k.slice(1)
 
   /** Artists aren't heartable — favorites key on album/track content identity. */
-  const heartableNode = (n: MediaNode): boolean => nodeKind(n) !== 'Artist'
+  const heartableNode = (n: MediaNode): boolean => nodeKind(n) !== 'artist'
   const nodeFav = (n: MediaNode): NewFavorite => ({
     kind: n.isContainer ? 'album' : 'track',
     title: n.title,
@@ -296,7 +290,7 @@ export function SearchScreen(): React.JSX.Element {
     () =>
       libKind === 'all'
         ? libResults
-        : libResults.filter((n) => `${nodeKind(n).toLowerCase()}s` === libKind),
+        : libResults.filter((n) => `${nodeKind(n)}s` === libKind),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [libResults, libKind]
   )
@@ -323,7 +317,7 @@ export function SearchScreen(): React.JSX.Element {
     /** What the count MEANS: matches found, which may exceed what's listed. */
     total: number
     pending?: boolean
-    rows: Array<{ key: string; sortKey: string; node: React.ReactNode }>
+    rows: Array<{ key: string; sortKey: string; kind?: MediaKind; node: React.ReactNode }>
     /** Where the whole set lives, once this screen can't show more of it. */
     owner?: { screen: Screen; filterKey: 'favorites' | 'playlists' | 'presets' }
   }> = [
@@ -334,13 +328,14 @@ export function SearchScreen(): React.JSX.Element {
       rows: libShown.map((node) => ({
         key: `${node.serverUdn}:${node.id}`,
         sortKey: node.title,
+        kind: nodeKind(node),
         node: (
           <SearchRow
             title={node.title}
             subtitle={[node.artist, node.serverName].filter(Boolean).join(' — ')}
             artUrl={node.artUrl}
-            icon={nodeKind(node) === 'Track' ? Music : nodeKind(node) === 'Artist' ? UserRound : Disc3}
-            badge={nodeKind(node)}
+            icon={nodeKind(node) === 'track' ? Music : nodeKind(node) === 'artist' ? UserRound : Disc3}
+            badge={kindLabel(nodeKind(node))}
             actions={
               <>
                 {/* A container's click OPENS it, so playing needs its own
@@ -647,7 +642,12 @@ export function SearchScreen(): React.JSX.Element {
               return (
                 <section key={c.id} className="space-y-1.5">
                   <div className="flex items-baseline gap-2 px-1">
-                    <span className="microlabel">{c.label}</span>
+                    {/* the CATEGORY heading — tagged so it can't be confused
+                        with the kind sub-headings below it, which share the
+                        microlabel look */}
+                    <span data-search-group={c.id} className="microlabel">
+                      {c.label}
+                    </span>
                     <span className="text-[11px] text-faint tabular-nums">{c.total}</span>
                     {c.pending && (
                       <span className="text-[11px] text-faint motion-safe:animate-pulse">
@@ -694,9 +694,30 @@ export function SearchScreen(): React.JSX.Element {
                       unaffected.
                     </div>
                   )}
-                  {ordered.slice(0, cap).map((r) => (
-                    <div key={r.key}>{r.node}</div>
-                  ))}
+                  {/* SECTIONED BY KIND once the library owns the screen. The
+                      taxonomy is closed at three (lib/media), and the Library's
+                      own results already read artists → albums → tracks — the
+                      hierarchy order, artists make albums, albums contain
+                      tracks. Mixed into one list, six artists above six albums
+                      looked like an unsorted jumble. Only while ISOLATED: six
+                      rows split three ways is worse than six rows. */}
+                  {c.id === 'library' && isolated
+                    ? (['artist', 'album', 'track'] as const).map((k) => {
+                        const inKind = ordered.slice(0, cap).filter((r) => r.kind === k)
+                        if (inKind.length === 0) return null
+                        return (
+                          <div key={k} className="space-y-1.5">
+                            <div className="microlabel pt-2 px-1 opacity-70">
+                              {k === 'artist' ? 'Artists' : k === 'album' ? 'Albums' : 'Tracks'}{' '}
+                              <span className="tabular-nums">{inKind.length}</span>
+                            </div>
+                            {inKind.map((r) => (
+                              <div key={r.key}>{r.node}</div>
+                            ))}
+                          </div>
+                        )
+                      })
+                    : ordered.slice(0, cap).map((r) => <div key={r.key}>{r.node}</div>)}
                 </section>
               )
             })}

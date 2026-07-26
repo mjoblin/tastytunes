@@ -3,6 +3,36 @@ import type { MediaNode } from '@shared/ipc'
 // UPnP class-shape helpers shared by the Library screen and its cards.
 
 export const isAlbumClass = (c: string): boolean => c.includes('musicAlbum')
+
+/**
+ * The library taxonomy, and it is CLOSED AT THREE by construction.
+ *
+ * A media index only ever holds artists, albums and tracks, whichever way it
+ * was built: the searchable crawl issues exactly three UPnP Searches
+ * (object.container.album / object.container.person / object.item.audioItem),
+ * and the browse crawl walks every container but FILES only musicAlbum,
+ * person and audioItem — genre containers, storage folders and playlist
+ * containers are traversed and dropped. A server may expose more; the index
+ * has already decided not to keep it.
+ *
+ * So this is the one classifier for the one taxonomy. It used to be spelled
+ * twice — matchesKind here, a second copy in the search screen with a
+ * different artist predicate and an 'Album' fallback that would silently
+ * mislabel anything unexpected. Two spellings of one closed set is how the
+ * two drift.
+ */
+export type MediaKind = 'artist' | 'album' | 'track'
+
+export const mediaKind = (upnpClass: string, isContainer: boolean): MediaKind =>
+  !isContainer
+    ? 'track'
+    : isAlbumClass(upnpClass)
+      ? 'album'
+      : upnpClass.includes('person') || upnpClass.includes('Artist')
+        ? 'artist'
+        : // Unreachable from an index (see above); an unfiled container is far
+          // likelier to be album-shaped than a person, so this is the safe read.
+          'album'
 export const isEntityClass = (c: string): boolean =>
   c.includes('musicAlbum') || c.includes('musicArtist') || c.includes('audioItem')
 
