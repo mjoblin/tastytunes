@@ -1,11 +1,13 @@
 import { useRef } from 'react'
 import { Disc3, Folder, Heart, MoreHorizontal, Play } from 'lucide-react'
 import type { MediaNode } from '@shared/ipc'
-import { cx, fmtTime } from '@/lib/format'
+import { cx } from '@/lib/format'
 import { isAlbumClass, isArtistClass, isMutedArt } from '@/lib/media'
 import { RowAction } from '@/components/RowAction'
 import { RowHeart } from '@/components/RowHeart'
 import { ArtImage } from '@/components/ArtImage'
+import { MediaArt } from '@/components/MediaArt'
+import { DurationCell } from '@/components/DurationCell'
 import { Eqbars } from '@/components/Eqbars'
 
 // The Library's four listing renderers — cards and rows for containers and
@@ -228,20 +230,11 @@ export function ContainerRow({
       onContextMenu={menuable ? onMenu : undefined}
       data-library-row
     >
-      <div className="h-10 w-10 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
-        <ArtImage
-          src={node.artUrl}
-          lazy
-          className={cx('h-full w-full object-cover', muted && 'opacity-60 saturate-[.6]')}
-          fallback={
-            album ? (
-              <Disc3 size={16} className="text-faint" />
-            ) : (
-              <Folder size={16} className="text-faint" />
-            )
-          }
-        />
-      </div>
+      <MediaArt
+        src={node.artUrl}
+        kind={album ? 'album' : isArtistClass(node.upnpClass) ? 'artist' : 'folder'}
+        className={muted ? 'opacity-60 saturate-[.6]' : undefined}
+      />
       <div className="min-w-0">
         <div className={cx('text-[13.5px] truncate', playing ? 'text-gold' : 'text-ink')}>
           {node.title}
@@ -335,11 +328,7 @@ export function TrackRow({
       <span className="font-mono text-[10.5px] text-faint tabular-nums">
         {isCurrent ? <Eqbars playing={audible} /> : (node.trackNumber ?? '')}
       </span>
-      {showArt && (
-        <div className="h-10 w-10 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
-          <ArtImage src={node.artUrl} lazy fallback={<Disc3 size={16} className="text-faint" />} />
-        </div>
-      )}
+      {showArt && <MediaArt src={node.artUrl} kind="track" />}
       <div className="min-w-0">
         <div className={cx('text-[13.5px] truncate', isCurrent ? 'text-gold' : 'text-ink')}>
           {node.title}
@@ -396,9 +385,7 @@ export function TrackRow({
             behind the hover-only actions (see QueueRow) */}
         {onHeart && <RowHeart favorited={favorited === true} held={menuOpen} onHeart={onHeart} />}
       </div>
-      <span className="font-mono text-[11px] text-faint tabular-nums">
-        {node.durationSecs != null ? fmtTime(node.durationSecs) : ''}
-      </span>
+      <DurationCell secs={node.durationSecs} />
     </div>
   )
 }

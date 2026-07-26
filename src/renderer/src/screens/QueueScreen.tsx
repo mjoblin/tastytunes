@@ -22,7 +22,6 @@ import {
   presetVolumeKey,
   type ContentRef,
   type Favorite,
-  type FavoriteMedia,
   type QueueRestoreResult,
   type ScreenLayout
 } from '@shared/ipc'
@@ -35,15 +34,20 @@ import { flashTarget, scrollToWithContext } from '@/lib/scroll'
 import { lockVertical } from '@/lib/dnd'
 import { activeSourceId, cx, fmtTime, matchesFilter } from '@/lib/format'
 import { toggleFavorite } from '@/lib/favorites'
+import { fromQueueItem, refToFavorite, refToPlaylistItem } from '@/lib/mediaRef'
+import { saveRefToPreset } from '@/lib/mediaActions'
+import { trackMenuItems, type MediaMenuItem } from '@/lib/mediaMenus'
 import { AddToPlaylistPanel } from '@/components/AddToPlaylistPanel'
 import { RowMenu } from '@/components/RowMenu'
 import { RowAction } from '@/components/RowAction'
 import { RowHeart } from '@/components/RowHeart'
 import { OrderHandle } from '@/components/OrderHandle'
 import { ArtImage } from '@/components/ArtImage'
+import { MediaArt } from '@/components/MediaArt'
+import { DurationCell } from '@/components/DurationCell'
 import { FilterInput } from '@/components/FilterInput'
 import { PopoverChrome } from '@/hooks/usePopover'
-import { PresetSavePanel } from '@/components/LibraryMenus'
+import { PresetSavePanel, PresetPicker } from '@/components/LibraryMenus'
 
 /**
  * Queue → preset: the shared PresetSavePanel in a centered modal. The device
@@ -133,12 +137,14 @@ export function QueueScreen(): React.JSX.Element {
   }
 
   const showToast = useStore((s) => s.showToast)
-  const favorites = useStore((s) => s.favorites)
   // Right-click rather than a third hover button: the row already carries
   // remove and a grip, and Favorites established right-click for exactly this
   // (a local list of tracks whose rows are already busy).
   const [rowMenu, setRowMenu] = useState<{ item: QueueListItem; x: number; y: number } | null>(null)
   const [playlistFor, setPlaylistFor] = useState<{ item: QueueListItem; x: number; y: number } | null>(
+    null
+  )
+  const [presetFor, setPresetFor] = useState<{ item: QueueListItem; x: number; y: number } | null>(
     null
   )
   const allItems = (queue?.items ?? []).filter((i) => i.id != null)
@@ -328,8 +334,8 @@ export function QueueScreen(): React.JSX.Element {
           at={{ x: rowMenu.x, y: rowMenu.y }}
           onClose={() => setRowMenu(null)}
           items={queueRowActions(rowMenu.item, {
-            favorites,
-            addToPlaylist: () => setPlaylistFor({ item: rowMenu.item, x: rowMenu.x, y: rowMenu.y })
+            addToPlaylist: () => setPlaylistFor({ item: rowMenu.item, x: rowMenu.x, y: rowMenu.y }),
+            saveToPreset: () => setPresetFor({ item: rowMenu.item, x: rowMenu.x, y: rowMenu.y })
           })}
         />
       )}
@@ -339,23 +345,22 @@ export function QueueScreen(): React.JSX.Element {
           at={{ x: playlistFor.x, y: playlistFor.y }}
           onClose={() => setPlaylistFor(null)}
           resolve={async () => {
-            const md = playlistFor.item.metadata
-            return md
-              ? [
-                  {
-                    title: md.title ?? 'Unknown track',
-                    artist: md.artist ?? null,
-                    album: md.album ?? null,
-                    artUrl: md.art_url ?? null,
-                    // a queue id belongs to THIS queue, not to the library —
-                    // content is the identity, resolved fresh on activation
-                    serverUdn: null,
-                    serverName: null,
-                    objectId: null,
-                    durationSecs: md.duration ?? null
-                  }
-                ]
-              : []
+            // a queue id belongs to THIS queue, not to the library — content
+            // is the identity, resolved fresh on activation
+            const ref = fromQueueItem(playlistFor.item)
+            return ref ? [refToPlaylistItem(ref)] : []
+          }}
+        />
+      )}
+      {presetFor && (
+        <PresetPicker
+          picker={{ node: { title: presetFor.item.metadata?.title ?? 'Track' }, x: presetFor.x, y: presetFor.y }}
+          onClose={() => setPresetFor(null)}
+          onSave={async (slot, name) => {
+            const ref = fromQueueItem(presetFor.item)
+            if (!ref) throw new Error('no content identity')
+            await saveRefToPreset(ref, slot, name)
+            setPresetFor(null)
           }}
         />
       )}
@@ -494,7 +499,8 @@ function QueueRow({ item, isCurrent, playing, sourceActive, currentRef, onMenu }
   })
   const md = item.metadata
   const favorites = useStore((s) => s.favorites)
-  const favorite = queueItemFavorite(item)
+  const ref = fromQueueItem(item)
+  const favorite = ref ? refToFavorite(ref) : null
   const hearted =
     favorite != null && favorites.some((f) => favoriteKey(f) === favoriteKey(favorite as Favorite))
 
@@ -518,6 +524,11 @@ function QueueRow({ item, isCurrent, playing, sourceActive, currentRef, onMenu }
       onClick={() => {
         if (item.id != null) void tt.command({ type: 'playQueueId', queueId: item.id })
       }}
+      onContextMenu={(e) => {
+        // right-click = the ⋯, the app-wide rule (favorites established it)
+        e.preventDefault()
+        onMenu?.(e)
+      }}
     >
       <OrderHandle
         label={`Reorder ${md?.title ?? 'track'}`}
@@ -533,9 +544,7 @@ function QueueRow({ item, isCurrent, playing, sourceActive, currentRef, onMenu }
         )}
       </OrderHandle>
 
-      <div className="h-10 w-10 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
-        <ArtImage src={md?.art_url} lazy fallback={<Disc3 size={16} className="text-faint" />} />
-      </div>
+      <MediaArt src={md?.art_url} kind="track" />
 
       <div className="min-w-0">
         <div className={cx('text-[13.5px] truncate', isCurrent && sourceActive ? 'text-gold' : 'text-ink')}>
@@ -568,9 +577,7 @@ function QueueRow({ item, isCurrent, playing, sourceActive, currentRef, onMenu }
       {/* Duration sits at the far right of the CONTENT, after the actions —
           it's always-visible information, so it wants a stable column, while
           the actions come and go with hover. */}
-      <span className="font-mono text-[11px] text-faint tabular-nums">
-        {fmtTime(md?.duration)}
-      </span>
+      <DurationCell secs={md?.duration ?? null} />
     </div>
   )
 }
@@ -591,6 +598,10 @@ function QueueCard({ item, isCurrent, playing, sourceActive, currentRef, onMenu 
       style={{ transform: CSS.Transform.toString(transform), transition }}
       {...attributes}
       {...listeners}
+      onContextMenu={(e) => {
+        e.preventDefault()
+        onMenu?.(e)
+      }}
       className={cx(
         // Hover grow matches PresetCard; scale is layout-free so edge-clipped
         // cards simply clip at the scrollport seam.
@@ -603,19 +614,6 @@ function QueueCard({ item, isCurrent, playing, sourceActive, currentRef, onMenu 
             : 'bg-raised/70 ring-1 ring-edge card-hover-glow'
       )}
     >
-      {/* Cards get the same visible ⋯ as the rows — an art-corner chip, the
-          treatment presets already use for their hover controls. */}
-      <button
-        aria-label="More actions"
-        onClick={(e) => {
-          e.stopPropagation()
-          onMenu?.(e)
-        }}
-        className="absolute top-3 right-3 z-10 h-7 w-7 rounded-full grid place-items-center bg-bg/70 text-dim opacity-0 group-hover:opacity-100 hover:text-ink backdrop-blur-sm transition-all"
-      >
-        <MoreHorizontal size={14} />
-      </button>
-
       <button
         className="relative block w-full cursor-pointer"
         onClick={() => {
@@ -639,8 +637,22 @@ function QueueCard({ item, isCurrent, playing, sourceActive, currentRef, onMenu 
             </span>
           </div>
 
+          {/* the one card-chip grammar (ContainerCard's): ⋯ bottom-right on
+              the art, status top-left, one chip surface — this card used a
+              rounded-full blur chip at TOP-right, the only card that did */}
+          <span
+            aria-label="More actions"
+            onClick={(e) => {
+              e.stopPropagation()
+              onMenu?.(e)
+            }}
+            className="absolute bottom-1.5 right-1.5 z-10 h-8 w-8 rounded-lg bg-panel/80 ring-1 ring-edge text-dim hover:text-ink flex items-center justify-center transition-all opacity-0 group-hover:opacity-100"
+          >
+            <MoreHorizontal size={15} />
+          </span>
+
           {isCurrent && (
-            <span className="absolute top-2 left-2 flex items-center rounded-md bg-black/55 backdrop-blur-sm px-1.5 py-1">
+            <span className="absolute top-1.5 left-1.5 flex items-center rounded-lg bg-panel/80 ring-1 ring-edge px-1.5 h-7">
               <Eqbars playing={playing} dim={!(sourceActive)} />
             </span>
           )}
@@ -682,62 +694,23 @@ function QueueCard({ item, isCurrent, playing, sourceActive, currentRef, onMenu 
 }
 
 /**
- * A queued track as a favorite — or null when it can't be one. Favorites key on
- * CONTENT, so a track with no title or no artist has no identity to store and
- * could never be found again; offering a heart there would be a lie. Shared by
- * the row's heart and its ⋯ menu so the two can't disagree.
- */
-export function queueItemFavorite(item: QueueListItem): Omit<FavoriteMedia, 'addedAt'> | null {
-  const md = item.metadata
-  const title = md?.title ?? null
-  const artist = md?.artist ?? null
-  if (!title || !artist) return null
-  return {
-    kind: 'track',
-    title,
-    artist,
-    album: md?.album ?? null,
-    artUrl: md?.art_url ?? null,
-    serverUdn: null,
-    serverName: null,
-    objectId: null,
-    titlePath: null,
-    durationSecs: md?.duration ?? null
-  }
-}
-
-/**
- * What a queued track offers beyond play and remove. The queue had NO row menu
- * at all — you could hear a track, want to keep it, and have nowhere to say so
- * without going to Now Playing and waiting for it to come round.
+ * A queued track's ⋯ — the shared track menu (lib/mediaMenus) plus the local
+ * remove. No play verbs: the row's click already plays, and a queued row has
+ * no meaningful "add to queue". A row with NO content identity (no title)
+ * still offers its removal — the one verb that needs only the queue id.
  */
 function queueRowActions(
   item: QueueListItem,
-  deps: { favorites: Favorite[]; addToPlaylist: () => void }
-): Array<{ label: string; run: () => void }> {
-  const fav = queueItemFavorite(item)
-  const hearted =
-    fav != null && deps.favorites.some((f) => favoriteKey(f) === favoriteKey(fav as Favorite))
-
-  return [
-    { label: 'Add to playlist…', run: deps.addToPlaylist },
-    // A track needs title AND artist to have a content identity; without one
-    // it can't be re-found later, so it isn't offered.
-    ...(fav
-      ? [
-          {
-            label: hearted ? 'Remove from favorites' : 'Add to favorites',
-            run: () => void toggleFavorite(fav)
-          }
-        ]
-      : []),
-    ...(item.id != null
-      ? [
-          {
-            label: 'Remove from queue',
-            run: () => removeFromQueue(item)
-          }
-        ]
-      : [])
-  ]
+  deps: { addToPlaylist: () => void; saveToPreset: () => void }
+): MediaMenuItem[] {
+  const remove: MediaMenuItem[] =
+    item.id != null ? [{ label: 'Remove from queue', run: () => removeFromQueue(item) }] : []
+  const ref = fromQueueItem(item)
+  if (!ref) return remove
+  return trackMenuItems(ref, {
+    addToPlaylist: deps.addToPlaylist,
+    saveToPreset: deps.saveToPreset,
+    searchFrom: { screen: 'queue' },
+    extra: remove
+  })
 }

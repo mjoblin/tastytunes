@@ -1,12 +1,21 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronRight, Disc3, History, Music, Radio, Trash2 } from 'lucide-react'
-import { recentMatchesPlayState, type RecentTrack } from '@shared/ipc'
+import { ChevronRight, History, MoreHorizontal, Play, Trash2 } from 'lucide-react'
+import { favoriteKey, recentMatchesPlayState, type Favorite, type RecentTrack } from '@shared/ipc'
 import { useStore } from '@/store'
 import { Eqbars } from '@/components/Eqbars'
 import { EmptyState } from '@/components/EmptyState'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { Segmented } from '@/components/Segmented'
-import { ArtImage } from '@/components/ArtImage'
+import { MediaArt } from '@/components/MediaArt'
+import { MediaRow } from '@/components/MediaRow'
+import { RowAction } from '@/components/RowAction'
+import { RowHeart } from '@/components/RowHeart'
+import { RowMenu } from '@/components/RowMenu'
+import { AddToPlaylistPanel } from '@/components/AddToPlaylistPanel'
+import { toggleFavorite } from '@/lib/favorites'
+import { fromRecent, refToFavorite, refToPlaylistItem } from '@/lib/mediaRef'
+import { playRefNow } from '@/lib/mediaActions'
+import { trackMenuItems, type MediaMenuItem } from '@/lib/mediaMenus'
 import { cx, fmtDayBucket, fmtRelative, matchesFilter } from '@/lib/format'
 import { clearRecentsWithUndo } from '@/lib/recents'
 import { FilterInput } from '@/components/FilterInput'
@@ -97,6 +106,49 @@ export function RecentlyPlayedScreen(): React.JSX.Element {
       return s
     })
 
+  // The log grew verbs in the consistency pass: a discrete track row can be
+  // played again (content resolve — the entry stores no library ids), hearted,
+  // and carries the shared track ⋯. Sessions and radio entries stay verb-free:
+  // no stream URL is stored, so there is no identity to act on.
+  const favorites = useStore((s) => s.favorites)
+  const favKeys = useMemo(() => new Set(favorites.map(favoriteKey)), [favorites])
+  const heartedOf = (entry: RecentTrack): boolean => {
+    const ref = fromRecent(entry)
+    const fav = ref ? refToFavorite(ref) : null
+    return fav != null && favKeys.has(favoriteKey(fav as Favorite))
+  }
+  const [rowMenu, setRowMenu] = useState<{
+    title: string
+    x: number
+    y: number
+    items: MediaMenuItem[]
+  } | null>(null)
+  const [playlistFor, setPlaylistFor] = useState<{
+    label: string
+    x: number
+    y: number
+  } | null>(null)
+  const [playlistRef, setPlaylistRef] = useState<ReturnType<typeof fromRecent>>(null)
+  const openRowMenu = (entry: RecentTrack, e: React.MouseEvent): void => {
+    const ref = fromRecent(entry)
+    if (!ref) return
+    e.preventDefault()
+    e.stopPropagation()
+    const at = { x: e.clientX, y: e.clientY }
+    setRowMenu({
+      title: ref.title,
+      ...at,
+      items: trackMenuItems(ref, {
+        playNow: () => void playRefNow(ref),
+        addToPlaylist: () => {
+          setPlaylistRef(ref)
+          setPlaylistFor({ label: ref.title, ...at })
+        },
+        searchFrom: { screen: 'recently-played' }
+      })
+    })
+  }
+
   return (
     <div className="h-full flex flex-col">
       <header className="drag-region flex items-center gap-3 px-8 pt-8 pb-4">
@@ -132,6 +184,23 @@ export function RecentlyPlayedScreen(): React.JSX.Element {
         )}
       </header>
 
+      {rowMenu && (
+        <RowMenu
+          title={rowMenu.title}
+          at={{ x: rowMenu.x, y: rowMenu.y }}
+          onClose={() => setRowMenu(null)}
+          items={rowMenu.items}
+        />
+      )}
+      {playlistFor && playlistRef && (
+        <AddToPlaylistPanel
+          label={playlistFor.label}
+          at={{ x: playlistFor.x, y: playlistFor.y }}
+          onClose={() => setPlaylistFor(null)}
+          resolve={async () => [refToPlaylistItem(playlistRef)]}
+        />
+      )}
+
       {recents.length === 0 ? (
         <EmptyState
           icon={History}
@@ -166,6 +235,8 @@ export function RecentlyPlayedScreen(): React.JSX.Element {
                           entry={entry}
                           now={now}
                           live={headIsLive && block === blocks[0] && i === 0}
+                          hearted={heartedOf(entry)}
+                          onMenu={openRowMenu}
                         />
                       ))
                     )
@@ -184,22 +255,21 @@ export function RecentlyPlayedScreen(): React.JSX.Element {
 // ------------------------------------------------------------------- row pieces
 
 function Thumb({ entry }: { entry: RecentTrack }): React.JSX.Element {
-  const Fallback = entry.isRadio ? Radio : Disc3
-  return (
-    <div className="h-11 w-11 shrink-0 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
-      <ArtImage src={entry.artUrl} lazy fallback={<Fallback size={17} className="text-faint" />} />
-    </div>
-  )
+  return <MediaArt src={entry.artUrl} kind={entry.isRadio ? 'station' : 'track'} />
 }
 
 function TrackRow({
   entry,
   now,
-  live
+  live,
+  hearted,
+  onMenu
 }: {
   entry: RecentTrack
   now: number
   live?: boolean
+  hearted: boolean
+  onMenu(entry: RecentTrack, e: React.MouseEvent): void
 }): React.JSX.Element {
   const title = entry.isRadio ? (entry.station ?? entry.title) : entry.title
   // Queue-row anatomy: title up top, artist — album below (songText would
@@ -207,24 +277,41 @@ function TrackRow({
   const subtitle = entry.isRadio
     ? entry.title
     : [entry.artist, entry.album].filter(Boolean).join(' — ') || null
+  // Verbs only where there's an identity to act on (fromRecent is null for
+  // radio and songless rows — no stream URL / no content is stored for them).
+  const ref = fromRecent(entry)
+  const fav = ref ? refToFavorite(ref) : null
   return (
-    <div
-      data-recent-row="track"
-      className={cx(
-        'flex items-center gap-4 rounded-xl px-3 py-2.5',
-        live ? 'row-playing bg-gold/10' : 'ring-1 ring-edge bg-panel/60'
-      )}
-    >
-      <Thumb entry={entry} />
-      <div className="min-w-0 flex-1">
-        <div className={cx('flex items-center gap-2 text-[13.5px] truncate', live ? 'text-gold' : 'text-ink')}>
-          {live && <Eqbars playing />}
-          <span className="truncate">{title ?? '—'}</span>
-        </div>
-        {subtitle && <div className="text-[12px] text-dim truncate">{subtitle}</div>}
-      </div>
-      <RightMeta at={entry.at} now={now} source={entry.source} live={live} />
-    </div>
+    <MediaRow
+      attrs={{ 'data-recent-row': 'track' }}
+      title={title ?? '—'}
+      subtitle={subtitle ?? undefined}
+      kind={entry.isRadio ? 'station' : 'track'}
+      artUrl={entry.artUrl}
+      playing={live}
+      meta={<RightMeta at={entry.at} now={now} source={entry.source} live={live} />}
+      onContextMenu={ref ? (e) => onMenu(entry, e) : undefined}
+      actions={
+        ref ? (
+          <>
+            <RowAction
+              icon={Play}
+              label="Play again"
+              tip="Play now — slots in after the current track"
+              onClick={() => void playRefNow(ref)}
+            />
+            <RowAction
+              icon={MoreHorizontal}
+              label="More actions"
+              onClick={(e) => onMenu(entry, e)}
+            />
+            {fav && (
+              <RowHeart favorited={hearted} held={false} onHeart={() => void toggleFavorite(fav)} />
+            )}
+          </>
+        ) : undefined
+      }
+    />
   )
 }
 
@@ -250,7 +337,6 @@ function SessionRow({
   // Expandable whenever there's at least one song, so a single-song session
   // lists its song the same way a multi-song one does.
   const expandable = songs.length >= 1
-  const FallbackIcon = head.isRadio ? Radio : Music
 
   return (
     <div>
@@ -258,19 +344,13 @@ function SessionRow({
         data-recent-row="session"
         onClick={expandable ? onToggle : undefined}
         className={cx(
-          'flex items-center gap-4 rounded-xl px-3 py-2.5',
+          'flex items-center gap-3 rounded-xl px-3 py-2.5',
           live ? 'row-playing bg-gold/10' : 'ring-1 ring-edge bg-panel/60',
           expandable && 'cursor-pointer transition-colors',
           expandable && !live && 'hover:bg-raised/70 hover:ring-edge2'
         )}
       >
-        <div className="h-11 w-11 shrink-0 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
-          <ArtImage
-            src={head.artUrl}
-            lazy
-            fallback={<FallbackIcon size={17} className="text-faint" />}
-          />
-        </div>
+        <Thumb entry={head} />
         <div className="min-w-0 flex-1">
           <div className={cx('flex items-center gap-2 text-[13.5px] truncate', live ? 'text-gold' : 'text-ink')}>
             {live && <Eqbars playing />}

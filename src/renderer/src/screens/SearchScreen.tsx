@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Disc3, ListOrdered, Music, Play, Radio, Search, UserRound, X } from 'lucide-react'
-import type { Favorite, FavoriteMedia, MediaNode, RadioStation } from '@shared/ipc'
+import { MoreHorizontal, Play, Search, X } from 'lucide-react'
+import type { Favorite, FavoriteMedia, MediaNode, PlaylistItem, RadioStation } from '@shared/ipc'
 import { favoriteKey } from '@shared/ipc'
 import { mediaKind, type MediaKind } from '@/lib/media'
 import { sanitizeNavHidden } from '@/lib/screens'
@@ -8,10 +8,21 @@ import { tt } from '@/api'
 import { useStore, type Screen } from '@/store'
 import { EmptyState } from '@/components/EmptyState'
 import { SortChip } from '@/components/SortChip'
-import { SearchRow } from '@/components/SearchRow'
+import { MediaRow } from '@/components/MediaRow'
 import { StationRow } from '@/components/StationRow'
-import { favoriteAct, toggleFavorite, type NewFavorite } from '@/lib/favorites'
+import { RowMenu } from '@/components/RowMenu'
+import { AddToPlaylistPanel } from '@/components/AddToPlaylistPanel'
+import { PresetPicker } from '@/components/LibraryMenus'
+import { favoriteAct, toggleFavorite } from '@/lib/favorites'
 import { activatePlaylist } from '@/lib/playlists'
+import { fromFavorite, fromNode, refToFavorite, refToPlaylistItem, type MediaRef } from '@/lib/mediaRef'
+import { saveRefToPreset } from '@/lib/mediaActions'
+import {
+  albumMenuItems,
+  artistMenuItems,
+  trackMenuItems,
+  type MediaMenuItem
+} from '@/lib/mediaMenus'
 import { RowAction } from '@/components/RowAction'
 import { RowHeart } from '@/components/RowHeart'
 import { Segmented } from '@/components/Segmented'
@@ -321,24 +332,109 @@ export function SearchScreen(): React.JSX.Element {
   const nodeKind = (n: MediaNode): MediaKind => mediaKind(n.upnpClass, n.isContainer)
   const kindLabel = (k: MediaKind): string => k[0].toUpperCase() + k.slice(1)
 
-  /** Artists aren't heartable — favorites key on album/track content identity. */
-  const heartableNode = (n: MediaNode): boolean => nodeKind(n) !== 'artist'
-  const nodeFav = (n: MediaNode): NewFavorite => ({
-    kind: n.isContainer ? 'album' : 'track',
-    title: n.title,
-    artist: n.artist,
-    album: n.album,
-    artUrl: n.artUrl,
-    serverUdn: n.serverUdn ?? null,
-    serverName: n.serverName ?? null,
-    objectId: n.id,
-    // A search result's folder path is unknown — same as the library's own
-    // search-mode hearts, which also store null here.
-    titlePath: null,
-    durationSecs: n.isContainer ? null : n.durationSecs
-  })
   const favKeys = useMemo(() => new Set(favorites.map(favoriteKey)), [favorites])
-  const nodeFavorited = (n: MediaNode): boolean => favKeys.has(favoriteKey(nodeFav(n) as Favorite))
+  /** Hearted, by content key — null fav (artists, identity-less) = no heart. */
+  const refFavorited = (ref: MediaRef): boolean => {
+    const fav = refToFavorite(ref)
+    return fav != null && favKeys.has(favoriteKey(fav as Favorite))
+  }
+
+  // ---- the ⋯ (and right-click): items built at open time from the shared
+  // ---- per-entity builders, so a result's menu is the same menu the Library,
+  // ---- Queue and Favorites show for the same thing
+  const [rowMenu, setRowMenu] = useState<{
+    title: string
+    x: number
+    y: number
+    items: MediaMenuItem[]
+  } | null>(null)
+  const [playlistFor, setPlaylistFor] = useState<{
+    label: string
+    x: number
+    y: number
+    resolve(): Promise<PlaylistItem[]>
+  } | null>(null)
+  const [presetFor, setPresetFor] = useState<{ ref: MediaRef; x: number; y: number } | null>(null)
+
+  const openNodeMenu = (node: MediaNode, e: React.MouseEvent): void => {
+    e.preventDefault()
+    e.stopPropagation()
+    const ref = fromNode(node)
+    const udn = node.serverUdn
+    const at = { x: e.clientX, y: e.clientY }
+    const queueVerb = (action: 'PLAY_NOW' | 'PLAY_NEXT' | 'APPEND' | 'REPLACE') =>
+      udn ? () => void tt.mediaQueueAdd(udn, node.id, action) : undefined
+    const caps = {
+      playNow: queueVerb('PLAY_NOW'),
+      playNext: queueVerb('PLAY_NEXT'),
+      append: queueVerb('APPEND'),
+      replaceQueue: queueVerb('REPLACE'),
+      saveToPreset: () => setPresetFor({ ref, ...at }),
+      addToPlaylist: () =>
+        setPlaylistFor({
+          label: node.title,
+          ...at,
+          resolve: async () => {
+            if (!node.isContainer) return [refToPlaylistItem(ref)]
+            if (!udn) return []
+            // an album expands to its TRACKS — a playlist stores tracks
+            const children = await tt.mediaBrowse(udn, node.id, [])
+            return children.filter((c) => !c.isContainer).map((c) => refToPlaylistItem(fromNode(c, udn)))
+          }
+        })
+    }
+    const kind = nodeKind(node)
+    const items =
+      kind === 'artist'
+        ? artistMenuItems(ref)
+        : kind === 'album'
+          ? albumMenuItems(ref, {
+              ...caps,
+              openInLibrary: () => playNode(node) // container click contract: open
+            })
+          : trackMenuItems(ref, caps)
+    setRowMenu({ title: node.title, ...at, items })
+  }
+
+  const openFavMenu = (f: Favorite, e: React.MouseEvent): void => {
+    if (f.kind === 'station') return // stations: heart + click; no menu anywhere
+    const media = f as FavoriteMedia
+    e.preventDefault()
+    e.stopPropagation()
+    const ref = fromFavorite(media)
+    const at = { x: e.clientX, y: e.clientY }
+    const favQueue = (action: 'PLAY_NEXT' | 'APPEND' | 'REPLACE') => () =>
+      void favoriteAct(media, (udn, id) => tt.mediaQueueAdd(udn, id, action))
+    const caps = {
+      playNext: favQueue('PLAY_NEXT'),
+      append: favQueue('APPEND'),
+      replaceQueue: favQueue('REPLACE'),
+      saveToPreset: () => setPresetFor({ ref, ...at }),
+      addToPlaylist: () =>
+        setPlaylistFor({
+          label: media.title,
+          ...at,
+          resolve: async () => {
+            if (media.kind === 'track') return [refToPlaylistItem(ref)]
+            const items: PlaylistItem[] = []
+            await favoriteAct(media, async (udn, id) => {
+              const children = await tt.mediaBrowse(udn, id, media.titlePath ?? [media.title])
+              for (const c of children)
+                if (!c.isContainer) items.push(refToPlaylistItem(fromNode(c, udn)))
+            })
+            return items
+          }
+        })
+    }
+    setRowMenu({
+      title: media.title,
+      ...at,
+      items:
+        media.kind === 'album'
+          ? albumMenuItems(ref, { ...caps, playNow: () => openFavorite(f) })
+          : trackMenuItems(ref, { ...caps, playNow: () => openFavorite(f) })
+    })
+  }
 
   // Library sub-filter, offered only when the library IS the screen — the same
   // All/Artists/Albums/Tracks partition its own results screen uses.
@@ -396,43 +492,54 @@ export function SearchScreen(): React.JSX.Element {
       id: 'library',
       label: 'Library',
       total: libTotal,
-      rows: libShown.map((node) => ({
-        key: `${node.serverUdn}:${node.id}`,
-        sortKey: node.title,
-        kind: nodeKind(node),
-        node: (
-          <SearchRow
-            title={node.title}
-            subtitle={[node.artist, node.serverName].filter(Boolean).join(' — ')}
-            artUrl={node.artUrl}
-            icon={nodeKind(node) === 'track' ? Music : nodeKind(node) === 'artist' ? UserRound : Disc3}
-            badge={kindLabel(nodeKind(node))}
-            actions={
-              <>
-                {/* A container's click OPENS it, so playing needs its own
-                    button; a track's click already plays. */}
-                {node.isContainer && (
+      rows: libShown.map((node) => {
+        const ref = fromNode(node)
+        const fav = refToFavorite(ref)
+        return {
+          key: `${node.serverUdn}:${node.id}`,
+          sortKey: node.title,
+          kind: nodeKind(node),
+          node: (
+            <MediaRow
+              title={node.title}
+              subtitle={[node.artist, node.serverName].filter(Boolean).join(' — ')}
+              artUrl={node.artUrl}
+              kind={nodeKind(node)}
+              badge={kindLabel(nodeKind(node))}
+              duration={nodeKind(node) === 'track' ? node.durationSecs : undefined}
+              actions={
+                <>
+                  {/* A container's click OPENS it, so playing needs its own
+                      button; a track's click already plays. */}
+                  {node.isContainer && nodeKind(node) !== 'artist' && (
+                    <RowAction
+                      icon={Play}
+                      label={`Play ${node.title}`}
+                      onClick={() => {
+                        if (node.serverUdn) void tt.mediaQueueAdd(node.serverUdn, node.id, 'PLAY_NOW')
+                      }}
+                    />
+                  )}
                   <RowAction
-                    icon={Play}
-                    label={`Play ${node.title}`}
-                    onClick={() => {
-                      if (node.serverUdn) void tt.mediaQueueAdd(node.serverUdn, node.id, 'PLAY_NOW')
-                    }}
+                    icon={MoreHorizontal}
+                    label="More actions"
+                    onClick={(e) => openNodeMenu(node, e)}
                   />
-                )}
-                {heartableNode(node) && (
-                  <RowHeart
-                    favorited={nodeFavorited(node)}
-                    held={false}
-                    onHeart={() => void toggleFavorite(nodeFav(node))}
-                  />
-                )}
-              </>
-            }
-            onClick={() => playNode(node)}
-          />
-        )
-      }))
+                  {fav && (
+                    <RowHeart
+                      favorited={refFavorited(ref)}
+                      held={false}
+                      onHeart={() => void toggleFavorite(fav)}
+                    />
+                  )}
+                </>
+              }
+              onClick={() => playNode(node)}
+              onContextMenu={(e) => openNodeMenu(node, e)}
+            />
+          )
+        }
+      })
     },
     {
       id: 'presets',
@@ -443,13 +550,13 @@ export function SearchScreen(): React.JSX.Element {
         key: String(p.id ?? p.name),
         sortKey: p.name ?? '',
         node: (
-          <SearchRow
+          <MediaRow
             title={p.name ?? `Preset ${p.id}`}
             subtitle={p.type}
             artUrl={p.art_url}
-            icon={Radio}
+            kind="preset"
             badge="Preset"
-            meta={p.id != null ? `#${p.id}` : null}
+            meta={p.id != null ? `#${p.id}` : undefined}
             playing={p.is_playing === true}
             dimmed={!connected}
             onClick={() => {
@@ -468,10 +575,10 @@ export function SearchScreen(): React.JSX.Element {
         key: p.id,
         sortKey: p.name,
         node: (
-          <SearchRow
+          <MediaRow
             title={p.name}
             subtitle={`${p.items.length} ${p.items.length === 1 ? 'track' : 'tracks'}`}
-            icon={ListOrdered}
+            kind="playlist"
             badge="Playlist"
             // never dimmed: the row's CLICK opens the playlist, which is local
             // and fine offline — only the Play action needs the streamer, and
@@ -497,7 +604,7 @@ export function SearchScreen(): React.JSX.Element {
         key: favoriteKey(f),
         sortKey: f.kind === 'station' ? f.name : f.title,
         node: (
-          <SearchRow
+          <MediaRow
             title={f.kind === 'station' ? f.name : f.title}
             subtitle={
               f.kind === 'station'
@@ -505,13 +612,24 @@ export function SearchScreen(): React.JSX.Element {
                 : [f.artist, f.kind === 'album' ? 'Album' : f.album].filter(Boolean).join(' — ')
             }
             artUrl={f.kind === 'station' ? f.favicon : f.artUrl}
-            icon={f.kind === 'station' ? Radio : f.kind === 'album' ? Disc3 : Music}
+            kind={f.kind === 'station' ? 'station' : f.kind}
             badge={f.kind === 'station' ? 'Station' : f.kind === 'album' ? 'Album' : 'Track'}
+            duration={f.kind === 'track' ? (f.durationSecs ?? null) : undefined}
             dimmed={!connected}
             actions={
-              <RowHeart favorited held={false} onHeart={() => void tt.favoriteRemove(favoriteKey(f))} />
+              <>
+                {f.kind !== 'station' && (
+                  <RowAction
+                    icon={MoreHorizontal}
+                    label="More actions"
+                    onClick={(e) => openFavMenu(f, e)}
+                  />
+                )}
+                <RowHeart favorited held={false} onHeart={() => void tt.favoriteRemove(favoriteKey(f))} />
+              </>
             }
             onClick={() => openFavorite(f)}
+            onContextMenu={(e) => openFavMenu(f, e)}
           />
         )
       }))
@@ -640,6 +758,33 @@ export function SearchScreen(): React.JSX.Element {
           )}
         </div>
       </header>
+
+      {rowMenu && (
+        <RowMenu
+          title={rowMenu.title}
+          at={{ x: rowMenu.x, y: rowMenu.y }}
+          onClose={() => setRowMenu(null)}
+          items={rowMenu.items}
+        />
+      )}
+      {playlistFor && (
+        <AddToPlaylistPanel
+          label={playlistFor.label}
+          at={{ x: playlistFor.x, y: playlistFor.y }}
+          onClose={() => setPlaylistFor(null)}
+          resolve={playlistFor.resolve}
+        />
+      )}
+      {presetFor && (
+        <PresetPicker
+          picker={{ node: { title: presetFor.ref.title }, x: presetFor.x, y: presetFor.y }}
+          onClose={() => setPresetFor(null)}
+          onSave={async (slot, name) => {
+            await saveRefToPreset(presetFor.ref, slot, name)
+            setPresetFor(null)
+          }}
+        />
+      )}
 
       {/* The category rail: what was searched, how much each holds, and which
           are showing. Counts are the POINT — a category with 0 still gets a

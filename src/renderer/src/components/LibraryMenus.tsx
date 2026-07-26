@@ -3,7 +3,16 @@ import { createPortal } from 'react-dom'
 import type { MediaNode, MediaQueueAction } from '@shared/ipc'
 import { useStore } from '@/store'
 import { cx } from '@/lib/format'
-import { isArtistClass } from '@/lib/media'
+import { isAlbumClass, isArtistClass } from '@/lib/media'
+import { fromNode } from '@/lib/mediaRef'
+import {
+  albumMenuItems,
+  artistMenuItems,
+  trackMenuItems,
+  type MediaMenuCaps,
+  type MediaMenuItem
+} from '@/lib/mediaMenus'
+import type { SearchBack } from '@/store'
 import { usePopoverChrome, useClampedPosition } from '@/hooks/usePopover'
 import { ArtImage } from '@/components/ArtImage'
 
@@ -17,7 +26,7 @@ export function ItemMenu({
   onAddToPlaylist,
   goToAlbum,
   goToArtist,
-  searchEverywhere,
+  searchFrom,
   favorite
 }: {
   menu: { node: MediaNode; x: number; y: number }
@@ -30,79 +39,49 @@ export function ItemMenu({
   /** Search results give tracks navigate verbs (the row click still plays). */
   goToAlbum?(): void
   goToArtist?(): void
-  /**
-   * The Library→Search pivot: seed unified Search with this entity and see
-   * what ELSE the app holds of it — playlists, presets, favorites, stations.
-   * Go-to verbs navigate WITHIN the library; this one leaves it, so the label
-   * says where it's going. Absent for plain folders — a folder name is a
-   * filing choice, not an entity worth pivoting on.
-   */
-  searchEverywhere?: { entity: string; run(): void }
-  /** When present, the menu grows an Add/Remove favorites entry (last). */
+  /** Back-link the search pivot records — see mediaMenus. */
+  searchFrom?: SearchBack
+  /** Overrides the builders' derived heart (the library stores richer
+   *  favorites — titlePath from the crumbs). */
   favorite?: { active: boolean; toggle(): void }
 }): React.JSX.Element {
   const { node } = menu
-  const playlistItem = onAddToPlaylist
-    ? [{ label: 'Add to playlist…', run: onAddToPlaylist }]
-    : []
-  const pivotItem = searchEverywhere
-    ? [
-        {
-          label: `Search everywhere for “${searchEverywhere.entity}”`,
-          run: searchEverywhere.run
-        }
-      ]
-    : []
-  const favoriteItem = favorite
-    ? [
-        {
-          label: favorite.active ? 'Remove from favorites' : 'Add to favorites',
-          run: favorite.toggle
-        }
-      ]
-    : []
-  // An ARTIST'S menu is the pivot alone. The queue/preset verbs don't apply
-  // (an artist container holds albums, not a playable track list — "queue a
-  // whole artist" is a decision that hasn't been made), and favorites key on
-  // album/track content identity. One item is thin, but it's the one
-  // cross-collection question an artist can answer, and the menu gives any
-  // future artist verb a home.
-  const items: Array<{ label: string; run: () => void }> = isArtistClass(node.upnpClass) && node.isContainer
-    ? [...pivotItem]
-    : node.isContainer
-    ? [
-        { label: 'Play', run: () => onAction('PLAY') },
-        { label: 'Play next', run: () => onAction('PLAY_NEXT') },
-        { label: 'Add to end of queue', run: () => onAction('APPEND') },
-        { label: 'Replace queue', run: () => onAction('REPLACE') },
-        // the pivot sits with the navigate verbs, before the write cluster
-        ...pivotItem,
-        { label: 'Save to preset…', run: onSavePreset },
-        ...playlistItem,
-        ...favoriteItem
-      ]
-    : [
-        { label: 'Play now', run: () => onAction('PLAY_NOW') },
-        { label: 'Play next', run: () => onAction('PLAY_NEXT') },
-        { label: 'Add to end of queue', run: () => onAction('APPEND') },
-        { label: 'Replace queue', run: () => onAction('REPLACE') },
-        ...(node.parentId
-          ? [
-              {
-                label: 'Play album from here',
-                run: () => onAction('PLAY_FROM_HERE', node.id)
-              }
-            ]
-          : []),
-        ...(goToAlbum ? [{ label: 'Go to album', run: goToAlbum }] : []),
-        ...(goToArtist ? [{ label: 'Go to artist', run: goToArtist }] : []),
-        // after the go-to verbs: those navigate within the library, this one
-        // pivots out across every collection
-        ...pivotItem,
-        { label: 'Save to preset…', run: onSavePreset },
-        ...playlistItem,
-        ...favoriteItem
-      ]
+  // The item lists come from the per-entity builders (lib/mediaMenus) — the
+  // same lists every other surface composes, so a track's menu here IS a
+  // track's menu everywhere. PLAIN FOLDERS stay outside the entity system on
+  // purpose: a folder is filing, not media — it gets the queue verbs and
+  // nothing content-shaped (no pivot, no heart, no playlist).
+  const ref = fromNode(node)
+  const caps: MediaMenuCaps = {
+    playNow: () => onAction(node.isContainer ? 'PLAY' : 'PLAY_NOW'),
+    playNext: () => onAction('PLAY_NEXT'),
+    append: () => onAction('APPEND'),
+    replaceQueue: () => onAction('REPLACE'),
+    extraQueueVerbs:
+      !node.isContainer && node.parentId
+        ? [{ label: 'Play album from here', run: () => onAction('PLAY_FROM_HERE', node.id) }]
+        : undefined,
+    goToAlbum,
+    goToArtist,
+    saveToPreset: onSavePreset,
+    addToPlaylist: onAddToPlaylist,
+    heart: favorite,
+    searchFrom
+  }
+  const items: MediaMenuItem[] =
+    node.isContainer && isArtistClass(node.upnpClass)
+      ? artistMenuItems(ref, { searchFrom })
+      : node.isContainer && !isAlbumClass(node.upnpClass)
+        ? [
+            { label: 'Play', run: () => onAction('PLAY') },
+            { label: 'Play next', run: () => onAction('PLAY_NEXT') },
+            { label: 'Add to end of queue', run: () => onAction('APPEND') },
+            { label: 'Replace queue', run: () => onAction('REPLACE') },
+            { label: 'Save to preset…', run: onSavePreset }
+          ]
+        : node.isContainer
+          ? albumMenuItems(ref, caps)
+          : trackMenuItems(ref, caps)
 
   usePopoverChrome(onClose)
   const boxRef = useRef<HTMLDivElement | null>(null)
@@ -120,7 +99,13 @@ export function ItemMenu({
         {items.map((item) => (
           <button
             key={item.label}
-            onClick={item.run}
+            onClick={() => {
+              // close-then-run, the RowMenu contract — builder items (pivot,
+              // heart) don't know about this menu's state, and callers that
+              // also close themselves just close twice, harmlessly
+              onClose()
+              item.run()
+            }}
             className="w-full px-2.5 py-1.5 rounded-lg text-left text-[13px] text-dim hover:text-ink hover:bg-veil transition-colors"
           >
             {item.label}
@@ -244,7 +229,9 @@ export function PresetPicker({
   onClose,
   onSave
 }: {
-  picker: { node: MediaNode; x: number; y: number }
+  /** Only the title is read — loosened from MediaNode so any surface with a
+   *  name (a queue row, a search result) can offer the picker. */
+  picker: { node: Pick<MediaNode, 'title'>; x: number; y: number }
   onClose(): void
   onSave(slot: number, name: string | null): Promise<void>
 }): React.JSX.Element {

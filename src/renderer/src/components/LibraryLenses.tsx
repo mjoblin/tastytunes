@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowUpRight, ChevronDown, Disc3, MoreHorizontal, Users } from 'lucide-react'
+import { ArrowUpRight, ChevronDown, MoreHorizontal } from 'lucide-react'
 import type { MediaIndexPools, MediaNode } from '@shared/ipc'
 import { cx, fmtTime, matchesFilter } from '@/lib/format'
 import { scrollToVisible } from '@/lib/scroll'
 import { isAlbumClass } from '@/lib/media'
-import { ArtImage } from '@/components/ArtImage'
+import { MediaArt } from '@/components/MediaArt'
 import { FilterInput } from '@/components/FilterInput'
 import { PopoverChrome } from '@/hooks/usePopover'
 import { SortChip } from '@/components/SortChip'
@@ -622,22 +622,16 @@ export function ArtistsLens({
                   data-artist-row={a.name}
                   onClick={() => setMem({ artist: selected ? null : a.key, album: null })}
                   className={cx(
-                    'group grid grid-cols-[36px_1fr_auto] items-center gap-2.5 rounded-lg px-2 py-1.5 cursor-pointer transition-colors',
+                    'group grid grid-cols-[44px_1fr_auto] items-center gap-2.5 rounded-lg px-2 py-1.5 cursor-pointer transition-colors',
                     selected ? 'bg-raised ring-1 ring-edge2' : playing ? 'bg-gold/10' : 'hover:bg-veil'
                   )}
                 >
-                  <div className="h-9 w-9 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
-                    <ArtImage
-                      src={a.artUrl}
-                      lazy
-                      fallback={<Users size={14} className="text-faint" />}
-                    />
-                  </div>
+                  <MediaArt src={a.artUrl} kind="artist" />
                   <div className="min-w-0">
-                    <div className={cx('text-[13px] truncate', playing ? 'text-gold' : 'text-ink')}>
+                    <div className={cx('text-[13.5px] truncate', playing ? 'text-gold' : 'text-ink')}>
                       {a.name}
                     </div>
-                    <div className="text-[11px] text-faint truncate">
+                    <div className="text-[12px] text-dim truncate">
                       {a.albums.length > 0
                         ? `${a.albums.length} album${a.albums.length === 1 ? '' : 's'}`
                         : `${a.tracks.length} track${a.tracks.length === 1 ? '' : 's'}`}
@@ -700,18 +694,12 @@ export function ArtistsLens({
                     selected ? 'bg-raised ring-1 ring-edge2' : playing ? 'bg-gold/10' : 'hover:bg-veil'
                   )}
                 >
-                  <div className="h-10 w-10 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
-                    <ArtImage
-                      src={alb.artUrl}
-                      lazy
-                      fallback={<Disc3 size={16} className="text-faint" />}
-                    />
-                  </div>
+                  <MediaArt src={alb.artUrl} kind="album" />
                   <div className="min-w-0">
-                    <div className={cx('text-[13px] truncate', playing ? 'text-gold' : 'text-ink')}>
+                    <div className={cx('text-[13.5px] truncate', playing ? 'text-gold' : 'text-ink')}>
                       {alb.title}
                     </div>
-                    <div className="flex items-center gap-1.5 min-w-0 text-[11px] text-faint">
+                    <div className="flex items-center gap-1.5 min-w-0 text-[12px] text-dim">
                       {alb.year && <span>{alb.year}</span>}
                       {multiServer && alb.serverName && (
                         <span

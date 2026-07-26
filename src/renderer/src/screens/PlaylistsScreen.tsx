@@ -16,7 +16,7 @@ import {
   verticalListSortingStrategy
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Disc3, ListOrdered, Loader2, MoreHorizontal, Pencil, Play, Trash2, X } from 'lucide-react'
+import { ListOrdered, Loader2, MoreHorizontal, Pencil, Play, Trash2, X } from 'lucide-react'
 import { queueContentHash } from '@shared/smoip'
 import {
   favoriteKey,
@@ -38,11 +38,17 @@ import { RowHeart } from '@/components/RowHeart'
 import { AddToPlaylistPanel } from '@/components/AddToPlaylistPanel'
 import { toggleFavorite } from '@/lib/favorites'
 import { activatePlaylist } from '@/lib/playlists'
+import { fromPlaylistItem } from '@/lib/mediaRef'
+import { saveRefToPreset } from '@/lib/mediaActions'
+import { trackMenuItems } from '@/lib/mediaMenus'
 import { OrderHandle } from '@/components/OrderHandle'
 import { ArtImage } from '@/components/ArtImage'
+import { MediaArt } from '@/components/MediaArt'
+import { DurationCell } from '@/components/DurationCell'
+import { PresetPicker } from '@/components/LibraryMenus'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { lockVertical } from '@/lib/dnd'
-import { cx, fmtDuration, fmtRelative, fmtTime, matchesFilter } from '@/lib/format'
+import { cx, fmtDuration, fmtRelative, matchesFilter } from '@/lib/format'
 
 /**
  * Stored playlists: the collection on the left, the selected playlist's tracks
@@ -77,6 +83,9 @@ export function PlaylistsScreen(): React.JSX.Element {
     y: number
   } | null>(null)
   const [copyTo, setCopyTo] = useState<{ item: PlaylistItem; x: number; y: number } | null>(null)
+  const [presetFor, setPresetFor] = useState<{ item: PlaylistItem; x: number; y: number } | null>(
+    null
+  )
   // A sort picker rather than manual ordering (user call 2026-07-24): manual
   // order fights the recency sort that already does useful work and needs an
   // `order` field maintained forever, for control a picker gives at a fraction
@@ -227,13 +236,14 @@ export function PlaylistsScreen(): React.JSX.Element {
           title={trackMenu.item.title}
           at={{ x: trackMenu.x, y: trackMenu.y }}
           onClose={() => setTrackMenu(null)}
-          items={[
-            {
-              label: 'Add to another playlist…',
-              run: () => setCopyTo({ item: trackMenu.item, x: trackMenu.x, y: trackMenu.y })
-            },
-            { label: 'Remove from playlist', run: () => removeItem(trackMenu.index) }
-          ]}
+          // the shared track menu (heart, pivot, preset…) + the local remove
+          items={trackMenuItems(fromPlaylistItem(trackMenu.item), {
+            addToPlaylist: () => setCopyTo({ item: trackMenu.item, x: trackMenu.x, y: trackMenu.y }),
+            saveToPreset: () =>
+              setPresetFor({ item: trackMenu.item, x: trackMenu.x, y: trackMenu.y }),
+            searchFrom: { screen: 'playlists' },
+            extra: [{ label: 'Remove from playlist', run: () => removeItem(trackMenu.index) }]
+          })}
         />
       )}
       {copyTo && (
@@ -242,6 +252,16 @@ export function PlaylistsScreen(): React.JSX.Element {
           at={{ x: copyTo.x, y: copyTo.y }}
           onClose={() => setCopyTo(null)}
           resolve={async () => [copyTo.item]}
+        />
+      )}
+      {presetFor && (
+        <PresetPicker
+          picker={{ node: { title: presetFor.item.title }, x: presetFor.x, y: presetFor.y }}
+          onClose={() => setPresetFor(null)}
+          onSave={async (slot, name) => {
+            await saveRefToPreset(fromPlaylistItem(presetFor.item), slot, name)
+            setPresetFor(null)
+          }}
         />
       )}
       {playlists.length === 0 ? (
@@ -543,6 +563,10 @@ function TrackRow({
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(lockVertical(transform)), transition }}
+      onContextMenu={(e) => {
+        e.preventDefault()
+        onMenu(e)
+      }}
       className={cx(
         'group grid grid-cols-[26px_44px_1fr_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5',
         'transition-colors',
@@ -557,9 +581,7 @@ function TrackRow({
         <span className="font-mono text-[10.5px] text-faint tabular-nums">{index + 1}</span>
       </OrderHandle>
 
-      <div className="h-10 w-10 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
-        <ArtImage src={item.artUrl} lazy fallback={<Disc3 size={16} className="text-faint" />} />
-      </div>
+      <MediaArt src={item.artUrl} kind="track" />
 
       <div className="min-w-0">
         <div className="text-[13.5px] truncate text-ink">{item.title}</div>
@@ -584,9 +606,7 @@ function TrackRow({
       </div>
 
       {/* far right of the content, after the hover actions — see QueueRow */}
-      <span className="font-mono text-[11px] text-faint tabular-nums">
-        {item.durationSecs != null ? fmtTime(item.durationSecs) : ''}
-      </span>
+      <DurationCell secs={item.durationSecs ?? null} />
     </div>
   )
 }

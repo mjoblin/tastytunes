@@ -91,6 +91,9 @@ export async function favoriteAct(
         serverName: server.name,
         objectId: found.id,
         artUrl: fav.artUrl ?? found.artUrl,
+        // backfill a missing duration too — hearts captured before the field
+        // existed (or from surfaces without one) otherwise stay '–:––' forever
+        durationSecs: fav.durationSecs ?? found.durationSecs,
         titlePath: null // the old trail is meaningless on the healed server
       })
       return 'healed'

@@ -164,7 +164,6 @@ export function LibraryScreen(): React.JSX.Element {
   const filter = useStore((s) => s.screenFilters.library)
   const setScreenFilter = useStore((s) => s.setScreenFilter)
   const setScreen = useStore((s) => s.setScreen)
-  const requestSearch = useStore((s) => s.requestSearch)
   const playState = useStore((s) => s.playState)
   const nowPlaying = useStore((s) => s.nowPlaying)
   const zoneState = useStore((s) => s.zoneState)
@@ -2108,29 +2107,10 @@ export function LibraryScreen(): React.JSX.Element {
                 }
               : undefined
           }
-          // The cross-collection pivot: artists pivot on their own name,
-          // albums and tracks on their artist (that's the "what ELSE do I
-          // have of this?" question) with the title as fallback. Plain
-          // folders are filing, not entities — no pivot.
-          searchEverywhere={(() => {
-            const kind = mediaKind(menu.node.upnpClass, menu.node.isContainer)
-            if (menu.node.isContainer && kind === 'album' && !isAlbumClass(menu.node.upnpClass))
-              return undefined // the classifier's unfiled-container fallback — a folder
-            const entity =
-              kind === 'artist' ? menu.node.title : (menu.node.artist ?? menu.node.title)
-            if (!entity.trim()) return undefined
-            return {
-              entity,
-              run: () => {
-                setMenu(null)
-                // where we are rides along so ⌘← on Search comes back HERE —
-                // a browse pivot returns via the position restore, a pivot out
-                // of SEARCH MODE returns via find-recall (its browse position
-                // is just the search's scope root)
-                requestSearch(entity, { screen: 'library', librarySearch: searchMode })
-              }
-            }
-          })()}
+          // Back-link for the builders' search pivot: a browse pivot returns
+          // via the position restore, a pivot out of SEARCH MODE returns via
+          // find-recall (its browse position is just the search's scope root).
+          searchFrom={{ screen: 'library', librarySearch: searchMode }}
           // Albums and tracks are heartable; plain folders and artists aren't.
           favorite={
             !menu.node.isContainer || isAlbumClass(menu.node.upnpClass)

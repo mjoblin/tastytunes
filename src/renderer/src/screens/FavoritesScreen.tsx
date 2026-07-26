@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Heart, Loader2, MoreHorizontal, Music2, Play, RadioTower } from 'lucide-react'
+import { Heart, Loader2, MoreHorizontal, Play } from 'lucide-react'
 import {
   favoriteKey,
   type Favorite,
@@ -7,21 +7,27 @@ import {
   type FavoriteStation,
   type MediaNode,
   type MediaQueueAction,
-  type MediaServerInfo
+  type MediaServerInfo,
+  type PlaylistItem
 } from '@shared/ipc'
 import { isRadioMetadata, type QueueListItem } from '@shared/smoip'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { RowAction } from '@/components/RowAction'
-import { ArtImage } from '@/components/ArtImage'
+import { RowHeart } from '@/components/RowHeart'
+import { MediaRow } from '@/components/MediaRow'
 import { ContainerCard } from '@/components/LibraryCards'
+import { AddToPlaylistPanel } from '@/components/AddToPlaylistPanel'
+import { PresetPicker } from '@/components/LibraryMenus'
+import { fromFavorite, fromNode, refToPlaylistItem } from '@/lib/mediaRef'
+import { recordPresetSaved } from '@/lib/mediaActions'
+import { albumMenuItems, trackMenuItems } from '@/lib/mediaMenus'
 import { EmptyState } from '@/components/EmptyState'
-import { Eqbars } from '@/components/Eqbars'
 import { FilterInput } from '@/components/FilterInput'
 import { Segmented } from '@/components/Segmented'
 import { RowMenu } from '@/components/RowMenu'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
-import { activeSourceId, cx, fmtTime, matchesFilter } from '@/lib/format'
+import { activeSourceId, cx, matchesFilter } from '@/lib/format'
 import { favoriteAct, favoriteHasRoute, type FavoriteActResult } from '@/lib/favorites'
 import { flashTarget } from '@/lib/scroll'
 
@@ -258,6 +264,36 @@ export function FavoritesScreen(): React.JSX.Element {
   // ------------------------------------------------------------------- menus
 
   const [menu, setMenu] = useState<{ fav: FavoriteMedia; x: number; y: number } | null>(null)
+  const [playlistFor, setPlaylistFor] = useState<{ fav: FavoriteMedia; x: number; y: number } | null>(
+    null
+  )
+  const [presetFor, setPresetFor] = useState<{ fav: FavoriteMedia; x: number; y: number } | null>(
+    null
+  )
+
+  /** A favorite's items for the playlist panel: tracks map straight over; an
+   *  album expands to its tracks through the same favoriteAct resolution
+   *  (heals rotted ids) playing it uses. */
+  const resolvePlaylistItems = async (f: FavoriteMedia): Promise<PlaylistItem[]> => {
+    if (f.kind === 'track') return [refToPlaylistItem(fromFavorite(f))]
+    const items: PlaylistItem[] = []
+    await favoriteAct(f, async (udn, id) => {
+      const children = await tt.mediaBrowse(udn, id, f.titlePath ?? [f.title])
+      for (const c of children) if (!c.isContainer) items.push(refToPlaylistItem(fromNode(c, udn)))
+    })
+    return items
+  }
+
+  /** Save through favoriteAct (album-capable, heals) then the shared preset
+   *  bookkeeping. Throws on failure so the panel stays open. */
+  const savePresetFor = async (f: FavoriteMedia, slot: number, name: string | null): Promise<void> => {
+    const res = await favoriteAct(f, (udn, id) => tt.mediaPresetSave(udn, id, slot))
+    if (res === 'missing' || res === 'no-server') {
+      showToast({ kind: 'error', text: `Couldn't find “${f.title}” to save` })
+      throw new Error('preset save failed')
+    }
+    await recordPresetSaved(fromFavorite(f), slot, name)
+  }
   const openMenu = (fav: FavoriteMedia, e: React.MouseEvent): void => {
     e.preventDefault()
     e.stopPropagation()
@@ -406,89 +442,69 @@ export function FavoritesScreen(): React.JSX.Element {
                   const key = favoriteKey(f)
                   const active = activeKeys.has(key)
                   const routed = servers == null || favoriteHasRoute(f, servers)
-                  const playing = trackPlaying(f)
                   return (
-                    <div
+                    // MediaRow's reserved duration column is what keeps every
+                    // heart on one vertical line — a track with no captured
+                    // length shows '–:––' instead of letting the heart drift
+                    <MediaRow
                       key={key}
-                      data-fav-track={f.title}
-                      onClick={(e) =>
-                        routed && active !== false && playTrack(f, e.currentTarget as HTMLElement)
+                      attrs={{ 'data-fav-track': f.title }}
+                      title={f.title}
+                      kind="track"
+                      artUrl={f.artUrl}
+                      subtitle={
+                        [
+                          [f.artist, f.album].filter(Boolean).join(' — '),
+                          !routed && f.serverName ? `${f.serverName} is offline` : ''
+                        ]
+                          .filter(Boolean)
+                          .join(' · ') || undefined
                       }
+                      playing={trackPlaying(f)}
+                      dimmed={!active || !routed}
+                      duration={f.durationSecs ?? null}
+                      onClick={(el) => playTrack(f, el)}
                       onContextMenu={(e) => openMenu(f, e)}
-                      className={cx(
-                        // station-row rhythm (py-2.5 + space-y-1.5) — same ringed
-                        // floating-row idiom on the same screen, same density
-                        'group flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors',
-                        routed ? 'cursor-pointer' : 'cursor-default',
-                        playing
-                          ? 'row-playing bg-gold/10'
-                          : 'ring-1 ring-edge bg-panel/60 hover:bg-raised/70 hover:ring-edge2',
-                        (!active || !routed) && 'opacity-50'
-                      )}
-                    >
-                      <div className="h-9 w-9 shrink-0 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
-                        <ArtImage
-                          src={f.artUrl}
-                          lazy
-                          fallback={<Music2 size={14} className="text-faint" />}
-                        />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div
-                          className={cx(
-                            'flex items-center gap-2 text-[13px] truncate',
-                            playing ? 'text-gold' : 'text-ink'
+                      actions={
+                        <>
+                          {routed && active && (
+                            <>
+                              <RowAction
+                                icon={Play}
+                                label="Play"
+                                tip={
+                                  favQueueMatches(f).length > 0
+                                    ? 'Play — already in the queue'
+                                    : 'Play now — slots in after the current track'
+                                }
+                                pinned={menu?.fav === f}
+                                onClick={(e: React.MouseEvent) =>
+                                  playTrack(
+                                    f,
+                                    (e.currentTarget as HTMLElement).closest(
+                                      '[data-fav-track]'
+                                    ) as HTMLElement
+                                  )
+                                }
+                              />
+                              <RowAction
+                                icon={MoreHorizontal}
+                                label="More actions"
+                                pinned={menu?.fav === f}
+                                onClick={(e) => openMenu(f, e)}
+                              />
+                            </>
                           )}
-                        >
-                          {playing && <Eqbars playing={audible} />}
-                          <span className="truncate">{f.title}</span>
-                        </div>
-                        <div className="text-[11.5px] text-dim truncate">
-                          {[f.artist, f.album].filter(Boolean).join(' — ')}
-                          {!routed && f.serverName ? ` · ${f.serverName} is offline` : ''}
-                        </div>
-                      </div>
-                      {/* library TrackRow parity: hover play + ⋯ with the
-                          same queue-aware tips, then the captured duration */}
-                      {routed && active && (
-                        <div className="flex items-center gap-0.5 shrink-0">
-                          <RowAction
-                            icon={Play}
-                            label="Play"
-                            tip={
-                              favQueueMatches(f).length > 0
-                                ? 'Play — already in the queue'
-                                : 'Play now — slots in after the current track'
-                            }
-                            pinned={menu?.fav === f}
-                            onClick={(e: React.MouseEvent) =>
-                              playTrack(
-                                f,
-                                (e.currentTarget as HTMLElement).closest(
-                                  '[data-fav-track]'
-                                ) as HTMLElement
-                              )
-                            }
-                          />
-                          <RowAction
-                            icon={MoreHorizontal}
-                            label="More actions"
-                            pinned={menu?.fav === f}
-                            onClick={(e) => openMenu(f, e)}
-                          />
-                        </div>
-                      )}
-                      {busyKey === key && <Loader2 size={13} className="spin text-gold/80 shrink-0" />}
-                      <HeartButton active={active} onClick={() => toggleHeart(f)} />
-                      {/* Duration LAST, matching the library's track row — the
-                          most developed of these and the one the others drifted
-                          from. Actions cluster to its left; the heart is part of
-                          that cluster (as in the library) rather than trailing
-                          it, so the final column is always the duration. */}
-                      <span className="font-mono text-[11px] text-faint tabular-nums shrink-0">
-                        {f.durationSecs != null ? fmtTime(f.durationSecs) : ''}
-                      </span>
-                    </div>
+                          {busyKey === key && (
+                            <Loader2 size={13} className="spin text-gold/80 shrink-0" />
+                          )}
+                          {/* held: on THIS screen the heart is the state marker,
+                              so it stays visible even unset (soft removal keeps
+                              the row; the hollow heart is the one-click undo) */}
+                          <RowHeart favorited={active} held onHeart={() => toggleHeart(f)} />
+                        </>
+                      }
+                    />
                   )
                 })}
               </div>
@@ -502,33 +518,52 @@ export function FavoritesScreen(): React.JSX.Element {
           title={menu.fav.title}
           at={{ x: menu.x, y: menu.y }}
           onClose={() => setMenu(null)}
-          items={
-            menu.fav.kind === 'album'
-              ? [
-                  { label: 'Play', run: () => playAlbum(menu.fav, null) },
-                  { label: 'Play next', run: () => queueAction(menu.fav, 'PLAY_NEXT', null) },
-                  { label: 'Add to end of queue', run: () => queueAction(menu.fav, 'APPEND', null) },
-                  { label: 'Replace queue', run: () => queueAction(menu.fav, 'REPLACE', null) },
-                  { label: 'Open in Library', run: () => enterAlbum(menu.fav) },
-                  {
-                    label: activeKeys.has(favoriteKey(menu.fav))
-                      ? 'Remove from favorites'
-                      : 'Add to favorites',
-                    run: () => toggleHeart(menu.fav)
-                  }
-                ]
-              : [
-                  { label: 'Play now', run: () => playTrack(menu.fav, null) },
-                  { label: 'Play next', run: () => queueAction(menu.fav, 'PLAY_NEXT', null) },
-                  { label: 'Add to end of queue', run: () => queueAction(menu.fav, 'APPEND', null) },
-                  {
-                    label: activeKeys.has(favoriteKey(menu.fav))
-                      ? 'Remove from favorites'
-                      : 'Add to favorites',
-                    run: () => toggleHeart(menu.fav)
-                  }
-                ]
-          }
+          // The shared per-entity builders (lib/mediaMenus): a favorite's menu
+          // is now the same track/album menu as everywhere else — including
+          // the playlist, preset and search-everywhere verbs this screen
+          // never offered before the consistency pass.
+          items={(() => {
+            const shared = {
+              playNext: () => queueAction(menu.fav, 'PLAY_NEXT' as MediaQueueAction, null),
+              append: () => queueAction(menu.fav, 'APPEND' as MediaQueueAction, null),
+              replaceQueue: () => queueAction(menu.fav, 'REPLACE' as MediaQueueAction, null),
+              saveToPreset: () => setPresetFor({ fav: menu.fav, x: menu.x, y: menu.y }),
+              addToPlaylist: () => setPlaylistFor({ fav: menu.fav, x: menu.x, y: menu.y }),
+              heart: {
+                active: activeKeys.has(favoriteKey(menu.fav)),
+                toggle: () => toggleHeart(menu.fav)
+              },
+              searchFrom: { screen: 'favorites' as const }
+            }
+            return menu.fav.kind === 'album'
+              ? albumMenuItems(fromFavorite(menu.fav), {
+                  ...shared,
+                  playNow: () => playAlbum(menu.fav, null),
+                  openInLibrary: () => enterAlbum(menu.fav)
+                })
+              : trackMenuItems(fromFavorite(menu.fav), {
+                  ...shared,
+                  playNow: () => playTrack(menu.fav, null)
+                })
+          })()}
+        />
+      )}
+      {playlistFor && (
+        <AddToPlaylistPanel
+          label={playlistFor.fav.title}
+          at={{ x: playlistFor.x, y: playlistFor.y }}
+          onClose={() => setPlaylistFor(null)}
+          resolve={() => resolvePlaylistItems(playlistFor.fav)}
+        />
+      )}
+      {presetFor && (
+        <PresetPicker
+          picker={{ node: { title: presetFor.fav.title }, x: presetFor.x, y: presetFor.y }}
+          onClose={() => setPresetFor(null)}
+          onSave={async (slot, name) => {
+            await savePresetFor(presetFor.fav, slot, name)
+            setPresetFor(null)
+          }}
         />
       )}
     </div>
@@ -536,36 +571,6 @@ export function FavoritesScreen(): React.JSX.Element {
 }
 
 // ---------------------------------------------------------------- components
-
-function HeartButton({
-  active,
-  onClick,
-  reveal
-}: {
-  active: boolean
-  onClick(): void
-  /** 'hover' shows only on row/card hover unless active; default always shows. */
-  reveal?: 'hover'
-}): React.JSX.Element {
-  return (
-    <button
-      onClick={(e) => {
-        e.stopPropagation()
-        onClick()
-      }}
-      data-tip={active ? 'Remove from favorites' : 'Add to favorites'}
-      aria-label={active ? 'Remove from favorites' : 'Add to favorites'}
-      data-fav-heart={active ? 'on' : 'off'}
-      className={cx(
-        'p-1.5 rounded-full transition-all motion-safe:active:scale-90 shrink-0',
-        active ? 'text-gold hover:text-ink' : 'text-dim hover:text-ink hover:bg-veil2',
-        reveal === 'hover' && !active && 'opacity-0 group-hover:opacity-100'
-      )}
-    >
-      <Heart size={15} fill={active ? 'currentColor' : 'none'} />
-    </button>
-  )
-}
 
 function StationFavRow({
   station,
@@ -582,44 +587,26 @@ function StationFavRow({
   onPlay(): void
   onHeart(): void
 }): React.JSX.Element {
+  // MediaRow carries the whole station treatment (tuning half-light, inline
+  // eqbars); a soft-removed station dims and, like a soft-removed track, needs
+  // its heart back before it plays again.
   return (
-    <div
-      data-fav-station={station.name}
-      onClick={onPlay}
-      className={cx(
-        'group flex items-center gap-4 rounded-xl px-3 py-2.5 cursor-pointer transition-colors',
-        playing
-          ? 'row-playing bg-gold/10'
-          : tuning
-            ? 'ring-1 ring-gold/40 bg-golddim/40'
-            : 'ring-1 ring-edge bg-panel/60 hover:bg-raised/70 hover:ring-edge2',
-        !active && 'opacity-50'
-      )}
-    >
-      <div className="h-11 w-11 shrink-0 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
-        <ArtImage
-          src={station.favicon}
-          lazy
-          fallback={<RadioTower size={17} className="text-faint" />}
-        />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div
-          className={cx(
-            'flex items-center gap-2 text-[13.5px] truncate',
-            playing ? 'text-gold' : tuning ? 'text-gold/80' : 'text-ink'
-          )}
-        >
-          {playing && <Eqbars playing />}
-          {tuning && <Loader2 size={13} className="spin shrink-0" />}
-          <span className="truncate">{station.name}</span>
-        </div>
-        {tuning && (
-          <div className="text-[10.5px] text-gold/80 motion-safe:animate-pulse">tuning in…</div>
-        )}
-      </div>
-      <HeartButton active={active} onClick={onHeart} />
-    </div>
+    <MediaRow
+      attrs={{ 'data-fav-station': station.name }}
+      title={station.name}
+      kind="station"
+      artUrl={station.favicon}
+      playing={playing}
+      tuning={tuning}
+      dimmed={!active}
+      meta={
+        tuning ? (
+          <span className="text-gold/80 motion-safe:animate-pulse">tuning in…</span>
+        ) : undefined
+      }
+      onClick={() => onPlay()}
+      actions={<RowHeart favorited={active} held onHeart={onHeart} />}
+    />
   )
 }
 
