@@ -16,6 +16,7 @@ export function ItemMenu({
   onAddToPlaylist,
   goToAlbum,
   goToArtist,
+  searchEverywhere,
   favorite
 }: {
   menu: { node: MediaNode; x: number; y: number }
@@ -28,12 +29,28 @@ export function ItemMenu({
   /** Search results give tracks navigate verbs (the row click still plays). */
   goToAlbum?(): void
   goToArtist?(): void
+  /**
+   * The Library→Search pivot: seed unified Search with this entity and see
+   * what ELSE the app holds of it — playlists, presets, favorites, stations.
+   * Go-to verbs navigate WITHIN the library; this one leaves it, so the label
+   * says where it's going. Absent for plain folders — a folder name is a
+   * filing choice, not an entity worth pivoting on.
+   */
+  searchEverywhere?: { entity: string; run(): void }
   /** When present, the menu grows an Add/Remove favorites entry (last). */
   favorite?: { active: boolean; toggle(): void }
 }): React.JSX.Element {
   const { node } = menu
   const playlistItem = onAddToPlaylist
     ? [{ label: 'Add to playlist…', run: onAddToPlaylist }]
+    : []
+  const pivotItem = searchEverywhere
+    ? [
+        {
+          label: `Search everywhere for “${searchEverywhere.entity}”`,
+          run: searchEverywhere.run
+        }
+      ]
     : []
   const favoriteItem = favorite
     ? [
@@ -49,6 +66,8 @@ export function ItemMenu({
         { label: 'Play next', run: () => onAction('PLAY_NEXT') },
         { label: 'Add to end of queue', run: () => onAction('APPEND') },
         { label: 'Replace queue', run: () => onAction('REPLACE') },
+        // the pivot sits with the navigate verbs, before the write cluster
+        ...pivotItem,
         { label: 'Save to preset…', run: onSavePreset },
         ...playlistItem,
         ...favoriteItem
@@ -68,6 +87,9 @@ export function ItemMenu({
           : []),
         ...(goToAlbum ? [{ label: 'Go to album', run: goToAlbum }] : []),
         ...(goToArtist ? [{ label: 'Go to artist', run: goToArtist }] : []),
+        // after the go-to verbs: those navigate within the library, this one
+        // pivots out across every collection
+        ...pivotItem,
         { label: 'Save to preset…', run: onSavePreset },
         ...playlistItem,
         ...favoriteItem
