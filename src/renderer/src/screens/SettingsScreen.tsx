@@ -735,7 +735,7 @@ const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frid
 
 /** Plain-English one-liner of exactly what a schedule will (or won't) do. */
 function describeSchedule(s: Schedule): string {
-  if (!s.enabled) return 'Off — flip the switch to arm it.'
+  if (!s.enabled) return 'Off — flip the switch to enable it.'
   if (s.days.length === 0) return 'Never fires — no days selected.'
   const days =
     s.days.length === 7
