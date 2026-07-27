@@ -186,6 +186,7 @@ export function PlaybackBar(): React.JSX.Element {
               value={duration ? shownPosition / duration : 0}
               disabled={!active || !canSeek}
               ariaLabel="Playhead"
+              scrubLabel={duration ? (v) => fmtTime(v * duration) : undefined}
               onScrub={setScrub}
               onCancel={() => setScrub(null)}
               onCommit={(v) => {
