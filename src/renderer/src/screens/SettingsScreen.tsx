@@ -64,10 +64,10 @@ import {
   type NavToolDef,
   type ScreenDef
 } from '@/lib/screens'
-import { Slider } from '@/components/Slider'
-import { OrderHandle } from '@/components/OrderHandle'
+import { Slider } from '@/components/controls/Slider'
+import { OrderHandle } from '@/components/controls/OrderHandle'
 import { lockVertical } from '@/lib/dnd'
-import { HeaderChip, PrimaryButton, ScreenTitle } from '@/components/Chrome'
+import { HeaderChip, PrimaryButton, ScreenTitle } from '@/components/chrome/Chrome'
 import { useOneShotAsk } from '@/hooks/useOneShotAsk'
 
 const TABS = [

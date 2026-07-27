@@ -12,9 +12,9 @@ import {
   type MediaMenuItem
 } from '@/lib/mediaMenus'
 import type { SearchBack } from '@/store'
-import { PopoverCard } from '@/components/Overlay'
+import { PopoverCard } from '@/components/chrome/Overlay'
 import { useConfirmTap } from '@/hooks/useConfirmTap'
-import { ArtImage } from '@/components/ArtImage'
+import { ArtImage } from '@/components/media/ArtImage'
 
 // ------------------------------------------------------------------- ⋯ menu
 

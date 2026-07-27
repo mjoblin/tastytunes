@@ -4,7 +4,7 @@ import type { PlaylistItem } from '@shared/model'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { cx, fmtTime, matchesFilter } from '@/lib/format'
-import { PopoverCard } from '@/components/Overlay'
+import { PopoverCard } from '@/components/chrome/Overlay'
 
 /**
  * The one add-to-playlist control, shared by every surface that shows a track

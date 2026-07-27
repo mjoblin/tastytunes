@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArtImage } from '@/components/ArtImage'
+import { ArtImage } from '@/components/media/ArtImage'
 import { useDecodedArt } from '@/hooks/useDecodedArt'
 
 /**

@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { tt } from '@/api'
 import { useStore } from '@/store'
-import { PopoverCard } from '@/components/Overlay'
+import { PopoverCard } from '@/components/chrome/Overlay'
 import { cx } from '@/lib/format'
-import { HeaderChip } from '@/components/Chrome'
+import { HeaderChip } from '@/components/chrome/Chrome'
 import { audioCaps, EQ_GAIN_MAX, EQ_GAIN_MIN } from '@shared/smoip'
 
 // The 7-band table is fixed firmware-side (freq/filter/q never written by us);

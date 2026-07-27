@@ -17,12 +17,12 @@ import { tt } from '@/api'
 import { useStore } from '@/store'
 import { usePlayhead } from '@/hooks/usePlayhead'
 import { controlSet, cx, deriveNowPlaying, fmtTime } from '@/lib/format'
-import { Slider } from './Slider'
-import { ArtImage } from './ArtImage'
+import { Slider } from '../controls/Slider'
+import { ArtImage } from '../media/ArtImage'
 import { VolumeCluster } from './VolumeCluster'
-import { SignalLamp } from './SignalLamp'
+import { SignalLamp } from '../device/SignalLamp'
 import { SleepTimer } from './SleepTimer'
-import { DeviceSwitcher } from './DeviceSwitcher'
+import { DeviceSwitcher } from '../device/DeviceSwitcher'
 
 export function PlaybackBar(): React.JSX.Element {
   const connection = useStore((s) => s.connection)

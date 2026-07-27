@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Captions, Disc3, RadioTower, X } from 'lucide-react'
 import { useStore } from '@/store'
-import { CrossfadeArt } from '@/components/CrossfadeArt'
+import { CrossfadeArt } from '@/components/media/CrossfadeArt'
 import { usePlayhead } from '@/hooks/usePlayhead'
 import { useArtLoadable } from '@/hooks/useArtLoadable'
 import { useFadedText, useLyrics } from '@/hooks/useLyrics'

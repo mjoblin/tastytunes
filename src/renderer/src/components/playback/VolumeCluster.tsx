@@ -4,7 +4,7 @@ import { isCbusMode, isPreAmpMode } from '@shared/smoip'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { cx } from '@/lib/format'
-import { Slider } from './Slider'
+import { Slider } from '../controls/Slider'
 
 /** Accumulate trackpad/wheel deltas into discrete volume nudges. */
 export function useWheelVolume(): (e: React.WheelEvent) => void {

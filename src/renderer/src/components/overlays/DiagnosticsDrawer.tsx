@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ArrowDownLeft, ArrowUpRight, Pause, Play } from 'lucide-react'
 import { useStore } from '@/store'
 import { cx } from '@/lib/format'
-import { CloseButton } from '@/components/CloseButton'
+import { CloseButton } from '@/components/controls/CloseButton'
 
 type Filter = 'all' | 'in' | 'out' | 'logs'
 

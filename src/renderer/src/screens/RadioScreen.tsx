@@ -7,13 +7,13 @@ import { useStore } from '@/store'
 import { toggleFavorite } from '@/lib/favorites'
 import { playingStationName } from '@/lib/radio'
 import { useStationTuning } from '@/hooks/useStationTuning'
-import { EmptyState } from '@/components/EmptyState'
-import { StationRow } from '@/components/StationRow'
-import { PresetSavePanel } from '@/components/LibraryMenus'
-import { PopoverCard } from '@/components/Overlay'
+import { EmptyState } from '@/components/chrome/EmptyState'
+import { StationRow } from '@/components/media/StationRow'
+import { PresetSavePanel } from '@/components/library/LibraryMenus'
+import { PopoverCard } from '@/components/chrome/Overlay'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { cx } from '@/lib/format'
-import { Chip, ScreenTitle } from '@/components/Chrome'
+import { Chip, ScreenTitle } from '@/components/chrome/Chrome'
 
 /**
  * Internet radio via the radio-browser.info community directory (keyless —

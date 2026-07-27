@@ -3,12 +3,12 @@ import { Disc3, Folder, Heart, MoreHorizontal, Play } from 'lucide-react'
 import type { MediaNode } from '@shared/model'
 import { cx } from '@/lib/format'
 import { isAlbumClass, isArtistClass, isMutedArt } from '@/lib/media'
-import { RowAction } from '@/components/RowAction'
-import { RowHeart } from '@/components/RowHeart'
-import { ArtImage } from '@/components/ArtImage'
-import { MediaArt } from '@/components/MediaArt'
-import { DurationCell } from '@/components/DurationCell'
-import { Eqbars } from '@/components/Eqbars'
+import { RowAction } from '@/components/media/RowAction'
+import { RowHeart } from '@/components/media/RowHeart'
+import { ArtImage } from '@/components/media/ArtImage'
+import { MediaArt } from '@/components/media/MediaArt'
+import { DurationCell } from '@/components/media/DurationCell'
+import { Eqbars } from '@/components/media/Eqbars'
 
 // The Library's four listing renderers — cards and rows for containers and
 // tracks. Pure presentation: every action arrives as a callback.

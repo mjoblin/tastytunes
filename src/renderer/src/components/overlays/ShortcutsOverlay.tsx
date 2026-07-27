@@ -1,5 +1,5 @@
-import { CloseButton } from '@/components/CloseButton'
-import { ModalShell } from '@/components/Overlay'
+import { CloseButton } from '@/components/controls/CloseButton'
+import { ModalShell } from '@/components/chrome/Overlay'
 import { useStore } from '@/store'
 import { MOD, SCREENS } from '@/lib/screens'
 

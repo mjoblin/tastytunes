@@ -1,6 +1,6 @@
 import { tt } from '@/api'
 import { useStore } from '@/store'
-import { Segmented } from '@/components/Segmented'
+import { Segmented } from '@/components/controls/Segmented'
 import { autoPowerDownRange, brightnessOptions, standbyModeOptions } from '@shared/smoip'
 
 // §10 device controls on the Device screen's Streamer tab: front-panel

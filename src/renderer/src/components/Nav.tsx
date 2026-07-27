@@ -14,7 +14,7 @@ import {
   type NavTool,
   type ScreenDef
 } from '@/lib/screens'
-import { PopoverCard } from '@/components/Overlay'
+import { PopoverCard } from '@/components/chrome/Overlay'
 
 /**
  * Right-click target: which nav item (a screen or a bottom-cluster tool), and

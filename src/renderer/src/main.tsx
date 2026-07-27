@@ -21,7 +21,7 @@ import { useStore } from './store'
 // window parsed the mini right back. Each window now loads only its chunk.
 const App = lazy(() => import('./App'))
 const MiniPlayer = lazy(() =>
-  import('./components/MiniPlayer').then((m) => ({ default: m.MiniPlayer }))
+  import('./components/playback/MiniPlayer').then((m) => ({ default: m.MiniPlayer }))
 )
 
 // EVERYTHING AT MODULE SCOPE HERE MUST BE IDEMPOTENT. In dev, edits to

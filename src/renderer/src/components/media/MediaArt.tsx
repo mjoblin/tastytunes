@@ -1,5 +1,5 @@
 import { Disc3, Folder, ListOrdered, Music, Radio, RadioTower, UserRound } from 'lucide-react'
-import { ArtImage } from '@/components/ArtImage'
+import { ArtImage } from '@/components/media/ArtImage'
 import { cx } from '@/lib/format'
 
 /**

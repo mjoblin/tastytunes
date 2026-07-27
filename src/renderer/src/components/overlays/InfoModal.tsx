@@ -1,9 +1,9 @@
 import { ExternalLink, Heart } from 'lucide-react'
-import { version } from '../../../../package.json'
+import { version } from '../../../../../package.json'
 import { tt } from '@/api'
 import { useStore } from '@/store'
-import { CloseButton } from '@/components/CloseButton'
-import { ModalShell } from '@/components/Overlay'
+import { CloseButton } from '@/components/controls/CloseButton'
+import { ModalShell } from '@/components/chrome/Overlay'
 
 const REPO_URL = 'https://github.com/mjoblin/tastytunes'
 const SUPPORT_URL = 'https://tastytunes.app/#support'

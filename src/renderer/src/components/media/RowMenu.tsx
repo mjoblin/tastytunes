@@ -1,4 +1,4 @@
-import { PopoverCard } from '@/components/Overlay'
+import { PopoverCard } from '@/components/chrome/Overlay'
 
 /**
  * The row ⋯ / right-click menu: a truncated title, then plain verbs. One

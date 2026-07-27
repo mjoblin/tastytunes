@@ -1,7 +1,7 @@
 import { Loader2 } from 'lucide-react'
-import { DurationCell } from '@/components/DurationCell'
-import { MediaArt, type MediaArtKind } from '@/components/MediaArt'
-import { Eqbars } from '@/components/Eqbars'
+import { DurationCell } from '@/components/media/DurationCell'
+import { MediaArt, type MediaArtKind } from '@/components/media/MediaArt'
+import { Eqbars } from '@/components/media/Eqbars'
 import { cx } from '@/lib/format'
 
 /**

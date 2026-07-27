@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
 import { cx } from '@/lib/format'
 import { PopoverChrome } from '@/hooks/usePopover'
-import { POPOVER_CARD } from '@/components/Overlay'
-import { HeaderChip } from '@/components/Chrome'
+import { POPOVER_CARD } from '@/components/chrome/Overlay'
+import { HeaderChip } from '@/components/chrome/Chrome'
 
 /**
  * The sort control chip + popover (lifted from LibraryScreen so the library

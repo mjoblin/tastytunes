@@ -6,8 +6,8 @@ import { cx } from '@/lib/format'
 import { scrollToCentered } from '@/lib/scroll'
 import { useLyrics } from '@/hooks/useLyrics'
 import { usePanelWidth } from '@/hooks/usePanelWidth'
-import { PanelResizeHandle } from '@/components/PanelResizeHandle'
-import { HeaderChip } from '@/components/Chrome'
+import { PanelResizeHandle } from '@/components/controls/PanelResizeHandle'
+import { HeaderChip } from '@/components/chrome/Chrome'
 
 export function LyricsPanel(): React.JSX.Element {
   const setLyricsOpen = useStore((s) => s.setLyricsOpen)

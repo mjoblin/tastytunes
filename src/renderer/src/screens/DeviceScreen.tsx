@@ -14,11 +14,11 @@ import { tt } from '@/api'
 import { useStore } from '@/store'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { cx } from '@/lib/format'
-import { Segmented } from '@/components/Segmented'
-import { SourcesPanel } from '@/components/SourcesPanel'
-import { ToneEq } from '@/components/ToneEq'
-import { DeviceControls } from '@/components/DeviceControls'
-import { HeaderChip, ScreenTitle } from '@/components/Chrome'
+import { Segmented } from '@/components/controls/Segmented'
+import { SourcesPanel } from '@/components/device/SourcesPanel'
+import { ToneEq } from '@/components/device/ToneEq'
+import { DeviceControls } from '@/components/device/DeviceControls'
+import { HeaderChip, ScreenTitle } from '@/components/chrome/Chrome'
 
 export function DeviceScreen(): React.JSX.Element {
   const connection = useStore((s) => s.connection)

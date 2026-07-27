@@ -1,8 +1,8 @@
 import { BookmarkPlus } from 'lucide-react'
 import type { RadioStation } from '@shared/model'
-import { MediaRow } from '@/components/MediaRow'
-import { RowAction } from '@/components/RowAction'
-import { RowHeart } from '@/components/RowHeart'
+import { MediaRow } from '@/components/media/MediaRow'
+import { RowAction } from '@/components/media/RowAction'
+import { RowHeart } from '@/components/media/RowHeart'
 
 /**
  * One internet-radio station, as a row.
