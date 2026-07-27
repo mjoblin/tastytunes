@@ -20,6 +20,7 @@ import { usePlayhead } from '@/hooks/usePlayhead'
 import { useArtAccent } from '@/hooks/useArtAccent'
 import { useMotionPreference } from '@/hooks/useMotionPreference'
 import { useTheme } from '@/hooks/useTheme'
+import { useShortcuts } from '@/hooks/useShortcuts'
 import { useDisplayFont } from '@/hooks/useDisplayFont'
 import { useVolumeSlider, useWheelVolume } from '@/components/playback/VolumeCluster'
 import { Slider } from '@/components/controls/Slider'
@@ -48,6 +49,8 @@ export function MiniPlayer(): React.JSX.Element {
   // Unconditional — the pre-amp slider's plumbing. Stays above the (currently
   // absent) early returns so the hook count never shifts (React #310 guard).
   const vol = useVolumeSlider()
+  // transport keys only — this window has no screens, palette or overlays
+  useShortcuts({ transportOnly: true })
   const theme = useTheme(settings.theme)
   useDisplayFont(settings.displayFont)
 

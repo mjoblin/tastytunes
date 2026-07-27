@@ -10,11 +10,19 @@ const SCREEN_KEYS: Record<string, Screen> = Object.fromEntries(
   SCREENS.map((s) => [s.key.toLowerCase(), s.id])
 )
 
-export function useShortcuts(): void {
+/**
+ * `transportOnly` is the MINI PLAYER's mode: a window with no screens, no
+ * palette and no overlays has no business binding the keys that reach them, so
+ * it takes the playback half only — play/pause, seek, track skips, volume,
+ * mute. The transport switch itself stays in ONE place; a second hook would
+ * drift from this one the first time a binding changed.
+ */
+export function useShortcuts(opts?: { transportOnly?: boolean }): void {
+  const transportOnly = opts?.transportOnly === true
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent): void => {
       // Command palette: ⌘K / Ctrl+K toggles from anywhere, inputs included.
-      if ((e.metaKey || e.ctrlKey) && !e.altKey && (e.key === 'k' || e.key === 'K')) {
+      if (!transportOnly && (e.metaKey || e.ctrlKey) && !e.altKey && (e.key === 'k' || e.key === 'K')) {
         e.preventDefault()
         const s = useStore.getState()
         s.setPaletteOpen(!s.paletteOpen)
@@ -30,7 +38,7 @@ export function useShortcuts(): void {
       // is the "I don't know where it is" tool. Search also has 'S', the nav
       // row and the palette, so it loses no discoverability by yielding ⌘F on
       // the one screen with a better answer.
-      if ((e.metaKey || e.ctrlKey) && !e.altKey && (e.key === 'f' || e.key === 'F')) {
+      if (!transportOnly && (e.metaKey || e.ctrlKey) && !e.altKey && (e.key === 'f' || e.key === 'F')) {
         e.preventDefault()
         const s = useStore.getState()
         // ⌘⇧F is the editor idiom: find HERE (⌘F, contextual) vs search
@@ -51,6 +59,7 @@ export function useShortcuts(): void {
       // when no input has focus; the search box handles its own just-landed
       // case (SearchScreen), the same split the Library's search bar uses.
       if (
+        !transportOnly &&
         (e.metaKey || e.ctrlKey || e.altKey) &&
         e.key === 'ArrowLeft' &&
         !(e.target as HTMLElement | null)?.matches?.('input, textarea')
@@ -95,6 +104,7 @@ export function useShortcuts(): void {
 
       const s = useStore.getState()
 
+      if (!transportOnly) {
       if (e.key === 'Escape') {
         // Palette first: normally its input handles Escape, but if focus has
         // strayed the cascade must not toggle overlays underneath it.
@@ -137,16 +147,17 @@ export function useShortcuts(): void {
         }
         return
       }
+      }
 
       if (s.connection.phase !== 'connected') return
 
-      if (e.key === 'f') {
+      if (!transportOnly && e.key === 'f') {
         s.setDisplayMode(!s.displayMode)
         return
       }
 
       // 1–9: direct preset recall, radio-tuner style (only for occupied slots)
-      if (/^[1-9]$/.test(e.key)) {
+      if (!transportOnly && /^[1-9]$/.test(e.key)) {
         const id = Number(e.key)
         if (s.presets?.presets?.some((p) => p.id === id)) {
           void tt.command({ type: 'recallPreset', presetId: id })
