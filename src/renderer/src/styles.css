@@ -424,8 +424,8 @@ img {
    Light theme drops it — glow on paper reads as smudge, not light (same
    rule as the playing-tile blooms above). */
 .lyric-glow {
-  filter: drop-shadow(0 0 5px rgb(var(--gold-rgb) / 0.5))
-    drop-shadow(0 0 14px rgb(var(--gold-rgb) / 0.22));
+  filter: drop-shadow(0 0 5px rgb(var(--gold-rgb) / 0.42))
+    drop-shadow(0 0 14px rgb(var(--gold-rgb) / 0.17));
 }
 :root.light .lyric-glow {
   filter: none;
