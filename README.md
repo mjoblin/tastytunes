@@ -77,6 +77,18 @@ The current line is highlighted and kept centered. Click a line to seek there.
 
 <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/lyrics.webp" alt="Lyrics panel with the current line highlighted">
 
+### Presets
+
+The streamer's preset slots as a card grid, each recallable with a click and holding its own volume. The playing preset stays lit.
+
+<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/presets.webp" alt="The Presets grid with the playing preset lit">
+
+### Fullscreen
+
+Press F for the front-panel view: album art, track details, the current lyric line and a clock.
+
+<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/display.webp" alt="Fullscreen display mode showing album art and the current lyric line">
+
 ### Mini player
 
 A small always-on-top window: art, transport, playhead, volume, and what's next.
