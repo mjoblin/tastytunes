@@ -29,7 +29,7 @@ import { fetchAlbumInfo } from './albumInfo'
 import { radioByTags, radioSearch, radioTop } from './radioBrowser'
 import { clearLookupCaches, flushLookupCaches, lookupCacheStats } from './diskCache'
 import { browse as mediaBrowse, presetSave, queueAdd, refreshServers } from './upnpBrowser'
-import { startScheduler } from './scheduler'
+import { catchUpOnResume, noteSuspend, startScheduler } from './scheduler'
 import { loggedFetch } from './netlog'
 import { getSettings, updateSettings } from './persist'
 import { getRecents } from './recents'
@@ -454,10 +454,14 @@ if (!gotLock) {
       mainWindow?.webContents.send(IPC.push, { kind: 'updateState', state })
     })
 
+    // Node timers stall during system sleep. The sleep timer fires what came
+    // due; the SCHEDULER offers it instead (an alarm minutes late is a
+    // question, not an instruction) — see scheduler.ts for the three rules.
+    powerMonitor.on('suspend', () => noteSuspend())
     powerMonitor.on('resume', () => {
       deviceManager.healthCheck()
-      // Node timers stall during system sleep; fire any countdown that came due.
       deviceManager.checkSleepTimer()
+      catchUpOnResume(deviceManager)
     })
 
     app.on('activate', () => {
