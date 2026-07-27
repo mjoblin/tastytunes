@@ -53,6 +53,12 @@ against an Evo 150.
 
 ## Screenshots
 
+### Now Playing
+
+Album art, track details, format badges and the live lyric line. The transport bar sits along the bottom of every screen.
+
+<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/now-playing.webp" alt="The Now Playing screen with album art, track details and the current lyric line">
+
 ### The library as one collection
 
 UPnP servers and the streamer's USB drive, pooled into Artists and Albums views with genre and decade filters.
