@@ -70,13 +70,25 @@ export function useShortcuts(): void {
       ) {
         return
       }
-      // A focused drag handle OWNS space and the arrows: dnd-kit's keyboard
+      // A focused drag activator OWNS space and the arrows: dnd-kit's keyboard
       // sensor uses exactly those to pick up, move and drop. Without this the
       // global bindings fire too — space toggles playback and the arrows seek
       // and change volume — so a keyboard reorder plays havoc with the streamer
       // while it works. dnd-kit marks its activators with aria-roledescription
       // ('sortable' from useSortable, 'draggable' from bare useDraggable).
-      if (target?.closest('[aria-roledescription="sortable"], [aria-roledescription="draggable"]')) {
+      //
+      // MATCHES, NOT CLOSEST (user report 2026-07-27: "up/down scrolls after I
+      // click a preset"). Rows put the attributes on the grip button, so the
+      // activator IS the focused element and either test works — but preset and
+      // queue CARDS spread them on the tile root, which makes every button
+      // inside the card "within a sortable". Clicking a card leaves focus on
+      // its recall button, and the broad test then swallowed volume, seek and
+      // play/pause until focus moved elsewhere. Narrowing costs nothing:
+      // dnd-kit's keyboard sensor already refuses to start a drag from a
+      // bubbled event (`if (activator && event.target !== activator) return
+      // false` in core.esm.js), so a child's keydown was never going to reorder
+      // anything.
+      if (target?.matches('[aria-roledescription="sortable"], [aria-roledescription="draggable"]')) {
         return
       }
       if (e.metaKey || e.ctrlKey || e.altKey) return
