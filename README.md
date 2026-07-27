@@ -19,50 +19,63 @@
   <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/now-playing.webp" alt="TastyTunes Now Playing — album art over an ambient backdrop, format badges, and the current lyric line">
 </p>
 
-TastyTunes talks straight to the streamer. No backend, no database, no
-account, no cloud — the app opens the SMOIP WebSocket the streamer already
-serves, sends commands down it, and re-renders from the state the streamer
-pushes back. The device is the single source of truth.
+TastyTunes is a desktop controller for Cambridge Audio StreamMagic streamers.
+It shows what's playing with full artwork and synced lyrics, browses every
+media server and the streamer's USB drive as a single library, searches all of
+it instantly, tunes internet radio, and edits the queue and the streamer's 99
+presets.
 
-It's the desktop sibling of [PunyTunes](https://punytunes.app) — same
-streamers, same author, but a full app in place of a tray applet: a browsable
-library with its own search, queue and preset editing, synced lyrics,
-scrobbling, a mini player, and an optional MCP server.
+Beyond that: playlists and favorites, a log of what you've played, artist and
+album notes, tone and EQ, a mini player, a full-screen display mode, sleep
+timers and schedules, scrobbling to ListenBrainz, and an optional MCP server
+for local AI agents.
 
-## The tour
+It all runs on your machine and talks to the streamer over your own network.
+There's no account, no cloud service and no database.
 
-<table>
-  <tr>
-    <td width="50%">
-      <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/lens-albums.webp" alt="The Albums lens pooling every library into one collection">
-      <p align="center"><b>The library, as one collection</b><br><sub>UPnP servers and the streamer's USB drive, pooled into Artists and Albums views with genre and decade filters.</sub></p>
-    </td>
-    <td width="50%">
-      <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/search.webp" alt="Cross-server search with results grouped by server">
-      <p align="center"><b>Search every library at once</b><br><sub>⌘F, type, results grouped by where they live — answered from a local index.</sub></p>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%">
-      <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/lyrics.webp" alt="Lyrics panel with the current line highlighted">
-      <p align="center"><b>Synced lyrics</b><br><sub>The current line is highlighted and kept centered. Click a line to seek there.</sub></p>
-    </td>
-    <td width="50%">
-      <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/mini-player.webp" alt="Mini player window">
-      <p align="center"><b>Mini player</b><br><sub>A small always-on-top window: art, transport, playhead, volume, what's next.</sub></p>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%">
-      <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/settings.webp" alt="Appearance settings">
-      <p align="center"><b>Settings</b><br><sub>Themes, fonts, layouts, sort orders — all stored on your machine, not an account.</sub></p>
-    </td>
-    <td width="50%">
-      <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/settings-agents.webp" alt="The AI agents settings tab">
-      <p align="center"><b>AI agents</b><br><sub>The MCP server's per-cluster and per-tool switches. Off by default.</sub></p>
-    </td>
-  </tr>
-</table>
+## Getting started
+
+1. Get the installer for your platform from the
+   [releases page](https://github.com/mjoblin/tastytunes/releases/latest):
+   macOS 11+ (universal, signed and notarized), Windows 10+ (x64),
+   Linux (x64 or arm64 AppImage).
+2. Launch it. TastyTunes discovers StreamMagic streamers on your network; if
+   discovery comes up empty, enter the streamer's IP directly.
+3. There's no account and nothing else to configure.
+
+Without a streamer on the network, demo mode on the connect screen runs the
+whole app against a built-in virtual one.
+
+You'll need a Cambridge Audio network player built on the StreamMagic
+platform — Evo 75/150, CXN100 / CXN (V2), MXN10, AXN10, EXN100, Edge NQ,
+851N — on the same network as your computer. Developed and tested daily
+against an Evo 150.
+
+## Screenshots
+
+<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/lens-albums.webp" alt="The Albums view pooling every library into one collection">
+
+**The library as one collection** — UPnP servers and the streamer's USB drive, pooled into Artists and Albums views with genre and decade filters.
+
+<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/search.webp" alt="Search results grouped by where they live">
+
+**One search** — libraries, playlists, favorites, presets and internet radio, with results grouped by where they live. Library results come from a local index.
+
+<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/lyrics.webp" alt="Lyrics panel with the current line highlighted">
+
+**Synced lyrics** — the current line is highlighted and kept centered. Click a line to seek there.
+
+<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/mini-player.webp" alt="Mini player window">
+
+**Mini player** — a small always-on-top window: art, transport, playhead, volume, and what's next.
+
+<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/settings.webp" alt="Appearance settings">
+
+**Settings** — themes, fonts, layouts and sort orders, stored on your machine.
+
+<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/settings-agents.webp" alt="The AI agents settings tab">
+
+**AI agents** — per-cluster and per-tool switches for the MCP server. Off by default.
 
 ## MCP server
 
@@ -89,11 +102,11 @@ from another machine.
 
 ### Connection & devices
 
-- UPnP/SSDP discovery, with a manual-IP fallback for shy networks
+- UPnP/SSDP discovery, with manual IP entry when discovery finds nothing
 - Device switcher in the playback bar
 - Auto-reconnect with backoff, and connection health checks after system sleep
 - Power and standby, with a guard that never re-sends ON to a unit that's already on
-- Demo mode — run the whole app against a built-in virtual streamer, no hardware needed
+- Demo mode: runs the whole app against a built-in virtual streamer
 
 ### Now Playing
 
@@ -110,7 +123,7 @@ from another machine.
 - A local, rebuildable index: search as you type, and <kbd>⌘F</kbd> searches every library at once, grouped by server
 - Artists & Albums views pooling all sources into one collection, with genre and decade filters and sorts
 - Play now, play next, append, or replace; a bare click never adds a track that's already queued
-- Save any album — or the whole queue — to the streamer's hardware presets
+- Save an album, a track, or the whole queue to one of the streamer's preset slots
 - Browser-style navigation: <kbd>⌘←</kbd>/<kbd>⌘→</kbd>, Backspace, mouse back button; per-folder filters and scroll memory
 
 ### Radio
@@ -125,11 +138,11 @@ from another machine.
 
 ### Playlists
 
-- Ordered collections of tracks, stored locally — built from anywhere you see music, or captured whole from the queue
+- Ordered collections of tracks, stored locally: built from any track the app shows, or captured whole from the queue
 - Entries key on content, not on a server's object id, so a playlist survives a media server re-indexing and heals its stored ids as it goes
-- Playing one replaces the queue a track at a time, with progress and a cancel; anything genuinely missing is named rather than quietly dropped
-- The playlist that matches what's queued says so — matched on content, so it recognizes a queue loaded before the app started
-- Reorder by drag or keyboard, rename, delete with an undo behind it
+- Playing one replaces the queue a track at a time, with progress and a cancel; tracks that can't be found are listed rather than dropped silently
+- A playlist whose contents match the live queue is marked as such; the match is on content, so it also recognizes a queue loaded before the app started
+- Reorder by drag or keyboard, rename, and delete with an undo
 
 ### Transport & volume
 
@@ -160,7 +173,7 @@ from another machine.
 ### Lyrics
 
 - Fetched from LRCLIB; synced lyrics highlight the live line, auto-center it, and click-to-seek
-- Three flavors: a full panel, an inline line under the track details, and a display-mode strip
+- Three forms: a full panel, an inline line under the track details, and a display-mode strip
 - Plain-text fallback, instrumental- and radio-aware states, force-refresh
 
 ### Artist & album context
@@ -171,7 +184,7 @@ from another machine.
 ### Scrobbling
 
 - ListenBrainz: a listen submits only after real played time — half the track or four minutes
-- Pauses don't count, seeks can't cheat; short tracks and radio never scrobble
+- Paused time doesn't count and seeking doesn't advance it; short tracks and radio never scrobble
 - Failed submissions queue and flush with the next success
 
 ### History
@@ -182,7 +195,7 @@ from another machine.
 
 - Sleep timer: 15 minutes to 2 hours, or end of track; pause or standby; owned by the main process, so it survives a closed window and a system sleep
 - Schedules: wake the streamer to a preset at a chosen volume, or send it to standby, per weekday (schedules fire while the app is running)
-- A wake missed while the computer was asleep is offered when it wakes — never fired late: within ten minutes, once, and only if nothing is already playing
+- A wake schedule missed while the computer was asleep is offered on waking rather than run late: once, within ten minutes of the missed time, and only if nothing is already playing
 
 ### Windows & control
 
@@ -198,7 +211,7 @@ from another machine.
 - Dark and light themes; optional per-album accent
 - Reduced motion: on, off, or follow the system setting
 - Card size and grid fill, cards ⇄ rows per screen, resizable side panels
-- The left nav is yours to arrange: drag the rows into the order you use them and hide the ones you don't — shortcut keys stay where they are
+- The left nav can be reordered by drag or keyboard, and individual items hidden; shortcut keys don't move with position
 
 ### Transparency
 
@@ -224,28 +237,10 @@ The complete list:
 | Update check | github.com | on by default; toggleable |
 | Scrobbles | listenbrainz.org | off until you add your token |
 
-No analytics, no telemetry, no accounts, and no radio "click" pings — the
-directory never hears what you tuned to. Each row of Settings → Connections
-says what its service is sent, and the requests console shows the traffic
+No analytics, no telemetry, no accounts, and no radio "click" pings: the
+directory isn't told what you tuned to. Each row of Settings → Connections
+states what its service is sent, and the requests console shows the traffic
 live.
-
-## Getting started
-
-1. Get the installer for your platform from the
-   [releases page](https://github.com/mjoblin/tastytunes/releases/latest):
-   macOS 11+ (universal, signed and notarized), Windows 10+ (x64),
-   Linux (x64 or arm64 AppImage).
-2. Launch it. TastyTunes discovers StreamMagic streamers on your network; if
-   discovery comes up empty, enter the streamer's IP directly.
-3. There's no account and nothing else to configure.
-
-No streamer nearby? Demo mode (on the connect screen) runs the whole app
-against a built-in virtual streamer.
-
-You'll need a Cambridge Audio network player built on the StreamMagic
-platform — Evo 75/150, CXN100 / CXN (V2), MXN10, AXN10, EXN100, Edge NQ,
-851N — on the same network as your computer. Developed and tested daily
-against an Evo 150.
 
 ## Development
 
