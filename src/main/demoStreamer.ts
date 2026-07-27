@@ -387,9 +387,26 @@ function buildDemo(host: string): {
   // ---------------------------------------------------------------- WS side
 
   let wssRef: WebSocketServer | null = null
+  /**
+   * FIRMWARE TRUTH (live-probed 2026-07-23, mirrored from mock-streamer.mjs):
+   * in NETWORK standby /zone/play_state reads `state: 'not_ready'` with NO
+   * art_url — the streamer stops announcing the pre-standby track as playing,
+   * though it retains the state and brings it back on wake. A WIRE-SHAPE
+   * override, not a mutation: DATA keeps the real thing and every send point
+   * passes through here.
+   */
+  const wireData = (path: string): unknown => {
+    const power = (DATA['/system/power'] as Dict | undefined)?.power
+    if (path === '/zone/play_state' && power !== 'ON') {
+      const ps = DATA['/zone/play_state'] as Dict
+      const { art_url: _dropped, ...metadata } = (ps.metadata ?? {}) as Dict
+      return { ...ps, state: 'not_ready', metadata }
+    }
+    return DATA[path]
+  }
   const broadcast = (path: string): void => {
     if (!wssRef) return
-    const msg = JSON.stringify({ path, params: { data: DATA[path] } })
+    const msg = JSON.stringify({ path, params: { data: wireData(path) } })
     for (const c of wssRef.clients) if (c.readyState === 1) c.send(msg)
   }
 
@@ -982,7 +999,7 @@ function buildDemo(host: string): {
   function attachWs(wss: WebSocketServer): void {
     wssRef = wss
     wss.on('connection', (ws) => {
-      const push = (path: string): void => ws.send(JSON.stringify({ path, params: { data: DATA[path] } }))
+      const push = (path: string): void => ws.send(JSON.stringify({ path, params: { data: wireData(path) } }))
       ws.on('message', (raw) => {
         let frame: { path?: string; params?: Dict }
         try {

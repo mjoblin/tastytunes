@@ -110,6 +110,21 @@ export function PresetsScreen(): React.JSX.Element {
   const activeSource = activeSourceId(zoneState, nowPlaying)
   const radioId = playState?.metadata?.radio_id ?? null
   const md = playState?.metadata ?? null
+  // A LIT PRESET MEANS "THIS IS PLAYING" — so nothing lights while the streamer
+  // is asleep or on its way back (user report 2026-07-26: clicking a preset in
+  // standby scrolled to the PREVIOUSLY-played one first, then to the clicked
+  // one). Wake-on-intent holds a play-shaped command for ~3s (ensureAwake:
+  // ON → readiness → 2.5s settle) and the waking device re-announces its
+  // RETAINED pre-standby play_state, so the old preset's content check passes
+  // again mid-wake. Follow reads that as a track change and glides to it —
+  // then glides again when the real recall lands. Suppressing the lamp for the
+  // whole not-ON window removes the transition rather than racing it, and it's
+  // the honest reading besides: the Now Playing screen already shows a sleeping
+  // face for exactly this state. `waking` covers the tail, where power reads ON
+  // but the zone is still settling.
+  const systemPower = useStore((s) => s.systemPower)
+  const waking = useStore((s) => s.waking)
+  const asleep = (systemPower != null && systemPower.power !== 'ON') || waking
   // The live queue's leading distinct-album art sequence — the same
   // fingerprint the firmware bakes into a MediaQueue preset's art_urls.
   const queueArts = useMemo(() => {
@@ -140,12 +155,29 @@ export function PresetsScreen(): React.JSX.Element {
   // screen's "tuning in" treatment on the recalled tile until the playing
   // lamp takes over, the command fails, or a dead recall times out.
   const [tuningId, setTuningId] = useState<number | null>(null)
+  // A recall issued while the streamer sleeps doesn't reach the device for ~3s
+  // (ensureAwake: ON → readiness → 2.5s settle), and `waking` ends BEFORE the
+  // recall lands — a gap the wake's re-announced pre-standby play_state slots
+  // straight into, lighting the PREVIOUSLY-played preset just long enough for
+  // follow to start gliding at it. So a recall made from standby claims the
+  // lamp: until it lands (or the tuning window lapses), it is the only preset
+  // allowed to light. NB tuningId itself can't bound this — it is never
+  // cleared on success, only hidden once the tile is playing, and it lingers
+  // for the full 15s.
+  const [wakeRecallId, setWakeRecallId] = useState<number | null>(null)
   const tuningTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const recall = (presetId: number): void => {
     setTuningId(presetId)
+    setWakeRecallId(asleep ? presetId : null)
     if (tuningTimer.current) clearTimeout(tuningTimer.current)
-    tuningTimer.current = setTimeout(() => setTuningId(null), 15_000)
-    void tt.command({ type: 'recallPreset', presetId }).catch(() => setTuningId(null))
+    tuningTimer.current = setTimeout(() => {
+      setTuningId(null)
+      setWakeRecallId(null)
+    }, 15_000)
+    void tt.command({ type: 'recallPreset', presetId }).catch(() => {
+      setTuningId(null)
+      setWakeRecallId(null)
+    })
   }
   useEffect(
     () => () => {
@@ -153,6 +185,15 @@ export function PresetsScreen(): React.JSX.Element {
     },
     []
   )
+  // The claim can't rest on what this screen knew at CLICK time: for the first
+  // seconds after connecting, systemPower is still null here while the main
+  // process already knows the streamer is asleep — so the click reads awake,
+  // makes no claim, and the wake re-announcement lights the old preset after
+  // all. Latch off the authoritative signal instead: main says it is waking,
+  // and we know which preset we asked for.
+  useEffect(() => {
+    if (waking && tuningId != null) setWakeRecallId(tuningId)
+  }, [waking, tuningId])
   // Exact identity of the live queue (all tracks, in order) — matched against
   // the signatures recorded when queue presets were saved through this app.
   const liveQueueHash = useMemo(
@@ -161,6 +202,7 @@ export function PresetsScreen(): React.JSX.Element {
   )
   const playingIds = useMemo(() => {
     const lit = new Set<number>()
+    if (asleep) return lit
     const mediaOk = activeSource == null || activeSource === 'MEDIA_PLAYER'
 
     // Exact signature recorded at save time, when this app did the saving.
@@ -241,8 +283,10 @@ export function PresetsScreen(): React.JSX.Element {
       // while local media is the active source.
       if (p.is_playing === true && activeSource !== 'MEDIA_PLAYER') lit.add(p.id)
     }
+    // A recall made from standby owns the lamp until it lands — see wakeRecallId.
+    if (wakeRecallId != null) return lit.has(wakeRecallId) ? new Set([wakeRecallId]) : new Set<number>()
     return lit
-  }, [allItems, lastRecalledPresetId, queueArts, queueSignatures, liveQueueHash, systemInfo, radioId, md, activeSource])
+  }, [allItems, lastRecalledPresetId, queueArts, queueSignatures, liveQueueHash, systemInfo, radioId, md, activeSource, asleep, wakeRecallId])
   const isPresetPlaying = (p: PresetItem): boolean => p.id != null && playingIds.has(p.id)
 
   const onDragEnd = (event: DragEndEvent): void => {
