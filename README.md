@@ -16,7 +16,7 @@
 <br>
 
 <p align="center">
-  <img src=".github/assets/now-playing.png" alt="TastyTunes Now Playing — album art over an ambient backdrop, format badges, and the current lyric line">
+  <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/now-playing.webp" alt="TastyTunes Now Playing — album art over an ambient backdrop, format badges, and the current lyric line">
 </p>
 
 TastyTunes talks straight to the streamer. No backend, no database, no
@@ -34,31 +34,31 @@ scrobbling, a mini player, and an optional MCP server.
 <table>
   <tr>
     <td width="50%">
-      <img src=".github/assets/lens-albums.png" alt="The Albums lens pooling every library into one collection">
+      <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/lens-albums.webp" alt="The Albums lens pooling every library into one collection">
       <p align="center"><b>The library, as one collection</b><br><sub>UPnP servers and the streamer's USB drive, pooled into Artists and Albums views with genre and decade filters.</sub></p>
     </td>
     <td width="50%">
-      <img src=".github/assets/search.png" alt="Cross-server search with results grouped by server">
+      <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/search.webp" alt="Cross-server search with results grouped by server">
       <p align="center"><b>Search every library at once</b><br><sub>⌘F, type, results grouped by where they live — answered from a local index.</sub></p>
     </td>
   </tr>
   <tr>
     <td width="50%">
-      <img src=".github/assets/lyrics.png" alt="Lyrics panel with the current line highlighted">
+      <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/lyrics.webp" alt="Lyrics panel with the current line highlighted">
       <p align="center"><b>Synced lyrics</b><br><sub>The current line is highlighted and kept centered. Click a line to seek there.</sub></p>
     </td>
     <td width="50%">
-      <img src=".github/assets/mini-player.png" alt="Mini player window">
+      <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/mini-player.webp" alt="Mini player window">
       <p align="center"><b>Mini player</b><br><sub>A small always-on-top window: art, transport, playhead, volume, what's next.</sub></p>
     </td>
   </tr>
   <tr>
     <td width="50%">
-      <img src=".github/assets/settings.png" alt="Appearance settings">
+      <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/settings.webp" alt="Appearance settings">
       <p align="center"><b>Settings</b><br><sub>Themes, fonts, layouts, sort orders — all stored on your machine, not an account.</sub></p>
     </td>
     <td width="50%">
-      <img src=".github/assets/settings-agents.png" alt="The AI agents settings tab">
+      <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/settings-agents.webp" alt="The AI agents settings tab">
       <p align="center"><b>AI agents</b><br><sub>The MCP server's per-cluster and per-tool switches. Off by default.</sub></p>
     </td>
   </tr>
@@ -123,6 +123,14 @@ from another machine.
 - Stations, albums, and tracks, hearted from rows, cards, or Now Playing
 - Keyed on content identity, so favorites survive media-server id churn
 
+### Playlists
+
+- Ordered collections of tracks, stored locally — built from anywhere you see music, or captured whole from the queue
+- Entries key on content, not on a server's object id, so a playlist survives a media server re-indexing and heals its stored ids as it goes
+- Playing one replaces the queue a track at a time, with progress and a cancel; anything genuinely missing is named rather than quietly dropped
+- The playlist that matches what's queued says so — matched on content, so it recognizes a queue loaded before the app started
+- Reorder by drag or keyboard, rename, delete with an undo behind it
+
 ### Transport & volume
 
 - Play, pause, stop, next, previous, seek, scrub; repeat and shuffle
@@ -174,12 +182,14 @@ from another machine.
 
 - Sleep timer: 15 minutes to 2 hours, or end of track; pause or standby; owned by the main process, so it survives a closed window and a system sleep
 - Schedules: wake the streamer to a preset at a chosen volume, or send it to standby, per weekday (schedules fire while the app is running)
+- A wake missed while the computer was asleep is offered when it wakes — never fired late: within ten minutes, once, and only if nothing is already playing
 
 ### Windows & control
 
 - Mini player: frameless, always on top, remembers its position
 - Command palette (<kbd>⌘K</kbd>): transport, sources, presets by name, screens, library search, index rebuilds, devices, sleep timer, power
 - Keyboard throughout — single keys jump screens, <kbd>space</kbd> toggles play, arrows seek and nudge volume, <kbd>/</kbd> filters lists; <kbd>?</kbd> shows the overlay
+- Every reorderable list — queue, presets, playlists, the nav rail — reorders by keyboard as well as by drag
 - OS media keys, and a track-change notification with artwork when the window isn't focused
 - An application menu on macOS; an auto-hidden menu bar on Windows and Linux
 
@@ -188,6 +198,7 @@ from another machine.
 - Dark and light themes; optional per-album accent
 - Reduced motion: on, off, or follow the system setting
 - Card size and grid fill, cards ⇄ rows per screen, resizable side panels
+- The left nav is yours to arrange: drag the rows into the order you use them and hide the ones you don't — shortcut keys stay where they are
 
 ### Transparency
 
