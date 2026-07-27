@@ -53,29 +53,41 @@ against an Evo 150.
 
 ## Screenshots
 
+### The library as one collection
+
+UPnP servers and the streamer's USB drive, pooled into Artists and Albums views with genre and decade filters.
+
 <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/lens-albums.webp" alt="The Albums view pooling every library into one collection">
 
-**The library as one collection** — UPnP servers and the streamer's USB drive, pooled into Artists and Albums views with genre and decade filters.
+### One search
+
+Libraries, playlists, favorites, presets and internet radio, with results grouped by where they live. Library results come from a local index.
 
 <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/search.webp" alt="Search results grouped by where they live">
 
-**One search** — libraries, playlists, favorites, presets and internet radio, with results grouped by where they live. Library results come from a local index.
+### Synced lyrics
+
+The current line is highlighted and kept centered. Click a line to seek there.
 
 <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/lyrics.webp" alt="Lyrics panel with the current line highlighted">
 
-**Synced lyrics** — the current line is highlighted and kept centered. Click a line to seek there.
+### Mini player
+
+A small always-on-top window: art, transport, playhead, volume, and what's next.
 
 <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/mini-player.webp" alt="Mini player window">
 
-**Mini player** — a small always-on-top window: art, transport, playhead, volume, and what's next.
+### Settings
+
+Themes, fonts, layouts and sort orders, stored on your machine.
 
 <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/settings.webp" alt="Appearance settings">
 
-**Settings** — themes, fonts, layouts and sort orders, stored on your machine.
+### AI agents
+
+Per-cluster and per-tool switches for the MCP server. Off by default.
 
 <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/settings-agents.webp" alt="The AI agents settings tab">
-
-**AI agents** — per-cluster and per-tool switches for the MCP server. Off by default.
 
 ## MCP server
 
