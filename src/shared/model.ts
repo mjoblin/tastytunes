@@ -688,7 +688,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   presetGap: 12,
   presetFillRows: true,
   nowPlayingAlignH: 'left',
-  nowPlayingAlignV: 'center',
+  nowPlayingAlignV: 'top',
   navCollapsed: false,
   navHidden: [],
   navHiddenTools: [],
