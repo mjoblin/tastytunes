@@ -272,6 +272,77 @@ function buildDemo(host: string): {
     }
   ]
 
+  // A SECOND media server, always present in the demo: a dedicated library box
+  // beside the streamer's own storage. One library cannot show what the app
+  // does with two — cross-server search fans out over every ready index, and
+  // the lens badges exist to say WHICH server a pooled album came from — so
+  // the demo (and every screenshot taken from it) was quietly hiding a whole
+  // feature. Mirrors dev/mock-streamer.mjs's MOCK_SECOND_SERVER, which is
+  // permanent here rather than env-gated.
+  //
+  // 'Amber Nights' EXISTS ON BOTH SERVERS on purpose: showing the same album's
+  // provenance is the grouped UI's reason to exist.
+  const LIB2_ALBUMS: Album[] = [
+    {
+      id: 'a2-amber',
+      title: 'Amber Nights',
+      artist: 'The Amber Collective',
+      date: '2011-03-14',
+      art: `${host}/art/p21.svg`,
+      count: 3,
+      genres: ['Electronic'],
+      track: (n) => ({
+        ...trackMeta(n),
+        title: `Amber Track ${n}`,
+        album: 'Amber Nights',
+        artist: 'The Amber Collective',
+        art_url: `${host}/art/p21.svg`,
+        duration: 200 + n
+      })
+    },
+    {
+      id: 'a2-velvet',
+      title: 'Velvet Static',
+      artist: 'Static Nomads',
+      date: '2019-09-09',
+      art: `${host}/art/p22.svg`,
+      count: 4,
+      genres: ['Ambient', 'Downtempo'],
+      track: (n) => ({
+        ...trackMeta(n),
+        title: `Velvet ${n}`,
+        album: 'Velvet Static',
+        artist: 'Static Nomads',
+        art_url: `${host}/art/p22.svg`,
+        duration: 150 + n * 7
+      })
+    }
+  ]
+  const album2ById = (id: string): Album | undefined => LIB2_ALBUMS.find((a) => a.id === id)
+
+  function cd2Children(id: string): string[] | null {
+    if (id === '0') return [didlContainer('a2-music', '0', 'Music', 'object.container', null)]
+    if (id === 'a2-music')
+      return LIB2_ALBUMS.map((a) =>
+        didlContainer(a.id, 'a2-music', a.title, 'object.container.album.musicAlbum', a.art, a.artist, a.date, a.genres)
+      )
+    const alb = album2ById(id)
+    if (alb) return Array.from({ length: alb.count }, (_, i) => didlTrack(alb, i + 1))
+    return null
+  }
+  function cd2Metadata(id: string): string | null {
+    if (id === 'a2-music') return didlContainer('a2-music', '0', 'Music', 'object.container', null)
+    const alb = album2ById(id)
+    if (alb)
+      return didlContainer(alb.id, 'a2-music', alb.title, 'object.container.album.musicAlbum', alb.art, alb.artist, alb.date, alb.genres)
+    const m = id.match(/^(a2-\w+)-t(\d+)$/)
+    if (m) {
+      const a = album2ById(m[1])
+      if (a) return didlTrack(a, Number(m[2]))
+    }
+    return null
+  }
+
   const SYN_GENRES = ['House', 'Techno', 'IDM', 'Trance', 'Breakbeat', 'Dub', 'Chillout', 'Garage', 'Electro', 'Acid']
   const SYN_ALBUMS: Album[] = Array.from({ length: 35 }, (_, i) => ({
     id: `syn-${i + 1}`,
@@ -525,6 +596,28 @@ function buildDemo(host: string): {
   }
 
   function queueItemsFor(targetId: string | null): QueueItem[] | null {
+    // one queue, two sources — the second server's ids resolve here too
+    const t2 = targetId?.match(/^(a2-\w+)-t(\d+)$/)
+    if (t2) {
+      const a = album2ById(t2[1])
+      if (a)
+        return [
+          {
+            id: nextQueueId++,
+            position: 0,
+            srcId: targetId ?? undefined,
+            metadata: { ...a.track(Number(t2[2])), playback_source: 'punnet' }
+          }
+        ]
+    }
+    const alb2 = targetId ? album2ById(targetId) : undefined
+    if (alb2)
+      return Array.from({ length: alb2.count }, (_, i) => ({
+        id: nextQueueId++,
+        position: 0,
+        srcId: `${alb2.id}-t${i + 1}`,
+        metadata: { ...alb2.track(i + 1), playback_source: 'punnet' }
+      }))
     const trackMatch = targetId?.match(/^((?:alb|syn)-\d+)-t(\d+)$/)
     if (trackMatch) {
       const a = albumById(trackMatch[1])
@@ -643,6 +736,26 @@ function buildDemo(host: string): {
   </device>
 </root>`
 
+  const DESCRIPTION2_XML = `<?xml version="1.0"?>
+<root xmlns="urn:schemas-upnp-org:device-1-0">
+  <specVersion><major>1</major><minor>0</minor></specVersion>
+  <device>
+    <deviceType>urn:schemas-upnp-org:device:MediaServer:1</deviceType>
+    <friendlyName>Demo NAS</friendlyName>
+    <manufacturer>TastyTunes</manufacturer>
+    <UDN>uuid:demo-udn-2</UDN>
+    <serviceList>
+      <service>
+        <serviceType>urn:schemas-upnp-org:service:ContentDirectory:1</serviceType>
+        <serviceId>urn:upnp-org:serviceId:ContentDirectory</serviceId>
+        <controlURL>/upnp2/control</controlURL>
+        <eventSubURL>/upnp2/event</eventSubURL>
+        <SCPDURL>/upnp2/scpd.xml</SCPDURL>
+      </service>
+    </serviceList>
+  </device>
+</root>`
+
   function handleHttp(req: IncomingMessage, res: ServerResponse): void {
     void (async () => {
       const u = new URL(req.url ?? '/', host)
@@ -650,6 +763,70 @@ function buildDemo(host: string): {
       if (u.pathname === '/description.xml') {
         res.writeHead(200, { 'content-type': 'text/xml' })
         return res.end(DESCRIPTION_XML)
+      }
+      if (u.pathname === '/description2.xml') {
+        res.writeHead(200, { 'content-type': 'text/xml' })
+        return res.end(DESCRIPTION2_XML)
+      }
+      if (u.pathname === '/upnp2/control' && req.method === 'POST') {
+        const body = await readBody(req)
+        const soap2 = (inner: string): void => {
+          res.writeHead(200, { 'content-type': 'text/xml' })
+          res.end(
+            `<?xml version="1.0"?>
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body>${inner}</s:Body></s:Envelope>`
+          )
+        }
+        if (body.includes('GetSearchCapabilities'))
+          return soap2(
+            '<u:GetSearchCapabilitiesResponse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"><SearchCaps>*</SearchCaps></u:GetSearchCapabilitiesResponse>'
+          )
+        if (body.includes('GetSortCapabilities'))
+          return soap2(
+            '<u:GetSortCapabilitiesResponse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"><SortCaps></SortCaps></u:GetSortCapabilitiesResponse>'
+          )
+        if (body.includes('GetSystemUpdateID'))
+          return soap2(
+            '<u:GetSystemUpdateIDResponse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"><Id>7</Id></u:GetSystemUpdateIDResponse>'
+          )
+        if (body.includes('<u:Search')) {
+          const q = (body.match(/contains &quot;(.*?)&quot;/)?.[1] ?? '').toLowerCase()
+          const scope = body.match(/derivedfrom &quot;(.*?)&quot;/)?.[1] ?? ''
+          const useArtist = body.includes('upnp:artist contains')
+          const useAlbum = body.includes('upnp:album contains')
+          const parts: string[] = []
+          if (scope.includes('container.album')) {
+            for (const a of LIB2_ALBUMS)
+              if (a.title.toLowerCase().includes(q) || (useArtist && a.artist.toLowerCase().includes(q)))
+                parts.push(didlContainer(a.id, 'a2-music', a.title, 'object.container.album', a.art, a.artist, a.date, a.genres))
+          } else if (scope.includes('item.audioItem')) {
+            for (const a of LIB2_ALBUMS)
+              for (let n = 1; n <= a.count; n++) {
+                const md = a.track(n)
+                const title = String(md.title ?? '')
+                if (
+                  title.toLowerCase().includes(q) ||
+                  (useArtist && a.artist.toLowerCase().includes(q)) ||
+                  (useAlbum && a.title.toLowerCase().includes(q))
+                )
+                  parts.push(didlTrack(a, n))
+              }
+          }
+          return soap2(
+            `<u:SearchResponse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"><Result>${xmlEsc(didlWrap(parts.join('')))}</Result><NumberReturned>${parts.length}</NumberReturned><TotalMatches>${parts.length}</TotalMatches><UpdateID>7</UpdateID></u:SearchResponse>`
+          )
+        }
+        const objectId = body.match(/<ObjectID>(.*?)<\/ObjectID>/)?.[1] ?? '0'
+        const flag = body.match(/<BrowseFlag>(.*?)<\/BrowseFlag>/)?.[1] ?? 'BrowseDirectChildren'
+        const meta = cd2Metadata(objectId)
+        const all = flag === 'BrowseMetadata' ? (meta ? [meta] : null) : cd2Children(objectId)
+        if (!all) {
+          res.writeHead(500)
+          return res.end('<error/>')
+        }
+        return soap2(
+          `<u:BrowseResponse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"><Result>${xmlEsc(didlWrap(all.join('')))}</Result><NumberReturned>${all.length}</NumberReturned><TotalMatches>${all.length}</TotalMatches><UpdateID>7</UpdateID></u:BrowseResponse>`
+        )
       }
       if (u.pathname === '/smoip/system/upnp') {
         res.writeHead(200, { 'content-type': 'application/json' })
@@ -663,6 +840,13 @@ function buildDemo(host: string): {
                   manufacturer: 'TastyTunes',
                   udn: 'demo-udn-1',
                   description_url: `${host}/description.xml`
+                },
+                {
+                  model: 'Demo',
+                  name: 'Demo NAS',
+                  manufacturer: 'TastyTunes',
+                  udn: 'demo-udn-2',
+                  description_url: `${host}/description2.xml`
                 }
               ]
             }
