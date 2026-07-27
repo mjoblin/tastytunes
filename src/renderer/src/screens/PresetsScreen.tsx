@@ -25,11 +25,12 @@ import {
   Play,
   Radio,
   Rows3,
+  AlertTriangle,
   Trash2,
   Volume2
 } from 'lucide-react'
 import { isPreAmpMode, queueContentHash, type PresetItem } from '@shared/smoip'
-import { presetVolumeKey, type ScreenLayout } from '@shared/model'
+import { presetVolumeKey, type ScreenLayout, type MediaNode } from '@shared/model'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { Eqbars } from '@/components/media/Eqbars'
@@ -166,22 +167,60 @@ export function PresetsScreen(): React.JSX.Element {
   // for the full 15s.
   const [wakeRecallId, setWakeRecallId] = useState<number | null>(null)
   const tuningTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // A preset whose stored object id the media server no longer resolves is
+  // ACCEPTED by the firmware and then silently ignored — no error, no state
+  // change (live-probed 2026-07-27). Nothing distinguishes that from "slow"
+  // except the passage of time, so watch for a recall that moved nothing.
+  // A real recall lands in ~3s; 8s is generous and still inside the 15s
+  // tuning window.
+  const [deadIds, setDeadIds] = useState<Set<number>>(new Set())
+  const deadTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const playbackSignature = (): string => {
+    const s = useStore.getState()
+    return JSON.stringify([
+      s.playState?.state,
+      s.playState?.queue_id,
+      s.playState?.metadata?.title,
+      s.queue?.play_id,
+      s.queue?.total
+    ])
+  }
   const recall = (presetId: number): void => {
     setTuningId(presetId)
     setWakeRecallId(asleep ? presetId : null)
+    setDeadIds((prev) => {
+      if (!prev.has(presetId)) return prev
+      const next = new Set(prev)
+      next.delete(presetId)
+      return next
+    })
     if (tuningTimer.current) clearTimeout(tuningTimer.current)
     tuningTimer.current = setTimeout(() => {
       setTuningId(null)
       setWakeRecallId(null)
     }, 15_000)
+    // Recalling what is ALREADY playing legitimately changes nothing — the
+    // one false positive this check has, so it never arms in that case.
+    const alreadyPlaying = playingIds.has(presetId)
+    const before = playbackSignature()
+    if (deadTimer.current) clearTimeout(deadTimer.current)
+    if (!alreadyPlaying) {
+      deadTimer.current = setTimeout(() => {
+        if (playbackSignature() !== before) return
+        setDeadIds((prev) => new Set(prev).add(presetId))
+        setTuningId((cur) => (cur === presetId ? null : cur))
+      }, 8_000)
+    }
     void tt.command({ type: 'recallPreset', presetId }).catch(() => {
       setTuningId(null)
       setWakeRecallId(null)
+      if (deadTimer.current) clearTimeout(deadTimer.current)
     })
   }
   useEffect(
     () => () => {
       if (tuningTimer.current) clearTimeout(tuningTimer.current)
+      if (deadTimer.current) clearTimeout(deadTimer.current)
     },
     []
   )
@@ -288,6 +327,14 @@ export function PresetsScreen(): React.JSX.Element {
     return lit
   }, [allItems, lastRecalledPresetId, queueArts, queueSignatures, liveQueueHash, systemInfo, radioId, md, activeSource, asleep, wakeRecallId])
   const isPresetPlaying = (p: PresetItem): boolean => p.id != null && playingIds.has(p.id)
+  const isPresetDead = (p: PresetItem): boolean => p.id != null && deadIds.has(p.id)
+  const clearDead = (id: number): void =>
+    setDeadIds((prev) => {
+      if (!prev.has(id)) return prev
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
 
   const onDragEnd = (event: DragEndEvent): void => {
     const { active, over } = event
@@ -421,6 +468,8 @@ export function PresetsScreen(): React.JSX.Element {
                     key={preset.id}
                     preset={preset}
                     playing={isPresetPlaying(preset)}
+                    dead={isPresetDead(preset)}
+                    onRepaired={() => preset.id != null && clearDead(preset.id)}
                     tuning={tuningId === preset.id && !isPresetPlaying(preset)}
                     onRecall={() => preset.id != null && recall(preset.id)}
                     volume={volumeFor(preset.id as number)}
@@ -435,6 +484,8 @@ export function PresetsScreen(): React.JSX.Element {
                   key={preset.id}
                   preset={preset}
                   playing={isPresetPlaying(preset)}
+                  dead={isPresetDead(preset)}
+                  onRepaired={() => preset.id != null && clearDead(preset.id)}
                   tuning={tuningId === preset.id && !isPresetPlaying(preset)}
                   onRecall={() => preset.id != null && recall(preset.id)}
                   volume={volumeFor(preset.id as number)}
@@ -582,6 +633,8 @@ function usePresetVolumePopover(
 function PresetRow({
   preset,
   playing,
+  dead,
+  onRepaired,
   tuning,
   onRecall,
   volume,
@@ -590,6 +643,9 @@ function PresetRow({
 }: {
   preset: PresetItem
   playing: boolean
+  /** Recall was accepted and then silently ignored — see RepairChip. */
+  dead?: boolean
+  onRepaired?(): void
   tuning: boolean
   onRecall(): void
 } & PresetVolumeProps): React.JSX.Element {
@@ -649,7 +705,10 @@ function PresetRow({
         </div>
       </div>
 
-      <span className="inline-flex" onPointerDown={(e) => e.stopPropagation()}>
+      <span className="inline-flex items-center" onPointerDown={(e) => e.stopPropagation()}>
+        {dead && (
+          <RepairChip preset={preset} variant="row" onRepaired={() => onRepaired?.()} />
+        )}
         {volume != null ? (
           <button
             data-tip={`Recalled at ${volume}% volume`}
@@ -707,6 +766,8 @@ function PresetRow({
 function PresetCard({
   preset,
   playing,
+  dead,
+  onRepaired,
   tuning,
   onRecall,
   volume,
@@ -715,6 +776,9 @@ function PresetCard({
 }: {
   preset: PresetItem
   playing: boolean
+  /** Recall was accepted and then silently ignored — see RepairChip. */
+  dead?: boolean
+  onRepaired?(): void
   tuning: boolean
   onRecall(): void
 } & PresetVolumeProps): React.JSX.Element {
@@ -802,6 +866,11 @@ function PresetCard({
         </div>
       </button>
 
+      {/* the alert takes the corner the tuning spinner hands over, and is a
+          sibling of the recall button (not a child) — nested buttons are
+          invalid, and this one must not also fire the recall */}
+      {dead && <RepairChip preset={preset} variant="card" onRepaired={() => onRepaired?.()} />}
+
       {/* ONE speaker: hover-revealed control normally; when a volume is set it
           stays visible in gold — presence + color IS the indicator, and the
           tooltip carries the percentage */}
@@ -859,5 +928,148 @@ function PresetCard({
       </div>
       {pv.popover}
     </div>
+  )
+}
+
+/**
+ * A preset that points at content its media server no longer resolves. The
+ * firmware accepts the recall and silently ignores it, so the app has to name
+ * the failure — and can usually fix it: Asset re-mints object ids on a
+ * rescan, but the ART id survives, which makes the artwork a reliable
+ * fingerprint for finding the same album's CURRENT id in the media index
+ * (44/44 of the author's UPnP presets matched this way).
+ *
+ * Radio presets are out of scope: an airable id has no index to match against.
+ */
+function RepairChip({
+  preset,
+  variant,
+  onRepaired
+}: {
+  preset: PresetItem
+  variant: 'card' | 'row'
+  onRepaired(): void
+}): React.JSX.Element {
+  const [open, setOpen] = useState(false)
+  const [anchor, setAnchor] = useState<{ left: number; top: number } | null>(null)
+  const [match, setMatch] = useState<MediaNode | null | undefined>(undefined) // undefined = looking
+  const [saving, setSaving] = useState(false)
+  const WIDTH = 268
+
+  const openFrom = async (e: React.MouseEvent): Promise<void> => {
+    e.stopPropagation()
+    if (open) return setOpen(false)
+    const r = e.currentTarget.getBoundingClientRect()
+    setAnchor({
+      left: Math.min(Math.max(8, r.left), window.innerWidth - WIDTH - 8),
+      top: Math.min(r.bottom + 8, window.innerHeight - 200)
+    })
+    setMatch(undefined)
+    setOpen(true)
+    // The artwork is the fingerprint: same art url, same album, current id.
+    const pools = await tt.mediaIndexPools()
+    const hits = pools.flatMap((pool) =>
+      pool.albums.filter((a) => a.artUrl != null && a.artUrl === preset.art_url)
+    )
+    setMatch(hits.length === 1 ? hits[0] : null)
+  }
+
+  const repair = async (): Promise<void> => {
+    if (!match?.serverUdn || preset.id == null) return
+    setSaving(true)
+    try {
+      await tt.mediaPresetSave(match.serverUdn, match.id, preset.id)
+      setOpen(false)
+      onRepaired()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const chip =
+    variant === 'card' ? (
+      <button
+        data-preset-dead
+        data-tip="Didn't load — click to repair"
+        aria-label="Preset didn't load — repair"
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => void openFrom(e)}
+        className="tip-bottom absolute top-2 left-2 z-10 flex h-7 w-7 items-center justify-center rounded-lg bg-panel/80 ring-1 ring-alert/50 text-alert"
+      >
+        <AlertTriangle size={13} />
+      </button>
+    ) : (
+      <button
+        data-preset-dead
+        data-tip="Didn't load — click to repair"
+        aria-label="Preset didn't load — repair"
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => void openFrom(e)}
+        className="tip-bottom p-1 rounded text-alert hover:text-ink transition-colors"
+      >
+        <AlertTriangle size={13} />
+      </button>
+    )
+
+  return (
+    <>
+      {chip}
+      {open &&
+        anchor &&
+        createPortal(
+          <>
+            <PopoverChrome onClose={() => setOpen(false)} />
+            <span
+              className="fixed inset-0 z-30 cursor-default"
+              onClick={(e) => {
+                e.stopPropagation()
+                setOpen(false)
+              }}
+            />
+            <span
+              data-preset-repair-popover
+              style={anchor}
+              className="fixed z-40 w-[268px] rounded-xl bg-raised ring-1 ring-edge2 shadow-2xl p-3 block cursor-default"
+              onClick={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              <span className="microlabel text-dim block mb-2">preset didn't load</span>
+              <span className="block text-[11px] text-faint leading-relaxed">
+                This preset points at something the media server no longer has — its id changed,
+                most likely when the library was rescanned. The streamer accepts the recall and
+                then does nothing.
+              </span>
+              {match === undefined && (
+                <span className="block text-[11px] text-faint mt-2.5">Looking in the index…</span>
+              )}
+              {match === null && (
+                <span className="block text-[11px] text-faint mt-2.5">
+                  No match in the library index for this preset's artwork, so there's nothing safe
+                  to save. Re-save it by hand from the Library.
+                </span>
+              )}
+              {match != null && (
+                <>
+                  <span className="block text-[12px] text-ink mt-2.5 truncate">{match.title}</span>
+                  <span className="block text-[11px] text-dim truncate">
+                    {[match.artist, match.serverName].filter(Boolean).join(' · ')}
+                  </span>
+                  <button
+                    disabled={saving}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      void repair()
+                    }}
+                    className="mt-2.5 text-[12px] px-3 py-1 rounded-lg bg-gold text-bg font-medium hover:brightness-110 motion-safe:active:scale-95 transition-all disabled:opacity-50"
+                  >
+                    {saving ? 'Repairing…' : `Save to slot ${preset.id}`}
+                  </button>
+                </>
+              )}
+            </span>
+          </>,
+          document.body
+        )}
+    </>
   )
 }
