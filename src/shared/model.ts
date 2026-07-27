@@ -52,7 +52,7 @@ export interface RecentTrack {
 
 /**
  * Does a recently-played entry describe what /zone/play_state currently
- * reports? Mirrors the recording normalization in main/recents.ts (title-keyed;
+ * reports? Mirrors the recording normalization in main/data/recents.ts (title-keyed;
  * a radio "song" that's absent or just echoes the station name is null), so the
  * Recently Played screen can mark its head entry live without drifting from how
  * entries were written.
@@ -366,7 +366,7 @@ export interface Schedule {
 
 /**
  * A wake schedule that came due while the computer was asleep, offered rather
- * than fired (see main/scheduler.ts). Held in the main process, mirrored to the
+ * than fired (see main/app/scheduler.ts). Held in the main process, mirrored to the
  * renderer so the Schedules tab can show it too — the OS notification is the
  * loud surface, this is the one that survives Do Not Disturb.
  *

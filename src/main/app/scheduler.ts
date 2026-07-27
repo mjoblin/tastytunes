@@ -24,8 +24,8 @@
 //     schedule, never a queue of them.
 import { Notification } from 'electron'
 import type { Schedule } from '@shared/model'
-import type { DeviceManager } from './deviceManager'
-import { getSettings } from './persist'
+import type { DeviceManager } from '../device/deviceManager'
+import { getSettings } from '../data/persist'
 
 const TICK_MS = 15_000
 

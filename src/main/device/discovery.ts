@@ -5,7 +5,7 @@
 // approach PunyTunes and vibin use.
 
 import { createSocket } from 'node:dgram'
-import { loggedFetch } from './netlog'
+import { loggedFetch } from '../netlog'
 import { XMLParser } from 'fast-xml-parser'
 import type { DiscoveredDevice } from '@shared/model'
 

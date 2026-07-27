@@ -4,10 +4,10 @@
 // first — accumulated wallclock while state is 'play', so pauses don't count
 // and seeks can't cheat. Radio and metadata-less sources are never scrobbled.
 // Failed listens queue in memory (bounded) and flush with the next success.
-import { version } from '../../package.json'
+import { version } from '../../../package.json'
 import { isRadioMetadata, type ZonePlayState } from '@shared/smoip'
-import { getSettings } from './persist'
-import { loggedFetch } from './netlog'
+import { getSettings } from '../data/persist'
+import { loggedFetch } from '../netlog'
 
 // TASTYTUNES_LB_URL lets test harnesses point submissions at a local server.
 const BASE = process.env['TASTYTUNES_LB_URL'] ?? 'https://api.listenbrainz.org'

@@ -16,8 +16,8 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { app } from 'electron'
-import { getSettings } from './persist'
-import { atomicWriteFileSync } from './jsonStore'
+import { getSettings } from '../data/persist'
+import { atomicWriteFileSync } from '../data/jsonStore'
 import type { MediaIndexPools, MediaIndexStatus, MediaNode, MediaSearchAllGroup, MediaServerInfo } from '@shared/model'
 import {
   browseChildrenOf,

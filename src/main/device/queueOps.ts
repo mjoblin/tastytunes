@@ -4,9 +4,9 @@ import type { MediaQueueAction } from '@shared/model'
 import type { QueueList } from '@shared/smoip'
 import type { SmoipSocket } from './smoipSocket'
 import * as smoipHttp from './smoipHttp'
-import { getPlaylists, healPlaylistItem, markPlaylistPlayed } from './playlists'
-import { queueAdd } from './upnpBrowser'
-import { resolveContent, type ResolvedContent } from './resolveContent'
+import { getPlaylists, healPlaylistItem, markPlaylistPlayed } from '../data/playlists'
+import { queueAdd } from '../media/upnpBrowser'
+import { resolveContent, type ResolvedContent } from '../media/resolveContent'
 
 /**
  * The queue-ops engine: everything that WRITES to the streamer's queue on the

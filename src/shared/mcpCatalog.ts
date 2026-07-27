@@ -4,7 +4,7 @@
 // were most of the file. SHARED ON PURPOSE: the Settings screen renders these
 // clusters and the server registers from them, so the two cannot drift about
 // what exists or what it is called. Schemas and handlers live in
-// main/mcpServer.ts; enable/disable state lives in settings.mcp.
+// main/servers/mcpServer.ts; enable/disable state lives in settings.mcp.
 //
 // Adding a tool = add it here AND implement it in mcpServer.ts. A cluster whose
 // tools change saved things gets `optIn: true` and stays off until the user

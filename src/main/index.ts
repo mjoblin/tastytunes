@@ -9,11 +9,11 @@ import {
   type Favorite,
   type RecentTrack
 } from '@shared/model'
-import { DeviceManager } from './deviceManager'
-import { demoHost, startDemoStreamer, stopDemoStreamer } from './demoStreamer'
-import { McpBridge } from './mcpServer'
-import { installAppMenu } from './menu'
-import * as mediaIndex from './mediaIndex'
+import { DeviceManager } from './device/deviceManager'
+import { demoHost, startDemoStreamer, stopDemoStreamer } from './servers/demoStreamer'
+import { McpBridge } from './servers/mcpServer'
+import { installAppMenu } from './app/menu'
+import * as mediaIndex from './media/mediaIndex'
 import {
   checkUpdatesNow,
   checkUpdatesOnDemand,
@@ -21,24 +21,24 @@ import {
   downloadUpdate,
   installUpdate,
   startUpdater
-} from './updater'
-import { fetchLyrics } from './lyrics'
-import { scrobbler } from './scrobbler'
-import { fetchArtistInfo } from './artistInfo'
-import { fetchAlbumInfo } from './albumInfo'
-import { radioByTags, radioSearch, radioTop } from './radioBrowser'
-import { clearLookupCaches, flushLookupCaches, lookupCacheStats } from './diskCache'
-import { browse as mediaBrowse, presetSave, queueAdd, refreshServers } from './upnpBrowser'
+} from './app/updater'
+import { fetchLyrics } from './lookups/lyrics'
+import { scrobbler } from './lookups/scrobbler'
+import { fetchArtistInfo } from './lookups/artistInfo'
+import { fetchAlbumInfo } from './lookups/albumInfo'
+import { radioByTags, radioSearch, radioTop } from './lookups/radioBrowser'
+import { clearLookupCaches, flushLookupCaches, lookupCacheStats } from './lookups/diskCache'
+import { browse as mediaBrowse, presetSave, queueAdd, refreshServers } from './media/upnpBrowser'
 import {
   catchUpOnResume,
   dismissMissedSchedule,
   noteSuspend,
   runMissedSchedule,
   startScheduler
-} from './scheduler'
+} from './app/scheduler'
 import { loggedFetch } from './netlog'
-import { getSettings, updateSettings } from './persist'
-import { getRecents } from './recents'
+import { getSettings, updateSettings } from './data/persist'
+import { getRecents } from './data/recents'
 
 // Pin the identity and settings location: when Electron is launched with a
 // bare file path (dev harnesses), it doesn't read package.json and userData

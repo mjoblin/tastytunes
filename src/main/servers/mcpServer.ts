@@ -19,20 +19,20 @@ import { favoriteKey, type Favorite } from '@shared/model'
 import { MCP_CLUSTERS, mcpClusterEnabled } from '@shared/mcpCatalog'
 import { EQ_GAIN_MAX, EQ_GAIN_MIN, audioCaps, brightnessOptions, isRadioMetadata } from '@shared/smoip'
 import { app } from 'electron'
-import type { DeviceManager } from './deviceManager'
-import { getSettings, updateSettings } from './persist'
+import type { DeviceManager } from '../device/deviceManager'
+import { getSettings, updateSettings } from '../data/persist'
 import { randomUUID } from 'node:crypto'
-import { fetchArtistInfo } from './artistInfo'
-import { fetchAlbumInfo } from './albumInfo'
-import { fetchLyrics } from './lyrics'
-import { radioSearch, radioByTags } from './radioBrowser'
-import { queueAdd, refreshServers } from './upnpBrowser'
+import { fetchArtistInfo } from '../lookups/artistInfo'
+import { fetchAlbumInfo } from '../lookups/albumInfo'
+import { fetchLyrics } from '../lookups/lyrics'
+import { radioSearch, radioByTags } from '../lookups/radioBrowser'
+import { queueAdd, refreshServers } from '../media/upnpBrowser'
 import {
   searchServer as librarySearch,
   status as indexStatus,
   pools as indexPools,
   ensureFresh as indexEnsureFresh
-} from './mediaIndex'
+} from '../media/mediaIndex'
 
 interface ToolResult {
   content: Array<{ type: 'text'; text: string }>

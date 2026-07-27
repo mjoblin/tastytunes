@@ -2,9 +2,9 @@
 // (artist bios, album details). MusicBrainz enforces ONE request per second
 // per IP and an identifying User-Agent (violators get 100% declined) — every
 // MB call from anywhere in the app goes through the single spacing gate here.
-import { version } from '../../package.json'
+import { version } from '../../../package.json'
 import { REPO_URL } from '@shared/ipc'
-import { loggedFetch } from './netlog'
+import { loggedFetch } from '../netlog'
 
 // Env overrides let test harnesses point each hop at a local server.
 export const MB = process.env['TASTYTUNES_MB_URL'] ?? 'https://musicbrainz.org'

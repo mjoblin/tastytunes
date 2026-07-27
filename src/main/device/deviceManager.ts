@@ -33,9 +33,9 @@ import { EQ_GAIN_MAX, EQ_GAIN_MIN, isRadioMetadata, radioTrackTitle } from '@sha
 import { discoverStreamers } from './discovery'
 import { SmoipSocket } from './smoipSocket'
 import * as smoipHttp from './smoipHttp'
-import { getSettings, updateSettings } from './persist'
-import { clearRecents, getRecents, recordRecent, restoreRecents } from './recents'
-import { addFavorite, getFavorites, removeFavorite, updateFavorite } from './favorites'
+import { getSettings, updateSettings } from '../data/persist'
+import { clearRecents, getRecents, recordRecent, restoreRecents } from '../data/recents'
+import { addFavorite, getFavorites, removeFavorite, updateFavorite } from '../data/favorites'
 import {
   appendToPlaylist,
   createPlaylist,
@@ -44,11 +44,11 @@ import {
   renamePlaylist,
   restorePlaylist,
   setPlaylistItems
-} from './playlists'
+} from '../data/playlists'
 import { QueueOps } from './queueOps'
-import type { ResolvedContent } from './resolveContent'
-import { scrobbler } from './scrobbler'
-import { getNetRequests, loggedFetch } from './netlog'
+import type { ResolvedContent } from '../media/resolveContent'
+import { scrobbler } from '../lookups/scrobbler'
+import { getNetRequests, loggedFetch } from '../netlog'
 
 const FRAME_RING_SIZE = 300
 const LOG_RING_SIZE = 300

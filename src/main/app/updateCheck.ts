@@ -1,10 +1,10 @@
 // Version from package.json, not app.getVersion(): under a dev harness that
 // launches Electron with a bare file path, getVersion() is Electron's own.
-import { version as appVersion } from '../../package.json'
+import { version as appVersion } from '../../../package.json'
 import { REPO_URL } from '@shared/ipc'
 import { type UpdateCheckResult, type UpdateInfo } from '@shared/model'
-import { getSettings } from './persist'
-import { loggedFetch } from './netlog'
+import { getSettings } from '../data/persist'
+import { loggedFetch } from '../netlog'
 
 // TASTYTUNES_UPDATE_URL lets test harnesses point the check at a local server.
 const RELEASES_URL =

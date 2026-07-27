@@ -8,10 +8,10 @@
 import { rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { app } from 'electron'
-import { version } from '../../package.json'
+import { version } from '../../../package.json'
 import type { LyricsQuery, LyricsResult } from '@shared/model'
 import { REPO_URL } from '@shared/ipc'
-import { loggedFetch } from './netlog'
+import { loggedFetch } from '../netlog'
 import { DiskCache } from './diskCache'
 
 // TASTYTUNES_LYRICS_URL lets test harnesses point lookups at a local server.

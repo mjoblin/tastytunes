@@ -13,10 +13,10 @@ import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { app } from 'electron'
 import electronUpdater from 'electron-updater'
-import { version as appVersion } from '../../package.json'
+import { version as appVersion } from '../../../package.json'
 import { REPO_URL } from '@shared/ipc'
 import { type UpdateCheckResult, type UpdateState } from '@shared/model'
-import { getSettings } from './persist'
+import { getSettings } from '../data/persist'
 import {
   checkNow as legacyCheckNow,
   checkOnDemand as legacyCheckOnDemand,
