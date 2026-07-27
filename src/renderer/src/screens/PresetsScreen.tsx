@@ -328,6 +328,11 @@ export function PresetsScreen(): React.JSX.Element {
   }, [allItems, lastRecalledPresetId, queueArts, queueSignatures, liveQueueHash, systemInfo, radioId, md, activeSource, asleep, wakeRecallId])
   const isPresetPlaying = (p: PresetItem): boolean => p.id != null && playingIds.has(p.id)
   const isPresetDead = (p: PresetItem): boolean => p.id != null && deadIds.has(p.id)
+  const noteRepair = (id: number): void => {
+    repairAt.current = Date.now()
+    repairPlayingId.current = items.find(isPresetPlaying)?.id ?? null
+    clearDead(id)
+  }
   const clearDead = (id: number): void =>
     setDeadIds((prev) => {
       if (!prev.has(id)) return prev
@@ -363,14 +368,25 @@ export function PresetsScreen(): React.JSX.Element {
     [presetGap, cards]
   )
 
+  // A REPAIR IS MAINTENANCE, NOT PLAYBACK (user, 2026-07-27: repairing a preset
+  // scrolled the list to the last-played one). Writing a slot makes the device
+  // re-push /presets/list — measured ~4.3s later on the Evo, where the mock
+  // broadcasts instantly — and the follow effect must not treat anything that
+  // push stirs up as a track change. The window is generous enough to cover
+  // that lag, and the guard only holds while the PLAYING preset is unchanged,
+  // so starting something else during it still follows normally.
+  const repairAt = useRef(0)
+  const repairPlayingId = useRef<number | null>(null)
   const playingId = items.find(isPresetPlaying)?.id ?? null
   // First follow after mount positions INSTANTLY — re-entering the screen
   // shouldn't replay a glide to a place you already were. The animation is
   // reserved for track changes while you're watching.
   const firstFollow = useRef(true)
   useEffect(() => {
+    const settlingRepair =
+      Date.now() - repairAt.current < 8000 && playingId === repairPlayingId.current
     // Follow pauses while a filter is active — the playing card may be hidden.
-    if (followPresets && playingId != null && !filter) {
+    if (followPresets && playingId != null && !filter && !settlingRepair) {
       scrollToPlaying(false, firstFollow.current ? 'auto' : undefined)
     }
     firstFollow.current = false
@@ -469,7 +485,7 @@ export function PresetsScreen(): React.JSX.Element {
                     preset={preset}
                     playing={isPresetPlaying(preset)}
                     dead={isPresetDead(preset)}
-                    onRepaired={() => preset.id != null && clearDead(preset.id)}
+                    onRepaired={() => preset.id != null && noteRepair(preset.id)}
                     tuning={tuningId === preset.id && !isPresetPlaying(preset)}
                     onRecall={() => preset.id != null && recall(preset.id)}
                     volume={volumeFor(preset.id as number)}
@@ -485,7 +501,7 @@ export function PresetsScreen(): React.JSX.Element {
                   preset={preset}
                   playing={isPresetPlaying(preset)}
                   dead={isPresetDead(preset)}
-                  onRepaired={() => preset.id != null && clearDead(preset.id)}
+                  onRepaired={() => preset.id != null && noteRepair(preset.id)}
                   tuning={tuningId === preset.id && !isPresetPlaying(preset)}
                   onRecall={() => preset.id != null && recall(preset.id)}
                   volume={volumeFor(preset.id as number)}
