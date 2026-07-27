@@ -39,7 +39,8 @@ import {
   RefreshCw,
   SlidersHorizontal,
   Sun,
-  Trash2
+  Trash2,
+  X
 } from 'lucide-react'
 import { version } from '../../../../package.json'
 import { type AlignH, type AlignV, type AmbientArtMode, type AmbientCoverage, type AppSettings, type McpBind, type McpSettings, type MotionMode, type Schedule, type ThemePreference, type UpdateCheckResult } from '@shared/model'
@@ -733,6 +734,49 @@ function CopyRow({
 const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
+/**
+ * A wake this schedule missed while the computer was asleep, offered in place.
+ *
+ * The SECOND surface for the same offer — the OS notification is the loud one,
+ * but it is silenced by Do Not Disturb, by a Focus mode, or simply by being
+ * swiped away, and a missed alarm that leaves no trace anywhere is the failure
+ * this whole feature exists to fix. This one sits with the schedule it belongs
+ * to, where you would look to ask "did that run?", and stays until answered.
+ *
+ * Deliberately NOT a toast: toasts are a single slot that any later one evicts,
+ * and they self-dismiss in seconds — both wrong for an offer that has to
+ * survive you looking away.
+ */
+function MissedRow({ dueAt }: { dueAt: number }): React.JSX.Element {
+  const due = new Date(dueAt)
+  const time = `${String(due.getHours()).padStart(2, '0')}:${String(due.getMinutes()).padStart(2, '0')}`
+  return (
+    <div
+      data-missed-schedule
+      className="flex items-center gap-3 rounded-lg ring-1 ring-gold/40 bg-golddim px-3 py-2"
+    >
+      <AlarmClock size={14} strokeWidth={1.9} className="shrink-0 text-gold" />
+      <span className="flex-1 min-w-0 text-[12.5px] text-gold">
+        Missed {time} — your computer was asleep.
+      </span>
+      <PrimaryButton
+        onClick={() => void tt.scheduleRunMissed()}
+        className="shrink-0 text-[12px] px-3 py-1"
+      >
+        Start now
+      </PrimaryButton>
+      <button
+        onClick={() => void tt.scheduleDismissMissed()}
+        data-tip="Dismiss"
+        aria-label="Dismiss the missed schedule"
+        className="tip-top tip-end shrink-0 flex items-center justify-center h-7 w-7 rounded-md text-gold/70 hover:text-gold hover:bg-gold/10 motion-safe:active:scale-90 transition-all"
+      >
+        <X size={14} strokeWidth={2} />
+      </button>
+    </div>
+  )
+}
+
 /** Plain-English one-liner of exactly what a schedule will (or won't) do. */
 function describeSchedule(s: Schedule): string {
   if (!s.enabled) return 'Off — flip the switch to enable it.'
@@ -767,6 +811,7 @@ function SchedulesSection({
 }): React.JSX.Element {
   const presets = useStore((s) => s.presets?.presets ?? null)
   const showToast = useStore((s) => s.showToast)
+  const missed = useStore((s) => s.missedSchedule)
   const schedules = settings.schedules
 
   const update = (id: string, patch: Partial<Schedule>): void => {
@@ -822,6 +867,7 @@ function SchedulesSection({
 
       {schedules.map((s) => (
         <div key={s.id} className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-4">
+          {missed?.scheduleId === s.id && <MissedRow dueAt={missed.dueAt} />}
           <div className="flex items-center gap-3">
             <input
               type="time"

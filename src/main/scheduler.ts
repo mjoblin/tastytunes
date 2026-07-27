@@ -161,9 +161,34 @@ export function catchUpOnResume(dm: DeviceManager): void {
     // Claim the instance even though we only OFFERED: the Map means "don't act
     // on this firing again", and a second resume must not re-ask.
     lastFired.set(pick.schedule.id, pick.instance)
+    // TWO SURFACES, one state. The notification is the loud one; the Schedules
+    // tab is the one that still shows up under Do Not Disturb, or when the
+    // banner has been swiped away. Acting on either clears both.
+    offered = pick
+    dm.setMissedSchedule({ scheduleId: pick.schedule.id, dueAt: pick.dueAt })
     offerCatchUp(dm, pick)
   }
   setTimeout(attempt, RECONNECT_POLL_MS)
+}
+
+/** The live offer, so the in-app surface and the notification act as one. */
+let offered: CatchUpPick | null = null
+
+/** Take the offer — from the notification, or from the Schedules tab. */
+export function runMissedSchedule(dm: DeviceManager): void {
+  const pick = offered
+  offered = null
+  dm.setMissedSchedule(null)
+  if (!pick) return
+  void fire(dm, pick.schedule).catch((e) =>
+    console.warn(`catch-up ${pick.schedule.id} failed:`, e?.message ?? e)
+  )
+}
+
+/** Let it go. The instance stays claimed, so nothing re-offers it. */
+export function dismissMissedSchedule(dm: DeviceManager): void {
+  offered = null
+  dm.setMissedSchedule(null)
 }
 
 /** The offer itself. Clicking it runs the schedule exactly as the tick would. */
@@ -181,14 +206,10 @@ function offerCatchUp(dm: DeviceManager, pick: CatchUpPick): void {
     silent: false,
     actions: [{ type: 'button', text: 'Start now' }]
   })
-  let ran = false
-  const run = (): void => {
-    if (ran) return
-    ran = true
-    void fire(dm, s).catch((e) => console.warn(`catch-up ${s.id} failed:`, e?.message ?? e))
-  }
   // 'click' is the notification body (every platform); 'action' is the macOS
-  // button. Either means yes, and `ran` keeps a double-tap to one run.
+  // button. Either means yes; runMissedSchedule clears the shared offer, so a
+  // double-tap — or a tap after the in-app row was used — does nothing twice.
+  const run = (): void => runMissedSchedule(dm)
   n.on('click', run)
   n.on('action', run)
   n.show()

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { MenuCommand, PushMessage, Snapshot } from '@shared/ipc'
-import type { AppSettings, ConnectionState, DiscoveredDevice, FirmwareStatus, FrameEntry, LogEntry, McpStatus, MediaIndexStatus, NetRequestEntry, UpdateState, SleepTimer } from '@shared/model'
+import type { AppSettings, ConnectionState, DiscoveredDevice, FirmwareStatus, FrameEntry, LogEntry, McpStatus, MediaIndexStatus, MissedSchedule, NetRequestEntry, UpdateState, SleepTimer } from '@shared/model'
 import type { Favorite, RecentTrack, Playlist, PlaylistActivation } from '@shared/model'
 import type {
   Presets,
@@ -202,6 +202,9 @@ interface TTState {
   lastStation: LastStation | null
   /** MCP server state, mirrored from the main process. */
   mcpStatus: McpStatus
+  /** A wake schedule missed while the computer slept — offered, never fired.
+   *  The Schedules tab shows it; the OS notification is the other surface. */
+  missedSchedule: MissedSchedule | null
   /** Local media-index state per known server (Settings + Library UI). */
   mediaIndex: MediaIndexStatus[]
   /** Self-update consent-flow state, mirrored from the main process. */
@@ -341,6 +344,7 @@ export const useStore = create<TTState>((set, get) => ({
   libraryTarget: null,
   lastStation: null,
   mcpStatus: { running: false, url: null, error: null },
+  missedSchedule: null,
   mediaIndex: [],
   update: null,
   settingsJump: null,
@@ -465,6 +469,7 @@ export const useStore = create<TTState>((set, get) => ({
       playlists: snap.playlists,
       playlistActivation: snap.playlistActivation,
       mcpStatus: snap.mcpStatus,
+      missedSchedule: snap.missedSchedule,
       mediaIndex: snap.mediaIndex,
       playhead: snap.position ? { secs: snap.position.position, at: Date.now() } : null,
       frames: snap.frames,
@@ -565,6 +570,8 @@ export const useStore = create<TTState>((set, get) => ({
           return { favorites: msg.data }
         case 'mcpStatus':
           return { mcpStatus: msg.status }
+        case 'scheduleMissed':
+          return { missedSchedule: msg.missed }
         case 'mediaIndex':
           return { mediaIndex: msg.statuses }
         case 'updateState':

@@ -364,6 +364,22 @@ export interface Schedule {
   volumePercent: number | null
 }
 
+/**
+ * A wake schedule that came due while the computer was asleep, offered rather
+ * than fired (see main/scheduler.ts). Held in the main process, mirrored to the
+ * renderer so the Schedules tab can show it too — the OS notification is the
+ * loud surface, this is the one that survives Do Not Disturb.
+ *
+ * Ephemeral by design: it dies with the app, like the countdown and lastFired.
+ * A missed alarm is only interesting for as long as acting on it still makes
+ * sense.
+ */
+export interface MissedSchedule {
+  scheduleId: string
+  /** When it was due — the UI says so, because "missed" without a time is noise. */
+  dueAt: number
+}
+
 /** Cache key for a preset volume override — device-scoped so ids don't collide. */
 export function presetVolumeKey(udn: string | null | undefined, presetId: number): string {
   return `${udn ?? 'device'}|${presetId}`

@@ -3,7 +3,7 @@
 
 import { BrowserWindow, Notification, nativeImage, webContents } from 'electron'
 import { type PushMessage, type Snapshot, type StreamerCommand } from '@shared/ipc'
-import { presetVolumeKey, sleepTrackKey, type ConnectionState, type DiscoveredDevice, type FirmwareStatus, type FrameEntry, type LogEntry, type McpStatus, type MediaIndexStatus, type SleepTimer } from '@shared/model'
+import { presetVolumeKey, sleepTrackKey, type ConnectionState, type DiscoveredDevice, type FirmwareStatus, type FrameEntry, type LogEntry, type McpStatus, type MediaIndexStatus, type MissedSchedule, type SleepTimer } from '@shared/model'
 import {
   type ContentRef,
   type Playlist,
@@ -119,6 +119,7 @@ export class DeviceManager {
   /** See Snapshot.lastRecalledPresetId — in-app recalls only, content-checked by consumers. */
   private lastRecalledPresetId: number | null = null
   private mcpStatus: McpStatus = { running: false, url: null, error: null }
+  private missedSchedule: MissedSchedule | null = null
   private mediaIndexStatuses: MediaIndexStatus[] = []
 
   // ------------------------------------------------------------------ lifecycle
@@ -726,6 +727,17 @@ export class DeviceManager {
     this.push({ kind: 'mediaIndex', statuses })
   }
 
+  /**
+   * A wake schedule missed while the machine slept, mirrored to the renderer so
+   * the Schedules tab can offer it too. The OS notification is the loud
+   * surface; this is the one that survives Do Not Disturb. Owned here, like
+   * mcpStatus, so it rides the snapshot and a fresh window sees it.
+   */
+  setMissedSchedule(missed: MissedSchedule | null): void {
+    this.missedSchedule = missed
+    this.push({ kind: 'scheduleMissed', missed })
+  }
+
   setMcpStatus(status: McpStatus | null, logText: string, level: LogEntry['level'] = 'info'): void {
     this.log(level, 'mcp', logText)
     if (status) {
@@ -943,6 +955,7 @@ export class DeviceManager {
       favorites: getFavorites(),
       playlists: getPlaylists(),
       playlistActivation: this.queueOps.activation,
+      missedSchedule: this.missedSchedule,
       mcpStatus: this.mcpStatus,
       mediaIndex: this.mediaIndexStatuses,
       frames: this.frames,

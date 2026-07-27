@@ -54,6 +54,7 @@ import type {
   MediaQueueAction,
   MediaSearchAllGroup,
   MediaServerInfo,
+  MissedSchedule,
   NetRequestEntry,
   Playlist,
   PlaylistActivation,
@@ -117,6 +118,7 @@ export type PushMessage =
   | { kind: 'sleep'; sleep: SleepTimer | null }
   | { kind: 'recalledPreset'; id: number | null }
   | { kind: 'mcpStatus'; status: McpStatus }
+  | { kind: 'scheduleMissed'; missed: MissedSchedule | null }
   | { kind: 'mediaIndex'; statuses: MediaIndexStatus[] }
   | { kind: 'menu'; command: MenuCommand }
   | { kind: 'updateState'; state: UpdateState }
@@ -221,6 +223,8 @@ export interface Snapshot {
    *  rather than a stale idle button (the did-finish-load rule). */
   playlistActivation: PlaylistActivation | null
   mcpStatus: McpStatus
+  /** A wake missed while the machine slept, still worth offering. */
+  missedSchedule: MissedSchedule | null
   /** Local media-index state per known server. */
   mediaIndex: MediaIndexStatus[]
   frames: FrameEntry[]
@@ -266,6 +270,10 @@ export interface TastyTunesApi {
   showMain(): Promise<void>
   /** Arm or clear the sleep timer (lives in the main process). */
   setSleep(sleep: SleepTimer | null): Promise<void>
+  /** Act on a wake missed during sleep — runs it exactly as the tick would. */
+  scheduleRunMissed(): Promise<void>
+  /** Let it go: clears the offer without running anything. */
+  scheduleDismissMissed(): Promise<void>
   /** The local recently-played log, newest first. */
   getRecents(): Promise<RecentTrack[]>
   /** Wipe the recently-played log. */
@@ -364,6 +372,8 @@ export const IPC = {
   toggleMini: 'tt:toggleMini',
   showMain: 'tt:showMain',
   setSleep: 'tt:setSleep',
+  scheduleRunMissed: 'tt:scheduleRunMissed',
+  scheduleDismissMissed: 'tt:scheduleDismissMissed',
   getRecents: 'tt:getRecents',
   clearRecents: 'tt:clearRecents',
   recentsRestore: 'tt:recentsRestore',

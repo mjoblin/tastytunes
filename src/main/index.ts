@@ -29,7 +29,13 @@ import { fetchAlbumInfo } from './albumInfo'
 import { radioByTags, radioSearch, radioTop } from './radioBrowser'
 import { clearLookupCaches, flushLookupCaches, lookupCacheStats } from './diskCache'
 import { browse as mediaBrowse, presetSave, queueAdd, refreshServers } from './upnpBrowser'
-import { catchUpOnResume, noteSuspend, startScheduler } from './scheduler'
+import {
+  catchUpOnResume,
+  dismissMissedSchedule,
+  noteSuspend,
+  runMissedSchedule,
+  startScheduler
+} from './scheduler'
 import { loggedFetch } from './netlog'
 import { getSettings, updateSettings } from './persist'
 import { getRecents } from './recents'
@@ -294,6 +300,8 @@ function registerIpc(): void {
     return Promise.resolve()
   })
   ipcMain.handle(IPC.setSleep, (_e, sleep: SleepTimer | null) => deviceManager.setSleep(sleep))
+  ipcMain.handle(IPC.scheduleRunMissed, () => runMissedSchedule(deviceManager))
+  ipcMain.handle(IPC.scheduleDismissMissed, () => dismissMissedSchedule(deviceManager))
   // Belt-and-braces gate: the renderer only asks while the setting is on, but
   // "off = no requests, ever" should hold even if a stale renderer asks.
   ipcMain.handle(IPC.fetchLyrics, (_e, q: LyricsQuery, force?: boolean) =>
