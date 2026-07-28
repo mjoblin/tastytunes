@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import {
   Disc3,
   Heart,
@@ -27,7 +28,19 @@ import { useVolumeSlider, useWheelVolume } from '@/components/playback/VolumeClu
 import { Slider } from '@/components/controls/Slider'
 import { ArtImage } from '@/components/media/ArtImage'
 import { AmbientArt } from '@/components/media/AmbientArt'
+import { Segmented } from '@/components/controls/Segmented'
+import {
+  PlaylistsTab,
+  PresetsTab,
+  QueueTab,
+  RecentTab,
+  type TrayTab
+} from '@/components/playback/TrayPanelTabs'
 import { controlSet, cx, deriveNowPlaying, fmtTime } from '@/lib/format'
+
+const TABS: readonly TrayTab[] = ['queue', 'presets', 'playlists', 'recent']
+/** A stored tab from a future (or hand-edited) settings file must not blank the body. */
+const coerceTab = (v: string): TrayTab => (TABS as readonly string[]).includes(v) ? (v as TrayTab) : 'queue'
 
 /**
  * The tray panel (?tray=1): what's playing, reachable without a window.
@@ -38,8 +51,10 @@ import { controlSet, cx, deriveNowPlaying, fmtTime } from '@/lib/format'
  * under the tray icon, you do one thing, it dismisses on blur. Its
  * justification is reach without a window, not "small now playing".
  *
- * Phase 2 is this header plus the footer. Phase 3 adds the tab strip (Queue ·
- * Presets · Playlists · Recent) between them and grows the window.
+ * Header, then the four tabs (Queue · Presets · Playlists · Recent), then a
+ * footer. The tab list is short because a section only earns one if it is one
+ * click to an outcome, bounded, and wanted WITHOUT opening the app — see
+ * TrayPanelTabs.
  *
  * Everything here arrives through the same pushes the main window gets
  * (`deviceManager.push` fans out to every webContents) and follows theme, font
@@ -66,6 +81,56 @@ export function TrayPanel(): React.JSX.Element {
   const connected = connection.phase === 'connected'
   const powered = systemPower?.power === 'ON'
   const active = connected && powered
+
+  // ---- tabs. Remembered across opens (same precedent as settingsTab), then
+  // overridden by ONE heuristic rather than a knob: opening on Queue with
+  // nothing playing is an empty box, so an idle streamer opens on Presets.
+  const [tab, setTab] = useState<TrayTab>(() => coerceTab(settings.trayTab))
+  const opens = useStore((s) => s.trayOpens)
+  const saveSettings = useStore((s) => s.saveSettings)
+  const pickTab = (next: TrayTab): void => {
+    setTab(next)
+    void saveSettings({ trayTab: next })
+  }
+  // Keyed on the OPEN COUNT, not on visibility: the panel is hidden rather
+  // than destroyed, so this component never remounts and a boolean couldn't
+  // tell two consecutive opens apart. Reads the live values without
+  // subscribing to them, so a queue emptying while the panel sits open
+  // doesn't yank the tab out from under a click.
+  useEffect(() => {
+    if (opens === 0) return
+    const s = useStore.getState()
+    // "A queue tab on an idle streamer is an empty box" — two ways to get one,
+    // and both count. Nothing playing (stopped, or never started) is the
+    // obvious case; the other is RADIO, which plays happily with no queue
+    // behind it at all. Paused counts as playing: you paused it, the queue is
+    // still yours, and Queue is where you meant to be.
+    const state = s.playState?.state
+    const nothingPlaying = state !== 'play' && state !== 'pause'
+    const emptyQueue = (s.queue?.items?.length ?? 0) === 0
+    const stored = coerceTab(s.settings.trayTab)
+    setTab(stored === 'queue' && (nothingPlaying || emptyQueue) ? 'presets' : stored)
+  }, [opens])
+
+  // ---- playlist activation, and the dismissal rules it drives.
+  //
+  // Started HERE, specifically: a run someone kicked off in the main window
+  // must not hold this panel open — the rule is about not losing YOUR click's
+  // progress, not about any activation anywhere.
+  const activation = useStore((s) => s.playlistActivation)
+  const [startedId, setStartedId] = useState<string | null>(null)
+  const holding = startedId != null && !!activation && !activation.finished && activation.playlistId === startedId
+  const startActivation = (p: { id: string; name: string }): void => {
+    setStartedId(p.id)
+    setTab('playlists')
+    void tt.playlistActivate(p.id).catch(() => setStartedId(null))
+  }
+  useEffect(() => {
+    if (activation?.finished && activation.playlistId === startedId) setStartedId(null)
+  }, [activation?.finished, activation?.playlistId, startedId])
+  // NB main holds the panel open independently, and learns the run is the
+  // panel's from the IPC SENDER of playlistActivate rather than from a message
+  // — nothing here needs to tell it. This local flag is only for the cue.
   const meta = deriveNowPlaying(playState, nowPlaying)
   const controls = controlSet(nowPlaying)
   useArtAccent(settings.accentFollowsArt && active ? meta.artUrl : null, theme)
@@ -107,7 +172,18 @@ export function TrayPanel(): React.JSX.Element {
 
   return (
     <div className="h-screen w-screen p-1" onWheel={onWheel}>
-      <div className="relative h-full w-full rounded-2xl bg-panel ring-1 ring-edge2 overflow-hidden flex flex-col shadow-[0_18px_50px_rgb(0_0_0_/_0.55)]">
+      <div
+        data-tray-holding={holding || undefined}
+        className={cx(
+          'relative h-full w-full rounded-2xl bg-panel overflow-hidden flex flex-col shadow-[0_18px_50px_rgb(0_0_0_/_0.55)] ring-1 transition-[box-shadow,--tw-ring-color]',
+          // THE CUE. While a run this panel started is in flight, blur no
+          // longer dismisses — and a surface that refuses to close without
+          // saying why reads as stuck, not as protective. A gold edge is the
+          // quietest thing that says "held on purpose"; the tab's own row
+          // carries the count and the cancel.
+          holding ? 'ring-gold/60' : 'ring-edge2'
+        )}
+      >
         {/* Same wash and the same gating as everywhere else: 'off' means off
             here too, and 'now-playing' keeps it, because this is nothing but
             a now-playing surface. */}
@@ -120,7 +196,7 @@ export function TrayPanel(): React.JSX.Element {
             The window is sized to fit this, honestly, rather than resizing
             itself to its content — that trick is a Tauri outside-click
             workaround, and in Electron blur does the dismissing. */}
-        <div className="relative flex-1 flex flex-col px-4 pt-4 pb-3 gap-3.5">
+        <div className="relative shrink-0 flex flex-col px-4 pt-4 pb-3 gap-3.5">
           <div className="flex items-start gap-3">
             <div className="relative h-16 w-16 shrink-0 rounded-lg overflow-hidden bg-raised flex items-center justify-center">
               <ArtImage
@@ -244,6 +320,35 @@ export function TrayPanel(): React.JSX.Element {
             )}
             <span className="font-mono text-[9.5px] text-faint tabular-nums shrink-0">{timeText}</span>
           </div>
+        </div>
+
+        {/* ---- the four tabs ----
+            Four is the practical ceiling: at this width a TEXT Segmented fits
+            four ("Playlists" alone eats ~55px), and a fifth would force
+            icon-only and throw away the app's partition idiom. */}
+        <div className="relative px-3 pb-2">
+          <Segmented<TrayTab>
+            value={tab}
+            onChange={pickTab}
+            className="w-full [&>button]:flex-1"
+            options={[
+              { value: 'queue', label: 'Queue' },
+              { value: 'presets', label: 'Presets' },
+              { value: 'playlists', label: 'Playlists' },
+              { value: 'recent', label: 'Recent' }
+            ]}
+          />
+        </div>
+        {/* `key` per tab so the scroller REMOUNTS: without it the container is
+            one DOM node and its scrollTop carries across, so switching away
+            from a queue scrolled to the playing row landed you halfway down
+            the presets. It also re-runs the queue's scroll-to-playing effect
+            on every return to that tab, which is what you'd want anyway. */}
+        <div key={tab} className="relative flex-1 min-h-0 overflow-y-auto" data-tray-body={tab}>
+          {tab === 'queue' && <QueueTab opens={opens} />}
+          {tab === 'presets' && <PresetsTab />}
+          {tab === 'playlists' && <PlaylistsTab onActivate={startActivation} />}
+          {tab === 'recent' && <RecentTab />}
         </div>
 
         {/* ---- footer: device state, and the way back to the app ----

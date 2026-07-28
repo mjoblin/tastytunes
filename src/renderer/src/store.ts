@@ -187,6 +187,14 @@ interface TTState {
   ambientWindowActive: boolean
   /** Mini window only: cursor is over the window (pushed from main). */
   miniHover: boolean
+  /**
+   * Tray panel only. It is HIDDEN rather than destroyed between uses, so the
+   * renderer never remounts — `trayOpens` counts openings so an effect can
+   * fire on each one (pick the right tab, scroll to the playing row), which a
+   * bare boolean couldn't do for two opens in a row on the same tab.
+   */
+  trayPanelVisible: boolean
+  trayOpens: number
   /** Live sleep timer, mirrored from the main process (arm via tt.setSleep). */
   sleep: SleepTimer | null
   /** Local recently-played log, newest first (mirrored from the main process). */
@@ -336,6 +344,8 @@ export const useStore = create<TTState>((set, get) => ({
   },
   ambientWindowActive: false,
   miniHover: false,
+  trayPanelVisible: false,
+  trayOpens: 0,
   sleep: null,
   recents: [],
   favorites: [],
@@ -560,6 +570,11 @@ export const useStore = create<TTState>((set, get) => ({
         }
         case 'miniHover':
           return { miniHover: msg.hovered }
+        case 'trayPanel':
+          return {
+            trayPanelVisible: msg.visible,
+            trayOpens: msg.visible ? s.trayOpens + 1 : s.trayOpens
+          }
         case 'sleep':
           return { sleep: msg.sleep }
         case 'recalledPreset':

@@ -13,7 +13,16 @@ import { DeviceManager } from './device/deviceManager'
 import { demoHost, startDemoStreamer, stopDemoStreamer } from './servers/demoStreamer'
 import { McpBridge } from './servers/mcpServer'
 import { installAppMenu } from './app/menu'
-import { hasTray, noteClosedToTray, refreshTrayMenu, syncTray, trayWantsRefresh } from './app/tray'
+import {
+  hasTray,
+  isPanelSender,
+  noteClosedToTray,
+  notePanelActivationEnd,
+  notePanelActivationStart,
+  refreshTrayMenu,
+  syncTray,
+  trayWantsRefresh
+} from './app/tray'
 import { homeWorkArea, isOnScreen } from './app/windowPlacement'
 import * as mediaIndex from './media/mediaIndex'
 import {
@@ -366,7 +375,23 @@ function registerIpc(): void {
   ipcMain.handle(IPC.playlistAppend, (_e, id: string, items: PlaylistItem[]) =>
     deviceManager.playlistAppend(id, items)
   )
-  ipcMain.handle(IPC.playlistActivate, (_e, id: string) => deviceManager.playlistActivate(id))
+  // The tray panel gets special handling around this one verb, and it's
+  // identified by its SENDER rather than by anything it tells us: a run started
+  // from the panel holds the panel open against an accidental blur, and if the
+  // panel was deliberately closed mid-run its report becomes an OS
+  // notification. See tray.ts for the ruling.
+  ipcMain.handle(IPC.playlistActivate, async (e, id: string) => {
+    const fromPanel = isPanelSender(e.sender)
+    if (fromPanel) notePanelActivationStart(id)
+    try {
+      const result = await deviceManager.playlistActivate(id)
+      if (fromPanel) notePanelActivationEnd(result)
+      return result
+    } catch (err) {
+      if (fromPanel) notePanelActivationEnd(null)
+      throw err
+    }
+  })
   ipcMain.handle(IPC.playlistActivateCancel, () => deviceManager.cancelPlaylistActivation())
   ipcMain.handle(IPC.lookupCacheStats, () => lookupCacheStats())
   ipcMain.handle(IPC.clearLookupCaches, () => clearLookupCaches())

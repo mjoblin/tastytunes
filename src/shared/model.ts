@@ -660,6 +660,15 @@ export interface AppSettings {
   /** Media indexes build/rebuild themselves (off = only from the Libraries buttons). */
   mediaIndexAuto: boolean
   settingsTab: string
+  /**
+   * Last-visited tray-panel tab. Remembered across opens on the same
+   * precedent as `settingsTab` — you reach for the same one repeatedly, and
+   * re-picking it every time is friction the panel can't afford at its size.
+   *
+   * Overridden by a heuristic, not a knob: opening on Queue with nothing
+   * playing is an empty box, so an idle streamer opens on Presets.
+   */
+  trayTab: string
   /** Last-selected diagnostics-drawer tab (smoip | requests). */
   diagnosticsTab: string
   /** Last-selected Device-screen tab (tabs appear only on tone-capable streamers). */
@@ -744,6 +753,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   },
   mediaIndexAuto: true,
   settingsTab: 'appearance',
+  trayTab: 'queue',
   diagnosticsTab: 'smoip',
   deviceTab: 'streamer',
   panelWidth: 400,

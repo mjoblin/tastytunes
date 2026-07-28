@@ -115,6 +115,13 @@ export type PushMessage =
   | { kind: 'waking'; waking: boolean }
   /** Cursor is over the mini window (CSS :hover can't fire over drag regions). */
   | { kind: 'miniHover'; hovered: boolean }
+  /**
+   * The tray panel opened or closed. It is HIDDEN rather than destroyed
+   * between uses, so the renderer never remounts and would otherwise have no
+   * idea it had been reopened — which is what the open-on-a-sensible-tab
+   * heuristic and the scroll-to-the-playing-row both key off.
+   */
+  | { kind: 'trayPanel'; visible: boolean }
   | { kind: 'sleep'; sleep: SleepTimer | null }
   | { kind: 'recalledPreset'; id: number | null }
   | { kind: 'mcpStatus'; status: McpStatus }

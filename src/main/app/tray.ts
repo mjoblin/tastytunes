@@ -11,7 +11,7 @@ import {
 import type { NativeImage } from 'electron'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { MenuCommand, PushMessage, Snapshot } from '@shared/ipc'
+import { IPC, type MenuCommand, type PushMessage, type Snapshot } from '@shared/ipc'
 import type { StreamerCommand } from '@shared/ipc'
 import { getSettings, updateSettings } from '../data/persist'
 import { anchorToTray, workAreaFor, type Rect } from './windowPlacement'
@@ -241,12 +241,16 @@ function trayIcon(): NativeImage {
  */
 let panel: BrowserWindow | null = null
 /**
- * Panel size in DIPs. Width is the design's 380; the height is exactly what
- * phase 2's header + footer occupy, NOT the design's 560 — that figure budgets
- * for phase 3's tab strip and body, and reserving the space early would just
- * be 300px of empty panel. Phase 3 grows this.
+ * Panel size in DIPs: header ~126 · tab strip ~48 · body ~342 · footer 36.
+ *
+ * The design's 560, arrived at from the other direction. Its header estimate
+ * (~180) came in at ~126, but its ROW estimate was optimistic in the opposite
+ * direction: the app's floating row is 40px of art plus padding, ~56px, not
+ * the ~33px that "7 rows vs 9" implies. Shrinking the row was never an option
+ * — that anatomy is law, and the panel is swept for it. So the number the
+ * design picked to stop Queue feeling cramped is the number that does it.
  */
-const PANEL_SIZE = { width: 380, height: 190 }
+const PANEL_SIZE = { width: 380, height: 560 }
 
 /**
  * Set while the panel is hiding, and for a beat afterwards.
@@ -292,6 +296,10 @@ export function panelVisible(): boolean {
   return panel != null && !panel.isDestroyed() && panel.isVisible()
 }
 
+function announcePanel(visible: boolean): void {
+  if (panel && !panel.isDestroyed()) panel.webContents.send(IPC.push, { kind: 'trayPanel', visible })
+}
+
 function hidePanel(): void {
   // Recorded even when there's nothing to hide: this is the point at which the
   // panel stops being wanted, and a pending retry must not outlive that.
@@ -300,6 +308,7 @@ function hidePanel(): void {
   if (!panel || panel.isDestroyed() || !panel.isVisible()) return
   hidingUntil = Date.now() + CLICK_SWALLOW_MS
   panel.hide()
+  announcePanel(false)
 }
 
 function destroyPanel(): void {
@@ -309,12 +318,67 @@ function destroyPanel(): void {
   panel = null
 }
 
-/** Dismiss-on-blur, and the two things that must not count as a dismissal. */
+/**
+ * A playlist activation the PANEL started, still running.
+ *
+ * Playlist activation is a slow, cancellable batch that can also report tracks
+ * it couldn't find, so dismissing the panel mid-run loses both the progress and
+ * the report. The ruling: **refuse ACCIDENTAL dismissal, honour DELIBERATE
+ * dismissal.** Blur is the accidental case — you clicked a playlist, music is
+ * starting, you clicked back into your work — and is held. A tray-icon click or
+ * Escape is a person deciding, and a 40-track run can hold the panel 15–30s;
+ * overriding a decision is worse than losing a progress bar.
+ *
+ * Scoped to runs started FROM THE PANEL, learned from the IPC sender rather
+ * than a message: a run someone kicked off in the main window has its own
+ * progress UI and must not make this panel refuse to close.
+ */
+let panelActivation: string | null = null
+
+/** Is this the tray panel's renderer? */
+export function isPanelSender(wc: Electron.WebContents): boolean {
+  return panel != null && !panel.isDestroyed() && wc === panel.webContents
+}
+
+export function notePanelActivationStart(playlistId: string): void {
+  panelActivation = playlistId
+}
+
+/**
+ * A panel-started run ended. If the panel was DELIBERATELY closed while it ran,
+ * the report it would have shown falls back to an OS notification — otherwise
+ * starting a playlist from the tray and walking away is a black box.
+ */
+export function notePanelActivationEnd(result: {
+  name: string
+  total: number
+  added: number
+  missed: string[]
+  cancelled: boolean
+} | null): void {
+  panelActivation = null
+  if (!result || panelVisible() || !Notification.isSupported()) return
+  const missed = result.missed.length
+  new Notification({
+    title: result.cancelled ? 'Stopped loading' : `Loaded “${result.name}”`,
+    body: result.cancelled
+      ? `${result.added} of ${result.total} tracks queued.`
+      : missed > 0
+        ? `${result.added} of ${result.total} tracks — ${missed} not found.`
+        : `${result.added} ${result.added === 1 ? 'track' : 'tracks'} queued.`,
+    silent: true
+  }).show()
+}
+
+/** Dismiss-on-blur, and the three things that must not count as a dismissal. */
 function onPanelBlur(): void {
   // DEVTOOLS STEAL FOCUS, so an unguarded blur-hide makes the panel impossible
   // to inspect — it vanishes the instant you open the inspector.
   if (panel && !panel.isDestroyed() && panel.webContents.isDevToolsOpened()) return
   if (Date.now() - shownAt < SETTLE_MS) return
+  // The accidental case, held. Note this guard is ONLY here — `hidePanel` still
+  // hides on Escape and on a tray click, which are deliberate.
+  if (panelActivation != null) return
   hidePanel()
 }
 
@@ -358,6 +422,15 @@ function ensurePanel(): BrowserWindow {
   panel.on('closed', () => {
     panel = null
   })
+  // A push sent while the renderer is still loading is LOST, and the very
+  // first open is exactly that case: the window is created and shown in the
+  // same breath, so the "you're open" announcement lands before anything is
+  // listening — and the tab heuristic silently never ran on a first open.
+  // Re-announce once loaded (the did-finish-load rule the main window and the
+  // mini player both follow).
+  panel.webContents.on('did-finish-load', () => {
+    if (panelVisible()) announcePanel(true)
+  })
 
   if (process.env['ELECTRON_RENDERER_URL']) {
     void panel.loadURL(`${process.env['ELECTRON_RENDERER_URL']}?tray=1`)
@@ -395,6 +468,9 @@ function showPanel(): void {
   shownAt = Date.now()
   win.show()
   win.focus()
+  // The panel is hidden, not destroyed, so the renderer never remounts — this
+  // is the only way it learns it has been reopened.
+  announcePanel(true)
   // 'ready-to-show' is unreliable for transparent windows (the mini player
   // carries the same workaround) — retry rather than never appearing. Guarded
   // on `wantVisible`, because by the time this fires the panel may have been
