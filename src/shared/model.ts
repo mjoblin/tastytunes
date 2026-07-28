@@ -669,6 +669,25 @@ export interface AppSettings {
    * playing is an empty box, so an idle streamer opens on Presets.
    */
   trayTab: string
+  /**
+   * Tray-panel list density: `detailed` carries album art and an artist line,
+   * `compressed` is one line per row with no art — roughly double the rows in
+   * the same space.
+   *
+   * WHY THIS IS SEPARATE FROM THE MAIN WINDOW'S LAYOUT SETTINGS, and the rule
+   * for anything added later: **preferences travel between surfaces, fit does
+   * not.** `followQueue` ("should the list chase the music?") is a preference —
+   * it means the same thing in both places, so the panel honours the app's
+   * setting rather than growing its own. Density is a question about how much
+   * fits in a 380px window, which has no bearing on a 1180px one; sharing it
+   * would force one answer onto two very different surfaces. The design
+   * already applied this rule once, ruling that the panel must not inherit
+   * `presetCardSize`/`presetGap`.
+   */
+  trayRowDensity: 'detailed' | 'compressed'
+  /** Tray-panel presets: art tiles or rows. Separate from `presetsLayout` for
+   *  the same reason as the density above — it's fit, not preference. */
+  trayPresetsLayout: ScreenLayout
   /** Last-selected diagnostics-drawer tab (smoip | requests). */
   diagnosticsTab: string
   /** Last-selected Device-screen tab (tabs appear only on tone-capable streamers). */
@@ -754,6 +773,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   mediaIndexAuto: true,
   settingsTab: 'appearance',
   trayTab: 'queue',
+  trayRowDensity: 'detailed',
+  trayPresetsLayout: 'cards',
   diagnosticsTab: 'smoip',
   deviceTab: 'streamer',
   panelWidth: 400,

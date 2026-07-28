@@ -32,7 +32,8 @@ export function MediaRow({
   actions,
   onClick,
   onContextMenu,
-  attrs
+  attrs,
+  dense
 }: {
   title: string
   subtitle?: React.ReactNode
@@ -59,6 +60,18 @@ export function MediaRow({
   onContextMenu?(e: React.MouseEvent): void
   /** data-* passthrough for flash targets and harnesses. */
   attrs?: Record<string, string | undefined>
+  /**
+   * Tighter padding, for surfaces where vertical space is the scarce thing —
+   * the tray panel, which is 380px wide and has ~340px of body.
+   *
+   * PADDING ONLY, and deliberately so: the row-anatomy law fixes the ART at
+   * 40px and the TITLE at 13.5px, and neither moves here. Those tokens are
+   * what make a row recognisably the same object across surfaces; the box it
+   * sits in is not one of them. Anything that wants a genuinely smaller row
+   * wants a different row (see the panel's compressed mode, which drops the
+   * art entirely rather than shrinking it).
+   */
+  dense?: boolean
 }): React.JSX.Element {
   return (
     <div
@@ -76,7 +89,8 @@ export function MediaRow({
         }
       }}
       className={cx(
-        'group w-full text-left flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors',
+        'group w-full text-left flex items-center rounded-xl transition-colors',
+        dense ? 'gap-2.5 px-2.5 py-1.5' : 'gap-3 px-3 py-2.5',
         onClick && !dimmed && 'cursor-pointer',
         playing
           ? 'row-playing bg-gold/10'

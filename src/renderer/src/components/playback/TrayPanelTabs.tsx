@@ -1,9 +1,12 @@
 import { useEffect, useRef } from 'react'
 import { Disc3, ListMusic, Radio, RadioTower, X } from 'lucide-react'
+import type { ScreenLayout } from '@shared/model'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { MediaRow } from '@/components/media/MediaRow'
 import { MediaArt } from '@/components/media/MediaArt'
+import { DurationCell } from '@/components/media/DurationCell'
+import { Eqbars } from '@/components/media/Eqbars'
 import { EmptyState } from '@/components/chrome/EmptyState'
 import { fromRecent } from '@/lib/mediaRef'
 import { playRefNow } from '@/lib/mediaActions'
@@ -11,6 +14,7 @@ import { scrollToVisible } from '@/lib/scroll'
 import { cx } from '@/lib/format'
 
 export type TrayTab = 'queue' | 'presets' | 'playlists' | 'recent'
+export type TrayDensity = 'detailed' | 'compressed'
 
 /**
  * The panel's four tab bodies.
@@ -25,8 +29,82 @@ export type TrayTab = 'queue' | 'presets' | 'playlists' | 'recent'
  * implementation of a row.
  */
 
-/** How many rows the body shows before scrolling — the panel is ~9 rows tall. */
-const RECENT_CAP = 9
+/** How many Recent entries the tab shows. The cap is the point — see RecentTab. */
+const RECENT_CAP = 12
+
+// ------------------------------------------------------------ the compressed row
+
+/**
+ * One line, no art: position (where there is one), title, duration.
+ *
+ * This is the app's FLAT skin, which the row doctrine already assigns to
+ * "dense ordered lists" — the same shape the Queue screen itself uses, minus
+ * the drag handles the panel deliberately doesn't have. It is NOT a shrunken
+ * `MediaRow`: shrinking one would break the 40px art token, and that token is
+ * what makes a row recognisably the same object everywhere. Dropping the art
+ * entirely is an honest different row, not a violated one.
+ *
+ * Worth ~30px against the detailed row's ~52 — the difference between six rows
+ * of queue and eleven.
+ */
+function CompressedRow({
+  position,
+  title,
+  subtitle,
+  duration,
+  playing,
+  dimmed,
+  onClick,
+  attrs
+}: {
+  position?: number | null
+  title: string
+  subtitle?: string | null
+  duration?: number | null
+  playing?: boolean
+  dimmed?: boolean
+  onClick?: () => void
+  attrs?: Record<string, string | undefined>
+}): React.JSX.Element {
+  return (
+    <div
+      {...attrs}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick && !dimmed ? 0 : undefined}
+      onClick={() => !dimmed && onClick?.()}
+      onKeyDown={(e) => {
+        if (dimmed || !onClick) return
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onClick()
+        }
+      }}
+      className={cx(
+        'group w-full text-left flex items-center gap-2 px-2.5 py-1 rounded-md transition-colors',
+        onClick && !dimmed && 'cursor-pointer',
+        playing ? 'bg-gold/10' : 'hover:bg-raised/60',
+        dimmed && 'opacity-45'
+      )}
+    >
+      {/* The position cell is the flat skin's playing marker — eqbars replace
+          the number, exactly as on the Queue screen, so the eye looks in one
+          place for "where am I" on both surfaces. */}
+      <span className="w-5 shrink-0 flex justify-center font-mono text-[10.5px] text-faint tabular-nums">
+        {playing ? <Eqbars playing /> : position != null ? position : ''}
+      </span>
+      <span
+        className={cx(
+          'flex-1 min-w-0 truncate text-[12.5px]',
+          playing ? 'text-gold' : 'text-ink'
+        )}
+      >
+        {title}
+        {subtitle && <span className="text-faint"> · {subtitle}</span>}
+      </span>
+      <DurationCell secs={duration ?? null} />
+    </div>
+  )
+}
 
 // ------------------------------------------------------------------- the queue
 
@@ -38,7 +116,13 @@ const RECENT_CAP = 9
  * need portaled popovers, and a drag interrupted by an accidental blur-dismiss
  * is a genuinely bad moment. Reordering is what the app is for.
  */
-export function QueueTab({ opens }: { opens: number }): React.JSX.Element {
+export function QueueTab({
+  opens,
+  density
+}: {
+  opens: number
+  density: TrayDensity
+}): React.JSX.Element {
   const queue = useStore((s) => s.queue)
   const playState = useStore((s) => s.playState)
   const followQueue = useStore((s) => s.settings.followQueue)
@@ -54,14 +138,14 @@ export function QueueTab({ opens }: { opens: number }): React.JSX.Element {
   //
   // On TRACK CHANGE, only if `followQueue` is on. That is the app's existing
   // answer to "don't yank the list while I'm reading it", and the panel honours
-  // it rather than growing a second one — the panel can't afford knobs, and it
-  // shouldn't need its own when the app already has the right one.
+  // it rather than growing a second one — a preference travels between
+  // surfaces even where a fit setting wouldn't.
   //
   // Container-scoped: scrollIntoView is banned app-wide, it scrolls every
   // scrollable ancestor including the window.
   useEffect(() => {
     scrollToVisible(playingRow.current)
-  }, [opens])
+  }, [opens, density])
   useEffect(() => {
     if (followQueue) scrollToVisible(playingRow.current)
   }, [playId, followQueue])
@@ -75,20 +159,34 @@ export function QueueTab({ opens }: { opens: number }): React.JSX.Element {
       {items.map((item) => {
         const md = item.metadata
         const playing = item.id != null && item.id === playId
+        const play = (): void => {
+          if (item.id != null) void tt.command({ type: 'playQueueId', queueId: item.id })
+        }
         return (
           <div key={item.id ?? item.position} ref={playing ? playingRow : undefined}>
-            <MediaRow
-              attrs={{ 'data-tray-row': 'queue' }}
-              title={md?.title ?? md?.name ?? '—'}
-              subtitle={[md?.artist, md?.album].filter(Boolean).join(' — ') || undefined}
-              kind="track"
-              artUrl={md?.art_url ?? null}
-              playing={playing}
-              duration={md?.duration ?? null}
-              onClick={() => {
-                if (item.id != null) void tt.command({ type: 'playQueueId', queueId: item.id })
-              }}
-            />
+            {density === 'compressed' ? (
+              <CompressedRow
+                attrs={{ 'data-tray-row': 'queue' }}
+                position={item.position}
+                title={md?.title ?? md?.name ?? '—'}
+                subtitle={md?.artist}
+                duration={md?.duration}
+                playing={playing}
+                onClick={play}
+              />
+            ) : (
+              <MediaRow
+                dense
+                attrs={{ 'data-tray-row': 'queue' }}
+                title={md?.title ?? md?.name ?? '—'}
+                subtitle={[md?.artist, md?.album].filter(Boolean).join(' — ') || undefined}
+                kind="track"
+                artUrl={md?.art_url ?? null}
+                playing={playing}
+                duration={md?.duration ?? null}
+                onClick={play}
+              />
+            )}
           </div>
         )
       })}
@@ -99,28 +197,69 @@ export function QueueTab({ opens }: { opens: number }): React.JSX.Element {
 // ----------------------------------------------------------------- the presets
 
 /**
- * The strongest case for a tab, and given a DIFFERENT SHAPE on purpose: two
- * columns of art tiles rather than rows. Presets are the one section where the
- * art IS the identifier, and the change of shape separates "start something"
- * from the row-heavy queue at a glance.
+ * The strongest case for a tab, and given a DIFFERENT SHAPE by default: art
+ * tiles rather than rows. Presets are the one section where the art IS the
+ * identifier, and the change of shape separates "start something" from the
+ * row-heavy queue at a glance.
  *
- * Fixed geometry — deliberately NOT `presetCardSize`/`presetGap`. Those are
- * tuned for the main grid at full window width and would make this either two
- * enormous tiles or a mosaic.
+ * THREE columns, where the design said two. At 380px wide a two-column tile is
+ * ~175px square, so the tab showed FOUR presets against a device that holds up
+ * to 99 — a poster wall, not a launcher. Three keeps the art unmistakably the
+ * identifier (~112px, close to the main grid's own default) and shows nine.
  *
- * THREE columns, where the design said two. Two is what the design named, but
- * at 380px wide a two-column tile is ~175px square, so the tab showed FOUR
- * presets against a device that holds up to 99 — a poster wall, not a
- * launcher. Three keeps the art unmistakably the identifier (~112px, close to
- * the main grid's own default) and shows nine. The decision the design was
- * actually making is TILES RATHER THAN ROWS, and that stands.
+ * Rows are offered as well, and unlike the track tabs that is NOT a
+ * contradiction: the app's standing rule is "tracks always rows, and the
+ * rows⇄cards toggle is scoped to CONTAINER lists" — presets are containers.
+ * Geometry stays fixed either way, never `presetCardSize`/`presetGap`, which
+ * are tuned for the main grid at full window width.
  */
-export function PresetsTab(): React.JSX.Element {
+export function PresetsTab({
+  layout,
+  density
+}: {
+  layout: ScreenLayout
+  density: TrayDensity
+}): React.JSX.Element {
   const presets = useStore((s) => s.presets)
   const items = (presets?.presets ?? []).filter((p) => p.id != null)
 
   if (items.length === 0) {
     return <TabEmpty icon={Radio} title="No presets" hint="Save stations and albums to the streamer's presets." />
+  }
+
+  const recall = (id: number) => (): void => {
+    void tt.command({ type: 'recallPreset', presetId: id })
+  }
+
+  if (layout === 'rows') {
+    return (
+      <>
+        {items.map((p) =>
+          density === 'compressed' ? (
+            <CompressedRow
+              key={p.id}
+              attrs={{ 'data-tray-row': 'preset' }}
+              position={p.id}
+              title={p.name ?? `Preset ${p.id}`}
+              playing={!!p.is_playing}
+              onClick={recall(p.id as number)}
+            />
+          ) : (
+            <MediaRow
+              dense
+              key={p.id}
+              attrs={{ 'data-tray-row': 'preset' }}
+              title={p.name ?? `Preset ${p.id}`}
+              subtitle={`Preset ${p.id}`}
+              kind={p.class?.includes('radio') ? 'station' : 'album'}
+              artUrl={p.art_url ?? p.art_urls?.[0] ?? null}
+              playing={!!p.is_playing}
+              onClick={recall(p.id as number)}
+            />
+          )
+        )}
+      </>
+    )
   }
 
   return (
@@ -129,7 +268,7 @@ export function PresetsTab(): React.JSX.Element {
         <button
           key={p.id}
           data-tray-preset={p.id}
-          onClick={() => void tt.command({ type: 'recallPreset', presetId: p.id as number })}
+          onClick={recall(p.id as number)}
           className={cx(
             'group relative rounded-lg overflow-hidden ring-1 text-left transition-all',
             p.is_playing ? 'ring-gold/70' : 'ring-edge hover:ring-edge2'
@@ -142,12 +281,7 @@ export function PresetsTab(): React.JSX.Element {
               className="h-full w-full"
             />
           </div>
-          <div
-            className={cx(
-              'px-1.5 py-1 text-[10.5px] truncate',
-              p.is_playing ? 'text-gold' : 'text-ink'
-            )}
-          >
+          <div className={cx('px-1.5 py-1 text-[10.5px] truncate', p.is_playing ? 'text-gold' : 'text-ink')}>
             {p.name ?? `Preset ${p.id}`}
           </div>
         </button>
@@ -164,8 +298,10 @@ export function PresetsTab(): React.JSX.Element {
  * dismissal rules it drives.
  */
 export function PlaylistsTab({
+  density,
   onActivate
 }: {
+  density: TrayDensity
   onActivate(playlist: { id: string; name: string }): void
 }): React.JSX.Element {
   const playlists = useStore((s) => s.playlists)
@@ -180,25 +316,36 @@ export function PlaylistsTab({
     <>
       {playlists.map((p) => {
         const mine = running && activation.playlistId === p.id
-        return (
-          <MediaRow
+        const count = `${p.items.length} ${p.items.length === 1 ? 'track' : 'tracks'}`
+        const progress = mine ? `Loading ${activation.done} of ${activation.total}…` : count
+        // Another playlist's run is in flight: starting a second would fight it
+        // for the queue, and the door is closed at the preload anyway. Dim
+        // rather than hide, so the list never reshapes.
+        const dimmed = !!running && !mine
+        const start = (): void => onActivate({ id: p.id, name: p.name })
+        return density === 'compressed' ? (
+          <CompressedRow
             key={p.id}
             attrs={{ 'data-tray-row': 'playlist' }}
             title={p.name}
-            subtitle={
-              mine
-                ? `Loading ${activation.done} of ${activation.total}…`
-                : `${p.items.length} ${p.items.length === 1 ? 'track' : 'tracks'}`
-            }
+            subtitle={progress}
+            playing={!!mine}
+            dimmed={dimmed}
+            onClick={running ? undefined : start}
+          />
+        ) : (
+          <MediaRow
+            dense
+            key={p.id}
+            attrs={{ 'data-tray-row': 'playlist' }}
+            title={p.name}
+            subtitle={progress}
             kind="album"
             artUrl={p.items.find((i) => i.artUrl)?.artUrl ?? null}
             // `tuning` is the row layer's own in-flight affordance (the spinner
             // before the title) — the same one a station shows while it tunes.
             tuning={!!mine}
-            // Another playlist's run is in flight: starting a second would
-            // fight it for the queue, and the door is closed at the preload
-            // anyway. Dim rather than hide, so the list never reshapes.
-            dimmed={!!running && !mine}
+            dimmed={dimmed}
             actions={
               mine ? (
                 <button
@@ -214,10 +361,21 @@ export function PlaylistsTab({
                 </button>
               ) : undefined
             }
-            onClick={running ? undefined : () => onActivate({ id: p.id, name: p.name })}
+            onClick={running ? undefined : start}
           />
         )
       })}
+      {/* Compressed rows have no room for a cancel button, so the run's own
+          row carries it beneath them rather than being uncancellable. */}
+      {density === 'compressed' && running && (
+        <button
+          onClick={() => void tt.playlistActivateCancel()}
+          aria-label="Stop loading"
+          className="w-full text-left px-2.5 py-1 text-[11.5px] text-dim hover:text-alert transition-colors"
+        >
+          Stop loading “{activation.name}”
+        </button>
+      )}
     </>
   )
 }
@@ -231,7 +389,7 @@ export function PlaylistsTab({
  * answers the sharper question ("what was that, this morning?"). Want the real
  * thing, open the app.
  */
-export function RecentTab(): React.JSX.Element {
+export function RecentTab({ density }: { density: TrayDensity }): React.JSX.Element {
   const recents = useStore((s) => s.recents)
   const items = recents.slice(0, RECENT_CAP)
 
@@ -244,21 +402,32 @@ export function RecentTab(): React.JSX.Element {
       {items.map((entry) => {
         const ref = fromRecent(entry)
         const title = entry.isRadio ? (entry.station ?? entry.title) : entry.title
-        return (
-          <MediaRow
+        const subtitle =
+          (entry.isRadio ? entry.title : [entry.artist, entry.album].filter(Boolean).join(' — ')) || undefined
+        // Radio and songless rows carry no identity to replay — no stream URL
+        // is stored for them — so they read as history, not as buttons.
+        const play = ref ? () => void playRefNow(ref) : undefined
+        const attrs = { 'data-tray-row': 'recent' }
+        return density === 'compressed' ? (
+          <CompressedRow
             key={`${entry.at}-${entry.title ?? ''}`}
-            attrs={{ 'data-tray-row': 'recent' }}
+            attrs={attrs}
             title={title ?? '—'}
-            subtitle={
-              (entry.isRadio ? entry.title : [entry.artist, entry.album].filter(Boolean).join(' — ')) ||
-              undefined
-            }
+            subtitle={entry.isRadio ? entry.title : entry.artist}
+            dimmed={!ref}
+            onClick={play}
+          />
+        ) : (
+          <MediaRow
+            dense
+            key={`${entry.at}-${entry.title ?? ''}`}
+            attrs={attrs}
+            title={title ?? '—'}
+            subtitle={subtitle}
             kind={entry.isRadio ? 'station' : 'track'}
             artUrl={entry.artUrl}
-            // Radio and songless rows carry no identity to replay — no stream
-            // URL is stored for them — so they read as history, not as buttons.
             dimmed={!ref}
-            onClick={ref ? () => void playRefNow(ref) : undefined}
+            onClick={play}
           />
         )
       })}
