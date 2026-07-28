@@ -41,17 +41,30 @@ const RECENT_CAP = 9
 export function QueueTab({ opens }: { opens: number }): React.JSX.Element {
   const queue = useStore((s) => s.queue)
   const playState = useStore((s) => s.playState)
+  const followQueue = useStore((s) => s.settings.followQueue)
   const playingRow = useRef<HTMLDivElement | null>(null)
 
   const items = queue?.items ?? []
   const playId = queue?.play_id ?? playState?.queue_id ?? null
 
-  // A queue panel that opens at row 1 of 60 is useless. Container-scoped —
-  // scrollIntoView is banned app-wide, it scrolls every ancestor including
-  // the window.
+  // TWO DIFFERENT SCROLLS, deliberately split.
+  //
+  // On OPEN, always: a queue panel that opens at row 1 of 60 is useless, and
+  // this isn't "following" anything — it's landing where you already are.
+  //
+  // On TRACK CHANGE, only if `followQueue` is on. That is the app's existing
+  // answer to "don't yank the list while I'm reading it", and the panel honours
+  // it rather than growing a second one — the panel can't afford knobs, and it
+  // shouldn't need its own when the app already has the right one.
+  //
+  // Container-scoped: scrollIntoView is banned app-wide, it scrolls every
+  // scrollable ancestor including the window.
   useEffect(() => {
     scrollToVisible(playingRow.current)
-  }, [opens, playId])
+  }, [opens])
+  useEffect(() => {
+    if (followQueue) scrollToVisible(playingRow.current)
+  }, [playId, followQueue])
 
   if (items.length === 0) {
     return <TabEmpty icon={ListMusic} title="Queue is empty" hint="Play an album or a playlist to fill it." />

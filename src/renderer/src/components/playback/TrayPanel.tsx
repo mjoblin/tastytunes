@@ -171,7 +171,7 @@ export function TrayPanel(): React.JSX.Element {
       : `${deviceName ?? 'Streamer'} · Standby`
 
   return (
-    <div className="h-screen w-screen p-1" onWheel={onWheel}>
+    <div className="h-screen w-screen p-1">
       <div
         data-tray-holding={holding || undefined}
         className={cx(
@@ -196,7 +196,14 @@ export function TrayPanel(): React.JSX.Element {
             The window is sized to fit this, honestly, rather than resizing
             itself to its content — that trick is a Tauri outside-click
             workaround, and in Electron blur does the dismissing. */}
-        <div className="relative shrink-0 flex flex-col px-4 pt-4 pb-3 gap-3.5">
+        {/* Wheel-to-volume is scoped to the HEADER, not the whole surface as
+            in the mini player. The mini has nothing that scrolls, so
+            wheel-anywhere is unambiguous there; here the tab body is a list,
+            and a wheel event bubbling out of it changed the volume while you
+            were only trying to read the queue. The header is the now-playing
+            area — the same thing the mini strip is, and where the mute
+            button's "scroll for volume" tooltip lives. */}
+        <div className="relative shrink-0 flex flex-col px-4 pt-4 pb-3 gap-3.5" onWheel={onWheel}>
           <div className="flex items-start gap-3">
             <div className="relative h-16 w-16 shrink-0 rounded-lg overflow-hidden bg-raised flex items-center justify-center">
               <ArtImage
