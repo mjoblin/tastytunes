@@ -65,8 +65,11 @@ export function MiniPlayer(): React.JSX.Element {
   useMotionPreference(settings.motion)
 
   const state = playState?.state
-  const playing = state === 'play'
-  const busy = state === 'buffering' || state === 'connecting'
+  // Gated on `active`, like the tray panel: play_state SURVIVES a disconnect
+  // and a drop into standby, so an ungated check shows a PAUSE button while
+  // the rest of the surface says nothing is playing.
+  const playing = active && state === 'play'
+  const busy = active && (state === 'buffering' || state === 'connecting')
   const canToggle = controls.has('play_pause') || controls.has('play') || controls.has('pause')
   const canNext = controls.has('track_next')
   const canPrev = controls.has('track_previous')
