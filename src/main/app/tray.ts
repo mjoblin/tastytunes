@@ -1,9 +1,20 @@
-import { Menu, Notification, Tray, app, nativeImage, type MenuItemConstructorOptions } from 'electron'
+import {
+  BrowserWindow,
+  Menu,
+  Notification,
+  Tray,
+  app,
+  nativeImage,
+  screen,
+  type MenuItemConstructorOptions
+} from 'electron'
 import type { NativeImage } from 'electron'
 import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import type { MenuCommand, PushMessage, Snapshot } from '@shared/ipc'
 import type { StreamerCommand } from '@shared/ipc'
 import { getSettings, updateSettings } from '../data/persist'
+import { anchorToTray, workAreaFor } from './windowPlacement'
 import trayTemplateIcon from '../../../resources/trayTemplate.png?asset'
 import trayTemplateIcon2x from '../../../resources/trayTemplate@2x.png?asset'
 import trayTileIcon from '../../../resources/tray.png?asset'
@@ -28,6 +39,21 @@ let tray: Tray | null = null
 let deps: TrayDeps | null = null
 /** What the menu currently says, so a push that changes nothing rebuilds nothing. */
 let rendered: string | null = null
+/** Held rather than attached where a left-click belongs to the panel instead. */
+let contextMenu: Menu | null = null
+
+/**
+ * Whether this platform can have a panel at all.
+ *
+ * `tray.getBounds()` and `right-click` are macOS + Windows only. Without
+ * bounds there is nothing to anchor a panel to, and without a right-click
+ * event there is nowhere to move the menu to — so Linux keeps the phase-1
+ * arrangement (menu attached to the icon, opens on activation) and never
+ * builds a panel. A half-placed panel floating in the middle of a Linux
+ * desktop is worse than no panel; a complete context menu is not a
+ * consolation prize.
+ */
+const HAS_PANEL = process.platform === 'darwin' || process.platform === 'win32'
 
 export interface TrayDeps {
   /** Streamer commands go straight to the DeviceManager (safe no-op offline). */
@@ -200,6 +226,155 @@ function trayIcon(): NativeImage {
   return icon
 }
 
+// -------------------------------------------------------------------- the panel
+
+/**
+ * The anchored now-playing panel. Transient by nature: it opens under the
+ * icon, it dismisses on blur, you never place it. That is the whole difference
+ * from the mini player, which is persistent and placed — position it once and
+ * leave it. Keeping them different in KIND is what makes both defensible, so
+ * a tray click must never just toggle the mini.
+ *
+ * LINUX HAS NO PANEL. `tray.getBounds()` is macOS + Windows only, so there is
+ * nothing to anchor against; Linux gets the context menu on click and that is
+ * its complete, honest story.
+ */
+let panel: BrowserWindow | null = null
+/**
+ * Panel size in DIPs. Width is the design's 380; the height is exactly what
+ * phase 2's header + footer occupy, NOT the design's 560 — that figure budgets
+ * for phase 3's tab strip and body, and reserving the space early would just
+ * be 300px of empty panel. Phase 3 grows this.
+ */
+const PANEL_SIZE = { width: 380, height: 190 }
+
+/**
+ * Set while the panel is hiding, and for a beat afterwards.
+ *
+ * THE BUG THIS EXISTS FOR: clicking the tray icon while the panel is open
+ * fires BOTH a blur (panel loses focus) and a tray click — and in the opposite
+ * ORDER on macOS vs Windows. Naively, blur hides it and the click then re-opens
+ * it, so clicking to dismiss appears to do nothing. The window swallows the
+ * click that immediately follows a hide.
+ */
+let hidingUntil = 0
+const CLICK_SWALLOW_MS = 250
+
+/**
+ * When the panel was last shown. A blur that lands within a breath of the show
+ * is not a dismissal — the app may not have been frontmost when the icon was
+ * clicked, in which case macOS declines the focus and delivers a blur
+ * immediately, and the panel would flash open and shut. Below deliberate-click
+ * latency, so a real click-away still dismisses.
+ */
+let shownAt = 0
+const SETTLE_MS = 200
+
+export function panelVisible(): boolean {
+  return panel != null && !panel.isDestroyed() && panel.isVisible()
+}
+
+function hidePanel(): void {
+  if (!panel || panel.isDestroyed() || !panel.isVisible()) return
+  hidingUntil = Date.now() + CLICK_SWALLOW_MS
+  panel.hide()
+}
+
+function destroyPanel(): void {
+  if (panel && !panel.isDestroyed()) panel.destroy()
+  panel = null
+}
+
+/** Dismiss-on-blur, and the two things that must not count as a dismissal. */
+function onPanelBlur(): void {
+  // DEVTOOLS STEAL FOCUS, so an unguarded blur-hide makes the panel impossible
+  // to inspect — it vanishes the instant you open the inspector.
+  if (panel && !panel.isDestroyed() && panel.webContents.isDevToolsOpened()) return
+  if (Date.now() - shownAt < SETTLE_MS) return
+  hidePanel()
+}
+
+/**
+ * Build the panel on first use and keep it around hidden.
+ *
+ * A third renderer costs 40–80MB, which is why it isn't created with the tray
+ * — someone who turns the icon on for its menu never pays for a panel they
+ * don't open. It is kept (not destroyed) after the first open because
+ * re-creating it on every click would show an empty frame while React mounts.
+ */
+function ensurePanel(): BrowserWindow {
+  if (panel && !panel.isDestroyed()) return panel
+  panel = new BrowserWindow({
+    ...PANEL_SIZE,
+    show: false,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    // No traffic lights, no shadow gap — the panel draws its own card.
+    backgroundColor: '#00000000',
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.mjs'),
+      sandbox: false
+    }
+  })
+  try {
+    panel.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+  } catch {
+    // not supported everywhere; cosmetic
+  }
+  panel.on('blur', () => onPanelBlur())
+  // Escape is a DELIBERATE dismissal and always honoured (phase 3's
+  // playlist-activation rule only ever holds the panel against ACCIDENTAL
+  // blur, never against a person deciding to close it).
+  panel.webContents.on('before-input-event', (_e, input) => {
+    if (input.type === 'keyDown' && input.key === 'Escape') hidePanel()
+  })
+  panel.on('closed', () => {
+    panel = null
+  })
+
+  if (process.env['ELECTRON_RENDERER_URL']) {
+    void panel.loadURL(`${process.env['ELECTRON_RENDERER_URL']}?tray=1`)
+  } else {
+    void panel.loadFile(join(__dirname, '../renderer/index.html'), { query: { tray: '1' } })
+  }
+  return panel
+}
+
+/** Position the panel under the icon and show it. */
+function showPanel(): void {
+  if (!tray) return
+  const win = ensurePanel()
+  const trayBounds = tray.getBounds()
+  const displays = screen.getAllDisplays().map((d) => d.workArea)
+  // getBounds() gives the icon's rectangle; the panel still has to be clamped
+  // into the work area of the display that icon is ON — a menu-bar extra sits
+  // at the right edge, so a centred panel hangs off the side almost always.
+  const area =
+    trayBounds.width > 0
+      ? workAreaFor(trayBounds, displays)
+      : screen.getPrimaryDisplay().workArea
+  win.setBounds(anchorToTray(trayBounds, area, PANEL_SIZE))
+  shownAt = Date.now()
+  win.show()
+  win.focus()
+  // 'ready-to-show' is unreliable for transparent windows (the mini player
+  // carries the same workaround) — show anyway rather than never appearing.
+  setTimeout(() => {
+    if (panel && !panel.isDestroyed() && !panel.isVisible()) panel.show()
+  }, 900)
+}
+
+/** What a click on the tray icon does. Exported for the test hook. */
+export function toggleTrayPanel(): void {
+  if (!tray) return
+  if (Date.now() < hidingUntil) return
+  if (panelVisible()) hidePanel()
+  else showPanel()
+}
+
 // ------------------------------------------------------------------- lifecycle
 
 /** True while a tray icon exists — the thing that decides whether closing the
@@ -215,7 +390,12 @@ export function refreshTrayMenu(): void {
   const signature = JSON.stringify(nodes)
   if (signature === rendered) return
   rendered = signature
-  tray.setContextMenu(Menu.buildFromTemplate(toTemplate(nodes, deps)))
+  const menu = Menu.buildFromTemplate(toTemplate(nodes, deps))
+  // On Linux the menu IS the feature, so it stays attached to the icon and
+  // opens on activation. Where there's a panel, left-click belongs to it and
+  // the menu moves to right-click, popped on demand.
+  if (HAS_PANEL) contextMenu = menu
+  else tray.setContextMenu(menu)
 }
 
 /**
@@ -229,18 +409,31 @@ export function syncTray(enabled: boolean, next: TrayDeps): void {
     return
   }
   if (!enabled) {
+    // The panel goes with it — a hidden 40–80MB renderer belonging to a
+    // feature that's been switched off is pure leak.
+    destroyPanel()
     tray?.destroy()
     tray = null
     rendered = null
+    contextMenu = null
     return
   }
   tray = new Tray(trayIcon())
   tray.setToolTip('TastyTunes')
-  // Phase 1 is menu-only, so the menu is set rather than popped up on click:
-  // `popUpContextMenu` doesn't exist on Linux, and a left-click opens a set
-  // menu on every platform. When the panel lands, left-click becomes its
-  // toggle and this menu moves to right-click on macOS/Windows.
   refreshTrayMenu()
+  if (HAS_PANEL) {
+    // Left-click toggles the panel, right-click pops the menu. `click` also
+    // fires on Linux (as "activation"), which is exactly why Linux takes the
+    // other branch: there it must open the MENU, and it does so via the menu
+    // attached in refreshTrayMenu rather than through this handler.
+    tray.on('click', () => toggleTrayPanel())
+    tray.on('right-click', () => {
+      // Popped fresh from the held menu — `popUpContextMenu` is macOS/Windows
+      // only, which is fine, because so is this branch.
+      hidePanel()
+      if (tray && contextMenu) tray.popUpContextMenu(contextMenu)
+    })
+  }
   installTestHooks()
 }
 
@@ -279,6 +472,16 @@ declare global {
         menu(): TrayNode[] | null
         click(id: string): boolean
         icon(): { empty: boolean; width: number; height: number; px1: number; px2: number; template: boolean }
+        /** What a click on the icon does — the input no harness can send. */
+        toggle(): void
+        panel(): {
+          exists: boolean
+          visible: boolean
+          bounds: Electron.Rectangle | null
+          trayBounds: Electron.Rectangle | null
+        }
+        /** Drive a blur without a real focus change, to test dismiss-on-blur. */
+        blur(): boolean
       }
     | undefined
 }
@@ -324,6 +527,24 @@ function installTestHooks(): void {
         px2: img.toBitmap({ scaleFactor: 2 }).length,
         template: img.isTemplateImage()
       }
+    },
+    toggle: () => toggleTrayPanel(),
+    panel: () => ({
+      exists: panel != null && !panel.isDestroyed(),
+      visible: panelVisible(),
+      bounds: panel && !panel.isDestroyed() ? panel.getBounds() : null,
+      // The icon rect the anchor was computed from — the harness can't see the
+      // menu bar, so this is the only way to tell a bad anchor from a bad
+      // reading of where the icon is.
+      trayBounds: tray ? tray.getBounds() : null
+    }),
+    // A harness can't take focus away from a window it doesn't own, so the
+    // blur PATH is exercised directly — through the SAME handler a real focus
+    // loss runs, guards included, not a shortcut to hide().
+    blur(): boolean {
+      if (!panelVisible()) return false
+      onPanelBlur()
+      return !panelVisible()
     }
   }
 }

@@ -170,6 +170,12 @@ img {
 :root.mini body {
   background: transparent;
 }
+/* tray panel: same reason, plus it is NEVER dragged — it's anchored to the
+   icon, so the whole surface stays clickable rather than carrying a drag
+   region the way the mini strip does. */
+:root.tray body {
+  background: transparent;
+}
 .no-drag {
   -webkit-app-region: no-drag;
 }

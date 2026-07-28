@@ -14,6 +14,7 @@ import { demoHost, startDemoStreamer, stopDemoStreamer } from './servers/demoStr
 import { McpBridge } from './servers/mcpServer'
 import { installAppMenu } from './app/menu'
 import { hasTray, noteClosedToTray, refreshTrayMenu, syncTray, trayWantsRefresh } from './app/tray'
+import { homeWorkArea, isOnScreen } from './app/windowPlacement'
 import * as mediaIndex from './media/mediaIndex'
 import {
   checkUpdatesNow,
@@ -58,6 +59,13 @@ const mcpBridge = new McpBridge(deviceManager)
 let mainWindow: BrowserWindow | null = null
 let miniWindow: BrowserWindow | null = null
 /**
+ * Set once a quit is genuinely under way, so windows closing as PART of the
+ * quit aren't mistaken for someone retreating to the tray. Module scope
+ * because both the main window's `closed` handler and `window-all-closed`
+ * need it.
+ */
+let isQuitting = false
+/**
  * Every window hears a settings write — the mini player tracks the main window
  * live (display font, theme, ambient art), and an MCP-driven change (schedules)
  * reaches both. The sender re-applies the same object idempotently; the store's
@@ -82,16 +90,8 @@ function createWindow(): void {
   // monitor must not reopen off the edges of a laptop screen.
   const { mainBounds } = getSettings()
   const home =
-    mainBounds == null
-      ? null
-      : (screen.getAllDisplays().find(
-          ({ workArea }) =>
-            mainBounds.x >= workArea.x - 40 &&
-            mainBounds.x <= workArea.x + workArea.width - 100 &&
-            mainBounds.y >= workArea.y - 10 &&
-            mainBounds.y <= workArea.y + workArea.height - 60
-        ) ?? null)
-  const { workArea } = home ?? screen.getPrimaryDisplay()
+    mainBounds == null ? null : homeWorkArea(mainBounds, screen.getAllDisplays().map((d) => d.workArea))
+  const workArea = home ?? screen.getPrimaryDisplay().workArea
   const fit = (saved: number | undefined, fallback: number, min: number, max: number): number =>
     Math.max(min, Math.min(saved ?? fallback, max))
   mainWindow = new BrowserWindow({
@@ -120,6 +120,15 @@ function createWindow(): void {
   // destroyed BrowserWindow and throw.
   mainWindow.on('closed', () => {
     mainWindow = null
+    // The close-to-tray notice lives HERE, not on 'window-all-closed', because
+    // the tray panel is itself a BrowserWindow: once it has been opened even
+    // once, a hidden panel means 'window-all-closed' never fires again and the
+    // notice would silently stop existing. What it actually announces is "you
+    // closed the window and the app is still running", so the honest test is
+    // that nothing VISIBLE is left.
+    if (isQuitting) return
+    const visible = BrowserWindow.getAllWindows().some((w) => !w.isDestroyed() && w.isVisible())
+    if (!visible) noteClosedToTray()
   })
 
   // Remember size/position across restarts (debounced during drags; skip
@@ -170,15 +179,7 @@ function toggleMiniPlayer(): void {
   // Only reuse the remembered position if it's still on a connected display.
   const { miniBounds } = getSettings()
   const onScreen =
-    miniBounds != null &&
-    screen.getAllDisplays().some(({ workArea }) => {
-      return (
-        miniBounds.x >= workArea.x - 40 &&
-        miniBounds.x <= workArea.x + workArea.width - 100 &&
-        miniBounds.y >= workArea.y - 10 &&
-        miniBounds.y <= workArea.y + workArea.height - 60
-      )
-    })
+    miniBounds != null && isOnScreen(miniBounds, screen.getAllDisplays().map((d) => d.workArea))
   miniWindow = new BrowserWindow({
     width: 360,
     height: 132,
@@ -492,14 +493,12 @@ if (!gotLock) {
       catchUpOnResume(deviceManager)
     })
 
-    app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) createWindow()
-    })
+    // Dock-icon click. Asking for the MAIN window rather than "are there zero
+    // windows" matters now that a hidden tray panel can be the only window
+    // there is — counting windows would make the dock icon do nothing.
+    app.on('activate', () => showMainWindow())
   })
 
-  // Set once the quit is genuinely under way, so the last window closing as
-  // PART of a quit isn't mistaken for someone retreating to the tray.
-  let isQuitting = false
   app.on('before-quit', () => {
     isQuitting = true
   })
@@ -509,11 +508,9 @@ if (!gotLock) {
     // A tray icon is a promise that the app is still reachable, so closing the
     // last window stops being a quit while one exists. Without a tray the old
     // rule stands exactly as it was — an app that can't be quit by closing it
-    // and shows nothing anywhere is the thing to never ship.
-    if (hasTray()) {
-      noteClosedToTray()
-      return
-    }
+    // and shows nothing anywhere is the thing to never ship. (The notice that
+    // goes with this lives on the main window's 'closed'; see the note there.)
+    if (hasTray()) return
     if (process.platform !== 'darwin') app.quit()
   })
 

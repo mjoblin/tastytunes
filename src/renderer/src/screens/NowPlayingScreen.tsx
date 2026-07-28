@@ -1,11 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { Captions, Disc3, Heart, ListOrdered, Maximize2, MicVocal, RadioTower, UserRound } from 'lucide-react'
-import { favoriteKey, type Favorite, type FavoriteMedia } from '@shared/model'
-import { tt } from '@/api'
 import { useStore } from '@/store'
-import { toggleFavorite } from '@/lib/favorites'
 import { cx, deriveNowPlaying } from '@/lib/format'
 import { useSettledSnapshot } from '@/hooks/useSettledSnapshot'
+import { useNowPlayingHeart } from '@/hooks/useNowPlayingHeart'
 import { useDecodedArt } from '@/hooks/useDecodedArt'
 import { AddToPlaylistPanel } from '@/components/overlays/AddToPlaylistPanel'
 import { SignalLamp } from '@/components/device/SignalLamp'
@@ -62,55 +60,10 @@ export function NowPlayingScreen(): React.JSX.Element {
   const { artistInfo: artistEnabled } = useStore((s) => s.settings)
   const artistAvailable = artistEnabled && !meta.isRadio && !!meta.subtitle
 
-  // The heart: content-only favoriting of whatever is playing. Tracks need
-  // title+artist (the lyrics gating); radio needs a URL to replay, which
-  // play_state never carries — so a stream is heartable only when TT started
-  // it this session (lastStation) or it's already a favorite (unheart).
-  const favorites = useStore((s) => s.favorites)
-  const lastStation = useStore((s) => s.lastStation)
+  // The heart: content-only favoriting of whatever is playing. Shared with the
+  // tray panel — the track/station/last-station asymmetry lives in the hook.
   const md = playState?.metadata
-  const stationName = meta.isRadio ? ((md?.station ?? md?.name)?.trim() ?? null) : null
-  const stationFav = stationName
-    ? (favorites.find(
-        (f) => f.kind === 'station' && f.name.trim().toLowerCase() === stationName.toLowerCase()
-      ) ?? null)
-    : null
-  const lastMatches =
-    stationName != null &&
-    lastStation != null &&
-    lastStation.name.trim().toLowerCase() === stationName.toLowerCase()
-  const trackFav: Omit<FavoriteMedia, 'addedAt'> | null =
-    !meta.isRadio && meta.title && meta.subtitle
-      ? {
-          kind: 'track',
-          title: meta.title,
-          artist: meta.subtitle,
-          album: meta.album ?? null,
-          artUrl: meta.artUrl ?? null,
-          serverUdn: null,
-          serverName: null,
-          objectId: null,
-          titlePath: null,
-          durationSecs: md?.duration ?? null
-        }
-      : null
-  const heartActive = trackFav
-    ? favorites.some((f) => favoriteKey(f) === favoriteKey(trackFav as Favorite))
-    : stationFav != null
-  const heartAvailable = trackFav != null || stationFav != null || lastMatches
-  const toggleHeart = (): void => {
-    if (trackFav) void toggleFavorite(trackFav)
-    else if (stationFav) void tt.favoriteRemove(favoriteKey(stationFav))
-    else if (lastStation && lastMatches)
-      void tt.favoriteAdd({
-        kind: 'station',
-        addedAt: Date.now(),
-        name: lastStation.name,
-        url: lastStation.url,
-        favicon: lastStation.favicon,
-        radioBrowserUuid: lastStation.radioBrowserUuid
-      })
-  }
+  const { active: heartActive, available: heartAvailable, toggle: toggleHeart } = useNowPlayingHeart()
 
   const toggleLyricLine = async (): Promise<void> => {
     await saveSettings({ lyricsLine: !lyricsLine })
