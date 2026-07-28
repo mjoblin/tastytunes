@@ -223,6 +223,12 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
           'UPnP media servers the streamer can play from. Per server: `searchable` = answers LIVE UPnP searches, `index_ready` = TastyTunes holds a local index (search_library and list_albums work with either/the latter). Ready indexes include library counts — sum `index.albums` across servers for questions like "how many albums do I have".'
       },
       {
+        name: 'rebuild_library_index',
+        title: 'Rebuild library index',
+        description:
+          "Build or rebuild TastyTunes' local index for one media server, then report the result. Needed for Browse-only servers (a streamer's USB drive is the usual case) — those never index themselves, so until this runs they answer no searches at all and list_media_servers shows index_ready false. Searchable servers refresh on their own; use this only to force one. Reads the server, writes nothing to it."
+      },
+      {
         name: 'search_library',
         title: 'Search library',
         description:
@@ -468,6 +474,12 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         title: 'Save queue as preset',
         description:
           'Snapshot the whole queue into a preset slot (1–99) with a name. If the slot is occupied the call fails unless overwrite is true — always check list_presets first.'
+      },
+      {
+        name: 'repair_preset',
+        title: 'Repair preset',
+        description:
+          "Re-point a preset at content its media server no longer resolves. A preset whose stored object id has gone stale (the server re-mints ids on a rescan) is ACCEPTED by the streamer and then silently ignored — it simply will not play, with no error anywhere. The artwork survives that churn, so this matches the preset's art against the library index and writes the album's CURRENT id back into the same slot. Fails rather than guessing when the artwork matches no album, or more than one. Media presets only: radio presets have no index to match against."
       },
       {
         name: 'save_playing_to_preset',

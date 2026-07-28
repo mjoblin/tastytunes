@@ -1,27 +1,29 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  AlarmClock,
   ArrowUpCircle,
   AudioLines,
-  Bot,
-  Library,
-  RefreshCw,
-  Monitor,
   Bluetooth,
+  Bot,
   Cable,
   CornerDownLeft,
   Disc3,
-  Heart,
   EyeOff,
   HardDrive,
+  Heart,
   Info,
   Keyboard,
+  Library,
+  ListOrdered,
   Maximize2,
   MicVocal,
+  Monitor,
   Moon,
   PictureInPicture2,
   Play,
   Power,
   Radio,
+  RefreshCw,
   Repeat,
   Search,
   Shuffle,
@@ -37,6 +39,7 @@ import {
 } from 'lucide-react'
 import { sleepTrackKey, type SleepAction } from '@shared/model'
 import { favoriteKey, type Favorite } from '@shared/model'
+import { activatePlaylist } from '@/lib/playlists'
 import { audioCaps, brightnessOptions } from '@shared/smoip'
 import { toggleFavorite } from '@/lib/favorites'
 import { tt } from '@/api'
@@ -154,6 +157,7 @@ export function CommandPalette(): React.JSX.Element {
   const displayMode = useStore((s) => s.displayMode)
   const audioSpec = useStore((s) => s.audioSpec)
   const favorites = useStore((s) => s.favorites)
+  const playlists = useStore((s) => s.playlists)
   const settings = useStore((s) => s.settings)
   const displaySpec = useStore((s) => s.displaySpec)
   const mediaIndex = useStore((s) => s.mediaIndex)
@@ -307,6 +311,27 @@ export function CommandPalette(): React.JSX.Element {
           icon: Radio,
           keywords: 'recall station',
           run: () => void tt.command({ type: 'recallPreset', presetId: p.id as number })
+        })
+      }
+    }
+
+    // -------- Playlists (by name)
+    // The palette listed every PRESET by name but no playlists, which read as
+    // an oversight rather than a decision once playlists became the larger
+    // feature. activatePlaylist carries its own toast (including the
+    // "n not found" case and an Open Queue action), which is exactly right
+    // here: the palette leaves you nowhere near the effect.
+    if (connected && !inStandby) {
+      for (const pl of playlists) {
+        if (!pl.name) continue
+        cmds.push({
+          id: `playlist:${pl.id}`,
+          label: pl.name,
+          group: 'Playlists',
+          hint: `${pl.items.length} ${pl.items.length === 1 ? 'track' : 'tracks'}`,
+          icon: ListOrdered,
+          keywords: 'playlist activate load queue',
+          run: () => void activatePlaylist(pl)
         })
       }
     }
@@ -614,6 +639,14 @@ export function CommandPalette(): React.JSX.Element {
       icon: Library,
       keywords: 'settings media index servers',
       run: () => jumpToSettingsTab('libraries')
+    })
+    cmds.push({
+      id: 'settings:schedules',
+      label: 'Open Schedules',
+      group: 'View',
+      icon: AlarmClock,
+      keywords: 'settings alarm wake timer automation schedule',
+      run: () => jumpToSettingsTab('schedules')
     })
     cmds.push({
       id: 'settings:agents',

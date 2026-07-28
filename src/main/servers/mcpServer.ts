@@ -26,12 +26,13 @@ import { fetchArtistInfo } from '../lookups/artistInfo'
 import { fetchAlbumInfo } from '../lookups/albumInfo'
 import { fetchLyrics } from '../lookups/lyrics'
 import { radioSearch, radioByTags } from '../lookups/radioBrowser'
-import { queueAdd, refreshServers } from '../media/upnpBrowser'
+import { presetSave, queueAdd, refreshServers } from '../media/upnpBrowser'
 import {
   searchServer as librarySearch,
   status as indexStatus,
   pools as indexPools,
-  ensureFresh as indexEnsureFresh
+  ensureFresh as indexEnsureFresh,
+  rebuild as indexRebuild
 } from '../media/mediaIndex'
 
 interface ToolResult {
@@ -604,6 +605,51 @@ export class McpBridge {
       },
 
       // ---- library
+      rebuild_library_index: {
+        inputSchema: {
+          server_udn: z
+            .string()
+            .describe('Which server to index (see list_media_servers for udn + index state).')
+        },
+        handler: async (a) => {
+          const s = this.connected()
+          const servers = await refreshServers(s.connection.host)
+          const server = servers.find((x) => x.udn === (a.server_udn as string))
+          if (!server) return err(`No media server with udn ${a.server_udn as string}.`)
+          // Browse-only servers (a streamer's USB drive) never index
+          // themselves — this is the ONLY way to make them searchable, which
+          // is why an agent needs it: list_media_servers can already SEE that
+          // an index is missing, and could do nothing about it.
+          await indexRebuild(s.connection.host, server)
+          // build() is a NO-OP while a build is already in flight — listing
+          // servers nudges Tier A builds, so awaiting rebuild can return
+          // mid-crawl. Wait for it to settle, and if it is still going, SAY so
+          // instead of reporting zeros as though they were the answer.
+          const statusOf = (): { state: string; albums: number; artists: number; tracks: number } | undefined => {
+            const x = indexStatus().find((y) => y.udn === (a.server_udn as string))
+            return x ? { state: x.state, albums: x.albums ?? 0, artists: x.artists ?? 0, tracks: x.tracks ?? 0 } : undefined
+          }
+          const deadline = Date.now() + 45_000
+          let st = statusOf()
+          while (st?.state === 'building' && Date.now() < deadline) {
+            await new Promise((r) => setTimeout(r, 400))
+            st = statusOf()
+          }
+          if (st?.state === 'building')
+            return ok({
+              server: server.name,
+              state: 'building',
+              note: 'Still indexing — call list_media_servers in a little while for the counts.'
+            })
+          return ok({
+            server: server.name,
+            state: st?.state ?? 'unknown',
+            albums: st?.albums ?? 0,
+            artists: st?.artists ?? 0,
+            tracks: st?.tracks ?? 0
+          })
+        }
+      },
       list_media_servers: {
         handler: async () => {
           const s = this.connected()
@@ -1374,6 +1420,41 @@ export class McpBridge {
           guardSlot(s, a.slot as number, a.overwrite === true)
           await dm.command({ type: 'queueSavePreset', slot: a.slot as number, name: a.name as string })
           return ok(`Saved the queue to preset ${a.slot} as "${a.name}".`)
+        }
+      },
+      repair_preset: {
+        inputSchema: {
+          slot: z.number().int().min(1).max(99).describe('The preset slot that will not play.')
+        },
+        handler: async (a) => {
+          const s = this.connected()
+          const slot = a.slot as number
+          const preset = (s.presets?.presets ?? []).find((p) => p.id === slot)
+          if (!preset) return err(`Preset slot ${slot} is empty.`)
+          if (!preset.art_url)
+            return err(`Preset ${slot} has no artwork to match on, so it cannot be repaired here.`)
+          // The art id survives the object-id churn that breaks presets, which
+          // is what makes this a lookup rather than a guess.
+          const hits = indexPools().flatMap((pool) =>
+            pool.albums.filter((alb) => alb.artUrl != null && alb.artUrl === preset.art_url)
+          )
+          if (hits.length === 0)
+            return err(
+              `Nothing in the library index matches preset ${slot}'s artwork. Build the index for the server that holds it (rebuild_library_index) and try again.`
+            )
+          if (hits.length > 1)
+            return err(
+              `Preset ${slot}'s artwork matches ${hits.length} albums, so the right one is ambiguous — repair it from the app instead.`
+            )
+          const match = hits[0]
+          if (!match.serverUdn) return err('The matched album has no server — index may be mid-build.')
+          await presetSave(s.connection.host, match.serverUdn, match.id, slot)
+          return ok({
+            slot,
+            repaired_to: match.title,
+            artist: match.artist ?? null,
+            server: match.serverName ?? null
+          })
         }
       },
       save_playing_to_preset: {
