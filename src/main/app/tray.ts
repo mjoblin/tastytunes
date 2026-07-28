@@ -14,7 +14,7 @@ import { join } from 'node:path'
 import type { MenuCommand, PushMessage, Snapshot } from '@shared/ipc'
 import type { StreamerCommand } from '@shared/ipc'
 import { getSettings, updateSettings } from '../data/persist'
-import { anchorToTray, workAreaFor } from './windowPlacement'
+import { anchorToTray, workAreaFor, type Rect } from './windowPlacement'
 import trayTemplateIcon from '../../../resources/trayTemplate.png?asset'
 import trayTemplateIcon2x from '../../../resources/trayTemplate@2x.png?asset'
 import trayTileIcon from '../../../resources/tray.png?asset'
@@ -270,17 +270,41 @@ const CLICK_SWALLOW_MS = 250
 let shownAt = 0
 const SETTLE_MS = 200
 
+/**
+ * Whether the panel is currently WANTED on screen, as opposed to merely having
+ * been asked for at some point.
+ *
+ * Every deferred show has to consult this. The retry below fires 900ms after a
+ * show, by which time a blur may well have dismissed the panel — and a retry
+ * that only checks `!isVisible()` reads that dismissal as "the show didn't
+ * take" and puts the panel straight back up. Reported from real use: open the
+ * panel, click away to dismiss it, and it returns a moment later on its own.
+ */
+let wantVisible = false
+let showRetry: ReturnType<typeof setTimeout> | null = null
+
+function clearShowRetry(): void {
+  if (showRetry) clearTimeout(showRetry)
+  showRetry = null
+}
+
 export function panelVisible(): boolean {
   return panel != null && !panel.isDestroyed() && panel.isVisible()
 }
 
 function hidePanel(): void {
+  // Recorded even when there's nothing to hide: this is the point at which the
+  // panel stops being wanted, and a pending retry must not outlive that.
+  wantVisible = false
+  clearShowRetry()
   if (!panel || panel.isDestroyed() || !panel.isVisible()) return
   hidingUntil = Date.now() + CLICK_SWALLOW_MS
   panel.hide()
 }
 
 function destroyPanel(): void {
+  wantVisible = false
+  clearShowRetry()
   if (panel && !panel.isDestroyed()) panel.destroy()
   panel = null
 }
@@ -343,6 +367,14 @@ function ensurePanel(): BrowserWindow {
   return panel
 }
 
+/**
+ * What the last show computed its position from. Exists for the harness: menu
+ * bar icons shift as their neighbours come and go, so reading `getBounds()`
+ * again after the fact races the layout and can't tell a mis-anchored panel
+ * from an icon that simply moved.
+ */
+let lastAnchor: { trayBounds: Rect; workArea: Rect; bounds: Rect } | null = null
+
 /** Position the panel under the icon and show it. */
 function showPanel(): void {
   if (!tray) return
@@ -356,14 +388,27 @@ function showPanel(): void {
     trayBounds.width > 0
       ? workAreaFor(trayBounds, displays)
       : screen.getPrimaryDisplay().workArea
-  win.setBounds(anchorToTray(trayBounds, area, PANEL_SIZE))
+  const bounds = anchorToTray(trayBounds, area, PANEL_SIZE)
+  lastAnchor = { trayBounds, workArea: area, bounds }
+  win.setBounds(bounds)
+  wantVisible = true
   shownAt = Date.now()
   win.show()
   win.focus()
   // 'ready-to-show' is unreliable for transparent windows (the mini player
-  // carries the same workaround) — show anyway rather than never appearing.
-  setTimeout(() => {
-    if (panel && !panel.isDestroyed() && !panel.isVisible()) panel.show()
+  // carries the same workaround) — retry rather than never appearing. Guarded
+  // on `wantVisible`, because by the time this fires the panel may have been
+  // deliberately dismissed, and "not visible" would otherwise be mistaken for
+  // "the show didn't take".
+  clearShowRetry()
+  showRetry = setTimeout(() => {
+    showRetry = null
+    if (!wantVisible || !panel || panel.isDestroyed() || panel.isVisible()) return
+    // A late show restarts the settle window — it IS a show, and the blur it
+    // may provoke is no more a dismissal than the first one was.
+    shownAt = Date.now()
+    panel.show()
+    panel.focus()
   }, 900)
 }
 
@@ -479,6 +524,7 @@ declare global {
           visible: boolean
           bounds: Electron.Rectangle | null
           trayBounds: Electron.Rectangle | null
+          lastAnchor: { trayBounds: Rect; workArea: Rect; bounds: Rect } | null
         }
         /** Drive a blur without a real focus change, to test dismiss-on-blur. */
         blur(): boolean
@@ -535,8 +581,10 @@ function installTestHooks(): void {
       bounds: panel && !panel.isDestroyed() ? panel.getBounds() : null,
       // The icon rect the anchor was computed from — the harness can't see the
       // menu bar, so this is the only way to tell a bad anchor from a bad
-      // reading of where the icon is.
-      trayBounds: tray ? tray.getBounds() : null
+      // reading of where the icon is. `lastAnchor` is the reading taken AT SHOW
+      // TIME; `trayBounds` is live and may already have moved.
+      trayBounds: tray ? tray.getBounds() : null,
+      lastAnchor
     }),
     // A harness can't take focus away from a window it doesn't own, so the
     // blur PATH is exercised directly — through the SAME handler a real focus
