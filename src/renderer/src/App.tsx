@@ -51,7 +51,36 @@ export default function App(): React.JSX.Element {
   const settings = useStore((s) => s.settings)
 
   const connected = connection.phase === 'connected'
-  const inStandby = connected && systemPower != null && systemPower.power !== 'ON'
+  // Power flips to ON the moment the wake verb lands, but the recall that
+  // asked for the wake is still ~2.5s away (ensureAwake's settle). In that gap
+  // the streamer re-announces its RETAINED pre-standby play_state, so dropping
+  // the sleeping face at power-ON showed the PREVIOUS track's art and title as
+  // though it were playing, then crossfaded to what you actually asked for
+  // (user, 2026-07-27: clicked a radio preset while asleep, saw the old
+  // album's art first). The gate already says "Waking…" — hold it until the
+  // wake finishes rather than presenting stale state as live.
+  const waking = useStore((s) => s.waking)
+  // ...and `waking` itself ENDS TOO EARLY: ensureAwake resolves after its 2.5s
+  // settle, then the recall is sent, and only then does the new content
+  // arrive. So hold the face past the wake until the play_state identity
+  // actually CHANGES from the retained one — the same claim the preset lamp
+  // needed for the same reason. Bounded, so a recall that never lands (a dead
+  // preset, say) can't strand the screen on a sleeping face.
+  const stateSig = `${playState?.state ?? ''}|${playState?.queue_id ?? ''}|${playState?.metadata?.title ?? ''}`
+  const [heldSig, setHeldSig] = useState<string | null>(null)
+  const wasWaking = useRef(false)
+  useEffect(() => {
+    if (wasWaking.current && !waking) setHeldSig(stateSig)
+    wasWaking.current = waking
+  }, [waking, stateSig])
+  useEffect(() => {
+    if (heldSig == null) return
+    if (stateSig !== heldSig) return setHeldSig(null)
+    const t = setTimeout(() => setHeldSig(null), 8000)
+    return () => clearTimeout(t)
+  }, [heldSig, stateSig])
+  const inStandby =
+    connected && ((systemPower != null && systemPower.power !== 'ON') || waking || heldSig != null)
 
   // Per-album accent tint (Plexamp-style), from the current art.
   const theme = useTheme(settings.theme)
