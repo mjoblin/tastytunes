@@ -530,6 +530,24 @@ export interface AppSettings {
   mediaKeys: boolean
   volumeLimitPercent: number | null
   notifications: boolean
+  /**
+   * A TastyTunes icon in the system tray / menu bar, with a context menu that
+   * reaches the streamer without opening a window. Companion to the main
+   * window, never a replacement — see main/app/tray.ts.
+   *
+   * Default OFF, and deliberately a knob rather than a heuristic (the usual
+   * "a better default beats a new knob" rule was checked): a permanent icon in
+   * someone's menu bar has no defensible default and, unlike a toast, can't be
+   * discovered and dismissed.
+   */
+  tray: boolean
+  /**
+   * The "TastyTunes is still running" notice has been shown once. Internal
+   * one-shot state, not a preference — there is no UI for it. Closing the last
+   * window with a tray icon present leaves the app alive, and silently
+   * surviving a close is how apps earn a reputation for being un-quittable.
+   */
+  trayCloseNoticeShown: boolean
   theme: ThemePreference
   displayFont: DisplayFont
   /** Blurred album-art backdrop. */
@@ -678,6 +696,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   mediaKeys: true,
   volumeLimitPercent: null,
   notifications: true,
+  tray: false,
+  trayCloseNoticeShown: false,
   theme: 'dark',
   displayFont: 'fraunces',
   ambientArt: 'all',

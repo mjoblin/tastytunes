@@ -340,6 +340,13 @@ export function SettingsScreen(): React.JSX.Element {
               onChange={(notifications) => void save({ notifications })}
             />
 
+            <Toggle
+              label="Menu bar icon"
+              hint="Adds a TastyTunes icon to the menu bar — switch source, wake or standby the streamer, and reach settings without opening the app. It's the system tray on Windows and Linux, where TastyTunes then keeps running after you close the window."
+              checked={settings.tray}
+              onChange={(tray) => void save({ tray })}
+            />
+
             <SettingRow
               label="Recently played"
               hint="A local log of tracks and stations you've played, shown on the Recently Played screen (R). Kept only on this computer."

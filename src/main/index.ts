@@ -13,6 +13,7 @@ import { DeviceManager } from './device/deviceManager'
 import { demoHost, startDemoStreamer, stopDemoStreamer } from './servers/demoStreamer'
 import { McpBridge } from './servers/mcpServer'
 import { installAppMenu } from './app/menu'
+import { hasTray, noteClosedToTray, refreshTrayMenu, syncTray, trayWantsRefresh } from './app/tray'
 import * as mediaIndex from './media/mediaIndex'
 import {
   checkUpdatesNow,
@@ -243,6 +244,24 @@ function toggleMiniPlayer(): void {
   }
 }
 
+/** Show and focus the main window, recreating it if it's been closed. */
+function showMainWindow(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow()
+    return
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
+}
+
+const trayDeps = {
+  command: (cmd: StreamerCommand) => void deviceManager.command(cmd),
+  snapshot: () => deviceManager.snapshot(),
+  showMain: showMainWindow,
+  sendToMain: (command: MenuCommand) => sendMenuCommand(command)
+}
+
 // Deliver a menu click to the main window's renderer. If the window is gone
 // (closed on macOS while the app lives on), recreate it and send after load —
 // the renderer subscribes to pushes at module scope, so did-finish-load is late
@@ -287,6 +306,8 @@ function registerIpc(): void {
     // OS-global shortcut churn only when the toggle itself changed — every
     // settings write used to unregister/re-register all four media keys.
     if ('mediaKeys' in patch) syncMediaKeys()
+    // The tray comes and goes live — toggling it is not a restart.
+    if ('tray' in patch) syncTray(next.tray, trayDeps)
     mcpBridge.sync(next)
     // Only when the limit itself changed — a volume set above the limit from
     // outside the app (device knob) mustn't be ambushed by unrelated saves.
@@ -394,14 +415,7 @@ function registerIpc(): void {
   )
   ipcMain.handle(IPC.contentResolve, (_e, ref: ContentRef) => deviceManager.contentResolve(ref))
   ipcMain.handle(IPC.toggleMini, () => toggleMiniPlayer())
-  ipcMain.handle(IPC.showMain, () => {
-    if (!mainWindow || mainWindow.isDestroyed()) createWindow()
-    else {
-      if (mainWindow.isMinimized()) mainWindow.restore()
-      mainWindow.show()
-      mainWindow.focus()
-    }
-  })
+  ipcMain.handle(IPC.showMain, () => showMainWindow())
   ipcMain.handle(IPC.fetchArt, async (_e, url: string) => {
     if (!/^https?:/i.test(url)) return null
     try {
@@ -454,6 +468,12 @@ if (!gotLock) {
     })
     createWindow()
     syncMediaKeys()
+    syncTray(getSettings().tray, trayDeps)
+    // The tray's menu is a native snapshot the OS holds — it can't read state
+    // on open the way the renderer does, so device movement has to push it.
+    deviceManager.onPush = (msg) => {
+      if (trayWantsRefresh(msg.kind)) refreshTrayMenu()
+    }
     mcpBridge.sync(getSettings())
     void deviceManager.startup()
     startScheduler(deviceManager)
@@ -477,7 +497,23 @@ if (!gotLock) {
     })
   })
 
+  // Set once the quit is genuinely under way, so the last window closing as
+  // PART of a quit isn't mistaken for someone retreating to the tray.
+  let isQuitting = false
+  app.on('before-quit', () => {
+    isQuitting = true
+  })
+
   app.on('window-all-closed', () => {
+    if (isQuitting) return
+    // A tray icon is a promise that the app is still reachable, so closing the
+    // last window stops being a quit while one exists. Without a tray the old
+    // rule stands exactly as it was — an app that can't be quit by closing it
+    // and shows nothing anywhere is the thing to never ship.
+    if (hasTray()) {
+      noteClosedToTray()
+      return
+    }
     if (process.platform !== 'darwin') app.quit()
   })
 

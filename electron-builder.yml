@@ -12,6 +12,11 @@ directories:
 files:
   - out/**
   - package.json
+  # Tray icons. electron-vite's ?asset compiles to a path relative to out/main,
+  # NOT a copy into out/ — so the directory has to be packaged alongside it or
+  # the menu-bar icon is missing in release builds only. Reading them from
+  # inside the asar is fine (Electron patches fs), so no asarUnpack.
+  - resources/**
 npmRebuild: false
 mac:
   category: public.app-category.music

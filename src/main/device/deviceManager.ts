@@ -900,10 +900,19 @@ export class DeviceManager {
 
   // ----------------------------------------------------------------- push relay
 
+  /**
+   * A main-process listener on the same push stream the windows get — for
+   * surfaces that aren't a renderer. The tray's native menu is a snapshot the
+   * OS owns, so it has to be rebuilt when the device moves; without this it
+   * would sit there describing a streamer that has since gone to standby.
+   */
+  onPush: ((msg: PushMessage) => void) | null = null
+
   private push(msg: PushMessage): void {
     for (const wc of webContents.getAllWebContents()) {
       if (!wc.isDestroyed()) wc.send('tt:push', msg)
     }
+    this.onPush?.(msg)
   }
 
   private setRecalledPreset(id: number | null): void {
