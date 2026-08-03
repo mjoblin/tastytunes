@@ -11,7 +11,7 @@ import { EmptyState } from '@/components/chrome/EmptyState'
 import { fromRecent } from '@/lib/mediaRef'
 import { playRefNow } from '@/lib/mediaActions'
 import { scrollToVisible } from '@/lib/scroll'
-import { cx } from '@/lib/format'
+import { activeSourceId, cx } from '@/lib/format'
 
 export type TrayTab = 'queue' | 'presets' | 'playlists' | 'recent'
 export type TrayDensity = 'detailed' | 'compressed'
@@ -53,6 +53,7 @@ function CompressedRow({
   subtitle,
   duration,
   playing,
+  parked,
   dimmed,
   onClick,
   attrs
@@ -62,6 +63,7 @@ function CompressedRow({
   subtitle?: string | null
   duration?: number | null
   playing?: boolean
+  parked?: boolean
   dimmed?: boolean
   onClick?: () => void
   attrs?: Record<string, string | undefined>
@@ -82,7 +84,7 @@ function CompressedRow({
       className={cx(
         'group w-full text-left flex items-center gap-2 px-2.5 py-1 rounded-md transition-colors',
         onClick && !dimmed && 'cursor-pointer',
-        playing ? 'bg-gold/10' : 'hover:bg-raised/60',
+        playing ? 'bg-gold/10' : parked ? 'bg-veil/50 hover:bg-veil' : 'hover:bg-raised/60',
         dimmed && 'opacity-45'
       )}
     >
@@ -125,11 +127,19 @@ export function QueueTab({
 }): React.JSX.Element {
   const queue = useStore((s) => s.queue)
   const playState = useStore((s) => s.playState)
+  const zoneState = useStore((s) => s.zoneState)
+  const nowPlaying = useStore((s) => s.nowPlaying)
   const followQueue = useStore((s) => s.settings.followQueue)
   const playingRow = useRef<HTMLDivElement | null>(null)
 
   const items = queue?.items ?? []
   const playId = queue?.play_id ?? playState?.queue_id ?? null
+  // THE QUEUE BELONGS TO MEDIA_PLAYER. Switch to a radio preset (or AirPlay)
+  // and the device still reports a play_id — that row is just where the queue
+  // is PARKED, and a panel that leaves eqbars dancing on it is claiming a
+  // track is playing when it stopped minutes ago. The Queue screen has drawn
+  // this distinction since the AirPlay round; the panel was missing it.
+  const queueAudible = activeSourceId(zoneState, nowPlaying) === 'MEDIA_PLAYER'
 
   // TWO DIFFERENT SCROLLS, deliberately split.
   //
@@ -158,7 +168,10 @@ export function QueueTab({
     <>
       {items.map((item) => {
         const md = item.metadata
-        const playing = item.id != null && item.id === playId
+        const current = item.id != null && item.id === playId
+        // Current AND audible = the full playing treatment. Current while
+        // another source plays = the parked resume point, quietly set apart.
+        const playing = current && queueAudible
         const play = (): void => {
           if (item.id != null) void tt.command({ type: 'playQueueId', queueId: item.id })
         }
@@ -172,11 +185,13 @@ export function QueueTab({
                 subtitle={md?.artist}
                 duration={md?.duration}
                 playing={playing}
+                parked={current && !queueAudible}
                 onClick={play}
               />
             ) : (
               <MediaRow
                 dense
+                parked={current && !queueAudible}
                 attrs={{ 'data-tray-row': 'queue' }}
                 title={md?.title ?? md?.name ?? '—'}
                 subtitle={[md?.artist, md?.album].filter(Boolean).join(' — ') || undefined}
@@ -270,8 +285,13 @@ export function PresetsTab({
           data-tray-preset={p.id}
           onClick={recall(p.id as number)}
           className={cx(
-            'group relative rounded-lg overflow-hidden ring-1 text-left transition-all',
-            p.is_playing ? 'ring-gold/70' : 'ring-edge hover:ring-edge2'
+            // A ring change alone is nearly invisible over album art, so the
+            // card lifts and its label brightens too — the same "this is a
+            // button" answer the main grid gives.
+            'group relative rounded-lg overflow-hidden ring-1 text-left transition-all motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0',
+            p.is_playing
+              ? 'ring-gold/70 hover:ring-gold'
+              : 'ring-edge hover:ring-edge2 hover:bg-raised/70'
           )}
         >
           <div className="aspect-square bg-raised">
@@ -281,7 +301,12 @@ export function PresetsTab({
               className="h-full w-full"
             />
           </div>
-          <div className={cx('px-1.5 py-1 text-[10.5px] truncate', p.is_playing ? 'text-gold' : 'text-ink')}>
+          <div
+            className={cx(
+              'px-1.5 py-1 text-[10.5px] truncate transition-colors',
+              p.is_playing ? 'text-gold' : 'text-dim group-hover:text-ink'
+            )}
+          >
             {p.name ?? `Preset ${p.id}`}
           </div>
         </button>

@@ -33,7 +33,8 @@ export function MediaRow({
   onClick,
   onContextMenu,
   attrs,
-  dense
+  dense,
+  parked
 }: {
   title: string
   subtitle?: React.ReactNode
@@ -72,6 +73,15 @@ export function MediaRow({
    * art entirely rather than shrinking it).
    */
   dense?: boolean
+  /**
+   * The current row of a queue whose source ISN'T the audible one — a radio
+   * preset or AirPlay is playing, and this is merely where the queue will
+   * resume. Set apart quietly rather than dressed as playing: the device
+   * keeps reporting a play_id regardless, and eqbars dancing on a track that
+   * stopped minutes ago is a lie. The flat skin has drawn this distinction
+   * since the AirPlay round; this gives the floating skin the same word.
+   */
+  parked?: boolean
 }): React.JSX.Element {
   return (
     <div
@@ -90,13 +100,15 @@ export function MediaRow({
       }}
       className={cx(
         'group w-full text-left flex items-center rounded-xl transition-colors',
-        dense ? 'gap-2.5 px-2.5 py-1.5' : 'gap-3 px-3 py-2.5',
+        dense ? 'gap-2.5 px-2 py-1' : 'gap-3 px-3 py-2.5',
         onClick && !dimmed && 'cursor-pointer',
         playing
           ? 'row-playing bg-gold/10'
           : tuning
             ? 'ring-1 ring-gold/40 bg-golddim/40' // half-lit: on its way to playing
-            : 'ring-1 ring-edge bg-panel/60 hover:bg-raised/70 hover:ring-edge2',
+            : parked
+              ? 'ring-1 ring-edge2 bg-veil/60 hover:bg-veil'
+              : 'ring-1 ring-edge bg-panel/60 hover:bg-raised/70 hover:ring-edge2',
         dimmed && 'opacity-50 cursor-default'
       )}
     >

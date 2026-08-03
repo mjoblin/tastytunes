@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
 import {
-  ChevronDown,
-  ChevronUp,
   Disc3,
   Heart,
+  AlignJustify,
   LayoutGrid,
   Loader2,
   Maximize2,
@@ -15,9 +14,7 @@ import {
   Rows3,
   Shuffle,
   SkipBack,
-  SkipForward,
-  Volume2,
-  VolumeX
+  SkipForward
 } from 'lucide-react'
 import { isCbusMode, isPreAmpMode } from '@shared/smoip'
 import type { ScreenLayout } from '@shared/model'
@@ -31,6 +28,7 @@ import { useDisplayFont } from '@/hooks/useDisplayFont'
 import { useDecodedArt } from '@/hooks/useDecodedArt'
 import { useNowPlayingHeart } from '@/hooks/useNowPlayingHeart'
 import { useVolumeSlider, useWheelVolume } from '@/components/playback/VolumeCluster'
+import { VolumeDial } from '@/components/playback/VolumeDial'
 import { Slider } from '@/components/controls/Slider'
 import { ArtImage } from '@/components/media/ArtImage'
 import { AmbientArt } from '@/components/media/AmbientArt'
@@ -185,17 +183,18 @@ export function TrayPanel(): React.JSX.Element {
   // is asleep).
   const deviceName = systemInfo?.name?.trim() || (connected ? connection.host : null)
   const sourceName = active ? (nowPlaying?.source?.name ?? null) : null
-  // SOURCE AND DEVICE, both — they answer different questions ("what's feeding
-  // it" vs "which streamer am I driving", and the second one matters the
-  // moment there are two). Truncated with the full string on the title, which
-  // is what the space allows.
+  // THE SOURCE while playing; the DEVICE only when the device is the thing you
+  // need told. Naming the streamer on every line was noise — you own it, you
+  // know what it's called — but "which box is asleep" and "connected to what"
+  // are real questions, so standby and disconnection still say it. (The full
+  // chain, source included, stays one click away on the lamp.)
   const statusText = !connected
     ? connection.phase === 'connecting'
       ? 'Connecting…'
       : 'Not connected'
     : !powered
       ? `${deviceName ?? 'Streamer'} · Standby`
-      : [sourceName, deviceName].filter(Boolean).join(' · ') || 'Connected'
+      : (sourceName ?? deviceName ?? 'Connected')
   // Format detail is the badges the app already derives (codec / rate / depth).
   // Compressed to a single string: the panel has one line for this, and the
   // full chain is a click away on the lamp.
@@ -206,7 +205,12 @@ export function TrayPanel(): React.JSX.Element {
       <div
         data-tray-holding={holding || undefined}
         className={cx(
-          'relative h-full w-full rounded-2xl bg-panel overflow-hidden flex flex-col shadow-[0_18px_50px_rgb(0_0_0_/_0.55)] ring-1 transition-[box-shadow,--tw-ring-color]',
+          // NO overflow-hidden on the card. It used to be here for the rounded
+          // corners, and it CLIPPED every overlay the panel raises — the signal
+          // lamp's tooltip and its detail popover both got cut off at the card
+          // edge. The clip belongs on the thing that actually needs it (the
+          // ambient art layer below), not on the whole surface.
+          'relative h-full w-full rounded-2xl bg-panel flex flex-col shadow-[0_18px_50px_rgb(0_0_0_/_0.55)] ring-1 transition-[box-shadow,--tw-ring-color]',
           // THE CUE. While a run this panel started is in flight, blur no
           // longer dismisses — and a surface that refuses to close without
           // saying why reads as stuck, not protective. A gold edge is the
@@ -215,10 +219,12 @@ export function TrayPanel(): React.JSX.Element {
           holding ? 'ring-gold/60' : 'ring-edge2'
         )}
       >
-        <AmbientArt
-          src={active && settings.ambientArt !== 'off' ? (art ?? null) : null}
-          vignette={settings.vignette}
-        />
+        <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
+          <AmbientArt
+            src={active && settings.ambientArt !== 'off' ? (art ?? null) : null}
+            vignette={settings.vignette}
+          />
+        </div>
 
         {/* ---- identity + volume ----
             Wheel-to-volume is scoped to the HEADER, not the whole surface as
@@ -243,8 +249,28 @@ export function TrayPanel(): React.JSX.Element {
             <div className="flex-1 min-w-0 pt-0.5">
               {/* min-heights keep the lines occupying space through the brief
                   metadata gap on a track change, so nothing shifts. */}
-              <div className="font-display no-optical font-bold tracking-tight text-[14px] text-ink truncate leading-tight min-h-[17px]">
-                {active ? (meta.title ?? ' ') : 'Nothing playing'}
+              <div className="flex items-center gap-1.5 min-h-[17px]">
+                <span className="font-display no-optical font-bold tracking-tight text-[14px] text-ink truncate leading-tight">
+                  {active ? (meta.title ?? ' ') : 'Nothing playing'}
+                </span>
+                {/* THE HEART SITS WITH THE TITLE, not in the corner. It acts on
+                    the TRACK, so belonging to the track's name is if anything
+                    more honest than the corner was — and the corner is worth
+                    more to volume, which is what gets reached for without
+                    opening the app. */}
+                {heart.available && active && (
+                  <button
+                    aria-label={heart.active ? 'Remove from favorites' : 'Add to favorites'}
+                    data-tip={heart.active ? 'Remove from favorites' : 'Add to favorites'}
+                    onClick={heart.toggle}
+                    className={cx(
+                      'tip-bottom shrink-0 p-0.5 rounded transition-colors',
+                      heart.active ? 'text-gold' : 'text-faint hover:text-ink'
+                    )}
+                  >
+                    <Heart size={12} fill={heart.active ? 'currentColor' : 'none'} />
+                  </button>
+                )}
               </div>
               <div className="font-display no-optical tracking-tight text-[12px] text-dim truncate leading-tight min-h-[14px]">
                 {(active && meta.subtitle) || ' '}
@@ -253,59 +279,26 @@ export function TrayPanel(): React.JSX.Element {
                 {(active && meta.album) || ' '}
               </div>
             </div>
-            {/* VOLUME, compact — the PunyTunes affordance, adapted. A
-                full-width slider ate the transport row and left nowhere for a
-                playhead; a mute toggle, the level, and two steps do the same
-                job in a fifth of the width. The wheel over this header is the
-                fast path (shift for 5 at a time), which is what the mute
-                button's tooltip has always taught. */}
+            {/* VOLUME OWNS THE TOP-RIGHT CORNER — the squarest space the panel
+                has, which is the shape an arc wants and a slider doesn't. */}
             {hasVolume && (
-              <div className="shrink-0 flex items-center gap-0.5">
-                <button
-                  data-tip={muted ? 'Unmute — scroll for volume' : 'Mute — scroll for volume'}
-                  aria-label={muted ? 'Unmute' : 'Mute'}
-                  onClick={() => void tt.command({ type: 'setMute', mute: !muted })}
-                  className={cx(
-                    'tip-bottom p-1 rounded transition-colors',
-                    muted ? 'text-gold' : 'text-dim hover:text-ink'
-                  )}
-                >
-                  {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
-                </button>
-                {/* Control Bus has no absolute level to show — steps only. */}
-                {preAmp && (
-                  <span
-                    className={cx(
-                      'font-mono text-[11px] tabular-nums w-6 text-right',
-                      muted ? 'text-faint' : 'text-dim'
-                    )}
-                  >
-                    {vol.levelNow ?? '—'}
-                  </span>
-                )}
-                <div className="flex flex-col">
-                  <VolStep dir={1} enabled={active} />
-                  <VolStep dir={-1} enabled={active} />
-                </div>
-              </div>
-            )}
-            {heart.available && active && (
-              <button
-                aria-label={heart.active ? 'Remove from favorites' : 'Add to favorites'}
-                data-tip={heart.active ? 'Remove from favorites' : 'Add to favorites'}
-                onClick={heart.toggle}
-                className={cx(
-                  'tip-bottom tip-end shrink-0 p-1 rounded transition-colors',
-                  heart.active ? 'text-gold' : 'text-faint hover:text-ink'
-                )}
-              >
-                <Heart size={13} fill={heart.active ? 'currentColor' : 'none'} />
-              </button>
+              <VolumeDial level={preAmp ? vol.levelNow : null} muted={muted} enabled={active} />
             )}
           </div>
 
           {/* ---- transport + modes + playhead, on one line ---- */}
           <div className="flex items-center gap-1 mt-2">
+            {/* ORDER MATCHES THE PLAYBACK BAR: shuffle · prev · play · next ·
+                repeat. The two mode toggles bracket the transport there, and a
+                second surface that reshuffles them makes you look twice. */}
+            <PanelButton
+              enabled={active && canShuffle}
+              tip="Shuffle"
+              active={shuffleOn}
+              onClick={() => void tt.command({ type: 'setShuffle', mode: shuffleOn ? 'off' : 'all' })}
+            >
+              <Shuffle size={13} />
+            </PanelButton>
             <PanelButton enabled={active && canPrev} tip="Previous" onClick={() => void tt.command({ type: 'previousTrack' })}>
               <SkipBack size={14} />
             </PanelButton>
@@ -329,19 +322,6 @@ export function TrayPanel(): React.JSX.Element {
             </button>
             <PanelButton enabled={active && canNext} tip="Next" onClick={() => void tt.command({ type: 'nextTrack' })}>
               <SkipForward size={14} />
-            </PanelButton>
-            {/* Shuffle and repeat live HERE rather than in the context menu.
-                The earlier call sent them to the menu purely on space, and
-                once the volume cluster gave the transport row its width back
-                that argument stopped holding — they are one click to an
-                outcome, which is the panel's own admission test. */}
-            <PanelButton
-              enabled={active && canShuffle}
-              tip="Shuffle"
-              active={shuffleOn}
-              onClick={() => void tt.command({ type: 'setShuffle', mode: shuffleOn ? 'off' : 'all' })}
-            >
-              <Shuffle size={13} />
             </PanelButton>
             <PanelButton
               enabled={active && canRepeat}
@@ -399,7 +379,13 @@ export function TrayPanel(): React.JSX.Element {
             onClick={() => void tt.command({ type: 'power', power: powered ? 'NETWORK' : 'ON' })}
             className={cx(
               'tip-top tip-end p-1 rounded transition-colors shrink-0',
-              !connected ? 'text-faint/40' : powered ? 'text-gold' : 'text-dim hover:text-ink'
+              // Every state gets a hover, including the gold one — a control
+              // that doesn't react to the cursor reads as a status light.
+              !connected
+                ? 'text-faint/40'
+                : powered
+                  ? 'text-gold hover:bg-veil hover:text-goldbright'
+                  : 'text-dim hover:text-ink hover:bg-veil'
             )}
           >
             <Power size={13} />
@@ -412,11 +398,15 @@ export function TrayPanel(): React.JSX.Element {
             icon-only and throw away the app's partition idiom. The view
             controls sit to its right, which is where the app puts layout
             chips on every list screen. */}
-        <div className="relative shrink-0 flex items-center gap-1.5 px-2.5 py-1.5">
+        <div className="relative shrink-0 flex items-center gap-1.5 px-3 py-1.5">
           <Segmented<TrayTab>
             value={tab}
             onChange={pickTab}
-            className="flex-1 min-w-0 [&>button]:flex-1 [&>button]:min-w-0"
+            // Tight horizontal padding and centred labels: the default chip
+            // padding is tuned for a full-width header row and left "Recent"
+            // adrift in its own segment here. min-w-0 lets the four share the
+            // width evenly instead of sizing to their text.
+            className="flex-1 min-w-0 [&>button]:flex-1 [&>button]:min-w-0 [&>button]:px-1 [&>button]:justify-center"
             options={[
               { value: 'queue', label: 'Queue' },
               { value: 'presets', label: 'Presets' },
@@ -424,16 +414,23 @@ export function TrayPanel(): React.JSX.Element {
               { value: 'recent', label: 'Recent' }
             ]}
           />
-          {tab === 'presets' && (
-            <ViewChip
-              tip={presetsLayout === 'cards' ? 'View as rows' : 'View as cards'}
-              onClick={() =>
-                void saveSettings({ trayPresetsLayout: presetsLayout === 'cards' ? 'rows' : 'cards' })
-              }
-            >
-              {presetsLayout === 'cards' ? <Rows3 size={13} /> : <LayoutGrid size={13} />}
-            </ViewChip>
-          )}
+          {/* THE LAYOUT CHIP'S SLOT IS ALWAYS THERE, even on tabs that have no
+              layout to change. It only applies to Presets, but letting it
+              appear and vanish resized the whole tab strip as you moved
+              between tabs — the labels visibly jumped. A reserved slot costs
+              28px and keeps the row still. */}
+          <div className="w-[26px] shrink-0">
+            {tab === 'presets' && (
+              <ViewChip
+                tip={presetsLayout === 'cards' ? 'View as rows' : 'View as cards'}
+                onClick={() =>
+                  void saveSettings({ trayPresetsLayout: presetsLayout === 'cards' ? 'rows' : 'cards' })
+                }
+              >
+                {presetsLayout === 'cards' ? <Rows3 size={13} /> : <LayoutGrid size={13} />}
+              </ViewChip>
+            )}
+          </div>
           <ViewChip
             tip={density === 'detailed' ? 'Compact rows' : 'Detailed rows'}
             active={density === 'compressed'}
@@ -442,8 +439,13 @@ export function TrayPanel(): React.JSX.Element {
               void saveSettings({ trayRowDensity: density === 'detailed' ? 'compressed' : 'detailed' })
             }
           >
-            <Rows3 size={13} />
+            {/* A DIFFERENT glyph from the layout chip beside it. Both were
+                Rows3, so the two sat side by side looking like the same
+                control twice. */}
+            {density === 'detailed' ? <AlignJustify size={13} /> : <Rows3 size={13} />}
           </ViewChip>
+          {/* Same glyph the mini player uses for the same job — one icon means
+              "take me to the app" wherever you meet it. */}
           <ViewChip tip="Open TastyTunes" onClick={() => void tt.showMain()}>
             <Maximize2 size={13} />
           </ViewChip>
@@ -454,9 +456,14 @@ export function TrayPanel(): React.JSX.Element {
             from a queue scrolled to the playing row landed you halfway down
             the presets. It also re-runs the queue's scroll-to-playing effect
             on every return to that tab, which is what you'd want anyway. */}
+        {/* px-3 matches the header, so the rows line up with the title above
+            them instead of running edge to edge. pr-1.5 on top of that is the
+            SCROLLBAR's lane — without it the last few pixels of every row sit
+            underneath it. `space-y` gives the rows a rhythm of their own
+            rather than letting them touch. */}
         <div
           key={tab}
-          className="relative flex-1 min-h-0 overflow-y-auto pb-1"
+          className="relative flex-1 min-h-0 overflow-y-auto px-3 pr-1.5 pb-2 space-y-0.5"
           data-tray-body={tab}
         >
           {tab === 'queue' && <QueueTab opens={opens} density={density} />}
@@ -466,24 +473,6 @@ export function TrayPanel(): React.JSX.Element {
         </div>
       </div>
     </div>
-  )
-}
-
-/** One volume step. Two of these stacked replace a slider in a fifth the width. */
-function VolStep({ dir, enabled }: { dir: 1 | -1; enabled: boolean }): React.JSX.Element {
-  return (
-    <button
-      data-tip={dir > 0 ? 'Volume up' : 'Volume down'}
-      aria-label={dir > 0 ? 'Volume up' : 'Volume down'}
-      disabled={!enabled}
-      onClick={() => void tt.command({ type: 'volumeStepChange', delta: dir })}
-      className={cx(
-        'tip-bottom tip-end px-0.5 leading-none transition-colors',
-        enabled ? 'text-dim hover:text-ink' : 'text-faint/40'
-      )}
-    >
-      {dir > 0 ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
-    </button>
   )
 }
 

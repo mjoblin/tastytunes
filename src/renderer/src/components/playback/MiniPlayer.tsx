@@ -1,6 +1,6 @@
 import {
   Disc3,
-  Expand,
+  Maximize2,
   Loader2,
   Minus,
   Pause,
@@ -171,7 +171,7 @@ export function MiniPlayer(): React.JSX.Element {
                 }}
                 className="no-drag tip-bottom tip-end p-1 rounded text-faint hover:text-ink transition-colors"
               >
-                <Expand size={12} />
+                <Maximize2 size={12} />
               </button>
               <CloseButton
                 onClick={() => void tt.toggleMini()}

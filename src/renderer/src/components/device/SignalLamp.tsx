@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useStore } from '@/store'
 import { SIGNAL_COLORS, SIGNAL_LABELS, cx, fmtKHz, signalGlow, signalQuality } from '@/lib/format'
-import { PopoverChrome } from '@/hooks/usePopover'
+import { PopoverCard } from '@/components/chrome/Overlay'
 
 /**
  * Roon-style signal light: one glance says how good the stream is; a click shows
@@ -11,7 +11,9 @@ import { PopoverChrome } from '@/hooks/usePopover'
 export function SignalLamp(): React.JSX.Element | null {
   const playState = useStore((s) => s.playState)
   const nowPlaying = useStore((s) => s.nowPlaying)
-  const [open, setOpen] = useState(false)
+  // Click point, not a boolean: the detail card is a PopoverCard, which
+  // portals and CLAMPS itself on-screen from where you clicked.
+  const [at, setAt] = useState<{ x: number; y: number } | null>(null)
 
   const quality = signalQuality(playState)
   if (quality === 'unknown') return null
@@ -31,9 +33,12 @@ export function SignalLamp(): React.JSX.Element | null {
   return (
     <div className="relative">
       <button
-        data-tip={open ? undefined : `Signal: ${SIGNAL_LABELS[quality]}`}
+        data-tip={at ? undefined : `Signal: ${SIGNAL_LABELS[quality]}`}
         aria-label={`Signal: ${SIGNAL_LABELS[quality]}`}
-        onClick={() => setOpen((o) => !o)}
+        onClick={(e) => {
+          const b = e.currentTarget.getBoundingClientRect()
+          setAt((o) => (o ? null : { x: b.left, y: b.bottom + 6 }))
+        }}
         className="tip-top p-2 rounded-md hover:bg-veil transition-colors"
       >
         <span
@@ -42,30 +47,32 @@ export function SignalLamp(): React.JSX.Element | null {
         />
       </button>
 
-      {open && (
-        <>
-          <PopoverChrome onClose={() => setOpen(false)} />
-          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute bottom-11 right-0 z-40 w-60 rounded-xl bg-raised ring-1 ring-edge2 shadow-2xl p-3">
-            <div className="flex items-center gap-2 mb-2.5">
-              <span
-                className="block h-2 w-2 rounded-full"
-                style={{ background: color, boxShadow: signalGlow(color) }}
-              />
-              <span className={cx('microlabel')} style={{ color }}>
-                {SIGNAL_LABELS[quality]}
-              </span>
-            </div>
-            <div className="space-y-1.5">
-              {rows.map(([label, value]) => (
-                <div key={label} className="flex items-baseline justify-between gap-3">
-                  <span className="text-[11px] text-faint">{label}</span>
-                  <span className="font-mono text-[11px] text-ink/90">{value}</span>
-                </div>
-              ))}
-            </div>
+      {/* THE SHELL, not a hand-rolled box. This used to be an `absolute
+          bottom-11 right-0` div, which assumed the lamp sits at the RIGHT of a
+          wide bar — true in the playback bar, false in the tray panel, where
+          the same markup opened up and to the left, off two edges of a 380px
+          window at once. PopoverCard portals, backdrops and clamps, which is
+          what the chrome kit exists for. */}
+      {at && (
+        <PopoverCard at={at} width="w-60" onClose={() => setAt(null)} className="p-3">
+          <div className="flex items-center gap-2 mb-2.5">
+            <span
+              className="block h-2 w-2 rounded-full"
+              style={{ background: color, boxShadow: signalGlow(color) }}
+            />
+            <span className={cx('microlabel')} style={{ color }}>
+              {SIGNAL_LABELS[quality]}
+            </span>
           </div>
-        </>
+          <div className="space-y-1.5">
+            {rows.map(([label, value]) => (
+              <div key={label} className="flex items-baseline justify-between gap-3">
+                <span className="text-[11px] text-faint">{label}</span>
+                <span className="font-mono text-[11px] text-ink/90">{value}</span>
+              </div>
+            ))}
+          </div>
+        </PopoverCard>
       )}
     </div>
   )
