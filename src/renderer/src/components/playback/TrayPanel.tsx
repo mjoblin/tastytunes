@@ -363,14 +363,18 @@ export function TrayPanel(): React.JSX.Element {
             One line doing what a 36px footer used to. Power sits at the RIGHT,
             mirroring the playback bar's right cluster: a widget of a given type
             belongs in the same place on every surface that has one. */}
-        <div className="relative shrink-0 flex items-center gap-1.5 px-3 h-6 text-[11px]">
-          <div className="shrink-0 -ml-1.5 scale-90 origin-left">
-            <SignalLamp />
+        <div className="relative shrink-0 flex items-center px-3 h-6 text-[11px]">
+          {/* The lamp reads as a bullet for the source, so it sits TIGHT to it;
+              the format is a separate fact and gets real air before it. */}
+          <div className="shrink-0 -ml-2 scale-90 origin-left">
+            <SignalLamp tipClass="tip-bottom tip-start" />
           </div>
-          <span className="text-dim truncate shrink-0 max-w-[45%]" title={statusText}>
+          <span className="text-dim truncate shrink-0 max-w-[45%] -ml-0.5" title={statusText}>
             {statusText}
           </span>
-          {formatText && <span className="text-faint truncate font-mono text-[10px]">{formatText}</span>}
+          {formatText && (
+            <span className="text-faint truncate font-mono text-[10px] ml-3">{formatText}</span>
+          )}
           <div className="flex-1" />
           <button
             data-tip={powered ? 'Put in standby' : 'Wake'}
@@ -463,7 +467,7 @@ export function TrayPanel(): React.JSX.Element {
             rather than letting them touch. */}
         <div
           key={tab}
-          className="relative flex-1 min-h-0 overflow-y-auto px-3 pr-1.5 pb-2 space-y-0.5"
+          className="relative flex-1 min-h-0 overflow-y-auto px-3 pr-1.5 pt-1.5 pb-2 space-y-1.5"
           data-tray-body={tab}
         >
           {tab === 'queue' && <QueueTab opens={opens} density={density} />}

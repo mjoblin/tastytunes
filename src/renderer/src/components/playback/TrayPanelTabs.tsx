@@ -12,6 +12,7 @@ import { fromRecent } from '@/lib/mediaRef'
 import { playRefNow } from '@/lib/mediaActions'
 import { scrollToVisible } from '@/lib/scroll'
 import { activeSourceId, cx } from '@/lib/format'
+import { useLitPresets } from '@/hooks/useLitPresets'
 
 export type TrayTab = 'queue' | 'presets' | 'playlists' | 'recent'
 export type TrayDensity = 'detailed' | 'compressed'
@@ -237,6 +238,11 @@ export function PresetsTab({
 }): React.JSX.Element {
   const presets = useStore((s) => s.presets)
   const items = (presets?.presets ?? []).filter((p) => p.id != null)
+  // NOT `p.is_playing` — the device's flags are unreliable in both directions
+  // and lit almost nothing here. `useLitPresets` is the derivation the Presets
+  // screen has always used, now shared.
+  const lit = useLitPresets(items)
+  const isPlaying = (id: number | null): boolean => id != null && lit.has(id)
 
   if (items.length === 0) {
     return <TabEmpty icon={Radio} title="No presets" hint="Save stations and albums to the streamer's presets." />
@@ -256,7 +262,7 @@ export function PresetsTab({
               attrs={{ 'data-tray-row': 'preset' }}
               position={p.id}
               title={p.name ?? `Preset ${p.id}`}
-              playing={!!p.is_playing}
+              playing={isPlaying(p.id)}
               onClick={recall(p.id as number)}
             />
           ) : (
@@ -268,7 +274,7 @@ export function PresetsTab({
               subtitle={`Preset ${p.id}`}
               kind={p.class?.includes('radio') ? 'station' : 'album'}
               artUrl={p.art_url ?? p.art_urls?.[0] ?? null}
-              playing={!!p.is_playing}
+              playing={isPlaying(p.id)}
               onClick={recall(p.id as number)}
             />
           )
@@ -289,8 +295,8 @@ export function PresetsTab({
             // card lifts and its label brightens too — the same "this is a
             // button" answer the main grid gives.
             'group relative rounded-lg overflow-hidden ring-1 text-left transition-all motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0',
-            p.is_playing
-              ? 'ring-gold/70 hover:ring-gold'
+            isPlaying(p.id)
+              ? 'ring-gold ring-2 hover:ring-gold'
               : 'ring-edge hover:ring-edge2 hover:bg-raised/70'
           )}
         >
@@ -304,7 +310,7 @@ export function PresetsTab({
           <div
             className={cx(
               'px-1.5 py-1 text-[10.5px] truncate transition-colors',
-              p.is_playing ? 'text-gold' : 'text-dim group-hover:text-ink'
+              isPlaying(p.id) ? 'text-gold' : 'text-dim group-hover:text-ink'
             )}
           >
             {p.name ?? `Preset ${p.id}`}

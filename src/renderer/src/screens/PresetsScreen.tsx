@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   DndContext,
@@ -29,17 +29,18 @@ import {
   Trash2,
   Volume2
 } from 'lucide-react'
-import { isPreAmpMode, queueContentHash, type PresetItem } from '@shared/smoip'
+import { isPreAmpMode, type PresetItem } from '@shared/smoip'
 import { presetVolumeKey, type ScreenLayout, type MediaNode } from '@shared/model'
 import { tt } from '@/api'
 import { useStore } from '@/store'
+import { useLitPresets } from '@/hooks/useLitPresets'
 import { Eqbars } from '@/components/media/Eqbars'
 import { EmptyState } from '@/components/chrome/EmptyState'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { flashTarget, scrollToWithContext } from '@/lib/scroll'
 import { lockVertical } from '@/lib/dnd'
 import { OrderHandle } from '@/components/controls/OrderHandle'
-import { activeSourceId, cx, matchesFilter } from '@/lib/format'
+import { cx, matchesFilter } from '@/lib/format'
 import { FilterInput } from '@/components/controls/FilterInput'
 import { Slider } from '@/components/controls/Slider'
 import { ArtImage } from '@/components/media/ArtImage'
@@ -50,10 +51,7 @@ import { useConfirmTap } from '@/hooks/useConfirmTap'
 export function PresetsScreen(): React.JSX.Element {
   const presets = useStore((s) => s.presets)
   const saveSettings = useStore((s) => s.saveSettings)
-  const playState = useStore((s) => s.playState)
-  const queue = useStore((s) => s.queue)
   const zoneState = useStore((s) => s.zoneState)
-  const nowPlaying = useStore((s) => s.nowPlaying)
   const { presetCardSize, presetGap, presetFillRows, followPresets, presetsLayout } = useStore(
     (s) => s.settings
   )
@@ -108,9 +106,6 @@ export function PresetsScreen(): React.JSX.Element {
   // radio_id is authoritative for stations; album presets are matched by art
   // URL or name against the current track. Stateless means it also works at
   // startup, when every flag reads false.
-  const activeSource = activeSourceId(zoneState, nowPlaying)
-  const radioId = playState?.metadata?.radio_id ?? null
-  const md = playState?.metadata ?? null
   // A LIT PRESET MEANS "THIS IS PLAYING" — so nothing lights while the streamer
   // is asleep or on its way back (user report 2026-07-26: clicking a preset in
   // standby scrolled to the PREVIOUSLY-played one first, then to the clicked
@@ -126,16 +121,6 @@ export function PresetsScreen(): React.JSX.Element {
   const systemPower = useStore((s) => s.systemPower)
   const waking = useStore((s) => s.waking)
   const asleep = (systemPower != null && systemPower.power !== 'ON') || waking
-  // The live queue's leading distinct-album art sequence — the same
-  // fingerprint the firmware bakes into a MediaQueue preset's art_urls.
-  const queueArts = useMemo(() => {
-    const seen: string[] = []
-    for (const it of queue?.items ?? []) {
-      const a = it.metadata?.art_url
-      if (a && !seen.some((s) => urlsMatch(s, a))) seen.push(a)
-    }
-    return seen
-  }, [queue])
   // ONE preset lights, in this priority:
   //  1. The preset most recently recalled through this app, while a content
   //     check confirms its stuff is still what's playing (the check is the
@@ -148,8 +133,6 @@ export function PresetsScreen(): React.JSX.Element {
   //     the queue is a recognized saved queue (the queue explains the playing
   //     track better than the album does); input-type presets trust the flag
   //     off local media.
-  const lastRecalledPresetId = useStore((s) => s.lastRecalledPresetId)
-  const queueSignatures = useStore((s) => s.settings.queueSignatures)
 
   // A recall takes seconds on the device (source switch, stream connect,
   // queue load) with no state change until it lands — mirror the Radio
@@ -233,99 +216,9 @@ export function PresetsScreen(): React.JSX.Element {
   useEffect(() => {
     if (waking && tuningId != null) setWakeRecallId(tuningId)
   }, [waking, tuningId])
-  // Exact identity of the live queue (all tracks, in order) — matched against
-  // the signatures recorded when queue presets were saved through this app.
-  const liveQueueHash = useMemo(
-    () => (queue?.items?.length ? queueContentHash(queue.items) : null),
-    [queue]
-  )
-  const playingIds = useMemo(() => {
-    const lit = new Set<number>()
-    if (asleep) return lit
-    const mediaOk = activeSource == null || activeSource === 'MEDIA_PLAYER'
-
-    // Exact signature recorded at save time, when this app did the saving.
-    const sigOf = (p: PresetItem): string | undefined =>
-      p.id != null ? queueSignatures[presetVolumeKey(systemInfo?.udn, p.id)] : undefined
-    const sigMatch = (p: PresetItem): boolean =>
-      mediaOk && liveQueueHash != null && sigOf(p) === liveQueueHash
-    // MediaQueue fingerprint: art_urls is the queue's leading distinct-album
-    // art sequence at save time — compare against the live queue's sequence.
-    // (Coarser than a signature — only used when no signature exists, i.e.
-    // the preset was saved by another controller.)
-    const fingerprint = (p: PresetItem): boolean => {
-      if (!mediaOk) return false
-      const want = p.art_urls ?? []
-      if (want.length === 0 || want.length > queueArts.length) return false
-      return want.every((u, i) => urlsMatch(u, queueArts[i]))
-    }
-    const mqContent = (p: PresetItem): boolean =>
-      sigOf(p) != null ? sigMatch(p) : fingerprint(p)
-    const albumMatch = (p: PresetItem): boolean => {
-      if (!mediaOk) return false
-      if (p.is_playing === true) return true // transiently correct after recall
-      if (!md) return false
-      if (p.art_url != null && md.art_url != null && urlsMatch(p.art_url, md.art_url)) return true
-      if (p.name != null && md.album != null) {
-        if (p.name === md.album) return true
-        if (md.artist != null && p.name.includes(md.album) && p.name.includes(md.artist)) return true
-      }
-      return false
-    }
-    // null = this preset type has no content to check (inputs etc.)
-    // Raw-URL radio presets (saved from the Radio screen) carry no airable id
-    // — the station NAME is their identity, matched against what's playing.
-    const isRadioPreset = (p: PresetItem): boolean =>
-      /radio/i.test(p.class ?? '') || p.type === 'Radio'
-    const stationMatch = (p: PresetItem): boolean => {
-      const station = md?.station?.trim().toLowerCase()
-      return station != null && p.name?.trim().toLowerCase() === station
-    }
-    const contentCheck = (p: PresetItem): boolean | null => {
-      if (p.airable_radio_id != null && radioId != null) return p.airable_radio_id === radioId
-      if (p.type === 'MediaQueue') return mqContent(p)
-      if ((p.class ?? '').startsWith('stream.media')) return albumMatch(p)
-      if (isRadioPreset(p)) return stationMatch(p)
-      return null
-    }
-
-    const recalled = allItems.find((p) => p.id === lastRecalledPresetId)
-    if (recalled?.id != null && contentCheck(recalled) === true) {
-      lit.add(recalled.id)
-      return lit
-    }
-
-    // Signature matches are exact (all tracks, in order) — light the first
-    // one even without a recall on record (startup, recalls made from other
-    // controllers). Collage fingerprints stay a tie-breaker-free fallback:
-    // only an unambiguous single match lights.
-    const sigFirst = allItems.find((p) => p.type === 'MediaQueue' && sigMatch(p))
-    const mqMatches = allItems.filter((p) => p.type === 'MediaQueue' && mqContent(p))
-    if (sigFirst?.id != null) lit.add(sigFirst.id)
-    else if (mqMatches.length === 1 && mqMatches[0].id != null) lit.add(mqMatches[0].id)
-    for (const p of allItems) {
-      if (p.id == null || p.type === 'MediaQueue') continue
-      if (p.airable_radio_id != null && radioId != null) {
-        if (p.airable_radio_id === radioId) lit.add(p.id)
-        continue
-      }
-      if ((p.class ?? '').startsWith('stream.media')) {
-        if (mqMatches.length === 0 && sigFirst == null && albumMatch(p)) lit.add(p.id)
-        continue
-      }
-      // Raw-URL radio presets: station-name identity (no airable id to hold).
-      if (isRadioPreset(p) && stationMatch(p)) {
-        lit.add(p.id)
-        continue
-      }
-      // Radio/input presets with nothing to match: trust the flag except
-      // while local media is the active source.
-      if (p.is_playing === true && activeSource !== 'MEDIA_PLAYER') lit.add(p.id)
-    }
-    // A recall made from standby owns the lamp until it lands — see wakeRecallId.
-    if (wakeRecallId != null) return lit.has(wakeRecallId) ? new Set([wakeRecallId]) : new Set<number>()
-    return lit
-  }, [allItems, lastRecalledPresetId, queueArts, queueSignatures, liveQueueHash, systemInfo, radioId, md, activeSource, asleep, wakeRecallId])
+  // The lit-preset derivation lives in useLitPresets — the tray panel needs
+  // the same answer, and a rule this hard-won must not exist in two places.
+  const playingIds = useLitPresets(allItems, wakeRecallId)
   const isPresetPlaying = (p: PresetItem): boolean => p.id != null && playingIds.has(p.id)
   const isPresetDead = (p: PresetItem): boolean => p.id != null && deadIds.has(p.id)
   const noteRepair = (id: number): void => {
@@ -515,18 +408,6 @@ export function PresetsScreen(): React.JSX.Element {
       </div>
     </div>
   )
-}
-
-/** Same art object regardless of scheme/query differences. */
-function urlsMatch(a: string, b: string): boolean {
-  if (a === b) return true
-  try {
-    const ua = new URL(a)
-    const ub = new URL(b)
-    return ua.host === ub.host && ua.pathname === ub.pathname
-  } catch {
-    return false
-  }
 }
 
 interface PresetVolumeProps {

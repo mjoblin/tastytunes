@@ -507,6 +507,14 @@ img {
   right: 0;
   translate: 0 0;
 }
+/* modifier: LEFT-align, the mirror of tip-end. A centered tip on a control
+   near a narrow window's left edge runs off it — the tray panel's signal lamp
+   sits ~14px in, and "Signal: Lossless" centered there starts at -41px. */
+[data-tip].tip-start::after {
+  left: 0;
+  right: auto;
+  translate: 0 0;
+}
 /* modifier: prose tooltips (tool descriptions) wrap at a readable measure.
    Anchored to the element's LEFT edge, not centered: these live inside
    scrollports whose overflow-x is hidden (see the phantom-scrollbar rule

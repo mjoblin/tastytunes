@@ -8,7 +8,15 @@ import { PopoverCard } from '@/components/chrome/Overlay'
  * the whole chain the streamer reports. Colors are fixed (not the art accent) so
  * quality always reads the same.
  */
-export function SignalLamp(): React.JSX.Element | null {
+export function SignalLamp({
+  /**
+   * Tooltip placement. Defaults to the playback bar's "above, centred", which
+   * is wrong anywhere the lamp isn't in the middle of a wide bar: in the tray
+   * panel it sits ~14px from the left of a 380px window, where a centred tip
+   * starts off-screen.
+   */
+  tipClass = 'tip-top'
+}: { tipClass?: string } = {}): React.JSX.Element | null {
   const playState = useStore((s) => s.playState)
   const nowPlaying = useStore((s) => s.nowPlaying)
   // Click point, not a boolean: the detail card is a PopoverCard, which
@@ -39,7 +47,7 @@ export function SignalLamp(): React.JSX.Element | null {
           const b = e.currentTarget.getBoundingClientRect()
           setAt((o) => (o ? null : { x: b.left, y: b.bottom + 6 }))
         }}
-        className="tip-top p-2 rounded-md hover:bg-veil transition-colors"
+        className={cx(tipClass, 'p-2 rounded-md hover:bg-veil transition-colors')}
       >
         <span
           className="block h-2.5 w-2.5 rounded-full"

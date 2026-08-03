@@ -43,23 +43,24 @@ export function VolumeDial({
   }
 
   return (
-    <div className="flex items-center gap-1 shrink-0">
-      <div className="flex flex-col">
-        <VolButton tip="Volume up 5" enabled={enabled} onClick={() => step(5)}>
-          <ChevronsUp size={11} />
-        </VolButton>
-        <VolButton tip="Volume down 5" enabled={enabled} onClick={() => step(-5)}>
-          <ChevronsDown size={11} />
-        </VolButton>
-      </div>
-
+    <div data-volume-dial className="flex items-center gap-1.5 shrink-0">
+      {/* MUTE IS ITS OWN BUTTON with the app's own speaker glyph, not a state
+          hidden inside the dial. Every other surface spells mute this way, and
+          a control you can only find by clicking the number isn't a control. */}
       <button
         data-tip={muted ? 'Unmute — scroll for volume' : 'Mute — scroll for volume'}
         aria-label={muted ? 'Unmute' : 'Mute'}
         disabled={!enabled}
         onClick={() => void tt.command({ type: 'setMute', mute: !muted })}
-        className="tip-bottom tip-end relative h-9 w-9 shrink-0 flex items-center justify-center rounded-full hover:bg-veil transition-colors disabled:hover:bg-transparent"
+        className={cx(
+          'tip-bottom tip-end p-1 rounded transition-colors',
+          !enabled ? 'text-faint/40' : muted ? 'text-gold' : 'text-dim hover:text-ink hover:bg-veil'
+        )}
       >
+        {muted ? <VolumeX size={15} /> : <Volume2 size={15} />}
+      </button>
+
+      <div className="relative h-9 w-9 shrink-0 flex items-center justify-center">
         <svg viewBox="0 0 32 32" className="absolute inset-0 h-full w-full -rotate-[225deg]">
           <circle
             cx="16"
@@ -85,33 +86,33 @@ export function VolumeDial({
             strokeDasharray={`${C * SWEEP * ratio} ${C}`}
           />
         </svg>
-        {/* The number lives INSIDE the arc — one glance gives both the exact
-            level and its position against the ceiling. Control Bus has no
-            absolute level, so it gets the speaker icon instead of a lie. */}
-        {level == null ? (
-          muted ? (
-            <VolumeX size={13} className="relative text-gold" />
-          ) : (
-            <Volume2 size={13} className={cx('relative', enabled ? 'text-dim' : 'text-faint/50')} />
-          )
-        ) : (
-          <span
-            className={cx(
-              'relative font-mono text-[11px] tabular-nums leading-none',
-              muted ? 'text-gold' : enabled ? 'text-ink' : 'text-faint/50'
-            )}
-          >
-            {muted ? <VolumeX size={12} /> : level}
-          </span>
-        )}
-      </button>
+        {/* The number lives inside the arc — one glance gives the exact level
+            and its position against the ceiling. Control Bus has no absolute
+            level, so it gets a dash rather than a lie. */}
+        <span
+          className={cx(
+            'relative font-mono text-[11.5px] tabular-nums leading-none',
+            muted ? 'text-faint' : enabled ? 'text-ink' : 'text-faint/50'
+          )}
+        >
+          {level ?? '–'}
+        </span>
+      </div>
 
-      <div className="flex flex-col">
+      {/* ±1 and ±5, in a 2x2 to the RIGHT of the arc — singles nearest the
+          dial, doubles outboard, so the bigger jump is the further reach. */}
+      <div className="grid grid-cols-2 gap-x-1 gap-y-0.5">
         <VolButton tip="Volume up" enabled={enabled} onClick={() => step(1)}>
-          <ChevronUp size={11} />
+          <ChevronUp size={12} />
+        </VolButton>
+        <VolButton tip="Volume up 5" enabled={enabled} onClick={() => step(5)}>
+          <ChevronsUp size={12} />
         </VolButton>
         <VolButton tip="Volume down" enabled={enabled} onClick={() => step(-1)}>
-          <ChevronDown size={11} />
+          <ChevronDown size={12} />
+        </VolButton>
+        <VolButton tip="Volume down 5" enabled={enabled} onClick={() => step(-5)}>
+          <ChevronsDown size={12} />
         </VolButton>
       </div>
     </div>
