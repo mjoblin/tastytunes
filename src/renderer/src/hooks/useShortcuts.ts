@@ -100,6 +100,17 @@ export function useShortcuts(opts?: { transportOnly?: boolean }): void {
       if (target?.matches('[aria-roledescription="sortable"], [aria-roledescription="draggable"]')) {
         return
       }
+      // SPACE ON A FOCUSED CONTROL PRESSES THE CONTROL, nothing else. Native
+      // buttons activate on space, and the row-divs carry role="button" with
+      // their own space handler — but a window-level listener hears the
+      // keydown regardless (preventDefault doesn't stop bubbling), so one
+      // press played the focused row AND toggled playback underneath it. The
+      // panel made this easy to hit (every row is focusable and clicking one
+      // leaves it focused); the same collision existed on every surface.
+      // Space only: arrows and letters stay global — a focused button has no
+      // use for them, and yielding those would kill volume/seek for as long
+      // as any control held focus.
+      if (e.key === ' ' && target?.matches('button, [role="button"], a[href], summary')) return
       if (e.metaKey || e.ctrlKey || e.altKey) return
 
       const s = useStore.getState()
