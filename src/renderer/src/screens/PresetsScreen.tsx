@@ -50,7 +50,7 @@ import { Slider } from '@/components/controls/Slider'
 import { ArtImage } from '@/components/media/ArtImage'
 import { PopoverChrome } from '@/hooks/usePopover'
 import { HeaderChip, ScreenTitle } from '@/components/chrome/Chrome'
-import { useConfirmTap } from '@/hooks/useConfirmTap'
+import { useConfirmPopover } from '@/components/chrome/Confirm'
 
 export function PresetsScreen(): React.JSX.Element {
   const presets = useStore((s) => s.presets)
@@ -556,7 +556,7 @@ function PresetRow({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: preset.id as number
   })
-  const confirmDelete = useConfirmTap()
+  const confirmDelete = useConfirmPopover()
   const pv = usePresetVolumePopover(volume, onVolume)
 
   return (
@@ -639,27 +639,23 @@ function PresetRow({
       </span>
 
       <button
-        data-tip={confirmDelete.isArmed() ? 'Click again to delete' : 'Delete preset'}
+        data-tip="Delete preset"
         aria-label="Delete preset"
         onPointerDown={(e) => e.stopPropagation()}
-        {...confirmDelete.blurProps}
         onClick={(e) => {
           e.stopPropagation()
-          if (confirmDelete.tap() && preset.id != null)
-            void tt.command({ type: 'presetDelete', presetId: preset.id })
+          confirmDelete.ask(e, {
+            question: `Delete “${preset.name ?? `Preset ${preset.id}`}”?`,
+            onConfirm: () => {
+              if (preset.id != null) void tt.command({ type: 'presetDelete', presetId: preset.id })
+            }
+          })
         }}
-        className={cx(
-          'tip-bottom flex items-center gap-1.5 p-1.5 rounded transition-all',
-          confirmDelete.isArmed()
-            ? 'bg-alert text-white opacity-100 px-2'
-            : 'text-faint opacity-0 group-hover:opacity-100 hover:text-alert'
-        )}
+        className="tip-bottom flex items-center p-1.5 rounded transition-all text-faint opacity-0 group-hover:opacity-100 hover:text-alert"
       >
         <Trash2 size={13} />
-        {confirmDelete.isArmed() && (
-          <span className="font-mono text-[10px] font-semibold uppercase tracking-wide">sure?</span>
-        )}
       </button>
+      {confirmDelete.popover}
     </div>
   )
 }
@@ -689,7 +685,7 @@ function PresetCard({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: preset.id as number
   })
-  const confirmDelete = useConfirmTap()
+  const confirmDelete = useConfirmPopover()
   const pv = usePresetVolumePopover(volume, onVolume)
 
   return (
@@ -793,26 +789,24 @@ function PresetCard({
         </button>
       )}
       <button
-        data-tip={confirmDelete.isArmed() ? 'Click again to delete' : 'Delete preset'}
+        data-tip="Delete preset"
         aria-label="Delete preset"
         onPointerDown={(e) => e.stopPropagation()}
-        {...confirmDelete.blurProps}
         onClick={(e) => {
           e.stopPropagation()
-          if (confirmDelete.tap() && preset.id != null)
-            void tt.command({ type: 'presetDelete', presetId: preset.id })
+          confirmDelete.ask(e, {
+            question: `Delete “${preset.name ?? `Preset ${preset.id}`}”?`,
+            onConfirm: () => {
+              if (preset.id != null) void tt.command({ type: 'presetDelete', presetId: preset.id })
+            }
+          })
         }}
         className={cx(
-          'tip-bottom absolute bottom-2 right-2 z-10 flex h-7 items-center justify-center gap-1.5 rounded-lg transition-all',
-          confirmDelete.isArmed()
-            ? 'px-2.5 bg-alert text-white opacity-100 shadow-lg'
-            : cx('w-7 bg-panel/80 ring-1 ring-edge text-dim hover:text-alert', 'opacity-0 group-hover:opacity-100')
+          'tip-bottom absolute bottom-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-lg transition-all',
+          'bg-panel/80 ring-1 ring-edge text-dim hover:text-alert opacity-0 group-hover:opacity-100'
         )}
       >
         <Trash2 size={13} />
-        {confirmDelete.isArmed() && (
-          <span className="font-mono text-[10px] font-semibold uppercase tracking-wide">sure?</span>
-        )}
       </button>
       </div>
 
@@ -828,6 +822,7 @@ function PresetCard({
         </div>
       </div>
       {pv.popover}
+      {confirmDelete.popover}
     </div>
   )
 }

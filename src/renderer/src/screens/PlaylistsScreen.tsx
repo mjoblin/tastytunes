@@ -50,7 +50,7 @@ import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { lockVertical } from '@/lib/dnd'
 import { cx, fmtDuration, fmtRelative, matchesFilter } from '@/lib/format'
 import { HeaderChip, PrimaryButton, ScreenTitle } from '@/components/chrome/Chrome'
-import { useConfirmTap } from '@/hooks/useConfirmTap'
+import { useConfirmPopover } from '@/components/chrome/Confirm'
 import { useOneShotAsk } from '@/hooks/useOneShotAsk'
 
 /**
@@ -78,7 +78,7 @@ export function PlaylistsScreen(): React.JSX.Element {
   const setScreenFilter = useStore((s) => s.setScreenFilter)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
-  const confirmDelete = useConfirmTap<string>()
+  const confirmDelete = useConfirmPopover()
   const [trackMenu, setTrackMenu] = useState<{
     item: PlaylistItem
     index: number
@@ -380,31 +380,30 @@ export function PlaylistsScreen(): React.JSX.Element {
                   <Pencil size={16} />
                 </HeaderChip>
                 <button
-                  onClick={() => {
-                    if (!confirmDelete.tap(selected.id)) return
-                    // Snapshot the WHOLE playlist, not its id: undo has to put
-                    // back the name, the items and the timestamps, and after
-                    // the delete there is nowhere left to read them from.
-                    const deleted = selected
-                    void tt.playlistDelete(deleted.id)
-                    showToast({
-                      kind: 'success',
-                      text: `Deleted “${deleted.name}”`,
-                      action: { label: 'Undo', undo: () => void tt.playlistRestore(deleted) }
+                  onClick={(e) =>
+                    confirmDelete.ask(e, {
+                      question: `Delete “${selected.name}”?`,
+                      onConfirm: () => {
+                        // Snapshot the WHOLE playlist, not its id: undo has to
+                        // put back the name, the items and the timestamps, and
+                        // after the delete there is nowhere left to read them.
+                        const deleted = selected
+                        void tt.playlistDelete(deleted.id)
+                        showToast({
+                          kind: 'success',
+                          text: `Deleted “${deleted.name}”`,
+                          action: { label: 'Undo', undo: () => void tt.playlistRestore(deleted) }
+                        })
+                      }
                     })
-                  }}
-                  {...confirmDelete.blurProps}
+                  }
                   data-tip="Delete playlist"
                   aria-label="Delete playlist"
-                  className={cx(
-                    'no-drag tip-bottom tip-end rounded-lg motion-safe:active:scale-90 transition-all',
-                    confirmDelete.isArmed(selected.id)
-                      ? 'px-2.5 h-9 text-[11.5px] bg-alert text-white'
-                      : 'p-2 ring-1 ring-edge bg-panel/70 text-dim hover:text-alert hover:ring-edge2 hover:bg-raised/70'
-                  )}
+                  className="no-drag tip-bottom tip-end rounded-lg motion-safe:active:scale-90 transition-all p-2 ring-1 ring-edge bg-panel/70 text-dim hover:text-alert hover:ring-edge2 hover:bg-raised/70"
                 >
-                  {confirmDelete.isArmed(selected.id) ? 'Sure?' : <Trash2 size={16} />}
+                  <Trash2 size={16} />
                 </button>
+                {confirmDelete.popover}
               </div>
 
               {/* Its own line, under the title — stacked rather than competing,

@@ -4,17 +4,21 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 const DISARM_MS = 3000
 
 /**
- * The two-tap "Sure?" state machine, shared by the four sites that use one:
- * playlist delete, preset-row delete, preset-card delete, preset-save overwrite.
+ * The two-tap "Sure?" state machine — now ONE site: the preset-save overwrite
+ * slot grid (LibraryMenus), whose cells are fixed squares so the in-place arm
+ * shifts nothing, and which lives inside a popover already, where stacking a
+ * second card would fight the first.
  *
- * Only the STATE MACHINE is shared — every site keeps its own visual morph
- * (a red pill, a "sure?" label, an inline slot swap), because what the armed
- * control should look like is a per-surface question.
+ * EVERY OTHER CONFIRM IS `useConfirmPopover` (law changed 2026-08-03, user
+ * call): the in-place morph resized icon buttons — a trash glyph becoming
+ * "Sure?" text — and a confirm whose arrival moves the thing you're aiming at
+ * is worse than no confirm. The rule that emerged: an in-place arm is
+ * acceptable ONLY where the control's box cannot change; everywhere else,
+ * the anchored popover (components/chrome/Confirm.tsx).
  *
  * DISARM IS THE UNION OF WHAT THE SITES USED TO DO (decided 2026-07-26): a 3s
- * timeout AND blur. Before this, the presets disarmed only on the timer, the
- * playlist only on blur, and the preset-save overwrite never disarmed at all —
- * so an armed control could sit there indefinitely waiting to delete something.
+ * timeout AND blur — before this, an armed control could sit indefinitely
+ * waiting to delete something.
  *
  * Confirms are for what CAN'T be undone; anything with a working undo should
  * stay instant (see the destructive-edit rules in the ROADMAP). This hook is
