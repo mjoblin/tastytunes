@@ -11,7 +11,7 @@ import { EmptyState } from '@/components/chrome/EmptyState'
 import { fromRecent } from '@/lib/mediaRef'
 import { playRefNow } from '@/lib/mediaActions'
 import { scrollToVisible } from '@/lib/scroll'
-import { activeSourceId, cx } from '@/lib/format'
+import { activeSourceId, cx, fmtRelative } from '@/lib/format'
 import { useLitPresets } from '@/hooks/useLitPresets'
 
 export type TrayTab = 'queue' | 'presets' | 'playlists' | 'recent'
@@ -54,6 +54,7 @@ function CompressedRow({
   title,
   subtitle,
   duration,
+  meta,
   playing,
   parked,
   dimmed,
@@ -66,7 +67,15 @@ function CompressedRow({
   withIndex?: boolean
   title: string
   subtitle?: string | null
+  /**
+   * Reserved PER LIST, like the index cell: a list whose rows have durations
+   * passes `?? null` so unknown ones still hold the '–:––' cell, and a list
+   * that has no durations at all (recents, playlists) passes nothing — a
+   * column of placeholders against nothing told the user precisely nothing.
+   */
   duration?: number | null
+  /** Trailing text where a duration makes no sense — the recents' "ago". */
+  meta?: string
   playing?: boolean
   parked?: boolean
   dimmed?: boolean
@@ -116,7 +125,10 @@ function CompressedRow({
         {title}
         {subtitle && <span className="text-faint"> · {subtitle}</span>}
       </span>
-      <DurationCell secs={duration ?? null} />
+      {meta && (
+        <span className="shrink-0 font-mono text-[10.5px] text-faint tabular-nums">{meta}</span>
+      )}
+      {duration !== undefined && <DurationCell secs={duration} />}
     </div>
   )
 }
@@ -197,7 +209,7 @@ export function QueueTab({
                 position={item.position}
                 title={md?.title ?? md?.name ?? '—'}
                 subtitle={md?.artist}
-                duration={md?.duration}
+                duration={md?.duration ?? null}
                 playing={playing}
                 parked={current && !queueAudible}
                 onClick={play}
@@ -470,12 +482,16 @@ export function RecentTab({ density }: { density: TrayDensity }): React.JSX.Elem
         // is stored for them — so they read as history, not as buttons.
         const play = ref ? () => void playRefNow(ref) : undefined
         const attrs = { 'data-tray-row': 'recent' }
+        // The main Recently Played screen's trailing fact, from the same
+        // formatter — a history row's useful number is WHEN, not how long.
+        const ago = fmtRelative(entry.at)
         return density === 'compressed' ? (
           <CompressedRow
             key={`${entry.at}-${entry.title ?? ''}`}
             attrs={attrs}
             title={title ?? '—'}
             subtitle={entry.isRadio ? entry.title : entry.artist}
+            meta={ago}
             dimmed={!ref}
             onClick={play}
           />
@@ -488,6 +504,7 @@ export function RecentTab({ density }: { density: TrayDensity }): React.JSX.Elem
             subtitle={subtitle}
             kind={entry.isRadio ? 'station' : 'track'}
             artUrl={entry.artUrl}
+            meta={ago}
             dimmed={!ref}
             onClick={play}
           />

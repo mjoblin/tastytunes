@@ -516,7 +516,14 @@ export function TrayPanel(): React.JSX.Element {
             rather than letting them touch. */}
         <div
           key={tab}
-          className="relative flex-1 min-h-0 overflow-y-auto pl-3 pr-2 pt-1.5 pb-2 space-y-1.5"
+          className={cx(
+            'relative flex-1 min-h-0 overflow-y-auto pl-3 pr-2 pt-1.5 pb-2',
+            // Rhythm belongs to the FLOATING skin: detailed rows are ringed
+            // cards and need air between them. Compressed rows are the flat
+            // skin — one dense list — and a gap between flat rows just spends
+            // the height the density exists to save.
+            density === 'detailed' && 'space-y-1.5'
+          )}
           data-tray-body={tab}
         >
           {tab === 'queue' && <QueueTab opens={opens} density={density} />}
