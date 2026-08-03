@@ -20,7 +20,18 @@ export type MediaArtKind =
   | 'preset'
   | 'folder'
 
-const FALLBACK: Record<MediaArtKind, React.ComponentType<{ size?: number; className?: string }>> = {
+/**
+ * The fallback glyph per kind, EXPORTED so surfaces that don't render through
+ * MediaArt still pick from the same set. The preset grid draws its art at card
+ * scale with its own ArtImage, and used to hardcode `Radio` — which agreed
+ * with this table by luck, until the tray panel guessed radio-vs-album for the
+ * same presets and an input source came out as a disc in one window and a
+ * radio in the other.
+ */
+export const MEDIA_ART_FALLBACK: Record<
+  MediaArtKind,
+  React.ComponentType<{ size?: number; strokeWidth?: number; className?: string }>
+> = {
   track: Music,
   album: Disc3,
   artist: UserRound,
@@ -40,8 +51,18 @@ const FALLBACK: Record<MediaArtKind, React.ComponentType<{ size?: number; classN
  * of the screen. Amended 2026-07-28 at the user's call; before that the size
  * was a single constant, and the suite still asserts it is one of exactly
  * these two rather than whatever a caller fancied.
+ *
+ * `card` FILLS its container — for tiles, where the art is the whole point.
+ * It exists so a caller doesn't have to override the box with `h-full w-full`
+ * and hope the class order goes its way, and so the FALLBACK GLYPH can scale
+ * with it: a 16px row glyph marooned in a 112px tile is unreadable, which is
+ * exactly how it shipped.
  */
-export type MediaArtSize = 'row' | 'dense'
+export type MediaArtSize = 'row' | 'dense' | 'card'
+
+/** Fallback glyph size per art size — the row sizes are thumb-scale, the card
+ *  one is sized to be legible in a tile a third of the panel's width. */
+const GLYPH: Record<MediaArtSize, number> = { row: 16, dense: 14, card: 28 }
 
 export function MediaArt({
   src,
@@ -57,21 +78,21 @@ export function MediaArt({
   size?: MediaArtSize
   className?: string
 }): React.JSX.Element {
-  const Fallback = icon ?? FALLBACK[kind]
+  const Fallback = icon ?? MEDIA_ART_FALLBACK[kind]
   return (
     <div
       data-media-art
       data-art-size={size}
       className={cx(
         'shrink-0 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center',
-        size === 'dense' ? 'h-8 w-8' : 'h-10 w-10',
+        size === 'card' ? 'h-full w-full' : size === 'dense' ? 'h-8 w-8' : 'h-10 w-10',
         className
       )}
     >
       <ArtImage
         src={src ?? null}
         lazy
-        fallback={<Fallback size={size === 'dense' ? 14 : 16} className="text-faint" />}
+        fallback={<Fallback size={GLYPH[size]} className="text-faint" />}
       />
     </div>
   )

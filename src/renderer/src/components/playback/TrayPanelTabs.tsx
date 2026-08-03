@@ -286,7 +286,7 @@ export function PresetsTab({
               attrs={{ 'data-tray-row': 'preset' }}
               title={p.name ?? `Preset ${p.id}`}
               subtitle={`Preset ${p.id}`}
-              kind={p.class?.includes('radio') ? 'station' : 'album'}
+              kind="preset"
               artUrl={p.art_url ?? p.art_urls?.[0] ?? null}
               playing={isPlaying(p.id)}
               onClick={recall(p.id as number)}
@@ -325,10 +325,15 @@ export function PresetsTab({
           )}
         >
           <div className="aspect-square bg-raised">
+            {/* `preset`, not a guess at the class. A preset is its own kind of
+                thing — an input source, a saved queue and a station are all
+                presets — and the main grid has always drawn the radio mark for
+                every one of them. Guessing radio-vs-album here made a TV ARC
+                input a disc in this window and a radio in the other. */}
             <MediaArt
               src={p.art_url ?? p.art_urls?.[0] ?? null}
-              kind={p.class?.includes('radio') ? 'station' : 'album'}
-              className="h-full w-full"
+              kind="preset"
+              size="card"
             />
           </div>
           {!compact && (

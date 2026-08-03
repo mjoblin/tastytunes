@@ -39,7 +39,11 @@ import { EmptyState } from '@/components/chrome/EmptyState'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { flashTarget, scrollToWithContext } from '@/lib/scroll'
 import { lockVertical } from '@/lib/dnd'
+import { MEDIA_ART_FALLBACK } from '@/components/media/MediaArt'
 import { OrderHandle } from '@/components/controls/OrderHandle'
+
+/** The same glyph the tray panel's preset tiles fall back to — one table. */
+const PresetGlyph = MEDIA_ART_FALLBACK.preset
 import { cx, matchesFilter } from '@/lib/format'
 import { FilterInput } from '@/components/controls/FilterInput'
 import { Slider } from '@/components/controls/Slider'
@@ -590,7 +594,7 @@ function PresetRow({
       </OrderHandle>
 
       <div className="h-10 w-10 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
-        <ArtImage src={preset.art_url} lazy fallback={<Radio size={16} className="text-faint" />} />
+        <ArtImage src={preset.art_url} lazy fallback={<PresetGlyph size={16} className="text-faint" />} />
       </div>
 
       <div className="min-w-0">
@@ -730,7 +734,7 @@ function PresetCard({
             <ArtImage
               src={preset.art_url}
               lazy
-              fallback={<Radio size={34} strokeWidth={1.2} className="text-faint" />}
+              fallback={<PresetGlyph size={34} strokeWidth={1.2} className="text-faint" />}
             />
           )}
 
