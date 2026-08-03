@@ -13,9 +13,6 @@ on:
   workflow_dispatch:
   push:
     tags: ['v*']
-    # TEMPORARY while the smoke is being brought up — dispatch can't see a
-    # workflow that isn't on the default branch yet. Removed before merge.
-    branches: ['windows-ci-smoke']
 
 jobs:
   smoke:
