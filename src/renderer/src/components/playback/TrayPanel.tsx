@@ -25,6 +25,7 @@ import { useTheme } from '@/hooks/useTheme'
 import { useDisplayFont } from '@/hooks/useDisplayFont'
 import { useDecodedArt } from '@/hooks/useDecodedArt'
 import { useNowPlayingHeart } from '@/hooks/useNowPlayingHeart'
+import { useShortcuts } from '@/hooks/useShortcuts'
 import { useVolumeSlider, useWheelVolume } from '@/components/playback/VolumeCluster'
 import { VolumeDial } from '@/components/playback/VolumeDial'
 import { PlayPauseButton, TransportIconButton, useTransport } from '@/components/playback/Transport'
@@ -83,6 +84,11 @@ export function TrayPanel(): React.JSX.Element {
   // Unconditional, above any early return — the hook count must never shift.
   const vol = useVolumeSlider()
   const heart = useNowPlayingHeart()
+  // Transport keys only — this window has no screens, palette or overlays, the
+  // same call the mini player makes. Without it the panel was the one surface
+  // where taking focus took your shortcuts away: space, the arrows and the
+  // volume keys all went dead while it was open.
+  useShortcuts({ transportOnly: true })
   const theme = useTheme(settings.theme)
   useDisplayFont(settings.displayFont)
   useMotionPreference(settings.motion)
@@ -114,6 +120,13 @@ export function TrayPanel(): React.JSX.Element {
   // from under a click.
   useEffect(() => {
     if (opens === 0) return
+    // BELT AND BRACES AGAINST A STALE FIRST FRAME. backgroundThrottling is off
+    // for this window (see main/app/tray.ts) so its state stays live while
+    // hidden, but a re-sync on open costs one IPC round trip and covers
+    // anything a suspended renderer could still have missed — the panel is
+    // hidden for hours at a time, and showing yesterday's album art for a
+    // frame is exactly the thing that makes a surface feel untrustworthy.
+    void tt.getSnapshot().then((snapshot) => useStore.getState().init(snapshot))
     const s = useStore.getState()
     // "A queue tab on an idle streamer is an empty box" — two ways to get one,
     // and both count. Nothing playing (stopped, or never started) is the
@@ -286,7 +299,7 @@ export function TrayPanel(): React.JSX.Element {
               accent={t.shuffleOn}
               onClick={t.toggleShuffle}
             >
-              <Shuffle size={13} />
+              <Shuffle size={12} />
             </TransportIconButton>
             <TransportIconButton size="compact" enabled={active && t.canPrev} tip="Previous" onClick={t.prev}>
               <SkipBack size={14} />
@@ -302,7 +315,7 @@ export function TrayPanel(): React.JSX.Element {
               accent={t.repeatOn}
               onClick={t.toggleRepeat}
             >
-              <Repeat size={13} />
+              <Repeat size={12} />
             </TransportIconButton>
 
             <span className="font-mono text-[10px] text-faint tabular-nums shrink-0 ml-1 w-8 text-right">

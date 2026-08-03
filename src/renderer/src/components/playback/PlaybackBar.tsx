@@ -86,7 +86,7 @@ export function PlaybackBar(): React.JSX.Element {
             accent={t.shuffleOn}
             onClick={t.toggleShuffle}
           >
-            <Shuffle size={15} />
+            <Shuffle size={13} />
           </TransportIconButton>
           <TransportIconButton
             size="bar"
@@ -109,7 +109,7 @@ export function PlaybackBar(): React.JSX.Element {
             accent={t.repeatOn}
             onClick={t.toggleRepeat}
           >
-            <Repeat size={15} />
+            <Repeat size={13} />
           </TransportIconButton>
           {t.canStop && meta.isRadio && (
             <TransportIconButton size="bar" tip="Stop" enabled={active} onClick={t.stop}>

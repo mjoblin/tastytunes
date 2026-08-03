@@ -112,11 +112,12 @@ export function MediaRow({
         dimmed && 'opacity-50 cursor-default'
       )}
     >
-      <MediaArt src={artUrl} kind={kind} icon={icon} />
+      <MediaArt src={artUrl} kind={kind} icon={icon} size={dense ? 'dense' : 'row'} />
       <div className="min-w-0 flex-1">
         <div
           className={cx(
             'flex items-center gap-2 text-[13.5px] truncate',
+            dense && 'leading-tight',
             playing ? 'text-gold' : tuning ? 'text-gold/80' : 'text-ink'
           )}
         >
@@ -127,7 +128,7 @@ export function MediaRow({
           {tuning && <Loader2 size={13} className="spin shrink-0" />}
           <span className="truncate">{title}</span>
         </div>
-        <div className="flex items-center gap-1.5 min-w-0">
+        <div className={cx('flex items-center gap-1.5 min-w-0', dense && 'leading-tight')}>
           {badge && (
             <span className="shrink-0 text-[10px] uppercase tracking-wide font-mono text-faint/80 ring-1 ring-edge rounded px-1 py-px">
               {badge}

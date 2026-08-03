@@ -404,7 +404,16 @@ function ensurePanel(): BrowserWindow {
     backgroundColor: '#00000000',
     webPreferences: {
       preload: join(__dirname, '../preload/index.mjs'),
-      sandbox: false
+      sandbox: false,
+      // THE PANEL MUST NOT BE THROTTLED WHILE HIDDEN. Chromium suspends
+      // timers and coalesces work in background windows, and this window
+      // spends nearly all its life hidden — so on reopen it painted the last
+      // frame it managed before falling asleep (yesterday's album art, a
+      // playhead frozen mid-track) and only then caught up on the pushes it
+      // had queued. That flash is the whole "is this thing live?" question,
+      // answered badly. The cost is a hidden 380px window keeping up with a
+      // push every second or so, which is nothing.
+      backgroundThrottling: false
     }
   })
   try {
