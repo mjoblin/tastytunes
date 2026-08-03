@@ -313,13 +313,15 @@ export function PresetsTab({
           title={compact ? (p.name ?? `Preset ${p.id}`) : undefined}
           onClick={recall(p.id as number)}
           className={cx(
-            // A ring change alone is nearly invisible over album art, so the
-            // card lifts and its label brightens too — the same "this is a
-            // button" answer the main grid gives.
-            'group relative rounded-lg overflow-hidden ring-1 text-left transition-all motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0',
-            isPlaying(p.id)
-              ? 'ring-gold ring-2 hover:ring-gold'
-              : 'ring-edge hover:ring-edge2 hover:bg-raised/70'
+            // THE MAIN GRID'S CARD TREATMENT, not an approximation of it. It
+            // grows slightly on hover (scale is layout-free, so an edge card
+            // just clips at the scrollport) and picks up the shared
+            // `card-hover-glow` outline; a playing card wears `tile-playing`,
+            // the same gold ring and bloom it has on the Presets screen. This
+            // was a raise plus a ring change, which is a different gesture and
+            // a nearly invisible one over album art.
+            'group relative rounded-lg overflow-hidden text-left transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]',
+            isPlaying(p.id) ? 'tile-playing' : 'ring-1 ring-edge card-hover-glow'
           )}
         >
           <div className="aspect-square bg-raised">

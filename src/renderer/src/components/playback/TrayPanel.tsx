@@ -364,7 +364,11 @@ export function TrayPanel(): React.JSX.Element {
             One line doing what a 36px footer used to. Power sits at the RIGHT,
             mirroring the playback bar's right cluster: a widget of a given type
             belongs in the same place on every surface that has one. */}
-        <div className="relative shrink-0 flex items-center px-3 h-6 text-[11px]">
+        {/* leading-none on the row: the three things here are a dot, a
+            proportional label and a mono readout, and each font's default line
+            box centres its glyphs differently — collapsing them to their glyph
+            boxes lets `items-center` line up what you can actually see. */}
+        <div data-status-row className="relative shrink-0 flex items-center px-3 h-6 text-[11px] leading-none">
           {/* ALIGNED WITH THE TRANSPORT ICONS ABOVE IT. The lamp is a button
               like they are, so its glyph should land where theirs do (x=20,
               i.e. the 16px content gutter plus a button's own padding). It was
@@ -375,11 +379,11 @@ export function TrayPanel(): React.JSX.Element {
           <div className="shrink-0 -ml-1">
             <SignalLamp tipClass="tip-bottom tip-start" />
           </div>
-          <span className="text-dim truncate shrink-0 max-w-[45%] -ml-1" title={statusText}>
+          <span className="text-dim truncate shrink-0 max-w-[45%] ml-0.5 leading-none" title={statusText}>
             {statusText}
           </span>
           {formatText && (
-            <span className="text-faint truncate font-mono text-[10px] ml-3">{formatText}</span>
+            <span className="text-faint truncate font-mono text-[10px] ml-4 leading-none">{formatText}</span>
           )}
           <div className="flex-1" />
           <button
