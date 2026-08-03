@@ -27,6 +27,7 @@ import { useDisplayFont } from '@/hooks/useDisplayFont'
 import { useDecodedArt } from '@/hooks/useDecodedArt'
 import { useNowPlayingHeart } from '@/hooks/useNowPlayingHeart'
 import { useShortcuts } from '@/hooks/useShortcuts'
+import { useWakeHold } from '@/hooks/useWakeHold'
 import { useVolumeSlider, useWheelVolume } from '@/components/playback/VolumeCluster'
 import { VolumeDial } from '@/components/playback/VolumeDial'
 import { PlayPauseButton, TransportIconButton, useTransport } from '@/components/playback/Transport'
@@ -191,7 +192,14 @@ export function TrayPanel(): React.JSX.Element {
   // are real questions, so standby and disconnection still say it. (The full
   // chain, source included, stays one click away on the lamp.)
   // Badged when it's a SOURCE; plain when it's a message about the streamer.
-  const standby = connected && !powered
+  // The FULL wake window, not just power: the panel dropped its standby face
+  // at power-ON, which is exactly when the streamer re-announces its retained
+  // pre-standby play_state — so the header flashed the old track as though it
+  // were playing while the recall was still in flight. Same hold as the main
+  // window's StandbyGate (see useWakeHold for the whole story).
+  const waking = useStore((s) => s.waking)
+  const wakeHolding = useWakeHold()
+  const standby = connected && (!powered || waking || wakeHolding)
   const sourceBadge = connected && powered ? sourceName : null
   const statusText = !connected
     ? connection.phase === 'connecting'
@@ -239,7 +247,7 @@ export function TrayPanel(): React.JSX.Element {
             and plays it, which is the fastest thing you can do from here, and
             hiding them would make standby a dead end. */}
         {standby ? (
-          <TrayStandby />
+          <TrayStandby busy={waking || wakeHolding} />
         ) : (
         <>
         {/* ---- identity + volume ----
@@ -573,9 +581,15 @@ function ViewChip({
  * greyed-out versions of those are just noise shaped like controls — which is
  * what the panel did before, and it read as broken rather than asleep.
  */
-function TrayStandby(): React.JSX.Element {
+function TrayStandby({
+  /** The whole wake window (waking OR the post-wake hold) — the copy keys on
+   *  it so the face never reverts to the idle "press to wake" text while a
+   *  recall is still in flight. */
+  busy
+}: {
+  busy: boolean
+}): React.JSX.Element {
   const systemInfo = useStore((s) => s.systemInfo)
-  const waking = useStore((s) => s.waking)
   const last = useStore((s) => s.recents[0])
   return (
     <div
@@ -598,7 +612,7 @@ function TrayStandby(): React.JSX.Element {
           'tip-bottom h-14 w-14 shrink-0 rounded-full ring-2 ring-amber/50 text-amber',
           'flex items-center justify-center transition-all',
           'hover:bg-amberdim hover:shadow-[0_0_28px_rgb(var(--amber-rgb)_/_0.3)]',
-          waking && 'motion-safe:animate-pulse bg-amberdim'
+          busy && 'motion-safe:animate-pulse bg-amberdim'
         )}
       >
         <Power size={24} strokeWidth={1.8} />
@@ -611,7 +625,7 @@ function TrayStandby(): React.JSX.Element {
           <span className="truncate">{systemInfo?.name ?? 'Streamer'} is asleep</span>
         </div>
         <div className="text-[11.5px] text-faint truncate min-h-[15px]">
-          {waking ? 'Waking…' : 'Press to wake — or start something below.'}
+          {busy ? 'Waking…' : 'Press to wake — or start something below.'}
         </div>
         <div className="text-[11px] text-faint mt-0.5 truncate min-h-[14px]">
           {last != null && (

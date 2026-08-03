@@ -3,6 +3,7 @@ import { CircleAlert, CircleCheck, Loader2, Moon, Power, Search, Sparkles } from
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { useShortcuts } from '@/hooks/useShortcuts'
+import { useWakeHold } from '@/hooks/useWakeHold'
 import { useArtAccent } from '@/hooks/useArtAccent'
 import { useArtLoadable } from '@/hooks/useArtLoadable'
 import { useMotionPreference } from '@/hooks/useMotionPreference'
@@ -51,36 +52,15 @@ export default function App(): React.JSX.Element {
   const settings = useStore((s) => s.settings)
 
   const connected = connection.phase === 'connected'
-  // Power flips to ON the moment the wake verb lands, but the recall that
-  // asked for the wake is still ~2.5s away (ensureAwake's settle). In that gap
-  // the streamer re-announces its RETAINED pre-standby play_state, so dropping
-  // the sleeping face at power-ON showed the PREVIOUS track's art and title as
-  // though it were playing, then crossfaded to what you actually asked for
-  // (user, 2026-07-27: clicked a radio preset while asleep, saw the old
-  // album's art first). The gate already says "Waking…" — hold it until the
-  // wake finishes rather than presenting stale state as live.
+  // The wake window: power ON is not arrival. The whole story — the retained
+  // re-announcement, the two wake paths, the release rules and why the first
+  // version of this hold regressed — lives in useWakeHold; this file just
+  // asks. `waking` is the wake-on-intent flag; `holding` covers the gap
+  // between the wake finishing and the streamer actually arriving.
   const waking = useStore((s) => s.waking)
-  // ...and `waking` itself ENDS TOO EARLY: ensureAwake resolves after its 2.5s
-  // settle, then the recall is sent, and only then does the new content
-  // arrive. So hold the face past the wake until the play_state identity
-  // actually CHANGES from the retained one — the same claim the preset lamp
-  // needed for the same reason. Bounded, so a recall that never lands (a dead
-  // preset, say) can't strand the screen on a sleeping face.
-  const stateSig = `${playState?.state ?? ''}|${playState?.queue_id ?? ''}|${playState?.metadata?.title ?? ''}`
-  const [heldSig, setHeldSig] = useState<string | null>(null)
-  const wasWaking = useRef(false)
-  useEffect(() => {
-    if (wasWaking.current && !waking) setHeldSig(stateSig)
-    wasWaking.current = waking
-  }, [waking, stateSig])
-  useEffect(() => {
-    if (heldSig == null) return
-    if (stateSig !== heldSig) return setHeldSig(null)
-    const t = setTimeout(() => setHeldSig(null), 8000)
-    return () => clearTimeout(t)
-  }, [heldSig, stateSig])
+  const holding = useWakeHold()
   const inStandby =
-    connected && ((systemPower != null && systemPower.power !== 'ON') || waking || heldSig != null)
+    connected && ((systemPower != null && systemPower.power !== 'ON') || waking || holding)
 
   // Per-album accent tint (Plexamp-style), from the current art.
   const theme = useTheme(settings.theme)
@@ -141,7 +121,7 @@ export default function App(): React.JSX.Element {
     // has nothing to show, gets the sleeping face.
     switch (screen) {
       case 'now-playing':
-        return inStandby ? <StandbyGate /> : <NowPlayingScreen />
+        return inStandby ? <StandbyGate busy={waking || holding} /> : <NowPlayingScreen />
       case 'queue':
         return <QueueScreen />
       case 'presets':
@@ -389,10 +369,17 @@ function ConnectGate(): React.JSX.Element {
 }
 
 /** Now Playing while the streamer sleeps: nothing is playing, so the screen
- *  becomes a quiet face — wake lamp, last played, and the standing offer. */
-function StandbyGate(): React.JSX.Element {
+ *  becomes a quiet face — wake lamp, last played, and the standing offer.
+ *
+ *  `busy` is the whole wake window — the `waking` flag PLUS the hold that
+ *  covers the gap between the wake finishing and the streamer arriving (see
+ *  useWakeHold). The copy keys on it so the face reads asleep → Waking… →
+ *  gone; keying on `waking` alone made it read asleep → Waking… → asleep
+ *  again for the seconds the recall was still in flight (the reported
+ *  flip-flop).
+ */
+function StandbyGate({ busy }: { busy: boolean }): React.JSX.Element {
   const systemInfo = useStore((s) => s.systemInfo)
-  const waking = useStore((s) => s.waking)
   const last = useStore((s) => s.recents[0])
 
   return (
@@ -402,29 +389,36 @@ function StandbyGate(): React.JSX.Element {
         className={cx(
           'h-24 w-24 rounded-full ring-2 ring-amber/50 text-amber flex items-center justify-center',
           'hover:bg-amberdim hover:shadow-[0_0_40px_rgb(var(--amber-rgb)_/_0.35)] transition-all',
-          waking && 'motion-safe:animate-pulse bg-amberdim'
+          busy && 'motion-safe:animate-pulse bg-amberdim'
         )}
         title="Power on"
       >
         <Power size={36} strokeWidth={1.8} />
       </button>
+      {/* EVERY LINE HOLDS ITS HEIGHT whether or not it has content — the face
+          is a centred flex column, so a line that unmounts re-centres the
+          whole stack and the lamp visibly jumps as the copy changes. This was
+          fixed once, lost, and reported again (2026-08-03); the tray panel's
+          standby face reserves all three lines for the same reason. */}
       <div>
-        <div className="font-display text-2xl text-dim flex items-center justify-center gap-2.5">
+        <div className="font-display text-2xl text-dim flex items-center justify-center gap-2.5 min-h-[32px]">
           <Moon size={20} strokeWidth={1.8} className="text-amber/70" />
           {systemInfo?.name ?? 'Streamer'} is asleep
         </div>
-        <div className="text-[13px] text-faint mt-1.5">
-          {waking ? 'Waking…' : 'Press the lamp — or just play something, from any screen.'}
+        <div className="text-[13px] text-faint mt-1.5 min-h-[19px]">
+          {busy ? 'Waking…' : 'Press the lamp — or just play something, from any screen.'}
         </div>
-        {!waking && last != null && (
-          <div className="text-[12px] text-faint mt-4">
-            Last played:{' '}
-            <span className="text-dim">
-              {last.title ?? last.station}
-              {last.artist ? ` — ${last.artist}` : ''}
-            </span>
-          </div>
-        )}
+        <div className="text-[12px] text-faint mt-4 min-h-[17px]">
+          {last != null && (
+            <>
+              Last played:{' '}
+              <span className="text-dim">
+                {last.title ?? last.station}
+                {last.artist ? ` — ${last.artist}` : ''}
+              </span>
+            </>
+          )}
+        </div>
       </div>
     </div>
   )
