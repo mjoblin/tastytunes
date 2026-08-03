@@ -99,8 +99,13 @@ export function MediaRow({
         }
       }}
       className={cx(
-        'group w-full text-left flex items-center rounded-xl transition-colors',
-        dense ? 'gap-2.5 px-2 py-1' : 'gap-3 px-3 py-2.5',
+        'group w-full text-left flex items-center transition-colors',
+        // A dense row squares off to `rounded-md`, matching the compact rows
+        // it shares a panel with — the two densities are the same list seen
+        // two ways, and a 12px corner beside a 6px one reads as two different
+        // kinds of thing. The window's rows keep `rounded-xl`: nothing there
+        // sits next to a compact row.
+        dense ? 'gap-2.5 px-2 py-1 rounded-md' : 'gap-3 px-3 py-2.5 rounded-xl',
         onClick && !dimmed && 'cursor-pointer',
         playing
           ? 'row-playing bg-gold/10'
