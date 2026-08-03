@@ -1,0 +1,54 @@
+name: Windows smoke
+
+# Builds the NSIS installer, installs it SILENTLY on a real x64 Windows
+# runner, and drives the installed app end-to-end (boot → demo connect →
+# transport round-trip) via .github/windows-smoke.mjs. This is the
+# packaged-Windows proof no dev-mode run gives: installer, packaged
+# resources, release chunks, on the OS they ship to.
+#
+# Runs on manual dispatch and on version tags (observational alongside the
+# Release workflow — it does not gate the release yet).
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  smoke:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - name: Package the NSIS installer
+        run: npx electron-builder --win --publish never
+
+      - name: Install silently
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem dist -Filter '*.exe' | Select-Object -First 1
+          if (-not $setup) { throw 'no installer in dist/' }
+          Write-Host "installing $($setup.Name)"
+          # NSIS one-click: /S is silent; the process forks, so wait for the
+          # installed exe to appear rather than trusting -Wait alone.
+          Start-Process -FilePath $setup.FullName -ArgumentList '/S' -Wait
+          $exe = Join-Path $env:LOCALAPPDATA 'Programs\TastyTunes\TastyTunes.exe'
+          for ($i = 0; $i -lt 30 -and -not (Test-Path $exe); $i++) { Start-Sleep 2 }
+          if (-not (Test-Path $exe)) { throw "installed exe not found at $exe" }
+          Write-Host "installed: $exe"
+          "TT_EXE=$exe" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Drive the installed app
+        shell: pwsh
+        run: |
+          npm i --no-save playwright-core
+          node .github/windows-smoke.mjs
