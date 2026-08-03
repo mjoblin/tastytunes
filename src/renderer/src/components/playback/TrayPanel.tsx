@@ -299,7 +299,7 @@ export function TrayPanel(): React.JSX.Element {
               accent={t.shuffleOn}
               onClick={t.toggleShuffle}
             >
-              <Shuffle size={11} />
+              <Shuffle size={10} />
             </TransportIconButton>
             <TransportIconButton size="compact" enabled={active && t.canPrev} tip="Previous" onClick={t.prev}>
               <SkipBack size={14} />
@@ -315,7 +315,7 @@ export function TrayPanel(): React.JSX.Element {
               accent={t.repeatOn}
               onClick={t.toggleRepeat}
             >
-              <Repeat size={11} />
+              <Repeat size={10} />
             </TransportIconButton>
 
             <span className="font-mono text-[10px] text-faint tabular-nums shrink-0 ml-1 w-8 text-right">
