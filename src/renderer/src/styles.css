@@ -196,6 +196,14 @@ img {
 .badge {
   @apply font-mono text-[10px] uppercase tracking-[0.14em] text-dim border border-edge2 rounded px-1.5 py-0.5;
 }
+/* Same chip, a hair smaller — the tray panel's status line is one 24px row in
+   a 380px window. A MODIFIER CLASS rather than utilities at the call site:
+   `.badge` is a plain class rule emitted after Tailwind's utility layer, so
+   `text-[9px]` alongside it loses the cascade and silently does nothing
+   (measured — it rendered at 10px either way). Must stay after .badge. */
+.badge-sm {
+  @apply text-[9px] tracking-[0.1em] px-1;
+}
 
 ::-webkit-scrollbar {
   width: 10px;

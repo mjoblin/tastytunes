@@ -7,6 +7,7 @@ import {
   Rows2,
   Rows4,
   Maximize2,
+  Moon,
   Power,
   RadioTower,
   Repeat,
@@ -189,6 +190,9 @@ export function TrayPanel(): React.JSX.Element {
   // know what it's called — but "which box is asleep" and "connected to what"
   // are real questions, so standby and disconnection still say it. (The full
   // chain, source included, stays one click away on the lamp.)
+  // Badged when it's a SOURCE; plain when it's a message about the streamer.
+  const standby = connected && !powered
+  const sourceBadge = connected && powered ? sourceName : null
   const statusText = !connected
     ? connection.phase === 'connecting'
       ? 'Connecting…'
@@ -227,6 +231,17 @@ export function TrayPanel(): React.JSX.Element {
           />
         </div>
 
+        {/* STANDBY REPLACES THE HEADER, it doesn't grey it out. A dimmed
+            transport over a dead art tile is a lot of pixels spent saying
+            "no": the panel's whole job is answering a question at a glance,
+            and the answer here is "it's asleep, here's how to wake it". The
+            TABS STAY — picking a preset or a recent track wakes the streamer
+            and plays it, which is the fastest thing you can do from here, and
+            hiding them would make standby a dead end. */}
+        {standby ? (
+          <TrayStandby />
+        ) : (
+        <>
         {/* ---- identity + volume ----
             Wheel-to-volume is scoped to the HEADER, not the whole surface as
             in the mini player. The mini has nothing that scrolls, so
@@ -340,15 +355,26 @@ export function TrayPanel(): React.JSX.Element {
           </div>
         </div>
 
+        </>
+        )}
+
         {/* ---- status: signal, source, format, power ----
             One line doing what a 36px footer used to. Power sits at the RIGHT,
             mirroring the playback bar's right cluster: a widget of a given type
-            belongs in the same place on every surface that has one. */}
-        {/* leading-none on the row: the three things here are a dot, a
-            proportional label and a mono readout, and each font's default line
-            box centres its glyphs differently — collapsing them to their glyph
-            boxes lets `items-center` line up what you can actually see. */}
-        <div data-status-row className="relative shrink-0 flex items-center px-3 h-6 text-[11px] leading-none">
+            belongs in the same place on every surface that has one.
+
+            HIDDEN IN STANDBY. Every one of its jobs is either answered better
+            by the standby face above (the streamer's name, the wake control)
+            or meaningless while asleep (source, format) — and the signal lamp
+            is worse than meaningless there: it takes its colour from the
+            RETAINED pre-standby play_state, so it sat glowing green over a
+            sleeping streamer. */}
+        {!standby && (
+          /* leading-none on the row: the three things here are a dot, a
+             proportional label and a mono readout, and each font's default
+             line box centres its glyphs differently — collapsing them to their
+             glyph boxes lets `items-center` line up what you can see. */
+          <div data-status-row className="relative shrink-0 flex items-center px-3 h-6 text-[11px] leading-none">
           {/* ALIGNED WITH THE TRANSPORT ICONS ABOVE IT. The lamp is a button
               like they are, so its glyph should land where theirs do (x=20,
               i.e. the 16px content gutter plus a button's own padding). It was
@@ -359,9 +385,26 @@ export function TrayPanel(): React.JSX.Element {
           <div className="shrink-0 -ml-1">
             <SignalLamp tipClass="tip-bottom tip-start" />
           </div>
-          <span className="text-dim truncate shrink-0 max-w-[45%] ml-0.5 leading-none" title={statusText}>
-            {statusText}
-          </span>
+          {/* THE SOURCE WEARS THE APP'S BADGE — the same squared-off mono chip
+              Now Playing puts it in. A source is a THING (an input you
+              selected), and the badge says so; the disconnected and standby
+              lines are messages about the streamer, not inputs, so they stay
+              plain text rather than pretending to be chips. */}
+          {sourceBadge ? (
+            <span
+              // `badge-sm` is the shared chip a hair smaller — Now Playing's is
+              // sized for a window and reads correctly there. A modifier class,
+              // because plain utilities lose to `.badge` in the cascade.
+              className="badge badge-sm truncate shrink-0 max-w-[52%] ml-0.5"
+              title={sourceBadge}
+            >
+              {sourceBadge}
+            </span>
+          ) : (
+            <span className="text-dim truncate shrink-0 max-w-[52%] ml-0.5 leading-none" title={statusText}>
+              {statusText}
+            </span>
+          )}
           {formatText && (
             <span className="text-faint truncate font-mono text-[10px] ml-4 leading-none">{formatText}</span>
           )}
@@ -385,6 +428,8 @@ export function TrayPanel(): React.JSX.Element {
             <Power size={13} />
           </button>
         </div>
+
+        )}
 
         {/* ---- tabs + view controls ----
             Four is the practical ceiling: at this width a TEXT Segmented fits
@@ -504,5 +549,66 @@ function ViewChip({
     >
       {children}
     </HeaderChip>
+  )
+}
+
+/**
+ * The panel's standby face — the sibling of App.tsx's `StandbyFace`, at panel
+ * scale and with the same words. Shared WORDING matters more than shared code
+ * here: the two are laid out completely differently (a full screen centred in
+ * a window vs a 130px strip above a tab list), but "X is asleep" has to be the
+ * same sentence in both, or the app appears to hold two opinions about what
+ * happened.
+ *
+ * WHAT STAYS VISIBLE, and why. The lamp, because waking is the thing you came
+ * here to do. The streamer's NAME, because with two of them "which one is
+ * asleep" is the actual question. And the LAST-PLAYED line, the cheapest
+ * possible answer to "will it come back to what I want" — the main app's
+ * standby screen shows it for the same reason.
+ *
+ * WHAT GOES: volume, transport, seek, the signal lamp and the format readout.
+ * A sleeping streamer has no position to seek to and no format to report, and
+ * greyed-out versions of those are just noise shaped like controls — which is
+ * what the panel did before, and it read as broken rather than asleep.
+ */
+function TrayStandby(): React.JSX.Element {
+  const systemInfo = useStore((s) => s.systemInfo)
+  const waking = useStore((s) => s.waking)
+  const last = useStore((s) => s.recents[0])
+  return (
+    <div data-tray-standby className="relative shrink-0 flex items-center gap-3 px-4 pt-4 pb-3">
+      <button
+        onClick={() => void tt.command({ type: 'power', power: 'ON' })}
+        data-tip="Wake the streamer"
+        aria-label="Wake the streamer"
+        className={cx(
+          'tip-bottom h-14 w-14 shrink-0 rounded-full ring-2 ring-amber/50 text-amber',
+          'flex items-center justify-center transition-all',
+          'hover:bg-amberdim hover:shadow-[0_0_28px_rgb(var(--amber-rgb)_/_0.3)]',
+          waking && 'motion-safe:animate-pulse bg-amberdim'
+        )}
+      >
+        <Power size={24} strokeWidth={1.8} />
+      </button>
+      <div className="min-w-0 flex-1">
+        {/* Every line holds its height whether or not it has content, so the
+            lamp beside them never moves as the wake progresses. */}
+        <div className="font-display no-optical tracking-tight text-[14px] text-dim flex items-center gap-1.5 min-h-[17px]">
+          <Moon size={14} strokeWidth={1.8} className="text-amber/70 shrink-0" />
+          <span className="truncate">{systemInfo?.name ?? 'Streamer'} is asleep</span>
+        </div>
+        <div className="text-[11.5px] text-faint mt-0.5 truncate min-h-[15px]">
+          {waking ? 'Waking…' : 'Press to wake — or start something below.'}
+        </div>
+        <div className="text-[11px] text-faint mt-1 truncate min-h-[14px]">
+          {last != null && (
+            <>
+              Last played: <span className="text-dim">{last.title ?? last.station}</span>
+              {last.artist ? ` — ${last.artist}` : ''}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }
