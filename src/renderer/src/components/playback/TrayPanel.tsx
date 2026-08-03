@@ -299,7 +299,7 @@ export function TrayPanel(): React.JSX.Element {
               accent={t.shuffleOn}
               onClick={t.toggleShuffle}
             >
-              <Shuffle size={12} />
+              <Shuffle size={11} />
             </TransportIconButton>
             <TransportIconButton size="compact" enabled={active && t.canPrev} tip="Previous" onClick={t.prev}>
               <SkipBack size={14} />
@@ -315,7 +315,7 @@ export function TrayPanel(): React.JSX.Element {
               accent={t.repeatOn}
               onClick={t.toggleRepeat}
             >
-              <Repeat size={12} />
+              <Repeat size={11} />
             </TransportIconButton>
 
             <span className="font-mono text-[10px] text-faint tabular-nums shrink-0 ml-1 w-8 text-right">
@@ -461,7 +461,7 @@ export function TrayPanel(): React.JSX.Element {
             rather than letting them touch. */}
         <div
           key={tab}
-          className="relative flex-1 min-h-0 overflow-y-auto px-3 pr-1.5 pt-1.5 pb-2 space-y-1.5"
+          className="relative flex-1 min-h-0 overflow-y-auto pl-3 pr-2 pt-1.5 pb-2 space-y-1.5"
           data-tray-body={tab}
         >
           {tab === 'queue' && <QueueTab opens={opens} density={density} />}

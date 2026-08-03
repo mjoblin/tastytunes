@@ -105,7 +105,10 @@ export function MediaRow({
         // two ways, and a 12px corner beside a 6px one reads as two different
         // kinds of thing. The window's rows keep `rounded-xl`: nothing there
         // sits next to a compact row.
-        dense ? 'gap-2.5 px-2 py-1 rounded-md' : 'gap-3 px-3 py-2.5 rounded-xl',
+        // pl-1 == py-1: the art sits the same distance from the row's left
+        // edge as from its top and bottom. pr-2 keeps the trailing duration off
+        // the edge, which is a different job.
+        dense ? 'gap-2.5 pl-1 pr-2 py-1 rounded-md' : 'gap-3 px-3 py-2.5 rounded-xl',
         onClick && !dimmed && 'cursor-pointer',
         playing
           ? 'row-playing bg-gold/10'

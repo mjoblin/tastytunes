@@ -176,6 +176,13 @@ img {
 :root.tray body {
   background: transparent;
 }
+/* A 10px scrollbar is a lot of gutter in a 380px window, and it consumes the
+   body's content box — which is why the rows couldn't reach the same right
+   edge (16px) as everything in the header, status and tab rows above them.
+   4px still reads as a scrollbar and leaves the panel one right gutter. */
+:root.tray ::-webkit-scrollbar {
+  width: 4px;
+}
 .no-drag {
   -webkit-app-region: no-drag;
 }
