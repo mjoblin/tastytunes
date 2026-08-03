@@ -64,6 +64,16 @@ export type MediaArtSize = 'row' | 'dense' | 'card'
  *  one is sized to be legible in a tile a third of the panel's width. */
 const GLYPH: Record<MediaArtSize, number> = { row: 16, dense: 14, card: 28 }
 
+/**
+ * A big glyph needs a THINNER stroke, not the same one scaled up. Lucide's
+ * default 2 is tuned for ~16px marks, where it's what makes them legible; at
+ * 28px the same weight reads as a fat cartoon of the icon. The preset grid has
+ * drawn its card-scale glyph at 1.2 since it was written, and shares this
+ * constant so the two can't diverge again.
+ */
+export const CARD_GLYPH_STROKE = 1.2
+const GLYPH_STROKE: Record<MediaArtSize, number> = { row: 2, dense: 2, card: CARD_GLYPH_STROKE }
+
 export function MediaArt({
   src,
   kind = 'track',
@@ -92,7 +102,9 @@ export function MediaArt({
       <ArtImage
         src={src ?? null}
         lazy
-        fallback={<Fallback size={GLYPH[size]} className="text-faint" />}
+        fallback={
+          <Fallback size={GLYPH[size]} strokeWidth={GLYPH_STROKE[size]} className="text-faint" />
+        }
       />
     </div>
   )

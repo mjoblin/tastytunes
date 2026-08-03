@@ -39,7 +39,7 @@ import { EmptyState } from '@/components/chrome/EmptyState'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { flashTarget, scrollToWithContext } from '@/lib/scroll'
 import { lockVertical } from '@/lib/dnd'
-import { MEDIA_ART_FALLBACK } from '@/components/media/MediaArt'
+import { CARD_GLYPH_STROKE, MEDIA_ART_FALLBACK } from '@/components/media/MediaArt'
 import { OrderHandle } from '@/components/controls/OrderHandle'
 
 /** The same glyph the tray panel's preset tiles fall back to — one table. */
@@ -734,7 +734,7 @@ function PresetCard({
             <ArtImage
               src={preset.art_url}
               lazy
-              fallback={<PresetGlyph size={34} strokeWidth={1.2} className="text-faint" />}
+              fallback={<PresetGlyph size={34} strokeWidth={CARD_GLYPH_STROKE} className="text-faint" />}
             />
           )}
 
