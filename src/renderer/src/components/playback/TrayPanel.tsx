@@ -375,39 +375,31 @@ export function TrayPanel(): React.JSX.Element {
              line box centres its glyphs differently — collapsing them to their
              glyph boxes lets `items-center` line up what you can see. */
           <div data-status-row className="relative shrink-0 flex items-center px-3 h-6 text-[11px] leading-none">
-          {/* ALIGNED WITH THE TRANSPORT ICONS ABOVE IT. The lamp is a button
-              like they are, so its glyph should land where theirs do (x=20,
-              i.e. the 16px content gutter plus a button's own padding). It was
-              carrying a -ml-2 and a scale-90 that put the dot at 15.2 —
-              measurably the leftmost ink in the panel, and it read that way.
-              The lamp is a bullet for the source, so it stays TIGHT to it;
-              the format is a separate fact and gets real air before it. */}
-          <div className="shrink-0 -ml-1">
-            <SignalLamp tipClass="tip-bottom tip-start" />
-          </div>
-          {/* THE SOURCE WEARS THE APP'S BADGE — the same squared-off mono chip
-              Now Playing puts it in. A source is a THING (an input you
-              selected), and the badge says so; the disconnected and standby
-              lines are messages about the streamer, not inputs, so they stay
-              plain text rather than pretending to be chips. */}
+          {/* ORDER MATCHES NOW PLAYING: source, then the format badges, then
+              the lamp. There the lamp trails the chips it summarises, and a
+              second surface that leads with it makes you re-learn the row.
+              The BADGE is the status row's left anchor now, and it is a box,
+              so it sits on the 16px content gutter rather than the 20px the
+              lamp used to take as a button glyph. */}
           {sourceBadge ? (
-            <span
-              // `badge-sm` is the shared chip a hair smaller — Now Playing's is
-              // sized for a window and reads correctly there. A modifier class,
-              // because plain utilities lose to `.badge` in the cascade.
-              className="badge badge-sm truncate shrink-0 max-w-[52%] ml-0.5"
-              title={sourceBadge}
-            >
+            <span className="badge badge-sm truncate shrink-0 max-w-[46%]" title={sourceBadge}>
               {sourceBadge}
             </span>
           ) : (
-            <span className="text-dim truncate shrink-0 max-w-[52%] ml-0.5 leading-none" title={statusText}>
+            <span className="text-dim truncate shrink-0 max-w-[46%] leading-none" title={statusText}>
               {statusText}
             </span>
           )}
           {formatText && (
-            <span className="text-faint truncate font-mono text-[10px] ml-4 leading-none">{formatText}</span>
+            <span className="text-faint truncate font-mono text-[10px] ml-3 leading-none">
+              {formatText}
+            </span>
           )}
+          {/* The lamp SUMMARISES the format beside it, so it sits tight to it
+              — the same relationship it has on Now Playing. */}
+          <div className="shrink-0 ml-1">
+            <SignalLamp tipClass="tip-bottom tip-end" />
+          </div>
           <div className="flex-1" />
           <button
             data-tip={powered ? 'Put in standby' : 'Wake'}
@@ -576,7 +568,18 @@ function TrayStandby(): React.JSX.Element {
   const waking = useStore((s) => s.waking)
   const last = useStore((s) => s.recents[0])
   return (
-    <div data-tray-standby className="relative shrink-0 flex items-center gap-3 px-4 pt-4 pb-3">
+    <div
+      data-tray-standby
+      // THE SAME HEIGHT AS THE HEADER IT REPLACES (art row + transport row +
+      // status row = 138px of content), so nothing below it moves when it wakes
+      // or sleeps. A panel that resizes its own body on a state change makes
+      // the list under it jump, which is the thing you notice and can't
+      // unnotice. Content is centred in the space rather than padded to fill
+      // it — that keeps the lines tight, which is the other half of the ask.
+      // Coupled by an invariant, not by hope: S8 measures both states and
+      // requires them equal, so changing the header fails loudly here.
+      className="relative shrink-0 min-h-[138px] flex items-center gap-3.5 px-4"
+    >
       <button
         onClick={() => void tt.command({ type: 'power', power: 'ON' })}
         data-tip="Wake the streamer"
@@ -597,10 +600,10 @@ function TrayStandby(): React.JSX.Element {
           <Moon size={14} strokeWidth={1.8} className="text-amber/70 shrink-0" />
           <span className="truncate">{systemInfo?.name ?? 'Streamer'} is asleep</span>
         </div>
-        <div className="text-[11.5px] text-faint mt-0.5 truncate min-h-[15px]">
+        <div className="text-[11.5px] text-faint truncate min-h-[15px]">
           {waking ? 'Waking…' : 'Press to wake — or start something below.'}
         </div>
-        <div className="text-[11px] text-faint mt-1 truncate min-h-[14px]">
+        <div className="text-[11px] text-faint mt-0.5 truncate min-h-[14px]">
           {last != null && (
             <>
               Last played: <span className="text-dim">{last.title ?? last.station}</span>
