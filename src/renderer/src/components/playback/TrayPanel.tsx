@@ -455,7 +455,7 @@ export function TrayPanel(): React.JSX.Element {
             // padding is tuned for a full-width header row and left "Recent"
             // adrift in its own segment here. min-w-0 lets the four share the
             // width evenly instead of sizing to their text.
-            className="flex-1 min-w-0 [&>button]:flex-1 [&>button]:min-w-0 [&>button]:px-1 [&>button]:justify-center"
+            className="flex-1 min-w-0 [&>button]:flex-1 [&>button]:min-w-0 [&>button]:px-1 [&>button]:py-1 [&>button]:justify-center"
             options={[
               { value: 'queue', label: 'Queue' },
               { value: 'presets', label: 'Presets' },
