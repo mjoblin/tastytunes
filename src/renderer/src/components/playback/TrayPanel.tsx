@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react'
 import {
   Disc3,
   Heart,
-  ChevronsDownUp,
-  ChevronsUpDown,
   LayoutGrid,
   List,
+  Rows2,
+  Rows4,
   Loader2,
   Maximize2,
   Pause,
@@ -365,12 +365,17 @@ export function TrayPanel(): React.JSX.Element {
             mirroring the playback bar's right cluster: a widget of a given type
             belongs in the same place on every surface that has one. */}
         <div className="relative shrink-0 flex items-center px-3 h-6 text-[11px]">
-          {/* The lamp reads as a bullet for the source, so it sits TIGHT to it;
+          {/* ALIGNED WITH THE TRANSPORT ICONS ABOVE IT. The lamp is a button
+              like they are, so its glyph should land where theirs do (x=20,
+              i.e. the 16px content gutter plus a button's own padding). It was
+              carrying a -ml-2 and a scale-90 that put the dot at 15.2 —
+              measurably the leftmost ink in the panel, and it read that way.
+              The lamp is a bullet for the source, so it stays TIGHT to it;
               the format is a separate fact and gets real air before it. */}
-          <div className="shrink-0 -ml-2 scale-90 origin-left">
+          <div className="shrink-0 -ml-1">
             <SignalLamp tipClass="tip-bottom tip-start" />
           </div>
-          <span className="text-dim truncate shrink-0 max-w-[45%] -ml-0.5" title={statusText}>
+          <span className="text-dim truncate shrink-0 max-w-[45%] -ml-1" title={statusText}>
             {statusText}
           </span>
           {formatText && (
@@ -445,11 +450,13 @@ export function TrayPanel(): React.JSX.Element {
               void saveSettings({ trayRowDensity: density === 'detailed' ? 'compressed' : 'detailed' })
             }
           >
-            {/* COMPRESS vs EXPAND — deliberately not another list glyph. The
-                two chips sit side by side and were both list-shaped, which
-                read as the same control twice. This one is asking a different
-                question ("how much of it") and now looks like it. */}
-            {density === 'detailed' ? <ChevronsDownUp size={13} /> : <ChevronsUpDown size={13} />}
+            {/* Rows-in-a-box, showing the TARGET: four thin ones when a click
+                would compact, two fat ones when it would expand. Distinct from
+                the layout chip beside it (bulleted list vs grid of squares) —
+                the two were both list glyphs and read as one control twice.
+                Compress/expand chevrons were the first fix and were worse: at
+                13px they collapse into something that looks like a ✕. */}
+            {density === 'detailed' ? <Rows4 size={13} /> : <Rows2 size={13} />}
           </ViewChip>
           {/* Same glyph the mini player uses for the same job — one icon means
               "take me to the app" wherever you meet it. */}

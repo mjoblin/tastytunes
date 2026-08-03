@@ -91,7 +91,9 @@ export function VolumeDial({
             level, so it gets a dash rather than a lie. */}
         <span
           className={cx(
-            'relative font-mono text-[11.5px] tabular-nums leading-none',
+            // 10.5px, not 11.5: it sat a size above the readouts either side of
+            // it, and a three-digit level needs the room inside a 26px arc.
+            'relative font-mono text-[10.5px] tabular-nums leading-none',
             muted ? 'text-faint' : enabled ? 'text-ink' : 'text-faint/50'
           )}
         >
