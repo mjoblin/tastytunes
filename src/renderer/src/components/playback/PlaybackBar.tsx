@@ -1,10 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import {
   Disc3,
-  Loader2,
   Moon,
-  Pause,
-  Play,
   Power,
   RadioTower,
   Repeat,
@@ -16,60 +13,28 @@ import {
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { usePlayhead } from '@/hooks/usePlayhead'
-import { controlSet, cx, deriveNowPlaying, fmtTime } from '@/lib/format'
+import { useSeekScrub } from '@/hooks/useSeekScrub'
+import { cx, deriveNowPlaying, fmtTime } from '@/lib/format'
 import { Slider } from '../controls/Slider'
 import { ArtImage } from '../media/ArtImage'
 import { VolumeCluster } from './VolumeCluster'
+import { PlayPauseButton, TransportIconButton, useTransport } from './Transport'
 import { SignalLamp } from '../device/SignalLamp'
 import { SleepTimer } from './SleepTimer'
 import { DeviceSwitcher } from '../device/DeviceSwitcher'
 
 export function PlaybackBar(): React.JSX.Element {
-  const connection = useStore((s) => s.connection)
   const playState = useStore((s) => s.playState)
   const nowPlaying = useStore((s) => s.nowPlaying)
-  const systemPower = useStore((s) => s.systemPower)
   const setScreen = useStore((s) => s.setScreen)
   const { position, duration } = usePlayhead()
-  const [scrub, setScrub] = useState<number | null>(null)
-  // Seek target held after release until the device's playhead catches up —
-  // otherwise the thumb snaps back to the stale position, then jumps forward.
-  const [seekHold, setSeekHold] = useState<number | null>(null)
+  const t = useTransport(duration)
+  const { shownPosition, slider } = useSeekScrub(position, duration, t.seek)
   const [showRemaining, setShowRemaining] = useState(false)
 
-  useEffect(() => {
-    if (seekHold == null) return
-    if (Math.abs(position - seekHold) < 2) {
-      setSeekHold(null)
-      return
-    }
-    const t = setTimeout(() => setSeekHold(null), 3000)
-    return () => clearTimeout(t)
-  }, [seekHold, position])
-
-  const connected = connection.phase === 'connected'
-  const powered = systemPower?.power === 'ON'
   const waking = useStore((s) => s.waking)
   const meta = deriveNowPlaying(playState, nowPlaying)
-  const controls = controlSet(nowPlaying)
-
-  const state = playState?.state
-  const playing = state === 'play'
-  const busy = state === 'buffering' || state === 'connecting'
-
-  const canToggle = controls.has('play_pause') || controls.has('play') || controls.has('pause')
-  const canNext = controls.has('track_next')
-  const canPrev = controls.has('track_previous')
-  const canSeek = controls.has('seek') && duration != null && duration > 0
-  const canShuffle = controls.has('toggle_shuffle')
-  const canRepeat = controls.has('toggle_repeat')
-  const canStop = controls.has('stop')
-
-  const repeatOn = playState?.mode_repeat === 'all'
-  const shuffleOn = playState?.mode_shuffle === 'all'
-
-  const active = connected && powered
-  const shownPosition = scrub != null && duration ? scrub * duration : (seekHold ?? position)
+  const { connected, powered, active } = t
   const ambientWindow = useStore((s) => s.ambientWindowActive)
 
   return (
@@ -114,66 +79,42 @@ export function PlaybackBar(): React.JSX.Element {
       {/* transport + playhead */}
       <div className="flex flex-col items-center justify-center gap-1 min-w-0">
         <div className="flex items-center gap-1">
-          <TransportButton
+          <TransportIconButton
+            size="bar"
             tip="Shuffle"
-            enabled={active && canShuffle}
-            accent={shuffleOn}
-            onClick={() => void tt.command({ type: 'setShuffle', mode: shuffleOn ? 'off' : 'all' })}
+            enabled={active && t.canShuffle}
+            accent={t.shuffleOn}
+            onClick={t.toggleShuffle}
           >
             <Shuffle size={15} />
-          </TransportButton>
-          <TransportButton
+          </TransportIconButton>
+          <TransportIconButton
+            size="bar"
             tip="Previous (←)"
-            enabled={active && canPrev}
-            onClick={() => void tt.command({ type: 'previousTrack' })}
+            enabled={active && t.canPrev}
+            onClick={t.prev}
           >
             <SkipBack size={18} />
-          </TransportButton>
+          </TransportIconButton>
 
-          <button
-            data-tip={playing ? 'Pause (space)' : 'Play (space)'}
-            aria-label={playing ? 'Pause (space)' : 'Play (space)'}
-            disabled={!active || (!canToggle && !busy)}
-            onClick={() => void tt.command({ type: 'togglePlayback' })}
-            className={cx(
-              'tip-top mx-1.5 h-11 w-11 rounded-full flex items-center justify-center transition-all',
-              active && (canToggle || busy)
-                ? 'bg-gold text-bg motion-safe:hover:scale-105 shadow-[0_0_20px_rgb(var(--gold-rgb)_/_0.35)]'
-                : 'bg-veil2 text-faint'
-            )}
-          >
-            {busy ? (
-              <Loader2 size={20} className="spin" />
-            ) : playing ? (
-              <Pause size={20} fill="currentColor" strokeWidth={0} />
-            ) : (
-              <Play size={20} fill="currentColor" strokeWidth={0} className="translate-x-[1px]" />
-            )}
-          </button>
+          <PlayPauseButton size="bar" tipHint=" (space)" className="mx-1.5" />
 
-          <TransportButton
-            tip="Next (→)"
-            enabled={active && canNext}
-            onClick={() => void tt.command({ type: 'nextTrack' })}
-          >
+          <TransportIconButton size="bar" tip="Next (→)" enabled={active && t.canNext} onClick={t.next}>
             <SkipForward size={18} />
-          </TransportButton>
-          <TransportButton
+          </TransportIconButton>
+          <TransportIconButton
+            size="bar"
             tip="Repeat"
-            enabled={active && canRepeat}
-            accent={repeatOn}
-            onClick={() => void tt.command({ type: 'setRepeat', mode: repeatOn ? 'off' : 'all' })}
+            enabled={active && t.canRepeat}
+            accent={t.repeatOn}
+            onClick={t.toggleRepeat}
           >
             <Repeat size={15} />
-          </TransportButton>
-          {canStop && meta.isRadio && (
-            <TransportButton
-              tip="Stop"
-              enabled={active}
-              onClick={() => void tt.command({ type: 'stop' })}
-            >
+          </TransportIconButton>
+          {t.canStop && meta.isRadio && (
+            <TransportIconButton size="bar" tip="Stop" enabled={active} onClick={t.stop}>
               <Square size={13} fill="currentColor" strokeWidth={0} />
-            </TransportButton>
+            </TransportIconButton>
           )}
         </div>
 
@@ -184,18 +125,10 @@ export function PlaybackBar(): React.JSX.Element {
           <div className="flex-1">
             <Slider
               value={duration ? shownPosition / duration : 0}
-              disabled={!active || !canSeek}
+              disabled={!active || !t.canSeek}
               ariaLabel="Playhead"
               scrubLabel={duration ? (v) => fmtTime(v * duration) : undefined}
-              onScrub={setScrub}
-              onCancel={() => setScrub(null)}
-              onCommit={(v) => {
-                setScrub(null)
-                if (duration) {
-                  setSeekHold(v * duration)
-                  void tt.command({ type: 'seek', positionSecs: v * duration })
-                }
-              }}
+              {...slider}
             />
           </div>
           <button
@@ -251,34 +184,5 @@ export function PlaybackBar(): React.JSX.Element {
         </button>
       </div>
     </footer>
-  )
-}
-
-function TransportButton({
-  children,
-  tip,
-  enabled,
-  accent,
-  onClick
-}: {
-  children: React.ReactNode
-  tip: string
-  enabled: boolean
-  accent?: boolean
-  onClick(): void
-}): React.JSX.Element {
-  return (
-    <button
-      data-tip={tip}
-      aria-label={tip}
-      disabled={!enabled}
-      onClick={onClick}
-      className={cx(
-        'tip-top p-2 rounded-md transition-colors',
-        !enabled ? 'text-faint/40' : accent ? 'text-gold' : 'text-dim hover:text-ink'
-      )}
-    >
-      {children}
-    </button>
   )
 }

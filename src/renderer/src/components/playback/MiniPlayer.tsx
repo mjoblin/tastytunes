@@ -1,17 +1,4 @@
-import {
-  Disc3,
-  Maximize2,
-  Loader2,
-  Minus,
-  Pause,
-  Play,
-  Plus,
-  RadioTower,
-  SkipBack,
-  SkipForward,
-  Volume2,
-  VolumeX
-} from 'lucide-react'
+import { Disc3, Maximize2, Minus, Plus, RadioTower, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react'
 import { isCbusMode, isPreAmpMode } from '@shared/smoip'
 import { tt } from '@/api'
 import { CloseButton } from '@/components/controls/CloseButton'
@@ -23,11 +10,12 @@ import { useTheme } from '@/hooks/useTheme'
 import { useShortcuts } from '@/hooks/useShortcuts'
 import { useDisplayFont } from '@/hooks/useDisplayFont'
 import { useVolumeSlider, useWheelVolume } from '@/components/playback/VolumeCluster'
+import { PlayPauseButton, TransportIconButton, useTransport } from '@/components/playback/Transport'
 import { Slider } from '@/components/controls/Slider'
 import { ArtImage } from '@/components/media/ArtImage'
 import { AmbientArt } from '@/components/media/AmbientArt'
 import { useDecodedArt } from '@/hooks/useDecodedArt'
-import { controlSet, cx, deriveNowPlaying, fmtTime } from '@/lib/format'
+import { cx, deriveNowPlaying, fmtTime } from '@/lib/format'
 
 /**
  * The mini player window (?mini=1): a frameless always-on-top strip with art,
@@ -36,12 +24,10 @@ import { controlSet, cx, deriveNowPlaying, fmtTime } from '@/lib/format'
  * region).
  */
 export function MiniPlayer(): React.JSX.Element {
-  const connection = useStore((s) => s.connection)
   const playState = useStore((s) => s.playState)
   const nowPlaying = useStore((s) => s.nowPlaying)
   const zoneState = useStore((s) => s.zoneState)
   const queue = useStore((s) => s.queue)
-  const systemPower = useStore((s) => s.systemPower)
   const settings = useStore((s) => s.settings)
   const hovered = useStore((s) => s.miniHover)
   const { position, duration } = usePlayhead()
@@ -54,25 +40,15 @@ export function MiniPlayer(): React.JSX.Element {
   const theme = useTheme(settings.theme)
   useDisplayFont(settings.displayFont)
 
-  const connected = connection.phase === 'connected'
-  const powered = systemPower?.power === 'ON'
-  const active = connected && powered
+  // Shared with the bar and the tray panel — playing/busy arrive already
+  // gated on `active` (see Transport.tsx for the drift this closed).
+  const t = useTransport()
+  const { connected, active } = t
   const meta = deriveNowPlaying(playState, nowPlaying)
-  const controls = controlSet(nowPlaying)
   useArtAccent(settings.accentFollowsArt && active ? meta.artUrl : null, theme)
   // Wash and tile both render the last DECODED cover (see useDecodedArt).
   const { art: miniArt } = useDecodedArt(meta.artUrl)
   useMotionPreference(settings.motion)
-
-  const state = playState?.state
-  // Gated on `active`, like the tray panel: play_state SURVIVES a disconnect
-  // and a drop into standby, so an ungated check shows a PAUSE button while
-  // the rest of the surface says nothing is playing.
-  const playing = active && state === 'play'
-  const busy = active && (state === 'buffering' || state === 'connecting')
-  const canToggle = controls.has('play_pause') || controls.has('play') || controls.has('pause')
-  const canNext = controls.has('track_next')
-  const canPrev = controls.has('track_previous')
 
   const muted = zoneState?.mute === true
   const preAmp = isPreAmpMode(zoneState)
@@ -185,30 +161,11 @@ export function MiniPlayer(): React.JSX.Element {
 
           {/* transport + volume + time */}
           <div className="flex items-center gap-1.5">
-            <MiniButton enabled={active && canPrev} tip="Previous" onClick={() => void tt.command({ type: 'previousTrack' })}>
+            <MiniButton enabled={active && t.canPrev} tip="Previous" onClick={t.prev}>
               <SkipBack size={14} />
             </MiniButton>
-            <button
-              data-tip={playing ? 'Pause' : 'Play'}
-              aria-label={playing ? 'Pause' : 'Play'}
-              disabled={!active || (!canToggle && !busy)}
-              onClick={() => void tt.command({ type: 'togglePlayback' })}
-              className={cx(
-                'no-drag tip-top h-8 w-8 rounded-full flex items-center justify-center transition-all shrink-0',
-                active && (canToggle || busy)
-                  ? 'bg-gold text-bg motion-safe:hover:scale-105'
-                  : 'bg-veil2 text-faint'
-              )}
-            >
-              {busy ? (
-                <Loader2 size={14} className="spin" />
-              ) : playing ? (
-                <Pause size={14} fill="currentColor" strokeWidth={0} />
-              ) : (
-                <Play size={14} fill="currentColor" strokeWidth={0} className="translate-x-[1px]" />
-              )}
-            </button>
-            <MiniButton enabled={active && canNext} tip="Next" onClick={() => void tt.command({ type: 'nextTrack' })}>
+            <PlayPauseButton size="compact" className="no-drag" />
+            <MiniButton enabled={active && t.canNext} tip="Next" onClick={t.next}>
               <SkipForward size={14} />
             </MiniButton>
 
@@ -286,6 +243,7 @@ export function MiniPlayer(): React.JSX.Element {
   )
 }
 
+/** The shared secondary-control skin, plus the frameless window's no-drag. */
 function MiniButton({
   children,
   tip,
@@ -298,17 +256,8 @@ function MiniButton({
   onClick(): void
 }): React.JSX.Element {
   return (
-    <button
-      data-tip={tip}
-      aria-label={tip}
-      disabled={!enabled}
-      onClick={onClick}
-      className={cx(
-        'no-drag tip-top p-1 rounded transition-colors',
-        enabled ? 'text-dim hover:text-ink' : 'text-faint/40'
-      )}
-    >
+    <TransportIconButton size="compact" tip={tip} enabled={enabled} className="no-drag" onClick={onClick}>
       {children}
-    </button>
+    </TransportIconButton>
   )
 }

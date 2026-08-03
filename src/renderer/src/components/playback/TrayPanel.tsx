@@ -6,10 +6,7 @@ import {
   List,
   Rows2,
   Rows4,
-  Loader2,
   Maximize2,
-  Pause,
-  Play,
   Power,
   RadioTower,
   Repeat,
@@ -30,7 +27,10 @@ import { useDecodedArt } from '@/hooks/useDecodedArt'
 import { useNowPlayingHeart } from '@/hooks/useNowPlayingHeart'
 import { useVolumeSlider, useWheelVolume } from '@/components/playback/VolumeCluster'
 import { VolumeDial } from '@/components/playback/VolumeDial'
+import { PlayPauseButton, TransportIconButton, useTransport } from '@/components/playback/Transport'
+import { useSeekScrub } from '@/hooks/useSeekScrub'
 import { Slider } from '@/components/controls/Slider'
+import { HeaderChip } from '@/components/chrome/Chrome'
 import { ArtImage } from '@/components/media/ArtImage'
 import { AmbientArt } from '@/components/media/AmbientArt'
 import { SignalLamp } from '@/components/device/SignalLamp'
@@ -43,7 +43,7 @@ import {
   type TrayDensity,
   type TrayTab
 } from '@/components/playback/TrayPanelTabs'
-import { controlSet, cx, deriveNowPlaying, fmtTime } from '@/lib/format'
+import { cx, deriveNowPlaying, fmtTime } from '@/lib/format'
 
 const TABS: readonly TrayTab[] = ['queue', 'presets', 'playlists', 'recent']
 /** A stored tab from a future (or hand-edited) settings file must not blank the body. */
@@ -75,7 +75,6 @@ export function TrayPanel(): React.JSX.Element {
   const playState = useStore((s) => s.playState)
   const nowPlaying = useStore((s) => s.nowPlaying)
   const zoneState = useStore((s) => s.zoneState)
-  const systemPower = useStore((s) => s.systemPower)
   const systemInfo = useStore((s) => s.systemInfo)
   const settings = useStore((s) => s.settings)
   const saveSettings = useStore((s) => s.saveSettings)
@@ -88,9 +87,10 @@ export function TrayPanel(): React.JSX.Element {
   useDisplayFont(settings.displayFont)
   useMotionPreference(settings.motion)
 
-  const connected = connection.phase === 'connected'
-  const powered = systemPower?.power === 'ON'
-  const active = connected && powered
+  // Shared with the bar and the mini — playing/busy arrive already gated on
+  // `active` (see Transport.tsx for the drift this closed).
+  const t = useTransport(duration)
+  const { connected, powered, active } = t
 
   // ---- tabs and view controls.
   //
@@ -149,40 +149,27 @@ export function TrayPanel(): React.JSX.Element {
   // — nothing here needs to tell it. This local flag is only for the cue.
 
   const meta = deriveNowPlaying(playState, nowPlaying)
-  const controls = controlSet(nowPlaying)
   useArtAccent(settings.accentFollowsArt && active ? meta.artUrl : null, theme)
   const { art } = useDecodedArt(meta.artUrl)
-
-  const state = playState?.state
-  // `active` matters: play_state survives a disconnect or a drop into standby,
-  // so without it the disabled button sits there showing a PAUSE icon —
-  // claiming the streamer is playing while the panel says nothing is.
-  const playing = active && state === 'play'
-  const busy = active && (state === 'buffering' || state === 'connecting')
-  const canToggle = controls.has('play_pause') || controls.has('play') || controls.has('pause')
-  const canNext = controls.has('track_next')
-  const canPrev = controls.has('track_previous')
-  const canSeek = controls.has('seek') && duration != null && duration > 0
-  const canShuffle = controls.has('toggle_shuffle')
-  const canRepeat = controls.has('toggle_repeat')
-  const repeatOn = playState?.mode_repeat === 'all'
-  const shuffleOn = playState?.mode_shuffle === 'all'
 
   const muted = zoneState?.mute === true
   const preAmp = isPreAmpMode(zoneState)
   const cbus = isCbusMode(zoneState)
   const hasVolume = zoneState != null && (preAmp || cbus)
 
-  // ---- seek. Local scrub so the thumb tracks the drag rather than the
-  // streamer's next push, which arrives about a second later.
-  const [scrub, setScrub] = useState<number | null>(null)
-  const shownPosition = scrub != null && duration ? scrub * duration : position
+  // ---- seek. Shared scrub-and-hold (see useSeekScrub): the thumb tracks the
+  // drag rather than the streamer's ~1s-late pushes, and holds the target
+  // after release instead of snapping back — the bar's old fix, now here too.
+  const { shownPosition, slider } = useSeekScrub(position, duration, t.seek)
 
   // The status line. A panel that hides the streamer's state lies about it, so
   // connection and standby are always readable — and wake-from-standby is
   // genuinely menu-bar-shaped (it's midnight, the app isn't open, the streamer
   // is asleep).
-  const deviceName = systemInfo?.name?.trim() || (connected ? connection.host : null)
+  // The phase check inline (not `connected`): host only exists on the
+  // connected arm of the union, and TS can't narrow through the hook's boolean.
+  const deviceName =
+    systemInfo?.name?.trim() || (connection.phase === 'connected' ? connection.host : null)
   const sourceName = active ? (nowPlaying?.source?.name ?? null) : null
   // THE SOURCE while playing; the DEVICE only when the device is the thing you
   // need told. Naming the streamer on every line was noise — you own it, you
@@ -288,50 +275,35 @@ export function TrayPanel(): React.JSX.Element {
           </div>
 
           {/* ---- transport + modes + playhead, on one line ---- */}
-          <div className="flex items-center gap-1 mt-2">
+          <div data-transport className="flex items-center gap-1 mt-2">
             {/* ORDER MATCHES THE PLAYBACK BAR: shuffle · prev · play · next ·
                 repeat. The two mode toggles bracket the transport there, and a
                 second surface that reshuffles them makes you look twice. */}
-            <PanelButton
-              enabled={active && canShuffle}
+            <TransportIconButton
+              size="compact"
+              enabled={active && t.canShuffle}
               tip="Shuffle"
-              active={shuffleOn}
-              onClick={() => void tt.command({ type: 'setShuffle', mode: shuffleOn ? 'off' : 'all' })}
+              accent={t.shuffleOn}
+              onClick={t.toggleShuffle}
             >
               <Shuffle size={13} />
-            </PanelButton>
-            <PanelButton enabled={active && canPrev} tip="Previous" onClick={() => void tt.command({ type: 'previousTrack' })}>
+            </TransportIconButton>
+            <TransportIconButton size="compact" enabled={active && t.canPrev} tip="Previous" onClick={t.prev}>
               <SkipBack size={14} />
-            </PanelButton>
-            <button
-              data-tip={playing ? 'Pause' : 'Play'}
-              aria-label={playing ? 'Pause' : 'Play'}
-              disabled={!active || (!canToggle && !busy)}
-              onClick={() => void tt.command({ type: 'togglePlayback' })}
-              className={cx(
-                'tip-top h-8 w-8 rounded-full flex items-center justify-center transition-all shrink-0',
-                active && (canToggle || busy) ? 'bg-gold text-bg motion-safe:hover:scale-105' : 'bg-veil2 text-faint'
-              )}
-            >
-              {busy ? (
-                <Loader2 size={14} className="spin" />
-              ) : playing ? (
-                <Pause size={14} fill="currentColor" strokeWidth={0} />
-              ) : (
-                <Play size={14} fill="currentColor" strokeWidth={0} className="translate-x-[1px]" />
-              )}
-            </button>
-            <PanelButton enabled={active && canNext} tip="Next" onClick={() => void tt.command({ type: 'nextTrack' })}>
+            </TransportIconButton>
+            <PlayPauseButton size="compact" />
+            <TransportIconButton size="compact" enabled={active && t.canNext} tip="Next" onClick={t.next}>
               <SkipForward size={14} />
-            </PanelButton>
-            <PanelButton
-              enabled={active && canRepeat}
+            </TransportIconButton>
+            <TransportIconButton
+              size="compact"
+              enabled={active && t.canRepeat}
               tip="Repeat"
-              active={repeatOn}
-              onClick={() => void tt.command({ type: 'setRepeat', mode: repeatOn ? 'off' : 'all' })}
+              accent={t.repeatOn}
+              onClick={t.toggleRepeat}
             >
               <Repeat size={13} />
-            </PanelButton>
+            </TransportIconButton>
 
             <span className="font-mono text-[10px] text-faint tabular-nums shrink-0 ml-1 w-8 text-right">
               {active ? fmtTime(shownPosition) : ''}
@@ -343,15 +315,10 @@ export function TrayPanel(): React.JSX.Element {
                   to know where it will land. */}
               <Slider
                 value={duration ? shownPosition / duration : 0}
-                disabled={!active || !canSeek}
+                disabled={!active || !t.canSeek}
                 ariaLabel="Playhead"
                 scrubLabel={duration ? (v) => fmtTime(v * duration) : undefined}
-                onScrub={setScrub}
-                onCancel={() => setScrub(null)}
-                onCommit={(v) => {
-                  setScrub(null)
-                  if (duration) void tt.command({ type: 'seek', positionSecs: v * duration })
-                }}
+                {...slider}
               />
             </div>
             <span className="font-mono text-[10px] text-faint tabular-nums shrink-0 w-8">
@@ -442,7 +409,7 @@ export function TrayPanel(): React.JSX.Element {
                 }
               >
                 {/* Grid vs list — the shape question. */}
-              {presetsLayout === 'cards' ? <List size={13} /> : <LayoutGrid size={13} />}
+                {presetsLayout === 'cards' ? <List size={13} /> : <LayoutGrid size={13} />}
               </ViewChip>
             )}
           </div>
@@ -494,36 +461,12 @@ export function TrayPanel(): React.JSX.Element {
   )
 }
 
-function PanelButton({
-  children,
-  tip,
-  enabled,
-  active,
-  onClick
-}: {
-  children: React.ReactNode
-  tip: string
-  enabled: boolean
-  active?: boolean
-  onClick(): void
-}): React.JSX.Element {
-  return (
-    <button
-      data-tip={tip}
-      aria-label={tip}
-      disabled={!enabled}
-      onClick={onClick}
-      className={cx(
-        'tip-top p-1 rounded transition-colors shrink-0',
-        !enabled ? 'text-faint/40' : active ? 'text-gold' : 'text-dim hover:text-ink'
-      )}
-    >
-      {children}
-    </button>
-  )
-}
-
-/** The panel's layout chips — the app's HeaderChip idiom at panel scale. */
+/**
+ * The panel's layout chips — the app's ACTUAL HeaderChip, not an idiom-alike.
+ * It wore a local approximation first (`bg-golddim/40`, no idle fill), which
+ * is precisely the drift the chrome kit exists to prevent; only the panel-
+ * scale padding and the tooltip placement live here.
+ */
 function ViewChip({
   children,
   tip,
@@ -538,17 +481,15 @@ function ViewChip({
   onClick(): void
 }): React.JSX.Element {
   return (
-    <button
+    <HeaderChip
       {...attrs}
       data-tip={tip}
       aria-label={tip}
+      active={active}
       onClick={onClick}
-      className={cx(
-        'tip-bottom tip-end shrink-0 p-1.5 rounded-lg ring-1 transition-colors',
-        active ? 'ring-gold/50 text-gold bg-golddim/40' : 'ring-edge text-dim hover:text-ink hover:ring-edge2'
-      )}
+      className="tip-bottom tip-end shrink-0 p-1.5"
     >
       {children}
-    </button>
+    </HeaderChip>
   )
 }

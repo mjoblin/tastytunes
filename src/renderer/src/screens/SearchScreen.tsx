@@ -29,6 +29,7 @@ import { RowHeart } from '@/components/media/RowHeart'
 import { Segmented } from '@/components/controls/Segmented'
 import { playStation, playingStationName } from '@/lib/radio'
 import { useStationTuning } from '@/hooks/useStationTuning'
+import { useLitPresets } from '@/hooks/useLitPresets'
 import { cx, matchesFilter } from '@/lib/format'
 import { Chip, ScreenTitle } from '@/components/chrome/Chrome'
 
@@ -129,6 +130,10 @@ export function SearchScreen(): React.JSX.Element {
   const favorites = useStore((s) => s.favorites)
   const playlists = useStore((s) => s.playlists)
   const presets = useStore((s) => s.presets?.presets ?? null)
+  // Over ALL presets, not the filtered results: uniqueness-based matching
+  // (duplicate saved queues light only an unambiguous match) must see the
+  // same field the Presets screen sees, or a filter can fake uniqueness.
+  const litPresets = useLitPresets(presets ?? [])
   const connection = useStore((s) => s.connection)
   const openInLibrary = useStore((s) => s.openInLibrary)
   const requestLibrarySearch = useStore((s) => s.requestLibrarySearch)
@@ -567,7 +572,9 @@ export function SearchScreen(): React.JSX.Element {
             kind="preset"
             badge="Preset"
             meta={p.id != null ? `#${p.id}` : undefined}
-            playing={p.is_playing === true}
+            // NOT `p.is_playing` — the device's flag is untrustworthy in both
+            // directions; useLitPresets is the one derivation (see its memo).
+            playing={p.id != null && litPresets.has(p.id)}
             dimmed={!connected}
             onClick={() => {
               if (p.id != null) void tt.command({ type: 'recallPreset', presetId: p.id })
