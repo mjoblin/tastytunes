@@ -50,6 +50,7 @@ const RECENT_CAP = 12
  */
 function CompressedRow({
   position,
+  withIndex,
   title,
   subtitle,
   duration,
@@ -60,6 +61,9 @@ function CompressedRow({
   attrs
 }: {
   position?: number | null
+  /** Does this LIST have indices at all? Set per list, not per row, so the
+   *  titles stay on one line even where a particular row has no number. */
+  withIndex?: boolean
   title: string
   subtitle?: string | null
   duration?: number | null
@@ -91,10 +95,18 @@ function CompressedRow({
     >
       {/* The position cell is the flat skin's playing marker — eqbars replace
           the number, exactly as on the Queue screen, so the eye looks in one
-          place for "where am I" on both surfaces. */}
-      <span className="w-5 shrink-0 flex justify-center font-mono text-[10.5px] text-faint tabular-nums">
-        {playing ? <Eqbars playing /> : position != null ? position : ''}
-      </span>
+          place for "where am I" on both surfaces.
+          ONLY WHERE THE LIST HAS NUMBERS. Recent and Playlists have none, and
+          reserving the cell for them indented every title by 20px against
+          nothing. Those lists put the playing marker inline instead — which is
+          the floating skin's rule, and the right one when there's no cell. */}
+      {withIndex ? (
+        <span className="w-5 shrink-0 flex justify-center font-mono text-[10.5px] text-faint tabular-nums">
+          {playing ? <Eqbars playing /> : position != null ? position : ''}
+        </span>
+      ) : (
+        playing && <Eqbars playing />
+      )}
       <span
         className={cx(
           'flex-1 min-w-0 truncate text-[12.5px]',
@@ -180,6 +192,7 @@ export function QueueTab({
           <div key={item.id ?? item.position} ref={playing ? playingRow : undefined}>
             {density === 'compressed' ? (
               <CompressedRow
+                withIndex
                 attrs={{ 'data-tray-row': 'queue' }}
                 position={item.position}
                 title={md?.title ?? md?.name ?? '—'}
@@ -258,6 +271,7 @@ export function PresetsTab({
         {items.map((p) =>
           density === 'compressed' ? (
             <CompressedRow
+              withIndex
               key={p.id}
               attrs={{ 'data-tray-row': 'preset' }}
               position={p.id}
@@ -283,12 +297,20 @@ export function PresetsTab({
     )
   }
 
+  // COMPACT CARDS: art only, four across. The density chip means something on
+  // this tab too — "show me more of them" is the same request whether the
+  // things are rows or tiles, and for presets the art IS the identifier, so
+  // the label is the part that can go.
+  const compact = density === 'compressed'
   return (
-    <div className="grid grid-cols-3 gap-2 p-2">
+    // No padding of its own: the body already supplies the window's gutter,
+    // and adding to it indented the grid further than everything above it.
+    <div className={cx('grid gap-2', compact ? 'grid-cols-4 gap-1.5' : 'grid-cols-3')}>
       {items.map((p) => (
         <button
           key={p.id}
           data-tray-preset={p.id}
+          title={compact ? (p.name ?? `Preset ${p.id}`) : undefined}
           onClick={recall(p.id as number)}
           className={cx(
             // A ring change alone is nearly invisible over album art, so the
@@ -307,14 +329,16 @@ export function PresetsTab({
               className="h-full w-full"
             />
           </div>
-          <div
-            className={cx(
-              'px-1.5 py-1 text-[10.5px] truncate transition-colors',
-              isPlaying(p.id) ? 'text-gold' : 'text-dim group-hover:text-ink'
-            )}
-          >
-            {p.name ?? `Preset ${p.id}`}
-          </div>
+          {!compact && (
+            <div
+              className={cx(
+                'px-1.5 py-1 text-[10.5px] truncate transition-colors',
+                isPlaying(p.id) ? 'text-gold' : 'text-dim group-hover:text-ink'
+              )}
+            >
+              {p.name ?? `Preset ${p.id}`}
+            </div>
+          )}
         </button>
       ))}
     </div>

@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react'
 import {
   Disc3,
   Heart,
-  AlignJustify,
+  ChevronsDownUp,
+  ChevronsUpDown,
   LayoutGrid,
+  List,
   Loader2,
   Maximize2,
   Pause,
@@ -11,7 +13,6 @@ import {
   Power,
   RadioTower,
   Repeat,
-  Rows3,
   Shuffle,
   SkipBack,
   SkipForward
@@ -431,22 +432,24 @@ export function TrayPanel(): React.JSX.Element {
                   void saveSettings({ trayPresetsLayout: presetsLayout === 'cards' ? 'rows' : 'cards' })
                 }
               >
-                {presetsLayout === 'cards' ? <Rows3 size={13} /> : <LayoutGrid size={13} />}
+                {/* Grid vs list — the shape question. */}
+              {presetsLayout === 'cards' ? <List size={13} /> : <LayoutGrid size={13} />}
               </ViewChip>
             )}
           </div>
           <ViewChip
-            tip={density === 'detailed' ? 'Compact rows' : 'Detailed rows'}
+            tip={density === 'detailed' ? 'Compact view' : 'Detailed view'}
             active={density === 'compressed'}
             attrs={{ 'data-tray-density': density }}
             onClick={() =>
               void saveSettings({ trayRowDensity: density === 'detailed' ? 'compressed' : 'detailed' })
             }
           >
-            {/* A DIFFERENT glyph from the layout chip beside it. Both were
-                Rows3, so the two sat side by side looking like the same
-                control twice. */}
-            {density === 'detailed' ? <AlignJustify size={13} /> : <Rows3 size={13} />}
+            {/* COMPRESS vs EXPAND — deliberately not another list glyph. The
+                two chips sit side by side and were both list-shaped, which
+                read as the same control twice. This one is asking a different
+                question ("how much of it") and now looks like it. */}
+            {density === 'detailed' ? <ChevronsDownUp size={13} /> : <ChevronsUpDown size={13} />}
           </ViewChip>
           {/* Same glyph the mini player uses for the same job — one icon means
               "take me to the app" wherever you meet it. */}
