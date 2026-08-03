@@ -206,7 +206,10 @@ export function QueueTab({
               <CompressedRow
                 withIndex
                 attrs={{ 'data-tray-row': 'queue' }}
-                position={item.position}
+                // 1-BASED, like the Queue screen's cell — the wire's position
+                // is 0-based, and a list that counts from 0 in one window and
+                // 1 in the other is the same number telling two stories.
+                position={(item.position ?? 0) + 1}
                 title={md?.title ?? md?.name ?? '—'}
                 subtitle={md?.artist}
                 duration={md?.duration ?? null}
