@@ -724,7 +724,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
   mediaKeys: true,
   volumeLimitPercent: null,
   notifications: true,
-  tray: false,
+  // ON by default (user call, 2026-08-03, once the panel feature-completed):
+  // the panel is the app's reach-without-a-window face, and a default-off
+  // switch buried mid-list meant most installs would never meet it. Existing
+  // installs that TOUCHED the toggle keep their stored value; only settings
+  // files without the key pick up the new default.
+  tray: true,
   trayCloseNoticeShown: false,
   theme: 'dark',
   displayFont: 'fraunces',

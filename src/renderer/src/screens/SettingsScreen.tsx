@@ -311,6 +311,15 @@ export function SettingsScreen(): React.JSX.Element {
         {tab === 'behavior' && (
         <section className="space-y-3">
           <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
+            {/* First in the section (user call, 2026-08-03): the panel is the
+                app's reach-without-a-window face, and this is its switch. */}
+            <Toggle
+              label="Menu bar icon"
+              hint="Adds a TastyTunes icon to the menu bar — switch source, wake or standby the streamer, and reach settings without opening the app. It's the system tray on Windows and Linux, where TastyTunes then keeps running after you close the window."
+              checked={settings.tray}
+              onChange={(tray) => void save({ tray })}
+            />
+
             <SettingRow
               label="Animations"
               hint="Motion effects — hover growth, the small equalizer bars that indicate what's playing, smooth scrolling. System follows your OS Reduce Motion setting."
@@ -338,13 +347,6 @@ export function SettingsScreen(): React.JSX.Element {
               hint="Show a system notification when the track changes while TastyTunes is in the background."
               checked={settings.notifications}
               onChange={(notifications) => void save({ notifications })}
-            />
-
-            <Toggle
-              label="Menu bar icon"
-              hint="Adds a TastyTunes icon to the menu bar — switch source, wake or standby the streamer, and reach settings without opening the app. It's the system tray on Windows and Linux, where TastyTunes then keeps running after you close the window."
-              checked={settings.tray}
-              onChange={(tray) => void save({ tray })}
             />
 
             <SettingRow
