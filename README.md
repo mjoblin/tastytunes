@@ -31,7 +31,7 @@ full-screen display mode, sleep timers and schedules, scrobbling to
 ListenBrainz, and an optional MCP server for local AI agents.
 
 It all runs on your machine and talks to the streamer over your own network.
-There's no account, no cloud service and no database.
+There's no account, and no cloud service requirements.
 
 ## Getting started
 
@@ -109,7 +109,7 @@ Themes, fonts, layouts and sort orders, stored on your machine.
 
 ### AI agents
 
-Per-cluster and per-tool switches for the MCP server. Off by default.
+MCP tools for local agent control.
 
 <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/settings-agents.webp" alt="The AI agents settings tab">
 
