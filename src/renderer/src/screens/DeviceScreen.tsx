@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ArrowUpCircle,
   Check,
@@ -6,6 +6,7 @@ import {
   ExternalLink,
   Loader2,
   RefreshCw,
+  Router,
   Sparkles,
   Unplug
 } from 'lucide-react'
@@ -33,6 +34,20 @@ export function DeviceScreen(): React.JSX.Element {
   const deviceTab = useStore((s) => s.settings.deviceTab)
   const saveSettings = useStore((s) => s.saveSettings)
   const [manualHost, setManualHost] = useState('')
+  const manualRef = useRef<HTMLInputElement | null>(null)
+  /**
+   * A discovery run FINISHED and turned up nothing. Distinct from "no devices
+   * yet" (the state before anyone has looked), because only the former means
+   * the person is now waiting on the manual path — that's when the field earns
+   * the focus, and taking it before they've searched would be presumptuous.
+   */
+  const [searchCameBackEmpty, setSearchCameBackEmpty] = useState(false)
+  const wasDiscovering = useRef(false)
+  useEffect(() => {
+    if (wasDiscovering.current && !discovering) setSearchCameBackEmpty(devices.length === 0)
+    if (discovering) setSearchCameBackEmpty(false)
+    wasDiscovering.current = discovering
+  }, [discovering, devices.length])
   // Tabs are UNCONDITIONAL now: every streamer has inputs, so there are always
   // at least System and Sources. Tone & EQ stays feature-detected — it's an
   // option that may be absent, no longer the reason the tab bar exists (which
@@ -65,6 +80,22 @@ export function DeviceScreen(): React.JSX.Element {
     setExpandedOverride(null)
   }, [connection.phase])
   const expanded = expandedOverride ?? !connected
+  /**
+   * Is the address field the LIVE PATH rather than a fallback? True when we're
+   * not connected and discovery has nothing to offer — which is exactly when
+   * someone is stuck, and the one moment this block should be the loudest
+   * thing on the screen. While devices are listed it stays quiet: shouting
+   * every time would just be noise over the path most people take.
+   */
+  const needsManual = !connected && !discovering && devices.length === 0
+  // Hand over the caret when a search has come back empty — at that point
+  // typing an address is the only thing left to do, and making someone click
+  // into the field first is a small unkindness. Never on mere arrival: the
+  // screen has tabs and controls, and stealing focus from them would be worse
+  // than the click it saves.
+  useEffect(() => {
+    if (searchCameBackEmpty && expanded) manualRef.current?.focus()
+  }, [searchCameBackEmpty, expanded])
   const busyHost =
     connection.phase === 'connecting' || (connection.phase === 'disconnected' && connection.reconnecting)
       ? connection.host
@@ -149,8 +180,8 @@ export function DeviceScreen(): React.JSX.Element {
 
                 {devices.length === 0 && !discovering && (
                   <div className="text-[12.5px] text-faint">
-                    Nothing found yet. Ensure the streamer is on the same network, or enter its IP
-                    below.
+                    Nothing found yet. Ensure the streamer is on the same network — or connect to
+                    it directly below.
                   </div>
                 )}
 
@@ -180,22 +211,68 @@ export function DeviceScreen(): React.JSX.Element {
               </div>
             )}
 
+            {/* CONNECT BY ADDRESS.
+                Discovery is SSDP multicast, which plenty of real networks
+                simply don't carry — guest/IoT VLANs, a streamer on ethernet
+                while the Mac is on a mesh AP, VPNs, and virtual machines (a
+                VM on NAT reaches the streamer fine and never hears a
+                multicast reply — user, 2026-08-04). For those people this
+                field is not a fallback, it IS the way in, and it used to sit
+                unlabelled under a hairline looking like a developer setting.
+
+                So it earns its weight CONDITIONALLY: quiet while discovery
+                has answers, promoted the moment it doesn't. Always labelled —
+                a placeholder is not a label, and it vanishes the instant you
+                type. */}
             {expanded && (
-              <div className="border-t border-edge pt-3">
+              <div
+                data-manual-connect={needsManual ? 'promoted' : 'quiet'}
+                className={cx(
+                  'mt-3 rounded-xl transition-all',
+                  needsManual
+                    ? 'ring-1 ring-amber/35 bg-amberdim/25 p-3'
+                    : 'border-t border-edge pt-3'
+                )}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <Router size={14} className={needsManual ? 'text-amber' : 'text-faint'} />
+                  <span className={cx('text-[12.5px]', needsManual ? 'text-ink' : 'text-dim')}>
+                    Connect by address
+                  </span>
+                </div>
+                {needsManual && (
+                  // Only when it's the live path: the one question someone in
+                  // this state actually has is "where do I find that?", and
+                  // answering it beats another line of reassurance.
+                  <p className="text-[11.5px] text-faint leading-snug mb-2">
+                    Your streamer shows its IP under Settings → Network on its own display, and
+                    your router lists it among connected devices.
+                  </p>
+                )}
                 <div className="flex gap-2">
                   <input
+                    ref={manualRef}
                     value={manualHost}
                     onChange={(e) => setManualHost(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && manualHost.trim()) void tt.connect(manualHost.trim())
                     }}
                     placeholder="Hostname or IP (e.g. 192.168.1.42)"
-                    className="flex-1 bg-bg rounded-lg ring-1 ring-edge focus:ring-edge2 outline-none px-3 py-1.5 text-[13px] placeholder:text-faint"
+                    aria-label="Streamer hostname or IP address"
+                    className={cx(
+                      'flex-1 bg-bg rounded-lg ring-1 outline-none px-3 text-[13px] placeholder:text-faint transition-all',
+                      needsManual
+                        ? 'ring-amber/40 focus:ring-amber/70 py-2'
+                        : 'ring-edge focus:ring-edge2 py-1.5'
+                    )}
                   />
                   <button
                     disabled={!manualHost.trim()}
                     onClick={() => void tt.connect(manualHost.trim())}
-                    className="text-[12.5px] px-3 py-1.5 rounded-lg bg-amber text-bg font-medium disabled:opacity-40 hover:brightness-110 transition-all"
+                    className={cx(
+                      'rounded-lg bg-amber text-bg font-medium disabled:opacity-40 hover:brightness-110 motion-safe:active:scale-95 transition-all',
+                      needsManual ? 'text-[13px] px-4 py-2' : 'text-[12.5px] px-3 py-1.5'
+                    )}
                   >
                     Connect
                   </button>
