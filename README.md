@@ -26,9 +26,9 @@ it instantly, tunes internet radio, and edits the queue and the streamer's 99
 presets.
 
 Beyond that: playlists and favorites, a log of what you've played, artist and
-album notes, tone and EQ, a mini player, a full-screen display mode, sleep
-timers and schedules, scrobbling to ListenBrainz, and an optional MCP server
-for local AI agents.
+album notes, tone and EQ, a menu bar / system tray panel, a mini player, a
+full-screen display mode, sleep timers and schedules, scrobbling to
+ListenBrainz, and an optional MCP server for local AI agents.
 
 It all runs on your machine and talks to the streamer over your own network.
 There's no account, no cloud service and no database.
@@ -136,7 +136,7 @@ from another machine.
 - Device switcher in the playback bar
 - Auto-reconnect with backoff, and connection health checks after system sleep
 - Power and standby, with a guard that never re-sends ON to a unit that's already on
-- Demo mode: runs the whole app against a built-in virtual streamer
+- Demo mode: runs the whole app against a built-in virtual streamer and two demo media libraries
 
 ### Now Playing
 
@@ -190,6 +190,7 @@ from another machine.
 
 - All 99 hardware slots: recall, delete, drag-to-reorder; keys <kbd>1</kbd>–<kbd>9</kbd> recall directly
 - Per-preset volume: a preset can carry its own level, applied on every recall, remembered per device
+- A preset broken by a media-server re-index is flagged in place and repairable — repair finds the same content again and re-saves the slot
 
 ### Tone, EQ & device
 
@@ -226,6 +227,14 @@ from another machine.
 - Sleep timer: 15 minutes to 2 hours, or end of track; pause or standby; owned by the main process, so it survives a closed window and a system sleep
 - Schedules: wake the streamer to a preset at a chosen volume, or send it to standby, per weekday (schedules fire while the app is running)
 - A wake schedule missed while the computer was asleep is offered on waking rather than run late: once, within ten minutes of the missed time, and only if nothing is already playing
+
+### Menu bar / system tray
+
+- An optional icon in the menu bar (macOS) or system tray (Windows, Linux) — on by default — with a native menu: connection status, wake/standby, source switching, and quit
+- Clicking the icon (macOS and Windows) opens a compact panel: now playing with transport and volume, plus Queue, Presets, Playlists, and Recent tabs, each one click to play; a pick made in standby wakes the streamer first
+- The panel sets its own fit — row density down to an art-free compressed mode, presets as cards or rows — independent of the main window's layout
+- Closing the main window on Windows and Linux keeps TastyTunes running in the tray, told once via a notification; Quit lives in the icon's menu
+- Linux keeps the icon and menu only — the platform offers nothing to anchor the panel against
 
 ### Windows & control
 
