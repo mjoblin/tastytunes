@@ -33,8 +33,18 @@ mac:
   entitlementsInherit: build/entitlements.mac.plist
   notarize: true
 win:
+  # x64 plus arm64 in ONE dual-arch installer: NSIS embeds both payloads and
+  # picks at install time. A single artifact keeps electron-updater safe (one
+  # latest.yml entry serves both arches) and spares Windows-on-ARM users the
+  # x64-under-emulation fallback. Pinning the arch list here also means a bare
+  # dist:win builds what users get, not the host arch; explicit --x64/--arm64
+  # still narrows to one arch for quick tests. The arm64 payload only decodes
+  # because of the BCJ filter pin in scripts/build-win.mjs — see there.
   target:
-    - nsis
+    - target: nsis
+      arch:
+        - x64
+        - arm64
 nsis:
   # A half-extracted payload used to install "successfully" and leave a
   # shortcut to an .exe that was never written (live-hit on Windows 11 ARM,

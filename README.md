@@ -37,8 +37,8 @@ There's no account, and no cloud service requirements.
 
 1. Get the installer for your platform from the
    [releases page](https://github.com/mjoblin/tastytunes/releases/latest):
-   macOS 11+ (universal, signed and notarized), Windows 10+ (x64),
-   Linux (x64 or arm64 AppImage).
+   macOS 11+ (universal, signed and notarized), Windows 10+ (x64 & arm64,
+   one installer), Linux (x64 or arm64 AppImage).
 2. Launch it. TastyTunes discovers StreamMagic streamers on your network; if
    discovery comes up empty, enter the streamer's IP directly.
 3. There's no account and nothing else to configure.
@@ -266,7 +266,7 @@ from another machine.
 ### Updates & packaging
 
 - Update check on launch and every four hours; the self-updater downloads nothing until you click Download, installs nothing until you click Restart
-- Signed and notarized universal macOS builds (Intel and Apple Silicon); Windows x64; Linux AppImages for x64 and arm64, including 64-bit Raspberry Pi OS
+- Signed and notarized universal macOS builds (Intel and Apple Silicon); one Windows installer covering x64 and arm64 (native on Windows-on-ARM); Linux AppImages for x64 and arm64, including 64-bit Raspberry Pi OS
 
 ## What leaves your machine
 

@@ -23,6 +23,9 @@ jobs:
             # --mac on the arm64 runner would ship Apple-Silicon-only)
             args: --mac --universal
           - os: windows-latest
+            # arch comes from electron-builder.yml (x64 + arm64, one
+            # dual-arch NSIS installer); the packaging step routes through
+            # scripts/build-win.mjs, which pins the 7z filter
             args: --win
           - os: ubuntu-latest
             args: --linux
