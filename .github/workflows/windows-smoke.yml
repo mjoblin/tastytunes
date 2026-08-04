@@ -45,7 +45,7 @@ jobs:
       - run: npm run build
 
       - name: Package the NSIS installer
-        run: npx electron-builder --win --${{ matrix.arch }} --publish never
+        run: npm run dist:win -- --${{ matrix.arch }} --publish never
 
       - name: Install silently
         shell: pwsh

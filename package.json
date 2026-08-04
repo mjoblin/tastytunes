@@ -19,7 +19,7 @@
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "dist:mac": "electron-vite build && electron-builder --mac",
-    "dist:win": "electron-vite build && electron-builder --win",
+    "dist:win": "electron-vite build && node scripts/build-win.mjs",
     "dist:linux": "electron-vite build && electron-builder --linux"
   },
   "dependencies": {

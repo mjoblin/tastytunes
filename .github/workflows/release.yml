@@ -90,15 +90,17 @@ jobs:
 
       # On a tag: build and upload the installers to the GitHub Release.
       # On manual runs: build only; artifacts are attached to the workflow run.
+      # Windows goes through scripts/build-win.mjs — it pins the 7z filter, and
+      # without it the arm64 installer ships broken (see that file).
       - name: Package and publish
         if: startsWith(github.ref, 'refs/tags/v')
-        run: npx electron-builder ${{ matrix.args }} --publish always
+        run: ${{ matrix.os == 'windows-latest' && 'npm run dist:win -- --publish always' || format('npx electron-builder {0} --publish always', matrix.args) }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Package only
         if: "!startsWith(github.ref, 'refs/tags/v')"
-        run: npx electron-builder ${{ matrix.args }} --publish never
+        run: ${{ matrix.os == 'windows-latest' && 'npm run dist:win -- --publish never' || format('npx electron-builder {0} --publish never', matrix.args) }}
 
       # MANUAL RUNS ONLY. On a tag the installers are already attached to the
       # GitHub Release by --publish always above, and release assets do NOT

@@ -1,0 +1,34 @@
+// The ONE entry point for Windows packaging. Use it everywhere — CI and by
+// hand — because a raw `electron-builder --win` produces an installer that
+// silently fails to install on Windows-on-ARM.
+//
+// WHY: 7-Zip groups executables into a single solid block so it can apply an
+// architecture filter to them, and for arm64 payloads it picks the ARM64
+// branch filter (7-Zip 21.x). The 7z decoder embedded in the NSIS installer
+// predates that filter, so it decodes every ordinary block and fails on
+// exactly the executable one — the install "succeeds" with no .exe and no
+// DLLs, leaving a shortcut that points at nothing. Live-hit 2026-08-03 and
+// reproduced on a windows-11-arm CI runner.
+//
+// ELECTRON_BUILDER_7Z_FILTER pins the filter to BCJ (the x86 one, understood
+// by every 7-Zip decoder ever shipped). Compression is unaffected in any way
+// that matters, and the payload becomes decodable everywhere.
+//
+// NOT `useZip: true`, which looks like the obvious alternative: the zip path
+// in electron-builder's NSIS script reports failure through a MessageBox with
+// NO `/SD` default, so a silent install (`/S`, i.e. every CI install and
+// every unattended one) BLOCKS FOREVER waiting for a click. Tried it; both
+// architectures hung for 38 minutes before the run was cancelled.
+//
+//   node scripts/build-win.mjs [extra electron-builder args...]
+//   npm run dist:win -- --arm64
+import { spawn } from 'node:child_process'
+
+const args = ['electron-builder', '--win', ...process.argv.slice(2)]
+console.log(`> ELECTRON_BUILDER_7Z_FILTER=BCJ npx ${args.join(' ')}`)
+
+const child = spawn('npx', args, {
+  stdio: 'inherit',
+  env: { ...process.env, ELECTRON_BUILDER_7Z_FILTER: 'BCJ' }
+})
+child.on('exit', (code) => process.exit(code ?? 1))
