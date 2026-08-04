@@ -18,6 +18,17 @@ files:
   # inside the asar is fine (Electron patches fs), so no asarUnpack.
   - resources/**
 npmRebuild: false
+# VERSIONLESS ARTIFACT NAMES for everything a human downloads (decided
+# 2026-08-04, for the website's download buttons): GitHub's
+# releases/latest/download/<asset> endpoint gives each asset a stable URL
+# only if the NAME is stable, so the site's three links are set once and
+# survive every release. The mac ZIP keeps the default VERSIONED name — it
+# is the updater's artifact, referenced inside latest-mac.yml, and no human
+# ever sees it. Windows/Linux installers are ALSO update artifacts, but each
+# release's latest*.yml names its own assets, so versionless works there.
+# Costs, accepted: a downloaded file doesn't carry its version in the name
+# (the installed app shows it in Settings' tab rail), and linking an OLDER
+# release means hand-building the URL.
 mac:
   category: public.app-category.music
   target:
@@ -32,6 +43,8 @@ mac:
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   notarize: true
+dmg:
+  artifactName: ${productName}.${ext}
 win:
   # x64 plus arm64 in ONE dual-arch installer: NSIS embeds both payloads and
   # picks at install time. A single artifact keeps electron-updater safe (one
@@ -46,6 +59,10 @@ win:
         - x64
         - arm64
 nsis:
+  # NO arch in this name, deliberately: an artifactName containing the arch
+  # placeholder silently switches NSIS from the one dual-arch installer back
+  # to per-arch installers (NsisTarget splits on it).
+  artifactName: ${productName}-Setup.${ext}
   # A half-extracted payload used to install "successfully" and leave a
   # shortcut to an .exe that was never written (live-hit on Windows 11 ARM,
   # 2026-08-03). electron-builder's own script does not check the extraction
@@ -59,4 +76,7 @@ linux:
       arch:
         - x64
         - arm64
+  # Versionless like the rest, but the arch STAYS: two AppImages share one
+  # release, so the arch is what keeps their names distinct.
+  artifactName: ${productName}-${arch}.${ext}
   category: Audio
