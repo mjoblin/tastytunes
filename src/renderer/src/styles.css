@@ -79,7 +79,12 @@
   --color-edge2: rgb(255 255 255 / 0.16);
   --color-ink: #f4efe6;
   --color-dim: #a69e90;
-  --color-faint: #6f675b;
+  /* Lifted from #6f675b (3.48:1) to clear the 4.5:1 WCAG AA floor for normal
+     text — measured 2026-08-04, hue and saturation preserved so the palette's
+     warmth is unchanged. It dresses ~120 visible text nodes: queue positions,
+     the playhead readouts on every screen, Device's field labels, Settings'
+     hint lines. Still the app's quietest text token. */
+  --color-faint: #82786a;
   --color-amber: rgb(var(--amber-rgb));
   --color-amberdim: rgb(var(--amber-rgb) / 0.14);
   /* fixed gold for brand + "currently playing" — never tinted by album art */
@@ -119,7 +124,7 @@
   --color-edge2: rgb(30 20 5 / 0.26);
   --color-ink: #241d12;
   --color-dim: #5f5749;
-  --color-faint: #8f8672;
+  --color-faint: #736c5c; /* 3.12:1 -> 4.50:1 on paper; see the dark note */
   --color-goldtile: #eee0bd;
   --color-led: #1fa456;
   --alert-rgb: 199 74 53;
