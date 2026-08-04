@@ -441,7 +441,12 @@ function registerIpc(): void {
   )
   ipcMain.handle(IPC.contentResolve, (_e, ref: ContentRef) => deviceManager.contentResolve(ref))
   ipcMain.handle(IPC.toggleMini, () => toggleMiniPlayer())
-  ipcMain.handle(IPC.showMain, () => showMainWindow())
+  // A named screen goes through sendMenuCommand, which already creates the
+  // window if it's gone, waits for the load, restores/focuses it and then
+  // navigates — the exact sequence the tray menu's own items rely on.
+  ipcMain.handle(IPC.showMain, (_e, screen?: string) =>
+    screen ? sendMenuCommand({ id: 'screen', screen }) : showMainWindow()
+  )
   ipcMain.handle(IPC.fetchArt, async (_e, url: string) => {
     if (!/^https?:/i.test(url)) return null
     try {

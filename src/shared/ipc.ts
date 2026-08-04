@@ -274,7 +274,13 @@ export interface TastyTunesApi {
   /** Open/close the mini player window. */
   toggleMini(): Promise<void>
   /** Show and focus the main window. */
-  showMain(): Promise<void>
+  /**
+   * Bring the main window up, optionally ON A GIVEN SCREEN — the tray panel
+   * needs "open the app where the thing I can't do from here lives" (its
+   * disconnected face sends people to Device to connect). Same door the tray
+   * MENU's items use; without the argument it's the plain "just show it".
+   */
+  showMain(screen?: string): Promise<void>
   /** Arm or clear the sleep timer (lives in the main process). */
   setSleep(sleep: SleepTimer | null): Promise<void>
   /** Act on a wake missed during sleep — runs it exactly as the tick would. */

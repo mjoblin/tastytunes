@@ -31,7 +31,7 @@ const api: TastyTunesApi = {
   fetchAlbumInfo: (artist: string, album: string, force?: boolean) =>
     ipcRenderer.invoke(IPC.fetchAlbumInfo, artist, album, force),
   toggleMini: () => ipcRenderer.invoke(IPC.toggleMini),
-  showMain: () => ipcRenderer.invoke(IPC.showMain),
+  showMain: (screen?: string) => ipcRenderer.invoke(IPC.showMain, screen),
   setSleep: (sleep: SleepTimer | null) => ipcRenderer.invoke(IPC.setSleep, sleep),
   scheduleRunMissed: () => ipcRenderer.invoke(IPC.scheduleRunMissed),
   scheduleDismissMissed: () => ipcRenderer.invoke(IPC.scheduleDismissMissed),

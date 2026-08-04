@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import {
+  ArrowRight,
   Disc3,
   Heart,
+  Loader2,
   LayoutGrid,
   List,
   Rows2,
@@ -13,7 +15,8 @@ import {
   Repeat,
   Shuffle,
   SkipBack,
-  SkipForward
+  SkipForward,
+  Unplug
 } from 'lucide-react'
 import { isCbusMode, isPreAmpMode } from '@shared/smoip'
 import type { ScreenLayout } from '@shared/model'
@@ -200,6 +203,13 @@ export function TrayPanel(): React.JSX.Element {
   const waking = useStore((s) => s.waking)
   const wakeHolding = useWakeHold()
   const standby = connected && (!powered || waking || wakeHolding)
+  // NO STREAMER AT ALL gets its own face, for the same reason standby does: a
+  // dead transport over an empty art tile spends the panel's whole header
+  // saying "no". Worse here than in standby, because the answer isn't on this
+  // surface — connecting means discovery or typing an address, neither of
+  // which belongs in a 380px panel that dismisses on blur. So the face says
+  // what's wrong and opens the app where it can be fixed.
+  const offline = !connected
   const sourceBadge = connected && powered ? sourceName : null
   const statusText = !connected
     ? connection.phase === 'connecting'
@@ -246,7 +256,9 @@ export function TrayPanel(): React.JSX.Element {
             TABS STAY — picking a preset or a recent track wakes the streamer
             and plays it, which is the fastest thing you can do from here, and
             hiding them would make standby a dead end. */}
-        {standby ? (
+        {offline ? (
+          <TrayOffline phase={connection.phase} host={deviceName} />
+        ) : standby ? (
           <TrayStandby busy={waking || wakeHolding} />
         ) : (
         <>
@@ -377,7 +389,7 @@ export function TrayPanel(): React.JSX.Element {
             is worse than meaningless there: it takes its colour from the
             RETAINED pre-standby play_state, so it sat glowing green over a
             sleeping streamer. */}
-        {!standby && (
+        {!standby && !offline && (
           /* leading-none on the row: the three things here are a dot, a
              proportional label and a mono readout, and each font's default
              line box centres its glyphs differently — collapsing them to their
@@ -588,6 +600,69 @@ function ViewChip({
  * greyed-out versions of those are just noise shaped like controls — which is
  * what the panel did before, and it read as broken rather than asleep.
  */
+/**
+ * The panel with NO STREAMER behind it.
+ *
+ * Sibling of TrayStandby, and the same bargain: replace the header rather than
+ * grey it out, at exactly the header's height so nothing below it moves. The
+ * difference is what the two states can offer. Standby has its remedy right
+ * here — press the lamp. This one does not: connecting means discovery or
+ * typing an address, and neither belongs in a 380px window that dismisses the
+ * moment you look away. So the honest move is to name the problem and open the
+ * app on the screen that solves it (Device, where "Find devices" and the
+ * address field live — NOT Settings, which has no connection controls).
+ *
+ * CONNECTING IS NOT DISCONNECTED. While the app is dialling, the button would
+ * be an interruption rather than a help, so that state just says so and waits.
+ */
+function TrayOffline({
+  phase,
+  host
+}: {
+  phase: string
+  host: string | null
+}): React.JSX.Element {
+  const busy = phase === 'connecting'
+  return (
+    <div
+      data-tray-offline={busy ? 'connecting' : 'disconnected'}
+      // Height-locked to the header it replaces, like the standby face. S8
+      // measures both, so changing the header fails loudly here too.
+      className="relative shrink-0 min-h-[138px] flex items-center gap-3.5 px-4"
+    >
+      <div
+        className={cx(
+          'h-14 w-14 shrink-0 rounded-full ring-2 flex items-center justify-center',
+          busy ? 'ring-amber/40 text-amber motion-safe:animate-pulse' : 'ring-edge2 text-faint'
+        )}
+      >
+        {busy ? <Loader2 size={22} className="spin" /> : <Unplug size={22} />}
+      </div>
+      <div className="min-w-0 flex-1">
+        {/* Reserved heights, so the lines can change without moving the glyph
+            beside them — the same rule the standby face follows. */}
+        <div className="font-display no-optical tracking-tight text-[14px] text-dim min-h-[17px] truncate">
+          {busy ? `Connecting to ${host ?? 'your streamer'}…` : 'No streamer connected'}
+        </div>
+        <div className="text-[11.5px] text-faint min-h-[15px] truncate">
+          {busy ? 'One moment.' : 'TastyTunes needs a streamer to control.'}
+        </div>
+        <div className="min-h-[26px] mt-1">
+          {!busy && (
+            <button
+              onClick={() => void tt.showMain('device')}
+              className="inline-flex items-center gap-1.5 text-[11.5px] px-2.5 py-1 rounded-lg ring-1 ring-amber/40 bg-amberdim text-amber hover:brightness-110 hover:ring-amber/60 motion-safe:active:scale-95 transition-all"
+            >
+              Connect a streamer
+              <ArrowRight size={12} />
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function TrayStandby({
   /** The whole wake window (waking OR the post-wake hold) — the copy keys on
    *  it so the face never reverts to the idle "press to wake" text while a
