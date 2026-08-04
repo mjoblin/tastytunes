@@ -180,11 +180,15 @@ export function QueueTab({
   //
   // Container-scoped: scrollIntoView is banned app-wide, it scrolls every
   // scrollable ancestor including the window.
+  // pad 8: detailed rows are RINGED cards, and the ring is a box-shadow
+  // outside the row's border box — a flush follow-scroll clipped the playing
+  // row's gold ring at the scrollport edge (user, 2026-08-04, seen switching
+  // compact -> detailed). 8px matches the body's own pb-2 rhythm.
   useEffect(() => {
-    scrollToVisible(playingRow.current)
+    scrollToVisible(playingRow.current, 8)
   }, [opens, density])
   useEffect(() => {
-    if (followQueue) scrollToVisible(playingRow.current)
+    if (followQueue) scrollToVisible(playingRow.current, 8)
   }, [playId, followQueue])
 
   if (offline) return <OfflineTab icon={ListMusic} what="Queue" they="It lives" />
