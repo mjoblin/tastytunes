@@ -1,6 +1,10 @@
 node_modules/
 out/
 dist/
+# electron-builder writes per-arch output dirs too (dist-arm64/, …) —
+# `dist/` alone does not cover them, and a stray `git add -A` then tries to
+# commit a 190MB exe (happened 2026-08-03; the push bounced, thankfully).
+dist-*/
 *.log
 .DS_Store
 *.tsbuildinfo

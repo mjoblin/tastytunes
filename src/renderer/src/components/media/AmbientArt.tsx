@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useBlurredArt } from '@/hooks/useBlurredArt'
 
 /**
  * The blurred album-art wash behind the app (and behind the mini player's
@@ -12,16 +13,26 @@ import { useEffect, useRef, useState } from 'react'
  * changes dropped the whole window to base black for the length of the fetch —
  * very visible when the art comes from a remote service via the streamer.
  *
+ * THE BLUR LIVES IN THE BITMAP, NOT IN CSS (2026-08-03). A live
+ * `filter: blur()` over a full-window layer costs 16x under software
+ * rasterization and made the app unusable on machines without working GPU
+ * acceleration; `useBlurredArt` bakes it once per track instead.
+ *
  * A null `src` fades the wash OUT rather than yanking it: art that fails to
  * load, or a disconnect, used to remove it in a single frame.
  */
 export function AmbientArt({
-  src,
+  src: rawSrc,
   vignette
 }: {
   src: string | null
   vignette: boolean
 }): React.JSX.Element | null {
+  // THE BLUR IS BAKED IN, not applied live — see useBlurredArt for the
+  // measurements. What lands here is already a small, pre-blurred bitmap, and
+  // the layers below carry no filter at all. Until it's baked there is simply
+  // no wash yet, which the crossfade already handles (a null src fades out).
+  const src = useBlurredArt(rawSrc)
   const [cur, setCur] = useState<{ src: string | null; k: number }>({ src, k: 0 })
   const [prev, setPrev] = useState<{ src: string; k: number } | null>(null)
   const curRef = useRef(cur)

@@ -154,6 +154,16 @@ img {
 .drag-region {
   -webkit-app-region: drag;
 }
+/* THE TRAFFIC-LIGHT RESERVATION IS macOS-ONLY. Screen headers carry `pt-8`
+   (32px) so the hiddenInset lights at y=18 have somewhere to sit without
+   landing on content. A native title bar (Windows, Linux) is drawn ABOVE the
+   web contents, so that reservation buys nothing and reads as a dead band
+   across the top of the window. 20px keeps the header off the frame without
+   the hole. Wins on specificity (0,2,0) over Tailwind's pt-8 (0,1,0) — no
+   !important needed, and the utility still governs macOS. */
+:root.native-frame .drag-region {
+  padding-top: 20px;
+}
 /* While a filter input is focused, drag regions go inert: the native drag
    hit-test swallows ALL pointer events, so clicks on the header could never
    reach the DOM to dismiss the caret. Dragging returns the moment it blurs. */
@@ -351,16 +361,30 @@ img {
    carry only the images (see AmbientArt). Keeping the opacity out here means a
    dissolve can't brighten past the wash's own level halfway through, and the
    expensive blur is one pass over both layers rather than one each. */
+/* NO FILTER HERE — DELIBERATELY. This layer used to carry
+   `filter: blur(100px) saturate(1.4)` across the whole window, which a GPU
+   does for free and a software rasterizer does at 227ms per repaint against
+   14ms with the wash off (16x, ~4fps): the app became unusable on machines
+   without working acceleration (VMs, RDP, blacklisted drivers).
+
+   MEASURED, so the obvious "fixes" don't get retried: a smaller radius isn't
+   enough (blur(25px) = 7.4x, blur(6px) = 5.3x); blurring a small surface and
+   scaling it up changes nothing (15.6x — Chromium rasterizes at the final
+   on-screen scale); and it isn't blur specifically, since `saturate()` alone
+   cost 3.2x. ANY per-frame filter over a full-window layer is the problem.
+   With no filter the layer costs 2x (28ms), which is fine.
+
+   The blur and the saturation are baked into the bitmap instead, once per
+   track — see useBlurredArt. Adding a filter back here re-introduces all of
+   it. */
 .ambient-art {
   position: absolute;
   inset: 0;
   transform: scale(1.3);
-  filter: blur(100px) saturate(1.4);
   opacity: 0.2;
 }
 :root.light .ambient-art {
   opacity: 0.16;
-  filter: blur(100px) saturate(1.1);
 }
 .ambient-layer {
   position: absolute;

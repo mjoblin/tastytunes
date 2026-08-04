@@ -778,7 +778,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
   mediaIndexAuto: true,
   settingsTab: 'appearance',
   trayTab: 'queue',
-  trayRowDensity: 'detailed',
+  // COMPRESSED by default (user call, 2026-08-03): the panel's job is a
+  // glance's worth of list in a corner of the screen, and the flat rows fit
+  // ~11 where the floating ones fit 6. The detailed skin stays one chip away.
+  trayRowDensity: 'compressed',
   trayPresetsLayout: 'cards',
   diagnosticsTab: 'smoip',
   deviceTab: 'streamer',
