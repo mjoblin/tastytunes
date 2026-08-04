@@ -529,7 +529,13 @@ export function TrayPanel(): React.JSX.Element {
         <div
           key={tab}
           className={cx(
-            'relative flex-1 min-h-0 overflow-y-auto pl-3 pr-2 pt-1.5 pb-2',
+            // scrollbar-gutter STABLE: the 4px tray scrollbar is the panel's
+            // right gutter by design, but without the reservation only tabs
+            // tall enough to scroll paid it — a short tab's rows sat 4px
+            // wider and the right-aligned column jumped as you switched tabs
+            // (user, 2026-08-04). Same idiom as the main window's list
+            // screens; S8 asserts one row right-edge across tabs.
+            'relative flex-1 min-h-0 overflow-y-auto [scrollbar-gutter:stable] pl-3 pr-2 pt-1.5 pb-2',
             // Rhythm belongs to the FLOATING skin: detailed rows are ringed
             // cards and need air between them. Compressed rows are the flat
             // skin — one dense list — and a gap between flat rows just spends
