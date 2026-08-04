@@ -147,6 +147,18 @@ export function SettingsScreen(): React.JSX.Element {
               )}
             </button>
           ))}
+
+          {/* The version, where it's visible from every tab rather than only
+              from Updates (and the About box). The rail is pinned while the
+              panel scrolls, so this never moves; it opens Updates, which is
+              where the version row and the check-now button already live. */}
+          <button
+            onClick={() => selectTab('updates')}
+            title="Open Updates"
+            className="w-full px-3 pt-6 text-left font-mono text-[11px] text-faint hover:text-dim"
+          >
+            v{version}
+          </button>
         </nav>
 
         {/* keyed by tab so each tab keeps its own scroll position */}
