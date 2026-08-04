@@ -28,7 +28,7 @@ export function InfoModal(): React.JSX.Element {
       <div className="mt-6 space-y-3">
         <button
           onClick={() => void tt.openExternal(REPO_URL)}
-          className="w-full flex items-center justify-between rounded-xl ring-1 ring-edge bg-raised/70 px-4 py-3 text-left hover:ring-edge2 transition-all"
+          className="w-full flex items-center justify-between rounded-xl ring-1 ring-edge bg-raised/70 px-4 py-3 text-left hover:ring-edge2 transition-shadow"
         >
           <span>
             <span className="block text-[13.5px]">Source &amp; issues</span>
@@ -41,7 +41,7 @@ export function InfoModal(): React.JSX.Element {
 
         <button
           onClick={() => void tt.openExternal(SUPPORT_URL)}
-          className="w-full flex items-center justify-between rounded-xl ring-1 ring-edge bg-raised/70 px-4 py-3 text-left hover:ring-edge2 transition-all"
+          className="w-full flex items-center justify-between rounded-xl ring-1 ring-edge bg-raised/70 px-4 py-3 text-left hover:ring-edge2 transition-shadow"
         >
           <span>
             <span className="block text-[13.5px]">Support</span>

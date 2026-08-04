@@ -104,8 +104,13 @@ export function ModalShell({
   children: React.ReactNode
 }): React.JSX.Element {
   return (
+    // Dim only, NO live backdrop blur (2026-08-04, same ruling as the ambient
+    // wash bake): a backdrop-filter re-blurs the room on every repaint of its
+    // subtree, so hover transitions inside the modal ran at ~117ms/frame p95
+    // on the software path (GPU-less VMs, RDP) and 8.7ms without the blur —
+    // measured A/B, real hover cycles. /70 keeps the room receding.
     <div
-      className="absolute inset-0 z-30 bg-black/60 backdrop-blur-sm flex items-center justify-center"
+      className="absolute inset-0 z-30 bg-black/70 flex items-center justify-center"
       onClick={onClose}
     >
       {escapeCloses && <PopoverChrome onClose={onClose} />}

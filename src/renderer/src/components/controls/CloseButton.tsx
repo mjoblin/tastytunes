@@ -33,7 +33,13 @@ export function CloseButton({
       aria-label={label}
       data-tip={tip}
       className={cx(
-        'p-1.5 rounded-full text-dim hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all',
+        // `transition`, not `transition-all`: the curated set (color, bg,
+        // transform) is all this button animates, and this control mounts
+        // inside surfaces that keep a live backdrop blur (lyrics/artist
+        // panels), where every animated frame re-runs the blur on software
+        // rendering — don't volunteer properties that repaint for free today
+        // and expensively tomorrow.
+        'p-1.5 rounded-full text-dim hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition',
         className
       )}
     >
