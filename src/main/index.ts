@@ -279,8 +279,25 @@ const trayDeps = {
 function sendMenuCommand(command: MenuCommand): void {
   if (!mainWindow || mainWindow.isDestroyed()) {
     createWindow()
-    mainWindow?.webContents.once('did-finish-load', () => {
-      mainWindow?.webContents.send(IPC.push, { kind: 'menu', command })
+    const target = mainWindow
+    target?.webContents.once('did-finish-load', () => {
+      if (!target || target.isDestroyed()) return
+      target.webContents.send(IPC.push, { kind: 'menu', command })
+      // AND ONCE MORE, a beat later. `did-finish-load` says the PAGE loaded,
+      // not that the renderer is listening — the app wires its push handler
+      // during module execution, and on a slow machine anything that delays
+      // that (an emulated CPU, a cold disk) drops the only delivery on the
+      // floor and the window opens on the wrong screen. Menu commands are
+      // idempotent — 'go to Device' twice is 'go to Device' — so the cheap
+      // repeat is strictly better than the race. Reported from a Windows VM
+      // where the panel's "Connect a streamer" opened the app but not the
+      // Device screen; unreproducible on faster hardware, which is itself
+      // the tell.
+      setTimeout(() => {
+        if (target && !target.isDestroyed()) {
+          target.webContents.send(IPC.push, { kind: 'menu', command })
+        }
+      }, 400)
     })
     return
   }

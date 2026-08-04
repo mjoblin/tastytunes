@@ -157,6 +157,7 @@ export function QueueTab({
   const followQueue = useStore((s) => s.settings.followQueue)
   const playingRow = useRef<HTMLDivElement | null>(null)
 
+  const offline = useOffline()
   const items = queue?.items ?? []
   const playId = queue?.play_id ?? playState?.queue_id ?? null
   // THE QUEUE BELONGS TO MEDIA_PLAYER. Switch to a radio preset (or AirPlay)
@@ -185,6 +186,7 @@ export function QueueTab({
     if (followQueue) scrollToVisible(playingRow.current)
   }, [playId, followQueue])
 
+  if (offline) return <OfflineTab icon={ListMusic} what="Queue" they="It lives" />
   if (items.length === 0) {
     return <TabEmpty icon={ListMusic} title="Queue is empty" hint="Play an album or a playlist to fill it." />
   }
@@ -265,6 +267,7 @@ export function PresetsTab({
   density: TrayDensity
 }): React.JSX.Element {
   const presets = useStore((s) => s.presets)
+  const offline = useOffline()
   const items = (presets?.presets ?? []).filter((p) => p.id != null)
   // NOT `p.is_playing` — the device's flags are unreliable in both directions
   // and lit almost nothing here. `useLitPresets` is the derivation the Presets
@@ -272,6 +275,7 @@ export function PresetsTab({
   const lit = useLitPresets(items)
   const isPlaying = (id: number | null): boolean => id != null && lit.has(id)
 
+  if (offline) return <OfflineTab icon={Radio} what="Presets" they="They live" />
   if (items.length === 0) {
     return <TabEmpty icon={Radio} title="No presets" hint="Save stations and albums to the streamer's presets." />
   }
@@ -529,8 +533,35 @@ function TabEmpty({
   hint: string
 }): React.JSX.Element {
   return (
-    <div className="h-full flex items-center justify-center px-6">
-      <EmptyState icon={Icon} title={title} caption={hint} />
+    <div className="h-full flex items-center justify-center px-2">
+      <EmptyState compact icon={Icon} title={title} caption={hint} />
     </div>
   )
+}
+
+/**
+ * QUEUE AND PRESETS ARE DEVICE STATE. With no streamer they'd otherwise show
+ * the last one's — a full queue sitting under a panel header that says "No
+ * streamer connected" (user, 2026-08-04). Playlists and Recent are local and
+ * stay honest offline, which is exactly why only these two go quiet.
+ */
+function useOffline(): boolean {
+  return useStore((s) => s.connection.phase !== 'connected')
+}
+
+function OfflineTab({
+  icon,
+  what,
+  they
+}: {
+  icon: typeof RadioTower
+  what: string
+  they: string
+}): React.JSX.Element {
+  // KEEPS THE TAB'S OWN GLYPH AND EXPLAINS THE CONSEQUENCE, rather than
+  // repeating the header. The panel's offline face is right above this saying
+  // "No streamer connected" with an unplug mark; a second unplug mark and a
+  // second "Not connected" underneath it is the same sentence twice, and the
+  // question it leaves unanswered is why THIS tab is empty when Recent isn't.
+  return <TabEmpty icon={icon} title={`${what} unavailable`} hint={`${they} on the streamer.`} />
 }
