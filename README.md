@@ -16,7 +16,7 @@
 <br>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/now-playing.webp" alt="TastyTunes Now Playing — album art over an ambient backdrop, format badges, and the current lyric line">
+  <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/now-playing.webp" alt="TastyTunes Now Playing: album art over an ambient backdrop, format badges, and the current lyric line">
 </p>
 
 TastyTunes is a desktop controller for Cambridge Audio StreamMagic streamers.
@@ -47,8 +47,8 @@ Without a streamer on the network, demo mode on the connect screen runs the
 whole app against a built-in virtual one.
 
 You'll need a Cambridge Audio network player built on the StreamMagic
-platform — Evo 75/150, CXN100 / CXN (V2), MXN10, AXN10, EXN100, Edge NQ,
-851N — on the same network as your computer. Developed and tested daily
+platform, on the same network as your computer: Evo 75/150, CXN100 /
+CXN (V2), MXN10, AXN10, EXN100, Edge NQ, 851N. Developed and tested daily
 against an Evo 150.
 
 ## Screenshots
@@ -97,7 +97,7 @@ A small always-on-top window: art, transport, playhead, volume, and what's next.
 
 ### Menu bar / system tray
 
-The icon's compact panel: now playing with transport and volume, and the queue, presets, playlists, and recents — the streamer without the window.
+The icon's compact panel: now playing with transport and volume, and the queue, presets, playlists, and recents. The streamer without the window.
 
 <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/tray-panel.webp" alt="The menu-bar panel showing now playing and the queue" width="380">
 
@@ -116,7 +116,7 @@ MCP tools for local agent control.
 ## MCP server
 
 TastyTunes can host a local MCP server (off by default), so AI agents on your
-network — Claude Code, Claude Desktop, anything that speaks MCP — can see and
+network (Claude Code, Claude Desktop, anything that speaks MCP) can see and
 control the streamer:
 
 ```bash
@@ -125,12 +125,12 @@ claude mcp add --transport http tastytunes http://127.0.0.1:8555/mcp
 
 > *"what's playing?"* · *"how many albums do I have?"* · *"play a 90s rock album"* · *"put on some jazz radio"* · *"set a sleep timer for the end of this track"*
 
-The tools cover what the app itself does — playback and volume, presets and
-sources, library and radio, favorites, tone and EQ, sleep timers — with the
-editing ones, like queue and preset changes, kept separate and off until you
+The tools cover what the app itself does: playback and volume, presets and
+sources, library and radio, favorites, tone and EQ, sleep timers. The editing
+ones, like queue and preset changes, are kept separate and off until you
 turn them on. Every tool has its own switch in Settings → AI agents, effective
 on the agent's next call. Agents inherit the same limits the UI has: the volume
-cap, the power-on guard, the Connections toggles — a lookup that's switched off
+cap, the power-on guard, the Connections toggles. A lookup that's switched off
 just refuses. Bind it to localhost, or to your network to reach the streamer
 from another machine.
 
@@ -147,9 +147,9 @@ from another machine.
 ### Now Playing
 
 - Large artwork over an ambient blurred-art backdrop
-- Optional art-derived accent — the gold tint follows the current album
+- Optional art-derived accent: the gold tint follows the current album
 - Format badges: codec, sample rate, bit depth, lossless, MQA
-- Signal-quality lamp — amber for hi-res lossless, green for lossless, gray for lossy — with the full signal chain in a popover
+- Signal-quality lamp (amber for hi-res lossless, green for lossless, gray for lossy), with the full signal chain in a popover
 - Internet-radio display, track *x* of *y*, and the current lyric line under the track details
 - Display mode (<kbd>F</kbd>): chrome-free full screen for a desk or shelf display
 
@@ -196,11 +196,11 @@ from another machine.
 
 - All 99 hardware slots: recall, delete, drag-to-reorder; keys <kbd>1</kbd>–<kbd>9</kbd> recall directly
 - Per-preset volume: a preset can carry its own level, applied on every recall, remembered per device
-- A preset broken by a media server re-indexing is flagged in place — repairing it finds the same content again and re-saves the slot
+- A preset broken by a media server re-indexing is flagged in place; repairing it finds the same content again and re-saves the slot
 
 ### Tone, EQ & device
 
-- Seven-band EQ, tilt, and balance — live device writes while dragging, with saveable presets (feature-detected per model)
+- Seven-band EQ, tilt, and balance: live device writes while dragging, with saveable presets (feature-detected per model)
 - Display brightness, standby mode, and auto power-down, probed from the device's own capabilities
 
 ### Sources
@@ -220,13 +220,13 @@ from another machine.
 
 ### Scrobbling
 
-- ListenBrainz: a listen submits only after real played time — half the track or four minutes
+- ListenBrainz: a listen submits only after real played time (half the track or four minutes)
 - Paused time doesn't count and seeking doesn't advance it; short tracks and radio never scrobble
 - Failed submissions queue and flush with the next success
 
 ### History
 
-- Recently played: a bounded local log (200 entries, clearable) of tracks and stations — kept because the streamer itself keeps no history
+- Recently played: a bounded local log (200 entries, clearable) of tracks and stations, kept because the streamer itself keeps no history
 
 ### Automation
 
@@ -237,17 +237,17 @@ from another machine.
 ### Menu bar / system tray
 
 - An optional icon in the menu bar (macOS) or system tray (Windows, Linux), on by default, with a native menu: connection status, wake/standby, sources, and quit
-- On macOS and Windows, clicking the icon opens a compact panel: now playing with transport and volume, plus queue, presets, playlists, and recents — everything in them plays with a click, and picking something while the streamer sleeps wakes it first
-- The panel has its own density settings, down to an art-free compressed row, and shows presets as cards or rows — separate from the main window's layout
+- On macOS and Windows, clicking the icon opens a compact panel: now playing with transport and volume, plus queue, presets, playlists, and recents; everything in them plays with a click, and picking something while the streamer sleeps wakes it first
+- The panel has its own density settings, down to an art-free compressed row, and shows presets as cards or rows, all separate from the main window's layout
 - On Windows and Linux, closing the main window keeps TastyTunes running in the tray (a one-time notification says so); Quit is in the icon's menu
-- On Linux there's no panel — just the icon and its menu
+- On Linux there's no panel, just the icon and its menu
 
 ### Windows & control
 
 - Mini player: frameless, always on top, remembers its position
 - Command palette (<kbd>⌘K</kbd>): transport, sources, presets by name, screens, library search, index rebuilds, devices, sleep timer, power
-- Keyboard throughout — single keys jump screens, <kbd>space</kbd> toggles play, arrows seek and nudge volume, <kbd>/</kbd> filters lists; <kbd>?</kbd> shows the overlay
-- Every reorderable list — queue, presets, playlists, the nav rail — reorders by keyboard as well as by drag
+- Keyboard throughout: single keys jump screens, <kbd>space</kbd> toggles play, arrows seek and nudge volume, <kbd>/</kbd> filters lists; <kbd>?</kbd> shows the overlay
+- Every reorderable list (queue, presets, playlists, the nav rail) reorders by keyboard as well as by drag
 - OS media keys, and a track-change notification with artwork when the window isn't focused
 - An application menu on macOS; an auto-hidden menu bar on Windows and Linux
 
@@ -260,7 +260,7 @@ from another machine.
 
 ### Transparency
 
-- A requests console (<kbd>`</kbd>) showing every outbound request the app makes — service, method, status, timing
+- A requests console (<kbd>`</kbd>) showing every outbound request the app makes: service, method, status, timing
 - A SMOIP console showing the raw streamer traffic, live
 
 ### Updates & packaging
@@ -274,8 +274,8 @@ The complete list:
 
 | Traffic | Where it goes | When |
 |---|---|---|
-| Streamer control | your streamer, on your LAN | always — it's the app |
-| Library browsing | your media servers, on your LAN | always — it's the app |
+| Streamer control | your streamer, on your LAN | always (it's the app) |
+| Library browsing | your media servers, on your LAN | always (it's the app) |
 | Lyrics | lrclib.net | on by default; toggleable |
 | Artist & album context | musicbrainz.org · wikidata.org · wikipedia.org | on by default; toggleable |
 | Radio directory | radio-browser.info | when you search or browse Radio |
@@ -300,14 +300,14 @@ npm run dist:mac   # package a dmg (also: dist:win, dist:linux)
 Stack: Electron + electron-vite, React 19, TypeScript, Tailwind CSS v4,
 Zustand, `ws` in the main process for the streamer socket.
 
-- `src/main/` — device I/O lives here: SSDP discovery, the SMOIP WebSocket
+- `src/main/` is where device I/O lives: SSDP discovery, the SMOIP WebSocket
   client (with the `Origin` header the streamer requires),
   reconnect/keepalive, command dispatch, the UPnP browser and library index,
   the MCP server, the scheduler and sleep timer, external-service fetchers,
   and the typed IPC push relay.
-- `src/preload/` — the `window.tastytunes` bridge.
-- `src/renderer/` — React UI; a Zustand store fed exclusively by pushed state.
-- `src/shared/` — the SMOIP payload types and the IPC contract.
+- `src/preload/` is the `window.tastytunes` bridge.
+- `src/renderer/` is the React UI; a Zustand store fed exclusively by pushed state.
+- `src/shared/` holds the SMOIP payload types and the IPC contract.
 
 The streamer is the single source of truth: user actions send commands, the
 streamer applies them and pushes new state, and the UI re-renders from the
@@ -319,7 +319,7 @@ queue/preset edits over SMOIP HTTP.
 
 TastyTunes is free. If it's been worth something to you, there's a
 name-your-price tip jar at [tastytunes.app](https://tastytunes.app/#support).
-For help — bugs, questions, requests — use
+For help (bugs, questions, requests) use
 [GitHub issues](https://github.com/mjoblin/tastytunes/issues).
 
 ## License
