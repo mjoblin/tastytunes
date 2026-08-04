@@ -104,13 +104,18 @@ export function ModalShell({
   children: React.ReactNode
 }): React.JSX.Element {
   return (
-    // Dim only, NO live backdrop blur (2026-08-04, same ruling as the ambient
-    // wash bake): a backdrop-filter re-blurs the room on every repaint of its
-    // subtree, so hover transitions inside the modal ran at ~117ms/frame p95
-    // on the software path (GPU-less VMs, RDP) and 8.7ms without the blur —
-    // measured A/B, real hover cycles. /70 keeps the room receding.
+    // DEEP DIM, NO LIVE BACKDROP BLUR (2026-08-04, same ruling as the ambient
+    // wash bake). With backdrop-blur-sm, every hover repaint in the card
+    // re-ran the blur on the software path (GPU-less VMs, RDP): ~117ms/frame
+    // p95 against 9ms without it, measured with real hover cycles. DON'T
+    // RE-TRY the obvious outs — both measured, neither helps: the dim+blur
+    // as a childless SIBLING layer (108ms p95) and will-change promotion of
+    // the card (117ms) — software compositing re-rasterizes the filter
+    // whenever the overlapping region repaints, whatever the layer tree
+    // says. /80, up from the blurred era's /60: without the smear, sharp
+    // room text at /60-70 reads as bright fragments against the card edge.
     <div
-      className="absolute inset-0 z-30 bg-black/70 flex items-center justify-center"
+      className="absolute inset-0 z-30 bg-black/80 flex items-center justify-center"
       onClick={onClose}
     >
       {escapeCloses && <PopoverChrome onClose={onClose} />}
