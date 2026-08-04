@@ -93,13 +93,13 @@ Press F for the front-panel view: album art, track details, the current lyric li
 
 A small always-on-top window: art, transport, playhead, volume, and what's next.
 
-<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/mini-player.webp" alt="Mini player window">
+<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/mini-player.webp" alt="Mini player window" width="360">
 
 ### Menu bar / system tray
 
 The icon's compact panel: now playing with transport and volume, and the queue, presets, playlists, and recents — the streamer without the window.
 
-<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/tray-panel.webp" alt="The menu-bar panel showing now playing and the queue">
+<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/tray-panel.webp" alt="The menu-bar panel showing now playing and the queue" width="380">
 
 ### Settings
 
