@@ -41,6 +41,7 @@ nsis:
   # 2026-08-03). electron-builder's own script does not check the extraction
   # result, so this adds the verification — see build/installer.nsh.
   include: build/installer.nsh
+  useZip: true
 linux:
   # x64 plus arm64 — the arm64 AppImage covers 64-bit Raspberry Pi OS
   # (Pi 4/5 with a screen; pure-JS deps, so it's a cross-pack, no compile).
