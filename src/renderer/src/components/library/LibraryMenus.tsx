@@ -177,7 +177,7 @@ export function PresetSavePanel({
       <button
         onClick={() => void commit(nextFree)}
         disabled={busy}
-        className="w-full px-3 py-2 rounded-lg bg-amber text-bg text-[13px] font-medium disabled:opacity-50 motion-safe:active:scale-95 transition-all"
+        className="w-full px-3 py-2 rounded-lg bg-amber text-bg text-[13px] font-medium disabled:opacity-50 motion-safe:active:scale-95"
         data-preset-save-primary
       >
         Save to preset {nextFree}
@@ -199,7 +199,10 @@ export function PresetSavePanel({
               {...overwrite.blurProps}
               data-tip={taken ? `Overwrite “${occ?.name}”` : `Preset ${slot}`}
               className={cx(
-                'relative aspect-square rounded-md overflow-hidden ring-1 flex items-center justify-center text-[10.5px] font-mono transition-all',
+                // No transition — this grid mounts inside the frosted
+                // ModalShell (save-queue), where animated hovers crawl on
+                // software rendering; see the shell's doc comment.
+                'relative aspect-square rounded-md overflow-hidden ring-1 flex items-center justify-center text-[10.5px] font-mono',
                 confirming
                   ? 'ring-alert bg-alert text-white'
                   : taken
