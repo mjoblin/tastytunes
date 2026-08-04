@@ -43,6 +43,20 @@ mac:
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   notarize: true
+  extendInfo:
+    # macOS 15+ shows a local-network consent prompt the first time the app
+    # touches the LAN — this string appears in that dialog. It was carried
+    # only by the store lane (apple branch) at first, and the v0.1.0 draft's
+    # dmg shipped without it: the direct build hit the same consent system
+    # and, on a machine with stale permission state, was silently denied —
+    # unicast AND multicast both dropped, discovery blind, reconnect forever
+    # (live-hit on the release dmg, 2026-08-04). Every mac flavor needs it.
+    NSLocalNetworkUsageDescription: >-
+      TastyTunes uses your local network to find and control Cambridge Audio
+      StreamMagic streamers and to browse your media servers.
+    # Only HTTPS/standard encryption — pre-answers App Store Connect's export
+    # compliance question so TestFlight builds don't stall on it.
+    ITSAppUsesNonExemptEncryption: false
 dmg:
   artifactName: ${productName}.${ext}
 win:
