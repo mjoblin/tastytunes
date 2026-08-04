@@ -287,6 +287,20 @@ const SETTLE_MS = 200
 let wantVisible = false
 let showRetry: ReturnType<typeof setTimeout> | null = null
 
+/**
+ * Windows composites a transparent window before its renderer has painted, so
+ * the panel flashed on, vanished (an unpainted transparent window is
+ * invisible) and faded back in. It is shown at opacity 0 and revealed a beat
+ * later there. macOS shows in step with its first frame and is left alone.
+ */
+const FADE_IN = process.platform === 'win32'
+let revealTimer: ReturnType<typeof setTimeout> | null = null
+
+function clearReveal(): void {
+  if (revealTimer) clearTimeout(revealTimer)
+  revealTimer = null
+}
+
 function clearShowRetry(): void {
   if (showRetry) clearTimeout(showRetry)
   showRetry = null
@@ -305,6 +319,7 @@ function hidePanel(): void {
   // panel stops being wanted, and a pending retry must not outlive that.
   wantVisible = false
   clearShowRetry()
+  clearReveal()
   if (!panel || panel.isDestroyed() || !panel.isVisible()) return
   hidingUntil = Date.now() + CLICK_SWALLOW_MS
   panel.hide()
@@ -314,6 +329,7 @@ function hidePanel(): void {
 function destroyPanel(): void {
   wantVisible = false
   clearShowRetry()
+  clearReveal()
   if (panel && !panel.isDestroyed()) panel.destroy()
   panel = null
 }
@@ -475,8 +491,31 @@ function showPanel(): void {
   win.setBounds(bounds)
   wantVisible = true
   shownAt = Date.now()
+  // SHOW BEHIND OPACITY 0 ON WINDOWS, then reveal once a frame exists.
+  //
+  // A transparent window that is composited before its renderer has painted
+  // is FULLY SEE-THROUGH, so on Windows the panel appeared for an instant,
+  // vanished, and then faded in under the OS's own show animation — reported
+  // from real use 2026-08-04. macOS doesn't show it (its show is synchronous
+  // with the first frame), so this stays scoped rather than changing a
+  // behaviour that is already right.
+  //
+  // Opacity, not a deferred show(): the window has to be shown to paint, and
+  // deferring the show is what the 900ms retry below already has to work
+  // around. This way the window is live and laying out while invisible, and
+  // the reveal is a single property change.
+  if (FADE_IN) win.setOpacity(0)
   win.show()
   win.focus()
+  if (FADE_IN) {
+    clearReveal()
+    // Two frames at 60Hz. Long enough for the renderer to have painted with
+    // backgroundThrottling off, short enough to read as instant.
+    revealTimer = setTimeout(() => {
+      revealTimer = null
+      if (panel && !panel.isDestroyed() && wantVisible) panel.setOpacity(1)
+    }, 32)
+  }
   // The panel is hidden, not destroyed, so the renderer never remounts — this
   // is the only way it learns it has been reopened.
   announcePanel(true)
@@ -494,6 +533,9 @@ function showPanel(): void {
     shownAt = Date.now()
     panel.show()
     panel.focus()
+    // The retry is a show like any other: it must lift the opacity too, or a
+    // panel rescued by it stays invisible at 0 for good.
+    if (FADE_IN) panel.setOpacity(1)
   }, 900)
 }
 
