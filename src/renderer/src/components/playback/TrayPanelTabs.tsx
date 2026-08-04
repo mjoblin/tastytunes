@@ -74,8 +74,9 @@ function CompressedRow({
    * column of placeholders against nothing told the user precisely nothing.
    */
   duration?: number | null
-  /** Trailing text where a duration makes no sense — the recents' "ago". */
-  meta?: string
+  /** Trailing content where a duration makes no sense — the recents' "ago",
+   *  the playlists' "3 tracks · 11 min" pair. */
+  meta?: React.ReactNode
   playing?: boolean
   parked?: boolean
   dimmed?: boolean
@@ -422,8 +423,25 @@ export function PlaylistsTab({
             key={p.id}
             attrs={{ 'data-tray-row': 'playlist' }}
             title={p.name}
-            subtitle={progress}
-            meta={runtime}
+            // The inline slot carries only the ACTIVATION progress; at rest
+            // the row's facts live right-aligned in the meta cell below.
+            subtitle={mine ? progress : undefined}
+            // COMPACT: count and runtime together where the time sits —
+            // "3 tracks · 11 min", the status line's own dot with a touch
+            // more air on each side (user call, 2026-08-04). One fact, one
+            // place; splitting its two halves across the row's full width
+            // read as two facts.
+            meta={
+              runtime ? (
+                <>
+                  {count}
+                  <span className="mx-1">·</span>
+                  {runtime}
+                </>
+              ) : (
+                count
+              )
+            }
             playing={!!mine}
             dimmed={dimmed}
             onClick={running ? undefined : start}
