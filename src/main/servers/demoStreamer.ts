@@ -1289,6 +1289,24 @@ function buildDemo(host: string): {
           // echo volume like a real device (async push back)
           DATA['/zone/state'] = { ...DATA['/zone/state'], volume_percent: params.volume_percent }
           setTimeout(() => push('/zone/state'), 120)
+        } else if (frame.path === '/zone/state' && typeof params.volume_step_change === 'number') {
+          // Pre-Amp: the real firmware applies the step to the level and
+          // pushes the new percent, clamped at the device's own volume limit
+          // (mirrors mock-streamer.mjs — neither applied it before 2026-08-04,
+          // so wheel volume looked dead in demo mode once the mini's volume
+          // slider became the seek slider; the slider's absolute writes echo,
+          // which is why the gap had been invisible).
+          const zone = DATA['/zone/state'] as Dict
+          const curPercent = zone.volume_percent
+          if (typeof curPercent === 'number') {
+            const rawLimit = (DATA['/zone/audio'] as Dict | undefined)?.volume_limit_percent
+            const limit = typeof rawLimit === 'number' ? rawLimit : 100
+            DATA['/zone/state'] = {
+              ...zone,
+              volume_percent: Math.max(0, Math.min(limit, curPercent + params.volume_step_change))
+            }
+            setTimeout(() => push('/zone/state'), 120)
+          }
         } else if (frame.path === '/zone/state' && typeof params.mute === 'boolean') {
           // echo mute like a real device (async push back) — the renderer does
           // no optimistic update, so without this the mute button never engages
