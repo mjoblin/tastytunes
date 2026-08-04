@@ -23,11 +23,17 @@
 //   node scripts/build-win.mjs [extra electron-builder args...]
 //   npm run dist:win -- --arm64
 import { spawn } from 'node:child_process'
+import { createRequire } from 'node:module'
 
-const args = ['electron-builder', '--win', ...process.argv.slice(2)]
-console.log(`> ELECTRON_BUILDER_7Z_FILTER=BCJ npx ${args.join(' ')}`)
+// Resolve electron-builder's own CLI and run it with THIS node — no `npx`,
+// no shell. `spawn('npx', …)` fails with ENOENT on Windows, where npx is a
+// .cmd shim rather than an executable, which broke the very platform this
+// script exists for (caught in CI, 2026-08-04).
+const cli = createRequire(import.meta.url).resolve('electron-builder/cli.js')
+const args = [cli, '--win', ...process.argv.slice(2)]
+console.log(`> ELECTRON_BUILDER_7Z_FILTER=BCJ node ${args.join(' ')}`)
 
-const child = spawn('npx', args, {
+const child = spawn(process.execPath, args, {
   stdio: 'inherit',
   env: { ...process.env, ELECTRON_BUILDER_7Z_FILTER: 'BCJ' }
 })
