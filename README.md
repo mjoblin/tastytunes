@@ -142,7 +142,7 @@ from another machine.
 - Device switcher in the playback bar
 - Auto-reconnect with backoff, and connection health checks after system sleep
 - Power and standby, with a guard that never re-sends ON to a unit that's already on
-- Demo mode: runs the whole app against a built-in virtual streamer and two demo media libraries
+- Demo mode: runs the whole app against a built-in virtual streamer and two sample libraries
 
 ### Now Playing
 
@@ -164,13 +164,13 @@ from another machine.
 
 ### Radio
 
-- Search and browse the keyless [radio-browser.info](https://www.radio-browser.info) directory, with genre and decade categories
+- Search and browse the [radio-browser.info](https://www.radio-browser.info) directory, with genre and decade categories
 - Stations can be favorited and saved to hardware preset slots
 
 ### Favorites
 
 - Stations, albums, and tracks, hearted from rows, cards, or Now Playing
-- Keyed on content identity, so favorites survive media-server id churn
+- Keyed on the content itself, so favorites survive a media server re-indexing
 
 ### Playlists
 
@@ -183,7 +183,7 @@ from another machine.
 ### Transport & volume
 
 - Play, pause, stop, next, previous, seek, scrub; repeat and shuffle
-- Capability-gated: only the controls the streamer itself reports are offered
+- Only the controls the streamer itself reports are offered
 - Pre-amp mode (absolute volume) and Control Bus mode (nudge), mute, and an optional volume limit
 - Scroll-wheel volume on the volume cluster and the mini player
 
@@ -196,7 +196,7 @@ from another machine.
 
 - All 99 hardware slots: recall, delete, drag-to-reorder; keys <kbd>1</kbd>–<kbd>9</kbd> recall directly
 - Per-preset volume: a preset can carry its own level, applied on every recall, remembered per device
-- A preset broken by a media-server re-index is flagged in place and repairable — repair finds the same content again and re-saves the slot
+- A preset broken by a media server re-indexing is flagged in place — repairing it finds the same content again and re-saves the slot
 
 ### Tone, EQ & device
 
@@ -209,13 +209,13 @@ from another machine.
 
 ### Lyrics
 
-- Fetched from LRCLIB; synced lyrics highlight the live line, auto-center it, and click-to-seek
+- Fetched from LRCLIB; synced lyrics highlight and center the current line, and clicking a line seeks there
 - Three forms: a full panel, an inline line under the track details, and a display-mode strip
-- Plain-text fallback, instrumental- and radio-aware states, force-refresh
+- Falls back to plain text, says why when there's nothing to show (instrumentals, radio), and can be force-refreshed
 
 ### Artist & album context
 
-- A short artist bio and album facts (year, label, genres, credits) in a side panel — MusicBrainz → Wikipedia, with attribution links
+- A short artist bio and album facts (year, label, genres, credits) in a side panel, from MusicBrainz and Wikipedia, with attribution links
 - Lookups cache to disk (bounded, clearable in Settings)
 
 ### Scrobbling
@@ -230,17 +230,17 @@ from another machine.
 
 ### Automation
 
-- Sleep timer: 15 minutes to 2 hours, or end of track; pause or standby; owned by the main process, so it survives a closed window and a system sleep
+- Sleep timer: 15 minutes to 2 hours, or end of track; pause or standby; keeps running with the window closed, and survives a system sleep
 - Schedules: wake the streamer to a preset at a chosen volume, or send it to standby, per weekday (schedules fire while the app is running)
 - A wake schedule missed while the computer was asleep is offered on waking rather than run late: once, within ten minutes of the missed time, and only if nothing is already playing
 
 ### Menu bar / system tray
 
-- An optional icon in the menu bar (macOS) or system tray (Windows, Linux) — on by default — with a native menu: connection status, wake/standby, source switching, and quit
-- Clicking the icon (macOS and Windows) opens a compact panel: now playing with transport and volume, plus Queue, Presets, Playlists, and Recent tabs, each one click to play; a pick made in standby wakes the streamer first
-- The panel sets its own fit — row density down to an art-free compressed mode, presets as cards or rows — independent of the main window's layout
-- Closing the main window on Windows and Linux keeps TastyTunes running in the tray, told once via a notification; Quit lives in the icon's menu
-- Linux keeps the icon and menu only — the platform offers nothing to anchor the panel against
+- An optional icon in the menu bar (macOS) or system tray (Windows, Linux), on by default, with a native menu: connection status, wake/standby, sources, and quit
+- On macOS and Windows, clicking the icon opens a compact panel: now playing with transport and volume, plus queue, presets, playlists, and recents — everything in them plays with a click, and picking something while the streamer sleeps wakes it first
+- The panel has its own density settings, down to an art-free compressed row, and shows presets as cards or rows — separate from the main window's layout
+- On Windows and Linux, closing the main window keeps TastyTunes running in the tray (a one-time notification says so); Quit is in the icon's menu
+- On Linux there's no panel — just the icon and its menu
 
 ### Windows & control
 
