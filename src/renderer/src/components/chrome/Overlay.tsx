@@ -104,27 +104,40 @@ export function ModalShell({
   children: React.ReactNode
 }): React.JSX.Element {
   return (
-    // DEEP DIM, NO LIVE BACKDROP BLUR (2026-08-04, same ruling as the ambient
-    // wash bake). With backdrop-blur-sm, every hover repaint in the card
-    // re-ran the blur on the software path (GPU-less VMs, RDP): ~117ms/frame
-    // p95 against 9ms without it, measured with real hover cycles. DON'T
-    // RE-TRY the obvious outs — both measured, neither helps: the dim+blur
-    // as a childless SIBLING layer (108ms p95) and will-change promotion of
-    // the card (117ms) — software compositing re-rasterizes the filter
-    // whenever the overlapping region repaints, whatever the layer tree
-    // says. /80, up from the blurred era's /60: without the smear, sharp
-    // room text at /60-70 reads as bright fragments against the card edge.
-    <div
-      className="absolute inset-0 z-30 bg-black/80 flex items-center justify-center"
-      onClick={onClose}
-    >
-      {escapeCloses && <PopoverChrome onClose={onClose} />}
+    // THE BLUR STAYS; HOVER TRANSITIONS INSIDE THE SHELL GO (2026-08-04,
+    // measured round). The frosted backdrop is what dissolves the room's
+    // text at the card edge — a dim alone (tried at /70 and /80) leaves
+    // sharp glyph fragments there, and the user called both ugly. The cost
+    // was never the blur at rest: on the software path (GPU-less VMs, RDP)
+    // every repaint over the blur re-runs it at ~50-120ms, so an ANIMATED
+    // hover (transition-all, ~150ms of frames) crawled at 117ms/frame p95.
+    // Untransitioned hovers pay ONE such frame per state flip (50ms p95
+    // measured) — the palette has lived exactly this way over the same blur
+    // all along. So: no transition-* on hover-styled elements inside a
+    // ModalShell. Also measured, don't re-try: blur as a childless sibling
+    // layer (108ms p95) and will-change card promotion (117ms) — software
+    // compositing re-rasterizes the filter regardless of the layer tree.
+    //
+    // PORTALED TO <body>, fixed: a modal dims the WHOLE room — nav rail and
+    // playback bar included — wherever it happens to render. The save-queue
+    // dialog mounts inside the Queue screen's content container, and its
+    // inset-0 dimmed only that area while the app-level Info/Shortcuts
+    // modals covered the window (user call, 2026-08-04): coverage must not
+    // depend on the mount point.
+    createPortal(
       <div
-        className={cx('rounded-2xl bg-panel ring-1 ring-edge2 shadow-2xl', className)}
-        onClick={(e) => e.stopPropagation()}
+        className="fixed inset-0 z-30 bg-black/60 backdrop-blur-sm flex items-center justify-center"
+        onClick={onClose}
       >
-        {children}
-      </div>
-    </div>
+        {escapeCloses && <PopoverChrome onClose={onClose} />}
+        <div
+          className={cx('rounded-2xl bg-panel ring-1 ring-edge2 shadow-2xl', className)}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {children}
+        </div>
+      </div>,
+      document.body
+    )
   )
 }

@@ -33,13 +33,13 @@ export function CloseButton({
       aria-label={label}
       data-tip={tip}
       className={cx(
-        // `transition`, not `transition-all`: the curated set (color, bg,
-        // transform) is all this button animates, and this control mounts
-        // inside surfaces that keep a live backdrop blur (lyrics/artist
-        // panels), where every animated frame re-runs the blur on software
-        // rendering — don't volunteer properties that repaint for free today
-        // and expensively tomorrow.
-        'p-1.5 rounded-full text-dim hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition',
+        // NO transition — hover and press SNAP, like the palette's rows. This
+        // control mounts inside backdrop-blurred surfaces (every ModalShell,
+        // the lyrics/artist panels), where each animated frame re-runs the
+        // blur on software rendering: a 150ms transition crawled at
+        // ~117ms/frame there, an untransitioned flip pays one ~50ms frame
+        // (both measured, 2026-08-04).
+        'p-1.5 rounded-full text-dim hover:text-ink hover:bg-veil2 motion-safe:active:scale-90',
         className
       )}
     >
