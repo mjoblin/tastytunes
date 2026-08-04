@@ -232,6 +232,16 @@ export function playlistItemKey(i: PlaylistItem): string {
   return `track:${lc(i.title)}:${lc(i.artist)}:${lc(i.album)}`
 }
 
+/**
+ * A playlist's runtime, from the durations it knows — items without one simply
+ * don't count, so a partly-unknown playlist shows an honest partial total
+ * rather than nothing. One home (the Playlists screen and the tray panel both
+ * show it); callers gate on `> 0` for the all-unknown case.
+ */
+export function playlistTotalSecs(p: Playlist): number {
+  return p.items.reduce((n, i) => n + (i.durationSecs ?? 0), 0)
+}
+
 // ===========================================================================
 // Second pass (2026-07-26): everything below moved from ipc.ts under the
 // rule stated in this file's header — each of these would still mean

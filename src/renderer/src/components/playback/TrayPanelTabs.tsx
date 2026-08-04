@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Disc3, ListMusic, Radio, RadioTower, X } from 'lucide-react'
-import type { ScreenLayout } from '@shared/model'
+import { playlistTotalSecs, type ScreenLayout } from '@shared/model'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { MediaRow } from '@/components/media/MediaRow'
@@ -11,7 +11,7 @@ import { EmptyState } from '@/components/chrome/EmptyState'
 import { fromRecent } from '@/lib/mediaRef'
 import { playRefNow } from '@/lib/mediaActions'
 import { scrollToVisible } from '@/lib/scroll'
-import { activeSourceId, cx, fmtRelative } from '@/lib/format'
+import { activeSourceId, cx, fmtDuration, fmtRelative } from '@/lib/format'
 import { useLitPresets } from '@/hooks/useLitPresets'
 
 export type TrayTab = 'queue' | 'presets' | 'playlists' | 'recent'
@@ -303,8 +303,14 @@ export function PresetsTab({
               dense
               key={p.id}
               attrs={{ 'data-tray-row': 'preset' }}
+              // The slot number moved out of the second line and into a
+              // position cell beside the name: "Preset N" under every row was
+              // boilerplate wearing a subtitle's clothes — 24 rows all saying
+              // the same word — where the queue's second line actually varies
+              // (user call, 2026-08-04). The cell is fixed-width and padded,
+              // so names share one left edge from slot 1 to slot 99.
+              slot={p.id as number}
               title={p.name ?? `Preset ${p.id}`}
-              subtitle={`Preset ${p.id}`}
               kind="preset"
               artUrl={p.art_url ?? p.art_urls?.[0] ?? null}
               playing={isPlaying(p.id)}
@@ -399,6 +405,13 @@ export function PlaylistsTab({
         const mine = running && activation.playlistId === p.id
         const count = `${p.items.length} ${p.items.length === 1 ? 'track' : 'tracks'}`
         const progress = mine ? `Loading ${activation.done} of ${activation.total}…` : count
+        // The runtime the Playlists screen already shows beside the count —
+        // same sum (`playlistTotalSecs`), worn as the row's trailing fact, the
+        // slot recents use for their relative time. Absent when no item knows
+        // its length; constant through activation so the right edge never
+        // reshapes with the state.
+        const total = playlistTotalSecs(p)
+        const runtime = total > 0 ? fmtDuration(total) : undefined
         // Another playlist's run is in flight: starting a second would fight it
         // for the queue, and the door is closed at the preload anyway. Dim
         // rather than hide, so the list never reshapes.
@@ -410,6 +423,7 @@ export function PlaylistsTab({
             attrs={{ 'data-tray-row': 'playlist' }}
             title={p.name}
             subtitle={progress}
+            meta={runtime}
             playing={!!mine}
             dimmed={dimmed}
             onClick={running ? undefined : start}
@@ -421,6 +435,7 @@ export function PlaylistsTab({
             attrs={{ 'data-tray-row': 'playlist' }}
             title={p.name}
             subtitle={progress}
+            meta={runtime}
             kind="album"
             artUrl={p.items.find((i) => i.artUrl)?.artUrl ?? null}
             // `tuning` is the row layer's own in-flight affordance (the spinner

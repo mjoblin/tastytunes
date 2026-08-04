@@ -13,7 +13,8 @@ import { cx } from '@/lib/format'
  *
  * Grew out of SearchRow when the audit found Favorites, Recents and Radio each
  * hand-rolling the same ringed row at drifting sizes. One shell means one type
- * scale (13.5/12), one art size, one playing/tuning treatment — and a
+ * scale (13.5/12; the `dense` panel variant runs 13.5/11.5-faint — see the
+ * prop), one art size per variant, one playing/tuning treatment — and a
  * `duration` slot that reserves its width, so a row without a known length
  * can't let the heart drift out of line (the screenshot that started this).
  */
@@ -34,7 +35,8 @@ export function MediaRow({
   onContextMenu,
   attrs,
   dense,
-  parked
+  parked,
+  slot
 }: {
   title: string
   subtitle?: React.ReactNode
@@ -65,12 +67,16 @@ export function MediaRow({
    * Tighter padding, for surfaces where vertical space is the scarce thing —
    * the tray panel, which is 380px wide and has ~340px of body.
    *
-   * PADDING ONLY, and deliberately so: the row-anatomy law fixes the ART at
-   * 40px and the TITLE at 13.5px, and neither moves here. Those tokens are
-   * what make a row recognisably the same object across surfaces; the box it
-   * sits in is not one of them. Anything that wants a genuinely smaller row
-   * wants a different row (see the panel's compressed mode, which drops the
-   * art entirely rather than shrinking it).
+   * The row-anatomy law fixes the ART (32px here — the `dense` variant) and
+   * the TITLE at 13.5px; neither moves. The SUBTITLE is the one line that
+   * differs by law: 11.5px `faint` here vs the window rows' 12px `dim`
+   * (amended at the user's call, 2026-08-04 — in a 380px glanceable panel
+   * the second line is wayfinding, not content, and the AA-retuned `faint`
+   * lets it be quieter without dropping under the contrast floor). Those
+   * tokens are what make a row recognisably the same object across
+   * surfaces; anything that wants a genuinely smaller row wants a different
+   * row (see the panel's compressed mode, which drops the art entirely
+   * rather than shrinking it).
    */
   dense?: boolean
   /**
@@ -82,6 +88,17 @@ export function MediaRow({
    * since the AirPlay round; this gives the floating skin the same word.
    */
   parked?: boolean
+  /**
+   * Device slot number, rendered as a fixed-width zero-padded mono cell
+   * between the art and the name — the flat skin's position cell, adopted
+   * here for rows whose identity IS a slot (the tray panel's preset rows,
+   * whose second line said "Preset N" on every row: boilerplate wearing a
+   * subtitle's clothes; user call 2026-08-04). The cell is present in every
+   * state and the number is always two glyphs, so names share one left edge.
+   * Playing/tuning markers move INTO the cell, replacing the number — the
+   * flat skin's rule — instead of stacking beside it in the title row.
+   */
+  slot?: number
 }): React.JSX.Element {
   return (
     <div
@@ -121,6 +138,20 @@ export function MediaRow({
       )}
     >
       <MediaArt src={artUrl} kind={kind} icon={icon} size={dense ? 'dense' : 'row'} />
+      {slot != null && (
+        <span
+          data-slot={String(slot).padStart(2, '0')}
+          className="shrink-0 w-[18px] flex justify-center font-mono text-[10.5px] text-faint tabular-nums"
+        >
+          {playing ? (
+            <Eqbars playing />
+          ) : tuning ? (
+            <Loader2 size={13} className="spin text-gold/80" />
+          ) : (
+            String(slot).padStart(2, '0')
+          )}
+        </span>
+      )}
       <div className="min-w-0 flex-1">
         <div
           className={cx(
@@ -131,9 +162,11 @@ export function MediaRow({
         >
           {/* the floating skin has no position cell, so the playing state
               lives inline before the title — the flat skin's rule is the
-              position cell; both are one glance from the name */}
-          {playing && <Eqbars playing />}
-          {tuning && <Loader2 size={13} className="spin shrink-0" />}
+              position cell; both are one glance from the name. A row WITH a
+              slot cell has a position cell again, and the markers live there
+              instead. */}
+          {playing && slot == null && <Eqbars playing />}
+          {tuning && slot == null && <Loader2 size={13} className="spin shrink-0" />}
           <span className="truncate">{title}</span>
         </div>
         <div className={cx('flex items-center gap-1.5 min-w-0', dense && 'leading-tight')}>
@@ -142,7 +175,17 @@ export function MediaRow({
               {badge}
             </span>
           )}
-          {subtitle && <div className="text-[12px] text-dim truncate">{subtitle}</div>}
+          {subtitle && (
+            <div
+              data-row-subtitle
+              className={cx(
+                'truncate',
+                dense ? 'text-[11.5px] text-faint' : 'text-[12px] text-dim'
+              )}
+            >
+              {subtitle}
+            </div>
+          )}
         </div>
       </div>
       {actions && <div className="shrink-0 flex items-center gap-0.5">{actions}</div>}

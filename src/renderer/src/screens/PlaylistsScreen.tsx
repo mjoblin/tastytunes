@@ -22,6 +22,7 @@ import {
   favoriteKey,
   playlistContentHash,
   playlistItemKey,
+  playlistTotalSecs,
   type Favorite,
   type FavoriteMedia,
   type Playlist,
@@ -463,8 +464,9 @@ export function PlaylistsScreen(): React.JSX.Element {
 
 type PlaylistSort = 'updated' | 'created' | 'played' | 'name' | 'length'
 
-/** Total runtime; null durations (servers that don't report one) just don't add. */
-const totalSecs = (p: Playlist): number => p.items.reduce((n, i) => n + (i.durationSecs ?? 0), 0)
+/** Total runtime lives in @shared/model (`playlistTotalSecs`) — the tray
+ *  panel shows it too, and two sums is how they'd drift. */
+const totalSecs = playlistTotalSecs
 
 /** How many distinct artists — a cheap read on how varied a playlist is. */
 const artistCount = (p: Playlist): number =>
