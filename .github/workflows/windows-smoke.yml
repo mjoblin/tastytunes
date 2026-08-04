@@ -13,10 +13,25 @@ on:
   workflow_dispatch:
   push:
     tags: ['v*']
+    branches: ['arm64-installer-integrity'] # temporary, for the arm64 bring-up
 
 jobs:
   smoke:
-    runs-on: windows-latest
+    # BOTH ARCHITECTURES. x64 is what most users get; arm64 is what
+    # Windows-on-ARM machines download, and it is the one that shipped
+    # broken — a truncated payload extraction left the app .exe and every
+    # DLL unwritten while the install reported success (2026-08-03). Only a
+    # real ARM machine can catch that, so the matrix earns its keep.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            arch: x64
+          - runner: windows-11-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    name: smoke (${{ matrix.arch }})
     steps:
       - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
 
@@ -30,7 +45,7 @@ jobs:
       - run: npm run build
 
       - name: Package the NSIS installer
-        run: npx electron-builder --win --publish never
+        run: npx electron-builder --win --${{ matrix.arch }} --publish never
 
       - name: Install silently
         shell: pwsh
@@ -43,7 +58,15 @@ jobs:
           Start-Process -FilePath $setup.FullName -ArgumentList '/S' -Wait
           $exe = Join-Path $env:LOCALAPPDATA 'Programs\TastyTunes\TastyTunes.exe'
           for ($i = 0; $i -lt 30 -and -not (Test-Path $exe); $i++) { Start-Sleep 2 }
-          if (-not (Test-Path $exe)) { throw "installed exe not found at $exe" }
+          if (-not (Test-Path $exe)) {
+            # THE ARM64 BUG'S SIGNATURE: the installer "succeeds" but the
+            # executable tail of the payload never lands. Dump what did, so a
+            # failure here is diagnosable from the log alone.
+            Write-Host "installed exe MISSING. Directory contents:"
+            Get-ChildItem (Split-Path $exe) -Recurse -Depth 1 -ErrorAction SilentlyContinue |
+              Select-Object Length, FullName | Format-Table -AutoSize | Out-String -Width 200
+            throw "installed exe not found at $exe"
+          }
           Write-Host "installed: $exe"
           "TT_EXE=$exe" | Out-File -FilePath $env:GITHUB_ENV -Append
 
