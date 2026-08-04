@@ -198,8 +198,20 @@ img {
 }
 
 /* faceplate silkscreen labels */
+/* Section landmarks: TODAY, ALBUMS, TRACKS, CONNECTION.
+   MEASURED, not adjusted by feel (2026-08-04). This was 10px / 0.22em /
+   `faint`, which stacked three legibility penalties on the same text: the
+   smallest size in the app, the dimmest token, and wide-tracked caps, which
+   slow reading because they break word-shape recognition. `faint` on the app
+   background is 3.48:1 — under the 4.5:1 WCAG AA floor for normal text — and
+   the ambient wash drops it to 2.27:1 behind a bright album cover, so its
+   legibility varied with whatever was playing.
+   `dim` is 7.32:1 (and 4.76:1 even under that bright wash), 11px gets it off
+   the app's smallest step, and 0.14em keeps the mono-caps character while
+   letting the words read as words. Deliberately still the quietest text in
+   the app — these are landmarks, not content. */
 .microlabel {
-  @apply font-mono text-[10px] uppercase tracking-[0.22em] text-faint;
+  @apply font-mono text-[11px] uppercase tracking-[0.14em] text-dim;
 }
 
 /* tech readout chips (codec / sample rate / bit depth) */
