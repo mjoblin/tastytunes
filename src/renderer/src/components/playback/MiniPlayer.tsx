@@ -11,6 +11,8 @@ import { useShortcuts } from '@/hooks/useShortcuts'
 import { useDisplayFont } from '@/hooks/useDisplayFont'
 import { useVolumeSlider, useWheelVolume } from '@/components/playback/VolumeCluster'
 import { PlayPauseButton, TransportIconButton, useTransport } from '@/components/playback/Transport'
+import { VolumeArc } from '@/components/playback/VolumeDial'
+import { useSeekScrub } from '@/hooks/useSeekScrub'
 import { Slider } from '@/components/controls/Slider'
 import { ArtImage } from '@/components/media/ArtImage'
 import { AmbientArt } from '@/components/media/AmbientArt'
@@ -19,9 +21,14 @@ import { cx, deriveNowPlaying, fmtTime } from '@/lib/format'
 
 /**
  * The mini player window (?mini=1): a frameless always-on-top strip with art,
- * transport, and volume. Fed by the same pushes as the main window; hover
- * state arrives from the main process (CSS :hover can't fire over the drag
- * region).
+ * playhead, transport, and volume. Fed by the same pushes as the main window;
+ * hover state arrives from the main process (CSS :hover can't fire over the
+ * drag region).
+ *
+ * THE SLIDER IS THE PLAYHEAD, as on every other surface. It used to be a
+ * hover-revealed VOLUME slider in the time cell, which read as a seek bar and
+ * wasn't (user call, 2026-08-04) — volume is now the tray panel's arc at mini
+ * scale, plus the wheel anywhere on the window and the arrow keys.
  */
 export function MiniPlayer(): React.JSX.Element {
   const playState = useStore((s) => s.playState)
@@ -32,8 +39,9 @@ export function MiniPlayer(): React.JSX.Element {
   const hovered = useStore((s) => s.miniHover)
   const { position, duration } = usePlayhead()
   const onWheel = useWheelVolume()
-  // Unconditional — the pre-amp slider's plumbing. Stays above the (currently
-  // absent) early returns so the hook count never shifts (React #310 guard).
+  // Unconditional — feeds the arc's level (hold-aware, percent-vs-step). Stays
+  // above the (currently absent) early returns so the hook count never shifts
+  // (React #310 guard).
   const vol = useVolumeSlider()
   // transport keys only — this window has no screens, palette or overlays
   useShortcuts({ transportOnly: true })
@@ -42,7 +50,10 @@ export function MiniPlayer(): React.JSX.Element {
 
   // Shared with the bar and the tray panel — playing/busy arrive already
   // gated on `active` (see Transport.tsx for the drift this closed).
-  const t = useTransport()
+  const t = useTransport(duration)
+  // Shared scrub-and-hold: thumb tracks the pointer while dragging, holds the
+  // target after release until the device's playhead catches up.
+  const { shownPosition, slider } = useSeekScrub(position, duration, t.seek)
   const { connected, active } = t
   const meta = deriveNowPlaying(playState, nowPlaying)
   useArtAccent(settings.accentFollowsArt && active ? meta.artUrl : null, theme)
@@ -57,8 +68,8 @@ export function MiniPlayer(): React.JSX.Element {
 
   const timeText = active
     ? duration != null
-      ? `${fmtTime(position)} / ${fmtTime(duration)}`
-      : fmtTime(position)
+      ? `${fmtTime(shownPosition)} / ${fmtTime(duration)}`
+      : fmtTime(shownPosition)
     : ''
 
   // what's next in the queue
@@ -75,8 +86,10 @@ export function MiniPlayer(): React.JSX.Element {
       onClick={() => void tt.command({ type: 'setMute', mute: !muted })}
       className={cx(
         // matches MiniButton (the ± nudges) and the main transport's mute —
-        // one consistent secondary-control treatment across the mini
-        'no-drag tip-top p-1 ml-0.5 rounded transition-colors',
+        // one consistent secondary-control treatment across the mini.
+        // tip-end: the mute sits by the right edge now, and a centred tip
+        // clips against the window (the shell is overflow-hidden).
+        'no-drag tip-top tip-end p-1 ml-0.5 rounded transition-colors',
         muted ? 'text-gold' : 'text-dim hover:text-ink'
       )}
     >
@@ -159,7 +172,23 @@ export function MiniPlayer(): React.JSX.Element {
             </div>
           </div>
 
-          {/* transport + volume + time */}
+          {/* playhead: the same seek row the bar and panel carry, sized down.
+              Radio has a position but no duration, and cast sources only seek
+              when they offer it — canSeek (via useTransport) gates both. */}
+          <div className="flex items-center gap-2">
+            <div className="flex-1">
+              <Slider
+                value={duration ? shownPosition / duration : 0}
+                disabled={!active || !t.canSeek}
+                ariaLabel="Playhead"
+                scrubLabel={duration ? (v) => fmtTime(v * duration) : undefined}
+                {...slider}
+              />
+            </div>
+            <span className="font-mono text-[9.5px] text-faint tabular-nums shrink-0">{timeText}</span>
+          </div>
+
+          {/* transport + volume */}
           <div className="flex items-center gap-1.5">
             <MiniButton enabled={active && t.canPrev} tip="Previous" onClick={t.prev}>
               <SkipBack size={14} />
@@ -168,40 +197,15 @@ export function MiniPlayer(): React.JSX.Element {
             <MiniButton enabled={active && t.canNext} tip="Next" onClick={t.next}>
               <SkipForward size={14} />
             </MiniButton>
+            <div className="flex-1" />
 
             {active && hasVolume && preAmp ? (
-              // Pre-Amp: mute icon, then a hover-reveal slider that cross-fades
-              // with the time readout. The relative box is a fixed-size flex-1
-              // cell, so revealing the slider shifts nothing (no height change,
-              // no vertical jump); collapsed, it's the mute icon + time as before.
+              // Pre-Amp: mute, then the tray panel's arc at mini scale. The
+              // arc is display; the wheel (anywhere on the window) and the
+              // arrow keys are the control, as the mute tooltip teaches.
               <>
                 {muteBtn}
-                <div className="mini-vol-cell relative flex-1 flex items-center min-w-0">
-                  <span
-                    className={cx(
-                      'mini-time flex-1 text-right font-mono text-[9.5px] text-faint tabular-nums transition-opacity',
-                      hovered ? 'opacity-0' : 'opacity-100'
-                    )}
-                  >
-                    {timeText}
-                  </span>
-                  <div
-                    className={cx(
-                      'mini-vol-overlay no-drag absolute inset-0 flex items-center transition-opacity',
-                      hovered ? 'opacity-100' : 'opacity-0 pointer-events-none'
-                    )}
-                  >
-                    <div className={cx('flex-1', muted && 'opacity-40')}>
-                      <Slider
-                        value={vol.value}
-                        onScrub={vol.onScrub}
-                        onCancel={vol.onCancel}
-                        onCommit={vol.onCommit}
-                        ariaLabel="Volume"
-                      />
-                    </div>
-                  </div>
-                </div>
+                <VolumeArc size="mini" level={vol.levelNow} muted={muted} enabled={active} />
               </>
             ) : active && hasVolume && cbus ? (
               // Control Bus: no absolute level — mute then − / + nudges, same
@@ -222,20 +226,16 @@ export function MiniPlayer(): React.JSX.Element {
                 >
                   <Plus size={13} />
                 </MiniButton>
-                <div className="flex-1" />
-                <span className="font-mono text-[9.5px] text-faint tabular-nums shrink-0">{timeText}</span>
               </>
-            ) : (
-              <>
-                <div className="flex-1" />
-                <span className="font-mono text-[9.5px] text-faint tabular-nums shrink-0">{timeText}</span>
-              </>
-            )}
+            ) : null}
           </div>
 
-          {/* next up */}
-          <div className="microlabel truncate min-h-[13px]">
-            {active && next?.metadata ? `next · ${next.metadata.title ?? next.metadata.name ?? ''}` : ''}
+          {/* next up. Thin spaces (U+2009) around the dot: a full space plus
+              the 0.14em tracking read as a gulf at this size. mt-1 biases the
+              column's justify-between so this row gets a little more air above
+              it than the evenly-split gaps would give. */}
+          <div className="microlabel microlabel-sm truncate min-h-[12px] mt-1">
+            {active && next?.metadata ? `next · ${next.metadata.title ?? next.metadata.name ?? ''}` : ''}
           </div>
         </div>
       </div>

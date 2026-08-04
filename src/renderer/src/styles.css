@@ -232,6 +232,13 @@ img {
   @apply text-[9px] tracking-[0.1em] px-1;
 }
 
+/* Same landmark voice, a step down — the mini player's next-up line sits in a
+   132px strip where 11px caps read as a fourth content row rather than a
+   whisper. Same cascade note as .badge-sm: must stay after .microlabel. */
+.microlabel-sm {
+  @apply text-[10px];
+}
+
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;

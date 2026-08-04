@@ -28,16 +28,6 @@ export function VolumeDial({
   muted: boolean
   enabled: boolean
 }): React.JSX.Element {
-  const limit = useStore((s) => s.settings.volumeLimitPercent)
-  const ceiling = limit ?? 100
-  const ratio = level == null ? 0 : Math.max(0, Math.min(1, level / Math.max(1, ceiling)))
-
-  // A 270° arc, the gap at the bottom — the dial idiom, and the gap is what
-  // makes "empty" distinguishable from "not a dial".
-  const R = 13
-  const C = 2 * Math.PI * R
-  const SWEEP = 0.75
-
   const step = (delta: number): void => {
     void tt.command({ type: 'volumeStepChange', delta })
   }
@@ -60,46 +50,7 @@ export function VolumeDial({
         {muted ? <VolumeX size={15} /> : <Volume2 size={15} />}
       </button>
 
-      <div className="relative h-9 w-9 shrink-0 flex items-center justify-center">
-        <svg viewBox="0 0 32 32" className="absolute inset-0 h-full w-full -rotate-[225deg]">
-          <circle
-            cx="16"
-            cy="16"
-            r={R}
-            fill="none"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            className="stroke-edge2"
-            strokeDasharray={`${C * SWEEP} ${C}`}
-          />
-          <circle
-            cx="16"
-            cy="16"
-            r={R}
-            fill="none"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            className={cx(
-              'transition-[stroke-dasharray,stroke] duration-200',
-              muted || !enabled ? 'stroke-faint' : 'stroke-gold'
-            )}
-            strokeDasharray={`${C * SWEEP * ratio} ${C}`}
-          />
-        </svg>
-        {/* The number lives inside the arc — one glance gives the exact level
-            and its position against the ceiling. Control Bus has no absolute
-            level, so it gets a dash rather than a lie. */}
-        <span
-          className={cx(
-            // 10.5px, not 11.5: it sat a size above the readouts either side of
-            // it, and a three-digit level needs the room inside a 26px arc.
-            'relative font-mono text-[10.5px] tabular-nums leading-none',
-            muted ? 'text-faint' : enabled ? 'text-ink' : 'text-faint/50'
-          )}
-        >
-          {level ?? '–'}
-        </span>
-      </div>
+      <VolumeArc size="panel" level={level} muted={muted} enabled={enabled} />
 
       {/* ±1 and ±5, in a 2x2 to the RIGHT of the arc — singles nearest the
           dial, doubles outboard, so the bigger jump is the further reach. */}
@@ -117,6 +68,86 @@ export function VolumeDial({
           <ChevronsDown size={12} />
         </VolButton>
       </div>
+    </div>
+  )
+}
+
+/**
+ * The arc + number on its own, so the mini player can carry the same level
+ * display at its own scale. `size` is a NAMED VARIANT, the MediaArt rule: the
+ * point of the token is that no caller picks its own number. 'panel' is the
+ * tray panel's 36px arc with the 10.5px readout; 'mini' is the mini player's
+ * 28px with 9.5px, matching the mono sizes beside it there.
+ */
+export function VolumeArc({
+  level,
+  muted,
+  enabled,
+  size
+}: {
+  /** Device level 0..100, or null when the model reports none (Control Bus). */
+  level: number | null
+  muted: boolean
+  enabled: boolean
+  size: 'panel' | 'mini'
+}): React.JSX.Element {
+  const limit = useStore((s) => s.settings.volumeLimitPercent)
+  const ceiling = limit ?? 100
+  const ratio = level == null ? 0 : Math.max(0, Math.min(1, level / Math.max(1, ceiling)))
+
+  // A 270° arc, the gap at the bottom — the dial idiom, and the gap is what
+  // makes "empty" distinguishable from "not a dial".
+  const R = 13
+  const C = 2 * Math.PI * R
+  const SWEEP = 0.75
+
+  return (
+    <div
+      data-volume-arc
+      className={cx(
+        'relative shrink-0 flex items-center justify-center',
+        size === 'panel' ? 'h-9 w-9' : 'h-7 w-7'
+      )}
+    >
+      <svg viewBox="0 0 32 32" className="absolute inset-0 h-full w-full -rotate-[225deg]">
+        <circle
+          cx="16"
+          cy="16"
+          r={R}
+          fill="none"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          className="stroke-edge2"
+          strokeDasharray={`${C * SWEEP} ${C}`}
+        />
+        <circle
+          cx="16"
+          cy="16"
+          r={R}
+          fill="none"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          className={cx(
+            'transition-[stroke-dasharray,stroke] duration-200',
+            muted || !enabled ? 'stroke-faint' : 'stroke-gold'
+          )}
+          strokeDasharray={`${C * SWEEP * ratio} ${C}`}
+        />
+      </svg>
+      {/* The number lives inside the arc — one glance gives the exact level
+          and its position against the ceiling. Control Bus has no absolute
+          level, so it gets a dash rather than a lie. */}
+      <span
+        className={cx(
+          // panel: 10.5px, not 11.5 — it sat a size above the readouts either
+          // side of it, and a three-digit level needs the room inside the arc.
+          'relative font-mono tabular-nums leading-none',
+          size === 'panel' ? 'text-[10.5px]' : 'text-[9.5px]',
+          muted ? 'text-faint' : enabled ? 'text-ink' : 'text-faint/50'
+        )}
+      >
+        {level ?? '–'}
+      </span>
     </div>
   )
 }
