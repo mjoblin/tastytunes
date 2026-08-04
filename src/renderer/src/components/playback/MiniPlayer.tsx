@@ -231,10 +231,11 @@ export function MiniPlayer(): React.JSX.Element {
           </div>
 
           {/* next up. Thin spaces (U+2009) around the dot: a full space plus
-              the 0.14em tracking read as a gulf at this size. mt-1 biases the
-              column's justify-between so this row gets a little more air above
-              it than the evenly-split gaps would give. */}
-          <div className="microlabel microlabel-sm truncate min-h-[12px] mt-1">
+              the 0.14em tracking read as a gulf at this size. mt-2 biases the
+              column's justify-between so this row gets visibly more air above
+              it than the evenly-split gaps would give (mt-1 was imperceptible
+              against the line box's own descender space). */}
+          <div className="microlabel microlabel-sm truncate min-h-[12px] mt-2">
             {active && next?.metadata ? `next · ${next.metadata.title ?? next.metadata.name ?? ''}` : ''}
           </div>
         </div>

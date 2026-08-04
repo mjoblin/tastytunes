@@ -104,8 +104,12 @@ export function VolumeArc({
   return (
     <div
       data-volume-arc
+      // no-drag ALWAYS: in the mini's frameless window every control around
+      // the arc (mute, transport, slider) opts out of the drag region — a
+      // control cluster shouldn't double as a window drag handle. Inert where
+      // there is no drag region, so the panel is unaffected.
       className={cx(
-        'relative shrink-0 flex items-center justify-center',
+        'no-drag relative shrink-0 flex items-center justify-center',
         size === 'panel' ? 'h-9 w-9' : 'h-7 w-7'
       )}
     >
