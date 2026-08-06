@@ -43,6 +43,9 @@ if (process.env.AZURE_TENANT_ID) {
     '--config.win.azureSignOptions.endpoint=https://wus2.codesigning.azure.net',
     '--config.win.azureSignOptions.codeSigningAccountName=redactedcatsigning',
     '--config.win.azureSignOptions.certificateProfileName=tastytunes',
+    // Required by the schema; must equal the certificate CN — the updater
+    // verifies downloaded updates against this publisher.
+    '--config.win.azureSignOptions.publisherName=Michael Vaughan Joblin',
     '--config.win.azureSignOptions.timestampRfc3161=http://timestamp.acs.microsoft.com',
     '--config.win.azureSignOptions.timestampDigest=SHA256'
   )
