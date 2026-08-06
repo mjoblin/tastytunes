@@ -3,7 +3,7 @@ import { Disc3, ExternalLink, RotateCw, UserRound, X } from 'lucide-react'
 import type { AlbumInfo, ArtistInfo } from '@shared/model'
 import { tt } from '@/api'
 import { useStore } from '@/store'
-import { deriveNowPlaying } from '@/lib/format'
+import { deriveNowPlaying , cx } from '@/lib/format'
 import { usePanelWidth } from '@/hooks/usePanelWidth'
 import { PanelResizeHandle } from '@/components/controls/PanelResizeHandle'
 import { Segmented } from '@/components/controls/Segmented'
@@ -20,7 +20,7 @@ type Tab = 'artist' | 'album'
  * mutually exclusive (the store's setters enforce it). Each tab fetches only
  * while active — the disk cache makes revisits instant.
  */
-export function ArtistPanel(): React.JSX.Element {
+export function ArtistPanel({ className }: { className?: string }): React.JSX.Element {
   const playState = useStore((s) => s.playState)
   const nowPlaying = useStore((s) => s.nowPlaying)
   const setArtistOpen = useStore((s) => s.setArtistOpen)
@@ -106,7 +106,10 @@ export function ArtistPanel(): React.JSX.Element {
   return (
     <aside
       style={{ width }}
-      className="no-drag absolute inset-y-0 right-0 z-10 max-w-[60%] flex flex-col bg-panel/60 backdrop-blur-md border-l border-edge"
+      className={cx(
+        'no-drag absolute inset-y-0 right-0 z-10 max-w-[60%] flex flex-col bg-panel/60 backdrop-blur-md border-l border-edge',
+        className
+      )}
     >
       <PanelResizeHandle dragging={dragging} snapped={snapped} handleProps={handleProps} />
       <div className="flex items-center justify-between px-6 pt-5 pb-3">

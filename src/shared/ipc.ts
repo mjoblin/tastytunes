@@ -154,6 +154,8 @@ export type StreamerCommand =
   | { type: 'setVolumePercent'; percent: number }
   | { type: 'volumeStepChange'; delta: number }
   | { type: 'queueDelete'; id: number }
+  /** Clear the whole queue (the Queue screen's Clear button). */
+  | { type: 'queueClear' }
   | { type: 'queueMove'; id: number; from: number; to: number }
   | { type: 'presetDelete'; presetId: number }
   | { type: 'presetMove'; from: number; to: number }

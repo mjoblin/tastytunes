@@ -1127,6 +1127,32 @@ function buildDemo(host: string): {
         res.writeHead(200, { 'content-type': 'application/json' })
         return res.end('{"zone": "ZONE1"}')
       }
+      // Queue edits (row remove / drag reorder / Clear queue) — these two
+      // routes were MISSING here while the mock had them (fork drift, caught
+      // 2026-08-06 adding delete_all): demo-mode queue edits failed silently.
+      // Mirrors dev/mock-streamer.mjs; {"start":0,"delete_all":true} is the
+      // firmware's clear-all form (vibin's playlist_clear).
+      if (u.pathname === '/smoip/queue/delete' && req.method === 'POST') {
+        const body = JSON.parse((await readBody(req)) || '{}') as Dict
+        const ids = Array.isArray(body.ids) ? (body.ids as number[]) : []
+        const cur = (DATA['/queue/list'] as { items?: QueueItem[] }).items ?? []
+        const items = body.delete_all ? [] : cur.filter((it) => !ids.includes(it.id))
+        setQueue(items, null)
+        res.writeHead(200, { 'content-type': 'application/json' })
+        return res.end('{"zone": "ZONE1"}')
+      }
+      if (u.pathname === '/smoip/queue/move' && req.method === 'POST') {
+        const body = JSON.parse((await readBody(req)) || '{}') as Dict
+        const items = [...((DATA['/queue/list'] as { items?: QueueItem[] }).items ?? [])]
+        const idx = items.findIndex((it) => it.id === body.id)
+        if (idx >= 0 && typeof body.to === 'number') {
+          const [it] = items.splice(idx, 1)
+          items.splice(Math.max(0, Math.min(items.length, body.to as number)), 0, it)
+        }
+        setQueue(items, null)
+        res.writeHead(200, { 'content-type': 'application/json' })
+        return res.end('{"zone": "ZONE1"}')
+      }
       if (u.pathname === '/smoip/queue/add') {
         if (req.method === 'POST') {
           const body = JSON.parse((await readBody(req)) || '{}') as Dict

@@ -436,6 +436,8 @@ export class DeviceManager {
       }
       case 'queueDelete':
         return smoipHttp.queueDelete(host, cmd.id)
+      case 'queueClear':
+        return smoipHttp.queueClear(host)
       case 'queueMove':
         return smoipHttp.queueMove(host, cmd.id, cmd.from, cmd.to)
       case 'presetDelete':

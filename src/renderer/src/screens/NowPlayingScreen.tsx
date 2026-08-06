@@ -8,6 +8,7 @@ import { useDecodedArt } from '@/hooks/useDecodedArt'
 import { AddToPlaylistPanel } from '@/components/overlays/AddToPlaylistPanel'
 import { SignalLamp } from '@/components/device/SignalLamp'
 import { ArtImage } from '@/components/media/ArtImage'
+import { useFadePresence } from '@/hooks/useFadePresence'
 import { LyricsPanel } from '@/components/overlays/LyricsPanel'
 import { LyricLine } from '@/components/playback/LyricLine'
 import { EmptyState } from '@/components/chrome/EmptyState'
@@ -59,6 +60,9 @@ export function NowPlayingScreen(): React.JSX.Element {
   const lyricsAvailable = lyricsEnabled && !meta.isRadio && !!meta.title && !!meta.subtitle
   const { artistInfo: artistEnabled } = useStore((s) => s.settings)
   const artistAvailable = artistEnabled && !meta.isRadio && !!meta.subtitle
+  // Quick fade on open/close — see useFadePresence for why 140ms.
+  const lyricsFade = useFadePresence(lyricsAvailable && lyricsOpen)
+  const artistFade = useFadePresence(artistAvailable && artistOpen)
 
   // The heart: content-only favoriting of whatever is playing. Shared with the
   // tray panel — the track/station/last-station asymmetry lives in the hook.
@@ -250,8 +254,8 @@ export function NowPlayingScreen(): React.JSX.Element {
           ]}
         />
       )}
-      {lyricsAvailable && lyricsOpen && <LyricsPanel />}
-      {artistAvailable && artistOpen && <ArtistPanel />}
+      {lyricsFade.mounted && <LyricsPanel className={lyricsFade.faded} />}
+      {artistFade.mounted && <ArtistPanel className={artistFade.faded} />}
 
       {/* fixed alignment (settings-chosen) so the layout doesn't shift as track lengths change.
           The art+text pair is one inner unit: text always tops-out level with the art

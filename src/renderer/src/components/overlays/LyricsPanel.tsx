@@ -9,7 +9,7 @@ import { usePanelWidth } from '@/hooks/usePanelWidth'
 import { PanelResizeHandle } from '@/components/controls/PanelResizeHandle'
 import { HeaderChip } from '@/components/chrome/Chrome'
 
-export function LyricsPanel(): React.JSX.Element {
+export function LyricsPanel({ className }: { className?: string }): React.JSX.Element {
   const setLyricsOpen = useStore((s) => s.setLyricsOpen)
   const { status, result, synced, currentIndex, isRadio, hasQuery, refresh } = useLyrics()
   const { width, dragging, snapped, handleProps } = usePanelWidth()
@@ -27,7 +27,10 @@ export function LyricsPanel(): React.JSX.Element {
   return (
     <aside
       style={{ width }}
-      className="no-drag absolute inset-y-0 right-0 z-10 max-w-[60%] flex flex-col bg-panel/60 backdrop-blur-md border-l border-edge"
+      className={cx(
+        'no-drag absolute inset-y-0 right-0 z-10 max-w-[60%] flex flex-col bg-panel/60 backdrop-blur-md border-l border-edge',
+        className
+      )}
     >
       <PanelResizeHandle dragging={dragging} snapped={snapped} handleProps={handleProps} />
       <div className="flex items-center justify-between px-6 pt-5 pb-3">

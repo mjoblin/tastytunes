@@ -17,7 +17,7 @@ import {
   verticalListSortingStrategy
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { BookmarkPlus, Crosshair, Disc3, Footprints, LayoutGrid, ListMusic, ListOrdered, MoreHorizontal, Play, Rows3, X } from 'lucide-react'
+import { BookmarkPlus, Crosshair, Disc3, Footprints, LayoutGrid, ListMusic, ListOrdered, ListX, MoreHorizontal, Play, Rows3, X } from 'lucide-react'
 import { queueContentHash, type QueueListItem } from '@shared/smoip'
 import { presetVolumeKey, type ScreenLayout } from '@shared/model'
 import {
@@ -27,6 +27,7 @@ import {
   type QueueRestoreResult
 } from '@shared/model'
 import { tt } from '@/api'
+import { useConfirmPopover } from '@/components/chrome/Confirm'
 import { useStore } from '@/store'
 import { Eqbars } from '@/components/media/Eqbars'
 import { EmptyState } from '@/components/chrome/EmptyState'
@@ -113,6 +114,7 @@ export function QueueScreen(): React.JSX.Element {
   const setScreenFilter = useStore((s) => s.setScreenFilter)
   const cards = queueLayout === 'cards'
   const [saveOpen, setSaveOpen] = useState(false)
+  const clearConfirm = useConfirmPopover()
   // Follow-current does its own scrolling on entry; otherwise restore the
   // previous position.
   const scrollRef = useScrollMemory('queue', !followQueue)
@@ -292,6 +294,25 @@ export function QueueScreen(): React.JSX.Element {
             >
               <BookmarkPlus size={16} />
             </HeaderChip>
+            {/* Destructive and not undoable (device state) → the confirm-popover
+                law. Clearing empties the visible list, so no toast (feedback
+                keys on invocation context; the effect is its own feedback). */}
+            <HeaderChip
+              data-tip="Clear queue"
+              aria-label="Clear queue"
+              disabled={allItems.length === 0}
+              onClick={(e) =>
+                clearConfirm.ask(e, {
+                  question: 'Clear the queue?',
+                  verb: 'Clear',
+                  onConfirm: () => void tt.command({ type: 'queueClear' })
+                })
+              }
+              className="no-drag tip-bottom p-2 disabled:opacity-40 motion-safe:active:scale-90"
+            >
+              <ListX size={16} />
+            </HeaderChip>
+            {clearConfirm.popover}
           </div>
           <div className="flex items-center gap-1.5">
           <HeaderChip

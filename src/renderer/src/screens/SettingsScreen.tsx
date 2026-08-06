@@ -712,7 +712,7 @@ const MCP_GROUPS: Array<{ id: McpClusterInfo['group']; label: string; note: stri
   {
     id: 'write',
     label: 'Edits & saves',
-    note: 'Changes saved things (queue order, preset slots) — off until you switch them on. Overwriting an occupied preset slot additionally requires the agent to say so explicitly per call.'
+    note: 'Changes saved things (queue order, preset slots). Overwriting an occupied preset slot additionally requires the agent to say so explicitly per call.'
   }
 ]
 

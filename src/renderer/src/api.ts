@@ -9,6 +9,7 @@ const raw: TastyTunesApi = window.tastytunes
  * surfaces a failure toast without remembering to attach a catch.
  */
 const WRITE_FAILURES: Partial<Record<StreamerCommand['type'], string>> = {
+  queueClear: "Couldn't clear the queue",
   queueSavePreset: "Couldn't save the preset",
   presetRename: "Couldn't rename the preset",
   streamRadio: "Couldn't play the station",

@@ -37,7 +37,7 @@ export function LyricLine(): React.JSX.Element | null {
     // vertically-centred art/details block around (see below).
     return (
       <div data-lyric-note className="h-0 max-w-xl">
-        <div className="text-[12px] text-faint/65 leading-snug truncate">{note}</div>
+        <div className="text-[13px] text-dim leading-snug truncate">{note}</div>
       </div>
     )
   }

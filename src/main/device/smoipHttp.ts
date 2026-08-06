@@ -15,6 +15,12 @@ async function smoipPost(host: string, path: string, body: unknown): Promise<voi
 export const queueDelete = (host: string, id: number): Promise<void> =>
   smoipPost(host, '/queue/delete', { ids: [id] })
 
+/** Clear the whole queue. {"start": 0, "delete_all": true} is the firmware's
+ *  clear-all form of /queue/delete — live-proven by vibin's playlist_clear
+ *  (streammagic.py), not in the sniffed verb table. */
+export const queueClear = (host: string): Promise<void> =>
+  smoipPost(host, '/queue/delete', { start: 0, delete_all: true })
+
 export const queueMove = (host: string, id: number, from: number, to: number): Promise<void> =>
   smoipPost(host, '/queue/move', { id, from, to })
 
