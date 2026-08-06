@@ -49,7 +49,8 @@ import { DurationCell } from '@/components/media/DurationCell'
 import { PresetPicker } from '@/components/library/LibraryMenus'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { lockVertical } from '@/lib/dnd'
-import { cx, fmtDuration, fmtRelative, matchesFilter } from '@/lib/format'
+import { activeSourceId, cx, fmtDuration, fmtRelative, matchesFilter } from '@/lib/format'
+import { Eqbars } from '@/components/media/Eqbars'
 import { HeaderChip, PrimaryButton, ScreenTitle } from '@/components/chrome/Chrome'
 import { useConfirmPopover } from '@/components/chrome/Confirm'
 import { useOneShotAsk } from '@/hooks/useOneShotAsk'
@@ -107,6 +108,19 @@ export function PlaylistsScreen(): React.JSX.Element {
     if ((queue?.items?.length ?? 0) === 0) return null
     return playlists.find((p) => playlistContentHash(p.items) === liveHash)?.id ?? null
   }, [playlists, liveHash, queue])
+  // Playing marker, queue-screen rules. queuedId means the queue and the
+  // playlist are content-identical INCLUDING ORDER (the hash is
+  // order-sensitive), so the playing queue POSITION is the playlist index —
+  // no title matching, and twin-titled tracks can't cross-light.
+  const playState = useStore((s) => s.playState)
+  const zoneState = useStore((s) => s.zoneState)
+  const nowPlaying = useStore((s) => s.nowPlaying)
+  const queueSourceActive = activeSourceId(zoneState, nowPlaying) === 'MEDIA_PLAYER'
+  const playingIndex = useMemo(() => {
+    const playId = queue?.play_id ?? playState?.queue_id ?? null
+    if (playId == null) return null
+    return queue?.items?.find((it) => it.id === playId)?.position ?? null
+  }, [queue, playState])
 
   const shown = useMemo(() => {
     const list = playlists.filter((p) => matchesFilter(filter, [p.name]))
@@ -122,6 +136,15 @@ export function PlaylistsScreen(): React.JSX.Element {
     return reversed ? sorted.reverse() : sorted
   }, [playlists, filter, sort, reversed])
   const selected = playlists.find((p) => p.id === selectedId) ?? shown[0] ?? null
+  // The record keeps every title the last activation couldn't find, but the
+  // note's job is pointing at a gap in THIS list — a missing track the user
+  // has since edited out is a gap that no longer exists, so it drops from the
+  // display. The stored record stays untouched; the next play rewrites it.
+  const stillMissing = (selected?.lastMissing ?? []).filter((title) =>
+    (selected?.items ?? []).some(
+      (it) => it.title.trim().toLowerCase() === title.trim().toLowerCase()
+    )
+  )
   /** Is the live activation THIS playlist's? Another one running should grey
    *  this button, not turn it into that run's progress bar. */
   const mine = !!activation && !activation.finished && activation.playlistId === selected?.id
@@ -298,7 +321,10 @@ export function PlaylistsScreen(): React.JSX.Element {
                   <div className="flex items-center gap-2.5">
                     <ArtStack playlist={p} />
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-[13.5px]">{p.name}</div>
+                      <div className="flex items-center gap-2 text-[13.5px]">
+                        {queuedId === p.id && <Eqbars dim={!queueSourceActive} />}
+                        <span className="truncate">{p.name}</span>
+                      </div>
                       <div className="microlabel mt-0.5 truncate">
                         {queuedId === p.id && <span className="text-gold">in the queue · </span>}
                         {p.items.length} {p.items.length === 1 ? 'track' : 'tracks'}
@@ -320,122 +346,135 @@ export function PlaylistsScreen(): React.JSX.Element {
             // window. The rail is a fixed 280px, so a wide window can still
             // leave this column cramped — viewport breakpoints (sm:) answered
             // the wrong question and let the metadata strangle the title.
-            <div className="@container flex-1 min-w-0 min-h-0 flex flex-col">
-              <div className="flex items-center gap-2 mb-1">
-                {renaming === selected.id ? (
-                  <RenameField
-                    initial={selected.name}
-                    onDone={(name) => {
-                      if (name) void tt.playlistRename(selected.id, name)
-                      setRenaming(null)
-                    }}
-                  />
-                ) : (
-                  <h2 className="flex-1 min-w-0 font-display font-bold text-[19px] tracking-tight truncate">
-                    {selected.name}
-                  </h2>
-                )}
-                {/* Progress lives IN the button that started it — the button is
-                    already inert during the run, and an inserted banner pushed
-                    the whole list down and back up again. Clicking mid-run
-                    cancels, so one control owns the whole interaction. */}
-                <PrimaryButton
-                  onClick={() =>
-                    mine ? void tt.playlistActivateCancel() : void activatePlaylist(selected)
-                  }
-                  disabled={(!!running && !mine) || selected.items.length === 0}
-                  data-tip={
-                    mine
-                      ? `Loading ${activation.done} of ${activation.total} — click to stop`
-                      : 'Replace the queue with this playlist'
-                  }
-                  aria-label={mine ? 'Stop loading playlist' : 'Play playlist'}
-                  className="no-drag tip-bottom relative overflow-hidden flex items-center gap-2 px-3.5 h-8 text-[12.5px]"
-                >
-                  {mine && (
-                    <span
-                      aria-hidden
-                      className="absolute inset-y-0 left-0 bg-bg/20 transition-[width] duration-200"
-                      style={{
-                        width: `${Math.round((activation.done / Math.max(1, activation.total)) * 100)}%`
-                      }}
-                    />
-                  )}
-                  {/* The LABEL never changes and the icon carries the state, so
-                      the button can't resize mid-run — the sleep timer settled
-                      this exact question when an in-bar countdown grew the
-                      right cluster and squeezed the volume slider. The live
-                      count lives in the tooltip, where it can be read at
-                      leisure rather than glimpsed. */}
-                  <span className="relative flex items-center gap-2">
-                    {mine ? (
-                      <Loader2 size={14} strokeWidth={2.2} className="motion-safe:animate-spin" />
+            <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+              {/* Two columns: the title AND the fact line share one right
+                  boundary and can never run under the buttons — the same
+                  text-cluster/actions anatomy every row follows. @container
+                  sits on the LEFT COLUMN so the fact gates measure the space
+                  the facts actually have, not the pane behind the buttons. */}
+              <div className="flex items-start gap-4 mb-3">
+                <div className="@container flex-1 min-w-0">
+                  <div className="flex items-center min-h-8 mb-1 gap-2">
+                    {renaming === selected.id ? (
+                      <RenameField
+                        initial={selected.name}
+                        onDone={(name) => {
+                          if (name) void tt.playlistRename(selected.id, name)
+                          setRenaming(null)
+                        }}
+                      />
                     ) : (
-                      <Play size={14} strokeWidth={2.2} />
+                      <h2 className="flex-1 min-w-0 font-display font-bold text-[19px] tracking-tight truncate">
+                        {selected.name}
+                      </h2>
                     )}
-                    Play
-                  </span>
-                </PrimaryButton>
-                <HeaderChip
-                  onClick={() => setRenaming(selected.id)}
-                  data-tip="Rename"
-                  aria-label="Rename playlist"
-                  className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
-                >
-                  <Pencil size={16} />
-                </HeaderChip>
-                <button
-                  onClick={(e) =>
-                    confirmDelete.ask(e, {
-                      question: `Delete “${selected.name}”?`,
-                      onConfirm: () => {
-                        // Snapshot the WHOLE playlist, not its id: undo has to
-                        // put back the name, the items and the timestamps, and
-                        // after the delete there is nowhere left to read them.
-                        const deleted = selected
-                        void tt.playlistDelete(deleted.id)
-                        showToast({
-                          kind: 'success',
-                          text: `Deleted “${deleted.name}”`,
-                          action: { label: 'Undo', undo: () => void tt.playlistRestore(deleted) }
-                        })
-                      }
-                    })
-                  }
-                  data-tip="Delete playlist"
-                  aria-label="Delete playlist"
-                  className="no-drag tip-bottom tip-end rounded-lg motion-safe:active:scale-90 transition-all p-2 ring-1 ring-edge bg-panel/70 text-dim hover:text-alert hover:ring-edge2 hover:bg-raised/70"
-                >
-                  <Trash2 size={16} />
-                </button>
-                {confirmDelete.popover}
+                  </div>
+
+                  {/* Its own line, under the title — stacked rather than
+                      competing, so the name is never the thing that loses.
+                      Facts drop by the width the facts actually get, least
+                      useful first: created, then artists. */}
+                  <div data-playlist-meta className="microlabel truncate">
+                    {queuedId === selected.id && <span className="text-gold">in the queue · </span>}
+                    {selected.items.length} {selected.items.length === 1 ? 'track' : 'tracks'}
+                    {totalSecs(selected) > 0 && ` · ${fmtDuration(totalSecs(selected))}`}
+                    {artistCount(selected) > 1 && (
+                      <span className="hidden @md:inline"> · {artistCount(selected)} artists</span>
+                    )}
+                    {selected.lastPlayedAt && (
+                      <span className="hidden @xs:inline"> · played {fmtRelative(selected.lastPlayedAt)}</span>
+                    )}
+                    <span className="hidden @xl:inline"> · created {fmtRelative(selected.createdAt)}</span>
+                  </div>
+                </div>
+
+                <div data-playlist-actions className="shrink-0 flex items-center gap-2">
+                  {/* Progress lives IN the button that started it — the button is
+                      already inert during the run, and an inserted banner pushed
+                      the whole list down and back up again. Clicking mid-run
+                      cancels, so one control owns the whole interaction. */}
+                  <PrimaryButton
+                    onClick={() =>
+                      mine ? void tt.playlistActivateCancel() : void activatePlaylist(selected)
+                    }
+                    disabled={(!!running && !mine) || selected.items.length === 0}
+                    data-tip={
+                      mine
+                        ? `Loading ${activation.done} of ${activation.total} — click to stop`
+                        : 'Replace the queue with this playlist'
+                    }
+                    aria-label={mine ? 'Stop loading playlist' : 'Play playlist'}
+                    className="no-drag tip-bottom relative overflow-hidden flex items-center gap-2 px-3.5 h-8 text-[12.5px]"
+                  >
+                    {mine && (
+                      <span
+                        aria-hidden
+                        className="absolute inset-y-0 left-0 bg-bg/20 transition-[width] duration-200"
+                        style={{
+                          width: `${Math.round((activation.done / Math.max(1, activation.total)) * 100)}%`
+                        }}
+                      />
+                    )}
+                    {/* The LABEL never changes and the icon carries the state, so
+                        the button can't resize mid-run — the sleep timer settled
+                        this exact question when an in-bar countdown grew the
+                        right cluster and squeezed the volume slider. The live
+                        count lives in the tooltip, where it can be read at
+                        leisure rather than glimpsed. */}
+                    <span className="relative flex items-center gap-2">
+                      {mine ? (
+                        <Loader2 size={14} strokeWidth={2.2} className="motion-safe:animate-spin" />
+                      ) : (
+                        <Play size={14} strokeWidth={2.2} />
+                      )}
+                      Play
+                    </span>
+                  </PrimaryButton>
+                  <HeaderChip
+                    onClick={() => setRenaming(selected.id)}
+                    data-tip="Rename"
+                    aria-label="Rename playlist"
+                    className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
+                  >
+                    <Pencil size={16} />
+                  </HeaderChip>
+                  <button
+                    onClick={(e) =>
+                      confirmDelete.ask(e, {
+                        question: `Delete “${selected.name}”?`,
+                        onConfirm: () => {
+                          // Snapshot the WHOLE playlist, not its id: undo has to
+                          // put back the name, the items and the timestamps, and
+                          // after the delete there is nowhere left to read them.
+                          const deleted = selected
+                          void tt.playlistDelete(deleted.id)
+                          showToast({
+                            kind: 'success',
+                            text: `Deleted “${deleted.name}”`,
+                            action: { label: 'Undo', undo: () => void tt.playlistRestore(deleted) }
+                          })
+                        }
+                      })
+                    }
+                    data-tip="Delete playlist"
+                    aria-label="Delete playlist"
+                    className="no-drag tip-bottom tip-end rounded-lg motion-safe:active:scale-90 transition-all p-2 ring-1 ring-edge bg-panel/70 text-dim hover:text-alert hover:ring-edge2 hover:bg-raised/70"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                  {confirmDelete.popover}
+                </div>
               </div>
 
-              {/* Its own line, under the title — stacked rather than competing,
-                  so the name is never the thing that loses. Facts drop by PANE
-                  width, least useful first: created, then artists. */}
-              <div className="microlabel truncate mb-3">
-                {queuedId === selected.id && <span className="text-gold">in the queue · </span>}
-                {selected.items.length} {selected.items.length === 1 ? 'track' : 'tracks'}
-                {totalSecs(selected) > 0 && ` · ${fmtDuration(totalSecs(selected))}`}
-                {artistCount(selected) > 1 && (
-                  <span className="hidden @sm:inline"> · {artistCount(selected)} artists</span>
-                )}
-                {selected.lastPlayedAt && (
-                  <span className="hidden @xs:inline"> · played {fmtRelative(selected.lastPlayedAt)}</span>
-                )}
-                <span className="hidden @lg:inline"> · created {fmtRelative(selected.createdAt)}</span>
-              </div>
-
-              {(selected.lastMissing?.length ?? 0) > 0 && (
+              {stillMissing.length > 0 && (
                 <div className="mb-2 text-[11.5px] text-dim">
-                  Last played, {selected.lastMissing?.length} could not be found:{' '}
-                  <span className="text-faint">{selected.lastMissing?.join(', ')}</span>
+                  Last played, {stillMissing.length} could not be found:{' '}
+                  <span className="text-faint">{stillMissing.join(', ')}</span>
                 </div>
               )}
               {/* divide-y divide-edge/50: the same hairline the queue and the
                   library's track lists use between rows */}
-              <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-edge/50">
+              <div className="flex-1 min-h-0 overflow-y-auto px-1.5 -mx-1.5 py-1 -my-1 divide-y divide-edge/50">
                 <DndContext
                   sensors={sensors}
                   collisionDetection={closestCenter}
@@ -448,6 +487,8 @@ export function PlaylistsScreen(): React.JSX.Element {
                         id={ids[i]}
                         index={i}
                         item={item}
+                        current={queuedId === selected.id && playingIndex === i}
+                        sourceActive={queueSourceActive}
                         onRemove={() => removeItem(i)}
                         onMenu={(e) => setTrackMenu({ item, index: i, x: e.clientX, y: e.clientY })}
                       />
@@ -533,12 +574,18 @@ function TrackRow({
   id,
   index,
   item,
+  current,
+  sourceActive,
   onRemove,
   onMenu
 }: {
   id: string
   index: number
   item: PlaylistItem
+  /** This row is what the queue is playing (only when the playlist IS the queue). */
+  current: boolean
+  /** The queue's own source (MEDIA_PLAYER) is what's audible right now. */
+  sourceActive: boolean
   onRemove: () => void
   onMenu: (e: React.MouseEvent) => void
 }): React.JSX.Element {
@@ -579,7 +626,12 @@ function TrackRow({
       className={cx(
         'group grid grid-cols-[26px_44px_1fr_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5',
         'transition-colors',
-        isDragging ? 'z-10 bg-raised shadow-xl' : 'hover:bg-veil'
+        isDragging && 'z-10 bg-raised shadow-xl',
+        // current + queue audible: the queue row's full playing treatment;
+        // current while another source plays: the parked resume point
+        current && sourceActive && 'row-playing bg-gold/10',
+        current && !sourceActive && 'ring-1 ring-edge2 bg-veil/60 hover:bg-veil',
+        !current && !isDragging && 'hover:bg-veil'
       )}
     >
       <OrderHandle
@@ -587,7 +639,11 @@ function TrackRow({
         attributes={attributes}
         listeners={listeners}
       >
-        <span className="font-mono text-[10.5px] text-faint tabular-nums">{index + 1}</span>
+        {current ? (
+          <Eqbars dim={!sourceActive} />
+        ) : (
+          <span className="font-mono text-[10.5px] text-faint tabular-nums">{index + 1}</span>
+        )}
       </OrderHandle>
 
       <MediaArt src={item.artUrl} kind="track" />
