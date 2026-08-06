@@ -11,9 +11,15 @@ on:
 
 permissions:
   contents: write # electron-builder uploads release assets
+  id-token: write # GitHub OIDC token for Azure Artifact Signing (no stored secret)
 
 jobs:
   build:
+    # The `release` environment is what the Entra federated credential trusts
+    # (subject repo:mjoblin/tastytunes:environment:release) — without it the
+    # azure/login step's OIDC token is rejected. All three legs carry the
+    # environment; only the Windows leg logs in.
+    environment: release
     strategy:
       fail-fast: false
       matrix:
@@ -90,6 +96,23 @@ jobs:
       - run: npm ci
 
       - run: npm run build
+
+      # Azure Artifact Signing auth for the Windows build. OIDC only — no
+      # long-lived secret exists anywhere; the exchanged token is scoped to
+      # the signer role on the redactedcatsigning account. build-win.mjs
+      # turns signing on when it sees AZURE_TENANT_ID in the env.
+      - name: Azure login for Artifact Signing
+        if: matrix.os == 'windows-latest'
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Expose Azure signing env
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        run: echo "AZURE_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}" >> "$GITHUB_ENV"
 
       # On a tag: build and upload the installers to the GitHub Release.
       # On manual runs: build only; artifacts are attached to the workflow run.

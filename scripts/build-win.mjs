@@ -31,6 +31,26 @@ import { createRequire } from 'node:module'
 // script exists for (caught in CI, 2026-08-04).
 const cli = createRequire(import.meta.url).resolve('electron-builder/cli.js')
 const args = [cli, '--win', ...process.argv.slice(2)]
+
+// AZURE ARTIFACT SIGNING, CI-only by design: the release workflow's
+// azure/login step (OIDC, no stored secret) sets AZURE_TENANT_ID in the job
+// env, and its presence is the switch. Local builds stay unsigned — the
+// options aren't in electron-builder.yml precisely so a Mac cross-build or a
+// hand build doesn't die reaching for credentials it doesn't have. The
+// account/profile names are not secrets; auth is entirely the OIDC session.
+if (process.env.AZURE_TENANT_ID) {
+  args.push(
+    '--config.win.azureSignOptions.endpoint=https://wus2.codesigning.azure.net',
+    '--config.win.azureSignOptions.codeSigningAccountName=redactedcatsigning',
+    '--config.win.azureSignOptions.certificateProfileName=tastytunes',
+    '--config.win.azureSignOptions.timestampRfc3161=http://timestamp.acs.microsoft.com',
+    '--config.win.azureSignOptions.timestampDigest=SHA256'
+  )
+  console.log('> Azure Artifact Signing: ON (AZURE_TENANT_ID present)')
+} else {
+  console.log('> Azure Artifact Signing: off (no AZURE_TENANT_ID - local/unsigned build)')
+}
+
 console.log(`> ELECTRON_BUILDER_7Z_FILTER=BCJ node ${args.join(' ')}`)
 
 const child = spawn(process.execPath, args, {
