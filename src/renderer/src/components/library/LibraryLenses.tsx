@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowUpRight, ChevronDown, MoreHorizontal } from 'lucide-react'
 import type { MediaIndexPools, MediaNode } from '@shared/model'
 import { cx, fmtTime, matchesFilter } from '@/lib/format'
+import { useStore } from '@/store'
 import { scrollToVisible } from '@/lib/scroll'
 import { isAlbumClass } from '@/lib/media'
 import { MediaArt } from '@/components/media/MediaArt'
@@ -235,14 +236,14 @@ const ALBUM_SORTS: Array<{ value: 'title' | 'artist' | 'year'; label: string }> 
   { value: 'year', label: 'Year (newest first)' }
 ]
 
-// Session memory (never a setting): the lens comes back as it was left.
+// Sort + direction live in settings (view defaults persist, 2026-08-06);
+// what stays here is session workspace — filters, and the browse spot come
+// back as they were left, and die with the app.
 let albumsMem: {
   genre: string | null
   decade: string | null
-  sort: 'title' | 'artist' | 'year'
-  reversed: boolean
   filter: string
-} = { genre: null, decade: null, sort: 'title', reversed: false, filter: '' }
+} = { genre: null, decade: null, filter: '' }
 
 export function AlbumsLens({
   pools,
@@ -264,6 +265,9 @@ export function AlbumsLens({
     albumsMem = { ...albumsMem, ...patch }
     setMemState(albumsMem)
   }
+  const sort = useStore((s) => s.settings.lensAlbumsSort)
+  const reversed = useStore((s) => s.settings.lensAlbumsSortReversed)
+  const saveSettings = useStore((s) => s.saveSettings)
 
   const all = useMemo(() => pools.flatMap((g) => g.albums), [pools])
   const multiServer = useMemo(() => pools.filter((g) => g.albums.length > 0).length > 1, [pools])
@@ -308,14 +312,14 @@ export function AlbumsLens({
       )
     if (mem.filter) list = list.filter((a) => matchesFilter(mem.filter, [a.title, a.artist, a.year]))
     const sorted = [...list].sort((a, b) => {
-      if (mem.sort === 'artist')
+      if (sort === 'artist')
         return (a.artist ?? '￿').localeCompare(b.artist ?? '￿') || a.title.localeCompare(b.title)
-      if (mem.sort === 'year')
+      if (sort === 'year')
         return (b.year ?? '').localeCompare(a.year ?? '') || a.title.localeCompare(b.title)
       return a.title.localeCompare(b.title) || (a.serverName ?? '').localeCompare(b.serverName ?? '')
     })
-    return mem.reversed ? sorted.reverse() : sorted
-  }, [all, mem])
+    return reversed ? sorted.reverse() : sorted
+  }, [all, mem, sort, reversed])
 
   return (
     <div data-lens-albums>
@@ -351,10 +355,10 @@ export function AlbumsLens({
           <SortChip
             sorts={ALBUM_SORTS}
             neutral="title"
-            value={mem.sort}
-            reversed={mem.reversed}
-            onChange={(sort) => setMem({ sort, reversed: false })}
-            onToggleReverse={() => setMem({ reversed: !mem.reversed })}
+            value={sort}
+            reversed={reversed}
+            onChange={(v) => void saveSettings({ lensAlbumsSort: v, lensAlbumsSortReversed: false })}
+            onToggleReverse={() => void saveSettings({ lensAlbumsSortReversed: !reversed })}
           />
         </div>
       </div>
@@ -422,20 +426,14 @@ interface LensArtist {
 
 // Session memory: selections, the artist filter, and each column's scroll
 // spot survive the round trip through an album leaf (and screen switches).
+// The With-albums toggle lives in settings (view defaults persist,
+// 2026-08-06); this is the session's workspace — spot, filter, scroll.
 let artistsMem: {
   artist: string | null
   album: string | null
   filter: string
-  /** Hide artists that only have loose tracks (no albums). */
-  albumsOnly: boolean
   scroll: { artists: number; albums: number; tracks: number }
-} = {
-  artist: null,
-  album: null,
-  filter: '',
-  albumsOnly: false,
-  scroll: { artists: 0, albums: 0, tracks: 0 }
-}
+} = { artist: null, album: null, filter: '', scroll: { artists: 0, albums: 0, tracks: 0 } }
 
 /**
  * The miller view (vibin's Artists screen, adapted): Artists | Albums |
@@ -458,6 +456,8 @@ export function ArtistsLens({
     artistsMem = { ...artistsMem, ...patch }
     setMemState(artistsMem)
   }
+  const albumsOnly = useStore((s) => s.settings.lensArtistsAlbumsOnly)
+  const saveSettings = useStore((s) => s.saveSettings)
 
   const multiServer = useMemo(() => pools.filter((g) => g.albums.length > 0).length > 1, [pools])
 
@@ -493,8 +493,8 @@ export function ArtistsLens({
   }, [pools])
 
   const baseArtists = useMemo(
-    () => (mem.albumsOnly ? artists.filter((a) => a.albums.length > 0) : artists),
-    [artists, mem.albumsOnly]
+    () => (albumsOnly ? artists.filter((a) => a.albums.length > 0) : artists),
+    [artists, albumsOnly]
   )
   const shownArtists = useMemo(
     () => (mem.filter ? baseArtists.filter((a) => matchesFilter(mem.filter, [a.name])) : baseArtists),
@@ -594,12 +594,12 @@ export function ArtistsLens({
           total={artists.length}
         />
         <Chip
-          state={mem.albumsOnly ? 'active' : 'idle'}
-          aria-pressed={mem.albumsOnly}
+          state={albumsOnly ? 'active' : 'idle'}
+          aria-pressed={albumsOnly}
           data-tip="Hide artists that only have loose tracks"
           data-lens-albums-only
           className="tip-bottom shrink-0"
-          onClick={() => setMem({ albumsOnly: !mem.albumsOnly })}
+          onClick={() => void saveSettings({ lensArtistsAlbumsOnly: !albumsOnly })}
         >
           With albums
         </Chip>
@@ -611,7 +611,7 @@ export function ArtistsLens({
       <div className="w-[24%] min-w-[220px] max-w-[320px] shrink-0 min-h-0 flex flex-col">
         {colHeading(
           'Artists',
-          mem.filter || mem.albumsOnly
+          mem.filter || albumsOnly
             ? `${shownArtists.length}/${artists.length}`
             : String(artists.length)
         )}

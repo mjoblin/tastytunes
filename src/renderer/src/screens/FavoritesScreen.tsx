@@ -32,7 +32,7 @@ import { ScreenTitle } from '@/components/chrome/Chrome'
 
 /** Kind visibility — session memory, like the Radio screen's chip state. */
 type FavKind = 'all' | 'station' | 'album' | 'track'
-let lastKind: FavKind = 'all'
+const FAV_KINDS: readonly FavKind[] = ['all', 'station', 'album', 'track']
 
 /**
  * Favorites: the local cross-source collection — radio stations, albums, and
@@ -99,10 +99,13 @@ export function FavoritesScreen(): React.JSX.Element {
     }
   }, [connected])
 
-  const [kind, setKindState] = useState<FavKind>(lastKind)
+  // View default, persisted (2026-08-06); sanitized on use so a hand-edited
+  // settings file can't blank every section.
+  const storedKind = useStore((s) => s.settings.favoritesKind)
+  const kind: FavKind = FAV_KINDS.includes(storedKind) ? storedKind : 'all'
+  const saveSettings = useStore((s) => s.saveSettings)
   const setKind = (k: FavKind): void => {
-    lastKind = k
-    setKindState(k)
+    void saveSettings({ favoritesKind: k })
   }
   const stations = displayed.filter((f): f is FavoriteStation => f.kind === 'station')
   const albums = displayed.filter((f): f is FavoriteMedia => f.kind === 'album')

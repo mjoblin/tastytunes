@@ -620,6 +620,32 @@ export interface AppSettings {
   /** Album-grid sort in the Library (tracks always sort by track number). */
   librarySort: 'server' | 'title' | 'artist' | 'year'
   librarySortReversed: boolean
+  /**
+   * VIEW DEFAULTS PERSIST (ruled 2026-08-06): a control that shapes how a
+   * screen presents — sort, partition, layout, a hide-this-kind toggle — is
+   * the user naming their preferred default view, so it lives here. What
+   * stays session-only is workspace state: filter text, selections, scroll,
+   * queries. The five below joined under that ruling; anything similar added
+   * later belongs here too.
+   */
+  /** Albums lens sort (the native album grid above keeps librarySort). */
+  lensAlbumsSort: 'title' | 'artist' | 'year'
+  lensAlbumsSortReversed: boolean
+  /** Artists lens: hide artists that only have loose tracks. */
+  lensArtistsAlbumsOnly: boolean
+  playlistsSort: 'updated' | 'created' | 'played' | 'name' | 'length'
+  playlistsSortReversed: boolean
+  /** Favorites kind partition (All / Stations / Albums / Tracks). */
+  favoritesKind: 'all' | 'station' | 'album' | 'track'
+  searchSort: 'relevance' | 'name'
+  searchSortReversed: boolean
+  /**
+   * Unified search: hidden result categories, plain ids sanitized on use
+   * (the navHidden pattern). null = never customized — the screen derives
+   * the default from navHidden (a screen hidden from the rail starts hidden
+   * in search); an array is the user's explicit chip choice and wins.
+   */
+  searchHidden: string[] | null
   /** Remembered sleep-timer action (pause vs standby). The countdown itself is not persisted. */
   sleepAction: SleepAction
   /** Recently Played: collapse continuous sessions (radio/AirPlay/…) to one row, vs a row per song. */
@@ -763,6 +789,15 @@ export const DEFAULT_SETTINGS: AppSettings = {
   libraryLayout: 'cards',
   librarySort: 'server',
   librarySortReversed: false,
+  lensAlbumsSort: 'title',
+  lensAlbumsSortReversed: false,
+  lensArtistsAlbumsOnly: false,
+  playlistsSort: 'updated',
+  playlistsSortReversed: false,
+  favoritesKind: 'all',
+  searchSort: 'relevance',
+  searchSortReversed: false,
+  searchHidden: null,
   sleepAction: 'standby',
   recentsGrouped: true,
   motion: 'system',

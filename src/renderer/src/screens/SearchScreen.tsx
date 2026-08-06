@@ -44,7 +44,7 @@ const ISOLATED_CAP = 50
 
 type CategoryId = 'library' | 'favorites' | 'playlists' | 'presets' | 'radio'
 /** Every category id is also a nav screen id — that 1:1 is what lets the nav
- *  seed this rail's hidden set (see hiddenSeeded) AND order it (see navRank).
+ *  seed this rail's default hidden set (see searchHidden) AND order it (navRank).
  *  MEMBERSHIP ONLY: this list's own order carries no meaning — the rendered
  *  order comes from the user's nav order, applied to `cats` below. */
 const CATEGORY_IDS: CategoryId[] = ['library', 'favorites', 'playlists', 'presets', 'radio']
@@ -70,19 +70,17 @@ const SEARCH_SORTS: Array<{ value: 'relevance' | 'name'; label: string; noRevers
  * were looking for, and this is never a setting.
  */
 let lastQuery = ''
-/** Hidden categories, and the sort — session-only like the query above. */
-let lastHidden = new Set<CategoryId>()
-/**
- * Seeded ONCE per session from navHidden. A row you've hidden from the rail is
- * a row you've said you don't use, so search starts without it — but only as a
- * DEFAULT: the chip is still there, still counted, one click from coming back.
- * `navHidden` has never meant "disabled" (a hidden screen keeps its shortcut,
- * its palette entry and its Go-menu item) and this doesn't change that.
- * Changing the setting mid-session won't re-seed; the chips are the live control.
+/*
+ * Hidden categories and the sort are PERSISTED view defaults (settings
+ * searchHidden/searchSort — the 2026-08-06 ruling), unlike the query above.
+ * searchHidden null means "never customized": the mount seeds from navHidden —
+ * a row you've hidden from the rail is a row you've said you don't use, so
+ * search starts without it, as a DEFAULT only (the chip is still there, still
+ * counted, one click from coming back; navHidden has never meant "disabled").
+ * An explicit CHIP choice persists and wins from then on. The "+N more"
+ * isolate is a session gesture, not a preference — it narrows the live view
+ * without rewriting the default.
  */
-let hiddenSeeded = false
-let lastSort: 'relevance' | 'name' = 'relevance'
-let lastSortReversed = false
 
 /**
  * Unified search: one box over library, favorites, playlists, presets and
@@ -112,18 +110,15 @@ export function SearchScreen(): React.JSX.Element {
   const [query, setQuery] = useState(lastQuery)
   const navHidden = useStore((s) => s.settings.navHidden)
   const navOrder = useStore((s) => s.settings.navOrder)
+  const storedHidden = useStore((s) => s.settings.searchHidden)
+  const saveSettings = useStore((s) => s.saveSettings)
   const [hidden, setHidden] = useState<Set<CategoryId>>(() => {
-    if (!hiddenSeeded) {
-      hiddenSeeded = true
-      const ids = new Set<string>(CATEGORY_IDS)
-      lastHidden = new Set(
-        sanitizeNavHidden(navHidden).filter((id): id is CategoryId => ids.has(id))
-      )
-    }
-    return lastHidden
+    const ids = new Set<string>(CATEGORY_IDS)
+    const src = storedHidden ?? sanitizeNavHidden(navHidden)
+    return new Set(src.filter((id): id is CategoryId => ids.has(id)))
   })
-  const [sort, setSort] = useState(lastSort)
-  const [sortReversed, setSortReversed] = useState(lastSortReversed)
+  const sort = useStore((s) => s.settings.searchSort)
+  const sortReversed = useStore((s) => s.settings.searchSortReversed)
   const [libKind, setLibKind] = useState<'all' | 'artists' | 'albums' | 'tracks'>('all')
   const inputRef = useRef<HTMLInputElement | null>(null)
 
@@ -150,10 +145,7 @@ export function SearchScreen(): React.JSX.Element {
 
   useEffect(() => {
     lastQuery = query
-    lastHidden = hidden
-    lastSort = sort
-    lastSortReversed = sortReversed
-  }, [query, hidden, sort, sortReversed])
+  }, [query])
 
   // ⌘F / the nav / the palette all land here; the ask carries an id so a
   // request made before this mounted still focuses, and can't re-fire later.
@@ -722,7 +714,9 @@ export function SearchScreen(): React.JSX.Element {
     else next.add(id)
     // Hiding the last visible category would leave a blank screen saying
     // nothing — treat that as "show everything again".
-    setHidden(next.size >= cats.length ? new Set() : next)
+    const final = next.size >= cats.length ? new Set<CategoryId>() : next
+    setHidden(final)
+    void saveSettings({ searchHidden: [...final] })
   }
 
   return (
@@ -873,10 +867,9 @@ export function SearchScreen(): React.JSX.Element {
             value={sort}
             reversed={sortReversed}
             onChange={(v) => {
-              setSort(v)
-              setSortReversed(false)
+              void saveSettings({ searchSort: v, searchSortReversed: false })
             }}
-            onToggleReverse={() => setSortReversed((r) => !r)}
+            onToggleReverse={() => void saveSettings({ searchSortReversed: !sortReversed })}
           />
         </div>
       )}

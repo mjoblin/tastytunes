@@ -95,8 +95,12 @@ export function PlaylistsScreen(): React.JSX.Element {
   // `order` field maintained forever, for control a picker gives at a fraction
   // of the cost. 'updated' is the neutral default the store already writes in.
   const showToast = useStore((s) => s.showToast)
-  const [sort, setSort] = useState<PlaylistSort>('updated')
-  const [reversed, setReversed] = useState(false)
+  const saveSettings = useStore((s) => s.saveSettings)
+  // View default, persisted (2026-08-06). Sanitized on use: a hand-edited
+  // settings file must not leave the list unsorted-and-unlabeled.
+  const storedSort = useStore((s) => s.settings.playlistsSort)
+  const sort: PlaylistSort = PLAYLIST_SORT_IDS.includes(storedSort) ? storedSort : 'updated'
+  const reversed = useStore((s) => s.settings.playlistsSortReversed)
   const scrollMemory = useScrollMemory('playlists')
 
   const queuedId = useMemo(() => {
@@ -223,8 +227,8 @@ export function PlaylistsScreen(): React.JSX.Element {
             neutral="updated"
             value={sort}
             reversed={reversed}
-            onChange={(v) => setSort(v)}
-            onToggleReverse={() => setReversed((r) => !r)}
+            onChange={(v) => void saveSettings({ playlistsSort: v, playlistsSortReversed: false })}
+            onToggleReverse={() => void saveSettings({ playlistsSortReversed: !reversed })}
           />
         )}
         {playlists.length > 0 && (
@@ -463,6 +467,7 @@ export function PlaylistsScreen(): React.JSX.Element {
 }
 
 type PlaylistSort = 'updated' | 'created' | 'played' | 'name' | 'length'
+const PLAYLIST_SORT_IDS: readonly PlaylistSort[] = ['updated', 'created', 'played', 'name', 'length']
 
 /** Total runtime lives in @shared/model (`playlistTotalSecs`) — the tray
  *  panel shows it too, and two sums is how they'd drift. */
