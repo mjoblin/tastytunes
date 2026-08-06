@@ -307,8 +307,15 @@ img {
 .eqbars span:nth-child(3) {
   animation-delay: 0.5s;
 }
+/* Current but not audible (paused/buffering): the icon without the motion —
+   bars rest at their inline staggered heights, still recognisably the eqbars. */
 .eqbars.paused span {
-  animation-play-state: paused;
+  animation: none;
+}
+/* Parked: current row while ANOTHER source is audible — flattened to stubs,
+   quietly set apart rather than dressed as playing. */
+.eqbars.parked span {
+  animation: none;
   height: 3px !important;
 }
 @keyframes eq-bounce {

@@ -144,7 +144,7 @@ export function MediaRow({
           className="shrink-0 w-[18px] flex justify-center font-mono text-[10.5px] text-faint tabular-nums"
         >
           {playing ? (
-            <Eqbars playing />
+            <Eqbars />
           ) : tuning ? (
             <Loader2 size={13} className="spin text-gold/80" />
           ) : (
@@ -165,7 +165,7 @@ export function MediaRow({
               position cell; both are one glance from the name. A row WITH a
               slot cell has a position cell again, and the markers live there
               instead. */}
-          {playing && slot == null && <Eqbars playing />}
+          {playing && slot == null && <Eqbars />}
           {tuning && slot == null && <Loader2 size={13} className="spin shrink-0" />}
           <span className="truncate">{title}</span>
         </div>

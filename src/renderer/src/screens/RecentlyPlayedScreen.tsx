@@ -74,11 +74,13 @@ export function RecentlyPlayedScreen(): React.JSX.Element {
     [recents, filter]
   )
 
-  // The head entry is "live" while it's what's actually sounding right now.
+  // The head entry is "live" while it's what the device currently holds —
+  // sounding, tuning, or paused mid-track. Pause keeps the marker (the shared
+  // Eqbars freeze the bars); only a real stop releases the entry to history.
   const state = playState?.state
   const headIsLive =
     shownRecents.length > 0 &&
-    (state === 'play' || state === 'buffering') &&
+    (state === 'play' || state === 'buffering' || state === 'pause') &&
     recentMatchesPlayState(shownRecents[0], playState)
 
   const scrollRef = useScrollMemory('recently-played')
@@ -359,7 +361,7 @@ function SessionRow({
         <Thumb entry={head} />
         <div className="min-w-0 flex-1">
           <div className={cx('flex items-center gap-2 text-[13.5px] truncate', live ? 'text-gold' : 'text-ink')}>
-            {live && <Eqbars playing />}
+            {live && <Eqbars />}
             <span className="truncate">{primary ?? '—'}</span>
           </div>
           {subtitle && <div className="text-[12px] text-dim truncate">{subtitle}</div>}

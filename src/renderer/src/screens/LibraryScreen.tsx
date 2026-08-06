@@ -1165,7 +1165,6 @@ export function LibraryScreen(): React.JSX.Element {
   // when both sides have them), and only while the queue's source is audible.
   const md = playState?.metadata ?? null
   const queueSourceActive = activeSourceId(zoneState, nowPlaying) === 'MEDIA_PLAYER'
-  const isPlayingState = playState?.state === 'play'
   const isCurrentTrack = (node: MediaNode): boolean =>
     md != null &&
     node.title === md.title &&
@@ -1260,7 +1259,6 @@ export function LibraryScreen(): React.JSX.Element {
     trackQueued,
     isCurrentTrack: (node) => queueSourceActive && isCurrentTrack(node),
     isPlayingAlbum: (node) => queueSourceActive && isPlayingAlbum(node),
-    audible: isPlayingState,
     playingArtist: queueSourceActive ? (md?.artist ?? null) : null
   }
 
@@ -1294,7 +1292,6 @@ export function LibraryScreen(): React.JSX.Element {
             key={node.id}
             node={node}
             playing={queueSourceActive && isPlayingAlbum(node)}
-            audible={isPlayingState}
             menuOpen={menuNodeId === node.id}
             favorited={isAlbumClass(node.upnpClass) ? nodeFavorited(node) : undefined}
             onHeart={isAlbumClass(node.upnpClass) ? () => heartNode(node) : undefined}
@@ -1307,7 +1304,6 @@ export function LibraryScreen(): React.JSX.Element {
             key={node.id}
             node={node}
             playing={queueSourceActive && isPlayingAlbum(node)}
-            audible={isPlayingState}
             menuOpen={menuNodeId === node.id}
             favorited={isAlbumClass(node.upnpClass) ? nodeFavorited(node) : undefined}
             onHeart={isAlbumClass(node.upnpClass) ? () => heartNode(node) : undefined}
@@ -1968,7 +1964,6 @@ export function LibraryScreen(): React.JSX.Element {
                 node={node}
                 showArt={!albumNode}
                 isCurrent={queueSourceActive && isCurrentTrack(node)}
-                audible={isPlayingState}
                 queued={trackQueued(node)}
                 menuOpen={menuNodeId === node.id}
                 favorited={nodeFavorited(node)}
@@ -2034,7 +2029,6 @@ export function LibraryScreen(): React.JSX.Element {
                           node={node}
                           showArt
                           isCurrent={queueSourceActive && isCurrentTrack(node)}
-                          audible={isPlayingState}
                           queued={trackQueued(node)}
                           menuOpen={menuNodeId === node.id}
                           favorited={nodeFavorited(node)}

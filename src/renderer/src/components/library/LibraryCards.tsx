@@ -55,7 +55,6 @@ function HeartChip({
 export function ContainerCard({
   node,
   playing,
-  audible,
   menuOpen,
   favorited,
   badge,
@@ -67,8 +66,6 @@ export function ContainerCard({
   node: MediaNode
   /** The playing track belongs to this album (and the queue source is live). */
   playing: boolean
-  /** Transport is actually in the play state (eqbars animate vs freeze). */
-  audible: boolean
   /** This card's ⋯ menu or preset picker is open — hold the hover treatment. */
   menuOpen: boolean
   /** With onHeart: the art-corner heart chip (albums only make sense). */
@@ -127,7 +124,7 @@ export function ContainerCard({
           )}
           {playing && (
             <span className="absolute top-1.5 left-1.5 h-7 w-7 rounded-lg bg-panel/80 ring-1 ring-edge flex items-center justify-center">
-              <Eqbars playing={audible} />
+              <Eqbars />
             </span>
           )}
           {album && (
@@ -194,7 +191,6 @@ export function ContainerCard({
 export function ContainerRow({
   node,
   playing,
-  audible,
   menuOpen,
   favorited,
   badge,
@@ -204,7 +200,6 @@ export function ContainerRow({
 }: {
   node: MediaNode
   playing: boolean
-  audible: boolean
   menuOpen: boolean
   /** With onHeart: the heart button in the row's action cluster (albums). */
   favorited?: boolean
@@ -253,7 +248,7 @@ export function ContainerRow({
           </div>
         )}
       </div>
-      {playing ? <Eqbars playing={audible} /> : <span />}
+      {playing ? <Eqbars /> : <span />}
       {album && onHeart ? (
         <RowHeart favorited={favorited === true} held={menuOpen} onHeart={onHeart} />
       ) : (
@@ -281,7 +276,6 @@ export function TrackRow({
   node,
   showArt,
   isCurrent,
-  audible,
   queued,
   menuOpen,
   favorited,
@@ -296,7 +290,6 @@ export function TrackRow({
   showArt: boolean
   /** This is what's playing right now (queue source live) — queue-row treatment. */
   isCurrent: boolean
-  audible: boolean
   /** Already in the queue — a click jumps there instead of inserting. */
   queued: boolean
   menuOpen: boolean
@@ -326,7 +319,7 @@ export function TrackRow({
     >
       {/* left-justified: numbers sit flush with the header/art above */}
       <span className="font-mono text-[10.5px] text-faint tabular-nums">
-        {isCurrent ? <Eqbars playing={audible} /> : (node.trackNumber ?? '')}
+        {isCurrent ? <Eqbars /> : (node.trackNumber ?? '')}
       </span>
       {showArt && <MediaArt src={node.artUrl} kind="track" />}
       <div className="min-w-0">

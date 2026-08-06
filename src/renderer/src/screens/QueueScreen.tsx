@@ -198,7 +198,6 @@ export function QueueScreen(): React.JSX.Element {
       )
     : allItems
   const playId = queue?.play_id ?? playState?.queue_id ?? null
-  const playing = playState?.state === 'play'
   // The queue belongs to the MEDIA_PLAYER source. When another source is
   // active (AirPlay, radio, …) the device still reports a play_id — that row
   // is just where the queue is parked, and must not claim to be playing.
@@ -418,7 +417,6 @@ export function QueueScreen(): React.JSX.Element {
                     }}
                     item={item}
                     isCurrent={item.id === playId}
-                    playing={playing}
                     sourceActive={queueSourceActive}
                     currentRef={item.id === playId ? currentRef : undefined}
                   />
@@ -435,7 +433,6 @@ export function QueueScreen(): React.JSX.Element {
                   }}
                   item={item}
                   isCurrent={item.id === playId}
-                  playing={playing}
                   sourceActive={queueSourceActive}
                   currentRef={item.id === playId ? currentRef : undefined}
                 />
@@ -503,13 +500,12 @@ interface QueueItemProps {
   onMenu?(e: React.MouseEvent): void
   item: QueueListItem
   isCurrent: boolean
-  playing: boolean
   /** The queue's own source (MEDIA_PLAYER) is what's audible right now. */
   sourceActive: boolean
   currentRef?: React.MutableRefObject<HTMLDivElement | null>
 }
 
-function QueueRow({ item, isCurrent, playing, sourceActive, currentRef, onMenu }: QueueItemProps): React.JSX.Element {
+function QueueRow({ item, isCurrent, sourceActive, currentRef, onMenu }: QueueItemProps): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id as number
   })
@@ -552,7 +548,7 @@ function QueueRow({ item, isCurrent, playing, sourceActive, currentRef, onMenu }
         listeners={listeners}
       >
         {isCurrent ? (
-          <Eqbars playing={playing} dim={!sourceActive} />
+          <Eqbars dim={!sourceActive} />
         ) : (
           <span className="font-mono text-[10.5px] text-faint tabular-nums">
             {(item.position ?? 0) + 1}
@@ -599,7 +595,7 @@ function QueueRow({ item, isCurrent, playing, sourceActive, currentRef, onMenu }
 }
 
 /** Card view of a queue track — mirrors PresetCard's inset-tile anatomy. */
-function QueueCard({ item, isCurrent, playing, sourceActive, currentRef, onMenu }: QueueItemProps): React.JSX.Element {
+function QueueCard({ item, isCurrent, sourceActive, currentRef, onMenu }: QueueItemProps): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id as number
   })
@@ -669,7 +665,7 @@ function QueueCard({ item, isCurrent, playing, sourceActive, currentRef, onMenu 
 
           {isCurrent && (
             <span className="absolute top-1.5 left-1.5 flex items-center rounded-lg bg-panel/80 ring-1 ring-edge px-1.5 h-7">
-              <Eqbars playing={playing} dim={!(sourceActive)} />
+              <Eqbars dim={!sourceActive} />
             </span>
           )}
         </div>

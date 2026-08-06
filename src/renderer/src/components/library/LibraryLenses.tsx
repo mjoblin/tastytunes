@@ -35,7 +35,6 @@ export interface LensActions {
   trackQueued(node: MediaNode): boolean
   isCurrentTrack(node: MediaNode): boolean
   isPlayingAlbum(node: MediaNode): boolean
-  audible: boolean
   /** The playing track's artist while the queue source is live — cheap
    *  content identity for the artists column (no per-render track scans). */
   playingArtist: string | null
@@ -383,7 +382,6 @@ export function AlbumsLens({
                 key={nodeKey(node)}
                 node={node}
                 playing={actions.isPlayingAlbum(node)}
-                audible={actions.audible}
                 menuOpen={actions.menuNodeId === node.id}
                 favorited={actions.nodeFavorited(node)}
                 badge={multiServer ? node.serverName : undefined}
@@ -397,7 +395,6 @@ export function AlbumsLens({
                 key={nodeKey(node)}
                 node={node}
                 playing={actions.isPlayingAlbum(node)}
-                audible={actions.audible}
                 menuOpen={actions.menuNodeId === node.id}
                 favorited={actions.nodeFavorited(node)}
                 badge={multiServer ? node.serverName : undefined}
@@ -633,7 +630,7 @@ export function ArtistsLens({
                         : `${a.tracks.length} track${a.tracks.length === 1 ? '' : 's'}`}
                     </div>
                   </div>
-                  {playing ? <Eqbars playing={actions.audible} /> : <span />}
+                  {playing ? <Eqbars /> : <span />}
                 </div>
               )
             })}
@@ -776,7 +773,6 @@ export function ArtistsLens({
                   node={t}
                   showArt={looseTracks != null}
                   isCurrent={actions.isCurrentTrack(t)}
-                  audible={actions.audible}
                   queued={actions.trackQueued(t)}
                   menuOpen={actions.menuNodeId === t.id}
                   favorited={actions.nodeFavorited(t)}

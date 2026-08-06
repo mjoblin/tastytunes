@@ -112,10 +112,10 @@ function CompressedRow({
           the floating skin's rule, and the right one when there's no cell. */}
       {withIndex ? (
         <span className="w-5 shrink-0 flex justify-center font-mono text-[10.5px] text-faint tabular-nums">
-          {playing ? <Eqbars playing /> : position != null ? position : ''}
+          {playing ? <Eqbars /> : position != null ? position : ''}
         </span>
       ) : (
-        playing && <Eqbars playing />
+        playing && <Eqbars />
       )}
       <span
         className={cx(

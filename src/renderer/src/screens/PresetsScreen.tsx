@@ -550,9 +550,6 @@ function PresetRow({
   tuning: boolean
   onRecall(): void
 } & PresetVolumeProps): React.JSX.Element {
-  // pause-aware bars (the inline copies never froze — a divergence from
-  // the queue/library idiom, fixed by adopting the shared component)
-  const audible = useStore((s) => s.playState?.state === 'play')
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: preset.id as number
   })
@@ -583,7 +580,7 @@ function PresetRow({
         listeners={listeners}
       >
         {playing ? (
-          <Eqbars playing={audible} />
+          <Eqbars />
         ) : tuning ? (
           <Loader2 data-preset-tuning size={13} className="spin text-gold/80" />
         ) : (
@@ -679,9 +676,6 @@ function PresetCard({
   tuning: boolean
   onRecall(): void
 } & PresetVolumeProps): React.JSX.Element {
-  // pause-aware bars (the inline copies never froze — a divergence from
-  // the queue/library idiom, fixed by adopting the shared component)
-  const audible = useStore((s) => s.playState?.state === 'play')
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: preset.id as number
   })
@@ -748,7 +742,7 @@ function PresetCard({
           {playing && (
             // h/w match the corner buttons so the four corners feel weighted
             <span className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-lg bg-panel/80 ring-1 ring-edge">
-              <Eqbars playing={audible} />
+              <Eqbars />
             </span>
           )}
           {tuning && (

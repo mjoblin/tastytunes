@@ -156,7 +156,6 @@ export function FavoritesScreen(): React.JSX.Element {
   // ------------------------------------------------------------------- media
 
   const queueSourceActive = activeSourceId(zoneState, nowPlaying) === 'MEDIA_PLAYER'
-  const audible = queueSourceActive && playState?.state === 'play'
   const albumPlaying = (f: FavoriteMedia): boolean =>
     queueSourceActive &&
     md != null &&
@@ -410,7 +409,6 @@ export function FavoritesScreen(): React.JSX.Element {
                       <ContainerCard
                         node={asNode(f)}
                         playing={albumPlaying(f)}
-                        audible={audible}
                         menuOpen={menu?.fav === f}
                         favorited={active}
                         onHeart={() => toggleHeart(f)}
