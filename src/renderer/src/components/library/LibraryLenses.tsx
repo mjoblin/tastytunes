@@ -426,8 +426,16 @@ let artistsMem: {
   artist: string | null
   album: string | null
   filter: string
+  /** Hide artists that only have loose tracks (no albums). */
+  albumsOnly: boolean
   scroll: { artists: number; albums: number; tracks: number }
-} = { artist: null, album: null, filter: '', scroll: { artists: 0, albums: 0, tracks: 0 } }
+} = {
+  artist: null,
+  album: null,
+  filter: '',
+  albumsOnly: false,
+  scroll: { artists: 0, albums: 0, tracks: 0 }
+}
 
 /**
  * The miller view (vibin's Artists screen, adapted): Artists | Albums |
@@ -484,9 +492,13 @@ export function ArtistsLens({
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [pools])
 
+  const baseArtists = useMemo(
+    () => (mem.albumsOnly ? artists.filter((a) => a.albums.length > 0) : artists),
+    [artists, mem.albumsOnly]
+  )
   const shownArtists = useMemo(
-    () => (mem.filter ? artists.filter((a) => matchesFilter(mem.filter, [a.name])) : artists),
-    [artists, mem.filter]
+    () => (mem.filter ? baseArtists.filter((a) => matchesFilter(mem.filter, [a.name])) : baseArtists),
+    [baseArtists, mem.filter]
   )
 
   // Album tracks by content identity: same server + same album title.
@@ -574,13 +586,23 @@ export function ArtistsLens({
     <div data-lens-artists className="h-full min-h-0 flex flex-col">
       {/* the filter sits ABOVE the columns (left — over the artists column
           it scopes), so all three columns' headings and rows stay aligned */}
-      <div className="shrink-0 pb-3 flex">
+      <div className="shrink-0 pb-3 flex items-center gap-2">
         <FilterInput
           value={mem.filter}
           onChange={(filter) => setMem({ filter })}
           shown={shownArtists.length}
           total={artists.length}
         />
+        <Chip
+          state={mem.albumsOnly ? 'active' : 'idle'}
+          aria-pressed={mem.albumsOnly}
+          data-tip="Hide artists that only have loose tracks"
+          data-lens-albums-only
+          className="tip-bottom shrink-0"
+          onClick={() => setMem({ albumsOnly: !mem.albumsOnly })}
+        >
+          With albums
+        </Chip>
       </div>
       <div className="min-h-0 flex-1 flex gap-6">
       {/* Artists ------------------------------------------------------- */}
@@ -589,7 +611,9 @@ export function ArtistsLens({
       <div className="w-[24%] min-w-[220px] max-w-[320px] shrink-0 min-h-0 flex flex-col">
         {colHeading(
           'Artists',
-          mem.filter ? `${shownArtists.length}/${artists.length}` : String(artists.length)
+          mem.filter || mem.albumsOnly
+            ? `${shownArtists.length}/${artists.length}`
+            : String(artists.length)
         )}
         <div className="min-h-0 flex-1 flex gap-1">
           <div
@@ -597,7 +621,10 @@ export function ArtistsLens({
             onScroll={(e) => {
               artistsMem.scroll.artists = e.currentTarget.scrollTop
             }}
-            className="relative min-h-0 flex-1 overflow-y-auto pr-1"
+            // px/py with matching negative margins: room INSIDE the scrollport
+            // for the rings and the row-playing glow (box-shadows clip at the
+            // padding box) without shifting the rows off the heading's edge
+            className="relative min-h-0 flex-1 overflow-y-auto px-1.5 -mx-1.5 py-1 -my-1"
           >
             {shownArtists.map((a) => {
               const letter = letterOf(a.name)
@@ -616,7 +643,7 @@ export function ArtistsLens({
                   onClick={() => setMem({ artist: selected ? null : a.key, album: null })}
                   className={cx(
                     'group grid grid-cols-[44px_1fr_auto] items-center gap-2.5 rounded-lg px-2 py-1.5 cursor-pointer transition-colors',
-                    selected ? 'bg-raised ring-1 ring-edge2' : playing ? 'bg-gold/10' : 'hover:bg-veil'
+                    selected ? 'bg-raised/70 ring-1 ring-edge2' : playing ? 'bg-gold/10' : 'hover:bg-veil'
                   )}
                 >
                   <MediaArt src={a.artUrl} kind="artist" />
@@ -664,7 +691,7 @@ export function ArtistsLens({
           onScroll={(e) => {
             artistsMem.scroll.albums = e.currentTarget.scrollTop
           }}
-          className="min-h-0 flex-1 overflow-y-auto pr-1"
+          className="min-h-0 flex-1 overflow-y-auto px-1.5 -mx-1.5 py-1 -my-1"
           data-lens-albums-col
         >
           {!selectedArtist ? (
@@ -684,13 +711,23 @@ export function ArtistsLens({
                   onClick={() => setMem({ album: selected ? null : nodeKey(alb) })}
                   className={cx(
                     'group grid grid-cols-[44px_1fr_auto_auto] items-center gap-2.5 rounded-lg px-2 py-1.5 cursor-pointer transition-colors',
-                    selected ? 'bg-raised ring-1 ring-edge2' : playing ? 'bg-gold/10' : 'hover:bg-veil'
+                    selected ? 'bg-raised/70 ring-1 ring-edge2' : playing ? 'bg-gold/10' : 'hover:bg-veil'
                   )}
                 >
                   <MediaArt src={alb.artUrl} kind="album" />
                   <div className="min-w-0">
-                    <div className={cx('text-[13.5px] truncate', playing ? 'text-gold' : 'text-ink')}>
-                      {alb.title}
+                    <div
+                      className={cx(
+                        'flex items-center gap-2 text-[13.5px]',
+                        playing ? 'text-gold' : 'text-ink'
+                      )}
+                    >
+                      {/* no position cell in this list, so the playing marker
+                          rides inline before the title (the floating skin's
+                          rule) — artist row and track row both carry one, and
+                          the album between them answers WHICH album sounds */}
+                      {playing && <Eqbars />}
+                      <span className="truncate">{alb.title}</span>
                     </div>
                     <div className="flex items-center gap-1.5 min-w-0 text-[12px] text-dim">
                       {alb.year && <span>{alb.year}</span>}
@@ -762,7 +799,7 @@ export function ArtistsLens({
           onScroll={(e) => {
             artistsMem.scroll.tracks = e.currentTarget.scrollTop
           }}
-          className="min-h-0 flex-1 overflow-y-auto pr-1"
+          className="min-h-0 flex-1 overflow-y-auto px-1.5 -mx-1.5 py-1 -my-1"
           data-lens-tracks-col
         >
           {albumTracks || looseTracks ? (
