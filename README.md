@@ -297,6 +297,9 @@ npm run build      # bundle to out/
 npm run dist:mac   # package a dmg (also: dist:win, dist:linux)
 ```
 
+Development happens on the `develop` branch; `main` tracks the latest
+release. Pull requests should target `develop`.
+
 Stack: Electron + electron-vite, React 19, TypeScript, Tailwind CSS v4,
 Zustand, `ws` in the main process for the streamer socket.
 
