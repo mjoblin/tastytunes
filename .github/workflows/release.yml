@@ -14,12 +14,12 @@ permissions:
   id-token: write # GitHub OIDC token for Azure Artifact Signing (no stored secret)
 
 jobs:
+  # mac + linux. DELIBERATELY NO `environment:` here — when all three legs
+  # shared the `release` environment, GitHub's deployment model treated the
+  # concurrent jobs as supersedable deployments and reaped the mac/linux legs
+  # mid-run (~15 minutes in, twice, 2026-08-06). Only Windows needs the
+  # environment, because only Windows exchanges an OIDC token.
   build:
-    # The `release` environment is what the Entra federated credential trusts
-    # (subject repo:mjoblin/tastytunes:environment:release) — without it the
-    # azure/login step's OIDC token is rejected. All three legs carry the
-    # environment; only the Windows leg logs in.
-    environment: release
     strategy:
       fail-fast: false
       matrix:
@@ -28,11 +28,6 @@ jobs:
             # universal = one dmg/zip for Intel AND Apple Silicon (plain
             # --mac on the arm64 runner would ship Apple-Silicon-only)
             args: --mac --universal
-          - os: windows-latest
-            # arch comes from electron-builder.yml (x64 + arm64, one
-            # dual-arch NSIS installer); the packaging step routes through
-            # scripts/build-win.mjs, which pins the 7z filter
-            args: --win
           - os: ubuntu-latest
             args: --linux
     runs-on: ${{ matrix.os }}
@@ -57,7 +52,7 @@ jobs:
           TAG="${GITHUB_REF_NAME}"
           PKG="v$(node -p "require('./package.json').version")"
           if [ "$TAG" != "$PKG" ]; then
-            echo "::error::Tag $TAG does not match package.json $PKG — bump package.json on main, then re-tag (dev/tag-release.sh derives the tag for you)."
+            echo "::error::Tag $TAG does not match package.json $PKG — bump package.json on develop, then re-tag (dev/tag-release.sh derives the tag for you)."
             exit 1
           fi
           echo "Version check OK: $TAG"
@@ -97,45 +92,25 @@ jobs:
 
       - run: npm run build
 
-      # Azure Artifact Signing auth for the Windows build. OIDC only — no
-      # long-lived secret exists anywhere; the exchanged token is scoped to
-      # the signer role on the redactedcatsigning account. build-win.mjs
-      # turns signing on when it sees AZURE_TENANT_ID in the env.
-      - name: Azure login for Artifact Signing
-        if: matrix.os == 'windows-latest'
-        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Expose Azure signing env
-        if: matrix.os == 'windows-latest'
-        shell: bash
-        run: echo "AZURE_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}" >> "$GITHUB_ENV"
-
       # On a tag: build and upload the installers to the GitHub Release.
       # On manual runs: build only; artifacts are attached to the workflow run.
-      # Windows goes through scripts/build-win.mjs — it pins the 7z filter, and
-      # without it the arm64 installer ships broken (see that file).
       - name: Package and publish
         if: startsWith(github.ref, 'refs/tags/v')
-        run: ${{ matrix.os == 'windows-latest' && 'npm run dist:win -- --publish always' || format('npx electron-builder {0} --publish always', matrix.args) }}
+        run: npx electron-builder ${{ matrix.args }} --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Package only
         if: "!startsWith(github.ref, 'refs/tags/v')"
-        run: ${{ matrix.os == 'windows-latest' && 'npm run dist:win -- --publish never' || format('npx electron-builder {0} --publish never', matrix.args) }}
+        run: npx electron-builder ${{ matrix.args }} --publish never
 
       # MANUAL RUNS ONLY. On a tag the installers are already attached to the
       # GitHub Release by --publish always above, and release assets do NOT
       # count against the Actions storage allowance — uploading them here too
-      # just stores ~600MB of the same files a second time, per release, where
-      # they DO count. Manual runs have no Release to attach to, so that is the
-      # one case the artifact earns its keep.
-      # Retention is short for the same reason: these are throwaway test builds,
-      # and the default (90 days) is what quietly filled the allowance.
+      # just stores the same files a second time, per release, where they DO
+      # count. Manual runs have no Release to attach to, so that is the one
+      # case the artifact earns its keep. Retention is short for the same
+      # reason: these are throwaway test builds.
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         if: "!startsWith(github.ref, 'refs/tags/v')"
         with:
@@ -143,7 +118,85 @@ jobs:
           retention-days: 7
           path: |
             dist/*.dmg
-            dist/*.exe
             dist/*.zip
             dist/*.AppImage
+          if-no-files-found: ignore
+
+  # Windows, in its OWN job: the `release` environment is what the Entra
+  # federated credential trusts (subject
+  # repo:mjoblin/tastytunes:environment:release) — without it the azure/login
+  # OIDC exchange is rejected. Kept off the matrix so the environment's
+  # deployment semantics can't touch the other legs (see the note above).
+  build-windows:
+    runs-on: windows-latest
+    environment: release
+    # A signed dual-arch build is slower than unsigned (per-file service
+    # round-trips) but 45 minutes means something is stuck, not slow.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Verify tag matches package.json version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          PKG="v$(node -p "require('./package.json').version")"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::Tag $TAG does not match package.json $PKG — bump package.json on develop, then re-tag (dev/tag-release.sh derives the tag for you)."
+            exit 1
+          fi
+          echo "Version check OK: $TAG"
+
+      - run: npm ci
+
+      - run: npm run build
+
+      # Azure Artifact Signing auth. OIDC only — no long-lived secret exists
+      # anywhere; the exchanged token is scoped to the signer role on the
+      # redactedcatsigning account. build-win.mjs turns signing on when it
+      # sees AZURE_TENANT_ID in the env.
+      - name: Azure login for Artifact Signing
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Expose Azure signing env
+        shell: bash
+        # AZURE_TOKEN_CREDENTIALS=dev pins Azure.Identity's credential chain
+        # to the CLI-session credentials the login step just created, skipping
+        # the EnvironmentCredential/ManagedIdentity probes — GitHub's runners
+        # live in Azure, so the IMDS probe ANSWERS and then fails slowly, per
+        # signed file. The first signed run spent ~50 minutes mostly on that
+        # (2026-08-06); harmlessly ignored by older Azure.Identity versions.
+        run: |
+          echo "AZURE_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}" >> "$GITHUB_ENV"
+          echo "AZURE_TOKEN_CREDENTIALS=dev" >> "$GITHUB_ENV"
+
+      # Windows goes through scripts/build-win.mjs — it pins the 7z filter
+      # (without it the arm64 installer ships broken) and injects the Azure
+      # signing options; see that file.
+      - name: Package and publish
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: npm run dist:win -- --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Package only
+        if: "!startsWith(github.ref, 'refs/tags/v')"
+        run: npm run dist:win -- --publish never
+
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: "!startsWith(github.ref, 'refs/tags/v')"
+        with:
+          name: tastytunes-windows
+          retention-days: 7
+          path: dist/*.exe
           if-no-files-found: ignore
