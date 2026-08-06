@@ -1169,7 +1169,13 @@ export function LibraryScreen(): React.JSX.Element {
     md != null &&
     node.title === md.title &&
     (node.album == null || md.album == null || node.album === md.album) &&
-    (node.artist == null || md.artist == null || node.artist === md.artist)
+    (node.artist == null || md.artist == null || node.artist === md.artist) &&
+    // Twin titles on one album (a reprise, a bonus cut) are real — duration is
+    // the content identity left, so require agreement when both sides know it
+    // (±2s: the device and UPnP round track lengths differently).
+    (node.durationSecs == null ||
+      md.duration == null ||
+      Math.abs(node.durationSecs - md.duration) <= 2)
   const isPlayingAlbum = (node: MediaNode): boolean =>
     md != null &&
     md.album === node.title &&
