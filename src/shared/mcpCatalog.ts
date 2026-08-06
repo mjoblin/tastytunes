@@ -337,7 +337,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
     group: 'write',
     optIn: true,
     description:
-      "Create playlists, add the playing track to one, and delete them. These write the user's own stored collection — off unless you turn it on.",
+      "Create playlists, add the playing track to one, and delete them. These write the user's own stored collection.",
     tools: [
       {
         name: 'create_playlist',
@@ -447,7 +447,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
     group: 'write',
     optIn: true,
     description:
-      'Remove or reorder tracks in the play queue. Removals are immediate and there is no undo — off unless you turn it on.',
+      'Remove or reorder tracks in the play queue. Removals are immediate and there is no undo.',
     tools: [
       {
         name: 'remove_queue_item',
@@ -467,7 +467,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
     group: 'write',
     optIn: true,
     description:
-      'Save the queue or the current playback into numbered preset slots. A slot that already holds a preset is only replaced when the tool call says overwrite explicitly — off unless you turn it on.',
+      'Save the queue or the current playback into numbered preset slots. A slot that already holds a preset is only replaced when the tool call says overwrite explicitly.',
     tools: [
       {
         name: 'save_queue_as_preset',
@@ -495,7 +495,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
     group: 'write',
     optIn: true,
     description:
-      'Create, toggle, and delete wake/standby schedules (alarms). These are standing actions that fire on their own later — off unless you turn it on. Reading schedules needs no opt-in (list_schedules, under Status & lists).',
+      'Create, toggle, and delete wake/standby schedules (alarms). These are standing actions that fire on their own later. Reading schedules needs no opt-in (list_schedules, under Status & lists).',
     tools: [
       {
         name: 'create_schedule',
