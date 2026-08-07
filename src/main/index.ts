@@ -182,6 +182,17 @@ function createWindow(): void {
 
 function toggleMiniPlayer(): void {
   if (miniWindow) {
+    // Unset the all-workspaces flag BEFORE closing: on macOS Electron
+    // implements visibleOnFullScreen by flipping the whole app to the
+    // ACCESSORY activation policy (no dock icon, no menu bar), and closing
+    // the window without unsetting it is the path where the flip-back gets
+    // missed — the user's menu bar vanished for good and only the tray icon
+    // still answered (2026-08-06).
+    try {
+      miniWindow.setVisibleOnAllWorkspaces(false)
+    } catch {
+      // cosmetic on platforms without the flag
+    }
     miniWindow.close()
     return
   }
@@ -245,6 +256,10 @@ function toggleMiniPlayer(): void {
   miniWindow.on('closed', () => {
     clearInterval(hoverTimer)
     miniWindow = null
+    // Belt to the unset-flag braces above: whatever path closed the window
+    // (its X, the toggle, a quit), put the dock icon and menu bar back.
+    // Idempotent when the policy never flipped.
+    if (process.platform === 'darwin') void app.dock?.show()
   })
 
   if (process.env['ELECTRON_RENDERER_URL']) {
