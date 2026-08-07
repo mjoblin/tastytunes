@@ -45,6 +45,7 @@ import {
 import { version } from '../../../../package.json'
 import { type AlignH, type AlignV, type AmbientArtMode, type AmbientCoverage, type AppSettings, type McpBind, type McpSettings, type MotionMode, type Schedule, type ThemePreference, type UpdateCheckResult } from '@shared/model'
 import { MCP_CLUSTERS, mcpClusterEnabled, type McpClusterInfo } from '@shared/mcpCatalog'
+import { REPO_URL } from '@shared/ipc'
 import { tt } from '@/api'
 import { useStore, type Screen } from '@/store'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
@@ -1349,7 +1350,21 @@ function UpdatesSection({
     <section className="space-y-3">
       <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
         <SettingRow label="Version" hint="The build you're running.">
-          <span className="font-mono text-[12px] text-dim">v{version}</span>
+          <span className="flex items-center gap-2.5">
+            <span className="font-mono text-[12px] text-dim">v{version}</span>
+            {/* The notes for THIS build, any time — not just at update time.
+                Dev builds self-identify as the NEXT release, so the tag may
+                not exist yet there; for packaged builds the tag-matches-
+                version CI gate guarantees the page. */}
+            <button
+              onClick={() => void tt.openExternal(`${REPO_URL}/releases/tag/v${version}`)}
+              aria-label={`Release notes for v${version}`}
+              data-release-notes
+              className="font-mono text-[11px] text-faint underline underline-offset-2 hover:text-dim transition-colors"
+            >
+              release notes
+            </button>
+          </span>
         </SettingRow>
 
         <Toggle
@@ -1411,6 +1426,18 @@ function UpdatePanel(): React.JSX.Element | null {
               {update.canDownload
                 ? 'nothing downloads until you say so'
                 : 'open the release page to download'}
+              {update.canDownload && (
+                <>
+                  {' · '}
+                  <button
+                    onClick={() => void tt.openExternal(update.url)}
+                    aria-label={`What's new in v${update.version}`}
+                    className="underline underline-offset-2 hover:text-dim transition-colors"
+                  >
+                    what&apos;s new
+                  </button>
+                </>
+              )}
             </span>
           </span>
           {update.canDownload ? (
@@ -1451,7 +1478,14 @@ function UpdatePanel(): React.JSX.Element | null {
           <span className="min-w-0">
             <span className="block text-[13.5px] text-gold">v{update.version} is ready</span>
             <span className="block font-mono text-[10.5px] text-faint mt-0.5">
-              installs when you quit — or restart now
+              installs when you quit — or restart now{' · '}
+              <button
+                onClick={() => void tt.openExternal(update.url)}
+                aria-label={`What's new in v${update.version}`}
+                className="underline underline-offset-2 hover:text-dim transition-colors"
+              >
+                what&apos;s new
+              </button>
             </span>
           </span>
           <PrimaryButton
