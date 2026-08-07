@@ -76,7 +76,20 @@ export function installAppMenu(deps: MenuDeps): void {
 
   const viewSubmenu: MenuItemConstructorOptions[] = [
     { id: 'menu-mini', label: 'Mini Player', click: () => deps.toggleMini() },
-    { id: 'menu-display', label: 'Display Mode', click: () => deps.sendToMain({ id: 'displayMode' }) },
+    {
+      id: 'menu-display',
+      // "Full-Screen Now Playing", not the in-app "display mode" name: this
+      // sits two rows above the native "Toggle Full Screen" role, and two
+      // items that both say full screen/fullscreen-ish need labels that say
+      // WHICH full screen (user, 2026-08-06). The app keeps calling the
+      // feature display mode; menus describe.
+      label: 'Full-Screen Now Playing',
+      // macOS displays the renderer's F shortcut without stealing the key
+      // (registerAccelerator is macOS-only; elsewhere an accelerator here
+      // would grab F app-wide from the renderer, which owns it).
+      ...(process.platform === 'darwin' ? { accelerator: 'F', registerAccelerator: false } : {}),
+      click: () => deps.sendToMain({ id: 'displayMode' })
+    },
     { id: 'menu-toggle-nav', label: 'Toggle Sidebar', click: () => deps.sendToMain({ id: 'toggleNav' }) },
     { type: 'separator' },
     { role: 'togglefullscreen' }
