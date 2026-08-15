@@ -182,17 +182,6 @@ function createWindow(): void {
 
 function toggleMiniPlayer(): void {
   if (miniWindow) {
-    // Unset the all-workspaces flag BEFORE closing: on macOS Electron
-    // implements visibleOnFullScreen by flipping the whole app to the
-    // ACCESSORY activation policy (no dock icon, no menu bar), and closing
-    // the window without unsetting it is the path where the flip-back gets
-    // missed — the user's menu bar vanished for good and only the tray icon
-    // still answered (2026-08-06).
-    try {
-      miniWindow.setVisibleOnAllWorkspaces(false)
-    } catch {
-      // cosmetic on platforms without the flag
-    }
     miniWindow.close()
     return
   }
@@ -210,13 +199,28 @@ function toggleMiniPlayer(): void {
     alwaysOnTop: true,
     skipTaskbar: true,
     show: false,
+    // THE SAME WINDOW KIND AS THE TRAY PANEL, for the same reasons (see
+    // main/app/tray.ts ensurePanel): on macOS a non-activating NSPanel that
+    // is never full-screenable. It floats over full-screen apps on its own —
+    // no `visibleOnFullScreen` process transform, so opening the mini no
+    // longer turns the whole app into an accessory (the vanished dock icon
+    // and menu bar of 2026-08-06, and the flip-back dance this function used
+    // to carry); clicking its transport doesn't yank focus away from what
+    // you were working in; and it can never be promoted to a full-screen
+    // tile of its own. Being always VISIBLE, it is immune to the hidden-
+    // window Space re-homing that made the tray panel a show-once surface.
+    ...(process.platform === 'darwin' ? { type: 'panel' as const } : {}),
+    fullscreenable: false,
     webPreferences: {
       preload: join(__dirname, '../preload/index.mjs'),
       sandbox: false
     }
   })
   try {
-    miniWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+    miniWindow.setVisibleOnAllWorkspaces(true, {
+      visibleOnFullScreen: true,
+      skipTransformProcessType: true
+    })
   } catch {
     // not supported everywhere; cosmetic
   }
@@ -256,10 +260,6 @@ function toggleMiniPlayer(): void {
   miniWindow.on('closed', () => {
     clearInterval(hoverTimer)
     miniWindow = null
-    // Belt to the unset-flag braces above: whatever path closed the window
-    // (its X, the toggle, a quit), put the dock icon and menu bar back.
-    // Idempotent when the policy never flipped.
-    if (process.platform === 'darwin') void app.dock?.show()
   })
 
   if (process.env['ELECTRON_RENDERER_URL']) {
