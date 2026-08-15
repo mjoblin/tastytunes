@@ -317,6 +317,41 @@ function announcePanel(visible: boolean): void {
   if (panel && !panel.isDestroyed()) panel.webContents.send(IPC.push, { kind: 'trayPanel', visible })
 }
 
+/**
+ * ON macOS A PANEL IS SHOWN AT MOST ONCE. Dismissing it DESTROYS it and
+ * pre-creates a hidden replacement, rather than hiding and re-showing the same
+ * window. Not a memory tidy — a Spaces workaround, measured 2026-08-15:
+ *
+ * The WindowServer keeps a HIDDEN window's Space membership from the last time
+ * it was shown. When any full-screen Space is torn down (ANY app's — Safari
+ * leaving full screen counts, our own display mode certainly does), the
+ * windows that belonged to it are re-homed to the desktop it returns to; a
+ * VISIBLE all-Spaces window comes out still on every Space, but a hidden one
+ * comes out pinned to that single desktop, and re-showing it does not
+ * re-expand it. Nothing Electron exposes puts it back — flipping every
+ * collection-behaviour bit and the window level was tried; only a NEW window
+ * gets a fresh "all Spaces" assignment on its first order-in. Read via
+ * CGSCopySpacesForWindows: ALL(9) at first open → [1] after a full-screen exit
+ * → ALL(9) again only after destroy + recreate.
+ *
+ * What the user saw: with the old activating window, opening the pinned panel
+ * dragged them to desktop 1 (the app followed its key window); with the
+ * non-activating panel, the click "did nothing" anywhere but desktop 1. Both
+ * are the same pinned window.
+ *
+ * The replacement loads in the background, so the next open is as instant as
+ * the kept-hidden design ever was; the price is one renderer create per
+ * dismiss. Windows keeps hide/re-show — the bug is macOS's, and a hidden
+ * window re-shown there lands on the current virtual desktop.
+ */
+const SHOW_ONCE = process.platform === 'darwin'
+let precreate: ReturnType<typeof setTimeout> | null = null
+
+function clearPrecreate(): void {
+  if (precreate) clearTimeout(precreate)
+  precreate = null
+}
+
 function hidePanel(): void {
   // Recorded even when there's nothing to hide: this is the point at which the
   // panel stops being wanted, and a pending retry must not outlive that.
@@ -325,14 +360,35 @@ function hidePanel(): void {
   clearReveal()
   if (!panel || panel.isDestroyed() || !panel.isVisible()) return
   hidingUntil = Date.now() + CLICK_SWALLOW_MS
+  // DevTools attached to the panel would go with it — keep the window while
+  // someone is inspecting it (a dev-only path; the Spaces bug is irrelevant
+  // to that session).
+  if (SHOW_ONCE && !panel.webContents.isDevToolsOpened()) {
+    retirePanel()
+    return
+  }
   panel.hide()
   announcePanel(false)
+}
+
+/** Destroy the shown panel and pre-create its never-shown replacement. */
+function retirePanel(): void {
+  if (panel && !panel.isDestroyed()) panel.destroy()
+  panel = null
+  clearPrecreate()
+  // A beat later, so the dismissal itself stays instant; `ensurePanel` on the
+  // next show covers a click that beats this timer.
+  precreate = setTimeout(() => {
+    precreate = null
+    if (tray && !panel) ensurePanel()
+  }, 100)
 }
 
 function destroyPanel(): void {
   wantVisible = false
   clearShowRetry()
   clearReveal()
+  clearPrecreate()
   if (panel && !panel.isDestroyed()) panel.destroy()
   panel = null
 }
@@ -406,8 +462,11 @@ function onPanelBlur(): void {
  *
  * A third renderer costs 40–80MB, which is why it isn't created with the tray
  * — someone who turns the icon on for its menu never pays for a panel they
- * don't open. It is kept (not destroyed) after the first open because
- * re-creating it on every click would show an empty frame while React mounts.
+ * don't open. A panel that has been opened is never left un-built after that,
+ * because creating one at click time shows an empty frame while React mounts:
+ * on Windows the same window is kept hidden; on macOS a dismissed panel is
+ * destroyed and its replacement pre-created hidden (see SHOW_ONCE) — either
+ * way the next click finds a mounted renderer.
  */
 function ensurePanel(): BrowserWindow {
   if (panel && !panel.isDestroyed()) return panel
@@ -419,6 +478,15 @@ function ensurePanel(): BrowserWindow {
     resizable: false,
     alwaysOnTop: true,
     skipTaskbar: true,
+    // NEVER FULL-SCREENABLE. Electron leaves NSWindowCollectionBehaviorFullScreenPrimary
+    // on by default even for a non-resizable window, and a Primary window
+    // ordered in while the app's own main window is full screen is not
+    // overlaid — macOS promotes it to a full-screen tile of its own: the panel
+    // came up 1728×1084 in a brand-new Space when the icon was clicked from
+    // display mode (user report, 2026-08-15; measured: isFullScreen true, a
+    // new Space id). With Primary cleared it is a plain auxiliary overlay,
+    // 380×560, on the Space it was summoned from.
+    fullscreenable: false,
     // A NON-ACTIVATING PANEL ON macOS (Electron's `type: 'panel'` wraps the
     // window in an NSPanel with NSWindowStyleMaskNonactivatingPanel). It can
     // become key — the search field still takes typing — but showing it never
@@ -474,8 +542,11 @@ function ensurePanel(): BrowserWindow {
   panel.webContents.on('before-input-event', (_e, input) => {
     if (input.type === 'keyDown' && input.key === 'Escape') hidePanel()
   })
+  // Identity-checked: with dismiss = destroy + pre-create, a `closed` from the
+  // retired window must never null the replacement.
+  const self = panel
   panel.on('closed', () => {
-    panel = null
+    if (panel === self) panel = null
   })
   // A push sent while the renderer is still loading is LOST, and the very
   // first open is exactly that case: the window is created and shown in the
