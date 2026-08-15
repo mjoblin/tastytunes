@@ -84,10 +84,15 @@ export function installAppMenu(deps: MenuDeps): void {
       // WHICH full screen (user, 2026-08-06). The app keeps calling the
       // feature display mode; menus describe.
       label: 'Full-Screen Now Playing',
-      // macOS displays the renderer's F shortcut without stealing the key
-      // (registerAccelerator is macOS-only; elsewhere an accelerator here
-      // would grab F app-wide from the renderer, which owns it).
-      ...(process.platform === 'darwin' ? { accelerator: 'F', registerAccelerator: false } : {}),
+      // NO ACCELERATOR, ON ANY PLATFORM. The renderer owns F. This item once
+      // carried `accelerator: 'F', registerAccelerator: false` on macOS to
+      // DISPLAY the key (2026-08-06) — but registerAccelerator is Linux/Windows
+      // only (Electron docs; on macOS the Cocoa menu controller sets the key
+      // equivalent unconditionally), so a bare F fired this command AND the
+      // renderer's handler: display mode toggled on and straight back off,
+      // and the window flashed into full screen and out (user report,
+      // 2026-08-15). A menu key equivalent on macOS is always live — there is
+      // no display-only mode — so the hint is not shown here.
       click: () => deps.sendToMain({ id: 'displayMode' })
     },
     { id: 'menu-toggle-nav', label: 'Toggle Sidebar', click: () => deps.sendToMain({ id: 'toggleNav' }) },
