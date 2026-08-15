@@ -269,7 +269,10 @@ const CLICK_SWALLOW_MS = 250
  * is not a dismissal — the app may not have been frontmost when the icon was
  * clicked, in which case macOS declines the focus and delivers a blur
  * immediately, and the panel would flash open and shut. Below deliberate-click
- * latency, so a real click-away still dismisses.
+ * latency, so a real click-away still dismisses. (On macOS the panel is now a
+ * non-activating NSPanel and no longer asks for app focus at all, so the case
+ * that bred this guard is mostly Windows'; it stays, because it is cheap and
+ * the show/blur race is not something either OS promises to keep still.)
  */
 let shownAt = 0
 const SETTLE_MS = 200
@@ -416,6 +419,20 @@ function ensurePanel(): BrowserWindow {
     resizable: false,
     alwaysOnTop: true,
     skipTaskbar: true,
+    // A NON-ACTIVATING PANEL ON macOS (Electron's `type: 'panel'` wraps the
+    // window in an NSPanel with NSWindowStyleMaskNonactivatingPanel). It can
+    // become key — the search field still takes typing — but showing it never
+    // ACTIVATES the app, and that is the whole point: `show()` on an ordinary
+    // window calls activateIgnoringOtherApps BEFORE ordering the window in,
+    // and app activation is what makes macOS jump to "a Space with open
+    // windows for the application" — i.e. every tray click yanked the user to
+    // whichever desktop the main window lived on (reported 2026-08-15). A
+    // panel gives macOS nothing to switch for, and dismissing it leaves the
+    // app you were in frontmost, Spotlight-style. The type also carries
+    // all-Spaces + over-fullscreen in its collection behaviour, which is what
+    // lets the transform below be skipped. Windows has no such type; there a
+    // hidden window re-shown lands on the current virtual desktop anyway.
+    ...(process.platform === 'darwin' ? { type: 'panel' as const } : {}),
     // No traffic lights, no shadow gap — the panel draws its own card.
     backgroundColor: '#00000000',
     webPreferences: {
@@ -433,7 +450,20 @@ function ensurePanel(): BrowserWindow {
     }
   })
   try {
-    panel.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+    // skipTransformProcessType IS THE FIX FOR A VANISHING DOCK ICON. Without
+    // it, `visibleOnFullScreen` makes Electron flip the WHOLE APP to the
+    // accessory activation policy (no dock icon, no menu bar) — the same flip
+    // the mini player restores on close (4cd081b) — and this panel is created
+    // once and kept hidden for the rest of the session, so nothing ever
+    // flipped it back: from the first panel open onward, TastyTunes had no
+    // dock icon (proven in the harness: app.dock.isVisible() true → false →
+    // still false after dismiss). The panel type above already floats over
+    // fullscreen without any of that, so the transform is pure cost. Guarded
+    // by verify-invariants S7/S8.
+    panel.setVisibleOnAllWorkspaces(true, {
+      visibleOnFullScreen: true,
+      skipTransformProcessType: true
+    })
   } catch {
     // not supported everywhere; cosmetic
   }
