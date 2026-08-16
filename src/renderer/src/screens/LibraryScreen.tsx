@@ -16,7 +16,7 @@ import {
   Users,
   X
 } from 'lucide-react'
-import { presetVolumeKey, type AppSettings, type MediaIndexPools, type MediaNode, type MediaQueueAction, type MediaSearchAllGroup, type MediaServerInfo, type ScreenLayout, compareTrackOrder, discGroups } from '@shared/model'
+import { presetVolumeKey, type AppSettings, type MediaIndexPools, type MediaNode, type MediaQueueAction, type MediaSearchAllGroup, type MediaServerInfo, type ScreenLayout, compareTrackOrder, discGroups, albumFormat, fmtBytes } from '@shared/model'
 import { favoriteKey, type Favorite, type FavoriteMedia } from '@shared/model'
 import type { QueueListItem } from '@shared/smoip'
 import { tt } from '@/api'
@@ -1194,16 +1194,28 @@ export function LibraryScreen(): React.JSX.Element {
     : null
   const albumSecs = allTracks.reduce((acc, t) => acc + (t.durationSecs ?? 0), 0)
   const albumInQueue = allTracks.length > 0 && allTracks.every(trackQueued)
+  // Format and size come from the tracks' <res> (Asset describes them; the
+  // USB server doesn't, and then the facts simply don't mention them).
+  const albumBytes = allTracks.reduce((acc, t) => acc + (t.format?.sizeBytes ?? 0), 0)
+  const albumFmt = albumFormat(allTracks)
   const albumFacts = albumNode
     ? [
         albumNode.year ?? allTracks[0]?.year ?? null,
         allTracks.length > 0 ? `${allTracks.length} tracks` : null,
         albumSecs > 0 ? fmtTime(albumSecs) : null,
+        albumBytes > 0 ? fmtBytes(albumBytes) : null,
+        albumFmt.label,
         albumInQueue ? 'in the queue' : null
       ]
         .filter(Boolean)
         .join(' · ')
     : ''
+  // the note a row carries when its format differs from the album headline
+  const albumNoteFor = (node: MediaNode): string | null => {
+    if (!albumNode) return null
+    const i = allTracks.indexOf(node)
+    return i >= 0 ? albumFmt.notes[i] : null
+  }
   const shownServers = servers ?? [] // the source list is short — no filter there
   const loading = atRoot ? servers == null : state === 'loading'
 
@@ -1987,6 +1999,7 @@ export function LibraryScreen(): React.JSX.Element {
                       onHeart={() => heartNode(node)}
                       onPlayNow={(el) => playTrack(node, el)}
                       onMenu={(e) => openMenu(node, e)}
+                      note={albumNoteFor(node)}
                       onAlbumLink={searchMode && node.album && linkable(node, 'albums') ? () => void goToAlbum(node) : undefined}
                       onArtistLink={searchMode && node.artist && linkable(node, 'artists') ? () => void goToArtist(node) : undefined}
                     />

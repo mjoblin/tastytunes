@@ -7,7 +7,7 @@
 // (action=PRESET — preset saves). Streamer-directed SMOIP traffic is
 // unlogged (it has its own console); media-server traffic logs as 'upnp'.
 import { XMLParser } from 'fast-xml-parser'
-import type { MediaNode, MediaQueueAction, MediaServerInfo } from '@shared/model'
+import type { MediaNode, MediaQueueAction, MediaServerInfo, MediaFormat } from '@shared/model'
 import { loggedFetch } from '../netlog'
 
 const PAGE_SIZE = 5000 // the streamer's own server ignores RequestedCount=0
@@ -246,6 +246,44 @@ function didlToNodes(didl: string): MediaNode[] {
     const title = text(raw.title)
     if (!id || title == null) return null
     const res = asArray(raw.res as Record<string, unknown> | Array<Record<string, unknown>>)[0]
+    // The primary <res> describes the file (DLNA attributes; Asset sends them
+    // all, the USB server sends duration only). bitrate is BYTES/s per the
+    // UPnP spec (176400 for 16/44.1 stereo) — stored as kbps.
+    const format = ((): MediaFormat | null => {
+      if (!res) return null
+      const proto = text(res['@_protocolInfo']) ?? ''
+      const mime = (proto.split(':')[2] ?? '').toLowerCase()
+      if (!mime.startsWith('audio/')) return null
+      const sub = mime.slice('audio/'.length).replace(/^x-/, '')
+      const pn = /DLNA\.ORG_PN=([A-Z0-9_]+)/i.exec(proto)?.[1]?.toUpperCase() ?? ''
+      const codec =
+        sub === 'flac' ? 'FLAC'
+        : sub === 'mpeg' || sub === 'mp3' ? 'MP3'
+        : sub === 'wav' || sub === 'wave' ? 'WAV'
+        : sub === 'l16' || sub === 'l24' ? 'PCM'
+        : sub === 'aiff' || sub === 'aif' ? 'AIFF'
+        : sub === 'ms-wma' || sub === 'wma' ? 'WMA'
+        : sub === 'ogg' || sub === 'vorbis' ? 'OGG'
+        : sub === 'opus' ? 'Opus'
+        : sub === 'dsd' || sub === 'dsf' || sub === 'dff' ? 'DSD'
+        : sub === 'ape' ? 'APE'
+        : sub === 'wavpack' || sub === 'wv' ? 'WV'
+        : sub === 'mp4' || sub === 'm4a' || sub === 'aac' || sub === 'mp4a-latm'
+          ? pn.startsWith('ALAC') ? 'ALAC' : 'AAC'
+          : sub.toUpperCase()
+      const num = (k: string): number | undefined => {
+        const v = Number(text(res[`@_${k}`]))
+        return Number.isFinite(v) && v > 0 ? v : undefined
+      }
+      const bytesPerSec = num('bitrate')
+      const out: MediaFormat = { codec }
+      const bits = num('bitsPerSample'); if (bits) out.bits = bits
+      const rate = num('sampleFrequency'); if (rate) out.rate = rate
+      if (bytesPerSec) out.kbps = Math.round((bytesPerSec * 8) / 1000)
+      const size = num('size'); if (size) out.sizeBytes = size
+      const ch = num('nrAudioChannels'); if (ch) out.channels = ch
+      return out
+    })()
     // multi-valued two ways: taggers repeat <upnp:genre> AND pack several
     // into one value ("Pop; Rock" — live-observed on Asset). Split on ';',
     // dedupe case-insensitively, keep first-seen casing and order.
@@ -314,7 +352,8 @@ function didlToNodes(didl: string): MediaNode[] {
       ...(raw.originalDiscCount != null && Number.isFinite(Number(text(raw.originalDiscCount)))
         ? { discCount: Number(text(raw.originalDiscCount)) }
         : {}),
-      durationSecs: res ? parseDuration(text(res['@_duration'])) : null
+      durationSecs: res ? parseDuration(text(res['@_duration'])) : null,
+      ...(format ? { format } : {})
     }
   }
 

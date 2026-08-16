@@ -889,6 +889,13 @@ export interface MediaNode {
   discNumber?: number
   discCount?: number
   /**
+   * The audio format of the primary <res>, when the server describes it
+   * (DLNA attributes: protocolInfo mime, bitsPerSample, sampleFrequency,
+   * bitrate in BYTES/s per the UPnP spec, size). Asset sends all of them
+   * (live 2026-08-15); the streamer's USB server sends duration only.
+   */
+  format?: MediaFormat
+  /**
    * upnp:genre values, when the server sends any (multi-valued — real tags
    * repeat the element). Raw tagger data: case-normalize before faceting.
    * Absent (not empty) when the server offers none.
@@ -915,6 +922,60 @@ export interface MediaNode {
    */
   serverUdn?: string
   serverName?: string
+}
+
+export interface MediaFormat {
+  /** Codec label from the mime type: FLAC, MP3, AAC, ALAC, WAV, PCM, AIFF, WMA, OGG, Opus, DSD — or the bare subtype. */
+  codec: string
+  bits?: number
+  /** Sample rate in Hz. */
+  rate?: number
+  /** Stream bitrate in kbps (the spec's bytes/s ×8 /1000). */
+  kbps?: number
+  sizeBytes?: number
+  channels?: number
+}
+
+const LOSSLESS = new Set(['FLAC', 'WAV', 'PCM', 'AIFF', 'ALAC', 'DSD', 'APE', 'WV'])
+
+/** "FLAC · 16/44.1" for lossless (bits/kHz), "MP3 · 320 kbps" for lossy; degrades to what is known. */
+export function formatLabel(f: MediaFormat | undefined | null): string | null {
+  if (!f) return null
+  const khz = f.rate ? `${(f.rate / 1000).toFixed(f.rate % 1000 === 0 ? 0 : 1)}` : null
+  if (LOSSLESS.has(f.codec)) {
+    const detail = f.bits && khz ? `${f.bits}/${khz}` : khz ? `${khz} kHz` : f.bits ? `${f.bits}-bit` : null
+    return detail ? `${f.codec} · ${detail}` : f.codec
+  }
+  return f.kbps ? `${f.codec} · ${f.kbps} kbps` : f.codec
+}
+
+/**
+ * An album's format at a glance: the label every track shares, or the one
+ * MOST tracks share (then the odd ones out get their own note); nothing
+ * when formats are genuinely mixed or unknown. Returned alongside the
+ * per-track notes so a header and its rows can never disagree.
+ */
+export function albumFormat(tracks: ReadonlyArray<Pick<MediaNode, 'format'>>): {
+  label: string | null
+  /** For each input track, the note a row should carry — null when it matches the headline. */
+  notes: (string | null)[]
+} {
+  const labels = tracks.map((t) => formatLabel(t.format))
+  const counts = new Map<string, number>()
+  for (const l of labels) if (l) counts.set(l, (counts.get(l) ?? 0) + 1)
+  if (counts.size === 0) return { label: null, notes: labels.map(() => null) }
+  const [top, n] = [...counts.entries()].sort((x, y) => y[1] - x[1])[0]
+  const known = labels.filter(Boolean).length
+  // a headline needs a real majority; otherwise say "mixed" and note nothing
+  if (n * 2 <= known && counts.size > 1) return { label: 'mixed formats', notes: labels.map(() => null) }
+  return { label: top, notes: labels.map((l) => (l && l !== top ? l : null)) }
+}
+
+/** 940 MB, 1.2 GB — for album/playlist size sums. */
+export function fmtBytes(n: number): string {
+  if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toFixed(n >= 10 * 1024 ** 3 ? 0 : 1)} GB`
+  if (n >= 1024 ** 2) return `${Math.round(n / 1024 ** 2)} MB`
+  return `${Math.max(1, Math.round(n / 1024))} KB`
 }
 
 /**

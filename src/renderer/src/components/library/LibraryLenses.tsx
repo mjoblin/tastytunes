@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowUpRight, ChevronDown, MoreHorizontal } from 'lucide-react'
-import { compareTrackOrder, discGroups, trackArtists, trackInAlbumOf, type MediaIndexPools, type MediaNode } from '@shared/model'
+import { albumFormat, compareTrackOrder, discGroups, trackArtists, trackInAlbumOf, type MediaIndexPools, type MediaNode } from '@shared/model'
 import { cx, fmtTime, matchesFilter } from '@/lib/format'
 import { useStore } from '@/store'
 import { scrollToVisible } from '@/lib/scroll'
@@ -537,6 +537,8 @@ export function ArtistsLens({
   // an artist with no albums shows their loose tracks directly (vibin rule)
   const looseTracks =
     selectedArtist && selectedArtist.albums.length === 0 ? selectedArtist.tracks : null
+  // headline format + per-row deviation notes, decided together so they agree
+  const albumFmt = albumFormat(albumTracks ?? [])
 
   // A-Z fast travel: letter anchors in the artists column.
   const artistsColRef = useRef<HTMLDivElement | null>(null)
@@ -791,9 +793,15 @@ export function ArtistsLens({
         {colHeading(
           'Tracks',
           selectedAlbum
-            ? `${albumTracks?.length ?? 0} · ${fmtTime(
-                (albumTracks ?? []).reduce((acc, t) => acc + (t.durationSecs ?? 0), 0)
-              )}`
+            ? [
+                String(albumTracks?.length ?? 0),
+                fmtTime((albumTracks ?? []).reduce((acc, t) => acc + (t.durationSecs ?? 0), 0)),
+                // the album's format at a glance (from the tracks' <res>);
+                // rows that differ from it carry their own note below
+                albumFmt.label
+              ]
+                .filter(Boolean)
+                .join(' · ')
             : looseTracks
               ? String(looseTracks.length)
               : undefined
@@ -822,6 +830,7 @@ export function ArtistsLens({
                     <TrackRow
                       key={nodeKey(t)}
                       node={t}
+                      note={albumTracks ? albumFmt.notes[albumTracks.indexOf(t)] : null}
                       showArt={looseTracks != null}
                       isCurrent={actions.isCurrentTrack(t)}
                       queued={actions.trackQueued(t)}

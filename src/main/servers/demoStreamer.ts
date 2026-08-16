@@ -272,6 +272,7 @@ function buildDemo(host: string): {
         album: 'Neon Evenings',
         artist: n === 3 ? 'The Neon Collective; Ivy Lane' : 'The Neon Collective',
         ...(n === 3 ? { albumArtist: 'The Neon Collective', composer: 'Neon Writer; Ivy Lane' } : {}),
+        ...(n === 5 ? { mp3: true } : {}), // the one lossy track in a FLAC album
         art_url: `${host}/aa/2002/cover.jpg?size=0`,
         duration: 120 + n * 11
       })
@@ -381,9 +382,17 @@ function buildDemo(host: string): {
     md.albumArtist
       ? `<dc:creator>${xmlEsc(String(md.artist))}</dc:creator><upnp:artist role="AlbumArtist">${xmlEsc(String(md.albumArtist))}</upnp:artist><upnp:artist>${xmlEsc(String(md.artist))}</upnp:artist>${md.composer ? `<upnp:artist role="Composer">${xmlEsc(String(md.composer))}</upnp:artist>` : ''}`
       : `<upnp:artist>${xmlEsc(String(md.artist))}</upnp:artist>`
+  // The primary <res> with Asset's DLNA attributes (mirrors the mock): FLAC
+  // 16/44.1 by default; `mp3: true` = MP3 320 kbps (Neon Track 5).
+  const didlRes = (alb: Album, n: number, md: Dict): string => {
+    const dur = Number(md.duration)
+    return md.mp3
+      ? `<res duration="${durFmt(dur)}" size="${dur * 40000}" bitrate="40000" sampleFrequency="44100" nrAudioChannels="2" protocolInfo="http-get:*:audio/mpeg:DLNA.ORG_PN=MP3;DLNA.ORG_OP=01">file:///tmp/usm/1/${alb.id}/${n}.mp3</res>`
+      : `<res duration="${durFmt(dur)}" size="${dur * 100000}" bitrate="176400" bitsPerSample="16" sampleFrequency="44100" nrAudioChannels="2" protocolInfo="http-get:*:audio/x-flac:DLNA.ORG_PN=FLAC;DLNA.ORG_OP=01">file:///tmp/usm/1/${alb.id}/${n}.flac</res>`
+  }
   const didlTrack = (alb: Album, n: number): string => {
     const md = alb.track(n)
-    return `<item id="${alb.id}-t${n}" parentID="${alb.id}" restricted="true"><dc:title>${xmlEsc(String(md.title))}</dc:title><upnp:class>object.item.audioItem.musicTrack</upnp:class>${didlArtists(md)}<upnp:album>${xmlEsc(String(md.album))}</upnp:album>${(alb.genres ?? []).map((g) => `<upnp:genre>${xmlEsc(g)}</upnp:genre>`).join('')}<upnp:originalTrackNumber>${md.trackNo ?? n}</upnp:originalTrackNumber>${md.disc ? `<upnp:originalDiscNumber>${md.disc}</upnp:originalDiscNumber><upnp:originalDiscCount>${md.discCount}</upnp:originalDiscCount>` : ''}<upnp:albumArtURI>${md.art_url}</upnp:albumArtURI><res duration="${durFmt(Number(md.duration))}" protocolInfo="*:*:*:*">file:///tmp/usm/1/${alb.id}/${n}.flac</res></item>`
+    return `<item id="${alb.id}-t${n}" parentID="${alb.id}" restricted="true"><dc:title>${xmlEsc(String(md.title))}</dc:title><upnp:class>object.item.audioItem.musicTrack</upnp:class>${didlArtists(md)}<upnp:album>${xmlEsc(String(md.album))}</upnp:album>${(alb.genres ?? []).map((g) => `<upnp:genre>${xmlEsc(g)}</upnp:genre>`).join('')}<upnp:originalTrackNumber>${md.trackNo ?? n}</upnp:originalTrackNumber>${md.disc ? `<upnp:originalDiscNumber>${md.disc}</upnp:originalDiscNumber><upnp:originalDiscCount>${md.discCount}</upnp:originalDiscCount>` : ''}<upnp:albumArtURI>${md.art_url}</upnp:albumArtURI>${didlRes(alb, n, md)}</item>`
   }
 
   const ARTIST_COUNT = 400

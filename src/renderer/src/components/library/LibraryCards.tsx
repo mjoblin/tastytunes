@@ -284,7 +284,8 @@ export function TrackRow({
   onPlayNow,
   onMenu,
   onAlbumLink,
-  onArtistLink
+  onArtistLink,
+  note
 }: {
   node: MediaNode
   /** Loose tracks in mixed folders get a thumb; album views carry the art in the header. */
@@ -304,6 +305,12 @@ export function TrackRow({
   onAlbumLink?(): void
   /** Search results: the artist name links to the artist entity. */
   onArtistLink?(): void
+  /**
+   * A quiet note after the title — the ONE case is a track whose format
+   * differs from its album's headline ("MP3 · 320 kbps" in a FLAC album);
+   * rows that match the album carry nothing (albumFormat decides).
+   */
+  note?: string | null
 }): React.JSX.Element {
   const ref = useRef<HTMLDivElement | null>(null)
   return (
@@ -324,8 +331,18 @@ export function TrackRow({
       </span>
       {showArt && <MediaArt src={node.artUrl} kind="track" />}
       <div className="min-w-0">
-        <div className={cx('text-[13.5px] truncate', isCurrent ? 'text-gold' : 'text-ink')}>
-          {node.title}
+        <div className="flex items-baseline gap-2 min-w-0">
+          <div className={cx('text-[13.5px] truncate', isCurrent ? 'text-gold' : 'text-ink')}>
+            {node.title}
+          </div>
+          {note && (
+            <span
+              className="shrink-0 font-mono text-[10px] text-faint tabular-nums ring-1 ring-edge rounded px-1 leading-4"
+              data-track-note
+            >
+              {note}
+            </span>
+          )}
         </div>
         {(node.artist || (onAlbumLink && node.album)) && (
           <div className="text-[12px] text-faint truncate">
