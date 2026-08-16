@@ -51,6 +51,7 @@ import { ArtImage } from '@/components/media/ArtImage'
 import { PopoverChrome } from '@/hooks/usePopover'
 import { HeaderChip, ScreenTitle } from '@/components/chrome/Chrome'
 import { useConfirmPopover } from '@/components/chrome/Confirm'
+import { artUrlAt } from '@shared/artUrl'
 
 export function PresetsScreen(): React.JSX.Element {
   const presets = useStore((s) => s.presets)
@@ -591,7 +592,7 @@ function PresetRow({
       </OrderHandle>
 
       <div className="h-10 w-10 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
-        <ArtImage src={preset.art_url} lazy fallback={<PresetGlyph size={16} className="text-faint" />} />
+        <ArtImage src={artUrlAt(preset.art_url, 40)} lazy fallback={<PresetGlyph size={16} className="text-faint" />} />
       </div>
 
       <div className="min-w-0">
@@ -717,12 +718,12 @@ function PresetCard({
               )}
             >
               {preset.art_urls.slice(0, 4).map((u) => (
-                <ArtImage key={u} src={u} lazy fallback={<div className="bg-raised/70 h-full w-full" />} />
+                <ArtImage key={u} src={artUrlAt(u, 120)} lazy fallback={<div className="bg-raised/70 h-full w-full" />} />
               ))}
             </div>
           ) : (
             <ArtImage
-              src={preset.art_url}
+              src={artUrlAt(preset.art_url, 240)}
               lazy
               fallback={<PresetGlyph size={34} strokeWidth={CARD_GLYPH_STROKE} className="text-faint" />}
             />

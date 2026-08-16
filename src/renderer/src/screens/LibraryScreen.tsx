@@ -37,6 +37,7 @@ import { ItemMenu, PresetPicker } from '@/components/library/LibraryMenus'
 import { EmptyState } from '@/components/chrome/EmptyState'
 import { HeaderChip, PrimaryButton, ScreenTitle } from '@/components/chrome/Chrome'
 import { useOneShotAsk } from '@/hooks/useOneShotAsk'
+import { artUrlAt } from '@shared/artUrl'
 
 // Crumbs keep the entered node so an album level can render its header
 // (art, artist, year) without re-fetching metadata.
@@ -1830,7 +1831,7 @@ export function LibraryScreen(): React.JSX.Element {
           <div className="flex items-start gap-6 pb-6 pt-2" data-album-header>
             <div className="h-[160px] w-[160px] shrink-0 rounded-xl overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
               <ArtImage
-                src={albumArt}
+                src={artUrlAt(albumArt, 160)}
                 className="h-full w-full object-cover"
                 fallback={<Disc3 size={48} strokeWidth={1} className="text-faint" />}
               />

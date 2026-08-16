@@ -51,6 +51,7 @@ import { FilterInput } from '@/components/controls/FilterInput'
 import { ModalShell } from '@/components/chrome/Overlay'
 import { PresetSavePanel, PresetPicker } from '@/components/library/LibraryMenus'
 import { HeaderChip, ScreenTitle } from '@/components/chrome/Chrome'
+import { artUrlAt } from '@shared/artUrl'
 
 /**
  * Queue → preset: the shared PresetSavePanel in a centered modal. The device
@@ -634,7 +635,7 @@ function QueueCard({ item, isCurrent, sourceActive, currentRef, onMenu }: QueueI
       >
         <div className="aspect-square w-full rounded-lg overflow-hidden bg-panel/70 flex items-center justify-center">
           <ArtImage
-            src={md?.art_url}
+            src={artUrlAt(md?.art_url, 240)}
             lazy
             fallback={<Disc3 size={34} strokeWidth={1.2} className="text-faint" />}
           />

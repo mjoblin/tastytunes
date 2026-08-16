@@ -1,6 +1,7 @@
 import { Disc3, Folder, ListOrdered, Music, Radio, RadioTower, UserRound } from 'lucide-react'
 import { ArtImage } from '@/components/media/ArtImage'
 import { cx } from '@/lib/format'
+import { artUrlAt } from '@shared/artUrl'
 
 /**
  * THE row-scale artwork thumb. One size (h-10 — the 44px grid column's inset),
@@ -100,7 +101,9 @@ export function MediaArt({
       )}
     >
       <ArtImage
-        src={src ?? null}
+        // fetch at the drawn size — Asset serves the 1400px original for a
+        // 40px thumb otherwise (shared/artUrl); cards fill up to ~240px tiles
+        src={artUrlAt(src, size === 'card' ? 240 : size === 'dense' ? 32 : 40)}
         lazy
         fallback={
           <Fallback size={GLYPH[size]} strokeWidth={GLYPH_STROKE[size]} className="text-faint" />

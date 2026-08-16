@@ -258,7 +258,9 @@ function buildDemo(host: string): {
       title: 'Neon Evenings',
       artist: 'The Neon Collective',
       date: '2014-06-01',
-      art: `${host}/art/p2.svg`,
+      // Asset-style RESIZING art URL (mirrors the mock; the app asks for the
+      // size it draws — shared/artUrl)
+      art: `${host}/aa/2002/cover.jpg?size=0`,
       count: 5,
       genres: ['Synthpop; Electropop'],
       // Track 3 FEATURES a guest, in Asset's exact shape (mirrors the mock —
@@ -270,7 +272,7 @@ function buildDemo(host: string): {
         album: 'Neon Evenings',
         artist: n === 3 ? 'The Neon Collective; Ivy Lane' : 'The Neon Collective',
         ...(n === 3 ? { albumArtist: 'The Neon Collective', composer: 'Neon Writer; Ivy Lane' } : {}),
-        art_url: `${host}/art/p2.svg`,
+        art_url: `${host}/aa/2002/cover.jpg?size=0`,
         duration: 120 + n * 11
       })
     }
@@ -1177,6 +1179,12 @@ function buildDemo(host: string): {
         return handleQueueAdd(Object.fromEntries(u.searchParams), res)
       }
 
+      // Asset-style resizing art endpoint (mirrors the mock): /aa/<id>/cover.jpg?size=N
+      if (/^\/aa\/\d+\/cover\.jpg$/.test(u.pathname)) {
+        res.writeHead(200, { 'content-type': 'image/svg+xml', 'access-control-allow-origin': '*' })
+        res.end(ARTS['/art/p2.svg'])
+        return
+      }
       const svg = ARTS[u.pathname]
       if (svg) {
         res.writeHead(200, { 'content-type': 'image/svg+xml', 'access-control-allow-origin': '*' })

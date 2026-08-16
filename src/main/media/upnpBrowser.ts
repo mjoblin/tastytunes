@@ -41,6 +41,25 @@ const nodeCache = new Map<string, MediaNode[]>()
 
 const asArray = <T>(v: T | T[] | undefined): T[] => (v == null ? [] : Array.isArray(v) ? v : [v])
 
+// upnp:albumArtURI can be MULTI-VALUED: DLNA lets a server offer several
+// sizes, one element each, tagged dlna:profileID JPEG_TN/SM/MED/LRG (Twonky,
+// Serviio and friends do; Asset sends one). text() of an array is null — the
+// same array trap the artist parse fell into — so such a server used to yield
+// NO art at all. Take the largest profile; unranked ones keep first-seen order.
+const ART_RANK: Record<string, number> = { JPEG_LRG: 4, PNG_LRG: 4, JPEG_MED: 3, PNG_MED: 3, JPEG_SM: 2, PNG_SM: 2, JPEG_TN: 1, PNG_TN: 1 }
+const pickArt = (v: unknown): string | null => {
+  const els = asArray(v as unknown | unknown[])
+  let best: { url: string; rank: number } | null = null
+  for (const el of els) {
+    const url = text(el)
+    if (!url) continue
+    const profile = el != null && typeof el === 'object' ? String((el as Record<string, unknown>)['@_dlna:profileID'] ?? (el as Record<string, unknown>)['@_profileID'] ?? '') : ''
+    const rank = ART_RANK[profile.toUpperCase()] ?? 0
+    if (!best || rank > best.rank) best = { url, rank }
+  }
+  return best?.url ?? null
+}
+
 const text = (v: unknown): string | null => {
   if (v == null) return null
   if (typeof v === 'string' || typeof v === 'number') return String(v)
@@ -282,7 +301,7 @@ function didlToNodes(didl: string): MediaNode[] {
       title,
       upnpClass: text(raw.class) ?? '',
       isContainer,
-      artUrl: text(raw.albumArtURI),
+      artUrl: pickArt(raw.albumArtURI),
       artist,
       album: text(raw.album),
       year: text(raw.date)?.slice(0, 4) ?? null,

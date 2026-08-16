@@ -9,6 +9,7 @@ import { ArtImage } from '@/components/media/ArtImage'
 import { MediaArt } from '@/components/media/MediaArt'
 import { DurationCell } from '@/components/media/DurationCell'
 import { Eqbars } from '@/components/media/Eqbars'
+import { artUrlAt } from '@shared/artUrl'
 
 // The Library's four listing renderers — cards and rows for containers and
 // tracks. Pure presentation: every action arrives as a callback.
@@ -108,7 +109,7 @@ export function ContainerCard({
       <button className="block w-full cursor-pointer" onClick={onEnter}>
         <div className="relative aspect-square w-full rounded-lg overflow-hidden bg-panel/70 flex items-center justify-center">
           <ArtImage
-            src={node.artUrl}
+            src={artUrlAt(node.artUrl, 240)}
             lazy
             className={cx('h-full w-full object-cover', muted && 'opacity-60 saturate-[.6]')}
             fallback={
@@ -226,7 +227,7 @@ export function ContainerRow({
       data-library-row
     >
       <MediaArt
-        src={node.artUrl}
+        src={artUrlAt(node.artUrl, 240)}
         kind={album ? 'album' : isArtistClass(node.upnpClass) ? 'artist' : 'folder'}
         className={muted ? 'opacity-60 saturate-[.6]' : undefined}
       />
