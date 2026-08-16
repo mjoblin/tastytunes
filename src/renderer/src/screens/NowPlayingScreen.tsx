@@ -210,8 +210,8 @@ export function NowPlayingScreen(): React.JSX.Element {
               file facts. Dimmed only when nothing is loaded. */}
           <button
             onClick={() => (infoAvailable ? void openInfoForNowPlaying(playState, nowPlaying) : undefined)}
-            data-tip={infoAvailable ? 'Track info' : 'Nothing playing'}
-            aria-label="Track info"
+            data-tip={infoAvailable ? 'Now playing info' : 'Nothing playing'}
+            aria-label="Now playing info"
             aria-disabled={!infoAvailable}
             data-np-info={infoAvailable ? 'on' : 'off'}
             className={cx(

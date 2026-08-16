@@ -87,7 +87,9 @@ function CopyableMono({ value, label }: { value: string; label: string }): React
             setTimeout(() => setDone(false), 1500)
           })
         }}
-        className="tip-bottom shrink-0 p-1 rounded text-faint hover:text-ink hover:bg-veil2"
+        // above and right-aligned: the value sits at the right of a scroll
+        // container, and a centered/below tip clips at its edge
+        className="tip-top tip-end shrink-0 p-1 rounded text-faint hover:text-ink hover:bg-veil2"
       >
         {done ? <Check size={11} /> : <Copy size={11} />}
       </button>
