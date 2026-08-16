@@ -276,11 +276,23 @@ function didlToNodes(didl: string): MediaNode[] {
         return Number.isFinite(v) && v > 0 ? v : undefined
       }
       const bytesPerSec = num('bitrate')
-      const out: MediaFormat = { codec }
-      const bits = num('bitsPerSample'); if (bits) out.bits = bits
+      const size = num('size')
+      const secs = parseDuration(text(res['@_duration']))
+      // The bitrate ATTRIBUTE is the stream Asset would send — for a lossy
+      // file that is the DECODED PCM rate (an m4a came back 576000 B/s,
+      // 24/96 — 4608 kbps). The file's own rate is size ÷ duration.
+      const fileKbps = size && secs ? Math.round((size * 8) / secs / 1000) : undefined
+      // Asset labels every .m4a AAC_ISO; a 24/96 m4a at 3 Mbps is ALAC.
+      const isMp4 = ['mp4', 'm4a', 'aac', 'mp4a-latm'].includes(sub)
+      const resolvedCodec =
+        isMp4 && (pn.startsWith('ALAC') || (fileKbps ?? 0) > 600) ? 'ALAC' : codec
+      const out: MediaFormat = { codec: resolvedCodec }
+      const lossless = ['FLAC', 'WAV', 'PCM', 'AIFF', 'ALAC', 'DSD', 'APE', 'WV'].includes(resolvedCodec)
+      const bits = num('bitsPerSample'); if (bits && lossless) out.bits = bits
       const rate = num('sampleFrequency'); if (rate) out.rate = rate
-      if (bytesPerSec) out.kbps = Math.round((bytesPerSec * 8) / 1000)
-      const size = num('size'); if (size) out.sizeBytes = size
+      const kbps = lossless ? (bytesPerSec ? Math.round((bytesPerSec * 8) / 1000) : fileKbps) : (fileKbps ?? (bytesPerSec ? Math.round((bytesPerSec * 8) / 1000) : undefined))
+      if (kbps) out.kbps = kbps
+      if (size) out.sizeBytes = size
       const ch = num('nrAudioChannels'); if (ch) out.channels = ch
       return out
     })()

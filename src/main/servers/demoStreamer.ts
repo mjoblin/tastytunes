@@ -276,7 +276,27 @@ function buildDemo(host: string): {
         art_url: `${host}/aa/2002/cover.jpg?size=0`,
         duration: 120 + n * 11
       })
-    }
+    },
+    // two EDITIONS of one album (mirrors the mock): same title/artist/year,
+    // different folders and art, 16/44.1 vs 24/96
+    ...([['alb-4', 'p4', false], ['alb-5', 'p5', true]] as const).map(([id, art, hires]) => ({
+      id,
+      title: 'Dark Skies',
+      artist: 'The Neon Collective',
+      date: '2016-05-05',
+      art: `${host}/art/${art}.svg`,
+      count: 2,
+      genres: ['Synthpop'],
+      track: (n: number) => ({
+        ...trackMeta(n),
+        title: `Dark Skies ${n}`,
+        album: 'Dark Skies',
+        artist: 'The Neon Collective',
+        ...(hires ? { hires: true } : {}),
+        art_url: `${host}/art/${art}.svg`,
+        duration: 200 + n
+      })
+    }))
   ]
 
   // A SECOND media server, always present in the demo: a dedicated library box
@@ -365,6 +385,9 @@ function buildDemo(host: string): {
     track: (n: number) => ({
       ...trackMeta(n),
       ...(i === 34 ? { disc: n <= 2 ? 1 : 2, discCount: 2, trackNo: (n <= 2 ? 100 : 200) + ((n - 1) % 2) + 1 } : {}),
+      // disc 2 is m4a: track 3 AAC, track 4 ALAC → the album reads "mixed formats"
+      ...(i === 34 && n === 3 ? { aac: true } : {}),
+      ...(i === 34 && n === 4 ? { alac: true } : {}),
       title: `Synth ${i + 1}.${n}`,
       album: `Synth Album ${i + 1}`,
       artist: `Demo Artist ${(i % 30) + 1}`,
@@ -384,11 +407,17 @@ function buildDemo(host: string): {
       : `<upnp:artist>${xmlEsc(String(md.artist))}</upnp:artist>`
   // The primary <res> with Asset's DLNA attributes (mirrors the mock): FLAC
   // 16/44.1 by default; `mp3: true` = MP3 320 kbps (Neon Track 5).
+  // Variants mirror the mock: mp3, hires (FLAC 24/96), and Asset's m4a
+  // reporting (decoded PCM attributes for aac AND alac; size tells them apart).
   const didlRes = (alb: Album, n: number, md: Dict): string => {
     const dur = Number(md.duration)
     return md.mp3
       ? `<res duration="${durFmt(dur)}" size="${dur * 40000}" bitrate="40000" sampleFrequency="44100" nrAudioChannels="2" protocolInfo="http-get:*:audio/mpeg:DLNA.ORG_PN=MP3;DLNA.ORG_OP=01">file:///tmp/usm/1/${alb.id}/${n}.mp3</res>`
-      : `<res duration="${durFmt(dur)}" size="${dur * 100000}" bitrate="176400" bitsPerSample="16" sampleFrequency="44100" nrAudioChannels="2" protocolInfo="http-get:*:audio/x-flac:DLNA.ORG_PN=FLAC;DLNA.ORG_OP=01">file:///tmp/usm/1/${alb.id}/${n}.flac</res>`
+      : md.aac || md.alac
+        ? `<res duration="${durFmt(dur)}" size="${dur * (md.alac ? 400000 : 32000)}" bitrate="576000" bitsPerSample="24" sampleFrequency="96000" nrAudioChannels="2" protocolInfo="http-get:*:audio/mp4:DLNA.ORG_PN=AAC_ISO;DLNA.ORG_OP=01">file:///tmp/usm/1/${alb.id}/${n}.m4a</res>`
+        : md.hires
+          ? `<res duration="${durFmt(dur)}" size="${dur * 700000}" bitrate="576000" bitsPerSample="24" sampleFrequency="96000" nrAudioChannels="2" protocolInfo="http-get:*:audio/x-flac:DLNA.ORG_PN=FLAC;DLNA.ORG_OP=01">file:///tmp/usm/1/${alb.id}/${n}.flac</res>`
+          : `<res duration="${durFmt(dur)}" size="${dur * 100000}" bitrate="176400" bitsPerSample="16" sampleFrequency="44100" nrAudioChannels="2" protocolInfo="http-get:*:audio/x-flac:DLNA.ORG_PN=FLAC;DLNA.ORG_OP=01">file:///tmp/usm/1/${alb.id}/${n}.flac</res>`
   }
   const didlTrack = (alb: Album, n: number): string => {
     const md = alb.track(n)

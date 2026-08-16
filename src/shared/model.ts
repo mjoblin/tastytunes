@@ -966,8 +966,16 @@ export function albumFormat(tracks: ReadonlyArray<Pick<MediaNode, 'format'>>): {
   if (counts.size === 0) return { label: null, notes: labels.map(() => null) }
   const [top, n] = [...counts.entries()].sort((x, y) => y[1] - x[1])[0]
   const known = labels.filter(Boolean).length
-  // a headline needs a real majority; otherwise say "mixed" and note nothing
-  if (n * 2 <= known && counts.size > 1) return { label: 'mixed formats', notes: labels.map(() => null) }
+  // A headline with chips is for the ODD ONE OUT — at most one track in five
+  // (one, on a short album). More than that and the album is simply mixed:
+  // one codec at several rates reads "FLAC · mixed", several codecs "mixed
+  // formats", and no row is singled out (a 12-track album with 5 chips is
+  // noise, not information — Manila Killa's Dusk, 2026-08-16).
+  const odd = known - n
+  if (counts.size > 1 && odd > Math.max(1, Math.floor(known / 5))) {
+    const codecs = new Set(tracks.map((t) => t.format?.codec).filter(Boolean))
+    return { label: codecs.size === 1 ? `${[...codecs][0]} · mixed` : 'mixed formats', notes: labels.map(() => null) }
+  }
   return { label: top, notes: labels.map((l) => (l && l !== top ? l : null)) }
 }
 
@@ -1042,16 +1050,31 @@ export function compareTrackOrder(
 
 /** Consecutive runs of one disc, for the quiet "Disc N" dividers — only when the list actually spans discs. */
 export function discGroups<T extends Pick<MediaNode, 'discNumber'>>(tracks: T[]): { disc: number | null; tracks: T[] }[] {
-  const discs = new Set(tracks.map((t) => t.discNumber ?? null))
+  // "no disc" IS disc 1 (that is how compareTrackOrder sorts it too) — an
+  // album where some tracks say disc 1 and the rest say nothing is one disc,
+  // not an alternation of dividers (two GUNSHIP editions, 2026-08-16)
+  const discs = new Set(tracks.map((t) => t.discNumber ?? 1))
   if (discs.size < 2) return [{ disc: null, tracks }]
   const out: { disc: number | null; tracks: T[] }[] = []
   for (const t of tracks) {
-    const d = t.discNumber ?? null
+    const d = t.discNumber ?? 1
     const last = out[out.length - 1]
     if (last && last.disc === d) last.tracks.push(t)
     else out.push({ disc: d, tracks: [t] })
   }
   return out
+}
+
+/**
+ * Same album ART? The way to tell two EDITIONS of one album apart when
+ * title, artist and year all agree (16/44.1 and 24/44.1 GUNSHIP folders,
+ * 2026-08-16): Asset stamps every track with its album folder's cover id,
+ * so a track belongs to the edition whose art it shares. Compared without
+ * the size query, unknown on either side counts as a match.
+ */
+export function sameArt(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (!a || !b) return true
+  return a.split('?')[0] === b.split('?')[0]
 }
 
 /** One server's slice of a cross-server (all ready indexes) search. */

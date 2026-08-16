@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowUpRight, ChevronDown, MoreHorizontal } from 'lucide-react'
-import { albumFormat, compareTrackOrder, discGroups, trackArtists, trackInAlbumOf, type MediaIndexPools, type MediaNode } from '@shared/model'
+import { albumFormat, compareTrackOrder, discGroups, sameArt, trackArtists, trackInAlbumOf, type MediaIndexPools, type MediaNode } from '@shared/model'
 import { cx, fmtTime, matchesFilter } from '@/lib/format'
 import { useStore } from '@/store'
 import { scrollToVisible } from '@/lib/scroll'
@@ -526,12 +526,24 @@ export function ArtistsLens({
   const selectedArtist = shownArtists.find((a) => a.key === mem.artist) ?? null
   const selectedAlbum =
     selectedArtist?.albums.find((a) => nodeKey(a) === mem.album) ?? null
+  // Two EDITIONS of one album (same title, artist, year, server — a 16/44.1
+  // and a 24/44.1 folder) are two album rows; when the selected artist has
+  // such twins, a track belongs to the edition whose ART it shares (Asset
+  // stamps tracks with their folder's cover). Only then — a lone album must
+  // not lose tracks over a server that gives tracks their own art.
+  const twinTitled =
+    selectedAlbum != null &&
+    (selectedArtist?.albums ?? []).filter(
+      (a) => a.serverUdn === selectedAlbum.serverUdn && lc(a.title) === lc(selectedAlbum.title)
+    ).length > 1
   const albumTracks = selectedAlbum
     ? (tracksByAlbum.get(`${selectedAlbum.serverUdn}|${lc(selectedAlbum.title)}`) ?? []).filter(
-        // same-titled album on the same server by ANOTHER artist stays out —
-        // judged by album artist / performers, so a featured track ("Daft
-        // Punk; Julian Casablancas" on Daft Punk's album) stays IN.
-        (t) => trackInAlbumOf(t, selectedAlbum.artist)
+        (t) =>
+          // same-titled album on the same server by ANOTHER artist stays out —
+          // judged by album artist / performers, so a featured track ("Daft
+          // Punk; Julian Casablancas" on Daft Punk's album) stays IN.
+          trackInAlbumOf(t, selectedAlbum.artist) &&
+          (!twinTitled || sameArt(t.artUrl, selectedAlbum.artUrl))
       )
     : null
   // an artist with no albums shows their loose tracks directly (vibin rule)

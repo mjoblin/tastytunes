@@ -1853,7 +1853,8 @@ export function LibraryScreen(): React.JSX.Element {
                 {albumNode.title}
               </div>
               {albumArtist && <div className="text-[14px] text-dim truncate">{albumArtist}</div>}
-              {albumFacts && <div className="text-[12.5px] text-faint">{albumFacts}</div>}
+              {/* title + artist are one thought; the facts sit a step apart */}
+              {albumFacts && <div className="text-[12.5px] text-faint pt-2">{albumFacts}</div>}
               <div className="flex items-center gap-2 pt-2">
                 <button
                   data-tip="Replaces the queue"
