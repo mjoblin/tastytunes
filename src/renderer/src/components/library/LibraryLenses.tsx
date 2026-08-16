@@ -700,6 +700,32 @@ export function ArtistsLens({
                   }}
                   data-artist-row={a.name}
                   onClick={() => setMem({ artist: selected ? null : a.key, album: null })}
+                  // right-click = the ⋯ (the app-wide rule): the artist menu — the
+                  // pivot and Info. A lens artist is content identity, not a
+                  // node, so one is synthesized: the entity's server (or the first
+                  // album's) is what Info sums their page from.
+                  onContextMenu={(e) => {
+                    e.preventDefault()
+                    const from = a.albums[0] ?? a.tracks[0]
+                    actions.openMenu(
+                      {
+                        id: `lens-artist:${a.key}`,
+                        parentId: null,
+                        title: a.name,
+                        upnpClass: 'object.container.person.musicArtist',
+                        isContainer: true,
+                        artUrl: a.artUrl,
+                        artist: null,
+                        album: null,
+                        year: null,
+                        trackNumber: null,
+                        durationSecs: null,
+                        ...(from?.serverUdn ? { serverUdn: from.serverUdn, serverName: from.serverName } : {})
+                      },
+                      e
+                    )
+                  }}
+                  data-lens-artist-row
                   className={cx(
                     'group grid grid-cols-[44px_1fr_auto] items-center gap-2.5 rounded-lg px-2 py-1.5 cursor-pointer transition-colors',
                     selected ? 'bg-raised/70 ring-1 ring-edge2' : playing ? 'bg-gold/10' : 'hover:bg-veil'

@@ -251,7 +251,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         name: 'get_media_info',
         title: 'Get media info',
         description:
-          "Everything the local index knows about one album, track or artist by server_udn + object id — the app's Info panel as a tool: performers, album artist, composers, year, genres, track/disc numbers, duration, format (codec, bit depth, sample rate, bitrate, size), server and object ids, art URL. An album also gets its tracks summed (count, discs, runtime, size, format, composers, compilation) and its full track list. Read-only, index-backed."
+          "Everything the local index knows about one album, track or artist by server_udn + object id — the app's Info panel as a tool: performers, album artist, composers, year, genres, track/disc numbers, duration, format (codec, bit depth, sample rate, bitrate, size), server and object ids, art URL. An album also gets its tracks summed (count, discs, runtime, size, format, composers, compilation) and its full track list; an artist gets their library page (albums with year/format, track count, guest appearances, composer credits, genres, active years). Read-only, index-backed."
       },
       {
         name: 'play_media',

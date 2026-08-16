@@ -14,7 +14,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { z, type ZodRawShape } from 'zod'
 import { type Snapshot } from '@shared/ipc'
-import { sleepTrackKey, type AppSettings, type ConnectionState, type McpSettings, type MediaNode, type MediaQueueAction, type Schedule, trackArtists, formatLabel, albumTracksOf, albumSummary, trackPosition } from '@shared/model'
+import { sleepTrackKey, type AppSettings, type ConnectionState, type McpSettings, type MediaNode, type MediaQueueAction, type Schedule, trackArtists, formatLabel, albumTracksOf, albumSummary, trackPosition, artistSummary } from '@shared/model'
 import { favoriteKey, type Favorite } from '@shared/model'
 import { MCP_CLUSTERS, mcpClusterEnabled } from '@shared/mcpCatalog'
 import { EQ_GAIN_MAX, EQ_GAIN_MIN, audioCaps, brightnessOptions, isRadioMetadata } from '@shared/smoip'
@@ -1067,7 +1067,17 @@ export class McpBridge {
               }))
             })
           }
-          return ok(base)
+          // artist: their library page (albums, credits) — artistSummary, the modal's source
+          const summary = artistSummary(node.title, pool)
+          return ok({
+            ...base,
+            albums: summary.albums.map((x) => ({ object_id: x.objectId, title: x.title, year: x.year, tracks: x.tracks, ...(x.format ? { format: x.format } : {}) })),
+            track_count: summary.trackCount,
+            guest_on: summary.guestOn.map((g) => ({ object_id: g.objectId, title: g.title, album: g.album, album_artist: g.albumArtist })),
+            composed: summary.composed.map((x) => ({ object_id: x.objectId, title: x.title, album: x.album })),
+            genres_across_albums: summary.genres,
+            ...(summary.years ? { active_years: summary.years } : {})
+          })
         }
       },
       play_media: {

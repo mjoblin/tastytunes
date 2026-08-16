@@ -1193,6 +1193,71 @@ export function sameArt(a: string | null | undefined, b: string | null | undefin
   return a.split('?')[0] === b.split('?')[0]
 }
 
+/** An artist as the library knows them — the Info modal's artist page and MCP's get_media_info share it. */
+export interface ArtistSummary {
+  name: string
+  /** Albums credited to them (album artist), newest first, with a format headline when known. */
+  albums: { title: string; year: string | null; format: string | null; tracks: number; objectId: string; serverUdn?: string }[]
+  /** Tracks they perform on (headliner or guest). */
+  trackCount: number
+  /** Tracks they GUEST on — performer, but not the album artist. */
+  guestOn: { title: string; album: string | null; albumArtist: string | null; objectId: string }[]
+  /** Tracks they wrote (role=Composer). */
+  composed: { title: string; album: string | null; objectId: string }[]
+  /** Genres across their albums, most common first. */
+  genres: string[]
+  /** Earliest and latest album year. */
+  years: [string, string] | null
+  artUrl: string | null
+}
+
+/**
+ * Everything the index says about an artist by NAME (case-insensitive) — the
+ * album-artist credits, the performer credits (guest spots included), the
+ * composer credits. Names that exist only as credits (a featured singer with
+ * no albums of their own) get a page too.
+ */
+export function artistSummary(name: string, pool: { albums: ReadonlyArray<MediaNode>; tracks: ReadonlyArray<MediaNode> }): ArtistSummary {
+  const key = name.trim().toLowerCase()
+  const same = (v: string | null | undefined): boolean => (v ?? '').trim().toLowerCase() === key
+  const albums = pool.albums
+    .filter((a) => same(a.artist))
+    .map((a) => {
+      const tracks = albumTracksOf(a, pool)
+      return { title: a.title, year: a.year, format: albumFormat(tracks).label, tracks: tracks.length, objectId: a.id, ...(a.serverUdn ? { serverUdn: a.serverUdn } : {}), artUrl: a.artUrl }
+    })
+    .sort((x, y) => (y.year ?? '').localeCompare(x.year ?? '') || x.title.localeCompare(y.title))
+  const performs = pool.tracks.filter((t) => trackArtists(t).some(same))
+  // a GUEST spot is a track on someone else's album: the album owner (the
+  // track's album artist, else the album's credited artist) is known and is
+  // not them — a loose single with no album is simply theirs
+  const ownerOf = (t: MediaNode): string | null =>
+    t.albumArtist ?? pool.albums.find((a) => t.album && a.title.trim().toLowerCase() === t.album.trim().toLowerCase())?.artist ?? null
+  const guestOn = performs
+    .filter((t) => {
+      const owner = ownerOf(t)
+      return owner != null && !same(owner)
+    })
+    .map((t) => ({ title: t.title, album: t.album ?? null, albumArtist: ownerOf(t), objectId: t.id }))
+  const composed = pool.tracks
+    .filter((t) => (t.composers ?? []).some(same))
+    .map((t) => ({ title: t.title, album: t.album ?? null, objectId: t.id }))
+  const genreCount = new Map<string, number>()
+  for (const a of pool.albums.filter((x) => same(x.artist))) for (const g of a.genre ?? []) genreCount.set(g, (genreCount.get(g) ?? 0) + 1)
+  const genres = [...genreCount.entries()].sort((x, y) => y[1] - x[1]).map(([g]) => g)
+  const yearsList = albums.map((a) => a.year).filter((y): y is string => !!y).sort()
+  return {
+    name: name.trim(),
+    albums: albums.map(({ artUrl: _a, ...rest }) => rest),
+    trackCount: performs.length,
+    guestOn,
+    composed,
+    genres,
+    years: yearsList.length > 0 ? [yearsList[0], yearsList[yearsList.length - 1]] : null,
+    artUrl: albums.find((a) => a.artUrl)?.artUrl ?? null
+  }
+}
+
 /**
  * What the Info modal is looking at: a node, plus — for an album — the tracks
  * the caller already knows belong to it (the album leaf's listing, or the
@@ -1206,6 +1271,8 @@ export interface MediaInfoTarget {
   serverName?: string | null
   /** A caveat to show — e.g. the item wasn't found in any library index and this is only what the list knew. */
   note?: string | null
+  /** For an artist: their library page (albums, credits) — from artistSummary. */
+  artist?: ArtistSummary
 }
 
 /**

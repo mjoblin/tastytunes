@@ -16,7 +16,7 @@ import {
   Users,
   X
 } from 'lucide-react'
-import { presetVolumeKey, type AppSettings, type MediaIndexPools, type MediaNode, type MediaQueueAction, type MediaSearchAllGroup, type MediaServerInfo, type ScreenLayout, compareTrackOrder, discGroups, albumFormat, fmtBytes, albumComposers, performerLine, albumTracksOf } from '@shared/model'
+import { presetVolumeKey, type AppSettings, type MediaIndexPools, type MediaNode, type MediaQueueAction, type MediaSearchAllGroup, type MediaServerInfo, type ScreenLayout, compareTrackOrder, discGroups, albumFormat, fmtBytes, albumComposers, performerLine, albumTracksOf, artistSummary } from '@shared/model'
 import { favoriteKey, type Favorite, type FavoriteMedia } from '@shared/model'
 import type { QueueListItem } from '@shared/smoip'
 import { tt } from '@/api'
@@ -24,7 +24,7 @@ import { useStore } from '@/store'
 import { activeSourceId, cx, fmtTime, matchesFilter } from '@/lib/format'
 import { MOD } from '@/lib/screens'
 import { flashTarget } from '@/lib/scroll'
-import { mediaKind, isAlbumClass, stripFurniture } from '@/lib/media'
+import { mediaKind, isAlbumClass, stripFurniture, isArtistClass } from '@/lib/media'
 import { toggleFavorite } from '@/lib/favorites'
 import { ArtImage } from '@/components/media/ArtImage'
 import { Segmented } from '@/components/controls/Segmented'
@@ -2152,10 +2152,17 @@ export function LibraryScreen(): React.JSX.Element {
           }}
           onInfo={() => {
             setMenu(null)
+            const n = menu.node
+            // an artist's page is summed by NAME from the index (albums,
+            // credits) — the lens's merged rows and the server's person
+            // entities alike; without a pool the modal shows what it has
+            const pool = lensPools?.find((g) => g.udn === (n.serverUdn ?? server?.udn)) ?? lensPools?.[0]
+            const artist = n.isContainer && isArtistClass(n.upnpClass) && pool ? artistSummary(n.title, pool) : undefined
             setMediaInfo({
-              node: menu.node,
-              tracks: tracksForInfo(menu.node),
-              serverName: menu.node.serverName ?? server?.name ?? null
+              node: artist && !n.artUrl && artist.artUrl ? { ...n, artUrl: artist.artUrl } : n,
+              tracks: artist ? undefined : tracksForInfo(n),
+              artist,
+              serverName: n.serverName ?? server?.name ?? null
             })
           }}
           onAddToPlaylist={

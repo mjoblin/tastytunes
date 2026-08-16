@@ -7,7 +7,7 @@
 //      album as the tie-break — resolveContent's matching rule)
 //   3. a live BrowseMetadata, when server + id are known but not indexed
 // Null when nothing is found; the caller shows what the list knew.
-import { albumTracksOf, trackInAlbumOf, type MediaInfoQuery, type MediaInfoTarget, type MediaNode } from '@shared/model'
+import { albumTracksOf, artistSummary, trackArtists, trackInAlbumOf, type MediaInfoQuery, type MediaInfoTarget, type MediaNode } from '@shared/model'
 import { pools } from './mediaIndex'
 import { browseMetadataNode } from './upnpBrowser'
 
@@ -19,13 +19,43 @@ function contentMatch(q: MediaInfoQuery, n: MediaNode): boolean {
   return true
 }
 
+/** A page for a name the index only knows as a CREDIT (a guest singer, a composer) — no entity node exists, so one is made. */
+function creditedArtistNode(name: string, pool: { udn: string; serverName: string; albums: ReadonlyArray<MediaNode>; tracks: ReadonlyArray<MediaNode> }): MediaNode | null {
+  const key = name.trim().toLowerCase()
+  const credited =
+    pool.albums.some((a) => (a.artist ?? '').trim().toLowerCase() === key) ||
+    pool.tracks.some((t) => trackArtists(t).some((x) => x.trim().toLowerCase() === key) || (t.composers ?? []).some((c) => c.trim().toLowerCase() === key))
+  if (!credited) return null
+  return {
+    id: '',
+    parentId: null,
+    title: name.trim(),
+    upnpClass: 'object.container.person.musicArtist',
+    isContainer: true,
+    artUrl: null,
+    artist: null,
+    album: null,
+    year: null,
+    trackNumber: null,
+    durationSecs: null,
+    serverUdn: pool.udn,
+    serverName: pool.serverName
+  }
+}
+
 export async function lookupMediaInfo(host: string | null, q: MediaInfoQuery): Promise<MediaInfoTarget | null> {
   const groups = pools()
-  const withAlbum = (pool: (typeof groups)[number], node: MediaNode): MediaInfoTarget => ({
-    node,
-    tracks: node.isContainer ? albumTracksOf(node, pool) : undefined,
-    serverName: pool.serverName
-  })
+  const withAlbum = (pool: (typeof groups)[number], node: MediaNode): MediaInfoTarget => {
+    if (node.isContainer && /person|Artist/.test(node.upnpClass)) {
+      const summary = artistSummary(node.title, pool)
+      return { node: node.artUrl ? node : { ...node, artUrl: summary.artUrl }, artist: summary, serverName: pool.serverName }
+    }
+    return {
+      node,
+      tracks: node.isContainer ? albumTracksOf(node, pool) : undefined,
+      serverName: pool.serverName
+    }
+  }
   // 1. identity
   if (q.serverUdn && q.objectId) {
     const pool = groups.find((p) => p.udn === q.serverUdn)
@@ -49,6 +79,14 @@ export async function lookupMediaInfo(host: string | null, q: MediaInfoQuery): P
       candidates.find((n) => q.artist == null || lc(n.artist) === lc(q.artist)) ||
       candidates[0]
     return withAlbum(pool, best)
+  }
+  // 2b. an artist the index knows only as a credit (guest, composer, or the
+  //     album artist of a server without person entities) still gets a page
+  if (q.kind === 'artist') {
+    for (const pool of ordered) {
+      const node = creditedArtistNode(q.title, pool)
+      if (node) return withAlbum(pool, node)
+    }
   }
   // 3. live, when we know exactly what to ask for
   if (host && q.serverUdn && q.objectId) {

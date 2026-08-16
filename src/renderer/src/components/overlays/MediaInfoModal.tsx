@@ -66,7 +66,7 @@ const mono = (v: string | null | undefined): React.ReactNode =>
 export function MediaInfoModal({ target }: { target: MediaInfoTarget }): React.JSX.Element {
   const setMediaInfo = useStore((s) => s.setMediaInfo)
   const close = (): void => setMediaInfo(null)
-  const { node, tracks, serverName, note } = target
+  const { node, tracks, serverName, note, artist } = target
   const kind = kindOf(node)
   const [copied, setCopied] = useState(false)
 
@@ -141,10 +141,34 @@ export function MediaInfoModal({ target }: { target: MediaInfoTarget }): React.J
     ]
   })()
 
+  // ---- an artist's library page (artistSummary — shared with MCP)
+  const list = (items: string[], max: number): React.ReactNode =>
+    items.length === 0 ? null : (
+      <span>
+        {items.slice(0, max).join(' · ')}
+        {items.length > max ? <span className="text-faint"> · +{items.length - max} more</span> : null}
+      </span>
+    )
+  const artistRows: Row[] = artist
+    ? [
+        [
+          'Albums',
+          artist.albums.length > 0
+            ? list(artist.albums.map((a) => `${a.title}${a.year ? ` (${a.year})` : ''}${a.format ? ` · ${a.format}` : ''}`), 12)
+            : null
+        ],
+        ['Tracks', artist.trackCount > 0 ? String(artist.trackCount) : null],
+        ['Guest on', list(artist.guestOn.map((g) => `${g.title}${g.albumArtist ? ` (${g.albumArtist})` : g.album ? ` (${g.album})` : ''}`), 8)],
+        ['Composed', artist.composed.length > 0 ? `${artist.composed.length} ${artist.composed.length === 1 ? 'track' : 'tracks'}` : null],
+        ['Genres', list(artist.genres, 8)],
+        ['Active', artist.years ? (artist.years[0] === artist.years[1] ? artist.years[0] : `${artist.years[0]}–${artist.years[1]}`) : null]
+      ]
+    : []
+
   // ---- source
   const source: Row[] = [
     ['Server', serverName ?? node.serverName ?? null],
-    ['Object id', mono(node.id)],
+    ['Object id', node.id ? mono(node.id) : null],
     ['Parent id', mono(node.parentId)],
     ['Class', mono(node.upnpClass)],
     ['Art', mono(node.artUrl)]
@@ -185,6 +209,7 @@ export function MediaInfoModal({ target }: { target: MediaInfoTarget }): React.J
       )}
       <div className="mt-5 min-h-0 overflow-y-auto pr-1 space-y-5" data-info-body>
         <Section title="Identity" rows={identity} />
+        {artistRows.length > 0 && <Section title="Library" rows={artistRows} />}
         {albumRows.length > 0 && <Section title="Album" rows={albumRows} />}
         {trackFormat.length > 0 && <Section title="Format" rows={trackFormat} />}
         <Section title="Source" rows={source} />
@@ -194,7 +219,9 @@ export function MediaInfoModal({ target }: { target: MediaInfoTarget }): React.J
         <span className="text-[11.5px] text-faint">
           {kind === 'album' && (!tracks || tracks.length === 0)
             ? 'Open the album to see its tracks summed here.'
-            : formatLabel(node.format) ?? ''}
+            : kind === 'artist' && !artist
+              ? 'No library index covers this artist yet.'
+              : formatLabel(node.format) ?? ''}
         </span>
         <button
           onClick={copy}
