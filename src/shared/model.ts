@@ -633,6 +633,8 @@ export interface AppSettings {
   lensAlbumsSortReversed: boolean
   /** Artists lens: hide artists that only have loose tracks. */
   lensArtistsAlbumsOnly: boolean
+  /** Albums lens partition: everything, artist albums only, or compilations only. */
+  lensAlbumsKind: 'all' | 'albums' | 'compilations'
   playlistsSort: 'updated' | 'created' | 'played' | 'name' | 'length'
   playlistsSortReversed: boolean
   /** Favorites kind partition (All / Stations / Albums / Tracks). */
@@ -792,6 +794,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   lensAlbumsSort: 'title',
   lensAlbumsSortReversed: false,
   lensArtistsAlbumsOnly: false,
+  lensAlbumsKind: 'all',
   playlistsSort: 'updated',
   playlistsSortReversed: false,
   favoritesKind: 'all',
@@ -916,6 +919,12 @@ export interface MediaNode {
    */
   artists?: string[]
   /**
+   * upnp:artist role="Composer", split on "; " (Asset: "Thomas Bangalter;
+   * Guy-Manuel de Homem-Christo"). Not performers — never an artist row;
+   * searchable, and an album that shares one composer says so in its facts.
+   */
+  composers?: string[]
+  /**
    * Which server this node came from — stamped ONLY on cross-server search
    * results, where nodes from several servers share a listing. Everywhere
    * else the screen's own server context applies and these stay absent.
@@ -974,6 +983,60 @@ export function albumFormat(tracks: ReadonlyArray<Pick<MediaNode, 'format'>>): {
   // many there are.
   if (counts.size > 1 && n * 2 < known) return { label: 'mixed formats', notes: labels.map((l) => l ?? null) }
   return { label: top, notes: labels.map((l) => (l && l !== top ? l : null)) }
+}
+
+/**
+ * How a track row names its performers INSIDE AN ALBUM under its artist:
+ * the album artist, then the guests as "feat." — "Daft Punk feat. Julian
+ * Casablancas". Anywhere else (search, queue, a compilation) the raw packed
+ * string is the honest thing to show, so this returns it unchanged unless
+ * the album artist is among the performers and there are others.
+ */
+export function performerLine(
+  n: Pick<MediaNode, 'artist' | 'artists' | 'albumArtist'>,
+  albumArtist: string | null | undefined
+): string | null {
+  const names = trackArtists(n)
+  if (!albumArtist || names.length < 2) return n.artist
+  const key = albumArtist.trim().toLowerCase()
+  const lead = names.find((x) => x.trim().toLowerCase() === key)
+  if (!lead) return n.artist
+  const guests = names.filter((x) => x !== lead)
+  return guests.length > 0 ? `${lead} feat. ${guests.join(', ')}` : n.artist
+}
+
+const VARIOUS = /^(various(\s+artists?)?|va|v\.a\.|verschiedene(\s+interpreten)?|divers)$/i
+
+/**
+ * Is this album a COMPILATION? Named so by its album artist ("Various
+ * Artists" and friends), or — when the tracks are known — credited to an
+ * album artist none of its performers is (a soundtrack under a label name);
+ * an album whose guests join its own artist ("Daft Punk feat. …") is NOT.
+ */
+export function isCompilation(
+  album: Pick<MediaNode, 'artist'>,
+  tracks?: ReadonlyArray<Pick<MediaNode, 'artist' | 'artists' | 'albumArtist'>>
+): boolean {
+  const owner = album.artist?.trim() ?? ''
+  if (VARIOUS.test(owner)) return true
+  if (!tracks || tracks.length < 2 || !owner) return false
+  const key = owner.toLowerCase()
+  const performerSets = tracks.map((t) => trackArtists(t).map((x) => x.trim().toLowerCase()))
+  const anyOwner = performerSets.some((set) => set.includes(key))
+  const distinct = new Set(performerSets.map((set) => set.join('|'))).size
+  return !anyOwner && distinct >= 2
+}
+
+/** The composers every track shares (order of first appearance), or [] when they differ or are unknown. */
+export function albumComposers(tracks: ReadonlyArray<Pick<MediaNode, 'composers'>>): string[] {
+  const known = tracks.filter((t) => t.composers && t.composers.length > 0)
+  if (known.length === 0 || known.length < tracks.length) return []
+  const first = known[0].composers!.map((x) => x.trim().toLowerCase())
+  const same = known.every((t) => {
+    const c = t.composers!.map((x) => x.trim().toLowerCase())
+    return c.length === first.length && c.every((x) => first.includes(x))
+  })
+  return same ? known[0].composers! : []
 }
 
 /** 940 MB, 1.2 GB — for album/playlist size sums. */

@@ -251,7 +251,8 @@ function buildDemo(host: string): {
       art: `${host}/art/p1.svg`,
       count: 8,
       genres: ['Electronic'],
-      track: (n) => ({ ...trackMeta(n) })
+      // every track composed by the same writer → the album leaf says so
+      track: (n) => ({ ...trackMeta(n), composer: 'Amber Writer' })
     },
     {
       id: 'alb-2',
@@ -275,6 +276,26 @@ function buildDemo(host: string): {
         ...(n === 5 ? { mp3: true } : {}), // the one lossy track in a FLAC album
         art_url: `${host}/aa/2002/cover.jpg?size=0`,
         duration: 120 + n * 11
+      })
+    },
+    {
+      // A COMPILATION in Asset's exact shape (mirrors the mock): container
+      // artist "Various Artists"; each track role="AlbumArtist" + performer.
+      id: 'alb-3',
+      title: 'Godzone Mix',
+      artist: 'Various Artists',
+      date: '2002-01-01',
+      art: `${host}/art/p3.svg`,
+      count: 3,
+      genres: ['New Zealand'],
+      track: (n) => ({
+        ...trackMeta(n),
+        title: `Godzone ${n}`,
+        album: 'Godzone Mix',
+        artist: ['Coconut Rough', 'Citizen Band', 'Che Fu'][n - 1],
+        albumArtist: 'Various Artists',
+        art_url: `${host}/art/p3.svg`,
+        duration: 180 + n
       })
     },
     // two EDITIONS of one album (mirrors the mock): same title/artist/year,
@@ -405,7 +426,7 @@ function buildDemo(host: string): {
   const didlArtists = (md: Dict): string =>
     md.albumArtist
       ? `<dc:creator>${xmlEsc(String(md.artist))}</dc:creator><upnp:artist role="AlbumArtist">${xmlEsc(String(md.albumArtist))}</upnp:artist><upnp:artist>${xmlEsc(String(md.artist))}</upnp:artist>${md.composer ? `<upnp:artist role="Composer">${xmlEsc(String(md.composer))}</upnp:artist>` : ''}`
-      : `<upnp:artist>${xmlEsc(String(md.artist))}</upnp:artist>`
+      : `<upnp:artist>${xmlEsc(String(md.artist))}</upnp:artist>${md.composer ? `<upnp:artist role="Composer">${xmlEsc(String(md.composer))}</upnp:artist>` : ''}`
   // The primary <res> with Asset's DLNA attributes (mirrors the mock): FLAC
   // 16/44.1 by default; `mp3: true` = MP3 320 kbps (Neon Track 5).
   // Variants mirror the mock: mp3, hires (FLAC 24/96), and Asset's m4a

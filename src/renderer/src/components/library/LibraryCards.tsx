@@ -285,7 +285,8 @@ export function TrackRow({
   onMenu,
   onAlbumLink,
   onArtistLink,
-  note
+  note,
+  artistLabel
 }: {
   node: MediaNode
   /** Loose tracks in mixed folders get a thumb; album views carry the art in the header. */
@@ -311,6 +312,12 @@ export function TrackRow({
    * rows that match the album carry nothing (albumFormat decides).
    */
   note?: string | null
+  /**
+   * What the second line says instead of the raw `artist` — the album
+   * context's "Daft Punk feat. Julian Casablancas" (performerLine). Absent
+   * = the packed string, which is the honest default everywhere else.
+   */
+  artistLabel?: string | null
 }): React.JSX.Element {
   const ref = useRef<HTMLDivElement | null>(null)
   return (
@@ -357,10 +364,10 @@ export function TrackRow({
                   }}
                   className="tip-bottom hover:text-ink hover:underline underline-offset-2 transition-colors"
                 >
-                  {node.artist}
+                  {artistLabel ?? node.artist}
                 </button>
               ) : (
-                node.artist
+                (artistLabel ?? node.artist)
               ))}
             {onAlbumLink && node.album && (
               <>

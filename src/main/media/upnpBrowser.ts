@@ -342,7 +342,17 @@ function didlToNodes(didl: string): MediaNode[] {
       if (trimmed && !seenArtists.has(trimmed.toLowerCase())) seenArtists.set(trimmed.toLowerCase(), trimmed)
     }
     const artists = [...seenArtists.values()]
+    // composers: role="Composer", packed with "; " like everything else
+    const seenComposers = new Map<string, string>()
+    for (const el of artistEls.filter((e) => roleOf(e) === 'composer')) {
+      for (const part of (text(el) ?? '').split(';')) {
+        const trimmed = part.trim()
+        if (trimmed && !seenComposers.has(trimmed.toLowerCase())) seenComposers.set(trimmed.toLowerCase(), trimmed)
+      }
+    }
+    const composers = [...seenComposers.values()]
     return {
+      ...(composers.length > 0 ? { composers } : {}),
       ...(genres.length > 0 ? { genre: genres } : {}),
       ...(albumArtist != null && albumArtist.trim() ? { albumArtist: albumArtist.trim() } : {}),
       ...(artists.length > 1 ? { artists } : {}),

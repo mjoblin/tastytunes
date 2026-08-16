@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowUpRight, ChevronDown, MoreHorizontal } from 'lucide-react'
-import { albumFormat, compareTrackOrder, discGroups, sameArt, trackArtists, trackInAlbumOf, type MediaIndexPools, type MediaNode } from '@shared/model'
+import { albumFormat, compareTrackOrder, discGroups, isCompilation, performerLine, sameArt, trackArtists, trackInAlbumOf, type MediaIndexPools, type MediaNode } from '@shared/model'
 import { cx, fmtTime, matchesFilter } from '@/lib/format'
 import { useStore } from '@/store'
 import { scrollToVisible } from '@/lib/scroll'
@@ -11,6 +11,7 @@ import { PopoverChrome } from '@/hooks/usePopover'
 import { POPOVER_CARD } from '@/components/chrome/Overlay'
 import { Chip } from '@/components/chrome/Chrome'
 import { SortChip } from '@/components/controls/SortChip'
+import { Segmented } from '@/components/controls/Segmented'
 import { ContainerCard, ContainerRow, TrackRow } from '@/components/library/LibraryCards'
 import { Eqbars } from '@/components/media/Eqbars'
 
@@ -303,8 +304,28 @@ export function AlbumsLens({
       .sort((a, b) => b.value.localeCompare(a.value))
   }, [all])
 
+  // Compilation = named so by its album artist, or (tracks known) credited to
+  // an album artist none of its performers is; "Daft Punk feat. …" is not.
+  const kind = useStore((s) => s.settings.lensAlbumsKind)
+  const compilationKeys = useMemo(() => {
+    const byAlbum = new Map<string, MediaNode[]>()
+    for (const g of pools)
+      for (const t of g.tracks) {
+        if (!t.album) continue
+        const k = `${g.udn}|${lc(t.album)}`
+        const list = byAlbum.get(k)
+        if (list) list.push(t)
+        else byAlbum.set(k, [t])
+      }
+    const keys = new Set<string>()
+    for (const a of all) if (isCompilation(a, byAlbum.get(`${a.serverUdn}|${lc(a.title)}`))) keys.add(nodeKey(a))
+    return keys
+  }, [pools, all])
+
   const shown = useMemo(() => {
     let list = all
+    if (kind === 'compilations') list = list.filter((a) => compilationKeys.has(nodeKey(a)))
+    else if (kind === 'albums') list = list.filter((a) => !compilationKeys.has(nodeKey(a)))
     if (mem.genre) list = list.filter((a) => (a.genre ?? []).some((g) => lc(g) === mem.genre))
     if (mem.decade)
       list = list.filter(
@@ -319,7 +340,7 @@ export function AlbumsLens({
       return a.title.localeCompare(b.title) || (a.serverName ?? '').localeCompare(b.serverName ?? '')
     })
     return reversed ? sorted.reverse() : sorted
-  }, [all, mem, sort, reversed])
+  }, [all, mem, sort, reversed, kind, compilationKeys])
 
   return (
     <div data-lens-albums>
@@ -333,14 +354,28 @@ export function AlbumsLens({
             value={mem.genre}
             max={8}
             lead={
-              <PickerPill
-                id="decade"
-                neutral="Decade"
-                clearLabel="All decades"
-                options={decadeOptions}
-                value={mem.decade}
-                onChange={(decade) => setMem({ decade })}
-              />
+              <>
+                {/* the PARTITION leads the left cluster (the kind-Segmented
+                    rule from unified search): everything · artist albums ·
+                    compilations. A view default — it persists (S12). */}
+                <Segmented<'all' | 'albums' | 'compilations'>
+                  value={kind}
+                  onChange={(v) => void saveSettings({ lensAlbumsKind: v })}
+                  options={[
+                    { value: 'all', label: 'All' },
+                    { value: 'albums', label: 'Albums' },
+                    { value: 'compilations', label: 'Compilations', tip: 'Various-artists albums' }
+                  ]}
+                />
+                <PickerPill
+                  id="decade"
+                  neutral="Decade"
+                  clearLabel="All decades"
+                  options={decadeOptions}
+                  value={mem.decade}
+                  onChange={(decade) => setMem({ decade })}
+                />
+              </>
             }
             onChange={(genre) => setMem({ genre })}
           />
@@ -843,6 +878,8 @@ export function ArtistsLens({
                       key={nodeKey(t)}
                       node={t}
                       note={albumTracks ? albumFmt.notes[albumTracks.indexOf(t)] : null}
+                      // inside an album under its artist, guests read as "feat."
+                      artistLabel={selectedAlbum ? performerLine(t, selectedAlbum.artist) : null}
                       showArt={looseTracks != null}
                       isCurrent={actions.isCurrentTrack(t)}
                       queued={actions.trackQueued(t)}

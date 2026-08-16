@@ -16,7 +16,7 @@ import {
   Users,
   X
 } from 'lucide-react'
-import { presetVolumeKey, type AppSettings, type MediaIndexPools, type MediaNode, type MediaQueueAction, type MediaSearchAllGroup, type MediaServerInfo, type ScreenLayout, compareTrackOrder, discGroups, albumFormat, fmtBytes } from '@shared/model'
+import { presetVolumeKey, type AppSettings, type MediaIndexPools, type MediaNode, type MediaQueueAction, type MediaSearchAllGroup, type MediaServerInfo, type ScreenLayout, compareTrackOrder, discGroups, albumFormat, fmtBytes, albumComposers, performerLine } from '@shared/model'
 import { favoriteKey, type Favorite, type FavoriteMedia } from '@shared/model'
 import type { QueueListItem } from '@shared/smoip'
 import { tt } from '@/api'
@@ -1210,6 +1210,10 @@ export function LibraryScreen(): React.JSX.Element {
         .filter(Boolean)
         .join(' · ')
     : ''
+  // one composer credit for the whole album, when every track agrees (the
+  // classical case, and a band that writes its own); silent otherwise
+  const composers = albumNode ? albumComposers(allTracks) : []
+  const albumComposerLine = composers.length > 0 ? `Composed by ${composers.join(', ')}` : null
   // the note a row carries when its format differs from the album headline
   const albumNoteFor = (node: MediaNode): string | null => {
     if (!albumNode) return null
@@ -1858,6 +1862,11 @@ export function LibraryScreen(): React.JSX.Element {
                 {albumArtist && <div className="text-[14px] text-dim truncate">{albumArtist}</div>}
               </div>
               {albumFacts && <div className="text-[12.5px] text-faint">{albumFacts}</div>}
+              {albumComposerLine && (
+                <div className="text-[12.5px] text-faint" data-album-composers>
+                  {albumComposerLine}
+                </div>
+              )}
               <div className="flex items-center gap-2 pt-2">
                 <button
                   data-tip="Replaces the queue"
@@ -2004,6 +2013,7 @@ export function LibraryScreen(): React.JSX.Element {
                       onPlayNow={(el) => playTrack(node, el)}
                       onMenu={(e) => openMenu(node, e)}
                       note={albumNoteFor(node)}
+                      artistLabel={albumNode ? performerLine(node, albumArtist ?? albumNode.artist) : null}
                       onAlbumLink={searchMode && node.album && linkable(node, 'albums') ? () => void goToAlbum(node) : undefined}
                       onArtistLink={searchMode && node.artist && linkable(node, 'artists') ? () => void goToArtist(node) : undefined}
                     />

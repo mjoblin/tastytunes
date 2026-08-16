@@ -14,7 +14,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { z, type ZodRawShape } from 'zod'
 import { type Snapshot } from '@shared/ipc'
-import { sleepTrackKey, type AppSettings, type ConnectionState, type McpSettings, type MediaNode, type MediaQueueAction, type Schedule, trackArtists } from '@shared/model'
+import { sleepTrackKey, type AppSettings, type ConnectionState, type McpSettings, type MediaNode, type MediaQueueAction, type Schedule, trackArtists, formatLabel } from '@shared/model'
 import { favoriteKey, type Favorite } from '@shared/model'
 import { MCP_CLUSTERS, mcpClusterEnabled } from '@shared/mcpCatalog'
 import { EQ_GAIN_MAX, EQ_GAIN_MIN, audioCaps, brightnessOptions, isRadioMetadata } from '@shared/smoip'
@@ -757,7 +757,12 @@ export class McpBridge {
                 artist: n.artist,
                 album: n.album,
                 year: n.year,
-                duration_seconds: n.durationSecs
+                duration_seconds: n.durationSecs,
+                // what the DIDL knows beyond the packed artist string (2026-08-16)
+                ...(n.albumArtist ? { album_artist: n.albumArtist } : {}),
+                ...(n.artists ? { performers: n.artists } : {}),
+                ...(n.composers ? { composers: n.composers } : {}),
+                ...(n.format ? { format: formatLabel(n.format) } : {})
               })
             }
           }

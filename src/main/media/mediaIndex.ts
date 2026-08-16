@@ -37,6 +37,7 @@ interface StoredIndex {
   tracks: MediaNode[]
 }
 
+// v8: composers (upnp:artist role="Composer", split) — 2026-08-16.
 // v7: format parse revised (m4a ALAC-vs-AAC by file bitrate, lossy kbps from
 //     size ÷ duration) — the SAME parser change without a bump left the lens
 //     (index) and the album leaf (live) disagreeing on one album (2026-08-16).
@@ -49,7 +50,7 @@ interface StoredIndex {
 // Asset tagging). v2 added upnp:genre. A bump discards stored indexes
 // wholesale; rebuildHints below keeps that from costing Browse-only
 // servers their Build click.
-const VERSION = 7
+const VERSION = 8
 const PAGE = 500
 const MAX_TRACKS = 50_000
 const MAX_CONTAINERS = 10_000
@@ -305,7 +306,8 @@ export function searchIndex(udn: string, query: string): { items: MediaNode[]; t
   const tokens = query.toLowerCase().split(/\s+/).filter(Boolean)
   if (tokens.length === 0) return { items: [], total: 0 }
   const matches = (n: MediaNode): boolean => {
-    const hay = `${n.title} ${n.artist ?? ''} ${n.album ?? ''}`.toLowerCase()
+    // composers are searchable ("bangalter" finds the track) without being artists
+    const hay = `${n.title} ${n.artist ?? ''} ${n.album ?? ''} ${(n.composers ?? []).join(' ')}`.toLowerCase()
     return tokens.every((t) => hay.includes(t))
   }
   const items: MediaNode[] = []
