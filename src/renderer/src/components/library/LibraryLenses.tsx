@@ -355,8 +355,19 @@ export function AlbumsLens({
             max={8}
             lead={
               <>
-                {/* the PARTITION leads the left cluster (the kind-Segmented
-                    rule from unified search): everything · artist albums ·
+                {/* FILTER FIRST, on the LEFT — the lens sub-row rule (user
+                    call 2026-08-16, matching the Artists lens): text filter,
+                    then the partition, then the facets; the sort chip sits
+                    alone on the right. This filter used to sit right, beside
+                    the sort chip — the one text filter in the app next to a
+                    sort control, and its sibling lens did the opposite. */}
+                <FilterInput
+                  value={mem.filter}
+                  onChange={(filter) => setMem({ filter })}
+                  shown={shown.length}
+                  total={all.length}
+                />
+                {/* the PARTITION follows: everything · artist albums ·
                     compilations. A view default — it persists (S12). */}
                 <Segmented<'all' | 'albums' | 'compilations'>
                   value={kind}
@@ -381,12 +392,7 @@ export function AlbumsLens({
           />
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-          <FilterInput
-            value={mem.filter}
-            onChange={(filter) => setMem({ filter })}
-            shown={shown.length}
-            total={all.length}
-          />
+          {/* the sort chip keeps its lone right spot */}
           <SortChip
             sorts={ALBUM_SORTS}
             neutral="title"

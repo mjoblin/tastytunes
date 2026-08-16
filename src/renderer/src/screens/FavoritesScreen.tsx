@@ -325,6 +325,14 @@ export function FavoritesScreen(): React.JSX.Element {
         <div className="flex-1" />
         {total > 0 && (
           <>
+            {/* header clusters read Filter first, then partition/sort/chips
+                (app-wide hygiene pass, 2026-08-16) */}
+            <FilterInput
+              value={filter}
+              onChange={(text) => setScreenFilter('favorites', text)}
+              shown={shownCount}
+              total={kindTotal}
+            />
             <Segmented
               value={kind}
               onChange={setKind}
@@ -334,12 +342,6 @@ export function FavoritesScreen(): React.JSX.Element {
                 { value: 'album' as const, label: 'Albums' },
                 { value: 'track' as const, label: 'Tracks' }
               ]}
-            />
-            <FilterInput
-              value={filter}
-              onChange={(text) => setScreenFilter('favorites', text)}
-              shown={shownCount}
-              total={kindTotal}
             />
           </>
         )}

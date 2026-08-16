@@ -239,6 +239,16 @@ export function PlaylistsScreen(): React.JSX.Element {
       <header className="px-8 pt-8 pb-4 flex items-center gap-4">
         <ScreenTitle>Playlists</ScreenTitle>
         <div className="flex-1" />
+        {/* header clusters read Filter first, then partition/sort/chips
+            (app-wide hygiene pass, 2026-08-16) */}
+        {playlists.length > 0 && (
+          <FilterInput
+            value={filter}
+            onChange={(v) => setScreenFilter('playlists', v)}
+            shown={shown.length}
+            total={playlists.length}
+          />
+        )}
         {playlists.length > 0 && (
           <SortChip
             sorts={[
@@ -253,14 +263,6 @@ export function PlaylistsScreen(): React.JSX.Element {
             reversed={reversed}
             onChange={(v) => void saveSettings({ playlistsSort: v, playlistsSortReversed: false })}
             onToggleReverse={() => void saveSettings({ playlistsSortReversed: !reversed })}
-          />
-        )}
-        {playlists.length > 0 && (
-          <FilterInput
-            value={filter}
-            onChange={(v) => setScreenFilter('playlists', v)}
-            shown={shown.length}
-            total={playlists.length}
           />
         )}
       </header>
