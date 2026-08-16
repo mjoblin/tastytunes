@@ -465,6 +465,29 @@ interface LensArtist {
   tracks: MediaNode[]
 }
 
+/**
+ * A lens artist is content identity, not a node — the ⋯ / right-click menu
+ * and Info want one, so it is synthesized: the entity's server (or the first
+ * album's/track's) is what Info sums their page from.
+ */
+function lensArtistNode(a: LensArtist): MediaNode {
+  const from = a.albums[0] ?? a.tracks[0]
+  return {
+    id: `lens-artist:${a.key}`,
+    parentId: null,
+    title: a.name,
+    upnpClass: 'object.container.person.musicArtist',
+    isContainer: true,
+    artUrl: a.artUrl,
+    artist: null,
+    album: null,
+    year: null,
+    trackNumber: null,
+    durationSecs: null,
+    ...(from?.serverUdn ? { serverUdn: from.serverUdn, serverName: from.serverName } : {})
+  }
+}
+
 // Session memory: selections, the artist filter, and each column's scroll
 // spot survive the round trip through an album leaf (and screen switches).
 // The With-albums toggle lives in settings (view defaults persist,
@@ -706,24 +729,7 @@ export function ArtistsLens({
                   // album's) is what Info sums their page from.
                   onContextMenu={(e) => {
                     e.preventDefault()
-                    const from = a.albums[0] ?? a.tracks[0]
-                    actions.openMenu(
-                      {
-                        id: `lens-artist:${a.key}`,
-                        parentId: null,
-                        title: a.name,
-                        upnpClass: 'object.container.person.musicArtist',
-                        isContainer: true,
-                        artUrl: a.artUrl,
-                        artist: null,
-                        album: null,
-                        year: null,
-                        trackNumber: null,
-                        durationSecs: null,
-                        ...(from?.serverUdn ? { serverUdn: from.serverUdn, serverName: from.serverName } : {})
-                      },
-                      e
-                    )
+                    actions.openMenu(lensArtistNode(a), e)
                   }}
                   data-lens-artist-row
                   className={cx(
@@ -742,7 +748,25 @@ export function ArtistsLens({
                         : `${a.tracks.length} track${a.tracks.length === 1 ? '' : 's'}`}
                     </div>
                   </div>
-                  {playing ? <Eqbars /> : <span />}
+                  <div className="flex items-center gap-1">
+                    {playing && <Eqbars />}
+                    {/* the ⋯, hover-revealed like the album rows' — the same
+                        artist menu the right-click opens */}
+                    <button
+                      aria-label="More actions"
+                      data-lens-artist-menu
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        actions.openMenu(lensArtistNode(a), e)
+                      }}
+                      className={cx(
+                        'p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-all',
+                        actions.menuNodeId === `lens-artist:${a.key}` ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                      )}
+                    >
+                      <MoreHorizontal size={14} />
+                    </button>
+                  </div>
                 </div>
               )
             })}

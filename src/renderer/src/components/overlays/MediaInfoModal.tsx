@@ -149,16 +149,35 @@ export function MediaInfoModal({ target }: { target: MediaInfoTarget }): React.J
         {items.length > max ? <span className="text-faint"> · +{items.length - max} more</span> : null}
       </span>
     )
+  // Lists read as ROWS, the name in ink and its facts quiet beside it — a
+  // "·"-joined sentence made a shelf of albums look like a paragraph
+  // (user, 2026-08-16).
+  const rows = (items: { name: string; meta: string | null }[], max: number): React.ReactNode =>
+    items.length === 0 ? null : (
+      <ul className="space-y-0.5" data-info-list>
+        {items.slice(0, max).map((it, i) => (
+          <li key={`${it.name}-${i}`} className="min-w-0 truncate">
+            <span className="text-ink">{it.name}</span>
+            {it.meta && <span className="text-faint ml-2">{it.meta}</span>}
+          </li>
+        ))}
+        {items.length > max && <li className="text-faint">+{items.length - max} more</li>}
+      </ul>
+    )
   const artistRows: Row[] = artist
     ? [
         [
           'Albums',
-          artist.albums.length > 0
-            ? list(artist.albums.map((a) => `${a.title}${a.year ? ` (${a.year})` : ''}${a.format ? ` · ${a.format}` : ''}`), 12)
-            : null
+          rows(
+            artist.albums.map((a) => ({
+              name: a.title,
+              meta: [a.year, a.format].filter(Boolean).join(' · ') || null
+            })),
+            20
+          )
         ],
         ['Tracks', artist.trackCount > 0 ? String(artist.trackCount) : null],
-        ['Guest on', list(artist.guestOn.map((g) => `${g.title}${g.albumArtist ? ` (${g.albumArtist})` : g.album ? ` (${g.album})` : ''}`), 8)],
+        ['Guest on', rows(artist.guestOn.map((g) => ({ name: g.title, meta: g.albumArtist ?? g.album ?? null })), 8)],
         ['Composed', artist.composed.length > 0 ? `${artist.composed.length} ${artist.composed.length === 1 ? 'track' : 'tracks'}` : null],
         ['Genres', list(artist.genres, 8)],
         ['Active', artist.years ? (artist.years[0] === artist.years[1] ? artist.years[0] : `${artist.years[0]}–${artist.years[1]}`) : null]
