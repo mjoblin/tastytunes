@@ -1,7 +1,7 @@
 import { app, BrowserWindow, globalShortcut, ipcMain, powerMonitor, screen, shell } from 'electron'
 import { join } from 'node:path'
 import { IPC, type MenuCommand, type StreamerCommand } from '@shared/ipc'
-import { type AppSettings, type LyricsQuery, type MediaQueueAction, type SleepTimer } from '@shared/model'
+import { type AppSettings, type LyricsQuery, type MediaQueueAction, type SleepTimer , type MediaInfoQuery } from '@shared/model'
 import {
   type ContentRef,
   type Playlist,
@@ -25,6 +25,7 @@ import {
 } from './app/tray'
 import { homeWorkArea, isOnScreen } from './app/windowPlacement'
 import * as mediaIndex from './media/mediaIndex'
+import { lookupMediaInfo } from './media/mediaInfo'
 import {
   checkUpdatesNow,
   checkUpdatesOnDemand,
@@ -472,6 +473,10 @@ function registerIpc(): void {
     presetSave(streamerHost(), serverUdn, objectId, slot)
   )
   ipcMain.handle(IPC.contentResolve, (_e, ref: ContentRef) => deviceManager.contentResolve(ref))
+  ipcMain.handle(IPC.mediaNodeInfo, (_e, query: MediaInfoQuery) => {
+    const conn = deviceManager.snapshot().connection
+    return lookupMediaInfo(conn.phase === 'connected' ? conn.host : null, query)
+  })
   ipcMain.handle(IPC.toggleMini, () => toggleMiniPlayer())
   // A named screen goes through sendMenuCommand, which already creates the
   // window if it's gone, waits for the load, restores/focuses it and then

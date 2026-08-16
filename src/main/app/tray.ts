@@ -445,8 +445,18 @@ export function notePanelActivationEnd(result: {
   }).show()
 }
 
-/** Dismiss-on-blur, and the three things that must not count as a dismissal. */
+/**
+ * Test-only: the harness's anatomy sweep drives the OPEN panel for a minute
+ * or more, and with dismiss = destroy (SHOW_ONCE) a stray blur — someone
+ * touching the Mac while the suite runs — would destroy the very page the
+ * sweep holds. Under TASTYTUNES_TRAY_TEST the hook can hold the panel open;
+ * production never sets it.
+ */
+let testHold = false
+
+/** Dismiss-on-blur, and the four things that must not count as a dismissal. */
 function onPanelBlur(): void {
+  if (testHold) return
   // DEVTOOLS STEAL FOCUS, so an unguarded blur-hide makes the panel impossible
   // to inspect — it vanishes the instant you open the inspector.
   if (panel && !panel.isDestroyed() && panel.webContents.isDevToolsOpened()) return
@@ -756,6 +766,8 @@ declare global {
         }
         /** Drive a blur without a real focus change, to test dismiss-on-blur. */
         blur(): boolean
+        /** Hold the open panel against blur for the duration of a sweep (test-only). */
+        hold(on: boolean): void
       }
     | undefined
 }
@@ -821,6 +833,9 @@ function installTestHooks(): void {
       if (!panelVisible()) return false
       onPanelBlur()
       return !panelVisible()
+    },
+    hold(on: boolean): void {
+      testHold = on
     }
   }
 }

@@ -594,6 +594,26 @@ export async function browseChildrenOf(
 }
 
 /**
+ * ONE object's own metadata (BrowseMetadata), parsed like everything else —
+ * the live fallback for the Info modal when a list holds a server + id the
+ * index doesn't (a Browse-only server before its build). Null on any miss.
+ */
+export async function browseMetadataNode(
+  host: string,
+  serverUdn: string,
+  objectId: string
+): Promise<MediaNode | null> {
+  try {
+    const entry = await entryFor(host, serverUdn)
+    const r = await soapBrowse(entry, objectId, 'BrowseMetadata', 0, 1)
+    if (!r) return null
+    return didlToNodes(r.didl)[0] ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
  * The server's SystemUpdateID — a MANDATORY ContentDirectory action, so even
  * search-less servers answer it. Bumps whenever the library changes; the one
  * cheap question that keeps the media index honest.

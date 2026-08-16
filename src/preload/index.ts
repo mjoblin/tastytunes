@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import type { MediaInfoQuery } from '@shared/model'
 import { IPC, type PushMessage, type StreamerCommand, type TastyTunesApi } from '@shared/ipc'
 import { type AppSettings, type LyricsQuery, type MediaQueueAction, type SleepTimer } from '@shared/model'
 import {
@@ -69,6 +70,7 @@ const api: TastyTunesApi = {
   mediaPresetSave: (serverUdn: string, objectId: string, slot: number) =>
     ipcRenderer.invoke(IPC.mediaPresetSave, serverUdn, objectId, slot),
   contentResolve: (ref: ContentRef) => ipcRenderer.invoke(IPC.contentResolve, ref),
+  mediaNodeInfo: (query: MediaInfoQuery) => ipcRenderer.invoke(IPC.mediaNodeInfo, query),
   mediaIndexRebuild: (serverUdn: string) => ipcRenderer.invoke(IPC.mediaIndexRebuild, serverUdn),
   radioSearch: (query: string) => ipcRenderer.invoke(IPC.radioSearch, query),
   radioTop: () => ipcRenderer.invoke(IPC.radioTop),

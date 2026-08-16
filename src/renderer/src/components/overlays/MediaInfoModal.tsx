@@ -66,7 +66,7 @@ const mono = (v: string | null | undefined): React.ReactNode =>
 export function MediaInfoModal({ target }: { target: MediaInfoTarget }): React.JSX.Element {
   const setMediaInfo = useStore((s) => s.setMediaInfo)
   const close = (): void => setMediaInfo(null)
-  const { node, tracks, serverName } = target
+  const { node, tracks, serverName, note } = target
   const kind = kindOf(node)
   const [copied, setCopied] = useState(false)
 
@@ -178,6 +178,11 @@ export function MediaInfoModal({ target }: { target: MediaInfoTarget }): React.J
         <CloseButton onClick={close} />
       </div>
 
+      {note && (
+        <div className="mt-3 text-[11.5px] text-faint" data-info-note>
+          {note}
+        </div>
+      )}
       <div className="mt-5 min-h-0 overflow-y-auto pr-1 space-y-5" data-info-body>
         <Section title="Identity" rows={identity} />
         {albumRows.length > 0 && <Section title="Album" rows={albumRows} />}

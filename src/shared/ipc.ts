@@ -64,8 +64,7 @@ import type {
   RecentTrack,
   SleepTimer,
   UpdateCheckResult,
-  UpdateState
-} from './model'
+  UpdateState, MediaInfoQuery, MediaInfoTarget } from './model'
 
 /** The one copy of the project URL — user agents, Help menu, release pages. */
 export const REPO_URL = 'https://github.com/mjoblin/tastytunes'
@@ -350,6 +349,11 @@ export interface TastyTunesApi {
   contentResolve(
     ref: ContentRef
   ): Promise<{ serverUdn: string; serverName: string; objectId: string } | null>
+  /** Everything the library knows about a thing a list holds only a ref to
+   *  (queue row, favorite, playlist item…): the index by id, then by content,
+   *  then a live BrowseMetadata when the server and id are known. Null when
+   *  nothing is found — the caller shows what it has. */
+  mediaNodeInfo(query: MediaInfoQuery): Promise<MediaInfoTarget | null>
   /** Station search against radio-browser.info (main process; name contains, by popularity). */
   /** Force a media-index (re)build for one server (also the only way to
    *  build one for a Browse-only server). */
@@ -414,6 +418,7 @@ export const IPC = {
   mediaQueueAdd: 'tt:mediaQueueAdd',
   mediaPresetSave: 'tt:mediaPresetSave',
   contentResolve: 'tt:contentResolve',
+  mediaNodeInfo: 'tt:mediaNodeInfo',
   mediaIndexRebuild: 'tt:mediaIndexRebuild',
   radioSearch: 'tt:radioSearch',
   radioTop: 'tt:radioTop',

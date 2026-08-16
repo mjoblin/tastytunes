@@ -1204,6 +1204,22 @@ export interface MediaInfoTarget {
   node: MediaNode
   tracks?: MediaNode[]
   serverName?: string | null
+  /** A caveat to show — e.g. the item wasn't found in any library index and this is only what the list knew. */
+  note?: string | null
+}
+
+/**
+ * What a MediaRef surface (queue, favorites, playlists, recents, search)
+ * can say about a thing when asking main to find its node: identity hints
+ * first (server + object id), then content (title / artist / album).
+ */
+export interface MediaInfoQuery {
+  kind: 'track' | 'album' | 'artist'
+  title: string
+  artist?: string | null
+  album?: string | null
+  serverUdn?: string | null
+  objectId?: string | null
 }
 
 /** One server's slice of a cross-server (all ready indexes) search. */

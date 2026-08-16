@@ -2,6 +2,7 @@ import { favoriteKey, type Favorite } from '@shared/model'
 import { useStore, type SearchBack } from '@/store'
 import { toggleFavorite } from '@/lib/favorites'
 import { refToFavorite, type MediaRef } from '@/lib/mediaRef'
+import { openInfoForRef } from '@/lib/mediaInfo'
 
 /**
  * THE menu contents for a piece of media — what RowMenu did for the menu
@@ -51,6 +52,18 @@ export interface MediaMenuCaps {
    * MediaRef-only surface (queue, favorites) leaves it out.
    */
   info?(): void
+}
+
+/**
+ * "Info…" is DERIVED from the ref, like the heart: every entity menu offers
+ * it, on every surface, without the surface knowing how (main looks the node
+ * up — see lib/mediaInfo). A surface that already holds the full node (the
+ * Library) passes `caps.info` and skips the lookup. Stations opt out.
+ */
+function infoItem(ref: MediaRef, caps: MediaMenuCaps): MediaMenuItem[] {
+  if (caps.info) return [{ label: 'Info…', run: caps.info }]
+  if (ref.kind === 'station') return []
+  return [{ label: 'Info…', run: () => void openInfoForRef(ref) }]
 }
 
 const pivotEntity = (ref: MediaRef): string =>
@@ -106,7 +119,7 @@ export function trackMenuItems(ref: MediaRef, caps: MediaMenuCaps = {}): MediaMe
     ...cap('Save to preset…', caps.saveToPreset),
     ...cap('Add to playlist…', caps.addToPlaylist),
     ...heartItem(ref, caps),
-    ...cap('Info…', caps.info),
+    ...infoItem(ref, caps),
     ...(caps.extra ?? [])
   ]
 }
@@ -123,7 +136,7 @@ export function albumMenuItems(ref: MediaRef, caps: MediaMenuCaps = {}): MediaMe
     ...cap('Save to preset…', caps.saveToPreset),
     ...cap('Add to playlist…', caps.addToPlaylist),
     ...heartItem(ref, caps),
-    ...cap('Info…', caps.info),
+    ...infoItem(ref, caps),
     ...(caps.extra ?? [])
   ]
 }
@@ -133,5 +146,5 @@ export function albumMenuItems(ref: MediaRef, caps: MediaMenuCaps = {}): MediaMe
  *  album/track identity. Thin, but it's the one cross-collection question an
  *  artist can answer, and any future artist verb has a home here. */
 export function artistMenuItems(ref: MediaRef, caps: MediaMenuCaps = {}): MediaMenuItem[] {
-  return [...pivotItem(ref, caps), ...cap('Info…', caps.info), ...(caps.extra ?? [])]
+  return [...pivotItem(ref, caps), ...infoItem(ref, caps), ...(caps.extra ?? [])]
 }
