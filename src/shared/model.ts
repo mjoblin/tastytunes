@@ -1039,6 +1039,62 @@ export function albumComposers(tracks: ReadonlyArray<Pick<MediaNode, 'composers'
   return same ? known[0].composers! : []
 }
 
+/**
+ * The tracks that belong to an album, from an index pool: same title on the
+ * same server, credited to the album's artist (trackInAlbumOf), and — when
+ * the pool holds TWIN EDITIONS (same title, same artist) — sharing the
+ * album's art. In album order. THE one derivation of "an album's tracks"
+ * that both the Info modal and MCP use; the Artists lens computes the same
+ * rule over its memoized map (S13/S16 pin it).
+ */
+export function albumTracksOf(
+  album: Pick<MediaNode, 'title' | 'artist' | 'artUrl'>,
+  pool: { albums: ReadonlyArray<Pick<MediaNode, 'title' | 'artist'>>; tracks: ReadonlyArray<MediaNode> }
+): MediaNode[] {
+  const title = album.title.trim().toLowerCase()
+  const owner = (album.artist ?? '').trim().toLowerCase()
+  const twins =
+    pool.albums.filter((a) => a.title.trim().toLowerCase() === title && (a.artist ?? '').trim().toLowerCase() === owner).length > 1
+  return pool.tracks
+    .filter(
+      (t) =>
+        (t.album ?? '').trim().toLowerCase() === title &&
+        trackInAlbumOf(t, album.artist ?? null) &&
+        (!twins || sameArt(t.artUrl, album.artUrl))
+    )
+    .sort(compareTrackOrder)
+}
+
+/** Everything an album's tracks add up to — the leaf's facts, the lens heading, the Info modal and MCP all read this. */
+export function albumSummary(
+  album: Pick<MediaNode, 'artist'>,
+  tracks: MediaNode[]
+): {
+  tracks: number
+  discs: number
+  runtimeSecs: number
+  sizeBytes: number
+  format: string | null
+  /** how many tracks differ from the format headline */
+  formatOdd: number
+  hires: boolean
+  composers: string[]
+  isCompilation: boolean
+} {
+  const fmt = albumFormat(tracks)
+  return {
+    tracks: tracks.length,
+    discs: discGroups(tracks).filter((g) => g.disc != null).length || (tracks.length > 0 ? 1 : 0),
+    runtimeSecs: tracks.reduce((a, t) => a + (t.durationSecs ?? 0), 0),
+    sizeBytes: tracks.reduce((a, t) => a + (t.format?.sizeBytes ?? 0), 0),
+    format: fmt.label,
+    formatOdd: fmt.notes.filter(Boolean).length,
+    hires: tracks.some((t) => (t.format?.bits ?? 0) > 16 || (t.format?.rate ?? 0) > 48000),
+    composers: albumComposers(tracks),
+    isCompilation: isCompilation(album, tracks)
+  }
+}
+
 /** 940 MB, 1.2 GB — for album/playlist size sums. */
 export function fmtBytes(n: number): string {
   if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toFixed(n >= 10 * 1024 ** 3 ? 0 : 1)} GB`

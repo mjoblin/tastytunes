@@ -14,7 +14,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { z, type ZodRawShape } from 'zod'
 import { type Snapshot } from '@shared/ipc'
-import { sleepTrackKey, type AppSettings, type ConnectionState, type McpSettings, type MediaNode, type MediaQueueAction, type Schedule, trackArtists, formatLabel } from '@shared/model'
+import { sleepTrackKey, type AppSettings, type ConnectionState, type McpSettings, type MediaNode, type MediaQueueAction, type Schedule, trackArtists, formatLabel, albumTracksOf, albumSummary, trackPosition } from '@shared/model'
 import { favoriteKey, type Favorite } from '@shared/model'
 import { MCP_CLUSTERS, mcpClusterEnabled } from '@shared/mcpCatalog'
 import { EQ_GAIN_MAX, EQ_GAIN_MIN, audioCaps, brightnessOptions, isRadioMetadata } from '@shared/smoip'
@@ -224,6 +224,26 @@ export class McpBridge {
       )
     }
     return snap as Snapshot & { connection: Extract<ConnectionState, { phase: 'connected' }> }
+  }
+
+  /**
+   * No ready index yet: kick the build the way listing servers would (the
+   * Library screen or list_media_servers), and say so. An agent whose first
+   * question is list_albums used to hit a dead end until something else
+   * happened to list the servers (2026-08-16); now the answer is "building —
+   * ask again in a moment", and it will be. Fire-and-forget; needs the
+   * streamer (the server list comes from it) — offline it just reports.
+   */
+  private kickIndex(): string {
+    const snap = this.dm.snapshot()
+    if (snap.connection.phase !== 'connected') {
+      return 'No library index is ready yet, and the streamer is not connected (the server list comes from it) — connect, or the user can build one in Settings → Libraries.'
+    }
+    const host = snap.connection.host
+    void refreshServers(host)
+      .then((servers) => indexEnsureFresh(host, servers))
+      .catch(() => {})
+    return 'No library index is ready yet — a build has been started (searchable servers index themselves in seconds; a Browse-only server needs rebuild_library_index). Ask again in a moment, or check list_media_servers.'
   }
 
   private toolImpls(): Record<string, ToolImpl> {
@@ -785,6 +805,13 @@ export class McpBridge {
           artist: z.string().optional().describe('Case-insensitive substring match on the album artist.'),
           genre: z.string().optional().describe("Case-insensitive genre, e.g. 'Rock' (results list each album's genres)."),
           decade: z.string().optional().describe("e.g. '1990s' (or just '1990')."),
+          kind: z
+            .enum(['all', 'albums', 'compilations'])
+            .optional()
+            .describe("Default 'all'. 'compilations' = various-artists albums (album artist 'Various Artists' or credited to no performer on it); 'albums' excludes them."),
+          hires: z.boolean().optional().describe('true = only albums with any track above 16-bit or 48 kHz.'),
+          format: z.string().optional().describe("Case-insensitive substring of the album's format headline or any track's, e.g. 'FLAC', '24/96', 'MP3'."),
+          composer: z.string().optional().describe('Case-insensitive substring match on any track\'s composers.'),
           server_udn: z.string().optional().describe('Limit to one server (see list_media_servers).'),
           sort: z
             .enum(['title', 'artist', 'year'])
@@ -801,7 +828,7 @@ export class McpBridge {
             return err(
               a.server_udn != null
                 ? `No ready index for server '${a.server_udn}'. Use list_media_servers.`
-                : 'No library index is ready yet — the user can build one in Settings → Libraries.'
+                : this.kickIndex()
             )
           }
           const artistNeedle = (a.artist as string | undefined)?.toLowerCase()
@@ -816,6 +843,38 @@ export class McpBridge {
             albums = albums.filter(
               (n) => n.year != null && String(Math.floor(Number(n.year) / 10) * 10) === decade
             )
+          // Each album's tracks, summed once (the same derivations the album
+          // leaf, the lens and the Info modal use — albumTracksOf/albumSummary):
+          // the filters below and the per-album fields both read this map.
+          const poolOf = new Map(groups.map((p) => [p.udn, p]))
+          const summaries = new Map<string, { tracks: MediaNode[]; sum: ReturnType<typeof albumSummary> }>()
+          const summaryFor = (n: MediaNode): { tracks: MediaNode[]; sum: ReturnType<typeof albumSummary> } => {
+            const key = `${n.serverUdn}|${n.id}`
+            let hit = summaries.get(key)
+            if (!hit) {
+              const pool = n.serverUdn ? poolOf.get(n.serverUdn) : undefined
+              const tracks = pool ? albumTracksOf(n, pool) : []
+              hit = { tracks, sum: albumSummary(n, tracks) }
+              summaries.set(key, hit)
+            }
+            return hit
+          }
+          const kind = (a.kind as string | undefined) ?? 'all'
+          if (kind === 'compilations') albums = albums.filter((n) => summaryFor(n).sum.isCompilation)
+          else if (kind === 'albums') albums = albums.filter((n) => !summaryFor(n).sum.isCompilation)
+          if (a.hires === true) albums = albums.filter((n) => summaryFor(n).sum.hires)
+          const formatNeedle = (a.format as string | undefined)?.toLowerCase()
+          if (formatNeedle != null)
+            albums = albums.filter((n) => {
+              const { tracks, sum } = summaryFor(n)
+              return (
+                (sum.format ?? '').toLowerCase().includes(formatNeedle) ||
+                tracks.some((t) => (formatLabel(t.format) ?? '').toLowerCase().includes(formatNeedle))
+              )
+            })
+          const composerNeedle = (a.composer as string | undefined)?.toLowerCase()
+          if (composerNeedle != null)
+            albums = albums.filter((n) => summaryFor(n).tracks.some((t) => (t.composers ?? []).some((c) => c.toLowerCase().includes(composerNeedle))))
           const sort = (a.sort as string | undefined) ?? 'title'
           albums.sort((x, y) => {
             if (sort === 'artist')
@@ -830,21 +889,39 @@ export class McpBridge {
             total: albums.length,
             offset,
             returned: page.length,
-            albums: page.map((n) => ({
-              server_udn: n.serverUdn,
-              server: n.serverName,
-              object_id: n.id,
-              title: n.title,
-              artist: n.artist,
-              year: n.year,
-              genres: n.genre ?? []
-            }))
+            albums: page.map((n) => {
+              const { sum } = summaryFor(n)
+              return {
+                server_udn: n.serverUdn,
+                server: n.serverName,
+                object_id: n.id,
+                title: n.title,
+                artist: n.artist,
+                year: n.year,
+                genres: n.genre ?? [],
+                // summed from the album's tracks (2026-08-16): what the app's
+                // album header shows
+                tracks: sum.tracks,
+                ...(sum.discs > 1 ? { discs: sum.discs } : {}),
+                runtime_seconds: sum.runtimeSecs,
+                ...(sum.sizeBytes > 0 ? { size_bytes: sum.sizeBytes } : {}),
+                ...(sum.format ? { format: sum.format } : {}),
+                ...(sum.formatOdd > 0 ? { format_tracks_differ: sum.formatOdd } : {}),
+                hires: sum.hires,
+                ...(sum.composers.length > 0 ? { composers: sum.composers } : {}),
+                is_compilation: sum.isCompilation
+              }
+            })
           })
         }
       },
       list_artists: {
         inputSchema: {
           query: z.string().optional().describe('Case-insensitive substring match on the artist name.'),
+          role: z
+            .enum(['performers', 'composers'])
+            .optional()
+            .describe("Default 'performers' (album artists and every performer, featured guests included). 'composers' lists who WROTE the tracks (upnp:artist role=Composer), with track and album counts."),
           server_udn: z.string().optional().describe('Limit to one server (see list_media_servers).'),
           sort: z
             .enum(['name', 'albums'])
@@ -860,7 +937,7 @@ export class McpBridge {
             return err(
               a.server_udn != null
                 ? `No ready index for server '${a.server_udn}'. Use list_media_servers.`
-                : 'No library index is ready yet — the user can build one in Settings → Libraries.'
+                : this.kickIndex()
             )
           }
           // Derive from the album/track pools (like the Artists lens): albums
@@ -873,10 +950,26 @@ export class McpBridge {
             cur[field]++
             byName.set(k, cur)
           }
-          for (const p of groups) {
-            for (const alb of p.albums) bump(alb.artist, 'albums')
-            // every PERFORMER, not the packed "A; B" string (featured tracks)
-            for (const t of p.tracks) for (const name of trackArtists(t)) bump(name, 'tracks')
+          const role = (a.role as string | undefined) ?? 'performers'
+          if (role === 'composers') {
+            // composers: tracks they wrote, and the distinct albums those sit on
+            const albumsOf = new Map<string, Set<string>>()
+            for (const p of groups)
+              for (const t of p.tracks)
+                for (const cname of t.composers ?? []) {
+                  bump(cname, 'tracks')
+                  const k = cname.trim().toLowerCase()
+                  const set = albumsOf.get(k) ?? new Set<string>()
+                  if (t.album) set.add(`${p.udn}|${t.album.toLowerCase()}`)
+                  albumsOf.set(k, set)
+                }
+            for (const [k, cur] of byName) cur.albums = albumsOf.get(k)?.size ?? 0
+          } else {
+            for (const p of groups) {
+              for (const alb of p.albums) bump(alb.artist, 'albums')
+              // every PERFORMER, not the packed "A; B" string (featured tracks)
+              for (const t of p.tracks) for (const name of trackArtists(t)) bump(name, 'tracks')
+            }
           }
           const needle = (a.query as string | undefined)?.toLowerCase()
           let artists = [...byName.values()]
@@ -891,6 +984,90 @@ export class McpBridge {
           const limit = (a.limit as number | undefined) ?? 100
           const page = artists.slice(offset, offset + limit)
           return ok({ total: artists.length, offset, returned: page.length, artists: page })
+        }
+      },
+      get_media_info: {
+        inputSchema: {
+          server_udn: z.string().describe('From search_library / list_albums / list_media_servers.'),
+          object_id: z.string().describe('The album, track or artist object id.')
+        },
+        // Everything the local index knows about one thing — the app's Info
+        // modal as a tool. Index-backed (no connected() gate); an object the
+        // index doesn't hold (a Browse-only server before its build, a plain
+        // folder) says so rather than guessing.
+        handler: (a) => {
+          const pool = indexPools().find((p) => p.udn === a.server_udn)
+          if (!pool) return err(indexPools().length === 0 ? this.kickIndex() : `No ready index for server '${a.server_udn}'. Use list_media_servers.`)
+          const id = a.object_id as string
+          const node = pool.tracks.find((n) => n.id === id) ?? pool.albums.find((n) => n.id === id) ?? pool.artists.find((n) => n.id === id)
+          if (!node) return err(`Object '${id}' is not in the index for '${pool.serverName}' — search_library or list_albums give indexed ids.`)
+          const kind = pool.tracks.includes(node) ? 'track' : pool.albums.includes(node) ? 'album' : 'artist'
+          const base = {
+            kind,
+            server_udn: pool.udn,
+            server: pool.serverName,
+            object_id: node.id,
+            parent_id: node.parentId,
+            upnp_class: node.upnpClass,
+            title: node.title,
+            ...(node.artist ? { artist: node.artist } : {}),
+            ...(node.year ? { year: node.year } : {}),
+            genres: node.genre ?? [],
+            art_url: node.artUrl
+          }
+          if (kind === 'track') {
+            const f = node.format
+            return ok({
+              ...base,
+              performers: trackArtists(node),
+              ...(node.albumArtist ? { album_artist: node.albumArtist } : {}),
+              ...(node.album ? { album: node.album } : {}),
+              ...(node.composers ? { composers: node.composers } : {}),
+              ...(node.trackNumber != null ? { track_number: trackPosition(node) } : {}),
+              ...(node.discNumber != null ? { disc_number: node.discNumber } : {}),
+              ...(node.discCount != null ? { disc_count: node.discCount } : {}),
+              duration_seconds: node.durationSecs,
+              ...(f
+                ? {
+                    format: formatLabel(f),
+                    codec: f.codec,
+                    ...(f.bits ? { bits_per_sample: f.bits } : {}),
+                    ...(f.rate ? { sample_rate_hz: f.rate } : {}),
+                    ...(f.kbps ? { bitrate_kbps: f.kbps } : {}),
+                    ...(f.channels ? { channels: f.channels } : {}),
+                    ...(f.sizeBytes ? { size_bytes: f.sizeBytes } : {})
+                  }
+                : {})
+            })
+          }
+          if (kind === 'album') {
+            const tracks = albumTracksOf(node, pool)
+            const sum = albumSummary(node, tracks)
+            return ok({
+              ...base,
+              tracks: sum.tracks,
+              discs: sum.discs,
+              runtime_seconds: sum.runtimeSecs,
+              ...(sum.sizeBytes > 0 ? { size_bytes: sum.sizeBytes } : {}),
+              ...(sum.format ? { format: sum.format } : {}),
+              ...(sum.formatOdd > 0 ? { format_tracks_differ: sum.formatOdd } : {}),
+              hires: sum.hires,
+              ...(sum.composers.length > 0 ? { composers: sum.composers } : {}),
+              is_compilation: sum.isCompilation,
+              track_list: tracks.map((t) => ({
+                object_id: t.id,
+                title: t.title,
+                ...(t.discNumber != null ? { disc: t.discNumber } : {}),
+                ...(t.trackNumber != null ? { track: trackPosition(t) } : {}),
+                artist: t.artist,
+                ...(t.artists ? { performers: t.artists } : {}),
+                ...(t.composers ? { composers: t.composers } : {}),
+                duration_seconds: t.durationSecs,
+                ...(t.format ? { format: formatLabel(t.format) } : {})
+              }))
+            })
+          }
+          return ok(base)
         }
       },
       play_media: {

@@ -232,19 +232,26 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         name: 'search_library',
         title: 'Search library',
         description:
-          "Search for albums, artists, and tracks across every searchable or index-ready media server at once (or one server_udn). Returns object ids for play_media, a TRUE total, and pages with limit/offset — page again rather than assuming the first page is everything. match: 'title' scopes to items whose own title contains the query."
+          "Search for albums, artists, and tracks across every searchable or index-ready media server at once (or one server_udn). Returns object ids for play_media, a TRUE total, and pages with limit/offset — page again rather than assuming the first page is everything. match: 'title' scopes to items whose own title contains the query. Composers are searchable too (\"bangalter\" finds the tracks he wrote); indexed tracks carry album_artist, performers, composers and format when the server sends them."
       },
       {
         name: 'list_albums',
         title: 'List albums',
         description:
-          'Browse albums from the local library index — filter by artist, genre, or decade; sort by title, artist, or year; page with limit/offset. Returns object ids for play_media. Needs a ready index (see list_media_servers).'
+          "Browse albums from the local library index — filter by artist, genre, decade, kind (albums vs compilations), hires, format (e.g. '24/96', 'MP3') or composer; sort by title, artist, or year; page with limit/offset. Each album comes with what its tracks add up to: track count, discs, runtime, size, format headline (and how many tracks differ), hires, composers (when every track agrees), is_compilation. Returns object ids for play_media / get_media_info. Needs a ready index (see list_media_servers)."
+
       },
       {
         name: 'list_artists',
         title: 'List artists',
         description:
-          'Artists from the local library index with album and track counts — filter by name, sort by name or album count, page with limit/offset. Needs a ready index (see list_media_servers).'
+          "Artists from the local library index with album and track counts — filter by name, sort by name or album count, page with limit/offset. role 'performers' (default) counts album artists and every performer, featured guests included; role 'composers' lists who wrote the tracks. Needs a ready index (see list_media_servers)."
+      },
+      {
+        name: 'get_media_info',
+        title: 'Get media info',
+        description:
+          "Everything the local index knows about one album, track or artist by server_udn + object id — the app's Info panel as a tool: performers, album artist, composers, year, genres, track/disc numbers, duration, format (codec, bit depth, sample rate, bitrate, size), server and object ids, art URL. An album also gets its tracks summed (count, discs, runtime, size, format, composers, compilation) and its full track list. Read-only, index-backed."
       },
       {
         name: 'play_media',

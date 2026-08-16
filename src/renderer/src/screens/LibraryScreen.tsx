@@ -16,7 +16,7 @@ import {
   Users,
   X
 } from 'lucide-react'
-import { presetVolumeKey, type AppSettings, type MediaIndexPools, type MediaNode, type MediaQueueAction, type MediaSearchAllGroup, type MediaServerInfo, type ScreenLayout, compareTrackOrder, discGroups, albumFormat, fmtBytes, albumComposers, performerLine, trackInAlbumOf, sameArt } from '@shared/model'
+import { presetVolumeKey, type AppSettings, type MediaIndexPools, type MediaNode, type MediaQueueAction, type MediaSearchAllGroup, type MediaServerInfo, type ScreenLayout, compareTrackOrder, discGroups, albumFormat, fmtBytes, albumComposers, performerLine, albumTracksOf } from '@shared/model'
 import { favoriteKey, type Favorite, type FavoriteMedia } from '@shared/model'
 import type { QueueListItem } from '@shared/smoip'
 import { tt } from '@/api'
@@ -1055,11 +1055,7 @@ export function LibraryScreen(): React.JSX.Element {
     if (albumNode && node.id === albumNode.id) return allTracks
     if (!lensPools || !node.serverUdn) return undefined
     const pool = lensPools.find((g) => g.udn === node.serverUdn)
-    if (!pool) return undefined
-    const twin = pool.albums.filter((a) => a.title.toLowerCase() === node.title.toLowerCase() && (a.artist ?? '').toLowerCase() === (node.artist ?? '').toLowerCase()).length > 1
-    return pool.tracks
-      .filter((t) => (t.album ?? '').toLowerCase() === node.title.toLowerCase() && trackInAlbumOf(t, node.artist) && (!twin || sameArt(t.artUrl, node.artUrl)))
-      .sort(compareTrackOrder)
+    return pool ? albumTracksOf(node, pool) : undefined
   }
   const [presetPicker, setPresetPicker] = useState<{ node: MediaNode; x: number; y: number } | null>(
     null
