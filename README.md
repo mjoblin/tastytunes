@@ -152,12 +152,15 @@ from another machine.
 - Signal-quality lamp (amber for hi-res lossless, green for lossless, gray for lossy), with the full signal chain in a popover
 - Internet-radio display, track *x* of *y*, and the current lyric line under the track details
 - Display mode (<kbd>F</kbd>): chrome-free full screen for a desk or shelf display
+- Info: what the streamer reports about the current stream (codec, sample rate, bit depth, bitrate, queue position), for any source: local media, radio, AirPlay
 
 ### Library
 
 - Browse every UPnP media server and the streamer's own USB storage
 - A local, rebuildable index: search as you type, and <kbd>⌘F</kbd> searches every library at once, grouped by server
-- Artists & Albums views pooling all sources into one collection, with genre and decade filters and sorts
+- Artists & Albums views pooling all sources into one collection, with genre, decade, and albums ⇄ compilations filters and sorts
+- Albums read whole: featured guests stay in the album, compilations sit under Various Artists, multi-disc sets show disc dividers; format and size in every album header
+- Info on any album, track, or artist: performers, album artist, composers, disc and track numbers, format, size, and source ids, as the media server reports them; copy as JSON
 - Play now, play next, append, or replace; a bare click never adds a track that's already queued
 - Save an album, a track, or the whole queue to one of the streamer's preset slots
 - Browser-style navigation: <kbd>⌘←</kbd>/<kbd>⌘→</kbd>, Backspace, mouse back button; per-folder filters and scroll memory
