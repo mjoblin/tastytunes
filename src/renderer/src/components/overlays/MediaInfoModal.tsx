@@ -63,6 +63,38 @@ function Section({ title, rows }: { title: string; rows: Row[] }): React.JSX.Ele
 const mono = (v: string | null | undefined): React.ReactNode =>
   v ? <span className="font-mono text-[11px] text-dim break-all">{v}</span> : null
 
+/**
+ * A mono value with a copy affordance — the URL or id someone pastes into a
+ * bug report, an agent prompt, a browser (user ask, 2026-08-16). The app
+ * doesn't allow free text selection, on purpose; this is the deliberate
+ * exception, one value at a time. Feedback is in place (the icon becomes a
+ * check for a beat) — a toast would double-feedback something under the
+ * cursor.
+ */
+function CopyableMono({ value, label }: { value: string; label: string }): React.JSX.Element {
+  const [done, setDone] = useState(false)
+  return (
+    <span className="inline-flex items-center gap-2 min-w-0 max-w-full">
+      <span className="font-mono text-[11px] text-dim break-all">{value}</span>
+      <button
+        data-tip={done ? 'Copied' : `Copy ${label}`}
+        aria-label={`Copy ${label}`}
+        data-info-copy-value={label}
+        onClick={(e) => {
+          e.stopPropagation()
+          void navigator.clipboard.writeText(value).then(() => {
+            setDone(true)
+            setTimeout(() => setDone(false), 1500)
+          })
+        }}
+        className="tip-bottom shrink-0 p-1 rounded text-faint hover:text-ink hover:bg-veil2"
+      >
+        {done ? <Check size={11} /> : <Copy size={11} />}
+      </button>
+    </span>
+  )
+}
+
 export function MediaInfoModal({ target }: { target: MediaInfoTarget }): React.JSX.Element {
   const setMediaInfo = useStore((s) => s.setMediaInfo)
   const close = (): void => setMediaInfo(null)
@@ -209,10 +241,10 @@ export function MediaInfoModal({ target }: { target: MediaInfoTarget }): React.J
   // ---- source
   const source: Row[] = [
     ['Server', serverName ?? node.serverName ?? null],
-    ['Object id', node.id ? mono(node.id) : null],
+    ['Object id', node.id ? <CopyableMono value={node.id} label="object id" /> : null],
     ['Parent id', mono(node.parentId)],
     ['Class', node.id ? mono(node.upnpClass) : null],
-    ['Art', mono(node.artUrl)]
+    ['Art', node.artUrl ? <CopyableMono value={node.artUrl} label="art URL" /> : null]
   ]
 
   const Icon = kind === 'track' ? Music2 : kind === 'artist' ? User : Disc3
