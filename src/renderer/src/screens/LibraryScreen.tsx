@@ -16,7 +16,7 @@ import {
   Users,
   X
 } from 'lucide-react'
-import { presetVolumeKey, type AppSettings, type MediaIndexPools, type MediaNode, type MediaQueueAction, type MediaSearchAllGroup, type MediaServerInfo, type ScreenLayout, compareTrackOrder, discGroups, albumFormat, fmtBytes, albumComposers, performerLine } from '@shared/model'
+import { presetVolumeKey, type AppSettings, type MediaIndexPools, type MediaNode, type MediaQueueAction, type MediaSearchAllGroup, type MediaServerInfo, type ScreenLayout, compareTrackOrder, discGroups, albumFormat, fmtBytes, albumComposers, performerLine, trackInAlbumOf, sameArt } from '@shared/model'
 import { favoriteKey, type Favorite, type FavoriteMedia } from '@shared/model'
 import type { QueueListItem } from '@shared/smoip'
 import { tt } from '@/api'
@@ -1045,6 +1045,22 @@ export function LibraryScreen(): React.JSX.Element {
   // ------------------------------------------------------------------ menus
 
   const [menu, setMenu] = useState<{ node: MediaNode; x: number; y: number } | null>(null)
+  const setMediaInfo = useStore((s) => s.setMediaInfo)
+  // The Info modal wants an album's tracks summed: the browsed album's own
+  // listing when the node IS the open album; otherwise the lens's index
+  // (same server, same title, album artist / performers, and — when twin
+  // editions exist — the same art), i.e. exactly what the lens itself lists.
+  const tracksForInfo = (node: MediaNode): MediaNode[] | undefined => {
+    if (!node.isContainer) return undefined
+    if (albumNode && node.id === albumNode.id) return allTracks
+    if (!lensPools || !node.serverUdn) return undefined
+    const pool = lensPools.find((g) => g.udn === node.serverUdn)
+    if (!pool) return undefined
+    const twin = pool.albums.filter((a) => a.title.toLowerCase() === node.title.toLowerCase() && (a.artist ?? '').toLowerCase() === (node.artist ?? '').toLowerCase()).length > 1
+    return pool.tracks
+      .filter((t) => (t.album ?? '').toLowerCase() === node.title.toLowerCase() && trackInAlbumOf(t, node.artist) && (!twin || sameArt(t.artUrl, node.artUrl)))
+      .sort(compareTrackOrder)
+  }
   const [presetPicker, setPresetPicker] = useState<{ node: MediaNode; x: number; y: number } | null>(
     null
   )
@@ -2137,6 +2153,14 @@ export function LibraryScreen(): React.JSX.Element {
           onSavePreset={() => {
             setPresetPicker({ node: menu.node, x: menu.x, y: menu.y })
             setMenu(null)
+          }}
+          onInfo={() => {
+            setMenu(null)
+            setMediaInfo({
+              node: menu.node,
+              tracks: tracksForInfo(menu.node),
+              serverName: menu.node.serverName ?? server?.name ?? null
+            })
           }}
           onAddToPlaylist={
             !menu.node.isContainer || isAlbumClass(menu.node.upnpClass)

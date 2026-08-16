@@ -1137,6 +1137,19 @@ export function sameArt(a: string | null | undefined, b: string | null | undefin
   return a.split('?')[0] === b.split('?')[0]
 }
 
+/**
+ * What the Info modal is looking at: a node, plus — for an album — the tracks
+ * the caller already knows belong to it (the album leaf's listing, or the
+ * lens's index-matched tracks), so runtime/size/format/composers can be
+ * summed without a lookup. `serverName` names the source when the node
+ * itself isn't stamped (screen-scoped browsing).
+ */
+export interface MediaInfoTarget {
+  node: MediaNode
+  tracks?: MediaNode[]
+  serverName?: string | null
+}
+
 /** One server's slice of a cross-server (all ready indexes) search. */
 export interface MediaSearchAllGroup {
   udn: string

@@ -27,7 +27,8 @@ export function ItemMenu({
   goToAlbum,
   goToArtist,
   searchFrom,
-  favorite
+  favorite,
+  onInfo
 }: {
   menu: { node: MediaNode; x: number; y: number }
   onClose(): void
@@ -44,6 +45,8 @@ export function ItemMenu({
   /** Overrides the builders' derived heart (the library stores richer
    *  favorites — titlePath from the crumbs). */
   favorite?: { active: boolean; toggle(): void }
+  /** Open the Info modal on this node (every entity menu offers it). */
+  onInfo?(): void
 }): React.JSX.Element {
   const { node } = menu
   // The item lists come from the per-entity builders (lib/mediaMenus) — the
@@ -66,7 +69,8 @@ export function ItemMenu({
     saveToPreset: onSavePreset,
     addToPlaylist: onAddToPlaylist,
     heart: favorite,
-    searchFrom
+    searchFrom,
+    info: onInfo
   }
   const items: MediaMenuItem[] =
     node.isContainer && isArtistClass(node.upnpClass)
@@ -77,7 +81,8 @@ export function ItemMenu({
             { label: 'Play next', run: () => onAction('PLAY_NEXT') },
             { label: 'Add to end of queue', run: () => onAction('APPEND') },
             { label: 'Replace queue', run: () => onAction('REPLACE') },
-            { label: 'Save to preset…', run: onSavePreset }
+            { label: 'Save to preset…', run: onSavePreset },
+            ...(onInfo ? [{ label: 'Info…', run: onInfo }] : [])
           ]
         : node.isContainer
           ? albumMenuItems(ref, caps)

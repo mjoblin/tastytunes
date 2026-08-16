@@ -16,6 +16,7 @@ import { DiagnosticsDrawer } from '@/components/overlays/DiagnosticsDrawer'
 import { ShortcutsOverlay } from '@/components/overlays/ShortcutsOverlay'
 import { CommandPalette } from '@/components/overlays/CommandPalette'
 import { InfoModal } from '@/components/overlays/InfoModal'
+import { MediaInfoModal } from '@/components/overlays/MediaInfoModal'
 import { DisplayMode } from '@/components/playback/DisplayMode'
 import { NowPlayingScreen } from '@/screens/NowPlayingScreen'
 import { QueueScreen } from '@/screens/QueueScreen'
@@ -45,6 +46,7 @@ export default function App(): React.JSX.Element {
   const diagnosticsOpen = useStore((s) => s.diagnosticsOpen)
   const shortcutsOpen = useStore((s) => s.shortcutsOpen)
   const infoOpen = useStore((s) => s.infoOpen)
+  const mediaInfo = useStore((s) => s.mediaInfo)
   const paletteOpen = useStore((s) => s.paletteOpen)
   const displayMode = useStore((s) => s.displayMode)
   const setDisplayMode = useStore((s) => s.setDisplayMode)
@@ -161,6 +163,7 @@ export default function App(): React.JSX.Element {
         {shortcutsOpen && <ShortcutsOverlay />}
         {paletteOpen && <CommandPalette />}
         {infoOpen && <InfoModal />}
+        {mediaInfo && <MediaInfoModal target={mediaInfo} />}
       </div>
     </div>
   )

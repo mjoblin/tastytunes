@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { MenuCommand, PushMessage, Snapshot } from '@shared/ipc'
 import type { AppSettings, ConnectionState, DiscoveredDevice, FirmwareStatus, FrameEntry, LogEntry, McpStatus, MediaIndexStatus, MissedSchedule, NetRequestEntry, UpdateState, SleepTimer } from '@shared/model'
-import type { Favorite, RecentTrack, Playlist, PlaylistActivation } from '@shared/model'
+import type { Favorite, RecentTrack, Playlist, PlaylistActivation, MediaInfoTarget } from '@shared/model'
 import type {
   Presets,
   QueueList,
@@ -166,6 +166,8 @@ interface TTState {
   diagnosticsOpen: boolean
   shortcutsOpen: boolean
   infoOpen: boolean
+  /** The media Info modal's subject; null = closed. */
+  mediaInfo: MediaInfoTarget | null
   paletteOpen: boolean
   displayMode: boolean
   /** Lyrics drawer on the Now Playing screen (ephemeral, not persisted). */
@@ -275,6 +277,7 @@ interface TTState {
   setDiagnosticsOpen(open: boolean): void
   setShortcutsOpen(open: boolean): void
   setInfoOpen(open: boolean): void
+  setMediaInfo(target: MediaInfoTarget | null): void
   setPaletteOpen(open: boolean): void
   setDisplayMode(on: boolean): void
   setLyricsOpen(open: boolean): void
@@ -329,6 +332,7 @@ export const useStore = create<TTState>((set, get) => ({
   diagnosticsOpen: false,
   shortcutsOpen: false,
   infoOpen: false,
+  mediaInfo: null,
   paletteOpen: false,
   displayMode: false,
   lyricsOpen: false,
@@ -417,6 +421,7 @@ export const useStore = create<TTState>((set, get) => ({
   setDiagnosticsOpen: (diagnosticsOpen) => set({ diagnosticsOpen }),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   setInfoOpen: (infoOpen) => set({ infoOpen }),
+  setMediaInfo: (mediaInfo) => set({ mediaInfo }),
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
   setDisplayMode: (displayMode) => set({ displayMode }),
   // The two Now Playing drawers are mutually exclusive — opening one closes

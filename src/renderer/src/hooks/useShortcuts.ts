@@ -120,6 +120,7 @@ export function useShortcuts(opts?: { transportOnly?: boolean }): void {
         // Palette first: normally its input handles Escape, but if focus has
         // strayed the cascade must not toggle overlays underneath it.
         if (s.paletteOpen) s.setPaletteOpen(false)
+        else if (s.mediaInfo) s.setMediaInfo(null)
         else if (s.shortcutsOpen) s.setShortcutsOpen(false)
         else if (s.infoOpen) s.setInfoOpen(false)
         else if (s.lyricsOpen) s.setLyricsOpen(false)

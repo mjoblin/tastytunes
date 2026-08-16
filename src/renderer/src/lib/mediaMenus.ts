@@ -45,6 +45,12 @@ export interface MediaMenuCaps {
   searchFrom?: SearchBack
   /** Local verbs, appended last — Remove from queue, delete, unheart… */
   extra?: MediaMenuItem[]
+  /**
+   * Open the Info modal on this entity — everything the DIDL said about it
+   * (2026-08-16). Only surfaces holding a real MediaNode can offer it; a
+   * MediaRef-only surface (queue, favorites) leaves it out.
+   */
+  info?(): void
 }
 
 const pivotEntity = (ref: MediaRef): string =>
@@ -100,6 +106,7 @@ export function trackMenuItems(ref: MediaRef, caps: MediaMenuCaps = {}): MediaMe
     ...cap('Save to preset…', caps.saveToPreset),
     ...cap('Add to playlist…', caps.addToPlaylist),
     ...heartItem(ref, caps),
+    ...cap('Info…', caps.info),
     ...(caps.extra ?? [])
   ]
 }
@@ -116,6 +123,7 @@ export function albumMenuItems(ref: MediaRef, caps: MediaMenuCaps = {}): MediaMe
     ...cap('Save to preset…', caps.saveToPreset),
     ...cap('Add to playlist…', caps.addToPlaylist),
     ...heartItem(ref, caps),
+    ...cap('Info…', caps.info),
     ...(caps.extra ?? [])
   ]
 }
@@ -125,5 +133,5 @@ export function albumMenuItems(ref: MediaRef, caps: MediaMenuCaps = {}): MediaMe
  *  album/track identity. Thin, but it's the one cross-collection question an
  *  artist can answer, and any future artist verb has a home here. */
 export function artistMenuItems(ref: MediaRef, caps: MediaMenuCaps = {}): MediaMenuItem[] {
-  return [...pivotItem(ref, caps), ...(caps.extra ?? [])]
+  return [...pivotItem(ref, caps), ...cap('Info…', caps.info), ...(caps.extra ?? [])]
 }
