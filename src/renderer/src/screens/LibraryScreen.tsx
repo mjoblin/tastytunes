@@ -1861,12 +1861,16 @@ export function LibraryScreen(): React.JSX.Element {
                 </div>
                 {albumArtist && <div className="text-[14px] text-dim truncate">{albumArtist}</div>}
               </div>
-              {albumFacts && <div className="text-[12.5px] text-faint">{albumFacts}</div>}
-              {albumComposerLine && (
-                <div className="text-[12.5px] text-faint" data-album-composers>
-                  {albumComposerLine}
-                </div>
-              )}
+              {/* facts + composers are one thought too, set tight (the
+                  composer line is only there when every track agrees) */}
+              <div className="space-y-0.5">
+                {albumFacts && <div className="text-[12.5px] text-faint">{albumFacts}</div>}
+                {albumComposerLine && (
+                  <div className="text-[12.5px] text-faint" data-album-composers>
+                    {albumComposerLine}
+                  </div>
+                )}
+              </div>
               <div className="flex items-center gap-2 pt-2">
                 <button
                   data-tip="Replaces the queue"
