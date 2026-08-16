@@ -1849,12 +1849,15 @@ export function LibraryScreen(): React.JSX.Element {
               />
             </div>
             <div className="min-w-0 pt-1 space-y-1.5">
-              <div className="font-display font-bold text-[24px] tracking-tight leading-tight">
-                {albumNode.title}
+              {/* title + artist are one thought — set tight; the facts keep
+                  the block's own rhythm below them */}
+              <div className="space-y-0.5">
+                <div className="font-display font-bold text-[24px] tracking-tight leading-tight">
+                  {albumNode.title}
+                </div>
+                {albumArtist && <div className="text-[14px] text-dim truncate">{albumArtist}</div>}
               </div>
-              {albumArtist && <div className="text-[14px] text-dim truncate">{albumArtist}</div>}
-              {/* title + artist are one thought; the facts sit a step apart */}
-              {albumFacts && <div className="text-[12.5px] text-faint pt-2">{albumFacts}</div>}
+              {albumFacts && <div className="text-[12.5px] text-faint">{albumFacts}</div>}
               <div className="flex items-center gap-2 pt-2">
                 <button
                   data-tip="Replaces the queue"

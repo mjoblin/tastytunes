@@ -37,6 +37,9 @@ interface StoredIndex {
   tracks: MediaNode[]
 }
 
+// v7: format parse revised (m4a ALAC-vs-AAC by file bitrate, lossy kbps from
+//     size ÷ duration) — the SAME parser change without a bump left the lens
+//     (index) and the album leaf (live) disagreeing on one album (2026-08-16).
 // v6: format (codec/bits/rate/kbps/size from the primary <res>) — 2026-08-16.
 // v5: discNumber/discCount (upnp:originalDiscNumber/Count) — multi-disc
 // order and within-disc positions (2026-08-15, same day as v4).
@@ -46,7 +49,7 @@ interface StoredIndex {
 // Asset tagging). v2 added upnp:genre. A bump discards stored indexes
 // wholesale; rebuildHints below keeps that from costing Browse-only
 // servers their Build click.
-const VERSION = 6
+const VERSION = 7
 const PAGE = 500
 const MAX_TRACKS = 50_000
 const MAX_CONTAINERS = 10_000

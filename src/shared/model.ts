@@ -966,16 +966,13 @@ export function albumFormat(tracks: ReadonlyArray<Pick<MediaNode, 'format'>>): {
   if (counts.size === 0) return { label: null, notes: labels.map(() => null) }
   const [top, n] = [...counts.entries()].sort((x, y) => y[1] - x[1])[0]
   const known = labels.filter(Boolean).length
-  // A headline with chips is for the ODD ONE OUT — at most one track in five
-  // (one, on a short album). More than that and the album is simply mixed:
-  // one codec at several rates reads "FLAC · mixed", several codecs "mixed
-  // formats", and no row is singled out (a 12-track album with 5 chips is
-  // noise, not information — Manila Killa's Dusk, 2026-08-16).
-  const odd = known - n
-  if (counts.size > 1 && odd > Math.max(1, Math.floor(known / 5))) {
-    const codecs = new Set(tracks.map((t) => t.format?.codec).filter(Boolean))
-    return { label: codecs.size === 1 ? `${[...codecs][0]} · mixed` : 'mixed formats', notes: labels.map(() => null) }
-  }
+  // THE PREDOMINANT FORMAT HEADLINES when at least half the tracks share it,
+  // and every other track says what IT is; with no predominant format the
+  // headline is "mixed formats" and every track says. The user's ruling
+  // (2026-08-16, after a stricter odd-one-out cut hid information they
+  // wanted): the point of the row notes is to SEE the exceptions, however
+  // many there are.
+  if (counts.size > 1 && n * 2 < known) return { label: 'mixed formats', notes: labels.map((l) => l ?? null) }
   return { label: top, notes: labels.map((l) => (l && l !== top ? l : null)) }
 }
 

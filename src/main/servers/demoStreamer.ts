@@ -385,7 +385,8 @@ function buildDemo(host: string): {
     track: (n: number) => ({
       ...trackMeta(n),
       ...(i === 34 ? { disc: n <= 2 ? 1 : 2, discCount: 2, trackNo: (n <= 2 ? 100 : 200) + ((n - 1) % 2) + 1 } : {}),
-      // disc 2 is m4a: track 3 AAC, track 4 ALAC → the album reads "mixed formats"
+      // four formats across four tracks (16/44.1, 24/96, AAC, ALAC): "mixed formats", every row says
+      ...(i === 34 && n === 2 ? { hires: true } : {}),
       ...(i === 34 && n === 3 ? { aac: true } : {}),
       ...(i === 34 && n === 4 ? { alac: true } : {}),
       title: `Synth ${i + 1}.${n}`,
