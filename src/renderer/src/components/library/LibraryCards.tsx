@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import { Disc3, Folder, Heart, MoreHorizontal, Play } from 'lucide-react'
-import type { MediaNode } from '@shared/model'
+import { trackPosition, type MediaNode } from '@shared/model'
 import { cx } from '@/lib/format'
 import { isAlbumClass, isArtistClass, isMutedArt } from '@/lib/media'
 import { RowAction } from '@/components/media/RowAction'
@@ -319,7 +319,7 @@ export function TrackRow({
     >
       {/* left-justified: numbers sit flush with the header/art above */}
       <span className="font-mono text-[10.5px] text-faint tabular-nums">
-        {isCurrent ? <Eqbars /> : (node.trackNumber ?? '')}
+        {isCurrent ? <Eqbars /> : (trackPosition(node) ?? '')}
       </span>
       {showArt && <MediaArt src={node.artUrl} kind="track" />}
       <div className="min-w-0">

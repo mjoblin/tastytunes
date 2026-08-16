@@ -287,6 +287,14 @@ function didlToNodes(didl: string): MediaNode[] {
       album: text(raw.album),
       year: text(raw.date)?.slice(0, 4) ?? null,
       trackNumber: raw.originalTrackNumber != null ? Number(text(raw.originalTrackNumber)) : null,
+      // multi-disc: Asset sends both, and packs disc×100+track into the
+      // track number besides — decoded by trackPosition(), never here.
+      ...(raw.originalDiscNumber != null && Number.isFinite(Number(text(raw.originalDiscNumber)))
+        ? { discNumber: Number(text(raw.originalDiscNumber)) }
+        : {}),
+      ...(raw.originalDiscCount != null && Number.isFinite(Number(text(raw.originalDiscCount)))
+        ? { discCount: Number(text(raw.originalDiscCount)) }
+        : {}),
       durationSecs: res ? parseDuration(text(res['@_duration'])) : null
     }
   }

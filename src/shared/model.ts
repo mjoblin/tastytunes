@@ -882,6 +882,13 @@ export interface MediaNode {
   trackNumber: number | null
   durationSecs: number | null
   /**
+   * upnp:originalDiscNumber / originalDiscCount, when the server sends them
+   * (Asset does; it ALSO packs disc×100+track into originalTrackNumber — 212
+   * for disc 2 track 12 — so read positions through trackPosition()).
+   */
+  discNumber?: number
+  discCount?: number
+  /**
    * upnp:genre values, when the server sends any (multi-valued — real tags
    * repeat the element). Raw tagger data: case-normalize before faceting.
    * Absent (not empty) when the server offers none.
@@ -937,6 +944,53 @@ export function trackInAlbumOf(
   const names = trackArtists(n)
   if (names.length === 0) return true
   return names.some((a) => a.trim().toLowerCase() === want)
+}
+
+/**
+ * The track's position WITHIN ITS DISC — the number a row should show. Asset
+ * packs disc×100+track into originalTrackNumber for multi-disc albums (live:
+ * 113 = disc 1 track 13, 212 = disc 2 track 12); when the disc number agrees
+ * with that packing the hundreds are the disc, not the track. Servers that
+ * send a plain track number alongside the disc are returned as-is.
+ */
+export function trackPosition(n: Pick<MediaNode, 'trackNumber' | 'discNumber'>): number | null {
+  const t = n.trackNumber
+  if (t == null) return null
+  if (n.discNumber != null && t >= 100 && Math.floor(t / 100) === n.discNumber) return t % 100
+  return t
+}
+
+/**
+ * Album order: disc, then position. Tracks without a disc sort as disc 1;
+ * without a position they keep their listing order after the numbered ones.
+ */
+export function compareTrackOrder(
+  a: Pick<MediaNode, 'trackNumber' | 'discNumber'>,
+  b: Pick<MediaNode, 'trackNumber' | 'discNumber'>
+): number {
+  const da = a.discNumber ?? 1
+  const db = b.discNumber ?? 1
+  if (da !== db) return da - db
+  const pa = trackPosition(a)
+  const pb = trackPosition(b)
+  if (pa == null && pb == null) return 0
+  if (pa == null) return 1
+  if (pb == null) return -1
+  return pa - pb
+}
+
+/** Consecutive runs of one disc, for the quiet "Disc N" dividers — only when the list actually spans discs. */
+export function discGroups<T extends Pick<MediaNode, 'discNumber'>>(tracks: T[]): { disc: number | null; tracks: T[] }[] {
+  const discs = new Set(tracks.map((t) => t.discNumber ?? null))
+  if (discs.size < 2) return [{ disc: null, tracks }]
+  const out: { disc: number | null; tracks: T[] }[] = []
+  for (const t of tracks) {
+    const d = t.discNumber ?? null
+    const last = out[out.length - 1]
+    if (last && last.disc === d) last.tracks.push(t)
+    else out.push({ disc: d, tracks: [t] })
+  }
+  return out
 }
 
 /** One server's slice of a cross-server (all ready indexes) search. */

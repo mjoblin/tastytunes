@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowUpRight, ChevronDown, MoreHorizontal } from 'lucide-react'
-import { trackArtists, trackInAlbumOf, type MediaIndexPools, type MediaNode } from '@shared/model'
+import { compareTrackOrder, discGroups, trackArtists, trackInAlbumOf, type MediaIndexPools, type MediaNode } from '@shared/model'
 import { cx, fmtTime, matchesFilter } from '@/lib/format'
 import { useStore } from '@/store'
 import { scrollToVisible } from '@/lib/scroll'
@@ -516,7 +516,7 @@ export function ArtistsLens({
         else m.set(k, [t])
       }
     }
-    for (const list of m.values()) list.sort((a, b) => (a.trackNumber ?? 0) - (b.trackNumber ?? 0))
+    for (const list of m.values()) list.sort(compareTrackOrder) // disc, then position
     return m
   }, [pools])
 
@@ -807,22 +807,34 @@ export function ArtistsLens({
           data-lens-tracks-col
         >
           {albumTracks || looseTracks ? (
-            <div className="divide-y divide-edge/50">
-              {(albumTracks ?? looseTracks ?? []).map((t) => (
-                <TrackRow
-                  key={nodeKey(t)}
-                  node={t}
-                  showArt={looseTracks != null}
-                  isCurrent={actions.isCurrentTrack(t)}
-                  queued={actions.trackQueued(t)}
-                  menuOpen={actions.menuNodeId === t.id}
-                  favorited={actions.nodeFavorited(t)}
-                  onHeart={() => actions.heartNode(t)}
-                  onPlayNow={(el) => actions.playTrack(t, el)}
-                  onMenu={(e) => actions.openMenu(t, e)}
-                />
-              ))}
-            </div>
+            // Multi-disc albums get a quiet "Disc N" divider per disc — only
+            // when the list actually spans discs (discGroups is one group
+            // otherwise, and the divider never renders).
+            discGroups(albumTracks ?? looseTracks ?? []).map((g, gi) => (
+              <div key={g.disc ?? `d${gi}`}>
+                {g.disc != null && (
+                  <div className="microlabel px-1 pt-3 pb-1" data-disc-divider>
+                    Disc {g.disc}
+                  </div>
+                )}
+                <div className="divide-y divide-edge/50">
+                  {g.tracks.map((t) => (
+                    <TrackRow
+                      key={nodeKey(t)}
+                      node={t}
+                      showArt={looseTracks != null}
+                      isCurrent={actions.isCurrentTrack(t)}
+                      queued={actions.trackQueued(t)}
+                      menuOpen={actions.menuNodeId === t.id}
+                      favorited={actions.nodeFavorited(t)}
+                      onHeart={() => actions.heartNode(t)}
+                      onPlayNow={(el) => actions.playTrack(t, el)}
+                      onMenu={(e) => actions.openMenu(t, e)}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))
           ) : (
             <div className="text-[12.5px] text-faint pt-2 px-1">
               {selectedArtist ? 'Pick an album.' : ''}

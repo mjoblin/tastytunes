@@ -348,16 +348,20 @@ function buildDemo(host: string): {
   }
 
   const SYN_GENRES = ['House', 'Techno', 'IDM', 'Trance', 'Breakbeat', 'Dub', 'Chillout', 'Garage', 'Electro', 'Acid']
+  // Synth Album 35 is a TWO-DISC album in Asset's exact shape (mirrors the
+  // mock): disc number/count elements AND originalTrackNumber packed as
+  // disc×100+track (101, 102, 201, 202).
   const SYN_ALBUMS: Album[] = Array.from({ length: 35 }, (_, i) => ({
     id: `syn-${i + 1}`,
     title: `Synth Album ${i + 1}`,
     artist: `Demo Artist ${(i % 30) + 1}`,
     date: `${1980 + i}-01-01`,
     art: null,
-    count: 2,
+    count: i === 34 ? 4 : 2,
     genres: [SYN_GENRES[i % 10]],
     track: (n: number) => ({
       ...trackMeta(n),
+      ...(i === 34 ? { disc: n <= 2 ? 1 : 2, discCount: 2, trackNo: (n <= 2 ? 100 : 200) + ((n - 1) % 2) + 1 } : {}),
       title: `Synth ${i + 1}.${n}`,
       album: `Synth Album ${i + 1}`,
       artist: `Demo Artist ${(i % 30) + 1}`,
@@ -377,7 +381,7 @@ function buildDemo(host: string): {
       : `<upnp:artist>${xmlEsc(String(md.artist))}</upnp:artist>`
   const didlTrack = (alb: Album, n: number): string => {
     const md = alb.track(n)
-    return `<item id="${alb.id}-t${n}" parentID="${alb.id}" restricted="true"><dc:title>${xmlEsc(String(md.title))}</dc:title><upnp:class>object.item.audioItem.musicTrack</upnp:class>${didlArtists(md)}<upnp:album>${xmlEsc(String(md.album))}</upnp:album>${(alb.genres ?? []).map((g) => `<upnp:genre>${xmlEsc(g)}</upnp:genre>`).join('')}<upnp:originalTrackNumber>${n}</upnp:originalTrackNumber><upnp:albumArtURI>${md.art_url}</upnp:albumArtURI><res duration="${durFmt(Number(md.duration))}" protocolInfo="*:*:*:*">file:///tmp/usm/1/${alb.id}/${n}.flac</res></item>`
+    return `<item id="${alb.id}-t${n}" parentID="${alb.id}" restricted="true"><dc:title>${xmlEsc(String(md.title))}</dc:title><upnp:class>object.item.audioItem.musicTrack</upnp:class>${didlArtists(md)}<upnp:album>${xmlEsc(String(md.album))}</upnp:album>${(alb.genres ?? []).map((g) => `<upnp:genre>${xmlEsc(g)}</upnp:genre>`).join('')}<upnp:originalTrackNumber>${md.trackNo ?? n}</upnp:originalTrackNumber>${md.disc ? `<upnp:originalDiscNumber>${md.disc}</upnp:originalDiscNumber><upnp:originalDiscCount>${md.discCount}</upnp:originalDiscCount>` : ''}<upnp:albumArtURI>${md.art_url}</upnp:albumArtURI><res duration="${durFmt(Number(md.duration))}" protocolInfo="*:*:*:*">file:///tmp/usm/1/${alb.id}/${n}.flac</res></item>`
   }
 
   const ARTIST_COUNT = 400
