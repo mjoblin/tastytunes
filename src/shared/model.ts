@@ -1273,6 +1273,35 @@ export interface MediaInfoTarget {
   note?: string | null
   /** For an artist: their library page (albums, credits) — from artistSummary. */
   artist?: ArtistSummary
+  /** For what is playing NOW: the stream as the streamer reports it (source-agnostic — radio, AirPlay, local media alike). */
+  stream?: StreamInfo
+}
+
+/**
+ * The stream the streamer is decoding right now — its own account, distinct
+ * from the library's file facts (a transcode, or Asset's decoded reporting,
+ * makes the two differ, and that is worth seeing).
+ */
+export interface StreamInfo {
+  source: string | null
+  playbackSource: string | null
+  playbackClass: string | null
+  codec: string | null
+  sampleFormat: string | null
+  sampleRate: number | null
+  bitDepth: number | null
+  /** bits per second, as the streamer reports it */
+  bitrate: number | null
+  encoding: string | null
+  lossless: boolean | null
+  mqa: string | null
+  station: string | null
+  radioId: string | null
+  queuePosition: number | null
+  queueLength: number | null
+  presettable: boolean | null
+  /** the transport verbs this source honours (now_playing.controls) */
+  controls: string[]
 }
 
 /**

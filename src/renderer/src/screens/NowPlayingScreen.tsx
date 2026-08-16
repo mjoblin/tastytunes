@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Captions, Disc3, Heart, ListOrdered, Maximize2, MicVocal, RadioTower, UserRound } from 'lucide-react'
+import { Captions, Disc3, Heart, ListOrdered, Maximize2, MicVocal, RadioTower, UserRound, Info } from 'lucide-react'
 import { useStore } from '@/store'
 import { cx, deriveNowPlaying } from '@/lib/format'
 import { useSettledSnapshot } from '@/hooks/useSettledSnapshot'
@@ -13,6 +13,7 @@ import { LyricsPanel } from '@/components/overlays/LyricsPanel'
 import { LyricLine } from '@/components/playback/LyricLine'
 import { EmptyState } from '@/components/chrome/EmptyState'
 import { ArtistPanel } from '@/components/overlays/ArtistPanel'
+import { openInfoForNowPlaying } from '@/lib/mediaInfo'
 
 const ALIGN_H = { left: 'justify-start', center: 'justify-center', right: 'justify-end' } as const
 const ALIGN_V = { top: 'items-start', center: 'items-center', bottom: 'items-end' } as const
@@ -112,6 +113,8 @@ export function NowPlayingScreen(): React.JSX.Element {
   /** Every header button hides on this pair; naming it once also stopped the two
    *  lyrics buttons from spelling the same condition in two different orders. */
   const drawersClosed = !lyricsOpen && !artistOpen
+  // Info has something to say whenever anything is loaded — a title or a station
+  const infoAvailable = (meta.title != null && meta.title !== '') || playState?.metadata?.station != null
 
   // Titleless top band: preserves the header's vertical rhythm (and houses the
   // display-mode button) so the art/text sit where they did with a title.
@@ -202,6 +205,22 @@ export function NowPlayingScreen(): React.JSX.Element {
               <UserRound size={16} />
             </button>
           )}
+          {/* Info: what is playing, as the streamer reports it — every source
+              (radio, AirPlay, local media alike); local media adds the library's
+              file facts. Dimmed only when nothing is loaded. */}
+          <button
+            onClick={() => (infoAvailable ? void openInfoForNowPlaying(playState, nowPlaying) : undefined)}
+            data-tip={infoAvailable ? 'Track info' : 'Nothing playing'}
+            aria-label="Track info"
+            aria-disabled={!infoAvailable}
+            data-np-info={infoAvailable ? 'on' : 'off'}
+            className={cx(
+              'no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-full transition-all',
+              infoAvailable ? 'text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90' : 'text-faint/40 cursor-default'
+            )}
+          >
+            <Info size={16} />
+          </button>
           <button
             onClick={() => setDisplayMode(true)}
             data-tip="Full-screen display mode (F)"

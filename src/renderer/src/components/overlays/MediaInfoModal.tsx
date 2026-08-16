@@ -66,7 +66,7 @@ const mono = (v: string | null | undefined): React.ReactNode =>
 export function MediaInfoModal({ target }: { target: MediaInfoTarget }): React.JSX.Element {
   const setMediaInfo = useStore((s) => s.setMediaInfo)
   const close = (): void => setMediaInfo(null)
-  const { node, tracks, serverName, note, artist } = target
+  const { node, tracks, serverName, note, artist, stream } = target
   const kind = kindOf(node)
   const [copied, setCopied] = useState(false)
 
@@ -184,12 +184,34 @@ export function MediaInfoModal({ target }: { target: MediaInfoTarget }): React.J
       ]
     : []
 
+  // ---- the stream, as the streamer reports it (what is playing NOW)
+  const khzOf = (hz: number): string => `${(hz / 1000).toFixed(hz % 1000 === 0 ? 0 : 1)} kHz`
+  const streamRows: Row[] = stream
+    ? [
+        ['Source', stream.source],
+        ['Station', stream.station],
+        ['Codec', stream.codec],
+        ['Sample rate', stream.sampleRate ? khzOf(stream.sampleRate) : null],
+        ['Bit depth', stream.bitDepth ? `${stream.bitDepth}-bit` : null],
+        ['Bitrate', stream.bitrate ? `${Math.round(stream.bitrate / 1000)} kbps` : null],
+        ['Format', !stream.sampleRate && !stream.codec ? stream.sampleFormat : null],
+        ['Encoding', stream.encoding],
+        ['Lossless', stream.lossless == null ? null : stream.lossless ? 'yes' : 'no'],
+        ['MQA', stream.mqa],
+        ['Queue', stream.queuePosition != null && stream.queueLength != null ? `${stream.queuePosition} of ${stream.queueLength}` : null],
+        ['Presettable', stream.presettable == null ? null : stream.presettable ? 'yes' : 'no'],
+        ['Controls', stream.controls.length > 0 ? stream.controls.join(', ') : null],
+        ['Radio id', mono(stream.radioId)],
+        ['Playback', [stream.playbackSource, stream.playbackClass].filter(Boolean).join(' · ') || null]
+      ]
+    : []
+
   // ---- source
   const source: Row[] = [
     ['Server', serverName ?? node.serverName ?? null],
     ['Object id', node.id ? mono(node.id) : null],
     ['Parent id', mono(node.parentId)],
-    ['Class', mono(node.upnpClass)],
+    ['Class', node.id ? mono(node.upnpClass) : null],
     ['Art', mono(node.artUrl)]
   ]
 
@@ -212,7 +234,7 @@ export function MediaInfoModal({ target }: { target: MediaInfoTarget }): React.J
           />
         </div>
         <div className="min-w-0 flex-1 pt-0.5">
-          <div className="microlabel">{kind}</div>
+          <div className="microlabel">{stream ? `now playing · ${kind === 'track' && /audioBroadcast/.test(node.upnpClass) ? 'radio' : kind}` : kind}</div>
           <div className="font-display font-bold text-[20px] tracking-tight leading-tight mt-1 break-words">
             {node.title}
           </div>
@@ -227,6 +249,7 @@ export function MediaInfoModal({ target }: { target: MediaInfoTarget }): React.J
         </div>
       )}
       <div className="mt-5 min-h-0 overflow-y-auto pr-1 space-y-5" data-info-body>
+        {streamRows.length > 0 && <Section title="Stream" rows={streamRows} />}
         <Section title="Identity" rows={identity} />
         {artistRows.length > 0 && <Section title="Library" rows={artistRows} />}
         {albumRows.length > 0 && <Section title="Album" rows={albumRows} />}
