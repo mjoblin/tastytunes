@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowUpRight, ChevronDown, MoreHorizontal } from 'lucide-react'
-import type { MediaIndexPools, MediaNode } from '@shared/model'
+import { trackArtists, trackInAlbumOf, type MediaIndexPools, type MediaNode } from '@shared/model'
 import { cx, fmtTime, matchesFilter } from '@/lib/format'
 import { useStore } from '@/store'
 import { scrollToVisible } from '@/lib/scroll'
@@ -478,7 +478,10 @@ export function ArtistsLens({
         a.artUrl ??= e.artUrl
       }
       for (const alb of g.albums) if (alb.artist) ensure(alb.artist).albums.push(alb)
-      for (const t of g.tracks) if (t.artist) ensure(t.artist).tracks.push(t)
+      // Every PERFORMER is an artist, and only performers — never the packed
+      // "A; B" string. A featured singer gets a row with their one track;
+      // the headliner keeps every track of the album (2026-08-15).
+      for (const t of g.tracks) for (const name of trackArtists(t)) ensure(name).tracks.push(t)
     }
     return [...byKey.values()]
       .filter((a) => a.albums.length > 0 || a.tracks.length > 0)
@@ -525,9 +528,10 @@ export function ArtistsLens({
     selectedArtist?.albums.find((a) => nodeKey(a) === mem.album) ?? null
   const albumTracks = selectedAlbum
     ? (tracksByAlbum.get(`${selectedAlbum.serverUdn}|${lc(selectedAlbum.title)}`) ?? []).filter(
-        (t) =>
-          // same-titled album on the same server by ANOTHER artist stays out
-          t.artist == null || selectedAlbum.artist == null || lc(t.artist) === lc(selectedAlbum.artist)
+        // same-titled album on the same server by ANOTHER artist stays out —
+        // judged by album artist / performers, so a featured track ("Daft
+        // Punk; Julian Casablancas" on Daft Punk's album) stays IN.
+        (t) => trackInAlbumOf(t, selectedAlbum.artist)
       )
     : null
   // an artist with no albums shows their loose tracks directly (vibin rule)

@@ -14,7 +14,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { z, type ZodRawShape } from 'zod'
 import { type Snapshot } from '@shared/ipc'
-import { sleepTrackKey, type AppSettings, type ConnectionState, type McpSettings, type MediaNode, type MediaQueueAction, type Schedule } from '@shared/model'
+import { sleepTrackKey, type AppSettings, type ConnectionState, type McpSettings, type MediaNode, type MediaQueueAction, type Schedule, trackArtists } from '@shared/model'
 import { favoriteKey, type Favorite } from '@shared/model'
 import { MCP_CLUSTERS, mcpClusterEnabled } from '@shared/mcpCatalog'
 import { EQ_GAIN_MAX, EQ_GAIN_MIN, audioCaps, brightnessOptions, isRadioMetadata } from '@shared/smoip'
@@ -870,7 +870,8 @@ export class McpBridge {
           }
           for (const p of groups) {
             for (const alb of p.albums) bump(alb.artist, 'albums')
-            for (const t of p.tracks) bump(t.artist, 'tracks')
+            // every PERFORMER, not the packed "A; B" string (featured tracks)
+            for (const t of p.tracks) for (const name of trackArtists(t)) bump(name, 'tracks')
           }
           const needle = (a.query as string | undefined)?.toLowerCase()
           let artists = [...byName.values()]

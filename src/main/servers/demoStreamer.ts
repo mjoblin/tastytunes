@@ -261,11 +261,15 @@ function buildDemo(host: string): {
       art: `${host}/art/p2.svg`,
       count: 5,
       genres: ['Synthpop; Electropop'],
+      // Track 3 FEATURES a guest, in Asset's exact shape (mirrors the mock —
+      // see dev/mock-streamer.mjs): AlbumArtist role + packed performers +
+      // Composer role. Keeps the featured-track law demo-visible.
       track: (n) => ({
         ...trackMeta(n),
         title: `Neon Track ${n}`,
         album: 'Neon Evenings',
-        artist: 'The Neon Collective',
+        artist: n === 3 ? 'The Neon Collective; Ivy Lane' : 'The Neon Collective',
+        ...(n === 3 ? { albumArtist: 'The Neon Collective', composer: 'Neon Writer; Ivy Lane' } : {}),
         art_url: `${host}/art/p2.svg`,
         duration: 120 + n * 11
       })
@@ -364,9 +368,16 @@ function buildDemo(host: string): {
   const albumById = (id: string): Album | undefined =>
     LIB_ALBUMS.find((a) => a.id === id) ?? SYN_ALBUMS.find((a) => a.id === id)
 
+  // Asset's artist block for a track (see the mock's didlArtists): with an
+  // album artist, AlbumArtist role + plain performers + Composer role and a
+  // dc:creator repeating the performers; without, one plain element.
+  const didlArtists = (md: Dict): string =>
+    md.albumArtist
+      ? `<dc:creator>${xmlEsc(String(md.artist))}</dc:creator><upnp:artist role="AlbumArtist">${xmlEsc(String(md.albumArtist))}</upnp:artist><upnp:artist>${xmlEsc(String(md.artist))}</upnp:artist>${md.composer ? `<upnp:artist role="Composer">${xmlEsc(String(md.composer))}</upnp:artist>` : ''}`
+      : `<upnp:artist>${xmlEsc(String(md.artist))}</upnp:artist>`
   const didlTrack = (alb: Album, n: number): string => {
     const md = alb.track(n)
-    return `<item id="${alb.id}-t${n}" parentID="${alb.id}" restricted="true"><dc:title>${xmlEsc(String(md.title))}</dc:title><upnp:class>object.item.audioItem.musicTrack</upnp:class><upnp:artist>${xmlEsc(String(md.artist))}</upnp:artist><upnp:album>${xmlEsc(String(md.album))}</upnp:album>${(alb.genres ?? []).map((g) => `<upnp:genre>${xmlEsc(g)}</upnp:genre>`).join('')}<upnp:originalTrackNumber>${n}</upnp:originalTrackNumber><upnp:albumArtURI>${md.art_url}</upnp:albumArtURI><res duration="${durFmt(Number(md.duration))}" protocolInfo="*:*:*:*">file:///tmp/usm/1/${alb.id}/${n}.flac</res></item>`
+    return `<item id="${alb.id}-t${n}" parentID="${alb.id}" restricted="true"><dc:title>${xmlEsc(String(md.title))}</dc:title><upnp:class>object.item.audioItem.musicTrack</upnp:class>${didlArtists(md)}<upnp:album>${xmlEsc(String(md.album))}</upnp:album>${(alb.genres ?? []).map((g) => `<upnp:genre>${xmlEsc(g)}</upnp:genre>`).join('')}<upnp:originalTrackNumber>${n}</upnp:originalTrackNumber><upnp:albumArtURI>${md.art_url}</upnp:albumArtURI><res duration="${durFmt(Number(md.duration))}" protocolInfo="*:*:*:*">file:///tmp/usm/1/${alb.id}/${n}.flac</res></item>`
   }
 
   const ARTIST_COUNT = 400

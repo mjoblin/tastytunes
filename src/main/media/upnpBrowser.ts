@@ -239,15 +239,51 @@ function didlToNodes(didl: string): MediaNode[] {
       }
     }
     const genres = [...seenGenres.values()]
+    // upnp:artist is multi-valued THREE ways, all live-observed on Asset
+    // (2026-08-15, a Daft Punk track with a featured singer):
+    //   <upnp:artist role="AlbumArtist">Daft Punk</upnp:artist>
+    //   <upnp:artist>Daft Punk; Julian Casablancas</upnp:artist>
+    //   <upnp:artist role="Composer">Thomas Bangalter; Guy-Manuel …</upnp:artist>
+    // — repeated elements, a role attribute, AND several names packed into
+    // one value with '; ' (the same packing genres use). Before this the
+    // parser took text() of the ARRAY, got null, and fell through to
+    // dc:creator — so every featured track carried the packed performer
+    // string as its whole identity, and an album's featured tracks fell out
+    // of the album under its artist. Now: `artist` stays the display string
+    // (the performers, packed — "Daft Punk; Julian Casablancas" is what a
+    // row should say), `albumArtist` is the AlbumArtist role when a server
+    // sends one, and `artists` is the split performer list when there is
+    // more than one name — the lens keys identity on those two, never on
+    // the packed string. Composer/Conductor/… roles are not performers.
+    const artistEls = asArray(raw.artist as unknown | unknown[])
+    const roleOf = (el: unknown): string =>
+      el != null && typeof el === 'object' ? String((el as Record<string, unknown>)['@_role'] ?? '').toLowerCase() : ''
+    const albumArtist = text(artistEls.find((el) => roleOf(el) === 'albumartist')) ?? null
+    const performerEls = artistEls.filter((el) => ['', 'performer', 'artist'].includes(roleOf(el)))
+    const performerText = performerEls.map(text).filter((v): v is string => !!v?.trim())
+    const artist =
+      (performerText.length > 0 ? performerText.join('; ') : null) ??
+      text(raw.creator) ??
+      albumArtist ??
+      text(artistEls[0]) ??
+      null
+    const seenArtists = new Map<string, string>()
+    for (const part of (artist ?? '').split(';')) {
+      const trimmed = part.trim()
+      if (trimmed && !seenArtists.has(trimmed.toLowerCase())) seenArtists.set(trimmed.toLowerCase(), trimmed)
+    }
+    const artists = [...seenArtists.values()]
     return {
       ...(genres.length > 0 ? { genre: genres } : {}),
+      ...(albumArtist != null && albumArtist.trim() ? { albumArtist: albumArtist.trim() } : {}),
+      ...(artists.length > 1 ? { artists } : {}),
       id,
       parentId: text(raw['@_parentID']),
       title,
       upnpClass: text(raw.class) ?? '',
       isContainer,
       artUrl: text(raw.albumArtURI),
-      artist: text(raw.artist) ?? text(raw.creator),
+      artist,
       album: text(raw.album),
       year: text(raw.date)?.slice(0, 4) ?? null,
       trackNumber: raw.originalTrackNumber != null ? Number(text(raw.originalTrackNumber)) : null,

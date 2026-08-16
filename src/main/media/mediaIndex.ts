@@ -37,11 +37,13 @@ interface StoredIndex {
   tracks: MediaNode[]
 }
 
+// v4: albumArtist (upnp:artist role="AlbumArtist") and the split performer
+// list `artists` — featured tracks belong to their album again (2026-08-15).
 // v3: genre values split on ';' ("Pop; Rock" = two genres — live-observed
 // Asset tagging). v2 added upnp:genre. A bump discards stored indexes
 // wholesale; rebuildHints below keeps that from costing Browse-only
 // servers their Build click.
-const VERSION = 3
+const VERSION = 4
 const PAGE = 500
 const MAX_TRACKS = 50_000
 const MAX_CONTAINERS = 10_000

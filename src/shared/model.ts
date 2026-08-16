@@ -888,12 +888,55 @@ export interface MediaNode {
    */
   genre?: string[]
   /**
+   * The album artist, when the server says so (Asset: upnp:artist
+   * role="AlbumArtist"). Absent otherwise. This — not `artist` — is what
+   * decides whether a track belongs to an album under an artist: a featured
+   * track's `artist` reads "Daft Punk; Julian Casablancas" while its album
+   * artist is Daft Punk.
+   */
+  albumArtist?: string
+  /**
+   * The performers as separate names, when `artist` packs more than one
+   * ("A; B" → ["A", "B"]). Absent for a single performer — read identity
+   * through a helper that falls back to [artist], never off this alone.
+   */
+  artists?: string[]
+  /**
    * Which server this node came from — stamped ONLY on cross-server search
    * results, where nodes from several servers share a listing. Everywhere
    * else the screen's own server context applies and these stay absent.
    */
   serverUdn?: string
   serverName?: string
+}
+
+/**
+ * A track's performers as separate names — the ONLY way to ask "who is on
+ * this track": `artists` when the server packed several, else the single
+ * `artist`. Never key identity on the packed string ("A; B" is two people).
+ */
+export function trackArtists(n: Pick<MediaNode, 'artist' | 'artists'>): string[] {
+  if (n.artists && n.artists.length > 0) return n.artists
+  return n.artist ? [n.artist] : []
+}
+
+/**
+ * Does this track belong to an album credited to `albumArtist`? The album
+ * artist wins when the server sends one (a featured track's performers are
+ * "Daft Punk; Julian Casablancas"; its album is Daft Punk's); otherwise any
+ * performer matching counts (servers without an AlbumArtist role — the USB
+ * stick); a track with no artist at all is not held against the album.
+ */
+export function trackInAlbumOf(
+  n: Pick<MediaNode, 'artist' | 'artists' | 'albumArtist'>,
+  albumArtist: string | null
+): boolean {
+  if (albumArtist == null) return true
+  const want = albumArtist.trim().toLowerCase()
+  if (n.albumArtist) return n.albumArtist.trim().toLowerCase() === want
+  const names = trackArtists(n)
+  if (names.length === 0) return true
+  return names.some((a) => a.trim().toLowerCase() === want)
 }
 
 /** One server's slice of a cross-server (all ready indexes) search. */
