@@ -8,7 +8,7 @@ import {
   type FavoriteStation,
   type PlaylistItem
 } from '@shared/model'
-import { isRadioMetadata, type QueueListItem } from '@shared/smoip'
+import { type QueueListItem } from '@shared/smoip'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { RowAction } from '@/components/media/RowAction'
@@ -28,6 +28,8 @@ import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { activeSourceId, cx, matchesFilter } from '@/lib/format'
 import { favoriteAct, favoriteHasRoute, type FavoriteActResult } from '@/lib/favorites'
 import { flashTarget } from '@/lib/scroll'
+import { playingStationName } from '@/lib/radio'
+import { useStationTuning } from '@/hooks/useStationTuning'
 import { ScreenTitle } from '@/components/chrome/Chrome'
 
 /** Kind visibility — session memory, like the Radio screen's chip state. */
@@ -53,7 +55,6 @@ export function FavoritesScreen(): React.JSX.Element {
   const connected = useStore((s) => s.connection.phase === 'connected')
   const { presetCardSize, presetGap, presetFillRows } = useStore((s) => s.settings)
   const openInLibrary = useStore((s) => s.openInLibrary)
-  const setLastStation = useStore((s) => s.setLastStation)
   const showToast = useStore((s) => s.showToast)
   const scrollRef = useScrollMemory('favorites')
 
@@ -128,33 +129,11 @@ export function FavoritesScreen(): React.JSX.Element {
   // ---------------------------------------------------------------- stations
 
   const md = playState?.metadata
-  const playingStation =
-    isRadioMetadata(md) && (playState?.state === 'play' || playState?.state === 'buffering')
-      ? (md?.station ?? md?.name)?.trim().toLowerCase()
-      : null
-  const [tuning, setTuning] = useState<string | null>(null) // station url
-  const tuningTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const playStation = async (st: FavoriteStation): Promise<void> => {
-    setLastStation({ url: st.url, name: st.name, favicon: st.favicon, radioBrowserUuid: st.radioBrowserUuid })
-    setTuning(st.url)
-    if (tuningTimeout.current) clearTimeout(tuningTimeout.current)
-    tuningTimeout.current = setTimeout(() => setTuning(null), 15_000)
-    try {
-      await tt.command({ type: 'streamRadio', url: st.url, name: st.name })
-    } catch {
-      setTuning(null) // failure is toasted by the api layer
-    }
-  }
-  useEffect(() => {
-    if (tuning && stations.some((s) => s.url === tuning && s.name.trim().toLowerCase() === playingStation))
-      setTuning(null)
-  }, [tuning, playingStation, stations])
-  useEffect(
-    () => () => {
-      if (tuningTimeout.current) clearTimeout(tuningTimeout.current)
-    },
-    []
-  )
+  // The same identity + play path + tuning window as Radio and unified search
+  // (lib/radio, useStationTuning) — a favorite plays through playStation so
+  // lastStation is recorded once the command LANDS, like everywhere else.
+  const playingStation = playingStationName(playState)
+  const { tuningUrl: tuning, play: playStation } = useStationTuning(playingStation)
 
   // ------------------------------------------------------------------- media
 
@@ -377,7 +356,7 @@ export function FavoritesScreen(): React.JSX.Element {
                       active={active}
                       playing={playing}
                       tuning={!playing && tuning === st.url}
-                      onPlay={() => void playStation(st)}
+                      onPlay={() => void playStation({ url: st.url, name: st.name, favicon: st.favicon, uuid: st.radioBrowserUuid ?? undefined })}
                       onHeart={() => toggleHeart(st)}
                     />
                   )

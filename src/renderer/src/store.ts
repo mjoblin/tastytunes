@@ -18,7 +18,7 @@ import type {
   ZonePlayState,
   ZoneState
 } from '@shared/smoip'
-import { DEFAULT_SETTINGS } from '@shared/model'
+import { DEFAULT_SETTINGS, FRAME_RING_SIZE, LOG_RING_SIZE, NET_RING_SIZE } from '@shared/model'
 import { tt } from './api'
 
 export type Screen =
@@ -66,8 +66,6 @@ export interface LastStation {
   radioBrowserUuid: string | null
 }
 
-const FRAME_RING = 300
-const LOG_RING = 300
 
 /**
  * The one transient-feedback slot (single toast, replace-don't-stack).
@@ -565,12 +563,12 @@ export const useStore = create<TTState>((set, get) => ({
           return { powerSpec: msg.data }
         case 'frame': {
           const frames = [...s.frames, msg.entry]
-          if (frames.length > FRAME_RING) frames.splice(0, frames.length - FRAME_RING)
+          if (frames.length > FRAME_RING_SIZE) frames.splice(0, frames.length - FRAME_RING_SIZE)
           return { frames }
         }
         case 'log': {
           const logs = [...s.logs, msg.entry]
-          if (logs.length > LOG_RING) logs.splice(0, logs.length - LOG_RING)
+          if (logs.length > LOG_RING_SIZE) logs.splice(0, logs.length - LOG_RING_SIZE)
           return { logs }
         }
         case 'miniHover':
@@ -603,7 +601,7 @@ export const useStore = create<TTState>((set, get) => ({
             idx >= 0
               ? s.netRequests.map((e, i) => (i === idx ? msg.entry : e))
               : [...s.netRequests, msg.entry]
-          if (netRequests.length > 200) netRequests.splice(0, netRequests.length - 200)
+          if (netRequests.length > NET_RING_SIZE) netRequests.splice(0, netRequests.length - NET_RING_SIZE)
           return { netRequests }
         }
         case 'menu':

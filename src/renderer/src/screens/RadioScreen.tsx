@@ -5,7 +5,7 @@ import type { Favorite } from '@shared/model'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { toggleFavorite } from '@/lib/favorites'
-import { playingStationName } from '@/lib/radio'
+import { playingStationName, RADIO_DEBOUNCE_MS } from '@/lib/radio'
 import { useStationTuning } from '@/hooks/useStationTuning'
 import { EmptyState } from '@/components/chrome/EmptyState'
 import { StationRow } from '@/components/media/StationRow'
@@ -31,8 +31,6 @@ let lastResults: RadioStation[] | null = null
 let topCache: RadioStation[] | null = null
 let lastCat: string | null = null
 const catCache = new Map<string, RadioStation[]>()
-
-const DEBOUNCE_MS = 350
 
 /**
  * The curated category layer — the airable-style rails the official app gets
@@ -182,7 +180,7 @@ export function RadioScreen(): React.JSX.Element {
       lastResults = stations
       setResults(stations)
       setSearching(false)
-    }, DEBOUNCE_MS)
+    }, RADIO_DEBOUNCE_MS)
     return () => clearTimeout(t)
   }, [query])
 

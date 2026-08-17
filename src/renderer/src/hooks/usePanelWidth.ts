@@ -1,7 +1,9 @@
 import { useRef, useState } from 'react'
+import { DEFAULT_SETTINGS } from '@shared/model'
 import { useStore } from '@/store'
 
-export const PANEL_DEFAULT_WIDTH = 400
+/** The persisted default IS the detent — a fresh install opens snapped. */
+export const PANEL_DEFAULT_WIDTH = DEFAULT_SETTINGS.panelWidth
 const MIN_WIDTH = 250
 const MAX_WIDTH = 800
 // The default width acts as a magnetic detent while dragging.

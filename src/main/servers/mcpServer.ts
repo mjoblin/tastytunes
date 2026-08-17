@@ -14,7 +14,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { z, type ZodRawShape } from 'zod'
 import { type Snapshot } from '@shared/ipc'
-import { sleepTrackKey, type AppSettings, type ConnectionState, type McpSettings, type MediaNode, type MediaQueueAction, type Schedule, trackArtists, formatLabel, albumTracksOf, albumSummary, trackPosition, artistSummary } from '@shared/model'
+import { sleepTrackKey, type AppSettings, type ConnectionState, type McpSettings, type MediaNode, type MediaQueueAction, type Schedule, trackArtists, formatLabel, albumTracksOf, albumSummary, trackPosition, artistSummary, HIRES_BITS_ABOVE, HIRES_RATE_ABOVE } from '@shared/model'
 import { favoriteKey, type Favorite } from '@shared/model'
 import { MCP_CLUSTERS, mcpClusterEnabled } from '@shared/mcpCatalog'
 import { EQ_GAIN_MAX, EQ_GAIN_MIN, audioCaps, brightnessOptions, isRadioMetadata } from '@shared/smoip'
@@ -809,7 +809,7 @@ export class McpBridge {
             .enum(['all', 'albums', 'compilations'])
             .optional()
             .describe("Default 'all'. 'compilations' = various-artists albums (album artist 'Various Artists' or credited to no performer on it); 'albums' excludes them."),
-          hires: z.boolean().optional().describe('true = only albums with any track above 16-bit or 48 kHz.'),
+          hires: z.boolean().optional().describe(`true = only albums with any track above ${HIRES_BITS_ABOVE}-bit or ${HIRES_RATE_ABOVE / 1000} kHz.`),
           format: z.string().optional().describe("Case-insensitive substring of the album's format headline or any track's, e.g. 'FLAC', '24/96', 'MP3'."),
           composer: z.string().optional().describe('Case-insensitive substring match on any track\'s composers.'),
           server_udn: z.string().optional().describe('Limit to one server (see list_media_servers).'),

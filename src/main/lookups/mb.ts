@@ -2,15 +2,12 @@
 // (artist bios, album details). MusicBrainz enforces ONE request per second
 // per IP and an identifying User-Agent (violators get 100% declined) — every
 // MB call from anywhere in the app goes through the single spacing gate here.
-import { version } from '../../../package.json'
-import { REPO_URL } from '@shared/ipc'
-import { loggedFetch } from '../netlog'
+import { loggedFetch, USER_AGENT } from '../netlog'
 
 // Env overrides let test harnesses point each hop at a local server.
 export const MB = process.env['TASTYTUNES_MB_URL'] ?? 'https://musicbrainz.org'
 export const WD = process.env['TASTYTUNES_WD_URL'] ?? 'https://www.wikidata.org'
 export const WIKI = process.env['TASTYTUNES_WIKI_URL'] ?? 'https://en.wikipedia.org'
-const USER_AGENT = `TastyTunes/${version} (${REPO_URL})`
 
 /** ok = an answer; missing = authoritative 404; error = we never really asked. */
 export type Fetched =

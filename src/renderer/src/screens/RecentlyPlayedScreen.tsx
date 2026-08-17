@@ -3,6 +3,7 @@ import { ChevronRight, History, MoreHorizontal, Play, Trash2 } from 'lucide-reac
 import {
   favoriteKey,
   recentMatchesPlayState,
+  MAX_RECENTS,
   type Favorite,
   type RecentTrack
 } from '@shared/model'
@@ -253,7 +254,7 @@ export function RecentlyPlayedScreen(): React.JSX.Element {
               </div>
             ))}
           </div>
-          <div className="microlabel mt-6 px-1">up to 200 entries · stored locally · clears on demand</div>
+          <div className="microlabel mt-6 px-1">up to {MAX_RECENTS} entries · stored locally · clears on demand</div>
         </div>
       )}
     </div>

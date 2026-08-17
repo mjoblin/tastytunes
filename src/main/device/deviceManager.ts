@@ -3,7 +3,7 @@
 
 import { BrowserWindow, Notification, nativeImage, webContents } from 'electron'
 import { type PushMessage, type Snapshot, type StreamerCommand } from '@shared/ipc'
-import { presetVolumeKey, sleepTrackKey, type ConnectionState, type DiscoveredDevice, type FirmwareStatus, type FrameEntry, type LogEntry, type McpStatus, type MediaIndexStatus, type MissedSchedule, type SleepTimer } from '@shared/model'
+import { presetVolumeKey, sleepTrackKey, type ConnectionState, type DiscoveredDevice, type FirmwareStatus, type FrameEntry, type LogEntry, type McpStatus, type MediaIndexStatus, type MissedSchedule, type SleepTimer, FRAME_RING_SIZE, LOG_RING_SIZE } from '@shared/model'
 import {
   type ContentRef,
   type Playlist,
@@ -50,8 +50,6 @@ import type { ResolvedContent } from '../media/resolveContent'
 import { scrobbler } from '../lookups/scrobbler'
 import { getNetRequests, loggedFetch } from '../netlog'
 
-const FRAME_RING_SIZE = 300
-const LOG_RING_SIZE = 300
 
 /**
  * The user_eq_bands write string: "<idx>,<freq>,<filter>,<gain>,<q>", blank

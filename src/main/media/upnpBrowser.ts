@@ -7,7 +7,7 @@
 // (action=PRESET — preset saves). Streamer-directed SMOIP traffic is
 // unlogged (it has its own console); media-server traffic logs as 'upnp'.
 import { XMLParser } from 'fast-xml-parser'
-import type { MediaNode, MediaQueueAction, MediaServerInfo, MediaFormat } from '@shared/model'
+import { LOSSLESS_CODECS, type MediaNode, type MediaQueueAction, type MediaServerInfo, type MediaFormat } from '@shared/model'
 import { loggedFetch } from '../netlog'
 
 const PAGE_SIZE = 5000 // the streamer's own server ignores RequestedCount=0
@@ -287,7 +287,7 @@ function didlToNodes(didl: string): MediaNode[] {
       const resolvedCodec =
         isMp4 && (pn.startsWith('ALAC') || (fileKbps ?? 0) > 600) ? 'ALAC' : codec
       const out: MediaFormat = { codec: resolvedCodec }
-      const lossless = ['FLAC', 'WAV', 'PCM', 'AIFF', 'ALAC', 'DSD', 'APE', 'WV'].includes(resolvedCodec)
+      const lossless = LOSSLESS_CODECS.has(resolvedCodec)
       const bits = num('bitsPerSample'); if (bits && lossless) out.bits = bits
       const rate = num('sampleFrequency'); if (rate) out.rate = rate
       const kbps = lossless ? (bytesPerSec ? Math.round((bytesPerSec * 8) / 1000) : fileKbps) : (fileKbps ?? (bytesPerSec ? Math.round((bytesPerSec * 8) / 1000) : undefined))

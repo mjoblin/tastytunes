@@ -210,6 +210,18 @@ export const MAX_PLAYLISTS = 100
 export const MAX_PLAYLIST_ITEMS = 500
 
 /**
+ * Rings the main process keeps AND the renderer mirrors (2026-08-16, one
+ * number each): the diagnostics drawer's frame and log rings, the Requests
+ * console's ring, and the recently-played log. The renderer's copy trims to
+ * the same bound so a re-opened drawer shows exactly what main holds; the
+ * Recently Played footer quotes MAX_RECENTS rather than a literal.
+ */
+export const FRAME_RING_SIZE = 300
+export const LOG_RING_SIZE = 300
+export const NET_RING_SIZE = 200
+export const MAX_RECENTS = 200
+
+/**
  * A playlist's content hash in the SAME shape queueContentHash produces for a
  * live queue, so the two can be compared directly. That comparison is how a
  * playlist knows it's the thing currently queued — content-based, so it also
@@ -945,7 +957,26 @@ export interface MediaFormat {
   channels?: number
 }
 
-const LOSSLESS = new Set(['FLAC', 'WAV', 'PCM', 'AIFF', 'ALAC', 'DSD', 'APE', 'WV'])
+/**
+ * The codecs whose bit depth is meaningful (a lossy stream has a bitrate, not
+ * a word length). ONE list (2026-08-16): the parser consults it to decide
+ * whether bitsPerSample is stored at all, and formatLabel to decide whether
+ * to say "16/44.1" or "320 kbps" — two copies once disagreed only by luck.
+ */
+export const LOSSLESS_CODECS: ReadonlySet<string> = new Set(['FLAC', 'WAV', 'PCM', 'AIFF', 'ALAC', 'DSD', 'APE', 'WV'])
+const LOSSLESS = LOSSLESS_CODECS
+
+/**
+ * Hi-res, ONE definition (2026-08-16): above CD-class — more than 16 bits or
+ * more than 48 kHz (48 k counts as CD-class, not hi-res) — or MQA. The Now
+ * Playing signal lamp, the library's album summary and the MCP list_albums
+ * filter all ask this; the lamp once carried MQA and the summary did not.
+ */
+export const HIRES_BITS_ABOVE = 16
+export const HIRES_RATE_ABOVE = 48_000
+export function isHiRes(f: { bits?: number | null; rate?: number | null; mqa?: string | null }): boolean {
+  return (f.bits ?? 0) > HIRES_BITS_ABOVE || (f.rate ?? 0) > HIRES_RATE_ABOVE || (f.mqa != null && f.mqa !== 'none')
+}
 
 /** "FLAC · 16/44.1" for lossless (bits/kHz), "MP3 · 320 kbps" for lossy; degrades to what is known. */
 export function formatLabel(f: MediaFormat | undefined | null): string | null {
@@ -1089,7 +1120,7 @@ export function albumSummary(
     sizeBytes: tracks.reduce((a, t) => a + (t.format?.sizeBytes ?? 0), 0),
     format: fmt.label,
     formatOdd: fmt.notes.filter(Boolean).length,
-    hires: tracks.some((t) => (t.format?.bits ?? 0) > 16 || (t.format?.rate ?? 0) > 48000),
+    hires: tracks.some((t) => t.format != null && isHiRes(t.format)),
     composers: albumComposers(tracks),
     isCompilation: isCompilation(album, tracks)
   }

@@ -43,7 +43,7 @@ import {
   X
 } from 'lucide-react'
 import { version } from '../../../../package.json'
-import { type AlignH, type AlignV, type AmbientArtMode, type AmbientCoverage, type AppSettings, type McpBind, type McpSettings, type MotionMode, type Schedule, type ThemePreference, type UpdateCheckResult } from '@shared/model'
+import { DEFAULT_SETTINGS, type AlignH, type AlignV, type AmbientArtMode, type AmbientCoverage, type AppSettings, type McpBind, type McpSettings, type MotionMode, type Schedule, type ThemePreference, type UpdateCheckResult } from '@shared/model'
 import { MCP_CLUSTERS, mcpClusterEnabled, type McpClusterInfo } from '@shared/mcpCatalog'
 import { REPO_URL } from '@shared/ipc'
 import { tt } from '@/api'
@@ -613,7 +613,7 @@ function McpSection({
               min={1024}
               max={65535}
               widthClass="w-24"
-              onCommit={(port) => saveMcp({ port: port ?? 8555 })}
+              onCommit={(port) => saveMcp({ port: port ?? DEFAULT_SETTINGS.mcp.port })}
             />
           </SettingRow>
 

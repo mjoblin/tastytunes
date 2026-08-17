@@ -48,6 +48,7 @@ import { systemTheme } from '@/hooks/useTheme'
 import { activeSourceId, controlSet, cx, deriveNowPlaying } from '@/lib/format'
 import { SCREENS, sanitizeNavHidden, sanitizeNavHiddenTools } from '@/lib/screens'
 import { scrollToVisible } from '@/lib/scroll'
+import { SLEEP_DURATIONS } from '@/components/playback/SleepTimer'
 
 type Icon = typeof Play
 
@@ -77,14 +78,6 @@ const GROUP_ORDER = [
   'View'
 ]
 
-const SLEEP_DURATIONS: Array<{ minutes: number; label: string }> = [
-  { minutes: 15, label: '15 min' },
-  { minutes: 30, label: '30 min' },
-  { minutes: 45, label: '45 min' },
-  { minutes: 60, label: '1 hr' },
-  { minutes: 90, label: '1.5 hr' },
-  { minutes: 120, label: '2 hr' }
-]
 
 
 function sourceIcon(klass: string): Icon {

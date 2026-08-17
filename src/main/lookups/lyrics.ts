@@ -8,15 +8,12 @@
 import { rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { app } from 'electron'
-import { version } from '../../../package.json'
 import type { LyricsQuery, LyricsResult } from '@shared/model'
-import { REPO_URL } from '@shared/ipc'
-import { loggedFetch } from '../netlog'
+import { loggedFetch, USER_AGENT } from '../netlog'
 import { DiskCache } from './diskCache'
 
 // TASTYTUNES_LYRICS_URL lets test harnesses point lookups at a local server.
 const BASE = process.env['TASTYTUNES_LYRICS_URL'] ?? 'https://lrclib.net/api'
-const USER_AGENT = `TastyTunes/${version} (${REPO_URL})`
 const CACHE_MAX = 500
 // Search fallback: a duration this far off is a different recording — its
 // synced timestamps would drift, so keep only the plain text.

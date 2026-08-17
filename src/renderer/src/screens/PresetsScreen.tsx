@@ -52,6 +52,10 @@ import { PopoverChrome } from '@/hooks/usePopover'
 import { HeaderChip, ScreenTitle } from '@/components/chrome/Chrome'
 import { useConfirmPopover } from '@/components/chrome/Confirm'
 import { artUrlAt } from '@shared/artUrl'
+import { TUNING_WINDOW_MS } from '@/hooks/useStationTuning'
+
+/** A recall that moved nothing after this long is treated as dead — well inside TUNING_WINDOW_MS. */
+const DEAD_RECALL_MS = 8_000
 
 export function PresetsScreen(): React.JSX.Element {
   const presets = useStore((s) => s.presets)
@@ -159,8 +163,8 @@ export function PresetsScreen(): React.JSX.Element {
   // ACCEPTED by the firmware and then silently ignored — no error, no state
   // change (live-probed 2026-07-27). Nothing distinguishes that from "slow"
   // except the passage of time, so watch for a recall that moved nothing.
-  // A real recall lands in ~3s; 8s is generous and still inside the 15s
-  // tuning window.
+  // A real recall lands in ~3s; 8s is generous and still inside the tuning
+  // window (TUNING_WINDOW_MS, shared with station rows).
   const [deadIds, setDeadIds] = useState<Set<number>>(new Set())
   const deadTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const playbackSignature = (): string => {
@@ -186,7 +190,7 @@ export function PresetsScreen(): React.JSX.Element {
     tuningTimer.current = setTimeout(() => {
       setTuningId(null)
       setWakeRecallId(null)
-    }, 15_000)
+    }, TUNING_WINDOW_MS)
     // Recalling what is ALREADY playing legitimately changes nothing — the
     // one false positive this check has, so it never arms in that case.
     const alreadyPlaying = playingIds.has(presetId)
@@ -197,7 +201,7 @@ export function PresetsScreen(): React.JSX.Element {
         if (playbackSignature() !== before) return
         setDeadIds((prev) => new Set(prev).add(presetId))
         setTuningId((cur) => (cur === presetId ? null : cur))
-      }, 8_000)
+      }, DEAD_RECALL_MS)
     }
     void tt.command({ type: 'recallPreset', presetId }).catch(() => {
       setTuningId(null)

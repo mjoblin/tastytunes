@@ -27,14 +27,12 @@ import {
 import { RowAction } from '@/components/media/RowAction'
 import { RowHeart } from '@/components/media/RowHeart'
 import { Segmented } from '@/components/controls/Segmented'
-import { playStation, playingStationName } from '@/lib/radio'
+import { playStation, playingStationName, RADIO_DEBOUNCE_MS } from '@/lib/radio'
 import { useStationTuning } from '@/hooks/useStationTuning'
 import { useLitPresets } from '@/hooks/useLitPresets'
 import { cx, matchesFilter } from '@/lib/format'
 import { Chip, ScreenTitle } from '@/components/chrome/Chrome'
 
-/** Radio is a network call — same debounce the Radio screen uses. */
-const RADIO_DEBOUNCE_MS = 350
 /** Below this, a query matches half the library and every station on earth. */
 const MIN_RADIO_CHARS = 2
 /** Per group while several are showing — five groups of everything is a wall. */

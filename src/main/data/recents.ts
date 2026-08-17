@@ -1,14 +1,12 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { app } from 'electron'
-import type { RecentTrack } from '@shared/model'
+import { type RecentTrack, MAX_RECENTS } from '@shared/model'
 import { atomicWriteFileSync } from './jsonStore'
 
 // A bounded ring of recently-played tracks, persisted beside settings.json.
 // Kept out of settings.json on purpose: it's a churning log, cleared on its own,
 // and shouldn't bloat the settings file the user might inspect or sync.
-
-const MAX_RECENTS = 200
 
 let cached: RecentTrack[] | null = null
 

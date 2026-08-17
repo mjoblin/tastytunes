@@ -1,3 +1,4 @@
+import { isHiRes } from '@shared/model'
 import type { ZoneNowPlaying, ZonePlayState } from '@shared/smoip'
 
 export function cx(...parts: Array<string | false | null | undefined>): string {
@@ -142,10 +143,7 @@ export type SignalQuality = 'hires' | 'lossless' | 'lossy' | 'unknown'
 export function signalQuality(playState: ZonePlayState | null): SignalQuality {
   const md = playState?.metadata
   if (!md) return 'unknown'
-  const hires =
-    (md.sample_rate != null && md.sample_rate > 48_000) ||
-    (md.bit_depth != null && md.bit_depth > 16) ||
-    (md.mqa != null && md.mqa !== 'none')
+  const hires = isHiRes({ bits: md.bit_depth, rate: md.sample_rate, mqa: md.mqa })
   if (md.lossless && hires) return 'hires'
   if (md.lossless) return 'lossless'
   if (md.codec || md.bitrate || md.sample_rate) return 'lossy'

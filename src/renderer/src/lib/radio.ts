@@ -2,6 +2,9 @@ import { isRadioMetadata, type ZonePlayState } from '@shared/smoip'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 
+/** Radio search is a network call to the directory: type-ahead waits this long. ONE number for the Radio screen and unified search (2026-08-16). */
+export const RADIO_DEBOUNCE_MS = 350
+
 /**
  * The station name the device is playing right now, lowercased — or null when
  * radio isn't what's audible. NAME-matched because play_state carries no

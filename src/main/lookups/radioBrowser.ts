@@ -7,17 +7,14 @@
 // Deliberately NOT sent: the per-station "click" ping the directory offers —
 // it would report listening activity to a third party; revisit only as an
 // opt-in (privacy table in the README is a promise).
-import { version } from '../../../package.json'
 import type { RadioStation } from '@shared/model'
-import { REPO_URL } from '@shared/ipc'
-import { loggedFetch } from '../netlog'
+import { loggedFetch, USER_AGENT } from '../netlog'
 import { getSettings } from '../data/persist'
 
 // TASTYTUNES_RADIO_URL lets test harnesses point lookups at a local server.
 // all.api.radio-browser.info is the project's round-robin DNS over its
 // mirrors — fine for interactive use like ours.
 const BASE = process.env['TASTYTUNES_RADIO_URL'] ?? 'https://all.api.radio-browser.info/json'
-const USER_AGENT = `TastyTunes/${version} (${REPO_URL})`
 const LIMIT = 60
 
 interface ApiStation {

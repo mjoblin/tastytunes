@@ -3,9 +3,17 @@
 // the request starts (pending) and one when it settles — the renderer upserts
 // by id. Bounded ring; no payloads, just method/url/status/timing.
 import { webContents } from 'electron'
-import type { NetRequestEntry } from '@shared/model'
+import { NET_RING_SIZE, type NetRequestEntry } from '@shared/model'
+import { REPO_URL } from '@shared/ipc'
+import { version } from '../../package.json'
 
-const RING = 200
+/**
+ * The identifying User-Agent every external service sees (MusicBrainz
+ * declines absent or mismatched ones outright). ONE string (2026-08-16):
+ * mb, radio-browser and lrclib each built their own copy — identical by
+ * discipline, not by construction.
+ */
+export const USER_AGENT = `TastyTunes/${version} (${REPO_URL})`
 
 let nextId = 1
 const entries: NetRequestEntry[] = []
@@ -37,7 +45,7 @@ export async function loggedFetch(
     error: false
   }
   entries.push(entry)
-  if (entries.length > RING) entries.shift()
+  if (entries.length > NET_RING_SIZE) entries.shift()
   broadcast(entry)
 
   const started = Date.now()

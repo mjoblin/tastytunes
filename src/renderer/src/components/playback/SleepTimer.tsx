@@ -6,7 +6,8 @@ import { useStore } from '@/store'
 import { cx, deriveNowPlaying, fmtTime } from '@/lib/format'
 import { PopoverChrome } from '@/hooks/usePopover'
 
-const DURATIONS: Array<{ minutes: number; label: string }> = [
+/** The sleep-timer menu, ONE list (2026-08-16): the bar popover and the command palette both offer exactly these. */
+export const SLEEP_DURATIONS: ReadonlyArray<{ minutes: number; label: string }> = [
   { minutes: 15, label: '15 min' },
   { minutes: 30, label: '30 min' },
   { minutes: 45, label: '45 min' },
@@ -105,7 +106,7 @@ export function SleepTimer(): React.JSX.Element {
             </div>
 
             <div className="grid grid-cols-3 gap-1.5">
-              {DURATIONS.map(({ minutes, label }) => {
+              {SLEEP_DURATIONS.map(({ minutes, label }) => {
                 const on = sleep?.minutes === minutes
                 return (
                   <button
