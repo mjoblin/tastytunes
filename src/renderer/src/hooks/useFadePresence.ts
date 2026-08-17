@@ -3,10 +3,14 @@ import { cx } from '@/lib/format'
 
 /**
  * Presence with a quick opacity fade, for surfaces that conditionally mount
- * (the Now Playing side panels). `mounted` extends past close by the fade
- * duration so the exit is visible; `faded` is the class set for the surface's
- * root. Reduced motion strips the transition (motion-safe), so the panel
- * snaps — the unmount delay is imperceptible there.
+ * (the Now Playing side panels, every ModalShell). `mounted` extends past
+ * close by the fade duration so the exit is visible; `faded` is the class set
+ * for the surface's root. Reduced motion strips the transition (motion-safe),
+ * so the panel snaps — the unmount delay is imperceptible there.
+ *
+ * A surface that is ALREADY open when the hook first runs still fades in
+ * (`visible` starts false and the effect lifts it): the modals mount open,
+ * and a fade that skipped the first open would be no fade at all.
  *
  * The fade is 140ms ON PURPOSE: these panels carry backdrop-blur, and an
  * animated frame over a live blur re-runs it on software rendering (the
@@ -15,7 +19,7 @@ import { cx } from '@/lib/format'
  */
 export function useFadePresence(open: boolean): { mounted: boolean; faded: string } {
   const [mounted, setMounted] = useState(open)
-  const [visible, setVisible] = useState(open)
+  const [visible, setVisible] = useState(false)
 
   useEffect(() => {
     if (open) {

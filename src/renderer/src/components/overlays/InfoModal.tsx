@@ -8,11 +8,12 @@ import { ModalShell } from '@/components/chrome/Overlay'
 
 const SUPPORT_URL = 'https://tastytunes.app/#support'
 
-export function InfoModal(): React.JSX.Element {
+export function InfoModal(): React.JSX.Element | null {
+  const open = useStore((s) => s.infoOpen)
   const setInfoOpen = useStore((s) => s.setInfoOpen)
 
   return (
-    <ModalShell onClose={() => setInfoOpen(false)} className="w-[420px] p-6">
+    <ModalShell open={open} onClose={() => setInfoOpen(false)} className="w-[420px] p-6">
       <div className="flex items-start">
         <div className="flex-1">
           <div className="font-wordmark font-bold text-[24px] leading-none tracking-tight">

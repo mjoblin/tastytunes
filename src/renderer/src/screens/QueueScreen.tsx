@@ -58,7 +58,7 @@ import { artUrlAt } from '@shared/artUrl'
  * stores the whole queue as a MediaQueue preset (recallable anywhere); we also
  * record its exact track signature so the Presets screen can recognize it.
  */
-function SaveQueueDialog({ onClose }: { onClose(): void }): React.JSX.Element {
+function SaveQueueDialog({ open, onClose }: { open: boolean; onClose(): void }): React.JSX.Element | null {
   const trackCount = useStore((s) => s.queue?.items?.length ?? 0)
   const showToast = useStore((s) => s.showToast)
 
@@ -87,7 +87,7 @@ function SaveQueueDialog({ onClose }: { onClose(): void }): React.JSX.Element {
   }
 
   return (
-    <ModalShell onClose={onClose} escapeCloses className="w-[360px] p-5">
+    <ModalShell open={open} onClose={onClose} escapeCloses className="w-[360px] p-5">
       <div className="font-display font-bold text-[17px] tracking-tight mb-3">
         Save queue as preset
       </div>
@@ -380,7 +380,7 @@ export function QueueScreen(): React.JSX.Element {
           }}
         />
       )}
-      {saveOpen && <SaveQueueDialog onClose={() => setSaveOpen(false)} />}
+      <SaveQueueDialog open={saveOpen} onClose={() => setSaveOpen(false)} />
 
       {/* rows: pt-1 keeps the current ring unclipped; cards: pt-2 gives the
           hover grow + glow ring headroom on the top row */}

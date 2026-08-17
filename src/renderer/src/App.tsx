@@ -44,8 +44,6 @@ export default function App(): React.JSX.Element {
   const playState = useStore((s) => s.playState)
   const nowPlaying = useStore((s) => s.nowPlaying)
   const diagnosticsOpen = useStore((s) => s.diagnosticsOpen)
-  const shortcutsOpen = useStore((s) => s.shortcutsOpen)
-  const infoOpen = useStore((s) => s.infoOpen)
   const mediaInfo = useStore((s) => s.mediaInfo)
   const paletteOpen = useStore((s) => s.paletteOpen)
   const displayMode = useStore((s) => s.displayMode)
@@ -160,10 +158,12 @@ export default function App(): React.JSX.Element {
         </div>
         <PlaybackBar />
         {displayMode && <DisplayMode />}
-        {shortcutsOpen && <ShortcutsOverlay />}
+        {/* The modals stay mounted and take their open state themselves —
+            the shell's exit fade needs the DOM to outlive the close. */}
+        <ShortcutsOverlay />
         {paletteOpen && <CommandPalette />}
-        {infoOpen && <InfoModal />}
-        {mediaInfo && <MediaInfoModal target={mediaInfo} />}
+        <InfoModal />
+        <MediaInfoModal target={mediaInfo} />
       </div>
     </div>
   )

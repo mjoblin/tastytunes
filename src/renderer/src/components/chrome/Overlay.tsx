@@ -2,6 +2,7 @@ import { useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { cx } from '@/lib/format'
 import { PopoverChrome, usePopoverChrome, useClampedPosition } from '@/hooks/usePopover'
+import { useFadePresence } from '@/hooks/useFadePresence'
 
 /**
  * The two overlay shells. Every transient surface in the app is one of these:
@@ -90,19 +91,37 @@ export function PopoverCard({
  * state (the save-queue dialog). The two store-backed overlays — shortcuts and
  * info — are closed by the app's global Escape cascade instead, and mounting a
  * second handler here would just fight it.
+ *
+ * FADES IN AND OUT (2026-08-16, user call: the modals popped while the Now
+ * Playing side panels faded). Presence is the shell's, not the caller's:
+ * pass `open` and keep the shell MOUNTED across close, and the shell holds the
+ * room for one `useFadePresence` beat (140ms — the frost-law budget, see the
+ * hook) before rendering nothing. While it fades out it keeps showing the
+ * LAST children it was given while open, so a caller whose content is
+ * derived from a value that becomes null on close (the Info modal's target)
+ * needs no ghost of its own; the exiting surface takes no clicks. A caller
+ * that still mounts conditionally gets the fade IN and a pop out — every
+ * shell caller passes `open` for that reason.
  */
 export function ModalShell({
+  open = true,
   onClose,
   escapeCloses = false,
   className,
   children
 }: {
+  /** Keep the shell mounted and flip this — the exit fade needs the DOM. */
+  open?: boolean
   onClose(): void
   escapeCloses?: boolean
   /** Panel geometry — width, max-*, flex, padding. The surface is the shell's. */
   className?: string
   children: React.ReactNode
-}): React.JSX.Element {
+}): React.JSX.Element | null {
+  const { mounted, faded } = useFadePresence(open)
+  const shown = useRef(children)
+  if (open) shown.current = children
+  if (!mounted) return null
   return (
     // THE BLUR STAYS; HOVER TRANSITIONS INSIDE THE SHELL GO (2026-08-04,
     // measured round). The frosted backdrop is what dissolves the room's
@@ -126,15 +145,20 @@ export function ModalShell({
     // depend on the mount point.
     createPortal(
       <div
-        className="fixed inset-0 z-30 bg-black/60 backdrop-blur-sm flex items-center justify-center"
+        className={cx(
+          'fixed inset-0 z-30 bg-black/60 backdrop-blur-sm flex items-center justify-center',
+          faded,
+          !open && 'pointer-events-none'
+        )}
+        data-modal-open={open ? '' : undefined}
         onClick={onClose}
       >
-        {escapeCloses && <PopoverChrome onClose={onClose} />}
+        {escapeCloses && open && <PopoverChrome onClose={onClose} />}
         <div
           className={cx('rounded-2xl bg-panel ring-1 ring-edge2 shadow-2xl', className)}
           onClick={(e) => e.stopPropagation()}
         >
-          {children}
+          {open ? children : shown.current}
         </div>
       </div>,
       document.body

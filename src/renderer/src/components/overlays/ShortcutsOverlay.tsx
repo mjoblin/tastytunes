@@ -47,11 +47,13 @@ const GROUPS: Array<{ title: string; rows: Array<[string, string]> }> = [
   }
 ]
 
-export function ShortcutsOverlay(): React.JSX.Element {
+export function ShortcutsOverlay(): React.JSX.Element | null {
+  const open = useStore((s) => s.shortcutsOpen)
   const setShortcutsOpen = useStore((s) => s.setShortcutsOpen)
 
   return (
     <ModalShell
+      open={open}
       onClose={() => setShortcutsOpen(false)}
       className="w-[540px] max-w-[calc(100%-2rem)] max-h-[calc(100%-2rem)] flex flex-col p-6"
     >

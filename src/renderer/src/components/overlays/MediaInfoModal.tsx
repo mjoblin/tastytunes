@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Copy, Check, Disc3, Music2, User } from 'lucide-react'
 import {
   albumComposers,
@@ -97,7 +97,21 @@ function CopyableMono({ value, label }: { value: string; label: string }): React
   )
 }
 
-export function MediaInfoModal({ target }: { target: MediaInfoTarget }): React.JSX.Element {
+/**
+ * Mounted permanently by App; `target` null means closed. The body keeps
+ * rendering the LAST target through the shell's exit fade (the shell holds
+ * its last children, but this component's hooks need a node to run against),
+ * and unmounts once nothing has ever been shown.
+ */
+export function MediaInfoModal({ target }: { target: MediaInfoTarget | null }): React.JSX.Element | null {
+  const last = useRef<MediaInfoTarget | null>(null)
+  if (target) last.current = target
+  const shown = target ?? last.current
+  if (!shown) return null
+  return <MediaInfoBody target={shown} open={target != null} />
+}
+
+function MediaInfoBody({ target, open }: { target: MediaInfoTarget; open: boolean }): React.JSX.Element {
   const setMediaInfo = useStore((s) => s.setMediaInfo)
   const close = (): void => setMediaInfo(null)
   const { node, tracks, serverName, note, artist, stream } = target
@@ -258,7 +272,7 @@ export function MediaInfoModal({ target }: { target: MediaInfoTarget }): React.J
         : null
 
   return (
-    <ModalShell onClose={close} className="w-[640px] max-w-[92vw] max-h-[86vh] flex flex-col p-6" >
+    <ModalShell open={open} onClose={close} className="w-[640px] max-w-[92vw] max-h-[86vh] flex flex-col p-6">
       <div className="flex items-start gap-5" data-media-info>
         <div className="h-[128px] w-[128px] shrink-0 rounded-xl overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
           <ArtImage
