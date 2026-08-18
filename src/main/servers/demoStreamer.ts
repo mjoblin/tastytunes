@@ -368,6 +368,128 @@ function buildDemo(host: string): {
   ]
   const album2ById = (id: string): Album | undefined => LIB2_ALBUMS.find((a) => a.id === id)
 
+  // A THIRD media server, always present in the demo: a minidlna/ReadyMedia-
+  // SHAPED box (mirrors dev/mock-streamer.mjs's MOCK_MINIDLNA_SERVER; every
+  // trait rig-verified against ReadyMedia 1.3.3, 2026-08-16). Deliberately
+  // NOT Asset's shape — the demo must exercise the other reading:
+  //   - NO role attributes: upnp:artist is the ALBUM ARTIST, dc:creator the
+  //     performer (compilation tracks say "Various Artists" and name their
+  //     singer only as creator; a "feat." track likewise)
+  //   - virtual "- All Albums -" under every artist (BARE object.container.album
+  //     WITH upnp:artist) and "- All Artists -" under every genre (bare
+  //     object.container.person), answering class searches beside the real ones
+  //   - album containers carry NO dc:date (tracks do)
+  //   - a two-disc set has per-disc track numbers and NO disc element; Browse
+  //     order is disc-then-track (1, 2, 1, 2)
+  //   - res without bitsPerSample; one albumArtURI tagged JPEG_TN
+  type Lib3Album = {
+    id: string
+    title: string
+    artist: string
+    genre: string
+    art: string | null
+    tracks: Array<{ n: number; title: string; creator: string; date: string }>
+  }
+  const LIB3_ALBUMS: Lib3Album[] = [
+    {
+      id: 'm3-shark',
+      title: 'Sharkmouth',
+      artist: 'Russell Morris',
+      genre: 'Rock',
+      art: `${host}/art/p24.svg`,
+      tracks: [
+        { n: 1, title: 'Sharkmouth', creator: 'Russell Morris', date: '2012-01-01' },
+        { n: 2, title: 'Feat Cut', creator: 'Russell Morris feat. Guest One', date: '2012-01-01' }
+      ]
+    },
+    {
+      id: 'm3-comp',
+      title: 'Rig Compilation',
+      artist: 'Various Artists',
+      genre: 'Rock',
+      art: null,
+      tracks: [
+        { n: 1, title: 'First Cut', creator: 'Guest One', date: '2020-01-01' },
+        { n: 2, title: 'Second Cut', creator: 'Guest Two', date: '2020-01-01' }
+      ]
+    },
+    {
+      id: 'm3-box',
+      title: 'Box Set',
+      artist: 'Enya',
+      genre: 'New Age',
+      art: null,
+      tracks: [
+        { n: 1, title: 'Disc One A', creator: 'Enya', date: '2000-01-01' },
+        { n: 2, title: 'Disc One B', creator: 'Enya', date: '2000-01-01' },
+        { n: 1, title: 'Disc Two A', creator: 'Enya', date: '2000-01-01' },
+        { n: 2, title: 'Disc Two B', creator: 'Enya', date: '2000-01-01' }
+      ]
+    }
+  ]
+  const LIB3_ARTISTS = [...new Set(LIB3_ALBUMS.map((a) => a.artist))]
+  const LIB3_GENRES = [...new Set(LIB3_ALBUMS.map((a) => a.genre))]
+  const album3ById = (id: string): Lib3Album | undefined => LIB3_ALBUMS.find((a) => a.id === id)
+  const didl3Art = (art: string | null): string =>
+    art ? `<upnp:albumArtURI dlna:profileID="JPEG_TN" xmlns:dlna="urn:schemas-dlna-org:metadata-1-0/">${art}</upnp:albumArtURI>` : ''
+  const didl3Album = (a: Lib3Album, cls = 'object.container.album.musicAlbum'): string =>
+    `<container id="${a.id}" parentID="m3-albums" restricted="1" searchable="1" childCount="${a.tracks.length}"><dc:title>${xmlEsc(a.title)}</dc:title><upnp:class>${cls}</upnp:class><upnp:storageUsed>-1</upnp:storageUsed><dc:creator>${xmlEsc(a.artist)}</dc:creator><upnp:genre>${xmlEsc(a.genre)}</upnp:genre><upnp:artist>${xmlEsc(a.artist)}</upnp:artist>${didl3Art(a.art)}</container>`
+  const didl3AllAlbums = (artist: string, i: number): string =>
+    `<container id="m3-artist-${i}-all" parentID="m3-artist-${i}" restricted="1" searchable="1" childCount="1"><dc:title>- All Albums -</dc:title><upnp:class>object.container.album</upnp:class><upnp:storageUsed>-1</upnp:storageUsed><dc:creator>${xmlEsc(artist)}</dc:creator><upnp:artist>${xmlEsc(artist)}</upnp:artist></container>`
+  const didl3Artist = (artist: string, i: number): string =>
+    `<container id="m3-artist-${i}" parentID="m3-artists" restricted="1" searchable="1" childCount="2"><dc:title>${xmlEsc(artist)}</dc:title><upnp:class>object.container.person.musicArtist</upnp:class><upnp:storageUsed>-1</upnp:storageUsed></container>`
+  const didl3AllArtists = (genre: string, i: number): string =>
+    `<container id="m3-genre-${i}-all" parentID="m3-genre-${i}" restricted="1" searchable="1" childCount="1"><dc:title>- All Artists -</dc:title><upnp:class>object.container.person</upnp:class><upnp:storageUsed>-1</upnp:storageUsed><upnp:genre>${xmlEsc(genre)}</upnp:genre></container>`
+  const track3Secs = (i: number): number => 120 + i * 11
+  const didl3Track = (a: Lib3Album, i: number): string => {
+    const t = a.tracks[i]
+    const secs = track3Secs(i)
+    return `<item id="${a.id}-i${i}" parentID="${a.id}" restricted="1" refID="m3-folders-${a.id}-${i}"><dc:title>${xmlEsc(t.title)}</dc:title><upnp:class>object.item.audioItem.musicTrack</upnp:class><dc:creator>${xmlEsc(t.creator)}</dc:creator><dc:date>${t.date}</dc:date><upnp:artist>${xmlEsc(a.artist)}</upnp:artist><upnp:album>${xmlEsc(a.title)}</upnp:album><upnp:genre>${xmlEsc(a.genre)}</upnp:genre><upnp:originalTrackNumber>${t.n}</upnp:originalTrackNumber>${didl3Art(a.art)}<res size="${secs * 100000}" duration="${durFmt(secs)}" bitrate="100000" sampleFrequency="44100" nrAudioChannels="2" protocolInfo="http-get:*:audio/x-flac:*">${host}/MediaItems/${a.id}-${i}.flac</res></item>`
+  }
+  const track3Meta = (a: Lib3Album, i: number): Dict => ({
+    ...trackMeta(i + 1),
+    title: a.tracks[i].title,
+    album: a.title,
+    artist: a.tracks[i].creator,
+    genre: a.genre,
+    art_url: a.art,
+    track_number: a.tracks[i].n,
+    duration: track3Secs(i)
+  })
+  function cd3Children(id: string): string[] | null {
+    if (id === '0')
+      return [
+        `<container id="m3-music" parentID="0" restricted="1" searchable="1" childCount="2"><dc:title>Music</dc:title><upnp:class>object.container.storageFolder</upnp:class></container>`
+      ]
+    if (id === 'm3-music')
+      return [
+        `<container id="m3-albums" parentID="m3-music" restricted="1" searchable="1" childCount="${LIB3_ALBUMS.length}"><dc:title>Album</dc:title><upnp:class>object.container.storageFolder</upnp:class></container>`,
+        `<container id="m3-artists" parentID="m3-music" restricted="1" searchable="1" childCount="${LIB3_ARTISTS.length}"><dc:title>Artist</dc:title><upnp:class>object.container.storageFolder</upnp:class></container>`
+      ]
+    if (id === 'm3-albums') return LIB3_ALBUMS.map((a) => didl3Album(a))
+    if (id === 'm3-artists') return LIB3_ARTISTS.map(didl3Artist)
+    const am = id.match(/^m3-artist-(\d+)$/)
+    if (am) {
+      const artist = LIB3_ARTISTS[Number(am[1])]
+      return [didl3AllAlbums(artist, Number(am[1])), ...LIB3_ALBUMS.filter((a) => a.artist === artist).map((a) => didl3Album(a))]
+    }
+    const alb = album3ById(id)
+    if (alb) return alb.tracks.map((_, i) => didl3Track(alb, i))
+    return null
+  }
+  function cd3Metadata(id: string): string | null {
+    const alb = album3ById(id)
+    if (alb) return didl3Album(alb)
+    const m = id.match(/^(m3-\w+)-i(\d+)$/)
+    if (m) {
+      const a = album3ById(m[1])
+      if (a && a.tracks[Number(m[2])]) return didl3Track(a, Number(m[2]))
+    }
+    return null
+  }
+  const DESCRIPTION3_XML = `<?xml version="1.0"?>
+<root xmlns="urn:schemas-upnp-org:device-1-0"><specVersion><major>1</major><minor>0</minor></specVersion><device><deviceType>urn:schemas-upnp-org:device:MediaServer:1</deviceType><friendlyName>Demo ReadyMedia</friendlyName><manufacturer>Justin Maggard</manufacturer><modelName>Windows Media Connect compatible (MiniDLNA)</modelName><modelNumber>1.3.3</modelNumber><UDN>uuid:demo-udn-3</UDN><serviceList><service><serviceType>urn:schemas-upnp-org:service:ContentDirectory:1</serviceType><serviceId>urn:upnp-org:serviceId:ContentDirectory</serviceId><controlURL>/upnp3/control</controlURL><eventSubURL>/upnp3/event</eventSubURL><SCPDURL>/upnp3/scpd.xml</SCPDURL></service></serviceList></device></root>`
+
   function cd2Children(id: string): string[] | null {
     if (id === '0') return [didlContainer('a2-music', '0', 'Music', 'object.container', null)]
     if (id === 'a2-music')
@@ -673,7 +795,21 @@ function buildDemo(host: string): {
   }
 
   function queueItemsFor(targetId: string | null): QueueItem[] | null {
-    // one queue, two sources — the second server's ids resolve here too
+    // one queue, three sources — the other servers' ids resolve here too
+    const t3 = targetId?.match(/^(m3-\w+)-i(\d+)$/)
+    if (t3) {
+      const a = album3ById(t3[1])
+      if (a && a.tracks[Number(t3[2])])
+        return [{ id: nextQueueId++, position: 0, srcId: targetId ?? undefined, metadata: { ...track3Meta(a, Number(t3[2])), playback_source: 'punnet' } }]
+    }
+    const alb3 = targetId ? album3ById(targetId) : undefined
+    if (alb3)
+      return alb3.tracks.map((_, i) => ({
+        id: nextQueueId++,
+        position: 0,
+        srcId: `${alb3.id}-i${i}`,
+        metadata: { ...track3Meta(alb3, i), playback_source: 'punnet' }
+      }))
     const t2 = targetId?.match(/^(a2-\w+)-t(\d+)$/)
     if (t2) {
       const a = album2ById(t2[1])
@@ -845,6 +981,77 @@ function buildDemo(host: string): {
         res.writeHead(200, { 'content-type': 'text/xml' })
         return res.end(DESCRIPTION2_XML)
       }
+      if (u.pathname === '/description3.xml') {
+        res.writeHead(200, { 'content-type': 'text/xml' })
+        return res.end(DESCRIPTION3_XML)
+      }
+      if (u.pathname === '/upnp3/control' && req.method === 'POST') {
+        const body = await readBody(req)
+        const soap3 = (inner: string): void => {
+          res.writeHead(200, { 'content-type': 'text/xml' })
+          res.end(
+            `<?xml version="1.0"?>
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body>${inner}</s:Body></s:Envelope>`
+          )
+        }
+        if (body.includes('GetSearchCapabilities'))
+          return soap3(
+            '<u:GetSearchCapabilitiesResponse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"><SearchCaps>dc:creator,dc:date,dc:title,upnp:album,upnp:actor,upnp:artist,upnp:class,upnp:genre,@id,@parentID,@refID</SearchCaps></u:GetSearchCapabilitiesResponse>'
+          )
+        if (body.includes('GetSortCapabilities'))
+          return soap3(
+            '<u:GetSortCapabilitiesResponse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"><SortCaps>dc:title,dc:date,upnp:class,upnp:album,upnp:originalTrackNumber</SortCaps></u:GetSortCapabilitiesResponse>'
+          )
+        if (body.includes('GetSystemUpdateID'))
+          return soap3(
+            '<u:GetSystemUpdateIDResponse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"><Id>3</Id></u:GetSystemUpdateIDResponse>'
+          )
+        if (body.includes('<u:Search')) {
+          const q = (body.match(/contains &quot;(.*?)&quot;/)?.[1] ?? '').toLowerCase()
+          const scope = body.match(/derivedfrom &quot;(.*?)&quot;/)?.[1] ?? ''
+          const useArtist = body.includes('upnp:artist contains')
+          const useAlbum = body.includes('upnp:album contains')
+          const parts: string[] = []
+          if (scope.includes('container.album')) {
+            for (const a of LIB3_ALBUMS)
+              if (a.title.toLowerCase().includes(q) || (useArtist && a.artist.toLowerCase().includes(q))) parts.push(didl3Album(a))
+            LIB3_ARTISTS.forEach((artist, i) => {
+              if ('- all albums -'.includes(q) || (useArtist && artist.toLowerCase().includes(q))) parts.push(didl3AllAlbums(artist, i))
+            })
+          } else if (scope.includes('container.person')) {
+            LIB3_ARTISTS.forEach((artist, i) => {
+              if (artist.toLowerCase().includes(q)) parts.push(didl3Artist(artist, i))
+            })
+            LIB3_GENRES.forEach((genre, i) => {
+              if ('- all artists -'.includes(q)) parts.push(didl3AllArtists(genre, i))
+            })
+          } else if (scope.includes('item.audioItem')) {
+            for (const a of LIB3_ALBUMS)
+              a.tracks.forEach((t, i) => {
+                if (
+                  t.title.toLowerCase().includes(q) ||
+                  (useArtist && a.artist.toLowerCase().includes(q)) ||
+                  (useAlbum && a.title.toLowerCase().includes(q))
+                )
+                  parts.push(didl3Track(a, i))
+              })
+          }
+          return soap3(
+            `<u:SearchResponse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"><Result>${xmlEsc(didlWrap(parts.join('')))}</Result><NumberReturned>${parts.length}</NumberReturned><TotalMatches>${parts.length}</TotalMatches><UpdateID>3</UpdateID></u:SearchResponse>`
+          )
+        }
+        const objectId = body.match(/<ObjectID>(.*?)<\/ObjectID>/)?.[1] ?? '0'
+        const flag = body.match(/<BrowseFlag>(.*?)<\/BrowseFlag>/)?.[1] ?? 'BrowseDirectChildren'
+        const meta = cd3Metadata(objectId)
+        const all = flag === 'BrowseMetadata' ? (meta ? [meta] : null) : cd3Children(objectId)
+        if (!all) {
+          res.writeHead(500)
+          return res.end('<error/>')
+        }
+        return soap3(
+          `<u:BrowseResponse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"><Result>${xmlEsc(didlWrap(all.join('')))}</Result><NumberReturned>${all.length}</NumberReturned><TotalMatches>${all.length}</TotalMatches><UpdateID>3</UpdateID></u:BrowseResponse>`
+        )
+      }
       if (u.pathname === '/upnp2/control' && req.method === 'POST') {
         const body = await readBody(req)
         const soap2 = (inner: string): void => {
@@ -924,6 +1131,13 @@ function buildDemo(host: string): {
                   manufacturer: 'TastyTunes',
                   udn: 'demo-udn-2',
                   description_url: `${host}/description2.xml`
+                },
+                {
+                  model: 'Windows Media Connect compatible (MiniDLNA)',
+                  name: 'Demo ReadyMedia',
+                  manufacturer: 'Justin Maggard',
+                  udn: 'demo-udn-3',
+                  description_url: `${host}/description3.xml`
                 }
               ]
             }

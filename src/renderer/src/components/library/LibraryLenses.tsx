@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowUpRight, ChevronDown, MoreHorizontal } from 'lucide-react'
-import { albumFormat, compareTrackOrder, discGroups, isCompilation, performerLine, sameArt, trackArtists, trackInAlbumOf, type MediaIndexPools, type MediaNode } from '@shared/model'
+import { albumFormat, orderTracks, discGroups, isCompilation, performerLine, sameArt, trackArtists, trackInAlbumOf, type MediaIndexPools, type MediaNode } from '@shared/model'
 import { cx, fmtTime, matchesFilter } from '@/lib/format'
 import { useStore } from '@/store'
 import { scrollToVisible } from '@/lib/scroll'
@@ -580,7 +580,7 @@ export function ArtistsLens({
         else m.set(k, [t])
       }
     }
-    for (const list of m.values()) list.sort(compareTrackOrder) // disc, then position
+    for (const [k, list] of m) m.set(k, orderTracks(list)) // disc, then position — or the server's order when the numbers repeat
     return m
   }, [pools])
 

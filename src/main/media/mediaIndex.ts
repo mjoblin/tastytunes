@@ -37,6 +37,10 @@ interface StoredIndex {
   tracks: MediaNode[]
 }
 
+// v9: minidlna round (2026-08-16): role-less artist/creator split read as
+//     albumArtist/performers; bare search classes settled structurally (the
+//     "- All Albums -" virtual container no longer an album); album year
+//     from its tracks when the container has none.
 // v8: composers (upnp:artist role="Composer", split) — 2026-08-16.
 // v7: format parse revised (m4a ALAC-vs-AAC by file bitrate, lossy kbps from
 //     size ÷ duration) — the SAME parser change without a bump left the lens
@@ -50,7 +54,7 @@ interface StoredIndex {
 // Asset tagging). v2 added upnp:genre. A bump discards stored indexes
 // wholesale; rebuildHints below keeps that from costing Browse-only
 // servers their Build click.
-const VERSION = 8
+const VERSION = 9
 const PAGE = 500
 const MAX_TRACKS = 50_000
 const MAX_CONTAINERS = 10_000
@@ -160,31 +164,70 @@ export function status(): MediaIndexStatus[] {
 const buildingNames = new Map<string, string>()
 
 // Asset generalizes classes in Search results (an album browses as
-// …album.musicAlbum but searches as bare object.container.album) — normalize
-// so index rows behave exactly like browsed ones in the renderer.
-const normalize = (n: MediaNode, leaf: string): MediaNode =>
-  n.isContainer && !n.upnpClass.includes(leaf.split('.').pop() as string)
-    ? { ...n, upnpClass: leaf }
-    : n
+// …album.musicAlbum but searches as bare object.container.album; the same for
+// person vs person.musicArtist) — EVERY result comes back bare. minidlna does
+// the opposite: real albums search as musicAlbum and only its VIRTUAL
+// containers ("- All Albums -" under each artist, "- All Artists -" under
+// each genre) are the bare class, with an upnp:artist attached. Promoting
+// every bare result to the leaf class was right for Asset and wrong for
+// minidlna (N+1 albums per artist, user report 2026-08-16). So the rule is
+// STRUCTURAL, not vendor-sniffed: a server whose results contain no leaf-class
+// instance at all is generalizing — promote them all; a server that
+// distinguishes the leaf class means it — keep the leaf ones, drop the bare.
+// (A photo album is bare object.container.album too; the second branch is
+// also what keeps those out of a music index.)
+const leafOf = (leaf: string): string => leaf.split('.').pop() as string
+const settleClasses = (nodes: MediaNode[], leaf: string, serverName: string, what: string): MediaNode[] => {
+  const isLeaf = (n: MediaNode): boolean => n.upnpClass.includes(leafOf(leaf))
+  if (nodes.some(isLeaf)) {
+    const kept = nodes.filter(isLeaf)
+    if (kept.length < nodes.length)
+      console.log(`[mediaIndex] ${serverName}: dropped ${nodes.length - kept.length} bare-class ${what} (server distinguishes ${leafOf(leaf)})`)
+    return kept
+  }
+  return nodes.map((n) => (n.isContainer ? { ...n, upnpClass: leaf } : n))
+}
+
+// An album container that carries no dc:date (minidlna's do not; its tracks
+// do) takes the year its tracks agree on — the Albums lens decades, sorts
+// and the artist page all read album.year.
+const yearFromTracks = (albums: MediaNode[], tracks: MediaNode[]): MediaNode[] => {
+  const byAlbum = new Map<string, Map<string, number>>()
+  for (const t of tracks) {
+    if (!t.album || !t.year) continue
+    const key = t.album.trim().toLowerCase()
+    const m = byAlbum.get(key) ?? new Map<string, number>()
+    m.set(t.year, (m.get(t.year) ?? 0) + 1)
+    byAlbum.set(key, m)
+  }
+  return albums.map((a) => {
+    if (a.year) return a
+    const m = byAlbum.get(a.title.trim().toLowerCase())
+    if (!m) return a
+    const [year] = [...m.entries()].sort((x, y) => y[1] - x[1])[0]
+    return { ...a, year }
+  })
+}
 
 async function crawlSearch(host: string, server: MediaServerInfo): Promise<StoredIndex | null> {
-  const collect = async (cls: string, leaf: string | null, cap: number): Promise<MediaNode[] | null> => {
+  const collect = async (cls: string, leaf: string | null, cap: number, what: string): Promise<MediaNode[] | null> => {
     const seen = new Map<string, MediaNode>()
     let start = 0
     for (;;) {
       const page = await searchPage(host, server.udn, `upnp:class derivedfrom "${cls}"`, start, PAGE)
       if (!page) return start === 0 ? null : [...seen.values()]
-      for (const n of page.items) seen.set(n.id, leaf ? normalize(n, leaf) : n)
+      for (const n of page.items) seen.set(n.id, n)
       start += page.items.length
       if (page.items.length === 0 || start >= page.total || seen.size >= cap) {
         if (seen.size >= cap) console.log(`[mediaIndex] ${server.name}: ${cls} capped at ${cap}`)
-        return [...seen.values()]
+        const all = [...seen.values()]
+        return leaf ? settleClasses(all, leaf, server.name, what) : all
       }
     }
   }
-  const albums = await collect('object.container.album', 'object.container.album.musicAlbum', MAX_CONTAINERS)
-  const artists = await collect('object.container.person', 'object.container.person.musicArtist', MAX_CONTAINERS)
-  const tracks = await collect('object.item.audioItem', null, MAX_TRACKS)
+  const albums = await collect('object.container.album', 'object.container.album.musicAlbum', MAX_CONTAINERS, 'albums')
+  const artists = await collect('object.container.person', 'object.container.person.musicArtist', MAX_CONTAINERS, 'artists')
+  const tracks = await collect('object.item.audioItem', null, MAX_TRACKS, 'tracks')
   if (tracks == null && albums == null) return null // server refused the crawl entirely
   const updateId = await getSystemUpdateID(host, server.udn)
   return {
@@ -193,7 +236,7 @@ async function crawlSearch(host: string, server: MediaServerInfo): Promise<Store
     strategy: 'search',
     updateId,
     builtAt: Date.now(),
-    albums: albums ?? [],
+    albums: yearFromTracks(albums ?? [], tracks ?? []),
     artists: artists ?? [],
     tracks: tracks ?? []
   }
@@ -233,7 +276,7 @@ async function crawlBrowse(host: string, server: MediaServerInfo): Promise<Store
     strategy: 'browse',
     updateId,
     builtAt: Date.now(),
-    albums: [...albums.values()],
+    albums: yearFromTracks([...albums.values()], [...tracks.values()]),
     artists: [...artists.values()],
     tracks: [...tracks.values()]
   }

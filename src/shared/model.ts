@@ -1086,14 +1086,36 @@ export function albumTracksOf(
   const owner = (album.artist ?? '').trim().toLowerCase()
   const twins =
     pool.albums.filter((a) => a.title.trim().toLowerCase() === title && (a.artist ?? '').trim().toLowerCase() === owner).length > 1
-  return pool.tracks
-    .filter(
+  return orderTracks(
+    pool.tracks.filter(
       (t) =>
         (t.album ?? '').trim().toLowerCase() === title &&
         trackInAlbumOf(t, album.artist ?? null) &&
         (!twins || sameArt(t.artUrl, album.artUrl))
     )
-    .sort(compareTrackOrder)
+  )
+}
+
+/**
+ * Order an album's tracks: by (disc, position) when that key is UNIQUE across
+ * the list, otherwise the LISTING ORDER stands. minidlna (rig-verified
+ * 2026-08-16) sends no disc number and per-disc track numbers — a two-disc
+ * set is 1, 2, 1, 2 — but its Browse order is disc-then-track; sorting by the
+ * numbers alone interleaved the discs (d1t1, d2t1, d1t2, …). Duplicate keys
+ * mean the numbers cannot say more than the server already has; the sort
+ * cannot improve on the listing and can only scramble it. Every sort of an
+ * album's tracks goes through here (leaf, lens, albumTracksOf).
+ */
+export function orderTracks<T extends Pick<MediaNode, 'trackNumber' | 'discNumber'>>(tracks: ReadonlyArray<T>): T[] {
+  const seen = new Set<string>()
+  for (const t of tracks) {
+    const pos = trackPosition(t)
+    if (pos == null) continue
+    const key = `${t.discNumber ?? 1}:${pos}`
+    if (seen.has(key)) return [...tracks]
+    seen.add(key)
+  }
+  return [...tracks].sort(compareTrackOrder)
 }
 
 /** Everything an album's tracks add up to — the leaf's facts, the lens heading, the Info modal and MCP all read this. */

@@ -16,7 +16,7 @@ import {
   Users,
   X
 } from 'lucide-react'
-import { presetVolumeKey, type AppSettings, type MediaIndexPools, type MediaNode, type MediaQueueAction, type MediaSearchAllGroup, type MediaServerInfo, type ScreenLayout, compareTrackOrder, discGroups, albumFormat, fmtBytes, albumComposers, performerLine, albumTracksOf, artistSummary } from '@shared/model'
+import { presetVolumeKey, type AppSettings, type MediaIndexPools, type MediaNode, type MediaQueueAction, type MediaSearchAllGroup, type MediaServerInfo, type ScreenLayout, orderTracks, discGroups, albumFormat, fmtBytes, albumComposers, performerLine, albumTracksOf, artistSummary } from '@shared/model'
 import { favoriteKey, type Favorite, type FavoriteMedia } from '@shared/model'
 import type { QueueListItem } from '@shared/smoip'
 import { tt } from '@/api'
@@ -1124,7 +1124,7 @@ export function LibraryScreen(): React.JSX.Element {
     // order); loose listings (Title views, mixed folders) follow the sort.
     const tracks = albumNode
       ? rawTracks.length > 1 && rawTracks.every((t) => t.trackNumber != null)
-        ? [...rawTracks].sort(compareTrackOrder) // disc, then position
+        ? orderTracks(rawTracks) // disc, then position — or the server's order when the numbers repeat
         : rawTracks
       : searchMode
         ? rawTracks

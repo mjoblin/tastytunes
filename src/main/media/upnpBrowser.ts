@@ -327,12 +327,32 @@ function didlToNodes(didl: string): MediaNode[] {
     const artistEls = asArray(raw.artist as unknown | unknown[])
     const roleOf = (el: unknown): string =>
       el != null && typeof el === 'object' ? String((el as Record<string, unknown>)['@_role'] ?? '').toLowerCase() : ''
-    const albumArtist = text(artistEls.find((el) => roleOf(el) === 'albumartist')) ?? null
+    let albumArtist = text(artistEls.find((el) => roleOf(el) === 'albumartist')) ?? null
     const performerEls = artistEls.filter((el) => ['', 'performer', 'artist'].includes(roleOf(el)))
-    const performerText = performerEls.map(text).filter((v): v is string => !!v?.trim())
+    let performerText = performerEls.map(text).filter((v): v is string => !!v?.trim())
+    const creator = text(raw.creator)?.trim() || null
+    // NO ROLES AT ALL, and dc:creator disagrees with the one role-less
+    // upnp:artist (minidlna/ReadyMedia, rig-verified 2026-08-16): that server
+    // puts ALBUMARTIST in upnp:artist and the performer (ARTIST) in
+    // dc:creator — a compilation track says artist "Various Artists" and
+    // names its singer only as creator; a "feat." track likewise. Read it the
+    // way it was written: album artist from upnp:artist, performers from
+    // dc:creator. A no-op whenever the two agree (every plain track, on every
+    // server), and Asset never gets here — it always sends the AlbumArtist
+    // role (its dc:creator equals its role-less artist, live-checked).
+    if (
+      albumArtist == null &&
+      artistEls.every((el) => roleOf(el) === '') &&
+      performerText.length === 1 &&
+      creator != null &&
+      creator.toLowerCase() !== performerText[0].trim().toLowerCase()
+    ) {
+      albumArtist = performerText[0].trim()
+      performerText = [creator]
+    }
     const artist =
       (performerText.length > 0 ? performerText.join('; ') : null) ??
-      text(raw.creator) ??
+      creator ??
       albumArtist ??
       text(artistEls[0]) ??
       null
