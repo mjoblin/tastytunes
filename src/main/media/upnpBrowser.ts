@@ -6,8 +6,8 @@
 // file except encoded inside /smoip/queue/add (queue writes) or a JSON body
 // (action=PRESET — preset saves). Streamer-directed SMOIP traffic is
 // unlogged (it has its own console); media-server traffic logs as 'upnp'.
-import { XMLParser } from 'fast-xml-parser'
-import { LOSSLESS_CODECS, type MediaNode, type MediaQueueAction, type MediaServerInfo, type MediaFormat } from '@shared/model'
+import type { MediaNode, MediaQueueAction, MediaServerInfo } from '@shared/model'
+import { asArray, didlToNodes, parser, text } from './didl'
 import { loggedFetch } from '../netlog'
 
 const PAGE_SIZE = 5000 // the streamer's own server ignores RequestedCount=0
@@ -18,54 +18,10 @@ interface ServerEntry extends MediaServerInfo {
   searchCaps: string
 }
 
-const parser = new XMLParser({
-  ignoreAttributes: false,
-  attributeNamePrefix: '@_',
-  removeNSPrefix: true,
-  // The SOAP Result is ESCAPED XML — every tag bracket of the inner DIDL is
-  // an &lt;/&gt; entity, so a large listing (Asset's "[All Album Artists]")
-  // blows straight past fast-xml-parser's default billion-laughs guard of
-  // 1000 expansions ("Couldn't browse this library" on big folders). Keep
-  // the guard, raise the ceilings to fit real library sizes.
-  processEntities: {
-    enabled: true,
-    maxTotalExpansions: 5_000_000,
-    maxExpandedLength: 50_000_000
-  }
-})
-
 let servers = new Map<string, ServerEntry>()
 // Per-node listing cache, session only. Streamer-USB ids rot across standby;
 // a failed browse falls back to re-walking the breadcrumb titles from root.
 const nodeCache = new Map<string, MediaNode[]>()
-
-const asArray = <T>(v: T | T[] | undefined): T[] => (v == null ? [] : Array.isArray(v) ? v : [v])
-
-// upnp:albumArtURI can be MULTI-VALUED: DLNA lets a server offer several
-// sizes, one element each, tagged dlna:profileID JPEG_TN/SM/MED/LRG (Twonky,
-// Serviio and friends do; Asset sends one). text() of an array is null — the
-// same array trap the artist parse fell into — so such a server used to yield
-// NO art at all. Take the largest profile; unranked ones keep first-seen order.
-const ART_RANK: Record<string, number> = { JPEG_LRG: 4, PNG_LRG: 4, JPEG_MED: 3, PNG_MED: 3, JPEG_SM: 2, PNG_SM: 2, JPEG_TN: 1, PNG_TN: 1 }
-const pickArt = (v: unknown): string | null => {
-  const els = asArray(v as unknown | unknown[])
-  let best: { url: string; rank: number } | null = null
-  for (const el of els) {
-    const url = text(el)
-    if (!url) continue
-    const profile = el != null && typeof el === 'object' ? String((el as Record<string, unknown>)['@_dlna:profileID'] ?? (el as Record<string, unknown>)['@_profileID'] ?? '') : ''
-    const rank = ART_RANK[profile.toUpperCase()] ?? 0
-    if (!best || rank > best.rank) best = { url, rank }
-  }
-  return best?.url ?? null
-}
-
-const text = (v: unknown): string | null => {
-  if (v == null) return null
-  if (typeof v === 'string' || typeof v === 'number') return String(v)
-  const inner = (v as Record<string, unknown>)['#text']
-  return inner == null ? null : String(inner)
-}
 
 // ------------------------------------------------------------ server registry
 
@@ -229,187 +185,6 @@ async function soapBrowse(
 }
 
 // "0:06:58.000" -> seconds
-function parseDuration(v: string | null): number | null {
-  if (!v) return null
-  const m = v.match(/^(\d+):(\d{1,2}):(\d{1,2})/)
-  if (!m) return null
-  return Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3])
-}
-
-function didlToNodes(didl: string): MediaNode[] {
-  const doc = parser.parse(didl) as { 'DIDL-Lite'?: Record<string, unknown> }
-  const root = doc['DIDL-Lite']
-  if (!root) return []
-
-  const node = (raw: Record<string, unknown>, isContainer: boolean): MediaNode | null => {
-    const id = text(raw['@_id'])
-    const title = text(raw.title)
-    if (!id || title == null) return null
-    const res = asArray(raw.res as Record<string, unknown> | Array<Record<string, unknown>>)[0]
-    // The primary <res> describes the file (DLNA attributes; Asset sends them
-    // all, the USB server sends duration only). bitrate is BYTES/s per the
-    // UPnP spec (176400 for 16/44.1 stereo) — stored as kbps.
-    const format = ((): MediaFormat | null => {
-      if (!res) return null
-      const proto = text(res['@_protocolInfo']) ?? ''
-      const mime = (proto.split(':')[2] ?? '').toLowerCase()
-      if (!mime.startsWith('audio/')) return null
-      const sub = mime.slice('audio/'.length).replace(/^x-/, '')
-      const pn = /DLNA\.ORG_PN=([A-Z0-9_]+)/i.exec(proto)?.[1]?.toUpperCase() ?? ''
-      const codec =
-        sub === 'flac' ? 'FLAC'
-        : sub === 'mpeg' || sub === 'mp3' ? 'MP3'
-        : sub === 'wav' || sub === 'wave' ? 'WAV'
-        : sub === 'l16' || sub === 'l24' ? 'PCM'
-        : sub === 'aiff' || sub === 'aif' ? 'AIFF'
-        : sub === 'ms-wma' || sub === 'wma' ? 'WMA'
-        : sub === 'ogg' || sub === 'vorbis' ? 'OGG'
-        : sub === 'opus' ? 'Opus'
-        : sub === 'dsd' || sub === 'dsf' || sub === 'dff' ? 'DSD'
-        : sub === 'ape' ? 'APE'
-        : sub === 'wavpack' || sub === 'wv' ? 'WV'
-        : sub === 'mp4' || sub === 'm4a' || sub === 'aac' || sub === 'mp4a-latm'
-          ? pn.startsWith('ALAC') ? 'ALAC' : 'AAC'
-          : sub.toUpperCase()
-      const num = (k: string): number | undefined => {
-        const v = Number(text(res[`@_${k}`]))
-        return Number.isFinite(v) && v > 0 ? v : undefined
-      }
-      const bytesPerSec = num('bitrate')
-      const size = num('size')
-      const secs = parseDuration(text(res['@_duration']))
-      // The bitrate ATTRIBUTE is the stream Asset would send — for a lossy
-      // file that is the DECODED PCM rate (an m4a came back 576000 B/s,
-      // 24/96 — 4608 kbps). The file's own rate is size ÷ duration.
-      const fileKbps = size && secs ? Math.round((size * 8) / secs / 1000) : undefined
-      // Asset labels every .m4a AAC_ISO; a 24/96 m4a at 3 Mbps is ALAC.
-      const isMp4 = ['mp4', 'm4a', 'aac', 'mp4a-latm'].includes(sub)
-      const resolvedCodec =
-        isMp4 && (pn.startsWith('ALAC') || (fileKbps ?? 0) > 600) ? 'ALAC' : codec
-      const out: MediaFormat = { codec: resolvedCodec }
-      const lossless = LOSSLESS_CODECS.has(resolvedCodec)
-      const bits = num('bitsPerSample'); if (bits && lossless) out.bits = bits
-      const rate = num('sampleFrequency'); if (rate) out.rate = rate
-      const kbps = lossless ? (bytesPerSec ? Math.round((bytesPerSec * 8) / 1000) : fileKbps) : (fileKbps ?? (bytesPerSec ? Math.round((bytesPerSec * 8) / 1000) : undefined))
-      if (kbps) out.kbps = kbps
-      if (size) out.sizeBytes = size
-      const ch = num('nrAudioChannels'); if (ch) out.channels = ch
-      return out
-    })()
-    // multi-valued two ways: taggers repeat <upnp:genre> AND pack several
-    // into one value ("Pop; Rock" — live-observed on Asset). Split on ';',
-    // dedupe case-insensitively, keep first-seen casing and order.
-    const seenGenres = new Map<string, string>()
-    for (const g of asArray(raw.genre as Record<string, unknown> | Array<Record<string, unknown>>)) {
-      for (const part of (text(g) ?? '').split(';')) {
-        const trimmed = part.trim()
-        if (trimmed && !seenGenres.has(trimmed.toLowerCase()))
-          seenGenres.set(trimmed.toLowerCase(), trimmed)
-      }
-    }
-    const genres = [...seenGenres.values()]
-    // upnp:artist is multi-valued THREE ways, all live-observed on Asset
-    // (2026-08-15, a Daft Punk track with a featured singer):
-    //   <upnp:artist role="AlbumArtist">Daft Punk</upnp:artist>
-    //   <upnp:artist>Daft Punk; Julian Casablancas</upnp:artist>
-    //   <upnp:artist role="Composer">Thomas Bangalter; Guy-Manuel …</upnp:artist>
-    // — repeated elements, a role attribute, AND several names packed into
-    // one value with '; ' (the same packing genres use). Before this the
-    // parser took text() of the ARRAY, got null, and fell through to
-    // dc:creator — so every featured track carried the packed performer
-    // string as its whole identity, and an album's featured tracks fell out
-    // of the album under its artist. Now: `artist` stays the display string
-    // (the performers, packed — "Daft Punk; Julian Casablancas" is what a
-    // row should say), `albumArtist` is the AlbumArtist role when a server
-    // sends one, and `artists` is the split performer list when there is
-    // more than one name — the lens keys identity on those two, never on
-    // the packed string. Composer/Conductor/… roles are not performers.
-    const artistEls = asArray(raw.artist as unknown | unknown[])
-    const roleOf = (el: unknown): string =>
-      el != null && typeof el === 'object' ? String((el as Record<string, unknown>)['@_role'] ?? '').toLowerCase() : ''
-    let albumArtist = text(artistEls.find((el) => roleOf(el) === 'albumartist')) ?? null
-    const performerEls = artistEls.filter((el) => ['', 'performer', 'artist'].includes(roleOf(el)))
-    let performerText = performerEls.map(text).filter((v): v is string => !!v?.trim())
-    const creator = text(raw.creator)?.trim() || null
-    // NO ROLES AT ALL, and dc:creator disagrees with the one role-less
-    // upnp:artist (minidlna/ReadyMedia, rig-verified 2026-08-16): that server
-    // puts ALBUMARTIST in upnp:artist and the performer (ARTIST) in
-    // dc:creator — a compilation track says artist "Various Artists" and
-    // names its singer only as creator; a "feat." track likewise. Read it the
-    // way it was written: album artist from upnp:artist, performers from
-    // dc:creator. A no-op whenever the two agree (every plain track, on every
-    // server), and Asset never gets here — it always sends the AlbumArtist
-    // role (its dc:creator equals its role-less artist, live-checked).
-    if (
-      albumArtist == null &&
-      artistEls.every((el) => roleOf(el) === '') &&
-      performerText.length === 1 &&
-      creator != null &&
-      creator.toLowerCase() !== performerText[0].trim().toLowerCase()
-    ) {
-      albumArtist = performerText[0].trim()
-      performerText = [creator]
-    }
-    const artist =
-      (performerText.length > 0 ? performerText.join('; ') : null) ??
-      creator ??
-      albumArtist ??
-      text(artistEls[0]) ??
-      null
-    const seenArtists = new Map<string, string>()
-    for (const part of (artist ?? '').split(';')) {
-      const trimmed = part.trim()
-      if (trimmed && !seenArtists.has(trimmed.toLowerCase())) seenArtists.set(trimmed.toLowerCase(), trimmed)
-    }
-    const artists = [...seenArtists.values()]
-    // composers: role="Composer", packed with "; " like everything else
-    const seenComposers = new Map<string, string>()
-    for (const el of artistEls.filter((e) => roleOf(e) === 'composer')) {
-      for (const part of (text(el) ?? '').split(';')) {
-        const trimmed = part.trim()
-        if (trimmed && !seenComposers.has(trimmed.toLowerCase())) seenComposers.set(trimmed.toLowerCase(), trimmed)
-      }
-    }
-    const composers = [...seenComposers.values()]
-    return {
-      ...(composers.length > 0 ? { composers } : {}),
-      ...(genres.length > 0 ? { genre: genres } : {}),
-      ...(albumArtist != null && albumArtist.trim() ? { albumArtist: albumArtist.trim() } : {}),
-      ...(artists.length > 1 ? { artists } : {}),
-      id,
-      parentId: text(raw['@_parentID']),
-      title,
-      upnpClass: text(raw.class) ?? '',
-      isContainer,
-      artUrl: pickArt(raw.albumArtURI),
-      artist,
-      album: text(raw.album),
-      year: text(raw.date)?.slice(0, 4) ?? null,
-      trackNumber: raw.originalTrackNumber != null ? Number(text(raw.originalTrackNumber)) : null,
-      // multi-disc: Asset sends both, and packs disc×100+track into the
-      // track number besides — decoded by trackPosition(), never here.
-      ...(raw.originalDiscNumber != null && Number.isFinite(Number(text(raw.originalDiscNumber)))
-        ? { discNumber: Number(text(raw.originalDiscNumber)) }
-        : {}),
-      ...(raw.originalDiscCount != null && Number.isFinite(Number(text(raw.originalDiscCount)))
-        ? { discCount: Number(text(raw.originalDiscCount)) }
-        : {}),
-      durationSecs: res ? parseDuration(text(res['@_duration'])) : null,
-      ...(format ? { format } : {})
-    }
-  }
-
-  const containers = asArray(
-    root.container as Record<string, unknown> | Array<Record<string, unknown>>
-  )
-    .map((c) => node(c, true))
-    .filter((n): n is MediaNode => n != null)
-  const items = asArray(root.item as Record<string, unknown> | Array<Record<string, unknown>>)
-    .map((i) => node(i, false))
-    .filter((n): n is MediaNode => n != null)
-  return [...containers, ...items]
-}
-
 async function browseChildren(entry: ServerEntry, objectId: string): Promise<MediaNode[] | null> {
   const first = await soapBrowse(entry, objectId, 'BrowseDirectChildren')
   if (!first) return null

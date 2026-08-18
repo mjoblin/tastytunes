@@ -697,7 +697,12 @@ export class McpBridge {
                         albums: st.albums,
                         artists: st.artists,
                         tracks: st.tracks,
-                        built_at: st.builtAt != null ? new Date(st.builtAt).toISOString() : null
+                        built_at: st.builtAt != null ? new Date(st.builtAt).toISOString() : null,
+                        // how the index was built and every reconciliation that changed something —
+                        // the SHAPE of the server's answers, so an agent can explain what it sees
+                        ...(st.profile
+                          ? { built_by: st.profile.strategy, albums_from: st.profile.albumsFrom, class_search: st.profile.classSearch, notes: st.profile.notes }
+                          : {})
                       }
                     }
                   : {})

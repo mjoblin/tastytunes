@@ -18,7 +18,8 @@ import { join } from 'node:path'
 import { app } from 'electron'
 import { getSettings } from '../data/persist'
 import { atomicWriteFileSync } from '../data/jsonStore'
-import type { MediaIndexPools, MediaIndexStatus, MediaNode, MediaSearchAllGroup, MediaServerInfo } from '@shared/model'
+import type { MediaIndexPools, MediaIndexStatus, MediaNode, MediaSearchAllGroup, MediaServerInfo, MediaServerProfile } from '@shared/model'
+import { albumsFromTracks, audioItemsOnly, dedupeAlbums, emptyProfile, preferCopy, richer, settleClasses, stripParentArtist, yearFromTracks, type Seen } from './reconcile'
 import {
   browseChildrenOf,
   getSystemUpdateID,
@@ -32,11 +33,17 @@ interface StoredIndex {
   strategy: 'search' | 'browse'
   updateId: number | null
   builtAt: number
+  profile?: MediaServerProfile
   albums: MediaNode[]
   artists: MediaNode[]
   tracks: MediaNode[]
 }
 
+// v10: the survey round (2026-08-17): parser split into didl.ts (node rules:
+//      dates, container-artist, title decoration, bitrate by size÷duration,
+//      " / " and upnp:composer) + reconcile.ts (pool rules: class settling by
+//      derivation, audio items only, dedupe copies, albums from tracks,
+//      richer copy) + browse/tracks fallbacks + MediaServerProfile.
 // v9: minidlna round (2026-08-16): role-less artist/creator split read as
 //     albumArtist/performers; bare search classes settled structurally (the
 //     "- All Albums -" virtual container no longer an album); album year
@@ -54,7 +61,7 @@ interface StoredIndex {
 // Asset tagging). v2 added upnp:genre. A bump discards stored indexes
 // wholesale; rebuildHints below keeps that from costing Browse-only
 // servers their Build click.
-const VERSION = 9
+const VERSION = 10
 const PAGE = 500
 const MAX_TRACKS = 50_000
 const MAX_CONTAINERS = 10_000
@@ -127,7 +134,8 @@ export function status(): MediaIndexStatus[] {
       albums: idx.albums.length,
       artists: idx.artists.length,
       builtAt: idx.builtAt,
-      updateId: idx.updateId
+      updateId: idx.updateId,
+      ...(idx.profile ? { profile: idx.profile } : {})
     })
   }
   for (const server of known.values()) {
@@ -163,122 +171,160 @@ export function status(): MediaIndexStatus[] {
 }
 const buildingNames = new Map<string, string>()
 
-// Asset generalizes classes in Search results (an album browses as
-// …album.musicAlbum but searches as bare object.container.album; the same for
-// person vs person.musicArtist) — EVERY result comes back bare. minidlna does
-// the opposite: real albums search as musicAlbum and only its VIRTUAL
-// containers ("- All Albums -" under each artist, "- All Artists -" under
-// each genre) are the bare class, with an upnp:artist attached. Promoting
-// every bare result to the leaf class was right for Asset and wrong for
-// minidlna (N+1 albums per artist, user report 2026-08-16). So the rule is
-// STRUCTURAL, not vendor-sniffed: a server whose results contain no leaf-class
-// instance at all is generalizing — promote them all; a server that
-// distinguishes the leaf class means it — keep the leaf ones, drop the bare.
-// (A photo album is bare object.container.album too; the second branch is
-// also what keeps those out of a music index.)
-const leafOf = (leaf: string): string => leaf.split('.').pop() as string
-const settleClasses = (nodes: MediaNode[], leaf: string, serverName: string, what: string): MediaNode[] => {
-  const isLeaf = (n: MediaNode): boolean => n.upnpClass.includes(leafOf(leaf))
-  if (nodes.some(isLeaf)) {
-    const kept = nodes.filter(isLeaf)
-    if (kept.length < nodes.length)
-      console.log(`[mediaIndex] ${serverName}: dropped ${nodes.length - kept.length} bare-class ${what} (server distinguishes ${leafOf(leaf)})`)
-    return kept
-  }
-  return nodes.map((n) => (n.isContainer ? { ...n, upnpClass: leaf } : n))
-}
+// ---------------------------------------------------------------- the crawl
+//
+// Strategy is chosen from what the server just did, never from its brand, and
+// each choice is written into the server's MediaServerProfile (the Info
+// modal's Source section and MCP list_media_servers read it):
+//   search  → paged class searches; results settled by SHAPE (reconcile.ts:
+//             leaf / generalized / unhonoured); a faulting page retries at a
+//             smaller size before the crawl gives up on that class
+//   ↓ no albums from Search but tracks came back (Emby: class ignored)
+//   browse  → walk the container tree for albums/artists (dedupe by id,
+//             keep the richer copy)
+//   ↓ still no album containers anywhere (UMS: folders only)
+//   tracks  → synthesise albums from the tracks (id = their container)
+// The pool rules run last, in order: dedupe copies (Gerbera), fill years from
+// tracks (minidlna), and every step that changed something leaves a note.
+const ALBUM_BASE = 'object.container.album'
+const ALBUM_LEAF = 'object.container.album.musicAlbum'
+const ARTIST_BASE = 'object.container.person'
+const ARTIST_LEAF = 'object.container.person.musicArtist'
+const TRACK_BASE = 'object.item.audioItem'
 
-// An album container that carries no dc:date (minidlna's do not; its tracks
-// do) takes the year its tracks agree on — the Albums lens decades, sorts
-// and the artist page all read album.year.
-const yearFromTracks = (albums: MediaNode[], tracks: MediaNode[]): MediaNode[] => {
-  const byAlbum = new Map<string, Map<string, number>>()
-  for (const t of tracks) {
-    if (!t.album || !t.year) continue
-    const key = t.album.trim().toLowerCase()
-    const m = byAlbum.get(key) ?? new Map<string, number>()
-    m.set(t.year, (m.get(t.year) ?? 0) + 1)
-    byAlbum.set(key, m)
-  }
-  return albums.map((a) => {
-    if (a.year) return a
-    const m = byAlbum.get(a.title.trim().toLowerCase())
-    if (!m) return a
-    const [year] = [...m.entries()].sort((x, y) => y[1] - x[1])[0]
-    return { ...a, year }
-  })
-}
+interface Crawled { albums: MediaNode[]; artists: MediaNode[]; tracks: MediaNode[]; profile: MediaServerProfile }
 
-async function crawlSearch(host: string, server: MediaServerInfo): Promise<StoredIndex | null> {
-  const collect = async (cls: string, leaf: string | null, cap: number, what: string): Promise<MediaNode[] | null> => {
-    const seen = new Map<string, MediaNode>()
-    let start = 0
-    for (;;) {
-      const page = await searchPage(host, server.udn, `upnp:class derivedfrom "${cls}"`, start, PAGE)
-      if (!page) return start === 0 ? null : [...seen.values()]
-      for (const n of page.items) seen.set(n.id, n)
-      start += page.items.length
-      if (page.items.length === 0 || start >= page.total || seen.size >= cap) {
-        if (seen.size >= cap) console.log(`[mediaIndex] ${server.name}: ${cls} capped at ${cap}`)
-        const all = [...seen.values()]
-        return leaf ? settleClasses(all, leaf, server.name, what) : all
-      }
+async function collectClass(host: string, server: MediaServerInfo, cls: string, cap: number, note: (s: string) => void): Promise<MediaNode[] | null> {
+  const seen = new Map<string, MediaNode>()
+  let start = 0
+  let pageSize = PAGE
+  for (;;) {
+    const page = await searchPage(host, server.udn, `upnp:class derivedfrom "${cls}"`, start, pageSize)
+    if (!page) {
+      // a page that faults (Jellyfin mid-scan: SOAP 500 on a 500-item page)
+      // is retried once at a fifth of the size before this class is given up
+      if (pageSize === PAGE) { pageSize = Math.max(50, Math.floor(PAGE / 5)); note(`${cls.split('.').pop()} search faulted at ${PAGE} per page — retried at ${pageSize}`); continue }
+      return start === 0 ? null : [...seen.values()]
+    }
+    for (const n of page.items) seen.set(n.id, n)
+    start += page.items.length
+    if (page.items.length === 0 || start >= page.total || seen.size >= cap) {
+      if (seen.size >= cap) console.log(`[mediaIndex] ${server.name}: ${cls} capped at ${cap}`)
+      return [...seen.values()]
     }
   }
-  const albums = await collect('object.container.album', 'object.container.album.musicAlbum', MAX_CONTAINERS, 'albums')
-  const artists = await collect('object.container.person', 'object.container.person.musicArtist', MAX_CONTAINERS, 'artists')
-  const tracks = await collect('object.item.audioItem', null, MAX_TRACKS, 'tracks')
-  if (tracks == null && albums == null) return null // server refused the crawl entirely
-  const updateId = await getSystemUpdateID(host, server.udn)
-  return {
-    udn: server.udn,
-    serverName: server.name,
-    strategy: 'search',
-    updateId,
-    builtAt: Date.now(),
-    albums: yearFromTracks(albums ?? [], tracks ?? []),
-    artists: artists ?? [],
-    tracks: tracks ?? []
-  }
 }
 
-async function crawlBrowse(host: string, server: MediaServerInfo): Promise<StoredIndex | null> {
-  const albums = new Map<string, MediaNode>()
+async function crawlSearch(host: string, server: MediaServerInfo): Promise<Crawled | null> {
+  const profile = emptyProfile('search')
+  const note = (s: string): void => { profile.notes.push(s) }
+  const rawAlbums = await collectClass(host, server, ALBUM_BASE, MAX_CONTAINERS, note)
+  const rawArtists = await collectClass(host, server, ARTIST_BASE, MAX_CONTAINERS, note)
+  const rawTracks = await collectClass(host, server, TRACK_BASE, MAX_TRACKS, note)
+  if (rawTracks == null && rawAlbums == null) return null // server refused the crawl entirely
+  const albumsSettled = settleClasses(rawAlbums ?? [], ALBUM_BASE, ALBUM_LEAF)
+  const artistsSettled = settleClasses(rawArtists ?? [], ARTIST_BASE, ARTIST_LEAF)
+  const tracksSettled = audioItemsOnly(rawTracks ?? [])
+  profile.classSearch = albumsSettled.mode === 'empty' ? artistsSettled.mode === 'empty' ? 'leaf' : artistsSettled.mode : albumsSettled.mode
+  if (albumsSettled.mode === 'generalized') note('class searches answer with the bare class — results promoted to albums/artists')
+  if (albumsSettled.mode === 'leaf' && albumsSettled.dropped > 0) note(`${albumsSettled.dropped} non-album search results dropped (virtual containers)`)
+  if (artistsSettled.mode === 'leaf' && artistsSettled.dropped > 0) note(`${artistsSettled.dropped} non-artist search results dropped`)
+  if (albumsSettled.mode === 'unhonoured') note('the album search returned no album containers')
+  if (tracksSettled.dropped > 0) note(`${tracksSettled.dropped} non-track search results dropped from the track search`)
+  return { albums: albumsSettled.kept, artists: artistsSettled.kept, tracks: tracksSettled.kept, profile }
+}
+
+async function crawlBrowse(host: string, server: MediaServerInfo, into?: Crawled): Promise<Crawled | null> {
+  const profile = into?.profile ?? emptyProfile('browse')
+  const albums = new Map<string, Seen>()
   const artists = new Map<string, MediaNode>()
-  const tracks = new Map<string, MediaNode>()
+  const tracks = new Map<string, MediaNode>(into ? into.tracks.map((t) => [t.id, t]) : [])
   const visited = new Set<string>()
+  const parents = new Map<string, { title: string; isArtist: boolean }>() // container id → what it is, for the parent-as-artist and canonical-branch rules
   const queue: string[] = ['0']
+  const put = (m: Map<string, MediaNode>, n: MediaNode): void => { const prev = m.get(n.id); m.set(n.id, prev ? richer(prev, n) : n) }
   while (queue.length > 0 && visited.size < MAX_CONTAINERS && tracks.size < MAX_TRACKS) {
     const id = queue.shift() as string
     if (visited.has(id)) continue
     visited.add(id)
     const children = await browseChildrenOf(host, server.udn, id)
     if (!children) continue
-    for (const n of children) {
+    const parent = parents.get(id) ?? null
+    for (const raw of children) {
+      // an album under its ARTIST container is credited to that artist by
+      // right; under any other container, a matching credit is the listing's
+      const n = stripParentArtist(raw, parent && !parent.isArtist ? parent.title : null)
       if (!n.isContainer) {
-        if (n.upnpClass.includes('audioItem')) tracks.set(n.id, n)
+        if (n.upnpClass.includes('audioItem') && !into) put(tracks, n)
         continue
       }
-      if (n.upnpClass.includes('musicAlbum')) albums.set(n.id, n)
-      else if (n.upnpClass.includes('person')) artists.set(n.id, n)
+      parents.set(n.id, { title: n.title, isArtist: n.upnpClass.includes('person') })
+      if (n.upnpClass.includes('musicAlbum')) albums.set(n.id, preferCopy(albums.get(n.id), { node: n, underArtist: parent?.isArtist === true }))
+      else if (n.upnpClass.includes('person')) put(artists, n)
       // walk every container: album tracks live inside albums too
       queue.push(n.id)
     }
   }
   if (visited.size >= MAX_CONTAINERS || tracks.size >= MAX_TRACKS) {
     console.log(`[mediaIndex] ${server.name}: browse-crawl capped (${visited.size} containers)`)
+    profile.notes.push(`browse walk capped at ${visited.size} containers`)
   }
   if (tracks.size === 0 && albums.size === 0) return null
+  return {
+    albums: [...albums.values()].map((s) => s.node),
+    artists: [...(into && into.artists.length > 0 ? new Map(into.artists.map((a) => [a.id, a])) : artists).values()],
+    tracks: [...tracks.values()],
+    profile
+  }
+}
+
+/** The pool rules, in order, over whatever the crawl produced. */
+function reconcilePools(c: Crawled, serverName: string): Crawled {
+  const note = (s: string): void => { c.profile.notes.push(s) }
+  let albums = c.albums
+  if (albums.length === 0 && c.tracks.length > 0) {
+    albums = albumsFromTracks(c.tracks)
+    c.profile.albumsFrom = 'tracks'
+    note(`albums built from ${c.tracks.length} tracks — this server exposes no album containers`)
+    console.log(`[mediaIndex] ${serverName}: ${albums.length} albums synthesised from tracks`)
+  }
+  const dd = dedupeAlbums(albums, c.tracks)
+  if (dd.collapsed > 0) note(`${dd.collapsed} duplicate album containers collapsed`)
+  const yf = yearFromTracks(dd.albums, c.tracks)
+  if (yf.filled > 0) note(`${yf.filled} albums took their year from their tracks`)
+  return { ...c, albums: yf.albums }
+}
+
+async function crawl(host: string, server: MediaServerInfo, strategy: 'search' | 'browse'): Promise<StoredIndex | null> {
+  let c: Crawled | null = strategy === 'search' ? await crawlSearch(host, server) : await crawlBrowse(host, server)
+  if (!c && strategy === 'search') {
+    // Search refused outright — a searchable server that faults on every
+    // page (Jellyfin mid-scan) is a browse-only server for today
+    const b = await crawlBrowse(host, server)
+    if (b) { b.profile.notes.push('search crawl failed — index built by browsing instead'); c = b }
+  }
+  if (!c) return null
+  if (c.profile.strategy === 'search' && c.albums.length === 0 && c.tracks.length > 0) {
+    // Emby: the class search returned no albums, its Browse tree has them
+    const b = await crawlBrowse(host, server, c)
+    if (b && b.albums.length > 0) {
+      c = { ...c, albums: b.albums, artists: c.artists.length > 0 ? c.artists : b.artists }
+      c.profile.albumsFrom = 'browse'
+      c.profile.notes.push(`albums came from browsing the tree — the album search returned none (${b.albums.length} found)`)
+    }
+  }
+  const r = reconcilePools(c, server.name)
   const updateId = await getSystemUpdateID(host, server.udn)
   return {
     udn: server.udn,
     serverName: server.name,
-    strategy: 'browse',
+    strategy: r.profile.strategy,
     updateId,
     builtAt: Date.now(),
-    albums: yearFromTracks([...albums.values()], [...tracks.values()]),
-    artists: [...artists.values()],
-    tracks: [...tracks.values()]
+    albums: r.albums,
+    artists: r.artists,
+    tracks: r.tracks,
+    profile: r.profile
   }
 }
 
@@ -288,7 +334,7 @@ async function build(host: string, server: MediaServerInfo, strategy: 'search' |
   buildingNames.set(server.udn, server.name)
   announce(status())
   try {
-    const built = strategy === 'search' ? await crawlSearch(host, server) : await crawlBrowse(host, server)
+    const built = await crawl(host, server, strategy)
     if (built) {
       indexes.set(server.udn, built)
       rebuildHints.delete(server.udn)
@@ -409,7 +455,8 @@ export function pools(): MediaIndexPools[] {
       serverName: idx.serverName,
       albums: idx.albums.map(stamp),
       artists: idx.artists.map(stamp),
-      tracks: idx.tracks.map(stamp)
+      tracks: idx.tracks.map(stamp),
+      ...(idx.profile ? { profile: idx.profile } : {})
     })
   }
   return out

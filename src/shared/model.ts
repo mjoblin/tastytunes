@@ -881,6 +881,7 @@ export interface MediaIndexStatus {
   artists: number
   builtAt: number | null
   updateId: number | null
+  profile?: MediaServerProfile
 }
 
 export interface MediaNode {
@@ -1108,13 +1109,31 @@ export function albumTracksOf(
  */
 export function orderTracks<T extends Pick<MediaNode, 'trackNumber' | 'discNumber'>>(tracks: ReadonlyArray<T>): T[] {
   const seen = new Set<string>()
+  let repeats = false
   for (const t of tracks) {
     const pos = trackPosition(t)
     if (pos == null) continue
     const key = `${t.discNumber ?? 1}:${pos}`
-    if (seen.has(key)) return [...tracks]
+    if (seen.has(key)) { repeats = true; break }
     seen.add(key)
   }
+  if (!repeats) return [...tracks].sort(compareTrackOrder)
+  // Repeats: the listing order stands ONLY when it reads as discs — ascending
+  // runs, each restarting lower than the last position (Browse of a minidlna
+  // or MinimServer album). A search-built index lists by title (Gerbera,
+  // Minim) and that order says nothing about discs; sort by position then,
+  // interleaved but ordered (survey 2026-08-17: OKNOTOK came out alphabetical).
+  const positions = tracks.map(trackPosition)
+  let ascendingRuns = true
+  let restarts = 0
+  for (let i = 1; i < positions.length; i++) {
+    const a = positions[i - 1]
+    const b = positions[i]
+    if (a == null || b == null) continue
+    if (b < a) restarts++
+    else if (b === a) { ascendingRuns = false; break }
+  }
+  if (ascendingRuns && restarts > 0 && restarts < positions.length / 2) return [...tracks]
   return [...tracks].sort(compareTrackOrder)
 }
 
@@ -1328,6 +1347,8 @@ export interface MediaInfoTarget {
   artist?: ArtistSummary
   /** For what is playing NOW: the stream as the streamer reports it (source-agnostic — radio, AirPlay, local media alike). */
   stream?: StreamInfo
+  /** What the index learned about the server this came from — how it was crawled and every reconciliation that changed something. */
+  serverProfile?: MediaServerProfile
 }
 
 /**
@@ -1380,6 +1401,25 @@ export interface MediaSearchAllGroup {
   total: number
 }
 
+/**
+ * What the index learned about a server while crawling it — the SHAPE of its
+ * answers, never its brand (2026-08-17, the UPnP server survey). Chosen from
+ * what the server just did, recorded so the app can say why something looks
+ * the way it does (Info › Source, MCP list_media_servers) instead of leaving
+ * the user to guess: "albums synthesised from tracks — this server exposes no
+ * album containers" is a sentence, not a bug report.
+ */
+export interface MediaServerProfile {
+  /** How the index was built: paged Search, or a walk of the container tree. */
+  strategy: 'search' | 'browse'
+  /** Where the albums came from: the class search, a browse walk (search yielded no albums), or built from the tracks (no album containers anywhere). */
+  albumsFrom: 'search' | 'browse' | 'tracks'
+  /** How the server answered class searches: leaf classes ('leaf'), everything as the bare base class ('generalized' — Asset), nothing derived from the asked class ('unhonoured' — Emby, UMS), or no Search at all ('unavailable'). */
+  classSearch: 'leaf' | 'generalized' | 'unhonoured' | 'unavailable'
+  /** Human-readable, one line each — every reconciliation that changed something. */
+  notes: string[]
+}
+
 /** One READY index's full pools, nodes stamped — the library lenses' feedstock. */
 export interface MediaIndexPools {
   udn: string
@@ -1387,6 +1427,7 @@ export interface MediaIndexPools {
   albums: MediaNode[]
   artists: MediaNode[]
   tracks: MediaNode[]
+  profile?: MediaServerProfile
 }
 
 /** Queue-write verbs of /smoip/queue/add (semantics per vibin's reverse-engineering). */

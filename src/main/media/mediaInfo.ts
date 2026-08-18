@@ -46,14 +46,16 @@ function creditedArtistNode(name: string, pool: { udn: string; serverName: strin
 export async function lookupMediaInfo(host: string | null, q: MediaInfoQuery): Promise<MediaInfoTarget | null> {
   const groups = pools()
   const withAlbum = (pool: (typeof groups)[number], node: MediaNode): MediaInfoTarget => {
+    const profile = pool.profile ? { serverProfile: pool.profile } : {}
     if (node.isContainer && /person|Artist/.test(node.upnpClass)) {
       const summary = artistSummary(node.title, pool)
-      return { node: node.artUrl ? node : { ...node, artUrl: summary.artUrl }, artist: summary, serverName: pool.serverName }
+      return { node: node.artUrl ? node : { ...node, artUrl: summary.artUrl }, artist: summary, serverName: pool.serverName, ...profile }
     }
     return {
       node,
       tracks: node.isContainer ? albumTracksOf(node, pool) : undefined,
-      serverName: pool.serverName
+      serverName: pool.serverName,
+      ...profile
     }
   }
   // 1. identity

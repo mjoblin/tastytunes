@@ -114,7 +114,7 @@ export function MediaInfoModal({ target }: { target: MediaInfoTarget | null }): 
 function MediaInfoBody({ target, open }: { target: MediaInfoTarget; open: boolean }): React.JSX.Element {
   const setMediaInfo = useStore((s) => s.setMediaInfo)
   const close = (): void => setMediaInfo(null)
-  const { node, tracks, serverName, note, artist, stream } = target
+  const { node, tracks, serverName, note, artist, stream, serverProfile } = target
   const kind = kindOf(node)
   const [copied, setCopied] = useState(false)
 
@@ -255,12 +255,29 @@ function MediaInfoBody({ target, open }: { target: MediaInfoTarget; open: boolea
     : []
 
   // ---- source
+  // What the index learned about this server (MediaServerProfile): how it was
+  // crawled, and every reconciliation that changed something — so an odd
+  // listing can be explained here instead of guessed at.
+  const indexed =
+    serverProfile
+      ? [
+          serverProfile.strategy === 'search' ? 'searched' : 'browsed',
+          serverProfile.albumsFrom === 'tracks' ? 'albums built from tracks' : serverProfile.albumsFrom === 'browse' ? 'albums by browsing' : null,
+          serverProfile.classSearch === 'generalized' ? 'bare classes promoted' : serverProfile.classSearch === 'unhonoured' ? 'class search unhonoured' : null
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      : null
   const source: Row[] = [
     ['Server', serverName ?? node.serverName ?? null],
     ['Object id', node.id ? <CopyableMono value={node.id} label="object id" /> : null],
     ['Parent id', mono(node.parentId)],
     ['Class', node.id ? mono(node.upnpClass) : null],
-    ['Art', node.artUrl ? <CopyableMono value={node.artUrl} label="art URL" /> : null]
+    ['Art', node.artUrl ? <CopyableMono value={node.artUrl} label="art URL" /> : null],
+    ['Indexed', indexed],
+    ...(serverProfile && serverProfile.notes.length > 0
+      ? serverProfile.notes.map((n, i): Row => [i === 0 ? 'Notes' : '', n])
+      : [])
   ]
 
   const Icon = kind === 'track' ? Music2 : kind === 'artist' ? User : Disc3
