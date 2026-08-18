@@ -67,6 +67,13 @@ export function startUpdater(onState: (s: UpdateState) => void): void {
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = true
   autoUpdater.logger = null
+  // Pre-releases (2026-08-17): a stable build never sees a GitHub pre-release;
+  // a build whose OWN version carries a pre-release suffix (0.3.0-rc.1, cut
+  // from develop by dev/tag-release.sh) is offered the next rc AND the final
+  // stable that supersedes it, so a tester rejoins the normal train on their
+  // own. This is electron-updater's default, made explicit so it cannot
+  // drift, and never for store builds (they have no updater at all).
+  autoUpdater.allowPrerelease = /-/.test(appVersion)
   if (FEED) {
     // The download path re-reads the dev update config from disk (setFeedURL
     // alone ENOENTs there) — write a real config file and point at it.
