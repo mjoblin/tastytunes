@@ -40,8 +40,14 @@ export function PlaybackBar(): React.JSX.Element {
   return (
     <footer
       className={cx(
-        // side columns flex down on narrow windows instead of squeezing the volume slider
-        'h-[92px] shrink-0 border-t border-edge grid grid-cols-[minmax(160px,280px)_1fr_minmax(215px,340px)] items-center gap-6 px-4 transition-colors',
+        // Three columns: now-playing | transport + seek | volume cluster. The
+        // SIDES share the leftover equally (both 1fr) so the transport stays
+        // centred whatever the window width, and the middle is capped — so on
+        // a wide window the title fills its side up to the transport instead
+        // of truncating at a fixed 280px (user, 2026-08-17). Minimums keep
+        // the volume slider unsqueezed at the 800px window minimum:
+        // 160 + 320 + 215 + gaps 48 + padding 32 = 775.
+        'h-[92px] shrink-0 border-t border-edge grid grid-cols-[minmax(160px,1fr)_minmax(320px,520px)_minmax(215px,1fr)] items-center gap-6 px-4 transition-colors',
         ambientWindow ? 'bg-transparent' : 'bg-panel/80 backdrop-blur'
       )}
     >
@@ -118,7 +124,7 @@ export function PlaybackBar(): React.JSX.Element {
           )}
         </div>
 
-        <div className="flex items-center gap-3 w-full max-w-[560px]">
+        <div className="flex items-center gap-3 w-full max-w-[520px]">
           <span className="font-mono text-[10.5px] text-faint w-11 text-right tabular-nums">
             {active ? fmtTime(shownPosition) : '–:––'}
           </span>
