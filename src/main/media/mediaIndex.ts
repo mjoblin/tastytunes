@@ -192,6 +192,10 @@ const buildingNames = new Map<string, string>()
 //   tracks  → synthesise albums from the tracks (id = their container)
 // The pool rules run last, in order: dedupe copies (Gerbera), fill years from
 // tracks (minidlna), and every step that changed something leaves a note.
+// Profile notes are USER-FACING (Info › Source, MCP): plain words, no UPnP
+// vocabulary, and a note only when something needed handling — a healthy
+// server reads "Indexed: by search" and nothing else.
+const n = (count: number, one: string, many: string): string => `${count} ${count === 1 ? one : many}`
 const ALBUM_BASE = 'object.container.album'
 const ALBUM_LEAF = 'object.container.album.musicAlbum'
 const ARTIST_BASE = 'object.container.person'
@@ -209,7 +213,7 @@ async function collectClass(host: string, server: MediaServerInfo, cls: string, 
     if (!page) {
       // a page that faults (Jellyfin mid-scan: SOAP 500 on a 500-item page)
       // is retried once at a fifth of the size before this class is given up
-      if (pageSize === PAGE) { pageSize = Math.max(50, Math.floor(PAGE / 5)); note(`${cls.split('.').pop()} search faulted at ${PAGE} per page — retried at ${pageSize}`); continue }
+      if (pageSize === PAGE) { pageSize = Math.max(50, Math.floor(PAGE / 5)); note(`the server's search failed on large pages — read in smaller pages instead`); continue }
       return start === 0 ? null : [...seen.values()]
     }
     for (const n of page.items) seen.set(n.id, n)
@@ -232,11 +236,12 @@ async function crawlSearch(host: string, server: MediaServerInfo): Promise<Crawl
   const artistsSettled = settleClasses(rawArtists ?? [], ARTIST_BASE, ARTIST_LEAF)
   const tracksSettled = audioItemsOnly(rawTracks ?? [])
   profile.classSearch = albumsSettled.mode === 'empty' ? artistsSettled.mode === 'empty' ? 'leaf' : artistsSettled.mode : albumsSettled.mode
-  if (albumsSettled.mode === 'generalized') note('class searches answer with the bare class — results promoted to albums/artists')
-  if (albumsSettled.mode === 'leaf' && albumsSettled.dropped > 0) note(`${albumsSettled.dropped} non-album search results dropped (virtual containers)`)
-  if (artistsSettled.mode === 'leaf' && artistsSettled.dropped > 0) note(`${artistsSettled.dropped} non-artist search results dropped`)
-  if (albumsSettled.mode === 'unhonoured') note('the album search returned no album containers')
-  if (tracksSettled.dropped > 0) note(`${tracksSettled.dropped} non-track search results dropped from the track search`)
+  // (a generalizing server — Asset — needs no note: promotion is how it is
+  // meant to be read; 'unhonoured' is explained by the note the fallback
+  // writes when it recovers the albums another way)
+  if (albumsSettled.mode === 'leaf' && albumsSettled.dropped > 0) note(`${n(albumsSettled.dropped, 'entry', 'entries')} the server adds for navigation (such as “- All Albums -”) left out of the albums`)
+  if (artistsSettled.mode === 'leaf' && artistsSettled.dropped > 0) note(`${n(artistsSettled.dropped, 'navigation entry', 'navigation entries')} left out of the artists`)
+  if (tracksSettled.dropped > 0) note(`${n(tracksSettled.dropped, 'entry', 'entries')} that ${tracksSettled.dropped === 1 ? 'was' : 'were'} not a track left out of the tracks`)
   return { albums: albumsSettled.kept, artists: artistsSettled.kept, tracks: tracksSettled.kept, profile }
 }
 
@@ -277,7 +282,7 @@ async function crawlBrowse(host: string, server: MediaServerInfo, into?: Crawled
   }
   if (visited.size >= MAX_CONTAINERS || tracks.size >= MAX_TRACKS) {
     console.log(`[mediaIndex] ${server.name}: browse-crawl capped (${visited.size} containers)`)
-    profile.notes.push(`browse walk capped at ${visited.size} containers`)
+    profile.notes.push(`browsing stopped after ${visited.size} folders — a very large library may be only partly indexed`)
   }
   if (tracks.size === 0 && albums.size === 0) return null
   return {
@@ -296,13 +301,13 @@ function reconcilePools(c: Crawled, serverName: string): Crawled {
   if (albums.length === 0 && c.tracks.length > 0) {
     albums = albumsFromTracks(c.tracks)
     c.profile.albumsFrom = 'tracks'
-    note(`albums built from ${c.tracks.length} tracks — this server exposes no album containers`)
+    note(`this server doesn't list albums — TastyTunes assembled them from its ${n(c.tracks.length, 'track', 'tracks')}`)
     console.log(`[mediaIndex] ${serverName}: ${albums.length} albums synthesised from tracks`)
   }
   const dd = dedupeAlbums(albums, c.tracks, c.parentsOf)
-  if (dd.collapsed > 0) note(`${dd.collapsed} duplicate album containers collapsed`)
+  if (dd.collapsed > 0) note(`${n(dd.collapsed, 'duplicate album entry', 'duplicate album entries')} merged — the server lists some albums more than once`)
   const yf = yearFromTracks(dd.albums, c.tracks)
-  if (yf.filled > 0) note(`${yf.filled} albums took their year from their tracks`)
+  if (yf.filled > 0) note(yf.filled === 1 ? '1 album with no year took the year from its tracks' : `${yf.filled} albums with no year took the year from their tracks`)
   return { ...c, albums: yf.albums }
 }
 
@@ -312,7 +317,7 @@ async function crawl(host: string, server: MediaServerInfo, strategy: 'search' |
     // Search refused outright — a searchable server that faults on every
     // page (Jellyfin mid-scan) is a browse-only server for today
     const b = await crawlBrowse(host, server)
-    if (b) { b.profile.notes.push('search crawl failed — index built by browsing instead'); c = b }
+    if (b) { b.profile.notes.push("the server's search failed — the library was indexed by browsing instead"); c = b }
   }
   if (!c) return null
   if (c.profile.strategy === 'search' && c.albums.length === 0 && c.tracks.length > 0) {
@@ -321,7 +326,7 @@ async function crawl(host: string, server: MediaServerInfo, strategy: 'search' |
     if (b && b.albums.length > 0) {
       c = { ...c, albums: b.albums, artists: c.artists.length > 0 ? c.artists : b.artists, parentsOf: b.parentsOf }
       c.profile.albumsFrom = 'browse'
-      c.profile.notes.push(`albums came from browsing the tree — the album search returned none (${b.albums.length} found)`)
+      c.profile.notes.push(`the server's album search returned nothing — ${n(b.albums.length, 'album was', 'albums were')} found by browsing instead`)
     }
   }
   const r = reconcilePools(c, server.name)
@@ -352,7 +357,7 @@ async function build(host: string, server: MediaServerInfo, strategy: 'search' |
       failed.delete(server.udn)
       save()
     } else {
-      failed.set(server.udn, strategy === 'search' ? 'the server answered neither Search nor Browse' : 'the server returned nothing to walk')
+      failed.set(server.udn, strategy === 'search' ? "the server didn't respond to search or browsing" : 'the server returned an empty library')
       console.log(`[mediaIndex] ${server.name}: build produced no index (${failed.get(server.udn)})`)
     }
   } catch (e) {

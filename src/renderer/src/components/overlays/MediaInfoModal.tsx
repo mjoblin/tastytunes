@@ -258,12 +258,14 @@ function MediaInfoBody({ target, open }: { target: MediaInfoTarget; open: boolea
   // What the index learned about this server (MediaServerProfile): how it was
   // crawled, and every reconciliation that changed something — so an odd
   // listing can be explained here instead of guessed at.
+  // Plain words: how the library was read, and — only when it differed from
+  // the norm — where the albums came from. The class-search mechanic stays
+  // in the JSON / MCP profile; a user needs "by search" or "by browsing".
   const indexed =
     serverProfile
       ? [
-          serverProfile.strategy === 'search' ? 'searched' : 'browsed',
-          serverProfile.albumsFrom === 'tracks' ? 'albums built from tracks' : serverProfile.albumsFrom === 'browse' ? 'albums by browsing' : null,
-          serverProfile.classSearch === 'generalized' ? 'bare classes promoted' : serverProfile.classSearch === 'unhonoured' ? 'class search unhonoured' : null
+          serverProfile.strategy === 'search' ? 'by search' : 'by browsing',
+          serverProfile.albumsFrom === 'tracks' ? 'albums assembled from tracks' : serverProfile.albumsFrom === 'browse' ? 'albums found by browsing' : null
         ]
           .filter(Boolean)
           .join(' · ')
