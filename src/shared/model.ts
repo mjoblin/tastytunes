@@ -874,7 +874,9 @@ export interface MediaServerInfo {
 export interface MediaIndexStatus {
   udn: string
   serverName: string
-  state: 'none' | 'building' | 'ready'
+  /** 'failed': the last build produced nothing (the server refused Search AND Browse — offline, or mid-scan); `failure` says why. */
+  state: 'none' | 'building' | 'ready' | 'failed'
+  failure?: string
   strategy: 'search' | 'browse' | null
   tracks: number
   albums: number

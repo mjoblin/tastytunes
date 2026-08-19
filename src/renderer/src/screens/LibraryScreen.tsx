@@ -238,6 +238,18 @@ export function LibraryScreen(): React.JSX.Element {
   // enough — for a Browse-only USB stick the lens is the first real library
   // UI it's ever had.
   const lensAvailable = readyIndexes.length >= 1
+  // The doors used to POP IN when the first index finished building — the
+  // same complaint the cross-search button drew (see above), and every
+  // schema bump replays it for everyone. So the block is on screen from the
+  // moment anything is BUILDING (or has FAILED — a silent "not indexed" told
+  // nobody anything): building doors are dimmed with a pulsing icon and say
+  // so, failed ones offer Retry in place, and because the block holds its
+  // space from the first paint nothing below it ever moves. Hidden only when
+  // no index exists AND nothing is building or failed (a fresh browse-only
+  // setup: the servers' own tiles are right below).
+  const failedIndexes = useMemo(() => mediaIndexStatuses.filter((x) => x.state === 'failed'), [mediaIndexStatuses])
+  const doorsState: 'ready' | 'building' | 'failed' | 'hidden' =
+    lensAvailable ? 'ready' : buildingCount > 0 ? 'building' : failedIndexes.length > 0 ? 'failed' : 'hidden'
   const [lens, setLens] = useState<'albums' | 'artists' | null>(null)
   const [lensPools, setLensPools] = useState<MediaIndexPools[] | null>(null)
   useEffect(() => {
@@ -1727,8 +1739,8 @@ export function LibraryScreen(): React.JSX.Element {
             {/* the lens doors LEAD the root: our views over EVERY built
                 index at once — same card geometry as the sources, gold
                 surface marking them as a different kind of door */}
-            {lensAvailable && (
-              <div>
+            {doorsState !== 'hidden' && (
+              <div data-library-doors={doorsState}>
                 <div className="microlabel mb-0.5 px-1">All libraries</div>
                 <div
                   style={{
@@ -1761,21 +1773,52 @@ export function LibraryScreen(): React.JSX.Element {
                     <div
                       key={door.key}
                       data-library-lens={door.key}
-                      onClick={() => openLens(door.key)}
-                      className="group relative rounded-2xl p-2 pb-2.5 bg-raised/70 ring-1 ring-gold/25 card-hover-glow cursor-pointer transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]"
+                      aria-disabled={doorsState === 'building' ? true : undefined}
+                      data-tip={
+                        doorsState === 'building'
+                          ? `Indexing ${buildingCount === 1 ? 'the library' : `${buildingCount} libraries`}…`
+                          : doorsState === 'failed'
+                            ? `Couldn't index: ${failedIndexes.map((x) => `${x.serverName} — ${x.failure ?? 'no index'}`).join('; ')}. Click to retry.`
+                            : undefined
+                      }
+                      onClick={() => {
+                        if (doorsState === 'building') return
+                        if (doorsState === 'failed') {
+                          for (const x of failedIndexes) void tt.mediaIndexRebuild(x.udn)
+                          return
+                        }
+                        openLens(door.key)
+                      }}
+                      className={cx(
+                        'group relative rounded-2xl p-2 pb-2.5 bg-raised/70 ring-1 ring-gold/25 transition-all duration-200 ease-out tip-bottom',
+                        doorsState === 'building'
+                          ? 'opacity-60 cursor-default'
+                          : 'card-hover-glow cursor-pointer hover:z-10 motion-safe:hover:scale-[1.04]'
+                      )}
                     >
                       <div className="aspect-square w-full rounded-lg ring-1 ring-gold/25 bg-golddim flex items-center justify-center">
                         <door.icon
                           size={40}
                           strokeWidth={1.1}
-                          className="text-gold/70 group-hover:text-gold transition-colors"
+                          className={cx(
+                            'text-gold/70 group-hover:text-gold transition-colors',
+                            doorsState === 'building' && 'motion-safe:animate-pulse'
+                          )}
                         />
                       </div>
                       <div className="pt-1.5 text-[12.5px] truncate">{door.title}</div>
-                      <div className="text-[11.5px] text-faint truncate">
-                        {door.count > 0
-                          ? `${door.count} ${door.noun} · every library`
-                          : 'Across every library'}
+                      {/* the count line fades in when the index lands (motion-safe, the modal's 140ms) — the door itself never moves */}
+                      <div
+                        key={doorsState === 'ready' ? 'ready' : 'waiting'}
+                        className={cx('text-[11.5px] truncate motion-safe:transition-opacity motion-safe:duration-[140ms]', doorsState === 'failed' ? 'text-alert' : 'text-faint')}
+                      >
+                        {doorsState === 'building'
+                          ? 'Indexing…'
+                          : doorsState === 'failed'
+                            ? "Couldn't index · Retry"
+                            : door.count > 0
+                              ? `${door.count} ${door.noun} · every library`
+                              : 'Across every library'}
                       </div>
                     </div>
                   ))}

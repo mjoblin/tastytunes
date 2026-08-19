@@ -1093,9 +1093,11 @@ function LibrariesSection({
             <span className="block font-mono text-[10.5px] text-faint">
               {st.state === 'building'
                 ? 'building…'
-                : st.state === 'none'
-                  ? 'not indexed — search asks the server live'
-                  : `${st.tracks.toLocaleString()} tracks · ${st.albums.toLocaleString()} albums · updated ${age(st.builtAt)}`}
+                : st.state === 'failed'
+                  ? `couldn't index — ${st.failure ?? 'no index'}`
+                  : st.state === 'none'
+                    ? 'not indexed — search asks the server live'
+                    : `${st.tracks.toLocaleString()} tracks · ${st.albums.toLocaleString()} albums · updated ${age(st.builtAt)}`}
             </span>
           </span>
           <HeaderChip
@@ -1108,7 +1110,7 @@ function LibrariesSection({
             ) : (
               <RefreshCw size={13} />
             )}
-            {st.state === 'ready' ? 'Rebuild' : 'Build'}
+            {st.state === 'ready' ? 'Rebuild' : st.state === 'failed' ? 'Retry' : 'Build'}
           </HeaderChip>
         </div>
       ))}

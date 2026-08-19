@@ -78,6 +78,10 @@ const rebuildHints = new Map<string, 'search' | 'browse'>()
 // un-indexed ones too (a USB stick deserves its Build button).
 const known = new Map<string, MediaServerInfo>()
 const building = new Set<string>()
+// The last build that produced NOTHING, per server, with a one-line reason —
+// so the Library's doors and Settings can say "couldn't index · Retry" instead
+// of quietly reverting to "not indexed" (2026-08-17). Cleared by any build.
+const failed = new Map<string, string>()
 let announce: (statuses: MediaIndexStatus[]) => void = () => {}
 let loaded = false
 
@@ -140,10 +144,12 @@ export function status(): MediaIndexStatus[] {
   }
   for (const server of known.values()) {
     if (indexes.has(server.udn) || building.has(server.udn)) continue
+    const why = failed.get(server.udn)
     out.push({
       udn: server.udn,
       serverName: server.name,
-      state: 'none',
+      state: why ? 'failed' : 'none',
+      ...(why ? { failure: why } : {}),
       strategy: null,
       tracks: 0,
       albums: 0,
@@ -343,8 +349,15 @@ async function build(host: string, server: MediaServerInfo, strategy: 'search' |
     if (built) {
       indexes.set(server.udn, built)
       rebuildHints.delete(server.udn)
+      failed.delete(server.udn)
       save()
+    } else {
+      failed.set(server.udn, strategy === 'search' ? 'the server answered neither Search nor Browse' : 'the server returned nothing to walk')
+      console.log(`[mediaIndex] ${server.name}: build produced no index (${failed.get(server.udn)})`)
     }
+  } catch (e) {
+    failed.set(server.udn, e instanceof Error ? e.message : String(e))
+    console.log(`[mediaIndex] ${server.name}: build failed — ${failed.get(server.udn)}`)
   } finally {
     building.delete(server.udn)
     announce(status())

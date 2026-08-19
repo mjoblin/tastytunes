@@ -690,6 +690,7 @@ export class McpBridge {
                 is_streamer_usb: x.isStreamer,
                 searchable: x.searchable,
                 index_ready: ready,
+                ...(st?.state === 'failed' ? { index_failed: st.failure ?? 'no index' } : {}),
                 // library counts, so "how many albums do I have" is one call
                 ...(ready && st
                   ? {
