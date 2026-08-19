@@ -14,7 +14,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { z, type ZodRawShape } from 'zod'
 import { type Snapshot } from '@shared/ipc'
-import { sleepTrackKey, type AppSettings, type ConnectionState, type McpSettings, type MediaNode, type MediaQueueAction, type Schedule, trackArtists, formatLabel, albumTracksOf, albumSummary, trackPosition, artistSummary, HIRES_BITS_ABOVE, HIRES_RATE_ABOVE } from '@shared/model'
+import { sleepTrackKey, type AppSettings, type ConnectionState, type McpSettings, type MediaNode, type MediaQueueAction, type Schedule, trackArtists, formatLabel, albumTracksOf, albumSummary, trackPosition, artistSummary, HIRES_BITS_ABOVE, HIRES_RATE_ABOVE, describeProfileNote } from '@shared/model'
 import { favoriteKey, type Favorite } from '@shared/model'
 import { MCP_CLUSTERS, mcpClusterEnabled } from '@shared/mcpCatalog'
 import { EQ_GAIN_MAX, EQ_GAIN_MIN, audioCaps, brightnessOptions, isRadioMetadata } from '@shared/smoip'
@@ -702,7 +702,7 @@ export class McpBridge {
                         // how the index was built and every reconciliation that changed something —
                         // the SHAPE of the server's answers, so an agent can explain what it sees
                         ...(st.profile
-                          ? { built_by: st.profile.strategy, albums_from: st.profile.albumsFrom, class_search: st.profile.classSearch, notes: st.profile.notes }
+                          ? { built_by: st.profile.strategy, albums_from: st.profile.albumsFrom, class_search: st.profile.classSearch, notes: st.profile.notes.map(describeProfileNote) }
                           : {})
                       }
                     }

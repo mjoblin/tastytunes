@@ -1418,8 +1418,51 @@ export interface MediaServerProfile {
   albumsFrom: 'search' | 'browse' | 'tracks'
   /** How the server answered class searches: leaf classes ('leaf'), everything as the bare base class ('generalized' — Asset), nothing derived from the asked class ('unhonoured' — Emby, UMS), or no Search at all ('unavailable'). */
   classSearch: 'leaf' | 'generalized' | 'unhonoured' | 'unavailable'
-  /** Human-readable, one line each — every reconciliation that changed something. */
-  notes: string[]
+  /** Every reconciliation that changed something — FACTS, not prose: the words are made at display time by describeProfileNote(), so wording can change without re-indexing. */
+  notes: ProfileNote[]
+}
+
+/** One thing the index did while reading a server. `count` where it applies. */
+export type ProfileNote =
+  | { kind: 'navigation-entries-left-out'; what: 'albums' | 'artists' | 'tracks'; count: number }
+  | { kind: 'albums-found-by-browsing'; count: number }
+  | { kind: 'albums-assembled-from-tracks'; count: number }
+  | { kind: 'duplicate-albums-merged'; count: number }
+  | { kind: 'years-from-tracks'; count: number }
+  | { kind: 'search-failed-browsed-instead' }
+  | { kind: 'search-paged-smaller' }
+  | { kind: 'browse-capped'; count: number }
+
+/**
+ * The words for a ProfileNote — user-facing (Info › Source, MCP), plain, no
+ * UPnP vocabulary; a note exists only when something needed handling, so a
+ * healthy server shows none. One home for the wording (renderer and MCP both
+ * call this); changing a sentence here needs no re-index.
+ */
+export function describeProfileNote(note: ProfileNote): string {
+  const n = (count: number, one: string, many: string): string => `${count} ${count === 1 ? one : many}`
+  switch (note.kind) {
+    case 'navigation-entries-left-out':
+      return note.what === 'albums'
+        ? `${n(note.count, 'entry', 'entries')} the server adds for navigation (such as “- All Albums -”) left out of the albums`
+        : note.what === 'artists'
+          ? `${n(note.count, 'navigation entry', 'navigation entries')} left out of the artists`
+          : `${n(note.count, 'entry', 'entries')} that ${note.count === 1 ? 'was' : 'were'} not a track left out of the tracks`
+    case 'albums-found-by-browsing':
+      return `the server's album search returned nothing — ${n(note.count, 'album was', 'albums were')} found by browsing instead`
+    case 'albums-assembled-from-tracks':
+      return `this server doesn't list albums — TastyTunes assembled them from its ${n(note.count, 'track', 'tracks')}`
+    case 'duplicate-albums-merged':
+      return `${n(note.count, 'duplicate album entry', 'duplicate album entries')} merged — the server lists some albums more than once`
+    case 'years-from-tracks':
+      return note.count === 1 ? '1 album with no year took the year from its tracks' : `${note.count} albums with no year took the year from their tracks`
+    case 'search-failed-browsed-instead':
+      return "the server's search failed — the library was indexed by browsing instead"
+    case 'search-paged-smaller':
+      return "the server's search failed on large pages — read in smaller pages instead"
+    case 'browse-capped':
+      return `browsing stopped after ${note.count} folders — a very large library may be only partly indexed`
+  }
 }
 
 /** One READY index's full pools, nodes stamped — the library lenses' feedstock. */

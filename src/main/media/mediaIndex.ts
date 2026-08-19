@@ -18,7 +18,7 @@ import { join } from 'node:path'
 import { app } from 'electron'
 import { getSettings } from '../data/persist'
 import { atomicWriteFileSync } from '../data/jsonStore'
-import type { MediaIndexPools, MediaIndexStatus, MediaNode, MediaSearchAllGroup, MediaServerInfo, MediaServerProfile } from '@shared/model'
+import type { MediaIndexPools, MediaIndexStatus, MediaNode, MediaSearchAllGroup, MediaServerInfo, MediaServerProfile, ProfileNote } from '@shared/model'
 import { albumsFromTracks, audioItemsOnly, dedupeAlbums, emptyProfile, preferCopy, richer, settleClasses, stripParentArtist, yearFromTracks, type Seen } from './reconcile'
 import {
   browseChildrenOf,
@@ -39,6 +39,8 @@ interface StoredIndex {
   tracks: MediaNode[]
 }
 
+// v11: profile notes are structured facts (ProfileNote), worded at display
+//      time — the v10 indexes stored prose (2026-08-19).
 // v10: the survey round (2026-08-17): parser split into didl.ts (node rules:
 //      dates, container-artist, title decoration, bitrate by size÷duration,
 //      " / " and upnp:composer) + reconcile.ts (pool rules: class settling by
@@ -61,7 +63,7 @@ interface StoredIndex {
 // Asset tagging). v2 added upnp:genre. A bump discards stored indexes
 // wholesale; rebuildHints below keeps that from costing Browse-only
 // servers their Build click.
-const VERSION = 10
+const VERSION = 11
 const PAGE = 500
 const MAX_TRACKS = 50_000
 const MAX_CONTAINERS = 10_000
@@ -192,10 +194,9 @@ const buildingNames = new Map<string, string>()
 //   tracks  → synthesise albums from the tracks (id = their container)
 // The pool rules run last, in order: dedupe copies (Gerbera), fill years from
 // tracks (minidlna), and every step that changed something leaves a note.
-// Profile notes are USER-FACING (Info › Source, MCP): plain words, no UPnP
-// vocabulary, and a note only when something needed handling — a healthy
-// server reads "Indexed: by search" and nothing else.
-const n = (count: number, one: string, many: string): string => `${count} ${count === 1 ? one : many}`
+// Profile notes are FACTS (shared/model ProfileNote); the words are made at
+// display time by describeProfileNote() — so wording can change without a
+// re-index, and a healthy server carries no notes at all.
 const ALBUM_BASE = 'object.container.album'
 const ALBUM_LEAF = 'object.container.album.musicAlbum'
 const ARTIST_BASE = 'object.container.person'
@@ -204,7 +205,7 @@ const TRACK_BASE = 'object.item.audioItem'
 
 interface Crawled { albums: MediaNode[]; artists: MediaNode[]; tracks: MediaNode[]; profile: MediaServerProfile; parentsOf?: Map<string, Set<string>> }
 
-async function collectClass(host: string, server: MediaServerInfo, cls: string, cap: number, note: (s: string) => void): Promise<MediaNode[] | null> {
+async function collectClass(host: string, server: MediaServerInfo, cls: string, cap: number, note: (s: ProfileNote) => void): Promise<MediaNode[] | null> {
   const seen = new Map<string, MediaNode>()
   let start = 0
   let pageSize = PAGE
@@ -213,7 +214,7 @@ async function collectClass(host: string, server: MediaServerInfo, cls: string, 
     if (!page) {
       // a page that faults (Jellyfin mid-scan: SOAP 500 on a 500-item page)
       // is retried once at a fifth of the size before this class is given up
-      if (pageSize === PAGE) { pageSize = Math.max(50, Math.floor(PAGE / 5)); note(`the server's search failed on large pages — read in smaller pages instead`); continue }
+      if (pageSize === PAGE) { pageSize = Math.max(50, Math.floor(PAGE / 5)); note({ kind: 'search-paged-smaller' }); continue }
       return start === 0 ? null : [...seen.values()]
     }
     for (const n of page.items) seen.set(n.id, n)
@@ -227,7 +228,7 @@ async function collectClass(host: string, server: MediaServerInfo, cls: string, 
 
 async function crawlSearch(host: string, server: MediaServerInfo): Promise<Crawled | null> {
   const profile = emptyProfile('search')
-  const note = (s: string): void => { profile.notes.push(s) }
+  const note = (s: ProfileNote): void => { if (!profile.notes.some((x) => JSON.stringify(x) === JSON.stringify(s))) profile.notes.push(s) }
   const rawAlbums = await collectClass(host, server, ALBUM_BASE, MAX_CONTAINERS, note)
   const rawArtists = await collectClass(host, server, ARTIST_BASE, MAX_CONTAINERS, note)
   const rawTracks = await collectClass(host, server, TRACK_BASE, MAX_TRACKS, note)
@@ -239,9 +240,9 @@ async function crawlSearch(host: string, server: MediaServerInfo): Promise<Crawl
   // (a generalizing server — Asset — needs no note: promotion is how it is
   // meant to be read; 'unhonoured' is explained by the note the fallback
   // writes when it recovers the albums another way)
-  if (albumsSettled.mode === 'leaf' && albumsSettled.dropped > 0) note(`${n(albumsSettled.dropped, 'entry', 'entries')} the server adds for navigation (such as “- All Albums -”) left out of the albums`)
-  if (artistsSettled.mode === 'leaf' && artistsSettled.dropped > 0) note(`${n(artistsSettled.dropped, 'navigation entry', 'navigation entries')} left out of the artists`)
-  if (tracksSettled.dropped > 0) note(`${n(tracksSettled.dropped, 'entry', 'entries')} that ${tracksSettled.dropped === 1 ? 'was' : 'were'} not a track left out of the tracks`)
+  if (albumsSettled.mode === 'leaf' && albumsSettled.dropped > 0) note({ kind: 'navigation-entries-left-out', what: 'albums', count: albumsSettled.dropped })
+  if (artistsSettled.mode === 'leaf' && artistsSettled.dropped > 0) note({ kind: 'navigation-entries-left-out', what: 'artists', count: artistsSettled.dropped })
+  if (tracksSettled.dropped > 0) note({ kind: 'navigation-entries-left-out', what: 'tracks', count: tracksSettled.dropped })
   return { albums: albumsSettled.kept, artists: artistsSettled.kept, tracks: tracksSettled.kept, profile }
 }
 
@@ -282,7 +283,7 @@ async function crawlBrowse(host: string, server: MediaServerInfo, into?: Crawled
   }
   if (visited.size >= MAX_CONTAINERS || tracks.size >= MAX_TRACKS) {
     console.log(`[mediaIndex] ${server.name}: browse-crawl capped (${visited.size} containers)`)
-    profile.notes.push(`browsing stopped after ${visited.size} folders — a very large library may be only partly indexed`)
+    profile.notes.push({ kind: 'browse-capped', count: visited.size })
   }
   if (tracks.size === 0 && albums.size === 0) return null
   return {
@@ -296,18 +297,18 @@ async function crawlBrowse(host: string, server: MediaServerInfo, into?: Crawled
 
 /** The pool rules, in order, over whatever the crawl produced. */
 function reconcilePools(c: Crawled, serverName: string): Crawled {
-  const note = (s: string): void => { c.profile.notes.push(s) }
+  const note = (s: ProfileNote): void => { c.profile.notes.push(s) }
   let albums = c.albums
   if (albums.length === 0 && c.tracks.length > 0) {
     albums = albumsFromTracks(c.tracks)
     c.profile.albumsFrom = 'tracks'
-    note(`this server doesn't list albums — TastyTunes assembled them from its ${n(c.tracks.length, 'track', 'tracks')}`)
+    note({ kind: 'albums-assembled-from-tracks', count: c.tracks.length })
     console.log(`[mediaIndex] ${serverName}: ${albums.length} albums synthesised from tracks`)
   }
   const dd = dedupeAlbums(albums, c.tracks, c.parentsOf)
-  if (dd.collapsed > 0) note(`${n(dd.collapsed, 'duplicate album entry', 'duplicate album entries')} merged — the server lists some albums more than once`)
+  if (dd.collapsed > 0) note({ kind: 'duplicate-albums-merged', count: dd.collapsed })
   const yf = yearFromTracks(dd.albums, c.tracks)
-  if (yf.filled > 0) note(yf.filled === 1 ? '1 album with no year took the year from its tracks' : `${yf.filled} albums with no year took the year from their tracks`)
+  if (yf.filled > 0) note({ kind: 'years-from-tracks', count: yf.filled })
   return { ...c, albums: yf.albums }
 }
 
@@ -317,7 +318,7 @@ async function crawl(host: string, server: MediaServerInfo, strategy: 'search' |
     // Search refused outright — a searchable server that faults on every
     // page (Jellyfin mid-scan) is a browse-only server for today
     const b = await crawlBrowse(host, server)
-    if (b) { b.profile.notes.push("the server's search failed — the library was indexed by browsing instead"); c = b }
+    if (b) { b.profile.notes.push({ kind: 'search-failed-browsed-instead' }); c = b }
   }
   if (!c) return null
   if (c.profile.strategy === 'search' && c.albums.length === 0 && c.tracks.length > 0) {
@@ -326,7 +327,7 @@ async function crawl(host: string, server: MediaServerInfo, strategy: 'search' |
     if (b && b.albums.length > 0) {
       c = { ...c, albums: b.albums, artists: c.artists.length > 0 ? c.artists : b.artists, parentsOf: b.parentsOf }
       c.profile.albumsFrom = 'browse'
-      c.profile.notes.push(`the server's album search returned nothing — ${n(b.albums.length, 'album was', 'albums were')} found by browsing instead`)
+      c.profile.notes.push({ kind: 'albums-found-by-browsing', count: b.albums.length })
     }
   }
   const r = reconcilePools(c, server.name)

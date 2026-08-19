@@ -3,6 +3,7 @@ import { Copy, Check, Disc3, Music2, User } from 'lucide-react'
 import {
   albumComposers,
   albumFormat,
+  describeProfileNote,
   discGroups,
   fmtBytes,
   formatLabel,
@@ -278,7 +279,7 @@ function MediaInfoBody({ target, open }: { target: MediaInfoTarget; open: boolea
     ['Art', node.artUrl ? <CopyableMono value={node.artUrl} label="art URL" /> : null],
     ['Indexed', indexed],
     ...(serverProfile && serverProfile.notes.length > 0
-      ? serverProfile.notes.map((n, i): Row => [i === 0 ? 'Notes' : '', n])
+      ? serverProfile.notes.map((n, i): Row => [i === 0 ? 'Notes' : '', describeProfileNote(n)])
       : [])
   ]
 
