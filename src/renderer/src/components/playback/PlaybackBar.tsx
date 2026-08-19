@@ -76,8 +76,13 @@ export function PlaybackBar(): React.JSX.Element {
           <div className="font-display font-bold text-[15px] leading-tight tracking-tight text-ink truncate">
             {(active && meta.title) || '—'}
           </div>
-          <div className="font-display text-[13px] leading-tight tracking-tight text-dim truncate mt-0.5">
-            {(active && meta.subtitle) || ''}
+          {/* min-h reserves the line while the subtitle is still on its way
+              (the source's name lands a beat before now_playing fills the
+              rest) — the block is vertically centred, so an empty second line
+              let the title sit low and jump up when the artist arrived. The
+              mini and the tray panel already reserve theirs. */}
+          <div className="font-display text-[13px] leading-tight tracking-tight text-dim truncate mt-0.5 min-h-[15px]">
+            {(active && meta.subtitle) || '\u00A0'}
           </div>
         </div>
       </button>

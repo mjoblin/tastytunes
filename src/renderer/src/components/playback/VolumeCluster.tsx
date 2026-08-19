@@ -168,7 +168,11 @@ export function VolumeCluster(): React.JSX.Element | null {
         >
           <Plus size={15} />
         </button>
-        <span className="microlabel">cbus</span>
+        {/* leading-none: the caps' box, not a 1.5 line box, is what items-center
+            centres — a fallback mono font on Linux placed the glyphs high in
+            the tall box (tester screenshot 2026-08-17); on the bundled font both
+            are centred to the pixel */}
+        <span className="microlabel leading-none">cbus</span>
       </div>
     )
   }
