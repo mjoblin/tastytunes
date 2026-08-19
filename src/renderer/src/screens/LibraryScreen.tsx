@@ -1775,8 +1775,8 @@ export function LibraryScreen(): React.JSX.Element {
                       data-library-lens={door.key}
                       aria-disabled={doorsState === 'building' ? true : undefined}
                       data-tip={
-                        doorsState === 'building'
-                          ? `Indexing ${buildingCount === 1 ? 'the library' : `${buildingCount} libraries`}…`
+                        buildingCount > 0 && doorsState !== 'failed'
+                          ? `Indexing ${buildingCount === 1 ? 'a library' : `${buildingCount} libraries`}…${doorsState === 'ready' ? ' — what is already indexed is browsable now' : ''}`
                           : doorsState === 'failed'
                             ? `Couldn't index: ${failedIndexes.map((x) => `${x.serverName} — ${x.failure ?? 'no index'}`).join('; ')}. Click to retry.`
                             : undefined
@@ -1802,23 +1802,30 @@ export function LibraryScreen(): React.JSX.Element {
                           strokeWidth={1.1}
                           className={cx(
                             'text-gold/70 group-hover:text-gold transition-colors',
-                            doorsState === 'building' && 'motion-safe:animate-pulse'
+                            // pulses while ANYTHING is still building — including the
+                            // mixed case where one index is ready (the streamer's USB
+                            // storage lands in a moment) and the big one is not
+                            buildingCount > 0 && 'motion-safe:animate-pulse'
                           )}
                         />
                       </div>
                       <div className="pt-1.5 text-[12.5px] truncate">{door.title}</div>
                       {/* the count line fades in when the index lands (motion-safe, the modal's 140ms) — the door itself never moves */}
                       <div
-                        key={doorsState === 'ready' ? 'ready' : 'waiting'}
+                        key={doorsState === 'ready' && buildingCount === 0 ? 'ready' : 'waiting'}
                         className={cx('text-[11.5px] truncate motion-safe:transition-opacity motion-safe:duration-[140ms]', doorsState === 'failed' ? 'text-alert' : 'text-faint')}
                       >
                         {doorsState === 'building'
                           ? 'Indexing…'
                           : doorsState === 'failed'
                             ? "Couldn't index · Retry"
-                            : door.count > 0
-                              ? `${door.count} ${door.noun} · every library`
-                              : 'Across every library'}
+                            : buildingCount > 0
+                              ? door.count > 0
+                                ? `${door.count} ${door.noun} · indexing…`
+                                : 'Indexing…'
+                              : door.count > 0
+                                ? `${door.count} ${door.noun} · every library`
+                                : 'Across every library'}
                       </div>
                     </div>
                   ))}
