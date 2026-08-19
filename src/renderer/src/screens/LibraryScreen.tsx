@@ -2162,7 +2162,9 @@ export function LibraryScreen(): React.JSX.Element {
               node: artist && !n.artUrl && artist.artUrl ? { ...n, artUrl: artist.artUrl } : n,
               tracks: artist ? undefined : tracksForInfo(n),
               artist,
-              serverName: n.serverName ?? server?.name ?? null
+              serverName: n.serverName ?? server?.name ?? null,
+              // what the index learned about this server (the modal's Indexed line + notes)
+              ...(pool?.profile ? { serverProfile: pool.profile } : {})
             })
           }}
           onAddToPlaylist={

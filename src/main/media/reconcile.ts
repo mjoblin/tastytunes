@@ -105,7 +105,7 @@ export function yearFromTracks(albums: MediaNode[], tracks: MediaNode[]): { albu
  * Editions (duplicated content) and same-titled albums by two different
  * artists (each container's tracks are its own) survive untouched.
  */
-export function dedupeAlbums(albums: MediaNode[], tracks: MediaNode[]): { albums: MediaNode[]; collapsed: number } {
+export function dedupeAlbums(albums: MediaNode[], tracks: MediaNode[], parentsOf?: Map<string, ReadonlySet<string>>): { albums: MediaNode[]; collapsed: number } {
   const groups = new Map<string, MediaNode[]>()
   for (const a of albums) {
     const k = `${lc(a.title)}|${a.year ?? ''}`
@@ -132,8 +132,14 @@ export function dedupeAlbums(albums: MediaNode[], tracks: MediaNode[]): { albums
     // Any two copies sharing a parent means these are distinct albums; and
     // with no tracks in the pool there is no content evidence — leave the
     // group alone in both cases.
-    const parents = group.map((a) => a.parentId ?? '')
-    const siblings = new Set(parents).size < parents.length
+    // (a browse crawl meets an album under several parents — Emby lists its
+    // per-performer compilation albums under Albums AND under each artist —
+    // and keeps one copy; every parent it was seen under counts here)
+    const parentSets = group.map((a) => parentsOf?.get(a.id) ?? new Set([a.parentId ?? '']))
+    let siblings = false
+    for (let i = 0; i < parentSets.length && !siblings; i++)
+      for (let j = i + 1; j < parentSets.length && !siblings; j++)
+        for (const p of parentSets[i]) if (parentSets[j].has(p)) { siblings = true; break }
     if (own.length === 0 || siblings) { out.push(...group); continue }
     const artistsOfCopies = new Set(group.map((a) => lc(a.artist)).filter(Boolean))
     // two different artists with a same-titled album whose tracks are each their own: not copies

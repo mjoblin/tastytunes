@@ -192,7 +192,7 @@ const ARTIST_BASE = 'object.container.person'
 const ARTIST_LEAF = 'object.container.person.musicArtist'
 const TRACK_BASE = 'object.item.audioItem'
 
-interface Crawled { albums: MediaNode[]; artists: MediaNode[]; tracks: MediaNode[]; profile: MediaServerProfile }
+interface Crawled { albums: MediaNode[]; artists: MediaNode[]; tracks: MediaNode[]; profile: MediaServerProfile; parentsOf?: Map<string, Set<string>> }
 
 async function collectClass(host: string, server: MediaServerInfo, cls: string, cap: number, note: (s: string) => void): Promise<MediaNode[] | null> {
   const seen = new Map<string, MediaNode>()
@@ -241,6 +241,7 @@ async function crawlBrowse(host: string, server: MediaServerInfo, into?: Crawled
   const tracks = new Map<string, MediaNode>(into ? into.tracks.map((t) => [t.id, t]) : [])
   const visited = new Set<string>()
   const parents = new Map<string, { title: string; isArtist: boolean }>() // container id → what it is, for the parent-as-artist and canonical-branch rules
+  const parentsOf = new Map<string, Set<string>>() // album id → every container it was listed under (dedupe's sibling evidence)
   const queue: string[] = ['0']
   const put = (m: Map<string, MediaNode>, n: MediaNode): void => { const prev = m.get(n.id); m.set(n.id, prev ? richer(prev, n) : n) }
   while (queue.length > 0 && visited.size < MAX_CONTAINERS && tracks.size < MAX_TRACKS) {
@@ -259,7 +260,10 @@ async function crawlBrowse(host: string, server: MediaServerInfo, into?: Crawled
         continue
       }
       parents.set(n.id, { title: n.title, isArtist: n.upnpClass.includes('person') })
-      if (n.upnpClass.includes('musicAlbum')) albums.set(n.id, preferCopy(albums.get(n.id), { node: n, underArtist: parent?.isArtist === true }))
+      if (n.upnpClass.includes('musicAlbum')) {
+        albums.set(n.id, preferCopy(albums.get(n.id), { node: n, underArtist: parent?.isArtist === true }))
+        parentsOf.set(n.id, (parentsOf.get(n.id) ?? new Set()).add(id))
+      }
       else if (n.upnpClass.includes('person')) put(artists, n)
       // walk every container: album tracks live inside albums too
       queue.push(n.id)
@@ -274,7 +278,8 @@ async function crawlBrowse(host: string, server: MediaServerInfo, into?: Crawled
     albums: [...albums.values()].map((s) => s.node),
     artists: [...(into && into.artists.length > 0 ? new Map(into.artists.map((a) => [a.id, a])) : artists).values()],
     tracks: [...tracks.values()],
-    profile
+    profile,
+    parentsOf
   }
 }
 
@@ -288,7 +293,7 @@ function reconcilePools(c: Crawled, serverName: string): Crawled {
     note(`albums built from ${c.tracks.length} tracks — this server exposes no album containers`)
     console.log(`[mediaIndex] ${serverName}: ${albums.length} albums synthesised from tracks`)
   }
-  const dd = dedupeAlbums(albums, c.tracks)
+  const dd = dedupeAlbums(albums, c.tracks, c.parentsOf)
   if (dd.collapsed > 0) note(`${dd.collapsed} duplicate album containers collapsed`)
   const yf = yearFromTracks(dd.albums, c.tracks)
   if (yf.filled > 0) note(`${yf.filled} albums took their year from their tracks`)
@@ -308,7 +313,7 @@ async function crawl(host: string, server: MediaServerInfo, strategy: 'search' |
     // Emby: the class search returned no albums, its Browse tree has them
     const b = await crawlBrowse(host, server, c)
     if (b && b.albums.length > 0) {
-      c = { ...c, albums: b.albums, artists: c.artists.length > 0 ? c.artists : b.artists }
+      c = { ...c, albums: b.albums, artists: c.artists.length > 0 ? c.artists : b.artists, parentsOf: b.parentsOf }
       c.profile.albumsFrom = 'browse'
       c.profile.notes.push(`albums came from browsing the tree — the album search returned none (${b.albums.length} found)`)
     }
