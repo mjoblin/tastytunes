@@ -1,144 +1,147 @@
-import { useEffect, useRef, useState } from 'react'
-import { CircleAlert, CircleCheck, Loader2, Moon, Power, Search, Sparkles } from 'lucide-react'
-import { tt } from '@/api'
-import { useStore } from '@/store'
-import { useShortcuts } from '@/hooks/useShortcuts'
-import { useWakeHold } from '@/hooks/useWakeHold'
-import { useArtAccent } from '@/hooks/useArtAccent'
-import { useArtLoadable } from '@/hooks/useArtLoadable'
-import { useMotionPreference } from '@/hooks/useMotionPreference'
-import { useTheme } from '@/hooks/useTheme'
-import { useDisplayFont } from '@/hooks/useDisplayFont'
-import { cx, deriveNowPlaying } from '@/lib/format'
-import { Nav } from '@/components/Nav'
-import { PlaybackBar } from '@/components/playback/PlaybackBar'
-import { DiagnosticsDrawer } from '@/components/overlays/DiagnosticsDrawer'
-import { ShortcutsOverlay } from '@/components/overlays/ShortcutsOverlay'
-import { CommandPalette } from '@/components/overlays/CommandPalette'
-import { InfoModal } from '@/components/overlays/InfoModal'
-import { MediaInfoModal } from '@/components/overlays/MediaInfoModal'
-import { DisplayMode } from '@/components/playback/DisplayMode'
-import { NowPlayingScreen } from '@/screens/NowPlayingScreen'
-import { QueueScreen } from '@/screens/QueueScreen'
-import { PresetsScreen } from '@/screens/PresetsScreen'
-import { LibraryScreen } from '@/screens/LibraryScreen'
-import { RadioScreen } from '@/screens/RadioScreen'
-import { RecentlyPlayedScreen } from '@/screens/RecentlyPlayedScreen'
-import { FavoritesScreen } from '@/screens/FavoritesScreen'
-import { PlaylistsScreen } from '@/screens/PlaylistsScreen'
-import { DeviceScreen } from '@/screens/DeviceScreen'
-import { SearchScreen } from '@/screens/SearchScreen'
-import { SettingsScreen } from '@/screens/SettingsScreen'
-import { AmbientArt } from '@/components/media/AmbientArt'
-import { useDecodedArt } from '@/hooks/useDecodedArt'
-import { usePrefetchNextArt } from '@/hooks/usePrefetchNextArt'
-import { useFontScaleGuard } from '@/hooks/useFontScaleGuard'
-import { HeaderChip } from '@/components/chrome/Chrome'
+import { useEffect, useRef, useState } from "react";
+import { CircleAlert, CircleCheck, Loader2, Moon, Power, Search, Sparkles } from "lucide-react";
+import { tt } from "@/api";
+import { useStore } from "@/store";
+import { useShortcuts } from "@/hooks/useShortcuts";
+import { useWakeHold } from "@/hooks/useWakeHold";
+import { useArtAccent } from "@/hooks/useArtAccent";
+import { useArtLoadable } from "@/hooks/useArtLoadable";
+import { useMotionPreference } from "@/hooks/useMotionPreference";
+import { useTheme } from "@/hooks/useTheme";
+import { useDisplayFont } from "@/hooks/useDisplayFont";
+import { cx, deriveNowPlaying } from "@/lib/format";
+import { Nav } from "@/components/Nav";
+import { PlaybackBar } from "@/components/playback/PlaybackBar";
+import { DiagnosticsDrawer } from "@/components/overlays/DiagnosticsDrawer";
+import { ShortcutsOverlay } from "@/components/overlays/ShortcutsOverlay";
+import { CommandPalette } from "@/components/overlays/CommandPalette";
+import { InfoModal } from "@/components/overlays/InfoModal";
+import { MediaInfoModal } from "@/components/overlays/MediaInfoModal";
+import { DisplayMode } from "@/components/playback/DisplayMode";
+import { NowPlayingScreen } from "@/screens/NowPlayingScreen";
+import { QueueScreen } from "@/screens/QueueScreen";
+import { PresetsScreen } from "@/screens/PresetsScreen";
+import { LibraryScreen } from "@/screens/LibraryScreen";
+import { RadioScreen } from "@/screens/RadioScreen";
+import { RecentlyPlayedScreen } from "@/screens/RecentlyPlayedScreen";
+import { FavoritesScreen } from "@/screens/FavoritesScreen";
+import { PlaylistsScreen } from "@/screens/PlaylistsScreen";
+import { DeviceScreen } from "@/screens/DeviceScreen";
+import { SearchScreen } from "@/screens/SearchScreen";
+import { SettingsScreen } from "@/screens/SettingsScreen";
+import { AmbientArt } from "@/components/media/AmbientArt";
+import { useDecodedArt } from "@/hooks/useDecodedArt";
+import { usePrefetchNextArt } from "@/hooks/usePrefetchNextArt";
+import { useFontScaleGuard } from "@/hooks/useFontScaleGuard";
+import { HeaderChip } from "@/components/chrome/Chrome";
 
 export default function App(): React.JSX.Element {
-  useShortcuts()
+  useShortcuts();
 
-  const screen = useStore((s) => s.screen)
-  const connection = useStore((s) => s.connection)
-  const systemPower = useStore((s) => s.systemPower)
-  const playState = useStore((s) => s.playState)
-  const nowPlaying = useStore((s) => s.nowPlaying)
-  const diagnosticsOpen = useStore((s) => s.diagnosticsOpen)
-  const mediaInfo = useStore((s) => s.mediaInfo)
-  const paletteOpen = useStore((s) => s.paletteOpen)
-  const displayMode = useStore((s) => s.displayMode)
-  const setDisplayMode = useStore((s) => s.setDisplayMode)
+  const screen = useStore((s) => s.screen);
+  const connection = useStore((s) => s.connection);
+  const systemPower = useStore((s) => s.systemPower);
+  const playState = useStore((s) => s.playState);
+  const nowPlaying = useStore((s) => s.nowPlaying);
+  const diagnosticsOpen = useStore((s) => s.diagnosticsOpen);
+  const mediaInfo = useStore((s) => s.mediaInfo);
+  const paletteOpen = useStore((s) => s.paletteOpen);
+  const displayMode = useStore((s) => s.displayMode);
+  const setDisplayMode = useStore((s) => s.setDisplayMode);
 
-  const settings = useStore((s) => s.settings)
+  const settings = useStore((s) => s.settings);
 
-  const connected = connection.phase === 'connected'
+  const connected = connection.phase === "connected";
   // The wake window: power ON is not arrival. The whole story — the retained
   // re-announcement, the two wake paths, the release rules and why the first
   // version of this hold regressed — lives in useWakeHold; this file just
   // asks. `waking` is the wake-on-intent flag; `holding` covers the gap
   // between the wake finishing and the streamer actually arriving.
-  const waking = useStore((s) => s.waking)
-  const holding = useWakeHold()
+  const waking = useStore((s) => s.waking);
+  const holding = useWakeHold();
   const inStandby =
-    connected && ((systemPower != null && systemPower.power !== 'ON') || waking || holding)
+    connected && ((systemPower != null && systemPower.power !== "ON") || waking || holding);
 
   // Per-album accent tint (Plexamp-style), from the current art.
-  const theme = useTheme(settings.theme)
-  useDisplayFont(settings.displayFont)
-  const meta = deriveNowPlaying(playState, nowPlaying)
-  const artActive = connected && !inStandby ? meta.artUrl : null
+  const theme = useTheme(settings.theme);
+  useDisplayFont(settings.displayFont);
+  const meta = deriveNowPlaying(playState, nowPlaying);
+  const artActive = connected && !inStandby ? meta.artUrl : null;
   // A dead art URL must not leave the ambient wash/vignette up with no art.
-  const artLoadable = useArtLoadable(artActive)
+  const artLoadable = useArtLoadable(artActive);
   // The wash renders the last DECODED art, so a slow remote cover can't blank
   // the window while it downloads (see useDecodedArt).
-  const { art: ambientArtUrl } = useDecodedArt(artActive)
-  useArtAccent(settings.accentFollowsArt ? artActive : null, theme)
-  useMotionPreference(settings.motion)
+  const { art: ambientArtUrl } = useDecodedArt(artActive);
+  useArtAccent(settings.accentFollowsArt ? artActive : null, theme);
+  useMotionPreference(settings.motion);
   // Queue playback knows the next track's art before it's needed — warm it so
   // the swap is instant on album/playlist runs.
-  usePrefetchNextArt()
+  usePrefetchNextArt();
   // Dev tripwire: nested .font-display would compound the optical zoom.
-  useFontScaleGuard(screen)
+  useFontScaleGuard(screen);
 
   useEffect(() => {
-    if (!connected && displayMode) setDisplayMode(false)
-  }, [connected, displayMode, setDisplayMode])
+    if (!connected && displayMode) setDisplayMode(false);
+  }, [connected, displayMode, setDisplayMode]);
 
   const ambientVisible =
     ambientArtUrl != null &&
     artLoadable &&
-    (settings.ambientArt === 'all' ||
-      (settings.ambientArt === 'now-playing' && screen === 'now-playing'))
+    (settings.ambientArt === "all" ||
+      (settings.ambientArt === "now-playing" && screen === "now-playing"));
 
   // Full-window ambient: the nav/bar drop their panel tint so the wash is even.
-  const setAmbientWindowActive = useStore((s) => s.setAmbientWindowActive)
-  const ambientWindow = ambientVisible && settings.ambientCoverage === 'window'
+  const setAmbientWindowActive = useStore((s) => s.setAmbientWindowActive);
+  const ambientWindow = ambientVisible && settings.ambientCoverage === "window";
   useEffect(() => {
-    setAmbientWindowActive(ambientWindow)
-  }, [ambientWindow, setAmbientWindowActive])
+    setAmbientWindowActive(ambientWindow);
+  }, [ambientWindow, setAmbientWindowActive]);
 
   const content = (() => {
-    if (screen === 'device') return <DeviceScreen />
-    if (screen === 'settings') return <SettingsScreen />
+    if (screen === "device") return <DeviceScreen />;
+    if (screen === "settings") return <SettingsScreen />;
     // Recently played is local history — viewable even while disconnected/standby.
-    if (screen === 'recently-played') return <RecentlyPlayedScreen />
+    if (screen === "recently-played") return <RecentlyPlayedScreen />;
     // Favorites is a local collection too — browsable offline; play verbs
     // surface their own failures through the central toast.
-    if (screen === 'favorites') return <FavoritesScreen />
+    if (screen === "favorites") return <FavoritesScreen />;
     // Playlists are local user data — browsable while disconnected, like
     // Favorites and Recently Played. Activating one needs the streamer; the
     // screen's Play button is what surfaces that, not a wall.
-    if (screen === 'playlists') return <PlaylistsScreen />
+    if (screen === "playlists") return <PlaylistsScreen />;
     // Search spans local collections as well as the streamer, so it stays
     // usable offline — the library/radio groups simply answer with nothing and
     // the rows that need a device dim themselves.
-    if (screen === 'search') return <SearchScreen />
-    if (!connected) return <ConnectGate />
+    if (screen === "search") return <SearchScreen />;
+    if (!connected) return <ConnectGate />;
     // Standby is a PRESENCE, not a wall (probed 2026-07-23: every state
     // endpoint, art path, and WS subscribe still answers in NETWORK
     // standby) — screens stay browsable and play actions wake the device
     // (wake-on-intent in DeviceManager). Only Now Playing, which genuinely
     // has nothing to show, gets the sleeping face.
     switch (screen) {
-      case 'now-playing':
-        return inStandby ? <StandbyGate busy={waking || holding} /> : <NowPlayingScreen />
-      case 'queue':
-        return <QueueScreen />
-      case 'presets':
-        return <PresetsScreen />
-      case 'library':
-        return <LibraryScreen />
-      case 'radio':
-        return <RadioScreen />
+      case "now-playing":
+        return inStandby ? <StandbyGate busy={waking || holding} /> : <NowPlayingScreen />;
+      case "queue":
+        return <QueueScreen />;
+      case "presets":
+        return <PresetsScreen />;
+      case "library":
+        return <LibraryScreen />;
+      case "radio":
+        return <RadioScreen />;
     }
-  })()
+  })();
 
   // Always mounted (with a null src when it shouldn't show) so the wash can
   // fade out on its own instead of vanishing in a frame.
   const ambient = (
-    <AmbientArt src={ambientVisible ? (ambientArtUrl ?? null) : null} vignette={settings.vignette} />
-  )
-  const coverWindow = settings.ambientCoverage === 'window'
+    <AmbientArt
+      src={ambientVisible ? (ambientArtUrl ?? null) : null}
+      vignette={settings.vignette}
+    />
+  );
+  const coverWindow = settings.ambientCoverage === "window";
 
   return (
     <div className="relative h-full">
@@ -166,7 +169,7 @@ export default function App(): React.JSX.Element {
         <MediaInfoModal target={mediaInfo} />
       </div>
     </div>
-  )
+  );
 }
 
 /**
@@ -177,28 +180,28 @@ export default function App(): React.JSX.Element {
  * cascade belongs to overlays.
  */
 function ToastHost(): React.JSX.Element | null {
-  const toast = useStore((s) => s.toast)
-  const dismissToast = useStore((s) => s.dismissToast)
-  const setScreen = useStore((s) => s.setScreen)
+  const toast = useStore((s) => s.toast);
+  const dismissToast = useStore((s) => s.dismissToast);
+  const setScreen = useStore((s) => s.setScreen);
 
   useEffect(() => {
-    if (!toast) return
+    if (!toast) return;
     // Errors linger a little longer than confirmations; an UNDO offer longer
     // still (half again), because it isn't there to be read — it's there to be
     // decided on, and noticing "wait, I didn't mean that" takes a beat.
-    const ms = toast.action?.undo ? 5400 : toast.kind === 'error' ? 5000 : 3600
-    const t = setTimeout(dismissToast, ms)
-    return () => clearTimeout(t)
-  }, [toast, dismissToast])
+    const ms = toast.action?.undo ? 5400 : toast.kind === "error" ? 5000 : 3600;
+    const t = setTimeout(dismissToast, ms);
+    return () => clearTimeout(t);
+  }, [toast, dismissToast]);
 
-  if (!toast) return null
+  if (!toast) return null;
   return (
     <div key={toast.id} className="toast-in absolute bottom-4 left-1/2 -translate-x-1/2 z-40">
       <div
         onClick={dismissToast}
         style={
           {
-            '--toast-accent': toast.kind === 'error' ? 'var(--alert-rgb)' : 'var(--gold-rgb)'
+            "--toast-accent": toast.kind === "error" ? "var(--alert-rgb)" : "var(--gold-rgb)",
           } as React.CSSProperties
         }
         className={cx(
@@ -208,14 +211,14 @@ function ToastHost(): React.JSX.Element | null {
           // near-black bg through is what makes it feel lit from the same
           // source as everything else. Roomier too — px-5/py-3, and gap-3 with
           // the action pushed further out so it stops crowding the sentence.
-          'toast-surface flex items-center gap-3 rounded-xl px-5 py-3 ring-1 backdrop-blur-md',
-          'bg-panel/70 shadow-[0_10px_40px_rgb(0_0_0_/_0.55)] text-[12.5px] cursor-pointer max-w-[520px]',
-          toast.kind === 'error'
-            ? 'ring-alert/45'
-            : 'ring-gold/35 shadow-[0_10px_40px_rgb(0_0_0_/_0.55),0_0_24px_rgb(var(--gold-rgb)_/_0.10)]'
+          "toast-surface flex items-center gap-3 rounded-xl px-5 py-3 ring-1 backdrop-blur-md",
+          "bg-panel/70 shadow-[0_10px_40px_rgb(0_0_0_/_0.55)] text-[12.5px] cursor-pointer max-w-[520px]",
+          toast.kind === "error"
+            ? "ring-alert/45"
+            : "ring-gold/35 shadow-[0_10px_40px_rgb(0_0_0_/_0.55),0_0_24px_rgb(var(--gold-rgb)_/_0.10)]",
         )}
       >
-        {toast.kind === 'error' ? (
+        {toast.kind === "error" ? (
           <CircleAlert size={14} className="text-alert shrink-0" />
         ) : (
           <CircleCheck size={14} className="text-gold shrink-0" />
@@ -224,20 +227,20 @@ function ToastHost(): React.JSX.Element | null {
         {toast.action && (
           <button
             onClick={(e) => {
-              e.stopPropagation()
-              const action = toast.action!
-              if (action.undo) action.undo()
-              else setScreen(action.screen)
-              dismissToast()
+              e.stopPropagation();
+              const action = toast.action!;
+              if (action.undo) action.undo();
+              else setScreen(action.screen);
+              dismissToast();
             }}
             // Tinted to the toast's own accent so it reads as the thing to
             // click. Neutral ring + text-dim over a translucent surface came
             // out looking like a disabled field.
             className={cx(
-              'ml-2 shrink-0 text-[12px] px-3 py-1.5 rounded-md ring-1 font-medium transition-all',
-              toast.kind === 'error'
-                ? 'ring-alert/40 text-alert hover:bg-alert/10 hover:ring-alert/60'
-                : 'ring-gold/35 text-gold hover:bg-golddim hover:ring-gold/55'
+              "ml-2 shrink-0 text-[12px] px-3 py-1.5 rounded-md ring-1 font-medium transition-all",
+              toast.kind === "error"
+                ? "ring-alert/40 text-alert hover:bg-alert/10 hover:ring-alert/60"
+                : "ring-gold/35 text-gold hover:bg-golddim hover:ring-gold/55",
             )}
           >
             {toast.action.label}
@@ -245,47 +248,50 @@ function ToastHost(): React.JSX.Element | null {
         )}
       </div>
     </div>
-  )
+  );
 }
 
 /** Shown on streamer screens while there's no live connection. */
 function ConnectGate(): React.JSX.Element {
-  const connection = useStore((s) => s.connection)
-  const devices = useStore((s) => s.devices)
-  const discovering = useStore((s) => s.discovering)
-  const setScreen = useStore((s) => s.setScreen)
+  const connection = useStore((s) => s.connection);
+  const devices = useStore((s) => s.devices);
+  const discovering = useStore((s) => s.discovering);
+  const setScreen = useStore((s) => s.setScreen);
   // Never connected to anything = a true first run: the gate doubles as the
   // welcome screen (connect() stamps lastHost on the first attempt).
-  const firstRun = useStore((s) => s.settings.lastHost == null)
+  const firstRun = useStore((s) => s.settings.lastHost == null);
   // If the device we lost had ECO standby configured, the honest hint is
   // that it may have LEFT THE NETWORK on purpose (eco powers the network
   // interface down — probed 2026-07-23; app-wake is impossible there).
-  const maybeEco = useStore((s) => s.lastStandbyMode === 'ECO_MODE')
+  const maybeEco = useStore((s) => s.lastStandbyMode === "ECO_MODE");
 
   const busy =
-    connection.phase === 'connecting' ||
-    (connection.phase === 'disconnected' && connection.reconnecting)
+    connection.phase === "connecting" ||
+    (connection.phase === "disconnected" && connection.reconnecting);
 
   // While the gate sits empty-handed, sweep again every 10s — a streamer
   // that's slow to answer (or powers on later) gets found hands-free. Count
   // completed sweeps so the manual-IP hint can surface after a few misses.
-  const [sweeps, setSweeps] = useState(0)
-  const prevDiscovering = useRef(discovering)
+  const [sweeps, setSweeps] = useState(0);
+  const prevDiscovering = useRef(discovering);
   useEffect(() => {
-    if (prevDiscovering.current && !discovering) setSweeps((n) => n + 1)
-    prevDiscovering.current = discovering
-  }, [discovering])
+    if (prevDiscovering.current && !discovering) setSweeps((n) => n + 1);
+    prevDiscovering.current = discovering;
+  }, [discovering]);
   useEffect(() => {
-    if (busy || devices.length > 0) return
-    const t = setInterval(() => void tt.discover(), 10_000)
-    return () => clearInterval(t)
-  }, [busy, devices.length])
-  const stillLooking = !busy && devices.length === 0 && sweeps >= 3
+    if (busy || devices.length > 0) return;
+    const t = setInterval(() => void tt.discover(), 10_000);
+    return () => clearInterval(t);
+  }, [busy, devices.length]);
+  const stillLooking = !busy && devices.length === 0 && sweeps >= 3;
 
   return (
     <div className="h-full flex flex-col items-center justify-center gap-5 text-center px-8">
       {maybeEco && (
-        <div data-eco-hint className="flex items-center gap-2 text-[12.5px] text-amber/90 border border-amber/20 bg-amberdim/40 rounded-full px-4 py-1.5">
+        <div
+          data-eco-hint
+          className="flex items-center gap-2 text-[12.5px] text-amber/90 border border-amber/20 bg-amberdim/40 rounded-full px-4 py-1.5"
+        >
           <Moon size={12} strokeWidth={2} />
           The streamer may be in eco standby — eco turns its network off, so wake it at the device.
         </div>
@@ -294,7 +300,7 @@ function ConnectGate(): React.JSX.Element {
         <>
           <Loader2 size={40} className="spin text-amber" />
           <div className="font-display text-xl text-dim">
-            {connection.phase === 'connecting'
+            {connection.phase === "connecting"
               ? `Connecting to ${connection.host}…`
               : `Reconnecting to ${(connection as { host: string }).host}…`}
           </div>
@@ -307,8 +313,8 @@ function ConnectGate(): React.JSX.Element {
                 tasty<span className="text-gold">tunes</span>
               </div>
               <div className="text-[14px] text-dim max-w-md leading-relaxed">
-                The hi-fi remote for Cambridge Audio StreamMagic streamers. Streamers on
-                your network appear here on their own.
+                The hi-fi remote for Cambridge Audio StreamMagic streamers. Streamers on your
+                network appear here on their own.
               </div>
             </>
           ) : (
@@ -334,13 +340,13 @@ function ConnectGate(): React.JSX.Element {
             </div>
           ) : (
             <div className="text-[13px] text-faint max-w-sm">
-              {discovering ? 'Searching the network…' : 'No StreamMagic devices found yet.'}
+              {discovering ? "Searching the network…" : "No StreamMagic devices found yet."}
             </div>
           )}
           {stillLooking && (
             <div className="text-[12.5px] text-faint max-w-sm leading-relaxed">
-              Still looking — the search repeats on its own. If the streamer sits on a
-              different subnet or Wi-Fi band, enter its IP manually below.
+              Still looking — the search repeats on its own. If the streamer sits on a different
+              subnet or Wi-Fi band, enter its IP manually below.
             </div>
           )}
           <div className="flex items-center gap-4">
@@ -349,10 +355,10 @@ function ConnectGate(): React.JSX.Element {
               disabled={discovering}
               className="text-[13px] px-4 py-2 rounded-lg bg-amber text-bg font-medium hover:brightness-110 transition-all disabled:opacity-50"
             >
-              {discovering ? 'Searching…' : 'Find devices'}
+              {discovering ? "Searching…" : "Find devices"}
             </button>
             <HeaderChip
-              onClick={() => setScreen('device')}
+              onClick={() => setScreen("device")}
               className="text-[13px] px-4 py-2 motion-safe:active:scale-95"
             >
               Enter IP manually →
@@ -368,7 +374,7 @@ function ConnectGate(): React.JSX.Element {
         </>
       )}
     </div>
-  )
+  );
 }
 
 /** Now Playing while the streamer sleeps: nothing is playing, so the screen
@@ -382,17 +388,20 @@ function ConnectGate(): React.JSX.Element {
  *  flip-flop).
  */
 function StandbyGate({ busy }: { busy: boolean }): React.JSX.Element {
-  const systemInfo = useStore((s) => s.systemInfo)
-  const last = useStore((s) => s.recents[0])
+  const systemInfo = useStore((s) => s.systemInfo);
+  const last = useStore((s) => s.recents[0]);
 
   return (
-    <div data-standby-face className="h-full flex flex-col items-center justify-center gap-6 text-center px-8">
+    <div
+      data-standby-face
+      className="h-full flex flex-col items-center justify-center gap-6 text-center px-8"
+    >
       <button
-        onClick={() => void tt.command({ type: 'power', power: 'ON' })}
+        onClick={() => void tt.command({ type: "power", power: "ON" })}
         className={cx(
-          'h-24 w-24 rounded-full ring-2 ring-amber/50 text-amber flex items-center justify-center',
-          'hover:bg-amberdim hover:shadow-[0_0_40px_rgb(var(--amber-rgb)_/_0.35)] transition-all',
-          busy && 'motion-safe:animate-pulse bg-amberdim'
+          "h-24 w-24 rounded-full ring-2 ring-amber/50 text-amber flex items-center justify-center",
+          "hover:bg-amberdim hover:shadow-[0_0_40px_rgb(var(--amber-rgb)_/_0.35)] transition-all",
+          busy && "motion-safe:animate-pulse bg-amberdim",
         )}
         title="Power on"
       >
@@ -406,23 +415,23 @@ function StandbyGate({ busy }: { busy: boolean }): React.JSX.Element {
       <div>
         <div className="font-display text-2xl text-dim flex items-center justify-center gap-2.5 min-h-[32px]">
           <Moon size={20} strokeWidth={1.8} className="text-amber/70" />
-          {systemInfo?.name ?? 'Streamer'} is asleep
+          {systemInfo?.name ?? "Streamer"} is asleep
         </div>
         <div className="text-[13px] text-faint mt-1.5 min-h-[19px]">
-          {busy ? 'Waking…' : 'Press the lamp — or just play something, from any screen.'}
+          {busy ? "Waking…" : "Press the lamp — or just play something, from any screen."}
         </div>
         <div className="text-[12px] text-faint mt-4 min-h-[17px]">
           {last != null && (
             <>
-              Last played:{' '}
+              Last played:{" "}
               <span className="text-dim">
                 {last.title ?? last.station}
-                {last.artist ? ` — ${last.artist}` : ''}
+                {last.artist ? ` — ${last.artist}` : ""}
               </span>
             </>
           )}
         </div>
       </div>
     </div>
-  )
+  );
 }

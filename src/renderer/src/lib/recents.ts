@@ -1,5 +1,5 @@
-import { tt } from '@/api'
-import { useStore } from '@/store'
+import { tt } from "@/api";
+import { useStore } from "@/store";
 
 /**
  * Clear the play history, offering to put it back.
@@ -15,13 +15,13 @@ import { useStore } from '@/store'
  * a track gets logged while the offer is up).
  */
 export async function clearRecentsWithUndo(): Promise<void> {
-  const { recents, showToast } = useStore.getState()
-  if (recents.length === 0) return
-  const snapshot = recents
-  await tt.clearRecents()
+  const { recents, showToast } = useStore.getState();
+  if (recents.length === 0) return;
+  const snapshot = recents;
+  await tt.clearRecents();
   showToast({
-    kind: 'success',
-    text: `Cleared ${snapshot.length} ${snapshot.length === 1 ? 'entry' : 'entries'}`,
-    action: { label: 'Undo', undo: () => void tt.recentsRestore(snapshot) }
-  })
+    kind: "success",
+    text: `Cleared ${snapshot.length} ${snapshot.length === 1 ? "entry" : "entries"}`,
+    action: { label: "Undo", undo: () => void tt.recentsRestore(snapshot) },
+  });
 }

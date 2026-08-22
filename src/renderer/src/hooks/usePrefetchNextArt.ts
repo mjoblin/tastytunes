@@ -1,5 +1,5 @@
-import { useEffect } from 'react'
-import { useStore } from '@/store'
+import { useEffect } from "react";
+import { useStore } from "@/store";
 
 /**
  * Warms the NEXT queued track's artwork while the current one plays, so the
@@ -16,24 +16,24 @@ import { useStore } from '@/store'
  * costs a beat of staleness instead of a blank window.
  */
 export function usePrefetchNextArt(): void {
-  const items = useStore((s) => s.queue?.items)
-  const index = useStore((s) => s.playState?.queue_index)
+  const items = useStore((s) => s.queue?.items);
+  const index = useStore((s) => s.playState?.queue_index);
 
   useEffect(() => {
-    if (index == null || !items?.length) return
+    if (index == null || !items?.length) return;
     // `position` is the streamer's own ordering; fall back to array order for
     // partial pages that don't carry it.
     const next =
       items.find((i) => i.position === index + 1) ??
-      (items[index + 1] as (typeof items)[number] | undefined)
-    const url = next?.metadata?.art_url
-    if (!url) return
+      (items[index + 1] as (typeof items)[number] | undefined);
+    const url = next?.metadata?.art_url;
+    if (!url) return;
     // Detached probe — the browser cache is what the <img>/background-image
     // hits later, so this is the whole mechanism.
-    const probe = new Image()
-    probe.src = url
+    const probe = new Image();
+    probe.src = url;
     return () => {
-      probe.src = ''
-    }
-  }, [items, index])
+      probe.src = "";
+    };
+  }, [items, index]);
 }

@@ -2,50 +2,47 @@
 // (artist bios, album details). MusicBrainz enforces ONE request per second
 // per IP and an identifying User-Agent (violators get 100% declined) — every
 // MB call from anywhere in the app goes through the single spacing gate here.
-import { loggedFetch, USER_AGENT } from '../netlog'
+import { loggedFetch, USER_AGENT } from "../netlog";
 
 // Env overrides let test harnesses point each hop at a local server.
-export const MB = process.env['TASTYTUNES_MB_URL'] ?? 'https://musicbrainz.org'
-export const WD = process.env['TASTYTUNES_WD_URL'] ?? 'https://www.wikidata.org'
-export const WIKI = process.env['TASTYTUNES_WIKI_URL'] ?? 'https://en.wikipedia.org'
+export const MB = process.env["TASTYTUNES_MB_URL"] ?? "https://musicbrainz.org";
+export const WD = process.env["TASTYTUNES_WD_URL"] ?? "https://www.wikidata.org";
+export const WIKI = process.env["TASTYTUNES_WIKI_URL"] ?? "https://en.wikipedia.org";
 
 /** ok = an answer; missing = authoritative 404; error = we never really asked. */
-export type Fetched =
-  | { kind: 'ok'; body: unknown }
-  | { kind: 'missing' }
-  | { kind: 'error' }
+export type Fetched = { kind: "ok"; body: unknown } | { kind: "missing" } | { kind: "error" };
 
 export async function getJson(service: string, url: string): Promise<Fetched> {
   try {
     const res = await loggedFetch(service, url, {
-      headers: { 'user-agent': USER_AGENT, accept: 'application/json' },
-      signal: AbortSignal.timeout(10_000)
-    })
-    if (res.status === 404) return { kind: 'missing' }
-    if (!res.ok) return { kind: 'error' }
-    return { kind: 'ok', body: await res.json() }
+      headers: { "user-agent": USER_AGENT, accept: "application/json" },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (res.status === 404) return { kind: "missing" };
+    if (!res.ok) return { kind: "error" };
+    return { kind: "ok", body: await res.json() };
   } catch {
-    return { kind: 'error' }
+    return { kind: "error" };
   }
 }
 
 // The MusicBrainz 1 rps gate: calls queue behind each other, spaced >= 1.1s.
-let mbChain: Promise<unknown> = Promise.resolve()
-let mbLastAt = 0
+let mbChain: Promise<unknown> = Promise.resolve();
+let mbLastAt = 0;
 export function mbFetch(url: string): Promise<Fetched> {
   const next = mbChain.then(async () => {
-    const wait = mbLastAt + 1100 - Date.now()
-    if (wait > 0) await new Promise((r) => setTimeout(r, wait))
-    mbLastAt = Date.now()
-    return getJson('musicbrainz', url)
-  })
-  mbChain = next.catch(() => null)
-  return next
+    const wait = mbLastAt + 1100 - Date.now();
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    mbLastAt = Date.now();
+    return getJson("musicbrainz", url);
+  });
+  mbChain = next.catch(() => null);
+  return next;
 }
 
 export interface MbRelation {
-  type?: string
-  url?: { resource?: string }
+  type?: string;
+  url?: { resource?: string };
 }
 
 /**
@@ -55,57 +52,57 @@ export interface MbRelation {
  * have, but don't cache it.
  */
 export async function wikipediaFromRels(
-  rels: MbRelation[]
+  rels: MbRelation[],
 ): Promise<{ summary: string | null; wikipediaUrl: string | null; definitive: boolean }> {
-  let definitive = true
-  let title: string | null = null
+  let definitive = true;
+  let title: string | null = null;
 
-  const wikipedia = rels.find((r) => r.type === 'wikipedia')?.url?.resource
+  const wikipedia = rels.find((r) => r.type === "wikipedia")?.url?.resource;
   if (wikipedia) {
-    title = decodeURIComponent(wikipedia.split('/wiki/')[1] ?? '')
+    title = decodeURIComponent(wikipedia.split("/wiki/")[1] ?? "");
   } else {
-    const wikidata = rels.find((r) => r.type === 'wikidata')?.url?.resource
-    const qid = wikidata?.split('/wiki/')[1]
+    const wikidata = rels.find((r) => r.type === "wikidata")?.url?.resource;
+    const qid = wikidata?.split("/wiki/")[1];
     if (qid) {
-      const entityGot = await getJson('wikidata', `${WD}/wiki/Special:EntityData/${qid}.json`)
-      if (entityGot.kind === 'error') {
-        definitive = false
-      } else if (entityGot.kind === 'ok') {
+      const entityGot = await getJson("wikidata", `${WD}/wiki/Special:EntityData/${qid}.json`);
+      if (entityGot.kind === "error") {
+        definitive = false;
+      } else if (entityGot.kind === "ok") {
         const entities = (
           entityGot.body as {
-            entities?: Record<string, { sitelinks?: { enwiki?: { title?: string } } }>
+            entities?: Record<string, { sitelinks?: { enwiki?: { title?: string } } }>;
           }
-        ).entities
-        title = entities?.[qid]?.sitelinks?.enwiki?.title ?? null
+        ).entities;
+        title = entities?.[qid]?.sitelinks?.enwiki?.title ?? null;
       }
       // 'missing' = no such entity: an answer, stays definitive
     }
     // no wikidata relation at all: an answer — no summary to link
   }
 
-  let summary: string | null = null
-  let wikipediaUrl: string | null = null
+  let summary: string | null = null;
+  let wikipediaUrl: string | null = null;
   if (title) {
     const summaryGot = await getJson(
-      'wikipedia',
-      `${WIKI}/api/rest_v1/page/summary/${encodeURIComponent(title)}`
-    )
-    if (summaryGot.kind === 'error') {
-      definitive = false
-    } else if (summaryGot.kind === 'ok') {
+      "wikipedia",
+      `${WIKI}/api/rest_v1/page/summary/${encodeURIComponent(title)}`,
+    );
+    if (summaryGot.kind === "error") {
+      definitive = false;
+    } else if (summaryGot.kind === "ok") {
       const s = summaryGot.body as {
-        extract?: string
-        content_urls?: { desktop?: { page?: string } }
-      }
+        extract?: string;
+        content_urls?: { desktop?: { page?: string } };
+      };
       if (s.extract) {
-        summary = s.extract
+        summary = s.extract;
         wikipediaUrl =
           s.content_urls?.desktop?.page ??
-          `https://en.wikipedia.org/wiki/${encodeURIComponent(title)}`
+          `https://en.wikipedia.org/wiki/${encodeURIComponent(title)}`;
       }
     }
     // 'missing' = the article is gone: an answer, stays definitive
   }
 
-  return { summary, wikipediaUrl, definitive }
+  return { summary, wikipediaUrl, definitive };
 }

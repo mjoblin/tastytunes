@@ -7,44 +7,44 @@
 // Deliberately NOT sent: the per-station "click" ping the directory offers —
 // it would report listening activity to a third party; revisit only as an
 // opt-in (privacy table in the README is a promise).
-import type { RadioStation } from '@shared/model'
-import { loggedFetch, USER_AGENT } from '../netlog'
-import { getSettings } from '../data/persist'
+import type { RadioStation } from "@shared/model";
+import { loggedFetch, USER_AGENT } from "../netlog";
+import { getSettings } from "../data/persist";
 
 // TASTYTUNES_RADIO_URL lets test harnesses point lookups at a local server.
 // all.api.radio-browser.info is the project's round-robin DNS over its
 // mirrors — fine for interactive use like ours.
-const BASE = process.env['TASTYTUNES_RADIO_URL'] ?? 'https://all.api.radio-browser.info/json'
-const LIMIT = 60
+const BASE = process.env["TASTYTUNES_RADIO_URL"] ?? "https://all.api.radio-browser.info/json";
+const LIMIT = 60;
 
 interface ApiStation {
-  stationuuid: string
-  name: string
-  url_resolved: string
-  url: string
-  favicon: string
-  homepage: string
-  tags: string
-  country: string
-  codec: string
-  bitrate: number
-  clickcount?: number
+  stationuuid: string;
+  name: string;
+  url_resolved: string;
+  url: string;
+  favicon: string;
+  homepage: string;
+  tags: string;
+  country: string;
+  codec: string;
+  bitrate: number;
+  clickcount?: number;
 }
 
 function toStation(s: ApiStation): RadioStation | null {
-  const url = s.url_resolved || s.url
-  if (!url || !s.name?.trim()) return null
+  const url = s.url_resolved || s.url;
+  if (!url || !s.name?.trim()) return null;
   return {
     uuid: s.stationuuid,
     name: s.name.trim(),
     url,
     favicon: s.favicon || null,
     homepage: s.homepage || null,
-    tags: s.tags ?? '',
-    country: s.country ?? '',
-    codec: s.codec ?? '',
-    bitrate: s.bitrate ?? 0
-  }
+    tags: s.tags ?? "",
+    country: s.country ?? "",
+    codec: s.codec ?? "",
+    bitrate: s.bitrate ?? 0,
+  };
 }
 
 /**
@@ -54,56 +54,56 @@ function toStation(s: ApiStation): RadioStation | null {
  * and a future caller inherits the promise without knowing about it.
  */
 function directoryAllowed(): boolean {
-  return getSettings().radioDirectory !== false
+  return getSettings().radioDirectory !== false;
 }
 
 async function fetchRaw(path: string): Promise<ApiStation[]> {
-  if (!directoryAllowed()) return []
+  if (!directoryAllowed()) return [];
   try {
-    const res = await loggedFetch('radio-browser', `${BASE}${path}`, {
-      headers: { 'user-agent': USER_AGENT, accept: 'application/json' },
-      signal: AbortSignal.timeout(10_000)
-    })
-    if (!res.ok) return []
-    return (await res.json()) as ApiStation[]
+    const res = await loggedFetch("radio-browser", `${BASE}${path}`, {
+      headers: { "user-agent": USER_AGENT, accept: "application/json" },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) return [];
+    return (await res.json()) as ApiStation[];
   } catch {
-    return []
+    return [];
   }
 }
 
 /** Map + dedupe (the directory holds many duplicate registrations of one stream). */
 function toStations(raw: ApiStation[]): RadioStation[] {
-  const out: RadioStation[] = []
-  const seen = new Set<string>()
+  const out: RadioStation[] = [];
+  const seen = new Set<string>();
   for (const s of raw) {
-    const st = toStation(s)
+    const st = toStation(s);
     if (st && !seen.has(st.url)) {
-      seen.add(st.url)
-      out.push(st)
+      seen.add(st.url);
+      out.push(st);
     }
   }
-  return out
+  return out;
 }
 
-const stations = async (path: string): Promise<RadioStation[]> => toStations(await fetchRaw(path))
+const stations = async (path: string): Promise<RadioStation[]> => toStations(await fetchRaw(path));
 
 /** Name search, most-listened first, broken stations filtered by the directory. */
 export function radioSearch(query: string): Promise<RadioStation[]> {
-  const q = query.trim()
-  if (!q) return Promise.resolve([])
+  const q = query.trim();
+  if (!q) return Promise.resolve([]);
   const params = new URLSearchParams({
     name: q,
     limit: String(LIMIT),
-    hidebroken: 'true',
-    order: 'clickcount',
-    reverse: 'true'
-  })
-  return stations(`/stations/search?${params}`)
+    hidebroken: "true",
+    order: "clickcount",
+    reverse: "true",
+  });
+  return stations(`/stations/search?${params}`);
 }
 
 /** The directory's most-listened stations — the screen's default rail. */
 export function radioTop(): Promise<RadioStation[]> {
-  return stations(`/stations/topclick/${LIMIT}?hidebroken=true`)
+  return stations(`/stations/topclick/${LIMIT}?hidebroken=true`);
 }
 
 /**
@@ -116,15 +116,15 @@ export async function radioByTags(tags: string[]): Promise<RadioStation[]> {
     tags.map((tag) => {
       const params = new URLSearchParams({
         tag,
-        tagExact: 'true',
-        limit: '40',
-        hidebroken: 'true',
-        order: 'clickcount',
-        reverse: 'true'
-      })
-      return fetchRaw(`/stations/search?${params}`)
-    })
-  )
-  const merged = perTag.flat().sort((a, b) => (b.clickcount ?? 0) - (a.clickcount ?? 0))
-  return toStations(merged).slice(0, LIMIT)
+        tagExact: "true",
+        limit: "40",
+        hidebroken: "true",
+        order: "clickcount",
+        reverse: "true",
+      });
+      return fetchRaw(`/stations/search?${params}`);
+    }),
+  );
+  const merged = perTag.flat().sort((a, b) => (b.clickcount ?? 0) - (a.clickcount ?? 0));
+  return toStations(merged).slice(0, LIMIT);
 }

@@ -1,6 +1,6 @@
-import type { PlaylistActivation } from '@shared/model'
-import { tt } from '@/api'
-import { useStore } from '@/store'
+import type { PlaylistActivation } from "@shared/model";
+import { tt } from "@/api";
+import { useStore } from "@/store";
 
 /**
  * Activate a playlist — replace the streamer's queue with it — and TELL the
@@ -17,22 +17,22 @@ import { useStore } from '@/store'
  * was a Play button that could silently do nothing.
  */
 export async function activatePlaylist(p: { id: string; name: string }): Promise<void> {
-  const showToast = useStore.getState().showToast
-  let res: PlaylistActivation
+  const showToast = useStore.getState().showToast;
+  let res: PlaylistActivation;
   try {
-    res = await tt.playlistActivate(p.id)
+    res = await tt.playlistActivate(p.id);
   } catch {
-    showToast({ kind: 'error', text: `Couldn't load “${p.name}”` })
-    return
+    showToast({ kind: "error", text: `Couldn't load “${p.name}”` });
+    return;
   }
-  const missed = res.missed.length
+  const missed = res.missed.length;
   showToast({
-    kind: res.added > 0 ? 'success' : 'error',
+    kind: res.added > 0 ? "success" : "error",
     text: res.cancelled
       ? `Stopped — ${res.added} of ${res.total} loaded`
       : missed > 0
         ? `Loaded ${res.added} of ${res.total} — ${missed} not found`
-        : `Loaded ${res.added} ${res.added === 1 ? 'track' : 'tracks'} from “${p.name}”`,
-    action: { label: 'Open Queue', screen: 'queue' }
-  })
+        : `Loaded ${res.added} ${res.added === 1 ? "track" : "tracks"} from “${p.name}”`,
+    action: { label: "Open Queue", screen: "queue" },
+  });
 }

@@ -1,7 +1,7 @@
-import { ChevronDown, ChevronUp, ChevronsDown, ChevronsUp, Volume2, VolumeX } from 'lucide-react'
-import { tt } from '@/api'
-import { useStore } from '@/store'
-import { cx } from '@/lib/format'
+import { ChevronDown, ChevronUp, ChevronsDown, ChevronsUp, Volume2, VolumeX } from "lucide-react";
+import { tt } from "@/api";
+import { useStore } from "@/store";
+import { cx } from "@/lib/format";
 
 /**
  * The tray panel's volume control: an arc showing level against the ceiling,
@@ -21,16 +21,16 @@ import { cx } from '@/lib/format'
 export function VolumeDial({
   level,
   muted,
-  enabled
+  enabled,
 }: {
   /** Device level 0..100, or null when the model reports none (Control Bus). */
-  level: number | null
-  muted: boolean
-  enabled: boolean
+  level: number | null;
+  muted: boolean;
+  enabled: boolean;
 }): React.JSX.Element {
   const step = (delta: number): void => {
-    void tt.command({ type: 'volumeStepChange', delta })
-  }
+    void tt.command({ type: "volumeStepChange", delta });
+  };
 
   return (
     <div data-volume-dial className="flex items-center gap-1.5 shrink-0">
@@ -38,13 +38,17 @@ export function VolumeDial({
           hidden inside the dial. Every other surface spells mute this way, and
           a control you can only find by clicking the number isn't a control. */}
       <button
-        data-tip={muted ? 'Unmute — scroll for volume' : 'Mute — scroll for volume'}
-        aria-label={muted ? 'Unmute' : 'Mute'}
+        data-tip={muted ? "Unmute — scroll for volume" : "Mute — scroll for volume"}
+        aria-label={muted ? "Unmute" : "Mute"}
         disabled={!enabled}
-        onClick={() => void tt.command({ type: 'setMute', mute: !muted })}
+        onClick={() => void tt.command({ type: "setMute", mute: !muted })}
         className={cx(
-          'tip-bottom tip-end p-1 rounded transition-colors',
-          !enabled ? 'text-faint/40' : muted ? 'text-gold' : 'text-dim hover:text-ink hover:bg-veil'
+          "tip-bottom tip-end p-1 rounded transition-colors",
+          !enabled
+            ? "text-faint/40"
+            : muted
+              ? "text-gold"
+              : "text-dim hover:text-ink hover:bg-veil",
         )}
       >
         {muted ? <VolumeX size={15} /> : <Volume2 size={15} />}
@@ -69,7 +73,7 @@ export function VolumeDial({
         </VolButton>
       </div>
     </div>
-  )
+  );
 }
 
 /**
@@ -83,23 +87,23 @@ export function VolumeArc({
   level,
   muted,
   enabled,
-  size
+  size,
 }: {
   /** Device level 0..100, or null when the model reports none (Control Bus). */
-  level: number | null
-  muted: boolean
-  enabled: boolean
-  size: 'panel' | 'mini'
+  level: number | null;
+  muted: boolean;
+  enabled: boolean;
+  size: "panel" | "mini";
 }): React.JSX.Element {
-  const limit = useStore((s) => s.settings.volumeLimitPercent)
-  const ceiling = limit ?? 100
-  const ratio = level == null ? 0 : Math.max(0, Math.min(1, level / Math.max(1, ceiling)))
+  const limit = useStore((s) => s.settings.volumeLimitPercent);
+  const ceiling = limit ?? 100;
+  const ratio = level == null ? 0 : Math.max(0, Math.min(1, level / Math.max(1, ceiling)));
 
   // A 270° arc, the gap at the bottom — the dial idiom, and the gap is what
   // makes "empty" distinguishable from "not a dial".
-  const R = 13
-  const C = 2 * Math.PI * R
-  const SWEEP = 0.75
+  const R = 13;
+  const C = 2 * Math.PI * R;
+  const SWEEP = 0.75;
 
   return (
     <div
@@ -109,8 +113,8 @@ export function VolumeArc({
       // control cluster shouldn't double as a window drag handle. Inert where
       // there is no drag region, so the panel is unaffected.
       className={cx(
-        'no-drag relative shrink-0 flex items-center justify-center',
-        size === 'panel' ? 'h-9 w-9' : 'h-7 w-7'
+        "no-drag relative shrink-0 flex items-center justify-center",
+        size === "panel" ? "h-9 w-9" : "h-7 w-7",
       )}
     >
       <svg viewBox="0 0 32 32" className="absolute inset-0 h-full w-full -rotate-[225deg]">
@@ -132,8 +136,8 @@ export function VolumeArc({
           strokeWidth="2.5"
           strokeLinecap="round"
           className={cx(
-            'transition-[stroke-dasharray,stroke] duration-200',
-            muted || !enabled ? 'stroke-faint' : 'stroke-gold'
+            "transition-[stroke-dasharray,stroke] duration-200",
+            muted || !enabled ? "stroke-faint" : "stroke-gold",
           )}
           strokeDasharray={`${C * SWEEP * ratio} ${C}`}
         />
@@ -145,27 +149,27 @@ export function VolumeArc({
         className={cx(
           // panel: 10.5px, not 11.5 — it sat a size above the readouts either
           // side of it, and a three-digit level needs the room inside the arc.
-          'relative font-mono tabular-nums leading-none',
-          size === 'panel' ? 'text-[10.5px]' : 'text-[9.5px]',
-          muted ? 'text-faint' : enabled ? 'text-ink' : 'text-faint/50'
+          "relative font-mono tabular-nums leading-none",
+          size === "panel" ? "text-[10.5px]" : "text-[9.5px]",
+          muted ? "text-faint" : enabled ? "text-ink" : "text-faint/50",
         )}
       >
-        {level ?? '–'}
+        {level ?? "–"}
       </span>
     </div>
-  )
+  );
 }
 
 function VolButton({
   children,
   tip,
   enabled,
-  onClick
+  onClick,
 }: {
-  children: React.ReactNode
-  tip: string
-  enabled: boolean
-  onClick(): void
+  children: React.ReactNode;
+  tip: string;
+  enabled: boolean;
+  onClick(): void;
 }): React.JSX.Element {
   return (
     <button
@@ -174,11 +178,11 @@ function VolButton({
       disabled={!enabled}
       onClick={onClick}
       className={cx(
-        'tip-bottom tip-end px-0.5 leading-none rounded transition-colors',
-        enabled ? 'text-faint hover:text-ink hover:bg-veil' : 'text-faint/30'
+        "tip-bottom tip-end px-0.5 leading-none rounded transition-colors",
+        enabled ? "text-faint hover:text-ink hover:bg-veil" : "text-faint/30",
       )}
     >
       {children}
     </button>
-  )
+  );
 }

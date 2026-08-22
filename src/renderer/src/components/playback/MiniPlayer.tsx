@@ -1,23 +1,37 @@
-import { Disc3, Maximize2, Minus, Plus, RadioTower, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react'
-import { isCbusMode, isPreAmpMode } from '@shared/smoip'
-import { tt } from '@/api'
-import { CloseButton } from '@/components/controls/CloseButton'
-import { useStore } from '@/store'
-import { usePlayhead } from '@/hooks/usePlayhead'
-import { useArtAccent } from '@/hooks/useArtAccent'
-import { useMotionPreference } from '@/hooks/useMotionPreference'
-import { useTheme } from '@/hooks/useTheme'
-import { useShortcuts } from '@/hooks/useShortcuts'
-import { useDisplayFont } from '@/hooks/useDisplayFont'
-import { useVolumeSlider, useWheelVolume } from '@/components/playback/VolumeCluster'
-import { PlayPauseButton, TransportIconButton, useTransport } from '@/components/playback/Transport'
-import { VolumeArc } from '@/components/playback/VolumeDial'
-import { useSeekScrub } from '@/hooks/useSeekScrub'
-import { Slider } from '@/components/controls/Slider'
-import { ArtImage } from '@/components/media/ArtImage'
-import { AmbientArt } from '@/components/media/AmbientArt'
-import { useDecodedArt } from '@/hooks/useDecodedArt'
-import { cx, deriveNowPlaying, fmtTime } from '@/lib/format'
+import {
+  Disc3,
+  Maximize2,
+  Minus,
+  Plus,
+  RadioTower,
+  SkipBack,
+  SkipForward,
+  Volume2,
+  VolumeX,
+} from "lucide-react";
+import { isCbusMode, isPreAmpMode } from "@shared/smoip";
+import { tt } from "@/api";
+import { CloseButton } from "@/components/controls/CloseButton";
+import { useStore } from "@/store";
+import { usePlayhead } from "@/hooks/usePlayhead";
+import { useArtAccent } from "@/hooks/useArtAccent";
+import { useMotionPreference } from "@/hooks/useMotionPreference";
+import { useTheme } from "@/hooks/useTheme";
+import { useShortcuts } from "@/hooks/useShortcuts";
+import { useDisplayFont } from "@/hooks/useDisplayFont";
+import { useVolumeSlider, useWheelVolume } from "@/components/playback/VolumeCluster";
+import {
+  PlayPauseButton,
+  TransportIconButton,
+  useTransport,
+} from "@/components/playback/Transport";
+import { VolumeArc } from "@/components/playback/VolumeDial";
+import { useSeekScrub } from "@/hooks/useSeekScrub";
+import { Slider } from "@/components/controls/Slider";
+import { ArtImage } from "@/components/media/ArtImage";
+import { AmbientArt } from "@/components/media/AmbientArt";
+import { useDecodedArt } from "@/hooks/useDecodedArt";
+import { cx, deriveNowPlaying, fmtTime } from "@/lib/format";
 
 /**
  * The mini player window (?mini=1): a frameless always-on-top strip with art,
@@ -31,71 +45,71 @@ import { cx, deriveNowPlaying, fmtTime } from '@/lib/format'
  * scale, plus the wheel anywhere on the window and the arrow keys.
  */
 export function MiniPlayer(): React.JSX.Element {
-  const playState = useStore((s) => s.playState)
-  const nowPlaying = useStore((s) => s.nowPlaying)
-  const zoneState = useStore((s) => s.zoneState)
-  const queue = useStore((s) => s.queue)
-  const settings = useStore((s) => s.settings)
-  const hovered = useStore((s) => s.miniHover)
-  const { position, duration } = usePlayhead()
-  const onWheel = useWheelVolume()
+  const playState = useStore((s) => s.playState);
+  const nowPlaying = useStore((s) => s.nowPlaying);
+  const zoneState = useStore((s) => s.zoneState);
+  const queue = useStore((s) => s.queue);
+  const settings = useStore((s) => s.settings);
+  const hovered = useStore((s) => s.miniHover);
+  const { position, duration } = usePlayhead();
+  const onWheel = useWheelVolume();
   // Unconditional — feeds the arc's level (hold-aware, percent-vs-step). Stays
   // above the (currently absent) early returns so the hook count never shifts
   // (React #310 guard).
-  const vol = useVolumeSlider()
+  const vol = useVolumeSlider();
   // transport keys only — this window has no screens, palette or overlays
-  useShortcuts({ transportOnly: true })
-  const theme = useTheme(settings.theme)
-  useDisplayFont(settings.displayFont)
+  useShortcuts({ transportOnly: true });
+  const theme = useTheme(settings.theme);
+  useDisplayFont(settings.displayFont);
 
   // Shared with the bar and the tray panel — playing/busy arrive already
   // gated on `active` (see Transport.tsx for the drift this closed).
-  const t = useTransport(duration)
+  const t = useTransport(duration);
   // Shared scrub-and-hold: thumb tracks the pointer while dragging, holds the
   // target after release until the device's playhead catches up.
-  const { shownPosition, slider } = useSeekScrub(position, duration, t.seek)
-  const { connected, active } = t
-  const meta = deriveNowPlaying(playState, nowPlaying)
-  useArtAccent(settings.accentFollowsArt && active ? meta.artUrl : null, theme)
+  const { shownPosition, slider } = useSeekScrub(position, duration, t.seek);
+  const { connected, active } = t;
+  const meta = deriveNowPlaying(playState, nowPlaying);
+  useArtAccent(settings.accentFollowsArt && active ? meta.artUrl : null, theme);
   // Wash and tile both render the last DECODED cover (see useDecodedArt).
-  const { art: miniArt } = useDecodedArt(meta.artUrl)
-  useMotionPreference(settings.motion)
+  const { art: miniArt } = useDecodedArt(meta.artUrl);
+  useMotionPreference(settings.motion);
 
-  const muted = zoneState?.mute === true
-  const preAmp = isPreAmpMode(zoneState)
-  const cbus = isCbusMode(zoneState)
-  const hasVolume = zoneState != null && (preAmp || cbus)
+  const muted = zoneState?.mute === true;
+  const preAmp = isPreAmpMode(zoneState);
+  const cbus = isCbusMode(zoneState);
+  const hasVolume = zoneState != null && (preAmp || cbus);
 
   const timeText = active
     ? duration != null
       ? `${fmtTime(shownPosition)} / ${fmtTime(duration)}`
       : fmtTime(shownPosition)
-    : ''
+    : "";
 
   // what's next in the queue
-  const items = queue?.items ?? []
-  const currentIdx = items.findIndex((i) => i.id === (queue?.play_id ?? playState?.queue_id))
-  const next = currentIdx >= 0 ? (items[currentIdx + 1] ?? null) : null
+  const items = queue?.items ?? [];
+  const currentIdx = items.findIndex((i) => i.id === (queue?.play_id ?? playState?.queue_id));
+  const next = currentIdx >= 0 ? (items[currentIdx + 1] ?? null) : null;
 
   // Shared mute toggle: same as before (gold when muted). Tooltip also teaches
   // the invisible wheel-anywhere volume.
   const muteBtn = (
     <button
-      data-tip={muted ? 'Unmute — scroll for volume' : 'Mute — scroll for volume'}
-      aria-label={muted ? 'Unmute' : 'Mute'}
-      onClick={() => void tt.command({ type: 'setMute', mute: !muted })}
+      data-tip={muted ? "Unmute — scroll for volume" : "Mute — scroll for volume"}
+      aria-label={muted ? "Unmute" : "Mute"}
+      onClick={() => void tt.command({ type: "setMute", mute: !muted })}
       className={cx(
         // matches MiniButton (the ± nudges) and the main transport's mute —
         // one consistent secondary-control treatment across the mini.
         // tip-end: the mute sits by the right edge now, and a centred tip
         // clips against the window (the shell is overflow-hidden).
-        'no-drag tip-top tip-end p-1 ml-0.5 rounded transition-colors',
-        muted ? 'text-gold' : 'text-dim hover:text-ink'
+        "no-drag tip-top tip-end p-1 ml-0.5 rounded transition-colors",
+        muted ? "text-gold" : "text-dim hover:text-ink",
       )}
     >
       {muted ? <VolumeX size={13} /> : <Volume2 size={13} />}
     </button>
-  )
+  );
 
   return (
     <div className="h-screen w-screen drag-region" onWheel={onWheel}>
@@ -111,7 +125,7 @@ export function MiniPlayer(): React.JSX.Element {
             check is !== 'off' — deliberately, not incidentally. (Arrives live
             in this window via the settings broadcast.) */}
         <AmbientArt
-          src={active && settings.ambientArt !== 'off' ? (miniArt ?? null) : null}
+          src={active && settings.ambientArt !== "off" ? (miniArt ?? null) : null}
           vignette={settings.vignette}
         />
         {/* art */}
@@ -135,28 +149,30 @@ export function MiniPlayer(): React.JSX.Element {
             <div className="flex-1 min-w-0">
               {/* min-heights + nbsp keep both lines occupying space during the
                   brief metadata gap on track changes, so the layout never shifts */}
-              <div className={cx(
-                  'font-display no-optical font-bold tracking-tight text-[14px] text-ink truncate leading-tight min-h-[16px]',
-                  hovered && 'pr-12'
-                )}>
-                {active ? (meta.title ?? ' ') : 'Nothing playing'}
+              <div
+                className={cx(
+                  "font-display no-optical font-bold tracking-tight text-[14px] text-ink truncate leading-tight min-h-[16px]",
+                  hovered && "pr-12",
+                )}
+              >
+                {active ? (meta.title ?? " ") : "Nothing playing"}
               </div>
               <div className="font-display no-optical tracking-tight text-[12px] text-dim truncate leading-tight mt-0.5 min-h-[14px]">
-                {(active && meta.subtitle) || (connected ? ' ' : 'not connected')}
+                {(active && meta.subtitle) || (connected ? " " : "not connected")}
               </div>
             </div>
             <div
               className={cx(
-                'absolute -top-0.5 right-0 flex items-center gap-0.5 transition-opacity',
-                hovered ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                "absolute -top-0.5 right-0 flex items-center gap-0.5 transition-opacity",
+                hovered ? "opacity-100" : "opacity-0 pointer-events-none",
               )}
             >
               <button
                 data-tip="Open TastyTunes"
                 aria-label="Open TastyTunes"
                 onClick={() => {
-                  void tt.showMain()
-                  void tt.toggleMini()
+                  void tt.showMain();
+                  void tt.toggleMini();
                 }}
                 className="no-drag tip-bottom tip-end p-1 rounded text-faint hover:text-ink transition-colors"
               >
@@ -185,7 +201,9 @@ export function MiniPlayer(): React.JSX.Element {
                 {...slider}
               />
             </div>
-            <span className="font-mono text-[9.5px] text-faint tabular-nums shrink-0">{timeText}</span>
+            <span className="font-mono text-[9.5px] text-faint tabular-nums shrink-0">
+              {timeText}
+            </span>
           </div>
 
           {/* transport + volume */}
@@ -215,14 +233,14 @@ export function MiniPlayer(): React.JSX.Element {
                 <MiniButton
                   enabled={active}
                   tip="Volume down"
-                  onClick={() => void tt.command({ type: 'volumeStepChange', delta: -1 })}
+                  onClick={() => void tt.command({ type: "volumeStepChange", delta: -1 })}
                 >
                   <Minus size={13} />
                 </MiniButton>
                 <MiniButton
                   enabled={active}
                   tip="Volume up"
-                  onClick={() => void tt.command({ type: 'volumeStepChange', delta: 1 })}
+                  onClick={() => void tt.command({ type: "volumeStepChange", delta: 1 })}
                 >
                   <Plus size={13} />
                 </MiniButton>
@@ -236,12 +254,14 @@ export function MiniPlayer(): React.JSX.Element {
               it than the evenly-split gaps would give (mt-1 was imperceptible
               against the line box's own descender space). */}
           <div className="microlabel microlabel-sm truncate min-h-[12px] mt-2">
-            {active && next?.metadata ? `next · ${next.metadata.title ?? next.metadata.name ?? ''}` : ''}
+            {active && next?.metadata
+              ? `next · ${next.metadata.title ?? next.metadata.name ?? ""}`
+              : ""}
           </div>
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 /** The shared secondary-control skin, plus the frameless window's no-drag. */
@@ -249,16 +269,22 @@ function MiniButton({
   children,
   tip,
   enabled,
-  onClick
+  onClick,
 }: {
-  children: React.ReactNode
-  tip: string
-  enabled: boolean
-  onClick(): void
+  children: React.ReactNode;
+  tip: string;
+  enabled: boolean;
+  onClick(): void;
 }): React.JSX.Element {
   return (
-    <TransportIconButton size="compact" tip={tip} enabled={enabled} className="no-drag" onClick={onClick}>
+    <TransportIconButton
+      size="compact"
+      tip={tip}
+      enabled={enabled}
+      className="no-drag"
+      onClick={onClick}
+    >
       {children}
     </TransportIconButton>
-  )
+  );
 }

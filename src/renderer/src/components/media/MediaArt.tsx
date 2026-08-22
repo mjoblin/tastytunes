@@ -1,7 +1,7 @@
-import { Disc3, Folder, ListOrdered, Music, Radio, RadioTower, UserRound } from 'lucide-react'
-import { ArtImage } from '@/components/media/ArtImage'
-import { cx } from '@/lib/format'
-import { artUrlAt } from '@shared/artUrl'
+import { Disc3, Folder, ListOrdered, Music, Radio, RadioTower, UserRound } from "lucide-react";
+import { ArtImage } from "@/components/media/ArtImage";
+import { cx } from "@/lib/format";
+import { artUrlAt } from "@shared/artUrl";
 
 /**
  * THE row-scale artwork thumb. One size (h-10 — the 44px grid column's inset),
@@ -13,13 +13,7 @@ import { artUrlAt } from '@shared/artUrl'
  * ArtStack; everything ROW-shaped renders art through here.
  */
 export type MediaArtKind =
-  | 'track'
-  | 'album'
-  | 'artist'
-  | 'station'
-  | 'playlist'
-  | 'preset'
-  | 'folder'
+  "track" | "album" | "artist" | "station" | "playlist" | "preset" | "folder";
 
 /**
  * The fallback glyph per kind, EXPORTED so surfaces that don't render through
@@ -39,8 +33,8 @@ export const MEDIA_ART_FALLBACK: Record<
   station: RadioTower,
   playlist: ListOrdered,
   preset: Radio,
-  folder: Folder
-}
+  folder: Folder,
+};
 
 /**
  * The two sanctioned art sizes, and there are only two.
@@ -59,11 +53,11 @@ export const MEDIA_ART_FALLBACK: Record<
  * with it: a 16px row glyph marooned in a 112px tile is unreadable, which is
  * exactly how it shipped.
  */
-export type MediaArtSize = 'row' | 'dense' | 'card'
+export type MediaArtSize = "row" | "dense" | "card";
 
 /** Fallback glyph size per art size — the row sizes are thumb-scale, the card
  *  one is sized to be legible in a tile a third of the panel's width. */
-const GLYPH: Record<MediaArtSize, number> = { row: 16, dense: 14, card: 28 }
+const GLYPH: Record<MediaArtSize, number> = { row: 16, dense: 14, card: 28 };
 
 /**
  * A big glyph needs a THINNER stroke, not the same one scaled up. Lucide's
@@ -72,43 +66,43 @@ const GLYPH: Record<MediaArtSize, number> = { row: 16, dense: 14, card: 28 }
  * drawn its card-scale glyph at 1.2 since it was written, and shares this
  * constant so the two can't diverge again.
  */
-export const CARD_GLYPH_STROKE = 1.2
-const GLYPH_STROKE: Record<MediaArtSize, number> = { row: 2, dense: 2, card: CARD_GLYPH_STROKE }
+export const CARD_GLYPH_STROKE = 1.2;
+const GLYPH_STROKE: Record<MediaArtSize, number> = { row: 2, dense: 2, card: CARD_GLYPH_STROKE };
 
 export function MediaArt({
   src,
-  kind = 'track',
+  kind = "track",
   icon,
-  size = 'row',
-  className
+  size = "row",
+  className,
 }: {
-  src?: string | null
-  kind?: MediaArtKind
+  src?: string | null;
+  kind?: MediaArtKind;
   /** Escape hatch for a caller with a better icon than the kind default. */
-  icon?: React.ComponentType<{ size?: number; className?: string }>
-  size?: MediaArtSize
-  className?: string
+  icon?: React.ComponentType<{ size?: number; className?: string }>;
+  size?: MediaArtSize;
+  className?: string;
 }): React.JSX.Element {
-  const Fallback = icon ?? MEDIA_ART_FALLBACK[kind]
+  const Fallback = icon ?? MEDIA_ART_FALLBACK[kind];
   return (
     <div
       data-media-art
       data-art-size={size}
       className={cx(
-        'shrink-0 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center',
-        size === 'card' ? 'h-full w-full' : size === 'dense' ? 'h-8 w-8' : 'h-10 w-10',
-        className
+        "shrink-0 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center",
+        size === "card" ? "h-full w-full" : size === "dense" ? "h-8 w-8" : "h-10 w-10",
+        className,
       )}
     >
       <ArtImage
         // fetch at the drawn size — Asset serves the 1400px original for a
         // 40px thumb otherwise (shared/artUrl); cards fill up to ~240px tiles
-        src={artUrlAt(src, size === 'card' ? 240 : size === 'dense' ? 32 : 40)}
+        src={artUrlAt(src, size === "card" ? 240 : size === "dense" ? 32 : 40)}
         lazy
         fallback={
           <Fallback size={GLYPH[size]} strokeWidth={GLYPH_STROKE[size]} className="text-faint" />
         }
       />
     </div>
-  )
+  );
 }

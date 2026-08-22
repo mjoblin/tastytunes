@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowUpCircle,
   Check,
@@ -8,59 +8,59 @@ import {
   RefreshCw,
   Router,
   Sparkles,
-  Unplug
-} from 'lucide-react'
-import { audioCaps } from '@shared/smoip'
-import { tt } from '@/api'
-import { useStore } from '@/store'
-import { useScrollMemory } from '@/hooks/useScrollMemory'
-import { cx } from '@/lib/format'
-import { Segmented } from '@/components/controls/Segmented'
-import { SourcesPanel } from '@/components/device/SourcesPanel'
-import { ToneEq } from '@/components/device/ToneEq'
-import { DeviceControls } from '@/components/device/DeviceControls'
-import { HeaderChip, ScreenTitle } from '@/components/chrome/Chrome'
+  Unplug,
+} from "lucide-react";
+import { audioCaps } from "@shared/smoip";
+import { tt } from "@/api";
+import { useStore } from "@/store";
+import { useScrollMemory } from "@/hooks/useScrollMemory";
+import { cx } from "@/lib/format";
+import { Segmented } from "@/components/controls/Segmented";
+import { SourcesPanel } from "@/components/device/SourcesPanel";
+import { ToneEq } from "@/components/device/ToneEq";
+import { DeviceControls } from "@/components/device/DeviceControls";
+import { HeaderChip, ScreenTitle } from "@/components/chrome/Chrome";
 
 export function DeviceScreen(): React.JSX.Element {
-  const connection = useStore((s) => s.connection)
-  const devices = useStore((s) => s.devices)
-  const discovering = useStore((s) => s.discovering)
-  const systemInfo = useStore((s) => s.systemInfo)
+  const connection = useStore((s) => s.connection);
+  const devices = useStore((s) => s.devices);
+  const discovering = useStore((s) => s.discovering);
+  const systemInfo = useStore((s) => s.systemInfo);
   // PASSIVE firmware awareness: shown here, never acted on. There is no check or
   // install control anywhere — updating is the user's job via the official app
   // or the streamer's web admin (the "Open web admin" button beside the tabs).
-  const firmwareUpdate = useStore((s) => s.firmwareUpdate)
-  const audioSpec = useStore((s) => s.audioSpec)
-  const deviceTab = useStore((s) => s.settings.deviceTab)
-  const saveSettings = useStore((s) => s.saveSettings)
-  const [manualHost, setManualHost] = useState('')
-  const manualRef = useRef<HTMLInputElement | null>(null)
+  const firmwareUpdate = useStore((s) => s.firmwareUpdate);
+  const audioSpec = useStore((s) => s.audioSpec);
+  const deviceTab = useStore((s) => s.settings.deviceTab);
+  const saveSettings = useStore((s) => s.saveSettings);
+  const [manualHost, setManualHost] = useState("");
+  const manualRef = useRef<HTMLInputElement | null>(null);
   /**
    * A discovery run FINISHED and turned up nothing. Distinct from "no devices
    * yet" (the state before anyone has looked), because only the former means
    * the person is now waiting on the manual path — that's when the field earns
    * the focus, and taking it before they've searched would be presumptuous.
    */
-  const [searchCameBackEmpty, setSearchCameBackEmpty] = useState(false)
-  const wasDiscovering = useRef(false)
+  const [searchCameBackEmpty, setSearchCameBackEmpty] = useState(false);
+  const wasDiscovering = useRef(false);
   useEffect(() => {
-    if (wasDiscovering.current && !discovering) setSearchCameBackEmpty(devices.length === 0)
-    if (discovering) setSearchCameBackEmpty(false)
-    wasDiscovering.current = discovering
-  }, [discovering, devices.length])
+    if (wasDiscovering.current && !discovering) setSearchCameBackEmpty(devices.length === 0);
+    if (discovering) setSearchCameBackEmpty(false);
+    wasDiscovering.current = discovering;
+  }, [discovering, devices.length]);
   // Tabs are UNCONDITIONAL now: every streamer has inputs, so there are always
   // at least System and Sources. Tone & EQ stays feature-detected — it's an
   // option that may be absent, no longer the reason the tab bar exists (which
   // is what retired the old bare "streamer" microlabel fallback).
-  const hasToneTab = audioCaps(audioSpec) != null
+  const hasToneTab = audioCaps(audioSpec) != null;
   // Resolve the persisted pick against what this streamer actually offers, the
   // way settingsTab and the retired display-font ids are resolved: anything
   // unknown or unavailable falls back to the default rather than showing blank.
   const activeTab =
-    deviceTab === 'sources' ? 'sources' : hasToneTab && deviceTab === 'tone' ? 'tone' : 'streamer'
+    deviceTab === "sources" ? "sources" : hasToneTab && deviceTab === "tone" ? "tone" : "streamer";
 
-  const connectedHost = connection.phase === 'connected' ? connection.host : null
-  const connected = connection.phase === 'connected'
+  const connectedHost = connection.phase === "connected" ? connection.host : null;
+  const connected = connection.phase === "connected";
 
   /**
    * The connection card COLLAPSES to its status line once you're connected.
@@ -75,11 +75,11 @@ export function DeviceScreen(): React.JSX.Element {
    * knob), and it RESETS on any phase change — a drop-out must reveal the
    * controls regardless of what you collapsed a minute earlier.
    */
-  const [expandedOverride, setExpandedOverride] = useState<boolean | null>(null)
+  const [expandedOverride, setExpandedOverride] = useState<boolean | null>(null);
   useEffect(() => {
-    setExpandedOverride(null)
-  }, [connection.phase])
-  const expanded = expandedOverride ?? !connected
+    setExpandedOverride(null);
+  }, [connection.phase]);
+  const expanded = expandedOverride ?? !connected;
   /**
    * Is the address field the LIVE PATH rather than a fallback? True when we're
    * not connected and discovery has nothing to offer — which is exactly when
@@ -87,34 +87,37 @@ export function DeviceScreen(): React.JSX.Element {
    * thing on the screen. While devices are listed it stays quiet: shouting
    * every time would just be noise over the path most people take.
    */
-  const needsManual = !connected && !discovering && devices.length === 0
+  const needsManual = !connected && !discovering && devices.length === 0;
   // Hand over the caret when a search has come back empty — at that point
   // typing an address is the only thing left to do, and making someone click
   // into the field first is a small unkindness. Never on mere arrival: the
   // screen has tabs and controls, and stealing focus from them would be worse
   // than the click it saves.
   useEffect(() => {
-    if (searchCameBackEmpty && expanded) manualRef.current?.focus()
-  }, [searchCameBackEmpty, expanded])
+    if (searchCameBackEmpty && expanded) manualRef.current?.focus();
+  }, [searchCameBackEmpty, expanded]);
   const busyHost =
-    connection.phase === 'connecting' || (connection.phase === 'disconnected' && connection.reconnecting)
+    connection.phase === "connecting" ||
+    (connection.phase === "disconnected" && connection.reconnecting)
       ? connection.host
-      : null
+      : null;
 
   const statusText = (() => {
     switch (connection.phase) {
-      case 'idle':
-        return 'Not connected'
-      case 'connecting':
-        return `Connecting to ${connection.host}… (attempt ${connection.attempt})`
-      case 'connected':
-        return connection.demo ? 'Connected to the built-in demo' : `Connected to ${connection.host}`
-      case 'disconnected':
+      case "idle":
+        return "Not connected";
+      case "connecting":
+        return `Connecting to ${connection.host}… (attempt ${connection.attempt})`;
+      case "connected":
+        return connection.demo
+          ? "Connected to the built-in demo"
+          : `Connected to ${connection.host}`;
+      case "disconnected":
         return connection.reconnecting
           ? `Lost connection to ${connection.host} (${connection.reason}) — reconnecting…`
-          : `Disconnected from ${connection.host}`
+          : `Disconnected from ${connection.host}`;
     }
-  })()
+  })();
 
   return (
     <div className="h-full flex flex-col">
@@ -123,95 +126,99 @@ export function DeviceScreen(): React.JSX.Element {
       </header>
 
       {/* pinned header; only the content scrolls (house pattern) */}
-      <div ref={useScrollMemory('device')} className="flex-1 overflow-y-auto px-8 pb-10 pt-1">
+      <div ref={useScrollMemory("device")} className="flex-1 overflow-y-auto px-8 pb-10 pt-1">
         <div className="max-w-2xl space-y-8">
-        {/* ------------------------------------------------------------ connection */}
-        <section className="space-y-3">
-          <div className="microlabel">connection</div>
-          <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-4">
-            <div className="flex items-center gap-3">
-              <span
-                className={cx(
-                  'led',
-                  connection.phase === 'connected' ? 'led-on' : busyHost ? 'led-busy' : 'led-off'
+          {/* ------------------------------------------------------------ connection */}
+          <section className="space-y-3">
+            <div className="microlabel">connection</div>
+            <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-4">
+              <div className="flex items-center gap-3">
+                <span
+                  className={cx(
+                    "led",
+                    connection.phase === "connected" ? "led-on" : busyHost ? "led-busy" : "led-off",
+                  )}
+                />
+                <span className="text-[13.5px] flex-1">{statusText}</span>
+                {connection.phase !== "idle" && (
+                  <HeaderChip
+                    onClick={() => void tt.disconnect()}
+                    className="flex items-center gap-1.5 text-[12.5px] px-3 h-8 motion-safe:active:scale-95"
+                  >
+                    <Unplug size={13} /> Disconnect
+                  </HeaderChip>
                 )}
-              />
-              <span className="text-[13.5px] flex-1">{statusText}</span>
-              {connection.phase !== 'idle' && (
-                <HeaderChip
-                  onClick={() => void tt.disconnect()}
-                  className="flex items-center gap-1.5 text-[12.5px] px-3 h-8 motion-safe:active:scale-95"
-                >
-                  <Unplug size={13} /> Disconnect
-                </HeaderChip>
-              )}
-              {/* Only offered while connected — the rest of the time the card is
+                {/* Only offered while connected — the rest of the time the card is
                   open anyway and there is nothing to reveal. */}
-              {connected && (
-                <button
-                  onClick={() => setExpandedOverride(!expanded)}
-                  data-connection-toggle
-                  data-tip={expanded ? 'Hide connection options' : 'Find or switch streamers'}
-                  aria-label={expanded ? 'Hide connection options' : 'Show connection options'}
-                  aria-expanded={expanded}
-                  className="tip-bottom tip-end shrink-0 p-1.5 rounded-lg text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
-                >
-                  <ChevronDown
-                    size={16}
-                    className={cx('transition-transform', expanded && 'rotate-180')}
-                  />
-                </button>
-              )}
-            </div>
-
-            {expanded && (
-              <div className="border-t border-edge pt-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[12.5px] text-dim">Discovered streamers</span>
+                {connected && (
                   <button
-                    onClick={() => void tt.discover()}
-                    disabled={discovering}
-                    className="flex items-center gap-1.5 text-[12.5px] px-3 h-8 rounded-lg ring-1 ring-edge bg-panel/70 text-amber hover:brightness-110 hover:ring-edge2 motion-safe:active:scale-95 transition-all disabled:opacity-50"
+                    onClick={() => setExpandedOverride(!expanded)}
+                    data-connection-toggle
+                    data-tip={expanded ? "Hide connection options" : "Find or switch streamers"}
+                    aria-label={expanded ? "Hide connection options" : "Show connection options"}
+                    aria-expanded={expanded}
+                    className="tip-bottom tip-end shrink-0 p-1.5 rounded-lg text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
                   >
-                    {discovering ? <Loader2 size={13} className="spin" /> : <RefreshCw size={13} />}
-                    {discovering ? 'Searching…' : 'Find devices'}
+                    <ChevronDown
+                      size={16}
+                      className={cx("transition-transform", expanded && "rotate-180")}
+                    />
                   </button>
-                </div>
-
-                {devices.length === 0 && !discovering && (
-                  <div className="text-[12.5px] text-faint">
-                    Nothing found yet. Ensure the streamer is on the same network — or connect to
-                    it directly below.
-                  </div>
                 )}
-
-                {devices.map((device) => (
-                  <div
-                    key={device.udn || device.host}
-                    className="flex items-center gap-3 rounded-lg bg-raised/70 ring-1 ring-edge px-3 py-2"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[13px] truncate">{device.friendlyName}</div>
-                      <div className="font-mono text-[10.5px] text-faint truncate">
-                        {device.model} · {device.host}
-                      </div>
-                    </div>
-                    {device.host === connectedHost ? (
-                      <span className="microlabel text-led!">connected</span>
-                    ) : (
-                      <button
-                        onClick={() => void tt.connect(device.host)}
-                        className="text-[12px] px-3 py-1.5 rounded-lg ring-1 ring-amber/40 bg-amberdim text-amber hover:brightness-110 hover:ring-amber/60 motion-safe:active:scale-95 transition-all"
-                      >
-                        Connect
-                      </button>
-                    )}
-                  </div>
-                ))}
               </div>
-            )}
 
-            {/* CONNECT BY ADDRESS.
+              {expanded && (
+                <div className="border-t border-edge pt-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[12.5px] text-dim">Discovered streamers</span>
+                    <button
+                      onClick={() => void tt.discover()}
+                      disabled={discovering}
+                      className="flex items-center gap-1.5 text-[12.5px] px-3 h-8 rounded-lg ring-1 ring-edge bg-panel/70 text-amber hover:brightness-110 hover:ring-edge2 motion-safe:active:scale-95 transition-all disabled:opacity-50"
+                    >
+                      {discovering ? (
+                        <Loader2 size={13} className="spin" />
+                      ) : (
+                        <RefreshCw size={13} />
+                      )}
+                      {discovering ? "Searching…" : "Find devices"}
+                    </button>
+                  </div>
+
+                  {devices.length === 0 && !discovering && (
+                    <div className="text-[12.5px] text-faint">
+                      Nothing found yet. Ensure the streamer is on the same network — or connect to
+                      it directly below.
+                    </div>
+                  )}
+
+                  {devices.map((device) => (
+                    <div
+                      key={device.udn || device.host}
+                      className="flex items-center gap-3 rounded-lg bg-raised/70 ring-1 ring-edge px-3 py-2"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[13px] truncate">{device.friendlyName}</div>
+                        <div className="font-mono text-[10.5px] text-faint truncate">
+                          {device.model} · {device.host}
+                        </div>
+                      </div>
+                      {device.host === connectedHost ? (
+                        <span className="microlabel text-led!">connected</span>
+                      ) : (
+                        <button
+                          onClick={() => void tt.connect(device.host)}
+                          className="text-[12px] px-3 py-1.5 rounded-lg ring-1 ring-amber/40 bg-amberdim text-amber hover:brightness-110 hover:ring-amber/60 motion-safe:active:scale-95 transition-all"
+                        >
+                          Connect
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* CONNECT BY ADDRESS.
                 Discovery is SSDP multicast, which plenty of real networks
                 simply don't carry — guest/IoT VLANs, a streamer on ethernet
                 while the Mac is on a mesh AP, VPNs, and virtual machines (a
@@ -224,208 +231,210 @@ export function DeviceScreen(): React.JSX.Element {
                 has answers, promoted the moment it doesn't. Always labelled —
                 a placeholder is not a label, and it vanishes the instant you
                 type. */}
-            {expanded && (
-              <div
-                data-manual-connect={needsManual ? 'promoted' : 'quiet'}
-                className={cx(
-                  'mt-3 rounded-xl transition-all',
-                  needsManual
-                    ? 'ring-1 ring-amber/35 bg-amberdim/25 p-3'
-                    : 'border-t border-edge pt-3'
-                )}
-              >
-                <div className="flex items-center gap-2 mb-2">
-                  <Router size={14} className={needsManual ? 'text-amber' : 'text-faint'} />
-                  <span className={cx('text-[12.5px]', needsManual ? 'text-ink' : 'text-dim')}>
-                    Connect by address
-                  </span>
+              {expanded && (
+                <div
+                  data-manual-connect={needsManual ? "promoted" : "quiet"}
+                  className={cx(
+                    "mt-3 rounded-xl transition-all",
+                    needsManual
+                      ? "ring-1 ring-amber/35 bg-amberdim/25 p-3"
+                      : "border-t border-edge pt-3",
+                  )}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <Router size={14} className={needsManual ? "text-amber" : "text-faint"} />
+                    <span className={cx("text-[12.5px]", needsManual ? "text-ink" : "text-dim")}>
+                      Connect by address
+                    </span>
+                  </div>
+                  {needsManual && (
+                    // Only when it's the live path: the one question someone in
+                    // this state actually has is "where do I find that?", and
+                    // answering it beats another line of reassurance.
+                    <p className="text-[11.5px] text-faint leading-snug mb-2">
+                      Your streamer shows its IP under Settings → Network on its own display, and
+                      your router lists it among connected devices.
+                    </p>
+                  )}
+                  <div className="flex gap-2">
+                    <input
+                      ref={manualRef}
+                      value={manualHost}
+                      onChange={(e) => setManualHost(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && manualHost.trim())
+                          void tt.connect(manualHost.trim());
+                      }}
+                      placeholder="Hostname or IP (e.g. 192.168.1.42)"
+                      aria-label="Streamer hostname or IP address"
+                      className={cx(
+                        "flex-1 bg-bg rounded-lg ring-1 outline-none px-3 text-[13px] placeholder:text-faint transition-all",
+                        needsManual
+                          ? "ring-amber/40 focus:ring-amber/70 py-2"
+                          : "ring-edge focus:ring-edge2 py-1.5",
+                      )}
+                    />
+                    <button
+                      disabled={!manualHost.trim()}
+                      onClick={() => void tt.connect(manualHost.trim())}
+                      className={cx(
+                        "rounded-lg bg-amber text-bg font-medium disabled:opacity-40 hover:brightness-110 motion-safe:active:scale-95 transition-all",
+                        needsManual ? "text-[13px] px-4 py-2" : "text-[12.5px] px-3 py-1.5",
+                      )}
+                    >
+                      Connect
+                    </button>
+                  </div>
                 </div>
-                {needsManual && (
-                  // Only when it's the live path: the one question someone in
-                  // this state actually has is "where do I find that?", and
-                  // answering it beats another line of reassurance.
-                  <p className="text-[11.5px] text-faint leading-snug mb-2">
-                    Your streamer shows its IP under Settings → Network on its own display, and
-                    your router lists it among connected devices.
-                  </p>
-                )}
-                <div className="flex gap-2">
-                  <input
-                    ref={manualRef}
-                    value={manualHost}
-                    onChange={(e) => setManualHost(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && manualHost.trim()) void tt.connect(manualHost.trim())
-                    }}
-                    placeholder="Hostname or IP (e.g. 192.168.1.42)"
-                    aria-label="Streamer hostname or IP address"
-                    className={cx(
-                      'flex-1 bg-bg rounded-lg ring-1 outline-none px-3 text-[13px] placeholder:text-faint transition-all',
-                      needsManual
-                        ? 'ring-amber/40 focus:ring-amber/70 py-2'
-                        : 'ring-edge focus:ring-edge2 py-1.5'
-                    )}
-                  />
-                  <button
-                    disabled={!manualHost.trim()}
-                    onClick={() => void tt.connect(manualHost.trim())}
-                    className={cx(
-                      'rounded-lg bg-amber text-bg font-medium disabled:opacity-40 hover:brightness-110 motion-safe:active:scale-95 transition-all',
-                      needsManual ? 'text-[13px] px-4 py-2' : 'text-[12.5px] px-3 py-1.5'
-                    )}
-                  >
-                    Connect
-                  </button>
-                </div>
-              </div>
-            )}
+              )}
 
-            {/* same escape hatch the connect gate offers, mirrored here */}
-            {!connectedHost && !busyHost && (
-              <button
-                onClick={() => void tt.demoStart()}
-                className="mt-9 flex items-center gap-2 text-[13px] text-faint hover:text-dim transition-colors"
-              >
-                <Sparkles size={14} className="text-gold/70" />
-                Try without a streamer — explore with the built-in demo →
-              </button>
-            )}
-          </div>
-        </section>
+              {/* same escape hatch the connect gate offers, mirrored here */}
+              {!connectedHost && !busyHost && (
+                <button
+                  onClick={() => void tt.demoStart()}
+                  className="mt-9 flex items-center gap-2 text-[13px] text-faint hover:text-dim transition-colors"
+                >
+                  <Sparkles size={14} className="text-gold/70" />
+                  Try without a streamer — explore with the built-in demo →
+                </button>
+              )}
+            </div>
+          </section>
 
-        {/* ------------------------------------------------- system / sources / eq */}
-        {/* The tab labelled "System" holds identity + the §10 device controls.
+          {/* ------------------------------------------------- system / sources / eq */}
+          {/* The tab labelled "System" holds identity + the §10 device controls.
             It was "Streamer", which said nothing on a screen that is entirely
             the streamer (user call 2026-07-25). The STORED id stays 'streamer'
             — renaming it would cost a settings migration for no visible gain.
             "Info & Settings" was considered and rejected: "Settings" collides
             with the app's own Settings screen. */}
-        {systemInfo && connectedHost && (
-          <section className="space-y-3">
-            {/* Tabs left, web admin right — the button belongs to the DEVICE,
+          {systemInfo && connectedHost && (
+            <section className="space-y-3">
+              {/* Tabs left, web admin right — the button belongs to the DEVICE,
                 not to one tab (user call 2026-07-25; it used to sit at the
                 bottom of the Streamer card, out of sight and reading as a
                 streamer-info thing). Right-aligned lands it flush with the
                 edge of the tab body below it. */}
-            <div className="flex items-center justify-between gap-4">
-              <Segmented
-                value={activeTab}
-                onChange={(deviceTab) => void saveSettings({ deviceTab })}
-                options={[
-                  { value: 'streamer' as const, label: 'System' },
-                  { value: 'sources' as const, label: 'Sources' },
-                  // absent entirely on streamers with no writable tone controls
-                  ...(hasToneTab ? [{ value: 'tone' as const, label: 'Tone & EQ' }] : [])
-                ]}
-                className="w-fit"
-              />
-              {/* the demo device has no web interface to point at */}
-              {!(connection.phase === 'connected' && connection.demo) && (
-                <button
-                  onClick={() => void tt.openExternal(`http://${connectedHost}`)}
-                  // The line that used to sit under the button becomes its tip:
-                  // the row has no room for a caption, and the app tips
-                  // everything else that needs a "why".
-                  data-tip="Renaming and firmware updates live in the streamer's own web interface"
-                  className="tip-bottom tip-end shrink-0 flex items-center gap-1.5 text-[12.5px] px-3 h-8 rounded-lg ring-1 ring-edge bg-panel/70 text-amber hover:brightness-110 hover:ring-edge2 motion-safe:active:scale-95 transition-all"
-                >
-                  Open web admin <ExternalLink size={12} />
-                </button>
-              )}
-            </div>
-            <div
-              className={cx(
-                'rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-3',
-                activeTab !== 'streamer' && 'hidden'
-              )}
-            >
-              <InfoRow label="Name" value={systemInfo.name} />
-              <InfoRow label="Model" value={systemInfo.model} />
-              <InfoRow label="Unit ID" value={systemInfo.unit_id} mono />
-              <InfoRow label="API version" value={systemInfo.api} mono />
-              {(systemInfo.versions ?? []).map((v) => (
-                <InfoRow
-                  key={v.component ?? ''}
-                  label={`Firmware · ${v.component ?? '?'}`}
-                  value={v.version}
-                  mono
+              <div className="flex items-center justify-between gap-4">
+                <Segmented
+                  value={activeTab}
+                  onChange={(deviceTab) => void saveSettings({ deviceTab })}
+                  options={[
+                    { value: "streamer" as const, label: "System" },
+                    { value: "sources" as const, label: "Sources" },
+                    // absent entirely on streamers with no writable tone controls
+                    ...(hasToneTab ? [{ value: "tone" as const, label: "Tone & EQ" }] : []),
+                  ]}
+                  className="w-fit"
                 />
-              ))}
+                {/* the demo device has no web interface to point at */}
+                {!(connection.phase === "connected" && connection.demo) && (
+                  <button
+                    onClick={() => void tt.openExternal(`http://${connectedHost}`)}
+                    // The line that used to sit under the button becomes its tip:
+                    // the row has no room for a caption, and the app tips
+                    // everything else that needs a "why".
+                    data-tip="Renaming and firmware updates live in the streamer's own web interface"
+                    className="tip-bottom tip-end shrink-0 flex items-center gap-1.5 text-[12.5px] px-3 h-8 rounded-lg ring-1 ring-edge bg-panel/70 text-amber hover:brightness-110 hover:ring-edge2 motion-safe:active:scale-95 transition-all"
+                  >
+                    Open web admin <ExternalLink size={12} />
+                  </button>
+                )}
+              </div>
+              <div
+                className={cx(
+                  "rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-3",
+                  activeTab !== "streamer" && "hidden",
+                )}
+              >
+                <InfoRow label="Name" value={systemInfo.name} />
+                <InfoRow label="Model" value={systemInfo.model} />
+                <InfoRow label="Unit ID" value={systemInfo.unit_id} mono />
+                <InfoRow label="API version" value={systemInfo.api} mono />
+                {(systemInfo.versions ?? []).map((v) => (
+                  <InfoRow
+                    key={v.component ?? ""}
+                    label={`Firmware · ${v.component ?? "?"}`}
+                    value={v.version}
+                    mono
+                  />
+                ))}
 
-              {/* Passive firmware indicator: informational only. No check/install
+                {/* Passive firmware indicator: informational only. No check/install
                   control — the streamer reports its own self-check and updating
                   is done in the Cambridge Audio app or the web admin. */}
-              {firmwareUpdate?.updating ? (
-                <div className="flex items-start gap-2.5 rounded-lg ring-1 ring-gold/40 bg-golddim px-3 py-2.5">
-                  <Loader2 size={14} className="spin text-gold shrink-0 mt-px" />
-                  <div className="min-w-0">
-                    <div className="text-[12.5px] text-gold">Updating firmware…</div>
-                    <div className="text-[11px] text-faint mt-0.5">
-                      The streamer is installing an update. Leave it powered on until it finishes.
+                {firmwareUpdate?.updating ? (
+                  <div className="flex items-start gap-2.5 rounded-lg ring-1 ring-gold/40 bg-golddim px-3 py-2.5">
+                    <Loader2 size={14} className="spin text-gold shrink-0 mt-px" />
+                    <div className="min-w-0">
+                      <div className="text-[12.5px] text-gold">Updating firmware…</div>
+                      <div className="text-[11px] text-faint mt-0.5">
+                        The streamer is installing an update. Leave it powered on until it finishes.
+                      </div>
                     </div>
                   </div>
-                </div>
-              ) : firmwareUpdate?.updateAvailable ? (
-                <div className="flex items-start gap-2.5 rounded-lg ring-1 ring-gold/40 bg-golddim px-3 py-2.5">
-                  <ArrowUpCircle size={14} className="text-gold shrink-0 mt-px" />
-                  <div className="min-w-0">
-                    <div className="text-[12.5px] text-gold">Firmware update available</div>
-                    <div className="text-[11px] text-faint mt-0.5">
-                      Install it in the Cambridge Audio app or the streamer&rsquo;s web admin —
-                      TastyTunes never updates firmware itself.
+                ) : firmwareUpdate?.updateAvailable ? (
+                  <div className="flex items-start gap-2.5 rounded-lg ring-1 ring-gold/40 bg-golddim px-3 py-2.5">
+                    <ArrowUpCircle size={14} className="text-gold shrink-0 mt-px" />
+                    <div className="min-w-0">
+                      <div className="text-[12.5px] text-gold">Firmware update available</div>
+                      <div className="text-[11px] text-faint mt-0.5">
+                        Install it in the Cambridge Audio app or the streamer&rsquo;s web admin —
+                        TastyTunes never updates firmware itself.
+                      </div>
                     </div>
                   </div>
-                </div>
-              ) : firmwareUpdate ? (
-                // Calm positive confirmation (not gold — this is the normal state),
-                // so the user gets the same "you're up to date" reassurance the
-                // streamer's own web page gives.
-                <div className="flex items-center gap-2 text-[12px] text-dim">
-                  <Check size={13} strokeWidth={2.5} className="text-led shrink-0" />
-                  Firmware up to date
-                </div>
-              ) : null}
+                ) : firmwareUpdate ? (
+                  // Calm positive confirmation (not gold — this is the normal state),
+                  // so the user gets the same "you're up to date" reassurance the
+                  // streamer's own web page gives.
+                  <div className="flex items-center gap-2 text-[12px] text-dim">
+                    <Check size={13} strokeWidth={2.5} className="text-led shrink-0" />
+                    Firmware up to date
+                  </div>
+                ) : null}
 
-              {/* §10 controls — brightness / standby / auto power-down, each
+                {/* §10 controls — brightness / standby / auto power-down, each
                   feature-detected via its /spec (hidden on models without it) */}
-              <DeviceControls />
-
-            </div>
-            {/* Sources: the streamer's inputs, one click to switch. Bare rows
+                <DeviceControls />
+              </div>
+              {/* Sources: the streamer's inputs, one click to switch. Bare rows
                 rather than a ring-and-panel card — they ARE the panel, same as
                 the list had on its own screen. */}
-            {activeTab === 'sources' && <SourcesPanel />}
-            {/* feature-detected: ToneEq renders null on streamers whose
+              {activeTab === "sources" && <SourcesPanel />}
+              {/* feature-detected: ToneEq renders null on streamers whose
                 /zone/audio/spec offers no writable controls */}
-            {activeTab === 'tone' && <ToneEq label={false} />}
-          </section>
-        )}
+              {activeTab === "tone" && <ToneEq label={false} />}
+            </section>
+          )}
 
-        <div className="microlabel">
-          press <span className="text-dim">`</span> for the smoip payload console
-        </div>
+          <div className="microlabel">
+            press <span className="text-dim">`</span> for the smoip payload console
+          </div>
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 function InfoRow({
   label,
   value,
-  mono
+  mono,
 }: {
-  label: string
-  value: string | null | undefined
-  mono?: boolean
+  label: string;
+  value: string | null | undefined;
+  mono?: boolean;
 }): React.JSX.Element | null {
-  if (!value) return null
+  if (!value) return null;
   return (
     <div className="flex items-baseline gap-4">
       <span className="text-[12px] text-faint w-36 shrink-0">{label}</span>
-      <span className={cx('text-[12.5px] text-ink/90 break-all', mono && 'font-mono text-[11.5px]')}>
+      <span
+        className={cx("text-[12.5px] text-ink/90 break-all", mono && "font-mono text-[11.5px]")}
+      >
         {value}
       </span>
     </div>
-  )
+  );
 }

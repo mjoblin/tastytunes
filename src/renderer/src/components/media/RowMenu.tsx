@@ -1,4 +1,4 @@
-import { PopoverCard } from '@/components/chrome/Overlay'
+import { PopoverCard } from "@/components/chrome/Overlay";
 
 /**
  * The row ⋯ / right-click menu: a truncated title, then plain verbs. One
@@ -12,23 +12,29 @@ export function RowMenu({
   title,
   at,
   items,
-  onClose
+  onClose,
 }: {
   /** What the menu is about — a track or favorite title, shown truncated. */
-  title: string
-  at: { x: number; y: number }
-  items: Array<{ label: string; run: () => void }>
-  onClose(): void
+  title: string;
+  at: { x: number; y: number };
+  items: Array<{ label: string; run: () => void }>;
+  onClose(): void;
 }): React.JSX.Element {
   return (
-    <PopoverCard at={at} width="w-52" onClose={onClose} rightClickCloses className="p-1.5 space-y-0.5">
+    <PopoverCard
+      at={at}
+      width="w-52"
+      onClose={onClose}
+      rightClickCloses
+      className="p-1.5 space-y-0.5"
+    >
       <div className="px-2.5 pt-1 pb-1.5 text-[11px] text-faint truncate">{title}</div>
       {items.map((it) => (
         <button
           key={it.label}
           onClick={() => {
-            onClose()
-            it.run()
+            onClose();
+            it.run();
           }}
           className="w-full px-2.5 py-1.5 rounded-lg text-left text-[13px] text-dim hover:text-ink hover:bg-veil transition-colors"
         >
@@ -36,5 +42,5 @@ export function RowMenu({
         </button>
       ))}
     </PopoverCard>
-  )
+  );
 }

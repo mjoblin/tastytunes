@@ -1,5 +1,5 @@
-import { X } from 'lucide-react'
-import { cx } from '@/lib/format'
+import { X } from "lucide-react";
+import { cx } from "@/lib/format";
 
 /**
  * The one dismiss-a-surface control: a circular close "x" with the app's
@@ -16,15 +16,15 @@ import { cx } from '@/lib/format'
 export function CloseButton({
   onClick,
   size = 16,
-  label = 'Close',
+  label = "Close",
   tip,
-  className
+  className,
 }: {
-  onClick: () => void
-  size?: number
-  label?: string
-  tip?: string
-  className?: string
+  onClick: () => void;
+  size?: number;
+  label?: string;
+  tip?: string;
+  className?: string;
 }): React.JSX.Element {
   return (
     <button
@@ -39,11 +39,11 @@ export function CloseButton({
         // blur on software rendering: a 150ms transition crawled at
         // ~117ms/frame there, an untransitioned flip pays one ~50ms frame
         // (both measured, 2026-08-04).
-        'p-1.5 rounded-full text-dim hover:text-ink hover:bg-veil2 motion-safe:active:scale-90',
-        className
+        "p-1.5 rounded-full text-dim hover:text-ink hover:bg-veil2 motion-safe:active:scale-90",
+        className,
       )}
     >
       <X size={size} />
     </button>
-  )
+  );
 }

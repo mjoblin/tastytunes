@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { playStation, type PlayableStation } from '@/lib/radio'
+import { useEffect, useRef, useState } from "react";
+import { playStation, type PlayableStation } from "@/lib/radio";
 
 /**
  * How long a "tuning in…" indication survives without the device confirming
@@ -8,7 +8,7 @@ import { playStation, type PlayableStation } from '@/lib/radio'
  * the Presets screen's recall lamp all wait this long; the Presets screen's
  * dead-recall detector is sized INSIDE it.
  */
-export const TUNING_WINDOW_MS = 15_000
+export const TUNING_WINDOW_MS = 15_000;
 
 /**
  * The "tuning in…" window between clicking a station and its stream landing.
@@ -26,29 +26,29 @@ export const TUNING_WINDOW_MS = 15_000
  */
 export function useStationTuning(playingName: string | null): {
   /** URL of the station on its way to playing, or null. */
-  tuningUrl: string | null
-  play(st: PlayableStation): Promise<void>
+  tuningUrl: string | null;
+  play(st: PlayableStation): Promise<void>;
 } {
-  const [starting, setStarting] = useState<{ url: string; name: string } | null>(null)
-  const timeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [starting, setStarting] = useState<{ url: string; name: string } | null>(null);
+  const timeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (starting && playingName === starting.name.trim().toLowerCase()) setStarting(null)
-  }, [starting, playingName])
+    if (starting && playingName === starting.name.trim().toLowerCase()) setStarting(null);
+  }, [starting, playingName]);
   useEffect(
     () => () => {
-      if (timeout.current) clearTimeout(timeout.current)
+      if (timeout.current) clearTimeout(timeout.current);
     },
-    []
-  )
+    [],
+  );
 
   const play = async (st: PlayableStation): Promise<void> => {
-    setStarting({ url: st.url, name: st.name })
-    if (timeout.current) clearTimeout(timeout.current)
+    setStarting({ url: st.url, name: st.name });
+    if (timeout.current) clearTimeout(timeout.current);
     // dead-stream fallback: stop indicating if it never lands
-    timeout.current = setTimeout(() => setStarting(null), TUNING_WINDOW_MS)
-    if (!(await playStation(st))) setStarting(null)
-  }
+    timeout.current = setTimeout(() => setStarting(null), TUNING_WINDOW_MS);
+    if (!(await playStation(st))) setStarting(null);
+  };
 
-  return { tuningUrl: starting?.url ?? null, play }
+  return { tuningUrl: starting?.url ?? null, play };
 }

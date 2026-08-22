@@ -1,4 +1,4 @@
-import { cx, fmtTime } from '@/lib/format'
+import { cx, fmtTime } from "@/lib/format";
 
 /**
  * THE trailing duration cell for track rows.
@@ -12,20 +12,20 @@ import { cx, fmtTime } from '@/lib/format'
  */
 export function DurationCell({
   secs,
-  className
+  className,
 }: {
-  secs: number | null | undefined
-  className?: string
+  secs: number | null | undefined;
+  className?: string;
 }): React.JSX.Element {
   return (
     <span
       data-duration
       className={cx(
-        'font-mono text-[11px] text-faint tabular-nums text-right min-w-[5ch] shrink-0',
-        className
+        "font-mono text-[11px] text-faint tabular-nums text-right min-w-[5ch] shrink-0",
+        className,
       )}
     >
       {fmtTime(secs)}
     </span>
-  )
+  );
 }

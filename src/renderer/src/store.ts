@@ -1,7 +1,26 @@
-import { create } from 'zustand'
-import type { MenuCommand, PushMessage, Snapshot } from '@shared/ipc'
-import type { AppSettings, ConnectionState, DiscoveredDevice, FirmwareStatus, FrameEntry, LogEntry, McpStatus, MediaIndexStatus, MissedSchedule, NetRequestEntry, UpdateState, SleepTimer } from '@shared/model'
-import type { Favorite, RecentTrack, Playlist, PlaylistActivation, MediaInfoTarget } from '@shared/model'
+import { create } from "zustand";
+import type { MenuCommand, PushMessage, Snapshot } from "@shared/ipc";
+import type {
+  AppSettings,
+  ConnectionState,
+  DiscoveredDevice,
+  FirmwareStatus,
+  FrameEntry,
+  LogEntry,
+  McpStatus,
+  MediaIndexStatus,
+  MissedSchedule,
+  NetRequestEntry,
+  UpdateState,
+  SleepTimer,
+} from "@shared/model";
+import type {
+  Favorite,
+  RecentTrack,
+  Playlist,
+  PlaylistActivation,
+  MediaInfoTarget,
+} from "@shared/model";
 import type {
   Presets,
   QueueList,
@@ -16,37 +35,37 @@ import type {
   ZoneAudioSpec,
   ZoneNowPlaying,
   ZonePlayState,
-  ZoneState
-} from '@shared/smoip'
-import { DEFAULT_SETTINGS, FRAME_RING_SIZE, LOG_RING_SIZE, NET_RING_SIZE } from '@shared/model'
-import { tt } from './api'
+  ZoneState,
+} from "@shared/smoip";
+import { DEFAULT_SETTINGS, FRAME_RING_SIZE, LOG_RING_SIZE, NET_RING_SIZE } from "@shared/model";
+import { tt } from "./api";
 
 export type Screen =
-  | 'now-playing'
-  | 'queue'
-  | 'search'
-  | 'presets'
-  | 'library'
-  | 'radio'
-  | 'favorites'
-  | 'playlists'
-  | 'recently-played'
-  | 'device'
-  | 'settings'
+  | "now-playing"
+  | "queue"
+  | "search"
+  | "presets"
+  | "library"
+  | "radio"
+  | "favorites"
+  | "playlists"
+  | "recently-played"
+  | "device"
+  | "settings";
 
 /** A Library destination planted by another screen (Favorites "open album"):
  *  the LibraryScreen consumes it on its next mount/reset and navigates there. */
 export interface LibraryTarget {
-  serverUdn: string
-  objectId: string
+  serverUdn: string;
+  objectId: string;
   /** Breadcrumb titles from root INCLUDING the target's own title — feeds the
    *  browse re-walk when the stored objectId has rotted. */
-  titlePath: string[]
-  title: string
+  titlePath: string[];
+  title: string;
   /** Planted by unified search: the Library shows a "Search" crumb that leads
    *  BACK to the Search screen, instead of stranding you in a browse tree you
    *  never navigated into. */
-  fromSearch?: boolean
+  fromSearch?: boolean;
   /**
    * The libraryResetNonce this target belongs to. The consuming effect keys
    * on nonce EQUALITY instead of consume-and-clear: StrictMode double-runs
@@ -54,18 +73,17 @@ export interface LibraryTarget {
    * the source list (the "lands on top-level Library" bug). A stale nonce
    * just means "ordinary reset".
    */
-  nonce: number
+  nonce: number;
 }
 
 /** The station most recently streamed BY THIS APP this session — the only way
  *  Now Playing can heart a radio stream (play_state carries no URL). */
 export interface LastStation {
-  url: string
-  name: string
-  favicon: string | null
-  radioBrowserUuid: string | null
+  url: string;
+  name: string;
+  favicon: string | null;
+  radioBrowserUuid: string | null;
 }
-
 
 /**
  * The one transient-feedback slot (single toast, replace-don't-stack).
@@ -75,10 +93,10 @@ export interface LastStation {
  */
 export interface ToastData {
   /** Monotonic nonce so an identical replacement still restarts the timer. */
-  id: number
-  kind: 'success' | 'error'
-  text: string
-  action?: ToastAction
+  id: number;
+  kind: "success" | "error";
+  text: string;
+  action?: ToastAction;
 }
 
 /**
@@ -95,12 +113,12 @@ export interface ToastData {
  */
 export type ToastAction =
   | { label: string; screen: Screen; undo?: never }
-  | { label: string; undo: () => void; screen?: never }
-let toastNonce = 0
+  | { label: string; undo: () => void; screen?: never };
+let toastNonce = 0;
 /** Monotonic id for search asks — see librarySearchTarget. */
-let librarySearchSeq = 0
+let librarySearchSeq = 0;
 /** Monotonic id for unified-search asks — see searchRequest. */
-let searchSeq = 0
+let searchSeq = 0;
 
 /**
  * What a Search pivot left behind — enough to go BACK to it. `librarySearch`
@@ -109,119 +127,118 @@ let searchSeq = 0
  * (find-recall holds it wholesale), not the position.
  */
 export interface SearchBack {
-  screen: Screen
-  librarySearch?: boolean
+  screen: Screen;
+  librarySearch?: boolean;
 }
 
-
 interface PlayheadSync {
-  secs: number
-  at: number // Date.now() when received — the UI interpolates from here
+  secs: number;
+  at: number; // Date.now() when received — the UI interpolates from here
 }
 
 interface TTState {
-  screen: Screen
+  screen: Screen;
   /** Bumped when the FRONT DOOR is asked for — "Library" re-invoked while
    *  already on the screen — and by openInLibrary, which plants a destination
    *  stamped with the new value. A bump means "don't restore the last
    *  position"; plain navigation back to the library no longer bumps. */
-  libraryResetNonce: number
-  connection: ConnectionState
-  devices: DiscoveredDevice[]
-  discovering: boolean
-  settings: AppSettings
+  libraryResetNonce: number;
+  connection: ConnectionState;
+  devices: DiscoveredDevice[];
+  discovering: boolean;
+  settings: AppSettings;
 
-  playState: ZonePlayState | null
-  nowPlaying: ZoneNowPlaying | null
-  zoneState: ZoneState | null
-  queue: QueueList | null
-  presets: Presets | null
-  systemInfo: SystemInfo | null
-  systemPower: SystemPower | null
+  playState: ZonePlayState | null;
+  nowPlaying: ZoneNowPlaying | null;
+  zoneState: ZoneState | null;
+  queue: QueueList | null;
+  presets: Presets | null;
+  systemInfo: SystemInfo | null;
+  systemPower: SystemPower | null;
   /** A wake-on-intent is in flight (playing something from standby). */
-  waking: boolean
+  waking: boolean;
   /** Last standby_mode seen from ANY device this session — survives the
    *  disconnect blanking so the ConnectGate can suggest eco standby. */
-  lastStandbyMode: SystemPower['standby_mode'] | null
+  lastStandbyMode: SystemPower["standby_mode"] | null;
   /** Read-only streamer firmware status (PASSIVE — shown, never acted on). */
-  firmwareUpdate: FirmwareStatus | null
-  sources: SystemSources | null
+  firmwareUpdate: FirmwareStatus | null;
+  sources: SystemSources | null;
   /** Tone/EQ state, live-mirrored (the streamer pushes /zone/audio on change). */
-  zoneAudio: ZoneAudio | null
+  zoneAudio: ZoneAudio | null;
   /** Tone/EQ capability spec (null = this streamer has no tone controls). */
-  audioSpec: ZoneAudioSpec | null
+  audioSpec: ZoneAudioSpec | null;
   /** Front-panel display + power/standby state and capability specs (§10 controls). */
-  systemDisplay: SystemDisplay | null
-  displaySpec: SystemDisplaySpec | null
-  powerSpec: SystemPowerSpec | null
-  playhead: PlayheadSync | null
+  systemDisplay: SystemDisplay | null;
+  displaySpec: SystemDisplaySpec | null;
+  powerSpec: SystemPowerSpec | null;
+  playhead: PlayheadSync | null;
 
-  frames: FrameEntry[]
-  logs: LogEntry[]
+  frames: FrameEntry[];
+  logs: LogEntry[];
   /** Outbound HTTP requests from the main process (diagnostics Requests tab). */
-  netRequests: NetRequestEntry[]
+  netRequests: NetRequestEntry[];
 
-  diagnosticsOpen: boolean
-  shortcutsOpen: boolean
-  infoOpen: boolean
+  diagnosticsOpen: boolean;
+  shortcutsOpen: boolean;
+  infoOpen: boolean;
   /** The media Info modal's subject; null = closed. */
-  mediaInfo: MediaInfoTarget | null
-  paletteOpen: boolean
-  displayMode: boolean
+  mediaInfo: MediaInfoTarget | null;
+  paletteOpen: boolean;
+  displayMode: boolean;
   /** Lyrics drawer on the Now Playing screen (ephemeral, not persisted). */
-  lyricsOpen: boolean
+  lyricsOpen: boolean;
   /** Artist-context drawer on Now Playing (mutually exclusive with lyrics). */
-  artistOpen: boolean
+  artistOpen: boolean;
   /** Active tab in the context drawer — remembered for the session only. */
-  contextTab: 'artist' | 'album'
+  contextTab: "artist" | "album";
   /** Per-screen list filters — session only; always visible in the screen's header box. */
   screenFilters: {
-    queue: string
-    presets: string
-    library: string
-    favorites: string
-    playlists: string
-    'recently-played': string
-  }
+    queue: string;
+    presets: string;
+    library: string;
+    favorites: string;
+    playlists: string;
+    "recently-played": string;
+  };
   /** True while the full-window ambient backdrop is showing — chrome goes transparent. */
-  ambientWindowActive: boolean
+  ambientWindowActive: boolean;
   /** Mini window only: cursor is over the window (pushed from main). */
-  miniHover: boolean
+  miniHover: boolean;
   /**
    * Tray panel only. It is HIDDEN rather than destroyed between uses, so the
    * renderer never remounts — `trayOpens` counts openings so an effect can
    * fire on each one (pick the right tab, scroll to the playing row), which a
    * bare boolean couldn't do for two opens in a row on the same tab.
    */
-  trayPanelVisible: boolean
-  trayOpens: number
+  trayPanelVisible: boolean;
+  trayOpens: number;
   /** Live sleep timer, mirrored from the main process (arm via tt.setSleep). */
-  sleep: SleepTimer | null
+  sleep: SleepTimer | null;
   /** Local recently-played log, newest first (mirrored from the main process). */
-  recents: RecentTrack[]
+  recents: RecentTrack[];
   /** Local favorites, newest-hearted first (mirrored from the main process). */
-  favorites: Favorite[]
-  playlists: Playlist[]
+  favorites: Favorite[];
+  playlists: Playlist[];
   /** Live playlist-activation progress (null when idle). */
-  playlistActivation: PlaylistActivation | null
+  playlistActivation: PlaylistActivation | null;
   /** See LibraryTarget — set by Favorites, consumed by LibraryScreen. */
-  libraryTarget: LibraryTarget | null
+  libraryTarget: LibraryTarget | null;
   /** See LastStation — session-only, set by every in-app streamRadio play. */
-  lastStation: LastStation | null
+  lastStation: LastStation | null;
   /** MCP server state, mirrored from the main process. */
-  mcpStatus: McpStatus
+  mcpStatus: McpStatus;
   /** A wake schedule missed while the computer slept — offered, never fired.
    *  The Schedules tab shows it; the OS notification is the other surface. */
-  missedSchedule: MissedSchedule | null
+  missedSchedule: MissedSchedule | null;
   /** Local media-index state per known server (Settings + Library UI). */
-  mediaIndex: MediaIndexStatus[]
+  mediaIndex: MediaIndexStatus[];
   /** Self-update consent-flow state, mirrored from the main process. */
-  update: UpdateState | null
+  update: UpdateState | null;
   /** One-shot deep link into a Settings tab (e.g. the nav update dot →
    *  Updates); SettingsScreen consumes and clears it. */
-  settingsJump: string | null
-  jumpToSettingsTab(tab: string): void
-  clearSettingsJump(): void
+  settingsJump: string | null;
+  jumpToSettingsTab(tab: string): void;
+  clearSettingsJump(): void;
   /**
    * One-shot ask: open the Library ready to search (palette / ⌘F).
    *
@@ -233,12 +250,12 @@ interface TTState {
    * clears the ask (see clearLibrarySearchTarget), which is what keeps a stale
    * ask from re-firing on a later mount.
    */
-  librarySearchTarget: { id: number; query?: string } | null
+  librarySearchTarget: { id: number; query?: string } | null;
   /** `query` seeds the search box (the Search→Library handoff: "See all N in
    *  the Library" brings the unified query along). Without it, ⌘F semantics —
    *  find-recall brings back the last search. */
-  requestLibrarySearch(query?: string): void
-  clearLibrarySearchTarget(): void
+  requestLibrarySearch(query?: string): void;
+  clearLibrarySearchTarget(): void;
   /**
    * One-shot ask: open the unified Search screen with its input focused.
    * Same id-and-clear contract as librarySearchTarget — a request made before
@@ -246,61 +263,61 @@ interface TTState {
    * `query` seeds the box (the Library→Search pivot: "Search everywhere for
    * <artist>"); without it the recalled query is merely selected.
    */
-  searchRequest: { id: number; query?: string } | null
+  searchRequest: { id: number; query?: string } | null;
   /** `from` records where a PIVOT left (Library ⋯ → "Search everywhere"),
    *  so ⌘← on Search can return there — the mirror of the Library's
    *  from-search crumb. Any other navigation clears it; a plain S/⌘F ask has
    *  no "back", the same way a typed URL has none. */
-  requestSearch(query?: string, from?: SearchBack): void
-  clearSearchRequest(): void
+  requestSearch(query?: string, from?: SearchBack): void;
+  clearSearchRequest(): void;
   /** Where ⌘← on the Search screen returns to, when a pivot brought you here. */
-  searchBack: SearchBack | null
+  searchBack: SearchBack | null;
   /** Consume searchBack: return where the pivot left. A pivot out of the
    *  library's SEARCH MODE goes back via find-recall (the browse position
    *  during a search is just the search's scope root — restoring it would
    *  land at the top of the Library, not in the results you left). */
-  searchGoBack(): void
+  searchGoBack(): void;
   /** One-shot ask: open Playlists with this playlist selected (search results
    *  OPEN a playlist rather than playing it — containers open, leaves play). */
-  playlistsJump: string | null
-  jumpToPlaylist(id: string): void
-  clearPlaylistsJump(): void
+  playlistsJump: string | null;
+  jumpToPlaylist(id: string): void;
+  clearPlaylistsJump(): void;
 
-  toast: ToastData | null
-  showToast(toast: Omit<ToastData, 'id'>): void
-  dismissToast(): void
+  toast: ToastData | null;
+  showToast(toast: Omit<ToastData, "id">): void;
+  dismissToast(): void;
   /** In-app recall memory (see Snapshot.lastRecalledPresetId). */
-  lastRecalledPresetId: number | null
-  setScreen(screen: Screen): void
-  setDiagnosticsOpen(open: boolean): void
-  setShortcutsOpen(open: boolean): void
-  setInfoOpen(open: boolean): void
-  setMediaInfo(target: MediaInfoTarget | null): void
-  setPaletteOpen(open: boolean): void
-  setDisplayMode(on: boolean): void
-  setLyricsOpen(open: boolean): void
-  setArtistOpen(open: boolean): void
-  setContextTab(tab: 'artist' | 'album'): void
-  setScreenFilter(screen: keyof TTState['screenFilters'], text: string): void
+  lastRecalledPresetId: number | null;
+  setScreen(screen: Screen): void;
+  setDiagnosticsOpen(open: boolean): void;
+  setShortcutsOpen(open: boolean): void;
+  setInfoOpen(open: boolean): void;
+  setMediaInfo(target: MediaInfoTarget | null): void;
+  setPaletteOpen(open: boolean): void;
+  setDisplayMode(on: boolean): void;
+  setLyricsOpen(open: boolean): void;
+  setArtistOpen(open: boolean): void;
+  setContextTab(tab: "artist" | "album"): void;
+  setScreenFilter(screen: keyof TTState["screenFilters"], text: string): void;
   /** Navigate to the Library opened at a specific node (Favorites → album). */
-  openInLibrary(target: Omit<LibraryTarget, 'nonce'>): void
-  clearLibraryTarget(): void
-  setLastStation(st: LastStation): void
-  setAmbientWindowActive(on: boolean): void
-  setSettings(settings: AppSettings): void
+  openInLibrary(target: Omit<LibraryTarget, "nonce">): void;
+  clearLibraryTarget(): void;
+  setLastStation(st: LastStation): void;
+  setAmbientWindowActive(on: boolean): void;
+  setSettings(settings: AppSettings): void;
   /** THE settings write path: round-trip through main, adopt the result. */
-  saveSettings(patch: Partial<AppSettings>): Promise<void>
-  setQueueItems(items: QueueListItem[]): void
-  init(snapshot: Snapshot): void
-  applyPush(msg: PushMessage): void
+  saveSettings(patch: Partial<AppSettings>): Promise<void>;
+  setQueueItems(items: QueueListItem[]): void;
+  init(snapshot: Snapshot): void;
+  applyPush(msg: PushMessage): void;
   /** Application-menu clicks forwarded from the main process (main window only). */
-  applyMenu(command: MenuCommand): void
+  applyMenu(command: MenuCommand): void;
 }
 
 export const useStore = create<TTState>((set, get) => ({
-  screen: 'now-playing',
+  screen: "now-playing",
   libraryResetNonce: 0,
-  connection: { phase: 'idle' },
+  connection: { phase: "idle" },
   devices: [],
   discovering: false,
   settings: DEFAULT_SETTINGS,
@@ -335,14 +352,14 @@ export const useStore = create<TTState>((set, get) => ({
   displayMode: false,
   lyricsOpen: false,
   artistOpen: false,
-  contextTab: 'artist',
+  contextTab: "artist",
   screenFilters: {
-    queue: '',
-    presets: '',
-    library: '',
-    favorites: '',
-    playlists: '',
-    'recently-played': ''
+    queue: "",
+    presets: "",
+    library: "",
+    favorites: "",
+    playlists: "",
+    "recently-played": "",
   },
   ambientWindowActive: false,
   miniHover: false,
@@ -361,8 +378,8 @@ export const useStore = create<TTState>((set, get) => ({
   update: null,
   settingsJump: null,
   jumpToSettingsTab: (tab) => {
-    get().setScreen('settings')
-    set({ settingsJump: tab })
+    get().setScreen("settings");
+    set({ settingsJump: tab });
   },
   clearSettingsJump: () => set({ settingsJump: null }),
   librarySearchTarget: null,
@@ -370,25 +387,25 @@ export const useStore = create<TTState>((set, get) => ({
     // Deliberately NOT setScreen('library'): from inside the Library that's the
     // front door, and a ⌘F shouldn't throw away where you were browsing.
     set({
-      screen: 'library',
+      screen: "library",
       librarySearchTarget: { id: ++librarySearchSeq, query },
-      searchBack: null
+      searchBack: null,
     }),
   clearLibrarySearchTarget: () => set({ librarySearchTarget: null }),
   searchRequest: null,
   requestSearch: (query, from) =>
-    set({ screen: 'search', searchRequest: { id: ++searchSeq, query }, searchBack: from ?? null }),
+    set({ screen: "search", searchRequest: { id: ++searchSeq, query }, searchBack: from ?? null }),
   clearSearchRequest: () => set({ searchRequest: null }),
   searchBack: null,
   searchGoBack: () => {
-    const back = get().searchBack
-    if (!back) return
+    const back = get().searchBack;
+    if (!back) return;
     // both paths clear searchBack themselves (requestLibrarySearch / setScreen)
-    if (back.screen === 'library' && back.librarySearch) get().requestLibrarySearch()
-    else get().setScreen(back.screen)
+    if (back.screen === "library" && back.librarySearch) get().requestLibrarySearch();
+    else get().setScreen(back.screen);
   },
   playlistsJump: null,
-  jumpToPlaylist: (id) => set({ screen: 'playlists', playlistsJump: id, searchBack: null }),
+  jumpToPlaylist: (id) => set({ screen: "playlists", playlistsJump: id, searchBack: null }),
   clearPlaylistsJump: () => set({ playlistsJump: null }),
 
   toast: null,
@@ -412,9 +429,9 @@ export const useStore = create<TTState>((set, get) => ({
       // any plain navigation invalidates the pivot's back-link — browser
       // rules: going somewhere new kills the stale "back"
       searchBack: null,
-      ...(screen === 'library' && s.screen === 'library'
+      ...(screen === "library" && s.screen === "library"
         ? { screen, libraryResetNonce: s.libraryResetNonce + 1 }
-        : { screen })
+        : { screen }),
     })),
   setDiagnosticsOpen: (diagnosticsOpen) => set({ diagnosticsOpen }),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
@@ -425,8 +442,10 @@ export const useStore = create<TTState>((set, get) => ({
   // The two Now Playing drawers are mutually exclusive — opening one closes
   // the other here, so every opener (header buttons, future palette entries)
   // inherits the rule.
-  setLyricsOpen: (lyricsOpen) => set(lyricsOpen ? { lyricsOpen, artistOpen: false } : { lyricsOpen }),
-  setArtistOpen: (artistOpen) => set(artistOpen ? { artistOpen, lyricsOpen: false } : { artistOpen }),
+  setLyricsOpen: (lyricsOpen) =>
+    set(lyricsOpen ? { lyricsOpen, artistOpen: false } : { lyricsOpen }),
+  setArtistOpen: (artistOpen) =>
+    set(artistOpen ? { artistOpen, lyricsOpen: false } : { artistOpen }),
   setContextTab: (contextTab) => set({ contextTab }),
   setScreenFilter: (screen, text) =>
     set((s) => ({ screenFilters: { ...s.screenFilters, [screen]: text } })),
@@ -435,20 +454,19 @@ export const useStore = create<TTState>((set, get) => ({
   openInLibrary: (target) =>
     set((s) => ({
       libraryTarget: { ...target, nonce: s.libraryResetNonce + 1 },
-      screen: 'library',
+      screen: "library",
       libraryResetNonce: s.libraryResetNonce + 1,
-      searchBack: null
+      searchBack: null,
     })),
   clearLibraryTarget: () => set({ libraryTarget: null }),
   setLastStation: (lastStation) => set({ lastStation }),
   setAmbientWindowActive: (ambientWindowActive) => set({ ambientWindowActive }),
   setSettings: (settings) => set({ settings }),
   saveSettings: async (patch) => {
-    const settings = await tt.setSettings(patch)
-    set({ settings })
+    const settings = await tt.setSettings(patch);
+    set({ settings });
   },
-  setQueueItems: (items) =>
-    set((s) => (s.queue ? { queue: { ...s.queue, items } } : {})),
+  setQueueItems: (items) => set((s) => (s.queue ? { queue: { ...s.queue, items } } : {})),
 
   init: (snap) =>
     set({
@@ -487,20 +505,20 @@ export const useStore = create<TTState>((set, get) => ({
       playhead: snap.position ? { secs: snap.position.position, at: Date.now() } : null,
       frames: snap.frames,
       logs: snap.logs,
-      netRequests: snap.netRequests
+      netRequests: snap.netRequests,
     }),
 
   applyPush: (msg) =>
     set((s) => {
       switch (msg.kind) {
-        case 'connection': {
+        case "connection": {
           // Connecting to a DIFFERENT device blanks the previous streamer's
           // state — its queue/presets otherwise linger until the new device's
           // pushes land. Same-host reconnects keep state: brief drops must
           // not flash the UI empty, and fresh pushes overwrite anyway.
-          const prevHost = 'host' in s.connection ? s.connection.host : null
-          const nextHost = 'host' in msg.state ? msg.state.host : null
-          if (msg.state.phase === 'connecting' && prevHost != null && nextHost !== prevHost) {
+          const prevHost = "host" in s.connection ? s.connection.host : null;
+          const nextHost = "host" in msg.state ? msg.state.host : null;
+          if (msg.state.phase === "connecting" && prevHost != null && nextHost !== prevHost) {
             return {
               connection: msg.state,
               playState: null,
@@ -518,129 +536,133 @@ export const useStore = create<TTState>((set, get) => ({
               displaySpec: null,
               powerSpec: null,
               sleep: null,
-              playhead: null
-            }
+              playhead: null,
+            };
           }
-          return { connection: msg.state }
+          return { connection: msg.state };
         }
-        case 'devices':
-          return { devices: msg.devices, discovering: msg.discovering }
-        case 'playState':
+        case "devices":
+          return { devices: msg.devices, discovering: msg.discovering };
+        case "playState":
           return {
             playState: msg.data,
             playhead:
-              msg.data.position != null ? { secs: msg.data.position, at: Date.now() } : s.playhead
-          }
-        case 'position':
-          return { playhead: { secs: msg.data.position, at: Date.now() } }
-        case 'nowPlaying':
-          return { nowPlaying: msg.data }
-        case 'zoneState':
-          return { zoneState: msg.data }
-        case 'queue':
-          return { queue: msg.data }
-        case 'presets':
-          return { presets: msg.data }
-        case 'systemInfo':
-          return { systemInfo: msg.data }
-        case 'systemPower':
-          return { systemPower: msg.data, lastStandbyMode: msg.data?.standby_mode ?? s.lastStandbyMode }
-        case 'waking':
-          return { waking: msg.waking }
-        case 'firmwareUpdate':
-          return { firmwareUpdate: msg.data }
-        case 'sources':
-          return { sources: msg.data }
-        case 'zoneAudio':
-          return { zoneAudio: msg.data }
-        case 'audioSpec':
-          return { audioSpec: msg.data }
-        case 'systemDisplay':
-          return { systemDisplay: msg.data }
-        case 'displaySpec':
-          return { displaySpec: msg.data }
-        case 'powerSpec':
-          return { powerSpec: msg.data }
-        case 'frame': {
-          const frames = [...s.frames, msg.entry]
-          if (frames.length > FRAME_RING_SIZE) frames.splice(0, frames.length - FRAME_RING_SIZE)
-          return { frames }
+              msg.data.position != null ? { secs: msg.data.position, at: Date.now() } : s.playhead,
+          };
+        case "position":
+          return { playhead: { secs: msg.data.position, at: Date.now() } };
+        case "nowPlaying":
+          return { nowPlaying: msg.data };
+        case "zoneState":
+          return { zoneState: msg.data };
+        case "queue":
+          return { queue: msg.data };
+        case "presets":
+          return { presets: msg.data };
+        case "systemInfo":
+          return { systemInfo: msg.data };
+        case "systemPower":
+          return {
+            systemPower: msg.data,
+            lastStandbyMode: msg.data?.standby_mode ?? s.lastStandbyMode,
+          };
+        case "waking":
+          return { waking: msg.waking };
+        case "firmwareUpdate":
+          return { firmwareUpdate: msg.data };
+        case "sources":
+          return { sources: msg.data };
+        case "zoneAudio":
+          return { zoneAudio: msg.data };
+        case "audioSpec":
+          return { audioSpec: msg.data };
+        case "systemDisplay":
+          return { systemDisplay: msg.data };
+        case "displaySpec":
+          return { displaySpec: msg.data };
+        case "powerSpec":
+          return { powerSpec: msg.data };
+        case "frame": {
+          const frames = [...s.frames, msg.entry];
+          if (frames.length > FRAME_RING_SIZE) frames.splice(0, frames.length - FRAME_RING_SIZE);
+          return { frames };
         }
-        case 'log': {
-          const logs = [...s.logs, msg.entry]
-          if (logs.length > LOG_RING_SIZE) logs.splice(0, logs.length - LOG_RING_SIZE)
-          return { logs }
+        case "log": {
+          const logs = [...s.logs, msg.entry];
+          if (logs.length > LOG_RING_SIZE) logs.splice(0, logs.length - LOG_RING_SIZE);
+          return { logs };
         }
-        case 'miniHover':
-          return { miniHover: msg.hovered }
-        case 'trayPanel':
+        case "miniHover":
+          return { miniHover: msg.hovered };
+        case "trayPanel":
           return {
             trayPanelVisible: msg.visible,
-            trayOpens: msg.visible ? s.trayOpens + 1 : s.trayOpens
-          }
-        case 'sleep':
-          return { sleep: msg.sleep }
-        case 'recalledPreset':
-          return { lastRecalledPresetId: msg.id }
-        case 'recents':
-          return { recents: msg.data }
-        case 'favorites':
-          return { favorites: msg.data }
-        case 'mcpStatus':
-          return { mcpStatus: msg.status }
-        case 'scheduleMissed':
-          return { missedSchedule: msg.missed }
-        case 'mediaIndex':
-          return { mediaIndex: msg.statuses }
-        case 'updateState':
-          return { update: msg.state.phase === 'idle' ? null : msg.state }
-        case 'netRequest': {
+            trayOpens: msg.visible ? s.trayOpens + 1 : s.trayOpens,
+          };
+        case "sleep":
+          return { sleep: msg.sleep };
+        case "recalledPreset":
+          return { lastRecalledPresetId: msg.id };
+        case "recents":
+          return { recents: msg.data };
+        case "favorites":
+          return { favorites: msg.data };
+        case "mcpStatus":
+          return { mcpStatus: msg.status };
+        case "scheduleMissed":
+          return { missedSchedule: msg.missed };
+        case "mediaIndex":
+          return { mediaIndex: msg.statuses };
+        case "updateState":
+          return { update: msg.state.phase === "idle" ? null : msg.state };
+        case "netRequest": {
           // start + settle arrive as separate pushes for the same id — upsert
-          const idx = s.netRequests.findIndex((e) => e.id === msg.entry.id)
+          const idx = s.netRequests.findIndex((e) => e.id === msg.entry.id);
           const netRequests =
             idx >= 0
               ? s.netRequests.map((e, i) => (i === idx ? msg.entry : e))
-              : [...s.netRequests, msg.entry]
-          if (netRequests.length > NET_RING_SIZE) netRequests.splice(0, netRequests.length - NET_RING_SIZE)
-          return { netRequests }
+              : [...s.netRequests, msg.entry];
+          if (netRequests.length > NET_RING_SIZE)
+            netRequests.splice(0, netRequests.length - NET_RING_SIZE);
+          return { netRequests };
         }
-        case 'menu':
-          return {} // routed to applyMenu in main.tsx; nothing to merge here
-        case 'playlists':
-          return { playlists: msg.data }
-        case 'playlistActivation':
-          return { playlistActivation: msg.state }
-        case 'settings':
+        case "menu":
+          return {}; // routed to applyMenu in main.tsx; nothing to merge here
+        case "playlists":
+          return { playlists: msg.data };
+        case "playlistActivation":
+          return { playlistActivation: msg.state };
+        case "settings":
           // settings changed outside the renderer (an MCP tool edited
           // schedules) — adopt wholesale, same as a snapshot would
-          return { settings: msg.settings }
+          return { settings: msg.settings };
       }
     }),
 
   applyMenu: (command) => {
-    const s = get()
+    const s = get();
     switch (command.id) {
-      case 'about':
-        s.setInfoOpen(true)
-        break
-      case 'palette':
-        s.setPaletteOpen(!s.paletteOpen)
-        break
-      case 'shortcuts':
-        s.setShortcutsOpen(!s.shortcutsOpen)
-        break
-      case 'displayMode':
-        s.setDisplayMode(!s.displayMode)
-        break
-      case 'toggleNav':
+      case "about":
+        s.setInfoOpen(true);
+        break;
+      case "palette":
+        s.setPaletteOpen(!s.paletteOpen);
+        break;
+      case "shortcuts":
+        s.setShortcutsOpen(!s.shortcutsOpen);
+        break;
+      case "displayMode":
+        s.setDisplayMode(!s.displayMode);
+        break;
+      case "toggleNav":
         // Same round-trip as Nav's collapse button: persist, then adopt.
         void tt
           .setSettings({ navCollapsed: !s.settings.navCollapsed })
-          .then((next) => get().setSettings(next))
-        break
-      case 'screen':
-        s.setScreen(command.screen as Screen)
-        break
+          .then((next) => get().setSettings(next));
+        break;
+      case "screen":
+        s.setScreen(command.screen as Screen);
+        break;
     }
-  }
-}))
+  },
+}));

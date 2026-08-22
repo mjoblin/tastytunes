@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState } from "react";
 
 /**
  * Scrub-and-hold state for a seek slider, shared by the playback bar and the
@@ -17,29 +17,29 @@ import { useEffect, useState } from 'react'
 export function useSeekScrub(
   position: number,
   duration: number | null,
-  seek: (positionSecs: number) => void
+  seek: (positionSecs: number) => void,
 ): {
   /** What the readout and slider should show right now. */
-  shownPosition: number
+  shownPosition: number;
   /** Wire these straight onto the Slider. */
   slider: {
-    onScrub(v: number): void
-    onCancel(): void
-    onCommit(v: number): void
-  }
+    onScrub(v: number): void;
+    onCancel(): void;
+    onCommit(v: number): void;
+  };
 } {
-  const [scrub, setScrub] = useState<number | null>(null)
-  const [seekHold, setSeekHold] = useState<number | null>(null)
+  const [scrub, setScrub] = useState<number | null>(null);
+  const [seekHold, setSeekHold] = useState<number | null>(null);
 
   useEffect(() => {
-    if (seekHold == null) return
+    if (seekHold == null) return;
     if (Math.abs(position - seekHold) < 2) {
-      setSeekHold(null)
-      return
+      setSeekHold(null);
+      return;
     }
-    const t = setTimeout(() => setSeekHold(null), 3000)
-    return () => clearTimeout(t)
-  }, [seekHold, position])
+    const t = setTimeout(() => setSeekHold(null), 3000);
+    return () => clearTimeout(t);
+  }, [seekHold, position]);
 
   return {
     shownPosition: scrub != null && duration ? scrub * duration : (seekHold ?? position),
@@ -47,12 +47,12 @@ export function useSeekScrub(
       onScrub: setScrub,
       onCancel: () => setScrub(null),
       onCommit: (v: number) => {
-        setScrub(null)
+        setScrub(null);
         if (duration) {
-          setSeekHold(v * duration)
-          seek(v * duration)
+          setSeekHold(v * duration);
+          seek(v * duration);
         }
-      }
-    }
-  }
+      },
+    },
+  };
 }

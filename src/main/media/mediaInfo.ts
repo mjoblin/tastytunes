@@ -7,30 +7,51 @@
 //      album as the tie-break — resolveContent's matching rule)
 //   3. a live BrowseMetadata, when server + id are known but not indexed
 // Null when nothing is found; the caller shows what the list knew.
-import { albumTracksOf, artistSummary, trackArtists, trackInAlbumOf, type MediaInfoQuery, type MediaInfoTarget, type MediaNode } from '@shared/model'
-import { pools } from './mediaIndex'
-import { browseMetadataNode } from './upnpBrowser'
+import {
+  albumTracksOf,
+  artistSummary,
+  trackArtists,
+  trackInAlbumOf,
+  type MediaInfoQuery,
+  type MediaInfoTarget,
+  type MediaNode,
+} from "@shared/model";
+import { pools } from "./mediaIndex";
+import { browseMetadataNode } from "./upnpBrowser";
 
-const lc = (v: string | null | undefined): string => (v ?? '').trim().toLowerCase()
+const lc = (v: string | null | undefined): string => (v ?? "").trim().toLowerCase();
 
 function contentMatch(q: MediaInfoQuery, n: MediaNode): boolean {
-  if (lc(n.title) !== lc(q.title)) return false
-  if (q.artist && n.artist && !trackInAlbumOf(n, q.artist) && lc(n.artist) !== lc(q.artist)) return false
-  return true
+  if (lc(n.title) !== lc(q.title)) return false;
+  if (q.artist && n.artist && !trackInAlbumOf(n, q.artist) && lc(n.artist) !== lc(q.artist))
+    return false;
+  return true;
 }
 
 /** A page for a name the index only knows as a CREDIT (a guest singer, a composer) — no entity node exists, so one is made. */
-function creditedArtistNode(name: string, pool: { udn: string; serverName: string; albums: ReadonlyArray<MediaNode>; tracks: ReadonlyArray<MediaNode> }): MediaNode | null {
-  const key = name.trim().toLowerCase()
+function creditedArtistNode(
+  name: string,
+  pool: {
+    udn: string;
+    serverName: string;
+    albums: ReadonlyArray<MediaNode>;
+    tracks: ReadonlyArray<MediaNode>;
+  },
+): MediaNode | null {
+  const key = name.trim().toLowerCase();
   const credited =
-    pool.albums.some((a) => (a.artist ?? '').trim().toLowerCase() === key) ||
-    pool.tracks.some((t) => trackArtists(t).some((x) => x.trim().toLowerCase() === key) || (t.composers ?? []).some((c) => c.trim().toLowerCase() === key))
-  if (!credited) return null
+    pool.albums.some((a) => (a.artist ?? "").trim().toLowerCase() === key) ||
+    pool.tracks.some(
+      (t) =>
+        trackArtists(t).some((x) => x.trim().toLowerCase() === key) ||
+        (t.composers ?? []).some((c) => c.trim().toLowerCase() === key),
+    );
+  if (!credited) return null;
   return {
-    id: '',
+    id: "",
     parentId: null,
     title: name.trim(),
-    upnpClass: 'object.container.person.musicArtist',
+    upnpClass: "object.container.person.musicArtist",
     isContainer: true,
     artUrl: null,
     artist: null,
@@ -39,61 +60,72 @@ function creditedArtistNode(name: string, pool: { udn: string; serverName: strin
     trackNumber: null,
     durationSecs: null,
     serverUdn: pool.udn,
-    serverName: pool.serverName
-  }
+    serverName: pool.serverName,
+  };
 }
 
-export async function lookupMediaInfo(host: string | null, q: MediaInfoQuery): Promise<MediaInfoTarget | null> {
-  const groups = pools()
+export async function lookupMediaInfo(
+  host: string | null,
+  q: MediaInfoQuery,
+): Promise<MediaInfoTarget | null> {
+  const groups = pools();
   const withAlbum = (pool: (typeof groups)[number], node: MediaNode): MediaInfoTarget => {
-    const profile = pool.profile ? { serverProfile: pool.profile } : {}
+    const profile = pool.profile ? { serverProfile: pool.profile } : {};
     if (node.isContainer && /person|Artist/.test(node.upnpClass)) {
-      const summary = artistSummary(node.title, pool)
-      return { node: node.artUrl ? node : { ...node, artUrl: summary.artUrl }, artist: summary, serverName: pool.serverName, ...profile }
+      const summary = artistSummary(node.title, pool);
+      return {
+        node: node.artUrl ? node : { ...node, artUrl: summary.artUrl },
+        artist: summary,
+        serverName: pool.serverName,
+        ...profile,
+      };
     }
     return {
       node,
       tracks: node.isContainer ? albumTracksOf(node, pool) : undefined,
       serverName: pool.serverName,
-      ...profile
-    }
-  }
+      ...profile,
+    };
+  };
   // 1. identity
   if (q.serverUdn && q.objectId) {
-    const pool = groups.find((p) => p.udn === q.serverUdn)
+    const pool = groups.find((p) => p.udn === q.serverUdn);
     if (pool) {
       const hit =
-        (q.kind === 'track' ? pool.tracks : q.kind === 'album' ? pool.albums : pool.artists).find((n) => n.id === q.objectId) ??
-        [...pool.tracks, ...pool.albums, ...pool.artists].find((n) => n.id === q.objectId)
-      if (hit) return withAlbum(pool, hit)
+        (q.kind === "track" ? pool.tracks : q.kind === "album" ? pool.albums : pool.artists).find(
+          (n) => n.id === q.objectId,
+        ) ?? [...pool.tracks, ...pool.albums, ...pool.artists].find((n) => n.id === q.objectId);
+      if (hit) return withAlbum(pool, hit);
     }
   }
   // 2. content, every ready index (the ref's own server first)
-  const ordered = [...groups].sort((a, b) => (a.udn === q.serverUdn ? -1 : b.udn === q.serverUdn ? 1 : 0))
+  const ordered = [...groups].sort((a, b) =>
+    a.udn === q.serverUdn ? -1 : b.udn === q.serverUdn ? 1 : 0,
+  );
   for (const pool of ordered) {
-    const candidates = (q.kind === 'track' ? pool.tracks : q.kind === 'album' ? pool.albums : pool.artists).filter((n) =>
-      contentMatch(q, n)
-    )
-    if (candidates.length === 0) continue
+    const candidates = (
+      q.kind === "track" ? pool.tracks : q.kind === "album" ? pool.albums : pool.artists
+    ).filter((n) => contentMatch(q, n));
+    if (candidates.length === 0) continue;
     // prefer the same album (tracks) — a title recorded on several
     const best =
       (q.album && candidates.find((n) => lc(n.album) === lc(q.album))) ||
       candidates.find((n) => q.artist == null || lc(n.artist) === lc(q.artist)) ||
-      candidates[0]
-    return withAlbum(pool, best)
+      candidates[0];
+    return withAlbum(pool, best);
   }
   // 2b. an artist the index knows only as a credit (guest, composer, or the
   //     album artist of a server without person entities) still gets a page
-  if (q.kind === 'artist') {
+  if (q.kind === "artist") {
     for (const pool of ordered) {
-      const node = creditedArtistNode(q.title, pool)
-      if (node) return withAlbum(pool, node)
+      const node = creditedArtistNode(q.title, pool);
+      if (node) return withAlbum(pool, node);
     }
   }
   // 3. live, when we know exactly what to ask for
   if (host && q.serverUdn && q.objectId) {
-    const node = await browseMetadataNode(host, q.serverUdn, q.objectId)
-    if (node) return { node, serverName: null }
+    const node = await browseMetadataNode(host, q.serverUdn, q.objectId);
+    if (node) return { node, serverName: null };
   }
-  return null
+  return null;
 }

@@ -1,4 +1,4 @@
-import type { Transform } from '@dnd-kit/utilities'
+import type { Transform } from "@dnd-kit/utilities";
 
 /**
  * Strip horizontal travel from a sortable's drag transform.
@@ -17,5 +17,4 @@ import type { Transform } from '@dnd-kit/utilities'
  * CARD grids must NOT use this — rectSortingStrategy is two-dimensional, and
  * sideways movement is how you reach the next column.
  */
-export const lockVertical = (t: Transform | null): Transform | null =>
-  t ? { ...t, x: 0 } : null
+export const lockVertical = (t: Transform | null): Transform | null => (t ? { ...t, x: 0 } : null);

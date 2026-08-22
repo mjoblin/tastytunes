@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react'
-import { Search, X } from 'lucide-react'
-import { cx } from '@/lib/format'
+import { useEffect, useRef } from "react";
+import { Search, X } from "lucide-react";
+import { cx } from "@/lib/format";
 
 /**
  * Compact text filter for the list screens' headers. `/` focuses it from
@@ -13,17 +13,17 @@ export function FilterInput({
   onChange,
   shown,
   total,
-  onSubmit
+  onSubmit,
 }: {
-  value: string
-  onChange(value: string): void
-  shown: number
-  total: number
+  value: string;
+  onChange(value: string): void;
+  shown: number;
+  total: number;
   /** Optional Enter action (the Library escalates a filter to a full search). */
-  onSubmit?(): void
+  onSubmit?(): void;
 }): React.JSX.Element {
-  const wrapRef = useRef<HTMLDivElement | null>(null)
-  const inputRef = useRef<HTMLInputElement | null>(null)
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   // Clicks on non-focusable chrome don't move focus off an input, so the
   // caret would keep blinking — blur explicitly when a press lands outside.
@@ -33,16 +33,16 @@ export function FilterInput({
         document.activeElement === inputRef.current &&
         !wrapRef.current?.contains(e.target as Node)
       ) {
-        inputRef.current?.blur()
+        inputRef.current?.blur();
       }
-    }
-    window.addEventListener('pointerdown', onPointerDown)
+    };
+    window.addEventListener("pointerdown", onPointerDown);
     return () => {
-      window.removeEventListener('pointerdown', onPointerDown)
+      window.removeEventListener("pointerdown", onPointerDown);
       // unmounting while focused (screen switch) must restore window dragging
-      document.documentElement.classList.remove('filter-focused')
-    }
-  }, [])
+      document.documentElement.classList.remove("filter-focused");
+    };
+  }, []);
 
   return (
     <div
@@ -50,29 +50,29 @@ export function FilterInput({
       // the whole box reads as an input — clicking anywhere in it focuses
       onClick={() => inputRef.current?.focus()}
       className={cx(
-        'no-drag flex items-center gap-1.5 h-8 pl-2.5 pr-1.5 rounded-lg ring-1 transition-all',
-        value ? 'ring-gold/50 bg-golddim' : 'ring-edge bg-panel/70 focus-within:ring-edge2'
+        "no-drag flex items-center gap-1.5 h-8 pl-2.5 pr-1.5 rounded-lg ring-1 transition-all",
+        value ? "ring-gold/50 bg-golddim" : "ring-edge bg-panel/70 focus-within:ring-edge2",
       )}
     >
-      <Search size={13} className={value ? 'text-gold' : 'text-faint'} />
+      <Search size={13} className={value ? "text-gold" : "text-faint"} />
       <input
         ref={inputRef}
         data-filter-input
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === 'Escape') {
-            e.stopPropagation()
-            if (value) onChange('')
-            else (e.target as HTMLInputElement).blur()
+          if (e.key === "Escape") {
+            e.stopPropagation();
+            if (value) onChange("");
+            else (e.target as HTMLInputElement).blur();
           }
-          if (e.key === 'Enter' && onSubmit) {
-            e.preventDefault()
-            onSubmit()
+          if (e.key === "Enter" && onSubmit) {
+            e.preventDefault();
+            onSubmit();
           }
         }}
-        onFocus={() => document.documentElement.classList.add('filter-focused')}
-        onBlur={() => document.documentElement.classList.remove('filter-focused')}
+        onFocus={() => document.documentElement.classList.add("filter-focused")}
+        onBlur={() => document.documentElement.classList.remove("filter-focused")}
         placeholder="Filter"
         spellCheck={false}
         className="w-28 bg-transparent outline-none text-[12.5px] text-ink placeholder:text-faint"
@@ -84,18 +84,18 @@ export function FilterInput({
         className="font-mono text-[10.5px] text-dim tabular-nums text-right"
         style={{ minWidth: `${Math.max(9, String(total).length * 2 + 1)}ch` }}
       >
-        {value ? `${shown}/${total}` : ''}
+        {value ? `${shown}/${total}` : ""}
       </span>
       <button
         aria-label="Clear filter"
-        onClick={() => onChange('')}
+        onClick={() => onChange("")}
         className={cx(
-          'p-1 rounded-full text-dim hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all',
-          !value && 'invisible pointer-events-none'
+          "p-1 rounded-full text-dim hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all",
+          !value && "invisible pointer-events-none",
         )}
       >
         <X size={12} />
       </button>
     </div>
-  )
+  );
 }

@@ -1,9 +1,9 @@
-import { isRadioMetadata, type ZonePlayState } from '@shared/smoip'
-import { tt } from '@/api'
-import { useStore } from '@/store'
+import { isRadioMetadata, type ZonePlayState } from "@shared/smoip";
+import { tt } from "@/api";
+import { useStore } from "@/store";
 
 /** Radio search is a network call to the directory: type-ahead waits this long. ONE number for the Radio screen and unified search (2026-08-16). */
-export const RADIO_DEBOUNCE_MS = 350
+export const RADIO_DEBOUNCE_MS = 350;
 
 /**
  * The station name the device is playing right now, lowercased — or null when
@@ -12,10 +12,10 @@ export const RADIO_DEBOUNCE_MS = 350
  * and unified search so the two light the same row for the same stream.
  */
 export function playingStationName(playState: ZonePlayState | null): string | null {
-  const md = playState?.metadata
-  return isRadioMetadata(md) && (playState?.state === 'play' || playState?.state === 'buffering')
+  const md = playState?.metadata;
+  return isRadioMetadata(md) && (playState?.state === "play" || playState?.state === "buffering")
     ? ((md?.station ?? md?.name)?.trim().toLowerCase() ?? null)
-    : null
+    : null;
 }
 
 /**
@@ -24,11 +24,11 @@ export function playingStationName(playState: ZonePlayState | null): string | nu
  * url, a name and a favicon but none of the directory metadata.
  */
 export interface PlayableStation {
-  url: string
-  name: string
-  favicon: string | null
+  url: string;
+  name: string;
+  favicon: string | null;
   /** radio-browser's id when it came from the directory. */
-  uuid?: string
+  uuid?: string;
 }
 
 /**
@@ -46,9 +46,9 @@ export interface PlayableStation {
  */
 export async function playStation(station: PlayableStation): Promise<boolean> {
   try {
-    await tt.command({ type: 'streamRadio', url: station.url, name: station.name })
+    await tt.command({ type: "streamRadio", url: station.url, name: station.name });
   } catch {
-    return false
+    return false;
   }
   // Recorded only once the command LANDED: a station that never played must
   // not become the heartable "last station". The command resolves on the
@@ -59,7 +59,7 @@ export async function playStation(station: PlayableStation): Promise<boolean> {
     name: station.name,
     favicon: station.favicon,
     // radio-browser uses the URL as the uuid for hand-entered stations
-    radioBrowserUuid: station.uuid && station.uuid !== station.url ? station.uuid : null
-  })
-  return true
+    radioBrowserUuid: station.uuid && station.uuid !== station.url ? station.uuid : null,
+  });
+  return true;
 }

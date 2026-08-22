@@ -1,12 +1,12 @@
-import type { ContentRef, PlaylistActivation, QueueRestoreResult } from '@shared/model'
-import type { PushMessage } from '@shared/ipc'
-import type { MediaQueueAction } from '@shared/model'
-import type { QueueList } from '@shared/smoip'
-import type { SmoipSocket } from './smoipSocket'
-import * as smoipHttp from './smoipHttp'
-import { getPlaylists, healPlaylistItem, markPlaylistPlayed } from '../data/playlists'
-import { queueAdd } from '../media/upnpBrowser'
-import { resolveContent, type ResolvedContent } from '../media/resolveContent'
+import type { ContentRef, PlaylistActivation, QueueRestoreResult } from "@shared/model";
+import type { PushMessage } from "@shared/ipc";
+import type { MediaQueueAction } from "@shared/model";
+import type { QueueList } from "@shared/smoip";
+import type { SmoipSocket } from "./smoipSocket";
+import * as smoipHttp from "./smoipHttp";
+import { getPlaylists, healPlaylistItem, markPlaylistPlayed } from "../data/playlists";
+import { queueAdd } from "../media/upnpBrowser";
+import { resolveContent, type ResolvedContent } from "../media/resolveContent";
 
 /**
  * The queue-ops engine: everything that WRITES to the streamer's queue on the
@@ -48,24 +48,24 @@ import { resolveContent, type ResolvedContent } from '../media/resolveContent'
  */
 export interface QueueOpsHost {
   /** The connected host, or null when there is no connection to write to. */
-  host(): string | null
+  host(): string | null;
   /** The live socket — may be null, and may go null mid-run. */
-  socket(): SmoipSocket | null
+  socket(): SmoipSocket | null;
   /** The manager's cached /queue/list, as fresh as the last frame. */
-  queue(): QueueList | null
-  push(msg: PushMessage): void
+  queue(): QueueList | null;
+  push(msg: PushMessage): void;
   /** Activating is a play-shaped intent, so it wakes a sleeping streamer first. */
-  ensureAwake(): Promise<void>
+  ensureAwake(): Promise<void>;
 }
 
 export class QueueOps {
-  private readonly host: QueueOpsHost
-  private batch = false
-  private current: PlaylistActivation | null = null
-  private cancelled = false
+  private readonly host: QueueOpsHost;
+  private batch = false;
+  private current: PlaylistActivation | null = null;
+  private cancelled = false;
 
   constructor(host: QueueOpsHost) {
-    this.host = host
+    this.host = host;
   }
 
   /**
@@ -73,16 +73,16 @@ export class QueueOps {
    * hold back /queue/list pushes — invariant 2's renderer half.
    */
   get batching(): boolean {
-    return this.batch
+    return this.batch;
   }
 
   /** Live activation state, for the boot snapshot and the push relay. */
   get activation(): PlaylistActivation | null {
-    return this.current
+    return this.current;
   }
 
   cancelActivation(): void {
-    if (this.current && !this.current.finished) this.cancelled = true
+    if (this.current && !this.current.finished) this.cancelled = true;
   }
 
   /**
@@ -94,17 +94,17 @@ export class QueueOps {
    * cancellation.
    */
   async playlistActivate(id: string): Promise<PlaylistActivation> {
-    const playlist = getPlaylists().find((p) => p.id === id)
-    if (!playlist) throw new Error('No such playlist')
-    const host = this.host.host()
-    if (!host) throw new Error('Not connected')
+    const playlist = getPlaylists().find((p) => p.id === id);
+    if (!playlist) throw new Error("No such playlist");
+    const host = this.host.host();
+    if (!host) throw new Error("Not connected");
     // INVARIANT 1 — the claim below is synchronous with this check: no await
     // between them.
     if (this.current && !this.current.finished) {
-      throw new Error(`Already loading "${this.current.name}" — cancel that run first`)
+      throw new Error(`Already loading "${this.current.name}" — cancel that run first`);
     }
 
-    this.cancelled = false
+    this.cancelled = false;
     const activation: PlaylistActivation = {
       playlistId: id,
       name: playlist.name,
@@ -113,35 +113,35 @@ export class QueueOps {
       added: 0,
       missed: [],
       cancelled: false,
-      finished: false
-    }
-    this.current = activation
-    const announce = (): void => this.host.push({ kind: 'playlistActivation', state: activation })
-    announce()
+      finished: false,
+    };
+    this.current = activation;
+    const announce = (): void => this.host.push({ kind: "playlistActivation", state: activation });
+    announce();
 
     // INVARIANT 3 — nothing has touched the queue until this flips.
-    let batchStarted = false
+    let batchStarted = false;
 
     // The FIRST successful add REPLACEs (clearing what was there); everything
     // after appends. Keyed off success, not index — if entry one can't be
     // resolved, entry two must still be the one that clears the old queue.
-    let replaced = false
+    let replaced = false;
     try {
-      await this.host.ensureAwake() // activating is a play-shaped intent
+      await this.host.ensureAwake(); // activating is a play-shaped intent
 
-      this.batch = true
-      batchStarted = true
-      const socket = this.host.socket()
-      if (socket) socket.suppressQueueRefetch = true
+      this.batch = true;
+      batchStarted = true;
+      const socket = this.host.socket();
+      if (socket) socket.suppressQueueRefetch = true;
       for (const [index, item] of playlist.items.entries()) {
-        if (this.cancelled) break
-        const action: MediaQueueAction = replaced ? 'APPEND' : 'REPLACE'
-        let landed = false
+        if (this.cancelled) break;
+        const action: MediaQueueAction = replaced ? "APPEND" : "REPLACE";
+        let landed = false;
 
         if (item.serverUdn && item.objectId) {
           try {
-            await queueAdd(host, item.serverUdn, item.objectId, action)
-            landed = true
+            await queueAdd(host, item.serverUdn, item.objectId, action);
+            landed = true;
           } catch {
             // stale id — fall through to the content re-resolve
           }
@@ -151,13 +151,13 @@ export class QueueOps {
           // INVARIANT 4. This used to walk `searchable` servers only, which
           // meant an entry living on a Browse-only server (USB) could never
           // heal; resolveContent asks the indexes first, so it can.
-          const found = await resolveContent(host, item)
+          const found = await resolveContent(host, item);
           if (found) {
             try {
-              await queueAdd(host, found.serverUdn, found.objectId, action)
-              landed = true
+              await queueAdd(host, found.serverUdn, found.objectId, action);
+              landed = true;
               // heal in place — no updatedAt bump, so the collection keeps its order
-              healPlaylistItem(id, index, item, found)
+              healPlaylistItem(id, index, item, found);
             } catch {
               // couldn't add it after all — counted as missed below
             }
@@ -165,38 +165,38 @@ export class QueueOps {
         }
 
         if (landed) {
-          replaced = true
-          activation.added += 1
+          replaced = true;
+          activation.added += 1;
         } else {
-          activation.missed.push(item.title)
+          activation.missed.push(item.title);
         }
-        activation.done += 1
-        announce()
+        activation.done += 1;
+        announce();
       }
     } finally {
-      this.batch = false
+      this.batch = false;
       // Re-read the socket: a run can outlive the connection it started on.
-      const socket = this.host.socket()
-      if (socket) socket.suppressQueueRefetch = false
+      const socket = this.host.socket();
+      if (socket) socket.suppressQueueRefetch = false;
       if (batchStarted) {
         // INVARIANT 2's single authoritative read of the truth, whatever
         // happened above. The send throws on a half-dead socket (by design);
         // swallowed HERE only, so cleanup can't mask the loop's real error —
         // reconnect resubscribes /queue/list and delivers the same truth anyway.
         try {
-          socket?.send('/queue/list')
+          socket?.send("/queue/list");
         } catch {
           /* reconnect refetches */
         }
       }
-      activation.cancelled = this.cancelled
-      activation.finished = true
+      activation.cancelled = this.cancelled;
+      activation.finished = true;
       // INVARIANT 3 — stamp the attempt only if the queue was actually touched.
-      if (batchStarted) markPlaylistPlayed(id, activation.missed)
-      announce()
-      this.host.push({ kind: 'playlists', data: getPlaylists() })
+      if (batchStarted) markPlaylistPlayed(id, activation.missed);
+      announce();
+      this.host.push({ kind: "playlists", data: getPlaylists() });
     }
-    return activation
+    return activation;
   }
 
   /**
@@ -215,42 +215,42 @@ export class QueueOps {
    * slot beats a track that didn't come back.
    */
   async queueRestore(ref: ContentRef, position: number): Promise<QueueRestoreResult> {
-    const host = this.host.host()
-    if (!host) return 'failed'
+    const host = this.host.host();
+    if (!host) return "failed";
 
-    const found = await resolveContent(host, ref)
-    if (!found) return 'not-found'
+    const found = await resolveContent(host, ref);
+    if (!found) return "not-found";
 
-    const before = this.host.queue()?.items?.length ?? 0
+    const before = this.host.queue()?.items?.length ?? 0;
     try {
-      await queueAdd(host, found.serverUdn, found.objectId, 'APPEND')
+      await queueAdd(host, found.serverUdn, found.objectId, "APPEND");
     } catch {
-      return 'failed'
+      return "failed";
     }
 
     // APPEND lands at the end, but the id it landed under only arrives with the
     // next /queue/list push — ask for one and wait for the queue to actually
     // grow rather than assuming a fixed delay.
     try {
-      this.host.socket()?.send('/queue/list')
+      this.host.socket()?.send("/queue/list");
     } catch {
-      return 'ok' // it IS in the queue; reconnect will refetch and show it
+      return "ok"; // it IS in the queue; reconnect will refetch and show it
     }
-    const grown = await this.waitForQueue((q) => (q.items?.length ?? 0) > before, 4000)
-    if (!grown) return 'ok'
+    const grown = await this.waitForQueue((q) => (q.items?.length ?? 0) > before, 4000);
+    if (!grown) return "ok";
 
-    const items = grown.items ?? []
-    const from = items.length - 1
-    const landed = items[from]
-    const to = Math.max(0, Math.min(position, from))
+    const items = grown.items ?? [];
+    const from = items.length - 1;
+    const landed = items[from];
+    const to = Math.max(0, Math.min(position, from));
     if (landed?.id != null && to !== from) {
       try {
-        await smoipHttp.queueMove(host, landed.id, from, to)
+        await smoipHttp.queueMove(host, landed.id, from, to);
       } catch {
         // it's in the queue, just not where it was — see the doc comment
       }
     }
-    return 'ok'
+    return "ok";
   }
 
   /**
@@ -260,27 +260,30 @@ export class QueueOps {
    * whose server changed). Null when disconnected or nothing matches.
    */
   async contentResolve(ref: ContentRef): Promise<ResolvedContent | null> {
-    const host = this.host.host()
-    if (!host) return null
-    return resolveContent(host, ref)
+    const host = this.host.host();
+    if (!host) return null;
+    return resolveContent(host, ref);
   }
 
   /** Resolve with the first cached queue satisfying `test`, or null on timeout. */
-  private waitForQueue(test: (q: QueueList) => boolean, timeoutMs: number): Promise<QueueList | null> {
-    const now = this.host.queue()
-    if (now && test(now)) return Promise.resolve(now)
+  private waitForQueue(
+    test: (q: QueueList) => boolean,
+    timeoutMs: number,
+  ): Promise<QueueList | null> {
+    const now = this.host.queue();
+    if (now && test(now)) return Promise.resolve(now);
     return new Promise((resolve) => {
-      const started = Date.now()
+      const started = Date.now();
       const tick = setInterval(() => {
-        const q = this.host.queue()
+        const q = this.host.queue();
         if (q && test(q)) {
-          clearInterval(tick)
-          resolve(q)
+          clearInterval(tick);
+          resolve(q);
         } else if (Date.now() - started >= timeoutMs) {
-          clearInterval(tick)
-          resolve(null)
+          clearInterval(tick);
+          resolve(null);
         }
-      }, 120)
-    })
+      }, 120);
+    });
   }
 }

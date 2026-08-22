@@ -8,222 +8,268 @@
 // power-ON reboot guard exactly like the UI. Tool/cluster identity lives in
 // MCP_CLUSTERS (shared with the Settings screen); this file supplies each
 // tool's input schema and handler.
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
-import { networkInterfaces } from 'node:os'
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
-import { z, type ZodRawShape } from 'zod'
-import { type Snapshot } from '@shared/ipc'
-import { sleepTrackKey, type AppSettings, type ConnectionState, type McpSettings, type MediaNode, type MediaQueueAction, type Schedule, trackArtists, formatLabel, albumTracksOf, albumSummary, trackPosition, artistSummary, HIRES_BITS_ABOVE, HIRES_RATE_ABOVE, describeProfileNote } from '@shared/model'
-import { favoriteKey, type Favorite } from '@shared/model'
-import { MCP_CLUSTERS, mcpClusterEnabled } from '@shared/mcpCatalog'
-import { EQ_GAIN_MAX, EQ_GAIN_MIN, audioCaps, brightnessOptions, isRadioMetadata } from '@shared/smoip'
-import { app } from 'electron'
-import type { DeviceManager } from '../device/deviceManager'
-import { getSettings, updateSettings } from '../data/persist'
-import { randomUUID } from 'node:crypto'
-import { fetchArtistInfo } from '../lookups/artistInfo'
-import { fetchAlbumInfo } from '../lookups/albumInfo'
-import { fetchLyrics } from '../lookups/lyrics'
-import { radioSearch, radioByTags } from '../lookups/radioBrowser'
-import { presetSave, queueAdd, refreshServers } from '../media/upnpBrowser'
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { networkInterfaces } from "node:os";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { z, type ZodRawShape } from "zod";
+import { type Snapshot } from "@shared/ipc";
+import {
+  sleepTrackKey,
+  type AppSettings,
+  type ConnectionState,
+  type McpSettings,
+  type MediaNode,
+  type MediaQueueAction,
+  type Schedule,
+  trackArtists,
+  formatLabel,
+  albumTracksOf,
+  albumSummary,
+  trackPosition,
+  artistSummary,
+  HIRES_BITS_ABOVE,
+  HIRES_RATE_ABOVE,
+  describeProfileNote,
+} from "@shared/model";
+import { favoriteKey, type Favorite } from "@shared/model";
+import { MCP_CLUSTERS, mcpClusterEnabled } from "@shared/mcpCatalog";
+import {
+  EQ_GAIN_MAX,
+  EQ_GAIN_MIN,
+  audioCaps,
+  brightnessOptions,
+  isRadioMetadata,
+} from "@shared/smoip";
+import { app } from "electron";
+import type { DeviceManager } from "../device/deviceManager";
+import { getSettings, updateSettings } from "../data/persist";
+import { randomUUID } from "node:crypto";
+import { fetchArtistInfo } from "../lookups/artistInfo";
+import { fetchAlbumInfo } from "../lookups/albumInfo";
+import { fetchLyrics } from "../lookups/lyrics";
+import { radioSearch, radioByTags } from "../lookups/radioBrowser";
+import { presetSave, queueAdd, refreshServers } from "../media/upnpBrowser";
 import {
   searchServer as librarySearch,
   status as indexStatus,
   pools as indexPools,
   ensureFresh as indexEnsureFresh,
-  rebuild as indexRebuild
-} from '../media/mediaIndex'
+  rebuild as indexRebuild,
+} from "../media/mediaIndex";
 
 interface ToolResult {
-  content: Array<{ type: 'text'; text: string }>
-  isError?: boolean
+  content: Array<{ type: "text"; text: string }>;
+  isError?: boolean;
 }
 
 interface ToolImpl {
-  inputSchema?: ZodRawShape
-  handler(args: Record<string, unknown>): Promise<ToolResult> | ToolResult
+  inputSchema?: ZodRawShape;
+  handler(args: Record<string, unknown>): Promise<ToolResult> | ToolResult;
 }
 
 const ok = (payload: unknown): ToolResult => ({
-  content: [{ type: 'text', text: typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2) }]
-})
+  content: [
+    {
+      type: "text",
+      text: typeof payload === "string" ? payload : JSON.stringify(payload, null, 2),
+    },
+  ],
+});
 const err = (message: string): ToolResult => ({
-  content: [{ type: 'text', text: message }],
-  isError: true
-})
+  content: [{ type: "text", text: message }],
+  isError: true,
+});
 
 /** First non-internal IPv4 address, for the reachable URL when bound to LAN. */
 function lanAddress(): string | null {
   for (const addrs of Object.values(networkInterfaces())) {
     for (const a of addrs ?? []) {
-      if (a.family === 'IPv4' && !a.internal) return a.address
+      if (a.family === "IPv4" && !a.internal) return a.address;
     }
   }
-  return null
+  return null;
 }
 
 export class McpBridge {
-  private http: Server | null = null
-  private active: { bind: McpSettings['bind']; port: number } | null = null
+  private http: Server | null = null;
+  private active: { bind: McpSettings["bind"]; port: number } | null = null;
   /** Fired when an MCP tool mutates settings (schedules) — the renderer
    *  learns via a {kind:'settings'} push; index.ts wires this to the window. */
-  onSettingsMutated: ((next: AppSettings) => void) | null = null
+  onSettingsMutated: ((next: AppSettings) => void) | null = null;
 
   constructor(private dm: DeviceManager) {}
 
   /** Bring the server in line with settings: start, stop, or move host/port. */
   sync(settings: { mcp: McpSettings }): void {
-    const mcp = settings.mcp
+    const mcp = settings.mcp;
     if (!mcp.enabled) {
-      this.stop()
-      return
+      this.stop();
+      return;
     }
-    if (this.http && this.active && this.active.bind === mcp.bind && this.active.port === mcp.port) {
-      return // running in the right place; tool toggles apply per-request
+    if (
+      this.http &&
+      this.active &&
+      this.active.bind === mcp.bind &&
+      this.active.port === mcp.port
+    ) {
+      return; // running in the right place; tool toggles apply per-request
     }
-    this.stop(true)
-    this.start(mcp)
+    this.stop(true);
+    this.start(mcp);
   }
 
   stop(restarting = false): void {
-    if (!this.http) return
+    if (!this.http) return;
     // close() only stops NEW connections — drop live keep-alive sockets too,
     // or a same-port restart (bind flip) races the drain into EADDRINUSE.
-    this.http.closeAllConnections()
-    this.http.close()
-    this.http = null
-    this.active = null
+    this.http.closeAllConnections();
+    this.http.close();
+    this.http = null;
+    this.active = null;
     if (!restarting) {
-      this.dm.setMcpStatus({ running: false, url: null, error: null }, 'stopped')
+      this.dm.setMcpStatus({ running: false, url: null, error: null }, "stopped");
     }
   }
 
   private start(mcp: McpSettings): void {
-    const host = mcp.bind === 'lan' ? '0.0.0.0' : '127.0.0.1'
-    const server = createServer((req, res) => void this.route(req, res, mcp.bind))
-    server.on('error', (e: NodeJS.ErrnoException) => {
-      this.http = null
-      this.active = null
+    const host = mcp.bind === "lan" ? "0.0.0.0" : "127.0.0.1";
+    const server = createServer((req, res) => void this.route(req, res, mcp.bind));
+    server.on("error", (e: NodeJS.ErrnoException) => {
+      this.http = null;
+      this.active = null;
       const reason =
-        e.code === 'EADDRINUSE' ? `port ${mcp.port} is already in use` : (e.message ?? 'failed to start')
-      this.dm.setMcpStatus({ running: false, url: null, error: reason }, `error: ${reason}`, 'error')
-    })
+        e.code === "EADDRINUSE"
+          ? `port ${mcp.port} is already in use`
+          : (e.message ?? "failed to start");
+      this.dm.setMcpStatus(
+        { running: false, url: null, error: reason },
+        `error: ${reason}`,
+        "error",
+      );
+    });
     server.listen(mcp.port, host, () => {
-      const shown = mcp.bind === 'lan' ? (lanAddress() ?? '0.0.0.0') : '127.0.0.1'
-      const url = `http://${shown}:${mcp.port}/mcp`
-      this.dm.setMcpStatus({ running: true, url, error: null }, `listening on ${url} (${mcp.bind})`)
-    })
-    this.http = server
-    this.active = { bind: mcp.bind, port: mcp.port }
+      const shown = mcp.bind === "lan" ? (lanAddress() ?? "0.0.0.0") : "127.0.0.1";
+      const url = `http://${shown}:${mcp.port}/mcp`;
+      this.dm.setMcpStatus(
+        { running: true, url, error: null },
+        `listening on ${url} (${mcp.bind})`,
+      );
+    });
+    this.http = server;
+    this.active = { bind: mcp.bind, port: mcp.port };
   }
 
-  private async route(req: IncomingMessage, res: ServerResponse, bind: McpSettings['bind']): Promise<void> {
-    const url = new URL(req.url ?? '/', 'http://internal')
-    if (url.pathname !== '/mcp') {
-      res.writeHead(404).end()
-      return
+  private async route(
+    req: IncomingMessage,
+    res: ServerResponse,
+    bind: McpSettings["bind"],
+  ): Promise<void> {
+    const url = new URL(req.url ?? "/", "http://internal");
+    if (url.pathname !== "/mcp") {
+      res.writeHead(404).end();
+      return;
     }
     // DNS-rebinding guard for the localhost bind: a malicious web page can make
     // a browser POST to 127.0.0.1, but it can't forge the Host header.
-    if (bind === 'localhost') {
-      const host = (req.headers.host ?? '').split(':')[0]
-      if (host !== '127.0.0.1' && host !== 'localhost') {
-        res.writeHead(403, { 'content-type': 'application/json' })
-        res.end(JSON.stringify({ error: 'forbidden host' }))
-        return
+    if (bind === "localhost") {
+      const host = (req.headers.host ?? "").split(":")[0];
+      if (host !== "127.0.0.1" && host !== "localhost") {
+        res.writeHead(403, { "content-type": "application/json" });
+        res.end(JSON.stringify({ error: "forbidden host" }));
+        return;
       }
     }
-    if (req.method !== 'POST') {
+    if (req.method !== "POST") {
       // Stateless mode: no SSE stream to resume, no session to delete.
-      res.writeHead(405, { 'content-type': 'application/json' })
+      res.writeHead(405, { "content-type": "application/json" });
       res.end(
         JSON.stringify({
-          jsonrpc: '2.0',
-          error: { code: -32000, message: 'Method not allowed — POST JSON-RPC to this endpoint.' },
-          id: null
-        })
-      )
-      return
+          jsonrpc: "2.0",
+          error: { code: -32000, message: "Method not allowed — POST JSON-RPC to this endpoint." },
+          id: null,
+        }),
+      );
+      return;
     }
 
     try {
-      const chunks: Buffer[] = []
-      for await (const chunk of req) chunks.push(chunk as Buffer)
-      const body: unknown = JSON.parse(Buffer.concat(chunks).toString('utf-8'))
+      const chunks: Buffer[] = [];
+      for await (const chunk of req) chunks.push(chunk as Buffer);
+      const body: unknown = JSON.parse(Buffer.concat(chunks).toString("utf-8"));
 
-      const mcpServer = this.buildServer()
+      const mcpServer = this.buildServer();
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: undefined, // stateless
-        enableJsonResponse: true
-      })
-      res.on('close', () => {
-        void transport.close()
-        void mcpServer.close()
-      })
-      await mcpServer.connect(transport)
-      await transport.handleRequest(req, res, body)
+        enableJsonResponse: true,
+      });
+      res.on("close", () => {
+        void transport.close();
+        void mcpServer.close();
+      });
+      await mcpServer.connect(transport);
+      await transport.handleRequest(req, res, body);
     } catch (e) {
-      this.dm.setMcpStatus(null, `request failed: ${(e as Error).message}`, 'warn')
+      this.dm.setMcpStatus(null, `request failed: ${(e as Error).message}`, "warn");
       if (!res.headersSent) {
-        res.writeHead(500, { 'content-type': 'application/json' })
+        res.writeHead(500, { "content-type": "application/json" });
         res.end(
           JSON.stringify({
-            jsonrpc: '2.0',
-            error: { code: -32603, message: 'Internal server error' },
-            id: null
-          })
-        )
+            jsonrpc: "2.0",
+            error: { code: -32603, message: "Internal server error" },
+            id: null,
+          }),
+        );
       }
     }
   }
 
   /** A fresh server per request, registering only the currently-enabled tools. */
   private buildServer(): McpServer {
-    const server = new McpServer({ name: 'tastytunes', version: app.getVersion() })
-    const impls = this.toolImpls()
-    const mcp = getSettings().mcp
-    const { disabledTools } = mcp
+    const server = new McpServer({ name: "tastytunes", version: app.getVersion() });
+    const impls = this.toolImpls();
+    const mcp = getSettings().mcp;
+    const { disabledTools } = mcp;
 
     for (const cluster of MCP_CLUSTERS) {
       // Opt-in (write-capable) clusters require an explicit enable in Settings.
-      if (!mcpClusterEnabled(cluster, mcp)) continue
+      if (!mcpClusterEnabled(cluster, mcp)) continue;
       for (const tool of cluster.tools) {
-        if (disabledTools.includes(tool.name)) continue
-        const impl = impls[tool.name]
-        if (!impl) continue
+        if (disabledTools.includes(tool.name)) continue;
+        const impl = impls[tool.name];
+        if (!impl) continue;
         server.registerTool(
           tool.name,
           {
             title: tool.title,
             description: tool.description,
             inputSchema: impl.inputSchema,
-            annotations: { readOnlyHint: cluster.readOnly === true, openWorldHint: false }
+            annotations: { readOnlyHint: cluster.readOnly === true, openWorldHint: false },
           },
           (async (args: Record<string, unknown>) => {
             try {
-              return await impl.handler(args ?? {})
+              return await impl.handler(args ?? {});
             } catch (e) {
-              return err((e as Error).message)
+              return err((e as Error).message);
             }
-          }) as never
-        )
+          }) as never,
+        );
       }
     }
-    return server
+    return server;
   }
 
   // --------------------------------------------------------------- tool handlers
 
   /** Snapshot when connected, or a throw that becomes a clean tool error. */
-  private connected(): Snapshot & { connection: Extract<ConnectionState, { phase: 'connected' }> } {
-    const snap = this.dm.snapshot()
-    if (snap.connection.phase !== 'connected') {
+  private connected(): Snapshot & { connection: Extract<ConnectionState, { phase: "connected" }> } {
+    const snap = this.dm.snapshot();
+    if (snap.connection.phase !== "connected") {
       throw new Error(
-        'Not connected to a streamer. Use list_devices and connect_device, or open TastyTunes to connect.'
-      )
+        "Not connected to a streamer. Use list_devices and connect_device, or open TastyTunes to connect.",
+      );
     }
-    return snap as Snapshot & { connection: Extract<ConnectionState, { phase: 'connected' }> }
+    return snap as Snapshot & { connection: Extract<ConnectionState, { phase: "connected" }> };
   }
 
   /**
@@ -235,71 +281,75 @@ export class McpBridge {
    * streamer (the server list comes from it) — offline it just reports.
    */
   private kickIndex(): string {
-    const snap = this.dm.snapshot()
-    if (snap.connection.phase !== 'connected') {
-      return 'No library index is ready yet, and the streamer is not connected (the server list comes from it) — connect, or the user can build one in Settings → Libraries.'
+    const snap = this.dm.snapshot();
+    if (snap.connection.phase !== "connected") {
+      return "No library index is ready yet, and the streamer is not connected (the server list comes from it) — connect, or the user can build one in Settings → Libraries.";
     }
-    const host = snap.connection.host
+    const host = snap.connection.host;
     void refreshServers(host)
       .then((servers) => indexEnsureFresh(host, servers))
-      .catch(() => {})
-    return 'No library index is ready yet — a build has been started (searchable servers index themselves in seconds; a Browse-only server needs rebuild_library_index). Ask again in a moment, or check list_media_servers.'
+      .catch(() => {});
+    return "No library index is ready yet — a build has been started (searchable servers index themselves in seconds; a Browse-only server needs rebuild_library_index). Ask again in a moment, or check list_media_servers.";
   }
 
   private toolImpls(): Record<string, ToolImpl> {
-    const dm = this.dm
+    const dm = this.dm;
 
-    const lc = (x: string | null | undefined): string => (x ?? '').trim().toLowerCase()
-    const kindOf = (n: MediaNode): 'album' | 'artist' | 'track' | 'folder' =>
-      n.upnpClass.includes('musicAlbum')
-        ? 'album'
-        : n.upnpClass.includes('Artist') || n.upnpClass.includes('person')
-          ? 'artist'
-          : n.upnpClass.includes('audioItem')
-            ? 'track'
-            : 'folder'
+    const lc = (x: string | null | undefined): string => (x ?? "").trim().toLowerCase();
+    const kindOf = (n: MediaNode): "album" | "artist" | "track" | "folder" =>
+      n.upnpClass.includes("musicAlbum")
+        ? "album"
+        : n.upnpClass.includes("Artist") || n.upnpClass.includes("person")
+          ? "artist"
+          : n.upnpClass.includes("audioItem")
+            ? "track"
+            : "folder";
     const QUEUE_MODES: Record<string, MediaQueueAction> = {
-      play_now: 'PLAY_NOW',
-      play_next: 'PLAY_NEXT',
-      append: 'APPEND',
-      replace: 'REPLACE'
-    }
+      play_now: "PLAY_NOW",
+      play_next: "PLAY_NEXT",
+      append: "APPEND",
+      replace: "REPLACE",
+    };
 
     /** Tone/EQ gate: caps when the streamer has them, a clean error otherwise. */
     const toneCaps = (): { s: Snapshot; caps: NonNullable<ReturnType<typeof audioCaps>> } => {
-      const s = this.connected()
-      const caps = audioCaps(s.audioSpec)
-      if (!caps) throw new Error('This streamer has no tone/EQ controls.')
-      return { s, caps }
-    }
+      const s = this.connected();
+      const caps = audioCaps(s.audioSpec);
+      if (!caps) throw new Error("This streamer has no tone/EQ controls.");
+      return { s, caps };
+    };
 
     /** The preset-save contract: an occupied slot needs overwrite: true. */
     const guardSlot = (s: Snapshot, slot: number, overwrite: boolean): void => {
-      const existing = (s.presets?.presets ?? []).find((p) => p.id === slot)
+      const existing = (s.presets?.presets ?? []).find((p) => p.id === slot);
       if (existing && !overwrite) {
         throw new Error(
-          `Slot ${slot} already holds "${existing.name ?? 'a preset'}". Pass overwrite: true to replace it.`
-        )
+          `Slot ${slot} already holds "${existing.name ?? "a preset"}". Pass overwrite: true to replace it.`,
+        );
       }
-    }
+    };
 
     const status = (): unknown => {
-      const s = dm.snapshot()
-      if (s.connection.phase !== 'connected') {
+      const s = dm.snapshot();
+      if (s.connection.phase !== "connected") {
         return {
           connection: s.connection.phase,
-          hint: 'Not connected. Use list_devices and connect_device.'
-        }
+          hint: "Not connected. Use list_devices and connect_device.",
+        };
       }
-      const md = s.playState?.metadata
-      const activeSourceId = s.zoneState?.source ?? s.nowPlaying?.source?.id ?? null
+      const md = s.playState?.metadata;
+      const activeSourceId = s.zoneState?.source ?? s.nowPlaying?.source?.id ?? null;
       const sourceName =
         s.sources?.sources?.find((x) => x.id === activeSourceId)?.name ??
         s.nowPlaying?.source?.name ??
-        null
+        null;
       return {
-        connection: 'connected',
-        device: { name: s.systemInfo?.name ?? null, model: s.systemInfo?.model ?? null, host: s.connection.host },
+        connection: "connected",
+        device: {
+          name: s.systemInfo?.name ?? null,
+          model: s.systemInfo?.model ?? null,
+          host: s.connection.host,
+        },
         power: s.systemPower?.power ?? null,
         source: activeSourceId ? { id: activeSourceId, name: sourceName } : null,
         playback: {
@@ -322,7 +372,7 @@ export class McpBridge {
                   (f) =>
                     favoriteKey(f) ===
                     favoriteKey({
-                      kind: 'track',
+                      kind: "track",
                       addedAt: 0,
                       title: md.title!,
                       artist: md.artist ?? null,
@@ -331,8 +381,8 @@ export class McpBridge {
                       serverUdn: null,
                       serverName: null,
                       objectId: null,
-                      titlePath: null
-                    })
+                      titlePath: null,
+                    }),
                 )
               : null,
           format: md
@@ -341,45 +391,47 @@ export class McpBridge {
                 sample_rate: md.sample_rate,
                 bit_depth: md.bit_depth,
                 lossless: md.lossless,
-                bitrate: md.bitrate
+                bitrate: md.bitrate,
               }
-            : null
+            : null,
         },
         volume: {
           percent: s.zoneState?.volume_percent ?? null,
           step: s.zoneState?.volume_step ?? null,
           muted: s.zoneState?.mute ?? null,
-          limit_percent: getSettings().volumeLimitPercent
+          limit_percent: getSettings().volumeLimitPercent,
         },
         // Tone/EQ — present only on streamers whose firmware has the controls.
         audio: (() => {
-          const caps = audioCaps(s.audioSpec)
-          if (!caps) return null
-          const za = s.zoneAudio
+          const caps = audioCaps(s.audioSpec);
+          if (!caps) return null;
+          const za = s.zoneAudio;
           return {
             user_eq_enabled: za?.user_eq?.enabled ?? false,
             band_gains_db: za?.user_eq?.bands?.map((b) => b.gain) ?? null,
-            tilt: za?.tilt_eq ? { enabled: za.tilt_eq.enabled, intensity: za.tilt_eq.intensity } : null,
-            balance: za?.balance ?? null
-          }
+            tilt: za?.tilt_eq
+              ? { enabled: za.tilt_eq.enabled, intensity: za.tilt_eq.intensity }
+              : null,
+            balance: za?.balance ?? null,
+          };
         })(),
         display: s.systemDisplay ? { brightness: s.systemDisplay.brightness } : null,
         sleep_timer: s.sleep
           ? {
               action: s.sleep.action,
               fires_at: s.sleep.firesAt,
-              end_of_track: s.sleep.minutes == null
+              end_of_track: s.sleep.minutes == null,
             }
-          : null
-      }
-    }
+          : null,
+      };
+    };
 
     return {
       // ---- status & lists
       get_status: { handler: () => ok(status()) },
       list_queue: {
         handler: () => {
-          const s = this.connected()
+          const s = this.connected();
           return ok({
             current_id: s.queue?.play_id ?? null,
             total: s.queue?.total ?? 0,
@@ -389,239 +441,271 @@ export class McpBridge {
               title: i.metadata?.title ?? i.metadata?.name ?? null,
               artist: i.metadata?.artist ?? null,
               album: i.metadata?.album ?? null,
-              duration_seconds: i.metadata?.duration ?? null
-            }))
-          })
-        }
+              duration_seconds: i.metadata?.duration ?? null,
+            })),
+          });
+        },
       },
       list_presets: {
         handler: () => {
-          const s = this.connected()
+          const s = this.connected();
           return ok(
             (s.presets?.presets ?? []).map((p) => ({
               id: p.id,
               name: p.name,
               kind: p.class,
-              is_playing: p.is_playing === true
-            }))
-          )
-        }
+              is_playing: p.is_playing === true,
+            })),
+          );
+        },
       },
       list_sources: {
         handler: () => {
-          const s = this.connected()
-          const active = s.zoneState?.source ?? s.nowPlaying?.source?.id ?? null
+          const s = this.connected();
+          const active = s.zoneState?.source ?? s.nowPlaying?.source?.id ?? null;
           return ok(
             (s.sources?.sources ?? [])
               .filter((x) => x.ui_selectable)
-              .map((x) => ({ id: x.id, name: x.name, kind: x.class, active: x.id === active }))
-          )
-        }
+              .map((x) => ({ id: x.id, name: x.name, kind: x.class, active: x.id === active })),
+          );
+        },
       },
       list_devices: {
         handler: () => {
-          const s = dm.snapshot()
-          const current = s.connection.phase === 'connected' ? s.connection.host : null
+          const s = dm.snapshot();
+          const current = s.connection.phase === "connected" ? s.connection.host : null;
           return ok(
             s.devices.map((d) => ({
               host: d.host,
               name: d.friendlyName,
               model: d.model,
-              connected: d.host === current
-            }))
-          )
-        }
+              connected: d.host === current,
+            })),
+          );
+        },
       },
       list_recently_played: {
-        inputSchema: { limit: z.number().int().min(1).max(200).optional().describe('Max entries (default 25).') },
+        inputSchema: {
+          limit: z.number().int().min(1).max(200).optional().describe("Max entries (default 25)."),
+        },
         handler: (a) => {
-          const limit = typeof a.limit === 'number' ? a.limit : 25
+          const limit = typeof a.limit === "number" ? a.limit : 25;
           return ok(
-            dm.snapshot().recents.slice(0, limit).map((r) => ({
-              at: new Date(r.at).toISOString(),
-              title: r.title,
-              artist: r.artist,
-              album: r.album,
-              station: r.station,
-              source: r.source
-            }))
-          )
-        }
+            dm
+              .snapshot()
+              .recents.slice(0, limit)
+              .map((r) => ({
+                at: new Date(r.at).toISOString(),
+                title: r.title,
+                artist: r.artist,
+                album: r.album,
+                station: r.station,
+                source: r.source,
+              })),
+          );
+        },
       },
       list_schedules: {
         handler: () =>
           ok({
-            note: 'Schedules fire only while TastyTunes is running and connected.',
-            schedules: getSettings().schedules.map(scheduleOut)
-          })
+            note: "Schedules fire only while TastyTunes is running and connected.",
+            schedules: getSettings().schedules.map(scheduleOut),
+          }),
       },
 
       // ---- transport
       play: {
         handler: async () => {
-          this.connected()
-          await dm.command({ type: 'play' })
-          return ok('Playing.')
-        }
+          this.connected();
+          await dm.command({ type: "play" });
+          return ok("Playing.");
+        },
       },
       pause: {
         handler: async () => {
-          this.connected()
-          await dm.command({ type: 'pause' })
-          return ok('Paused.')
-        }
+          this.connected();
+          await dm.command({ type: "pause" });
+          return ok("Paused.");
+        },
       },
       stop: {
         handler: async () => {
-          this.connected()
-          await dm.command({ type: 'stop' })
-          return ok('Stopped.')
-        }
+          this.connected();
+          await dm.command({ type: "stop" });
+          return ok("Stopped.");
+        },
       },
       next_track: {
         handler: async () => {
-          this.connected()
-          await dm.command({ type: 'nextTrack' })
-          return ok('Skipped to the next track.')
-        }
+          this.connected();
+          await dm.command({ type: "nextTrack" });
+          return ok("Skipped to the next track.");
+        },
       },
       previous_track: {
         handler: async () => {
-          this.connected()
-          await dm.command({ type: 'previousTrack' })
-          return ok('Went back to the previous track.')
-        }
+          this.connected();
+          await dm.command({ type: "previousTrack" });
+          return ok("Went back to the previous track.");
+        },
       },
       seek: {
-        inputSchema: { position_seconds: z.number().min(0).describe('Position in the current track, in seconds.') },
+        inputSchema: {
+          position_seconds: z
+            .number()
+            .min(0)
+            .describe("Position in the current track, in seconds."),
+        },
         handler: async (a) => {
-          this.connected()
-          await dm.command({ type: 'seek', positionSecs: a.position_seconds as number })
-          return ok(`Seeked to ${a.position_seconds}s.`)
-        }
+          this.connected();
+          await dm.command({ type: "seek", positionSecs: a.position_seconds as number });
+          return ok(`Seeked to ${a.position_seconds}s.`);
+        },
       },
       play_queue_item: {
-        inputSchema: { id: z.number().int().describe('Queue item id from list_queue.') },
+        inputSchema: { id: z.number().int().describe("Queue item id from list_queue.") },
         handler: async (a) => {
-          this.connected()
-          await dm.command({ type: 'playQueueId', queueId: a.id as number })
-          return ok(`Playing queue item ${a.id}.`)
-        }
+          this.connected();
+          await dm.command({ type: "playQueueId", queueId: a.id as number });
+          return ok(`Playing queue item ${a.id}.`);
+        },
       },
       set_shuffle: {
         inputSchema: { on: z.boolean() },
         handler: async (a) => {
-          this.connected()
-          await dm.command({ type: 'setShuffle', mode: a.on ? 'all' : 'off' })
-          return ok(`Shuffle ${a.on ? 'on' : 'off'}.`)
-        }
+          this.connected();
+          await dm.command({ type: "setShuffle", mode: a.on ? "all" : "off" });
+          return ok(`Shuffle ${a.on ? "on" : "off"}.`);
+        },
       },
       set_repeat: {
         inputSchema: { on: z.boolean() },
         handler: async (a) => {
-          this.connected()
-          await dm.command({ type: 'setRepeat', mode: a.on ? 'all' : 'off' })
-          return ok(`Repeat ${a.on ? 'on' : 'off'}.`)
-        }
+          this.connected();
+          await dm.command({ type: "setRepeat", mode: a.on ? "all" : "off" });
+          return ok(`Repeat ${a.on ? "on" : "off"}.`);
+        },
       },
 
       // ---- volume
       set_volume: {
-        inputSchema: { percent: z.number().min(0).max(100).describe('Absolute volume percent.') },
+        inputSchema: { percent: z.number().min(0).max(100).describe("Absolute volume percent.") },
         handler: async (a) => {
-          this.connected()
-          await dm.command({ type: 'setVolumePercent', percent: a.percent as number })
-          const limit = getSettings().volumeLimitPercent
-          const capped = limit != null && (a.percent as number) > limit
-          return ok(capped ? `Volume set to ${limit}% (the app's volume limit).` : `Volume set to ${a.percent}%.`)
-        }
+          this.connected();
+          await dm.command({ type: "setVolumePercent", percent: a.percent as number });
+          const limit = getSettings().volumeLimitPercent;
+          const capped = limit != null && (a.percent as number) > limit;
+          return ok(
+            capped
+              ? `Volume set to ${limit}% (the app's volume limit).`
+              : `Volume set to ${a.percent}%.`,
+          );
+        },
       },
       change_volume: {
-        inputSchema: { steps: z.number().int().min(-20).max(20).describe('Steps up (positive) or down (negative).') },
+        inputSchema: {
+          steps: z
+            .number()
+            .int()
+            .min(-20)
+            .max(20)
+            .describe("Steps up (positive) or down (negative)."),
+        },
         handler: async (a) => {
-          this.connected()
-          await dm.command({ type: 'volumeStepChange', delta: a.steps as number })
-          return ok(`Volume nudged by ${a.steps} step(s).`)
-        }
+          this.connected();
+          await dm.command({ type: "volumeStepChange", delta: a.steps as number });
+          return ok(`Volume nudged by ${a.steps} step(s).`);
+        },
       },
       set_mute: {
         inputSchema: { muted: z.boolean() },
         handler: async (a) => {
-          this.connected()
-          await dm.command({ type: 'setMute', mute: a.muted as boolean })
-          return ok(a.muted ? 'Muted.' : 'Unmuted.')
-        }
+          this.connected();
+          await dm.command({ type: "setMute", mute: a.muted as boolean });
+          return ok(a.muted ? "Muted." : "Unmuted.");
+        },
       },
 
       // ---- presets / sources / power / devices
       recall_preset: {
-        inputSchema: { id: z.number().int().min(1).describe('Preset id from list_presets.') },
+        inputSchema: { id: z.number().int().min(1).describe("Preset id from list_presets.") },
         handler: async (a) => {
-          const s = this.connected()
-          const preset = (s.presets?.presets ?? []).find((p) => p.id === a.id)
-          if (!preset) return err(`No preset ${a.id}. Use list_presets.`)
-          await dm.command({ type: 'recallPreset', presetId: a.id as number })
-          return ok(`Recalled preset ${a.id}${preset.name ? ` (${preset.name})` : ''}.`)
-        }
+          const s = this.connected();
+          const preset = (s.presets?.presets ?? []).find((p) => p.id === a.id);
+          if (!preset) return err(`No preset ${a.id}. Use list_presets.`);
+          await dm.command({ type: "recallPreset", presetId: a.id as number });
+          return ok(`Recalled preset ${a.id}${preset.name ? ` (${preset.name})` : ""}.`);
+        },
       },
       set_source: {
-        inputSchema: { id: z.string().describe('Source id from list_sources, e.g. MEDIA_PLAYER or IR.') },
+        inputSchema: {
+          id: z.string().describe("Source id from list_sources, e.g. MEDIA_PLAYER or IR."),
+        },
         handler: async (a) => {
-          const s = this.connected()
-          const src = (s.sources?.sources ?? []).find((x) => x.id === a.id)
-          if (!src) return err(`Unknown source '${a.id}'. Use list_sources.`)
-          await dm.command({ type: 'setSource', sourceId: a.id as string })
-          return ok(`Switched to ${src.name}.`)
-        }
+          const s = this.connected();
+          const src = (s.sources?.sources ?? []).find((x) => x.id === a.id);
+          if (!src) return err(`Unknown source '${a.id}'. Use list_sources.`);
+          await dm.command({ type: "setSource", sourceId: a.id as string });
+          return ok(`Switched to ${src.name}.`);
+        },
       },
       set_power: {
-        inputSchema: { state: z.enum(['on', 'standby']) },
+        inputSchema: { state: z.enum(["on", "standby"]) },
         handler: async (a) => {
-          this.connected()
-          await dm.command({ type: 'power', power: a.state === 'on' ? 'ON' : 'NETWORK' })
-          return ok(a.state === 'on' ? 'Powering on.' : 'Going to network standby.')
-        }
+          this.connected();
+          await dm.command({ type: "power", power: a.state === "on" ? "ON" : "NETWORK" });
+          return ok(a.state === "on" ? "Powering on." : "Going to network standby.");
+        },
       },
       connect_device: {
-        inputSchema: { host: z.string().describe('Host or IP from list_devices.') },
+        inputSchema: { host: z.string().describe("Host or IP from list_devices.") },
         handler: (a) => {
-          dm.connect(a.host as string)
-          return ok(`Connecting to ${a.host}. Call get_status to confirm.`)
-        }
+          dm.connect(a.host as string);
+          return ok(`Connecting to ${a.host}. Call get_status to confirm.`);
+        },
       },
 
       // ---- sleep timer
       set_sleep_timer: {
         inputSchema: {
-          minutes: z.number().min(1).max(720).optional().describe('Minutes from now. Omit when using end_of_track.'),
-          end_of_track: z.boolean().optional().describe('Fire when the current track ends.'),
-          action: z.enum(['pause', 'standby']).optional().describe("Defaults to the user's configured action.")
+          minutes: z
+            .number()
+            .min(1)
+            .max(720)
+            .optional()
+            .describe("Minutes from now. Omit when using end_of_track."),
+          end_of_track: z.boolean().optional().describe("Fire when the current track ends."),
+          action: z
+            .enum(["pause", "standby"])
+            .optional()
+            .describe("Defaults to the user's configured action."),
         },
         handler: (a) => {
-          const s = this.connected()
-          const stored = getSettings().sleepAction
-          const action = (a.action ?? (stored === 'pause' ? 'pause' : 'standby')) as 'pause' | 'standby'
+          const s = this.connected();
+          const stored = getSettings().sleepAction;
+          const action = (a.action ?? (stored === "pause" ? "pause" : "standby")) as
+            "pause" | "standby";
           if (a.end_of_track) {
-            const key = sleepTrackKey(s.playState)
-            if (key == null) return err('Nothing identifiable is playing — use minutes instead.')
-            dm.setSleep({ action, minutes: null, firesAt: null, trackKey: key })
-            return ok(`Sleep timer armed: ${action} at the end of the current track.`)
+            const key = sleepTrackKey(s.playState);
+            if (key == null) return err("Nothing identifiable is playing — use minutes instead.");
+            dm.setSleep({ action, minutes: null, firesAt: null, trackKey: key });
+            return ok(`Sleep timer armed: ${action} at the end of the current track.`);
           }
-          if (typeof a.minutes !== 'number') return err('Provide minutes, or end_of_track: true.')
+          if (typeof a.minutes !== "number") return err("Provide minutes, or end_of_track: true.");
           dm.setSleep({
             action,
             minutes: a.minutes,
             firesAt: Date.now() + a.minutes * 60_000,
-            trackKey: null
-          })
-          return ok(`Sleep timer armed: ${action} in ${a.minutes} minute(s).`)
-        }
+            trackKey: null,
+          });
+          return ok(`Sleep timer armed: ${action} in ${a.minutes} minute(s).`);
+        },
       },
       cancel_sleep_timer: {
         handler: () => {
-          dm.setSleep(null)
-          return ok('Sleep timer cleared.')
-        }
+          dm.setSleep(null);
+          return ok("Sleep timer cleared.");
+        },
       },
 
       // ---- library
@@ -629,60 +713,68 @@ export class McpBridge {
         inputSchema: {
           server_udn: z
             .string()
-            .describe('Which server to index (see list_media_servers for udn + index state).')
+            .describe("Which server to index (see list_media_servers for udn + index state)."),
         },
         handler: async (a) => {
-          const s = this.connected()
-          const servers = await refreshServers(s.connection.host)
-          const server = servers.find((x) => x.udn === (a.server_udn as string))
-          if (!server) return err(`No media server with udn ${a.server_udn as string}.`)
+          const s = this.connected();
+          const servers = await refreshServers(s.connection.host);
+          const server = servers.find((x) => x.udn === (a.server_udn as string));
+          if (!server) return err(`No media server with udn ${a.server_udn as string}.`);
           // Browse-only servers (a streamer's USB drive) never index
           // themselves — this is the ONLY way to make them searchable, which
           // is why an agent needs it: list_media_servers can already SEE that
           // an index is missing, and could do nothing about it.
-          await indexRebuild(s.connection.host, server)
+          await indexRebuild(s.connection.host, server);
           // build() is a NO-OP while a build is already in flight — listing
           // servers nudges Tier A builds, so awaiting rebuild can return
           // mid-crawl. Wait for it to settle, and if it is still going, SAY so
           // instead of reporting zeros as though they were the answer.
-          const statusOf = (): { state: string; albums: number; artists: number; tracks: number } | undefined => {
-            const x = indexStatus().find((y) => y.udn === (a.server_udn as string))
-            return x ? { state: x.state, albums: x.albums ?? 0, artists: x.artists ?? 0, tracks: x.tracks ?? 0 } : undefined
+          const statusOf = ():
+            { state: string; albums: number; artists: number; tracks: number } | undefined => {
+            const x = indexStatus().find((y) => y.udn === (a.server_udn as string));
+            return x
+              ? {
+                  state: x.state,
+                  albums: x.albums ?? 0,
+                  artists: x.artists ?? 0,
+                  tracks: x.tracks ?? 0,
+                }
+              : undefined;
+          };
+          const deadline = Date.now() + 45_000;
+          let st = statusOf();
+          while (st?.state === "building" && Date.now() < deadline) {
+            await new Promise((r) => setTimeout(r, 400));
+            st = statusOf();
           }
-          const deadline = Date.now() + 45_000
-          let st = statusOf()
-          while (st?.state === 'building' && Date.now() < deadline) {
-            await new Promise((r) => setTimeout(r, 400))
-            st = statusOf()
-          }
-          if (st?.state === 'building')
+          if (st?.state === "building")
             return ok({
               server: server.name,
-              state: 'building',
-              note: 'Still indexing — call list_media_servers in a little while for the counts.'
-            })
+              state: "building",
+              note: "Still indexing — call list_media_servers in a little while for the counts.",
+            });
           return ok({
             server: server.name,
-            state: st?.state ?? 'unknown',
+            state: st?.state ?? "unknown",
             albums: st?.albums ?? 0,
             artists: st?.artists ?? 0,
-            tracks: st?.tracks ?? 0
-          })
-        }
+            tracks: st?.tracks ?? 0,
+          });
+        },
       },
       list_media_servers: {
         handler: async () => {
-          const s = this.connected()
-          const servers = await refreshServers(s.connection.host)
+          const s = this.connected();
+          const servers = await refreshServers(s.connection.host);
           // same freshness semantics as the app's Library screen: listing
           // servers nudges Tier A index builds in the background (gated on
           // the user's auto-index setting inside ensureFresh)
-          indexEnsureFresh(s.connection.host, servers)
-          const stats = new Map(indexStatus().map((x) => [x.udn, x]))
+          indexEnsureFresh(s.connection.host, servers);
+          const stats = new Map(indexStatus().map((x) => [x.udn, x]));
           return ok(
             servers.map((x) => {
-              const st = stats.get(x.udn)
-              const ready = st?.state === 'ready'
+              const st = stats.get(x.udn);
+              const ready = st?.state === "ready";
               return {
                 udn: x.udn,
                 name: x.name,
@@ -690,7 +782,7 @@ export class McpBridge {
                 is_streamer_usb: x.isStreamer,
                 searchable: x.searchable,
                 index_ready: ready,
-                ...(st?.state === 'failed' ? { index_failed: st.failure ?? 'no index' } : {}),
+                ...(st?.state === "failed" ? { index_failed: st.failure ?? "no index" } : {}),
                 // library counts, so "how many albums do I have" is one call
                 ...(ready && st
                   ? {
@@ -702,55 +794,63 @@ export class McpBridge {
                         // how the index was built and every reconciliation that changed something —
                         // the SHAPE of the server's answers, so an agent can explain what it sees
                         ...(st.profile
-                          ? { built_by: st.profile.strategy, albums_from: st.profile.albumsFrom, class_search: st.profile.classSearch, notes: st.profile.notes.map(describeProfileNote) }
-                          : {})
-                      }
+                          ? {
+                              built_by: st.profile.strategy,
+                              albums_from: st.profile.albumsFrom,
+                              class_search: st.profile.classSearch,
+                              notes: st.profile.notes.map(describeProfileNote),
+                            }
+                          : {}),
+                      },
                     }
-                  : {})
-              }
-            })
-          )
-        }
+                  : {}),
+              };
+            }),
+          );
+        },
       },
       search_library: {
         inputSchema: {
-          query: z.string().min(1).describe('Album, artist, or track name (partial matches ok).'),
+          query: z.string().min(1).describe("Album, artist, or track name (partial matches ok)."),
           server_udn: z
             .string()
             .optional()
-            .describe('Limit to one server (see list_media_servers); omit to search every eligible server.'),
-          kind: z.enum(['album', 'artist', 'track']).optional().describe('Only return this kind.'),
+            .describe(
+              "Limit to one server (see list_media_servers); omit to search every eligible server.",
+            ),
+          kind: z.enum(["album", "artist", "track"]).optional().describe("Only return this kind."),
           match: z
-            .enum(['any', 'title'])
+            .enum(["any", "title"])
             .optional()
             .describe(
-              "'title' = only items whose OWN title contains the query (e.g. songs with 'love' in the track title). Default 'any' — title, artist, or album."
+              "'title' = only items whose OWN title contains the query (e.g. songs with 'love' in the track title). Default 'any' — title, artist, or album.",
             ),
-          limit: z.number().int().min(1).max(200).optional().describe('Default 40.'),
-          offset: z.number().int().min(0).optional().describe('For paging; default 0.')
+          limit: z.number().int().min(1).max(200).optional().describe("Default 40."),
+          offset: z.number().int().min(0).optional().describe("For paging; default 0."),
         },
         handler: async (a) => {
-          const s = this.connected()
+          const s = this.connected();
           const ready = new Set(
             indexStatus()
-              .filter((x) => x.state === 'ready')
-              .map((x) => x.udn)
-          )
+              .filter((x) => x.state === "ready")
+              .map((x) => x.udn),
+          );
           // Eligible = answers live Search OR has a ready local index (the
           // app's own rule) — a Browse-only USB stick with a built index
           // is searchable here too.
           let servers = (await refreshServers(s.connection.host)).filter(
-            (x) => x.searchable || ready.has(x.udn)
-          )
-          if (typeof a.server_udn === 'string') {
-            servers = servers.filter((x) => x.udn === a.server_udn)
+            (x) => x.searchable || ready.has(x.udn),
+          );
+          if (typeof a.server_udn === "string") {
+            servers = servers.filter((x) => x.udn === a.server_udn);
             if (servers.length === 0) {
               return err(
-                `No searchable or indexed media server with udn '${a.server_udn}'. Use list_media_servers.`
-              )
+                `No searchable or indexed media server with udn '${a.server_udn}'. Use list_media_servers.`,
+              );
             }
           }
-          if (servers.length === 0) return err('No searchable media servers are visible right now.')
+          if (servers.length === 0)
+            return err("No searchable media servers are visible right now.");
           // Ready indexes answer from memory (every match retrieved, true
           // totals) — the only real cost is tokens, which limit/offset
           // govern. The LAN-protection cap that matters is on live SOAP:
@@ -758,21 +858,25 @@ export class McpBridge {
           // by the ContentDirectory search's own 500-result ceiling.
           const fleet = [
             ...servers.filter((x) => ready.has(x.udn)),
-            ...servers.filter((x) => !ready.has(x.udn)).slice(0, 3)
-          ]
-          const tokens = (a.query as string).toLowerCase().split(/\s+/).filter(Boolean)
-          const collected: unknown[] = []
-          let sourceCapped = false
+            ...servers.filter((x) => !ready.has(x.udn)).slice(0, 3),
+          ];
+          const tokens = (a.query as string).toLowerCase().split(/\s+/).filter(Boolean);
+          const collected: unknown[] = [];
+          let sourceCapped = false;
           for (const server of fleet) {
-            const { items, total } = await librarySearch(s.connection.host, server.udn, a.query as string)
-            if (total > items.length) sourceCapped = true
+            const { items, total } = await librarySearch(
+              s.connection.host,
+              server.udn,
+              a.query as string,
+            );
+            if (total > items.length) sourceCapped = true;
             for (const n of items) {
-              const kind = kindOf(n)
-              if (kind === 'folder') continue
-              if (a.kind != null && kind !== a.kind) continue
-              if (a.match === 'title') {
-                const title = n.title.toLowerCase()
-                if (!tokens.every((t) => title.includes(t))) continue
+              const kind = kindOf(n);
+              if (kind === "folder") continue;
+              if (a.kind != null && kind !== a.kind) continue;
+              if (a.match === "title") {
+                const title = n.title.toLowerCase();
+                if (!tokens.every((t) => title.includes(t))) continue;
               }
               collected.push({
                 server_udn: server.udn,
@@ -788,115 +892,159 @@ export class McpBridge {
                 ...(n.albumArtist ? { album_artist: n.albumArtist } : {}),
                 ...(n.artists ? { performers: n.artists } : {}),
                 ...(n.composers ? { composers: n.composers } : {}),
-                ...(n.format ? { format: formatLabel(n.format) } : {})
-              })
+                ...(n.format ? { format: formatLabel(n.format) } : {}),
+              });
             }
           }
-          const offset = (a.offset as number | undefined) ?? 0
-          const limit = (a.limit as number | undefined) ?? 40
-          const page = collected.slice(offset, offset + limit)
+          const offset = (a.offset as number | undefined) ?? 0;
+          const limit = (a.limit as number | undefined) ?? 40;
+          const page = collected.slice(offset, offset + limit);
           return ok({
             total: collected.length,
             offset,
             returned: page.length,
             ...(sourceCapped
-              ? { note: 'A source hit its internal retrieval cap — total covers only what it returned.' }
+              ? {
+                  note: "A source hit its internal retrieval cap — total covers only what it returned.",
+                }
               : {}),
-            results: page
-          })
-        }
+            results: page,
+          });
+        },
       },
       list_albums: {
         inputSchema: {
-          artist: z.string().optional().describe('Case-insensitive substring match on the album artist.'),
-          genre: z.string().optional().describe("Case-insensitive genre, e.g. 'Rock' (results list each album's genres)."),
+          artist: z
+            .string()
+            .optional()
+            .describe("Case-insensitive substring match on the album artist."),
+          genre: z
+            .string()
+            .optional()
+            .describe("Case-insensitive genre, e.g. 'Rock' (results list each album's genres)."),
           decade: z.string().optional().describe("e.g. '1990s' (or just '1990')."),
           kind: z
-            .enum(['all', 'albums', 'compilations'])
+            .enum(["all", "albums", "compilations"])
             .optional()
-            .describe("Default 'all'. 'compilations' = various-artists albums (album artist 'Various Artists' or credited to no performer on it); 'albums' excludes them."),
-          hires: z.boolean().optional().describe(`true = only albums with any track above ${HIRES_BITS_ABOVE}-bit or ${HIRES_RATE_ABOVE / 1000} kHz.`),
-          format: z.string().optional().describe("Case-insensitive substring of the album's format headline or any track's, e.g. 'FLAC', '24/96', 'MP3'."),
-          composer: z.string().optional().describe('Case-insensitive substring match on any track\'s composers.'),
-          server_udn: z.string().optional().describe('Limit to one server (see list_media_servers).'),
+            .describe(
+              "Default 'all'. 'compilations' = various-artists albums (album artist 'Various Artists' or credited to no performer on it); 'albums' excludes them.",
+            ),
+          hires: z
+            .boolean()
+            .optional()
+            .describe(
+              `true = only albums with any track above ${HIRES_BITS_ABOVE}-bit or ${HIRES_RATE_ABOVE / 1000} kHz.`,
+            ),
+          format: z
+            .string()
+            .optional()
+            .describe(
+              "Case-insensitive substring of the album's format headline or any track's, e.g. 'FLAC', '24/96', 'MP3'.",
+            ),
+          composer: z
+            .string()
+            .optional()
+            .describe("Case-insensitive substring match on any track's composers."),
+          server_udn: z
+            .string()
+            .optional()
+            .describe("Limit to one server (see list_media_servers)."),
           sort: z
-            .enum(['title', 'artist', 'year'])
+            .enum(["title", "artist", "year"])
             .optional()
             .describe("Default 'title'; 'year' sorts newest first."),
-          limit: z.number().int().min(1).max(100).optional().describe('Default 40.'),
-          offset: z.number().int().min(0).optional().describe('For paging; default 0.')
+          limit: z.number().int().min(1).max(100).optional().describe("Default 40."),
+          offset: z.number().int().min(0).optional().describe("For paging; default 0."),
         },
         // Purely index-backed (the lenses' feedstock) — works even while the
         // streamer itself is off, so no connected() gate.
         handler: (a) => {
-          const groups = indexPools().filter((p) => a.server_udn == null || p.udn === a.server_udn)
+          const groups = indexPools().filter((p) => a.server_udn == null || p.udn === a.server_udn);
           if (groups.length === 0) {
             return err(
               a.server_udn != null
                 ? `No ready index for server '${a.server_udn}'. Use list_media_servers.`
-                : this.kickIndex()
-            )
+                : this.kickIndex(),
+            );
           }
-          const artistNeedle = (a.artist as string | undefined)?.toLowerCase()
-          const genreNeedle = (a.genre as string | undefined)?.toLowerCase()
-          const decade = a.decade != null ? String(a.decade).replace(/s$/i, '') : null
-          let albums = groups.flatMap((p) => p.albums)
+          const artistNeedle = (a.artist as string | undefined)?.toLowerCase();
+          const genreNeedle = (a.genre as string | undefined)?.toLowerCase();
+          const decade = a.decade != null ? String(a.decade).replace(/s$/i, "") : null;
+          let albums = groups.flatMap((p) => p.albums);
           if (artistNeedle != null)
-            albums = albums.filter((n) => n.artist?.toLowerCase().includes(artistNeedle))
+            albums = albums.filter((n) => n.artist?.toLowerCase().includes(artistNeedle));
           if (genreNeedle != null)
-            albums = albums.filter((n) => (n.genre ?? []).some((g) => g.toLowerCase() === genreNeedle))
+            albums = albums.filter((n) =>
+              (n.genre ?? []).some((g) => g.toLowerCase() === genreNeedle),
+            );
           if (decade != null)
             albums = albums.filter(
-              (n) => n.year != null && String(Math.floor(Number(n.year) / 10) * 10) === decade
-            )
+              (n) => n.year != null && String(Math.floor(Number(n.year) / 10) * 10) === decade,
+            );
           // Each album's tracks, summed once (the same derivations the album
           // leaf, the lens and the Info modal use — albumTracksOf/albumSummary):
           // the filters below and the per-album fields both read this map.
-          const poolOf = new Map(groups.map((p) => [p.udn, p]))
-          const summaries = new Map<string, { tracks: MediaNode[]; sum: ReturnType<typeof albumSummary> }>()
-          const summaryFor = (n: MediaNode): { tracks: MediaNode[]; sum: ReturnType<typeof albumSummary> } => {
-            const key = `${n.serverUdn}|${n.id}`
-            let hit = summaries.get(key)
+          const poolOf = new Map(groups.map((p) => [p.udn, p]));
+          const summaries = new Map<
+            string,
+            { tracks: MediaNode[]; sum: ReturnType<typeof albumSummary> }
+          >();
+          const summaryFor = (
+            n: MediaNode,
+          ): { tracks: MediaNode[]; sum: ReturnType<typeof albumSummary> } => {
+            const key = `${n.serverUdn}|${n.id}`;
+            let hit = summaries.get(key);
             if (!hit) {
-              const pool = n.serverUdn ? poolOf.get(n.serverUdn) : undefined
-              const tracks = pool ? albumTracksOf(n, pool) : []
-              hit = { tracks, sum: albumSummary(n, tracks) }
-              summaries.set(key, hit)
+              const pool = n.serverUdn ? poolOf.get(n.serverUdn) : undefined;
+              const tracks = pool ? albumTracksOf(n, pool) : [];
+              hit = { tracks, sum: albumSummary(n, tracks) };
+              summaries.set(key, hit);
             }
-            return hit
-          }
-          const kind = (a.kind as string | undefined) ?? 'all'
-          if (kind === 'compilations') albums = albums.filter((n) => summaryFor(n).sum.isCompilation)
-          else if (kind === 'albums') albums = albums.filter((n) => !summaryFor(n).sum.isCompilation)
-          if (a.hires === true) albums = albums.filter((n) => summaryFor(n).sum.hires)
-          const formatNeedle = (a.format as string | undefined)?.toLowerCase()
+            return hit;
+          };
+          const kind = (a.kind as string | undefined) ?? "all";
+          if (kind === "compilations")
+            albums = albums.filter((n) => summaryFor(n).sum.isCompilation);
+          else if (kind === "albums")
+            albums = albums.filter((n) => !summaryFor(n).sum.isCompilation);
+          if (a.hires === true) albums = albums.filter((n) => summaryFor(n).sum.hires);
+          const formatNeedle = (a.format as string | undefined)?.toLowerCase();
           if (formatNeedle != null)
             albums = albums.filter((n) => {
-              const { tracks, sum } = summaryFor(n)
+              const { tracks, sum } = summaryFor(n);
               return (
-                (sum.format ?? '').toLowerCase().includes(formatNeedle) ||
-                tracks.some((t) => (formatLabel(t.format) ?? '').toLowerCase().includes(formatNeedle))
-              )
-            })
-          const composerNeedle = (a.composer as string | undefined)?.toLowerCase()
+                (sum.format ?? "").toLowerCase().includes(formatNeedle) ||
+                tracks.some((t) =>
+                  (formatLabel(t.format) ?? "").toLowerCase().includes(formatNeedle),
+                )
+              );
+            });
+          const composerNeedle = (a.composer as string | undefined)?.toLowerCase();
           if (composerNeedle != null)
-            albums = albums.filter((n) => summaryFor(n).tracks.some((t) => (t.composers ?? []).some((c) => c.toLowerCase().includes(composerNeedle))))
-          const sort = (a.sort as string | undefined) ?? 'title'
+            albums = albums.filter((n) =>
+              summaryFor(n).tracks.some((t) =>
+                (t.composers ?? []).some((c) => c.toLowerCase().includes(composerNeedle)),
+              ),
+            );
+          const sort = (a.sort as string | undefined) ?? "title";
           albums.sort((x, y) => {
-            if (sort === 'artist')
-              return (x.artist ?? '￿').localeCompare(y.artist ?? '￿') || x.title.localeCompare(y.title)
-            if (sort === 'year') return (y.year ?? '').localeCompare(x.year ?? '') || x.title.localeCompare(y.title)
-            return x.title.localeCompare(y.title)
-          })
-          const offset = (a.offset as number | undefined) ?? 0
-          const limit = (a.limit as number | undefined) ?? 40
-          const page = albums.slice(offset, offset + limit)
+            if (sort === "artist")
+              return (
+                (x.artist ?? "￿").localeCompare(y.artist ?? "￿") || x.title.localeCompare(y.title)
+              );
+            if (sort === "year")
+              return (y.year ?? "").localeCompare(x.year ?? "") || x.title.localeCompare(y.title);
+            return x.title.localeCompare(y.title);
+          });
+          const offset = (a.offset as number | undefined) ?? 0;
+          const limit = (a.limit as number | undefined) ?? 40;
+          const page = albums.slice(offset, offset + limit);
           return ok({
             total: albums.length,
             offset,
             returned: page.length,
             albums: page.map((n) => {
-              const { sum } = summaryFor(n)
+              const { sum } = summaryFor(n);
               return {
                 server_udn: n.serverUdn,
                 server: n.serverName,
@@ -915,99 +1063,125 @@ export class McpBridge {
                 ...(sum.formatOdd > 0 ? { format_tracks_differ: sum.formatOdd } : {}),
                 hires: sum.hires,
                 ...(sum.composers.length > 0 ? { composers: sum.composers } : {}),
-                is_compilation: sum.isCompilation
-              }
-            })
-          })
-        }
+                is_compilation: sum.isCompilation,
+              };
+            }),
+          });
+        },
       },
       list_artists: {
         inputSchema: {
-          query: z.string().optional().describe('Case-insensitive substring match on the artist name.'),
-          role: z
-            .enum(['performers', 'composers'])
+          query: z
+            .string()
             .optional()
-            .describe("Default 'performers' (album artists and every performer, featured guests included). 'composers' lists who WROTE the tracks (upnp:artist role=Composer), with track and album counts."),
-          server_udn: z.string().optional().describe('Limit to one server (see list_media_servers).'),
+            .describe("Case-insensitive substring match on the artist name."),
+          role: z
+            .enum(["performers", "composers"])
+            .optional()
+            .describe(
+              "Default 'performers' (album artists and every performer, featured guests included). 'composers' lists who WROTE the tracks (upnp:artist role=Composer), with track and album counts.",
+            ),
+          server_udn: z
+            .string()
+            .optional()
+            .describe("Limit to one server (see list_media_servers)."),
           sort: z
-            .enum(['name', 'albums'])
+            .enum(["name", "albums"])
             .optional()
             .describe("Default 'name' (A–Z); 'albums' sorts by album count, most first."),
-          limit: z.number().int().min(1).max(200).optional().describe('Default 100.'),
-          offset: z.number().int().min(0).optional().describe('For paging; default 0.')
+          limit: z.number().int().min(1).max(200).optional().describe("Default 100."),
+          offset: z.number().int().min(0).optional().describe("For paging; default 0."),
         },
         // index-backed like list_albums — no connected() gate
         handler: (a) => {
-          const groups = indexPools().filter((p) => a.server_udn == null || p.udn === a.server_udn)
+          const groups = indexPools().filter((p) => a.server_udn == null || p.udn === a.server_udn);
           if (groups.length === 0) {
             return err(
               a.server_udn != null
                 ? `No ready index for server '${a.server_udn}'. Use list_media_servers.`
-                : this.kickIndex()
-            )
+                : this.kickIndex(),
+            );
           }
           // Derive from the album/track pools (like the Artists lens): albums
           // and tracks grouped by normalized artist name, first-seen casing.
-          const byName = new Map<string, { name: string; albums: number; tracks: number }>()
-          const bump = (artist: string | null, field: 'albums' | 'tracks'): void => {
-            if (!artist?.trim()) return
-            const k = artist.trim().toLowerCase()
-            const cur = byName.get(k) ?? { name: artist.trim(), albums: 0, tracks: 0 }
-            cur[field]++
-            byName.set(k, cur)
-          }
-          const role = (a.role as string | undefined) ?? 'performers'
-          if (role === 'composers') {
+          const byName = new Map<string, { name: string; albums: number; tracks: number }>();
+          const bump = (artist: string | null, field: "albums" | "tracks"): void => {
+            if (!artist?.trim()) return;
+            const k = artist.trim().toLowerCase();
+            const cur = byName.get(k) ?? { name: artist.trim(), albums: 0, tracks: 0 };
+            cur[field]++;
+            byName.set(k, cur);
+          };
+          const role = (a.role as string | undefined) ?? "performers";
+          if (role === "composers") {
             // composers: tracks they wrote, and the distinct albums those sit on
-            const albumsOf = new Map<string, Set<string>>()
+            const albumsOf = new Map<string, Set<string>>();
             for (const p of groups)
               for (const t of p.tracks)
                 for (const cname of t.composers ?? []) {
-                  bump(cname, 'tracks')
-                  const k = cname.trim().toLowerCase()
-                  const set = albumsOf.get(k) ?? new Set<string>()
-                  if (t.album) set.add(`${p.udn}|${t.album.toLowerCase()}`)
-                  albumsOf.set(k, set)
+                  bump(cname, "tracks");
+                  const k = cname.trim().toLowerCase();
+                  const set = albumsOf.get(k) ?? new Set<string>();
+                  if (t.album) set.add(`${p.udn}|${t.album.toLowerCase()}`);
+                  albumsOf.set(k, set);
                 }
-            for (const [k, cur] of byName) cur.albums = albumsOf.get(k)?.size ?? 0
+            for (const [k, cur] of byName) cur.albums = albumsOf.get(k)?.size ?? 0;
           } else {
             for (const p of groups) {
-              for (const alb of p.albums) bump(alb.artist, 'albums')
+              for (const alb of p.albums) bump(alb.artist, "albums");
               // every PERFORMER, not the packed "A; B" string (featured tracks)
-              for (const t of p.tracks) for (const name of trackArtists(t)) bump(name, 'tracks')
+              for (const t of p.tracks) for (const name of trackArtists(t)) bump(name, "tracks");
             }
           }
-          const needle = (a.query as string | undefined)?.toLowerCase()
-          let artists = [...byName.values()]
-          if (needle != null) artists = artists.filter((x) => x.name.toLowerCase().includes(needle))
-          const sort = (a.sort as string | undefined) ?? 'name'
+          const needle = (a.query as string | undefined)?.toLowerCase();
+          let artists = [...byName.values()];
+          if (needle != null)
+            artists = artists.filter((x) => x.name.toLowerCase().includes(needle));
+          const sort = (a.sort as string | undefined) ?? "name";
           artists.sort((x, y) =>
-            sort === 'albums'
+            sort === "albums"
               ? y.albums - x.albums || x.name.localeCompare(y.name)
-              : x.name.localeCompare(y.name)
-          )
-          const offset = (a.offset as number | undefined) ?? 0
-          const limit = (a.limit as number | undefined) ?? 100
-          const page = artists.slice(offset, offset + limit)
-          return ok({ total: artists.length, offset, returned: page.length, artists: page })
-        }
+              : x.name.localeCompare(y.name),
+          );
+          const offset = (a.offset as number | undefined) ?? 0;
+          const limit = (a.limit as number | undefined) ?? 100;
+          const page = artists.slice(offset, offset + limit);
+          return ok({ total: artists.length, offset, returned: page.length, artists: page });
+        },
       },
       get_media_info: {
         inputSchema: {
-          server_udn: z.string().describe('From search_library / list_albums / list_media_servers.'),
-          object_id: z.string().describe('The album, track or artist object id.')
+          server_udn: z
+            .string()
+            .describe("From search_library / list_albums / list_media_servers."),
+          object_id: z.string().describe("The album, track or artist object id."),
         },
         // Everything the local index knows about one thing — the app's Info
         // modal as a tool. Index-backed (no connected() gate); an object the
         // index doesn't hold (a Browse-only server before its build, a plain
         // folder) says so rather than guessing.
         handler: (a) => {
-          const pool = indexPools().find((p) => p.udn === a.server_udn)
-          if (!pool) return err(indexPools().length === 0 ? this.kickIndex() : `No ready index for server '${a.server_udn}'. Use list_media_servers.`)
-          const id = a.object_id as string
-          const node = pool.tracks.find((n) => n.id === id) ?? pool.albums.find((n) => n.id === id) ?? pool.artists.find((n) => n.id === id)
-          if (!node) return err(`Object '${id}' is not in the index for '${pool.serverName}' — search_library or list_albums give indexed ids.`)
-          const kind = pool.tracks.includes(node) ? 'track' : pool.albums.includes(node) ? 'album' : 'artist'
+          const pool = indexPools().find((p) => p.udn === a.server_udn);
+          if (!pool)
+            return err(
+              indexPools().length === 0
+                ? this.kickIndex()
+                : `No ready index for server '${a.server_udn}'. Use list_media_servers.`,
+            );
+          const id = a.object_id as string;
+          const node =
+            pool.tracks.find((n) => n.id === id) ??
+            pool.albums.find((n) => n.id === id) ??
+            pool.artists.find((n) => n.id === id);
+          if (!node)
+            return err(
+              `Object '${id}' is not in the index for '${pool.serverName}' — search_library or list_albums give indexed ids.`,
+            );
+          const kind = pool.tracks.includes(node)
+            ? "track"
+            : pool.albums.includes(node)
+              ? "album"
+              : "artist";
           const base = {
             kind,
             server_udn: pool.udn,
@@ -1019,10 +1193,10 @@ export class McpBridge {
             ...(node.artist ? { artist: node.artist } : {}),
             ...(node.year ? { year: node.year } : {}),
             genres: node.genre ?? [],
-            art_url: node.artUrl
-          }
-          if (kind === 'track') {
-            const f = node.format
+            art_url: node.artUrl,
+          };
+          if (kind === "track") {
+            const f = node.format;
             return ok({
               ...base,
               performers: trackArtists(node),
@@ -1041,14 +1215,14 @@ export class McpBridge {
                     ...(f.rate ? { sample_rate_hz: f.rate } : {}),
                     ...(f.kbps ? { bitrate_kbps: f.kbps } : {}),
                     ...(f.channels ? { channels: f.channels } : {}),
-                    ...(f.sizeBytes ? { size_bytes: f.sizeBytes } : {})
+                    ...(f.sizeBytes ? { size_bytes: f.sizeBytes } : {}),
                   }
-                : {})
-            })
+                : {}),
+            });
           }
-          if (kind === 'album') {
-            const tracks = albumTracksOf(node, pool)
-            const sum = albumSummary(node, tracks)
+          if (kind === "album") {
+            const tracks = albumTracksOf(node, pool);
+            const sum = albumSummary(node, tracks);
             return ok({
               ...base,
               tracks: sum.tracks,
@@ -1069,63 +1243,90 @@ export class McpBridge {
                 ...(t.artists ? { performers: t.artists } : {}),
                 ...(t.composers ? { composers: t.composers } : {}),
                 duration_seconds: t.durationSecs,
-                ...(t.format ? { format: formatLabel(t.format) } : {})
-              }))
-            })
+                ...(t.format ? { format: formatLabel(t.format) } : {}),
+              })),
+            });
           }
           // artist: their library page (albums, credits) — artistSummary, the modal's source
-          const summary = artistSummary(node.title, pool)
+          const summary = artistSummary(node.title, pool);
           return ok({
             ...base,
-            albums: summary.albums.map((x) => ({ object_id: x.objectId, title: x.title, year: x.year, tracks: x.tracks, ...(x.format ? { format: x.format } : {}) })),
+            albums: summary.albums.map((x) => ({
+              object_id: x.objectId,
+              title: x.title,
+              year: x.year,
+              tracks: x.tracks,
+              ...(x.format ? { format: x.format } : {}),
+            })),
             track_count: summary.trackCount,
-            guest_on: summary.guestOn.map((g) => ({ object_id: g.objectId, title: g.title, album: g.album, album_artist: g.albumArtist })),
-            composed: summary.composed.map((x) => ({ object_id: x.objectId, title: x.title, album: x.album })),
+            guest_on: summary.guestOn.map((g) => ({
+              object_id: g.objectId,
+              title: g.title,
+              album: g.album,
+              album_artist: g.albumArtist,
+            })),
+            composed: summary.composed.map((x) => ({
+              object_id: x.objectId,
+              title: x.title,
+              album: x.album,
+            })),
             genres_across_albums: summary.genres,
-            ...(summary.years ? { active_years: summary.years } : {})
-          })
-        }
+            ...(summary.years ? { active_years: summary.years } : {}),
+          });
+        },
       },
       play_media: {
         inputSchema: {
-          server_udn: z.string().describe('From search_library / list_media_servers.'),
-          object_id: z.string().describe('From search_library.'),
+          server_udn: z.string().describe("From search_library / list_media_servers."),
+          object_id: z.string().describe("From search_library."),
           mode: z
-            .enum(['play_now', 'play_next', 'append', 'replace'])
+            .enum(["play_now", "play_next", "append", "replace"])
             .optional()
-            .describe("Default play_now (keeps the queue). 'replace' clears the queue — only when asked to.")
+            .describe(
+              "Default play_now (keeps the queue). 'replace' clears the queue — only when asked to.",
+            ),
         },
         handler: async (a) => {
-          const s = this.connected()
-          const mode = (a.mode as string | undefined) ?? 'play_now'
+          const s = this.connected();
+          const mode = (a.mode as string | undefined) ?? "play_now";
           try {
-            await this.dm.ensureAwake() // agents get wake-on-intent too
-            await queueAdd(s.connection.host, a.server_udn as string, a.object_id as string, QUEUE_MODES[mode])
+            await this.dm.ensureAwake(); // agents get wake-on-intent too
+            await queueAdd(
+              s.connection.host,
+              a.server_udn as string,
+              a.object_id as string,
+              QUEUE_MODES[mode],
+            );
           } catch (e) {
             return err(
-              `Couldn't queue that item — its object id may be stale; run search_library again. (${(e as Error).message})`
-            )
+              `Couldn't queue that item — its object id may be stale; run search_library again. (${(e as Error).message})`,
+            );
           }
           return ok(
-            mode === 'replace'
-              ? 'Playing — the previous queue was replaced.'
-              : mode === 'play_now'
-                ? 'Playing now (the queue is kept).'
-                : mode === 'play_next'
-                  ? 'Queued to play next.'
-                  : 'Added to the end of the queue.'
-          )
-        }
+            mode === "replace"
+              ? "Playing — the previous queue was replaced."
+              : mode === "play_now"
+                ? "Playing now (the queue is kept)."
+                : mode === "play_next"
+                  ? "Queued to play next."
+                  : "Added to the end of the queue.",
+          );
+        },
       },
 
       // ---- radio (keyless directory; never any listening telemetry)
       search_radio: {
         inputSchema: {
-          query: z.string().optional().describe('Station name or place. Optional when genre is given.'),
+          query: z
+            .string()
+            .optional()
+            .describe("Station name or place. Optional when genre is given."),
           genre: z
             .string()
             .optional()
-            .describe("Style tag, e.g. 'jazz' — matched against the directory's tags, most-listened first.")
+            .describe(
+              "Style tag, e.g. 'jazz' — matched against the directory's tags, most-listened first.",
+            ),
         },
         handler: async (a) => {
           // The directory gate lives at the source (radioBrowser.fetchRaw), so
@@ -1134,20 +1335,24 @@ export class McpBridge {
           // Humans get a disabled chip for this state; the agent gets told.
           if (getSettings().radioDirectory === false) {
             return err(
-              'The internet-radio directory is turned off in Settings (Behavior → Internet radio directory), so station lookups are unavailable. Favorited stations still play.'
-            )
+              "The internet-radio directory is turned off in Settings (Behavior → Internet radio directory), so station lookups are unavailable. Favorited stations still play.",
+            );
           }
-          const q = (a.query as string | undefined)?.trim()
-          const g = (a.genre as string | undefined)?.trim().toLowerCase()
-          if (!q && !g) return err('Pass query and/or genre.')
-          let stations
-          if (g && !q) stations = await radioByTags([g])
+          const q = (a.query as string | undefined)?.trim();
+          const g = (a.genre as string | undefined)?.trim().toLowerCase();
+          if (!q && !g) return err("Pass query and/or genre.");
+          let stations;
+          if (g && !q) stations = await radioByTags([g]);
           else {
-            stations = await radioSearch(q as string)
+            stations = await radioSearch(q as string);
             if (g)
               stations = stations.filter((st) =>
-                st.tags.toLowerCase().split(',').map((t) => t.trim()).includes(g)
-              )
+                st.tags
+                  .toLowerCase()
+                  .split(",")
+                  .map((t) => t.trim())
+                  .includes(g),
+              );
           }
           return ok(
             stations.slice(0, 15).map((st) => ({
@@ -1155,27 +1360,27 @@ export class McpBridge {
               url: st.url,
               country: st.country,
               codec: st.codec,
-              tags: st.tags
-            }))
-          )
-        }
+              tags: st.tags,
+            })),
+          );
+        },
       },
       play_radio: {
         inputSchema: {
-          url: z.string().url().describe('Stream URL (from search_radio or a station favorite).'),
-          name: z.string().min(1).describe('Display name for the station.')
+          url: z.string().url().describe("Stream URL (from search_radio or a station favorite)."),
+          name: z.string().min(1).describe("Display name for the station."),
         },
         handler: async (a) => {
-          this.connected()
-          await dm.command({ type: 'streamRadio', url: a.url as string, name: a.name as string })
-          return ok(`Tuning to ${a.name}.`)
-        }
+          this.connected();
+          await dm.command({ type: "streamRadio", url: a.url as string, name: a.name as string });
+          return ok(`Tuning to ${a.name}.`);
+        },
       },
 
       // ---- favorites
       list_playlists: {
         handler: () => {
-          const s = dm.snapshot()
+          const s = dm.snapshot();
           return ok(
             s.playlists.map((p) => ({
               id: p.id,
@@ -1185,16 +1390,16 @@ export class McpBridge {
               last_played: p.lastPlayedAt ?? null,
               // surfaced because a run that skipped tracks is worth knowing
               // about before you play it again
-              missing_last_time: p.lastMissing ?? []
-            }))
-          )
-        }
+              missing_last_time: p.lastMissing ?? [],
+            })),
+          );
+        },
       },
       get_playlist: {
-        inputSchema: { id: z.string().describe('Playlist id from list_playlists.') },
+        inputSchema: { id: z.string().describe("Playlist id from list_playlists.") },
         handler: (a) => {
-          const p = dm.snapshot().playlists.find((x) => x.id === a.id)
-          if (!p) return err(`No playlist '${a.id}'. Use list_playlists.`)
+          const p = dm.snapshot().playlists.find((x) => x.id === a.id);
+          if (!p) return err(`No playlist '${a.id}'. Use list_playlists.`);
           return ok({
             id: p.id,
             name: p.name,
@@ -1202,76 +1407,77 @@ export class McpBridge {
               title: i.title,
               artist: i.artist,
               album: i.album,
-              seconds: i.durationSecs ?? null
-            }))
-          })
-        }
+              seconds: i.durationSecs ?? null,
+            })),
+          });
+        },
       },
       play_playlist: {
-        inputSchema: { id: z.string().describe('Playlist id from list_playlists.') },
+        inputSchema: { id: z.string().describe("Playlist id from list_playlists.") },
         handler: async (a) => {
-          this.connected()
-          const p = dm.snapshot().playlists.find((x) => x.id === a.id)
-          if (!p) return err(`No playlist '${a.id}'. Use list_playlists.`)
-          if (p.items.length === 0) return err(`"${p.name}" is empty.`)
-          const res = await dm.playlistActivate(a.id as string)
-          const missed = res.missed.length
+          this.connected();
+          const p = dm.snapshot().playlists.find((x) => x.id === a.id);
+          if (!p) return err(`No playlist '${a.id}'. Use list_playlists.`);
+          if (p.items.length === 0) return err(`"${p.name}" is empty.`);
+          const res = await dm.playlistActivate(a.id as string);
+          const missed = res.missed.length;
           // Name a few and count the rest: a long playlist can miss dozens, and
           // twenty-two titles inline is noise an agent has to wade through.
-          const sample = res.missed.slice(0, 3).join(', ')
-          const more = res.missed.length - 3
+          const sample = res.missed.slice(0, 3).join(", ");
+          const more = res.missed.length - 3;
           return ok(
             missed > 0
-              ? `Queued ${res.added} of ${res.total} from "${p.name}". ${missed} not found on any media server (${sample}${more > 0 ? `, +${more} more` : ''}).`
-              : `Queued ${res.added} ${res.added === 1 ? 'track' : 'tracks'} from "${p.name}".`
-          )
-        }
+              ? `Queued ${res.added} of ${res.total} from "${p.name}". ${missed} not found on any media server (${sample}${more > 0 ? `, +${more} more` : ""}).`
+              : `Queued ${res.added} ${res.added === 1 ? "track" : "tracks"} from "${p.name}".`,
+          );
+        },
       },
       create_playlist: {
         inputSchema: {
-          name: z.string().describe('Name for the new playlist.'),
+          name: z.string().describe("Name for the new playlist."),
           from_queue: z
             .boolean()
             .optional()
-            .describe('Seed it with the current play queue (default false — creates it empty).')
+            .describe("Seed it with the current play queue (default false — creates it empty)."),
         },
         handler: (a) => {
-          const s = dm.snapshot()
+          const s = dm.snapshot();
           const items =
             a.from_queue === true
               ? (s.queue?.items ?? [])
                   .map((i) => i.metadata)
                   .filter((m): m is NonNullable<typeof m> => m != null)
                   .map((m) => ({
-                    title: m.title ?? 'Unknown track',
+                    title: m.title ?? "Unknown track",
                     artist: m.artist ?? null,
                     album: m.album ?? null,
                     artUrl: m.art_url ?? null,
                     serverUdn: null,
                     serverName: null,
                     objectId: null,
-                    durationSecs: m.duration ?? null
+                    durationSecs: m.duration ?? null,
                   }))
-              : []
+              : [];
           // The returned playlist, not a lookup by name: on a name collision
           // the stored name is uniquified, and finding by the REQUESTED name
           // would report the old playlist's id — an agent would then edit
           // the wrong list.
-          const made = dm.playlistCreate(a.name as string, items)
-          return ok(`Created "${made.name}" with ${made.items.length} tracks. id: ${made.id}`)
-        }
+          const made = dm.playlistCreate(a.name as string, items);
+          return ok(`Created "${made.name}" with ${made.items.length} tracks. id: ${made.id}`);
+        },
       },
       add_to_playlist: {
-        inputSchema: { id: z.string().describe('Playlist id from list_playlists.') },
+        inputSchema: { id: z.string().describe("Playlist id from list_playlists.") },
         handler: (a) => {
-          const s = dm.snapshot()
-          const p = s.playlists.find((x) => x.id === a.id)
-          if (!p) return err(`No playlist '${a.id}'. Use list_playlists.`)
-          const md = s.playState?.metadata
+          const s = dm.snapshot();
+          const p = s.playlists.find((x) => x.id === a.id);
+          if (!p) return err(`No playlist '${a.id}'. Use list_playlists.`);
+          const md = s.playState?.metadata;
           // A playlist is an ordered list of TRACKS; a stream has no position
           // in one, and content identity needs a title and an artist.
-          if (!md || isRadioMetadata(md)) return err('Nothing playing that can go in a playlist.')
-          if (!md.title || !md.artist) return err('The playing track has no title/artist to store.')
+          if (!md || isRadioMetadata(md)) return err("Nothing playing that can go in a playlist.");
+          if (!md.title || !md.artist)
+            return err("The playing track has no title/artist to store.");
           dm.playlistAppend(a.id as string, [
             {
               title: md.title,
@@ -1281,105 +1487,113 @@ export class McpBridge {
               serverUdn: null,
               serverName: null,
               objectId: null,
-              durationSecs: md.duration ?? null
-            }
-          ])
-          return ok(`Added "${md.title}" to "${p.name}".`)
-        }
+              durationSecs: md.duration ?? null,
+            },
+          ]);
+          return ok(`Added "${md.title}" to "${p.name}".`);
+        },
       },
       delete_playlist: {
-        inputSchema: { id: z.string().describe('Playlist id from list_playlists.') },
+        inputSchema: { id: z.string().describe("Playlist id from list_playlists.") },
         handler: (a) => {
-          const p = dm.snapshot().playlists.find((x) => x.id === a.id)
-          if (!p) return err(`No playlist '${a.id}'. Use list_playlists.`)
-          dm.playlistDelete(a.id as string)
-          return ok(`Deleted "${p.name}".`)
-        }
+          const p = dm.snapshot().playlists.find((x) => x.id === a.id);
+          if (!p) return err(`No playlist '${a.id}'. Use list_playlists.`);
+          dm.playlistDelete(a.id as string);
+          return ok(`Deleted "${p.name}".`);
+        },
       },
       list_favorites: {
         handler: () => {
-          const s = dm.snapshot()
+          const s = dm.snapshot();
           return ok(
             s.favorites.map((f) =>
-              f.kind === 'station'
+              f.kind === "station"
                 ? { key: favoriteKey(f), kind: f.kind, name: f.name, url: f.url }
-                : { key: favoriteKey(f), kind: f.kind, title: f.title, artist: f.artist, album: f.album }
-            )
-          )
-        }
+                : {
+                    key: favoriteKey(f),
+                    kind: f.kind,
+                    title: f.title,
+                    artist: f.artist,
+                    album: f.album,
+                  },
+            ),
+          );
+        },
       },
       play_favorite: {
-        inputSchema: { key: z.string().describe('Favorite key from list_favorites.') },
+        inputSchema: { key: z.string().describe("Favorite key from list_favorites.") },
         handler: async (a) => {
-          const s = this.connected()
-          const fav = s.favorites.find((f) => favoriteKey(f) === a.key)
-          if (!fav) return err(`No favorite '${a.key}'. Use list_favorites.`)
-          if (fav.kind === 'station') {
-            await dm.command({ type: 'streamRadio', url: fav.url, name: fav.name })
-            return ok(`Tuning to ${fav.name}.`)
+          const s = this.connected();
+          const fav = s.favorites.find((f) => favoriteKey(f) === a.key);
+          if (!fav) return err(`No favorite '${a.key}'. Use list_favorites.`);
+          if (fav.kind === "station") {
+            await dm.command({ type: "streamRadio", url: fav.url, name: fav.name });
+            return ok(`Tuning to ${fav.name}.`);
           }
-          const host = s.connection.host
-          await dm.ensureAwake() // favorites are wake intents too
+          const host = s.connection.host;
+          await dm.ensureAwake(); // favorites are wake intents too
           if (fav.serverUdn && fav.objectId) {
             try {
-              await queueAdd(host, fav.serverUdn, fav.objectId, 'PLAY_NOW')
-              return ok(`Playing ${fav.title}.`)
+              await queueAdd(host, fav.serverUdn, fav.objectId, "PLAY_NOW");
+              return ok(`Playing ${fav.title}.`);
             } catch {
               // stored id went stale — heal by content below (the app's model:
               // object ids are hints, title/artist identity is the truth)
             }
           }
           for (const server of (await refreshServers(host)).filter((x) => x.searchable)) {
-            const { items } = await librarySearch(host, server.udn, fav.title)
+            const { items } = await librarySearch(host, server.udn, fav.title);
             const match = items.find(
               (n) =>
                 kindOf(n) === fav.kind &&
                 lc(n.title) === lc(fav.title) &&
-                (fav.artist == null || n.artist == null || lc(n.artist) === lc(fav.artist))
-            )
+                (fav.artist == null || n.artist == null || lc(n.artist) === lc(fav.artist)),
+            );
             if (match) {
-              await queueAdd(host, server.udn, match.id, 'PLAY_NOW')
+              await queueAdd(host, server.udn, match.id, "PLAY_NOW");
               dm.favoriteUpdate(a.key as string, {
                 serverUdn: server.udn,
                 serverName: server.name,
-                objectId: match.id
-              })
-              return ok(`Playing ${fav.title} (found on ${server.name}).`)
+                objectId: match.id,
+              });
+              return ok(`Playing ${fav.title} (found on ${server.name}).`);
             }
           }
-          return err(`Couldn't find "${fav.title}" on any media server right now.`)
-        }
+          return err(`Couldn't find "${fav.title}" on any media server right now.`);
+        },
       },
       add_favorite: {
         inputSchema: {
-          station_url: z.string().url().optional().describe('Favorite a station: its stream URL…'),
-          station_name: z.string().optional().describe('…and its display name (both or neither).')
+          station_url: z.string().url().optional().describe("Favorite a station: its stream URL…"),
+          station_name: z.string().optional().describe("…and its display name (both or neither)."),
         },
         handler: (a) => {
-          const s = this.connected()
-          let fav: Favorite
+          const s = this.connected();
+          let fav: Favorite;
           if (a.station_url != null || a.station_name != null) {
-            if (typeof a.station_url !== 'string' || typeof a.station_name !== 'string') {
-              return err('Pass BOTH station_url and station_name (or neither, to favorite the current track).')
+            if (typeof a.station_url !== "string" || typeof a.station_name !== "string") {
+              return err(
+                "Pass BOTH station_url and station_name (or neither, to favorite the current track).",
+              );
             }
             fav = {
-              kind: 'station',
+              kind: "station",
               addedAt: Date.now(),
               name: a.station_name,
               url: a.station_url,
               favicon: null,
-              radioBrowserUuid: null
-            }
+              radioBrowserUuid: null,
+            };
           } else {
-            const md = s.playState?.metadata
+            const md = s.playState?.metadata;
             if (md?.station) {
               return err(
-                "For radio, pass station_url + station_name — the stream URL isn't knowable from playback metadata."
-              )
+                "For radio, pass station_url + station_name — the stream URL isn't knowable from playback metadata.",
+              );
             }
-            if (!md?.title) return err('Nothing identifiable is playing.')
+            if (!md?.title) return err("Nothing identifiable is playing.");
             fav = {
-              kind: 'track',
+              kind: "track",
               addedAt: Date.now(),
               title: md.title,
               artist: md.artist ?? null,
@@ -1389,35 +1603,37 @@ export class McpBridge {
               serverName: null,
               objectId: null,
               titlePath: null,
-              durationSecs: md.duration ?? null
-            }
+              durationSecs: md.duration ?? null,
+            };
           }
-          const key = favoriteKey(fav)
-          if (s.favorites.some((f) => favoriteKey(f) === key)) return ok('Already a favorite.')
-          dm.favoriteAdd(fav)
-          return ok(fav.kind === 'station' ? `Favorited station ${fav.name}.` : `Favorited "${fav.title}".`)
-        }
+          const key = favoriteKey(fav);
+          if (s.favorites.some((f) => favoriteKey(f) === key)) return ok("Already a favorite.");
+          dm.favoriteAdd(fav);
+          return ok(
+            fav.kind === "station" ? `Favorited station ${fav.name}.` : `Favorited "${fav.title}".`,
+          );
+        },
       },
       remove_favorite: {
-        inputSchema: { key: z.string().describe('Favorite key from list_favorites.') },
+        inputSchema: { key: z.string().describe("Favorite key from list_favorites.") },
         handler: (a) => {
-          const s = this.connected()
-          const fav = s.favorites.find((f) => favoriteKey(f) === a.key)
-          if (!fav) return err(`No favorite with key '${a.key}'. Use list_favorites.`)
-          dm.favoriteRemove(a.key as string)
+          const s = this.connected();
+          const fav = s.favorites.find((f) => favoriteKey(f) === a.key);
+          if (!fav) return err(`No favorite with key '${a.key}'. Use list_favorites.`);
+          dm.favoriteRemove(a.key as string);
           return ok(
-            fav.kind === 'station'
+            fav.kind === "station"
               ? `Removed station ${fav.name} from favorites.`
-              : `Removed "${fav.title}" from favorites.`
-          )
-        }
+              : `Removed "${fav.title}" from favorites.`,
+          );
+        },
       },
 
       // ---- tone & EQ (feature-detected; toneCaps errors cleanly without)
       get_audio_settings: {
         handler: () => {
-          const { s, caps } = toneCaps()
-          const za = s.zoneAudio
+          const { s, caps } = toneCaps();
+          const za = s.zoneAudio;
           return ok({
             user_eq_enabled: za?.user_eq?.enabled ?? false,
             band_gains_db: za?.user_eq?.bands?.map((b) => b.gain) ?? null,
@@ -1426,140 +1642,158 @@ export class McpBridge {
             ranges: {
               band_gain_db: { min: EQ_GAIN_MIN, max: EQ_GAIN_MAX },
               tilt: caps.tilt ? caps.tiltRange : null,
-              balance: caps.balance ? caps.balanceRange : null
+              balance: caps.balance ? caps.balanceRange : null,
             },
-            saved_presets: getSettings().eqPresets.map((p) => p.name)
-          })
-        }
+            saved_presets: getSettings().eqPresets.map((p) => p.name),
+          });
+        },
       },
       set_eq_band: {
         inputSchema: {
-          band: z.number().int().min(0).max(6).describe('Band index 0 (lowest) … 6 (highest frequency).'),
-          gain_db: z.number().min(EQ_GAIN_MIN).max(EQ_GAIN_MAX)
+          band: z
+            .number()
+            .int()
+            .min(0)
+            .max(6)
+            .describe("Band index 0 (lowest) … 6 (highest frequency)."),
+          gain_db: z.number().min(EQ_GAIN_MIN).max(EQ_GAIN_MAX),
         },
         handler: async (a) => {
-          const { s } = toneCaps()
-          if (s.zoneAudio?.user_eq?.enabled !== true) await dm.command({ type: 'setUserEq', enabled: true })
-          await dm.command({ type: 'setEqBandGain', index: a.band as number, gain: a.gain_db as number })
-          return ok(`Band ${a.band} set to ${a.gain_db} dB.`)
-        }
+          const { s } = toneCaps();
+          if (s.zoneAudio?.user_eq?.enabled !== true)
+            await dm.command({ type: "setUserEq", enabled: true });
+          await dm.command({
+            type: "setEqBandGain",
+            index: a.band as number,
+            gain: a.gain_db as number,
+          });
+          return ok(`Band ${a.band} set to ${a.gain_db} dB.`);
+        },
       },
       set_tilt: {
         inputSchema: {
           intensity: z
             .number()
-            .describe('Negative = warmer, positive = brighter (range from get_audio_settings).')
+            .describe("Negative = warmer, positive = brighter (range from get_audio_settings)."),
         },
         handler: async (a) => {
-          const { s, caps } = toneCaps()
-          if (!caps.tilt) return err('This streamer has no tone tilt.')
-          if (s.zoneAudio?.tilt_eq?.enabled !== true) await dm.command({ type: 'setTiltEq', enabled: true })
-          await dm.command({ type: 'setTiltIntensity', intensity: a.intensity as number })
-          return ok(`Tilt set to ${a.intensity}.`)
-        }
+          const { s, caps } = toneCaps();
+          if (!caps.tilt) return err("This streamer has no tone tilt.");
+          if (s.zoneAudio?.tilt_eq?.enabled !== true)
+            await dm.command({ type: "setTiltEq", enabled: true });
+          await dm.command({ type: "setTiltIntensity", intensity: a.intensity as number });
+          return ok(`Tilt set to ${a.intensity}.`);
+        },
       },
       set_balance: {
         inputSchema: {
-          balance: z.number().describe('Negative = left, positive = right (range from get_audio_settings).')
+          balance: z
+            .number()
+            .describe("Negative = left, positive = right (range from get_audio_settings)."),
         },
         handler: async (a) => {
-          const { caps } = toneCaps()
-          if (!caps.balance) return err('This streamer has no balance control.')
-          await dm.command({ type: 'setBalance', balance: a.balance as number })
-          return ok(`Balance set to ${a.balance}.`)
-        }
+          const { caps } = toneCaps();
+          if (!caps.balance) return err("This streamer has no balance control.");
+          await dm.command({ type: "setBalance", balance: a.balance as number });
+          return ok(`Balance set to ${a.balance}.`);
+        },
       },
       apply_eq_preset: {
-        inputSchema: { name: z.string().describe('A saved preset name from get_audio_settings.') },
+        inputSchema: { name: z.string().describe("A saved preset name from get_audio_settings.") },
         handler: async (a) => {
-          toneCaps()
-          const preset = getSettings().eqPresets.find((p) => lc(p.name) === lc(a.name as string))
-          if (!preset) return err(`No saved EQ preset named '${a.name}'. get_audio_settings lists them.`)
-          await dm.command({ type: 'setUserEq', enabled: true })
-          await dm.command({ type: 'setEqBands', gains: preset.gains })
-          return ok(`Applied EQ preset "${preset.name}".`)
-        }
+          toneCaps();
+          const preset = getSettings().eqPresets.find((p) => lc(p.name) === lc(a.name as string));
+          if (!preset)
+            return err(`No saved EQ preset named '${a.name}'. get_audio_settings lists them.`);
+          await dm.command({ type: "setUserEq", enabled: true });
+          await dm.command({ type: "setEqBands", gains: preset.gains });
+          return ok(`Applied EQ preset "${preset.name}".`);
+        },
       },
       reset_eq: {
         handler: async () => {
-          toneCaps()
-          await dm.command({ type: 'setEqBands', gains: [0, 0, 0, 0, 0, 0, 0] })
-          return ok('EQ reset to flat.')
-        }
+          toneCaps();
+          await dm.command({ type: "setEqBands", gains: [0, 0, 0, 0, 0, 0, 0] });
+          return ok("EQ reset to flat.");
+        },
       },
 
       // ---- display
       set_display_brightness: {
-        inputSchema: { level: z.enum(['off', 'dim', 'bright']) },
+        inputSchema: { level: z.enum(["off", "dim", "bright"]) },
         handler: async (a) => {
-          const s = this.connected()
-          const options = brightnessOptions(s.displaySpec)
-          if (!options) return err('This streamer has no front-panel display.')
+          const s = this.connected();
+          const options = brightnessOptions(s.displaySpec);
+          if (!options) return err("This streamer has no front-panel display.");
           if (!options.includes(a.level as string)) {
-            return err(`This display only supports: ${options.join(', ')}.`)
+            return err(`This display only supports: ${options.join(", ")}.`);
           }
-          await dm.command({ type: 'setBrightness', brightness: a.level as string })
-          return ok(`Display set to ${a.level}.`)
-        }
+          await dm.command({ type: "setBrightness", brightness: a.level as string });
+          return ok(`Display set to ${a.level}.`);
+        },
       },
 
       // ---- lookups (each behind its Connections toggle: off = no requests, ever)
       get_lyrics: {
         handler: async () => {
           if (!getSettings().lyrics) {
-            return err('Lyrics lookups are switched off in Settings → Connections (off means no requests, ever).')
+            return err(
+              "Lyrics lookups are switched off in Settings → Connections (off means no requests, ever).",
+            );
           }
-          const s = this.connected()
-          const md = s.playState?.metadata
-          if (!md?.title || !md.artist) return err('Need a playing track with a title and artist.')
+          const s = this.connected();
+          const md = s.playState?.metadata;
+          if (!md?.title || !md.artist) return err("Need a playing track with a title and artist.");
           const r = await fetchLyrics({
             artist: md.artist,
             title: md.title,
             album: md.album ?? null,
-            duration: md.duration ?? null
-          })
-          if (!r) return ok('No lyrics found for this track.')
-          if (r.instrumental) return ok('Instrumental — no lyrics.')
-          return ok({ title: md.title, artist: md.artist, lyrics: r.plain ?? r.synced })
-        }
+            duration: md.duration ?? null,
+          });
+          if (!r) return ok("No lyrics found for this track.");
+          if (r.instrumental) return ok("Instrumental — no lyrics.");
+          return ok({ title: md.title, artist: md.artist, lyrics: r.plain ?? r.synced });
+        },
       },
       get_artist_info: {
-        inputSchema: { artist: z.string().optional().describe('Defaults to the playing artist.') },
+        inputSchema: { artist: z.string().optional().describe("Defaults to the playing artist.") },
         handler: async (a) => {
           if (!getSettings().artistInfo) {
-            return err('Artist context is switched off in Settings → Connections (off means no requests, ever).')
+            return err(
+              "Artist context is switched off in Settings → Connections (off means no requests, ever).",
+            );
           }
-          const s = this.connected()
-          const name = (a.artist as string | undefined) ?? s.playState?.metadata?.artist ?? null
-          if (!name) return err('No artist playing — pass artist explicitly.')
-          const info = await fetchArtistInfo(name)
-          if (!info) return ok(`No artist match for "${name}".`)
+          const s = this.connected();
+          const name = (a.artist as string | undefined) ?? s.playState?.metadata?.artist ?? null;
+          if (!name) return err("No artist playing — pass artist explicitly.");
+          const info = await fetchArtistInfo(name);
+          if (!info) return ok(`No artist match for "${name}".`);
           return ok({
             name: info.name,
             summary: info.summary,
             wikipedia: info.wikipediaUrl,
-            musicbrainz: info.musicbrainzUrl
-          })
-        }
+            musicbrainz: info.musicbrainzUrl,
+          });
+        },
       },
       get_album_info: {
         inputSchema: {
-          artist: z.string().optional().describe('Defaults to the playing artist.'),
-          album: z.string().optional().describe('Defaults to the playing album.')
+          artist: z.string().optional().describe("Defaults to the playing artist."),
+          album: z.string().optional().describe("Defaults to the playing album."),
         },
         handler: async (a) => {
           // one toggle governs both context tabs in the app — same here
           if (!getSettings().artistInfo) {
             return err(
-              'Artist & album context is switched off in Settings → Connections (off means no requests, ever).'
-            )
+              "Artist & album context is switched off in Settings → Connections (off means no requests, ever).",
+            );
           }
-          const s = this.connected()
-          const artist = (a.artist as string | undefined) ?? s.playState?.metadata?.artist ?? null
-          const album = (a.album as string | undefined) ?? s.playState?.metadata?.album ?? null
-          if (!artist || !album) return err('No album playing — pass artist and album explicitly.')
-          const info = await fetchAlbumInfo(artist, album)
-          if (!info) return ok(`No album match for "${album}" by ${artist}.`)
+          const s = this.connected();
+          const artist = (a.artist as string | undefined) ?? s.playState?.metadata?.artist ?? null;
+          const album = (a.album as string | undefined) ?? s.playState?.metadata?.album ?? null;
+          if (!artist || !album) return err("No album playing — pass artist and album explicitly.");
+          const info = await fetchAlbumInfo(artist, album);
+          if (!info) return ok(`No album match for "${album}" by ${artist}.`);
           return ok({
             title: info.title,
             year: info.year,
@@ -1569,111 +1803,123 @@ export class McpBridge {
             credits: info.credits,
             summary: info.summary,
             wikipedia: info.wikipediaUrl,
-            musicbrainz: info.musicbrainzUrl
-          })
-        }
+            musicbrainz: info.musicbrainzUrl,
+          });
+        },
       },
 
       // ---- queue editing (opt-in cluster)
       remove_queue_item: {
-        inputSchema: { id: z.number().int().describe('Queue item id from list_queue.') },
+        inputSchema: { id: z.number().int().describe("Queue item id from list_queue.") },
         handler: async (a) => {
-          const s = this.connected()
-          const item = (s.queue?.items ?? []).find((i) => i.id === a.id)
-          if (!item) return err(`No queue item ${a.id}. Use list_queue.`)
-          await dm.command({ type: 'queueDelete', id: a.id as number })
-          return ok(`Removed "${item.metadata?.title ?? `item ${a.id}`}" from the queue.`)
-        }
+          const s = this.connected();
+          const item = (s.queue?.items ?? []).find((i) => i.id === a.id);
+          if (!item) return err(`No queue item ${a.id}. Use list_queue.`);
+          await dm.command({ type: "queueDelete", id: a.id as number });
+          return ok(`Removed "${item.metadata?.title ?? `item ${a.id}`}" from the queue.`);
+        },
       },
       move_queue_item: {
         inputSchema: {
-          id: z.number().int().describe('Queue item id from list_queue.'),
-          to_position: z.number().int().min(0).describe('New 0-based position.')
+          id: z.number().int().describe("Queue item id from list_queue."),
+          to_position: z.number().int().min(0).describe("New 0-based position."),
         },
         handler: async (a) => {
-          const s = this.connected()
-          const item = (s.queue?.items ?? []).find((i) => i.id === a.id)
-          if (!item || item.position == null) return err(`No queue item ${a.id}. Use list_queue.`)
-          const total = s.queue?.total ?? 0
-          if ((a.to_position as number) >= total) return err(`to_position must be below ${total}.`)
+          const s = this.connected();
+          const item = (s.queue?.items ?? []).find((i) => i.id === a.id);
+          if (!item || item.position == null) return err(`No queue item ${a.id}. Use list_queue.`);
+          const total = s.queue?.total ?? 0;
+          if ((a.to_position as number) >= total) return err(`to_position must be below ${total}.`);
           await dm.command({
-            type: 'queueMove',
+            type: "queueMove",
             id: a.id as number,
             from: item.position,
-            to: a.to_position as number
-          })
-          return ok(`Moved "${item.metadata?.title ?? `item ${a.id}`}" to position ${a.to_position}.`)
-        }
+            to: a.to_position as number,
+          });
+          return ok(
+            `Moved "${item.metadata?.title ?? `item ${a.id}`}" to position ${a.to_position}.`,
+          );
+        },
       },
 
       // ---- preset saving (opt-in cluster; explicit-overwrite contract)
       save_queue_as_preset: {
         inputSchema: {
-          slot: z.number().int().min(1).max(99).describe('Preset slot 1–99.'),
-          name: z.string().min(1).describe('Name for the saved queue.'),
-          overwrite: z.boolean().optional().describe('Must be true to replace an occupied slot.')
+          slot: z.number().int().min(1).max(99).describe("Preset slot 1–99."),
+          name: z.string().min(1).describe("Name for the saved queue."),
+          overwrite: z.boolean().optional().describe("Must be true to replace an occupied slot."),
         },
         handler: async (a) => {
-          const s = this.connected()
-          if ((s.queue?.total ?? 0) === 0) return err('The queue is empty.')
-          guardSlot(s, a.slot as number, a.overwrite === true)
-          await dm.command({ type: 'queueSavePreset', slot: a.slot as number, name: a.name as string })
-          return ok(`Saved the queue to preset ${a.slot} as "${a.name}".`)
-        }
+          const s = this.connected();
+          if ((s.queue?.total ?? 0) === 0) return err("The queue is empty.");
+          guardSlot(s, a.slot as number, a.overwrite === true);
+          await dm.command({
+            type: "queueSavePreset",
+            slot: a.slot as number,
+            name: a.name as string,
+          });
+          return ok(`Saved the queue to preset ${a.slot} as "${a.name}".`);
+        },
       },
       repair_preset: {
         inputSchema: {
-          slot: z.number().int().min(1).max(99).describe('The preset slot that will not play.')
+          slot: z.number().int().min(1).max(99).describe("The preset slot that will not play."),
         },
         handler: async (a) => {
-          const s = this.connected()
-          const slot = a.slot as number
-          const preset = (s.presets?.presets ?? []).find((p) => p.id === slot)
-          if (!preset) return err(`Preset slot ${slot} is empty.`)
+          const s = this.connected();
+          const slot = a.slot as number;
+          const preset = (s.presets?.presets ?? []).find((p) => p.id === slot);
+          if (!preset) return err(`Preset slot ${slot} is empty.`);
           if (!preset.art_url)
-            return err(`Preset ${slot} has no artwork to match on, so it cannot be repaired here.`)
+            return err(`Preset ${slot} has no artwork to match on, so it cannot be repaired here.`);
           // The art id survives the object-id churn that breaks presets, which
           // is what makes this a lookup rather than a guess.
           const hits = indexPools().flatMap((pool) =>
-            pool.albums.filter((alb) => alb.artUrl != null && alb.artUrl === preset.art_url)
-          )
+            pool.albums.filter((alb) => alb.artUrl != null && alb.artUrl === preset.art_url),
+          );
           if (hits.length === 0)
             return err(
-              `Nothing in the library index matches preset ${slot}'s artwork. Build the index for the server that holds it (rebuild_library_index) and try again.`
-            )
+              `Nothing in the library index matches preset ${slot}'s artwork. Build the index for the server that holds it (rebuild_library_index) and try again.`,
+            );
           if (hits.length > 1)
             return err(
-              `Preset ${slot}'s artwork matches ${hits.length} albums, so the right one is ambiguous — repair it from the app instead.`
-            )
-          const match = hits[0]
-          if (!match.serverUdn) return err('The matched album has no server — index may be mid-build.')
-          await presetSave(s.connection.host, match.serverUdn, match.id, slot)
+              `Preset ${slot}'s artwork matches ${hits.length} albums, so the right one is ambiguous — repair it from the app instead.`,
+            );
+          const match = hits[0];
+          if (!match.serverUdn)
+            return err("The matched album has no server — index may be mid-build.");
+          await presetSave(s.connection.host, match.serverUdn, match.id, slot);
           return ok({
             slot,
             repaired_to: match.title,
             artist: match.artist ?? null,
-            server: match.serverName ?? null
-          })
-        }
+            server: match.serverName ?? null,
+          });
+        },
       },
       save_playing_to_preset: {
         inputSchema: {
-          slot: z.number().int().min(1).max(99).describe('Preset slot 1–99.'),
-          name: z.string().optional().describe('Optional rename (the firmware derives a name otherwise).'),
-          overwrite: z.boolean().optional().describe('Must be true to replace an occupied slot.')
+          slot: z.number().int().min(1).max(99).describe("Preset slot 1–99."),
+          name: z
+            .string()
+            .optional()
+            .describe("Optional rename (the firmware derives a name otherwise)."),
+          overwrite: z.boolean().optional().describe("Must be true to replace an occupied slot."),
         },
         handler: async (a) => {
-          const s = this.connected()
-          if (s.playState?.state !== 'play' && s.playState?.state !== 'pause') {
-            return err('Nothing is playing to save.')
+          const s = this.connected();
+          if (s.playState?.state !== "play" && s.playState?.state !== "pause") {
+            return err("Nothing is playing to save.");
           }
-          guardSlot(s, a.slot as number, a.overwrite === true)
-          await dm.command({ type: 'zoneSavePreset', slot: a.slot as number })
-          if (typeof a.name === 'string' && a.name.length > 0) {
-            await dm.command({ type: 'presetRename', slot: a.slot as number, name: a.name })
+          guardSlot(s, a.slot as number, a.overwrite === true);
+          await dm.command({ type: "zoneSavePreset", slot: a.slot as number });
+          if (typeof a.name === "string" && a.name.length > 0) {
+            await dm.command({ type: "presetRename", slot: a.slot as number, name: a.name });
           }
-          return ok(`Saved the current playback to preset ${a.slot}${a.name ? ` as "${a.name}"` : ''}.`)
-        }
+          return ok(
+            `Saved the current playback to preset ${a.slot}${a.name ? ` as "${a.name}"` : ""}.`,
+          );
+        },
       },
 
       // ---- schedules (opt-in cluster; list_schedules lives with Status & lists)
@@ -1686,62 +1932,76 @@ export class McpBridge {
           days: z
             .array(z.number().int().min(0).max(6))
             .min(1)
-            .describe('Days it fires: 0 = Sunday … 6 = Saturday.'),
-          action: z.enum(['wake', 'standby']).describe('wake = power on (optionally recall a preset); standby = power down.'),
-          preset_id: z.number().int().min(1).max(99).optional().describe('Wake only: preset to recall after powering on.'),
-          volume_percent: z.number().int().min(0).max(100).optional().describe('Wake only: volume to set after the preset settles.'),
-          enabled: z.boolean().optional().describe('Default true.')
+            .describe("Days it fires: 0 = Sunday … 6 = Saturday."),
+          action: z
+            .enum(["wake", "standby"])
+            .describe("wake = power on (optionally recall a preset); standby = power down."),
+          preset_id: z
+            .number()
+            .int()
+            .min(1)
+            .max(99)
+            .optional()
+            .describe("Wake only: preset to recall after powering on."),
+          volume_percent: z
+            .number()
+            .int()
+            .min(0)
+            .max(100)
+            .optional()
+            .describe("Wake only: volume to set after the preset settles."),
+          enabled: z.boolean().optional().describe("Default true."),
         },
         handler: (a) => {
-          if (a.action === 'standby' && (a.preset_id != null || a.volume_percent != null)) {
-            return err('preset_id and volume_percent only apply to wake schedules.')
+          if (a.action === "standby" && (a.preset_id != null || a.volume_percent != null)) {
+            return err("preset_id and volume_percent only apply to wake schedules.");
           }
           const sched: Schedule = {
             id: randomUUID(),
             enabled: a.enabled !== false,
             time: a.time as string,
             days: [...new Set(a.days as number[])].sort(),
-            action: a.action === 'wake' ? 'on' : 'standby',
+            action: a.action === "wake" ? "on" : "standby",
             presetId: (a.preset_id as number | undefined) ?? null,
-            volumePercent: (a.volume_percent as number | undefined) ?? null
-          }
-          this.mutateSchedules((list) => [...list, sched])
+            volumePercent: (a.volume_percent as number | undefined) ?? null,
+          };
+          this.mutateSchedules((list) => [...list, sched]);
           return ok({
             created: scheduleOut(sched),
-            note: 'Schedules fire only while TastyTunes is running and connected.'
-          })
-        }
+            note: "Schedules fire only while TastyTunes is running and connected.",
+          });
+        },
       },
       set_schedule_enabled: {
         inputSchema: {
-          id: z.string().describe('Schedule id from list_schedules.'),
-          enabled: z.boolean()
+          id: z.string().describe("Schedule id from list_schedules."),
+          enabled: z.boolean(),
         },
         handler: (a) => {
-          const found = getSettings().schedules.find((x) => x.id === a.id)
-          if (!found) return err(`No schedule '${a.id}'. Use list_schedules.`)
+          const found = getSettings().schedules.find((x) => x.id === a.id);
+          if (!found) return err(`No schedule '${a.id}'. Use list_schedules.`);
           this.mutateSchedules((list) =>
-            list.map((x) => (x.id === a.id ? { ...x, enabled: a.enabled as boolean } : x))
-          )
-          return ok(`Schedule ${a.enabled ? 'enabled' : 'disabled'}.`)
-        }
+            list.map((x) => (x.id === a.id ? { ...x, enabled: a.enabled as boolean } : x)),
+          );
+          return ok(`Schedule ${a.enabled ? "enabled" : "disabled"}.`);
+        },
       },
       delete_schedule: {
-        inputSchema: { id: z.string().describe('Schedule id from list_schedules.') },
+        inputSchema: { id: z.string().describe("Schedule id from list_schedules.") },
         handler: (a) => {
-          const found = getSettings().schedules.find((x) => x.id === a.id)
-          if (!found) return err(`No schedule '${a.id}'. Use list_schedules.`)
-          this.mutateSchedules((list) => list.filter((x) => x.id !== a.id))
-          return ok('Schedule deleted.')
-        }
-      }
-    }
+          const found = getSettings().schedules.find((x) => x.id === a.id);
+          if (!found) return err(`No schedule '${a.id}'. Use list_schedules.`);
+          this.mutateSchedules((list) => list.filter((x) => x.id !== a.id));
+          return ok("Schedule deleted.");
+        },
+      },
+    };
   }
 
   /** Persist a schedules change and tell the renderer (settings push). */
   private mutateSchedules(fn: (list: Schedule[]) => Schedule[]): void {
-    const next = updateSettings({ schedules: fn(getSettings().schedules) })
-    this.onSettingsMutated?.(next)
+    const next = updateSettings({ schedules: fn(getSettings().schedules) });
+    this.onSettingsMutated?.(next);
   }
 }
 
@@ -1752,8 +2012,8 @@ function scheduleOut(s: Schedule): Record<string, unknown> {
     enabled: s.enabled,
     time: s.time,
     days: s.days,
-    action: s.action === 'on' ? 'wake' : 'standby',
+    action: s.action === "on" ? "wake" : "standby",
     preset_id: s.presetId,
-    volume_percent: s.volumePercent
-  }
+    volume_percent: s.volumePercent,
+  };
 }

@@ -1,4 +1,4 @@
-import { cx } from '@/lib/format'
+import { cx } from "@/lib/format";
 
 /**
  * The one hover-action button for a list ROW — play, ⋯, remove.
@@ -21,31 +21,31 @@ export function RowAction({
   destructive,
   /** Keep it visible regardless of hover — e.g. while its own menu is open. */
   pinned,
-  size = 14
+  size = 14,
 }: {
-  icon: React.ComponentType<{ size?: number; className?: string }>
-  label: string
-  tip?: string
-  onClick(e: React.MouseEvent): void
-  destructive?: boolean
-  pinned?: boolean
-  size?: number
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  label: string;
+  tip?: string;
+  onClick(e: React.MouseEvent): void;
+  destructive?: boolean;
+  pinned?: boolean;
+  size?: number;
 }): React.JSX.Element {
   return (
     <button
       aria-label={label}
       data-tip={tip ?? label}
       onClick={(e) => {
-        e.stopPropagation()
-        onClick(e)
+        e.stopPropagation();
+        onClick(e);
       }}
       className={cx(
-        'tip-bottom p-1.5 rounded-lg text-dim hover:bg-veil2 transition-all',
-        destructive ? 'hover:text-alert' : 'hover:text-ink',
-        pinned ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
+        "tip-bottom p-1.5 rounded-lg text-dim hover:bg-veil2 transition-all",
+        destructive ? "hover:text-alert" : "hover:text-ink",
+        pinned ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
       )}
     >
       <Icon size={size} />
     </button>
-  )
+  );
 }

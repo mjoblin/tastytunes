@@ -1,8 +1,8 @@
-import { BookmarkPlus } from 'lucide-react'
-import type { RadioStation } from '@shared/model'
-import { MediaRow } from '@/components/media/MediaRow'
-import { RowAction } from '@/components/media/RowAction'
-import { RowHeart } from '@/components/media/RowHeart'
+import { BookmarkPlus } from "lucide-react";
+import type { RadioStation } from "@shared/model";
+import { MediaRow } from "@/components/media/MediaRow";
+import { RowAction } from "@/components/media/RowAction";
+import { RowHeart } from "@/components/media/RowHeart";
 
 /**
  * One internet-radio station, as a row.
@@ -25,33 +25,33 @@ export function StationRow({
   favorited,
   onHeart,
   onPlay,
-  onSave
+  onSave,
 }: {
-  station: RadioStation
-  playing: boolean
+  station: RadioStation;
+  playing: boolean;
   /** Play sent, stream not landed yet — the row pre-glows and spins. */
-  tuning: boolean
-  favorited: boolean
-  onHeart(): void
-  onPlay(): void
+  tuning: boolean;
+  favorited: boolean;
+  onHeart(): void;
+  onPlay(): void;
   /** Save-to-preset, offered on the PLAYING row. Optional: search omits it —
    *  the save panel belongs to the Radio screen, which has the room for it —
    *  and the button simply isn't rendered rather than wired to a no-op. */
-  onSave?(x: number, y: number): void
+  onSave?(x: number, y: number): void;
 }): React.JSX.Element {
   const tags = station.tags
-    .split(',')
+    .split(",")
     .map((t) => t.trim())
     .filter(Boolean)
     .slice(0, 3)
-    .join(' · ')
-  const subtitle = [tags, station.country].filter(Boolean).join(' — ')
+    .join(" · ");
+  const subtitle = [tags, station.country].filter(Boolean).join(" — ");
   const quality = [station.codec, station.bitrate > 0 ? `${station.bitrate}k` : null]
     .filter(Boolean)
-    .join(' ')
+    .join(" ");
   return (
     <MediaRow
-      attrs={{ 'data-radio-row': station.name }}
+      attrs={{ "data-radio-row": station.name }}
       title={station.name}
       subtitle={subtitle || undefined}
       artUrl={station.favicon}
@@ -78,13 +78,13 @@ export function StationRow({
               tip="Save station to preset"
               pinned
               onClick={(e) => {
-                const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
-                onSave(r.left, r.bottom + 6)
+                const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                onSave(r.left, r.bottom + 6);
               }}
             />
           )}
         </>
       }
     />
-  )
+  );
 }

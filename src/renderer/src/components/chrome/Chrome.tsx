@@ -1,4 +1,4 @@
-import { cx } from '@/lib/format'
+import { cx } from "@/lib/format";
 
 /**
  * The chrome kit: the four recipes the app repeats often enough that a drifted
@@ -22,32 +22,35 @@ import { cx } from '@/lib/format'
  */
 export function HeaderChip({
   active = false,
-  shape = 'lg',
+  shape = "lg",
   className,
   children,
   ...rest
 }: {
-  active?: boolean
+  active?: boolean;
   /** `full` is for the round album-header buttons; everything else is `lg`. */
-  shape?: 'lg' | 'full'
-  className?: string
-  children?: React.ReactNode
-} & Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'className' | 'children'>): React.JSX.Element {
+  shape?: "lg" | "full";
+  className?: string;
+  children?: React.ReactNode;
+} & Omit<
+  React.ButtonHTMLAttributes<HTMLButtonElement>,
+  "className" | "children"
+>): React.JSX.Element {
   return (
     <button
       className={cx(
-        shape === 'full' ? 'rounded-full' : 'rounded-lg',
-        'ring-1 transition-all',
+        shape === "full" ? "rounded-full" : "rounded-lg",
+        "ring-1 transition-all",
         active
-          ? 'ring-gold/50 bg-golddim text-gold'
-          : 'ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70',
-        className
+          ? "ring-gold/50 bg-golddim text-gold"
+          : "ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70",
+        className,
       )}
       {...rest}
     >
       {children}
     </button>
-  )
+  );
 }
 
 /**
@@ -60,7 +63,7 @@ export function HeaderChip({
 export function ScreenTitle({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
     <h1 className="font-display screen-title font-bold text-[26px] tracking-tight">{children}</h1>
-  )
+  );
 }
 
 /**
@@ -79,33 +82,36 @@ export function ScreenTitle({ children }: { children: React.ReactNode }): React.
  * could only serve those by growing a discriminator that buys nothing.
  */
 export function Chip({
-  state = 'idle',
+  state = "idle",
   className,
   children,
   ...rest
 }: {
-  state?: 'idle' | 'active' | 'open' | 'disabled'
-  className?: string
-  children?: React.ReactNode
-} & Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'className' | 'children'>): React.JSX.Element {
+  state?: "idle" | "active" | "open" | "disabled";
+  className?: string;
+  children?: React.ReactNode;
+} & Omit<
+  React.ButtonHTMLAttributes<HTMLButtonElement>,
+  "className" | "children"
+>): React.JSX.Element {
   return (
     <button
       className={cx(
-        'rounded-full px-3 py-1 text-[12px] ring-1 transition-all',
-        state === 'disabled'
-          ? 'ring-edge/60 bg-panel/40 text-faint/50 cursor-default'
-          : state === 'active'
-            ? 'ring-gold/50 bg-golddim text-gold'
-            : state === 'open'
-              ? 'ring-edge2 bg-raised text-ink'
-              : 'ring-edge bg-panel/60 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70',
-        className
+        "rounded-full px-3 py-1 text-[12px] ring-1 transition-all",
+        state === "disabled"
+          ? "ring-edge/60 bg-panel/40 text-faint/50 cursor-default"
+          : state === "active"
+            ? "ring-gold/50 bg-golddim text-gold"
+            : state === "open"
+              ? "ring-edge2 bg-raised text-ink"
+              : "ring-edge bg-panel/60 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70",
+        className,
       )}
       {...rest}
     >
       {children}
     </button>
-  )
+  );
 }
 
 /**
@@ -124,20 +130,23 @@ export function PrimaryButton({
   children,
   ...rest
 }: {
-  className?: string
-  children?: React.ReactNode
-} & Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'className' | 'children'>): React.JSX.Element {
+  className?: string;
+  children?: React.ReactNode;
+} & Omit<
+  React.ButtonHTMLAttributes<HTMLButtonElement>,
+  "className" | "children"
+>): React.JSX.Element {
   return (
     <button
       className={cx(
-        'rounded-lg bg-gold text-bg font-medium shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.3)]',
-        'hover:brightness-110 disabled:opacity-40 disabled:shadow-none',
-        'motion-safe:active:scale-95 transition-all',
-        className
+        "rounded-lg bg-gold text-bg font-medium shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.3)]",
+        "hover:brightness-110 disabled:opacity-40 disabled:shadow-none",
+        "motion-safe:active:scale-95 transition-all",
+        className,
       )}
       {...rest}
     >
       {children}
     </button>
-  )
+  );
 }

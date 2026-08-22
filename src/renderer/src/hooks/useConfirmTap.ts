@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from "react";
 
 /** How long an armed confirm waits before giving up on its second tap. */
-const DISARM_MS = 3000
+const DISARM_MS = 3000;
 
 /**
  * The two-tap "Sure?" state machine — now ONE site: the preset-save overwrite
@@ -34,53 +34,53 @@ const DISARM_MS = 3000
  */
 export function useConfirmTap<K extends string | number | boolean = boolean>(): {
   /** The armed key, or null. */
-  armed: K | null
+  armed: K | null;
   /** Is this key armed? Keyless sites can call it with no argument. */
-  isArmed(key?: K): boolean
+  isArmed(key?: K): boolean;
   /**
    * One tap. Returns TRUE when it fires (this key was already armed) and FALSE
    * when it merely arms — so a call site reads `if (confirm.tap(id)) remove()`.
    * Tapping a different key re-arms on that one; the old arm is dropped.
    */
-  tap(key?: K): boolean
-  disarm(): void
+  tap(key?: K): boolean;
+  disarm(): void;
   /** Spread onto the confirming control — focus leaving it disarms. */
-  blurProps: { onBlur: () => void }
+  blurProps: { onBlur: () => void };
 } {
-  const [armed, setArmed] = useState<K | null>(null)
+  const [armed, setArmed] = useState<K | null>(null);
   // The ref mirrors the state so `tap` can decide arm-vs-fire SYNCHRONOUSLY.
   // Reading `armed` from the closure would be a render behind after a tap that
   // arms, and a state updater can't return an answer to the caller.
-  const armedRef = useRef<K | null>(null)
+  const armedRef = useRef<K | null>(null);
 
   const set = useCallback((next: K | null): void => {
-    armedRef.current = next
-    setArmed(next)
-  }, [])
+    armedRef.current = next;
+    setArmed(next);
+  }, []);
 
   useEffect(() => {
-    if (armed === null) return
-    const t = setTimeout(() => set(null), DISARM_MS)
-    return () => clearTimeout(t)
-  }, [armed, set])
+    if (armed === null) return;
+    const t = setTimeout(() => set(null), DISARM_MS);
+    return () => clearTimeout(t);
+  }, [armed, set]);
 
   const tap = useCallback(
     (key?: K): boolean => {
-      const k = (key ?? true) as K
+      const k = (key ?? true) as K;
       if (armedRef.current === k) {
-        set(null)
-        return true
+        set(null);
+        return true;
       }
-      set(k)
-      return false
+      set(k);
+      return false;
     },
-    [set]
-  )
+    [set],
+  );
 
-  const disarm = useCallback(() => set(null), [set])
-  const isArmed = useCallback((key?: K): boolean => armed === ((key ?? true) as K), [armed])
-  const blurProps = useRef({ onBlur: disarm }).current
-  blurProps.onBlur = disarm
+  const disarm = useCallback(() => set(null), [set]);
+  const isArmed = useCallback((key?: K): boolean => armed === ((key ?? true) as K), [armed]);
+  const blurProps = useRef({ onBlur: disarm }).current;
+  blurProps.onBlur = disarm;
 
-  return { armed, isArmed, tap, disarm, blurProps }
+  return { armed, isArmed, tap, disarm, blurProps };
 }

@@ -1,7 +1,7 @@
-import { join } from 'node:path'
-import { app } from 'electron'
-import { favoriteKey, type Favorite } from '@shared/model'
-import { jsonFileStore } from './jsonStore'
+import { join } from "node:path";
+import { app } from "electron";
+import { favoriteKey, type Favorite } from "@shared/model";
+import { jsonFileStore } from "./jsonStore";
 
 // The local favorites collection (stations, albums, tracks), persisted beside
 // settings.json. User-curated and unbounded (it's a small JSON of things
@@ -10,16 +10,16 @@ import { jsonFileStore } from './jsonStore'
 // atomic) live in jsonStore; only the domain verbs live here.
 
 const store = jsonFileStore<Favorite[]>({
-  pathOf: () => join(app.getPath('userData'), 'favorites.json'),
-  scope: 'favorites',
-  load: (parsed) => (Array.isArray(parsed) ? (parsed as Favorite[]) : [])
-})
+  pathOf: () => join(app.getPath("userData"), "favorites.json"),
+  scope: "favorites",
+  load: (parsed) => (Array.isArray(parsed) ? (parsed as Favorite[]) : []),
+});
 
 export function getFavorites(): Favorite[] {
-  return store.get()
+  return store.get();
 }
 
-const save = (list: Favorite[]): Favorite[] => store.set(list)
+const save = (list: Favorite[]): Favorite[] => store.set(list);
 
 /**
  * Add (or re-add) a favorite: any same-key entry is replaced, and the list
@@ -32,20 +32,20 @@ const save = (list: Favorite[]): Favorite[] => store.set(list)
  * "newest first" ordering a side effect of call order — this makes it the rule.
  */
 export function addFavorite(fav: Favorite): Favorite[] {
-  const key = favoriteKey(fav)
-  const rest = getFavorites().filter((f) => favoriteKey(f) !== key)
-  const at = rest.findIndex((f) => f.addedAt < fav.addedAt)
-  const idx = at === -1 ? rest.length : at
-  return save([...rest.slice(0, idx), fav, ...rest.slice(idx)])
+  const key = favoriteKey(fav);
+  const rest = getFavorites().filter((f) => favoriteKey(f) !== key);
+  const at = rest.findIndex((f) => f.addedAt < fav.addedAt);
+  const idx = at === -1 ? rest.length : at;
+  return save([...rest.slice(0, idx), fav, ...rest.slice(idx)]);
 }
 
 export function removeFavorite(key: string): Favorite[] {
-  return save(getFavorites().filter((f) => favoriteKey(f) !== key))
+  return save(getFavorites().filter((f) => favoriteKey(f) !== key));
 }
 
 /** Patch a favorite in place (e.g. objectId healing after a search resolve). */
 export function updateFavorite(key: string, patch: Partial<Favorite>): Favorite[] {
   return save(
-    getFavorites().map((f) => (favoriteKey(f) === key ? ({ ...f, ...patch } as Favorite) : f))
-  )
+    getFavorites().map((f) => (favoriteKey(f) === key ? ({ ...f, ...patch } as Favorite) : f)),
+  );
 }

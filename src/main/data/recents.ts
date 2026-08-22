@@ -1,17 +1,17 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { app } from 'electron'
-import { type RecentTrack, MAX_RECENTS } from '@shared/model'
-import { atomicWriteFileSync } from './jsonStore'
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { app } from "electron";
+import { type RecentTrack, MAX_RECENTS } from "@shared/model";
+import { atomicWriteFileSync } from "./jsonStore";
 
 // A bounded ring of recently-played tracks, persisted beside settings.json.
 // Kept out of settings.json on purpose: it's a churning log, cleared on its own,
 // and shouldn't bloat the settings file the user might inspect or sync.
 
-let cached: RecentTrack[] | null = null
+let cached: RecentTrack[] | null = null;
 
 function recentsPath(): string {
-  return join(app.getPath('userData'), 'recents.json')
+  return join(app.getPath("userData"), "recents.json");
 }
 
 /**
@@ -22,7 +22,7 @@ function recentsPath(): string {
  * as two different tracks. Artist/album/art are treated as fields to merge in.
  */
 function recentKey(e: RecentTrack): string {
-  return e.isRadio ? `r:${e.station ?? ''}:${e.title ?? ''}` : `t:${e.title ?? ''}`
+  return e.isRadio ? `r:${e.station ?? ""}:${e.title ?? ""}` : `t:${e.title ?? ""}`;
 }
 
 /** Fill any field missing on `base` from `other`; `base` keeps its identity/time. */
@@ -39,13 +39,13 @@ function mergeEntries(base: RecentTrack, other: RecentTrack): RecentTrack {
     queueId: base.queueId ?? other.queueId,
     isRadio: base.isRadio,
     radioId: base.radioId ?? other.radioId,
-    session: base.session ?? other.session
-  }
+    session: base.session ?? other.session,
+  };
 }
 
 /** Backfill fields added in later versions so older logs load with a consistent shape. */
 function normalize(e: RecentTrack): RecentTrack {
-  const isRadio = !!e.isRadio
+  const isRadio = !!e.isRadio;
   return {
     at: e.at,
     title: e.title ?? null,
@@ -59,9 +59,8 @@ function normalize(e: RecentTrack): RecentTrack {
     isRadio,
     radioId: e.radioId ?? null,
     // Legacy rows only knew radio-vs-not; group legacy radio by station, others as discrete.
-    session:
-      e.session !== undefined ? e.session : isRadio ? `radio:${e.station ?? ''}` : null
-  }
+    session: e.session !== undefined ? e.session : isRadio ? `radio:${e.station ?? ""}` : null,
+  };
 }
 
 function sameFields(a: RecentTrack, b: RecentTrack): boolean {
@@ -72,55 +71,55 @@ function sameFields(a: RecentTrack, b: RecentTrack): boolean {
     a.station === b.station &&
     a.artUrl === b.artUrl &&
     a.source === b.source
-  )
+  );
 }
 
 /** Merge any runs of consecutive same-key entries down to one (newest-first list). */
 function collapseConsecutive(list: RecentTrack[]): RecentTrack[] {
-  const out: RecentTrack[] = []
+  const out: RecentTrack[] = [];
   for (const e of list) {
-    const prev = out[out.length - 1]
+    const prev = out[out.length - 1];
     if (prev && recentKey(prev) === recentKey(e)) {
-      const merged = mergeEntries(prev, e)
-      merged.at = Math.min(prev.at, e.at) // keep the earliest sighting
-      out[out.length - 1] = merged
+      const merged = mergeEntries(prev, e);
+      merged.at = Math.min(prev.at, e.at); // keep the earliest sighting
+      out[out.length - 1] = merged;
     } else {
-      out.push(e)
+      out.push(e);
     }
   }
-  return out
+  return out;
 }
 
 export function getRecents(): RecentTrack[] {
-  if (cached) return cached
-  let raw: RecentTrack[] = []
+  if (cached) return cached;
+  let raw: RecentTrack[] = [];
   try {
-    const parsed = JSON.parse(readFileSync(recentsPath(), 'utf-8'))
-    if (Array.isArray(parsed)) raw = parsed as RecentTrack[]
+    const parsed = JSON.parse(readFileSync(recentsPath(), "utf-8"));
+    if (Array.isArray(parsed)) raw = parsed as RecentTrack[];
   } catch {
-    raw = []
+    raw = [];
   }
   // Upgrade older rows to the current shape, then collapse duplicates from the
   // era before dedup was title-based.
   const upgraded = raw.some(
-    (e) => e.session === undefined || e.sourceId === undefined || e.queueId === undefined
-  )
-  const list = raw.map(normalize)
-  const collapsed = collapseConsecutive(list)
-  cached = collapsed
-  if (upgraded || collapsed.length !== raw.length) save(collapsed)
-  return cached
+    (e) => e.session === undefined || e.sourceId === undefined || e.queueId === undefined,
+  );
+  const list = raw.map(normalize);
+  const collapsed = collapseConsecutive(list);
+  cached = collapsed;
+  if (upgraded || collapsed.length !== raw.length) save(collapsed);
+  return cached;
 }
 
 function save(list: RecentTrack[]): void {
-  cached = list
+  cached = list;
   try {
     // atomic (temp + rename): a crash mid-write must not truncate the log.
     // The load side stays local — its upgrade/collapse pass is domain logic,
     // not persistence (see jsonStore for the stores that fit the factory).
-    atomicWriteFileSync(recentsPath(), JSON.stringify(list))
+    atomicWriteFileSync(recentsPath(), JSON.stringify(list));
   } catch (err) {
-    console.error('failed to persist recents', err)
+    console.error("failed to persist recents", err);
   }
 }
 
@@ -132,24 +131,24 @@ function save(list: RecentTrack[]): void {
  * so the caller can skip a redundant push.
  */
 export function recordRecent(entry: RecentTrack): { list: RecentTrack[]; changed: boolean } {
-  const list = getRecents()
-  const head = list[0]
+  const list = getRecents();
+  const head = list[0];
   if (head && recentKey(head) === recentKey(entry)) {
-    const merged = mergeEntries(head, entry)
-    if (sameFields(merged, head)) return { list, changed: false }
-    list[0] = merged
-    save(list)
-    return { list, changed: true }
+    const merged = mergeEntries(head, entry);
+    if (sameFields(merged, head)) return { list, changed: false };
+    list[0] = merged;
+    save(list);
+    return { list, changed: true };
   }
-  const next = [entry, ...list]
-  if (next.length > MAX_RECENTS) next.length = MAX_RECENTS
-  save(next)
-  return { list: next, changed: true }
+  const next = [entry, ...list];
+  if (next.length > MAX_RECENTS) next.length = MAX_RECENTS;
+  save(next);
+  return { list: next, changed: true };
 }
 
 export function clearRecents(): RecentTrack[] {
-  save([])
-  return cached!
+  save([]);
+  return cached!;
 }
 
 /**
@@ -165,14 +164,14 @@ export function clearRecents(): RecentTrack[] {
  * bounded like every other write here.
  */
 export function restoreRecents(list: RecentTrack[]): RecentTrack[] {
-  const seen = new Set<string>()
-  const merged: RecentTrack[] = []
+  const seen = new Set<string>();
+  const merged: RecentTrack[] = [];
   for (const entry of [...getRecents(), ...list.map(normalize)]) {
-    const key = `${entry.at}:${recentKey(entry)}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    merged.push(entry)
+    const key = `${entry.at}:${recentKey(entry)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(entry);
   }
-  save(merged.slice(0, MAX_RECENTS))
-  return cached!
+  save(merged.slice(0, MAX_RECENTS));
+  return cached!;
 }

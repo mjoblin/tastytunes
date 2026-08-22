@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
-import { ArtImage } from '@/components/media/ArtImage'
-import { useDecodedArt } from '@/hooks/useDecodedArt'
+import { useEffect, useRef, useState } from "react";
+import { ArtImage } from "@/components/media/ArtImage";
+import { useDecodedArt } from "@/hooks/useDecodedArt";
 
 /**
  * Album art that crossfades when the source changes: the incoming image fades
@@ -16,25 +16,25 @@ import { useDecodedArt } from '@/hooks/useDecodedArt'
 export function CrossfadeArt({
   src,
   className,
-  fallback
+  fallback,
 }: {
-  src: string | null | undefined
-  className: string
-  fallback: React.ReactNode
+  src: string | null | undefined;
+  className: string;
+  fallback: React.ReactNode;
 }): React.JSX.Element {
-  const [cur, setCur] = useState<{ src: string | null | undefined; k: number }>({ src, k: 0 })
-  const [prev, setPrev] = useState<{ src: string | null | undefined; k: number } | null>(null)
-  const curRef = useRef(cur)
-  const kRef = useRef(0)
-  const { pending } = useDecodedArt(src)
+  const [cur, setCur] = useState<{ src: string | null | undefined; k: number }>({ src, k: 0 });
+  const [prev, setPrev] = useState<{ src: string | null | undefined; k: number } | null>(null);
+  const curRef = useRef(cur);
+  const kRef = useRef(0);
+  const { pending } = useDecodedArt(src);
   useEffect(() => {
-    if (pending) return // hold the outgoing art until the incoming one is decoded
-    if (src === curRef.current.src) return
-    setPrev(curRef.current)
-    const next = { src, k: ++kRef.current }
-    curRef.current = next
-    setCur(next)
-  }, [src, pending])
+    if (pending) return; // hold the outgoing art until the incoming one is decoded
+    if (src === curRef.current.src) return;
+    setPrev(curRef.current);
+    const next = { src, k: ++kRef.current };
+    curRef.current = next;
+    setCur(next);
+  }, [src, pending]);
   return (
     <div className="relative">
       {prev && (
@@ -46,11 +46,11 @@ export function CrossfadeArt({
         key={`c${cur.k}`}
         className="art-fade-in"
         onAnimationEnd={(e) => {
-          if (e.target === e.currentTarget) setPrev(null)
+          if (e.target === e.currentTarget) setPrev(null);
         }}
       >
         <ArtImage src={cur.src} className={className} fallback={fallback} />
       </div>
     </div>
-  )
+  );
 }

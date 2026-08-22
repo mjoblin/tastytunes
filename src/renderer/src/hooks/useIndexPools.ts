@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
-import type { MediaIndexPools } from '@shared/model'
-import { tt } from '@/api'
-import { useStore } from '@/store'
+import { useEffect, useMemo, useState } from "react";
+import type { MediaIndexPools } from "@shared/model";
+import { tt } from "@/api";
+import { useStore } from "@/store";
 
 /**
  * The ready indexes' pools, cached on their builtAt signature: re-entry is
@@ -20,37 +20,37 @@ import { useStore } from '@/store'
  * ensureFresh), so a surface that only READS pools — the queue rows — shows
  * the device's strings until then. That is the index's law, not this hook's.
  */
-let poolsCache: { sig: string; pools: MediaIndexPools[] } | null = null
+let poolsCache: { sig: string; pools: MediaIndexPools[] } | null = null;
 
 export function useIndexPools(enabled = true): MediaIndexPools[] | null {
-  const statuses = useStore((s) => s.mediaIndex)
+  const statuses = useStore((s) => s.mediaIndex);
   const sig = useMemo(
     () =>
       statuses
-        .filter((x) => x.state === 'ready')
+        .filter((x) => x.state === "ready")
         .map((x) => `${x.udn}:${x.builtAt}`)
         .sort()
-        .join('|'),
-    [statuses]
-  )
+        .join("|"),
+    [statuses],
+  );
   const [pools, setPools] = useState<MediaIndexPools[] | null>(() =>
-    poolsCache?.sig === sig ? poolsCache.pools : null
-  )
+    poolsCache?.sig === sig ? poolsCache.pools : null,
+  );
   useEffect(() => {
-    if (!enabled) return
+    if (!enabled) return;
     if (poolsCache?.sig === sig) {
-      setPools(poolsCache.pools)
-      return
+      setPools(poolsCache.pools);
+      return;
     }
-    let stale = false
+    let stale = false;
     void tt.mediaIndexPools().then((fetched) => {
-      if (stale) return
-      poolsCache = { sig, pools: fetched }
-      setPools(fetched)
-    })
+      if (stale) return;
+      poolsCache = { sig, pools: fetched };
+      setPools(fetched);
+    });
     return () => {
-      stale = true
-    }
-  }, [enabled, sig])
-  return pools
+      stale = true;
+    };
+  }, [enabled, sig]);
+  return pools;
 }

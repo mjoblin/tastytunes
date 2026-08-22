@@ -13,8 +13,8 @@
 // file may read from it (a recent entry is matched against a play_state, a
 // playlist hashes with the same core a live queue does); it never writes to it.
 
-import type { SmoipFrame, ZonePlayState } from './smoip'
-import { contentRowsHash, isRadioMetadata, radioTrackTitle } from './smoip'
+import type { SmoipFrame, ZonePlayState } from "./smoip";
+import { contentRowsHash, isRadioMetadata, radioTrackTitle } from "./smoip";
 
 // --------------------------------------------------------------- recently played
 
@@ -25,29 +25,29 @@ import { contentRowsHash, isRadioMetadata, radioTrackTitle } from './smoip'
  */
 export interface RecentTrack {
   /** When the track first appeared (ms epoch). */
-  at: number
+  at: number;
   /** Song title. Null for a songless state (radio that emits no song, or echoes its own name). */
-  title: string | null
-  artist: string | null
-  album: string | null
+  title: string | null;
+  artist: string | null;
+  album: string | null;
   /** Set for internet radio — the station name (title then carries the song). */
-  station: string | null
-  artUrl: string | null
+  station: string | null;
+  artUrl: string | null;
   /** Human source label (e.g. "Media Library", "AirPlay"), best-effort. */
-  source: string | null
+  source: string | null;
   /** SMOIP source id (e.g. "AIRPLAY", "IR", "MEDIA_PLAYER") — lets a row re-activate the source. */
-  sourceId: string | null
+  sourceId: string | null;
   /** Queue item id at record time — lets a local row replay the track if it's still queued. */
-  queueId: number | null
-  isRadio: boolean
+  queueId: number | null;
+  isRadio: boolean;
   /** Airable radio id, if any — used to match a station back to a preset for re-tuning. */
-  radioId: number | null
+  radioId: number | null;
   /**
    * Grouping key for continuous sessions. `radio:<station>` or `src:<sourceId>` for
    * sources whose now-playing song changes over one continuous session; null for a
    * discrete queued track, which never groups. Optional so pre-upgrade logs still load.
    */
-  session: string | null
+  session: string | null;
 }
 
 /**
@@ -58,16 +58,16 @@ export interface RecentTrack {
  * entries were written.
  */
 export function recentMatchesPlayState(e: RecentTrack, ps: ZonePlayState | null): boolean {
-  const md = ps?.metadata
-  if (!md) return false
+  const md = ps?.metadata;
+  if (!md) return false;
   const eq = (a: string | null | undefined, b: string | null | undefined): boolean =>
-    (a ?? '').trim().toLowerCase() === (b ?? '').trim().toLowerCase()
-  const isRadio = isRadioMetadata(md)
-  if (e.isRadio !== isRadio) return false
+    (a ?? "").trim().toLowerCase() === (b ?? "").trim().toLowerCase();
+  const isRadio = isRadioMetadata(md);
+  if (e.isRadio !== isRadio) return false;
   if (isRadio) {
-    return eq(e.station, md.station) && eq(e.title, radioTrackTitle(md))
+    return eq(e.station, md.station) && eq(e.title, radioTrackTitle(md));
   }
-  return e.title != null && eq(e.title, md.title)
+  return e.title != null && eq(e.title, md.title);
 }
 
 // -------------------------------------------------------------------- favorites
@@ -79,12 +79,12 @@ export function recentMatchesPlayState(e: RecentTrack, ps: ZonePlayState | null)
  * user-initiated only (never a click-ping — the privacy stance holds).
  */
 export interface FavoriteStation {
-  kind: 'station'
-  addedAt: number
-  name: string
-  url: string
-  favicon: string | null
-  radioBrowserUuid: string | null
+  kind: "station";
+  addedAt: number;
+  name: string;
+  url: string;
+  favicon: string | null;
+  radioBrowserUuid: string | null;
 }
 
 /**
@@ -95,23 +95,23 @@ export interface FavoriteStation {
  * the breadcrumb trail at heart time, feeding the browse re-walk.
  */
 export interface FavoriteMedia {
-  kind: 'album' | 'track'
-  addedAt: number
-  title: string
-  artist: string | null
+  kind: "album" | "track";
+  addedAt: number;
+  title: string;
+  artist: string | null;
   /** Tracks only — the album the track belongs to. */
-  album: string | null
-  artUrl: string | null
-  serverUdn: string | null
-  serverName: string | null
-  objectId: string | null
-  titlePath: string[] | null
+  album: string | null;
+  artUrl: string | null;
+  serverUdn: string | null;
+  serverName: string | null;
+  objectId: string | null;
+  titlePath: string[] | null;
   /** Track length in seconds, captured at heart time (tracks; null when the
    *  source had none — favorites hearted before this field show blank). */
-  durationSecs?: number | null
+  durationSecs?: number | null;
 }
 
-export type Favorite = FavoriteStation | FavoriteMedia
+export type Favorite = FavoriteStation | FavoriteMedia;
 
 /**
  * Content identity — dedupe and heart-lit checks. Stations key on the URL;
@@ -119,10 +119,10 @@ export type Favorite = FavoriteStation | FavoriteMedia
  * (the same album on two servers is the same music).
  */
 export function favoriteKey(f: Favorite): string {
-  const lc = (s: string | null | undefined): string => (s ?? '').trim().toLowerCase()
-  if (f.kind === 'station') return `station:${f.url}`
-  if (f.kind === 'album') return `album:${lc(f.title)}:${lc(f.artist)}`
-  return `track:${lc(f.title)}:${lc(f.artist)}:${lc(f.album)}`
+  const lc = (s: string | null | undefined): string => (s ?? "").trim().toLowerCase();
+  if (f.kind === "station") return `station:${f.url}`;
+  if (f.kind === "album") return `album:${lc(f.title)}:${lc(f.artist)}`;
+  return `track:${lc(f.title)}:${lc(f.artist)}:${lc(f.album)}`;
 }
 
 // -------------------------------------------------------------------- playlists
@@ -138,15 +138,15 @@ export function favoriteKey(f: Favorite): string {
  * (favoriteKey + objectId healing, queueContentHash); this is the same answer.
  */
 export interface PlaylistItem {
-  title: string
-  artist: string | null
-  album: string | null
-  artUrl: string | null
-  serverUdn: string | null
-  serverName: string | null
+  title: string;
+  artist: string | null;
+  album: string | null;
+  artUrl: string | null;
+  serverUdn: string | null;
+  serverName: string | null;
   /** Fast path only — may be stale, and is re-resolved from content on a miss. */
-  objectId: string | null
-  durationSecs?: number | null
+  objectId: string | null;
+  durationSecs?: number | null;
 }
 
 /**
@@ -155,9 +155,9 @@ export interface PlaylistItem {
  * that never had one). Defined once here so the two can't drift apart.
  */
 export interface ContentRef {
-  title: string
-  artist?: string | null
-  album?: string | null
+  title: string;
+  artist?: string | null;
+  album?: string | null;
 }
 
 /**
@@ -167,21 +167,21 @@ export interface ContentRef {
  * connection refused, 'ok' = it's back (possibly not in its old slot; see
  * queueRestore).
  */
-export type QueueRestoreResult = 'ok' | 'not-found' | 'failed'
+export type QueueRestoreResult = "ok" | "not-found" | "failed";
 
 /** A stored, ordered collection of tracks. Bounded local JSON, no database. */
 export interface Playlist {
-  id: string
-  name: string
-  createdAt: number
-  updatedAt: number
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
   /** Last time this playlist was activated. Optional: playlists stored before
    *  this field existed simply have no last-played date to show. */
-  lastPlayedAt?: number | null
+  lastPlayedAt?: number | null;
   /** Titles the last activation couldn't find on any server. Kept so the gap
    *  is visible later, not just in the banner you dismissed at the time. */
-  lastMissing?: string[]
-  items: PlaylistItem[]
+  lastMissing?: string[];
+  items: PlaylistItem[];
 }
 
 /**
@@ -192,22 +192,22 @@ export interface Playlist {
  * failing the whole run (partial activation is a normal outcome, not an error).
  */
 export interface PlaylistActivation {
-  playlistId: string
-  name: string
-  total: number
-  done: number
-  added: number
-  missed: string[]
-  cancelled: boolean
-  finished: boolean
+  playlistId: string;
+  name: string;
+  total: number;
+  done: number;
+  added: number;
+  missed: string[];
+  cancelled: boolean;
+  finished: boolean;
 }
 
 /**
  * Bounds that keep "a bounded local file" honest (favorites are unbounded
  * because they're small and deliberate; a playlist collection is neither).
  */
-export const MAX_PLAYLISTS = 100
-export const MAX_PLAYLIST_ITEMS = 500
+export const MAX_PLAYLISTS = 100;
+export const MAX_PLAYLIST_ITEMS = 500;
 
 /**
  * Rings the main process keeps AND the renderer mirrors (2026-08-16, one
@@ -216,10 +216,10 @@ export const MAX_PLAYLIST_ITEMS = 500
  * the same bound so a re-opened drawer shows exactly what main holds; the
  * Recently Played footer quotes MAX_RECENTS rather than a literal.
  */
-export const FRAME_RING_SIZE = 300
-export const LOG_RING_SIZE = 300
-export const NET_RING_SIZE = 200
-export const MAX_RECENTS = 200
+export const FRAME_RING_SIZE = 300;
+export const LOG_RING_SIZE = 300;
+export const NET_RING_SIZE = 200;
+export const MAX_RECENTS = 200;
 
 /**
  * A playlist's content hash in the SAME shape queueContentHash produces for a
@@ -231,7 +231,7 @@ export const MAX_RECENTS = 200
 export function playlistContentHash(items: PlaylistItem[]): string {
   // Delegates to the ONE hash core queueContentHash uses — these two are
   // compared for equality, so a fork here would silently kill the marker.
-  return contentRowsHash(items)
+  return contentRowsHash(items);
 }
 
 /**
@@ -240,8 +240,8 @@ export function playlistContentHash(items: PlaylistItem[]): string {
  * way and the healing path can be shared.
  */
 export function playlistItemKey(i: PlaylistItem): string {
-  const lc = (s: string | null | undefined): string => (s ?? '').trim().toLowerCase()
-  return `track:${lc(i.title)}:${lc(i.artist)}:${lc(i.album)}`
+  const lc = (s: string | null | undefined): string => (s ?? "").trim().toLowerCase();
+  return `track:${lc(i.title)}:${lc(i.artist)}:${lc(i.album)}`;
 }
 
 /**
@@ -251,7 +251,7 @@ export function playlistItemKey(i: PlaylistItem): string {
  * show it); callers gate on `> 0` for the all-unknown case.
  */
 export function playlistTotalSecs(p: Playlist): number {
-  return p.items.reduce((n, i) => n + (i.durationSecs ?? 0), 0)
+  return p.items.reduce((n, i) => n + (i.durationSecs ?? 0), 0);
 }
 
 // ===========================================================================
@@ -267,40 +267,40 @@ export function playlistTotalSecs(p: Playlist): number {
 // ------------------------------------------------------------------- connection
 
 export type ConnectionState =
-  | { phase: 'idle' }
-  | { phase: 'connecting'; host: string; attempt: number; demo?: boolean }
-  | { phase: 'connected'; host: string; demo?: boolean }
-  | { phase: 'disconnected'; host: string; reason: string; reconnecting: boolean; demo?: boolean }
+  | { phase: "idle" }
+  | { phase: "connecting"; host: string; attempt: number; demo?: boolean }
+  | { phase: "connected"; host: string; demo?: boolean }
+  | { phase: "disconnected"; host: string; reason: string; reconnecting: boolean; demo?: boolean };
 
 export interface DiscoveredDevice {
-  host: string
-  friendlyName: string
-  model: string
-  udn: string
-  descriptionUrl: string
+  host: string;
+  friendlyName: string;
+  model: string;
+  udn: string;
+  descriptionUrl: string;
 }
 
 // ------------------------------------------------------------------ diagnostics
 
 export interface LogEntry {
-  at: number
-  level: 'info' | 'warn' | 'error'
-  scope: string
-  text: string
+  at: number;
+  level: "info" | "warn" | "error";
+  scope: string;
+  text: string;
 }
 
 export interface FrameEntry {
-  at: number
-  dir: 'in' | 'out'
-  frame: SmoipFrame
+  at: number;
+  dir: "in" | "out";
+  frame: SmoipFrame;
 }
 
 /** A newer GitHub release than the running version (stage-1 update awareness). */
 export interface UpdateInfo {
   /** Bare version, no leading v. */
-  version: string
+  version: string;
   /** Release page to open in the browser. */
-  url: string
+  url: string;
 }
 
 /**
@@ -311,17 +311,17 @@ export interface UpdateInfo {
  * unpackaged/dev builds, where "available" only offers the release page.
  */
 export interface UpdateState {
-  phase: 'idle' | 'available' | 'downloading' | 'downloaded' | 'error'
+  phase: "idle" | "available" | "downloading" | "downloaded" | "error";
   /** Version on offer (bare, no leading v); null while idle. */
-  version: string | null
+  version: string | null;
   /** Download progress 0–100 while downloading. */
-  percent: number | null
+  percent: number | null;
   /** In-app download/install possible (packaged build with a release feed). */
-  canDownload: boolean
+  canDownload: boolean;
   /** Release page — always available as the manual path. */
-  url: string
+  url: string;
   /** Human-readable failure when phase === 'error'. */
-  error: string | null
+  error: string | null;
 }
 
 /**
@@ -330,9 +330,7 @@ export interface UpdateState {
  * result exists so the UI can say "nothing new" or show the failure.
  */
 export type UpdateCheckResult =
-  | { status: 'update'; version: string }
-  | { status: 'none' }
-  | { status: 'error'; error: string }
+  { status: "update"; version: string } | { status: "none" } | { status: "error"; error: string };
 
 /**
  * Streamer FIRMWARE status, camelCased from the read-only /system/update push
@@ -343,27 +341,27 @@ export type UpdateCheckResult =
  * admin). There is deliberately no command to change any of this.
  */
 export interface FirmwareStatus {
-  updateAvailable: boolean
-  updating: boolean
-  earlyUpdate: boolean
+  updateAvailable: boolean;
+  updating: boolean;
+  earlyUpdate: boolean;
 }
 
 // ------------------------------------------------------------ requests console
 
 /** One outbound HTTP request from the main process, for the diagnostics drawer. */
 export interface NetRequestEntry {
-  id: number
-  at: number
+  id: number;
+  at: number;
   /** Short service tag: lrclib, musicbrainz, wikidata, wikipedia, listenbrainz, github, art. */
-  service: string
-  method: string
-  url: string
+  service: string;
+  method: string;
+  url: string;
   /** HTTP status once a response arrived; null while pending. */
-  status: number | null
+  status: number | null;
   /** Round-trip ms once settled; null while pending. */
-  ms: number | null
+  ms: number | null;
   /** Transport failure — no response at all (DNS, timeout, refused). */
-  error: boolean
+  error: boolean;
 }
 
 // ----------------------------------------------------------- scheduled actions
@@ -373,17 +371,17 @@ export interface NetRequestEntry {
  * wake (power ON, optionally recall a preset and set a volume) or standby.
  */
 export interface Schedule {
-  id: string
-  enabled: boolean
+  id: string;
+  enabled: boolean;
   /** Local 24h "HH:MM". */
-  time: string
+  time: string;
   /** Days it fires: 0 = Sunday … 6 = Saturday. Empty = never. */
-  days: number[]
-  action: 'on' | 'standby'
+  days: number[];
+  action: "on" | "standby";
   /** Wake only: preset to recall after powering on. */
-  presetId: number | null
+  presetId: number | null;
   /** Wake only: volume to set after the preset settles. */
-  volumePercent: number | null
+  volumePercent: number | null;
 }
 
 /**
@@ -397,88 +395,88 @@ export interface Schedule {
  * sense.
  */
 export interface MissedSchedule {
-  scheduleId: string
+  scheduleId: string;
   /** When it was due — the UI says so, because "missed" without a time is noise. */
-  dueAt: number
+  dueAt: number;
 }
 
 /** Cache key for a preset volume override — device-scoped so ids don't collide. */
 export function presetVolumeKey(udn: string | null | undefined, presetId: number): string {
-  return `${udn ?? 'device'}|${presetId}`
+  return `${udn ?? "device"}|${presetId}`;
 }
 
 // ------------------------------------------------------------- artist context
 
 export interface ArtistInfo {
   /** MusicBrainz's canonical name for the matched artist. */
-  name: string
+  name: string;
   /** Wikipedia summary extract, when the chain resolved one. */
-  summary: string | null
-  wikipediaUrl: string | null
-  musicbrainzUrl: string | null
+  summary: string | null;
+  wikipediaUrl: string | null;
+  musicbrainzUrl: string | null;
 }
 
 export interface AlbumInfo {
   /** MusicBrainz's canonical title for the matched release group. */
-  title: string
+  title: string;
   /** Year of first release, e.g. "2011". */
-  year: string | null
+  year: string | null;
   /** Release-group primary type, e.g. "Album", "EP". */
-  type: string | null
+  type: string | null;
   /** Label of the earliest release, when known. */
-  label: string | null
+  label: string | null;
   /** MusicBrainz genre tags, most-voted first. */
-  genres: string[]
+  genres: string[];
   /** Release-level relationship credits (producer etc.), when MB has them. */
-  credits: Array<{ role: string; name: string }>
+  credits: Array<{ role: string; name: string }>;
   /** Wikipedia summary extract, when the chain resolved one. */
-  summary: string | null
-  wikipediaUrl: string | null
-  musicbrainzUrl: string | null
+  summary: string | null;
+  wikipediaUrl: string | null;
+  musicbrainzUrl: string | null;
 }
 
 // ------------------------------------------------------------------- lyrics
 
 export interface LyricsQuery {
-  artist: string
-  title: string
-  album: string | null
+  artist: string;
+  title: string;
+  album: string | null;
   /** Track length in seconds, if known — LRCLIB uses it for exact matching. */
-  duration: number | null
+  duration: number | null;
 }
 
 export interface LyricsResult {
-  plain: string | null
+  plain: string | null;
   /** LRC-format synced lyrics ("[mm:ss.xx] line"), when the record has them. */
-  synced: string | null
-  instrumental: boolean
+  synced: string | null;
+  instrumental: boolean;
 }
 
 // ------------------------------------------------------------------- MCP server
 
 /** Which interface the MCP server binds to. */
-export type McpBind = 'localhost' | 'lan'
+export type McpBind = "localhost" | "lan";
 
 export interface McpSettings {
   /** Master switch — the server only exists while this is on. */
-  enabled: boolean
+  enabled: boolean;
   /** localhost = this computer only; lan = any machine on the network. */
-  bind: McpBind
-  port: number
+  bind: McpBind;
+  port: number;
   /** Cluster ids switched off (everything is on by default). */
-  disabledClusters: string[]
+  disabledClusters: string[];
   /** Opt-in cluster ids the user explicitly enabled (write-capable clusters
    *  are OFF until they appear here). */
-  enabledClusters: string[]
+  enabledClusters: string[];
   /** Individual tool names switched off. */
-  disabledTools: string[]
+  disabledTools: string[];
 }
 
 export interface McpStatus {
-  running: boolean
+  running: boolean;
   /** Reachable endpoint while running, e.g. http://192.168.1.20:8555/mcp. */
-  url: string | null
-  error: string | null
+  url: string | null;
+  error: string | null;
 }
 
 // The CATALOG — MCP_CLUSTERS, McpClusterInfo, McpToolInfo, mcpClusterEnabled —
@@ -488,7 +486,7 @@ export interface McpStatus {
 // ------------------------------------------------------------------- sleep timer
 
 /** What the sleep timer does when it expires. */
-export type SleepAction = 'pause' | 'standby'
+export type SleepAction = "pause" | "standby";
 
 /**
  * A live sleep timer. Ephemeral by design — a countdown shouldn't survive a
@@ -498,10 +496,10 @@ export type SleepAction = 'pause' | 'standby'
  * is the armed track's identity and `firesAt` is unused.
  */
 export interface SleepTimer {
-  action: SleepAction
-  minutes: number | null
-  firesAt: number | null
-  trackKey: string | null
+  action: SleepAction;
+  minutes: number | null;
+  firesAt: number | null;
+  trackKey: string | null;
 }
 
 /**
@@ -512,46 +510,46 @@ export interface SleepTimer {
  * process can never disagree.
  */
 export function sleepTrackKey(ps: ZonePlayState | null): string | null {
-  if (!ps) return null
-  if (ps.queue_id != null) return `q${ps.queue_id}`
-  const md = ps.metadata
-  if (md?.title) return `t:${md.title}:${md.artist ?? ''}`
-  return null
+  if (!ps) return null;
+  if (ps.queue_id != null) return `q${ps.queue_id}`;
+  const md = ps.metadata;
+  if (md?.title) return `t:${md.title}:${md.artist ?? ""}`;
+  return null;
 }
 
 // ---------------------------------------------------------------------- settings
 
-export type Theme = 'dark' | 'light'
+export type Theme = "dark" | "light";
 /** Stored preference: an explicit theme, or follow the OS. */
-export type ThemePreference = Theme | 'system'
+export type ThemePreference = Theme | "system";
 
 /** The display face ("money font") — a curated, bundled set. The array is the
  *  single source of truth for valid ids (persist.ts coerces unknown values to
  *  the default; the renderer builds its labelled picker from the same ids). */
 export const DISPLAY_FONT_IDS = [
-  'fraunces',
-  'unbounded',
-  'newsreader',
-  'hanken',
-  'instrument-serif',
-  'schibsted',
-  'instrument-sans'
-] as const
-export type DisplayFont = (typeof DISPLAY_FONT_IDS)[number]
+  "fraunces",
+  "unbounded",
+  "newsreader",
+  "hanken",
+  "instrument-serif",
+  "schibsted",
+  "instrument-sans",
+] as const;
+export type DisplayFont = (typeof DISPLAY_FONT_IDS)[number];
 /** How a collection screen lays out its items. */
-export type ScreenLayout = 'rows' | 'cards'
+export type ScreenLayout = "rows" | "cards";
 /** Motion effects: follow the OS Reduce Motion setting, or force on/off. */
-export type MotionMode = 'system' | 'on' | 'off'
-export type AmbientArtMode = 'off' | 'now-playing' | 'all'
-export type AmbientCoverage = 'main' | 'window'
-export type AlignH = 'left' | 'center' | 'right'
-export type AlignV = 'top' | 'center' | 'bottom'
+export type MotionMode = "system" | "on" | "off";
+export type AmbientArtMode = "off" | "now-playing" | "all";
+export type AmbientCoverage = "main" | "window";
+export type AlignH = "left" | "center" | "right";
+export type AlignV = "top" | "center" | "bottom";
 
 export interface AppSettings {
-  lastHost: string | null
-  mediaKeys: boolean
-  volumeLimitPercent: number | null
-  notifications: boolean
+  lastHost: string | null;
+  mediaKeys: boolean;
+  volumeLimitPercent: number | null;
+  notifications: boolean;
   /**
    * A TastyTunes icon in the system tray / menu bar, with a context menu that
    * reaches the streamer without opening a window. Companion to the main
@@ -562,33 +560,33 @@ export interface AppSettings {
    * someone's menu bar has no defensible default and, unlike a toast, can't be
    * discovered and dismissed.
    */
-  tray: boolean
+  tray: boolean;
   /**
    * The "TastyTunes is still running" notice has been shown once. Internal
    * one-shot state, not a preference — there is no UI for it. Closing the last
    * window with a tray icon present leaves the app alive, and silently
    * surviving a close is how apps earn a reputation for being un-quittable.
    */
-  trayCloseNoticeShown: boolean
-  theme: ThemePreference
-  displayFont: DisplayFont
+  trayCloseNoticeShown: boolean;
+  theme: ThemePreference;
+  displayFont: DisplayFont;
   /** Blurred album-art backdrop. */
-  ambientArt: AmbientArtMode
+  ambientArt: AmbientArtMode;
   /** Backdrop extent: the main content area, or the whole window (nav + bar too). */
-  ambientCoverage: AmbientCoverage
-  vignette: boolean
-  accentFollowsArt: boolean
+  ambientCoverage: AmbientCoverage;
+  vignette: boolean;
+  accentFollowsArt: boolean;
   /** Preset grid: base card width in px. */
-  presetCardSize: number
+  presetCardSize: number;
   /** Preset grid: gap between cards in px. */
-  presetGap: number
+  presetGap: number;
   /** Preset grid: stretch cards to fill each row (true) or keep them exact-size (false). */
-  presetFillRows: boolean
+  presetFillRows: boolean;
   /** Now Playing content placement. */
-  nowPlayingAlignH: AlignH
-  nowPlayingAlignV: AlignV
+  nowPlayingAlignH: AlignH;
+  nowPlayingAlignV: AlignV;
   /** Left nav reduced to icons only. */
-  navCollapsed: boolean
+  navCollapsed: boolean;
   /**
    * Screens hidden from the left nav. A hide-set (not a visible-list) so
    * screens added in future app versions default to visible. Persisted as
@@ -596,7 +594,7 @@ export interface AppSettings {
    * 'now-playing'). Nav-only — hidden screens stay fully reachable via their
    * keyboard shortcut and the command palette.
    */
-  navHidden: string[]
+  navHidden: string[];
   /**
    * Nav tools hidden from the left nav's pinned bottom cluster (Commands,
    * Mini player). A hide-set (not a visible-list) so tools added in future app
@@ -605,7 +603,7 @@ export interface AppSettings {
    * ids are different id-spaces. Nav-only: Commands stays on the palette
    * shortcut, the mini player stays in the palette and the View menu.
    */
-  navHiddenTools: string[]
+  navHiddenTools: string[];
   /**
    * The user's own nav-rail order — screen ids, top to bottom. `[]` means the
    * registry's curated default, which is what almost everyone keeps.
@@ -621,17 +619,17 @@ export interface AppSettings {
    * Settings) is fixed. KEYS DO NOT TRAVEL WITH POSITION — see the registry
    * header in lib/screens.ts.
    */
-  navOrder: string[]
+  navOrder: string[];
   /** Auto-scroll to the current queue row / playing preset. */
-  followQueue: boolean
-  followPresets: boolean
+  followQueue: boolean;
+  followPresets: boolean;
   /** Per-screen cards ⇄ rows layout. Card sizing shares the presetCard* settings. */
-  queueLayout: ScreenLayout
-  presetsLayout: ScreenLayout
-  libraryLayout: ScreenLayout
+  queueLayout: ScreenLayout;
+  presetsLayout: ScreenLayout;
+  libraryLayout: ScreenLayout;
   /** Album-grid sort in the Library (tracks always sort by track number). */
-  librarySort: 'server' | 'title' | 'artist' | 'year'
-  librarySortReversed: boolean
+  librarySort: "server" | "title" | "artist" | "year";
+  librarySortReversed: boolean;
   /**
    * VIEW DEFAULTS PERSIST (ruled 2026-08-06): a control that shapes how a
    * screen presents — sort, partition, layout, a hide-this-kind toggle — is
@@ -641,60 +639,60 @@ export interface AppSettings {
    * later belongs here too.
    */
   /** Albums lens sort (the native album grid above keeps librarySort). */
-  lensAlbumsSort: 'title' | 'artist' | 'year'
-  lensAlbumsSortReversed: boolean
+  lensAlbumsSort: "title" | "artist" | "year";
+  lensAlbumsSortReversed: boolean;
   /** Artists lens: hide artists that only have loose tracks. */
-  lensArtistsAlbumsOnly: boolean
+  lensArtistsAlbumsOnly: boolean;
   /** Albums lens partition: everything, artist albums only, or compilations only. */
-  lensAlbumsKind: 'all' | 'albums' | 'compilations'
-  playlistsSort: 'updated' | 'created' | 'played' | 'name' | 'length'
-  playlistsSortReversed: boolean
+  lensAlbumsKind: "all" | "albums" | "compilations";
+  playlistsSort: "updated" | "created" | "played" | "name" | "length";
+  playlistsSortReversed: boolean;
   /** Favorites kind partition (All / Stations / Albums / Tracks). */
-  favoritesKind: 'all' | 'station' | 'album' | 'track'
-  searchSort: 'relevance' | 'name'
-  searchSortReversed: boolean
+  favoritesKind: "all" | "station" | "album" | "track";
+  searchSort: "relevance" | "name";
+  searchSortReversed: boolean;
   /**
    * Unified search: hidden result categories, plain ids sanitized on use
    * (the navHidden pattern). null = never customized — the screen derives
    * the default from navHidden (a screen hidden from the rail starts hidden
    * in search); an array is the user's explicit chip choice and wins.
    */
-  searchHidden: string[] | null
+  searchHidden: string[] | null;
   /** Remembered sleep-timer action (pause vs standby). The countdown itself is not persisted. */
-  sleepAction: SleepAction
+  sleepAction: SleepAction;
   /** Recently Played: collapse continuous sessions (radio/AirPlay/…) to one row, vs a row per song. */
-  recentsGrouped: boolean
+  recentsGrouped: boolean;
   /** Motion effects (hover growth, eqbars, smooth scrolling). */
-  motion: MotionMode
+  motion: MotionMode;
   /** Check GitHub releases for a newer version on launch and every few hours. */
-  updateCheck: boolean
+  updateCheck: boolean;
   /** Lyrics panel on Now Playing — fetches from LRCLIB on demand when opened. */
-  lyrics: boolean
+  lyrics: boolean;
   /** Inline flavor: current synced line under the Now Playing track details. */
-  lyricsLine: boolean
+  lyricsLine: boolean;
   /** Current synced line in full-screen display mode (toggled from its chrome). */
-  displayLyrics: boolean
+  displayLyrics: boolean;
   /** Scrobble listens to ListenBrainz (needs a user token; radio is never scrobbled). */
-  lbEnabled: boolean
+  lbEnabled: boolean;
   /** ListenBrainz user token, from listenbrainz.org/settings. Stored locally. */
-  lbToken: string
+  lbToken: string;
   /** Artist bio panel on Now Playing (MusicBrainz + Wikipedia, on demand). */
-  artistInfo: boolean
+  artistInfo: boolean;
   /**
    * Look stations up in the radio-browser.info directory. OFF means the app
    * never contacts it — not from the Radio screen, not from unified search,
    * not from an agent. Favorited stations still play: a favorite carries its
    * own stream URL and needs no directory at all.
    */
-  radioDirectory: boolean
+  radioDirectory: boolean;
   /** Scheduled actions (alarms) — fire only while the app is running. */
-  schedules: Schedule[]
+  schedules: Schedule[];
   /**
    * Per-preset volume overrides (feature 10): recalling the preset through
    * TastyTunes also sets this volume. Keyed via presetVolumeKey (device udn +
    * preset id) so multi-streamer homes never cross-apply.
    */
-  presetVolumes: Record<string, number>
+  presetVolumes: Record<string, number>;
   /**
    * queueContentHash of the queue at save time for queue presets saved
    * through this app, keyed via presetVolumeKey(udn, slot). Lets the
@@ -703,13 +701,13 @@ export interface AppSettings {
    * this machine; presets saved by other controllers have no entry and fall
    * back to collage-fingerprint matching.
    */
-  queueSignatures: Record<string, string>
+  queueSignatures: Record<string, string>;
   /** MCP server for local AI agents. */
-  mcp: McpSettings
+  mcp: McpSettings;
   /** Last-visited Settings tab (id from the Settings screen's tab rail). */
   /** Media indexes build/rebuild themselves (off = only from the Libraries buttons). */
-  mediaIndexAuto: boolean
-  settingsTab: string
+  mediaIndexAuto: boolean;
+  settingsTab: string;
   /**
    * Last-visited tray-panel tab. Remembered across opens on the same
    * precedent as `settingsTab` — you reach for the same one repeatedly, and
@@ -718,7 +716,7 @@ export interface AppSettings {
    * Overridden by a heuristic, not a knob: opening on Queue with nothing
    * playing is an empty box, so an idle streamer opens on Presets.
    */
-  trayTab: string
+  trayTab: string;
   /**
    * Tray-panel list density: `detailed` carries album art and an artist line,
    * `compressed` is one line per row with no art — roughly double the rows in
@@ -734,20 +732,20 @@ export interface AppSettings {
    * already applied this rule once, ruling that the panel must not inherit
    * `presetCardSize`/`presetGap`.
    */
-  trayRowDensity: 'detailed' | 'compressed'
+  trayRowDensity: "detailed" | "compressed";
   /** Tray-panel presets: art tiles or rows. Separate from `presetsLayout` for
    *  the same reason as the density above — it's fit, not preference. */
-  trayPresetsLayout: ScreenLayout
+  trayPresetsLayout: ScreenLayout;
   /** Last-selected diagnostics-drawer tab (smoip | requests). */
-  diagnosticsTab: string
+  diagnosticsTab: string;
   /** Last-selected Device-screen tab (tabs appear only on tone-capable streamers). */
-  deviceTab: 'streamer' | 'sources' | 'tone'
+  deviceTab: "streamer" | "sources" | "tone";
   /** Width (px) of the Now Playing drawers (lyrics/artist), drag-resizable. */
-  panelWidth: number
+  panelWidth: number;
   /** Remembered mini-player window position. */
-  miniBounds: { x: number; y: number } | null
+  miniBounds: { x: number; y: number } | null;
   /** Remembered main-window bounds — reopened at this size/position. */
-  mainBounds: { x: number; y: number; width: number; height: number } | null
+  mainBounds: { x: number; y: number; width: number; height: number } | null;
   /**
    * Artist per device preset, keyed by presetVolumeKey(udn, presetId) —
    * recorded when TastyTunes saves an album/track preset from the Library.
@@ -758,7 +756,7 @@ export interface AppSettings {
    * as presetVolumes: entries are keyed by slot and not remapped on
    * move/delete.
    */
-  presetArtists: Record<string, string>
+  presetArtists: Record<string, string>;
   /**
    * User-saved EQ gain-sets (7 gains, dB). LOCAL by design: the firmware has
    * no preset storage — the official app's EQ presets are client-side too
@@ -766,7 +764,7 @@ export interface AppSettings {
    * so its presets and ours can't see each other. Applying = one multi-band
    * user_eq_bands frame.
    */
-  eqPresets: Array<{ name: string; gains: number[] }>
+  eqPresets: Array<{ name: string; gains: number[] }>;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -781,47 +779,47 @@ export const DEFAULT_SETTINGS: AppSettings = {
   // files without the key pick up the new default.
   tray: true,
   trayCloseNoticeShown: false,
-  theme: 'dark',
-  displayFont: 'fraunces',
-  ambientArt: 'all',
-  ambientCoverage: 'window',
+  theme: "dark",
+  displayFont: "fraunces",
+  ambientArt: "all",
+  ambientCoverage: "window",
   vignette: true,
   accentFollowsArt: false,
   presetCardSize: 160,
   presetGap: 12,
   presetFillRows: true,
-  nowPlayingAlignH: 'left',
-  nowPlayingAlignV: 'top',
+  nowPlayingAlignH: "left",
+  nowPlayingAlignV: "top",
   navCollapsed: false,
   navHidden: [],
   navHiddenTools: [],
   navOrder: [],
   followQueue: true,
   followPresets: false,
-  queueLayout: 'rows',
-  presetsLayout: 'cards',
-  libraryLayout: 'cards',
-  librarySort: 'server',
+  queueLayout: "rows",
+  presetsLayout: "cards",
+  libraryLayout: "cards",
+  librarySort: "server",
   librarySortReversed: false,
-  lensAlbumsSort: 'title',
+  lensAlbumsSort: "title",
   lensAlbumsSortReversed: false,
   lensArtistsAlbumsOnly: false,
-  lensAlbumsKind: 'all',
-  playlistsSort: 'updated',
+  lensAlbumsKind: "all",
+  playlistsSort: "updated",
   playlistsSortReversed: false,
-  favoritesKind: 'all',
-  searchSort: 'relevance',
+  favoritesKind: "all",
+  searchSort: "relevance",
   searchSortReversed: false,
   searchHidden: null,
-  sleepAction: 'standby',
+  sleepAction: "standby",
   recentsGrouped: true,
-  motion: 'system',
+  motion: "system",
   updateCheck: true,
   lyrics: true,
   lyricsLine: true,
   displayLyrics: true,
   lbEnabled: false,
-  lbToken: '',
+  lbToken: "",
   artistInfo: true,
   radioDirectory: true,
   schedules: [],
@@ -829,39 +827,39 @@ export const DEFAULT_SETTINGS: AppSettings = {
   queueSignatures: {},
   mcp: {
     enabled: false,
-    bind: 'localhost',
+    bind: "localhost",
     port: 8555,
     disabledClusters: [],
     enabledClusters: [],
-    disabledTools: []
+    disabledTools: [],
   },
   mediaIndexAuto: true,
-  settingsTab: 'appearance',
-  trayTab: 'queue',
+  settingsTab: "appearance",
+  trayTab: "queue",
   // COMPRESSED by default (user call, 2026-08-03): the panel's job is a
   // glance's worth of list in a corner of the screen, and the flat rows fit
   // ~11 where the floating ones fit 6. The detailed skin stays one chip away.
-  trayRowDensity: 'compressed',
-  trayPresetsLayout: 'cards',
-  diagnosticsTab: 'smoip',
-  deviceTab: 'streamer',
+  trayRowDensity: "compressed",
+  trayPresetsLayout: "cards",
+  diagnosticsTab: "smoip",
+  deviceTab: "streamer",
   panelWidth: 400,
   miniBounds: null,
   mainBounds: null,
   presetArtists: {},
-  eqPresets: []
-}
+  eqPresets: [],
+};
 
 // ------------------------------------------------------------------ media browser
 
 export interface MediaServerInfo {
-  udn: string
-  name: string
-  model: string | null
+  udn: string;
+  name: string;
+  model: string | null;
   /** True when this "server" is the connected streamer itself (USB storage). */
-  isStreamer: boolean
+  isStreamer: boolean;
   /** True when the server answers ContentDirectory Search (non-empty SearchCaps). */
-  searchable: boolean
+  searchable: boolean;
 }
 
 /**
@@ -872,53 +870,53 @@ export interface MediaServerInfo {
  * (seconds); Browse-only servers build on demand by walking containers.
  */
 export interface MediaIndexStatus {
-  udn: string
-  serverName: string
+  udn: string;
+  serverName: string;
   /** 'failed': the last build produced nothing (the server refused Search AND Browse — offline, or mid-scan); `failure` says why. */
-  state: 'none' | 'building' | 'ready' | 'failed'
-  failure?: string
-  strategy: 'search' | 'browse' | null
-  tracks: number
-  albums: number
-  artists: number
-  builtAt: number | null
-  updateId: number | null
-  profile?: MediaServerProfile
+  state: "none" | "building" | "ready" | "failed";
+  failure?: string;
+  strategy: "search" | "browse" | null;
+  tracks: number;
+  albums: number;
+  artists: number;
+  builtAt: number | null;
+  updateId: number | null;
+  profile?: MediaServerProfile;
 }
 
 export interface MediaNode {
-  id: string
-  parentId: string | null
-  title: string
-  upnpClass: string
-  isContainer: boolean
-  artUrl: string | null
-  artist: string | null
-  album: string | null
+  id: string;
+  parentId: string | null;
+  title: string;
+  upnpClass: string;
+  isContainer: boolean;
+  artUrl: string | null;
+  artist: string | null;
+  album: string | null;
   /** Release year, when the server sends dc:date (Asset does; the USB server doesn't). */
-  year: string | null
-  trackNumber: number | null
-  durationSecs: number | null
+  year: string | null;
+  trackNumber: number | null;
+  durationSecs: number | null;
   /**
    * upnp:originalDiscNumber / originalDiscCount, when the server sends them
    * (Asset does; it ALSO packs disc×100+track into originalTrackNumber — 212
    * for disc 2 track 12 — so read positions through trackPosition()).
    */
-  discNumber?: number
-  discCount?: number
+  discNumber?: number;
+  discCount?: number;
   /**
    * The audio format of the primary <res>, when the server describes it
    * (DLNA attributes: protocolInfo mime, bitsPerSample, sampleFrequency,
    * bitrate in BYTES/s per the UPnP spec, size). Asset sends all of them
    * (live 2026-08-15); the streamer's USB server sends duration only.
    */
-  format?: MediaFormat
+  format?: MediaFormat;
   /**
    * upnp:genre values, when the server sends any (multi-valued — real tags
    * repeat the element). Raw tagger data: case-normalize before faceting.
    * Absent (not empty) when the server offers none.
    */
-  genre?: string[]
+  genre?: string[];
   /**
    * The album artist, when the server says so (Asset: upnp:artist
    * role="AlbumArtist"). Absent otherwise. This — not `artist` — is what
@@ -926,38 +924,38 @@ export interface MediaNode {
    * track's `artist` reads "Daft Punk; Julian Casablancas" while its album
    * artist is Daft Punk.
    */
-  albumArtist?: string
+  albumArtist?: string;
   /**
    * The performers as separate names, when `artist` packs more than one
    * ("A; B" → ["A", "B"]). Absent for a single performer — read identity
    * through a helper that falls back to [artist], never off this alone.
    */
-  artists?: string[]
+  artists?: string[];
   /**
    * upnp:artist role="Composer", split on "; " (Asset: "Thomas Bangalter;
    * Guy-Manuel de Homem-Christo"). Not performers — never an artist row;
    * searchable, and an album that shares one composer says so in its facts.
    */
-  composers?: string[]
+  composers?: string[];
   /**
    * Which server this node came from — stamped ONLY on cross-server search
    * results, where nodes from several servers share a listing. Everywhere
    * else the screen's own server context applies and these stay absent.
    */
-  serverUdn?: string
-  serverName?: string
+  serverUdn?: string;
+  serverName?: string;
 }
 
 export interface MediaFormat {
   /** Codec label from the mime type: FLAC, MP3, AAC, ALAC, WAV, PCM, AIFF, WMA, OGG, Opus, DSD — or the bare subtype. */
-  codec: string
-  bits?: number
+  codec: string;
+  bits?: number;
   /** Sample rate in Hz. */
-  rate?: number
+  rate?: number;
   /** Stream bitrate in kbps (the spec's bytes/s ×8 /1000). */
-  kbps?: number
-  sizeBytes?: number
-  channels?: number
+  kbps?: number;
+  sizeBytes?: number;
+  channels?: number;
 }
 
 /**
@@ -966,8 +964,17 @@ export interface MediaFormat {
  * whether bitsPerSample is stored at all, and formatLabel to decide whether
  * to say "16/44.1" or "320 kbps" — two copies once disagreed only by luck.
  */
-export const LOSSLESS_CODECS: ReadonlySet<string> = new Set(['FLAC', 'WAV', 'PCM', 'AIFF', 'ALAC', 'DSD', 'APE', 'WV'])
-const LOSSLESS = LOSSLESS_CODECS
+export const LOSSLESS_CODECS: ReadonlySet<string> = new Set([
+  "FLAC",
+  "WAV",
+  "PCM",
+  "AIFF",
+  "ALAC",
+  "DSD",
+  "APE",
+  "WV",
+]);
+const LOSSLESS = LOSSLESS_CODECS;
 
 /**
  * Hi-res, ONE definition (2026-08-16): above CD-class — more than 16 bits or
@@ -975,21 +982,30 @@ const LOSSLESS = LOSSLESS_CODECS
  * Playing signal lamp, the library's album summary and the MCP list_albums
  * filter all ask this; the lamp once carried MQA and the summary did not.
  */
-export const HIRES_BITS_ABOVE = 16
-export const HIRES_RATE_ABOVE = 48_000
-export function isHiRes(f: { bits?: number | null; rate?: number | null; mqa?: string | null }): boolean {
-  return (f.bits ?? 0) > HIRES_BITS_ABOVE || (f.rate ?? 0) > HIRES_RATE_ABOVE || (f.mqa != null && f.mqa !== 'none')
+export const HIRES_BITS_ABOVE = 16;
+export const HIRES_RATE_ABOVE = 48_000;
+export function isHiRes(f: {
+  bits?: number | null;
+  rate?: number | null;
+  mqa?: string | null;
+}): boolean {
+  return (
+    (f.bits ?? 0) > HIRES_BITS_ABOVE ||
+    (f.rate ?? 0) > HIRES_RATE_ABOVE ||
+    (f.mqa != null && f.mqa !== "none")
+  );
 }
 
 /** "FLAC · 16/44.1" for lossless (bits/kHz), "MP3 · 320 kbps" for lossy; degrades to what is known. */
 export function formatLabel(f: MediaFormat | undefined | null): string | null {
-  if (!f) return null
-  const khz = f.rate ? `${(f.rate / 1000).toFixed(f.rate % 1000 === 0 ? 0 : 1)}` : null
+  if (!f) return null;
+  const khz = f.rate ? `${(f.rate / 1000).toFixed(f.rate % 1000 === 0 ? 0 : 1)}` : null;
   if (LOSSLESS.has(f.codec)) {
-    const detail = f.bits && khz ? `${f.bits}/${khz}` : khz ? `${khz} kHz` : f.bits ? `${f.bits}-bit` : null
-    return detail ? `${f.codec} · ${detail}` : f.codec
+    const detail =
+      f.bits && khz ? `${f.bits}/${khz}` : khz ? `${khz} kHz` : f.bits ? `${f.bits}-bit` : null;
+    return detail ? `${f.codec} · ${detail}` : f.codec;
   }
-  return f.kbps ? `${f.codec} · ${f.kbps} kbps` : f.codec
+  return f.kbps ? `${f.codec} · ${f.kbps} kbps` : f.codec;
 }
 
 /**
@@ -998,25 +1014,26 @@ export function formatLabel(f: MediaFormat | undefined | null): string | null {
  * when formats are genuinely mixed or unknown. Returned alongside the
  * per-track notes so a header and its rows can never disagree.
  */
-export function albumFormat(tracks: ReadonlyArray<Pick<MediaNode, 'format'>>): {
-  label: string | null
+export function albumFormat(tracks: ReadonlyArray<Pick<MediaNode, "format">>): {
+  label: string | null;
   /** For each input track, the note a row should carry — null when it matches the headline. */
-  notes: (string | null)[]
+  notes: (string | null)[];
 } {
-  const labels = tracks.map((t) => formatLabel(t.format))
-  const counts = new Map<string, number>()
-  for (const l of labels) if (l) counts.set(l, (counts.get(l) ?? 0) + 1)
-  if (counts.size === 0) return { label: null, notes: labels.map(() => null) }
-  const [top, n] = [...counts.entries()].sort((x, y) => y[1] - x[1])[0]
-  const known = labels.filter(Boolean).length
+  const labels = tracks.map((t) => formatLabel(t.format));
+  const counts = new Map<string, number>();
+  for (const l of labels) if (l) counts.set(l, (counts.get(l) ?? 0) + 1);
+  if (counts.size === 0) return { label: null, notes: labels.map(() => null) };
+  const [top, n] = [...counts.entries()].sort((x, y) => y[1] - x[1])[0];
+  const known = labels.filter(Boolean).length;
   // THE PREDOMINANT FORMAT HEADLINES when at least half the tracks share it,
   // and every other track says what IT is; with no predominant format the
   // headline is "mixed formats" and every track says. The user's ruling
   // (2026-08-16, after a stricter odd-one-out cut hid information they
   // wanted): the point of the row notes is to SEE the exceptions, however
   // many there are.
-  if (counts.size > 1 && n * 2 < known) return { label: 'mixed formats', notes: labels.map((l) => l ?? null) }
-  return { label: top, notes: labels.map((l) => (l && l !== top ? l : null)) }
+  if (counts.size > 1 && n * 2 < known)
+    return { label: "mixed formats", notes: labels.map((l) => l ?? null) };
+  return { label: top, notes: labels.map((l) => (l && l !== top ? l : null)) };
 }
 
 /**
@@ -1027,19 +1044,19 @@ export function albumFormat(tracks: ReadonlyArray<Pick<MediaNode, 'format'>>): {
  * the album artist is among the performers and there are others.
  */
 export function performerLine(
-  n: Pick<MediaNode, 'artist' | 'artists' | 'albumArtist'>,
-  albumArtist: string | null | undefined
+  n: Pick<MediaNode, "artist" | "artists" | "albumArtist">,
+  albumArtist: string | null | undefined,
 ): string | null {
-  const names = trackArtists(n)
-  if (!albumArtist || names.length < 2) return n.artist
-  const key = albumArtist.trim().toLowerCase()
-  const lead = names.find((x) => x.trim().toLowerCase() === key)
-  if (!lead) return n.artist
-  const guests = names.filter((x) => x !== lead)
-  return guests.length > 0 ? `${lead} feat. ${guests.join(', ')}` : n.artist
+  const names = trackArtists(n);
+  if (!albumArtist || names.length < 2) return n.artist;
+  const key = albumArtist.trim().toLowerCase();
+  const lead = names.find((x) => x.trim().toLowerCase() === key);
+  if (!lead) return n.artist;
+  const guests = names.filter((x) => x !== lead);
+  return guests.length > 0 ? `${lead} feat. ${guests.join(", ")}` : n.artist;
 }
 
-const VARIOUS = /^(various(\s+artists?)?|va|v\.a\.|verschiedene(\s+interpreten)?|divers)$/i
+const VARIOUS = /^(various(\s+artists?)?|va|v\.a\.|verschiedene(\s+interpreten)?|divers)$/i;
 
 /**
  * Is this album a COMPILATION? Named so by its album artist ("Various
@@ -1048,29 +1065,29 @@ const VARIOUS = /^(various(\s+artists?)?|va|v\.a\.|verschiedene(\s+interpreten)?
  * an album whose guests join its own artist ("Daft Punk feat. …") is NOT.
  */
 export function isCompilation(
-  album: Pick<MediaNode, 'artist'>,
-  tracks?: ReadonlyArray<Pick<MediaNode, 'artist' | 'artists' | 'albumArtist'>>
+  album: Pick<MediaNode, "artist">,
+  tracks?: ReadonlyArray<Pick<MediaNode, "artist" | "artists" | "albumArtist">>,
 ): boolean {
-  const owner = album.artist?.trim() ?? ''
-  if (VARIOUS.test(owner)) return true
-  if (!tracks || tracks.length < 2 || !owner) return false
-  const key = owner.toLowerCase()
-  const performerSets = tracks.map((t) => trackArtists(t).map((x) => x.trim().toLowerCase()))
-  const anyOwner = performerSets.some((set) => set.includes(key))
-  const distinct = new Set(performerSets.map((set) => set.join('|'))).size
-  return !anyOwner && distinct >= 2
+  const owner = album.artist?.trim() ?? "";
+  if (VARIOUS.test(owner)) return true;
+  if (!tracks || tracks.length < 2 || !owner) return false;
+  const key = owner.toLowerCase();
+  const performerSets = tracks.map((t) => trackArtists(t).map((x) => x.trim().toLowerCase()));
+  const anyOwner = performerSets.some((set) => set.includes(key));
+  const distinct = new Set(performerSets.map((set) => set.join("|"))).size;
+  return !anyOwner && distinct >= 2;
 }
 
 /** The composers every track shares (order of first appearance), or [] when they differ or are unknown. */
-export function albumComposers(tracks: ReadonlyArray<Pick<MediaNode, 'composers'>>): string[] {
-  const known = tracks.filter((t) => t.composers && t.composers.length > 0)
-  if (known.length === 0 || known.length < tracks.length) return []
-  const first = known[0].composers!.map((x) => x.trim().toLowerCase())
+export function albumComposers(tracks: ReadonlyArray<Pick<MediaNode, "composers">>): string[] {
+  const known = tracks.filter((t) => t.composers && t.composers.length > 0);
+  if (known.length === 0 || known.length < tracks.length) return [];
+  const first = known[0].composers!.map((x) => x.trim().toLowerCase());
   const same = known.every((t) => {
-    const c = t.composers!.map((x) => x.trim().toLowerCase())
-    return c.length === first.length && c.every((x) => first.includes(x))
-  })
-  return same ? known[0].composers! : []
+    const c = t.composers!.map((x) => x.trim().toLowerCase());
+    return c.length === first.length && c.every((x) => first.includes(x));
+  });
+  return same ? known[0].composers! : [];
 }
 
 /**
@@ -1082,21 +1099,27 @@ export function albumComposers(tracks: ReadonlyArray<Pick<MediaNode, 'composers'
  * rule over its memoized map (S13/S16 pin it).
  */
 export function albumTracksOf(
-  album: Pick<MediaNode, 'title' | 'artist' | 'artUrl'>,
-  pool: { albums: ReadonlyArray<Pick<MediaNode, 'title' | 'artist'>>; tracks: ReadonlyArray<MediaNode> }
+  album: Pick<MediaNode, "title" | "artist" | "artUrl">,
+  pool: {
+    albums: ReadonlyArray<Pick<MediaNode, "title" | "artist">>;
+    tracks: ReadonlyArray<MediaNode>;
+  },
 ): MediaNode[] {
-  const title = album.title.trim().toLowerCase()
-  const owner = (album.artist ?? '').trim().toLowerCase()
+  const title = album.title.trim().toLowerCase();
+  const owner = (album.artist ?? "").trim().toLowerCase();
   const twins =
-    pool.albums.filter((a) => a.title.trim().toLowerCase() === title && (a.artist ?? '').trim().toLowerCase() === owner).length > 1
+    pool.albums.filter(
+      (a) =>
+        a.title.trim().toLowerCase() === title && (a.artist ?? "").trim().toLowerCase() === owner,
+    ).length > 1;
   return orderTracks(
     pool.tracks.filter(
       (t) =>
-        (t.album ?? '').trim().toLowerCase() === title &&
+        (t.album ?? "").trim().toLowerCase() === title &&
         trackInAlbumOf(t, album.artist ?? null) &&
-        (!twins || sameArt(t.artUrl, album.artUrl))
-    )
-  )
+        (!twins || sameArt(t.artUrl, album.artUrl)),
+    ),
+  );
 }
 
 /**
@@ -1109,53 +1132,61 @@ export function albumTracksOf(
  * cannot improve on the listing and can only scramble it. Every sort of an
  * album's tracks goes through here (leaf, lens, albumTracksOf).
  */
-export function orderTracks<T extends Pick<MediaNode, 'trackNumber' | 'discNumber'>>(tracks: ReadonlyArray<T>): T[] {
-  const seen = new Set<string>()
-  let repeats = false
+export function orderTracks<T extends Pick<MediaNode, "trackNumber" | "discNumber">>(
+  tracks: ReadonlyArray<T>,
+): T[] {
+  const seen = new Set<string>();
+  let repeats = false;
   for (const t of tracks) {
-    const pos = trackPosition(t)
-    if (pos == null) continue
-    const key = `${t.discNumber ?? 1}:${pos}`
-    if (seen.has(key)) { repeats = true; break }
-    seen.add(key)
+    const pos = trackPosition(t);
+    if (pos == null) continue;
+    const key = `${t.discNumber ?? 1}:${pos}`;
+    if (seen.has(key)) {
+      repeats = true;
+      break;
+    }
+    seen.add(key);
   }
-  if (!repeats) return [...tracks].sort(compareTrackOrder)
+  if (!repeats) return [...tracks].sort(compareTrackOrder);
   // Repeats: the listing order stands ONLY when it reads as discs — ascending
   // runs, each restarting lower than the last position (Browse of a minidlna
   // or MinimServer album). A search-built index lists by title (Gerbera,
   // Minim) and that order says nothing about discs; sort by position then,
   // interleaved but ordered (survey 2026-08-17: OKNOTOK came out alphabetical).
-  const positions = tracks.map(trackPosition)
-  let ascendingRuns = true
-  let restarts = 0
+  const positions = tracks.map(trackPosition);
+  let ascendingRuns = true;
+  let restarts = 0;
   for (let i = 1; i < positions.length; i++) {
-    const a = positions[i - 1]
-    const b = positions[i]
-    if (a == null || b == null) continue
-    if (b < a) restarts++
-    else if (b === a) { ascendingRuns = false; break }
+    const a = positions[i - 1];
+    const b = positions[i];
+    if (a == null || b == null) continue;
+    if (b < a) restarts++;
+    else if (b === a) {
+      ascendingRuns = false;
+      break;
+    }
   }
-  if (ascendingRuns && restarts > 0 && restarts < positions.length / 2) return [...tracks]
-  return [...tracks].sort(compareTrackOrder)
+  if (ascendingRuns && restarts > 0 && restarts < positions.length / 2) return [...tracks];
+  return [...tracks].sort(compareTrackOrder);
 }
 
 /** Everything an album's tracks add up to — the leaf's facts, the lens heading, the Info modal and MCP all read this. */
 export function albumSummary(
-  album: Pick<MediaNode, 'artist'>,
-  tracks: MediaNode[]
+  album: Pick<MediaNode, "artist">,
+  tracks: MediaNode[],
 ): {
-  tracks: number
-  discs: number
-  runtimeSecs: number
-  sizeBytes: number
-  format: string | null
+  tracks: number;
+  discs: number;
+  runtimeSecs: number;
+  sizeBytes: number;
+  format: string | null;
   /** how many tracks differ from the format headline */
-  formatOdd: number
-  hires: boolean
-  composers: string[]
-  isCompilation: boolean
+  formatOdd: number;
+  hires: boolean;
+  composers: string[];
+  isCompilation: boolean;
 } {
-  const fmt = albumFormat(tracks)
+  const fmt = albumFormat(tracks);
   return {
     tracks: tracks.length,
     discs: discGroups(tracks).filter((g) => g.disc != null).length || (tracks.length > 0 ? 1 : 0),
@@ -1165,15 +1196,15 @@ export function albumSummary(
     formatOdd: fmt.notes.filter(Boolean).length,
     hires: tracks.some((t) => t.format != null && isHiRes(t.format)),
     composers: albumComposers(tracks),
-    isCompilation: isCompilation(album, tracks)
-  }
+    isCompilation: isCompilation(album, tracks),
+  };
 }
 
 /** 940 MB, 1.2 GB — for album/playlist size sums. */
 export function fmtBytes(n: number): string {
-  if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toFixed(n >= 10 * 1024 ** 3 ? 0 : 1)} GB`
-  if (n >= 1024 ** 2) return `${Math.round(n / 1024 ** 2)} MB`
-  return `${Math.max(1, Math.round(n / 1024))} KB`
+  if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toFixed(n >= 10 * 1024 ** 3 ? 0 : 1)} GB`;
+  if (n >= 1024 ** 2) return `${Math.round(n / 1024 ** 2)} MB`;
+  return `${Math.max(1, Math.round(n / 1024))} KB`;
 }
 
 /**
@@ -1181,9 +1212,9 @@ export function fmtBytes(n: number): string {
  * this track": `artists` when the server packed several, else the single
  * `artist`. Never key identity on the packed string ("A; B" is two people).
  */
-export function trackArtists(n: Pick<MediaNode, 'artist' | 'artists'>): string[] {
-  if (n.artists && n.artists.length > 0) return n.artists
-  return n.artist ? [n.artist] : []
+export function trackArtists(n: Pick<MediaNode, "artist" | "artists">): string[] {
+  if (n.artists && n.artists.length > 0) return n.artists;
+  return n.artist ? [n.artist] : [];
 }
 
 /**
@@ -1194,15 +1225,15 @@ export function trackArtists(n: Pick<MediaNode, 'artist' | 'artists'>): string[]
  * stick); a track with no artist at all is not held against the album.
  */
 export function trackInAlbumOf(
-  n: Pick<MediaNode, 'artist' | 'artists' | 'albumArtist'>,
-  albumArtist: string | null
+  n: Pick<MediaNode, "artist" | "artists" | "albumArtist">,
+  albumArtist: string | null,
 ): boolean {
-  if (albumArtist == null) return true
-  const want = albumArtist.trim().toLowerCase()
-  if (n.albumArtist) return n.albumArtist.trim().toLowerCase() === want
-  const names = trackArtists(n)
-  if (names.length === 0) return true
-  return names.some((a) => a.trim().toLowerCase() === want)
+  if (albumArtist == null) return true;
+  const want = albumArtist.trim().toLowerCase();
+  if (n.albumArtist) return n.albumArtist.trim().toLowerCase() === want;
+  const names = trackArtists(n);
+  if (names.length === 0) return true;
+  return names.some((a) => a.trim().toLowerCase() === want);
 }
 
 /**
@@ -1212,11 +1243,11 @@ export function trackInAlbumOf(
  * with that packing the hundreds are the disc, not the track. Servers that
  * send a plain track number alongside the disc are returned as-is.
  */
-export function trackPosition(n: Pick<MediaNode, 'trackNumber' | 'discNumber'>): number | null {
-  const t = n.trackNumber
-  if (t == null) return null
-  if (n.discNumber != null && t >= 100 && Math.floor(t / 100) === n.discNumber) return t % 100
-  return t
+export function trackPosition(n: Pick<MediaNode, "trackNumber" | "discNumber">): number | null {
+  const t = n.trackNumber;
+  if (t == null) return null;
+  if (n.discNumber != null && t >= 100 && Math.floor(t / 100) === n.discNumber) return t % 100;
+  return t;
 }
 
 /**
@@ -1224,35 +1255,37 @@ export function trackPosition(n: Pick<MediaNode, 'trackNumber' | 'discNumber'>):
  * without a position they keep their listing order after the numbered ones.
  */
 export function compareTrackOrder(
-  a: Pick<MediaNode, 'trackNumber' | 'discNumber'>,
-  b: Pick<MediaNode, 'trackNumber' | 'discNumber'>
+  a: Pick<MediaNode, "trackNumber" | "discNumber">,
+  b: Pick<MediaNode, "trackNumber" | "discNumber">,
 ): number {
-  const da = a.discNumber ?? 1
-  const db = b.discNumber ?? 1
-  if (da !== db) return da - db
-  const pa = trackPosition(a)
-  const pb = trackPosition(b)
-  if (pa == null && pb == null) return 0
-  if (pa == null) return 1
-  if (pb == null) return -1
-  return pa - pb
+  const da = a.discNumber ?? 1;
+  const db = b.discNumber ?? 1;
+  if (da !== db) return da - db;
+  const pa = trackPosition(a);
+  const pb = trackPosition(b);
+  if (pa == null && pb == null) return 0;
+  if (pa == null) return 1;
+  if (pb == null) return -1;
+  return pa - pb;
 }
 
 /** Consecutive runs of one disc, for the quiet "Disc N" dividers — only when the list actually spans discs. */
-export function discGroups<T extends Pick<MediaNode, 'discNumber'>>(tracks: T[]): { disc: number | null; tracks: T[] }[] {
+export function discGroups<T extends Pick<MediaNode, "discNumber">>(
+  tracks: T[],
+): { disc: number | null; tracks: T[] }[] {
   // "no disc" IS disc 1 (that is how compareTrackOrder sorts it too) — an
   // album where some tracks say disc 1 and the rest say nothing is one disc,
   // not an alternation of dividers (two GUNSHIP editions, 2026-08-16)
-  const discs = new Set(tracks.map((t) => t.discNumber ?? 1))
-  if (discs.size < 2) return [{ disc: null, tracks }]
-  const out: { disc: number | null; tracks: T[] }[] = []
+  const discs = new Set(tracks.map((t) => t.discNumber ?? 1));
+  if (discs.size < 2) return [{ disc: null, tracks }];
+  const out: { disc: number | null; tracks: T[] }[] = [];
   for (const t of tracks) {
-    const d = t.discNumber ?? 1
-    const last = out[out.length - 1]
-    if (last && last.disc === d) last.tracks.push(t)
-    else out.push({ disc: d, tracks: [t] })
+    const d = t.discNumber ?? 1;
+    const last = out[out.length - 1];
+    if (last && last.disc === d) last.tracks.push(t);
+    else out.push({ disc: d, tracks: [t] });
   }
-  return out
+  return out;
 }
 
 /**
@@ -1263,26 +1296,33 @@ export function discGroups<T extends Pick<MediaNode, 'discNumber'>>(tracks: T[])
  * the size query, unknown on either side counts as a match.
  */
 export function sameArt(a: string | null | undefined, b: string | null | undefined): boolean {
-  if (!a || !b) return true
-  return a.split('?')[0] === b.split('?')[0]
+  if (!a || !b) return true;
+  return a.split("?")[0] === b.split("?")[0];
 }
 
 /** An artist as the library knows them — the Info modal's artist page and MCP's get_media_info share it. */
 export interface ArtistSummary {
-  name: string
+  name: string;
   /** Albums credited to them (album artist), newest first, with a format headline when known. */
-  albums: { title: string; year: string | null; format: string | null; tracks: number; objectId: string; serverUdn?: string }[]
+  albums: {
+    title: string;
+    year: string | null;
+    format: string | null;
+    tracks: number;
+    objectId: string;
+    serverUdn?: string;
+  }[];
   /** Tracks they perform on (headliner or guest). */
-  trackCount: number
+  trackCount: number;
   /** Tracks they GUEST on — performer, but not the album artist. */
-  guestOn: { title: string; album: string | null; albumArtist: string | null; objectId: string }[]
+  guestOn: { title: string; album: string | null; albumArtist: string | null; objectId: string }[];
   /** Tracks they wrote (role=Composer). */
-  composed: { title: string; album: string | null; objectId: string }[]
+  composed: { title: string; album: string | null; objectId: string }[];
   /** Genres across their albums, most common first. */
-  genres: string[]
+  genres: string[];
   /** Earliest and latest album year. */
-  years: [string, string] | null
-  artUrl: string | null
+  years: [string, string] | null;
+  artUrl: string | null;
 }
 
 /**
@@ -1291,35 +1331,59 @@ export interface ArtistSummary {
  * composer credits. Names that exist only as credits (a featured singer with
  * no albums of their own) get a page too.
  */
-export function artistSummary(name: string, pool: { albums: ReadonlyArray<MediaNode>; tracks: ReadonlyArray<MediaNode> }): ArtistSummary {
-  const key = name.trim().toLowerCase()
-  const same = (v: string | null | undefined): boolean => (v ?? '').trim().toLowerCase() === key
+export function artistSummary(
+  name: string,
+  pool: { albums: ReadonlyArray<MediaNode>; tracks: ReadonlyArray<MediaNode> },
+): ArtistSummary {
+  const key = name.trim().toLowerCase();
+  const same = (v: string | null | undefined): boolean => (v ?? "").trim().toLowerCase() === key;
   const albums = pool.albums
     .filter((a) => same(a.artist))
     .map((a) => {
-      const tracks = albumTracksOf(a, pool)
-      return { title: a.title, year: a.year, format: albumFormat(tracks).label, tracks: tracks.length, objectId: a.id, ...(a.serverUdn ? { serverUdn: a.serverUdn } : {}), artUrl: a.artUrl }
+      const tracks = albumTracksOf(a, pool);
+      return {
+        title: a.title,
+        year: a.year,
+        format: albumFormat(tracks).label,
+        tracks: tracks.length,
+        objectId: a.id,
+        ...(a.serverUdn ? { serverUdn: a.serverUdn } : {}),
+        artUrl: a.artUrl,
+      };
     })
-    .sort((x, y) => (y.year ?? '').localeCompare(x.year ?? '') || x.title.localeCompare(y.title))
-  const performs = pool.tracks.filter((t) => trackArtists(t).some(same))
+    .sort((x, y) => (y.year ?? "").localeCompare(x.year ?? "") || x.title.localeCompare(y.title));
+  const performs = pool.tracks.filter((t) => trackArtists(t).some(same));
   // a GUEST spot is a track on someone else's album: the album owner (the
   // track's album artist, else the album's credited artist) is known and is
   // not them — a loose single with no album is simply theirs
   const ownerOf = (t: MediaNode): string | null =>
-    t.albumArtist ?? pool.albums.find((a) => t.album && a.title.trim().toLowerCase() === t.album.trim().toLowerCase())?.artist ?? null
+    t.albumArtist ??
+    pool.albums.find(
+      (a) => t.album && a.title.trim().toLowerCase() === t.album.trim().toLowerCase(),
+    )?.artist ??
+    null;
   const guestOn = performs
     .filter((t) => {
-      const owner = ownerOf(t)
-      return owner != null && !same(owner)
+      const owner = ownerOf(t);
+      return owner != null && !same(owner);
     })
-    .map((t) => ({ title: t.title, album: t.album ?? null, albumArtist: ownerOf(t), objectId: t.id }))
+    .map((t) => ({
+      title: t.title,
+      album: t.album ?? null,
+      albumArtist: ownerOf(t),
+      objectId: t.id,
+    }));
   const composed = pool.tracks
     .filter((t) => (t.composers ?? []).some(same))
-    .map((t) => ({ title: t.title, album: t.album ?? null, objectId: t.id }))
-  const genreCount = new Map<string, number>()
-  for (const a of pool.albums.filter((x) => same(x.artist))) for (const g of a.genre ?? []) genreCount.set(g, (genreCount.get(g) ?? 0) + 1)
-  const genres = [...genreCount.entries()].sort((x, y) => y[1] - x[1]).map(([g]) => g)
-  const yearsList = albums.map((a) => a.year).filter((y): y is string => !!y).sort()
+    .map((t) => ({ title: t.title, album: t.album ?? null, objectId: t.id }));
+  const genreCount = new Map<string, number>();
+  for (const a of pool.albums.filter((x) => same(x.artist)))
+    for (const g of a.genre ?? []) genreCount.set(g, (genreCount.get(g) ?? 0) + 1);
+  const genres = [...genreCount.entries()].sort((x, y) => y[1] - x[1]).map(([g]) => g);
+  const yearsList = albums
+    .map((a) => a.year)
+    .filter((y): y is string => !!y)
+    .sort();
   return {
     name: name.trim(),
     albums: albums.map(({ artUrl: _a, ...rest }) => rest),
@@ -1328,8 +1392,8 @@ export function artistSummary(name: string, pool: { albums: ReadonlyArray<MediaN
     composed,
     genres,
     years: yearsList.length > 0 ? [yearsList[0], yearsList[yearsList.length - 1]] : null,
-    artUrl: albums.find((a) => a.artUrl)?.artUrl ?? null
-  }
+    artUrl: albums.find((a) => a.artUrl)?.artUrl ?? null,
+  };
 }
 
 /**
@@ -1340,17 +1404,17 @@ export function artistSummary(name: string, pool: { albums: ReadonlyArray<MediaN
  * itself isn't stamped (screen-scoped browsing).
  */
 export interface MediaInfoTarget {
-  node: MediaNode
-  tracks?: MediaNode[]
-  serverName?: string | null
+  node: MediaNode;
+  tracks?: MediaNode[];
+  serverName?: string | null;
   /** A caveat to show — e.g. the item wasn't found in any library index and this is only what the list knew. */
-  note?: string | null
+  note?: string | null;
   /** For an artist: their library page (albums, credits) — from artistSummary. */
-  artist?: ArtistSummary
+  artist?: ArtistSummary;
   /** For what is playing NOW: the stream as the streamer reports it (source-agnostic — radio, AirPlay, local media alike). */
-  stream?: StreamInfo
+  stream?: StreamInfo;
   /** What the index learned about the server this came from — how it was crawled and every reconciliation that changed something. */
-  serverProfile?: MediaServerProfile
+  serverProfile?: MediaServerProfile;
 }
 
 /**
@@ -1359,25 +1423,25 @@ export interface MediaInfoTarget {
  * makes the two differ, and that is worth seeing).
  */
 export interface StreamInfo {
-  source: string | null
-  playbackSource: string | null
-  playbackClass: string | null
-  codec: string | null
-  sampleFormat: string | null
-  sampleRate: number | null
-  bitDepth: number | null
+  source: string | null;
+  playbackSource: string | null;
+  playbackClass: string | null;
+  codec: string | null;
+  sampleFormat: string | null;
+  sampleRate: number | null;
+  bitDepth: number | null;
   /** bits per second, as the streamer reports it */
-  bitrate: number | null
-  encoding: string | null
-  lossless: boolean | null
-  mqa: string | null
-  station: string | null
-  radioId: string | null
-  queuePosition: number | null
-  queueLength: number | null
-  presettable: boolean | null
+  bitrate: number | null;
+  encoding: string | null;
+  lossless: boolean | null;
+  mqa: string | null;
+  station: string | null;
+  radioId: string | null;
+  queuePosition: number | null;
+  queueLength: number | null;
+  presettable: boolean | null;
   /** the transport verbs this source honours (now_playing.controls) */
-  controls: string[]
+  controls: string[];
 }
 
 /**
@@ -1386,21 +1450,21 @@ export interface StreamInfo {
  * first (server + object id), then content (title / artist / album).
  */
 export interface MediaInfoQuery {
-  kind: 'track' | 'album' | 'artist'
-  title: string
-  artist?: string | null
-  album?: string | null
-  serverUdn?: string | null
-  objectId?: string | null
+  kind: "track" | "album" | "artist";
+  title: string;
+  artist?: string | null;
+  album?: string | null;
+  serverUdn?: string | null;
+  objectId?: string | null;
 }
 
 /** One server's slice of a cross-server (all ready indexes) search. */
 export interface MediaSearchAllGroup {
-  udn: string
-  serverName: string
+  udn: string;
+  serverName: string;
   /** Matches, each stamped with serverUdn/serverName. */
-  items: MediaNode[]
-  total: number
+  items: MediaNode[];
+  total: number;
 }
 
 /**
@@ -1413,25 +1477,25 @@ export interface MediaSearchAllGroup {
  */
 export interface MediaServerProfile {
   /** How the index was built: paged Search, or a walk of the container tree. */
-  strategy: 'search' | 'browse'
+  strategy: "search" | "browse";
   /** Where the albums came from: the class search, a browse walk (search yielded no albums), or built from the tracks (no album containers anywhere). */
-  albumsFrom: 'search' | 'browse' | 'tracks'
+  albumsFrom: "search" | "browse" | "tracks";
   /** How the server answered class searches: leaf classes ('leaf'), everything as the bare base class ('generalized' — Asset), nothing derived from the asked class ('unhonoured' — Emby, UMS), or no Search at all ('unavailable'). */
-  classSearch: 'leaf' | 'generalized' | 'unhonoured' | 'unavailable'
+  classSearch: "leaf" | "generalized" | "unhonoured" | "unavailable";
   /** Every reconciliation that changed something — FACTS, not prose: the words are made at display time by describeProfileNote(), so wording can change without re-indexing. */
-  notes: ProfileNote[]
+  notes: ProfileNote[];
 }
 
 /** One thing the index did while reading a server. `count` where it applies. */
 export type ProfileNote =
-  | { kind: 'navigation-entries-left-out'; what: 'albums' | 'artists' | 'tracks'; count: number }
-  | { kind: 'albums-found-by-browsing'; count: number }
-  | { kind: 'albums-assembled-from-tracks'; count: number }
-  | { kind: 'duplicate-albums-merged'; count: number }
-  | { kind: 'years-from-tracks'; count: number }
-  | { kind: 'search-failed-browsed-instead' }
-  | { kind: 'search-paged-smaller' }
-  | { kind: 'browse-capped'; count: number }
+  | { kind: "navigation-entries-left-out"; what: "albums" | "artists" | "tracks"; count: number }
+  | { kind: "albums-found-by-browsing"; count: number }
+  | { kind: "albums-assembled-from-tracks"; count: number }
+  | { kind: "duplicate-albums-merged"; count: number }
+  | { kind: "years-from-tracks"; count: number }
+  | { kind: "search-failed-browsed-instead" }
+  | { kind: "search-paged-smaller" }
+  | { kind: "browse-capped"; count: number };
 
 /**
  * The words for a ProfileNote — user-facing (Info › Source, MCP), plain, no
@@ -1440,58 +1504,61 @@ export type ProfileNote =
  * call this); changing a sentence here needs no re-index.
  */
 export function describeProfileNote(note: ProfileNote): string {
-  const n = (count: number, one: string, many: string): string => `${count} ${count === 1 ? one : many}`
+  const n = (count: number, one: string, many: string): string =>
+    `${count} ${count === 1 ? one : many}`;
   switch (note.kind) {
-    case 'navigation-entries-left-out':
-      return note.what === 'albums'
-        ? `${n(note.count, 'entry', 'entries')} the server adds for navigation (such as “- All Albums -”) left out of the albums`
-        : note.what === 'artists'
-          ? `${n(note.count, 'navigation entry', 'navigation entries')} left out of the artists`
-          : `${n(note.count, 'entry', 'entries')} that ${note.count === 1 ? 'was' : 'were'} not a track left out of the tracks`
-    case 'albums-found-by-browsing':
-      return `the server's album search returned nothing — ${n(note.count, 'album was', 'albums were')} found by browsing instead`
-    case 'albums-assembled-from-tracks':
-      return `this server doesn't list albums — TastyTunes assembled them from its ${n(note.count, 'track', 'tracks')}`
-    case 'duplicate-albums-merged':
-      return `${n(note.count, 'duplicate album entry', 'duplicate album entries')} merged — the server lists some albums more than once`
-    case 'years-from-tracks':
-      return note.count === 1 ? '1 album with no year took the year from its tracks' : `${note.count} albums with no year took the year from their tracks`
-    case 'search-failed-browsed-instead':
-      return "the server's search failed — the library was indexed by browsing instead"
-    case 'search-paged-smaller':
-      return "the server's search failed on large pages — read in smaller pages instead"
-    case 'browse-capped':
-      return `browsing stopped after ${note.count} folders — a very large library may be only partly indexed`
+    case "navigation-entries-left-out":
+      return note.what === "albums"
+        ? `${n(note.count, "entry", "entries")} the server adds for navigation (such as “- All Albums -”) left out of the albums`
+        : note.what === "artists"
+          ? `${n(note.count, "navigation entry", "navigation entries")} left out of the artists`
+          : `${n(note.count, "entry", "entries")} that ${note.count === 1 ? "was" : "were"} not a track left out of the tracks`;
+    case "albums-found-by-browsing":
+      return `the server's album search returned nothing — ${n(note.count, "album was", "albums were")} found by browsing instead`;
+    case "albums-assembled-from-tracks":
+      return `this server doesn't list albums — TastyTunes assembled them from its ${n(note.count, "track", "tracks")}`;
+    case "duplicate-albums-merged":
+      return `${n(note.count, "duplicate album entry", "duplicate album entries")} merged — the server lists some albums more than once`;
+    case "years-from-tracks":
+      return note.count === 1
+        ? "1 album with no year took the year from its tracks"
+        : `${note.count} albums with no year took the year from their tracks`;
+    case "search-failed-browsed-instead":
+      return "the server's search failed — the library was indexed by browsing instead";
+    case "search-paged-smaller":
+      return "the server's search failed on large pages — read in smaller pages instead";
+    case "browse-capped":
+      return `browsing stopped after ${note.count} folders — a very large library may be only partly indexed`;
   }
 }
 
 /** One READY index's full pools, nodes stamped — the library lenses' feedstock. */
 export interface MediaIndexPools {
-  udn: string
-  serverName: string
-  albums: MediaNode[]
-  artists: MediaNode[]
-  tracks: MediaNode[]
-  profile?: MediaServerProfile
+  udn: string;
+  serverName: string;
+  albums: MediaNode[];
+  artists: MediaNode[];
+  tracks: MediaNode[];
+  profile?: MediaServerProfile;
 }
 
 /** Queue-write verbs of /smoip/queue/add (semantics per vibin's reverse-engineering). */
-export type MediaQueueAction = 'REPLACE' | 'APPEND' | 'PLAY_NEXT' | 'PLAY_NOW' | 'PLAY_FROM_HERE'
+export type MediaQueueAction = "REPLACE" | "APPEND" | "PLAY_NEXT" | "PLAY_NOW" | "PLAY_FROM_HERE";
 
 // ------------------------------------------------------------------ internet radio
 
 /** A station from the radio-browser.info community directory (main-process lookup). */
 export interface RadioStation {
-  uuid: string
-  name: string
+  uuid: string;
+  name: string;
   /** The playable stream URL (radio-browser's url_resolved — playlists unwrapped). */
-  url: string
-  favicon: string | null
-  homepage: string | null
+  url: string;
+  favicon: string | null;
+  homepage: string | null;
   /** Comma-separated tag list as the directory provides it. */
-  tags: string
-  country: string
-  codec: string
+  tags: string;
+  country: string;
+  codec: string;
   /** kbps; 0 = unknown. */
-  bitrate: number
+  bitrate: number;
 }

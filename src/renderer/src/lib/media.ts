@@ -1,8 +1,8 @@
-import type { MediaNode } from '@shared/model'
+import type { MediaNode } from "@shared/model";
 
 // UPnP class-shape helpers shared by the Library screen and its cards.
 
-export const isAlbumClass = (c: string): boolean => c.includes('musicAlbum')
+export const isAlbumClass = (c: string): boolean => c.includes("musicAlbum");
 
 /**
  * The library taxonomy, and it is CLOSED AT THREE by construction.
@@ -21,24 +21,24 @@ export const isAlbumClass = (c: string): boolean => c.includes('musicAlbum')
  * mislabel anything unexpected. Two spellings of one closed set is how the
  * two drift.
  */
-export type MediaKind = 'artist' | 'album' | 'track'
+export type MediaKind = "artist" | "album" | "track";
 
 /** A PERSON container (musicArtist etc.) — strictly class-matched, so a plain
  *  storage folder can never pass. The index's artist pool is built on this. */
-export const isArtistClass = (c: string): boolean => c.includes('person') || c.includes('Artist')
+export const isArtistClass = (c: string): boolean => c.includes("person") || c.includes("Artist");
 
 export const mediaKind = (upnpClass: string, isContainer: boolean): MediaKind =>
   !isContainer
-    ? 'track'
+    ? "track"
     : isAlbumClass(upnpClass)
-      ? 'album'
+      ? "album"
       : isArtistClass(upnpClass)
-        ? 'artist'
+        ? "artist"
         : // Unreachable from an index (see above); an unfiled container is far
           // likelier to be album-shaped than a person, so this is the safe read.
-          'album'
+          "album";
 export const isEntityClass = (c: string): boolean =>
-  c.includes('musicAlbum') || c.includes('musicArtist') || c.includes('audioItem')
+  c.includes("musicAlbum") || c.includes("musicArtist") || c.includes("audioItem");
 
 /**
  * Server action-furniture: Asset (and kin) inject rows like " [All Tracks]" /
@@ -52,12 +52,12 @@ export const isEntityClass = (c: string): boolean =>
  * "[All Artists]") also survive — they lead somewhere and already render muted.
  */
 export const stripFurniture = (list: MediaNode[]): MediaNode[] => {
-  if (!list.some((n) => isEntityClass(n.upnpClass))) return list
+  if (!list.some((n) => isEntityClass(n.upnpClass))) return list;
   return list.filter(
     (n) =>
-      !(n.isContainer && n.upnpClass === 'object.container' && /^\[.+\]$/.test(n.title.trim()))
-  )
-}
+      !(n.isContainer && n.upnpClass === "object.container" && /^\[.+\]$/.test(n.title.trim())),
+  );
+};
 
 /**
  * Mute navigation-folder art so it recedes into the app's palette; real
@@ -67,4 +67,4 @@ export const stripFurniture = (list: MediaNode[]): MediaNode[] => {
  * letter tiles are `object.container.person` (no .musicArtist leaf).
  */
 export const isMutedArt = (node: MediaNode): boolean =>
-  !isAlbumClass(node.upnpClass) && !node.upnpClass.includes('musicArtist')
+  !isAlbumClass(node.upnpClass) && !node.upnpClass.includes("musicArtist");

@@ -1,19 +1,19 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { Heart, RadioTower, RotateCw, Search, X } from 'lucide-react'
-import type { RadioStation } from '@shared/model'
-import type { Favorite } from '@shared/model'
-import { tt } from '@/api'
-import { useStore } from '@/store'
-import { toggleFavorite } from '@/lib/favorites'
-import { playingStationName, RADIO_DEBOUNCE_MS } from '@/lib/radio'
-import { useStationTuning } from '@/hooks/useStationTuning'
-import { EmptyState } from '@/components/chrome/EmptyState'
-import { StationRow } from '@/components/media/StationRow'
-import { PresetSavePanel } from '@/components/library/LibraryMenus'
-import { PopoverCard } from '@/components/chrome/Overlay'
-import { useScrollMemory } from '@/hooks/useScrollMemory'
-import { cx } from '@/lib/format'
-import { Chip, ScreenTitle } from '@/components/chrome/Chrome'
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Heart, RadioTower, RotateCw, Search, X } from "lucide-react";
+import type { RadioStation } from "@shared/model";
+import type { Favorite } from "@shared/model";
+import { tt } from "@/api";
+import { useStore } from "@/store";
+import { toggleFavorite } from "@/lib/favorites";
+import { playingStationName, RADIO_DEBOUNCE_MS } from "@/lib/radio";
+import { useStationTuning } from "@/hooks/useStationTuning";
+import { EmptyState } from "@/components/chrome/EmptyState";
+import { StationRow } from "@/components/media/StationRow";
+import { PresetSavePanel } from "@/components/library/LibraryMenus";
+import { PopoverCard } from "@/components/chrome/Overlay";
+import { useScrollMemory } from "@/hooks/useScrollMemory";
+import { cx } from "@/lib/format";
+import { Chip, ScreenTitle } from "@/components/chrome/Chrome";
 
 /**
  * Internet radio via the radio-browser.info community directory (keyless —
@@ -26,11 +26,11 @@ import { Chip, ScreenTitle } from '@/components/chrome/Chrome'
 
 // Session-scoped like scrollMemory: coming back to the screen restores the
 // last search instead of refetching the default rail.
-let lastQuery = ''
-let lastResults: RadioStation[] | null = null
-let topCache: RadioStation[] | null = null
-let lastCat: string | null = null
-const catCache = new Map<string, RadioStation[]>()
+let lastQuery = "";
+let lastResults: RadioStation[] | null = null;
+let topCache: RadioStation[] | null = null;
+let lastCat: string | null = null;
+const catCache = new Map<string, RadioStation[]>();
 
 /**
  * The curated category layer — the airable-style rails the official app gets
@@ -39,173 +39,178 @@ const catCache = new Map<string, RadioStation[]>()
  * directory's junk tags out of the UI.
  */
 const RADIO_CATEGORIES: Array<{ label: string; tags: string[] }> = [
-  { label: 'Pop', tags: ['pop'] },
-  { label: 'Rock', tags: ['rock'] },
-  { label: 'Jazz', tags: ['jazz'] },
-  { label: 'Classical', tags: ['classical'] },
-  { label: 'Dance & Electronic', tags: ['dance', 'electronic', 'house'] },
-  { label: 'Talk & News', tags: ['talk', 'news'] },
-  { label: 'Sport', tags: ['sport', 'sports'] },
-  { label: 'Oldies', tags: ['oldies'] },
-  { label: 'Country', tags: ['country'] },
-  { label: 'Hip-Hop', tags: ['hip hop', 'rap'] },
-  { label: '60s', tags: ['60s'] },
-  { label: '70s', tags: ['70s'] },
-  { label: '80s', tags: ['80s'] },
-  { label: '90s', tags: ['90s'] }
-]
+  { label: "Pop", tags: ["pop"] },
+  { label: "Rock", tags: ["rock"] },
+  { label: "Jazz", tags: ["jazz"] },
+  { label: "Classical", tags: ["classical"] },
+  { label: "Dance & Electronic", tags: ["dance", "electronic", "house"] },
+  { label: "Talk & News", tags: ["talk", "news"] },
+  { label: "Sport", tags: ["sport", "sports"] },
+  { label: "Oldies", tags: ["oldies"] },
+  { label: "Country", tags: ["country"] },
+  { label: "Hip-Hop", tags: ["hip hop", "rap"] },
+  { label: "60s", tags: ["60s"] },
+  { label: "70s", tags: ["70s"] },
+  { label: "80s", tags: ["80s"] },
+  { label: "90s", tags: ["90s"] },
+];
 
 /** The gold favorites chip's sentinel "category" — local, never fetched. */
-const FAV_CAT = '__favorites__'
+const FAV_CAT = "__favorites__";
 
 /** A favorited station rendered through the normal station-row machinery. */
-const favAsStation = (f: Extract<Favorite, { kind: 'station' }>): RadioStation => ({
+const favAsStation = (f: Extract<Favorite, { kind: "station" }>): RadioStation => ({
   uuid: f.radioBrowserUuid ?? f.url,
   name: f.name,
   url: f.url,
   favicon: f.favicon,
   homepage: null,
-  tags: '',
-  country: '',
-  codec: '',
-  bitrate: 0
-})
+  tags: "",
+  country: "",
+  codec: "",
+  bitrate: 0,
+});
 
 export function RadioScreen(): React.JSX.Element {
-  const playState = useStore((s) => s.playState)
-  const showToast = useStore((s) => s.showToast)
-  const favorites = useStore((s) => s.favorites)
+  const playState = useStore((s) => s.playState);
+  const showToast = useStore((s) => s.showToast);
+  const favorites = useStore((s) => s.favorites);
   const favStations = useMemo(
-    () => favorites.filter((f): f is Extract<Favorite, { kind: 'station' }> => f.kind === 'station'),
-    [favorites]
-  )
-  const favUrls = useMemo(() => new Set(favStations.map((f) => f.url)), [favStations])
+    () =>
+      favorites.filter((f): f is Extract<Favorite, { kind: "station" }> => f.kind === "station"),
+    [favorites],
+  );
+  const favUrls = useMemo(() => new Set(favStations.map((f) => f.url)), [favStations]);
 
-  const [query, setQuery] = useState(lastQuery)
-  const [top, setTop] = useState<RadioStation[] | null>(topCache)
-  const [results, setResults] = useState<RadioStation[] | null>(lastQuery ? lastResults : null)
-  const [searching, setSearching] = useState(false)
-  const [topFailed, setTopFailed] = useState(false)
-  const radioDirectory = useStore((s) => s.settings.radioDirectory)
-  const jumpToSettingsTab = useStore((s) => s.jumpToSettingsTab)
-  const [cat, setCat] = useState<string | null>(lastCat)
+  const [query, setQuery] = useState(lastQuery);
+  const [top, setTop] = useState<RadioStation[] | null>(topCache);
+  const [results, setResults] = useState<RadioStation[] | null>(lastQuery ? lastResults : null);
+  const [searching, setSearching] = useState(false);
+  const [topFailed, setTopFailed] = useState(false);
+  const radioDirectory = useStore((s) => s.settings.radioDirectory);
+  const jumpToSettingsTab = useStore((s) => s.jumpToSettingsTab);
+  const [cat, setCat] = useState<string | null>(lastCat);
   const [catStations, setCatStations] = useState<RadioStation[] | null>(
-    lastCat ? (catCache.get(lastCat) ?? null) : null
-  )
-  const [catLoading, setCatLoading] = useState(false)
+    lastCat ? (catCache.get(lastCat) ?? null) : null,
+  );
+  const [catLoading, setCatLoading] = useState(false);
   const [saveFor, setSaveFor] = useState<{ station: RadioStation; x: number; y: number } | null>(
-    null
-  )
-  const scrollRef = useScrollMemory('radio')
+    null,
+  );
+  const scrollRef = useScrollMemory("radio");
 
   // The default rail, fetched once per app session.
   const loadTop = async (): Promise<void> => {
-    setTopFailed(false)
-    const stations = await tt.radioTop()
-    topCache = stations
-    setTop(stations)
-    if (stations.length === 0) setTopFailed(true)
-  }
+    setTopFailed(false);
+    const stations = await tt.radioTop();
+    topCache = stations;
+    setTop(stations);
+    if (stations.length === 0) setTopFailed(true);
+  };
   useEffect(() => {
-    if (topCache == null) void loadTop()
-  }, [])
+    if (topCache == null) void loadTop();
+  }, []);
 
   // Category selection — mutually exclusive with search; results cached per
   // chip for the session so hopping between chips is instant.
-  const catSeq = useRef(0)
+  const catSeq = useRef(0);
   const loadCat = (label: string): void => {
-    const seq = catSeq.current
-    setCatLoading(true)
-    const def = RADIO_CATEGORIES.find((c) => c.label === label)
+    const seq = catSeq.current;
+    setCatLoading(true);
+    const def = RADIO_CATEGORIES.find((c) => c.label === label);
     void tt.radioByTags(def?.tags ?? []).then((stations) => {
       // an empty answer is indistinguishable from a directory hiccup — don't
       // cache it, so re-tapping the chip retries
-      if (stations.length > 0) catCache.set(label, stations)
-      if (seq !== catSeq.current) return // selection moved on
-      setCatStations(stations)
-      setCatLoading(false)
-    })
-  }
+      if (stations.length > 0) catCache.set(label, stations);
+      if (seq !== catSeq.current) return; // selection moved on
+      setCatStations(stations);
+      setCatLoading(false);
+    });
+  };
   const pickCat = (label: string): void => {
-    const next = cat === label ? null : label
-    catSeq.current++
-    setCat(next)
-    lastCat = next
-    setQuery('')
+    const next = cat === label ? null : label;
+    catSeq.current++;
+    setCat(next);
+    lastCat = next;
+    setQuery("");
     if (!next || next === FAV_CAT) {
       // favorites are local store state — nothing to fetch or cache
-      setCatStations(null)
-      setCatLoading(false)
-      return
+      setCatStations(null);
+      setCatLoading(false);
+      return;
     }
-    const cached = catCache.get(next)
-    setCatStations(cached ?? null)
-    if (!cached) loadCat(next)
-  }
+    const cached = catCache.get(next);
+    setCatStations(cached ?? null);
+    if (!cached) loadCat(next);
+  };
   // Restore path: screen remounts with a chip selected but nothing cached
   // (e.g. its earlier load came back empty) — fetch again.
   useEffect(() => {
     if (cat != null && cat !== FAV_CAT && catStations == null) {
-      catSeq.current++
-      loadCat(cat)
+      catSeq.current++;
+      loadCat(cat);
     }
     // mount-only
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, []);
   const dropCat = (): void => {
-    if (cat == null) return
-    catSeq.current++
-    setCat(null)
-    lastCat = null
-    setCatStations(null)
-    setCatLoading(false)
-  }
+    if (cat == null) return;
+    catSeq.current++;
+    setCat(null);
+    lastCat = null;
+    setCatStations(null);
+    setCatLoading(false);
+  };
 
   // Debounced live search; empty query falls back to the rail.
-  const searchSeq = useRef(0)
+  const searchSeq = useRef(0);
   useEffect(() => {
-    lastQuery = query
-    const q = query.trim()
+    lastQuery = query;
+    const q = query.trim();
     if (!q) {
-      lastResults = null
-      setResults(null)
-      setSearching(false)
-      return
+      lastResults = null;
+      setResults(null);
+      setSearching(false);
+      return;
     }
-    setSearching(true)
-    const seq = ++searchSeq.current
+    setSearching(true);
+    const seq = ++searchSeq.current;
     const t = setTimeout(async () => {
-      const stations = await tt.radioSearch(q)
-      if (seq !== searchSeq.current) return // superseded by newer keystrokes
-      lastResults = stations
-      setResults(stations)
-      setSearching(false)
-    }, RADIO_DEBOUNCE_MS)
-    return () => clearTimeout(t)
-  }, [query])
+      const stations = await tt.radioSearch(q);
+      if (seq !== searchSeq.current) return; // superseded by newer keystrokes
+      lastResults = stations;
+      setResults(stations);
+      setSearching(false);
+    }, RADIO_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [query]);
 
   // What's audible and what's on its way both live in shared helpers now
   // (playingStationName, useStationTuning) — unified search lights the same
   // rows the same way, from the same code.
-  const playingName = playingStationName(playState)
-  const { tuningUrl, play } = useStationTuning(playingName)
+  const playingName = playingStationName(playState);
+  const { tuningUrl, play } = useStationTuning(playingName);
 
   const savePlaying = async (slot: number, name: string | null): Promise<void> => {
-    await tt.command({ type: 'zoneSavePreset', slot })
-    if (name) await tt.command({ type: 'presetRename', slot, name })
-    const station = saveFor?.station
-    setSaveFor(null)
+    await tt.command({ type: "zoneSavePreset", slot });
+    if (name) await tt.command({ type: "presetRename", slot, name });
+    const station = saveFor?.station;
+    setSaveFor(null);
     showToast({
-      kind: 'success',
-      text: `Saved “${name ?? station?.name ?? 'station'}” to preset ${slot}`,
-      action: { label: 'View', screen: 'presets' }
-    })
-  }
+      kind: "success",
+      text: `Saved “${name ?? station?.name ?? "station"}” to preset ${slot}`,
+      action: { label: "View", screen: "presets" },
+    });
+  };
 
   const shown =
-    results ?? (cat === FAV_CAT ? favStations.map(favAsStation) : cat != null ? catStations : top)
+    results ?? (cat === FAV_CAT ? favStations.map(favAsStation) : cat != null ? catStations : top);
   const heading =
-    results != null ? 'Search results' : cat === FAV_CAT ? 'Favorites' : (cat ?? 'Popular stations')
+    results != null
+      ? "Search results"
+      : cat === FAV_CAT
+        ? "Favorites"
+        : (cat ?? "Popular stations");
 
   return (
     <div className="h-full flex flex-col">
@@ -220,13 +225,13 @@ export function RadioScreen(): React.JSX.Element {
           <input
             value={query}
             onChange={(e) => {
-              setQuery(e.target.value)
-              if (e.target.value.trim()) dropCat() // typing takes over from the chip
+              setQuery(e.target.value);
+              if (e.target.value.trim()) dropCat(); // typing takes over from the chip
             }}
             onKeyDown={(e) => {
-              if (e.key === 'Escape' && query) {
-                e.stopPropagation()
-                setQuery('')
+              if (e.key === "Escape" && query) {
+                e.stopPropagation();
+                setQuery("");
               }
             }}
             placeholder="Search stations"
@@ -235,7 +240,7 @@ export function RadioScreen(): React.JSX.Element {
           />
           {query && (
             <button
-              onClick={() => setQuery('')}
+              onClick={() => setQuery("")}
               aria-label="Clear search"
               className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full text-dim hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
             >
@@ -256,10 +261,10 @@ export function RadioScreen(): React.JSX.Element {
             onClick={() => pickCat(FAV_CAT)}
             data-radio-cat="Favorites"
             className={cx(
-              'no-drag rounded-full px-3 py-1 text-[12px] ring-1 transition-all motion-safe:active:scale-95 flex items-center gap-1.5',
+              "no-drag rounded-full px-3 py-1 text-[12px] ring-1 transition-all motion-safe:active:scale-95 flex items-center gap-1.5",
               cat === FAV_CAT
-                ? 'ring-gold/50 bg-golddim text-gold'
-                : 'ring-gold/30 bg-panel/60 text-gold/80 hover:text-gold hover:ring-gold/50 hover:bg-golddim/40'
+                ? "ring-gold/50 bg-golddim text-gold"
+                : "ring-gold/30 bg-panel/60 text-gold/80 hover:text-gold hover:ring-gold/50 hover:bg-golddim/40",
             )}
           >
             <Heart size={11} fill="currentColor" /> Favorites
@@ -268,7 +273,7 @@ export function RadioScreen(): React.JSX.Element {
         {RADIO_CATEGORIES.map((c) => (
           <Chip
             key={c.label}
-            state={cat === c.label ? 'active' : 'idle'}
+            state={cat === c.label ? "active" : "idle"}
             onClick={() => pickCat(c.label)}
             data-radio-cat={c.label}
             className="no-drag motion-safe:active:scale-95"
@@ -288,7 +293,7 @@ export function RadioScreen(): React.JSX.Element {
           caption="TastyTunes isn't contacting the radio directory. Your favorited stations still play — turn lookups back on in Settings to search for new ones."
         >
           <button
-            onClick={() => jumpToSettingsTab('behavior')}
+            onClick={() => jumpToSettingsTab("behavior")}
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-[12.5px] text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 transition-all"
           >
             Open Settings
@@ -322,12 +327,12 @@ export function RadioScreen(): React.JSX.Element {
             </div>
             {shown.length === 0 && !searching && !catLoading && (
               <div className="text-[15px] text-faint pt-4 px-1">
-                {results != null ? `No stations for “${query}”` : 'No stations here right now.'}
+                {results != null ? `No stations for “${query}”` : "No stations here right now."}
               </div>
             )}
             <div className="space-y-1.5">
               {shown.map((st) => {
-                const playing = playingName != null && st.name.trim().toLowerCase() === playingName
+                const playing = playingName != null && st.name.trim().toLowerCase() === playingName;
                 return (
                   <StationRow
                     key={st.uuid}
@@ -337,17 +342,17 @@ export function RadioScreen(): React.JSX.Element {
                     favorited={favUrls.has(st.url)}
                     onHeart={() =>
                       void toggleFavorite({
-                        kind: 'station',
+                        kind: "station",
                         name: st.name,
                         url: st.url,
                         favicon: st.favicon,
-                        radioBrowserUuid: st.uuid !== st.url ? st.uuid : null
+                        radioBrowserUuid: st.uuid !== st.url ? st.uuid : null,
                       })
                     }
                     onPlay={() => void play(st)}
                     onSave={(x, y) => setSaveFor({ station: st, x, y })}
                   />
-                )
+                );
               })}
             </div>
             <div className="microlabel mt-6 px-1">
@@ -367,11 +372,10 @@ export function RadioScreen(): React.JSX.Element {
         />
       )}
     </div>
-  )
+  );
 }
 
 // ------------------------------------------------------------------- row pieces
-
 
 /** The shared PresetSavePanel in an anchored popover next to the save button. */
 function SaveStationPopover({
@@ -379,13 +383,13 @@ function SaveStationPopover({
   y,
   station,
   onClose,
-  onSave
+  onSave,
 }: {
-  x: number
-  y: number
-  station: RadioStation
-  onClose(): void
-  onSave(slot: number, name: string | null): Promise<void>
+  x: number;
+  y: number;
+  station: RadioStation;
+  onClose(): void;
+  onSave(slot: number, name: string | null): Promise<void>;
 }): React.JSX.Element {
   return (
     <PopoverCard at={{ x, y }} width="w-[272px]" onClose={onClose} className="p-3">
@@ -395,5 +399,5 @@ function SaveStationPopover({
         onSave={onSave}
       />
     </PopoverCard>
-  )
+  );
 }

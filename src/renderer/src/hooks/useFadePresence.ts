@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { cx } from '@/lib/format'
+import { useEffect, useState } from "react";
+import { cx } from "@/lib/format";
 
 /**
  * Presence with a quick opacity fade, for surfaces that conditionally mount
@@ -18,28 +18,28 @@ import { cx } from '@/lib/format'
  * unbounded per-hover transition was not.
  */
 export function useFadePresence(open: boolean): { mounted: boolean; faded: string } {
-  const [mounted, setMounted] = useState(open)
-  const [visible, setVisible] = useState(false)
+  const [mounted, setMounted] = useState(open);
+  const [visible, setVisible] = useState(false);
 
   useEffect(() => {
     if (open) {
-      setMounted(true)
+      setMounted(true);
       // Two frames, not one: the mount renders at opacity-0 first, and the
       // class flip must land in a LATER frame or the browser coalesces them
       // and the fade-in never plays.
-      const raf = requestAnimationFrame(() => requestAnimationFrame(() => setVisible(true)))
-      return () => cancelAnimationFrame(raf)
+      const raf = requestAnimationFrame(() => requestAnimationFrame(() => setVisible(true)));
+      return () => cancelAnimationFrame(raf);
     }
-    setVisible(false)
-    const t = setTimeout(() => setMounted(false), 140)
-    return () => clearTimeout(t)
-  }, [open])
+    setVisible(false);
+    const t = setTimeout(() => setMounted(false), 140);
+    return () => clearTimeout(t);
+  }, [open]);
 
   return {
     mounted,
     faded: cx(
-      'motion-safe:transition-opacity motion-safe:duration-[140ms]',
-      visible ? 'opacity-100' : 'opacity-0'
-    )
-  }
+      "motion-safe:transition-opacity motion-safe:duration-[140ms]",
+      visible ? "opacity-100" : "opacity-0",
+    ),
+  };
 }

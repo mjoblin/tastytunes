@@ -1,5 +1,5 @@
-import { cx } from '@/lib/format'
-import { useFadedText, useLyrics } from '@/hooks/useLyrics'
+import { cx } from "@/lib/format";
+import { useFadedText, useLyrics } from "@/hooks/useLyrics";
 
 /**
  * The inline lyrics flavor: just the current synced line, under the track
@@ -15,34 +15,34 @@ import { useFadedText, useLyrics } from '@/hooks/useLyrics'
  * wording — the panel has said this all along, but only once you open it.
  */
 export function LyricLine(): React.JSX.Element | null {
-  const { status, result, synced, currentIndex } = useLyrics()
+  const { status, result, synced, currentIndex } = useLyrics();
 
-  const line = synced && currentIndex >= 0 ? synced[currentIndex].text : ''
-  const { shown, visible } = useFadedText(synced ? line || '♪' : '')
+  const line = synced && currentIndex >= 0 ? synced[currentIndex].text : "";
+  const { shown, visible } = useFadedText(synced ? line || "♪" : "");
   if (!synced) {
     // 'loading' stays blank on purpose — a note that flashes during every
     // lookup and then vanishes is worse than the silence it replaces.
     const note =
-      status === 'loading'
+      status === "loading"
         ? null
-        : status === 'none'
-          ? 'No lyrics found for this track'
+        : status === "none"
+          ? "No lyrics found for this track"
           : result?.instrumental
-            ? 'Instrumental'
+            ? "Instrumental"
             : result?.plain
-              ? 'No lyric timing data for this track'
-              : null
-    if (!note) return null
+              ? "No lyric timing data for this track"
+              : null;
+    if (!note) return null;
     // Same h-0 slot as the line itself: an explanation must not push the
     // vertically-centred art/details block around (see below).
     return (
       <div data-lyric-note className="h-0 max-w-xl">
         <div className="text-[13px] text-dim leading-snug truncate">{note}</div>
       </div>
-    )
+    );
   }
 
-  const placeholder = shown === '♪'
+  const placeholder = shown === "♪";
   // h-0: the line must never contribute height, or the vertically-centered
   // art/details block bobs as lyrics wrap between 1 and 2 lines (and jumps
   // when synced lyrics appear at all). The text simply hangs downward;
@@ -51,13 +51,13 @@ export function LyricLine(): React.JSX.Element | null {
     <div data-lyric-line className="h-0 max-w-xl">
       <div
         className={cx(
-          'font-display text-[17px] leading-snug line-clamp-2 transition-opacity duration-200',
-          visible ? 'opacity-100' : 'opacity-0',
-          placeholder ? 'text-faint' : 'text-gold/90 lyric-glow'
+          "font-display text-[17px] leading-snug line-clamp-2 transition-opacity duration-200",
+          visible ? "opacity-100" : "opacity-0",
+          placeholder ? "text-faint" : "text-gold/90 lyric-glow",
         )}
       >
         {shown}
       </div>
     </div>
-  )
+  );
 }

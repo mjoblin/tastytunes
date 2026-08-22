@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-import { useEffect } from 'react'
+import { useEffect } from "react";
 
 /**
  * Dev-only tripwire for the one hazard in the per-face optical sizing.
@@ -19,19 +19,19 @@ import { useEffect } from 'react'
  */
 export function useFontScaleGuard(screen: string): void {
   useEffect(() => {
-    if (!import.meta.env.DEV) return
+    if (!import.meta.env.DEV) return;
     // after paint — the screen's own transitions/portals have landed by then
     const t = setTimeout(() => {
-      const nested = document.querySelectorAll('.font-display .font-display')
+      const nested = document.querySelectorAll(".font-display .font-display");
       if (nested.length > 0) {
         console.error(
           `[tastytunes] ${nested.length} nested .font-display element(s) on "${screen}" — ` +
-            'the optical zoom compounds (0.82 × 0.82 = 0.67). Add .no-optical to the inner ' +
-            'element, or move .font-display off the wrapper.',
-          nested
-        )
+            "the optical zoom compounds (0.82 × 0.82 = 0.67). Add .no-optical to the inner " +
+            "element, or move .font-display off the wrapper.",
+          nested,
+        );
       }
-    }, 250)
-    return () => clearTimeout(t)
-  }, [screen])
+    }, 250);
+    return () => clearTimeout(t);
+  }, [screen]);
 }

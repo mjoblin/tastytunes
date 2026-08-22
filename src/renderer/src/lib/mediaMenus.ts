@@ -1,8 +1,8 @@
-import { favoriteKey, type Favorite } from '@shared/model'
-import { useStore, type SearchBack } from '@/store'
-import { toggleFavorite } from '@/lib/favorites'
-import { refToFavorite, type MediaRef } from '@/lib/mediaRef'
-import { openInfoForRef } from '@/lib/mediaInfo'
+import { favoriteKey, type Favorite } from "@shared/model";
+import { useStore, type SearchBack } from "@/store";
+import { toggleFavorite } from "@/lib/favorites";
+import { refToFavorite, type MediaRef } from "@/lib/mediaRef";
+import { openInfoForRef } from "@/lib/mediaInfo";
 
 /**
  * THE menu contents for a piece of media — what RowMenu did for the menu
@@ -23,35 +23,35 @@ import { openInfoForRef } from '@/lib/mediaInfo'
  * a surface can't offer them.
  */
 export interface MediaMenuItem {
-  label: string
-  run(): void
+  label: string;
+  run(): void;
 }
 
 export interface MediaMenuCaps {
-  playNow?(): void
-  playNext?(): void
-  append?(): void
-  replaceQueue?(): void
+  playNow?(): void;
+  playNext?(): void;
+  append?(): void;
+  replaceQueue?(): void;
   /** Inserted after the queue verbs — the Library's "Play album from here". */
-  extraQueueVerbs?: MediaMenuItem[]
+  extraQueueVerbs?: MediaMenuItem[];
   /** Open the entity's home in the Library (favorites, search results). */
-  openInLibrary?(): void
-  goToAlbum?(): void
-  goToArtist?(): void
-  saveToPreset?(): void
-  addToPlaylist?(): void
+  openInLibrary?(): void;
+  goToAlbum?(): void;
+  goToArtist?(): void;
+  saveToPreset?(): void;
+  addToPlaylist?(): void;
   /** Override the derived heart (the Library stores richer favorites). */
-  heart?: { active: boolean; toggle(): void }
+  heart?: { active: boolean; toggle(): void };
   /** Where the search pivot should record it left, for ⌘← back. */
-  searchFrom?: SearchBack
+  searchFrom?: SearchBack;
   /** Local verbs, appended last — Remove from queue, delete, unheart… */
-  extra?: MediaMenuItem[]
+  extra?: MediaMenuItem[];
   /**
    * Open the Info modal on this entity — everything the DIDL said about it
    * (2026-08-16). Only surfaces holding a real MediaNode can offer it; a
    * MediaRef-only surface (queue, favorites) leaves it out.
    */
-  info?(): void
+  info?(): void;
 }
 
 /**
@@ -61,84 +61,84 @@ export interface MediaMenuCaps {
  * Library) passes `caps.info` and skips the lookup. Stations opt out.
  */
 function infoItem(ref: MediaRef, caps: MediaMenuCaps): MediaMenuItem[] {
-  if (caps.info) return [{ label: 'Info…', run: caps.info }]
-  if (ref.kind === 'station') return []
-  return [{ label: 'Info…', run: () => void openInfoForRef(ref) }]
+  if (caps.info) return [{ label: "Info…", run: caps.info }];
+  if (ref.kind === "station") return [];
+  return [{ label: "Info…", run: () => void openInfoForRef(ref) }];
 }
 
 const pivotEntity = (ref: MediaRef): string =>
-  ref.kind === 'artist' ? ref.title : (ref.artist ?? ref.title)
+  ref.kind === "artist" ? ref.title : (ref.artist ?? ref.title);
 
 function pivotItem(ref: MediaRef, caps: MediaMenuCaps): MediaMenuItem[] {
-  const entity = pivotEntity(ref).trim()
-  if (!entity) return []
+  const entity = pivotEntity(ref).trim();
+  if (!entity) return [];
   return [
     {
       label: `Search everywhere for “${entity}”`,
-      run: () => useStore.getState().requestSearch(entity, caps.searchFrom)
-    }
-  ]
+      run: () => useStore.getState().requestSearch(entity, caps.searchFrom),
+    },
+  ];
 }
 
 function heartItem(ref: MediaRef, caps: MediaMenuCaps): MediaMenuItem[] {
   if (caps.heart) {
     return [
       {
-        label: caps.heart.active ? 'Remove from favorites' : 'Add to favorites',
-        run: caps.heart.toggle
-      }
-    ]
+        label: caps.heart.active ? "Remove from favorites" : "Add to favorites",
+        run: caps.heart.toggle,
+      },
+    ];
   }
-  const fav = refToFavorite(ref)
-  if (!fav) return []
-  const key = favoriteKey(fav as Favorite)
-  const active = useStore.getState().favorites.some((f) => favoriteKey(f) === key)
+  const fav = refToFavorite(ref);
+  if (!fav) return [];
+  const key = favoriteKey(fav as Favorite);
+  const active = useStore.getState().favorites.some((f) => favoriteKey(f) === key);
   return [
     {
-      label: active ? 'Remove from favorites' : 'Add to favorites',
-      run: () => void toggleFavorite(fav)
-    }
-  ]
+      label: active ? "Remove from favorites" : "Add to favorites",
+      run: () => void toggleFavorite(fav),
+    },
+  ];
 }
 
-const cap = (label: string, run?: () => void): MediaMenuItem[] => (run ? [{ label, run }] : [])
+const cap = (label: string, run?: () => void): MediaMenuItem[] => (run ? [{ label, run }] : []);
 
 /** Order everywhere: play verbs · navigate (go-to / open / pivot) · write
  *  verbs (preset, playlist) · heart · local extras. */
 export function trackMenuItems(ref: MediaRef, caps: MediaMenuCaps = {}): MediaMenuItem[] {
   return [
-    ...cap('Play now', caps.playNow),
-    ...cap('Play next', caps.playNext),
-    ...cap('Add to end of queue', caps.append),
-    ...cap('Replace queue', caps.replaceQueue),
+    ...cap("Play now", caps.playNow),
+    ...cap("Play next", caps.playNext),
+    ...cap("Add to end of queue", caps.append),
+    ...cap("Replace queue", caps.replaceQueue),
     ...(caps.extraQueueVerbs ?? []),
-    ...cap('Go to album', caps.goToAlbum),
-    ...cap('Go to artist', caps.goToArtist),
-    ...cap('Open in Library', caps.openInLibrary),
+    ...cap("Go to album", caps.goToAlbum),
+    ...cap("Go to artist", caps.goToArtist),
+    ...cap("Open in Library", caps.openInLibrary),
     ...pivotItem(ref, caps),
-    ...cap('Save to preset…', caps.saveToPreset),
-    ...cap('Add to playlist…', caps.addToPlaylist),
+    ...cap("Save to preset…", caps.saveToPreset),
+    ...cap("Add to playlist…", caps.addToPlaylist),
     ...heartItem(ref, caps),
     ...infoItem(ref, caps),
-    ...(caps.extra ?? [])
-  ]
+    ...(caps.extra ?? []),
+  ];
 }
 
 export function albumMenuItems(ref: MediaRef, caps: MediaMenuCaps = {}): MediaMenuItem[] {
   return [
-    ...cap('Play', caps.playNow),
-    ...cap('Play next', caps.playNext),
-    ...cap('Add to end of queue', caps.append),
-    ...cap('Replace queue', caps.replaceQueue),
+    ...cap("Play", caps.playNow),
+    ...cap("Play next", caps.playNext),
+    ...cap("Add to end of queue", caps.append),
+    ...cap("Replace queue", caps.replaceQueue),
     ...(caps.extraQueueVerbs ?? []),
-    ...cap('Open in Library', caps.openInLibrary),
+    ...cap("Open in Library", caps.openInLibrary),
     ...pivotItem(ref, caps),
-    ...cap('Save to preset…', caps.saveToPreset),
-    ...cap('Add to playlist…', caps.addToPlaylist),
+    ...cap("Save to preset…", caps.saveToPreset),
+    ...cap("Add to playlist…", caps.addToPlaylist),
     ...heartItem(ref, caps),
     ...infoItem(ref, caps),
-    ...(caps.extra ?? [])
-  ]
+    ...(caps.extra ?? []),
+  ];
 }
 
 /** An artist's menu is the pivot (plus local extras) — the queue verbs don't
@@ -146,5 +146,5 @@ export function albumMenuItems(ref: MediaRef, caps: MediaMenuCaps = {}): MediaMe
  *  album/track identity. Thin, but it's the one cross-collection question an
  *  artist can answer, and any future artist verb has a home here. */
 export function artistMenuItems(ref: MediaRef, caps: MediaMenuCaps = {}): MediaMenuItem[] {
-  return [...pivotItem(ref, caps), ...infoItem(ref, caps), ...(caps.extra ?? [])]
+  return [...pivotItem(ref, caps), ...infoItem(ref, caps), ...(caps.extra ?? [])];
 }

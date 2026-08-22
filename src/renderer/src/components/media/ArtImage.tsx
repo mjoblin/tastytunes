@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState } from "react";
 
 /**
  * Artwork <img> that renders `fallback` when the URL is missing — or present
@@ -9,23 +9,23 @@ import { useState } from 'react'
 export function ArtImage({
   src,
   fallback,
-  className = 'h-full w-full object-cover',
-  lazy = false
+  className = "h-full w-full object-cover",
+  lazy = false,
 }: {
-  src: string | null | undefined
-  fallback: React.ReactNode
-  className?: string
-  lazy?: boolean
+  src: string | null | undefined;
+  fallback: React.ReactNode;
+  className?: string;
+  lazy?: boolean;
 }): React.JSX.Element {
-  const [failedSrc, setFailedSrc] = useState<string | null>(null)
-  if (!src || failedSrc === src) return <>{fallback}</>
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  if (!src || failedSrc === src) return <>{fallback}</>;
   return (
     <img
       src={src}
       alt=""
-      loading={lazy ? 'lazy' : undefined}
+      loading={lazy ? "lazy" : undefined}
       className={className}
       onError={() => setFailedSrc(src)}
     />
-  )
+  );
 }

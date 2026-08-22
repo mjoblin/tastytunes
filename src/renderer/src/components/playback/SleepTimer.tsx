@@ -1,85 +1,84 @@
-import { useEffect, useState } from 'react'
-import { Moon } from 'lucide-react'
-import { sleepTrackKey, type SleepAction } from '@shared/model'
-import { tt } from '@/api'
-import { useStore } from '@/store'
-import { cx, deriveNowPlaying, fmtTime } from '@/lib/format'
-import { PopoverChrome } from '@/hooks/usePopover'
+import { useEffect, useState } from "react";
+import { Moon } from "lucide-react";
+import { sleepTrackKey, type SleepAction } from "@shared/model";
+import { tt } from "@/api";
+import { useStore } from "@/store";
+import { cx, deriveNowPlaying, fmtTime } from "@/lib/format";
+import { PopoverChrome } from "@/hooks/usePopover";
 
 /** The sleep-timer menu, ONE list (2026-08-16): the bar popover and the command palette both offer exactly these. */
 export const SLEEP_DURATIONS: ReadonlyArray<{ minutes: number; label: string }> = [
-  { minutes: 15, label: '15 min' },
-  { minutes: 30, label: '30 min' },
-  { minutes: 45, label: '45 min' },
-  { minutes: 60, label: '1 hr' },
-  { minutes: 90, label: '1.5 hr' },
-  { minutes: 120, label: '2 hr' }
-]
+  { minutes: 15, label: "15 min" },
+  { minutes: 30, label: "30 min" },
+  { minutes: 45, label: "45 min" },
+  { minutes: 60, label: "1 hr" },
+  { minutes: 90, label: "1.5 hr" },
+  { minutes: 120, label: "2 hr" },
+];
 
-const ACTION_VERB: Record<SleepAction, string> = { pause: 'Pause', standby: 'Standby' }
+const ACTION_VERB: Record<SleepAction, string> = { pause: "Pause", standby: "Standby" };
 
 /** Plexamp/Sonos-style sleep timer: pause or standby after a countdown, or at end of track. */
 export function SleepTimer(): React.JSX.Element {
-  const sleep = useStore((s) => s.sleep)
-  const saveSettings = useStore((s) => s.saveSettings)
-  const stored = useStore((s) => s.settings.sleepAction)
-  const playState = useStore((s) => s.playState)
-  const nowPlaying = useStore((s) => s.nowPlaying)
-  const [open, setOpen] = useState(false)
-  const [now, setNow] = useState(() => Date.now())
+  const sleep = useStore((s) => s.sleep);
+  const saveSettings = useStore((s) => s.saveSettings);
+  const stored = useStore((s) => s.settings.sleepAction);
+  const playState = useStore((s) => s.playState);
+  const nowPlaying = useStore((s) => s.nowPlaying);
+  const [open, setOpen] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
 
   // Never trust the stored value blindly — an older settings file (or a skewed
   // dev reload) can leave it unset, which would arm a timer with no action.
-  const action: SleepAction = stored === 'pause' || stored === 'standby' ? stored : 'standby'
-  const endOfTrack = sleep != null && sleep.minutes == null
+  const action: SleepAction = stored === "pause" || stored === "standby" ? stored : "standby";
+  const endOfTrack = sleep != null && sleep.minutes == null;
 
   // Tick once a second while a countdown is live so the popover / tooltip stay fresh.
   useEffect(() => {
-    if (sleep?.firesAt == null) return
-    const t = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(t)
-  }, [sleep?.firesAt])
+    if (sleep?.firesAt == null) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [sleep?.firesAt]);
 
   const remainingSecs =
-    sleep?.firesAt != null ? Math.max(0, Math.round((sleep.firesAt - now) / 1000)) : null
+    sleep?.firesAt != null ? Math.max(0, Math.round((sleep.firesAt - now) / 1000)) : null;
 
-  const duration =
-    playState?.metadata?.duration ?? nowPlaying?.display?.progress?.duration ?? null
-  const meta = deriveNowPlaying(playState, nowPlaying)
+  const duration = playState?.metadata?.duration ?? nowPlaying?.display?.progress?.duration ?? null;
+  const meta = deriveNowPlaying(playState, nowPlaying);
   const canEndOfTrack =
-    sleepTrackKey(playState) != null && duration != null && duration > 0 && !meta.isRadio
+    sleepTrackKey(playState) != null && duration != null && duration > 0 && !meta.isRadio;
 
   // The timer itself lives in the main process (it must survive this window
   // closing); these calls arm/adjust it and the store mirrors its pushes.
   const arm = (minutes: number): void => {
-    void tt.setSleep({ action, minutes, firesAt: Date.now() + minutes * 60_000, trackKey: null })
-  }
+    void tt.setSleep({ action, minutes, firesAt: Date.now() + minutes * 60_000, trackKey: null });
+  };
   const armEndOfTrack = (): void => {
-    void tt.setSleep({ action, minutes: null, firesAt: null, trackKey: sleepTrackKey(playState) })
-  }
+    void tt.setSleep({ action, minutes: null, firesAt: null, trackKey: sleepTrackKey(playState) });
+  };
   const chooseAction = (next: SleepAction): void => {
-    void saveSettings({ sleepAction: next })
-    if (sleep) void tt.setSleep({ ...sleep, action: next })
-  }
+    void saveSettings({ sleepAction: next });
+    if (sleep) void tt.setSleep({ ...sleep, action: next });
+  };
 
   const statusLine = sleep
     ? sleep.minutes == null
       ? `${ACTION_VERB[sleep.action]} at end of track`
       : `${ACTION_VERB[sleep.action]} in ${fmtTime(remainingSecs)}`
-    : null
+    : null;
 
   return (
     <div className="relative">
       <button
-        data-tip={open ? undefined : (statusLine ?? 'Sleep timer')}
-        aria-label={statusLine ?? 'Sleep timer'}
+        data-tip={open ? undefined : (statusLine ?? "Sleep timer")}
+        aria-label={statusLine ?? "Sleep timer"}
         onClick={() => setOpen((o) => !o)}
         className={cx(
-          'tip-top p-2 rounded-md transition-colors',
-          open || sleep ? 'text-gold bg-golddim' : 'text-dim hover:text-ink hover:bg-veil'
+          "tip-top p-2 rounded-md transition-colors",
+          open || sleep ? "text-gold bg-golddim" : "text-dim hover:text-ink hover:bg-veil",
         )}
       >
-        <Moon size={16} strokeWidth={1.9} fill={sleep ? 'currentColor' : 'none'} />
+        <Moon size={16} strokeWidth={1.9} fill={sleep ? "currentColor" : "none"} />
       </button>
 
       {open && (
@@ -90,13 +89,13 @@ export function SleepTimer(): React.JSX.Element {
             <div className="flex items-center justify-between mb-2.5">
               <span className="microlabel">sleep timer</span>
               <div className="flex rounded-md ring-1 ring-edge bg-bg p-0.5">
-                {(['pause', 'standby'] as const).map((a) => (
+                {(["pause", "standby"] as const).map((a) => (
                   <button
                     key={a}
                     onClick={() => chooseAction(a)}
                     className={cx(
-                      'px-2 py-0.5 rounded text-[11px] capitalize transition-colors',
-                      action === a ? 'bg-golddim text-gold' : 'text-dim hover:text-ink'
+                      "px-2 py-0.5 rounded text-[11px] capitalize transition-colors",
+                      action === a ? "bg-golddim text-gold" : "text-dim hover:text-ink",
                     )}
                   >
                     {a}
@@ -107,30 +106,30 @@ export function SleepTimer(): React.JSX.Element {
 
             <div className="grid grid-cols-3 gap-1.5">
               {SLEEP_DURATIONS.map(({ minutes, label }) => {
-                const on = sleep?.minutes === minutes
+                const on = sleep?.minutes === minutes;
                 return (
                   <button
                     key={minutes}
                     onClick={() => arm(minutes)}
                     className={cx(
-                      'rounded-lg py-2 text-[12px] transition-colors',
-                      on ? 'bg-gold text-bg' : 'bg-veil text-dim hover:text-ink hover:bg-veil2'
+                      "rounded-lg py-2 text-[12px] transition-colors",
+                      on ? "bg-gold text-bg" : "bg-veil text-dim hover:text-ink hover:bg-veil2",
                     )}
                   >
                     {label}
                   </button>
-                )
+                );
               })}
               <button
                 onClick={armEndOfTrack}
                 disabled={!canEndOfTrack && !endOfTrack}
                 className={cx(
-                  'col-span-3 rounded-lg py-2 text-[12px] transition-colors',
+                  "col-span-3 rounded-lg py-2 text-[12px] transition-colors",
                   endOfTrack
-                    ? 'bg-gold text-bg'
+                    ? "bg-gold text-bg"
                     : canEndOfTrack
-                      ? 'bg-veil text-dim hover:text-ink hover:bg-veil2'
-                      : 'bg-veil text-faint/40 cursor-not-allowed'
+                      ? "bg-veil text-dim hover:text-ink hover:bg-veil2"
+                      : "bg-veil text-faint/40 cursor-not-allowed",
                 )}
               >
                 End of track
@@ -139,15 +138,15 @@ export function SleepTimer(): React.JSX.Element {
 
             {/* Always present so the popover height never jumps between states. */}
             <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-edge pt-2.5">
-              <span className={cx('text-[11.5px]', sleep ? 'text-gold' : 'text-faint')}>
-                {statusLine ?? 'Inactive'}
+              <span className={cx("text-[11.5px]", sleep ? "text-gold" : "text-faint")}>
+                {statusLine ?? "Inactive"}
               </span>
               <button
                 onClick={() => void tt.setSleep(null)}
                 disabled={!sleep}
                 className={cx(
-                  'text-[11px] transition-colors',
-                  sleep ? 'text-dim hover:text-ink' : 'text-faint/40 cursor-default'
+                  "text-[11px] transition-colors",
+                  sleep ? "text-dim hover:text-ink" : "text-faint/40 cursor-default",
                 )}
               >
                 Disable
@@ -157,5 +156,5 @@ export function SleepTimer(): React.JSX.Element {
         </>
       )}
     </div>
-  )
+  );
 }

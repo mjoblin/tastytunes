@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { tt } from '@/api'
+import { useEffect, useState } from "react";
+import { tt } from "@/api";
 
 /**
  * The ambient wash's art, BLURRED ONCE INTO A SMALL BITMAP instead of blurred
@@ -30,41 +30,41 @@ import { tt } from '@/api'
  * all. One canvas pass per track change replaces a filter pass per frame,
  * and it helps EVERY machine rather than only the ones we could detect.
  */
-const cache = new Map<string, string | null>()
+const cache = new Map<string, string | null>();
 
 export function useBlurredArt(src: string | null | undefined): string | null {
-  const [out, setOut] = useState<string | null>(() => (src ? (cache.get(src) ?? null) : null))
+  const [out, setOut] = useState<string | null>(() => (src ? (cache.get(src) ?? null) : null));
 
   useEffect(() => {
     if (!src) {
-      setOut(null)
-      return
+      setOut(null);
+      return;
     }
     if (cache.has(src)) {
-      setOut(cache.get(src) ?? null)
-      return
+      setOut(cache.get(src) ?? null);
+      return;
     }
-    let cancelled = false
+    let cancelled = false;
     void (async () => {
-      let blurred: string | null = null
+      let blurred: string | null = null;
       try {
-        const art = await tt.fetchArt(src)
-        if (art) blurred = await bake(art.dataUrl)
+        const art = await tt.fetchArt(src);
+        if (art) blurred = await bake(art.dataUrl);
       } catch {
-        blurred = null
+        blurred = null;
       }
-      cache.set(src, blurred)
+      cache.set(src, blurred);
       // Bounded like the accent cache — a long listening session must not
       // accumulate a bitmap per track forever.
-      if (cache.size > 60) cache.delete(cache.keys().next().value as string)
-      if (!cancelled) setOut(blurred)
-    })()
+      if (cache.size > 60) cache.delete(cache.keys().next().value as string);
+      if (!cancelled) setOut(blurred);
+    })();
     return () => {
-      cancelled = true
-    }
-  }, [src])
+      cancelled = true;
+    };
+  }, [src]);
 
-  return out
+  return out;
 }
 
 /**
@@ -75,21 +75,21 @@ export function useBlurredArt(src: string | null | undefined): string | null {
  * in for the same reason the blur is — a live `saturate()` cost 3.2x on its own.
  */
 async function bake(dataUrl: string): Promise<string | null> {
-  const img = new Image()
-  img.src = dataUrl
-  await img.decode()
+  const img = new Image();
+  img.src = dataUrl;
+  await img.decode();
 
-  const size = 160
-  const canvas = document.createElement('canvas')
-  canvas.width = size
-  canvas.height = size
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return null
+  const size = 160;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
   // Inset the draw so the blur has real pixels to pull from at the edges;
   // without it the kernel samples transparent black and the wash gets a dark
   // frame around it.
-  ctx.filter = 'blur(14px) saturate(1.4)'
-  const pad = Math.round(size * 0.22)
-  ctx.drawImage(img, -pad, -pad, size + pad * 2, size + pad * 2)
-  return canvas.toDataURL('image/jpeg', 0.7)
+  ctx.filter = "blur(14px) saturate(1.4)";
+  const pad = Math.round(size * 0.22);
+  ctx.drawImage(img, -pad, -pad, size + pad * 2, size + pad * 2);
+  return canvas.toDataURL("image/jpeg", 0.7);
 }

@@ -1,22 +1,22 @@
-import { useEffect, useRef } from 'react'
-import { Disc3, ListMusic, Radio, RadioTower, X } from 'lucide-react'
-import { playlistTotalSecs, type ScreenLayout } from '@shared/model'
-import { tt } from '@/api'
-import { useStore } from '@/store'
-import { useQueuePerformer } from '@/hooks/useQueuePerformer'
-import { MediaRow } from '@/components/media/MediaRow'
-import { MediaArt } from '@/components/media/MediaArt'
-import { DurationCell } from '@/components/media/DurationCell'
-import { Eqbars } from '@/components/media/Eqbars'
-import { EmptyState } from '@/components/chrome/EmptyState'
-import { fromRecent } from '@/lib/mediaRef'
-import { playRefNow } from '@/lib/mediaActions'
-import { scrollToVisible } from '@/lib/scroll'
-import { activeSourceId, cx, fmtDuration, fmtRelative } from '@/lib/format'
-import { useLitPresets } from '@/hooks/useLitPresets'
+import { useEffect, useRef } from "react";
+import { Disc3, ListMusic, Radio, RadioTower, X } from "lucide-react";
+import { playlistTotalSecs, type ScreenLayout } from "@shared/model";
+import { tt } from "@/api";
+import { useStore } from "@/store";
+import { useQueuePerformer } from "@/hooks/useQueuePerformer";
+import { MediaRow } from "@/components/media/MediaRow";
+import { MediaArt } from "@/components/media/MediaArt";
+import { DurationCell } from "@/components/media/DurationCell";
+import { Eqbars } from "@/components/media/Eqbars";
+import { EmptyState } from "@/components/chrome/EmptyState";
+import { fromRecent } from "@/lib/mediaRef";
+import { playRefNow } from "@/lib/mediaActions";
+import { scrollToVisible } from "@/lib/scroll";
+import { activeSourceId, cx, fmtDuration, fmtRelative } from "@/lib/format";
+import { useLitPresets } from "@/hooks/useLitPresets";
 
-export type TrayTab = 'queue' | 'presets' | 'playlists' | 'recent'
-export type TrayDensity = 'detailed' | 'compressed'
+export type TrayTab = "queue" | "presets" | "playlists" | "recent";
+export type TrayDensity = "detailed" | "compressed";
 
 /**
  * The panel's four tab bodies.
@@ -32,7 +32,7 @@ export type TrayDensity = 'detailed' | 'compressed'
  */
 
 /** How many Recent entries the tab shows. The cap is the point — see RecentTab. */
-const RECENT_CAP = 12
+const RECENT_CAP = 12;
 
 // ------------------------------------------------------------ the compressed row
 
@@ -60,48 +60,48 @@ function CompressedRow({
   parked,
   dimmed,
   onClick,
-  attrs
+  attrs,
 }: {
-  position?: number | null
+  position?: number | null;
   /** Does this LIST have indices at all? Set per list, not per row, so the
    *  titles stay on one line even where a particular row has no number. */
-  withIndex?: boolean
-  title: string
-  subtitle?: string | null
+  withIndex?: boolean;
+  title: string;
+  subtitle?: string | null;
   /**
    * Reserved PER LIST, like the index cell: a list whose rows have durations
    * passes `?? null` so unknown ones still hold the '–:––' cell, and a list
    * that has no durations at all (recents, playlists) passes nothing — a
    * column of placeholders against nothing told the user precisely nothing.
    */
-  duration?: number | null
+  duration?: number | null;
   /** Trailing content where a duration makes no sense — the recents' "ago",
    *  the playlists' "3 tracks · 11 min" pair. */
-  meta?: React.ReactNode
-  playing?: boolean
-  parked?: boolean
-  dimmed?: boolean
-  onClick?: () => void
-  attrs?: Record<string, string | undefined>
+  meta?: React.ReactNode;
+  playing?: boolean;
+  parked?: boolean;
+  dimmed?: boolean;
+  onClick?: () => void;
+  attrs?: Record<string, string | undefined>;
 }): React.JSX.Element {
   return (
     <div
       {...attrs}
-      role={onClick ? 'button' : undefined}
+      role={onClick ? "button" : undefined}
       tabIndex={onClick && !dimmed ? 0 : undefined}
       onClick={() => !dimmed && onClick?.()}
       onKeyDown={(e) => {
-        if (dimmed || !onClick) return
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          onClick()
+        if (dimmed || !onClick) return;
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick();
         }
       }}
       className={cx(
-        'group w-full text-left flex items-center gap-2 px-2.5 py-1 rounded-md transition-colors',
-        onClick && !dimmed && 'cursor-pointer',
-        playing ? 'bg-gold/10' : parked ? 'bg-veil/50 hover:bg-veil' : 'hover:bg-raised/60',
-        dimmed && 'opacity-45'
+        "group w-full text-left flex items-center gap-2 px-2.5 py-1 rounded-md transition-colors",
+        onClick && !dimmed && "cursor-pointer",
+        playing ? "bg-gold/10" : parked ? "bg-veil/50 hover:bg-veil" : "hover:bg-raised/60",
+        dimmed && "opacity-45",
       )}
     >
       {/* The position cell is the flat skin's playing marker — eqbars replace
@@ -113,16 +113,13 @@ function CompressedRow({
           the floating skin's rule, and the right one when there's no cell. */}
       {withIndex ? (
         <span className="w-5 shrink-0 flex justify-center font-mono text-[10.5px] text-faint tabular-nums">
-          {playing ? <Eqbars /> : position != null ? position : ''}
+          {playing ? <Eqbars /> : position != null ? position : ""}
         </span>
       ) : (
         playing && <Eqbars />
       )}
       <span
-        className={cx(
-          'flex-1 min-w-0 truncate text-[12.5px]',
-          playing ? 'text-gold' : 'text-ink'
-        )}
+        className={cx("flex-1 min-w-0 truncate text-[12.5px]", playing ? "text-gold" : "text-ink")}
       >
         {title}
         {subtitle && <span className="text-faint"> · {subtitle}</span>}
@@ -132,7 +129,7 @@ function CompressedRow({
       )}
       {duration !== undefined && <DurationCell secs={duration} />}
     </div>
-  )
+  );
 }
 
 // ------------------------------------------------------------------- the queue
@@ -147,28 +144,28 @@ function CompressedRow({
  */
 export function QueueTab({
   opens,
-  density
+  density,
 }: {
-  opens: number
-  density: TrayDensity
+  opens: number;
+  density: TrayDensity;
 }): React.JSX.Element {
-  const performerOf = useQueuePerformer()
-  const queue = useStore((s) => s.queue)
-  const playState = useStore((s) => s.playState)
-  const zoneState = useStore((s) => s.zoneState)
-  const nowPlaying = useStore((s) => s.nowPlaying)
-  const followQueue = useStore((s) => s.settings.followQueue)
-  const playingRow = useRef<HTMLDivElement | null>(null)
+  const performerOf = useQueuePerformer();
+  const queue = useStore((s) => s.queue);
+  const playState = useStore((s) => s.playState);
+  const zoneState = useStore((s) => s.zoneState);
+  const nowPlaying = useStore((s) => s.nowPlaying);
+  const followQueue = useStore((s) => s.settings.followQueue);
+  const playingRow = useRef<HTMLDivElement | null>(null);
 
-  const offline = useOffline()
-  const items = queue?.items ?? []
-  const playId = queue?.play_id ?? playState?.queue_id ?? null
+  const offline = useOffline();
+  const items = queue?.items ?? [];
+  const playId = queue?.play_id ?? playState?.queue_id ?? null;
   // THE QUEUE BELONGS TO MEDIA_PLAYER. Switch to a radio preset (or AirPlay)
   // and the device still reports a play_id — that row is just where the queue
   // is PARKED, and a panel that leaves eqbars dancing on it is claiming a
   // track is playing when it stopped minutes ago. The Queue screen has drawn
   // this distinction since the AirPlay round; the panel was missing it.
-  const queueAudible = activeSourceId(zoneState, nowPlaying) === 'MEDIA_PLAYER'
+  const queueAudible = activeSourceId(zoneState, nowPlaying) === "MEDIA_PLAYER";
 
   // TWO DIFFERENT SCROLLS, deliberately split.
   //
@@ -187,39 +184,45 @@ export function QueueTab({
   // row's gold ring at the scrollport edge (user, 2026-08-04, seen switching
   // compact -> detailed). 8px matches the body's own pb-2 rhythm.
   useEffect(() => {
-    scrollToVisible(playingRow.current, 8)
-  }, [opens, density])
+    scrollToVisible(playingRow.current, 8);
+  }, [opens, density]);
   useEffect(() => {
-    if (followQueue) scrollToVisible(playingRow.current, 8)
-  }, [playId, followQueue])
+    if (followQueue) scrollToVisible(playingRow.current, 8);
+  }, [playId, followQueue]);
 
-  if (offline) return <OfflineTab icon={ListMusic} what="Queue" they="It lives" />
+  if (offline) return <OfflineTab icon={ListMusic} what="Queue" they="It lives" />;
   if (items.length === 0) {
-    return <TabEmpty icon={ListMusic} title="Queue is empty" hint="Play an album or a playlist to fill it." />
+    return (
+      <TabEmpty
+        icon={ListMusic}
+        title="Queue is empty"
+        hint="Play an album or a playlist to fill it."
+      />
+    );
   }
 
   return (
     <>
       {items.map((item) => {
-        const md = item.metadata
-        const current = item.id != null && item.id === playId
+        const md = item.metadata;
+        const current = item.id != null && item.id === playId;
         // Current AND audible = the full playing treatment. Current while
         // another source plays = the parked resume point, quietly set apart.
-        const playing = current && queueAudible
+        const playing = current && queueAudible;
         const play = (): void => {
-          if (item.id != null) void tt.command({ type: 'playQueueId', queueId: item.id })
-        }
+          if (item.id != null) void tt.command({ type: "playQueueId", queueId: item.id });
+        };
         return (
           <div key={item.id ?? item.position} ref={playing ? playingRow : undefined}>
-            {density === 'compressed' ? (
+            {density === "compressed" ? (
               <CompressedRow
                 withIndex
-                attrs={{ 'data-tray-row': 'queue' }}
+                attrs={{ "data-tray-row": "queue" }}
                 // 1-BASED, like the Queue screen's cell — the wire's position
                 // is 0-based, and a list that counts from 0 in one window and
                 // 1 in the other is the same number telling two stories.
                 position={(item.position ?? 0) + 1}
-                title={md?.title ?? md?.name ?? '—'}
+                title={md?.title ?? md?.name ?? "—"}
                 subtitle={performerOf(md) ?? md?.artist}
                 duration={md?.duration ?? null}
                 playing={playing}
@@ -230,9 +233,12 @@ export function QueueTab({
               <MediaRow
                 dense
                 parked={current && !queueAudible}
-                attrs={{ 'data-tray-row': 'queue' }}
-                title={md?.title ?? md?.name ?? '—'}
-                subtitle={[performerOf(md) ?? md?.artist, md?.album].filter(Boolean).join(' — ') || undefined}
+                attrs={{ "data-tray-row": "queue" }}
+                title={md?.title ?? md?.name ?? "—"}
+                subtitle={
+                  [performerOf(md) ?? md?.artist, md?.album].filter(Boolean).join(" — ") ||
+                  undefined
+                }
                 kind="track"
                 artUrl={md?.art_url ?? null}
                 playing={playing}
@@ -241,10 +247,10 @@ export function QueueTab({
               />
             )}
           </div>
-        )
+        );
       })}
     </>
-  )
+  );
 }
 
 // ----------------------------------------------------------------- the presets
@@ -268,38 +274,44 @@ export function QueueTab({
  */
 export function PresetsTab({
   layout,
-  density
+  density,
 }: {
-  layout: ScreenLayout
-  density: TrayDensity
+  layout: ScreenLayout;
+  density: TrayDensity;
 }): React.JSX.Element {
-  const presets = useStore((s) => s.presets)
-  const offline = useOffline()
-  const items = (presets?.presets ?? []).filter((p) => p.id != null)
+  const presets = useStore((s) => s.presets);
+  const offline = useOffline();
+  const items = (presets?.presets ?? []).filter((p) => p.id != null);
   // NOT `p.is_playing` — the device's flags are unreliable in both directions
   // and lit almost nothing here. `useLitPresets` is the derivation the Presets
   // screen has always used, now shared.
-  const lit = useLitPresets(items)
-  const isPlaying = (id: number | null): boolean => id != null && lit.has(id)
+  const lit = useLitPresets(items);
+  const isPlaying = (id: number | null): boolean => id != null && lit.has(id);
 
-  if (offline) return <OfflineTab icon={Radio} what="Presets" they="They live" />
+  if (offline) return <OfflineTab icon={Radio} what="Presets" they="They live" />;
   if (items.length === 0) {
-    return <TabEmpty icon={Radio} title="No presets" hint="Save stations and albums to the streamer's presets." />
+    return (
+      <TabEmpty
+        icon={Radio}
+        title="No presets"
+        hint="Save stations and albums to the streamer's presets."
+      />
+    );
   }
 
   const recall = (id: number) => (): void => {
-    void tt.command({ type: 'recallPreset', presetId: id })
-  }
+    void tt.command({ type: "recallPreset", presetId: id });
+  };
 
-  if (layout === 'rows') {
+  if (layout === "rows") {
     return (
       <>
         {items.map((p) =>
-          density === 'compressed' ? (
+          density === "compressed" ? (
             <CompressedRow
               withIndex
               key={p.id}
-              attrs={{ 'data-tray-row': 'preset' }}
+              attrs={{ "data-tray-row": "preset" }}
               position={p.id}
               title={p.name ?? `Preset ${p.id}`}
               playing={isPlaying(p.id)}
@@ -309,7 +321,7 @@ export function PresetsTab({
             <MediaRow
               dense
               key={p.id}
-              attrs={{ 'data-tray-row': 'preset' }}
+              attrs={{ "data-tray-row": "preset" }}
               // The slot number moved out of the second line and into a
               // position cell beside the name: "Preset N" under every row was
               // boilerplate wearing a subtitle's clothes — 24 rows all saying
@@ -323,21 +335,21 @@ export function PresetsTab({
               playing={isPlaying(p.id)}
               onClick={recall(p.id as number)}
             />
-          )
+          ),
         )}
       </>
-    )
+    );
   }
 
   // COMPACT CARDS: art only, four across. The density chip means something on
   // this tab too — "show me more of them" is the same request whether the
   // things are rows or tiles, and for presets the art IS the identifier, so
   // the label is the part that can go.
-  const compact = density === 'compressed'
+  const compact = density === "compressed";
   return (
     // No padding of its own: the body already supplies the window's gutter,
     // and adding to it indented the grid further than everything above it.
-    <div className={cx('grid gap-2', compact ? 'grid-cols-4 gap-1.5' : 'grid-cols-3')}>
+    <div className={cx("grid gap-2", compact ? "grid-cols-4 gap-1.5" : "grid-cols-3")}>
       {items.map((p) => (
         <button
           key={p.id}
@@ -352,8 +364,8 @@ export function PresetsTab({
             // the same gold ring and bloom it has on the Presets screen. This
             // was a raise plus a ring change, which is a different gesture and
             // a nearly invisible one over album art.
-            'group relative rounded-lg overflow-hidden text-left transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]',
-            isPlaying(p.id) ? 'tile-playing' : 'ring-1 ring-edge card-hover-glow'
+            "group relative rounded-lg overflow-hidden text-left transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]",
+            isPlaying(p.id) ? "tile-playing" : "ring-1 ring-edge card-hover-glow",
           )}
         >
           <div className="aspect-square bg-raised">
@@ -362,17 +374,13 @@ export function PresetsTab({
                 presets — and the main grid has always drawn the radio mark for
                 every one of them. Guessing radio-vs-album here made a TV ARC
                 input a disc in this window and a radio in the other. */}
-            <MediaArt
-              src={p.art_url ?? p.art_urls?.[0] ?? null}
-              kind="preset"
-              size="card"
-            />
+            <MediaArt src={p.art_url ?? p.art_urls?.[0] ?? null} kind="preset" size="card" />
           </div>
           {!compact && (
             <div
               className={cx(
-                'px-1.5 py-1 text-[10.5px] truncate transition-colors',
-                isPlaying(p.id) ? 'text-gold' : 'text-dim group-hover:text-ink'
+                "px-1.5 py-1 text-[10.5px] truncate transition-colors",
+                isPlaying(p.id) ? "text-gold" : "text-dim group-hover:text-ink",
               )}
             >
               {p.name ?? `Preset ${p.id}`}
@@ -381,7 +389,7 @@ export function PresetsTab({
         </button>
       ))}
     </div>
-  )
+  );
 }
 
 // --------------------------------------------------------------- the playlists
@@ -393,41 +401,47 @@ export function PresetsTab({
  */
 export function PlaylistsTab({
   density,
-  onActivate
+  onActivate,
 }: {
-  density: TrayDensity
-  onActivate(playlist: { id: string; name: string }): void
+  density: TrayDensity;
+  onActivate(playlist: { id: string; name: string }): void;
 }): React.JSX.Element {
-  const playlists = useStore((s) => s.playlists)
-  const activation = useStore((s) => s.playlistActivation)
-  const running = activation && !activation.finished
+  const playlists = useStore((s) => s.playlists);
+  const activation = useStore((s) => s.playlistActivation);
+  const running = activation && !activation.finished;
 
   if (playlists.length === 0) {
-    return <TabEmpty icon={ListMusic} title="No playlists" hint="Build one in the app, start it from here." />
+    return (
+      <TabEmpty
+        icon={ListMusic}
+        title="No playlists"
+        hint="Build one in the app, start it from here."
+      />
+    );
   }
 
   return (
     <>
       {playlists.map((p) => {
-        const mine = running && activation.playlistId === p.id
-        const count = `${p.items.length} ${p.items.length === 1 ? 'track' : 'tracks'}`
-        const progress = mine ? `Loading ${activation.done} of ${activation.total}…` : count
+        const mine = running && activation.playlistId === p.id;
+        const count = `${p.items.length} ${p.items.length === 1 ? "track" : "tracks"}`;
+        const progress = mine ? `Loading ${activation.done} of ${activation.total}…` : count;
         // The runtime the Playlists screen already shows beside the count —
         // same sum (`playlistTotalSecs`), worn as the row's trailing fact, the
         // slot recents use for their relative time. Absent when no item knows
         // its length; constant through activation so the right edge never
         // reshapes with the state.
-        const total = playlistTotalSecs(p)
-        const runtime = total > 0 ? fmtDuration(total) : undefined
+        const total = playlistTotalSecs(p);
+        const runtime = total > 0 ? fmtDuration(total) : undefined;
         // Another playlist's run is in flight: starting a second would fight it
         // for the queue, and the door is closed at the preload anyway. Dim
         // rather than hide, so the list never reshapes.
-        const dimmed = !!running && !mine
-        const start = (): void => onActivate({ id: p.id, name: p.name })
-        return density === 'compressed' ? (
+        const dimmed = !!running && !mine;
+        const start = (): void => onActivate({ id: p.id, name: p.name });
+        return density === "compressed" ? (
           <CompressedRow
             key={p.id}
-            attrs={{ 'data-tray-row': 'playlist' }}
+            attrs={{ "data-tray-row": "playlist" }}
             title={p.name}
             // The inline slot carries only the ACTIVATION progress; at rest
             // the row's facts live right-aligned in the meta cell below.
@@ -456,7 +470,7 @@ export function PlaylistsTab({
           <MediaRow
             dense
             key={p.id}
-            attrs={{ 'data-tray-row': 'playlist' }}
+            attrs={{ "data-tray-row": "playlist" }}
             title={p.name}
             subtitle={progress}
             meta={runtime}
@@ -472,8 +486,8 @@ export function PlaylistsTab({
                   aria-label="Stop loading"
                   data-tip="Stop loading"
                   onClick={(e) => {
-                    e.stopPropagation()
-                    void tt.playlistActivateCancel()
+                    e.stopPropagation();
+                    void tt.playlistActivateCancel();
                   }}
                   className="tip-top p-1 rounded text-dim hover:text-alert transition-colors"
                 >
@@ -483,11 +497,11 @@ export function PlaylistsTab({
             }
             onClick={running ? undefined : start}
           />
-        )
+        );
       })}
       {/* Compressed rows have no room for a cancel button, so the run's own
           row carries it beneath them rather than being uncancellable. */}
-      {density === 'compressed' && running && (
+      {density === "compressed" && running && (
         <button
           onClick={() => void tt.playlistActivateCancel()}
           aria-label="Stop loading"
@@ -497,7 +511,7 @@ export function PlaylistsTab({
         </button>
       )}
     </>
-  )
+  );
 }
 
 // ------------------------------------------------------------------ the recent
@@ -510,32 +524,35 @@ export function PlaylistsTab({
  * thing, open the app.
  */
 export function RecentTab({ density }: { density: TrayDensity }): React.JSX.Element {
-  const recents = useStore((s) => s.recents)
-  const items = recents.slice(0, RECENT_CAP)
+  const recents = useStore((s) => s.recents);
+  const items = recents.slice(0, RECENT_CAP);
 
   if (items.length === 0) {
-    return <TabEmpty icon={Disc3} title="Nothing played yet" hint="Tracks you play show up here." />
+    return (
+      <TabEmpty icon={Disc3} title="Nothing played yet" hint="Tracks you play show up here." />
+    );
   }
 
   return (
     <>
       {items.map((entry) => {
-        const ref = fromRecent(entry)
-        const title = entry.isRadio ? (entry.station ?? entry.title) : entry.title
+        const ref = fromRecent(entry);
+        const title = entry.isRadio ? (entry.station ?? entry.title) : entry.title;
         const subtitle =
-          (entry.isRadio ? entry.title : [entry.artist, entry.album].filter(Boolean).join(' — ')) || undefined
+          (entry.isRadio ? entry.title : [entry.artist, entry.album].filter(Boolean).join(" — ")) ||
+          undefined;
         // Radio and songless rows carry no identity to replay — no stream URL
         // is stored for them — so they read as history, not as buttons.
-        const play = ref ? () => void playRefNow(ref) : undefined
-        const attrs = { 'data-tray-row': 'recent' }
+        const play = ref ? () => void playRefNow(ref) : undefined;
+        const attrs = { "data-tray-row": "recent" };
         // The main Recently Played screen's trailing fact, from the same
         // formatter — a history row's useful number is WHEN, not how long.
-        const ago = fmtRelative(entry.at)
-        return density === 'compressed' ? (
+        const ago = fmtRelative(entry.at);
+        return density === "compressed" ? (
           <CompressedRow
-            key={`${entry.at}-${entry.title ?? ''}`}
+            key={`${entry.at}-${entry.title ?? ""}`}
             attrs={attrs}
-            title={title ?? '—'}
+            title={title ?? "—"}
             subtitle={entry.isRadio ? entry.title : entry.artist}
             meta={ago}
             dimmed={!ref}
@@ -544,20 +561,20 @@ export function RecentTab({ density }: { density: TrayDensity }): React.JSX.Elem
         ) : (
           <MediaRow
             dense
-            key={`${entry.at}-${entry.title ?? ''}`}
+            key={`${entry.at}-${entry.title ?? ""}`}
             attrs={attrs}
-            title={title ?? '—'}
+            title={title ?? "—"}
             subtitle={subtitle}
-            kind={entry.isRadio ? 'station' : 'track'}
+            kind={entry.isRadio ? "station" : "track"}
             artUrl={entry.artUrl}
             meta={ago}
             dimmed={!ref}
             onClick={play}
           />
-        )
+        );
       })}
     </>
-  )
+  );
 }
 
 // ------------------------------------------------------------------- the empty
@@ -565,17 +582,17 @@ export function RecentTab({ density }: { density: TrayDensity }): React.JSX.Elem
 function TabEmpty({
   icon: Icon,
   title,
-  hint
+  hint,
 }: {
-  icon: typeof RadioTower
-  title: string
-  hint: string
+  icon: typeof RadioTower;
+  title: string;
+  hint: string;
 }): React.JSX.Element {
   return (
     <div className="h-full flex items-center justify-center px-2">
       <EmptyState compact icon={Icon} title={title} caption={hint} />
     </div>
-  )
+  );
 }
 
 /**
@@ -585,22 +602,22 @@ function TabEmpty({
  * stay honest offline, which is exactly why only these two go quiet.
  */
 function useOffline(): boolean {
-  return useStore((s) => s.connection.phase !== 'connected')
+  return useStore((s) => s.connection.phase !== "connected");
 }
 
 function OfflineTab({
   icon,
   what,
-  they
+  they,
 }: {
-  icon: typeof RadioTower
-  what: string
-  they: string
+  icon: typeof RadioTower;
+  what: string;
+  they: string;
 }): React.JSX.Element {
   // KEEPS THE TAB'S OWN GLYPH AND EXPLAINS THE CONSEQUENCE, rather than
   // repeating the header. The panel's offline face is right above this saying
   // "No streamer connected" with an unplug mark; a second unplug mark and a
   // second "Not connected" underneath it is the same sentence twice, and the
   // question it leaves unanswered is why THIS tab is empty when Recent isn't.
-  return <TabEmpty icon={icon} title={`${what} unavailable`} hint={`${they} on the streamer.`} />
+  return <TabEmpty icon={icon} title={`${what} unavailable`} hint={`${they} on the streamer.`} />;
 }

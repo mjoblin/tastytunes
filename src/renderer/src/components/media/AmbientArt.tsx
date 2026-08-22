@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { useBlurredArt } from '@/hooks/useBlurredArt'
+import { useEffect, useRef, useState } from "react";
+import { useBlurredArt } from "@/hooks/useBlurredArt";
 
 /**
  * The blurred album-art wash behind the app (and behind the mini player's
@@ -23,30 +23,30 @@ import { useBlurredArt } from '@/hooks/useBlurredArt'
  */
 export function AmbientArt({
   src: rawSrc,
-  vignette
+  vignette,
 }: {
-  src: string | null
-  vignette: boolean
+  src: string | null;
+  vignette: boolean;
 }): React.JSX.Element | null {
   // THE BLUR IS BAKED IN, not applied live — see useBlurredArt for the
   // measurements. What lands here is already a small, pre-blurred bitmap, and
   // the layers below carry no filter at all. Until it's baked there is simply
   // no wash yet, which the crossfade already handles (a null src fades out).
-  const src = useBlurredArt(rawSrc)
-  const [cur, setCur] = useState<{ src: string | null; k: number }>({ src, k: 0 })
-  const [prev, setPrev] = useState<{ src: string; k: number } | null>(null)
-  const curRef = useRef(cur)
-  const kRef = useRef(0)
+  const src = useBlurredArt(rawSrc);
+  const [cur, setCur] = useState<{ src: string | null; k: number }>({ src, k: 0 });
+  const [prev, setPrev] = useState<{ src: string; k: number } | null>(null);
+  const curRef = useRef(cur);
+  const kRef = useRef(0);
   useEffect(() => {
-    if (src === curRef.current.src) return
-    const outgoing = curRef.current
-    if (outgoing.src) setPrev({ src: outgoing.src, k: outgoing.k })
-    const next = { src, k: ++kRef.current }
-    curRef.current = next
-    setCur(next)
-  }, [src])
+    if (src === curRef.current.src) return;
+    const outgoing = curRef.current;
+    if (outgoing.src) setPrev({ src: outgoing.src, k: outgoing.k });
+    const next = { src, k: ++kRef.current };
+    curRef.current = next;
+    setCur(next);
+  }, [src]);
 
-  if (!cur.src && !prev) return null
+  if (!cur.src && !prev) return null;
   return (
     <div aria-hidden className="absolute inset-0 overflow-hidden pointer-events-none">
       <div className="ambient-art">
@@ -56,7 +56,7 @@ export function AmbientArt({
             className="ambient-layer ambient-layer-out"
             style={{ backgroundImage: `url(${prev.src})` }}
             onAnimationEnd={(e) => {
-              if (e.target === e.currentTarget) setPrev(null)
+              if (e.target === e.currentTarget) setPrev(null);
             }}
           />
         )}
@@ -70,5 +70,5 @@ export function AmbientArt({
       </div>
       {vignette && <div className="ambient-vignette" />}
     </div>
-  )
+  );
 }

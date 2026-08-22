@@ -1,5 +1,5 @@
-import { useState, useRef } from 'react'
-import { Copy, Check, Disc3, Music2, User } from 'lucide-react'
+import { useState, useRef } from "react";
+import { Copy, Check, Disc3, Music2, User } from "lucide-react";
 import {
   albumComposers,
   albumFormat,
@@ -10,15 +10,15 @@ import {
   trackArtists,
   trackPosition,
   type MediaInfoTarget,
-  type MediaNode
-} from '@shared/model'
-import { artUrlAt } from '@shared/artUrl'
-import { useStore } from '@/store'
-import { ModalShell } from '@/components/chrome/Overlay'
-import { CloseButton } from '@/components/controls/CloseButton'
-import { ArtImage } from '@/components/media/ArtImage'
-import { fmtTime } from '@/lib/format'
-import { isAlbumClass, isArtistClass } from '@/lib/media'
+  type MediaNode,
+} from "@shared/model";
+import { artUrlAt } from "@shared/artUrl";
+import { useStore } from "@/store";
+import { ModalShell } from "@/components/chrome/Overlay";
+import { CloseButton } from "@/components/controls/CloseButton";
+import { ArtImage } from "@/components/media/ArtImage";
+import { fmtTime } from "@/lib/format";
+import { isAlbumClass, isArtistClass } from "@/lib/media";
 
 /**
  * The Info modal: everything the server said about a piece of media, laid out
@@ -32,18 +32,20 @@ import { isAlbumClass, isArtistClass } from '@/lib/media'
  * clipboard for bug reports.
  */
 
-type Row = [label: string, value: React.ReactNode]
+type Row = [label: string, value: React.ReactNode];
 
-function kindOf(node: MediaNode): 'album' | 'artist' | 'folder' | 'track' {
-  if (!node.isContainer) return 'track'
-  if (isArtistClass(node.upnpClass)) return 'artist'
-  if (isAlbumClass(node.upnpClass)) return 'album'
-  return 'folder'
+function kindOf(node: MediaNode): "album" | "artist" | "folder" | "track" {
+  if (!node.isContainer) return "track";
+  if (isArtistClass(node.upnpClass)) return "artist";
+  if (isAlbumClass(node.upnpClass)) return "album";
+  return "folder";
 }
 
 function Section({ title, rows }: { title: string; rows: Row[] }): React.JSX.Element | null {
-  const shown = rows.filter(([, v]) => v != null && v !== '' && !(Array.isArray(v) && v.length === 0))
-  if (shown.length === 0) return null
+  const shown = rows.filter(
+    ([, v]) => v != null && v !== "" && !(Array.isArray(v) && v.length === 0),
+  );
+  if (shown.length === 0) return null;
   return (
     <div data-info-section={title.toLowerCase()}>
       <div className="microlabel mb-1.5">{title}</div>
@@ -58,11 +60,11 @@ function Section({ title, rows }: { title: string; rows: Row[] }): React.JSX.Ele
         ))}
       </dl>
     </div>
-  )
+  );
 }
 
 const mono = (v: string | null | undefined): React.ReactNode =>
-  v ? <span className="font-mono text-[11px] text-dim break-all">{v}</span> : null
+  v ? <span className="font-mono text-[11px] text-dim break-all">{v}</span> : null;
 
 /**
  * A mono value with a copy affordance — the URL or id someone pastes into a
@@ -73,20 +75,20 @@ const mono = (v: string | null | undefined): React.ReactNode =>
  * cursor.
  */
 function CopyableMono({ value, label }: { value: string; label: string }): React.JSX.Element {
-  const [done, setDone] = useState(false)
+  const [done, setDone] = useState(false);
   return (
     <span className="inline-flex items-center gap-2 min-w-0 max-w-full">
       <span className="font-mono text-[11px] text-dim break-all">{value}</span>
       <button
-        data-tip={done ? 'Copied' : `Copy ${label}`}
+        data-tip={done ? "Copied" : `Copy ${label}`}
         aria-label={`Copy ${label}`}
         data-info-copy-value={label}
         onClick={(e) => {
-          e.stopPropagation()
+          e.stopPropagation();
           void navigator.clipboard.writeText(value).then(() => {
-            setDone(true)
-            setTimeout(() => setDone(false), 1500)
-          })
+            setDone(true);
+            setTimeout(() => setDone(false), 1500);
+          });
         }}
         // above and right-aligned: the value sits at the right of a scroll
         // container, and a centered/below tip clips at its edge
@@ -95,7 +97,7 @@ function CopyableMono({ value, label }: { value: string; label: string }): React
         {done ? <Check size={11} /> : <Copy size={11} />}
       </button>
     </span>
-  )
+  );
 }
 
 /**
@@ -104,100 +106,117 @@ function CopyableMono({ value, label }: { value: string; label: string }): React
  * its last children, but this component's hooks need a node to run against),
  * and unmounts once nothing has ever been shown.
  */
-export function MediaInfoModal({ target }: { target: MediaInfoTarget | null }): React.JSX.Element | null {
-  const last = useRef<MediaInfoTarget | null>(null)
-  if (target) last.current = target
-  const shown = target ?? last.current
-  if (!shown) return null
-  return <MediaInfoBody target={shown} open={target != null} />
+export function MediaInfoModal({
+  target,
+}: {
+  target: MediaInfoTarget | null;
+}): React.JSX.Element | null {
+  const last = useRef<MediaInfoTarget | null>(null);
+  if (target) last.current = target;
+  const shown = target ?? last.current;
+  if (!shown) return null;
+  return <MediaInfoBody target={shown} open={target != null} />;
 }
 
-function MediaInfoBody({ target, open }: { target: MediaInfoTarget; open: boolean }): React.JSX.Element {
-  const setMediaInfo = useStore((s) => s.setMediaInfo)
-  const close = (): void => setMediaInfo(null)
-  const { node, tracks, serverName, note, artist, stream, serverProfile } = target
-  const kind = kindOf(node)
-  const [copied, setCopied] = useState(false)
+function MediaInfoBody({
+  target,
+  open,
+}: {
+  target: MediaInfoTarget;
+  open: boolean;
+}): React.JSX.Element {
+  const setMediaInfo = useStore((s) => s.setMediaInfo);
+  const close = (): void => setMediaInfo(null);
+  const { node, tracks, serverName, note, artist, stream, serverProfile } = target;
+  const kind = kindOf(node);
+  const [copied, setCopied] = useState(false);
 
   const copy = (): void => {
-    const payload = tracks && tracks.length > 0 ? { node, tracks } : node
+    const payload = tracks && tracks.length > 0 ? { node, tracks } : node;
     void navigator.clipboard.writeText(JSON.stringify(payload, null, 2)).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    })
-  }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
 
   // ---- identity
-  const performers = trackArtists(node)
+  const performers = trackArtists(node);
   const identity: Row[] =
-    kind === 'track'
+    kind === "track"
       ? [
-          ['Title', node.title],
-          ['Performers', performers.length > 1 ? performers.join(', ') : (node.artist ?? null)],
-          ['Album artist', node.albumArtist ?? null],
-          ['Album', node.album ?? null],
-          ['Composers', node.composers?.join(', ') ?? null],
-          ['Year', node.year ?? null],
-          ['Genres', node.genre?.join(', ') ?? null],
+          ["Title", node.title],
+          ["Performers", performers.length > 1 ? performers.join(", ") : (node.artist ?? null)],
+          ["Album artist", node.albumArtist ?? null],
+          ["Album", node.album ?? null],
+          ["Composers", node.composers?.join(", ") ?? null],
+          ["Year", node.year ?? null],
+          ["Genres", node.genre?.join(", ") ?? null],
           [
-            'Position',
+            "Position",
             node.trackNumber != null
-              ? `${trackPosition(node)}${node.discNumber != null ? ` · disc ${node.discNumber}${node.discCount ? ` of ${node.discCount}` : ''}` : ''}`
-              : null
+              ? `${trackPosition(node)}${node.discNumber != null ? ` · disc ${node.discNumber}${node.discCount ? ` of ${node.discCount}` : ""}` : ""}`
+              : null,
           ],
-          ['Duration', node.durationSecs != null ? fmtTime(node.durationSecs) : null]
+          ["Duration", node.durationSecs != null ? fmtTime(node.durationSecs) : null],
         ]
-      : kind === 'album'
+      : kind === "album"
         ? [
-            ['Title', node.title],
-            ['Artist', node.artist ?? null],
-            ['Year', node.year ?? null],
-            ['Genres', node.genre?.join(', ') ?? null]
+            ["Title", node.title],
+            ["Artist", node.artist ?? null],
+            ["Year", node.year ?? null],
+            ["Genres", node.genre?.join(", ") ?? null],
           ]
-        : [
-            ['Name', node.title],
-            ...(node.artist ? ([['Artist', node.artist]] as Row[]) : [])
-          ]
+        : [["Name", node.title], ...(node.artist ? ([["Artist", node.artist]] as Row[]) : [])];
 
   // ---- format (a track's own; an album's summed from its tracks)
-  const f = node.format
+  const f = node.format;
   const trackFormat: Row[] =
-    kind === 'track' && f
+    kind === "track" && f
       ? [
-          ['Codec', f.codec],
-          ['Bit depth', f.bits ? `${f.bits}-bit` : null],
-          ['Sample rate', f.rate ? `${(f.rate / 1000).toFixed(f.rate % 1000 === 0 ? 0 : 1)} kHz` : null],
-          ['Bitrate', f.kbps ? `${f.kbps} kbps` : null],
-          ['Channels', f.channels ?? null],
-          ['File size', f.sizeBytes ? fmtBytes(f.sizeBytes) : null]
+          ["Codec", f.codec],
+          ["Bit depth", f.bits ? `${f.bits}-bit` : null],
+          [
+            "Sample rate",
+            f.rate ? `${(f.rate / 1000).toFixed(f.rate % 1000 === 0 ? 0 : 1)} kHz` : null,
+          ],
+          ["Bitrate", f.kbps ? `${f.kbps} kbps` : null],
+          ["Channels", f.channels ?? null],
+          ["File size", f.sizeBytes ? fmtBytes(f.sizeBytes) : null],
         ]
-      : []
+      : [];
   const albumRows: Row[] = (() => {
-    if (kind !== 'album' || !tracks || tracks.length === 0) return []
-    const secs = tracks.reduce((a, t) => a + (t.durationSecs ?? 0), 0)
-    const bytes = tracks.reduce((a, t) => a + (t.format?.sizeBytes ?? 0), 0)
-    const fmt = albumFormat(tracks)
-    const odd = fmt.notes.filter(Boolean).length
-    const discs = discGroups(tracks).filter((g) => g.disc != null).length
-    const composers = albumComposers(tracks)
+    if (kind !== "album" || !tracks || tracks.length === 0) return [];
+    const secs = tracks.reduce((a, t) => a + (t.durationSecs ?? 0), 0);
+    const bytes = tracks.reduce((a, t) => a + (t.format?.sizeBytes ?? 0), 0);
+    const fmt = albumFormat(tracks);
+    const odd = fmt.notes.filter(Boolean).length;
+    const discs = discGroups(tracks).filter((g) => g.disc != null).length;
+    const composers = albumComposers(tracks);
     return [
-      ['Tracks', String(tracks.length)],
-      ['Discs', discs > 1 ? String(discs) : null],
-      ['Runtime', secs > 0 ? fmtTime(secs) : null],
-      ['Size', bytes > 0 ? fmtBytes(bytes) : null],
-      ['Format', fmt.label ? `${fmt.label}${odd > 0 ? ` (${odd} ${odd === 1 ? 'track differs' : 'tracks differ'})` : ''}` : null],
-      ['Composers', composers.length > 0 ? composers.join(', ') : null]
-    ]
-  })()
+      ["Tracks", String(tracks.length)],
+      ["Discs", discs > 1 ? String(discs) : null],
+      ["Runtime", secs > 0 ? fmtTime(secs) : null],
+      ["Size", bytes > 0 ? fmtBytes(bytes) : null],
+      [
+        "Format",
+        fmt.label
+          ? `${fmt.label}${odd > 0 ? ` (${odd} ${odd === 1 ? "track differs" : "tracks differ"})` : ""}`
+          : null,
+      ],
+      ["Composers", composers.length > 0 ? composers.join(", ") : null],
+    ];
+  })();
 
   // ---- an artist's library page (artistSummary — shared with MCP)
   const list = (items: string[], max: number): React.ReactNode =>
     items.length === 0 ? null : (
       <span>
-        {items.slice(0, max).join(' · ')}
-        {items.length > max ? <span className="text-faint"> · +{items.length - max} more</span> : null}
+        {items.slice(0, max).join(" · ")}
+        {items.length > max ? (
+          <span className="text-faint"> · +{items.length - max} more</span>
+        ) : null}
       </span>
-    )
+    );
   // Lists read as ROWS, the name in ink and its facts quiet beside it — a
   // "·"-joined sentence made a shelf of albums look like a paragraph
   // (user, 2026-08-16).
@@ -212,48 +231,74 @@ function MediaInfoBody({ target, open }: { target: MediaInfoTarget; open: boolea
         ))}
         {items.length > max && <li className="text-faint">+{items.length - max} more</li>}
       </ul>
-    )
+    );
   const artistRows: Row[] = artist
     ? [
         [
-          'Albums',
+          "Albums",
           rows(
             artist.albums.map((a) => ({
               name: a.title,
-              meta: [a.year, a.format].filter(Boolean).join(' · ') || null
+              meta: [a.year, a.format].filter(Boolean).join(" · ") || null,
             })),
-            20
-          )
+            20,
+          ),
         ],
-        ['Tracks', artist.trackCount > 0 ? String(artist.trackCount) : null],
-        ['Guest on', rows(artist.guestOn.map((g) => ({ name: g.title, meta: g.albumArtist ?? g.album ?? null })), 8)],
-        ['Composed', artist.composed.length > 0 ? `${artist.composed.length} ${artist.composed.length === 1 ? 'track' : 'tracks'}` : null],
-        ['Genres', list(artist.genres, 8)],
-        ['Active', artist.years ? (artist.years[0] === artist.years[1] ? artist.years[0] : `${artist.years[0]}–${artist.years[1]}`) : null]
+        ["Tracks", artist.trackCount > 0 ? String(artist.trackCount) : null],
+        [
+          "Guest on",
+          rows(
+            artist.guestOn.map((g) => ({ name: g.title, meta: g.albumArtist ?? g.album ?? null })),
+            8,
+          ),
+        ],
+        [
+          "Composed",
+          artist.composed.length > 0
+            ? `${artist.composed.length} ${artist.composed.length === 1 ? "track" : "tracks"}`
+            : null,
+        ],
+        ["Genres", list(artist.genres, 8)],
+        [
+          "Active",
+          artist.years
+            ? artist.years[0] === artist.years[1]
+              ? artist.years[0]
+              : `${artist.years[0]}–${artist.years[1]}`
+            : null,
+        ],
       ]
-    : []
+    : [];
 
   // ---- the stream, as the streamer reports it (what is playing NOW)
-  const khzOf = (hz: number): string => `${(hz / 1000).toFixed(hz % 1000 === 0 ? 0 : 1)} kHz`
+  const khzOf = (hz: number): string => `${(hz / 1000).toFixed(hz % 1000 === 0 ? 0 : 1)} kHz`;
   const streamRows: Row[] = stream
     ? [
-        ['Source', stream.source],
-        ['Station', stream.station],
-        ['Codec', stream.codec],
-        ['Sample rate', stream.sampleRate ? khzOf(stream.sampleRate) : null],
-        ['Bit depth', stream.bitDepth ? `${stream.bitDepth}-bit` : null],
-        ['Bitrate', stream.bitrate ? `${Math.round(stream.bitrate / 1000)} kbps` : null],
-        ['Format', !stream.sampleRate && !stream.codec ? stream.sampleFormat : null],
-        ['Encoding', stream.encoding],
-        ['Lossless', stream.lossless == null ? null : stream.lossless ? 'yes' : 'no'],
-        ['MQA', stream.mqa],
-        ['Queue', stream.queuePosition != null && stream.queueLength != null ? `${stream.queuePosition} of ${stream.queueLength}` : null],
-        ['Presettable', stream.presettable == null ? null : stream.presettable ? 'yes' : 'no'],
-        ['Controls', stream.controls.length > 0 ? stream.controls.join(', ') : null],
-        ['Radio id', mono(stream.radioId)],
-        ['Playback', [stream.playbackSource, stream.playbackClass].filter(Boolean).join(' · ') || null]
+        ["Source", stream.source],
+        ["Station", stream.station],
+        ["Codec", stream.codec],
+        ["Sample rate", stream.sampleRate ? khzOf(stream.sampleRate) : null],
+        ["Bit depth", stream.bitDepth ? `${stream.bitDepth}-bit` : null],
+        ["Bitrate", stream.bitrate ? `${Math.round(stream.bitrate / 1000)} kbps` : null],
+        ["Format", !stream.sampleRate && !stream.codec ? stream.sampleFormat : null],
+        ["Encoding", stream.encoding],
+        ["Lossless", stream.lossless == null ? null : stream.lossless ? "yes" : "no"],
+        ["MQA", stream.mqa],
+        [
+          "Queue",
+          stream.queuePosition != null && stream.queueLength != null
+            ? `${stream.queuePosition} of ${stream.queueLength}`
+            : null,
+        ],
+        ["Presettable", stream.presettable == null ? null : stream.presettable ? "yes" : "no"],
+        ["Controls", stream.controls.length > 0 ? stream.controls.join(", ") : null],
+        ["Radio id", mono(stream.radioId)],
+        [
+          "Playback",
+          [stream.playbackSource, stream.playbackClass].filter(Boolean).join(" · ") || null,
+        ],
       ]
-    : []
+    : [];
 
   // ---- source
   // What the index learned about this server (MediaServerProfile): how it was
@@ -262,37 +307,44 @@ function MediaInfoBody({ target, open }: { target: MediaInfoTarget; open: boolea
   // Plain words: how the library was read, and — only when it differed from
   // the norm — where the albums came from. The class-search mechanic stays
   // in the JSON / MCP profile; a user needs "by search" or "by browsing".
-  const indexed =
-    serverProfile
-      ? [
-          serverProfile.strategy === 'search' ? 'by search' : 'by browsing',
-          serverProfile.albumsFrom === 'tracks' ? 'albums assembled from tracks' : serverProfile.albumsFrom === 'browse' ? 'albums found by browsing' : null
-        ]
-          .filter(Boolean)
-          .join(' · ')
-      : null
+  const indexed = serverProfile
+    ? [
+        serverProfile.strategy === "search" ? "by search" : "by browsing",
+        serverProfile.albumsFrom === "tracks"
+          ? "albums assembled from tracks"
+          : serverProfile.albumsFrom === "browse"
+            ? "albums found by browsing"
+            : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : null;
   const source: Row[] = [
-    ['Server', serverName ?? node.serverName ?? null],
-    ['Object id', node.id ? <CopyableMono value={node.id} label="object id" /> : null],
-    ['Parent id', mono(node.parentId)],
-    ['Class', node.id ? mono(node.upnpClass) : null],
-    ['Art', node.artUrl ? <CopyableMono value={node.artUrl} label="art URL" /> : null],
-    ['Indexed', indexed],
+    ["Server", serverName ?? node.serverName ?? null],
+    ["Object id", node.id ? <CopyableMono value={node.id} label="object id" /> : null],
+    ["Parent id", mono(node.parentId)],
+    ["Class", node.id ? mono(node.upnpClass) : null],
+    ["Art", node.artUrl ? <CopyableMono value={node.artUrl} label="art URL" /> : null],
+    ["Indexed", indexed],
     ...(serverProfile && serverProfile.notes.length > 0
-      ? serverProfile.notes.map((n, i): Row => [i === 0 ? 'Notes' : '', describeProfileNote(n)])
-      : [])
-  ]
+      ? serverProfile.notes.map((n, i): Row => [i === 0 ? "Notes" : "", describeProfileNote(n)])
+      : []),
+  ];
 
-  const Icon = kind === 'track' ? Music2 : kind === 'artist' ? User : Disc3
+  const Icon = kind === "track" ? Music2 : kind === "artist" ? User : Disc3;
   const subtitle =
-    kind === 'track'
-      ? [node.artist, node.album].filter(Boolean).join(' · ')
-      : kind === 'album'
-        ? [node.artist, node.year].filter(Boolean).join(' · ')
-        : null
+    kind === "track"
+      ? [node.artist, node.album].filter(Boolean).join(" · ")
+      : kind === "album"
+        ? [node.artist, node.year].filter(Boolean).join(" · ")
+        : null;
 
   return (
-    <ModalShell open={open} onClose={close} className="w-[640px] max-w-[92vw] max-h-[86vh] flex flex-col p-6">
+    <ModalShell
+      open={open}
+      onClose={close}
+      className="w-[640px] max-w-[92vw] max-h-[86vh] flex flex-col p-6"
+    >
       <div className="flex items-start gap-5" data-media-info>
         <div className="h-[128px] w-[128px] shrink-0 rounded-xl overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
           <ArtImage
@@ -302,7 +354,11 @@ function MediaInfoBody({ target, open }: { target: MediaInfoTarget; open: boolea
           />
         </div>
         <div className="min-w-0 flex-1 pt-0.5">
-          <div className="microlabel">{stream ? `now playing · ${kind === 'track' && /audioBroadcast/.test(node.upnpClass) ? 'radio' : kind}` : kind}</div>
+          <div className="microlabel">
+            {stream
+              ? `now playing · ${kind === "track" && /audioBroadcast/.test(node.upnpClass) ? "radio" : kind}`
+              : kind}
+          </div>
           <div className="font-display font-bold text-[20px] tracking-tight leading-tight mt-1 break-words">
             {node.title}
           </div>
@@ -327,11 +383,11 @@ function MediaInfoBody({ target, open }: { target: MediaInfoTarget; open: boolea
 
       <div className="mt-5 flex items-center justify-between">
         <span className="text-[11.5px] text-faint">
-          {kind === 'album' && (!tracks || tracks.length === 0)
-            ? 'Open the album to see its tracks summed here.'
-            : kind === 'artist' && !artist
-              ? 'No library index covers this artist yet.'
-              : formatLabel(node.format) ?? ''}
+          {kind === "album" && (!tracks || tracks.length === 0)
+            ? "Open the album to see its tracks summed here."
+            : kind === "artist" && !artist
+              ? "No library index covers this artist yet."
+              : (formatLabel(node.format) ?? "")}
         </span>
         <button
           onClick={copy}
@@ -339,9 +395,9 @@ function MediaInfoBody({ target, open }: { target: MediaInfoTarget; open: boolea
           className="flex items-center gap-1.5 rounded-full ring-1 ring-edge bg-raised/70 px-3 py-1.5 text-[12px] text-dim hover:text-ink hover:ring-edge2"
         >
           {copied ? <Check size={13} /> : <Copy size={13} />}
-          {copied ? 'Copied' : 'Copy as JSON'}
+          {copied ? "Copied" : "Copy as JSON"}
         </button>
       </div>
     </ModalShell>
-  )
+  );
 }

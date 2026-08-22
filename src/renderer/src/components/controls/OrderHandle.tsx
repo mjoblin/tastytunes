@@ -1,6 +1,6 @@
-import type { DraggableAttributes } from '@dnd-kit/core'
-import type { SyntheticListenerMap } from '@dnd-kit/core/dist/hooks/utilities'
-import { GripVertical } from 'lucide-react'
+import type { DraggableAttributes } from "@dnd-kit/core";
+import type { SyntheticListenerMap } from "@dnd-kit/core/dist/hooks/utilities";
+import { GripVertical } from "lucide-react";
 
 /**
  * The leading cell of a reorderable row: its POSITION at rest, its drag handle
@@ -19,15 +19,15 @@ export function OrderHandle({
   label,
   attributes,
   listeners,
-  children
+  children,
 }: {
   /** Accessible name for the handle, e.g. `Reorder ${title}`. */
-  label: string
+  label: string;
   /** Straight from useSortable. */
-  attributes?: DraggableAttributes
-  listeners?: SyntheticListenerMap
+  attributes?: DraggableAttributes;
+  listeners?: SyntheticListenerMap;
   /** What shows at rest — a track number, slot number, or the playing eqbars. */
-  children: React.ReactNode
+  children: React.ReactNode;
 }): React.JSX.Element {
   return (
     <div className="relative flex items-center justify-center">
@@ -45,5 +45,5 @@ export function OrderHandle({
         <GripVertical size={14} />
       </button>
     </div>
-  )
+  );
 }

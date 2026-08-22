@@ -1,14 +1,14 @@
-import { randomUUID } from 'node:crypto'
-import { join } from 'node:path'
-import { app } from 'electron'
-import { jsonFileStore } from './jsonStore'
+import { randomUUID } from "node:crypto";
+import { join } from "node:path";
+import { app } from "electron";
+import { jsonFileStore } from "./jsonStore";
 import {
   MAX_PLAYLISTS,
   MAX_PLAYLIST_ITEMS,
   playlistItemKey,
   type Playlist,
-  type PlaylistItem
-} from '@shared/model'
+  type PlaylistItem,
+} from "@shared/model";
 
 // Stored playlists, persisted beside settings.json and favorites.json — the
 // same bounded-local-file pattern, no database. Newest-UPDATED first, because
@@ -19,26 +19,26 @@ import {
 // storing. Ids ride along as a fast path and are healed on activation.
 
 function sortNewest(list: Playlist[]): Playlist[] {
-  return [...list].sort((a, b) => b.updatedAt - a.updatedAt)
+  return [...list].sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 const store = jsonFileStore<Playlist[]>({
-  pathOf: () => join(app.getPath('userData'), 'playlists.json'),
-  scope: 'playlists',
-  load: (parsed) => (Array.isArray(parsed) ? sortNewest(parsed as Playlist[]) : [])
-})
+  pathOf: () => join(app.getPath("userData"), "playlists.json"),
+  scope: "playlists",
+  load: (parsed) => (Array.isArray(parsed) ? sortNewest(parsed as Playlist[]) : []),
+});
 
 export function getPlaylists(): Playlist[] {
-  return store.get()
+  return store.get();
 }
 
 function save(list: Playlist[]): Playlist[] {
-  return store.set(sortNewest(list).slice(0, MAX_PLAYLISTS))
+  return store.set(sortNewest(list).slice(0, MAX_PLAYLISTS));
 }
 
 /** Trim to the item ceiling — applied on every write path, not just create. */
 function boundItems(items: PlaylistItem[]): PlaylistItem[] {
-  return items.slice(0, MAX_PLAYLIST_ITEMS)
+  return items.slice(0, MAX_PLAYLIST_ITEMS);
 }
 
 /**
@@ -47,13 +47,13 @@ function boundItems(items: PlaylistItem[]): PlaylistItem[] {
  * "Queue — Jul 24, 7:49 PM" are indistinguishable to the person who made them.
  */
 function uniqueName(base: string, existing: Playlist[]): string {
-  const taken = new Set(existing.map((p) => p.name))
-  if (!taken.has(base)) return base
+  const taken = new Set(existing.map((p) => p.name));
+  if (!taken.has(base)) return base;
   for (let n = 2; n < 1000; n++) {
-    const candidate = `${base} (${n})`
-    if (!taken.has(candidate)) return candidate
+    const candidate = `${base} (${n})`;
+    if (!taken.has(candidate)) return candidate;
   }
-  return base
+  return base;
 }
 
 /**
@@ -65,17 +65,17 @@ function uniqueName(base: string, existing: Playlist[]): string {
  */
 export function createPlaylist(
   name: string,
-  items: PlaylistItem[]
+  items: PlaylistItem[],
 ): { list: Playlist[]; created: Playlist } {
-  const now = Date.now()
+  const now = Date.now();
   const playlist: Playlist = {
     id: randomUUID(),
-    name: uniqueName(name.trim() || 'Untitled playlist', getPlaylists()),
+    name: uniqueName(name.trim() || "Untitled playlist", getPlaylists()),
     createdAt: now,
     updatedAt: now,
-    items: boundItems(items)
-  }
-  return { list: save([playlist, ...getPlaylists()]), created: playlist }
+    items: boundItems(items),
+  };
+  return { list: save([playlist, ...getPlaylists()]), created: playlist };
 }
 
 /**
@@ -85,16 +85,18 @@ export function createPlaylist(
  */
 function patch(id: string, fn: (p: Playlist) => Playlist, touch = true): Playlist[] {
   return save(
-    getPlaylists().map((p) => (p.id === id ? { ...fn(p), ...(touch ? { updatedAt: Date.now() } : {}) } : p))
-  )
+    getPlaylists().map((p) =>
+      p.id === id ? { ...fn(p), ...(touch ? { updatedAt: Date.now() } : {}) } : p,
+    ),
+  );
 }
 
 export function renamePlaylist(id: string, name: string): Playlist[] {
-  return patch(id, (p) => ({ ...p, name: name.trim() || p.name }))
+  return patch(id, (p) => ({ ...p, name: name.trim() || p.name }));
 }
 
 export function deletePlaylist(id: string): Playlist[] {
-  return save(getPlaylists().filter((p) => p.id !== id))
+  return save(getPlaylists().filter((p) => p.id !== id));
 }
 
 /**
@@ -110,17 +112,17 @@ export function deletePlaylist(id: string): Playlist[] {
  * replaces rather than duplicates.
  */
 export function restorePlaylist(playlist: Playlist): Playlist[] {
-  return save([...getPlaylists().filter((p) => p.id !== playlist.id), playlist])
+  return save([...getPlaylists().filter((p) => p.id !== playlist.id), playlist]);
 }
 
 /** Reorder and remove both land here — the renderer owns the resulting order. */
 export function setPlaylistItems(id: string, items: PlaylistItem[]): Playlist[] {
-  return patch(id, (p) => ({ ...p, items: boundItems(items) }))
+  return patch(id, (p) => ({ ...p, items: boundItems(items) }));
 }
 
 /** Append. Duplicates are allowed: a playlist is an ordered list, not a set. */
 export function appendToPlaylist(id: string, items: PlaylistItem[]): Playlist[] {
-  return patch(id, (p) => ({ ...p, items: boundItems([...p.items, ...items]) }))
+  return patch(id, (p) => ({ ...p, items: boundItems([...p.items, ...items]) }));
 }
 
 /**
@@ -129,7 +131,7 @@ export function appendToPlaylist(id: string, items: PlaylistItem[]): Playlist[] 
  * sorted by recent edits.
  */
 export function markPlaylistPlayed(id: string, missing: string[]): Playlist[] {
-  return patch(id, (p) => ({ ...p, lastPlayedAt: Date.now(), lastMissing: missing }), false)
+  return patch(id, (p) => ({ ...p, lastPlayedAt: Date.now(), lastMissing: missing }), false);
 }
 
 /**
@@ -145,17 +147,17 @@ export function healPlaylistItem(
   id: string,
   index: number,
   item: PlaylistItem,
-  hint: Pick<PlaylistItem, 'serverUdn' | 'serverName' | 'objectId'>
+  hint: Pick<PlaylistItem, "serverUdn" | "serverName" | "objectId">,
 ): Playlist[] {
-  const expected = playlistItemKey(item)
+  const expected = playlistItemKey(item);
   return patch(
     id,
     (p) => ({
       ...p,
       items: p.items.map((it, i) =>
-        i === index && playlistItemKey(it) === expected ? { ...it, ...hint } : it
-      )
+        i === index && playlistItemKey(it) === expected ? { ...it, ...hint } : it,
+      ),
     }),
-    false // system write — must not reorder the user's collection
-  )
+    false, // system write — must not reorder the user's collection
+  );
 }

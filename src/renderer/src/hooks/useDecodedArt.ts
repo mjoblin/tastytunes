@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState } from "react";
 
 /**
  * Holds the last DECODED art URL, advancing only once the next one has decoded
@@ -21,32 +21,32 @@ import { useEffect, useState } from 'react'
  */
 export function useDecodedArt(
   url: string | null | undefined,
-  capMs = 2500
+  capMs = 2500,
 ): { art: string | null | undefined; pending: boolean } {
-  const [shown, setShown] = useState<string | null | undefined>(url)
+  const [shown, setShown] = useState<string | null | undefined>(url);
   useEffect(() => {
     // Nothing to wait for — an absent URL resolves to the fallback at once.
     if (!url) {
-      setShown(url)
-      return
+      setShown(url);
+      return;
     }
-    let done = false
+    let done = false;
     const settle = (): void => {
       if (!done) {
-        done = true
-        setShown(url)
+        done = true;
+        setShown(url);
       }
-    }
-    const probe = new Image()
-    probe.onload = settle
-    probe.onerror = settle
-    probe.src = url
-    if (probe.complete) settle() // already in the browser cache
-    const cap = setTimeout(settle, capMs)
+    };
+    const probe = new Image();
+    probe.onload = settle;
+    probe.onerror = settle;
+    probe.src = url;
+    if (probe.complete) settle(); // already in the browser cache
+    const cap = setTimeout(settle, capMs);
     return () => {
-      done = true
-      clearTimeout(cap)
-    }
-  }, [url, capMs])
-  return { art: shown, pending: shown !== url }
+      done = true;
+      clearTimeout(cap);
+    };
+  }, [url, capMs]);
+  return { art: shown, pending: shown !== url };
 }

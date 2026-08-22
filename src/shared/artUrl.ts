@@ -13,21 +13,21 @@
  */
 
 // Asset UPnP: http://host:port/aa/<numeric id>/cover.jpg[?size=N]
-const ASSET_ART = /^(https?:\/\/[^/]+\/aa\/\d+\/cover\.jpg)(?:\?size=\d+)?$/i
+const ASSET_ART = /^(https?:\/\/[^/]+\/aa\/\d+\/cover\.jpg)(?:\?size=\d+)?$/i;
 
 /**
  * The URL to fetch for art drawn `px` CSS pixels wide/tall. Ask for 2× the
  * CSS size (Retina), never less than 64. Unknown servers: the URL unchanged.
  */
 export function artUrlAt(url: string | null | undefined, px: number): string | null {
-  if (!url) return null
-  const m = ASSET_ART.exec(url)
-  if (!m) return url
-  const want = Math.max(64, Math.round(px * 2))
-  return `${m[1]}?size=${want}`
+  if (!url) return null;
+  const m = ASSET_ART.exec(url);
+  if (!m) return url;
+  const want = Math.max(64, Math.round(px * 2));
+  return `${m[1]}?size=${want}`;
 }
 
 /** True when this URL is one artUrlAt() knows how to resize (for tests and callers that care). */
 export function artUrlResizable(url: string | null | undefined): boolean {
-  return !!url && ASSET_ART.test(url)
+  return !!url && ASSET_ART.test(url);
 }

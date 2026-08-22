@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { PopoverCard } from '@/components/chrome/Overlay'
+import { useState } from "react";
+import { PopoverCard } from "@/components/chrome/Overlay";
 
 /**
  * The destructive-action confirm: a small popover anchored under the control
@@ -35,27 +35,27 @@ export function useConfirmPopover(): {
   /** Open the confirm, anchored under the event's currentTarget. */
   ask(
     e: { currentTarget: Element },
-    opts: { question: string; verb?: string; onConfirm(): void }
-  ): void
+    opts: { question: string; verb?: string; onConfirm(): void },
+  ): void;
   /** Render this once, near the trigger (portaled, so position is free). */
-  popover: React.ReactNode
+  popover: React.ReactNode;
 } {
   const [open, setOpen] = useState<{
-    at: { x: number; y: number }
-    question: string
-    verb: string
-    onConfirm(): void
-  } | null>(null)
+    at: { x: number; y: number };
+    question: string;
+    verb: string;
+    onConfirm(): void;
+  } | null>(null);
 
-  const ask: ReturnType<typeof useConfirmPopover>['ask'] = (e, opts) => {
-    const r = e.currentTarget.getBoundingClientRect()
+  const ask: ReturnType<typeof useConfirmPopover>["ask"] = (e, opts) => {
+    const r = e.currentTarget.getBoundingClientRect();
     setOpen({
       at: { x: r.left, y: r.bottom + 6 },
       question: opts.question,
-      verb: opts.verb ?? 'Delete',
-      onConfirm: opts.onConfirm
-    })
-  }
+      verb: opts.verb ?? "Delete",
+      onConfirm: opts.onConfirm,
+    });
+  };
 
   const popover = open != null && (
     <PopoverCard at={open.at} width="w-60" onClose={() => setOpen(null)} className="p-3">
@@ -70,9 +70,9 @@ export function useConfirmPopover(): {
         </button>
         <button
           onClick={() => {
-            const fire = open.onConfirm
-            setOpen(null)
-            fire()
+            const fire = open.onConfirm;
+            setOpen(null);
+            fire();
           }}
           className="px-2.5 py-1 rounded-lg text-[12px] bg-alert text-white hover:brightness-110 motion-safe:active:scale-95 transition-all"
         >
@@ -80,7 +80,7 @@ export function useConfirmPopover(): {
         </button>
       </div>
     </PopoverCard>
-  )
+  );
 
-  return { ask, popover }
+  return { ask, popover };
 }

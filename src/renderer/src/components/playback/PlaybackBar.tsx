@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState } from "react";
 import {
   Disc3,
   Moon,
@@ -8,34 +8,34 @@ import {
   Shuffle,
   SkipBack,
   SkipForward,
-  Square
-} from 'lucide-react'
-import { tt } from '@/api'
-import { useStore } from '@/store'
-import { usePlayhead } from '@/hooks/usePlayhead'
-import { useSeekScrub } from '@/hooks/useSeekScrub'
-import { cx, deriveNowPlaying, fmtTime } from '@/lib/format'
-import { Slider } from '../controls/Slider'
-import { ArtImage } from '../media/ArtImage'
-import { VolumeCluster } from './VolumeCluster'
-import { PlayPauseButton, TransportIconButton, useTransport } from './Transport'
-import { SignalLamp } from '../device/SignalLamp'
-import { SleepTimer } from './SleepTimer'
-import { DeviceSwitcher } from '../device/DeviceSwitcher'
+  Square,
+} from "lucide-react";
+import { tt } from "@/api";
+import { useStore } from "@/store";
+import { usePlayhead } from "@/hooks/usePlayhead";
+import { useSeekScrub } from "@/hooks/useSeekScrub";
+import { cx, deriveNowPlaying, fmtTime } from "@/lib/format";
+import { Slider } from "../controls/Slider";
+import { ArtImage } from "../media/ArtImage";
+import { VolumeCluster } from "./VolumeCluster";
+import { PlayPauseButton, TransportIconButton, useTransport } from "./Transport";
+import { SignalLamp } from "../device/SignalLamp";
+import { SleepTimer } from "./SleepTimer";
+import { DeviceSwitcher } from "../device/DeviceSwitcher";
 
 export function PlaybackBar(): React.JSX.Element {
-  const playState = useStore((s) => s.playState)
-  const nowPlaying = useStore((s) => s.nowPlaying)
-  const setScreen = useStore((s) => s.setScreen)
-  const { position, duration } = usePlayhead()
-  const t = useTransport(duration)
-  const { shownPosition, slider } = useSeekScrub(position, duration, t.seek)
-  const [showRemaining, setShowRemaining] = useState(false)
+  const playState = useStore((s) => s.playState);
+  const nowPlaying = useStore((s) => s.nowPlaying);
+  const setScreen = useStore((s) => s.setScreen);
+  const { position, duration } = usePlayhead();
+  const t = useTransport(duration);
+  const { shownPosition, slider } = useSeekScrub(position, duration, t.seek);
+  const [showRemaining, setShowRemaining] = useState(false);
 
-  const waking = useStore((s) => s.waking)
-  const meta = deriveNowPlaying(playState, nowPlaying)
-  const { connected, powered, active } = t
-  const ambientWindow = useStore((s) => s.ambientWindowActive)
+  const waking = useStore((s) => s.waking);
+  const meta = deriveNowPlaying(playState, nowPlaying);
+  const { connected, powered, active } = t;
+  const ambientWindow = useStore((s) => s.ambientWindowActive);
 
   return (
     <footer
@@ -47,17 +47,17 @@ export function PlaybackBar(): React.JSX.Element {
         // of truncating at a fixed 280px (user, 2026-08-17). Minimums keep
         // the volume slider unsqueezed at the 800px window minimum:
         // 160 + 320 + 215 + gaps 48 + padding 32 = 775.
-        'h-[92px] shrink-0 border-t border-edge grid grid-cols-[minmax(160px,1fr)_minmax(320px,520px)_minmax(215px,1fr)] items-center gap-6 px-4 transition-colors',
-        ambientWindow ? 'bg-transparent' : 'bg-panel/80 backdrop-blur'
+        "h-[92px] shrink-0 border-t border-edge grid grid-cols-[minmax(160px,1fr)_minmax(320px,520px)_minmax(215px,1fr)] items-center gap-6 px-4 transition-colors",
+        ambientWindow ? "bg-transparent" : "bg-panel/80 backdrop-blur",
       )}
     >
       {/* now playing mini */}
       <button
         className={cx(
-          'flex items-center gap-3 min-w-0 text-left rounded-lg p-1.5 -m-1.5 transition-colors',
-          active && 'hover:bg-veil'
+          "flex items-center gap-3 min-w-0 text-left rounded-lg p-1.5 -m-1.5 transition-colors",
+          active && "hover:bg-veil",
         )}
-        onClick={() => setScreen('now-playing')}
+        onClick={() => setScreen("now-playing")}
         disabled={!active}
       >
         <div className="h-[52px] w-[52px] shrink-0 rounded-md overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
@@ -74,7 +74,7 @@ export function PlaybackBar(): React.JSX.Element {
         </div>
         <div className="min-w-0">
           <div className="font-display font-bold text-[15px] leading-tight tracking-tight text-ink truncate">
-            {(active && meta.title) || '—'}
+            {(active && meta.title) || "—"}
           </div>
           {/* min-h reserves the line while the subtitle is still on its way
               (the source's name lands a beat before now_playing fills the
@@ -82,7 +82,7 @@ export function PlaybackBar(): React.JSX.Element {
               let the title sit low and jump up when the artist arrived. The
               mini and the tray panel already reserve theirs. */}
           <div className="font-display text-[13px] leading-tight tracking-tight text-dim truncate mt-0.5 min-h-[15px]">
-            {(active && meta.subtitle) || '\u00A0'}
+            {(active && meta.subtitle) || "\u00A0"}
           </div>
         </div>
       </button>
@@ -110,7 +110,12 @@ export function PlaybackBar(): React.JSX.Element {
 
           <PlayPauseButton size="bar" tipHint=" (space)" className="mx-1.5" />
 
-          <TransportIconButton size="bar" tip="Next (→)" enabled={active && t.canNext} onClick={t.next}>
+          <TransportIconButton
+            size="bar"
+            tip="Next (→)"
+            enabled={active && t.canNext}
+            onClick={t.next}
+          >
             <SkipForward size={18} />
           </TransportIconButton>
           <TransportIconButton
@@ -131,7 +136,7 @@ export function PlaybackBar(): React.JSX.Element {
 
         <div className="flex items-center gap-3 w-full max-w-[520px]">
           <span className="font-mono text-[10.5px] text-faint w-11 text-right tabular-nums">
-            {active ? fmtTime(shownPosition) : '–:––'}
+            {active ? fmtTime(shownPosition) : "–:––"}
           </span>
           <div className="flex-1">
             <Slider
@@ -152,7 +157,7 @@ export function PlaybackBar(): React.JSX.Element {
               ? showRemaining
                 ? `-${fmtTime(Math.max(0, duration - shownPosition))}`
                 : fmtTime(duration)
-              : '–:––'}
+              : "–:––"}
           </button>
         </div>
       </div>
@@ -178,22 +183,22 @@ export function PlaybackBar(): React.JSX.Element {
         {active && <SleepTimer />}
         <DeviceSwitcher />
         <button
-          data-tip={powered ? 'Standby' : 'Power on'}
-          aria-label={powered ? 'Standby' : 'Power on'}
+          data-tip={powered ? "Standby" : "Power on"}
+          aria-label={powered ? "Standby" : "Power on"}
           disabled={!connected}
-          onClick={() => void tt.command({ type: 'power', power: 'toggle' })}
+          onClick={() => void tt.command({ type: "power", power: "toggle" })}
           className={cx(
-            'tip-top p-2 rounded-full flex items-center justify-center transition-all',
+            "tip-top p-2 rounded-full flex items-center justify-center transition-all",
             powered
-              ? 'bg-gold text-bg shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.35)] motion-safe:hover:scale-110 hover:shadow-[0_0_20px_rgb(var(--gold-rgb)_/_0.5)]'
+              ? "bg-gold text-bg shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.35)] motion-safe:hover:scale-110 hover:shadow-[0_0_20px_rgb(var(--gold-rgb)_/_0.5)]"
               : connected
-                ? 'bg-veil2 text-faint hover:bg-golddim hover:text-gold motion-safe:hover:scale-110'
-                : 'bg-veil2 text-faint/40'
+                ? "bg-veil2 text-faint hover:bg-golddim hover:text-gold motion-safe:hover:scale-110"
+                : "bg-veil2 text-faint/40",
           )}
         >
           <Power size={16} strokeWidth={2.2} />
         </button>
       </div>
     </footer>
-  )
+  );
 }

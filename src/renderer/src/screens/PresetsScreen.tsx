@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   DndContext,
   KeyboardSensor,
@@ -7,16 +7,16 @@ import {
   closestCenter,
   useSensor,
   useSensors,
-  type DragEndEvent
-} from '@dnd-kit/core'
+  type DragEndEvent,
+} from "@dnd-kit/core";
 import {
   SortableContext,
   rectSortingStrategy,
   sortableKeyboardCoordinates,
   useSortable,
-  verticalListSortingStrategy
-} from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import {
   Crosshair,
   Footprints,
@@ -27,50 +27,50 @@ import {
   Rows3,
   AlertTriangle,
   Trash2,
-  Volume2
-} from 'lucide-react'
-import { isPreAmpMode, type PresetItem } from '@shared/smoip'
-import { presetVolumeKey, type ScreenLayout, type MediaNode } from '@shared/model'
-import { tt } from '@/api'
-import { useStore } from '@/store'
-import { useLitPresets } from '@/hooks/useLitPresets'
-import { Eqbars } from '@/components/media/Eqbars'
-import { EmptyState } from '@/components/chrome/EmptyState'
-import { useScrollMemory } from '@/hooks/useScrollMemory'
-import { flashTarget, scrollToWithContext } from '@/lib/scroll'
-import { lockVertical } from '@/lib/dnd'
-import { CARD_GLYPH_STROKE, MEDIA_ART_FALLBACK } from '@/components/media/MediaArt'
-import { OrderHandle } from '@/components/controls/OrderHandle'
+  Volume2,
+} from "lucide-react";
+import { isPreAmpMode, type PresetItem } from "@shared/smoip";
+import { presetVolumeKey, type ScreenLayout, type MediaNode } from "@shared/model";
+import { tt } from "@/api";
+import { useStore } from "@/store";
+import { useLitPresets } from "@/hooks/useLitPresets";
+import { Eqbars } from "@/components/media/Eqbars";
+import { EmptyState } from "@/components/chrome/EmptyState";
+import { useScrollMemory } from "@/hooks/useScrollMemory";
+import { flashTarget, scrollToWithContext } from "@/lib/scroll";
+import { lockVertical } from "@/lib/dnd";
+import { CARD_GLYPH_STROKE, MEDIA_ART_FALLBACK } from "@/components/media/MediaArt";
+import { OrderHandle } from "@/components/controls/OrderHandle";
 
 /** The same glyph the tray panel's preset tiles fall back to — one table. */
-const PresetGlyph = MEDIA_ART_FALLBACK.preset
-import { cx, matchesFilter } from '@/lib/format'
-import { FilterInput } from '@/components/controls/FilterInput'
-import { Slider } from '@/components/controls/Slider'
-import { ArtImage } from '@/components/media/ArtImage'
-import { PopoverChrome } from '@/hooks/usePopover'
-import { HeaderChip, ScreenTitle } from '@/components/chrome/Chrome'
-import { useConfirmPopover } from '@/components/chrome/Confirm'
-import { artUrlAt } from '@shared/artUrl'
-import { TUNING_WINDOW_MS } from '@/hooks/useStationTuning'
+const PresetGlyph = MEDIA_ART_FALLBACK.preset;
+import { cx, matchesFilter } from "@/lib/format";
+import { FilterInput } from "@/components/controls/FilterInput";
+import { Slider } from "@/components/controls/Slider";
+import { ArtImage } from "@/components/media/ArtImage";
+import { PopoverChrome } from "@/hooks/usePopover";
+import { HeaderChip, ScreenTitle } from "@/components/chrome/Chrome";
+import { useConfirmPopover } from "@/components/chrome/Confirm";
+import { artUrlAt } from "@shared/artUrl";
+import { TUNING_WINDOW_MS } from "@/hooks/useStationTuning";
 
 /** A recall that moved nothing after this long is treated as dead — well inside TUNING_WINDOW_MS. */
-const DEAD_RECALL_MS = 8_000
+const DEAD_RECALL_MS = 8_000;
 
 export function PresetsScreen(): React.JSX.Element {
-  const presets = useStore((s) => s.presets)
-  const saveSettings = useStore((s) => s.saveSettings)
-  const zoneState = useStore((s) => s.zoneState)
+  const presets = useStore((s) => s.presets);
+  const saveSettings = useStore((s) => s.saveSettings);
+  const zoneState = useStore((s) => s.zoneState);
   const { presetCardSize, presetGap, presetFillRows, followPresets, presetsLayout } = useStore(
-    (s) => s.settings
-  )
-  const systemInfo = useStore((s) => s.systemInfo)
-  const presetVolumes = useStore((s) => s.settings.presetVolumes)
-  const presetArtists = useStore((s) => s.settings.presetArtists)
-  const cards = presetsLayout === 'cards'
-  const filter = useStore((s) => s.screenFilters.presets)
-  const setScreenFilter = useStore((s) => s.setScreenFilter)
-  const allItems = (presets?.presets ?? []).filter((p) => p.id != null)
+    (s) => s.settings,
+  );
+  const systemInfo = useStore((s) => s.systemInfo);
+  const presetVolumes = useStore((s) => s.settings.presetVolumes);
+  const presetArtists = useStore((s) => s.settings.presetArtists);
+  const cards = presetsLayout === "cards";
+  const filter = useStore((s) => s.screenFilters.presets);
+  const setScreenFilter = useStore((s) => s.setScreenFilter);
+  const allItems = (presets?.presets ?? []).filter((p) => p.id != null);
   // type/class are hidden fields but filterable: "radio" / "media" work —
   // as is the locally-recorded artist (the wire has no artist field; TT
   // notes it at Library save time), so "iron" finds an Iron Maiden album.
@@ -80,29 +80,29 @@ export function PresetsScreen(): React.JSX.Element {
           p.name,
           p.type,
           p.class,
-          p.id != null ? presetArtists[presetVolumeKey(systemInfo?.udn, p.id)] : null
-        ])
+          p.id != null ? presetArtists[presetVolumeKey(systemInfo?.udn, p.id)] : null,
+        ]),
       )
-    : allItems
+    : allItems;
 
   // Feature 10: per-preset volume overrides. Absolute volume needs pre-amp
   // mode — control-bus devices only nudge, so the affordance hides there.
-  const canSetVolume = isPreAmpMode(zoneState)
+  const canSetVolume = isPreAmpMode(zoneState);
   const volumeFor = (id: number): number | null =>
-    presetVolumes[presetVolumeKey(systemInfo?.udn, id)] ?? null
+    presetVolumes[presetVolumeKey(systemInfo?.udn, id)] ?? null;
   const saveVolume = async (id: number, level: number | null): Promise<void> => {
-    const key = presetVolumeKey(systemInfo?.udn, id)
-    const next = { ...presetVolumes }
-    if (level == null) delete next[key]
-    else next[key] = level
-    await saveSettings({ presetVolumes: next })
-  }
+    const key = presetVolumeKey(systemInfo?.udn, id);
+    const next = { ...presetVolumes };
+    if (level == null) delete next[key];
+    else next[key] = level;
+    await saveSettings({ presetVolumes: next });
+  };
   // Pointer AND keyboard (the playlists pattern): device presets deserve the
   // same reorderability without a mouse as everything else that sorts.
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  )
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   // The streamer's is_playing flags can't be trusted:
   //  - radio presets aren't cleared when switching to local media (vibin's
@@ -127,9 +127,9 @@ export function PresetsScreen(): React.JSX.Element {
   // the honest reading besides: the Now Playing screen already shows a sleeping
   // face for exactly this state. `waking` covers the tail, where power reads ON
   // but the zone is still settling.
-  const systemPower = useStore((s) => s.systemPower)
-  const waking = useStore((s) => s.waking)
-  const asleep = (systemPower != null && systemPower.power !== 'ON') || waking
+  const systemPower = useStore((s) => s.systemPower);
+  const waking = useStore((s) => s.waking);
+  const asleep = (systemPower != null && systemPower.power !== "ON") || waking;
   // ONE preset lights, in this priority:
   //  1. The preset most recently recalled through this app, while a content
   //     check confirms its stuff is still what's playing (the check is the
@@ -147,7 +147,7 @@ export function PresetsScreen(): React.JSX.Element {
   // queue load) with no state change until it lands — mirror the Radio
   // screen's "tuning in" treatment on the recalled tile until the playing
   // lamp takes over, the command fails, or a dead recall times out.
-  const [tuningId, setTuningId] = useState<number | null>(null)
+  const [tuningId, setTuningId] = useState<number | null>(null);
   // A recall issued while the streamer sleeps doesn't reach the device for ~3s
   // (ensureAwake: ON → readiness → 2.5s settle), and `waking` ends BEFORE the
   // recall lands — a gap the wake's re-announced pre-standby play_state slots
@@ -157,65 +157,65 @@ export function PresetsScreen(): React.JSX.Element {
   // allowed to light. NB tuningId itself can't bound this — it is never
   // cleared on success, only hidden once the tile is playing, and it lingers
   // for the full 15s.
-  const [wakeRecallId, setWakeRecallId] = useState<number | null>(null)
-  const tuningTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [wakeRecallId, setWakeRecallId] = useState<number | null>(null);
+  const tuningTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // A preset whose stored object id the media server no longer resolves is
   // ACCEPTED by the firmware and then silently ignored — no error, no state
   // change (live-probed 2026-07-27). Nothing distinguishes that from "slow"
   // except the passage of time, so watch for a recall that moved nothing.
   // A real recall lands in ~3s; 8s is generous and still inside the tuning
   // window (TUNING_WINDOW_MS, shared with station rows).
-  const [deadIds, setDeadIds] = useState<Set<number>>(new Set())
-  const deadTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [deadIds, setDeadIds] = useState<Set<number>>(new Set());
+  const deadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const playbackSignature = (): string => {
-    const s = useStore.getState()
+    const s = useStore.getState();
     return JSON.stringify([
       s.playState?.state,
       s.playState?.queue_id,
       s.playState?.metadata?.title,
       s.queue?.play_id,
-      s.queue?.total
-    ])
-  }
+      s.queue?.total,
+    ]);
+  };
   const recall = (presetId: number): void => {
-    setTuningId(presetId)
-    setWakeRecallId(asleep ? presetId : null)
+    setTuningId(presetId);
+    setWakeRecallId(asleep ? presetId : null);
     setDeadIds((prev) => {
-      if (!prev.has(presetId)) return prev
-      const next = new Set(prev)
-      next.delete(presetId)
-      return next
-    })
-    if (tuningTimer.current) clearTimeout(tuningTimer.current)
+      if (!prev.has(presetId)) return prev;
+      const next = new Set(prev);
+      next.delete(presetId);
+      return next;
+    });
+    if (tuningTimer.current) clearTimeout(tuningTimer.current);
     tuningTimer.current = setTimeout(() => {
-      setTuningId(null)
-      setWakeRecallId(null)
-    }, TUNING_WINDOW_MS)
+      setTuningId(null);
+      setWakeRecallId(null);
+    }, TUNING_WINDOW_MS);
     // Recalling what is ALREADY playing legitimately changes nothing — the
     // one false positive this check has, so it never arms in that case.
-    const alreadyPlaying = playingIds.has(presetId)
-    const before = playbackSignature()
-    if (deadTimer.current) clearTimeout(deadTimer.current)
+    const alreadyPlaying = playingIds.has(presetId);
+    const before = playbackSignature();
+    if (deadTimer.current) clearTimeout(deadTimer.current);
     if (!alreadyPlaying) {
       deadTimer.current = setTimeout(() => {
-        if (playbackSignature() !== before) return
-        setDeadIds((prev) => new Set(prev).add(presetId))
-        setTuningId((cur) => (cur === presetId ? null : cur))
-      }, DEAD_RECALL_MS)
+        if (playbackSignature() !== before) return;
+        setDeadIds((prev) => new Set(prev).add(presetId));
+        setTuningId((cur) => (cur === presetId ? null : cur));
+      }, DEAD_RECALL_MS);
     }
-    void tt.command({ type: 'recallPreset', presetId }).catch(() => {
-      setTuningId(null)
-      setWakeRecallId(null)
-      if (deadTimer.current) clearTimeout(deadTimer.current)
-    })
-  }
+    void tt.command({ type: "recallPreset", presetId }).catch(() => {
+      setTuningId(null);
+      setWakeRecallId(null);
+      if (deadTimer.current) clearTimeout(deadTimer.current);
+    });
+  };
   useEffect(
     () => () => {
-      if (tuningTimer.current) clearTimeout(tuningTimer.current)
-      if (deadTimer.current) clearTimeout(deadTimer.current)
+      if (tuningTimer.current) clearTimeout(tuningTimer.current);
+      if (deadTimer.current) clearTimeout(deadTimer.current);
     },
-    []
-  )
+    [],
+  );
   // The claim can't rest on what this screen knew at CLICK time: for the first
   // seconds after connecting, systemPower is still null here while the main
   // process already knows the streamer is asleep — so the click reads awake,
@@ -223,52 +223,52 @@ export function PresetsScreen(): React.JSX.Element {
   // all. Latch off the authoritative signal instead: main says it is waking,
   // and we know which preset we asked for.
   useEffect(() => {
-    if (waking && tuningId != null) setWakeRecallId(tuningId)
-  }, [waking, tuningId])
+    if (waking && tuningId != null) setWakeRecallId(tuningId);
+  }, [waking, tuningId]);
   // The lit-preset derivation lives in useLitPresets — the tray panel needs
   // the same answer, and a rule this hard-won must not exist in two places.
-  const playingIds = useLitPresets(allItems, wakeRecallId)
-  const isPresetPlaying = (p: PresetItem): boolean => p.id != null && playingIds.has(p.id)
-  const isPresetDead = (p: PresetItem): boolean => p.id != null && deadIds.has(p.id)
+  const playingIds = useLitPresets(allItems, wakeRecallId);
+  const isPresetPlaying = (p: PresetItem): boolean => p.id != null && playingIds.has(p.id);
+  const isPresetDead = (p: PresetItem): boolean => p.id != null && deadIds.has(p.id);
   const noteRepair = (id: number): void => {
-    repairAt.current = Date.now()
-    repairPlayingId.current = items.find(isPresetPlaying)?.id ?? null
-    clearDead(id)
-  }
+    repairAt.current = Date.now();
+    repairPlayingId.current = items.find(isPresetPlaying)?.id ?? null;
+    clearDead(id);
+  };
   const clearDead = (id: number): void =>
     setDeadIds((prev) => {
-      if (!prev.has(id)) return prev
-      const next = new Set(prev)
-      next.delete(id)
-      return next
-    })
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
 
   const onDragEnd = (event: DragEndEvent): void => {
-    const { active, over } = event
-    if (!over || active.id === over.id) return
-    void tt.command({ type: 'presetMove', from: active.id as number, to: over.id as number })
-  }
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    void tt.command({ type: "presetMove", from: active.id as number, to: over.id as number });
+  };
 
   // Scroll container: combine scroll memory (skipped when following) with a
   // queryable ref for scroll-to-playing.
-  const scrollMemory = useScrollMemory('presets', !followPresets)
-  const containerRef = useRef<HTMLDivElement | null>(null)
+  const scrollMemory = useScrollMemory("presets", !followPresets);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const setContainerRef = useCallback(
     (node: HTMLDivElement | null) => {
-      containerRef.current = node
-      scrollMemory(node)
+      containerRef.current = node;
+      scrollMemory(node);
     },
-    [scrollMemory]
-  )
+    [scrollMemory],
+  );
   // Cards get half a card of context above the target; rows get a full row.
   const scrollToPlaying = useCallback(
     (flash = false, behavior?: ScrollBehavior): void => {
-      const el = containerRef.current?.querySelector('[data-playing="true"]') as HTMLElement | null
-      scrollToWithContext(el, cards ? presetGap : 8, cards ? 0.5 : 1, behavior)
-      if (flash) flashTarget(el)
+      const el = containerRef.current?.querySelector('[data-playing="true"]') as HTMLElement | null;
+      scrollToWithContext(el, cards ? presetGap : 8, cards ? 0.5 : 1, behavior);
+      if (flash) flashTarget(el);
     },
-    [presetGap, cards]
-  )
+    [presetGap, cards],
+  );
 
   // A REPAIR IS MAINTENANCE, NOT PLAYBACK (user, 2026-07-27: repairing a preset
   // scrolled the list to the last-played one). Writing a slot makes the device
@@ -277,29 +277,29 @@ export function PresetsScreen(): React.JSX.Element {
   // push stirs up as a track change. The window is generous enough to cover
   // that lag, and the guard only holds while the PLAYING preset is unchanged,
   // so starting something else during it still follows normally.
-  const repairAt = useRef(0)
-  const repairPlayingId = useRef<number | null>(null)
-  const playingId = items.find(isPresetPlaying)?.id ?? null
+  const repairAt = useRef(0);
+  const repairPlayingId = useRef<number | null>(null);
+  const playingId = items.find(isPresetPlaying)?.id ?? null;
   // First follow after mount positions INSTANTLY — re-entering the screen
   // shouldn't replay a glide to a place you already were. The animation is
   // reserved for track changes while you're watching.
-  const firstFollow = useRef(true)
+  const firstFollow = useRef(true);
   useEffect(() => {
     const settlingRepair =
-      Date.now() - repairAt.current < 8000 && playingId === repairPlayingId.current
+      Date.now() - repairAt.current < 8000 && playingId === repairPlayingId.current;
     // Follow pauses while a filter is active — the playing card may be hidden.
     if (followPresets && playingId != null && !filter && !settlingRepair) {
-      scrollToPlaying(false, firstFollow.current ? 'auto' : undefined)
+      scrollToPlaying(false, firstFollow.current ? "auto" : undefined);
     }
-    firstFollow.current = false
-  }, [followPresets, playingId, scrollToPlaying, filter])
+    firstFollow.current = false;
+  }, [followPresets, playingId, scrollToPlaying, filter]);
 
   const setFollowPresets = async (follow: boolean): Promise<void> => {
-    await saveSettings({ followPresets: follow })
-  }
+    await saveSettings({ followPresets: follow });
+  };
   const setLayout = async (presetsLayout: ScreenLayout): Promise<void> => {
-    await saveSettings({ presetsLayout })
-  }
+    await saveSettings({ presetsLayout });
+  };
 
   if (allItems.length === 0) {
     return (
@@ -309,7 +309,7 @@ export function PresetsScreen(): React.JSX.Element {
         title="No presets"
         caption="Save radio stations or albums to preset slots with the StreamMagic app and they'll appear here for one-click recall."
       />
-    )
+    );
   }
 
   return (
@@ -317,20 +317,20 @@ export function PresetsScreen(): React.JSX.Element {
       <header className="drag-region flex items-center gap-4 px-8 pt-8 pb-4">
         <ScreenTitle>Presets</ScreenTitle>
         <span className="font-mono text-[11px] text-faint">
-          {allItems.length} / {presets?.max_presets ?? '—'} slots
+          {allItems.length} / {presets?.max_presets ?? "—"} slots
         </span>
         <div className="flex-1" />
         <div className="flex items-center gap-1.5">
           <FilterInput
             value={filter}
-            onChange={(t) => setScreenFilter('presets', t)}
+            onChange={(t) => setScreenFilter("presets", t)}
             shown={items.length}
             total={allItems.length}
           />
           <HeaderChip
-            data-tip={cards ? 'View as rows' : 'View as cards'}
-            aria-label={cards ? 'View as rows' : 'View as cards'}
-            onClick={() => void setLayout(cards ? 'rows' : 'cards')}
+            data-tip={cards ? "View as rows" : "View as cards"}
+            aria-label={cards ? "View as rows" : "View as cards"}
+            onClick={() => void setLayout(cards ? "rows" : "cards")}
             className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
           >
             {cards ? <Rows3 size={16} /> : <LayoutGrid size={16} />}
@@ -345,8 +345,8 @@ export function PresetsScreen(): React.JSX.Element {
           </HeaderChip>
           <HeaderChip
             active={followPresets}
-            data-tip={followPresets ? 'Auto-follow: on' : 'Auto-follow: off'}
-            aria-label={followPresets ? 'Auto-follow: on' : 'Auto-follow: off'}
+            data-tip={followPresets ? "Auto-follow: on" : "Auto-follow: off"}
+            aria-label={followPresets ? "Auto-follow: on" : "Auto-follow: off"}
             onClick={() => void setFollowPresets(!followPresets)}
             className="no-drag tip-bottom p-2"
           >
@@ -357,7 +357,13 @@ export function PresetsScreen(): React.JSX.Element {
 
       {/* rows: pt-1 keeps the playing ring unclipped; cards: pt-2 gives the
           hover grow + glow ring headroom on the top row */}
-      <div ref={setContainerRef} className={cx('flex-1 overflow-y-auto', cards ? 'px-8 pb-8 pt-2' : 'px-6 pb-6 pt-1 divide-y divide-edge/50')}>
+      <div
+        ref={setContainerRef}
+        className={cx(
+          "flex-1 overflow-y-auto",
+          cards ? "px-8 pb-8 pt-2" : "px-6 pb-6 pt-1 divide-y divide-edge/50",
+        )}
+      >
         {items.length === 0 && (
           <div className="text-[15px] text-faint pt-6 px-2">No matches for “{filter}”</div>
         )}
@@ -378,7 +384,7 @@ export function PresetsScreen(): React.JSX.Element {
                   gridTemplateColumns: presetFillRows
                     ? `repeat(auto-fill, minmax(${presetCardSize}px, 1fr))`
                     : `repeat(auto-fill, ${presetCardSize}px)`,
-                  gap: presetGap
+                  gap: presetGap,
                 }}
               >
                 {items.map((preset) => (
@@ -416,15 +422,15 @@ export function PresetsScreen(): React.JSX.Element {
         </DndContext>
       </div>
     </div>
-  )
+  );
 }
 
 interface PresetVolumeProps {
   /** Saved override, or null. */
-  volume: number | null
+  volume: number | null;
   /** Pre-amp mode only — control-bus devices can't set an absolute level. */
-  canSetVolume: boolean
-  onVolume(level: number | null): void
+  canSetVolume: boolean;
+  onVolume(level: number | null): void;
 }
 
 /**
@@ -436,35 +442,35 @@ interface PresetVolumeProps {
  */
 function usePresetVolumePopover(
   volume: number | null,
-  onVolume: (level: number | null) => void
+  onVolume: (level: number | null) => void,
 ): { open: boolean; openFrom(e: React.MouseEvent): void; popover: React.ReactNode } {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<{ left: number; top?: number; bottom?: number } | null>(
-    null
-  )
-  const [draft, setDraft] = useState<number | null>(null)
-  const zoneVolume = useStore((s) => s.zoneState?.volume_percent)
+    null,
+  );
+  const [draft, setDraft] = useState<number | null>(null);
+  const zoneVolume = useStore((s) => s.zoneState?.volume_percent);
 
-  const level = draft ?? volume ?? zoneVolume ?? 25
-  const WIDTH = 240 // keep in step with w-60 below
+  const level = draft ?? volume ?? zoneVolume ?? 25;
+  const WIDTH = 240; // keep in step with w-60 below
 
   const openFrom = (e: React.MouseEvent): void => {
-    e.stopPropagation()
+    e.stopPropagation();
     if (open) {
-      setOpen(false)
-      return
+      setOpen(false);
+      return;
     }
-    const r = e.currentTarget.getBoundingClientRect()
-    const above = r.top > 300 // flip below the anchor when there's no headroom
+    const r = e.currentTarget.getBoundingClientRect();
+    const above = r.top > 300; // flip below the anchor when there's no headroom
     setAnchor({
       // right-aligned to the anchor, clamped into the viewport so the
       // left-most card's popover slides right instead of clipping
       left: Math.min(Math.max(8, r.right - WIDTH), window.innerWidth - WIDTH - 8),
-      ...(above ? { bottom: window.innerHeight - r.top + 8 } : { top: r.bottom + 8 })
-    })
-    setDraft(null)
-    setOpen(true)
-  }
+      ...(above ? { bottom: window.innerHeight - r.top + 8 } : { top: r.bottom + 8 }),
+    });
+    setDraft(null);
+    setOpen(true);
+  };
 
   const popover =
     open && anchor
@@ -475,8 +481,8 @@ function usePresetVolumePopover(
               data-preset-volume-overlay
               className="fixed inset-0 z-30 cursor-default"
               onClick={(e) => {
-                e.stopPropagation()
-                setOpen(false)
+                e.stopPropagation();
+                setOpen(false);
               }}
             />
             <span
@@ -505,9 +511,9 @@ function usePresetVolumePopover(
               <span className="flex items-center gap-2 mt-2.5">
                 <button
                   onClick={(e) => {
-                    e.stopPropagation()
-                    onVolume(level)
-                    setOpen(false)
+                    e.stopPropagation();
+                    onVolume(level);
+                    setOpen(false);
                   }}
                   className="text-[12px] px-3 py-1 rounded-lg bg-gold text-bg font-medium hover:brightness-110 motion-safe:active:scale-95 transition-all"
                 >
@@ -516,9 +522,9 @@ function usePresetVolumePopover(
                 {volume != null && (
                   <button
                     onClick={(e) => {
-                      e.stopPropagation()
-                      onVolume(null)
-                      setOpen(false)
+                      e.stopPropagation();
+                      onVolume(null);
+                      setOpen(false);
                     }}
                     className="text-[12px] px-2.5 py-1 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-alert hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
                   >
@@ -528,11 +534,11 @@ function usePresetVolumePopover(
               </span>
             </span>
           </>,
-          document.body
+          document.body,
         )
-      : null
+      : null;
 
-  return { open, openFrom, popover }
+  return { open, openFrom, popover };
 }
 
 /** Row view of a preset — mirrors the queue row's anatomy. */
@@ -545,21 +551,21 @@ function PresetRow({
   onRecall,
   volume,
   canSetVolume,
-  onVolume
+  onVolume,
 }: {
-  preset: PresetItem
-  playing: boolean
+  preset: PresetItem;
+  playing: boolean;
   /** Recall was accepted and then silently ignored — see RepairChip. */
-  dead?: boolean
-  onRepaired?(): void
-  tuning: boolean
-  onRecall(): void
+  dead?: boolean;
+  onRepaired?(): void;
+  tuning: boolean;
+  onRecall(): void;
 } & PresetVolumeProps): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: preset.id as number
-  })
-  const confirmDelete = useConfirmPopover()
-  const pv = usePresetVolumePopover(volume, onVolume)
+    id: preset.id as number,
+  });
+  const confirmDelete = useConfirmPopover();
+  const pv = usePresetVolumePopover(volume, onVolume);
 
   return (
     <div
@@ -570,12 +576,12 @@ function PresetRow({
         // FIVE columns for five children — the sixth column outlived the
         // trailing grip when it moved into the position cell (OrderHandle),
         // and an empty grid track still costs its gap.
-        'group grid grid-cols-[26px_44px_1fr_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5',
-        'cursor-default transition-colors',
-        isDragging && 'z-10 bg-raised shadow-xl',
+        "group grid grid-cols-[26px_44px_1fr_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5",
+        "cursor-default transition-colors",
+        isDragging && "z-10 bg-raised shadow-xl",
         // hold the hover highlight while this row's volume popover is open —
         // the pointer leaves the row, but the row is still what's being edited
-        playing ? 'row-playing bg-gold/10' : pv.open ? 'bg-veil' : 'hover:bg-veil'
+        playing ? "row-playing bg-gold/10" : pv.open ? "bg-veil" : "hover:bg-veil",
       )}
       onClick={onRecall}
     >
@@ -590,28 +596,30 @@ function PresetRow({
           <Loader2 data-preset-tuning size={13} className="spin text-gold/80" />
         ) : (
           <span className="font-mono text-[10.5px] text-faint tabular-nums">
-            {String(preset.id).padStart(2, '0')}
+            {String(preset.id).padStart(2, "0")}
           </span>
         )}
       </OrderHandle>
 
       <div className="h-10 w-10 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
-        <ArtImage src={artUrlAt(preset.art_url, 40)} lazy fallback={<PresetGlyph size={16} className="text-faint" />} />
+        <ArtImage
+          src={artUrlAt(preset.art_url, 40)}
+          lazy
+          fallback={<PresetGlyph size={16} className="text-faint" />}
+        />
       </div>
 
       <div className="min-w-0">
-        <div className={cx('text-[13.5px] truncate', playing ? 'text-gold' : 'text-ink')}>
+        <div className={cx("text-[13.5px] truncate", playing ? "text-gold" : "text-ink")}>
           {preset.name ?? `Preset ${preset.id}`}
         </div>
         <div className="text-[12px] text-dim truncate">
-          {preset.class ? preset.class.replace(/^stream\./, '') : ''}
+          {preset.class ? preset.class.replace(/^stream\./, "") : ""}
         </div>
       </div>
 
       <span className="inline-flex items-center" onPointerDown={(e) => e.stopPropagation()}>
-        {dead && (
-          <RepairChip preset={preset} variant="row" onRepaired={() => onRepaired?.()} />
-        )}
+        {dead && <RepairChip preset={preset} variant="row" onRepaired={() => onRepaired?.()} />}
         {volume != null ? (
           <button
             data-tip={`Recalled at ${volume}% volume`}
@@ -630,8 +638,8 @@ function PresetRow({
             onClick={pv.openFrom}
             data-preset-volume
             className={cx(
-              'tip-bottom p-1.5 rounded text-faint hover:text-ink transition-all',
-              pv.open ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+              "tip-bottom p-1.5 rounded text-faint hover:text-ink transition-all",
+              pv.open ? "opacity-100" : "opacity-0 group-hover:opacity-100",
             )}
           >
             <Volume2 size={13} />
@@ -645,13 +653,13 @@ function PresetRow({
         aria-label="Delete preset"
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => {
-          e.stopPropagation()
+          e.stopPropagation();
           confirmDelete.ask(e, {
             question: `Delete “${preset.name ?? `Preset ${preset.id}`}”?`,
             onConfirm: () => {
-              if (preset.id != null) void tt.command({ type: 'presetDelete', presetId: preset.id })
-            }
-          })
+              if (preset.id != null) void tt.command({ type: "presetDelete", presetId: preset.id });
+            },
+          });
         }}
         className="tip-bottom flex items-center p-1.5 rounded transition-all text-faint opacity-0 group-hover:opacity-100 hover:text-alert"
       >
@@ -659,7 +667,7 @@ function PresetRow({
       </button>
       {confirmDelete.popover}
     </div>
-  )
+  );
 }
 
 function PresetCard({
@@ -671,21 +679,21 @@ function PresetCard({
   onRecall,
   volume,
   canSetVolume,
-  onVolume
+  onVolume,
 }: {
-  preset: PresetItem
-  playing: boolean
+  preset: PresetItem;
+  playing: boolean;
   /** Recall was accepted and then silently ignored — see RepairChip. */
-  dead?: boolean
-  onRepaired?(): void
-  tuning: boolean
-  onRecall(): void
+  dead?: boolean;
+  onRepaired?(): void;
+  tuning: boolean;
+  onRecall(): void;
 } & PresetVolumeProps): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: preset.id as number
-  })
-  const confirmDelete = useConfirmPopover()
-  const pv = usePresetVolumePopover(volume, onVolume)
+    id: preset.id as number,
+  });
+  const confirmDelete = useConfirmPopover();
+  const pv = usePresetVolumePopover(volume, onVolume);
 
   return (
     <div
@@ -699,131 +707,144 @@ function PresetCard({
         // it stays legible on gold/orange album covers.
         // Hover: a slight grow + lift (scale is layout-free, so edge-clipped
         // cards just clip at the scrollport; z-10 keeps the grown card on top).
-        'group relative text-left rounded-2xl p-2 pb-2.5 transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]',
-        isDragging && 'z-10 opacity-90',
-        playing ? 'bg-goldtile/70 tile-playing' : 'bg-raised/70 ring-1 ring-edge card-hover-glow',
+        "group relative text-left rounded-2xl p-2 pb-2.5 transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]",
+        isDragging && "z-10 opacity-90",
+        playing ? "bg-goldtile/70 tile-playing" : "bg-raised/70 ring-1 ring-edge card-hover-glow",
         // held while this card's volume popover is open — the pointer has left,
         // but the card is still what's being edited
-        pv.open && 'ring-1 ring-edge2'
+        pv.open && "ring-1 ring-edge2",
       )}
     >
       {/* relative wrapper bounds exactly the art, so the corner chips anchor
           to the artwork: playing top-left, volume-set bottom-left, hover
           speaker top-right, hover trash bottom-right */}
       <div className="relative">
-      <button className="relative block w-full cursor-pointer" onClick={onRecall}>
-        <div className="aspect-square w-full rounded-lg overflow-hidden bg-panel/70 flex items-center justify-center">
-          {preset.art_urls && preset.art_urls.length > 1 ? (
-            // saved-queue (MediaQueue) presets: collage of the queue's albums
-            <div
-              className={cx(
-                'grid w-full h-full grid-cols-2',
-                preset.art_urls.length > 2 ? 'grid-rows-2' : 'grid-rows-1'
-              )}
-            >
-              {preset.art_urls.slice(0, 4).map((u) => (
-                <ArtImage key={u} src={artUrlAt(u, 120)} lazy fallback={<div className="bg-raised/70 h-full w-full" />} />
-              ))}
-            </div>
-          ) : (
-            <ArtImage
-              src={artUrlAt(preset.art_url, 240)}
-              lazy
-              fallback={<PresetGlyph size={34} strokeWidth={CARD_GLYPH_STROKE} className="text-faint" />}
-            />
-          )}
+        <button className="relative block w-full cursor-pointer" onClick={onRecall}>
+          <div className="aspect-square w-full rounded-lg overflow-hidden bg-panel/70 flex items-center justify-center">
+            {preset.art_urls && preset.art_urls.length > 1 ? (
+              // saved-queue (MediaQueue) presets: collage of the queue's albums
+              <div
+                className={cx(
+                  "grid w-full h-full grid-cols-2",
+                  preset.art_urls.length > 2 ? "grid-rows-2" : "grid-rows-1",
+                )}
+              >
+                {preset.art_urls.slice(0, 4).map((u) => (
+                  <ArtImage
+                    key={u}
+                    src={artUrlAt(u, 120)}
+                    lazy
+                    fallback={<div className="bg-raised/70 h-full w-full" />}
+                  />
+                ))}
+              </div>
+            ) : (
+              <ArtImage
+                src={artUrlAt(preset.art_url, 240)}
+                lazy
+                fallback={
+                  <PresetGlyph size={34} strokeWidth={CARD_GLYPH_STROKE} className="text-faint" />
+                }
+              />
+            )}
 
-          {/* hover overlay — the whole card recalls the preset; the chip is the affordance */}
-          <div className="absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-            <span
-              className="h-11 w-11 rounded-full bg-amber text-bg flex items-center justify-center
+            {/* hover overlay — the whole card recalls the preset; the chip is the affordance */}
+            <div className="absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              <span
+                className="h-11 w-11 rounded-full bg-amber text-bg flex items-center justify-center
                          transition-all duration-150 motion-safe:hover:scale-110
                          hover:shadow-[0_0_24px_rgb(var(--amber-rgb)_/_0.6)]"
-            >
-              <Play size={18} fill="currentColor" strokeWidth={0} className="translate-x-[1px]" />
-            </span>
+              >
+                <Play size={18} fill="currentColor" strokeWidth={0} className="translate-x-[1px]" />
+              </span>
+            </div>
+
+            {playing && (
+              // h/w match the corner buttons so the four corners feel weighted
+              <span className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-lg bg-panel/80 ring-1 ring-edge">
+                <Eqbars />
+              </span>
+            )}
+            {tuning && (
+              // same corner the playing chip will claim — spinner hands over to bars
+              <span
+                data-preset-tuning
+                className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-lg bg-panel/80 ring-1 ring-edge"
+              >
+                <Loader2 size={13} className="spin text-gold/90" />
+              </span>
+            )}
           </div>
+        </button>
 
-          {playing && (
-            // h/w match the corner buttons so the four corners feel weighted
-            <span className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-lg bg-panel/80 ring-1 ring-edge">
-              <Eqbars />
-            </span>
-          )}
-          {tuning && (
-            // same corner the playing chip will claim — spinner hands over to bars
-            <span
-              data-preset-tuning
-              className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-lg bg-panel/80 ring-1 ring-edge"
-            >
-              <Loader2 size={13} className="spin text-gold/90" />
-            </span>
-          )}
-        </div>
-      </button>
-
-      {/* the alert takes the corner the tuning spinner hands over, and is a
+        {/* the alert takes the corner the tuning spinner hands over, and is a
           sibling of the recall button (not a child) — nested buttons are
           invalid, and this one must not also fire the recall */}
-      {dead && <RepairChip preset={preset} variant="card" onRepaired={() => onRepaired?.()} />}
+        {dead && <RepairChip preset={preset} variant="card" onRepaired={() => onRepaired?.()} />}
 
-      {/* ONE speaker: hover-revealed control normally; when a volume is set it
+        {/* ONE speaker: hover-revealed control normally; when a volume is set it
           stays visible in gold — presence + color IS the indicator, and the
           tooltip carries the percentage */}
-      {(canSetVolume || volume != null) && (
+        {(canSetVolume || volume != null) && (
+          <button
+            data-tip={volume != null ? `Recalled at ${volume}% volume` : "Preset volume"}
+            aria-label="Preset volume"
+            onClick={pv.openFrom}
+            onPointerDown={(e) => e.stopPropagation()}
+            data-preset-volume
+            className={cx(
+              "tip-bottom absolute top-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-lg bg-panel/80 ring-1 ring-edge transition-all",
+              volume != null || pv.open
+                ? "opacity-100 text-gold hover:text-ink"
+                : "opacity-0 group-hover:opacity-100 text-dim hover:text-gold",
+            )}
+          >
+            <Volume2 size={13} />
+          </button>
+        )}
         <button
-          data-tip={volume != null ? `Recalled at ${volume}% volume` : 'Preset volume'}
-          aria-label="Preset volume"
-          onClick={pv.openFrom}
+          data-tip="Delete preset"
+          aria-label="Delete preset"
           onPointerDown={(e) => e.stopPropagation()}
-          data-preset-volume
+          onClick={(e) => {
+            e.stopPropagation();
+            confirmDelete.ask(e, {
+              question: `Delete “${preset.name ?? `Preset ${preset.id}`}”?`,
+              onConfirm: () => {
+                if (preset.id != null)
+                  void tt.command({ type: "presetDelete", presetId: preset.id });
+              },
+            });
+          }}
           className={cx(
-            'tip-bottom absolute top-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-lg bg-panel/80 ring-1 ring-edge transition-all',
-            volume != null || pv.open
-              ? 'opacity-100 text-gold hover:text-ink'
-              : 'opacity-0 group-hover:opacity-100 text-dim hover:text-gold'
+            "tip-bottom absolute bottom-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-lg transition-all",
+            "bg-panel/80 ring-1 ring-edge text-dim hover:text-alert opacity-0 group-hover:opacity-100",
           )}
         >
-          <Volume2 size={13} />
+          <Trash2 size={13} />
         </button>
-      )}
-      <button
-        data-tip="Delete preset"
-        aria-label="Delete preset"
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => {
-          e.stopPropagation()
-          confirmDelete.ask(e, {
-            question: `Delete “${preset.name ?? `Preset ${preset.id}`}”?`,
-            onConfirm: () => {
-              if (preset.id != null) void tt.command({ type: 'presetDelete', presetId: preset.id })
-            }
-          })
-        }}
-        className={cx(
-          'tip-bottom absolute bottom-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-lg transition-all',
-          'bg-panel/80 ring-1 ring-edge text-dim hover:text-alert opacity-0 group-hover:opacity-100'
-        )}
-      >
-        <Trash2 size={13} />
-      </button>
       </div>
 
       {/* the label is part of the card — clicking it recalls too (it used to
           be a dead zone below the artwork button, which read as a broken card) */}
       <div className="mt-2 px-1 cursor-pointer" onClick={onRecall}>
-        <div className={cx('text-[12.5px] leading-snug line-clamp-2', playing ? 'text-gold' : 'text-ink')}>
+        <div
+          className={cx(
+            "text-[12.5px] leading-snug line-clamp-2",
+            playing ? "text-gold" : "text-ink",
+          )}
+        >
           {preset.name ?? `Preset ${preset.id}`}
         </div>
         <div className="microlabel mt-1">
-          {String(preset.id).padStart(2, '0')}
-          {preset.class ? ` · ${preset.class.replace(/^stream\./, '')}` : ''}
+          {String(preset.id).padStart(2, "0")}
+          {preset.class ? ` · ${preset.class.replace(/^stream\./, "")}` : ""}
         </div>
       </div>
       {pv.popover}
       {confirmDelete.popover}
     </div>
-  )
+  );
 }
 
 /**
@@ -839,50 +860,50 @@ function PresetCard({
 function RepairChip({
   preset,
   variant,
-  onRepaired
+  onRepaired,
 }: {
-  preset: PresetItem
-  variant: 'card' | 'row'
-  onRepaired(): void
+  preset: PresetItem;
+  variant: "card" | "row";
+  onRepaired(): void;
 }): React.JSX.Element {
-  const [open, setOpen] = useState(false)
-  const [anchor, setAnchor] = useState<{ left: number; top: number } | null>(null)
-  const [match, setMatch] = useState<MediaNode | null | undefined>(undefined) // undefined = looking
-  const [saving, setSaving] = useState(false)
-  const WIDTH = 268
+  const [open, setOpen] = useState(false);
+  const [anchor, setAnchor] = useState<{ left: number; top: number } | null>(null);
+  const [match, setMatch] = useState<MediaNode | null | undefined>(undefined); // undefined = looking
+  const [saving, setSaving] = useState(false);
+  const WIDTH = 268;
 
   const openFrom = async (e: React.MouseEvent): Promise<void> => {
-    e.stopPropagation()
-    if (open) return setOpen(false)
-    const r = e.currentTarget.getBoundingClientRect()
+    e.stopPropagation();
+    if (open) return setOpen(false);
+    const r = e.currentTarget.getBoundingClientRect();
     setAnchor({
       left: Math.min(Math.max(8, r.left), window.innerWidth - WIDTH - 8),
-      top: Math.min(r.bottom + 8, window.innerHeight - 200)
-    })
-    setMatch(undefined)
-    setOpen(true)
+      top: Math.min(r.bottom + 8, window.innerHeight - 200),
+    });
+    setMatch(undefined);
+    setOpen(true);
     // The artwork is the fingerprint: same art url, same album, current id.
-    const pools = await tt.mediaIndexPools()
+    const pools = await tt.mediaIndexPools();
     const hits = pools.flatMap((pool) =>
-      pool.albums.filter((a) => a.artUrl != null && a.artUrl === preset.art_url)
-    )
-    setMatch(hits.length === 1 ? hits[0] : null)
-  }
+      pool.albums.filter((a) => a.artUrl != null && a.artUrl === preset.art_url),
+    );
+    setMatch(hits.length === 1 ? hits[0] : null);
+  };
 
   const repair = async (): Promise<void> => {
-    if (!match?.serverUdn || preset.id == null) return
-    setSaving(true)
+    if (!match?.serverUdn || preset.id == null) return;
+    setSaving(true);
     try {
-      await tt.mediaPresetSave(match.serverUdn, match.id, preset.id)
-      setOpen(false)
-      onRepaired()
+      await tt.mediaPresetSave(match.serverUdn, match.id, preset.id);
+      setOpen(false);
+      onRepaired();
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   const chip =
-    variant === 'card' ? (
+    variant === "card" ? (
       <button
         data-preset-dead
         data-tip="Didn't load — click to repair"
@@ -904,7 +925,7 @@ function RepairChip({
       >
         <AlertTriangle size={13} />
       </button>
-    )
+    );
 
   return (
     <>
@@ -917,8 +938,8 @@ function RepairChip({
             <span
               className="fixed inset-0 z-30 cursor-default"
               onClick={(e) => {
-                e.stopPropagation()
-                setOpen(false)
+                e.stopPropagation();
+                setOpen(false);
               }}
             />
             <span
@@ -931,8 +952,8 @@ function RepairChip({
               <span className="microlabel text-dim block mb-2">preset didn't load</span>
               <span className="block text-[11px] text-faint leading-relaxed">
                 This preset points at something the media server no longer has — its id changed,
-                most likely when the library was rescanned. The streamer accepts the recall and
-                then does nothing.
+                most likely when the library was rescanned. The streamer accepts the recall and then
+                does nothing.
               </span>
               {match === undefined && (
                 <span className="block text-[11px] text-faint mt-2.5">Looking in the index…</span>
@@ -947,24 +968,24 @@ function RepairChip({
                 <>
                   <span className="block text-[12px] text-ink mt-2.5 truncate">{match.title}</span>
                   <span className="block text-[11px] text-dim truncate">
-                    {[match.artist, match.serverName].filter(Boolean).join(' · ')}
+                    {[match.artist, match.serverName].filter(Boolean).join(" · ")}
                   </span>
                   <button
                     disabled={saving}
                     onClick={(e) => {
-                      e.stopPropagation()
-                      void repair()
+                      e.stopPropagation();
+                      void repair();
                     }}
                     className="mt-2.5 text-[12px] px-3 py-1 rounded-lg bg-gold text-bg font-medium hover:brightness-110 motion-safe:active:scale-95 transition-all disabled:opacity-50"
                   >
-                    {saving ? 'Repairing…' : `Save to slot ${preset.id}`}
+                    {saving ? "Repairing…" : `Save to slot ${preset.id}`}
                   </button>
                 </>
               )}
             </span>
           </>,
-          document.body
+          document.body,
         )}
     </>
-  )
+  );
 }

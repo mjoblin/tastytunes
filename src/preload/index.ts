@@ -1,14 +1,19 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
-import type { MediaInfoQuery } from '@shared/model'
-import { IPC, type PushMessage, type StreamerCommand, type TastyTunesApi } from '@shared/ipc'
-import { type AppSettings, type LyricsQuery, type MediaQueueAction, type SleepTimer } from '@shared/model'
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
+import type { MediaInfoQuery } from "@shared/model";
+import { IPC, type PushMessage, type StreamerCommand, type TastyTunesApi } from "@shared/ipc";
+import {
+  type AppSettings,
+  type LyricsQuery,
+  type MediaQueueAction,
+  type SleepTimer,
+} from "@shared/model";
 import {
   type ContentRef,
   type Favorite,
   type Playlist,
   type PlaylistItem,
-  type RecentTrack
-} from '@shared/model'
+  type RecentTrack,
+} from "@shared/model";
 
 const api: TastyTunesApi = {
   getSnapshot: () => ipcRenderer.invoke(IPC.getSnapshot),
@@ -65,8 +70,12 @@ const api: TastyTunesApi = {
     ipcRenderer.invoke(IPC.mediaSearch, serverUdn, query),
   mediaSearchAll: (query: string) => ipcRenderer.invoke(IPC.mediaSearchAll, query),
   mediaIndexPools: () => ipcRenderer.invoke(IPC.mediaIndexPools),
-  mediaQueueAdd: (serverUdn: string, objectId: string, action: MediaQueueAction, playFromId?: string) =>
-    ipcRenderer.invoke(IPC.mediaQueueAdd, serverUdn, objectId, action, playFromId),
+  mediaQueueAdd: (
+    serverUdn: string,
+    objectId: string,
+    action: MediaQueueAction,
+    playFromId?: string,
+  ) => ipcRenderer.invoke(IPC.mediaQueueAdd, serverUdn, objectId, action, playFromId),
   mediaPresetSave: (serverUdn: string, objectId: string, slot: number) =>
     ipcRenderer.invoke(IPC.mediaPresetSave, serverUdn, objectId, slot),
   contentResolve: (ref: ContentRef) => ipcRenderer.invoke(IPC.contentResolve, ref),
@@ -76,12 +85,12 @@ const api: TastyTunesApi = {
   radioTop: () => ipcRenderer.invoke(IPC.radioTop),
   radioByTags: (tags: string[]) => ipcRenderer.invoke(IPC.radioByTags, tags),
   onPush: (cb: (msg: PushMessage) => void) => {
-    const listener = (_e: IpcRendererEvent, msg: PushMessage): void => cb(msg)
-    ipcRenderer.on(IPC.push, listener)
+    const listener = (_e: IpcRendererEvent, msg: PushMessage): void => cb(msg);
+    ipcRenderer.on(IPC.push, listener);
     return () => {
-      ipcRenderer.removeListener(IPC.push, listener)
-    }
-  }
-}
+      ipcRenderer.removeListener(IPC.push, listener);
+    };
+  },
+};
 
-contextBridge.exposeInMainWorld('tastytunes', api)
+contextBridge.exposeInMainWorld("tastytunes", api);

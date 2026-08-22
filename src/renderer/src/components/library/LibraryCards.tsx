@@ -1,15 +1,15 @@
-import { useRef } from 'react'
-import { Disc3, Folder, Heart, MoreHorizontal, Play } from 'lucide-react'
-import { trackPosition, type MediaNode } from '@shared/model'
-import { cx } from '@/lib/format'
-import { isAlbumClass, isArtistClass, isMutedArt } from '@/lib/media'
-import { RowAction } from '@/components/media/RowAction'
-import { RowHeart } from '@/components/media/RowHeart'
-import { ArtImage } from '@/components/media/ArtImage'
-import { MediaArt } from '@/components/media/MediaArt'
-import { DurationCell } from '@/components/media/DurationCell'
-import { Eqbars } from '@/components/media/Eqbars'
-import { artUrlAt } from '@shared/artUrl'
+import { useRef } from "react";
+import { Disc3, Folder, Heart, MoreHorizontal, Play } from "lucide-react";
+import { trackPosition, type MediaNode } from "@shared/model";
+import { cx } from "@/lib/format";
+import { isAlbumClass, isArtistClass, isMutedArt } from "@/lib/media";
+import { RowAction } from "@/components/media/RowAction";
+import { RowHeart } from "@/components/media/RowHeart";
+import { ArtImage } from "@/components/media/ArtImage";
+import { MediaArt } from "@/components/media/MediaArt";
+import { DurationCell } from "@/components/media/DurationCell";
+import { Eqbars } from "@/components/media/Eqbars";
+import { artUrlAt } from "@shared/artUrl";
 
 // The Library's four listing renderers — cards and rows for containers and
 // tracks. Pure presentation: every action arrives as a callback.
@@ -25,32 +25,35 @@ import { artUrlAt } from '@shared/artUrl'
 function HeartChip({
   favorited,
   held,
-  onHeart
+  onHeart,
 }: {
-  favorited: boolean
+  favorited: boolean;
   /** The card's menu is open — match the other chips' held visibility. */
-  held: boolean
-  onHeart(): void
+  held: boolean;
+  onHeart(): void;
 }): React.JSX.Element {
   return (
     <span
-      data-tip={favorited ? 'Remove from favorites' : 'Add to favorites'}
-      data-card-heart={favorited ? 'on' : 'off'}
+      data-tip={favorited ? "Remove from favorites" : "Add to favorites"}
+      data-card-heart={favorited ? "on" : "off"}
       onClick={(e) => {
-        e.stopPropagation()
-        onHeart()
+        e.stopPropagation();
+        onHeart();
       }}
       className={cx(
         // 14px = the card's p-2 plus the chips' 6px inset from the art corner
-        'tip-bottom tip-end absolute top-3.5 right-3.5 z-10 h-8 w-8 rounded-lg bg-panel/80 ring-1 ring-edge flex items-center justify-center transition-all motion-safe:active:scale-90 cursor-pointer',
+        "tip-bottom tip-end absolute top-3.5 right-3.5 z-10 h-8 w-8 rounded-lg bg-panel/80 ring-1 ring-edge flex items-center justify-center transition-all motion-safe:active:scale-90 cursor-pointer",
         favorited
-          ? 'text-gold opacity-100'
-          : cx('text-dim hover:text-ink', held ? 'opacity-100' : 'opacity-0 group-hover:opacity-100')
+          ? "text-gold opacity-100"
+          : cx(
+              "text-dim hover:text-ink",
+              held ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+            ),
       )}
     >
-      <Heart size={14} fill={favorited ? 'currentColor' : 'none'} />
+      <Heart size={14} fill={favorited ? "currentColor" : "none"} />
     </span>
-  )
+  );
 }
 
 export function ContainerCard({
@@ -62,31 +65,31 @@ export function ContainerCard({
   onHeart,
   onEnter,
   onPlay,
-  onMenu
+  onMenu,
 }: {
-  node: MediaNode
+  node: MediaNode;
   /** The playing track belongs to this album (and the queue source is live). */
-  playing: boolean
+  playing: boolean;
   /** This card's ⋯ menu or preset picker is open — hold the hover treatment. */
-  menuOpen: boolean
+  menuOpen: boolean;
   /** With onHeart: the art-corner heart chip (albums only make sense). */
-  favorited?: boolean
+  favorited?: boolean;
   /** Provenance chip on the subtitle line (lens grids pooling several servers). */
-  badge?: string
-  onHeart?(): void
-  onEnter(): void
-  onPlay(el: HTMLElement | null): void
-  onMenu(e: React.MouseEvent): void
+  badge?: string;
+  onHeart?(): void;
+  onEnter(): void;
+  onPlay(el: HTMLElement | null): void;
+  onMenu(e: React.MouseEvent): void;
 }): React.JSX.Element {
-  const ref = useRef<HTMLDivElement | null>(null)
+  const ref = useRef<HTMLDivElement | null>(null);
   // Queue/preset verbs only make sense on albums — plain folders (USB
   // volumes, Asset's virtual views) get no chips and no menu. ARTIST
   // containers carry the ⋯ (their menu holds only the search-everywhere
   // pivot — see ItemMenu) but never the play chip.
-  const album = isAlbumClass(node.upnpClass)
-  const menuable = album || isArtistClass(node.upnpClass)
-  const muted = isMutedArt(node)
-  const subtitle = [node.artist, node.year].filter(Boolean).join(' · ')
+  const album = isAlbumClass(node.upnpClass);
+  const menuable = album || isArtistClass(node.upnpClass);
+  const muted = isMutedArt(node);
+  const subtitle = [node.artist, node.year].filter(Boolean).join(" · ");
   return (
     // Preset-card idiom: inset tile, hover grow + lift + glow; the highlight
     // wraps the gray tile so it stays legible over gold/orange covers.
@@ -95,12 +98,12 @@ export function ContainerCard({
       onContextMenu={menuable ? onMenu : undefined}
       data-library-card
       className={cx(
-        'group relative text-left rounded-2xl p-2 pb-2.5 transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]',
-        playing ? 'bg-goldtile/70 tile-playing' : 'bg-raised/70 ring-1 ring-edge card-hover-glow',
+        "group relative text-left rounded-2xl p-2 pb-2.5 transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]",
+        playing ? "bg-goldtile/70 tile-playing" : "bg-raised/70 ring-1 ring-edge card-hover-glow",
         // held while this card's ⋯ menu / preset picker is open — the pointer
         // has left, but the card is still what's being acted on: keep the
         // full hover treatment (grow + glow), not just a ring
-        menuOpen && 'ring-1 ring-edge2 z-10 motion-safe:scale-[1.04] card-glow-held'
+        menuOpen && "ring-1 ring-edge2 z-10 motion-safe:scale-[1.04] card-glow-held",
       )}
     >
       {/* the card CENTER always enters — play/menu are corner chips on the
@@ -111,7 +114,7 @@ export function ContainerCard({
           <ArtImage
             src={artUrlAt(node.artUrl, 240)}
             lazy
-            className={cx('h-full w-full object-cover', muted && 'opacity-60 saturate-[.6]')}
+            className={cx("h-full w-full object-cover", muted && "opacity-60 saturate-[.6]")}
             fallback={
               album ? (
                 <Disc3 size={34} strokeWidth={1.2} className="text-faint" />
@@ -131,13 +134,13 @@ export function ContainerCard({
           {album && (
             <span
               onClick={(e) => {
-                e.stopPropagation()
-                onPlay(ref.current)
+                e.stopPropagation();
+                onPlay(ref.current);
               }}
               data-tip="Play — replaces the queue"
               className={cx(
-                'tip-bottom absolute bottom-1.5 left-1.5 h-11 w-11 rounded-full bg-amber text-bg flex items-center justify-center transition-all duration-150 motion-safe:hover:scale-110 hover:shadow-[0_0_24px_rgb(var(--amber-rgb)_/_0.6)]',
-                menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                "tip-bottom absolute bottom-1.5 left-1.5 h-11 w-11 rounded-full bg-amber text-bg flex items-center justify-center transition-all duration-150 motion-safe:hover:scale-110 hover:shadow-[0_0_24px_rgb(var(--amber-rgb)_/_0.6)]",
+                menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100",
               )}
             >
               <Play size={18} fill="currentColor" />
@@ -148,8 +151,8 @@ export function ContainerCard({
               aria-label="More actions"
               onClick={onMenu}
               className={cx(
-                'absolute bottom-1.5 right-1.5 h-8 w-8 rounded-lg bg-panel/80 ring-1 ring-edge text-dim hover:text-ink flex items-center justify-center transition-all',
-                menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                "absolute bottom-1.5 right-1.5 h-8 w-8 rounded-lg bg-panel/80 ring-1 ring-edge text-dim hover:text-ink flex items-center justify-center transition-all",
+                menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100",
               )}
             >
               <MoreHorizontal size={15} />
@@ -158,8 +161,8 @@ export function ContainerCard({
         </div>
         <div
           className={cx(
-            'pt-1.5 text-[12.5px] truncate text-left',
-            playing ? 'text-gold' : 'text-ink'
+            "pt-1.5 text-[12.5px] truncate text-left",
+            playing ? "text-gold" : "text-ink",
           )}
         >
           {node.title}
@@ -184,7 +187,7 @@ export function ContainerCard({
         <HeartChip favorited={favorited === true} held={menuOpen} onHeart={onHeart} />
       )}
     </div>
-  )
+  );
 }
 
 /** Row-cluster heart: hover-revealed control, permanently gold when set. */
@@ -197,30 +200,30 @@ export function ContainerRow({
   badge,
   onHeart,
   onEnter,
-  onMenu
+  onMenu,
 }: {
-  node: MediaNode
-  playing: boolean
-  menuOpen: boolean
+  node: MediaNode;
+  playing: boolean;
+  menuOpen: boolean;
   /** With onHeart: the heart button in the row's action cluster (albums). */
-  favorited?: boolean
+  favorited?: boolean;
   /** Provenance chip beside the subline (lens listings pooling several servers). */
-  badge?: string
-  onHeart?(): void
-  onEnter(): void
-  onMenu(e: React.MouseEvent): void
+  badge?: string;
+  onHeart?(): void;
+  onEnter(): void;
+  onMenu(e: React.MouseEvent): void;
 }): React.JSX.Element {
   // Same rule as cards: albums carry the full ⋯ menu; ARTISTS carry it too now
   // (theirs holds only the search-everywhere pivot — see ItemMenu). Plain
   // folders stay menu-less: a folder is filing, and none of the verbs apply.
-  const album = isAlbumClass(node.upnpClass)
-  const menuable = album || isArtistClass(node.upnpClass)
-  const muted = isMutedArt(node)
+  const album = isAlbumClass(node.upnpClass);
+  const menuable = album || isArtistClass(node.upnpClass);
+  const muted = isMutedArt(node);
   return (
     <div
       className={cx(
-        'group grid grid-cols-[44px_1fr_auto_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer transition-colors',
-        playing ? 'row-playing bg-gold/10' : menuOpen ? 'bg-veil' : 'hover:bg-veil'
+        "group grid grid-cols-[44px_1fr_auto_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
+        playing ? "row-playing bg-gold/10" : menuOpen ? "bg-veil" : "hover:bg-veil",
       )}
       onClick={onEnter}
       onContextMenu={menuable ? onMenu : undefined}
@@ -228,11 +231,11 @@ export function ContainerRow({
     >
       <MediaArt
         src={artUrlAt(node.artUrl, 240)}
-        kind={album ? 'album' : isArtistClass(node.upnpClass) ? 'artist' : 'folder'}
-        className={muted ? 'opacity-60 saturate-[.6]' : undefined}
+        kind={album ? "album" : isArtistClass(node.upnpClass) ? "artist" : "folder"}
+        className={muted ? "opacity-60 saturate-[.6]" : undefined}
       />
       <div className="min-w-0">
-        <div className={cx('text-[13.5px] truncate', playing ? 'text-gold' : 'text-ink')}>
+        <div className={cx("text-[13.5px] truncate", playing ? "text-gold" : "text-ink")}>
           {node.title}
         </div>
         {(node.artist || badge) && (
@@ -260,8 +263,8 @@ export function ContainerRow({
           aria-label="More actions"
           onClick={onMenu}
           className={cx(
-            'p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-all',
-            menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+            "p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-all",
+            menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100",
           )}
         >
           <MoreHorizontal size={14} />
@@ -270,7 +273,7 @@ export function ContainerRow({
         <span />
       )}
     </div>
-  )
+  );
 }
 
 export function TrackRow({
@@ -286,47 +289,47 @@ export function TrackRow({
   onAlbumLink,
   onArtistLink,
   note,
-  artistLabel
+  artistLabel,
 }: {
-  node: MediaNode
+  node: MediaNode;
   /** Loose tracks in mixed folders get a thumb; album views carry the art in the header. */
-  showArt: boolean
+  showArt: boolean;
   /** This is what's playing right now (queue source live) — queue-row treatment. */
-  isCurrent: boolean
+  isCurrent: boolean;
   /** Already in the queue — a click jumps there instead of inserting. */
-  queued: boolean
-  menuOpen: boolean
+  queued: boolean;
+  menuOpen: boolean;
   /** With onHeart: the heart button in the row's action cluster. */
-  favorited?: boolean
-  onHeart?(): void
-  onPlayNow(el: HTMLElement | null): void
-  onMenu(e: React.MouseEvent): void
+  favorited?: boolean;
+  onHeart?(): void;
+  onPlayNow(el: HTMLElement | null): void;
+  onMenu(e: React.MouseEvent): void;
   /** Search results: the album name renders as a link that navigates there
    *  (the row itself keeps the app-wide click contract: tracks play). */
-  onAlbumLink?(): void
+  onAlbumLink?(): void;
   /** Search results: the artist name links to the artist entity. */
-  onArtistLink?(): void
+  onArtistLink?(): void;
   /**
    * A quiet note after the title — the ONE case is a track whose format
    * differs from its album's headline ("MP3 · 320 kbps" in a FLAC album);
    * rows that match the album carry nothing (albumFormat decides).
    */
-  note?: string | null
+  note?: string | null;
   /**
    * What the second line says instead of the raw `artist` — the album
    * context's "Daft Punk feat. Julian Casablancas" (performerLine). Absent
    * = the packed string, which is the honest default everywhere else.
    */
-  artistLabel?: string | null
+  artistLabel?: string | null;
 }): React.JSX.Element {
-  const ref = useRef<HTMLDivElement | null>(null)
+  const ref = useRef<HTMLDivElement | null>(null);
   return (
     <div
       ref={ref}
       className={cx(
-        'group grid items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer transition-colors',
-        showArt ? 'grid-cols-[26px_44px_1fr_auto_auto]' : 'grid-cols-[26px_1fr_auto_auto]',
-        isCurrent ? 'row-playing bg-gold/10' : menuOpen ? 'bg-veil' : 'hover:bg-veil'
+        "group grid items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
+        showArt ? "grid-cols-[26px_44px_1fr_auto_auto]" : "grid-cols-[26px_1fr_auto_auto]",
+        isCurrent ? "row-playing bg-gold/10" : menuOpen ? "bg-veil" : "hover:bg-veil",
       )}
       onClick={() => onPlayNow(ref.current)}
       onContextMenu={onMenu}
@@ -334,12 +337,12 @@ export function TrackRow({
     >
       {/* left-justified: numbers sit flush with the header/art above */}
       <span className="font-mono text-[10.5px] text-faint tabular-nums">
-        {isCurrent ? <Eqbars /> : (trackPosition(node) ?? '')}
+        {isCurrent ? <Eqbars /> : (trackPosition(node) ?? "")}
       </span>
       {showArt && <MediaArt src={node.artUrl} kind="track" />}
       <div className="min-w-0">
         <div className="flex items-baseline gap-2 min-w-0">
-          <div className={cx('text-[13.5px] truncate', isCurrent ? 'text-gold' : 'text-ink')}>
+          <div className={cx("text-[13.5px] truncate", isCurrent ? "text-gold" : "text-ink")}>
             {node.title}
           </div>
           {note && (
@@ -359,8 +362,8 @@ export function TrackRow({
                   data-tip="Go to artist"
                   aria-label={`Go to artist ${node.artist}`}
                   onClick={(e) => {
-                    e.stopPropagation()
-                    onArtistLink()
+                    e.stopPropagation();
+                    onArtistLink();
                   }}
                   className="tip-bottom hover:text-ink hover:underline underline-offset-2 transition-colors"
                 >
@@ -371,13 +374,13 @@ export function TrackRow({
               ))}
             {onAlbumLink && node.album && (
               <>
-                {node.artist ? ' · ' : ''}
+                {node.artist ? " · " : ""}
                 <button
                   data-tip="Go to album"
                   aria-label={`Go to album ${node.album}`}
                   onClick={(e) => {
-                    e.stopPropagation()
-                    onAlbumLink()
+                    e.stopPropagation();
+                    onAlbumLink();
                   }}
                   className="tip-bottom hover:text-ink hover:underline underline-offset-2 transition-colors"
                 >
@@ -394,7 +397,9 @@ export function TrackRow({
         <RowAction
           icon={Play}
           label="Play"
-          tip={queued ? 'Play — already in the queue' : 'Play now — slots in after the current track'}
+          tip={
+            queued ? "Play — already in the queue" : "Play now — slots in after the current track"
+          }
           pinned={menuOpen}
           onClick={() => onPlayNow(ref.current)}
         />
@@ -405,7 +410,7 @@ export function TrackRow({
       </div>
       <DurationCell secs={node.durationSecs} />
     </div>
-  )
+  );
 }
 
 /** A loose track as a card (Title views, mixed folders) — click = Play now. */

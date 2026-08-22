@@ -1,55 +1,58 @@
-import { CloseButton } from '@/components/controls/CloseButton'
-import { ModalShell } from '@/components/chrome/Overlay'
-import { useStore } from '@/store'
-import { MOD, SCREENS } from '@/lib/screens'
+import { CloseButton } from "@/components/controls/CloseButton";
+import { ModalShell } from "@/components/chrome/Overlay";
+import { useStore } from "@/store";
+import { MOD, SCREENS } from "@/lib/screens";
 
 const GROUPS: Array<{ title: string; rows: Array<[string, string]> }> = [
   {
-    title: 'Playback',
+    title: "Playback",
     rows: [
-      ['Space / K', 'Play / pause'],
-      ['← / →', 'Previous / next track'],
-      ['J / L', 'Seek −10s / +10s'],
-      ['1 – 9', 'Recall preset']
-    ]
+      ["Space / K", "Play / pause"],
+      ["← / →", "Previous / next track"],
+      ["J / L", "Seek −10s / +10s"],
+      ["1 – 9", "Recall preset"],
+    ],
   },
   {
-    title: 'Volume',
+    title: "Volume",
     rows: [
-      ['↑ / ↓', 'Volume up / down'],
-      ['Shift + ↑ / ↓', 'Volume ±5'],
-      ['Scroll', 'Over the volume control: up / down'],
-      ['M', 'Mute']
-    ]
+      ["↑ / ↓", "Volume up / down"],
+      ["Shift + ↑ / ↓", "Volume ±5"],
+      ["Scroll", "Over the volume control: up / down"],
+      ["M", "Mute"],
+    ],
   },
   {
-    title: 'Find',
+    title: "Find",
     // Three tiers, one line each: filter narrows what's on screen, Search
     // spans everything you own, the Library's own search digs one collection.
     rows: [
-      ['/', 'Filter the current list — narrows what’s already on screen'],
-      ['S', 'Search everything — library, playlists, presets, favorites, radio'],
-      [`${MOD}F`, 'Find here: the Library’s own search on the Library, Search everywhere else'],
-      [`⇧${MOD}F`, 'Search everything, from anywhere — including inside the Library']
-    ]
+      ["/", "Filter the current list — narrows what’s already on screen"],
+      ["S", "Search everything — library, playlists, presets, favorites, radio"],
+      [`${MOD}F`, "Find here: the Library’s own search on the Library, Search everywhere else"],
+      [`⇧${MOD}F`, "Search everything, from anywhere — including inside the Library"],
+    ],
   },
   {
-    title: 'Navigate',
+    title: "Navigate",
     rows: [
-      [`${MOD}K`, 'Command palette'],
+      [`${MOD}K`, "Command palette"],
       // letters derive from the shared registry; the prose stays hand-written
-      [SCREENS.map((s) => s.key).join(' '), 'Now Playing · Queue · Search · lIbrary · Presets · plAylists · faVorites · Tuner · Recently Played · Device · sEttings'],
-      ['F', 'Full-screen display mode'],
-      ['⌘← / ⌘→', 'Back / forward in the Library (Backspace and mouse side buttons too)'],
-      ['`', 'SMOIP and Requests console'],
-      ['?', 'This overlay']
-    ]
-  }
-]
+      [
+        SCREENS.map((s) => s.key).join(" "),
+        "Now Playing · Queue · Search · lIbrary · Presets · plAylists · faVorites · Tuner · Recently Played · Device · sEttings",
+      ],
+      ["F", "Full-screen display mode"],
+      ["⌘← / ⌘→", "Back / forward in the Library (Backspace and mouse side buttons too)"],
+      ["`", "SMOIP and Requests console"],
+      ["?", "This overlay"],
+    ],
+  },
+];
 
 export function ShortcutsOverlay(): React.JSX.Element | null {
-  const open = useStore((s) => s.shortcutsOpen)
-  const setShortcutsOpen = useStore((s) => s.setShortcutsOpen)
+  const open = useStore((s) => s.shortcutsOpen);
+  const setShortcutsOpen = useStore((s) => s.setShortcutsOpen);
 
   return (
     <ModalShell
@@ -79,5 +82,5 @@ export function ShortcutsOverlay(): React.JSX.Element | null {
         ))}
       </div>
     </ModalShell>
-  )
+  );
 }

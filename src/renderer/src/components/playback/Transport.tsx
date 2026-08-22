@@ -1,7 +1,7 @@
-import { Loader2, Pause, Play } from 'lucide-react'
-import { tt } from '@/api'
-import { useStore } from '@/store'
-import { controlSet, cx } from '@/lib/format'
+import { Loader2, Pause, Play } from "lucide-react";
+import { tt } from "@/api";
+import { useStore } from "@/store";
+import { controlSet, cx } from "@/lib/format";
 
 /**
  * The shared transport layer: ONE derivation of "what can the transport do
@@ -23,28 +23,28 @@ import { controlSet, cx } from '@/lib/format'
  * statements of the same verb.
  */
 export interface Transport {
-  connected: boolean
-  powered: boolean
+  connected: boolean;
+  powered: boolean;
   /** Connected AND powered — the gate every control checks first. */
-  active: boolean
-  playing: boolean
-  busy: boolean
-  canToggle: boolean
-  canPrev: boolean
-  canNext: boolean
-  canSeek: boolean
-  canShuffle: boolean
-  canRepeat: boolean
-  canStop: boolean
-  shuffleOn: boolean
-  repeatOn: boolean
-  toggle(): void
-  prev(): void
-  next(): void
-  stop(): void
-  toggleShuffle(): void
-  toggleRepeat(): void
-  seek(positionSecs: number): void
+  active: boolean;
+  playing: boolean;
+  busy: boolean;
+  canToggle: boolean;
+  canPrev: boolean;
+  canNext: boolean;
+  canSeek: boolean;
+  canShuffle: boolean;
+  canRepeat: boolean;
+  canStop: boolean;
+  shuffleOn: boolean;
+  repeatOn: boolean;
+  toggle(): void;
+  prev(): void;
+  next(): void;
+  stop(): void;
+  toggleShuffle(): void;
+  toggleRepeat(): void;
+  seek(positionSecs: number): void;
 }
 
 export function useTransport(
@@ -53,25 +53,25 @@ export function useTransport(
    * subscribed here because the playhead ticks — each window owns exactly one
    * subscription, and a surface that doesn't seek just omits it.
    */
-  duration?: number | null
+  duration?: number | null,
 ): Transport {
-  const connection = useStore((s) => s.connection)
-  const systemPower = useStore((s) => s.systemPower)
-  const playState = useStore((s) => s.playState)
-  const nowPlaying = useStore((s) => s.nowPlaying)
+  const connection = useStore((s) => s.connection);
+  const systemPower = useStore((s) => s.systemPower);
+  const playState = useStore((s) => s.playState);
+  const nowPlaying = useStore((s) => s.nowPlaying);
 
-  const connected = connection.phase === 'connected'
-  const powered = systemPower?.power === 'ON'
-  const active = connected && powered
-  const controls = controlSet(nowPlaying)
-  const state = playState?.state
+  const connected = connection.phase === "connected";
+  const powered = systemPower?.power === "ON";
+  const active = connected && powered;
+  const controls = controlSet(nowPlaying);
+  const state = playState?.state;
   // Gated on `active`: play_state SURVIVES a disconnect and a drop into
   // standby, so an ungated check shows a PAUSE button while the surface
   // around it says nothing is playing.
-  const playing = active && state === 'play'
-  const busy = active && (state === 'buffering' || state === 'connecting')
-  const shuffleOn = playState?.mode_shuffle === 'all'
-  const repeatOn = playState?.mode_repeat === 'all'
+  const playing = active && state === "play";
+  const busy = active && (state === "buffering" || state === "connecting");
+  const shuffleOn = playState?.mode_shuffle === "all";
+  const repeatOn = playState?.mode_repeat === "all";
 
   return {
     connected,
@@ -79,23 +79,23 @@ export function useTransport(
     active,
     playing,
     busy,
-    canToggle: controls.has('play_pause') || controls.has('play') || controls.has('pause'),
-    canPrev: controls.has('track_previous'),
-    canNext: controls.has('track_next'),
-    canSeek: controls.has('seek') && duration != null && duration > 0,
-    canShuffle: controls.has('toggle_shuffle'),
-    canRepeat: controls.has('toggle_repeat'),
-    canStop: controls.has('stop'),
+    canToggle: controls.has("play_pause") || controls.has("play") || controls.has("pause"),
+    canPrev: controls.has("track_previous"),
+    canNext: controls.has("track_next"),
+    canSeek: controls.has("seek") && duration != null && duration > 0,
+    canShuffle: controls.has("toggle_shuffle"),
+    canRepeat: controls.has("toggle_repeat"),
+    canStop: controls.has("stop"),
     shuffleOn,
     repeatOn,
-    toggle: () => void tt.command({ type: 'togglePlayback' }),
-    prev: () => void tt.command({ type: 'previousTrack' }),
-    next: () => void tt.command({ type: 'nextTrack' }),
-    stop: () => void tt.command({ type: 'stop' }),
-    toggleShuffle: () => void tt.command({ type: 'setShuffle', mode: shuffleOn ? 'off' : 'all' }),
-    toggleRepeat: () => void tt.command({ type: 'setRepeat', mode: repeatOn ? 'off' : 'all' }),
-    seek: (positionSecs: number) => void tt.command({ type: 'seek', positionSecs })
-  }
+    toggle: () => void tt.command({ type: "togglePlayback" }),
+    prev: () => void tt.command({ type: "previousTrack" }),
+    next: () => void tt.command({ type: "nextTrack" }),
+    stop: () => void tt.command({ type: "stop" }),
+    toggleShuffle: () => void tt.command({ type: "setShuffle", mode: shuffleOn ? "off" : "all" }),
+    toggleRepeat: () => void tt.command({ type: "setRepeat", mode: repeatOn ? "off" : "all" }),
+    seek: (positionSecs: number) => void tt.command({ type: "seek", positionSecs }),
+  };
 }
 
 /**
@@ -106,17 +106,17 @@ export function useTransport(
  */
 export function PlayPauseButton({
   size,
-  tipHint = '',
-  className
+  tipHint = "",
+  className,
 }: {
-  size: 'bar' | 'compact'
+  size: "bar" | "compact";
   /** Keyboard hint appended to the tooltip on surfaces that have shortcuts. */
-  tipHint?: string
-  className?: string
+  tipHint?: string;
+  className?: string;
 }): React.JSX.Element {
-  const t = useTransport()
-  const icon = size === 'bar' ? 20 : 14
-  const label = (t.playing ? 'Pause' : 'Play') + tipHint
+  const t = useTransport();
+  const icon = size === "bar" ? 20 : 14;
+  const label = (t.playing ? "Pause" : "Play") + tipHint;
   return (
     <button
       data-tip={label}
@@ -124,15 +124,15 @@ export function PlayPauseButton({
       disabled={!t.active || (!t.canToggle && !t.busy)}
       onClick={t.toggle}
       className={cx(
-        'tip-top rounded-full flex items-center justify-center transition-all shrink-0',
-        size === 'bar' ? 'h-11 w-11' : 'h-8 w-8',
+        "tip-top rounded-full flex items-center justify-center transition-all shrink-0",
+        size === "bar" ? "h-11 w-11" : "h-8 w-8",
         t.active && (t.canToggle || t.busy)
           ? cx(
-              'bg-gold text-bg motion-safe:hover:scale-105',
-              size === 'bar' && 'shadow-[0_0_20px_rgb(var(--gold-rgb)_/_0.35)]'
+              "bg-gold text-bg motion-safe:hover:scale-105",
+              size === "bar" && "shadow-[0_0_20px_rgb(var(--gold-rgb)_/_0.35)]",
             )
-          : 'bg-veil2 text-faint',
-        className
+          : "bg-veil2 text-faint",
+        className,
       )}
     >
       {t.busy ? (
@@ -143,7 +143,7 @@ export function PlayPauseButton({
         <Play size={icon} fill="currentColor" strokeWidth={0} className="translate-x-[1px]" />
       )}
     </button>
-  )
+  );
 }
 
 /**
@@ -159,15 +159,15 @@ export function TransportIconButton({
   accent,
   size,
   className,
-  onClick
+  onClick,
 }: {
-  children: React.ReactNode
-  tip: string
-  enabled: boolean
-  accent?: boolean
-  size: 'bar' | 'compact'
-  className?: string
-  onClick(): void
+  children: React.ReactNode;
+  tip: string;
+  enabled: boolean;
+  accent?: boolean;
+  size: "bar" | "compact";
+  className?: string;
+  onClick(): void;
 }): React.JSX.Element {
   return (
     <button
@@ -176,13 +176,13 @@ export function TransportIconButton({
       disabled={!enabled}
       onClick={onClick}
       className={cx(
-        'tip-top transition-colors shrink-0',
-        size === 'bar' ? 'p-2 rounded-md' : 'p-1 rounded',
-        !enabled ? 'text-faint/40' : accent ? 'text-gold' : 'text-dim hover:text-ink',
-        className
+        "tip-top transition-colors shrink-0",
+        size === "bar" ? "p-2 rounded-md" : "p-1 rounded",
+        !enabled ? "text-faint/40" : accent ? "text-gold" : "text-dim hover:text-ink",
+        className,
       )}
     >
       {children}
     </button>
-  )
+  );
 }

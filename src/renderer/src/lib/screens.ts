@@ -11,9 +11,9 @@ import {
   PictureInPicture2,
   Radio,
   RadioTower,
-  Search
-} from 'lucide-react'
-import type { Screen } from '@/store'
+  Search,
+} from "lucide-react";
+import type { Screen } from "@/store";
 
 /**
  * THE screen registry — the single source for every surface that lists
@@ -24,10 +24,10 @@ import type { Screen } from '@/store'
  * shortcuts in useShortcuts (J/L seek, K/space, M mute, arrows).
  */
 export interface ScreenDef {
-  id: Screen
-  label: string
-  icon: typeof Disc3
-  key: string
+  id: Screen;
+  label: string;
+  icon: typeof Disc3;
+  key: string;
 }
 
 /**
@@ -60,39 +60,44 @@ export interface ScreenDef {
  * rearranged: muscle memory is the whole point of them.
  */
 export const NAV_SCREENS: ScreenDef[] = [
-  { id: 'now-playing', label: 'Now Playing', icon: Disc3, key: 'N' },
-  { id: 'queue', label: 'Queue', icon: ListMusic, key: 'Q' },
+  { id: "now-playing", label: "Now Playing", icon: Disc3, key: "N" },
+  { id: "queue", label: "Queue", icon: ListMusic, key: "Q" },
   // 'S' was held INERT for this screen since 2026-07-24, when Sources moved to
   // 'C' — key quality follows visit frequency, and search will be constant.
   // It leads the finding cluster: search when you don't know where it is,
   // browse when you do.
-  { id: 'search', label: 'Search', icon: Search, key: 'S' },
-  { id: 'library', label: 'Library', icon: Library, key: 'I' },
-  { id: 'presets', label: 'Presets', icon: Radio, key: 'P' },
+  { id: "search", label: "Search", icon: Search, key: "S" },
+  { id: "library", label: "Library", icon: Library, key: "I" },
+  { id: "presets", label: "Presets", icon: Radio, key: "P" },
   // 'A' as in plAylists — S is the Search screen's, and P/L are long gone
   // (Presets, and L is a transport seek key). ListOrdered rather than
   // ListMusic: the queue owns that one, and a playlist IS a saved ordering.
-  { id: 'playlists', label: 'Playlists', icon: ListOrdered, key: 'A' },
+  { id: "playlists", label: "Playlists", icon: ListOrdered, key: "A" },
   // V as in faVorites (F belongs to display mode, H was left free for future
   // transport use) — must stay clear of J/L/K/space/M/F like every screen key
-  { id: 'favorites', label: 'Favorites', icon: Heart, key: 'V' },
+  { id: "favorites", label: "Favorites", icon: Heart, key: "V" },
   // T as in Tuner — the classic hi-fi name for the radio section
-  { id: 'radio', label: 'Radio', icon: RadioTower, key: 'T' },
-  { id: 'recently-played', label: 'Recently Played', icon: History, key: 'R' },
+  { id: "radio", label: "Radio", icon: RadioTower, key: "T" },
+  { id: "recently-played", label: "Recently Played", icon: History, key: "R" },
   // Sources USED to be its own row (key 'C'); it's a section of the Device
   // screen now — both are "system, not music", and Sources is one rarely-used
   // action. 'C' is free again and deliberately not reused.
-  { id: 'device', label: 'Device', icon: HardDrive, key: 'D' }
-]
-export const SETTINGS_SCREEN: ScreenDef = { id: 'settings', label: 'Settings', icon: Cog, key: 'E' }
-export const SCREENS: ScreenDef[] = [...NAV_SCREENS, SETTINGS_SCREEN]
+  { id: "device", label: "Device", icon: HardDrive, key: "D" },
+];
+export const SETTINGS_SCREEN: ScreenDef = {
+  id: "settings",
+  label: "Settings",
+  icon: Cog,
+  key: "E",
+};
+export const SCREENS: ScreenDef[] = [...NAV_SCREENS, SETTINGS_SCREEN];
 
 /**
  * Screens that can never be hidden from the nav (feature: hideable nav items).
  * 'settings' lives in the nav's pinned bottom cluster and stays locked — always
  * shown, no right-click hide menu — same as 'now-playing' up top.
  */
-export const NAV_UNHIDEABLE: Screen[] = ['now-playing', 'settings']
+export const NAV_UNHIDEABLE: Screen[] = ["now-playing", "settings"];
 
 /**
  * Sanitize a persisted nav hide-set into real, hideable registry ids: drops
@@ -101,13 +106,15 @@ export const NAV_UNHIDEABLE: Screen[] = ['now-playing', 'settings']
  * Settings card, and the palette all agree on what "hidden" means.
  */
 export function sanitizeNavHidden(raw: readonly string[] | null | undefined): Screen[] {
-  if (!Array.isArray(raw)) return []
-  const hideable = new Set<string>(NAV_SCREENS.map((s) => s.id).filter((id) => !NAV_UNHIDEABLE.includes(id)))
-  const out: Screen[] = []
+  if (!Array.isArray(raw)) return [];
+  const hideable = new Set<string>(
+    NAV_SCREENS.map((s) => s.id).filter((id) => !NAV_UNHIDEABLE.includes(id)),
+  );
+  const out: Screen[] = [];
   for (const id of raw) {
-    if (hideable.has(id) && !out.includes(id as Screen)) out.push(id as Screen)
+    if (hideable.has(id) && !out.includes(id as Screen)) out.push(id as Screen);
   }
-  return out
+  return out;
 }
 
 /**
@@ -130,46 +137,46 @@ export function sanitizeNavHidden(raw: readonly string[] | null | undefined): Sc
  * restores position. Filtering is the nav's job, after ordering.
  */
 export function sanitizeNavOrder(raw: readonly string[] | null | undefined): Screen[] {
-  const registry = NAV_SCREENS.map((s) => s.id)
-  if (!Array.isArray(raw) || raw.length === 0) return registry
+  const registry = NAV_SCREENS.map((s) => s.id);
+  if (!Array.isArray(raw) || raw.length === 0) return registry;
 
-  const known = new Set<string>(registry)
-  const out: Screen[] = []
+  const known = new Set<string>(registry);
+  const out: Screen[] = [];
   for (const id of raw) {
-    if (known.has(id) && !out.includes(id as Screen)) out.push(id as Screen)
+    if (known.has(id) && !out.includes(id as Screen)) out.push(id as Screen);
   }
 
   // Walk the registry FORWARD so a run of consecutive newcomers keeps its own
   // relative order as it is threaded back in.
   registry.forEach((id, i) => {
-    if (out.includes(id)) return
-    let at = 0
+    if (out.includes(id)) return;
+    let at = 0;
     for (let j = i - 1; j >= 0; j--) {
-      const placed = out.indexOf(registry[j])
+      const placed = out.indexOf(registry[j]);
       if (placed >= 0) {
-        at = placed + 1
-        break
+        at = placed + 1;
+        break;
       }
     }
-    out.splice(at, 0, id)
-  })
-  return out
+    out.splice(at, 0, id);
+  });
+  return out;
 }
 
 /** NAV_SCREENS in the user's order — the one list every nav surface renders. */
 export function orderedNavScreens(raw: readonly string[] | null | undefined): ScreenDef[] {
-  const byId = new Map(NAV_SCREENS.map((s) => [s.id, s]))
-  return sanitizeNavOrder(raw).map((id) => byId.get(id)!)
+  const byId = new Map(NAV_SCREENS.map((s) => [s.id, s]));
+  return sanitizeNavOrder(raw).map((id) => byId.get(id)!);
 }
 
 /** Hideable nav-tool ids — the pinned bottom-cluster buttons, minus the locked ones. */
-export type NavTool = 'commands' | 'mini-player'
+export type NavTool = "commands" | "mini-player";
 
 /** A hideable nav tool. Mirrors ScreenDef's id/label/icon (no shortcut key). */
 export interface NavToolDef {
-  id: NavTool
-  label: string
-  icon: typeof Disc3
+  id: NavTool;
+  label: string;
+  icon: typeof Disc3;
 }
 
 /**
@@ -181,9 +188,9 @@ export interface NavToolDef {
  * route (Commands: the palette shortcut; mini player: the palette + View menu).
  */
 export const NAV_TOOLS: NavToolDef[] = [
-  { id: 'commands', label: 'Commands', icon: Command },
-  { id: 'mini-player', label: 'Mini player', icon: PictureInPicture2 }
-]
+  { id: "commands", label: "Commands", icon: Command },
+  { id: "mini-player", label: "Mini player", icon: PictureInPicture2 },
+];
 
 /**
  * Sanitize a persisted nav-tool hide-set into real tool ids: drops anything
@@ -191,14 +198,14 @@ export const NAV_TOOLS: NavToolDef[] = [
  * separate because tool ids and screen ids are different id-spaces.
  */
 export function sanitizeNavHiddenTools(raw: readonly string[] | null | undefined): NavTool[] {
-  if (!Array.isArray(raw)) return []
-  const known = new Set<string>(NAV_TOOLS.map((t) => t.id))
-  const out: NavTool[] = []
+  if (!Array.isArray(raw)) return [];
+  const known = new Set<string>(NAV_TOOLS.map((t) => t.id));
+  const out: NavTool[] = [];
   for (const id of raw) {
-    if (known.has(id) && !out.includes(id as NavTool)) out.push(id as NavTool)
+    if (known.has(id) && !out.includes(id as NavTool)) out.push(id as NavTool);
   }
-  return out
+  return out;
 }
 
 /** Platform modifier label for shortcut chips ("⌘K" / "Ctrl+K"). */
-export const MOD = /mac/i.test(navigator.platform) ? '⌘' : 'Ctrl+'
+export const MOD = /mac/i.test(navigator.platform) ? "⌘" : "Ctrl+";

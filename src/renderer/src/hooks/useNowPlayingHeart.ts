@@ -1,15 +1,15 @@
-import { favoriteKey, type Favorite, type FavoriteMedia } from '@shared/model'
-import { tt } from '@/api'
-import { useStore } from '@/store'
-import { toggleFavorite } from '@/lib/favorites'
-import { deriveNowPlaying } from '@/lib/format'
+import { favoriteKey, type Favorite, type FavoriteMedia } from "@shared/model";
+import { tt } from "@/api";
+import { useStore } from "@/store";
+import { toggleFavorite } from "@/lib/favorites";
+import { deriveNowPlaying } from "@/lib/format";
 
 export interface NowPlayingHeart {
   /** Already a favorite — the filled state. */
-  active: boolean
+  active: boolean;
   /** There is something hearteable at all; otherwise don't offer the control. */
-  available: boolean
-  toggle(): void
+  available: boolean;
+  toggle(): void;
 }
 
 /**
@@ -26,29 +26,29 @@ export interface NowPlayingHeart {
  *   there to UN-heart it. That asymmetry is the whole subtlety here.
  */
 export function useNowPlayingHeart(): NowPlayingHeart {
-  const playState = useStore((s) => s.playState)
-  const nowPlaying = useStore((s) => s.nowPlaying)
-  const favorites = useStore((s) => s.favorites)
-  const lastStation = useStore((s) => s.lastStation)
+  const playState = useStore((s) => s.playState);
+  const nowPlaying = useStore((s) => s.nowPlaying);
+  const favorites = useStore((s) => s.favorites);
+  const lastStation = useStore((s) => s.lastStation);
 
-  const meta = deriveNowPlaying(playState, nowPlaying)
-  const md = playState?.metadata
+  const meta = deriveNowPlaying(playState, nowPlaying);
+  const md = playState?.metadata;
 
-  const stationName = meta.isRadio ? ((md?.station ?? md?.name)?.trim() ?? null) : null
+  const stationName = meta.isRadio ? ((md?.station ?? md?.name)?.trim() ?? null) : null;
   const stationFav = stationName
     ? (favorites.find(
-        (f) => f.kind === 'station' && f.name.trim().toLowerCase() === stationName.toLowerCase()
+        (f) => f.kind === "station" && f.name.trim().toLowerCase() === stationName.toLowerCase(),
       ) ?? null)
-    : null
+    : null;
   const lastMatches =
     stationName != null &&
     lastStation != null &&
-    lastStation.name.trim().toLowerCase() === stationName.toLowerCase()
+    lastStation.name.trim().toLowerCase() === stationName.toLowerCase();
 
-  const trackFav: Omit<FavoriteMedia, 'addedAt'> | null =
+  const trackFav: Omit<FavoriteMedia, "addedAt"> | null =
     !meta.isRadio && meta.title && meta.subtitle
       ? {
-          kind: 'track',
+          kind: "track",
           title: meta.title,
           artist: meta.subtitle,
           album: meta.album ?? null,
@@ -57,9 +57,9 @@ export function useNowPlayingHeart(): NowPlayingHeart {
           serverName: null,
           objectId: null,
           titlePath: null,
-          durationSecs: md?.duration ?? null
+          durationSecs: md?.duration ?? null,
         }
-      : null
+      : null;
 
   return {
     active: trackFav
@@ -67,17 +67,17 @@ export function useNowPlayingHeart(): NowPlayingHeart {
       : stationFav != null,
     available: trackFav != null || stationFav != null || lastMatches,
     toggle(): void {
-      if (trackFav) void toggleFavorite(trackFav)
-      else if (stationFav) void tt.favoriteRemove(favoriteKey(stationFav))
+      if (trackFav) void toggleFavorite(trackFav);
+      else if (stationFav) void tt.favoriteRemove(favoriteKey(stationFav));
       else if (lastStation && lastMatches)
         void tt.favoriteAdd({
-          kind: 'station',
+          kind: "station",
           addedAt: Date.now(),
           name: lastStation.name,
           url: lastStation.url,
           favicon: lastStation.favicon,
-          radioBrowserUuid: lastStation.radioBrowserUuid
-        })
-    }
-  }
+          radioBrowserUuid: lastStation.radioBrowserUuid,
+        });
+    },
+  };
 }

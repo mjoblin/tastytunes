@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState } from "react";
 
 /**
  * True unless `url` is known to be unloadable (stale streamer art URLs can
@@ -9,18 +9,18 @@ import { useEffect, useState } from 'react'
  * ArtImage fallbacks.
  */
 export function useArtLoadable(url: string | null): boolean {
-  const [failedUrl, setFailedUrl] = useState<string | null>(null)
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
   useEffect(() => {
-    if (!url) return
-    let cancelled = false
-    const probe = new Image()
+    if (!url) return;
+    let cancelled = false;
+    const probe = new Image();
     probe.onerror = () => {
-      if (!cancelled) setFailedUrl(url)
-    }
-    probe.src = url
+      if (!cancelled) setFailedUrl(url);
+    };
+    probe.src = url;
     return () => {
-      cancelled = true
-    }
-  }, [url])
-  return url == null || failedUrl !== url
+      cancelled = true;
+    };
+  }, [url]);
+  return url == null || failedUrl !== url;
 }

@@ -1,4 +1,4 @@
-@import 'tailwindcss';
+@import "tailwindcss";
 
 /* Motion is app-controlled: settings.motion resolves (system | on | off) into
    a .reduce-motion class on :root (useMotionPreference), so motion-safe:
@@ -70,12 +70,12 @@
 }
 
 @theme {
-  --font-display: 'Fraunces Variable', Georgia, serif;
-  --font-sans: 'Instrument Sans Variable', ui-sans-serif, system-ui, sans-serif;
-  --font-mono: 'Spline Sans Mono', ui-monospace, 'SF Mono', monospace;
+  --font-display: "Fraunces Variable", Georgia, serif;
+  --font-sans: "Instrument Sans Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Spline Sans Mono", ui-monospace, "SF Mono", monospace;
   /* the wordmark/brand face is pinned to Fraunces — a constant mark that never
      follows the user's display-font choice (font-wordmark utility). */
-  --font-wordmark: 'Fraunces Variable', Georgia, serif;
+  --font-wordmark: "Fraunces Variable", Georgia, serif;
 
   /* warm near-black "faceplate" palette (dark is the default theme) */
   --color-bg: #0e0d0b;
@@ -156,7 +156,6 @@ body {
 :focus-visible {
   outline: none;
 }
-
 
 img {
   -webkit-user-drag: none;

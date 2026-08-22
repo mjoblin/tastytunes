@@ -1,18 +1,18 @@
-import { useMemo } from 'react'
-import { presetVolumeKey } from '@shared/model'
-import { queueContentHash, type PresetItem } from '@shared/smoip'
-import { useStore } from '@/store'
-import { activeSourceId } from '@/lib/format'
+import { useMemo } from "react";
+import { presetVolumeKey } from "@shared/model";
+import { queueContentHash, type PresetItem } from "@shared/smoip";
+import { useStore } from "@/store";
+import { activeSourceId } from "@/lib/format";
 
 /** Same art object regardless of scheme/query differences. */
 function urlsMatch(a: string, b: string): boolean {
-  if (a === b) return true
+  if (a === b) return true;
   try {
-    const ua = new URL(a)
-    const ub = new URL(b)
-    return ua.host === ub.host && ua.pathname === ub.pathname
+    const ua = new URL(a);
+    const ub = new URL(b);
+    return ua.host === ub.host && ua.pathname === ub.pathname;
   } catch {
-    return false
+    return false;
   }
 }
 
@@ -52,126 +52,127 @@ export function useLitPresets(
   items: PresetItem[],
   /** A recall issued while the streamer slept owns the lamp until it lands —
    *  screen-local state, so the caller passes it (see PresetsScreen). */
-  wakeRecallId: number | null = null
+  wakeRecallId: number | null = null,
 ): Set<number> {
-  const zoneState = useStore((s) => s.zoneState)
-  const nowPlaying = useStore((s) => s.nowPlaying)
-  const playState = useStore((s) => s.playState)
-  const queue = useStore((s) => s.queue)
-  const systemInfo = useStore((s) => s.systemInfo)
-  const systemPower = useStore((s) => s.systemPower)
-  const waking = useStore((s) => s.waking)
-  const lastRecalledPresetId = useStore((s) => s.lastRecalledPresetId)
-  const queueSignatures = useStore((s) => s.settings.queueSignatures)
+  const zoneState = useStore((s) => s.zoneState);
+  const nowPlaying = useStore((s) => s.nowPlaying);
+  const playState = useStore((s) => s.playState);
+  const queue = useStore((s) => s.queue);
+  const systemInfo = useStore((s) => s.systemInfo);
+  const systemPower = useStore((s) => s.systemPower);
+  const waking = useStore((s) => s.waking);
+  const lastRecalledPresetId = useStore((s) => s.lastRecalledPresetId);
+  const queueSignatures = useStore((s) => s.settings.queueSignatures);
 
-  const activeSource = activeSourceId(zoneState, nowPlaying)
-  const radioId = playState?.metadata?.radio_id ?? null
-  const md = playState?.metadata ?? null
+  const activeSource = activeSourceId(zoneState, nowPlaying);
+  const radioId = playState?.metadata?.radio_id ?? null;
+  const md = playState?.metadata ?? null;
   // A LIT PRESET MEANS "THIS IS PLAYING" — so nothing lights while the
   // streamer is asleep or on its way back. A waking device re-announces its
   // RETAINED pre-standby play_state, so the old preset's content check passes
   // again mid-wake and follow glides at it, then glides again when the real
   // recall lands. Suppressing the lamp for the whole not-ON window removes the
   // transition rather than racing it.
-  const asleep = (systemPower != null && systemPower.power !== 'ON') || waking
+  const asleep = (systemPower != null && systemPower.power !== "ON") || waking;
 
   // The live queue's leading distinct-album art sequence — the same
   // fingerprint the firmware bakes into a MediaQueue preset's art_urls.
   const queueArts = useMemo(() => {
-    const seen: string[] = []
+    const seen: string[] = [];
     for (const it of queue?.items ?? []) {
-      const a = it.metadata?.art_url
-      if (a && !seen.some((s) => urlsMatch(s, a))) seen.push(a)
+      const a = it.metadata?.art_url;
+      if (a && !seen.some((s) => urlsMatch(s, a))) seen.push(a);
     }
-    return seen
-  }, [queue])
+    return seen;
+  }, [queue]);
 
   // Exact identity of the live queue (all tracks, in order).
   const liveQueueHash = useMemo(
     () => (queue?.items?.length ? queueContentHash(queue.items) : null),
-    [queue]
-  )
+    [queue],
+  );
 
   return useMemo(() => {
-    const lit = new Set<number>()
-    if (asleep) return lit
-    const mediaOk = activeSource == null || activeSource === 'MEDIA_PLAYER'
+    const lit = new Set<number>();
+    if (asleep) return lit;
+    const mediaOk = activeSource == null || activeSource === "MEDIA_PLAYER";
 
     const sigOf = (p: PresetItem): string | undefined =>
-      p.id != null ? queueSignatures[presetVolumeKey(systemInfo?.udn, p.id)] : undefined
+      p.id != null ? queueSignatures[presetVolumeKey(systemInfo?.udn, p.id)] : undefined;
     const sigMatch = (p: PresetItem): boolean =>
-      mediaOk && liveQueueHash != null && sigOf(p) === liveQueueHash
+      mediaOk && liveQueueHash != null && sigOf(p) === liveQueueHash;
     const fingerprint = (p: PresetItem): boolean => {
-      if (!mediaOk) return false
-      const want = p.art_urls ?? []
-      if (want.length === 0 || want.length > queueArts.length) return false
-      return want.every((u, i) => urlsMatch(u, queueArts[i]))
-    }
-    const mqContent = (p: PresetItem): boolean => (sigOf(p) != null ? sigMatch(p) : fingerprint(p))
+      if (!mediaOk) return false;
+      const want = p.art_urls ?? [];
+      if (want.length === 0 || want.length > queueArts.length) return false;
+      return want.every((u, i) => urlsMatch(u, queueArts[i]));
+    };
+    const mqContent = (p: PresetItem): boolean => (sigOf(p) != null ? sigMatch(p) : fingerprint(p));
     const albumMatch = (p: PresetItem): boolean => {
-      if (!mediaOk) return false
-      if (p.is_playing === true) return true // transiently correct after recall
-      if (!md) return false
-      if (p.art_url != null && md.art_url != null && urlsMatch(p.art_url, md.art_url)) return true
+      if (!mediaOk) return false;
+      if (p.is_playing === true) return true; // transiently correct after recall
+      if (!md) return false;
+      if (p.art_url != null && md.art_url != null && urlsMatch(p.art_url, md.art_url)) return true;
       if (p.name != null && md.album != null) {
-        if (p.name === md.album) return true
-        if (md.artist != null && p.name.includes(md.album) && p.name.includes(md.artist)) return true
+        if (p.name === md.album) return true;
+        if (md.artist != null && p.name.includes(md.album) && p.name.includes(md.artist))
+          return true;
       }
-      return false
-    }
+      return false;
+    };
     // Raw-URL radio presets (saved from the Radio screen) carry no airable id
     // — the station NAME is their identity.
     const isRadioPreset = (p: PresetItem): boolean =>
-      /radio/i.test(p.class ?? '') || p.type === 'Radio'
+      /radio/i.test(p.class ?? "") || p.type === "Radio";
     const stationMatch = (p: PresetItem): boolean => {
-      const station = md?.station?.trim().toLowerCase()
-      return station != null && p.name?.trim().toLowerCase() === station
-    }
+      const station = md?.station?.trim().toLowerCase();
+      return station != null && p.name?.trim().toLowerCase() === station;
+    };
     /** null = this preset type has no content to check (inputs etc.) */
     const contentCheck = (p: PresetItem): boolean | null => {
-      if (p.airable_radio_id != null && radioId != null) return p.airable_radio_id === radioId
-      if (p.type === 'MediaQueue') return mqContent(p)
-      if ((p.class ?? '').startsWith('stream.media')) return albumMatch(p)
-      if (isRadioPreset(p)) return stationMatch(p)
-      return null
-    }
+      if (p.airable_radio_id != null && radioId != null) return p.airable_radio_id === radioId;
+      if (p.type === "MediaQueue") return mqContent(p);
+      if ((p.class ?? "").startsWith("stream.media")) return albumMatch(p);
+      if (isRadioPreset(p)) return stationMatch(p);
+      return null;
+    };
 
-    const recalled = items.find((p) => p.id === lastRecalledPresetId)
+    const recalled = items.find((p) => p.id === lastRecalledPresetId);
     if (recalled?.id != null && contentCheck(recalled) === true) {
-      lit.add(recalled.id)
-      return lit
+      lit.add(recalled.id);
+      return lit;
     }
 
     // Signature matches are exact (all tracks, in order) — light the first one
     // even without a recall on record. Collage fingerprints stay a fallback:
     // only an unambiguous single match lights.
-    const sigFirst = items.find((p) => p.type === 'MediaQueue' && sigMatch(p))
-    const mqMatches = items.filter((p) => p.type === 'MediaQueue' && mqContent(p))
-    if (sigFirst?.id != null) lit.add(sigFirst.id)
-    else if (mqMatches.length === 1 && mqMatches[0].id != null) lit.add(mqMatches[0].id)
+    const sigFirst = items.find((p) => p.type === "MediaQueue" && sigMatch(p));
+    const mqMatches = items.filter((p) => p.type === "MediaQueue" && mqContent(p));
+    if (sigFirst?.id != null) lit.add(sigFirst.id);
+    else if (mqMatches.length === 1 && mqMatches[0].id != null) lit.add(mqMatches[0].id);
     for (const p of items) {
-      if (p.id == null || p.type === 'MediaQueue') continue
+      if (p.id == null || p.type === "MediaQueue") continue;
       if (p.airable_radio_id != null && radioId != null) {
-        if (p.airable_radio_id === radioId) lit.add(p.id)
-        continue
+        if (p.airable_radio_id === radioId) lit.add(p.id);
+        continue;
       }
-      if ((p.class ?? '').startsWith('stream.media')) {
-        if (mqMatches.length === 0 && sigFirst == null && albumMatch(p)) lit.add(p.id)
-        continue
+      if ((p.class ?? "").startsWith("stream.media")) {
+        if (mqMatches.length === 0 && sigFirst == null && albumMatch(p)) lit.add(p.id);
+        continue;
       }
       if (isRadioPreset(p) && stationMatch(p)) {
-        lit.add(p.id)
-        continue
+        lit.add(p.id);
+        continue;
       }
       // Radio/input presets with nothing to match: trust the flag except while
       // local media is the active source.
-      if (p.is_playing === true && activeSource !== 'MEDIA_PLAYER') lit.add(p.id)
+      if (p.is_playing === true && activeSource !== "MEDIA_PLAYER") lit.add(p.id);
     }
     // A recall made from standby owns the lamp until it lands.
     if (wakeRecallId != null) {
-      return lit.has(wakeRecallId) ? new Set([wakeRecallId]) : new Set<number>()
+      return lit.has(wakeRecallId) ? new Set([wakeRecallId]) : new Set<number>();
     }
-    return lit
+    return lit;
   }, [
     items,
     lastRecalledPresetId,
@@ -183,6 +184,6 @@ export function useLitPresets(
     md,
     activeSource,
     asleep,
-    wakeRecallId
-  ])
+    wakeRecallId,
+  ]);
 }

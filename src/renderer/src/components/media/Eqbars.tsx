@@ -1,5 +1,5 @@
-import { cx } from '@/lib/format'
-import { useStore } from '@/store'
+import { cx } from "@/lib/format";
+import { useStore } from "@/store";
 
 /**
  * The gold playing bars — one copy of the "this is what's sounding" idiom
@@ -15,17 +15,17 @@ import { useStore } from '@/store'
  * flattened, quietly set apart.
  */
 export function Eqbars({ dim = false }: { dim?: boolean }): React.JSX.Element {
-  const audible = useStore((s) => s.playState?.state === 'play')
+  const audible = useStore((s) => s.playState?.state === "play");
   return (
     <span
       className={cx(
-        'eqbars shrink-0',
-        dim ? 'text-faint parked' : cx('text-gold', !audible && 'paused')
+        "eqbars shrink-0",
+        dim ? "text-faint parked" : cx("text-gold", !audible && "paused"),
       )}
     >
       <span style={{ height: 6 }} />
       <span style={{ height: 10 }} />
       <span style={{ height: 5 }} />
     </span>
-  )
+  );
 }

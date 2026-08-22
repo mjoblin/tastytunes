@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef } from "react";
 
 /**
  * Consume a ONE-SHOT ASK — a value one screen plants in the store for another
@@ -35,27 +35,27 @@ export function useOneShotAsk<T>(
   run: (ask: T) => void,
   opts?: {
     /** Identity of this ask; defaults to the ask value (fine for primitives). */
-    claim?: string | number
+    claim?: string | number;
     /** Called once the ask is claimed, before `run`. */
-    clear?: () => void
+    clear?: () => void;
     /** False parks the ask until the screen can act on it. Default true. */
-    ready?: boolean
-  }
+    ready?: boolean;
+  },
 ): void {
-  const { claim, clear, ready = true } = opts ?? {}
-  const runRef = useRef(run)
-  runRef.current = run
-  const clearRef = useRef(clear)
-  clearRef.current = clear
-  const claimed = useRef<string | number | null>(null)
+  const { claim, clear, ready = true } = opts ?? {};
+  const runRef = useRef(run);
+  runRef.current = run;
+  const clearRef = useRef(clear);
+  clearRef.current = clear;
+  const claimed = useRef<string | number | null>(null);
 
-  const token = claim ?? (ask as unknown as string | number)
+  const token = claim ?? (ask as unknown as string | number);
   useEffect(() => {
-    if (ask == null) return
-    if (!ready) return
-    if (claimed.current === token) return
-    claimed.current = token
-    clearRef.current?.()
-    runRef.current(ask)
-  }, [ask, token, ready])
+    if (ask == null) return;
+    if (!ready) return;
+    if (claimed.current === token) return;
+    claimed.current = token;
+    clearRef.current?.();
+    runRef.current(ask);
+  }, [ask, token, ready]);
 }

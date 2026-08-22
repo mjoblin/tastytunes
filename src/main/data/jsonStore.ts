@@ -1,5 +1,5 @@
-import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 
 // The one JSON-persistence layer for the local data files (favorites,
 // playlists, recents, settings, the media index). Deliberately electron-free
@@ -19,18 +19,18 @@ import { dirname } from 'node:path'
  * directory for a marginal gain these files don't warrant.)
  */
 export function atomicWriteFileSync(path: string, data: string): void {
-  mkdirSync(dirname(path), { recursive: true })
-  const tmp = `${path}.${process.pid}.tmp`
+  mkdirSync(dirname(path), { recursive: true });
+  const tmp = `${path}.${process.pid}.tmp`;
   try {
-    writeFileSync(tmp, data)
-    renameSync(tmp, path)
+    writeFileSync(tmp, data);
+    renameSync(tmp, path);
   } catch (err) {
     try {
-      unlinkSync(tmp)
+      unlinkSync(tmp);
     } catch {
       /* never existed, or the rename already consumed it */
     }
-    throw err
+    throw err;
   }
 }
 
@@ -45,32 +45,32 @@ export function atomicWriteFileSync(path: string, data: string): void {
  */
 export function jsonFileStore<T>(opts: {
   /** Lazy: app.getPath('userData') isn't available at import time. */
-  pathOf(): string
+  pathOf(): string;
   /** For the persist-failure log line. */
-  scope: string
-  load(parsed: unknown): T
+  scope: string;
+  load(parsed: unknown): T;
 }): { get(): T; set(next: T): T } {
-  let cached: T | null = null
+  let cached: T | null = null;
   return {
     get() {
-      if (cached !== null) return cached
-      let parsed: unknown
+      if (cached !== null) return cached;
+      let parsed: unknown;
       try {
-        parsed = JSON.parse(readFileSync(opts.pathOf(), 'utf-8'))
+        parsed = JSON.parse(readFileSync(opts.pathOf(), "utf-8"));
       } catch {
-        parsed = undefined
+        parsed = undefined;
       }
-      cached = opts.load(parsed)
-      return cached
+      cached = opts.load(parsed);
+      return cached;
     },
     set(next: T) {
-      cached = next
+      cached = next;
       try {
-        atomicWriteFileSync(opts.pathOf(), JSON.stringify(next))
+        atomicWriteFileSync(opts.pathOf(), JSON.stringify(next));
       } catch (err) {
-        console.error(`failed to persist ${opts.scope}`, err)
+        console.error(`failed to persist ${opts.scope}`, err);
       }
-      return next
-    }
-  }
+      return next;
+    },
+  };
 }

@@ -1,39 +1,49 @@
-import { useEffect, useRef, useState } from 'react'
-import { Captions, Disc3, Heart, ListOrdered, Maximize2, MicVocal, RadioTower, UserRound, Info } from 'lucide-react'
-import { useStore } from '@/store'
-import { cx, deriveNowPlaying } from '@/lib/format'
-import { useSettledSnapshot } from '@/hooks/useSettledSnapshot'
-import { useNowPlayingHeart } from '@/hooks/useNowPlayingHeart'
-import { useDecodedArt } from '@/hooks/useDecodedArt'
-import { AddToPlaylistPanel } from '@/components/overlays/AddToPlaylistPanel'
-import { SignalLamp } from '@/components/device/SignalLamp'
-import { ArtImage } from '@/components/media/ArtImage'
-import { useFadePresence } from '@/hooks/useFadePresence'
-import { LyricsPanel } from '@/components/overlays/LyricsPanel'
-import { LyricLine } from '@/components/playback/LyricLine'
-import { EmptyState } from '@/components/chrome/EmptyState'
-import { ArtistPanel } from '@/components/overlays/ArtistPanel'
-import { openInfoForNowPlaying } from '@/lib/mediaInfo'
+import { useEffect, useRef, useState } from "react";
+import {
+  Captions,
+  Disc3,
+  Heart,
+  ListOrdered,
+  Maximize2,
+  MicVocal,
+  RadioTower,
+  UserRound,
+  Info,
+} from "lucide-react";
+import { useStore } from "@/store";
+import { cx, deriveNowPlaying } from "@/lib/format";
+import { useSettledSnapshot } from "@/hooks/useSettledSnapshot";
+import { useNowPlayingHeart } from "@/hooks/useNowPlayingHeart";
+import { useDecodedArt } from "@/hooks/useDecodedArt";
+import { AddToPlaylistPanel } from "@/components/overlays/AddToPlaylistPanel";
+import { SignalLamp } from "@/components/device/SignalLamp";
+import { ArtImage } from "@/components/media/ArtImage";
+import { useFadePresence } from "@/hooks/useFadePresence";
+import { LyricsPanel } from "@/components/overlays/LyricsPanel";
+import { LyricLine } from "@/components/playback/LyricLine";
+import { EmptyState } from "@/components/chrome/EmptyState";
+import { ArtistPanel } from "@/components/overlays/ArtistPanel";
+import { openInfoForNowPlaying } from "@/lib/mediaInfo";
 
-const ALIGN_H = { left: 'justify-start', center: 'justify-center', right: 'justify-end' } as const
-const ALIGN_V = { top: 'items-start', center: 'items-center', bottom: 'items-end' } as const
+const ALIGN_H = { left: "justify-start", center: "justify-center", right: "justify-end" } as const;
+const ALIGN_V = { top: "items-start", center: "items-center", bottom: "items-end" } as const;
 
 export function NowPlayingScreen(): React.JSX.Element {
-  const playState = useStore((s) => s.playState)
-  const saveSettings = useStore((s) => s.saveSettings)
-  const nowPlaying = useStore((s) => s.nowPlaying)
-  const setDisplayMode = useStore((s) => s.setDisplayMode)
-  const lyricsOpen = useStore((s) => s.lyricsOpen)
-  const setLyricsOpen = useStore((s) => s.setLyricsOpen)
-  const artistOpen = useStore((s) => s.artistOpen)
-  const setArtistOpen = useStore((s) => s.setArtistOpen)
+  const playState = useStore((s) => s.playState);
+  const saveSettings = useStore((s) => s.saveSettings);
+  const nowPlaying = useStore((s) => s.nowPlaying);
+  const setDisplayMode = useStore((s) => s.setDisplayMode);
+  const lyricsOpen = useStore((s) => s.lyricsOpen);
+  const setLyricsOpen = useStore((s) => s.setLyricsOpen);
+  const artistOpen = useStore((s) => s.artistOpen);
+  const setArtistOpen = useStore((s) => s.setArtistOpen);
   const {
     nowPlayingAlignH,
     nowPlayingAlignV,
     lyrics: lyricsEnabled,
-    lyricsLine
-  } = useStore((s) => s.settings)
-  const meta = deriveNowPlaying(playState, nowPlaying)
+    lyricsLine,
+  } = useStore((s) => s.settings);
+  const meta = deriveNowPlaying(playState, nowPlaying);
 
   // Title/artist/album/badges render from a SETTLED snapshot and fade as one
   // group on track change (same idea as display mode): fade out, wait for the
@@ -47,41 +57,45 @@ export function NowPlayingScreen(): React.JSX.Element {
   // ticking lasted. Queue position is deliberately NOT snapshotted: it moves
   // for reasons that have nothing to do with the track (adding, removing or
   // reordering the queue), so it renders live and merely fades with the group.
-  const liveTrackSig = `${meta.title ?? ''}␟${meta.subtitle ?? ''}␟${meta.album ?? ''}`
+  const liveTrackSig = `${meta.title ?? ""}␟${meta.subtitle ?? ""}␟${meta.album ?? ""}`;
   const { shown: shownTrack, visible: trackVisible } = useSettledSnapshot(liveTrackSig, () => ({
     title: meta.title,
     subtitle: meta.subtitle,
     album: meta.album,
-    badges: meta.badges
-  }))
+    badges: meta.badges,
+  }));
   // Right placement mirrors the pair: art anchors the right edge, text grows leftward.
-  const mirrored = nowPlayingAlignH === 'right'
+  const mirrored = nowPlayingAlignH === "right";
 
   // Lyrics need real track metadata — hidden for radio and title-only sources.
-  const lyricsAvailable = lyricsEnabled && !meta.isRadio && !!meta.title && !!meta.subtitle
-  const { artistInfo: artistEnabled } = useStore((s) => s.settings)
-  const artistAvailable = artistEnabled && !meta.isRadio && !!meta.subtitle
+  const lyricsAvailable = lyricsEnabled && !meta.isRadio && !!meta.title && !!meta.subtitle;
+  const { artistInfo: artistEnabled } = useStore((s) => s.settings);
+  const artistAvailable = artistEnabled && !meta.isRadio && !!meta.subtitle;
   // Quick fade on open/close — see useFadePresence for why 140ms.
-  const lyricsFade = useFadePresence(lyricsAvailable && lyricsOpen)
-  const artistFade = useFadePresence(artistAvailable && artistOpen)
+  const lyricsFade = useFadePresence(lyricsAvailable && lyricsOpen);
+  const artistFade = useFadePresence(artistAvailable && artistOpen);
 
   // The heart: content-only favoriting of whatever is playing. Shared with the
   // tray panel — the track/station/last-station asymmetry lives in the hook.
-  const md = playState?.metadata
-  const { active: heartActive, available: heartAvailable, toggle: toggleHeart } = useNowPlayingHeart()
+  const md = playState?.metadata;
+  const {
+    active: heartActive,
+    available: heartAvailable,
+    toggle: toggleHeart,
+  } = useNowPlayingHeart();
 
   const toggleLyricLine = async (): Promise<void> => {
-    await saveSettings({ lyricsLine: !lyricsLine })
-  }
+    await saveSettings({ lyricsLine: !lyricsLine });
+  };
 
-  const sourceName = nowPlaying?.source?.name ?? null
-  const state = playState?.state
+  const sourceName = nowPlaying?.source?.name ?? null;
+  const state = playState?.state;
   // The tile renders the last DECODED cover (see useDecodedArt) — a hard swap
   // between two real images, never a swap to an empty box mid-download.
-  const { art: tileArt } = useDecodedArt(meta.artUrl)
+  const { art: tileArt } = useDecodedArt(meta.artUrl);
   // Live, not snapshotted — the queue moves independently of the track.
-  const queueIndex = playState?.queue_index
-  const queueLength = playState?.queue_length
+  const queueIndex = playState?.queue_index;
+  const queueLength = playState?.queue_length;
 
   // Only surface "buffering" once it has persisted a beat — brief buffers on a
   // seek or track change shouldn't flash a label. Other states show at once.
@@ -92,29 +106,30 @@ export function NowPlayingScreen(): React.JSX.Element {
   // INSTANT on purpose — the two do different jobs. The LED says "something is
   // happening", which is ambient and belongs immediately; the label NAMES a
   // state, which is a statement and earns a threshold.
-  const [bufferingSettled, setBufferingSettled] = useState(false)
+  const [bufferingSettled, setBufferingSettled] = useState(false);
   useEffect(() => {
-    if (state !== 'buffering') {
-      setBufferingSettled(false)
-      return
+    if (state !== "buffering") {
+      setBufferingSettled(false);
+      return;
     }
-    const t = setTimeout(() => setBufferingSettled(true), 800)
-    return () => clearTimeout(t)
-  }, [state])
+    const t = setTimeout(() => setBufferingSettled(true), 800);
+    return () => clearTimeout(t);
+  }, [state]);
 
   // Adding what's playing is the other half of "add from wherever you see
   // music". Tracks only — a radio stream can't hold a position in an ordered
   // list, so the button simply isn't offered for one.
-  const playlistBtn = useRef<HTMLButtonElement | null>(null)
-  const [playlistAt, setPlaylistAt] = useState<{ x: number; y: number } | null>(null)
-  const playlistAvailable = !meta.isRadio && !!meta.title
+  const playlistBtn = useRef<HTMLButtonElement | null>(null);
+  const [playlistAt, setPlaylistAt] = useState<{ x: number; y: number } | null>(null);
+  const playlistAvailable = !meta.isRadio && !!meta.title;
 
-  const empty = !meta.title && !meta.subtitle
+  const empty = !meta.title && !meta.subtitle;
   /** Every header button hides on this pair; naming it once also stopped the two
    *  lyrics buttons from spelling the same condition in two different orders. */
-  const drawersClosed = !lyricsOpen && !artistOpen
+  const drawersClosed = !lyricsOpen && !artistOpen;
   // Info has something to say whenever anything is loaded — a title or a station
-  const infoAvailable = (meta.title != null && meta.title !== '') || playState?.metadata?.station != null
+  const infoAvailable =
+    (meta.title != null && meta.title !== "") || playState?.metadata?.station != null;
 
   // Titleless top band: preserves the header's vertical rhythm (and houses the
   // display-mode button) so the art/text sit where they did with a title.
@@ -144,8 +159,8 @@ export function NowPlayingScreen(): React.JSX.Element {
             <button
               ref={playlistBtn}
               onClick={() => {
-                const r = playlistBtn.current?.getBoundingClientRect()
-                setPlaylistAt({ x: r ? r.left : 0, y: r ? r.bottom + 6 : 0 })
+                const r = playlistBtn.current?.getBoundingClientRect();
+                setPlaylistAt({ x: r ? r.left : 0, y: r ? r.bottom + 6 : 0 });
               }}
               data-tip="Add to playlist"
               aria-label="Add to playlist"
@@ -157,15 +172,15 @@ export function NowPlayingScreen(): React.JSX.Element {
           {heartAvailable && (
             <button
               onClick={toggleHeart}
-              data-tip={heartActive ? 'Remove from favorites' : 'Add to favorites'}
-              aria-label={heartActive ? 'Remove from favorites' : 'Add to favorites'}
-              data-np-heart={heartActive ? 'on' : 'off'}
+              data-tip={heartActive ? "Remove from favorites" : "Add to favorites"}
+              aria-label={heartActive ? "Remove from favorites" : "Add to favorites"}
+              data-np-heart={heartActive ? "on" : "off"}
               className={cx(
-                'no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-full hover:bg-veil2 motion-safe:active:scale-90 transition-all',
-                heartActive ? 'text-gold hover:text-ink' : 'text-faint hover:text-ink'
+                "no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-full hover:bg-veil2 motion-safe:active:scale-90 transition-all",
+                heartActive ? "text-gold hover:text-ink" : "text-faint hover:text-ink",
               )}
             >
-              <Heart size={16} fill={heartActive ? 'currentColor' : 'none'} />
+              <Heart size={16} fill={heartActive ? "currentColor" : "none"} />
             </button>
           )}
         </div>
@@ -175,11 +190,11 @@ export function NowPlayingScreen(): React.JSX.Element {
           {lyricsAvailable && (
             <button
               onClick={() => void toggleLyricLine()}
-              data-tip={lyricsLine ? 'Hide current lyric line' : 'Show current lyric line'}
+              data-tip={lyricsLine ? "Hide current lyric line" : "Show current lyric line"}
               aria-label="Current lyric line"
               className={cx(
-                'no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-full hover:bg-veil2 motion-safe:active:scale-90 transition-all',
-                lyricsLine ? 'text-gold hover:text-ink' : 'text-faint hover:text-ink'
+                "no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-full hover:bg-veil2 motion-safe:active:scale-90 transition-all",
+                lyricsLine ? "text-gold hover:text-ink" : "text-faint hover:text-ink",
               )}
             >
               <Captions size={16} />
@@ -209,14 +224,18 @@ export function NowPlayingScreen(): React.JSX.Element {
               (radio, AirPlay, local media alike); local media adds the library's
               file facts. Dimmed only when nothing is loaded. */}
           <button
-            onClick={() => (infoAvailable ? void openInfoForNowPlaying(playState, nowPlaying) : undefined)}
-            data-tip={infoAvailable ? 'Now playing info' : 'Nothing playing'}
+            onClick={() =>
+              infoAvailable ? void openInfoForNowPlaying(playState, nowPlaying) : undefined
+            }
+            data-tip={infoAvailable ? "Now playing info" : "Nothing playing"}
             aria-label="Now playing info"
             aria-disabled={!infoAvailable}
-            data-np-info={infoAvailable ? 'on' : 'off'}
+            data-np-info={infoAvailable ? "on" : "off"}
             className={cx(
-              'no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-full transition-all',
-              infoAvailable ? 'text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90' : 'text-faint/40 cursor-default'
+              "no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-full transition-all",
+              infoAvailable
+                ? "text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90"
+                : "text-faint/40 cursor-default",
             )}
           >
             <Info size={16} />
@@ -232,7 +251,7 @@ export function NowPlayingScreen(): React.JSX.Element {
         </div>
       )}
     </header>
-  )
+  );
 
   if (empty) {
     return (
@@ -244,7 +263,7 @@ export function NowPlayingScreen(): React.JSX.Element {
           caption="Start playback from a queue, recall a preset, or stream to the device from another app."
         />
       </div>
-    )
+    );
   }
 
   return (
@@ -254,12 +273,12 @@ export function NowPlayingScreen(): React.JSX.Element {
 
       {playlistAt && (
         <AddToPlaylistPanel
-          label={meta.title ?? 'this track'}
+          label={meta.title ?? "this track"}
           at={playlistAt}
           onClose={() => setPlaylistAt(null)}
           resolve={async () => [
             {
-              title: meta.title ?? '',
+              title: meta.title ?? "",
               artist: meta.subtitle ?? null,
               album: meta.album ?? null,
               artUrl: meta.artUrl ?? null,
@@ -268,8 +287,8 @@ export function NowPlayingScreen(): React.JSX.Element {
               serverUdn: null,
               serverName: null,
               objectId: null,
-              durationSecs: md?.duration ?? null
-            }
+              durationSecs: md?.duration ?? null,
+            },
           ]}
         />
       )}
@@ -282,111 +301,111 @@ export function NowPlayingScreen(): React.JSX.Element {
           edge while text grows leftward. */}
       <div
         className={cx(
-          'relative flex-1 min-h-0 flex px-8 pb-10',
+          "relative flex-1 min-h-0 flex px-8 pb-10",
           ALIGN_H[nowPlayingAlignH],
-          ALIGN_V[nowPlayingAlignV]
+          ALIGN_V[nowPlayingAlignV],
         )}
       >
-        <div className={cx('flex gap-8 items-start min-w-0', mirrored && 'flex-row-reverse')}>
-        <div className="shrink-0">
-          {/* three width tiers — compact windows get genuinely small art
+        <div className={cx("flex gap-8 items-start min-w-0", mirrored && "flex-row-reverse")}>
+          <div className="shrink-0">
+            {/* three width tiers — compact windows get genuinely small art
               (260) instead of the old two-step 340/400 (user pass) */}
-          {/* Art swaps straight over on a track change — no crossfade here (user
+            {/* Art swaps straight over on a track change — no crossfade here (user
               call 2026-07-24: the text settling and the art dissolving at the
               same time read as mushy). Display mode keeps its crossfade. The
               swap is off the DECODED url, so the tile goes cover-to-cover
               rather than emptying while a slow remote fetch finishes. */}
-          <ArtImage
-            src={tileArt}
-            className="w-[260px] h-[260px] lg:w-[340px] lg:h-[340px] xl:w-[400px] xl:h-[400px] object-cover rounded-2xl art-glow"
-            fallback={
-              <div className="w-[260px] h-[260px] lg:w-[340px] lg:h-[340px] xl:w-[400px] xl:h-[400px] rounded-2xl bg-raised ring-1 ring-edge flex items-center justify-center">
-                {meta.isRadio ? (
-                  <RadioTower size={72} strokeWidth={1} className="text-faint" />
-                ) : (
-                  <Disc3 size={72} strokeWidth={1} className="text-faint" />
+            <ArtImage
+              src={tileArt}
+              className="w-[260px] h-[260px] lg:w-[340px] lg:h-[340px] xl:w-[400px] xl:h-[400px] object-cover rounded-2xl art-glow"
+              fallback={
+                <div className="w-[260px] h-[260px] lg:w-[340px] lg:h-[340px] xl:w-[400px] xl:h-[400px] rounded-2xl bg-raised ring-1 ring-edge flex items-center justify-center">
+                  {meta.isRadio ? (
+                    <RadioTower size={72} strokeWidth={1} className="text-faint" />
+                  ) : (
+                    <Disc3 size={72} strokeWidth={1} className="text-faint" />
+                  )}
+                </div>
+              }
+            />
+          </div>
+
+          <div className={cx("min-w-0 max-w-xl space-y-5", mirrored && "text-right")}>
+            <div className={cx("flex items-center gap-3", mirrored && "justify-end")}>
+              {sourceName && <span className="badge">{sourceName}</span>}
+              {state && state !== "play" && (state !== "buffering" || bufferingSettled) && (
+                <span className={cx("microlabel", state === "pause" ? "text-amber" : "")}>
+                  {state === "pause" ? "paused" : state}
+                </span>
+              )}
+            </div>
+
+            <div
+              className={cx(
+                "space-y-1 transition-opacity duration-300",
+                trackVisible ? "opacity-100" : "opacity-0",
+              )}
+            >
+              <h1 className="font-display font-bold text-[clamp(28px,4vw,46px)] leading-[1.08] tracking-tight text-balance">
+                {shownTrack.title}
+              </h1>
+              {shownTrack.subtitle && (
+                <div className="font-display text-[23px] leading-tight tracking-tight text-ink/80 truncate">
+                  {shownTrack.subtitle}
+                </div>
+              )}
+              {shownTrack.album && (
+                <div className="text-[14px] text-dim truncate">{shownTrack.album}</div>
+              )}
+            </div>
+
+            {shownTrack.badges.length > 0 && (
+              <div
+                className={cx(
+                  "flex flex-wrap items-center gap-1.5 transition-opacity duration-300",
+                  trackVisible ? "opacity-100" : "opacity-0",
+                  mirrored && "justify-end",
                 )}
-              </div>
-            }
-          />
-        </div>
-
-        <div className={cx('min-w-0 max-w-xl space-y-5', mirrored && 'text-right')}>
-          <div className={cx('flex items-center gap-3', mirrored && 'justify-end')}>
-            {sourceName && <span className="badge">{sourceName}</span>}
-            {state &&
-              state !== 'play' &&
-              (state !== 'buffering' || bufferingSettled) && (
-                <span className={cx('microlabel', state === 'pause' ? 'text-amber' : '')}>
-                  {state === 'pause' ? 'paused' : state}
-                </span>
-              )}
-          </div>
-
-          <div
-            className={cx(
-              'space-y-1 transition-opacity duration-300',
-              trackVisible ? 'opacity-100' : 'opacity-0'
-            )}
-          >
-            <h1 className="font-display font-bold text-[clamp(28px,4vw,46px)] leading-[1.08] tracking-tight text-balance">
-              {shownTrack.title}
-            </h1>
-            {shownTrack.subtitle && (
-              <div className="font-display text-[23px] leading-tight tracking-tight text-ink/80 truncate">
-                {shownTrack.subtitle}
+              >
+                {shownTrack.badges.map((b) => (
+                  <span key={b} className="badge">
+                    {b}
+                  </span>
+                ))}
+                <SignalLamp />
               </div>
             )}
-            {shownTrack.album && <div className="text-[14px] text-dim truncate">{shownTrack.album}</div>}
-          </div>
 
-          {shownTrack.badges.length > 0 && (
-            <div
-              className={cx(
-                'flex flex-wrap items-center gap-1.5 transition-opacity duration-300',
-                trackVisible ? 'opacity-100' : 'opacity-0',
-                mirrored && 'justify-end'
-              )}
-            >
-              {shownTrack.badges.map((b) => (
-                <span key={b} className="badge">
-                  {b}
-                </span>
-              ))}
-              <SignalLamp />
-            </div>
-          )}
+            {meta.isRadio && nowPlaying?.display?.line3 && (
+              <div className="text-[13px] text-dim">{nowPlaying.display.line3}</div>
+            )}
 
-          {meta.isRadio && nowPlaying?.display?.line3 && (
-            <div className="text-[13px] text-dim">{nowPlaying.display.line3}</div>
-          )}
+            {queueIndex != null && queueLength != null && queueLength > 0 && (
+              <div
+                className={cx(
+                  "microlabel transition-opacity duration-300",
+                  trackVisible ? "opacity-100" : "opacity-0",
+                )}
+              >
+                track {queueIndex + 1} of {queueLength}
+              </div>
+            )}
 
-          {queueIndex != null && queueLength != null && queueLength > 0 && (
-            <div
-              className={cx(
-                'microlabel transition-opacity duration-300',
-                trackVisible ? 'opacity-100' : 'opacity-0'
-              )}
-            >
-              track {queueIndex + 1} of {queueLength}
-            </div>
-          )}
-
-          {/* inline lyric flavor — never alongside the full panel; fades with
+            {/* inline lyric flavor — never alongside the full panel; fades with
               the track group so it doesn't pop on a change */}
-          {lyricsAvailable && lyricsLine && !lyricsOpen && (
-            <div
-              className={cx(
-                'transition-opacity duration-300',
-                trackVisible ? 'opacity-100' : 'opacity-0'
-              )}
-            >
-              <LyricLine />
-            </div>
-          )}
-        </div>
+            {lyricsAvailable && lyricsLine && !lyricsOpen && (
+              <div
+                className={cx(
+                  "transition-opacity duration-300",
+                  trackVisible ? "opacity-100" : "opacity-0",
+                )}
+              >
+                <LyricLine />
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
-  )
+  );
 }

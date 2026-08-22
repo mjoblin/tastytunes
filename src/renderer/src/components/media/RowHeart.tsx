@@ -1,5 +1,5 @@
-import { Heart } from 'lucide-react'
-import { cx } from '@/lib/format'
+import { Heart } from "lucide-react";
+import { cx } from "@/lib/format";
 
 /**
  * The heart on a list ROW, shared by the library and the queue.
@@ -13,31 +13,31 @@ import { cx } from '@/lib/format'
 export function RowHeart({
   favorited,
   held,
-  onHeart
+  onHeart,
 }: {
-  favorited: boolean
-  held: boolean
-  onHeart(): void
+  favorited: boolean;
+  held: boolean;
+  onHeart(): void;
 }): React.JSX.Element {
   return (
     <button
-      aria-label={favorited ? 'Remove from favorites' : 'Add to favorites'}
-      data-row-heart={favorited ? 'on' : 'off'}
+      aria-label={favorited ? "Remove from favorites" : "Add to favorites"}
+      data-row-heart={favorited ? "on" : "off"}
       onClick={(e) => {
-        e.stopPropagation()
-        onHeart()
+        e.stopPropagation();
+        onHeart();
       }}
       className={cx(
-        'p-1.5 rounded-lg transition-all motion-safe:active:scale-90',
+        "p-1.5 rounded-lg transition-all motion-safe:active:scale-90",
         favorited
-          ? 'text-gold hover:text-ink'
+          ? "text-gold hover:text-ink"
           : cx(
-              'text-dim hover:text-ink hover:bg-veil2',
-              held ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-            )
+              "text-dim hover:text-ink hover:bg-veil2",
+              held ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+            ),
       )}
     >
-      <Heart size={13} fill={favorited ? 'currentColor' : 'none'} />
+      <Heart size={13} fill={favorited ? "currentColor" : "none"} />
     </button>
-  )
+  );
 }

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useSavedPerformer } from '@/hooks/useQueuePerformer'
+import { useEffect, useMemo, useState } from "react";
+import { useSavedPerformer } from "@/hooks/useQueuePerformer";
 import {
   DndContext,
   KeyboardSensor,
@@ -7,18 +7,18 @@ import {
   closestCenter,
   useSensor,
   useSensors,
-  type DragEndEvent
-} from '@dnd-kit/core'
+  type DragEndEvent,
+} from "@dnd-kit/core";
 import {
   SortableContext,
   arrayMove,
   sortableKeyboardCoordinates,
   useSortable,
-  verticalListSortingStrategy
-} from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
-import { ListOrdered, Loader2, MoreHorizontal, Pencil, Play, Trash2, X } from 'lucide-react'
-import { queueContentHash } from '@shared/smoip'
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { ListOrdered, Loader2, MoreHorizontal, Pencil, Play, Trash2, X } from "lucide-react";
+import { queueContentHash } from "@shared/smoip";
 import {
   favoriteKey,
   playlistContentHash,
@@ -27,35 +27,35 @@ import {
   type Favorite,
   type FavoriteMedia,
   type Playlist,
-  type PlaylistItem
-} from '@shared/model'
-import { tt } from '@/api'
-import { useStore } from '@/store'
-import { EmptyState } from '@/components/chrome/EmptyState'
-import { SortChip } from '@/components/controls/SortChip'
-import { FilterInput } from '@/components/controls/FilterInput'
-import { RowAction } from '@/components/media/RowAction'
-import { RowMenu } from '@/components/media/RowMenu'
-import { RowHeart } from '@/components/media/RowHeart'
-import { AddToPlaylistPanel } from '@/components/overlays/AddToPlaylistPanel'
-import { toggleFavorite } from '@/lib/favorites'
-import { activatePlaylist } from '@/lib/playlists'
-import { fromPlaylistItem } from '@/lib/mediaRef'
-import { saveRefToPreset } from '@/lib/mediaActions'
-import { trackMenuItems } from '@/lib/mediaMenus'
-import { OrderHandle } from '@/components/controls/OrderHandle'
-import { ArtImage } from '@/components/media/ArtImage'
-import { MediaArt } from '@/components/media/MediaArt'
-import { DurationCell } from '@/components/media/DurationCell'
-import { PresetPicker } from '@/components/library/LibraryMenus'
-import { useScrollMemory } from '@/hooks/useScrollMemory'
-import { lockVertical } from '@/lib/dnd'
-import { activeSourceId, cx, fmtDuration, fmtRelative, matchesFilter } from '@/lib/format'
-import { Eqbars } from '@/components/media/Eqbars'
-import { HeaderChip, PrimaryButton, ScreenTitle } from '@/components/chrome/Chrome'
-import { useConfirmPopover } from '@/components/chrome/Confirm'
-import { useOneShotAsk } from '@/hooks/useOneShotAsk'
-import { artUrlAt } from '@shared/artUrl'
+  type PlaylistItem,
+} from "@shared/model";
+import { tt } from "@/api";
+import { useStore } from "@/store";
+import { EmptyState } from "@/components/chrome/EmptyState";
+import { SortChip } from "@/components/controls/SortChip";
+import { FilterInput } from "@/components/controls/FilterInput";
+import { RowAction } from "@/components/media/RowAction";
+import { RowMenu } from "@/components/media/RowMenu";
+import { RowHeart } from "@/components/media/RowHeart";
+import { AddToPlaylistPanel } from "@/components/overlays/AddToPlaylistPanel";
+import { toggleFavorite } from "@/lib/favorites";
+import { activatePlaylist } from "@/lib/playlists";
+import { fromPlaylistItem } from "@/lib/mediaRef";
+import { saveRefToPreset } from "@/lib/mediaActions";
+import { trackMenuItems } from "@/lib/mediaMenus";
+import { OrderHandle } from "@/components/controls/OrderHandle";
+import { ArtImage } from "@/components/media/ArtImage";
+import { MediaArt } from "@/components/media/MediaArt";
+import { DurationCell } from "@/components/media/DurationCell";
+import { PresetPicker } from "@/components/library/LibraryMenus";
+import { useScrollMemory } from "@/hooks/useScrollMemory";
+import { lockVertical } from "@/lib/dnd";
+import { activeSourceId, cx, fmtDuration, fmtRelative, matchesFilter } from "@/lib/format";
+import { Eqbars } from "@/components/media/Eqbars";
+import { HeaderChip, PrimaryButton, ScreenTitle } from "@/components/chrome/Chrome";
+import { useConfirmPopover } from "@/components/chrome/Confirm";
+import { useOneShotAsk } from "@/hooks/useOneShotAsk";
+import { artUrlAt } from "@shared/artUrl";
 
 /**
  * Stored playlists: the collection on the left, the selected playlist's tracks
@@ -66,10 +66,10 @@ import { artUrlAt } from '@shared/artUrl'
  */
 export function PlaylistsScreen(): React.JSX.Element {
   // the performer the library knows for an entry saved from a compilation queue (display only)
-  const performerOf = useSavedPerformer()
-  const playlists = useStore((s) => s.playlists)
-  const activation = useStore((s) => s.playlistActivation)
-  const queue = useStore((s) => s.queue)
+  const performerOf = useSavedPerformer();
+  const playlists = useStore((s) => s.playlists);
+  const activation = useStore((s) => s.playlistActivation);
+  const queue = useStore((s) => s.queue);
   /**
    * Which playlist IS the queue right now — matched on CONTENT, not on a stored
    * "active playlist" id. Content matching recognises a queue loaded before the
@@ -79,115 +79,115 @@ export function PlaylistsScreen(): React.JSX.Element {
    * dropped — after you queue an album it would still claim the old playlist
    * was loaded-but-edited, which is worse than saying nothing.)
    */
-  const liveHash = useMemo(() => queueContentHash(queue?.items ?? []), [queue])
-  const filter = useStore((s) => s.screenFilters.playlists)
-  const setScreenFilter = useStore((s) => s.setScreenFilter)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [renaming, setRenaming] = useState<string | null>(null)
-  const confirmDelete = useConfirmPopover()
+  const liveHash = useMemo(() => queueContentHash(queue?.items ?? []), [queue]);
+  const filter = useStore((s) => s.screenFilters.playlists);
+  const setScreenFilter = useStore((s) => s.setScreenFilter);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const confirmDelete = useConfirmPopover();
   const [trackMenu, setTrackMenu] = useState<{
-    item: PlaylistItem
-    index: number
-    x: number
-    y: number
-  } | null>(null)
-  const [copyTo, setCopyTo] = useState<{ item: PlaylistItem; x: number; y: number } | null>(null)
+    item: PlaylistItem;
+    index: number;
+    x: number;
+    y: number;
+  } | null>(null);
+  const [copyTo, setCopyTo] = useState<{ item: PlaylistItem; x: number; y: number } | null>(null);
   const [presetFor, setPresetFor] = useState<{ item: PlaylistItem; x: number; y: number } | null>(
-    null
-  )
+    null,
+  );
   // A sort picker rather than manual ordering (user call 2026-07-24): manual
   // order fights the recency sort that already does useful work and needs an
   // `order` field maintained forever, for control a picker gives at a fraction
   // of the cost. 'updated' is the neutral default the store already writes in.
-  const showToast = useStore((s) => s.showToast)
-  const saveSettings = useStore((s) => s.saveSettings)
+  const showToast = useStore((s) => s.showToast);
+  const saveSettings = useStore((s) => s.saveSettings);
   // View default, persisted (2026-08-06). Sanitized on use: a hand-edited
   // settings file must not leave the list unsorted-and-unlabeled.
-  const storedSort = useStore((s) => s.settings.playlistsSort)
-  const sort: PlaylistSort = PLAYLIST_SORT_IDS.includes(storedSort) ? storedSort : 'updated'
-  const reversed = useStore((s) => s.settings.playlistsSortReversed)
-  const scrollMemory = useScrollMemory('playlists')
+  const storedSort = useStore((s) => s.settings.playlistsSort);
+  const sort: PlaylistSort = PLAYLIST_SORT_IDS.includes(storedSort) ? storedSort : "updated";
+  const reversed = useStore((s) => s.settings.playlistsSortReversed);
+  const scrollMemory = useScrollMemory("playlists");
 
   const queuedId = useMemo(() => {
-    if ((queue?.items?.length ?? 0) === 0) return null
-    return playlists.find((p) => playlistContentHash(p.items) === liveHash)?.id ?? null
-  }, [playlists, liveHash, queue])
+    if ((queue?.items?.length ?? 0) === 0) return null;
+    return playlists.find((p) => playlistContentHash(p.items) === liveHash)?.id ?? null;
+  }, [playlists, liveHash, queue]);
   // Playing marker, queue-screen rules. queuedId means the queue and the
   // playlist are content-identical INCLUDING ORDER (the hash is
   // order-sensitive), so the playing queue POSITION is the playlist index —
   // no title matching, and twin-titled tracks can't cross-light.
-  const playState = useStore((s) => s.playState)
-  const zoneState = useStore((s) => s.zoneState)
-  const nowPlaying = useStore((s) => s.nowPlaying)
-  const queueSourceActive = activeSourceId(zoneState, nowPlaying) === 'MEDIA_PLAYER'
+  const playState = useStore((s) => s.playState);
+  const zoneState = useStore((s) => s.zoneState);
+  const nowPlaying = useStore((s) => s.nowPlaying);
+  const queueSourceActive = activeSourceId(zoneState, nowPlaying) === "MEDIA_PLAYER";
   const playingIndex = useMemo(() => {
-    const playId = queue?.play_id ?? playState?.queue_id ?? null
-    if (playId == null) return null
-    return queue?.items?.find((it) => it.id === playId)?.position ?? null
-  }, [queue, playState])
+    const playId = queue?.play_id ?? playState?.queue_id ?? null;
+    if (playId == null) return null;
+    return queue?.items?.find((it) => it.id === playId)?.position ?? null;
+  }, [queue, playState]);
 
   const shown = useMemo(() => {
-    const list = playlists.filter((p) => matchesFilter(filter, [p.name]))
+    const list = playlists.filter((p) => matchesFilter(filter, [p.name]));
     const by: Record<PlaylistSort, (a: Playlist, b: Playlist) => number> = {
       updated: (a, b) => b.updatedAt - a.updatedAt,
       created: (a, b) => b.createdAt - a.createdAt,
       // never-played sorts last rather than pretending to be oldest
       played: (a, b) => (b.lastPlayedAt ?? 0) - (a.lastPlayedAt ?? 0),
       name: (a, b) => a.name.localeCompare(b.name),
-      length: (a, b) => totalSecs(b) - totalSecs(a)
-    }
-    const sorted = [...list].sort(by[sort])
-    return reversed ? sorted.reverse() : sorted
-  }, [playlists, filter, sort, reversed])
-  const selected = playlists.find((p) => p.id === selectedId) ?? shown[0] ?? null
+      length: (a, b) => totalSecs(b) - totalSecs(a),
+    };
+    const sorted = [...list].sort(by[sort]);
+    return reversed ? sorted.reverse() : sorted;
+  }, [playlists, filter, sort, reversed]);
+  const selected = playlists.find((p) => p.id === selectedId) ?? shown[0] ?? null;
   // The record keeps every title the last activation couldn't find, but the
   // note's job is pointing at a gap in THIS list — a missing track the user
   // has since edited out is a gap that no longer exists, so it drops from the
   // display. The stored record stays untouched; the next play rewrites it.
   const stillMissing = (selected?.lastMissing ?? []).filter((title) =>
     (selected?.items ?? []).some(
-      (it) => it.title.trim().toLowerCase() === title.trim().toLowerCase()
-    )
-  )
+      (it) => it.title.trim().toLowerCase() === title.trim().toLowerCase(),
+    ),
+  );
   /** Is the live activation THIS playlist's? Another one running should grey
    *  this button, not turn it into that run's progress bar. */
-  const mine = !!activation && !activation.finished && activation.playlistId === selected?.id
+  const mine = !!activation && !activation.finished && activation.playlistId === selected?.id;
   // Computed once per items change: rowIds walks the whole list, and calling
   // it per row (as key= and id= once did) is O(n²) at the 500-item ceiling.
-  const ids = useMemo(() => rowIds(selected?.items ?? []), [selected?.items])
+  const ids = useMemo(() => rowIds(selected?.items ?? []), [selected?.items]);
 
   // A deleted (or filtered-away) selection must not strand the detail pane.
   useEffect(() => {
-    if (selectedId && !playlists.some((p) => p.id === selectedId)) setSelectedId(null)
-  }, [playlists, selectedId])
+    if (selectedId && !playlists.some((p) => p.id === selectedId)) setSelectedId(null);
+  }, [playlists, selectedId]);
 
   // A search result OPENS a playlist rather than playing it (containers open,
   // leaves play), so it plants an id here and this consumes it. Cleared on
   // arrival — a stale jump must not re-select on a later visit.
-  const playlistsJump = useStore((s) => s.playlistsJump)
-  const clearPlaylistsJump = useStore((s) => s.clearPlaylistsJump)
+  const playlistsJump = useStore((s) => s.playlistsJump);
+  const clearPlaylistsJump = useStore((s) => s.clearPlaylistsJump);
   useOneShotAsk(
     playlistsJump,
     (id) => {
-      if (playlists.some((p) => p.id === id)) setSelectedId(id)
+      if (playlists.some((p) => p.id === id)) setSelectedId(id);
     },
-    { clear: clearPlaylistsJump }
-  )
+    { clear: clearPlaylistsJump },
+  );
 
   // Pointer AND keyboard: reordering a list you can't drag is otherwise
   // impossible for anyone without a mouse.
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  )
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   const onDragEnd = (e: DragEndEvent): void => {
-    if (!selected || !e.over || e.active.id === e.over.id) return
-    const from = ids.indexOf(String(e.active.id))
-    const to = ids.indexOf(String(e.over.id))
-    if (from < 0 || to < 0) return
-    void tt.playlistSetItems(selected.id, arrayMove(selected.items, from, to))
-  }
+    if (!selected || !e.over || e.active.id === e.over.id) return;
+    const from = ids.indexOf(String(e.active.id));
+    const to = ids.indexOf(String(e.over.id));
+    if (from < 0 || to < 0) return;
+    void tt.playlistSetItems(selected.id, arrayMove(selected.items, from, to));
+  };
 
   /**
    * The × and the ⋯ menu's "Remove from playlist" both land here, so the undo
@@ -200,20 +200,20 @@ export function PlaylistsScreen(): React.JSX.Element {
    * keeps its confirm: rare, and it takes the collection with it.)
    */
   const removeItem = (index: number): void => {
-    if (!selected) return
-    const id = selected.id
-    const item = selected.items[index]
-    if (!item) return
+    if (!selected) return;
+    const id = selected.id;
+    const item = selected.items[index];
+    if (!item) return;
     void tt.playlistSetItems(
       selected.id,
-      selected.items.filter((_, i) => i !== index)
-    )
+      selected.items.filter((_, i) => i !== index),
+    );
     showToast({
-      kind: 'success',
+      kind: "success",
       text: `Removed “${item.title}”`,
-      action: { label: 'Undo', undo: () => restoreItem(id, index, item) }
-    })
-  }
+      action: { label: "Undo", undo: () => restoreItem(id, index, item) },
+    });
+  };
 
   /**
    * Splice the track back into the playlist as it is NOW, rather than restoring
@@ -223,14 +223,14 @@ export function PlaylistsScreen(): React.JSX.Element {
    * that true even if the selection has moved on.
    */
   const restoreItem = (id: string, index: number, item: PlaylistItem): void => {
-    const current = useStore.getState().playlists.find((p) => p.id === id)
-    if (!current) return // the playlist itself was deleted meanwhile
-    const items = [...current.items]
-    items.splice(Math.min(index, items.length), 0, item)
-    void tt.playlistSetItems(id, items)
-  }
+    const current = useStore.getState().playlists.find((p) => p.id === id);
+    if (!current) return; // the playlist itself was deleted meanwhile
+    const items = [...current.items];
+    items.splice(Math.min(index, items.length), 0, item);
+    void tt.playlistSetItems(id, items);
+  };
 
-  const running = activation && !activation.finished
+  const running = activation && !activation.finished;
 
   // Activation reporting lives in lib/playlists (activatePlaylist), shared
   // with unified search. The per-track detail isn't repeated in its toast: a
@@ -247,7 +247,7 @@ export function PlaylistsScreen(): React.JSX.Element {
         {playlists.length > 0 && (
           <FilterInput
             value={filter}
-            onChange={(v) => setScreenFilter('playlists', v)}
+            onChange={(v) => setScreenFilter("playlists", v)}
             shown={shown.length}
             total={playlists.length}
           />
@@ -255,11 +255,11 @@ export function PlaylistsScreen(): React.JSX.Element {
         {playlists.length > 0 && (
           <SortChip
             sorts={[
-              { value: 'updated', label: 'Recently updated' },
-              { value: 'played', label: 'Recently played' },
-              { value: 'created', label: 'Recently created' },
-              { value: 'name', label: 'Name' },
-              { value: 'length', label: 'Length' }
+              { value: "updated", label: "Recently updated" },
+              { value: "played", label: "Recently played" },
+              { value: "created", label: "Recently created" },
+              { value: "name", label: "Name" },
+              { value: "length", label: "Length" },
             ]}
             neutral="updated"
             value={sort}
@@ -277,11 +277,12 @@ export function PlaylistsScreen(): React.JSX.Element {
           onClose={() => setTrackMenu(null)}
           // the shared track menu (heart, pivot, preset…) + the local remove
           items={trackMenuItems(fromPlaylistItem(trackMenu.item), {
-            addToPlaylist: () => setCopyTo({ item: trackMenu.item, x: trackMenu.x, y: trackMenu.y }),
+            addToPlaylist: () =>
+              setCopyTo({ item: trackMenu.item, x: trackMenu.x, y: trackMenu.y }),
             saveToPreset: () =>
               setPresetFor({ item: trackMenu.item, x: trackMenu.x, y: trackMenu.y }),
-            searchFrom: { screen: 'playlists' },
-            extra: [{ label: 'Remove from playlist', run: () => removeItem(trackMenu.index) }]
+            searchFrom: { screen: "playlists" },
+            extra: [{ label: "Remove from playlist", run: () => removeItem(trackMenu.index) }],
           })}
         />
       )}
@@ -298,8 +299,8 @@ export function PlaylistsScreen(): React.JSX.Element {
           picker={{ node: { title: presetFor.item.title }, x: presetFor.x, y: presetFor.y }}
           onClose={() => setPresetFor(null)}
           onSave={async (slot, name) => {
-            await saveRefToPreset(fromPlaylistItem(presetFor.item), slot, name)
-            setPresetFor(null)
+            await saveRefToPreset(fromPlaylistItem(presetFor.item), slot, name);
+            setPresetFor(null);
           }}
         />
       )}
@@ -318,10 +319,10 @@ export function PlaylistsScreen(): React.JSX.Element {
                 <button
                   key={p.id}
                   onClick={() => setSelectedId(p.id)}
-                  aria-current={selected?.id === p.id ? 'true' : undefined}
+                  aria-current={selected?.id === p.id ? "true" : undefined}
                   className={cx(
-                    'text-left rounded-lg px-3 py-2 transition-colors',
-                    selected?.id === p.id ? 'bg-amberdim text-amber' : 'hover:bg-veil text-ink'
+                    "text-left rounded-lg px-3 py-2 transition-colors",
+                    selected?.id === p.id ? "bg-amberdim text-amber" : "hover:bg-veil text-ink",
                   )}
                 >
                   <div className="flex items-center gap-2.5">
@@ -333,11 +334,13 @@ export function PlaylistsScreen(): React.JSX.Element {
                       </div>
                       <div className="microlabel mt-0.5 truncate">
                         {queuedId === p.id && <span className="text-gold">in the queue · </span>}
-                        {p.items.length} {p.items.length === 1 ? 'track' : 'tracks'}
+                        {p.items.length} {p.items.length === 1 ? "track" : "tracks"}
                         {totalSecs(p) > 0 && ` · ${fmtDuration(totalSecs(p))}`}
                       </div>
                       <div className="microlabel truncate">
-                        {p.lastPlayedAt ? `played ${fmtRelative(p.lastPlayedAt)}` : 'not played yet'}
+                        {p.lastPlayedAt
+                          ? `played ${fmtRelative(p.lastPlayedAt)}`
+                          : "not played yet"}
                       </div>
                     </div>
                   </div>
@@ -365,8 +368,8 @@ export function PlaylistsScreen(): React.JSX.Element {
                       <RenameField
                         initial={selected.name}
                         onDone={(name) => {
-                          if (name) void tt.playlistRename(selected.id, name)
-                          setRenaming(null)
+                          if (name) void tt.playlistRename(selected.id, name);
+                          setRenaming(null);
                         }}
                       />
                     ) : (
@@ -382,15 +385,24 @@ export function PlaylistsScreen(): React.JSX.Element {
                       useful first: created, then artists. */}
                   <div data-playlist-meta className="microlabel truncate">
                     {queuedId === selected.id && <span className="text-gold">in the queue · </span>}
-                    {selected.items.length} {selected.items.length === 1 ? 'track' : 'tracks'}
+                    {selected.items.length} {selected.items.length === 1 ? "track" : "tracks"}
                     {totalSecs(selected) > 0 && ` · ${fmtDuration(totalSecs(selected))}`}
                     {artistCount(selected, performerOf) > 1 && (
-                      <span className="hidden @md:inline"> · {artistCount(selected, performerOf)} artists</span>
+                      <span className="hidden @md:inline">
+                        {" "}
+                        · {artistCount(selected, performerOf)} artists
+                      </span>
                     )}
                     {selected.lastPlayedAt && (
-                      <span className="hidden @xs:inline"> · played {fmtRelative(selected.lastPlayedAt)}</span>
+                      <span className="hidden @xs:inline">
+                        {" "}
+                        · played {fmtRelative(selected.lastPlayedAt)}
+                      </span>
                     )}
-                    <span className="hidden @xl:inline"> · created {fmtRelative(selected.createdAt)}</span>
+                    <span className="hidden @xl:inline">
+                      {" "}
+                      · created {fmtRelative(selected.createdAt)}
+                    </span>
                   </div>
                 </div>
 
@@ -407,9 +419,9 @@ export function PlaylistsScreen(): React.JSX.Element {
                     data-tip={
                       mine
                         ? `Loading ${activation.done} of ${activation.total} — click to stop`
-                        : 'Replace the queue with this playlist'
+                        : "Replace the queue with this playlist"
                     }
-                    aria-label={mine ? 'Stop loading playlist' : 'Play playlist'}
+                    aria-label={mine ? "Stop loading playlist" : "Play playlist"}
                     className="no-drag tip-bottom relative overflow-hidden flex items-center gap-2 px-3.5 h-8 text-[12.5px]"
                   >
                     {mine && (
@@ -417,7 +429,7 @@ export function PlaylistsScreen(): React.JSX.Element {
                         aria-hidden
                         className="absolute inset-y-0 left-0 bg-bg/20 transition-[width] duration-200"
                         style={{
-                          width: `${Math.round((activation.done / Math.max(1, activation.total)) * 100)}%`
+                          width: `${Math.round((activation.done / Math.max(1, activation.total)) * 100)}%`,
                         }}
                       />
                     )}
@@ -452,14 +464,14 @@ export function PlaylistsScreen(): React.JSX.Element {
                           // Snapshot the WHOLE playlist, not its id: undo has to
                           // put back the name, the items and the timestamps, and
                           // after the delete there is nowhere left to read them.
-                          const deleted = selected
-                          void tt.playlistDelete(deleted.id)
+                          const deleted = selected;
+                          void tt.playlistDelete(deleted.id);
                           showToast({
-                            kind: 'success',
+                            kind: "success",
                             text: `Deleted “${deleted.name}”`,
-                            action: { label: 'Undo', undo: () => void tt.playlistRestore(deleted) }
-                          })
-                        }
+                            action: { label: "Undo", undo: () => void tt.playlistRestore(deleted) },
+                          });
+                        },
                       })
                     }
                     data-tip="Delete playlist"
@@ -474,8 +486,8 @@ export function PlaylistsScreen(): React.JSX.Element {
 
               {stillMissing.length > 0 && (
                 <div className="mb-2 text-[11.5px] text-dim">
-                  Last played, {stillMissing.length} could not be found:{' '}
-                  <span className="text-faint">{stillMissing.join(', ')}</span>
+                  Last played, {stillMissing.length} could not be found:{" "}
+                  <span className="text-faint">{stillMissing.join(", ")}</span>
                 </div>
               )}
               {/* divide-y divide-edge/50: the same hairline the queue and the
@@ -510,21 +522,29 @@ export function PlaylistsScreen(): React.JSX.Element {
         </div>
       )}
     </div>
-  )
+  );
 }
 
-type PlaylistSort = 'updated' | 'created' | 'played' | 'name' | 'length'
-const PLAYLIST_SORT_IDS: readonly PlaylistSort[] = ['updated', 'created', 'played', 'name', 'length']
+type PlaylistSort = "updated" | "created" | "played" | "name" | "length";
+const PLAYLIST_SORT_IDS: readonly PlaylistSort[] = [
+  "updated",
+  "created",
+  "played",
+  "name",
+  "length",
+];
 
 /** Total runtime lives in @shared/model (`playlistTotalSecs`) — the tray
  *  panel shows it too, and two sums is how they'd drift. */
-const totalSecs = playlistTotalSecs
+const totalSecs = playlistTotalSecs;
 
 /** How many distinct artists — a cheap read on how varied a playlist is
  *  (performers where the library knows them: a compilation saved from the
  *  queue stores "Various Artists" on every row and would otherwise count 1). */
 const artistCount = (p: Playlist, performerOf: (i: PlaylistItem) => string | null): number =>
-  new Set(p.items.map((i) => (performerOf(i) ?? i.artist ?? '').trim().toLowerCase()).filter(Boolean)).size
+  new Set(
+    p.items.map((i) => (performerOf(i) ?? i.artist ?? "").trim().toLowerCase()).filter(Boolean),
+  ).size;
 
 /**
  * The first few covers, stacked. Playlists are far easier to recognise by their
@@ -532,13 +552,13 @@ const artistCount = (p: Playlist, performerOf: (i: PlaylistItem) => string | nul
  * costs nothing but makes the collection scannable.
  */
 function ArtStack({ playlist }: { playlist: Playlist }): React.JSX.Element {
-  const covers = [...new Set(playlist.items.map((i) => i.artUrl).filter(Boolean))].slice(0, 3)
+  const covers = [...new Set(playlist.items.map((i) => i.artUrl).filter(Boolean))].slice(0, 3);
   if (covers.length === 0) {
     return (
       <div className="h-10 w-10 shrink-0 rounded bg-raised ring-1 ring-edge flex items-center justify-center">
         <ListOrdered size={14} className="text-faint" />
       </div>
-    )
+    );
   }
   return (
     <div className="relative h-10 w-10 shrink-0">
@@ -552,7 +572,7 @@ function ArtStack({ playlist }: { playlist: Playlist }): React.JSX.Element {
         </div>
       ))}
     </div>
-  )
+  );
 }
 
 /**
@@ -569,13 +589,13 @@ function ArtStack({ playlist }: { playlist: Playlist }): React.JSX.Element {
  * their ids, but they're indistinguishable on screen, so nothing reads wrong.
  */
 function rowIds(items: PlaylistItem[]): string[] {
-  const seen = new Map<string, number>()
+  const seen = new Map<string, number>();
   return items.map((it) => {
-    const key = playlistItemKey(it)
-    const n = (seen.get(key) ?? 0) + 1
-    seen.set(key, n)
-    return `${key}#${n}`
-  })
+    const key = playlistItemKey(it);
+    const n = (seen.get(key) ?? 0) + 1;
+    seen.set(key, n);
+    return `${key}#${n}`;
+  });
 }
 
 function TrackRow({
@@ -585,26 +605,28 @@ function TrackRow({
   current,
   sourceActive,
   onRemove,
-  onMenu
+  onMenu,
 }: {
-  id: string
-  index: number
-  item: PlaylistItem
+  id: string;
+  index: number;
+  item: PlaylistItem;
   /** This row is what the queue is playing (only when the playlist IS the queue). */
-  current: boolean
+  current: boolean;
   /** The queue's own source (MEDIA_PLAYER) is what's audible right now. */
-  sourceActive: boolean
-  onRemove: () => void
-  onMenu: (e: React.MouseEvent) => void
+  sourceActive: boolean;
+  onRemove: () => void;
+  onMenu: (e: React.MouseEvent) => void;
 }): React.JSX.Element {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
-  const favorites = useStore((s) => s.favorites)
-  const artist = useSavedPerformer()(item) ?? item.artist
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+  });
+  const favorites = useStore((s) => s.favorites);
+  const artist = useSavedPerformer()(item) ?? item.artist;
   // A playlist entry already carries the content identity favorites need.
-  const favorite: Omit<FavoriteMedia, 'addedAt'> | null =
+  const favorite: Omit<FavoriteMedia, "addedAt"> | null =
     item.title && item.artist
       ? {
-          kind: 'track',
+          kind: "track",
           title: item.title,
           artist: item.artist,
           album: item.album,
@@ -613,11 +635,11 @@ function TrackRow({
           serverName: item.serverName,
           objectId: item.objectId,
           titlePath: null,
-          durationSecs: item.durationSecs ?? null
+          durationSecs: item.durationSecs ?? null,
         }
-      : null
+      : null;
   const hearted =
-    favorite != null && favorites.some((f) => favoriteKey(f) === favoriteKey(favorite as Favorite))
+    favorite != null && favorites.some((f) => favoriteKey(f) === favoriteKey(favorite as Favorite));
   return (
     // Same anatomy as a queue row (QueueScreen's QueueRow): position/handle,
     // art, title+artist, actions cluster, duration last — on the same grid.
@@ -629,25 +651,21 @@ function TrackRow({
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(lockVertical(transform)), transition }}
       onContextMenu={(e) => {
-        e.preventDefault()
-        onMenu(e)
+        e.preventDefault();
+        onMenu(e);
       }}
       className={cx(
-        'group grid grid-cols-[26px_44px_1fr_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5',
-        'transition-colors',
-        isDragging && 'z-10 bg-raised shadow-xl',
+        "group grid grid-cols-[26px_44px_1fr_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5",
+        "transition-colors",
+        isDragging && "z-10 bg-raised shadow-xl",
         // current + queue audible: the queue row's full playing treatment;
         // current while another source plays: the parked resume point
-        current && sourceActive && 'row-playing bg-gold/10',
-        current && !sourceActive && 'ring-1 ring-edge2 bg-veil/60 hover:bg-veil',
-        !current && !isDragging && 'hover:bg-veil'
+        current && sourceActive && "row-playing bg-gold/10",
+        current && !sourceActive && "ring-1 ring-edge2 bg-veil/60 hover:bg-veil",
+        !current && !isDragging && "hover:bg-veil",
       )}
     >
-      <OrderHandle
-        label={`Reorder ${item.title}`}
-        attributes={attributes}
-        listeners={listeners}
-      >
+      <OrderHandle label={`Reorder ${item.title}`} attributes={attributes} listeners={listeners}>
         {current ? (
           <Eqbars dim={!sourceActive} />
         ) : (
@@ -660,7 +678,7 @@ function TrackRow({
       <div className="min-w-0">
         <div className="text-[13.5px] truncate text-ink">{item.title}</div>
         <div className="text-[12px] text-dim truncate">
-          {[artist, item.album].filter(Boolean).join(' — ')}
+          {[artist, item.album].filter(Boolean).join(" — ")}
         </div>
       </div>
 
@@ -675,24 +693,28 @@ function TrackRow({
         />
         <RowAction icon={MoreHorizontal} label="More actions" onClick={(e) => onMenu(e)} />
         {favorite && (
-          <RowHeart favorited={hearted} held={false} onHeart={() => void toggleFavorite(favorite)} />
+          <RowHeart
+            favorited={hearted}
+            held={false}
+            onHeart={() => void toggleFavorite(favorite)}
+          />
         )}
       </div>
 
       {/* far right of the content, after the hover actions — see QueueRow */}
       <DurationCell secs={item.durationSecs ?? null} />
     </div>
-  )
+  );
 }
 
 function RenameField({
   initial,
-  onDone
+  onDone,
 }: {
-  initial: string
-  onDone: (name: string | null) => void
+  initial: string;
+  onDone: (name: string | null) => void;
 }): React.JSX.Element {
-  const [value, setValue] = useState(initial)
+  const [value, setValue] = useState(initial);
   return (
     <input
       autoFocus
@@ -700,12 +722,11 @@ function RenameField({
       onChange={(e) => setValue(e.target.value)}
       onBlur={() => onDone(value.trim() || null)}
       onKeyDown={(e) => {
-        if (e.key === 'Enter') onDone(value.trim() || null)
-        if (e.key === 'Escape') onDone(null)
+        if (e.key === "Enter") onDone(value.trim() || null);
+        if (e.key === "Escape") onDone(null);
       }}
       aria-label="Playlist name"
       className="bg-raised ring-1 ring-edge2 rounded px-2 h-8 text-[15px] font-display tracking-tight min-w-0 flex-1 max-w-[320px]"
     />
-  )
+  );
 }
-

@@ -1,8 +1,8 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useRef } from "react";
 
 // Session-scoped scroll positions per screen. Screens unmount when you switch
 // pages, so their scrollTop is remembered here and restored on return.
-const scrollMemory = new Map<string, number>()
+const scrollMemory = new Map<string, number>();
 
 /**
  * Attach to a scrollable container: `<div ref={useScrollMemory('queue')}>`.
@@ -12,26 +12,26 @@ const scrollMemory = new Map<string, number>()
  */
 export function useScrollMemory(
   key: string,
-  restoreOnMount = true
+  restoreOnMount = true,
 ): (node: HTMLDivElement | null) => void {
-  const detach = useRef<(() => void) | null>(null)
-  const restore = useRef(restoreOnMount)
-  restore.current = restoreOnMount
+  const detach = useRef<(() => void) | null>(null);
+  const restore = useRef(restoreOnMount);
+  restore.current = restoreOnMount;
 
   return useCallback(
     (node: HTMLDivElement | null) => {
       if (detach.current) {
-        detach.current()
-        detach.current = null
+        detach.current();
+        detach.current = null;
       }
-      if (!node) return
-      if (restore.current) node.scrollTop = scrollMemory.get(key) ?? 0
+      if (!node) return;
+      if (restore.current) node.scrollTop = scrollMemory.get(key) ?? 0;
       const onScroll = (): void => {
-        scrollMemory.set(key, node.scrollTop)
-      }
-      node.addEventListener('scroll', onScroll, { passive: true })
-      detach.current = () => node.removeEventListener('scroll', onScroll)
+        scrollMemory.set(key, node.scrollTop);
+      };
+      node.addEventListener("scroll", onScroll, { passive: true });
+      detach.current = () => node.removeEventListener("scroll", onScroll);
     },
-    [key]
-  )
+    [key],
+  );
 }

@@ -1,13 +1,13 @@
-import type { MediaNode } from '@shared/model'
-import { trackArtists } from '@shared/model'
-import type { QueueList, QueueListItem, QueueListItemMetadata, ZonePlayState } from '@shared/smoip'
+import type { MediaNode } from "@shared/model";
+import { trackArtists } from "@shared/model";
+import type { QueueList, QueueListItem, QueueListItemMetadata, ZonePlayState } from "@shared/smoip";
 
 /**
  * What the matchers need of a queue entry's metadata — the shape a SAVED item
  * (favorite, playlist entry) maps onto too, since it stored exactly these
  * fields from the queue it came from.
  */
-export type EntryLike = Pick<QueueListItemMetadata, 'title' | 'artist' | 'album' | 'duration'>
+export type EntryLike = Pick<QueueListItemMetadata, "title" | "artist" | "album" | "duration">;
 
 /**
  * WHICH QUEUE ENTRY IS PLAYING, and does a library item match it.
@@ -28,14 +28,15 @@ export type EntryLike = Pick<QueueListItemMetadata, 'title' | 'artist' | 'album'
  */
 export function playingQueueEntry(
   queue: QueueList | null,
-  playState: ZonePlayState | null
+  playState: ZonePlayState | null,
 ): QueueListItem | null {
-  const playId = queue?.play_id ?? playState?.queue_id ?? null
-  if (playId == null) return null
-  return queue?.items?.find((i) => i.id === playId) ?? null
+  const playId = queue?.play_id ?? playState?.queue_id ?? null;
+  if (playId == null) return null;
+  return queue?.items?.find((i) => i.id === playId) ?? null;
 }
 
-const sameName = (a: string, b: string): boolean => a.trim().toLowerCase() === b.trim().toLowerCase()
+const sameName = (a: string, b: string): boolean =>
+  a.trim().toLowerCase() === b.trim().toLowerCase();
 
 /**
  * A queue entry's `artist` is the DIDL's first upnp:artist — the ALBUM ARTIST
@@ -48,12 +49,12 @@ const sameName = (a: string, b: string): boolean => a.trim().toLowerCase() === b
  */
 export function entryArtistMatches(
   entryArtist: string | null | undefined,
-  item: Pick<MediaNode, 'artist' | 'artists' | 'albumArtist'>
+  item: Pick<MediaNode, "artist" | "artists" | "albumArtist">,
 ): boolean {
-  if (entryArtist == null || entryArtist.trim() === '') return true
-  const names = [item.albumArtist, ...trackArtists(item)].filter((n): n is string => !!n)
-  if (names.length === 0) return true
-  return names.some((n) => sameName(n, entryArtist))
+  if (entryArtist == null || entryArtist.trim() === "") return true;
+  const names = [item.albumArtist, ...trackArtists(item)].filter((n): n is string => !!n);
+  if (names.length === 0) return true;
+  return names.some((n) => sameName(n, entryArtist));
 }
 
 /**
@@ -64,17 +65,19 @@ export function entryArtistMatches(
  * differently).
  */
 export function trackMatchesEntry(node: MediaNode, m: EntryLike | null | undefined): boolean {
-  if (m == null || m.title == null) return false
+  if (m == null || m.title == null) return false;
   return (
     node.title === m.title &&
     (node.album == null || m.album == null || node.album === m.album) &&
     entryArtistMatches(m.artist, node) &&
-    (node.durationSecs == null || m.duration == null || Math.abs(node.durationSecs - m.duration) <= 2)
-  )
+    (node.durationSecs == null ||
+      m.duration == null ||
+      Math.abs(node.durationSecs - m.duration) <= 2)
+  );
 }
 
 /** Does a library ALBUM (container node) own a queue entry? Album title + artist identity. */
 export function albumMatchesEntry(node: MediaNode, m: EntryLike | null | undefined): boolean {
-  if (m == null || m.album == null) return false
-  return m.album === node.title && entryArtistMatches(m.artist, node)
+  if (m == null || m.album == null) return false;
+  return m.album === node.title && entryArtistMatches(m.artist, node);
 }

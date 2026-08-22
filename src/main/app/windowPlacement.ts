@@ -11,15 +11,15 @@
  */
 
 export interface Rect {
-  x: number
-  y: number
-  width: number
-  height: number
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
 export interface Size {
-  width: number
-  height: number
+  width: number;
+  height: number;
 }
 
 /**
@@ -39,17 +39,17 @@ export function homeWorkArea(spot: { x: number; y: number }, workAreas: Rect[]):
         spot.x >= w.x - 40 &&
         spot.x <= w.x + w.width - 100 &&
         spot.y >= w.y - 10 &&
-        spot.y <= w.y + w.height - 60
+        spot.y <= w.y + w.height - 60,
     ) ?? null
-  )
+  );
 }
 
 /** As `homeWorkArea`, for callers that only need yes/no. */
 export const isOnScreen = (spot: { x: number; y: number }, workAreas: Rect[]): boolean =>
-  homeWorkArea(spot, workAreas) != null
+  homeWorkArea(spot, workAreas) != null;
 
 /** Clamp `n` into [min, max], tolerating an inverted range (max < min). */
-const clamp = (n: number, min: number, max: number): number => Math.max(min, Math.min(n, max))
+const clamp = (n: number, min: number, max: number): number => Math.max(min, Math.min(n, max));
 
 /**
  * Where the tray panel goes, given the tray icon's rectangle and the work area
@@ -67,29 +67,29 @@ const clamp = (n: number, min: number, max: number): number => Math.max(min, Mat
  * where a menu-bar extra would be.
  */
 export function anchorToTray(trayBounds: Rect, workArea: Rect, panel: Size, gap = 6): Rect {
-  const minX = workArea.x + MARGIN
-  const maxX = workArea.x + workArea.width - panel.width - MARGIN
+  const minX = workArea.x + MARGIN;
+  const maxX = workArea.x + workArea.width - panel.width - MARGIN;
   const anchored =
     trayBounds.width > 0
       ? trayBounds.x + trayBounds.width / 2 - panel.width / 2
-      : workArea.x + workArea.width - panel.width - MARGIN
-  const x = Math.round(clamp(anchored, minX, maxX))
+      : workArea.x + workArea.width - panel.width - MARGIN;
+  const x = Math.round(clamp(anchored, minX, maxX));
 
   // Below the icon if it fits, above it if it doesn't (a taskbar on the bottom
   // edge puts the icon near the bottom of the screen). If neither fits, sit at
   // the top of the work area and let the clamp keep it on screen.
-  const below = trayBounds.y + trayBounds.height + gap
-  const above = trayBounds.y - gap - panel.height
-  const fitsBelow = below + panel.height <= workArea.y + workArea.height - MARGIN
-  const minY = workArea.y + MARGIN
-  const maxY = workArea.y + workArea.height - panel.height - MARGIN
-  const y = Math.round(clamp(fitsBelow ? below : above, minY, maxY))
+  const below = trayBounds.y + trayBounds.height + gap;
+  const above = trayBounds.y - gap - panel.height;
+  const fitsBelow = below + panel.height <= workArea.y + workArea.height - MARGIN;
+  const minY = workArea.y + MARGIN;
+  const maxY = workArea.y + workArea.height - panel.height - MARGIN;
+  const y = Math.round(clamp(fitsBelow ? below : above, minY, maxY));
 
-  return { x, y, width: panel.width, height: panel.height }
+  return { x, y, width: panel.width, height: panel.height };
 }
 
 /** Breathing room between the panel and the edge of the work area. */
-const MARGIN = 4
+const MARGIN = 4;
 
 /**
  * The work area of the display a rectangle sits on, chosen from a list.
@@ -109,11 +109,11 @@ const MARGIN = 4
  * so an icon on a display that has since vanished still lands somewhere real.
  */
 export function workAreaFor(rect: Rect, displays: Rect[]): Rect {
-  const cx = rect.x + rect.width / 2
-  const cy = rect.y + rect.height / 2
+  const cx = rect.x + rect.width / 2;
+  const cy = rect.y + rect.height / 2;
   const contains = displays.find(
-    (w) => cx >= w.x && cx < w.x + w.width && cy >= w.y && cy < w.y + w.height
-  )
-  if (contains) return contains
-  return displays.find((w) => cx >= w.x && cx < w.x + w.width) ?? displays[0]
+    (w) => cx >= w.x && cx < w.x + w.width && cy >= w.y && cy < w.y + w.height,
+  );
+  if (contains) return contains;
+  return displays.find((w) => cx >= w.x && cx < w.x + w.width) ?? displays[0];
 }

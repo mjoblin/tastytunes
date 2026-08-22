@@ -1,16 +1,30 @@
 // Orchestrates discovery, the SMOIP socket, command dispatch, and the push relay
 // to renderer windows. Mirrors PunyTunes' StreamMagicManager, translated to Node.
 
-import { BrowserWindow, Notification, nativeImage, webContents } from 'electron'
-import { type PushMessage, type Snapshot, type StreamerCommand } from '@shared/ipc'
-import { presetVolumeKey, sleepTrackKey, type ConnectionState, type DiscoveredDevice, type FirmwareStatus, type FrameEntry, type LogEntry, type McpStatus, type MediaIndexStatus, type MissedSchedule, type SleepTimer, FRAME_RING_SIZE, LOG_RING_SIZE } from '@shared/model'
+import { BrowserWindow, Notification, nativeImage, webContents } from "electron";
+import { type PushMessage, type Snapshot, type StreamerCommand } from "@shared/ipc";
+import {
+  presetVolumeKey,
+  sleepTrackKey,
+  type ConnectionState,
+  type DiscoveredDevice,
+  type FirmwareStatus,
+  type FrameEntry,
+  type LogEntry,
+  type McpStatus,
+  type MediaIndexStatus,
+  type MissedSchedule,
+  type SleepTimer,
+  FRAME_RING_SIZE,
+  LOG_RING_SIZE,
+} from "@shared/model";
 import {
   type ContentRef,
   type Playlist,
   type PlaylistActivation,
   type QueueRestoreResult,
-  type RecentTrack
-} from '@shared/model'
+  type RecentTrack,
+} from "@shared/model";
 import type {
   Presets,
   QueueList,
@@ -27,15 +41,15 @@ import type {
   ZoneNowPlaying,
   ZonePlayState,
   ZonePosition,
-  ZoneState
-} from '@shared/smoip'
-import { EQ_GAIN_MAX, EQ_GAIN_MIN, isRadioMetadata, radioTrackTitle } from '@shared/smoip'
-import { discoverStreamers } from './discovery'
-import { SmoipSocket } from './smoipSocket'
-import * as smoipHttp from './smoipHttp'
-import { getSettings, updateSettings } from '../data/persist'
-import { clearRecents, getRecents, recordRecent, restoreRecents } from '../data/recents'
-import { addFavorite, getFavorites, removeFavorite, updateFavorite } from '../data/favorites'
+  ZoneState,
+} from "@shared/smoip";
+import { EQ_GAIN_MAX, EQ_GAIN_MIN, isRadioMetadata, radioTrackTitle } from "@shared/smoip";
+import { discoverStreamers } from "./discovery";
+import { SmoipSocket } from "./smoipSocket";
+import * as smoipHttp from "./smoipHttp";
+import { getSettings, updateSettings } from "../data/persist";
+import { clearRecents, getRecents, recordRecent, restoreRecents } from "../data/recents";
+import { addFavorite, getFavorites, removeFavorite, updateFavorite } from "../data/favorites";
 import {
   appendToPlaylist,
   createPlaylist,
@@ -43,13 +57,12 @@ import {
   getPlaylists,
   renamePlaylist,
   restorePlaylist,
-  setPlaylistItems
-} from '../data/playlists'
-import { QueueOps } from './queueOps'
-import type { ResolvedContent } from '../media/resolveContent'
-import { scrobbler } from '../lookups/scrobbler'
-import { getNetRequests, loggedFetch } from '../netlog'
-
+  setPlaylistItems,
+} from "../data/playlists";
+import { QueueOps } from "./queueOps";
+import type { ResolvedContent } from "../media/resolveContent";
+import { scrobbler } from "../lookups/scrobbler";
+import { getNetRequests, loggedFetch } from "../netlog";
 
 /**
  * The user_eq_bands write string: "<idx>,<freq>,<filter>,<gain>,<q>", blank
@@ -60,24 +73,24 @@ import { getNetRequests, loggedFetch } from '../netlog'
 const bandString = (bands: [number, number][]): string =>
   bands
     .map(([i, g]) => `${i},,,${Math.max(EQ_GAIN_MIN, Math.min(EQ_GAIN_MAX, g)).toFixed(1)},`)
-    .join('|')
+    .join("|");
 
 interface Cache {
-  playState: ZonePlayState | null
-  position: ZonePosition | null
-  nowPlaying: ZoneNowPlaying | null
-  zoneState: ZoneState | null
-  queue: QueueList | null
-  presets: Presets | null
-  systemInfo: SystemInfo | null
-  systemPower: SystemPower | null
-  firmwareUpdate: FirmwareStatus | null
-  sources: SystemSources | null
-  zoneAudio: ZoneAudio | null
-  audioSpec: ZoneAudioSpec | null
-  systemDisplay: SystemDisplay | null
-  displaySpec: SystemDisplaySpec | null
-  powerSpec: SystemPowerSpec | null
+  playState: ZonePlayState | null;
+  position: ZonePosition | null;
+  nowPlaying: ZoneNowPlaying | null;
+  zoneState: ZoneState | null;
+  queue: QueueList | null;
+  presets: Presets | null;
+  systemInfo: SystemInfo | null;
+  systemPower: SystemPower | null;
+  firmwareUpdate: FirmwareStatus | null;
+  sources: SystemSources | null;
+  zoneAudio: ZoneAudio | null;
+  audioSpec: ZoneAudioSpec | null;
+  systemDisplay: SystemDisplay | null;
+  displaySpec: SystemDisplaySpec | null;
+  powerSpec: SystemPowerSpec | null;
 }
 
 const emptyCache = (): Cache => ({
@@ -95,134 +108,135 @@ const emptyCache = (): Cache => ({
   audioSpec: null,
   systemDisplay: null,
   displaySpec: null,
-  powerSpec: null
-})
+  powerSpec: null,
+});
 
 export class DeviceManager {
-  private socket: SmoipSocket | null = null
-  private connection: ConnectionState = { phase: 'idle' }
-  private devices: DiscoveredDevice[] = []
-  private discovering = false
-  private cache: Cache = emptyCache()
-  private frames: FrameEntry[] = []
-  private logs: LogEntry[] = []
-  private lastHealthCheckAt = 0
-  private currentTrackKey: string | null = null
-  private lastSourceId: string | null = null
-  private queuePresetsTimer: NodeJS.Timeout | null = null
-  private sleep: SleepTimer | null = null
-  private sleepTimeout: NodeJS.Timeout | null = null
+  private socket: SmoipSocket | null = null;
+  private connection: ConnectionState = { phase: "idle" };
+  private devices: DiscoveredDevice[] = [];
+  private discovering = false;
+  private cache: Cache = emptyCache();
+  private frames: FrameEntry[] = [];
+  private logs: LogEntry[] = [];
+  private lastHealthCheckAt = 0;
+  private currentTrackKey: string | null = null;
+  private lastSourceId: string | null = null;
+  private queuePresetsTimer: NodeJS.Timeout | null = null;
+  private sleep: SleepTimer | null = null;
+  private sleepTimeout: NodeJS.Timeout | null = null;
   /** Connected to the in-process demo device (labels the connection in the UI). */
-  private demo = false
+  private demo = false;
   /** See Snapshot.lastRecalledPresetId — in-app recalls only, content-checked by consumers. */
-  private lastRecalledPresetId: number | null = null
-  private mcpStatus: McpStatus = { running: false, url: null, error: null }
-  private missedSchedule: MissedSchedule | null = null
-  private mediaIndexStatuses: MediaIndexStatus[] = []
+  private lastRecalledPresetId: number | null = null;
+  private mcpStatus: McpStatus = { running: false, url: null, error: null };
+  private missedSchedule: MissedSchedule | null = null;
+  private mediaIndexStatuses: MediaIndexStatus[] = [];
 
   // ------------------------------------------------------------------ lifecycle
 
   /** Reconnect to the last-used streamer immediately; discover in parallel. */
   async startup(): Promise<void> {
-    const { lastHost } = getSettings()
-    if (lastHost) this.connect(lastHost)
-    await this.discover()
+    const { lastHost } = getSettings();
+    if (lastHost) this.connect(lastHost);
+    await this.discover();
   }
 
   async discover(): Promise<DiscoveredDevice[]> {
-    if (this.discovering) return this.devices
-    this.discovering = true
-    this.pushDevices()
+    if (this.discovering) return this.devices;
+    this.discovering = true;
+    this.pushDevices();
     try {
-      this.devices = await discoverStreamers()
-      this.log('info', 'discovery', `found ${this.devices.length} streamer(s)`)
+      this.devices = await discoverStreamers();
+      this.log("info", "discovery", `found ${this.devices.length} streamer(s)`);
     } catch (err) {
-      this.log('error', 'discovery', `discovery failed: ${(err as Error).message}`)
+      this.log("error", "discovery", `discovery failed: ${(err as Error).message}`);
     } finally {
-      this.discovering = false
-      this.pushDevices()
+      this.discovering = false;
+      this.pushDevices();
     }
     // Never-connected + idle + something found -> just connect. Lives here
     // (not only in startup) so the connect gate's auto-retry sweeps get the
     // same courtesy — a streamer that boots a minute after the app does is
     // picked up hands-free on a first run.
-    if (!getSettings().lastHost && this.connection.phase === 'idle' && this.devices.length > 0) {
-      this.connect(this.devices[0].host)
+    if (!getSettings().lastHost && this.connection.phase === "idle" && this.devices.length > 0) {
+      this.connect(this.devices[0].host);
     }
-    return this.devices
+    return this.devices;
   }
 
   connect(host: string, opts?: { remember?: boolean; demo?: boolean }): void {
     // Renderer surfaces label the connection ("built-in demo") off this flag.
-    this.demo = opts?.demo === true
+    this.demo = opts?.demo === true;
     // A recall remembered from one device means nothing on another.
-    this.setRecalledPreset(null)
+    this.setRecalledPreset(null);
     // A timer armed for one device must never act on another.
-    if (this.sleep && this.socket && this.socket.host !== host) this.setSleep(null)
-    this.socket?.close()
-    this.cache = emptyCache()
-    this.currentTrackKey = null
-    this.lastSourceId = null
+    if (this.sleep && this.socket && this.socket.host !== host) this.setSleep(null);
+    this.socket?.close();
+    this.cache = emptyCache();
+    this.currentTrackKey = null;
+    this.lastSourceId = null;
     // The demo device passes remember:false — its ephemeral loopback port
     // must never become the reconnect target of the next launch.
-    if (opts?.remember !== false) updateSettings({ lastHost: host })
+    if (opts?.remember !== false) updateSettings({ lastHost: host });
 
     // Callbacks from a replaced socket must be ignored: its async close event
     // would otherwise stomp the new connection's state.
-    const isCurrent = (socket: SmoipSocket): boolean => this.socket === socket
+    const isCurrent = (socket: SmoipSocket): boolean => this.socket === socket;
 
     const socket: SmoipSocket = new SmoipSocket(host, {
       onFrame: (frame) => {
-        if (isCurrent(socket)) this.handleFrame(frame)
+        if (isCurrent(socket)) this.handleFrame(frame);
       },
       onOutgoing: (frame) => {
-        if (isCurrent(socket)) this.recordFrame('out', frame)
+        if (isCurrent(socket)) this.recordFrame("out", frame);
       },
       onConnecting: (attempt) => {
-        if (isCurrent(socket)) this.setConnection({ phase: 'connecting', host, attempt })
+        if (isCurrent(socket)) this.setConnection({ phase: "connecting", host, attempt });
       },
       onConnected: () => {
         if (isCurrent(socket)) {
-          this.setConnection({ phase: 'connected', host })
+          this.setConnection({ phase: "connected", host });
           // Capability probes — refreshed every (re)connect. The /spec
           // endpoints aren't proven over the WS, so they ride HTTP like presets.
-          void this.probeAudioSpec(socket)
-          void this.probeSystemSpecs(socket)
+          void this.probeAudioSpec(socket);
+          void this.probeSystemSpecs(socket);
         }
       },
       onDisconnected: (reason, reconnecting) => {
-        if (isCurrent(socket)) this.setConnection({ phase: 'disconnected', host, reason, reconnecting })
+        if (isCurrent(socket))
+          this.setConnection({ phase: "disconnected", host, reason, reconnecting });
       },
       onLog: (level, text) => {
-        if (isCurrent(socket)) this.log(level, 'socket', text)
-      }
-    })
-    this.socket = socket
-    socket.connect()
+        if (isCurrent(socket)) this.log(level, "socket", text);
+      },
+    });
+    this.socket = socket;
+    socket.connect();
   }
 
   disconnect(): void {
-    if (this.sleep) this.setSleep(null)
-    this.socket?.close()
-    this.socket = null
-    this.cache = emptyCache()
-    this.demo = false
-    this.setRecalledPreset(null)
-    this.setConnection({ phase: 'idle' })
+    if (this.sleep) this.setSleep(null);
+    this.socket?.close();
+    this.socket = null;
+    this.cache = emptyCache();
+    this.demo = false;
+    this.setRecalledPreset(null);
+    this.setConnection({ phase: "idle" });
   }
 
   /** Rate-limited liveness probe, run on window focus and system resume. */
   healthCheck(): void {
-    const now = Date.now()
-    if (now - this.lastHealthCheckAt < 5000) return
-    this.lastHealthCheckAt = now
-    void this.socket?.healthCheck()
+    const now = Date.now();
+    if (now - this.lastHealthCheckAt < 5000) return;
+    this.lastHealthCheckAt = now;
+    void this.socket?.healthCheck();
   }
 
   shutdown(): void {
-    if (this.sleepTimeout) clearTimeout(this.sleepTimeout)
-    this.socket?.close()
-    this.socket = null
+    if (this.sleepTimeout) clearTimeout(this.sleepTimeout);
+    this.socket?.close();
+    this.socket = null;
   }
 
   // ---------------------------------------------------------------- sleep timer
@@ -233,68 +247,76 @@ export class DeviceManager {
    * sleep, so checkSleepTimer() re-evaluates the absolute deadline on resume.
    */
   setSleep(sleep: SleepTimer | null): void {
-    this.sleep = sleep
+    this.sleep = sleep;
     if (this.sleepTimeout) {
-      clearTimeout(this.sleepTimeout)
-      this.sleepTimeout = null
+      clearTimeout(this.sleepTimeout);
+      this.sleepTimeout = null;
     }
     if (sleep) {
-      this.log('info', 'sleep', sleep.minutes != null ? `armed: ${sleep.action} in ${sleep.minutes} min` : `armed: ${sleep.action} at end of track`)
+      this.log(
+        "info",
+        "sleep",
+        sleep.minutes != null
+          ? `armed: ${sleep.action} in ${sleep.minutes} min`
+          : `armed: ${sleep.action} at end of track`,
+      );
     }
     if (sleep?.firesAt != null) {
-      const ms = sleep.firesAt - Date.now()
+      const ms = sleep.firesAt - Date.now();
       if (ms <= 0) {
-        this.fireSleep()
-        return
+        this.fireSleep();
+        return;
       }
-      this.sleepTimeout = setTimeout(() => this.fireSleep(), ms)
+      this.sleepTimeout = setTimeout(() => this.fireSleep(), ms);
     }
-    this.push({ kind: 'sleep', sleep: this.sleep })
+    this.push({ kind: "sleep", sleep: this.sleep });
   }
 
   /** Fire a countdown that came due while the system was asleep (on resume). */
   checkSleepTimer(): void {
-    if (this.sleep?.firesAt != null && Date.now() >= this.sleep.firesAt) this.fireSleep()
+    if (this.sleep?.firesAt != null && Date.now() >= this.sleep.firesAt) this.fireSleep();
   }
 
   private fireSleep(): void {
-    const action = this.sleep?.action
-    this.sleep = null
+    const action = this.sleep?.action;
+    this.sleep = null;
     if (this.sleepTimeout) {
-      clearTimeout(this.sleepTimeout)
-      this.sleepTimeout = null
+      clearTimeout(this.sleepTimeout);
+      this.sleepTimeout = null;
     }
-    this.push({ kind: 'sleep', sleep: null })
+    this.push({ kind: "sleep", sleep: null });
     // Only touch the streamer while connected — a timer that expires after a
     // dropout should quietly clear, never pause on reconnect.
-    if (action && this.connection.phase === 'connected') {
-      this.log('info', 'sleep', `fired: ${action}`)
-      void this.command(action === 'standby' ? { type: 'power', power: 'NETWORK' } : { type: 'pause' })
+    if (action && this.connection.phase === "connected") {
+      this.log("info", "sleep", `fired: ${action}`);
+      void this.command(
+        action === "standby" ? { type: "power", power: "NETWORK" } : { type: "pause" },
+      );
     }
   }
 
   /** End-of-track sleep: fire when the armed track gives way or playback ends. */
   private sleepBoundaryCheck(ps: ZonePlayState): void {
-    const sleep = this.sleep
-    if (!sleep || sleep.minutes != null) return
-    const key = sleepTrackKey(ps)
-    const advanced = sleep.trackKey != null && key != null && key !== sleep.trackKey
-    const ended = ps.state === 'stop' || ps.state === 'no_signal'
-    if (advanced || ended) this.fireSleep()
+    const sleep = this.sleep;
+    if (!sleep || sleep.minutes != null) return;
+    const key = sleepTrackKey(ps);
+    const advanced = sleep.trackKey != null && key != null && key !== sleep.trackKey;
+    const ended = ps.state === "stop" || ps.state === "no_signal";
+    if (advanced || ended) this.fireSleep();
   }
 
   // ------------------------------------------------------------------- commands
 
   /** Play-shaped commands that should wake a standby streamer first. */
-  private static readonly WAKE_COMMANDS = new Set<StreamerCommand['type']>([
-    'play',
-    'togglePlayback',
-    'playQueueId',
-    'recallPreset',
-    'streamRadio',
-    'setSource'
-  ])
-  private wakePromise: Promise<void> | null = null
+  private static readonly WAKE_COMMANDS = new Set<StreamerCommand["type"]>([
+    "play",
+    "togglePlayback",
+    "playQueueId",
+    "recallPreset",
+    "streamRadio",
+    "setSource",
+  ]);
+  private wakePromise: Promise<void> | null = null;
 
   /**
    * Wake-on-intent: bring a NETWORK-standby streamer to ON and wait for the
@@ -304,47 +326,47 @@ export class DeviceManager {
    * The 2.5s settle is the scheduler's proven runway before recalls.
    */
   async ensureAwake(): Promise<void> {
-    if (this.cache.systemPower == null || this.cache.systemPower.power === 'ON') return
-    if (this.wakePromise) return this.wakePromise
+    if (this.cache.systemPower == null || this.cache.systemPower.power === "ON") return;
+    if (this.wakePromise) return this.wakePromise;
     this.wakePromise = (async () => {
-      this.push({ kind: 'waking', waking: true })
+      this.push({ kind: "waking", waking: true });
       try {
-        await this.command({ type: 'power', power: 'ON' })
+        await this.command({ type: "power", power: "ON" });
         // Event-driven readiness: the power push flips the cache; the timed
         // fallback covers a lost push. Then the settle for the zone/source.
-        const deadline = Date.now() + 8000
-        while (this.cache.systemPower?.power !== 'ON' && Date.now() < deadline) {
-          await new Promise((r) => setTimeout(r, 200))
+        const deadline = Date.now() + 8000;
+        while (this.cache.systemPower?.power !== "ON" && Date.now() < deadline) {
+          await new Promise((r) => setTimeout(r, 200));
         }
-        await new Promise((r) => setTimeout(r, 2500))
+        await new Promise((r) => setTimeout(r, 2500));
       } finally {
-        this.push({ kind: 'waking', waking: false })
-        this.wakePromise = null
+        this.push({ kind: "waking", waking: false });
+        this.wakePromise = null;
       }
-    })()
-    return this.wakePromise
+    })();
+    return this.wakePromise;
   }
 
   async command(cmd: StreamerCommand): Promise<void> {
-    const socket = this.socket
-    const host = socket?.host
+    const socket = this.socket;
+    const host = socket?.host;
     if (!socket || !host) {
-      this.log('warn', 'command', `ignored ${cmd.type} — not connected`)
-      return
+      this.log("warn", "command", `ignored ${cmd.type} — not connected`);
+      return;
     }
     // A half-dead socket (closed or mid-reconnect) used to swallow commands
     // silently — the user clicks a preset, the card marks, nothing plays.
     // Fail loudly instead so the renderer's central catch can toast it.
     if (!socket.isOpen()) {
-      this.log('warn', 'command', `dropped ${cmd.type} — socket not open`)
-      throw new Error(`streamer socket not open (${cmd.type})`)
+      this.log("warn", "command", `dropped ${cmd.type} — socket not open`);
+      throw new Error(`streamer socket not open (${cmd.type})`);
     }
     if (
       DeviceManager.WAKE_COMMANDS.has(cmd.type) &&
       this.cache.systemPower != null &&
-      this.cache.systemPower.power !== 'ON'
+      this.cache.systemPower.power !== "ON"
     ) {
-      await this.ensureAwake()
+      await this.ensureAwake();
     }
 
     // PASSIVE-ONLY firmware policy (explicit user decision): there is NO command
@@ -360,49 +382,51 @@ export class DeviceManager {
       // and the firmware SILENTLY IGNORES the explicit verbs there. Honor the
       // device's own controls contract: translate to toggle when the explicit
       // verb isn't offered, guarded by current state so pause never resumes.
-      case 'play': {
-        const controls = this.cache.nowPlaying?.controls ?? []
-        if (!controls.includes('play') && controls.includes('play_pause')) {
-          if (this.cache.playState?.state === 'play') return
-          return socket.send('/zone/play_control', { action: 'toggle' })
+      case "play": {
+        const controls = this.cache.nowPlaying?.controls ?? [];
+        if (!controls.includes("play") && controls.includes("play_pause")) {
+          if (this.cache.playState?.state === "play") return;
+          return socket.send("/zone/play_control", { action: "toggle" });
         }
-        return socket.send('/zone/play_control', { action: 'play' })
+        return socket.send("/zone/play_control", { action: "play" });
       }
-      case 'pause': {
-        const controls = this.cache.nowPlaying?.controls ?? []
-        if (!controls.includes('pause') && controls.includes('play_pause')) {
-          if (this.cache.playState?.state !== 'play') return
-          return socket.send('/zone/play_control', { action: 'toggle' })
+      case "pause": {
+        const controls = this.cache.nowPlaying?.controls ?? [];
+        if (!controls.includes("pause") && controls.includes("play_pause")) {
+          if (this.cache.playState?.state !== "play") return;
+          return socket.send("/zone/play_control", { action: "toggle" });
         }
-        return socket.send('/zone/play_control', { action: 'pause' })
+        return socket.send("/zone/play_control", { action: "pause" });
       }
-      case 'stop':
-        return socket.send('/zone/play_control', { action: 'stop' })
-      case 'togglePlayback':
-        return socket.send('/zone/play_control', { action: 'toggle' })
-      case 'nextTrack':
-        return socket.send('/zone/play_control', { skip_track: 1 })
-      case 'previousTrack':
-        return socket.send('/zone/play_control', { skip_track: -1 })
-      case 'seek':
-        return socket.send('/zone/play_control', { position: Math.max(0, Math.round(cmd.positionSecs)) })
-      case 'playQueueId':
-        return socket.send('/zone/play_control', { queue_id: cmd.queueId })
-      case 'setRepeat':
-        return socket.send('/zone/play_control', { mode_repeat: cmd.mode })
-      case 'setShuffle':
-        return socket.send('/zone/play_control', { mode_shuffle: cmd.mode })
-      case 'recallPreset': {
-        this.setRecalledPreset(cmd.presetId)
-        socket.send('/zone/recall_preset', { preset: cmd.presetId })
+      case "stop":
+        return socket.send("/zone/play_control", { action: "stop" });
+      case "togglePlayback":
+        return socket.send("/zone/play_control", { action: "toggle" });
+      case "nextTrack":
+        return socket.send("/zone/play_control", { skip_track: 1 });
+      case "previousTrack":
+        return socket.send("/zone/play_control", { skip_track: -1 });
+      case "seek":
+        return socket.send("/zone/play_control", {
+          position: Math.max(0, Math.round(cmd.positionSecs)),
+        });
+      case "playQueueId":
+        return socket.send("/zone/play_control", { queue_id: cmd.queueId });
+      case "setRepeat":
+        return socket.send("/zone/play_control", { mode_repeat: cmd.mode });
+      case "setShuffle":
+        return socket.send("/zone/play_control", { mode_shuffle: cmd.mode });
+      case "recallPreset": {
+        this.setRecalledPreset(cmd.presetId);
+        socket.send("/zone/recall_preset", { preset: cmd.presetId });
         // Feature 10: the preset's local volume override rides along on every
         // recall through the app — after a beat for the source switch — unless
         // the caller (a schedule with its own volume) opts out.
         if (!cmd.skipVolume) {
           const level =
-            getSettings().presetVolumes[presetVolumeKey(this.cache.systemInfo?.udn, cmd.presetId)]
+            getSettings().presetVolumes[presetVolumeKey(this.cache.systemInfo?.udn, cmd.presetId)];
           if (level != null) {
-            setTimeout(() => void this.command({ type: 'setVolumePercent', percent: level }), 1200)
+            setTimeout(() => void this.command({ type: "setVolumePercent", percent: level }), 1200);
           }
         }
         // The device updates is_playing internally but doesn't reliably push
@@ -410,100 +434,100 @@ export class DeviceManager {
         // once quickly (radio) and once late (album recalls switch source and
         // load a queue first); source- and queue-change refetches fire between.
         for (const delay of [800, 2800]) {
-          setTimeout(() => void this.refreshPresets(socket), delay)
+          setTimeout(() => void this.refreshPresets(socket), delay);
         }
-        return
+        return;
       }
-      case 'power':
+      case "power":
         // Re-sending ON to a powered-on streamer reboots it (PunyTunes' hard-won guard).
-        if (cmd.power === 'ON' && this.cache.systemPower?.power === 'ON') return
-        return socket.send('/system/power', { power: cmd.power })
-      case 'setMute':
-        return socket.send('/zone/state', { mute: cmd.mute })
-      case 'setSource':
-        return socket.send('/zone/state', { source: cmd.sourceId })
-      case 'setVolumeStep':
-        return socket.send('/zone/state', { volume_step: cmd.step })
-      case 'setVolumePercent':
-        return socket.send('/zone/state', { volume_percent: this.clampVolume(cmd.percent) })
-      case 'volumeStepChange': {
-        const limit = getSettings().volumeLimitPercent
-        const current = this.cache.zoneState?.volume_percent
-        if (cmd.delta > 0 && limit != null && current != null && current >= limit) return
-        return socket.send('/zone/state', { volume_step_change: cmd.delta })
+        if (cmd.power === "ON" && this.cache.systemPower?.power === "ON") return;
+        return socket.send("/system/power", { power: cmd.power });
+      case "setMute":
+        return socket.send("/zone/state", { mute: cmd.mute });
+      case "setSource":
+        return socket.send("/zone/state", { source: cmd.sourceId });
+      case "setVolumeStep":
+        return socket.send("/zone/state", { volume_step: cmd.step });
+      case "setVolumePercent":
+        return socket.send("/zone/state", { volume_percent: this.clampVolume(cmd.percent) });
+      case "volumeStepChange": {
+        const limit = getSettings().volumeLimitPercent;
+        const current = this.cache.zoneState?.volume_percent;
+        if (cmd.delta > 0 && limit != null && current != null && current >= limit) return;
+        return socket.send("/zone/state", { volume_step_change: cmd.delta });
       }
-      case 'queueDelete':
-        return smoipHttp.queueDelete(host, cmd.id)
-      case 'queueClear':
-        return smoipHttp.queueClear(host)
-      case 'queueMove':
-        return smoipHttp.queueMove(host, cmd.id, cmd.from, cmd.to)
-      case 'presetDelete':
-        await smoipHttp.presetDelete(host, cmd.presetId)
-        return this.refreshPresets(socket)
-      case 'presetRename':
-        await smoipHttp.presetRename(host, cmd.slot, cmd.name)
-        return this.refreshPresets(socket)
-      case 'queueSavePreset':
-        await smoipHttp.queueSavePreset(host, cmd.slot, cmd.name)
-        return this.refreshPresets(socket)
-      case 'streamRadio':
-        return smoipHttp.streamRadio(host, cmd.url, cmd.name)
+      case "queueDelete":
+        return smoipHttp.queueDelete(host, cmd.id);
+      case "queueClear":
+        return smoipHttp.queueClear(host);
+      case "queueMove":
+        return smoipHttp.queueMove(host, cmd.id, cmd.from, cmd.to);
+      case "presetDelete":
+        await smoipHttp.presetDelete(host, cmd.presetId);
+        return this.refreshPresets(socket);
+      case "presetRename":
+        await smoipHttp.presetRename(host, cmd.slot, cmd.name);
+        return this.refreshPresets(socket);
+      case "queueSavePreset":
+        await smoipHttp.queueSavePreset(host, cmd.slot, cmd.name);
+        return this.refreshPresets(socket);
+      case "streamRadio":
+        return smoipHttp.streamRadio(host, cmd.url, cmd.name);
       // ---- /zone/audio tone controls. One frame per logical control: writes
       // are ATOMIC on the firmware (one bad field rejects the whole frame —
       // the stranded-balance lesson from the 2026-07-19 probe). WS params are
       // JSON, so the '+'-literal query-encoding trap doesn't apply here.
-      case 'setUserEq':
+      case "setUserEq":
         // Boolean ON WRITE — the read returns {enabled, bands}; writing the
         // object shape 400s with code 112.
-        return socket.send('/zone/audio', { zone: 'ZONE1', user_eq: cmd.enabled })
-      case 'setEqBandGain':
-        return socket.send('/zone/audio', {
-          zone: 'ZONE1',
-          user_eq_bands: bandString([[cmd.index, cmd.gain]])
-        })
-      case 'setEqBands':
-        return socket.send('/zone/audio', {
-          zone: 'ZONE1',
-          user_eq_bands: bandString(cmd.gains.map((g, i) => [i, g]))
-        })
-      case 'setTiltEq':
-        return socket.send('/zone/audio', { zone: 'ZONE1', tilt_eq: cmd.enabled })
-      case 'setTiltIntensity':
-        return socket.send('/zone/audio', {
-          zone: 'ZONE1',
-          tilt_intensity: this.clampSpec(cmd.intensity, this.cache.audioSpec?.tilt_eq)
-        })
-      case 'setBalance':
-        return socket.send('/zone/audio', {
-          zone: 'ZONE1',
-          balance: this.clampSpec(cmd.balance, this.cache.audioSpec?.balance)
-        })
+        return socket.send("/zone/audio", { zone: "ZONE1", user_eq: cmd.enabled });
+      case "setEqBandGain":
+        return socket.send("/zone/audio", {
+          zone: "ZONE1",
+          user_eq_bands: bandString([[cmd.index, cmd.gain]]),
+        });
+      case "setEqBands":
+        return socket.send("/zone/audio", {
+          zone: "ZONE1",
+          user_eq_bands: bandString(cmd.gains.map((g, i) => [i, g])),
+        });
+      case "setTiltEq":
+        return socket.send("/zone/audio", { zone: "ZONE1", tilt_eq: cmd.enabled });
+      case "setTiltIntensity":
+        return socket.send("/zone/audio", {
+          zone: "ZONE1",
+          tilt_intensity: this.clampSpec(cmd.intensity, this.cache.audioSpec?.tilt_eq),
+        });
+      case "setBalance":
+        return socket.send("/zone/audio", {
+          zone: "ZONE1",
+          balance: this.clampSpec(cmd.balance, this.cache.audioSpec?.balance),
+        });
       // ---- §10 device controls (writes over the WS like the power command;
       // ---- standby fields are partial writes to /system/power, so they never
       // ---- carry `power` and can't trip the re-send-ON reboot guard)
-      case 'setBrightness':
-        return socket.send('/system/display', { brightness: cmd.brightness })
-      case 'setStandbyMode':
-        return socket.send('/system/power', { standby_mode: cmd.mode })
-      case 'setAutoPowerDown': {
+      case "setBrightness":
+        return socket.send("/system/display", { brightness: cmd.brightness });
+      case "setStandbyMode":
+        return socket.send("/system/power", { standby_mode: cmd.mode });
+      case "setAutoPowerDown": {
         // Clamp to the probed spec range like balance/tilt — the UI only
         // offers in-range presets, but the boundary shouldn't rely on that.
-        const r = this.cache.powerSpec?.auto_power_down
-        const secs = Math.max(0, Math.round(cmd.seconds))
-        return socket.send('/system/power', {
+        const r = this.cache.powerSpec?.auto_power_down;
+        const secs = Math.max(0, Math.round(cmd.seconds));
+        return socket.send("/system/power", {
           auto_power_down:
             r?.minimum != null && r?.maximum != null
               ? Math.max(r.minimum, Math.min(r.maximum, secs))
-              : secs
-        })
+              : secs,
+        });
       }
-      case 'zoneSavePreset':
-        await smoipHttp.zoneSavePreset(host, cmd.slot)
-        return this.refreshPresets(socket)
-      case 'presetMove':
-        await smoipHttp.presetMove(host, cmd.from, cmd.to)
-        return this.refreshPresets(socket)
+      case "zoneSavePreset":
+        await smoipHttp.zoneSavePreset(host, cmd.slot);
+        return this.refreshPresets(socket);
+      case "presetMove":
+        await smoipHttp.presetMove(host, cmd.from, cmd.to);
+        return this.refreshPresets(socket);
     }
   }
 
@@ -512,22 +536,22 @@ export class DeviceManager {
    * louder than the new limit, pull it down to the limit right away.
    */
   enforceVolumeLimit(): void {
-    const limit = getSettings().volumeLimitPercent
-    const current = this.cache.zoneState?.volume_percent
+    const limit = getSettings().volumeLimitPercent;
+    const current = this.cache.zoneState?.volume_percent;
     if (limit != null && current != null && current > limit) {
-      void this.command({ type: 'setVolumePercent', percent: limit })
+      void this.command({ type: "setVolumePercent", percent: limit });
     }
   }
 
   private clampVolume(percent: number): number {
-    const limit = getSettings().volumeLimitPercent
-    const capped = limit != null ? Math.min(percent, limit) : percent
-    return Math.max(0, Math.min(100, Math.round(capped)))
+    const limit = getSettings().volumeLimitPercent;
+    const capped = limit != null ? Math.min(percent, limit) : percent;
+    return Math.max(0, Math.min(100, Math.round(capped)));
   }
 
   /** Clamp an integer tone value to the spec's published range (fallback ±15). */
   private clampSpec(value: number, range?: { minimum?: number; maximum?: number }): number {
-    return Math.max(range?.minimum ?? -15, Math.min(range?.maximum ?? 15, Math.round(value)))
+    return Math.max(range?.minimum ?? -15, Math.min(range?.maximum ?? 15, Math.round(value)));
   }
 
   /**
@@ -536,11 +560,11 @@ export class DeviceManager {
    * "this streamer has no tone controls" and the UI section stays hidden.
    */
   private async probeAudioSpec(socket: SmoipSocket): Promise<void> {
-    const spec = (await smoipHttp.getAudioSpec(socket.host)) as ZoneAudioSpec | null
-    if (this.socket !== socket) return
-    this.cache.audioSpec = spec
-    this.push({ kind: 'audioSpec', data: spec })
-    if (spec) this.log('info', 'audio', 'tone/EQ spec present — controls enabled where writable')
+    const spec = (await smoipHttp.getAudioSpec(socket.host)) as ZoneAudioSpec | null;
+    if (this.socket !== socket) return;
+    this.cache.audioSpec = spec;
+    this.push({ kind: "audioSpec", data: spec });
+    if (spec) this.log("info", "audio", "tone/EQ spec present — controls enabled where writable");
   }
 
   /**
@@ -551,105 +575,105 @@ export class DeviceManager {
   private async probeSystemSpecs(socket: SmoipSocket): Promise<void> {
     const [display, power] = await Promise.all([
       smoipHttp.getDisplaySpec(socket.host) as Promise<SystemDisplaySpec | null>,
-      smoipHttp.getPowerSpec(socket.host) as Promise<SystemPowerSpec | null>
-    ])
-    if (this.socket !== socket) return
-    this.cache.displaySpec = display
-    this.cache.powerSpec = power
-    this.push({ kind: 'displaySpec', data: display })
-    this.push({ kind: 'powerSpec', data: power })
+      smoipHttp.getPowerSpec(socket.host) as Promise<SystemPowerSpec | null>,
+    ]);
+    if (this.socket !== socket) return;
+    this.cache.displaySpec = display;
+    this.cache.powerSpec = power;
+    this.push({ kind: "displaySpec", data: display });
+    this.push({ kind: "powerSpec", data: power });
   }
 
   // ------------------------------------------------------------ incoming frames
 
   private handleFrame(frame: SmoipFrame): void {
-    this.recordFrame('in', frame)
-    const data = frame.params?.data
-    if (data === undefined) return
+    this.recordFrame("in", frame);
+    const data = frame.params?.data;
+    if (data === undefined) return;
 
     switch (frame.path) {
-      case '/zone/play_state':
-        this.cache.playState = data as ZonePlayState
-        this.trackChangeNotification(this.cache.playState)
-        this.recordRecentlyPlayed(this.cache.playState)
-        this.sleepBoundaryCheck(this.cache.playState)
-        scrobbler.onPlayState(this.cache.playState)
-        return this.push({ kind: 'playState', data: this.cache.playState })
-      case '/zone/play_state/position':
-        this.cache.position = data as ZonePosition
-        return this.push({ kind: 'position', data: this.cache.position })
-      case '/zone/now_playing':
-        this.cache.nowPlaying = data as ZoneNowPlaying
-        this.sourceChanged((data as ZoneNowPlaying).source?.id)
-        return this.push({ kind: 'nowPlaying', data: this.cache.nowPlaying })
-      case '/zone/state':
-        this.cache.zoneState = data as ZoneState
-        this.sourceChanged((data as ZoneState).source)
-        return this.push({ kind: 'zoneState', data: this.cache.zoneState })
-      case '/queue/list':
-        this.cache.queue = data as QueueList
+      case "/zone/play_state":
+        this.cache.playState = data as ZonePlayState;
+        this.trackChangeNotification(this.cache.playState);
+        this.recordRecentlyPlayed(this.cache.playState);
+        this.sleepBoundaryCheck(this.cache.playState);
+        scrobbler.onPlayState(this.cache.playState);
+        return this.push({ kind: "playState", data: this.cache.playState });
+      case "/zone/play_state/position":
+        this.cache.position = data as ZonePosition;
+        return this.push({ kind: "position", data: this.cache.position });
+      case "/zone/now_playing":
+        this.cache.nowPlaying = data as ZoneNowPlaying;
+        this.sourceChanged((data as ZoneNowPlaying).source?.id);
+        return this.push({ kind: "nowPlaying", data: this.cache.nowPlaying });
+      case "/zone/state":
+        this.cache.zoneState = data as ZoneState;
+        this.sourceChanged((data as ZoneState).source);
+        return this.push({ kind: "zoneState", data: this.cache.zoneState });
+      case "/queue/list":
+        this.cache.queue = data as QueueList;
         // Mid-batch (playlist activation) the cache stays current but the
         // renderer hears nothing — one authoritative push lands at the end.
-        if (this.queueOps.batching) return
-        return this.push({ kind: 'queue', data: this.cache.queue })
-      case '/presets/list':
-        this.cache.presets = data as Presets
-        return this.push({ kind: 'presets', data: this.cache.presets })
-      case '/system/info':
-        this.cache.systemInfo = data as SystemInfo
-        return this.push({ kind: 'systemInfo', data: this.cache.systemInfo })
-      case '/system/power': {
-        const prev = this.cache.systemPower?.power
-        this.cache.systemPower = data as SystemPower
+        if (this.queueOps.batching) return;
+        return this.push({ kind: "queue", data: this.cache.queue });
+      case "/presets/list":
+        this.cache.presets = data as Presets;
+        return this.push({ kind: "presets", data: this.cache.presets });
+      case "/system/info":
+        this.cache.systemInfo = data as SystemInfo;
+        return this.push({ kind: "systemInfo", data: this.cache.systemInfo });
+      case "/system/power": {
+        const prev = this.cache.systemPower?.power;
+        this.cache.systemPower = data as SystemPower;
         // Waking from standby: re-request the queue — it may have CHANGED
         // shape across the cycle (live-probed 2026-07-23: server queues
         // survive standby, USB queues are dropped; USB remount also lags,
         // hence the second, late refetch).
-        if (prev != null && prev !== 'ON' && this.cache.systemPower.power === 'ON') {
+        if (prev != null && prev !== "ON" && this.cache.systemPower.power === "ON") {
           for (const delay of [2500, 10000]) {
-            setTimeout(() => this.socket?.isOpen() && this.socket.send('/queue/list'), delay)
+            setTimeout(() => this.socket?.isOpen() && this.socket.send("/queue/list"), delay);
           }
         }
-        return this.push({ kind: 'systemPower', data: this.cache.systemPower })
+        return this.push({ kind: "systemPower", data: this.cache.systemPower });
       }
-      case '/system/update': {
+      case "/system/update": {
         // Read-only firmware self-check the streamer pushes to subscribers.
         // Camelcase the wire shape into the clean FirmwareStatus the UI reads.
         // We NEVER act on this — see the PASSIVE-ONLY guard in command().
-        const u = data as SystemUpdate
+        const u = data as SystemUpdate;
         this.cache.firmwareUpdate = {
           updateAvailable: u.update_available === true,
           updating: u.updating === true,
-          earlyUpdate: u.early_update === true
-        }
-        return this.push({ kind: 'firmwareUpdate', data: this.cache.firmwareUpdate })
+          earlyUpdate: u.early_update === true,
+        };
+        return this.push({ kind: "firmwareUpdate", data: this.cache.firmwareUpdate });
       }
-      case '/system/sources':
-        this.cache.sources = data as SystemSources
-        return this.push({ kind: 'sources', data: this.cache.sources })
-      case '/zone/audio':
+      case "/system/sources":
+        this.cache.sources = data as SystemSources;
+        return this.push({ kind: "sources", data: this.cache.sources });
+      case "/zone/audio":
         // Pushed on every tone/EQ change, ours or another controller's
         // (confirmed live 2026-07-19) — the UI mirrors external tweaks free.
-        this.cache.zoneAudio = data as ZoneAudio
-        return this.push({ kind: 'zoneAudio', data: this.cache.zoneAudio })
-      case '/system/display':
-        this.cache.systemDisplay = data as SystemDisplay
-        return this.push({ kind: 'systemDisplay', data: this.cache.systemDisplay })
-      case '/queue/info': {
+        this.cache.zoneAudio = data as ZoneAudio;
+        return this.push({ kind: "zoneAudio", data: this.cache.zoneAudio });
+      case "/system/display":
+        this.cache.systemDisplay = data as SystemDisplay;
+        return this.push({ kind: "systemDisplay", data: this.cache.systemDisplay });
+      case "/queue/info": {
         // The socket already refetches /queue/list. A queue change is also the
         // only observable signal of an album->album preset recall (same source,
         // no /presets/list push) — refresh presets too, debounced.
-        if (this.queuePresetsTimer) clearTimeout(this.queuePresetsTimer)
-        const socket = this.socket
+        if (this.queuePresetsTimer) clearTimeout(this.queuePresetsTimer);
+        const socket = this.socket;
         this.queuePresetsTimer = setTimeout(() => {
-          this.queuePresetsTimer = null
-          void this.refreshPresets(socket)
-        }, 1000)
-        return
+          this.queuePresetsTimer = null;
+          void this.refreshPresets(socket);
+        }, 1000);
+        return;
       }
       default:
         // Command echoes (/zone/play_control etc.) are visible in the frame log.
-        return
+        return;
     }
   }
 
@@ -659,14 +683,14 @@ export class DeviceManager {
    * request for it isn't proven against real hardware; HTTP GET is.
    */
   private async refreshPresets(socket: SmoipSocket | null): Promise<void> {
-    if (!socket || this.socket !== socket) return
+    if (!socket || this.socket !== socket) return;
     try {
-      const data = await smoipHttp.getPresets(socket.host)
-      if (data == null || this.socket !== socket) return
-      this.cache.presets = data as Presets
-      this.push({ kind: 'presets', data: this.cache.presets })
+      const data = await smoipHttp.getPresets(socket.host);
+      if (data == null || this.socket !== socket) return;
+      this.cache.presets = data as Presets;
+      this.push({ kind: "presets", data: this.cache.presets });
     } catch (err) {
-      this.log('warn', 'presets', `refresh failed: ${(err as Error).message}`)
+      this.log("warn", "presets", `refresh failed: ${(err as Error).message}`);
     }
   }
 
@@ -678,12 +702,12 @@ export class DeviceManager {
    * after connect is initial state, not a change.
    */
   private sourceChanged(sourceId: string | null | undefined): void {
-    if (!sourceId || sourceId === this.lastSourceId) return
-    const isInitial = this.lastSourceId === null
-    this.lastSourceId = sourceId
-    if (isInitial) return
-    const socket = this.socket
-    setTimeout(() => void this.refreshPresets(socket), 500)
+    if (!sourceId || sourceId === this.lastSourceId) return;
+    const isInitial = this.lastSourceId === null;
+    this.lastSourceId = sourceId;
+    if (isInitial) return;
+    const socket = this.socket;
+    setTimeout(() => void this.refreshPresets(socket), 500);
   }
 
   /**
@@ -691,40 +715,45 @@ export class DeviceManager {
    * play_state after a connect only seeds the key — no notification for it.
    */
   private trackChangeNotification(playState: ZonePlayState): void {
-    const md = playState.metadata
-    const title = md?.title ?? md?.station ?? null
-    if (!title) return
-    const key = `${title}|${md?.artist ?? ''}`
-    if (key === this.currentTrackKey) return
-    const previous = this.currentTrackKey
-    this.currentTrackKey = key
-    if (previous === null) return
+    const md = playState.metadata;
+    const title = md?.title ?? md?.station ?? null;
+    if (!title) return;
+    const key = `${title}|${md?.artist ?? ""}`;
+    if (key === this.currentTrackKey) return;
+    const previous = this.currentTrackKey;
+    this.currentTrackKey = key;
+    if (previous === null) return;
 
-    if (!getSettings().notifications) return
-    if (!Notification.isSupported()) return
-    if (BrowserWindow.getAllWindows().some((w) => w.isFocused())) return
+    if (!getSettings().notifications) return;
+    if (!Notification.isSupported()) return;
+    if (BrowserWindow.getAllWindows().some((w) => w.isFocused())) return;
 
-    const body = [md?.artist, md?.album].filter(Boolean).join(' — ')
+    const body = [md?.artist, md?.album].filter(Boolean).join(" — ");
     void (async () => {
-      let icon
+      let icon;
       try {
         if (md?.art_url) {
-          const res = await loggedFetch('art', md.art_url, { signal: AbortSignal.timeout(2000) })
-          if (res.ok) icon = nativeImage.createFromBuffer(Buffer.from(await res.arrayBuffer()))
+          const res = await loggedFetch("art", md.art_url, { signal: AbortSignal.timeout(2000) });
+          if (res.ok) icon = nativeImage.createFromBuffer(Buffer.from(await res.arrayBuffer()));
         }
       } catch {
         // art is optional
       }
-      new Notification({ title, body, silent: true, ...(icon && !icon.isEmpty() ? { icon } : {}) }).show()
-    })()
+      new Notification({
+        title,
+        body,
+        silent: true,
+        ...(icon && !icon.isEmpty() ? { icon } : {}),
+      }).show();
+    })();
   }
 
   // ------------------------------------------------------------------ MCP status
 
   /** Status pushed by the MCP bridge (null = log only, keep current status). */
   setMediaIndex(statuses: MediaIndexStatus[]): void {
-    this.mediaIndexStatuses = statuses
-    this.push({ kind: 'mediaIndex', statuses })
+    this.mediaIndexStatuses = statuses;
+    this.push({ kind: "mediaIndex", statuses });
   }
 
   /**
@@ -734,15 +763,15 @@ export class DeviceManager {
    * mcpStatus, so it rides the snapshot and a fresh window sees it.
    */
   setMissedSchedule(missed: MissedSchedule | null): void {
-    this.missedSchedule = missed
-    this.push({ kind: 'scheduleMissed', missed })
+    this.missedSchedule = missed;
+    this.push({ kind: "scheduleMissed", missed });
   }
 
-  setMcpStatus(status: McpStatus | null, logText: string, level: LogEntry['level'] = 'info'): void {
-    this.log(level, 'mcp', logText)
+  setMcpStatus(status: McpStatus | null, logText: string, level: LogEntry["level"] = "info"): void {
+    this.log(level, "mcp", logText);
     if (status) {
-      this.mcpStatus = status
-      this.push({ kind: 'mcpStatus', status })
+      this.mcpStatus = status;
+      this.push({ kind: "mcpStatus", status });
     }
   }
 
@@ -755,25 +784,25 @@ export class DeviceManager {
   private recordRecentlyPlayed(ps: ZonePlayState): void {
     // Only log active playback: on connect (or wake) the device re-announces a
     // paused/stopped track's metadata, which must not become a phantom row.
-    if (ps.state !== 'play' && ps.state !== 'buffering') return
-    const md = ps.metadata
-    if (!md) return
-    const isRadio = isRadioMetadata(md)
-    const station = md.station ?? null
+    if (ps.state !== "play" && ps.state !== "buffering") return;
+    const md = ps.metadata;
+    if (!md) return;
+    const isRadio = isRadioMetadata(md);
+    const station = md.station ?? null;
     // Radio titles normalize through the shared helper (absent / station-echo
     // "songs" become null) so recording and matching can never drift.
-    const title = isRadio ? radioTrackTitle(md) : (md.title ?? null)
-    if (!title && !station) return // nothing identifiable to log
+    const title = isRadio ? radioTrackTitle(md) : (md.title ?? null);
+    if (!title && !station) return; // nothing identifiable to log
 
-    const sourceId = md.source ?? this.cache.nowPlaying?.source?.id ?? null
+    const sourceId = md.source ?? this.cache.nowPlaying?.source?.id ?? null;
     // Continuous sources (radio, AirPlay, Spotify, …) group into one session; a
     // queued local track has a queue_id and stays a discrete row of its own.
     const session =
       ps.queue_id != null
         ? null
         : isRadio
-          ? `radio:${station ?? sourceId ?? ''}`
-          : `src:${sourceId ?? 'stream'}`
+          ? `radio:${station ?? sourceId ?? ""}`
+          : `src:${sourceId ?? "stream"}`;
 
     const entry: RecentTrack = {
       at: Date.now(),
@@ -787,27 +816,27 @@ export class DeviceManager {
       queueId: ps.queue_id ?? null,
       isRadio,
       radioId: md.radio_id ?? null,
-      session
-    }
-    const { list, changed } = recordRecent(entry)
-    if (changed) this.push({ kind: 'recents', data: list })
+      session,
+    };
+    const { list, changed } = recordRecent(entry);
+    if (changed) this.push({ kind: "recents", data: list });
   }
 
   clearRecents(): void {
-    this.push({ kind: 'recents', data: clearRecents() })
+    this.push({ kind: "recents", data: clearRecents() });
   }
 
   recentsRestore(list: Parameters<typeof restoreRecents>[0]): void {
-    this.push({ kind: 'recents', data: restoreRecents(list) })
+    this.push({ kind: "recents", data: restoreRecents(list) });
   }
 
   // ------------------------------------------------------------------ favorites
 
   /** Favorites mutations live here so every window sees the push. */
   favoriteAdd(fav: Parameters<typeof addFavorite>[0]): ReturnType<typeof getFavorites> {
-    const list = addFavorite(fav)
-    this.push({ kind: 'favorites', data: list })
-    return list
+    const list = addFavorite(fav);
+    this.push({ kind: "favorites", data: list });
+    return list;
   }
 
   /**
@@ -820,82 +849,93 @@ export class DeviceManager {
    * cached queue both move under a run as frames arrive.
    */
   private readonly queueOps = new QueueOps({
-    host: () => (this.connection.phase === 'connected' ? this.connection.host : null),
+    host: () => (this.connection.phase === "connected" ? this.connection.host : null),
     socket: () => this.socket,
     queue: () => this.cache.queue ?? null,
     push: (msg) => this.push(msg),
-    ensureAwake: () => this.ensureAwake()
-  })
+    ensureAwake: () => this.ensureAwake(),
+  });
 
   /** Live activation state, for the boot snapshot. */
   get playlistActivation(): PlaylistActivation | null {
-    return this.queueOps.activation
+    return this.queueOps.activation;
   }
 
   cancelPlaylistActivation(): void {
-    this.queueOps.cancelActivation()
+    this.queueOps.cancelActivation();
   }
 
   /** See QueueOps.playlistActivate — one run at a time, batched, self-healing. */
   async playlistActivate(id: string): Promise<PlaylistActivation> {
-    return this.queueOps.playlistActivate(id)
+    return this.queueOps.playlistActivate(id);
   }
 
   // Playlist writes mirror the favorites verbs: mutate the bounded local file,
   // push the whole list, return it to the caller that asked.
   private pushPlaylists(list: ReturnType<typeof getPlaylists>): ReturnType<typeof getPlaylists> {
-    this.push({ kind: 'playlists', data: list })
-    return list
+    this.push({ kind: "playlists", data: list });
+    return list;
   }
 
   /** Returns the CREATED playlist (its stored name may have been uniquified). */
   playlistCreate(name: string, items: Parameters<typeof createPlaylist>[1]): Playlist {
-    const { list, created } = createPlaylist(name, items)
-    this.pushPlaylists(list)
-    return created
+    const { list, created } = createPlaylist(name, items);
+    this.pushPlaylists(list);
+    return created;
   }
 
   playlistRename(id: string, name: string): ReturnType<typeof getPlaylists> {
-    return this.pushPlaylists(renamePlaylist(id, name))
+    return this.pushPlaylists(renamePlaylist(id, name));
   }
 
   playlistDelete(id: string): ReturnType<typeof getPlaylists> {
-    return this.pushPlaylists(deletePlaylist(id))
+    return this.pushPlaylists(deletePlaylist(id));
   }
 
-  playlistRestore(playlist: Parameters<typeof restorePlaylist>[0]): ReturnType<typeof getPlaylists> {
-    return this.pushPlaylists(restorePlaylist(playlist))
+  playlistRestore(
+    playlist: Parameters<typeof restorePlaylist>[0],
+  ): ReturnType<typeof getPlaylists> {
+    return this.pushPlaylists(restorePlaylist(playlist));
   }
 
   /** See QueueOps.queueRestore — the undo behind the queue's ×. */
   async queueRestore(ref: ContentRef, position: number): Promise<QueueRestoreResult> {
-    return this.queueOps.queueRestore(ref, position)
+    return this.queueOps.queueRestore(ref, position);
   }
 
   /** See QueueOps.contentResolve — index-first resolution of a track known
    *  only by its content. */
   async contentResolve(ref: ContentRef): Promise<ResolvedContent | null> {
-    return this.queueOps.contentResolve(ref)
+    return this.queueOps.contentResolve(ref);
   }
 
-  playlistSetItems(id: string, items: Parameters<typeof setPlaylistItems>[1]): ReturnType<typeof getPlaylists> {
-    return this.pushPlaylists(setPlaylistItems(id, items))
+  playlistSetItems(
+    id: string,
+    items: Parameters<typeof setPlaylistItems>[1],
+  ): ReturnType<typeof getPlaylists> {
+    return this.pushPlaylists(setPlaylistItems(id, items));
   }
 
-  playlistAppend(id: string, items: Parameters<typeof appendToPlaylist>[1]): ReturnType<typeof getPlaylists> {
-    return this.pushPlaylists(appendToPlaylist(id, items))
+  playlistAppend(
+    id: string,
+    items: Parameters<typeof appendToPlaylist>[1],
+  ): ReturnType<typeof getPlaylists> {
+    return this.pushPlaylists(appendToPlaylist(id, items));
   }
 
   favoriteRemove(key: string): ReturnType<typeof getFavorites> {
-    const list = removeFavorite(key)
-    this.push({ kind: 'favorites', data: list })
-    return list
+    const list = removeFavorite(key);
+    this.push({ kind: "favorites", data: list });
+    return list;
   }
 
-  favoriteUpdate(key: string, patch: Parameters<typeof updateFavorite>[1]): ReturnType<typeof getFavorites> {
-    const list = updateFavorite(key, patch)
-    this.push({ kind: 'favorites', data: list })
-    return list
+  favoriteUpdate(
+    key: string,
+    patch: Parameters<typeof updateFavorite>[1],
+  ): ReturnType<typeof getFavorites> {
+    const list = updateFavorite(key, patch);
+    this.push({ kind: "favorites", data: list });
+    return list;
   }
 
   // ----------------------------------------------------------------- push relay
@@ -906,47 +946,47 @@ export class DeviceManager {
    * OS owns, so it has to be rebuilt when the device moves; without this it
    * would sit there describing a streamer that has since gone to standby.
    */
-  onPush: ((msg: PushMessage) => void) | null = null
+  onPush: ((msg: PushMessage) => void) | null = null;
 
   private push(msg: PushMessage): void {
     for (const wc of webContents.getAllWebContents()) {
-      if (!wc.isDestroyed()) wc.send('tt:push', msg)
+      if (!wc.isDestroyed()) wc.send("tt:push", msg);
     }
-    this.onPush?.(msg)
+    this.onPush?.(msg);
   }
 
   private setRecalledPreset(id: number | null): void {
-    if (id === this.lastRecalledPresetId) return
-    this.lastRecalledPresetId = id
-    this.push({ kind: 'recalledPreset', id })
+    if (id === this.lastRecalledPresetId) return;
+    this.lastRecalledPresetId = id;
+    this.push({ kind: "recalledPreset", id });
   }
 
   private setConnection(state: ConnectionState): void {
-    if (state.phase !== 'idle' && this.demo) state.demo = true
-    this.connection = state
+    if (state.phase !== "idle" && this.demo) state.demo = true;
+    this.connection = state;
     // Wallclock-based listen accounting can't survive a dead link or a device
     // switch — drop the in-flight track rather than over-count it.
-    if (state.phase !== 'connected') scrobbler.reset()
-    this.push({ kind: 'connection', state })
+    if (state.phase !== "connected") scrobbler.reset();
+    this.push({ kind: "connection", state });
   }
 
   private pushDevices(): void {
-    this.push({ kind: 'devices', devices: this.devices, discovering: this.discovering })
+    this.push({ kind: "devices", devices: this.devices, discovering: this.discovering });
   }
 
-  private recordFrame(dir: 'in' | 'out', frame: SmoipFrame): void {
-    const entry: FrameEntry = { at: Date.now(), dir, frame }
-    this.frames.push(entry)
-    if (this.frames.length > FRAME_RING_SIZE) this.frames.shift()
-    this.push({ kind: 'frame', entry })
+  private recordFrame(dir: "in" | "out", frame: SmoipFrame): void {
+    const entry: FrameEntry = { at: Date.now(), dir, frame };
+    this.frames.push(entry);
+    if (this.frames.length > FRAME_RING_SIZE) this.frames.shift();
+    this.push({ kind: "frame", entry });
   }
 
-  private log(level: LogEntry['level'], scope: string, text: string): void {
-    const entry: LogEntry = { at: Date.now(), level, scope, text }
-    this.logs.push(entry)
-    if (this.logs.length > LOG_RING_SIZE) this.logs.shift()
-    this.push({ kind: 'log', entry })
-    console.log(`[${scope}] ${text}`)
+  private log(level: LogEntry["level"], scope: string, text: string): void {
+    const entry: LogEntry = { at: Date.now(), level, scope, text };
+    this.logs.push(entry);
+    if (this.logs.length > LOG_RING_SIZE) this.logs.shift();
+    this.push({ kind: "log", entry });
+    console.log(`[${scope}] ${text}`);
   }
 
   // ------------------------------------------------------------------- snapshot
@@ -969,7 +1009,7 @@ export class DeviceManager {
       mediaIndex: this.mediaIndexStatuses,
       frames: this.frames,
       logs: this.logs,
-      netRequests: getNetRequests()
-    }
+      netRequests: getNetRequests(),
+    };
   }
 }

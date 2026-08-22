@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState } from "react";
 import {
   ArrowRight,
   Disc3,
@@ -16,45 +16,49 @@ import {
   Shuffle,
   SkipBack,
   SkipForward,
-  Unplug
-} from 'lucide-react'
-import { isCbusMode, isPreAmpMode } from '@shared/smoip'
-import type { ScreenLayout } from '@shared/model'
-import { tt } from '@/api'
-import { useStore } from '@/store'
-import { usePlayhead } from '@/hooks/usePlayhead'
-import { useArtAccent } from '@/hooks/useArtAccent'
-import { useMotionPreference } from '@/hooks/useMotionPreference'
-import { useTheme } from '@/hooks/useTheme'
-import { useDisplayFont } from '@/hooks/useDisplayFont'
-import { useDecodedArt } from '@/hooks/useDecodedArt'
-import { useNowPlayingHeart } from '@/hooks/useNowPlayingHeart'
-import { useShortcuts } from '@/hooks/useShortcuts'
-import { useWakeHold } from '@/hooks/useWakeHold'
-import { useVolumeSlider, useWheelVolume } from '@/components/playback/VolumeCluster'
-import { VolumeDial } from '@/components/playback/VolumeDial'
-import { PlayPauseButton, TransportIconButton, useTransport } from '@/components/playback/Transport'
-import { useSeekScrub } from '@/hooks/useSeekScrub'
-import { Slider } from '@/components/controls/Slider'
-import { HeaderChip } from '@/components/chrome/Chrome'
-import { ArtImage } from '@/components/media/ArtImage'
-import { AmbientArt } from '@/components/media/AmbientArt'
-import { SignalLamp } from '@/components/device/SignalLamp'
-import { Segmented } from '@/components/controls/Segmented'
+  Unplug,
+} from "lucide-react";
+import { isCbusMode, isPreAmpMode } from "@shared/smoip";
+import type { ScreenLayout } from "@shared/model";
+import { tt } from "@/api";
+import { useStore } from "@/store";
+import { usePlayhead } from "@/hooks/usePlayhead";
+import { useArtAccent } from "@/hooks/useArtAccent";
+import { useMotionPreference } from "@/hooks/useMotionPreference";
+import { useTheme } from "@/hooks/useTheme";
+import { useDisplayFont } from "@/hooks/useDisplayFont";
+import { useDecodedArt } from "@/hooks/useDecodedArt";
+import { useNowPlayingHeart } from "@/hooks/useNowPlayingHeart";
+import { useShortcuts } from "@/hooks/useShortcuts";
+import { useWakeHold } from "@/hooks/useWakeHold";
+import { useVolumeSlider, useWheelVolume } from "@/components/playback/VolumeCluster";
+import { VolumeDial } from "@/components/playback/VolumeDial";
+import {
+  PlayPauseButton,
+  TransportIconButton,
+  useTransport,
+} from "@/components/playback/Transport";
+import { useSeekScrub } from "@/hooks/useSeekScrub";
+import { Slider } from "@/components/controls/Slider";
+import { HeaderChip } from "@/components/chrome/Chrome";
+import { ArtImage } from "@/components/media/ArtImage";
+import { AmbientArt } from "@/components/media/AmbientArt";
+import { SignalLamp } from "@/components/device/SignalLamp";
+import { Segmented } from "@/components/controls/Segmented";
 import {
   PlaylistsTab,
   PresetsTab,
   QueueTab,
   RecentTab,
   type TrayDensity,
-  type TrayTab
-} from '@/components/playback/TrayPanelTabs'
-import { cx, deriveNowPlaying, fmtTime } from '@/lib/format'
+  type TrayTab,
+} from "@/components/playback/TrayPanelTabs";
+import { cx, deriveNowPlaying, fmtTime } from "@/lib/format";
 
-const TABS: readonly TrayTab[] = ['queue', 'presets', 'playlists', 'recent']
+const TABS: readonly TrayTab[] = ["queue", "presets", "playlists", "recent"];
 /** A stored tab from a future (or hand-edited) settings file must not blank the body. */
 const coerceTab = (v: string): TrayTab =>
-  (TABS as readonly string[]).includes(v) ? (v as TrayTab) : 'queue'
+  (TABS as readonly string[]).includes(v) ? (v as TrayTab) : "queue";
 
 /**
  * The tray panel (?tray=1): what's playing, reachable without a window.
@@ -77,31 +81,31 @@ const coerceTab = (v: string): TrayTab =>
  * why this file is assembly rather than plumbing.
  */
 export function TrayPanel(): React.JSX.Element {
-  const connection = useStore((s) => s.connection)
-  const playState = useStore((s) => s.playState)
-  const nowPlaying = useStore((s) => s.nowPlaying)
-  const zoneState = useStore((s) => s.zoneState)
-  const systemInfo = useStore((s) => s.systemInfo)
-  const settings = useStore((s) => s.settings)
-  const saveSettings = useStore((s) => s.saveSettings)
-  const { position, duration } = usePlayhead()
-  const onWheel = useWheelVolume()
+  const connection = useStore((s) => s.connection);
+  const playState = useStore((s) => s.playState);
+  const nowPlaying = useStore((s) => s.nowPlaying);
+  const zoneState = useStore((s) => s.zoneState);
+  const systemInfo = useStore((s) => s.systemInfo);
+  const settings = useStore((s) => s.settings);
+  const saveSettings = useStore((s) => s.saveSettings);
+  const { position, duration } = usePlayhead();
+  const onWheel = useWheelVolume();
   // Unconditional, above any early return — the hook count must never shift.
-  const vol = useVolumeSlider()
-  const heart = useNowPlayingHeart()
+  const vol = useVolumeSlider();
+  const heart = useNowPlayingHeart();
   // Transport keys only — this window has no screens, palette or overlays, the
   // same call the mini player makes. Without it the panel was the one surface
   // where taking focus took your shortcuts away: space, the arrows and the
   // volume keys all went dead while it was open.
-  useShortcuts({ transportOnly: true })
-  const theme = useTheme(settings.theme)
-  useDisplayFont(settings.displayFont)
-  useMotionPreference(settings.motion)
+  useShortcuts({ transportOnly: true });
+  const theme = useTheme(settings.theme);
+  useDisplayFont(settings.displayFont);
+  useMotionPreference(settings.motion);
 
   // Shared with the bar and the mini — playing/busy arrive already gated on
   // `active` (see Transport.tsx for the drift this closed).
-  const t = useTransport(duration)
-  const { connected, powered, active } = t
+  const t = useTransport(duration);
+  const { connected, powered, active } = t;
 
   // ---- tabs and view controls.
   //
@@ -110,75 +114,78 @@ export function TrayPanel(): React.JSX.Element {
   // layout are the panel's OWN settings, not the main window's: a preference
   // travels between surfaces, a question about what fits does not. See
   // AppSettings.trayRowDensity for the rule.
-  const density: TrayDensity = settings.trayRowDensity
-  const presetsLayout: ScreenLayout = settings.trayPresetsLayout
-  const [tab, setTab] = useState<TrayTab>(() => coerceTab(settings.trayTab))
-  const opens = useStore((s) => s.trayOpens)
+  const density: TrayDensity = settings.trayRowDensity;
+  const presetsLayout: ScreenLayout = settings.trayPresetsLayout;
+  const [tab, setTab] = useState<TrayTab>(() => coerceTab(settings.trayTab));
+  const opens = useStore((s) => s.trayOpens);
   const pickTab = (next: TrayTab): void => {
-    setTab(next)
-    void saveSettings({ trayTab: next })
-  }
+    setTab(next);
+    void saveSettings({ trayTab: next });
+  };
   // Keyed on the OPEN COUNT, not on visibility: the panel is hidden rather
   // than destroyed, so this component never remounts and a boolean couldn't
   // tell two consecutive opens apart. Reads live values without subscribing,
   // so a queue emptying while the panel sits open doesn't yank the tab out
   // from under a click.
   useEffect(() => {
-    if (opens === 0) return
+    if (opens === 0) return;
     // BELT AND BRACES AGAINST A STALE FIRST FRAME. backgroundThrottling is off
     // for this window (see main/app/tray.ts) so its state stays live while
     // hidden, but a re-sync on open costs one IPC round trip and covers
     // anything a suspended renderer could still have missed — the panel is
     // hidden for hours at a time, and showing yesterday's album art for a
     // frame is exactly the thing that makes a surface feel untrustworthy.
-    void tt.getSnapshot().then((snapshot) => useStore.getState().init(snapshot))
-    const s = useStore.getState()
+    void tt.getSnapshot().then((snapshot) => useStore.getState().init(snapshot));
+    const s = useStore.getState();
     // "A queue tab on an idle streamer is an empty box" — two ways to get one,
     // and both count. Nothing playing (stopped, or never started) is the
     // obvious case; the other is RADIO, which plays happily with no queue
     // behind it at all. Paused counts as playing: you paused it, the queue is
     // still yours, and Queue is where you meant to be.
-    const st = s.playState?.state
-    const nothingPlaying = st !== 'play' && st !== 'pause'
-    const emptyQueue = (s.queue?.items?.length ?? 0) === 0
-    const stored = coerceTab(s.settings.trayTab)
-    setTab(stored === 'queue' && (nothingPlaying || emptyQueue) ? 'presets' : stored)
-  }, [opens])
+    const st = s.playState?.state;
+    const nothingPlaying = st !== "play" && st !== "pause";
+    const emptyQueue = (s.queue?.items?.length ?? 0) === 0;
+    const stored = coerceTab(s.settings.trayTab);
+    setTab(stored === "queue" && (nothingPlaying || emptyQueue) ? "presets" : stored);
+  }, [opens]);
 
   // ---- playlist activation, and the dismissal rules it drives.
   //
   // Started HERE, specifically: a run someone kicked off in the main window
   // must not hold this panel open — the rule is about not losing YOUR click's
   // progress, not about any activation anywhere.
-  const activation = useStore((s) => s.playlistActivation)
-  const [startedId, setStartedId] = useState<string | null>(null)
+  const activation = useStore((s) => s.playlistActivation);
+  const [startedId, setStartedId] = useState<string | null>(null);
   const holding =
-    startedId != null && !!activation && !activation.finished && activation.playlistId === startedId
+    startedId != null &&
+    !!activation &&
+    !activation.finished &&
+    activation.playlistId === startedId;
   const startActivation = (p: { id: string; name: string }): void => {
-    setStartedId(p.id)
-    setTab('playlists')
-    void tt.playlistActivate(p.id).catch(() => setStartedId(null))
-  }
+    setStartedId(p.id);
+    setTab("playlists");
+    void tt.playlistActivate(p.id).catch(() => setStartedId(null));
+  };
   useEffect(() => {
-    if (activation?.finished && activation.playlistId === startedId) setStartedId(null)
-  }, [activation?.finished, activation?.playlistId, startedId])
+    if (activation?.finished && activation.playlistId === startedId) setStartedId(null);
+  }, [activation?.finished, activation?.playlistId, startedId]);
   // NB main holds the panel open independently, and learns the run is the
   // panel's from the IPC SENDER of playlistActivate rather than from a message
   // — nothing here needs to tell it. This local flag is only for the cue.
 
-  const meta = deriveNowPlaying(playState, nowPlaying)
-  useArtAccent(settings.accentFollowsArt && active ? meta.artUrl : null, theme)
-  const { art } = useDecodedArt(meta.artUrl)
+  const meta = deriveNowPlaying(playState, nowPlaying);
+  useArtAccent(settings.accentFollowsArt && active ? meta.artUrl : null, theme);
+  const { art } = useDecodedArt(meta.artUrl);
 
-  const muted = zoneState?.mute === true
-  const preAmp = isPreAmpMode(zoneState)
-  const cbus = isCbusMode(zoneState)
-  const hasVolume = zoneState != null && (preAmp || cbus)
+  const muted = zoneState?.mute === true;
+  const preAmp = isPreAmpMode(zoneState);
+  const cbus = isCbusMode(zoneState);
+  const hasVolume = zoneState != null && (preAmp || cbus);
 
   // ---- seek. Shared scrub-and-hold (see useSeekScrub): the thumb tracks the
   // drag rather than the streamer's ~1s-late pushes, and holds the target
   // after release instead of snapping back — the bar's old fix, now here too.
-  const { shownPosition, slider } = useSeekScrub(position, duration, t.seek)
+  const { shownPosition, slider } = useSeekScrub(position, duration, t.seek);
 
   // The status line. A panel that hides the streamer's state lies about it, so
   // connection and standby are always readable — and wake-from-standby is
@@ -187,8 +194,8 @@ export function TrayPanel(): React.JSX.Element {
   // The phase check inline (not `connected`): host only exists on the
   // connected arm of the union, and TS can't narrow through the hook's boolean.
   const deviceName =
-    systemInfo?.name?.trim() || (connection.phase === 'connected' ? connection.host : null)
-  const sourceName = active ? (nowPlaying?.source?.name ?? null) : null
+    systemInfo?.name?.trim() || (connection.phase === "connected" ? connection.host : null);
+  const sourceName = active ? (nowPlaying?.source?.name ?? null) : null;
   // THE SOURCE while playing; the DEVICE only when the device is the thing you
   // need told. Naming the streamer on every line was noise — you own it, you
   // know what it's called — but "which box is asleep" and "connected to what"
@@ -200,28 +207,28 @@ export function TrayPanel(): React.JSX.Element {
   // pre-standby play_state — so the header flashed the old track as though it
   // were playing while the recall was still in flight. Same hold as the main
   // window's StandbyGate (see useWakeHold for the whole story).
-  const waking = useStore((s) => s.waking)
-  const wakeHolding = useWakeHold()
-  const standby = connected && (!powered || waking || wakeHolding)
+  const waking = useStore((s) => s.waking);
+  const wakeHolding = useWakeHold();
+  const standby = connected && (!powered || waking || wakeHolding);
   // NO STREAMER AT ALL gets its own face, for the same reason standby does: a
   // dead transport over an empty art tile spends the panel's whole header
   // saying "no". Worse here than in standby, because the answer isn't on this
   // surface — connecting means discovery or typing an address, neither of
   // which belongs in a 380px panel that dismisses on blur. So the face says
   // what's wrong and opens the app where it can be fixed.
-  const offline = !connected
-  const sourceBadge = connected && powered ? sourceName : null
+  const offline = !connected;
+  const sourceBadge = connected && powered ? sourceName : null;
   const statusText = !connected
-    ? connection.phase === 'connecting'
-      ? 'Connecting…'
-      : 'Not connected'
+    ? connection.phase === "connecting"
+      ? "Connecting…"
+      : "Not connected"
     : !powered
-      ? `${deviceName ?? 'Streamer'} · Standby`
-      : (sourceName ?? deviceName ?? 'Connected')
+      ? `${deviceName ?? "Streamer"} · Standby`
+      : (sourceName ?? deviceName ?? "Connected");
   // Format detail is the badges the app already derives (codec / rate / depth).
   // Compressed to a single string: the panel has one line for this, and the
   // full chain is a click away on the lamp.
-  const formatText = active ? meta.badges.slice(0, 3).join(' · ') : ''
+  const formatText = active ? meta.badges.slice(0, 3).join(" · ") : "";
 
   return (
     <div className="h-screen w-screen p-1">
@@ -233,18 +240,18 @@ export function TrayPanel(): React.JSX.Element {
           // lamp's tooltip and its detail popover both got cut off at the card
           // edge. The clip belongs on the thing that actually needs it (the
           // ambient art layer below), not on the whole surface.
-          'relative h-full w-full rounded-2xl bg-panel flex flex-col shadow-[0_18px_50px_rgb(0_0_0_/_0.55)] ring-1 transition-[box-shadow,--tw-ring-color]',
+          "relative h-full w-full rounded-2xl bg-panel flex flex-col shadow-[0_18px_50px_rgb(0_0_0_/_0.55)] ring-1 transition-[box-shadow,--tw-ring-color]",
           // THE CUE. While a run this panel started is in flight, blur no
           // longer dismisses — and a surface that refuses to close without
           // saying why reads as stuck, not protective. A gold edge is the
           // quietest thing that says "held on purpose"; the tab's own row
           // carries the count and the cancel.
-          holding ? 'ring-gold/60' : 'ring-edge2'
+          holding ? "ring-gold/60" : "ring-edge2",
         )}
       >
         <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
           <AmbientArt
-            src={active && settings.ambientArt !== 'off' ? (art ?? null) : null}
+            src={active && settings.ambientArt !== "off" ? (art ?? null) : null}
             vignette={settings.vignette}
           />
         </div>
@@ -261,121 +268,130 @@ export function TrayPanel(): React.JSX.Element {
         ) : standby ? (
           <TrayStandby busy={waking || wakeHolding} />
         ) : (
-        <>
-        {/* ---- identity + volume ----
+          <>
+            {/* ---- identity + volume ----
             Wheel-to-volume is scoped to the HEADER, not the whole surface as
             in the mini player. The mini has nothing that scrolls, so
             wheel-anywhere is unambiguous there; here the tab body is a list,
             and a wheel bubbling out of it changed the volume while you were
             only trying to read the queue. */}
-        <div className="relative shrink-0 px-3 pt-3 pb-1.5" onWheel={onWheel}>
-          <div className="flex items-start gap-2.5">
-            <div className="relative h-14 w-14 shrink-0 rounded-lg overflow-hidden bg-raised flex items-center justify-center">
-              <ArtImage
-                src={active ? art : null}
-                fallback={
-                  meta.isRadio && active ? (
-                    <RadioTower size={22} className="text-faint" />
-                  ) : (
-                    <Disc3 size={22} className="text-faint" />
-                  )
-                }
-              />
-            </div>
-            <div className="flex-1 min-w-0 pt-0.5">
-              {/* min-heights keep the lines occupying space through the brief
+            <div className="relative shrink-0 px-3 pt-3 pb-1.5" onWheel={onWheel}>
+              <div className="flex items-start gap-2.5">
+                <div className="relative h-14 w-14 shrink-0 rounded-lg overflow-hidden bg-raised flex items-center justify-center">
+                  <ArtImage
+                    src={active ? art : null}
+                    fallback={
+                      meta.isRadio && active ? (
+                        <RadioTower size={22} className="text-faint" />
+                      ) : (
+                        <Disc3 size={22} className="text-faint" />
+                      )
+                    }
+                  />
+                </div>
+                <div className="flex-1 min-w-0 pt-0.5">
+                  {/* min-heights keep the lines occupying space through the brief
                   metadata gap on a track change, so nothing shifts. */}
-              <div className="flex items-center gap-1.5 min-h-[17px]">
-                <span className="font-display no-optical font-bold tracking-tight text-[14px] text-ink truncate leading-tight">
-                  {active ? (meta.title ?? ' ') : 'Nothing playing'}
-                </span>
-                {/* THE HEART SITS WITH THE TITLE, not in the corner. It acts on
+                  <div className="flex items-center gap-1.5 min-h-[17px]">
+                    <span className="font-display no-optical font-bold tracking-tight text-[14px] text-ink truncate leading-tight">
+                      {active ? (meta.title ?? " ") : "Nothing playing"}
+                    </span>
+                    {/* THE HEART SITS WITH THE TITLE, not in the corner. It acts on
                     the TRACK, so belonging to the track's name is if anything
                     more honest than the corner was — and the corner is worth
                     more to volume, which is what gets reached for without
                     opening the app. */}
-                {heart.available && active && (
-                  <button
-                    aria-label={heart.active ? 'Remove from favorites' : 'Add to favorites'}
-                    data-tip={heart.active ? 'Remove from favorites' : 'Add to favorites'}
-                    onClick={heart.toggle}
-                    className={cx(
-                      'tip-bottom shrink-0 p-0.5 rounded transition-colors',
-                      heart.active ? 'text-gold' : 'text-faint hover:text-ink'
+                    {heart.available && active && (
+                      <button
+                        aria-label={heart.active ? "Remove from favorites" : "Add to favorites"}
+                        data-tip={heart.active ? "Remove from favorites" : "Add to favorites"}
+                        onClick={heart.toggle}
+                        className={cx(
+                          "tip-bottom shrink-0 p-0.5 rounded transition-colors",
+                          heart.active ? "text-gold" : "text-faint hover:text-ink",
+                        )}
+                      >
+                        <Heart size={12} fill={heart.active ? "currentColor" : "none"} />
+                      </button>
                     )}
-                  >
-                    <Heart size={12} fill={heart.active ? 'currentColor' : 'none'} />
-                  </button>
+                  </div>
+                  <div className="font-display no-optical tracking-tight text-[12px] text-dim truncate leading-tight min-h-[14px]">
+                    {(active && meta.subtitle) || " "}
+                  </div>
+                  <div className="text-[11px] text-faint truncate leading-tight min-h-[13px]">
+                    {(active && meta.album) || " "}
+                  </div>
+                </div>
+                {/* VOLUME OWNS THE TOP-RIGHT CORNER — the squarest space the panel
+                has, which is the shape an arc wants and a slider doesn't. */}
+                {hasVolume && (
+                  <VolumeDial level={preAmp ? vol.levelNow : null} muted={muted} enabled={active} />
                 )}
               </div>
-              <div className="font-display no-optical tracking-tight text-[12px] text-dim truncate leading-tight min-h-[14px]">
-                {(active && meta.subtitle) || ' '}
-              </div>
-              <div className="text-[11px] text-faint truncate leading-tight min-h-[13px]">
-                {(active && meta.album) || ' '}
-              </div>
-            </div>
-            {/* VOLUME OWNS THE TOP-RIGHT CORNER — the squarest space the panel
-                has, which is the shape an arc wants and a slider doesn't. */}
-            {hasVolume && (
-              <VolumeDial level={preAmp ? vol.levelNow : null} muted={muted} enabled={active} />
-            )}
-          </div>
 
-          {/* ---- transport + modes + playhead, on one line ---- */}
-          <div data-transport className="flex items-center gap-1 mt-2">
-            {/* ORDER MATCHES THE PLAYBACK BAR: shuffle · prev · play · next ·
+              {/* ---- transport + modes + playhead, on one line ---- */}
+              <div data-transport className="flex items-center gap-1 mt-2">
+                {/* ORDER MATCHES THE PLAYBACK BAR: shuffle · prev · play · next ·
                 repeat. The two mode toggles bracket the transport there, and a
                 second surface that reshuffles them makes you look twice. */}
-            <TransportIconButton
-              size="compact"
-              enabled={active && t.canShuffle}
-              tip="Shuffle"
-              accent={t.shuffleOn}
-              onClick={t.toggleShuffle}
-            >
-              <Shuffle size={10} />
-            </TransportIconButton>
-            <TransportIconButton size="compact" enabled={active && t.canPrev} tip="Previous" onClick={t.prev}>
-              <SkipBack size={14} />
-            </TransportIconButton>
-            <PlayPauseButton size="compact" />
-            <TransportIconButton size="compact" enabled={active && t.canNext} tip="Next" onClick={t.next}>
-              <SkipForward size={14} />
-            </TransportIconButton>
-            <TransportIconButton
-              size="compact"
-              enabled={active && t.canRepeat}
-              tip="Repeat"
-              accent={t.repeatOn}
-              onClick={t.toggleRepeat}
-            >
-              <Repeat size={10} />
-            </TransportIconButton>
+                <TransportIconButton
+                  size="compact"
+                  enabled={active && t.canShuffle}
+                  tip="Shuffle"
+                  accent={t.shuffleOn}
+                  onClick={t.toggleShuffle}
+                >
+                  <Shuffle size={10} />
+                </TransportIconButton>
+                <TransportIconButton
+                  size="compact"
+                  enabled={active && t.canPrev}
+                  tip="Previous"
+                  onClick={t.prev}
+                >
+                  <SkipBack size={14} />
+                </TransportIconButton>
+                <PlayPauseButton size="compact" />
+                <TransportIconButton
+                  size="compact"
+                  enabled={active && t.canNext}
+                  tip="Next"
+                  onClick={t.next}
+                >
+                  <SkipForward size={14} />
+                </TransportIconButton>
+                <TransportIconButton
+                  size="compact"
+                  enabled={active && t.canRepeat}
+                  tip="Repeat"
+                  accent={t.repeatOn}
+                  onClick={t.toggleRepeat}
+                >
+                  <Repeat size={10} />
+                </TransportIconButton>
 
-            <span className="font-mono text-[10px] text-faint tabular-nums shrink-0 ml-1 w-8 text-right">
-              {active ? fmtTime(shownPosition) : ''}
-            </span>
-            <div className="flex-1 min-w-0">
-              {/* The position tooltip comes free: Slider's scrubLabel renders a
+                <span className="font-mono text-[10px] text-faint tabular-nums shrink-0 ml-1 w-8 text-right">
+                  {active ? fmtTime(shownPosition) : ""}
+                </span>
+                <div className="flex-1 min-w-0">
+                  {/* The position tooltip comes free: Slider's scrubLabel renders a
                   portaled, clamped bubble on hover as well as drag — the seek
                   bar is usually clicked rather than dragged, so a click needs
                   to know where it will land. */}
-              <Slider
-                value={duration ? shownPosition / duration : 0}
-                disabled={!active || !t.canSeek}
-                ariaLabel="Playhead"
-                scrubLabel={duration ? (v) => fmtTime(v * duration) : undefined}
-                {...slider}
-              />
+                  <Slider
+                    value={duration ? shownPosition / duration : 0}
+                    disabled={!active || !t.canSeek}
+                    ariaLabel="Playhead"
+                    scrubLabel={duration ? (v) => fmtTime(v * duration) : undefined}
+                    {...slider}
+                  />
+                </div>
+                <span className="font-mono text-[10px] text-faint tabular-nums shrink-0 w-8">
+                  {active && duration != null ? fmtTime(duration) : ""}
+                </span>
+              </div>
             </div>
-            <span className="font-mono text-[10px] text-faint tabular-nums shrink-0 w-8">
-              {active && duration != null ? fmtTime(duration) : ''}
-            </span>
-          </div>
-        </div>
-
-        </>
+          </>
         )}
 
         {/* ---- status: signal, source, format, power ----
@@ -394,34 +410,40 @@ export function TrayPanel(): React.JSX.Element {
              proportional label and a mono readout, and each font's default
              line box centres its glyphs differently — collapsing them to their
              glyph boxes lets `items-center` line up what you can see. */
-          <div data-status-row className="relative shrink-0 flex items-center px-3 h-6 text-[11px] leading-none">
-          {/* ORDER MATCHES NOW PLAYING: source, then the format badges, then
+          <div
+            data-status-row
+            className="relative shrink-0 flex items-center px-3 h-6 text-[11px] leading-none"
+          >
+            {/* ORDER MATCHES NOW PLAYING: source, then the format badges, then
               the lamp. There the lamp trails the chips it summarises, and a
               second surface that leads with it makes you re-learn the row.
               The BADGE is the status row's left anchor now, and it is a box,
               so it sits on the 16px content gutter rather than the 20px the
               lamp used to take as a button glyph. */}
-          {sourceBadge ? (
-            <span className="badge badge-sm truncate shrink-0 max-w-[46%]" title={sourceBadge}>
-              {sourceBadge}
-            </span>
-          ) : (
-            <span className="text-dim truncate shrink-0 max-w-[46%] leading-none" title={statusText}>
-              {statusText}
-            </span>
-          )}
-          {formatText && (
-            <span className="text-faint truncate font-mono text-[10px] ml-3 leading-none">
-              {formatText}
-            </span>
-          )}
-          {/* The lamp SUMMARISES the format beside it, so it sits tight to it
+            {sourceBadge ? (
+              <span className="badge badge-sm truncate shrink-0 max-w-[46%]" title={sourceBadge}>
+                {sourceBadge}
+              </span>
+            ) : (
+              <span
+                className="text-dim truncate shrink-0 max-w-[46%] leading-none"
+                title={statusText}
+              >
+                {statusText}
+              </span>
+            )}
+            {formatText && (
+              <span className="text-faint truncate font-mono text-[10px] ml-3 leading-none">
+                {formatText}
+              </span>
+            )}
+            {/* The lamp SUMMARISES the format beside it, so it sits tight to it
               — the same relationship it has on Now Playing. */}
-          <div className="shrink-0 ml-1">
-            <SignalLamp tipClass="tip-bottom tip-end" />
-          </div>
-          <div className="flex-1" />
-          {/* THE PLAYBACK BAR'S POWER CONTROL, at panel scale — filled gold
+            <div className="shrink-0 ml-1">
+              <SignalLamp tipClass="tip-bottom tip-end" />
+            </div>
+            <div className="flex-1" />
+            {/* THE PLAYBACK BAR'S POWER CONTROL, at panel scale — filled gold
               with the same glow and hover-grow, rather than a bare icon that
               happened to be gold. It is the one control here that commits the
               streamer to a state change, and in the main window it reads that
@@ -433,24 +455,23 @@ export function TrayPanel(): React.JSX.Element {
               move anything beside it — it simply overhangs into the padding
               above and below, which is empty. Asserted, so a future change to
               the row can't quietly start pushing things around. */}
-          <button
-            data-tip={powered ? 'Standby' : 'Wake'}
-            aria-label={powered ? 'Standby' : 'Wake'}
-            disabled={!connected}
-            onClick={() => void tt.command({ type: 'power', power: powered ? 'NETWORK' : 'ON' })}
-            className={cx(
-              'tip-top tip-end shrink-0 p-1.5 rounded-full flex items-center justify-center transition-all',
-              powered
-                ? 'bg-gold text-bg shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.35)] motion-safe:hover:scale-110 hover:shadow-[0_0_20px_rgb(var(--gold-rgb)_/_0.5)]'
-                : connected
-                  ? 'bg-veil2 text-faint hover:bg-golddim hover:text-gold motion-safe:hover:scale-110'
-                  : 'bg-veil2 text-faint/40'
-            )}
-          >
-            <Power size={14} strokeWidth={2.2} />
-          </button>
-        </div>
-
+            <button
+              data-tip={powered ? "Standby" : "Wake"}
+              aria-label={powered ? "Standby" : "Wake"}
+              disabled={!connected}
+              onClick={() => void tt.command({ type: "power", power: powered ? "NETWORK" : "ON" })}
+              className={cx(
+                "tip-top tip-end shrink-0 p-1.5 rounded-full flex items-center justify-center transition-all",
+                powered
+                  ? "bg-gold text-bg shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.35)] motion-safe:hover:scale-110 hover:shadow-[0_0_20px_rgb(var(--gold-rgb)_/_0.5)]"
+                  : connected
+                    ? "bg-veil2 text-faint hover:bg-golddim hover:text-gold motion-safe:hover:scale-110"
+                    : "bg-veil2 text-faint/40",
+              )}
+            >
+              <Power size={14} strokeWidth={2.2} />
+            </button>
+          </div>
         )}
 
         {/* ---- tabs + view controls ----
@@ -469,10 +490,10 @@ export function TrayPanel(): React.JSX.Element {
             // width evenly instead of sizing to their text.
             className="flex-1 min-w-0 [&>button]:flex-1 [&>button]:min-w-0 [&>button]:px-1 [&>button]:py-1 [&>button]:justify-center"
             options={[
-              { value: 'queue', label: 'Queue' },
-              { value: 'presets', label: 'Presets' },
-              { value: 'playlists', label: 'Playlists' },
-              { value: 'recent', label: 'Recent' }
+              { value: "queue", label: "Queue" },
+              { value: "presets", label: "Presets" },
+              { value: "playlists", label: "Playlists" },
+              { value: "recent", label: "Recent" },
             ]}
           />
           {/* THE LAYOUT CHIP'S SLOT IS ALWAYS THERE, even on tabs that have no
@@ -481,24 +502,28 @@ export function TrayPanel(): React.JSX.Element {
               between tabs — the labels visibly jumped. A reserved slot costs
               28px and keeps the row still. */}
           <div className="w-[26px] shrink-0">
-            {tab === 'presets' && (
+            {tab === "presets" && (
               <ViewChip
-                tip={presetsLayout === 'cards' ? 'View as rows' : 'View as cards'}
+                tip={presetsLayout === "cards" ? "View as rows" : "View as cards"}
                 onClick={() =>
-                  void saveSettings({ trayPresetsLayout: presetsLayout === 'cards' ? 'rows' : 'cards' })
+                  void saveSettings({
+                    trayPresetsLayout: presetsLayout === "cards" ? "rows" : "cards",
+                  })
                 }
               >
                 {/* Grid vs list — the shape question. */}
-                {presetsLayout === 'cards' ? <List size={13} /> : <LayoutGrid size={13} />}
+                {presetsLayout === "cards" ? <List size={13} /> : <LayoutGrid size={13} />}
               </ViewChip>
             )}
           </div>
           <ViewChip
-            tip={density === 'detailed' ? 'Compact view' : 'Detailed view'}
-            active={density === 'compressed'}
-            attrs={{ 'data-tray-density': density }}
+            tip={density === "detailed" ? "Compact view" : "Detailed view"}
+            active={density === "compressed"}
+            attrs={{ "data-tray-density": density }}
             onClick={() =>
-              void saveSettings({ trayRowDensity: density === 'detailed' ? 'compressed' : 'detailed' })
+              void saveSettings({
+                trayRowDensity: density === "detailed" ? "compressed" : "detailed",
+              })
             }
           >
             {/* Rows-in-a-box, showing the TARGET: four thin ones when a click
@@ -507,7 +532,7 @@ export function TrayPanel(): React.JSX.Element {
                 the two were both list glyphs and read as one control twice.
                 Compress/expand chevrons were the first fix and were worse: at
                 13px they collapse into something that looks like a ✕. */}
-            {density === 'detailed' ? <Rows4 size={13} /> : <Rows2 size={13} />}
+            {density === "detailed" ? <Rows4 size={13} /> : <Rows2 size={13} />}
           </ViewChip>
           {/* Same glyph the mini player uses for the same job — one icon means
               "take me to the app" wherever you meet it. */}
@@ -535,23 +560,23 @@ export function TrayPanel(): React.JSX.Element {
             // wider and the right-aligned column jumped as you switched tabs
             // (user, 2026-08-04). Same idiom as the main window's list
             // screens; S8 asserts one row right-edge across tabs.
-            'relative flex-1 min-h-0 overflow-y-auto [scrollbar-gutter:stable] pl-3 pr-2 pt-1.5 pb-2',
+            "relative flex-1 min-h-0 overflow-y-auto [scrollbar-gutter:stable] pl-3 pr-2 pt-1.5 pb-2",
             // Rhythm belongs to the FLOATING skin: detailed rows are ringed
             // cards and need air between them. Compressed rows are the flat
             // skin — one dense list — and a gap between flat rows just spends
             // the height the density exists to save.
-            density === 'detailed' && 'space-y-1.5'
+            density === "detailed" && "space-y-1.5",
           )}
           data-tray-body={tab}
         >
-          {tab === 'queue' && <QueueTab opens={opens} density={density} />}
-          {tab === 'presets' && <PresetsTab layout={presetsLayout} density={density} />}
-          {tab === 'playlists' && <PlaylistsTab density={density} onActivate={startActivation} />}
-          {tab === 'recent' && <RecentTab density={density} />}
+          {tab === "queue" && <QueueTab opens={opens} density={density} />}
+          {tab === "presets" && <PresetsTab layout={presetsLayout} density={density} />}
+          {tab === "playlists" && <PlaylistsTab density={density} onActivate={startActivation} />}
+          {tab === "recent" && <RecentTab density={density} />}
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 /**
@@ -565,13 +590,13 @@ function ViewChip({
   tip,
   active,
   attrs,
-  onClick
+  onClick,
 }: {
-  children: React.ReactNode
-  tip: string
-  active?: boolean
-  attrs?: Record<string, string | undefined>
-  onClick(): void
+  children: React.ReactNode;
+  tip: string;
+  active?: boolean;
+  attrs?: Record<string, string | undefined>;
+  onClick(): void;
 }): React.JSX.Element {
   return (
     <HeaderChip
@@ -584,7 +609,7 @@ function ViewChip({
     >
       {children}
     </HeaderChip>
-  )
+  );
 }
 
 /**
@@ -621,25 +646,19 @@ function ViewChip({
  * CONNECTING IS NOT DISCONNECTED. While the app is dialling, the button would
  * be an interruption rather than a help, so that state just says so and waits.
  */
-function TrayOffline({
-  phase,
-  host
-}: {
-  phase: string
-  host: string | null
-}): React.JSX.Element {
-  const busy = phase === 'connecting'
+function TrayOffline({ phase, host }: { phase: string; host: string | null }): React.JSX.Element {
+  const busy = phase === "connecting";
   return (
     <div
-      data-tray-offline={busy ? 'connecting' : 'disconnected'}
+      data-tray-offline={busy ? "connecting" : "disconnected"}
       // Height-locked to the header it replaces, like the standby face. S8
       // measures both, so changing the header fails loudly here too.
       className="relative shrink-0 min-h-[138px] flex items-center gap-3.5 px-4"
     >
       <div
         className={cx(
-          'h-14 w-14 shrink-0 rounded-full ring-2 flex items-center justify-center',
-          busy ? 'ring-amber/40 text-amber motion-safe:animate-pulse' : 'ring-edge2 text-faint'
+          "h-14 w-14 shrink-0 rounded-full ring-2 flex items-center justify-center",
+          busy ? "ring-amber/40 text-amber motion-safe:animate-pulse" : "ring-edge2 text-faint",
         )}
       >
         {busy ? <Loader2 size={22} className="spin" /> : <Unplug size={22} />}
@@ -648,15 +667,15 @@ function TrayOffline({
         {/* Reserved heights, so the lines can change without moving the glyph
             beside them — the same rule the standby face follows. */}
         <div className="font-display no-optical tracking-tight text-[14px] text-dim min-h-[17px] truncate">
-          {busy ? `Connecting to ${host ?? 'your streamer'}…` : 'No streamer connected'}
+          {busy ? `Connecting to ${host ?? "your streamer"}…` : "No streamer connected"}
         </div>
         <div className="text-[11.5px] text-faint min-h-[15px] truncate">
-          {busy ? 'One moment.' : 'TastyTunes needs a streamer to control.'}
+          {busy ? "One moment." : "TastyTunes needs a streamer to control."}
         </div>
         <div className="min-h-[26px] mt-1">
           {!busy && (
             <button
-              onClick={() => void tt.showMain('device')}
+              onClick={() => void tt.showMain("device")}
               className="inline-flex items-center gap-1.5 text-[11.5px] px-2.5 py-1 rounded-lg ring-1 ring-amber/40 bg-amberdim text-amber hover:brightness-110 hover:ring-amber/60 motion-safe:active:scale-95 transition-all"
             >
               Connect a streamer
@@ -666,19 +685,19 @@ function TrayOffline({
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 function TrayStandby({
   /** The whole wake window (waking OR the post-wake hold) — the copy keys on
    *  it so the face never reverts to the idle "press to wake" text while a
    *  recall is still in flight. */
-  busy
+  busy,
 }: {
-  busy: boolean
+  busy: boolean;
 }): React.JSX.Element {
-  const systemInfo = useStore((s) => s.systemInfo)
-  const last = useStore((s) => s.recents[0])
+  const systemInfo = useStore((s) => s.systemInfo);
+  const last = useStore((s) => s.recents[0]);
   return (
     <div
       data-tray-standby
@@ -693,14 +712,14 @@ function TrayStandby({
       className="relative shrink-0 min-h-[138px] flex items-center gap-3.5 px-4"
     >
       <button
-        onClick={() => void tt.command({ type: 'power', power: 'ON' })}
+        onClick={() => void tt.command({ type: "power", power: "ON" })}
         data-tip="Wake the streamer"
         aria-label="Wake the streamer"
         className={cx(
-          'tip-bottom h-14 w-14 shrink-0 rounded-full ring-2 ring-amber/50 text-amber',
-          'flex items-center justify-center transition-all',
-          'hover:bg-amberdim hover:shadow-[0_0_28px_rgb(var(--amber-rgb)_/_0.3)]',
-          busy && 'motion-safe:animate-pulse bg-amberdim'
+          "tip-bottom h-14 w-14 shrink-0 rounded-full ring-2 ring-amber/50 text-amber",
+          "flex items-center justify-center transition-all",
+          "hover:bg-amberdim hover:shadow-[0_0_28px_rgb(var(--amber-rgb)_/_0.3)]",
+          busy && "motion-safe:animate-pulse bg-amberdim",
         )}
       >
         <Power size={24} strokeWidth={1.8} />
@@ -710,20 +729,20 @@ function TrayStandby({
             lamp beside them never moves as the wake progresses. */}
         <div className="font-display no-optical tracking-tight text-[14px] text-dim flex items-center gap-1.5 min-h-[17px]">
           <Moon size={14} strokeWidth={1.8} className="text-amber/70 shrink-0" />
-          <span className="truncate">{systemInfo?.name ?? 'Streamer'} is asleep</span>
+          <span className="truncate">{systemInfo?.name ?? "Streamer"} is asleep</span>
         </div>
         <div className="text-[11.5px] text-faint truncate min-h-[15px]">
-          {busy ? 'Waking…' : 'Press to wake — or start something below.'}
+          {busy ? "Waking…" : "Press to wake — or start something below."}
         </div>
         <div className="text-[11px] text-faint mt-0.5 truncate min-h-[14px]">
           {last != null && (
             <>
               Last played: <span className="text-dim">{last.title ?? last.station}</span>
-              {last.artist ? ` — ${last.artist}` : ''}
+              {last.artist ? ` — ${last.artist}` : ""}
             </>
           )}
         </div>
       </div>
     </div>
-  )
+  );
 }

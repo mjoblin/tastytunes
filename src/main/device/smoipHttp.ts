@@ -4,31 +4,31 @@
 
 async function smoipPost(host: string, path: string, body: unknown): Promise<void> {
   const res = await fetch(`http://${host}/smoip${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(5000)
-  })
-  if (!res.ok) throw new Error(`POST /smoip${path} -> HTTP ${res.status}`)
+    signal: AbortSignal.timeout(5000),
+  });
+  if (!res.ok) throw new Error(`POST /smoip${path} -> HTTP ${res.status}`);
 }
 
 export const queueDelete = (host: string, id: number): Promise<void> =>
-  smoipPost(host, '/queue/delete', { ids: [id] })
+  smoipPost(host, "/queue/delete", { ids: [id] });
 
 /** Clear the whole queue. {"start": 0, "delete_all": true} is the firmware's
  *  clear-all form of /queue/delete — live-proven by vibin's playlist_clear
  *  (streammagic.py), not in the sniffed verb table. */
 export const queueClear = (host: string): Promise<void> =>
-  smoipPost(host, '/queue/delete', { start: 0, delete_all: true })
+  smoipPost(host, "/queue/delete", { start: 0, delete_all: true });
 
 export const queueMove = (host: string, id: number, from: number, to: number): Promise<void> =>
-  smoipPost(host, '/queue/move', { id, from, to })
+  smoipPost(host, "/queue/move", { id, from, to });
 
 export const presetDelete = (host: string, presetId: number): Promise<void> =>
-  smoipPost(host, '/presets/delete', { preset: presetId })
+  smoipPost(host, "/presets/delete", { preset: presetId });
 
 export const presetMove = (host: string, from: number, to: number): Promise<void> =>
-  smoipPost(host, '/presets/move', { from, to })
+  smoipPost(host, "/presets/move", { from, to });
 
 /**
  * Percent-encode a query value the firmware's way: StreamMagic decodes
@@ -36,14 +36,14 @@ export const presetMove = (host: string, from: number, to: number): Promise<void
  * URLSearchParams-encoded name came back as "102.7+KIIS+FM"), so spaces must
  * be %20 and never '+'. encodeURIComponent does exactly that.
  */
-const enc = encodeURIComponent
+const enc = encodeURIComponent;
 
 /** Rename a preset — the query-param GET verb probed live on the Evo. */
 export async function presetRename(host: string, slot: number, name: string): Promise<void> {
   const res = await fetch(`http://${host}/smoip/presets/rename?preset=${slot}&name=${enc(name)}`, {
-    signal: AbortSignal.timeout(5000)
-  })
-  if (!res.ok) throw new Error(`GET /smoip/presets/rename -> HTTP ${res.status}`)
+    signal: AbortSignal.timeout(5000),
+  });
+  if (!res.ok) throw new Error(`GET /smoip/presets/rename -> HTTP ${res.status}`);
 }
 
 /**
@@ -54,16 +54,16 @@ export async function presetRename(host: string, slot: number, name: string): Pr
 export async function queueSavePreset(
   host: string,
   slot: number | null,
-  name: string | null
+  name: string | null,
 ): Promise<void> {
-  const parts: string[] = []
-  if (slot != null) parts.push(`preset=${slot}`)
-  if (name) parts.push(`name=${enc(name)}`)
-  const qs = parts.length > 0 ? `?${parts.join('&')}` : ''
+  const parts: string[] = [];
+  if (slot != null) parts.push(`preset=${slot}`);
+  if (name) parts.push(`name=${enc(name)}`);
+  const qs = parts.length > 0 ? `?${parts.join("&")}` : "";
   const res = await fetch(`http://${host}/smoip/queue/save_preset${qs}`, {
-    signal: AbortSignal.timeout(5000)
-  })
-  if (!res.ok) throw new Error(`GET /smoip/queue/save_preset -> HTTP ${res.status}`)
+    signal: AbortSignal.timeout(5000),
+  });
+  if (!res.ok) throw new Error(`GET /smoip/queue/save_preset -> HTTP ${res.status}`);
 }
 
 /**
@@ -75,9 +75,9 @@ export async function queueSavePreset(
 export async function streamRadio(host: string, url: string, name: string): Promise<void> {
   const res = await fetch(
     `http://${host}/smoip/stream/radio?zone=ZONE1&url=${enc(url)}&name=${enc(name)}`,
-    { signal: AbortSignal.timeout(10_000) }
-  )
-  if (!res.ok) throw new Error(`GET /smoip/stream/radio -> HTTP ${res.status}`)
+    { signal: AbortSignal.timeout(10_000) },
+  );
+  if (!res.ok) throw new Error(`GET /smoip/stream/radio -> HTTP ${res.status}`);
 }
 
 /**
@@ -88,11 +88,11 @@ export async function streamRadio(host: string, url: string, name: string): Prom
  * silently takes the next free slot.
  */
 export async function zoneSavePreset(host: string, slot: number): Promise<void> {
-  const qs = new URLSearchParams({ preset: String(slot) })
+  const qs = new URLSearchParams({ preset: String(slot) });
   const res = await fetch(`http://${host}/smoip/zone/save_preset?${qs}`, {
-    signal: AbortSignal.timeout(5000)
-  })
-  if (!res.ok) throw new Error(`GET /smoip/zone/save_preset -> HTTP ${res.status}`)
+    signal: AbortSignal.timeout(5000),
+  });
+  if (!res.ok) throw new Error(`GET /smoip/zone/save_preset -> HTTP ${res.status}`);
 }
 
 /**
@@ -105,13 +105,13 @@ export async function zoneSavePreset(host: string, slot: number): Promise<void> 
 export async function getAudioSpec(host: string): Promise<unknown | null> {
   try {
     const res = await fetch(`http://${host}/smoip/zone/audio/spec?zone=ZONE1`, {
-      signal: AbortSignal.timeout(5000)
-    })
-    if (!res.ok) return null
-    const body = (await res.json().catch(() => null)) as { data?: unknown } | null
-    return body?.data ?? null
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return null;
+    const body = (await res.json().catch(() => null)) as { data?: unknown } | null;
+    return body?.data ?? null;
   } catch {
-    return null
+    return null;
   }
 }
 
@@ -122,18 +122,18 @@ export async function getAudioSpec(host: string): Promise<unknown | null> {
  */
 async function getSpec(host: string, path: string): Promise<unknown | null> {
   try {
-    const res = await fetch(`http://${host}/smoip${path}`, { signal: AbortSignal.timeout(5000) })
-    if (!res.ok) return null
-    const body = (await res.json().catch(() => null)) as { data?: unknown } | null
-    return body?.data ?? null
+    const res = await fetch(`http://${host}/smoip${path}`, { signal: AbortSignal.timeout(5000) });
+    if (!res.ok) return null;
+    const body = (await res.json().catch(() => null)) as { data?: unknown } | null;
+    return body?.data ?? null;
   } catch {
-    return null
+    return null;
   }
 }
 export const getDisplaySpec = (host: string): Promise<unknown | null> =>
-  getSpec(host, '/system/display/spec')
+  getSpec(host, "/system/display/spec");
 export const getPowerSpec = (host: string): Promise<unknown | null> =>
-  getSpec(host, '/system/power/spec')
+  getSpec(host, "/system/power/spec");
 
 /**
  * Fetch the preset list over HTTP — how vibin refreshes stale is_playing flags.
@@ -141,9 +141,9 @@ export const getPowerSpec = (host: string): Promise<unknown | null> =>
  */
 export async function getPresets(host: string): Promise<unknown | null> {
   const res = await fetch(`http://${host}/smoip/presets/list`, {
-    signal: AbortSignal.timeout(5000)
-  })
-  if (!res.ok) return null
-  const body = (await res.json().catch(() => null)) as { data?: unknown } | null
-  return body?.data ?? null
+    signal: AbortSignal.timeout(5000),
+  });
+  if (!res.ok) return null;
+  const body = (await res.json().catch(() => null)) as { data?: unknown } | null;
+  return body?.data ?? null;
 }

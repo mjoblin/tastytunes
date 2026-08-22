@@ -1,9 +1,9 @@
-import type { TastyTunesApi } from '@shared/ipc'
+import type { TastyTunesApi } from "@shared/ipc";
 
 declare global {
   interface Window {
-    tastytunes: TastyTunesApi
+    tastytunes: TastyTunesApi;
   }
 }
 
-export {}
+export {};

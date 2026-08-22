@@ -1,5 +1,5 @@
-import { useEffect } from 'react'
-import type { DisplayFont } from '@shared/model'
+import { useEffect } from "react";
+import type { DisplayFont } from "@shared/model";
 
 /**
  * The curated display faces. Every face ships in the bundle (fontsource
@@ -14,55 +14,55 @@ import type { DisplayFont } from '@shared/model'
  * is the face's character, not its size. Tuned by eye against Fraunces (1.0).
  */
 export const DISPLAY_FONTS: Array<{
-  id: DisplayFont
-  label: string
-  stack: string
-  scale: number
+  id: DisplayFont;
+  label: string;
+  stack: string;
+  scale: number;
 }> = [
-  { id: 'fraunces', label: 'Fraunces', stack: "'Fraunces Variable', Georgia, serif", scale: 1.0 },
+  { id: "fraunces", label: "Fraunces", stack: "'Fraunces Variable', Georgia, serif", scale: 1.0 },
   {
-    id: 'unbounded',
-    label: 'Unbounded',
+    id: "unbounded",
+    label: "Unbounded",
     stack: "'Unbounded Variable', ui-sans-serif, sans-serif",
-    scale: 0.82
+    scale: 0.82,
   },
   {
-    id: 'newsreader',
-    label: 'Newsreader',
+    id: "newsreader",
+    label: "Newsreader",
     stack: "'Newsreader Variable', Georgia, serif",
-    scale: 1.0
+    scale: 1.0,
   },
   {
-    id: 'hanken',
-    label: 'Hanken Grotesk',
+    id: "hanken",
+    label: "Hanken Grotesk",
     stack: "'Hanken Grotesk Variable', ui-sans-serif, sans-serif",
-    scale: 0.95
+    scale: 0.95,
   },
   {
-    id: 'instrument-serif',
-    label: 'Instrument Serif',
+    id: "instrument-serif",
+    label: "Instrument Serif",
     stack: "'Instrument Serif', Georgia, serif",
-    scale: 1.08
+    scale: 1.08,
   },
   {
-    id: 'schibsted',
-    label: 'Schibsted Grotesk',
+    id: "schibsted",
+    label: "Schibsted Grotesk",
     stack: "'Schibsted Grotesk Variable', ui-sans-serif, sans-serif",
-    scale: 0.97
+    scale: 0.97,
   },
   {
-    id: 'instrument-sans',
-    label: 'Instrument Sans',
+    id: "instrument-sans",
+    label: "Instrument Sans",
     stack: "'Instrument Sans Variable', ui-sans-serif, system-ui, sans-serif",
-    scale: 0.96
-  }
-]
+    scale: 0.96,
+  },
+];
 
 const face = (id: DisplayFont): (typeof DISPLAY_FONTS)[number] =>
-  DISPLAY_FONTS.find((f) => f.id === id) ?? DISPLAY_FONTS[0]
+  DISPLAY_FONTS.find((f) => f.id === id) ?? DISPLAY_FONTS[0];
 
-export const fontStack = (id: DisplayFont): string => face(id).stack
-export const fontScale = (id: DisplayFont): number => face(id).scale
+export const fontStack = (id: DisplayFont): string => face(id).stack;
+export const fontScale = (id: DisplayFont): number => face(id).scale;
 
 /**
  * Apply the chosen display face by overriding the --font-display token (family)
@@ -72,8 +72,8 @@ export const fontScale = (id: DisplayFont): number => face(id).scale
  */
 export function useDisplayFont(pref: DisplayFont): void {
   useEffect(() => {
-    const root = document.documentElement.style
-    root.setProperty('--font-display', fontStack(pref))
-    root.setProperty('--font-display-scale', String(fontScale(pref)))
-  }, [pref])
+    const root = document.documentElement.style;
+    root.setProperty("--font-display", fontStack(pref));
+    root.setProperty("--font-display-scale", String(fontScale(pref)));
+  }, [pref]);
 }

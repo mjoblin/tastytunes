@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useState } from "react";
 
 /**
  * Popover plumbing shared by every transient popover in the app (⋯ menus,
@@ -11,19 +11,19 @@ import { useEffect, useLayoutEffect, useState } from 'react'
  */
 export function usePopoverChrome(onClose: () => void): void {
   useEffect(() => {
-    document.documentElement.classList.add('popover-open')
+    document.documentElement.classList.add("popover-open");
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
-        e.stopPropagation()
-        onClose()
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onClose();
       }
-    }
-    window.addEventListener('keydown', onKey, true)
+    };
+    window.addEventListener("keydown", onKey, true);
     return () => {
-      document.documentElement.classList.remove('popover-open')
-      window.removeEventListener('keydown', onKey, true)
-    }
-  }, [onClose])
+      document.documentElement.classList.remove("popover-open");
+      window.removeEventListener("keydown", onKey, true);
+    };
+  }, [onClose]);
 }
 
 /**
@@ -32,25 +32,25 @@ export function usePopoverChrome(onClose: () => void): void {
  * restructuring the component around the hook rule.
  */
 export function PopoverChrome({ onClose }: { onClose(): void }): null {
-  usePopoverChrome(onClose)
-  return null
+  usePopoverChrome(onClose);
+  return null;
 }
 
 /** Clamp a click-anchored popover fully on-screen using its MEASURED size. */
 export function useClampedPosition(
   ref: React.RefObject<HTMLDivElement | null>,
   x: number,
-  y: number
+  y: number,
 ): { left: number; top: number } {
-  const [pos, setPos] = useState({ left: x, top: y })
+  const [pos, setPos] = useState({ left: x, top: y });
   useLayoutEffect(() => {
-    const r = ref.current?.getBoundingClientRect()
-    if (!r) return
+    const r = ref.current?.getBoundingClientRect();
+    if (!r) return;
     setPos({
       left: Math.max(12, Math.min(x, window.innerWidth - r.width - 12)),
-      top: Math.max(12, Math.min(y, window.innerHeight - r.height - 12))
-    })
+      top: Math.max(12, Math.min(y, window.innerHeight - r.height - 12)),
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [x, y])
-  return pos
+  }, [x, y]);
+  return pos;
 }

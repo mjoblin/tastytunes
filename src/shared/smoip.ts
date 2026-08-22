@@ -4,50 +4,43 @@
 
 /** Every frame the streamer sends over ws://<host>:80/smoip. */
 export interface SmoipFrame {
-  path: string
-  type?: string
-  result?: number
-  message?: string
+  path: string;
+  type?: string;
+  result?: number;
+  message?: string;
   params?: {
-    zone?: string
-    data?: unknown
-    [key: string]: unknown
-  }
+    zone?: string;
+    data?: unknown;
+    [key: string]: unknown;
+  };
 }
 
 // ---------------------------------------------------------------- /zone/play_state
 
 export type ZonePlayStateState =
-  | 'buffering'
-  | 'connecting'
-  | 'no_signal'
-  | 'not_ready'
-  | 'pause'
-  | 'play'
-  | 'ready'
-  | 'stop'
+  "buffering" | "connecting" | "no_signal" | "not_ready" | "pause" | "play" | "ready" | "stop";
 
 export interface ZonePlayStateMetadata {
-  class: string | null
-  source: string | null
-  name: string | null
-  playback_source: string | null
-  track_number: number | null
-  duration: number | null
-  album: string | null
-  artist: string | null
-  title: string | null
-  art_url: string | null
-  sample_format: string | null
-  mqa: string | null
-  codec: string | null
-  lossless: boolean | null
-  sample_rate: number | null
-  bit_depth: number | null
-  encoding: string | null
-  station: string | null
-  bitrate: number | null
-  radio_id: number | null
+  class: string | null;
+  source: string | null;
+  name: string | null;
+  playback_source: string | null;
+  track_number: number | null;
+  duration: number | null;
+  album: string | null;
+  artist: string | null;
+  title: string | null;
+  art_url: string | null;
+  sample_format: string | null;
+  mqa: string | null;
+  codec: string | null;
+  lossless: boolean | null;
+  sample_rate: number | null;
+  bit_depth: number | null;
+  encoding: string | null;
+  station: string | null;
+  bitrate: number | null;
+  radio_id: number | null;
 }
 
 /**
@@ -58,8 +51,8 @@ export interface ZonePlayStateMetadata {
  * silently.
  */
 export const isRadioMetadata = (
-  md: Pick<ZonePlayStateMetadata, 'class' | 'station'> | null | undefined
-): boolean => md != null && (/radio/i.test(md.class ?? '') || md.station != null)
+  md: Pick<ZonePlayStateMetadata, "class" | "station"> | null | undefined,
+): boolean => md != null && (/radio/i.test(md.class ?? "") || md.station != null);
 
 /**
  * A radio "title" that's absent or merely echoes the station's own name back
@@ -67,86 +60,86 @@ export const isRadioMetadata = (
  * matching how recents entries are recorded AND matched).
  */
 export const radioTrackTitle = (
-  md: Pick<ZonePlayStateMetadata, 'title' | 'station'>
+  md: Pick<ZonePlayStateMetadata, "title" | "station">,
 ): string | null => {
-  const title = md.title ?? null
-  const station = md.station ?? null
-  if (title == null) return null
-  if (station != null && title.trim().toLowerCase() === station.trim().toLowerCase()) return null
-  return title
-}
+  const title = md.title ?? null;
+  const station = md.station ?? null;
+  if (title == null) return null;
+  if (station != null && title.trim().toLowerCase() === station.trim().toLowerCase()) return null;
+  return title;
+};
 
 export interface ZonePlayState {
-  state: ZonePlayStateState | null
-  position: number | null
-  presettable: boolean | null
-  queue_index: number | null
-  queue_length: number | null
-  queue_id: number | null
-  mode_repeat: string | null
-  mode_shuffle: string | null
-  metadata: ZonePlayStateMetadata | null
+  state: ZonePlayStateState | null;
+  position: number | null;
+  presettable: boolean | null;
+  queue_index: number | null;
+  queue_length: number | null;
+  queue_id: number | null;
+  mode_repeat: string | null;
+  mode_shuffle: string | null;
+  metadata: ZonePlayStateMetadata | null;
 }
 
 // ------------------------------------------------------- /zone/play_state/position
 
 export interface ZonePosition {
-  position: number
+  position: number;
 }
 
 // --------------------------------------------------------------- /zone/now_playing
 
 export interface ZoneNowPlayingProgress {
-  position: number | null
-  duration: number | null
+  position: number | null;
+  duration: number | null;
 }
 
 export interface ZoneNowPlayingDisplay {
-  line1: string | null
-  line2: string | null
-  line3: string | null
-  format: string | null
-  mqa: string | null
-  playback_source: string | null
-  class: string | null
-  art_url: string | null
-  art_file: string | null
-  progress: ZoneNowPlayingProgress | null
-  context: string | null
+  line1: string | null;
+  line2: string | null;
+  line3: string | null;
+  format: string | null;
+  mqa: string | null;
+  playback_source: string | null;
+  class: string | null;
+  art_url: string | null;
+  art_file: string | null;
+  progress: ZoneNowPlayingProgress | null;
+  context: string | null;
 }
 
 export interface ZoneNowPlayingQueue {
-  length: number | null
-  position: number | null
-  shuffle: string | null
-  repeat: string | null
+  length: number | null;
+  position: number | null;
+  shuffle: string | null;
+  repeat: string | null;
 }
 
 export interface ZoneNowPlayingSource {
-  id: string | null
-  name: string | null
+  id: string | null;
+  name: string | null;
 }
 
 export interface ZoneNowPlaying {
-  state: string | null
-  source: ZoneNowPlayingSource | null
-  display: ZoneNowPlayingDisplay | null
-  queue: ZoneNowPlayingQueue | null
-  controls: string[] | null
+  state: string | null;
+  source: ZoneNowPlayingSource | null;
+  display: ZoneNowPlayingDisplay | null;
+  queue: ZoneNowPlayingQueue | null;
+  controls: string[] | null;
 }
 
 // -------------------------------------------------------------------- /zone/state
 
 export interface ZoneState {
-  source: string | null
-  power: boolean | null
-  pre_amp_mode: boolean | null
-  pre_amp_state: string | null
-  mute: boolean | null
-  volume_step: number | null
-  volume_percent: number | null
-  volume_db: number | null
-  cbus: string | null
+  source: string | null;
+  power: boolean | null;
+  pre_amp_mode: boolean | null;
+  pre_amp_state: string | null;
+  mute: boolean | null;
+  volume_step: number | null;
+  volume_percent: number | null;
+  volume_db: number | null;
+  cbus: string | null;
 }
 
 // -------------------------------------------------------------------- /zone/audio
@@ -165,41 +158,41 @@ export interface ZoneState {
  * the whole frame — so every logical control sends its own frame.
  */
 export interface ZoneAudioBand {
-  index: number
-  filter: string // LOWSHELF / PEAKING / HIGHSHELF / … (see spec filters enum)
-  freq: number
-  gain: number
-  q: number
+  index: number;
+  filter: string; // LOWSHELF / PEAKING / HIGHSHELF / … (see spec filters enum)
+  freq: number;
+  gain: number;
+  q: number;
 }
 
 export interface ZoneAudio {
-  volume_limit_percent: number | null
-  tilt_eq: { enabled: boolean; intensity: number } | null
-  user_eq: { enabled: boolean; bands: ZoneAudioBand[] } | null
-  balance: number | null
+  volume_limit_percent: number | null;
+  tilt_eq: { enabled: boolean; intensity: number } | null;
+  user_eq: { enabled: boolean; bands: ZoneAudioBand[] } | null;
+  balance: number | null;
   /** Observed "DSP" on the Evo; semantics unconfirmed — read-only for us. */
-  pipeline: string | null
+  pipeline: string | null;
 }
 
 // --------------------------------------------------------------- /zone/audio/spec
 
 export interface AudioSpecRange {
-  minimum?: number
-  maximum?: number
-  readonly?: boolean
+  minimum?: number;
+  maximum?: number;
+  readonly?: boolean;
 }
 
 export interface ZoneAudioSpec {
-  volume_limit_percent?: AudioSpecRange
-  pipeline?: { readonly?: boolean }
-  tilt_eq?: AudioSpecRange
+  volume_limit_percent?: AudioSpecRange;
+  pipeline?: { readonly?: boolean };
+  tilt_eq?: AudioSpecRange;
   user_eq?: {
-    bands?: number
-    filters?: { enum?: string[] }
-    readonly?: boolean
-    always_on?: boolean
-  }
-  balance?: AudioSpecRange
+    bands?: number;
+    filters?: { enum?: string[] };
+    readonly?: boolean;
+    always_on?: boolean;
+  };
+  balance?: AudioSpecRange;
 }
 
 /**
@@ -210,12 +203,12 @@ export interface ZoneAudioSpec {
  * non-positive as absence).
  */
 export interface AudioCaps {
-  userEq: boolean
-  tilt: boolean
-  balance: boolean
+  userEq: boolean;
+  tilt: boolean;
+  balance: boolean;
   /** From the spec when it publishes a range; UI fallback −15..15. */
-  tiltRange: { min: number; max: number }
-  balanceRange: { min: number; max: number }
+  tiltRange: { min: number; max: number };
+  balanceRange: { min: number; max: number };
 }
 
 /**
@@ -224,23 +217,23 @@ export interface AudioCaps {
  * stores out-of-range gains verbatim) — matching it keeps both apps' sliders
  * telling the same story, and Cambridge's boost ceiling reflects DSP headroom.
  */
-export const EQ_GAIN_MIN = -6
-export const EQ_GAIN_MAX = 3
+export const EQ_GAIN_MIN = -6;
+export const EQ_GAIN_MAX = 3;
 
 export function audioCaps(spec: ZoneAudioSpec | null | undefined): AudioCaps | null {
-  if (spec == null) return null
+  if (spec == null) return null;
   const range = (r: AudioSpecRange | undefined, fallbackMin: number, fallbackMax: number) => ({
     min: r?.minimum ?? fallbackMin,
-    max: r?.maximum ?? fallbackMax
-  })
+    max: r?.maximum ?? fallbackMax,
+  });
   const caps: AudioCaps = {
     userEq: spec.user_eq != null && spec.user_eq.readonly !== true,
     tilt: spec.tilt_eq != null && spec.tilt_eq.readonly !== true,
     balance: spec.balance != null && spec.balance.readonly !== true,
     tiltRange: range(spec.tilt_eq, -15, 15),
-    balanceRange: range(spec.balance, -15, 15)
-  }
-  return caps.userEq || caps.tilt || caps.balance ? caps : null
+    balanceRange: range(spec.balance, -15, 15),
+  };
+  return caps.userEq || caps.tilt || caps.balance ? caps : null;
 }
 
 /**
@@ -250,8 +243,8 @@ export function audioCaps(spec: ZoneAudioSpec | null | undefined): AudioCaps | n
  * matching the two field-tested references (punytunes `isCbusAmpModeEnabled`,
  * vibin `streammagic.py`), NOT an "anything not off/none" denylist.
  */
-export const isCbusMode = (z: Pick<ZoneState, 'cbus'> | null | undefined): boolean =>
-  z?.cbus === 'amplifier' || z?.cbus === 'receiver'
+export const isCbusMode = (z: Pick<ZoneState, "cbus"> | null | undefined): boolean =>
+  z?.cbus === "amplifier" || z?.cbus === "receiver";
 
 /**
  * Pre-amp mode: the streamer holds an absolute volume it can set. Requires
@@ -261,28 +254,28 @@ export const isCbusMode = (z: Pick<ZoneState, 'cbus'> | null | undefined): boole
  * true, pre_amp_state "on".)
  */
 export const isPreAmpMode = (
-  z: Pick<ZoneState, 'pre_amp_mode' | 'pre_amp_state'> | null | undefined
-): boolean => z?.pre_amp_mode === true && z.pre_amp_state === 'on'
+  z: Pick<ZoneState, "pre_amp_mode" | "pre_amp_state"> | null | undefined,
+): boolean => z?.pre_amp_mode === true && z.pre_amp_state === "on";
 
 // -------------------------------------------------------------------- /queue/list
 
 export interface QueueListItemMetadata {
-  class: string | null
-  source: string | null
-  name: string | null
-  title: string | null
-  art_url: string | null
-  track_number: number | null
-  duration: number | null
-  genre: string | null
-  album: string | null
-  artist: string | null
+  class: string | null;
+  source: string | null;
+  name: string | null;
+  title: string | null;
+  art_url: string | null;
+  track_number: number | null;
+  duration: number | null;
+  genre: string | null;
+  album: string | null;
+  artist: string | null;
 }
 
 export interface QueueListItem {
-  id: number | null
-  position: number | null
-  metadata: QueueListItemMetadata | null
+  id: number | null;
+  position: number | null;
+  metadata: QueueListItemMetadata | null;
 }
 
 /**
@@ -294,19 +287,19 @@ export interface QueueListItem {
  * a save and a later recall.
  */
 export function contentRowsHash(
-  rows: Array<{ title?: string | null; artist?: string | null; album?: string | null }>
+  rows: Array<{ title?: string | null; artist?: string | null; album?: string | null }>,
 ): string {
-  let h = 0x811c9dc5
+  let h = 0x811c9dc5;
   const mix = (s: string): void => {
     for (let i = 0; i < s.length; i++) {
-      h ^= s.charCodeAt(i)
-      h = Math.imul(h, 0x01000193) >>> 0
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 0x01000193) >>> 0;
     }
-  }
+  };
   for (const r of rows) {
-    mix(`${r.title ?? ''}\x00${r.artist ?? ''}\x00${r.album ?? ''}\x01`)
+    mix(`${r.title ?? ""}\x00${r.artist ?? ""}\x00${r.album ?? ""}\x01`);
   }
-  return `${rows.length}:${h.toString(16)}`
+  return `${rows.length}:${h.toString(16)}`;
 }
 
 /**
@@ -316,91 +309,91 @@ export function contentRowsHash(
  * controllers, and at startup.
  */
 export function queueContentHash(items: QueueListItem[]): string {
-  return contentRowsHash(items.map((it) => it.metadata ?? {}))
+  return contentRowsHash(items.map((it) => it.metadata ?? {}));
 }
 
 export interface QueueList {
-  start: number | null
-  count: number | null
-  total: number | null
-  play_postition: number | null // sic — the streamer's own spelling
-  play_id: number | null
-  items: QueueListItem[] | null
+  start: number | null;
+  count: number | null;
+  total: number | null;
+  play_postition: number | null; // sic — the streamer's own spelling
+  play_id: number | null;
+  items: QueueListItem[] | null;
 }
 
 // ------------------------------------------------------------------ /presets/list
 
 export interface PresetItem {
-  id: number | null
-  name: string | null
-  type: string | null
-  class: string | null
-  state: string | null
-  is_playing: boolean | null
-  art_url: string | null
+  id: number | null;
+  name: string | null;
+  type: string | null;
+  class: string | null;
+  state: string | null;
+  is_playing: boolean | null;
+  art_url: string | null;
   /** MediaQueue presets (saved queues) carry one art per distinct album. */
-  art_urls?: string[] | null
-  airable_radio_id: number | null
+  art_urls?: string[] | null;
+  airable_radio_id: number | null;
 }
 
 export interface Presets {
-  start: number | null
-  end: number | null
-  max_presets: number | null
-  presettable: boolean | null
-  presets: PresetItem[] | null
+  start: number | null;
+  end: number | null;
+  max_presets: number | null;
+  presettable: boolean | null;
+  presets: PresetItem[] | null;
 }
 
 // ------------------------------------------------------------------- /system/info
 
 export interface SystemInfoVersion {
-  component: string | null
-  version: string | null
+  component: string | null;
+  version: string | null;
 }
 
 export interface SystemInfo {
-  name: string | null
-  timezone: string | null
-  locale: string | null
-  usage_reports: boolean | null
-  setup: boolean | null
-  sources_setup: boolean | null
-  versions: SystemInfoVersion[] | null
-  udn: string | null
-  hcv: number | null
-  model: string | null
-  unit_id: string | null
-  max_http_body_size: number | null
-  api: string | null
+  name: string | null;
+  timezone: string | null;
+  locale: string | null;
+  usage_reports: boolean | null;
+  setup: boolean | null;
+  sources_setup: boolean | null;
+  versions: SystemInfoVersion[] | null;
+  udn: string | null;
+  hcv: number | null;
+  model: string | null;
+  unit_id: string | null;
+  max_http_body_size: number | null;
+  api: string | null;
 }
 
 // ------------------------------------------------------------------ /system/power
 
 export interface SystemPower {
-  power: string // "ON" | "NETWORK" (network standby)
+  power: string; // "ON" | "NETWORK" (network standby)
   /** Which standby the unit drops into (ECO_MODE = deep, NETWORK = instant-on). */
-  standby_mode?: string | null
+  standby_mode?: string | null;
   /** Idle seconds before auto power-down; 0 = never. (Evo range 0..7200.) */
-  auto_power_down?: number | null
+  auto_power_down?: number | null;
 }
 
 // ---------------------------------------------------------------- /system/display
 
 /** Front-panel display brightness (off | dim | bright). */
 export interface SystemDisplay {
-  brightness: string
+  brightness: string;
 }
 
 // --------------------------------------------------- /system/display + power specs
 
 export interface SystemDisplaySpec {
-  brightness?: { enum?: string[]; readonly?: boolean }
+  brightness?: { enum?: string[]; readonly?: boolean };
 }
 
 export interface SystemPowerSpec {
-  power?: { enum?: string[]; readonly?: boolean }
-  standby_mode?: { enum?: string[]; readonly?: boolean }
-  auto_power_down?: { minimum?: number; maximum?: number; readonly?: boolean }
+  power?: { enum?: string[]; readonly?: boolean };
+  standby_mode?: { enum?: string[]; readonly?: boolean };
+  auto_power_down?: { minimum?: number; maximum?: number; readonly?: boolean };
 }
 
 /**
@@ -409,21 +402,21 @@ export interface SystemPowerSpec {
  * fields (or an absent spec) collapse to "not supported" and the control hides.
  */
 export const brightnessOptions = (spec: SystemDisplaySpec | null | undefined): string[] | null => {
-  const b = spec?.brightness
-  return b?.enum?.length && b.readonly !== true ? b.enum : null
-}
+  const b = spec?.brightness;
+  return b?.enum?.length && b.readonly !== true ? b.enum : null;
+};
 export const standbyModeOptions = (spec: SystemPowerSpec | null | undefined): string[] | null => {
-  const s = spec?.standby_mode
-  return s?.enum?.length && s.readonly !== true ? s.enum : null
-}
+  const s = spec?.standby_mode;
+  return s?.enum?.length && s.readonly !== true ? s.enum : null;
+};
 export const autoPowerDownRange = (
-  spec: SystemPowerSpec | null | undefined
+  spec: SystemPowerSpec | null | undefined,
 ): { min: number; max: number } | null => {
-  const r = spec?.auto_power_down
+  const r = spec?.auto_power_down;
   return r && r.readonly !== true && r.minimum != null && r.maximum != null
     ? { min: r.minimum, max: r.maximum }
-    : null
-}
+    : null;
+};
 
 // ----------------------------------------------------------------- /system/update
 
@@ -434,25 +427,25 @@ export const autoPowerDownRange = (
  * ipc.ts and the PASSIVE-ONLY guard in deviceManager.
  */
 export interface SystemUpdate {
-  early_update: boolean
-  update_available: boolean
-  updating: boolean
+  early_update: boolean;
+  update_available: boolean;
+  updating: boolean;
 }
 
 // ---------------------------------------------------------------- /system/sources
 
 export interface Source {
-  id: string
-  name: string
-  default_name: string
-  class: string
-  nameable: boolean
-  ui_selectable: boolean
-  description: string
-  description_locale: string
-  preferred_order: number
+  id: string;
+  name: string;
+  default_name: string;
+  class: string;
+  nameable: boolean;
+  ui_selectable: boolean;
+  description: string;
+  description_locale: string;
+  preferred_order: number;
 }
 
 export interface SystemSources {
-  sources: Source[]
+  sources: Source[];
 }

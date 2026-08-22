@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlarmClock,
   ArrowUpCircle,
@@ -35,56 +35,54 @@ import {
   Usb,
   UserRound,
   Volume2,
-  VolumeX
-} from 'lucide-react'
-import { sleepTrackKey, type SleepAction } from '@shared/model'
-import { favoriteKey, type Favorite } from '@shared/model'
-import { activatePlaylist } from '@/lib/playlists'
-import { audioCaps, brightnessOptions } from '@shared/smoip'
-import { toggleFavorite } from '@/lib/favorites'
-import { tt } from '@/api'
-import { useStore } from '@/store'
-import { systemTheme } from '@/hooks/useTheme'
-import { activeSourceId, controlSet, cx, deriveNowPlaying } from '@/lib/format'
-import { SCREENS, sanitizeNavHidden, sanitizeNavHiddenTools } from '@/lib/screens'
-import { scrollToVisible } from '@/lib/scroll'
-import { SLEEP_DURATIONS } from '@/components/playback/SleepTimer'
+  VolumeX,
+} from "lucide-react";
+import { sleepTrackKey, type SleepAction } from "@shared/model";
+import { favoriteKey, type Favorite } from "@shared/model";
+import { activatePlaylist } from "@/lib/playlists";
+import { audioCaps, brightnessOptions } from "@shared/smoip";
+import { toggleFavorite } from "@/lib/favorites";
+import { tt } from "@/api";
+import { useStore } from "@/store";
+import { systemTheme } from "@/hooks/useTheme";
+import { activeSourceId, controlSet, cx, deriveNowPlaying } from "@/lib/format";
+import { SCREENS, sanitizeNavHidden, sanitizeNavHiddenTools } from "@/lib/screens";
+import { scrollToVisible } from "@/lib/scroll";
+import { SLEEP_DURATIONS } from "@/components/playback/SleepTimer";
 
-type Icon = typeof Play
+type Icon = typeof Play;
 
 interface Command {
-  id: string
-  label: string
+  id: string;
+  label: string;
   /** Section header and fallback right-hand tag. */
-  group: string
+  group: string;
   /** Overrides the group as the right-hand tag (e.g. "Preset 3", "EVO150"). */
-  hint?: string
-  icon: Icon
-  keywords?: string
+  hint?: string;
+  icon: Icon;
+  keywords?: string;
   /** Screen commands only: this screen is hidden from the sidebar (still navigable here). */
-  hidden?: boolean
-  run(): void
+  hidden?: boolean;
+  run(): void;
 }
 
 // Empty-query section order — most-reached first.
 const GROUP_ORDER = [
-  'Playback',
-  'Screens',
-  'Sources',
-  'Presets',
-  'Sleep timer',
-  'Power',
-  'Devices',
-  'View'
-]
-
-
+  "Playback",
+  "Screens",
+  "Sources",
+  "Presets",
+  "Sleep timer",
+  "Power",
+  "Devices",
+  "View",
+];
 
 function sourceIcon(klass: string): Icon {
-  if (/bluetooth/i.test(klass)) return Bluetooth
-  if (/radio/i.test(klass)) return Radio
-  if (/usb/i.test(klass)) return Usb
-  return Cable
+  if (/bluetooth/i.test(klass)) return Bluetooth;
+  if (/radio/i.test(klass)) return Radio;
+  if (/usb/i.test(klass)) return Usb;
+  return Cable;
 }
 
 /**
@@ -93,13 +91,13 @@ function sourceIcon(klass: string): Icon {
  * more-clustered matches rank higher.
  */
 function fuzzyScore(q: string, text: string): number | null {
-  if (!q) return 0
-  const idx = text.indexOf(q)
-  if (idx >= 0) return 1000 - idx
+  if (!q) return 0;
+  const idx = text.indexOf(q);
+  if (idx >= 0) return 1000 - idx;
   // The subsequence fallback exists for abbreviation typing ("nptrk",
   // "tnotb", "nplay") — at 1–2 characters it is near-vacuous, so short
   // queries match by substring only.
-  if (q.length < 3) return null
+  if (q.length < 3) return null;
   // Camel-hump rule: a matched character must either START A WORD (previous
   // char is a non-word boundary — space, ·, -, /) or CONTIGUOUSLY EXTEND the
   // previous match. Scattered single letters across a long haystack no
@@ -107,153 +105,154 @@ function fuzzyScore(q: string, text: string): number | null {
   // keywords contain "musicbrainz … context" (m-u-s ride "mus", but the
   // trailing e was stranded in "cont-e-xt"). Pure initials ("tnotb") and
   // word-prefix runs ("nplay" → Now Playing) still resolve.
-  const isWordStart = (pos: number): boolean => pos === 0 || !/[a-z0-9]/.test(text[pos - 1])
-  let ti = 0
-  let score = 0
-  let streak = 0
+  const isWordStart = (pos: number): boolean => pos === 0 || !/[a-z0-9]/.test(text[pos - 1]);
+  let ti = 0;
+  let score = 0;
+  let streak = 0;
   for (const ch of q) {
     // first occurrence at/after ti that is contiguous or a word start
-    let found = text.indexOf(ch, ti)
+    let found = text.indexOf(ch, ti);
     while (found >= 0 && found !== ti && !isWordStart(found)) {
-      found = text.indexOf(ch, found + 1)
+      found = text.indexOf(ch, found + 1);
     }
-    if (found < 0) return null
-    streak = found === ti ? streak + 1 : 0
-    score += 1 + streak
-    ti = found + 1
+    if (found < 0) return null;
+    streak = found === ti ? streak + 1 : 0;
+    score += 1 + streak;
+    ti = found + 1;
   }
-  return score
+  return score;
 }
 
 export function CommandPalette(): React.JSX.Element {
-  const setPaletteOpen = useStore((s) => s.setPaletteOpen)
-  const saveSettings = useStore((s) => s.saveSettings)
-  const setScreen = useStore((s) => s.setScreen)
-  const setDiagnosticsOpen = useStore((s) => s.setDiagnosticsOpen)
-  const setShortcutsOpen = useStore((s) => s.setShortcutsOpen)
-  const setInfoOpen = useStore((s) => s.setInfoOpen)
-  const setDisplayMode = useStore((s) => s.setDisplayMode)
-  const setLyricsOpen = useStore((s) => s.setLyricsOpen)
-  const setArtistOpen = useStore((s) => s.setArtistOpen)
-  const setContextTab = useStore((s) => s.setContextTab)
-  const setSettings = useStore((s) => s.setSettings)
+  const setPaletteOpen = useStore((s) => s.setPaletteOpen);
+  const saveSettings = useStore((s) => s.saveSettings);
+  const setScreen = useStore((s) => s.setScreen);
+  const setDiagnosticsOpen = useStore((s) => s.setDiagnosticsOpen);
+  const setShortcutsOpen = useStore((s) => s.setShortcutsOpen);
+  const setInfoOpen = useStore((s) => s.setInfoOpen);
+  const setDisplayMode = useStore((s) => s.setDisplayMode);
+  const setLyricsOpen = useStore((s) => s.setLyricsOpen);
+  const setArtistOpen = useStore((s) => s.setArtistOpen);
+  const setContextTab = useStore((s) => s.setContextTab);
+  const setSettings = useStore((s) => s.setSettings);
 
-  const connection = useStore((s) => s.connection)
-  const systemPower = useStore((s) => s.systemPower)
-  const sources = useStore((s) => s.sources)
-  const presets = useStore((s) => s.presets)
-  const devices = useStore((s) => s.devices)
-  const zoneState = useStore((s) => s.zoneState)
-  const playState = useStore((s) => s.playState)
-  const nowPlaying = useStore((s) => s.nowPlaying)
-  const sleep = useStore((s) => s.sleep)
-  const displayMode = useStore((s) => s.displayMode)
-  const audioSpec = useStore((s) => s.audioSpec)
-  const favorites = useStore((s) => s.favorites)
-  const playlists = useStore((s) => s.playlists)
-  const settings = useStore((s) => s.settings)
-  const displaySpec = useStore((s) => s.displaySpec)
-  const mediaIndex = useStore((s) => s.mediaIndex)
-  const jumpToSettingsTab = useStore((s) => s.jumpToSettingsTab)
-  const requestLibrarySearch = useStore((s) => s.requestLibrarySearch)
-  const requestSearch = useStore((s) => s.requestSearch)
-  const showToast = useStore((s) => s.showToast)
+  const connection = useStore((s) => s.connection);
+  const systemPower = useStore((s) => s.systemPower);
+  const sources = useStore((s) => s.sources);
+  const presets = useStore((s) => s.presets);
+  const devices = useStore((s) => s.devices);
+  const zoneState = useStore((s) => s.zoneState);
+  const playState = useStore((s) => s.playState);
+  const nowPlaying = useStore((s) => s.nowPlaying);
+  const sleep = useStore((s) => s.sleep);
+  const displayMode = useStore((s) => s.displayMode);
+  const audioSpec = useStore((s) => s.audioSpec);
+  const favorites = useStore((s) => s.favorites);
+  const playlists = useStore((s) => s.playlists);
+  const settings = useStore((s) => s.settings);
+  const displaySpec = useStore((s) => s.displaySpec);
+  const mediaIndex = useStore((s) => s.mediaIndex);
+  const jumpToSettingsTab = useStore((s) => s.jumpToSettingsTab);
+  const requestLibrarySearch = useStore((s) => s.requestLibrarySearch);
+  const requestSearch = useStore((s) => s.requestSearch);
+  const showToast = useStore((s) => s.showToast);
 
-  const [query, setQuery] = useState('')
-  const [selected, setSelected] = useState(0)
-  const listRef = useRef<HTMLDivElement | null>(null)
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState(0);
+  const listRef = useRef<HTMLDivElement | null>(null);
 
-  const connected = connection.phase === 'connected'
-  const inStandby = connected && systemPower != null && systemPower.power !== 'ON'
-  const currentHost =
-    'host' in connection ? (connection as { host: string }).host : null
+  const connected = connection.phase === "connected";
+  const inStandby = connected && systemPower != null && systemPower.power !== "ON";
+  const currentHost = "host" in connection ? (connection as { host: string }).host : null;
 
   const commands = useMemo<Command[]>(() => {
-    const cmds: Command[] = []
-    const controls = controlSet(nowPlaying)
-    const allow = (verb: string): boolean => controls.size === 0 || controls.has(verb)
+    const cmds: Command[] = [];
+    const controls = controlSet(nowPlaying);
+    const allow = (verb: string): boolean => controls.size === 0 || controls.has(verb);
 
     // -------- Playback (needs a live, awake streamer)
     if (connected && !inStandby) {
-      const playing = playState?.state === 'play'
+      const playing = playState?.state === "play";
       cmds.push({
-        id: 'toggle',
-        label: playing ? 'Pause' : 'Play',
-        group: 'Playback',
+        id: "toggle",
+        label: playing ? "Pause" : "Play",
+        group: "Playback",
         icon: Play,
-        keywords: 'play pause toggle',
-        run: () => void tt.command({ type: 'togglePlayback' })
-      })
-      if (allow('track_next'))
+        keywords: "play pause toggle",
+        run: () => void tt.command({ type: "togglePlayback" }),
+      });
+      if (allow("track_next"))
         cmds.push({
-          id: 'next',
-          label: 'Next track',
-          group: 'Playback',
+          id: "next",
+          label: "Next track",
+          group: "Playback",
           icon: SkipForward,
-          keywords: 'skip forward',
-          run: () => void tt.command({ type: 'nextTrack' })
-        })
-      if (allow('track_previous'))
+          keywords: "skip forward",
+          run: () => void tt.command({ type: "nextTrack" }),
+        });
+      if (allow("track_previous"))
         cmds.push({
-          id: 'prev',
-          label: 'Previous track',
-          group: 'Playback',
+          id: "prev",
+          label: "Previous track",
+          group: "Playback",
           icon: SkipBack,
-          keywords: 'skip back',
-          run: () => void tt.command({ type: 'previousTrack' })
-        })
-      if (allow('stop'))
+          keywords: "skip back",
+          run: () => void tt.command({ type: "previousTrack" }),
+        });
+      if (allow("stop"))
         cmds.push({
-          id: 'stop',
-          label: 'Stop',
-          group: 'Playback',
+          id: "stop",
+          label: "Stop",
+          group: "Playback",
           icon: Square,
-          run: () => void tt.command({ type: 'stop' })
-        })
-      const muted = zoneState?.mute ?? false
+          run: () => void tt.command({ type: "stop" }),
+        });
+      const muted = zoneState?.mute ?? false;
       cmds.push({
-        id: 'mute',
-        label: muted ? 'Unmute' : 'Mute',
-        group: 'Playback',
+        id: "mute",
+        label: muted ? "Unmute" : "Mute",
+        group: "Playback",
         icon: muted ? VolumeX : Volume2,
-        run: () => void tt.command({ type: 'setMute', mute: !muted })
-      })
-      if (allow('toggle_shuffle')) {
-        const on = playState?.mode_shuffle === 'all'
+        run: () => void tt.command({ type: "setMute", mute: !muted }),
+      });
+      if (allow("toggle_shuffle")) {
+        const on = playState?.mode_shuffle === "all";
         cmds.push({
-          id: 'shuffle',
-          label: on ? 'Shuffle off' : 'Shuffle on',
-          group: 'Playback',
+          id: "shuffle",
+          label: on ? "Shuffle off" : "Shuffle on",
+          group: "Playback",
           icon: Shuffle,
-          run: () => void tt.command({ type: 'setShuffle', mode: on ? 'off' : 'all' })
-        })
+          run: () => void tt.command({ type: "setShuffle", mode: on ? "off" : "all" }),
+        });
       }
-      if (allow('toggle_repeat')) {
-        const on = playState?.mode_repeat === 'all'
+      if (allow("toggle_repeat")) {
+        const on = playState?.mode_repeat === "all";
         cmds.push({
-          id: 'repeat',
-          label: on ? 'Repeat off' : 'Repeat all',
-          group: 'Playback',
+          id: "repeat",
+          label: on ? "Repeat off" : "Repeat all",
+          group: "Playback",
           icon: Repeat,
-          run: () => void tt.command({ type: 'setRepeat', mode: on ? 'off' : 'all' })
-        })
+          run: () => void tt.command({ type: "setRepeat", mode: on ? "off" : "all" }),
+        });
       }
     }
 
     // -------- Screens (always available — hidden-from-sidebar screens included,
     // flagged so the row shows they won't appear in the nav)
-    const navHidden = new Set(sanitizeNavHidden(settings.navHidden))
+    const navHidden = new Set(sanitizeNavHidden(settings.navHidden));
     for (const sc of SCREENS) {
       cmds.push({
         id: `screen:${sc.id}`,
         label: sc.label,
-        group: 'Screens',
+        group: "Screens",
         hint: `Screen · ${sc.key}`,
         icon: sc.icon,
-        keywords: navHidden.has(sc.id) ? 'go to open view screen hidden sidebar nav' : 'go to open view screen',
+        keywords: navHidden.has(sc.id)
+          ? "go to open view screen hidden sidebar nav"
+          : "go to open view screen",
         hidden: navHidden.has(sc.id),
-        run: () => setScreen(sc.id)
-      })
+        run: () => setScreen(sc.id),
+      });
     }
 
     // -------- Sources
@@ -263,48 +262,48 @@ export function CommandPalette(): React.JSX.Element {
     // Writing deviceTab is what clicking the tab does, so the pick persists the
     // same way either route is taken.
     cmds.push({
-      id: 'device:sources',
-      label: 'Open Sources',
-      group: 'View',
+      id: "device:sources",
+      label: "Open Sources",
+      group: "View",
       icon: Cable,
-      keywords: 'device input switch source',
+      keywords: "device input switch source",
       run: () => {
-        void saveSettings({ deviceTab: 'sources' })
-        setScreen('device')
-      }
-    })
+        void saveSettings({ deviceTab: "sources" });
+        setScreen("device");
+      },
+    });
     if (connected && !inStandby) {
-      const activeId = activeSourceId(zoneState, nowPlaying)
+      const activeId = activeSourceId(zoneState, nowPlaying);
       const selectable = (sources?.sources ?? [])
         .filter((s) => s.ui_selectable)
-        .sort((a, b) => a.preferred_order - b.preferred_order)
+        .sort((a, b) => a.preferred_order - b.preferred_order);
       for (const src of selectable) {
-        if (src.id === activeId) continue
+        if (src.id === activeId) continue;
         cmds.push({
           id: `source:${src.id}`,
           label: `Switch to ${src.name}`,
-          group: 'Sources',
-          hint: 'Source',
+          group: "Sources",
+          hint: "Source",
           icon: sourceIcon(src.class),
           keywords: `${src.id} input`,
-          run: () => void tt.command({ type: 'setSource', sourceId: src.id })
-        })
+          run: () => void tt.command({ type: "setSource", sourceId: src.id }),
+        });
       }
     }
 
     // -------- Presets (by name)
     if (connected && !inStandby) {
       for (const p of presets?.presets ?? []) {
-        if (p.id == null || !p.name) continue
+        if (p.id == null || !p.name) continue;
         cmds.push({
           id: `preset:${p.id}`,
           label: p.name,
-          group: 'Presets',
+          group: "Presets",
           hint: `Preset ${p.id}`,
           icon: Radio,
-          keywords: 'recall station',
-          run: () => void tt.command({ type: 'recallPreset', presetId: p.id as number })
-        })
+          keywords: "recall station",
+          run: () => void tt.command({ type: "recallPreset", presetId: p.id as number }),
+        });
       }
     }
 
@@ -316,173 +315,175 @@ export function CommandPalette(): React.JSX.Element {
     // here: the palette leaves you nowhere near the effect.
     if (connected && !inStandby) {
       for (const pl of playlists) {
-        if (!pl.name) continue
+        if (!pl.name) continue;
         cmds.push({
           id: `playlist:${pl.id}`,
           label: pl.name,
-          group: 'Playlists',
-          hint: `${pl.items.length} ${pl.items.length === 1 ? 'track' : 'tracks'}`,
+          group: "Playlists",
+          hint: `${pl.items.length} ${pl.items.length === 1 ? "track" : "tracks"}`,
           icon: ListOrdered,
-          keywords: 'playlist activate load queue',
-          run: () => void activatePlaylist(pl)
-        })
+          keywords: "playlist activate load queue",
+          run: () => void activatePlaylist(pl),
+        });
       }
     }
 
     // -------- Sleep timer
     if (connected && !inStandby) {
       const action: SleepAction =
-        settings.sleepAction === 'pause' || settings.sleepAction === 'standby'
+        settings.sleepAction === "pause" || settings.sleepAction === "standby"
           ? settings.sleepAction
-          : 'standby'
-      const verb = action === 'standby' ? 'Standby' : 'Pause'
+          : "standby";
+      const verb = action === "standby" ? "Standby" : "Pause";
       for (const d of SLEEP_DURATIONS) {
         cmds.push({
           id: `sleep:${d.minutes}`,
           label: `Sleep in ${d.label}`,
-          group: 'Sleep timer',
+          group: "Sleep timer",
           hint: verb,
           icon: Moon,
-          keywords: 'timer countdown',
+          keywords: "timer countdown",
           run: () =>
             void tt.setSleep({
               action,
               minutes: d.minutes,
               firesAt: Date.now() + d.minutes * 60_000,
-              trackKey: null
-            })
-        })
+              trackKey: null,
+            }),
+        });
       }
-      const meta = deriveNowPlaying(playState, nowPlaying)
+      const meta = deriveNowPlaying(playState, nowPlaying);
       const duration =
-        playState?.metadata?.duration ?? nowPlaying?.display?.progress?.duration ?? null
+        playState?.metadata?.duration ?? nowPlaying?.display?.progress?.duration ?? null;
       if (sleepTrackKey(playState) != null && duration != null && duration > 0 && !meta.isRadio) {
         cmds.push({
-          id: 'sleep:eot',
-          label: 'Sleep at end of track',
-          group: 'Sleep timer',
+          id: "sleep:eot",
+          label: "Sleep at end of track",
+          group: "Sleep timer",
           hint: verb,
           icon: Moon,
-          keywords: 'timer end of track',
+          keywords: "timer end of track",
           run: () =>
             void tt.setSleep({
               action,
               minutes: null,
               firesAt: null,
-              trackKey: sleepTrackKey(playState)
-            })
-        })
+              trackKey: sleepTrackKey(playState),
+            }),
+        });
       }
       if (sleep) {
         cmds.push({
-          id: 'sleep:cancel',
-          label: 'Cancel sleep timer',
-          group: 'Sleep timer',
+          id: "sleep:cancel",
+          label: "Cancel sleep timer",
+          group: "Sleep timer",
           icon: Moon,
-          keywords: 'disable off',
-          run: () => void tt.setSleep(null)
-        })
+          keywords: "disable off",
+          run: () => void tt.setSleep(null),
+        });
       }
     }
 
     // -------- Power
     if (connected) {
-      if (systemPower?.power === 'ON') {
+      if (systemPower?.power === "ON") {
         cmds.push({
-          id: 'power:standby',
-          label: 'Standby',
-          group: 'Power',
+          id: "power:standby",
+          label: "Standby",
+          group: "Power",
           icon: Power,
-          keywords: 'sleep network off',
-          run: () => void tt.command({ type: 'power', power: 'NETWORK' })
-        })
+          keywords: "sleep network off",
+          run: () => void tt.command({ type: "power", power: "NETWORK" }),
+        });
       } else {
         cmds.push({
-          id: 'power:on',
-          label: 'Power on',
-          group: 'Power',
+          id: "power:on",
+          label: "Power on",
+          group: "Power",
           icon: Power,
-          keywords: 'wake turn on',
-          run: () => void tt.command({ type: 'power', power: 'ON' })
-        })
+          keywords: "wake turn on",
+          run: () => void tt.command({ type: "power", power: "ON" }),
+        });
       }
     }
 
     // -------- Devices (switch / connect)
     for (const d of devices) {
-      if (d.host === currentHost) continue
+      if (d.host === currentHost) continue;
       cmds.push({
         id: `device:${d.host}`,
-        label: `${connected ? 'Switch to' : 'Connect to'} ${d.friendlyName}`,
-        group: 'Devices',
+        label: `${connected ? "Switch to" : "Connect to"} ${d.friendlyName}`,
+        group: "Devices",
         hint: d.model,
         icon: HardDrive,
         keywords: `${d.host} streamer`,
-        run: () => void tt.connect(d.host)
-      })
+        run: () => void tt.connect(d.host),
+      });
     }
 
     // -------- View / app
     // Mirror the hidden-from-sidebar hint the hidden screens get: when the
     // Mini player nav button is hidden, flag its palette row too (still runs).
-    const miniHiddenFromNav = sanitizeNavHiddenTools(settings.navHiddenTools).includes('mini-player')
+    const miniHiddenFromNav = sanitizeNavHiddenTools(settings.navHiddenTools).includes(
+      "mini-player",
+    );
     cmds.push({
-      id: 'view:mini',
-      label: 'Toggle mini player',
-      group: 'View',
+      id: "view:mini",
+      label: "Toggle mini player",
+      group: "View",
       icon: PictureInPicture2,
-      keywords: miniHiddenFromNav ? 'miniplayer window hidden sidebar' : 'miniplayer window',
+      keywords: miniHiddenFromNav ? "miniplayer window hidden sidebar" : "miniplayer window",
       hidden: miniHiddenFromNav,
-      run: () => void tt.toggleMini()
-    })
+      run: () => void tt.toggleMini(),
+    });
     if (connected && !inStandby) {
       cmds.push({
-        id: 'view:display',
-        label: displayMode ? 'Exit display mode' : 'Full-screen display mode',
-        group: 'View',
-        hint: 'F',
+        id: "view:display",
+        label: displayMode ? "Exit display mode" : "Full-screen display mode",
+        group: "View",
+        hint: "F",
         icon: Maximize2,
-        keywords: 'fullscreen wall',
-        run: () => setDisplayMode(!displayMode)
-      })
+        keywords: "fullscreen wall",
+        run: () => setDisplayMode(!displayMode),
+      });
     }
     // The drawers live on Now Playing — running these navigates there first.
     // Same metadata gating as the screen's header buttons (no radio, needs artist).
     if (connected && !inStandby) {
-      const npMeta = deriveNowPlaying(playState, nowPlaying)
+      const npMeta = deriveNowPlaying(playState, nowPlaying);
       if (settings.lyrics && !npMeta.isRadio && npMeta.title && npMeta.subtitle) {
         cmds.push({
-          id: 'view:lyrics',
-          label: 'Lyrics',
-          group: 'View',
+          id: "view:lyrics",
+          label: "Lyrics",
+          group: "View",
           icon: MicVocal,
-          keywords: 'lyrics panel words song',
+          keywords: "lyrics panel words song",
           run: () => {
-            setScreen('now-playing')
-            setLyricsOpen(true)
-          }
-        })
+            setScreen("now-playing");
+            setLyricsOpen(true);
+          },
+        });
       }
       if (settings.artistInfo && !npMeta.isRadio && npMeta.subtitle) {
         cmds.push({
-          id: 'view:artist',
-          label: 'About the artist',
-          group: 'View',
+          id: "view:artist",
+          label: "About the artist",
+          group: "View",
           icon: UserRound,
-          keywords: 'artist bio wikipedia musicbrainz context',
+          keywords: "artist bio wikipedia musicbrainz context",
           run: () => {
-            setScreen('now-playing')
-            setContextTab('artist')
-            setArtistOpen(true)
-          }
-        })
+            setScreen("now-playing");
+            setContextTab("artist");
+            setArtistOpen(true);
+          },
+        });
       }
       // Heart the current track — same content-only entry as the Now Playing
       // header heart (tracks need title+artist; radio hearts live there only,
       // since they also need the session's lastStation URL).
       if (!npMeta.isRadio && npMeta.title && npMeta.subtitle) {
         const fav = {
-          kind: 'track' as const,
+          kind: "track" as const,
           title: npMeta.title,
           artist: npMeta.subtitle,
           album: npMeta.album ?? null,
@@ -491,191 +492,191 @@ export function CommandPalette(): React.JSX.Element {
           serverName: null,
           objectId: null,
           titlePath: null,
-          durationSecs: playState?.metadata?.duration ?? null
-        }
-        const active = favorites.some((f) => favoriteKey(f) === favoriteKey(fav as Favorite))
+          durationSecs: playState?.metadata?.duration ?? null,
+        };
+        const active = favorites.some((f) => favoriteKey(f) === favoriteKey(fav as Favorite));
         cmds.push({
-          id: 'view:favtrack',
-          label: active ? 'Unfavorite this track' : 'Favorite this track',
-          group: 'Playback',
+          id: "view:favtrack",
+          label: active ? "Unfavorite this track" : "Favorite this track",
+          group: "Playback",
           icon: Heart,
-          keywords: 'heart favorite like love save track',
-          run: () => void toggleFavorite(fav)
-        })
+          keywords: "heart favorite like love save track",
+          run: () => void toggleFavorite(fav),
+        });
       }
       if (settings.artistInfo && !npMeta.isRadio && npMeta.subtitle && npMeta.album) {
         cmds.push({
-          id: 'view:album',
-          label: 'About the album',
-          group: 'View',
+          id: "view:album",
+          label: "About the album",
+          group: "View",
           icon: Disc3,
-          keywords: 'album release year label credits context',
+          keywords: "album release year label credits context",
           run: () => {
-            setScreen('now-playing')
-            setContextTab('album')
-            setArtistOpen(true)
-          }
-        })
+            setScreen("now-playing");
+            setContextTab("album");
+            setArtistOpen(true);
+          },
+        });
       }
     }
     // Toggle from the RESOLVED theme (the stored preference may be 'system');
     // running it always writes an explicit theme, which is what a toggle means.
-    const shownTheme = settings.theme === 'system' ? systemTheme() : settings.theme
+    const shownTheme = settings.theme === "system" ? systemTheme() : settings.theme;
     cmds.push({
-      id: 'view:theme',
-      label: shownTheme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme',
-      group: 'View',
-      icon: shownTheme === 'dark' ? Sun : Moon,
-      keywords: 'appearance dark light',
+      id: "view:theme",
+      label: shownTheme === "dark" ? "Switch to light theme" : "Switch to dark theme",
+      group: "View",
+      icon: shownTheme === "dark" ? Sun : Moon,
+      keywords: "appearance dark light",
       run: () => {
         void (async () => {
-          await saveSettings({ theme: shownTheme === 'dark' ? 'light' : 'dark' })
-        })()
-      }
-    })
+          await saveSettings({ theme: shownTheme === "dark" ? "light" : "dark" });
+        })();
+      },
+    });
     // Gated exactly like the Device-screen section: only when this streamer's
     // spec advertises writable tone controls (per-model feature detection).
     if (connected && audioCaps(audioSpec)) {
       cmds.push({
-        id: 'view:toneeq',
-        label: 'Tone & EQ',
-        group: 'View',
+        id: "view:toneeq",
+        label: "Tone & EQ",
+        group: "View",
         icon: AudioLines,
-        keywords: 'equalizer eq tilt balance tone bass treble dsp',
+        keywords: "equalizer eq tilt balance tone bass treble dsp",
         run: () => {
           // land on the right Device tab, not just the screen
-          void saveSettings({ deviceTab: 'tone' })
-          setScreen('device')
-        }
-      })
+          void saveSettings({ deviceTab: "tone" });
+          setScreen("device");
+        },
+      });
     }
     cmds.push({
-      id: 'view:diagnostics',
-      label: 'Open SMOIP payload console',
-      group: 'View',
-      hint: '`',
+      id: "view:diagnostics",
+      label: "Open SMOIP payload console",
+      group: "View",
+      hint: "`",
       icon: Terminal,
-      keywords: 'diagnostics debug frames',
-      run: () => setDiagnosticsOpen(true)
-    })
+      keywords: "diagnostics debug frames",
+      run: () => setDiagnosticsOpen(true),
+    });
     cmds.push({
-      id: 'view:shortcuts',
-      label: 'Keyboard shortcuts',
-      group: 'View',
-      hint: '?',
+      id: "view:shortcuts",
+      label: "Keyboard shortcuts",
+      group: "View",
+      hint: "?",
       icon: Keyboard,
-      run: () => setShortcutsOpen(true)
-    })
+      run: () => setShortcutsOpen(true),
+    });
     cmds.push({
-      id: 'view:about',
-      label: 'About TastyTunes',
-      group: 'View',
+      id: "view:about",
+      label: "About TastyTunes",
+      group: "View",
       icon: Info,
-      keywords: 'support version info',
-      run: () => setInfoOpen(true)
-    })
+      keywords: "support version info",
+      run: () => setInfoOpen(true),
+    });
 
     // -------- Search: the pair reads together — "everything" is the app-wide
     // -------- screen, "the library" is the library's own deeper search.
     cmds.push({
-      id: 'search:everything',
-      label: 'Search everything',
-      group: 'Library',
+      id: "search:everything",
+      label: "Search everything",
+      group: "Library",
       icon: Search,
-      keywords: 'find music search unified radio playlists presets favorites everywhere',
-      run: () => requestSearch()
-    })
+      keywords: "find music search unified radio playlists presets favorites everywhere",
+      run: () => requestSearch(),
+    });
     // -------- Library search + index (the media-index feature set)
     if (connected) {
       cmds.push({
-        id: 'library:search',
-        label: 'Search the library',
-        group: 'Library',
+        id: "library:search",
+        label: "Search the library",
+        group: "Library",
         icon: Search,
-        keywords: 'find music album artist track search deep',
-        run: () => requestLibrarySearch()
-      })
+        keywords: "find music album artist track search deep",
+        run: () => requestLibrarySearch(),
+      });
     }
     for (const idx of mediaIndex) {
-      if (idx.state === 'building') continue
+      if (idx.state === "building") continue;
       cmds.push({
         id: `library:rebuild:${idx.udn}`,
-        label: `${idx.state === 'ready' ? 'Rebuild' : 'Build'} library index — ${idx.serverName}`,
-        group: 'Library',
+        label: `${idx.state === "ready" ? "Rebuild" : "Build"} library index — ${idx.serverName}`,
+        group: "Library",
         icon: RefreshCw,
-        keywords: 'index scan media server refresh',
+        keywords: "index scan media server refresh",
         run: () => {
-          void tt.mediaIndexRebuild(idx.udn)
+          void tt.mediaIndexRebuild(idx.udn);
           // palette-site feedback: the building spinner lives in Settings →
           // Libraries, invisible from wherever the palette left you
           showToast({
-            kind: 'success',
-            text: `${idx.state === 'ready' ? 'Rebuilding' : 'Building'} the ${idx.serverName} index — progress in Settings → Libraries.`
-          })
-        }
-      })
+            kind: "success",
+            text: `${idx.state === "ready" ? "Rebuilding" : "Building"} the ${idx.serverName} index — progress in Settings → Libraries.`,
+          });
+        },
+      });
     }
 
     // -------- Settings deep links (the nav-dot jump mechanism, reused)
     cmds.push({
-      id: 'settings:updates',
-      label: 'Open Updates',
-      group: 'View',
+      id: "settings:updates",
+      label: "Open Updates",
+      group: "View",
       icon: ArrowUpCircle,
-      keywords: 'settings version upgrade release',
-      run: () => jumpToSettingsTab('updates')
-    })
+      keywords: "settings version upgrade release",
+      run: () => jumpToSettingsTab("updates"),
+    });
     cmds.push({
-      id: 'settings:libraries',
-      label: 'Open Libraries',
-      group: 'View',
+      id: "settings:libraries",
+      label: "Open Libraries",
+      group: "View",
       icon: Library,
-      keywords: 'settings media index servers',
-      run: () => jumpToSettingsTab('libraries')
-    })
+      keywords: "settings media index servers",
+      run: () => jumpToSettingsTab("libraries"),
+    });
     cmds.push({
-      id: 'settings:schedules',
-      label: 'Open Schedules',
-      group: 'View',
+      id: "settings:schedules",
+      label: "Open Schedules",
+      group: "View",
       icon: AlarmClock,
-      keywords: 'settings alarm wake timer automation schedule',
-      run: () => jumpToSettingsTab('schedules')
-    })
+      keywords: "settings alarm wake timer automation schedule",
+      run: () => jumpToSettingsTab("schedules"),
+    });
     cmds.push({
-      id: 'settings:agents',
-      label: 'Open AI agents',
-      group: 'View',
+      id: "settings:agents",
+      label: "Open AI agents",
+      group: "View",
       icon: Bot,
-      keywords: 'settings mcp tools model context protocol',
-      run: () => jumpToSettingsTab('agents')
-    })
+      keywords: "settings mcp tools model context protocol",
+      run: () => jumpToSettingsTab("agents"),
+    });
     cmds.push({
-      id: 'update:check',
-      label: 'Check for updates',
-      group: 'View',
+      id: "update:check",
+      label: "Check for updates",
+      group: "View",
       icon: ArrowUpCircle,
-      keywords: 'version new release upgrade now',
+      keywords: "version new release upgrade now",
       run: () => {
         // land where the outcome shows, then ask
-        jumpToSettingsTab('updates')
-        void tt.updateCheckNow()
-      }
-    })
+        jumpToSettingsTab("updates");
+        void tt.updateCheckNow();
+      },
+    });
 
     // -------- Device extras (spec-gated exactly like the Device screen)
     if (connected) {
-      const brightness = brightnessOptions(displaySpec)
+      const brightness = brightnessOptions(displaySpec);
       if (brightness) {
-        const LABEL: Record<string, string> = { off: 'off', dim: 'dim', bright: 'bright' }
+        const LABEL: Record<string, string> = { off: "off", dim: "dim", bright: "bright" };
         for (const level of brightness) {
           cmds.push({
             id: `display:${level}`,
             label: `Display ${LABEL[level] ?? level}`,
-            group: 'Device',
+            group: "Device",
             icon: Monitor,
-            keywords: 'brightness front panel screen',
-            run: () => void tt.command({ type: 'setBrightness', brightness: level })
-          })
+            keywords: "brightness front panel screen",
+            run: () => void tt.command({ type: "setBrightness", brightness: level }),
+          });
         }
       }
       if (audioCaps(audioSpec)) {
@@ -683,22 +684,22 @@ export function CommandPalette(): React.JSX.Element {
           cmds.push({
             id: `eq:${preset.name}`,
             label: `EQ preset: ${preset.name}`,
-            group: 'Device',
+            group: "Device",
             icon: AudioLines,
-            keywords: 'equalizer tone sound apply',
+            keywords: "equalizer tone sound apply",
             run: () => {
               void (async () => {
-                await tt.command({ type: 'setUserEq', enabled: true })
-                await tt.command({ type: 'setEqBands', gains: preset.gains })
-                showToast({ kind: 'success', text: `EQ preset ${preset.name} applied.` })
-              })()
-            }
-          })
+                await tt.command({ type: "setUserEq", enabled: true });
+                await tt.command({ type: "setEqBands", gains: preset.gains });
+                showToast({ kind: "success", text: `EQ preset ${preset.name} applied.` });
+              })();
+            },
+          });
         }
       }
     }
 
-    return cmds
+    return cmds;
   }, [
     connected,
     inStandby,
@@ -731,67 +732,67 @@ export function CommandPalette(): React.JSX.Element {
     setInfoOpen,
     setDisplayMode,
     setSettings,
-    setPaletteOpen
-  ])
+    setPaletteOpen,
+  ]);
 
-  const q = query.trim().toLowerCase()
+  const q = query.trim().toLowerCase();
   const filtered = useMemo<Command[]>(() => {
     if (!q) {
       return [...commands].sort(
-        (a, b) => GROUP_ORDER.indexOf(a.group) - GROUP_ORDER.indexOf(b.group)
-      )
+        (a, b) => GROUP_ORDER.indexOf(a.group) - GROUP_ORDER.indexOf(b.group),
+      );
     }
     return commands
       .map((c) => {
-        const hay = `${c.label} ${c.hint ?? ''} ${c.group} ${c.keywords ?? ''}`.toLowerCase()
-        const labelScore = fuzzyScore(q, c.label.toLowerCase())
-        const hayScore = fuzzyScore(q, hay)
-        if (labelScore == null && hayScore == null) return null
-        return { c, score: Math.max((labelScore ?? -1) * 2, hayScore ?? -1) }
+        const hay = `${c.label} ${c.hint ?? ""} ${c.group} ${c.keywords ?? ""}`.toLowerCase();
+        const labelScore = fuzzyScore(q, c.label.toLowerCase());
+        const hayScore = fuzzyScore(q, hay);
+        if (labelScore == null && hayScore == null) return null;
+        return { c, score: Math.max((labelScore ?? -1) * 2, hayScore ?? -1) };
       })
       .filter((x): x is { c: Command; score: number } => x != null)
       .sort((a, b) => b.score - a.score)
-      .map((x) => x.c)
-  }, [commands, q])
+      .map((x) => x.c);
+  }, [commands, q]);
 
   // Keep the selection valid as the result set changes.
   useEffect(() => {
-    setSelected(0)
-  }, [q])
+    setSelected(0);
+  }, [q]);
   useEffect(() => {
-    if (selected > filtered.length - 1) setSelected(Math.max(0, filtered.length - 1))
-  }, [filtered.length, selected])
+    if (selected > filtered.length - 1) setSelected(Math.max(0, filtered.length - 1));
+  }, [filtered.length, selected]);
 
   // Scroll the active row into view.
   useEffect(() => {
-    const el = listRef.current?.querySelector<HTMLElement>('[data-selected="true"]')
-    scrollToVisible(el ?? null)
-  }, [selected, filtered])
+    const el = listRef.current?.querySelector<HTMLElement>('[data-selected="true"]');
+    scrollToVisible(el ?? null);
+  }, [selected, filtered]);
 
   const run = (cmd: Command | undefined): void => {
-    if (!cmd) return
-    setPaletteOpen(false)
-    cmd.run()
-  }
+    if (!cmd) return;
+    setPaletteOpen(false);
+    cmd.run();
+  };
 
   const onKeyDown = (e: React.KeyboardEvent): void => {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault()
-      setSelected((i) => Math.min(filtered.length - 1, i + 1))
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault()
-      setSelected((i) => Math.max(0, i - 1))
-    } else if (e.key === 'Enter') {
-      e.preventDefault()
-      run(filtered[selected])
-    } else if (e.key === 'Escape') {
-      e.preventDefault()
-      setPaletteOpen(false)
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setSelected((i) => Math.min(filtered.length - 1, i + 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setSelected((i) => Math.max(0, i - 1));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      run(filtered[selected]);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      setPaletteOpen(false);
     }
-  }
+  };
 
-  const showHeaders = q === ''
-  let lastGroup = ''
+  const showHeaders = q === "";
+  let lastGroup = "";
 
   return (
     <div
@@ -821,10 +822,10 @@ export function CommandPalette(): React.JSX.Element {
             <div className="px-4 py-8 text-center text-[13px] text-faint">No matching commands</div>
           ) : (
             filtered.map((cmd, i) => {
-              const header = showHeaders && cmd.group !== lastGroup ? cmd.group : null
-              if (header) lastGroup = cmd.group
-              const Icon = cmd.icon
-              const active = i === selected
+              const header = showHeaders && cmd.group !== lastGroup ? cmd.group : null;
+              if (header) lastGroup = cmd.group;
+              const Icon = cmd.icon;
+              const active = i === selected;
               return (
                 <div key={cmd.id}>
                   {header && <div className="microlabel px-4 pt-3 pb-1.5">{header}</div>}
@@ -833,14 +834,14 @@ export function CommandPalette(): React.JSX.Element {
                     onMouseMove={() => setSelected(i)}
                     onClick={() => run(cmd)}
                     className={cx(
-                      'w-full flex items-center gap-3 px-4 py-2 text-left transition-colors',
-                      active ? 'bg-amberdim text-amber' : 'text-ink hover:bg-veil'
+                      "w-full flex items-center gap-3 px-4 py-2 text-left transition-colors",
+                      active ? "bg-amberdim text-amber" : "text-ink hover:bg-veil",
                     )}
                   >
                     <Icon
                       size={16}
                       strokeWidth={1.8}
-                      className={cx('shrink-0', active ? 'text-amber' : 'text-dim')}
+                      className={cx("shrink-0", active ? "text-amber" : "text-dim")}
                     />
                     <span className="flex-1 min-w-0 truncate text-[13.5px]">{cmd.label}</span>
                     {cmd.hidden && (
@@ -856,7 +857,7 @@ export function CommandPalette(): React.JSX.Element {
                     </span>
                   </button>
                 </div>
-              )
+              );
             })
           )}
         </div>
@@ -872,5 +873,5 @@ export function CommandPalette(): React.JSX.Element {
         </div>
       </div>
     </div>
-  )
+  );
 }

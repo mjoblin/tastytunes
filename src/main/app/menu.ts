@@ -1,13 +1,13 @@
-import { app, Menu, shell, type MenuItemConstructorOptions } from 'electron'
-import type { MenuCommand, StreamerCommand } from '@shared/ipc'
-import { REPO_URL } from '@shared/ipc'
+import { app, Menu, shell, type MenuItemConstructorOptions } from "electron";
+import type { MenuCommand, StreamerCommand } from "@shared/ipc";
+import { REPO_URL } from "@shared/ipc";
 
 export interface MenuDeps {
   /** Streamer commands go straight to the DeviceManager (safe no-op offline). */
-  command(cmd: StreamerCommand): void
-  toggleMini(): void
+  command(cmd: StreamerCommand): void;
+  toggleMini(): void;
   /** Deliver a MenuCommand to the main window, creating/focusing it first. */
-  sendToMain(command: MenuCommand): void
+  sendToMain(command: MenuCommand): void;
 }
 
 // Item ids exist for the test harness (Menu.getMenuItemById().click()).
@@ -16,74 +16,98 @@ export interface MenuDeps {
 // a menu accelerator would steal them app-wide. The renderer's shortcut set
 // is documented in the shortcuts overlay; the menu is the discoverable mirror.
 export function installAppMenu(deps: MenuDeps): void {
-  const isMac = process.platform === 'darwin'
+  const isMac = process.platform === "darwin";
 
   const settingsItem: MenuItemConstructorOptions = {
-    id: 'menu-settings',
-    label: isMac ? 'Settings…' : 'Settings',
-    accelerator: 'CmdOrCtrl+,',
-    click: () => deps.sendToMain({ id: 'screen', screen: 'settings' })
-  }
+    id: "menu-settings",
+    label: isMac ? "Settings…" : "Settings",
+    accelerator: "CmdOrCtrl+,",
+    click: () => deps.sendToMain({ id: "screen", screen: "settings" }),
+  };
 
   const appMenu: MenuItemConstructorOptions = {
     label: app.name,
     submenu: [
-      { id: 'menu-about', label: 'About TastyTunes', click: () => deps.sendToMain({ id: 'about' }) },
-      { type: 'separator' },
+      {
+        id: "menu-about",
+        label: "About TastyTunes",
+        click: () => deps.sendToMain({ id: "about" }),
+      },
+      { type: "separator" },
       settingsItem,
-      { type: 'separator' },
-      { role: 'services' },
-      { type: 'separator' },
-      { role: 'hide' },
-      { role: 'hideOthers' },
-      { role: 'unhide' },
-      { type: 'separator' },
-      { role: 'quit' }
-    ]
-  }
+      { type: "separator" },
+      { role: "services" },
+      { type: "separator" },
+      { role: "hide" },
+      { role: "hideOthers" },
+      { role: "unhide" },
+      { type: "separator" },
+      { role: "quit" },
+    ],
+  };
 
   const fileMenu: MenuItemConstructorOptions = {
-    label: 'File',
-    submenu: [settingsItem, { type: 'separator' }, { role: 'quit' }]
-  }
+    label: "File",
+    submenu: [settingsItem, { type: "separator" }, { role: "quit" }],
+  };
 
   const editMenu: MenuItemConstructorOptions = {
-    label: 'Edit',
+    label: "Edit",
     submenu: [
-      { role: 'undo' },
-      { role: 'redo' },
-      { type: 'separator' },
-      { role: 'cut' },
-      { role: 'copy' },
-      { role: 'paste' },
-      { role: 'selectAll' }
-    ]
-  }
+      { role: "undo" },
+      { role: "redo" },
+      { type: "separator" },
+      { role: "cut" },
+      { role: "copy" },
+      { role: "paste" },
+      { role: "selectAll" },
+    ],
+  };
 
   const playbackMenu: MenuItemConstructorOptions = {
-    label: 'Playback',
+    label: "Playback",
     submenu: [
-      { id: 'menu-play-pause', label: 'Play / Pause', click: () => deps.command({ type: 'togglePlayback' }) },
-      { id: 'menu-next', label: 'Next Track', click: () => deps.command({ type: 'nextTrack' }) },
-      { id: 'menu-prev', label: 'Previous Track', click: () => deps.command({ type: 'previousTrack' }) },
-      { type: 'separator' },
-      { id: 'menu-vol-up', label: 'Volume Up', click: () => deps.command({ type: 'volumeStepChange', delta: 1 }) },
-      { id: 'menu-vol-down', label: 'Volume Down', click: () => deps.command({ type: 'volumeStepChange', delta: -1 }) },
-      { type: 'separator' },
-      { id: 'menu-power', label: 'Power On / Standby', click: () => deps.command({ type: 'power', power: 'toggle' }) }
-    ]
-  }
+      {
+        id: "menu-play-pause",
+        label: "Play / Pause",
+        click: () => deps.command({ type: "togglePlayback" }),
+      },
+      { id: "menu-next", label: "Next Track", click: () => deps.command({ type: "nextTrack" }) },
+      {
+        id: "menu-prev",
+        label: "Previous Track",
+        click: () => deps.command({ type: "previousTrack" }),
+      },
+      { type: "separator" },
+      {
+        id: "menu-vol-up",
+        label: "Volume Up",
+        click: () => deps.command({ type: "volumeStepChange", delta: 1 }),
+      },
+      {
+        id: "menu-vol-down",
+        label: "Volume Down",
+        click: () => deps.command({ type: "volumeStepChange", delta: -1 }),
+      },
+      { type: "separator" },
+      {
+        id: "menu-power",
+        label: "Power On / Standby",
+        click: () => deps.command({ type: "power", power: "toggle" }),
+      },
+    ],
+  };
 
   const viewSubmenu: MenuItemConstructorOptions[] = [
-    { id: 'menu-mini', label: 'Mini Player', click: () => deps.toggleMini() },
+    { id: "menu-mini", label: "Mini Player", click: () => deps.toggleMini() },
     {
-      id: 'menu-display',
+      id: "menu-display",
       // "Full-Screen Now Playing", not the in-app "display mode" name: this
       // sits two rows above the native "Toggle Full Screen" role, and two
       // items that both say full screen/fullscreen-ish need labels that say
       // WHICH full screen (user, 2026-08-06). The app keeps calling the
       // feature display mode; menus describe.
-      label: 'Full-Screen Now Playing',
+      label: "Full-Screen Now Playing",
       // NO ACCELERATOR, ON ANY PLATFORM. The renderer owns F. This item once
       // carried `accelerator: 'F', registerAccelerator: false` on macOS to
       // DISPLAY the key (2026-08-06) — but registerAccelerator is Linux/Windows
@@ -93,67 +117,69 @@ export function installAppMenu(deps: MenuDeps): void {
       // and the window flashed into full screen and out (user report,
       // 2026-08-15). A menu key equivalent on macOS is always live — there is
       // no display-only mode — so the hint is not shown here.
-      click: () => deps.sendToMain({ id: 'displayMode' })
+      click: () => deps.sendToMain({ id: "displayMode" }),
     },
-    { id: 'menu-toggle-nav', label: 'Toggle Sidebar', click: () => deps.sendToMain({ id: 'toggleNav' }) },
-    { type: 'separator' },
-    { role: 'togglefullscreen' }
-  ]
+    {
+      id: "menu-toggle-nav",
+      label: "Toggle Sidebar",
+      click: () => deps.sendToMain({ id: "toggleNav" }),
+    },
+    { type: "separator" },
+    { role: "togglefullscreen" },
+  ];
   if (!app.isPackaged) {
     viewSubmenu.push(
-      { type: 'separator' },
-      { role: 'reload' },
-      { role: 'forceReload' },
-      { role: 'toggleDevTools' }
-    )
+      { type: "separator" },
+      { role: "reload" },
+      { role: "forceReload" },
+      { role: "toggleDevTools" },
+    );
   }
-  const viewMenu: MenuItemConstructorOptions = { label: 'View', submenu: viewSubmenu }
+  const viewMenu: MenuItemConstructorOptions = { label: "View", submenu: viewSubmenu };
 
   const screens: Array<[string, string]> = [
-    ['now-playing', 'Now Playing'],
-    ['queue', 'Queue'],
-    ['search', 'Search'],
-    ['presets', 'Presets'],
-    ['library', 'Library'],
-    ['recently-played', 'Recently Played'],
-    ['device', 'Device']
-  ]
+    ["now-playing", "Now Playing"],
+    ["queue", "Queue"],
+    ["search", "Search"],
+    ["presets", "Presets"],
+    ["library", "Library"],
+    ["recently-played", "Recently Played"],
+    ["device", "Device"],
+  ];
   const goMenu: MenuItemConstructorOptions = {
-    label: 'Go',
+    label: "Go",
     submenu: [
       {
-        id: 'menu-palette',
-        label: 'Command Palette…',
-        accelerator: 'CmdOrCtrl+K',
-        click: () => deps.sendToMain({ id: 'palette' })
+        id: "menu-palette",
+        label: "Command Palette…",
+        accelerator: "CmdOrCtrl+K",
+        click: () => deps.sendToMain({ id: "palette" }),
       },
-      { type: 'separator' },
-      ...screens.map(
-        ([screen, label]): MenuItemConstructorOptions => ({
-          id: `menu-screen-${screen}`,
-          label,
-          click: () => deps.sendToMain({ id: 'screen', screen })
-        })
-      )
-    ]
-  }
+      { type: "separator" },
+      ...screens.map(([screen, label]): MenuItemConstructorOptions => ({
+        id: `menu-screen-${screen}`,
+        label,
+        click: () => deps.sendToMain({ id: "screen", screen }),
+      })),
+    ],
+  };
 
   const helpMenu: MenuItemConstructorOptions = {
-    role: 'help',
+    role: "help",
     submenu: [
       {
-        id: 'menu-shortcuts',
-        label: 'Keyboard Shortcuts',
-        click: () => deps.sendToMain({ id: 'shortcuts' })
+        id: "menu-shortcuts",
+        label: "Keyboard Shortcuts",
+        click: () => deps.sendToMain({ id: "shortcuts" }),
       },
-      { type: 'separator' },
+      { type: "separator" },
       {
-        id: 'menu-github',
-        label: 'TastyTunes on GitHub',
-        click: () => void shell.openExternal(REPO_URL)
-      }
-    ]
-  }
+        id: "menu-github",
+        label: "TastyTunes on GitHub",
+        click: () => void shell.openExternal(REPO_URL),
+      },
+    ],
+  };
 
   const template: MenuItemConstructorOptions[] = [
     ...(isMac ? [appMenu] : [fileMenu]),
@@ -161,9 +187,9 @@ export function installAppMenu(deps: MenuDeps): void {
     playbackMenu,
     viewMenu,
     goMenu,
-    ...(isMac ? [{ role: 'windowMenu' } as MenuItemConstructorOptions] : []),
-    helpMenu
-  ]
+    ...(isMac ? [{ role: "windowMenu" } as MenuItemConstructorOptions] : []),
+    helpMenu,
+  ];
 
-  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }

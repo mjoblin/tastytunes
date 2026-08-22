@@ -1,8 +1,8 @@
-import { useRef } from 'react'
-import { createPortal } from 'react-dom'
-import { cx } from '@/lib/format'
-import { PopoverChrome, usePopoverChrome, useClampedPosition } from '@/hooks/usePopover'
-import { useFadePresence } from '@/hooks/useFadePresence'
+import { useRef } from "react";
+import { createPortal } from "react-dom";
+import { cx } from "@/lib/format";
+import { PopoverChrome, usePopoverChrome, useClampedPosition } from "@/hooks/usePopover";
+import { useFadePresence } from "@/hooks/useFadePresence";
 
 /**
  * The two overlay shells. Every transient surface in the app is one of these:
@@ -25,7 +25,7 @@ import { useFadePresence } from '@/hooks/useFadePresence'
  * either drift or a deliberate lift over the bar; either way changing it is a
  * visible change, so they are left alone here.
  */
-export const POPOVER_CARD = 'rounded-xl ring-1 ring-edge2 bg-raised shadow-xl'
+export const POPOVER_CARD = "rounded-xl ring-1 ring-edge2 bg-raised shadow-xl";
 
 /**
  * A popover anchored at a click point: portaled to <body>, backed by a
@@ -49,19 +49,22 @@ export function PopoverCard({
   ...rest
 }: {
   /** Where the click happened — the card is clamped to stay fully on-screen. */
-  at: { x: number; y: number }
+  at: { x: number; y: number };
   /** Tailwind width class: w-52, w-[272px]. */
-  width: string
-  onClose(): void
+  width: string;
+  onClose(): void;
   /** Menus opened by right-click also dismiss on right-click elsewhere. */
-  rightClickCloses?: boolean
+  rightClickCloses?: boolean;
   /** Padding/spacing for the card's contents. */
-  className?: string
-  children: React.ReactNode
-} & Omit<React.HTMLAttributes<HTMLDivElement>, 'className' | 'children' | 'style'>): React.JSX.Element {
-  usePopoverChrome(onClose)
-  const boxRef = useRef<HTMLDivElement | null>(null)
-  const pos = useClampedPosition(boxRef, at.x, at.y)
+  className?: string;
+  children: React.ReactNode;
+} & Omit<
+  React.HTMLAttributes<HTMLDivElement>,
+  "className" | "children" | "style"
+>): React.JSX.Element {
+  usePopoverChrome(onClose);
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const pos = useClampedPosition(boxRef, at.x, at.y);
 
   return createPortal(
     <>
@@ -72,15 +75,15 @@ export function PopoverCard({
       />
       <div
         ref={boxRef}
-        className={cx('fixed z-50', width, POPOVER_CARD, className)}
+        className={cx("fixed z-50", width, POPOVER_CARD, className)}
         style={pos}
         {...rest}
       >
         {children}
       </div>
     </>,
-    document.body
-  )
+    document.body,
+  );
 }
 
 /**
@@ -108,20 +111,20 @@ export function ModalShell({
   onClose,
   escapeCloses = false,
   className,
-  children
+  children,
 }: {
   /** Keep the shell mounted and flip this — the exit fade needs the DOM. */
-  open?: boolean
-  onClose(): void
-  escapeCloses?: boolean
+  open?: boolean;
+  onClose(): void;
+  escapeCloses?: boolean;
   /** Panel geometry — width, max-*, flex, padding. The surface is the shell's. */
-  className?: string
-  children: React.ReactNode
+  className?: string;
+  children: React.ReactNode;
 }): React.JSX.Element | null {
-  const { mounted, faded } = useFadePresence(open)
-  const shown = useRef(children)
-  if (open) shown.current = children
-  if (!mounted) return null
+  const { mounted, faded } = useFadePresence(open);
+  const shown = useRef(children);
+  if (open) shown.current = children;
+  if (!mounted) return null;
   return (
     // THE BLUR STAYS; HOVER TRANSITIONS INSIDE THE SHELL GO (2026-08-04,
     // measured round). The frosted backdrop is what dissolves the room's
@@ -146,22 +149,22 @@ export function ModalShell({
     createPortal(
       <div
         className={cx(
-          'fixed inset-0 z-30 bg-black/60 backdrop-blur-sm flex items-center justify-center',
+          "fixed inset-0 z-30 bg-black/60 backdrop-blur-sm flex items-center justify-center",
           faded,
-          !open && 'pointer-events-none'
+          !open && "pointer-events-none",
         )}
-        data-modal-open={open ? '' : undefined}
+        data-modal-open={open ? "" : undefined}
         onClick={onClose}
       >
         {escapeCloses && open && <PopoverChrome onClose={onClose} />}
         <div
-          className={cx('rounded-2xl bg-panel ring-1 ring-edge2 shadow-2xl', className)}
+          className={cx("rounded-2xl bg-panel ring-1 ring-edge2 shadow-2xl", className)}
           onClick={(e) => e.stopPropagation()}
         >
           {open ? children : shown.current}
         </div>
       </div>,
-      document.body
+      document.body,
     )
-  )
+  );
 }

@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { useQueuePerformer } from '@/hooks/useQueuePerformer'
+import { useEffect, useRef, useState } from "react";
+import { useQueuePerformer } from "@/hooks/useQueuePerformer";
 import {
   DndContext,
   KeyboardSensor,
@@ -7,85 +7,104 @@ import {
   closestCenter,
   useSensor,
   useSensors,
-  type DragEndEvent
-} from '@dnd-kit/core'
+  type DragEndEvent,
+} from "@dnd-kit/core";
 import {
   SortableContext,
   arrayMove,
   rectSortingStrategy,
   sortableKeyboardCoordinates,
   useSortable,
-  verticalListSortingStrategy
-} from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
-import { BookmarkPlus, Crosshair, Disc3, Footprints, LayoutGrid, ListMusic, ListOrdered, ListX, MoreHorizontal, Play, Rows3, X } from 'lucide-react'
-import { queueContentHash, type QueueListItem } from '@shared/smoip'
-import { presetVolumeKey, type ScreenLayout } from '@shared/model'
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
+  BookmarkPlus,
+  Crosshair,
+  Disc3,
+  Footprints,
+  LayoutGrid,
+  ListMusic,
+  ListOrdered,
+  ListX,
+  MoreHorizontal,
+  Play,
+  Rows3,
+  X,
+} from "lucide-react";
+import { queueContentHash, type QueueListItem } from "@shared/smoip";
+import { presetVolumeKey, type ScreenLayout } from "@shared/model";
 import {
   favoriteKey,
   type ContentRef,
   type Favorite,
-  type QueueRestoreResult
-} from '@shared/model'
-import { tt } from '@/api'
-import { useConfirmPopover } from '@/components/chrome/Confirm'
-import { useStore } from '@/store'
-import { Eqbars } from '@/components/media/Eqbars'
-import { EmptyState } from '@/components/chrome/EmptyState'
-import { useScrollMemory } from '@/hooks/useScrollMemory'
-import { flashTarget, scrollToWithContext } from '@/lib/scroll'
-import { lockVertical } from '@/lib/dnd'
-import { activeSourceId, cx, fmtTime, matchesFilter } from '@/lib/format'
-import { toggleFavorite } from '@/lib/favorites'
-import { fromQueueItem, refToFavorite, refToPlaylistItem } from '@/lib/mediaRef'
-import { saveRefToPreset } from '@/lib/mediaActions'
-import { trackMenuItems, type MediaMenuItem } from '@/lib/mediaMenus'
-import { AddToPlaylistPanel } from '@/components/overlays/AddToPlaylistPanel'
-import { RowMenu } from '@/components/media/RowMenu'
-import { RowAction } from '@/components/media/RowAction'
-import { RowHeart } from '@/components/media/RowHeart'
-import { OrderHandle } from '@/components/controls/OrderHandle'
-import { ArtImage } from '@/components/media/ArtImage'
-import { MediaArt } from '@/components/media/MediaArt'
-import { DurationCell } from '@/components/media/DurationCell'
-import { FilterInput } from '@/components/controls/FilterInput'
-import { ModalShell } from '@/components/chrome/Overlay'
-import { PresetSavePanel, PresetPicker } from '@/components/library/LibraryMenus'
-import { HeaderChip, ScreenTitle } from '@/components/chrome/Chrome'
-import { artUrlAt } from '@shared/artUrl'
+  type QueueRestoreResult,
+} from "@shared/model";
+import { tt } from "@/api";
+import { useConfirmPopover } from "@/components/chrome/Confirm";
+import { useStore } from "@/store";
+import { Eqbars } from "@/components/media/Eqbars";
+import { EmptyState } from "@/components/chrome/EmptyState";
+import { useScrollMemory } from "@/hooks/useScrollMemory";
+import { flashTarget, scrollToWithContext } from "@/lib/scroll";
+import { lockVertical } from "@/lib/dnd";
+import { activeSourceId, cx, fmtTime, matchesFilter } from "@/lib/format";
+import { toggleFavorite } from "@/lib/favorites";
+import { fromQueueItem, refToFavorite, refToPlaylistItem } from "@/lib/mediaRef";
+import { saveRefToPreset } from "@/lib/mediaActions";
+import { trackMenuItems, type MediaMenuItem } from "@/lib/mediaMenus";
+import { AddToPlaylistPanel } from "@/components/overlays/AddToPlaylistPanel";
+import { RowMenu } from "@/components/media/RowMenu";
+import { RowAction } from "@/components/media/RowAction";
+import { RowHeart } from "@/components/media/RowHeart";
+import { OrderHandle } from "@/components/controls/OrderHandle";
+import { ArtImage } from "@/components/media/ArtImage";
+import { MediaArt } from "@/components/media/MediaArt";
+import { DurationCell } from "@/components/media/DurationCell";
+import { FilterInput } from "@/components/controls/FilterInput";
+import { ModalShell } from "@/components/chrome/Overlay";
+import { PresetSavePanel, PresetPicker } from "@/components/library/LibraryMenus";
+import { HeaderChip, ScreenTitle } from "@/components/chrome/Chrome";
+import { artUrlAt } from "@shared/artUrl";
 
 /**
  * Queue → preset: the shared PresetSavePanel in a centered modal. The device
  * stores the whole queue as a MediaQueue preset (recallable anywhere); we also
  * record its exact track signature so the Presets screen can recognize it.
  */
-function SaveQueueDialog({ open, onClose }: { open: boolean; onClose(): void }): React.JSX.Element | null {
-  const trackCount = useStore((s) => s.queue?.items?.length ?? 0)
-  const showToast = useStore((s) => s.showToast)
+function SaveQueueDialog({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose(): void;
+}): React.JSX.Element | null {
+  const trackCount = useStore((s) => s.queue?.items?.length ?? 0);
+  const showToast = useStore((s) => s.showToast);
 
-  const saveSettings = useStore((s) => s.saveSettings)
+  const saveSettings = useStore((s) => s.saveSettings);
 
   const onSave = async (slot: number, name: string | null): Promise<void> => {
     // throws on failure (already toasted by the api layer) → panel stays open
-    await tt.command({ type: 'queueSavePreset', slot, name })
+    await tt.command({ type: "queueSavePreset", slot, name });
     // Remember exactly what this slot holds (all tracks, in order) so the
     // Presets screen recognizes this queue coming back from any controller.
-    const { queue, systemInfo, settings } = useStore.getState()
+    const { queue, systemInfo, settings } = useStore.getState();
     if (queue?.items?.length) {
       void saveSettings({
         queueSignatures: {
           ...settings.queueSignatures,
-          [presetVolumeKey(systemInfo?.udn, slot)]: queueContentHash(queue.items)
-        }
-      })
+          [presetVolumeKey(systemInfo?.udn, slot)]: queueContentHash(queue.items),
+        },
+      });
     }
     showToast({
-      kind: 'success',
+      kind: "success",
       text: `Saved “${name ?? `Queue Preset ${slot}`}” to preset ${slot}`,
-      action: { label: 'View', screen: 'presets' }
-    })
-    onClose()
-  }
+      action: { label: "View", screen: "presets" },
+    });
+    onClose();
+  };
 
   return (
     <ModalShell open={open} onClose={onClose} escapeCloses className="w-[360px] p-5">
@@ -99,52 +118,56 @@ function SaveQueueDialog({ open, onClose }: { open: boolean; onClose(): void }):
         onSave={onSave}
       />
     </ModalShell>
-  )
+  );
 }
 
 export function QueueScreen(): React.JSX.Element {
-  const queue = useStore((s) => s.queue)
-  const saveSettings = useStore((s) => s.saveSettings)
-  const playState = useStore((s) => s.playState)
-  const nowPlaying = useStore((s) => s.nowPlaying)
-  const zoneState = useStore((s) => s.zoneState)
+  const queue = useStore((s) => s.queue);
+  const saveSettings = useStore((s) => s.saveSettings);
+  const playState = useStore((s) => s.playState);
+  const nowPlaying = useStore((s) => s.nowPlaying);
+  const zoneState = useStore((s) => s.zoneState);
   const { followQueue, queueLayout, presetCardSize, presetGap, presetFillRows } = useStore(
-    (s) => s.settings
-  )
-  const setQueueItems = useStore((s) => s.setQueueItems)
-  const filter = useStore((s) => s.screenFilters.queue)
-  const setScreenFilter = useStore((s) => s.setScreenFilter)
-  const cards = queueLayout === 'cards'
-  const [saveOpen, setSaveOpen] = useState(false)
-  const clearConfirm = useConfirmPopover()
+    (s) => s.settings,
+  );
+  const setQueueItems = useStore((s) => s.setQueueItems);
+  const filter = useStore((s) => s.screenFilters.queue);
+  const setScreenFilter = useStore((s) => s.setScreenFilter);
+  const cards = queueLayout === "cards";
+  const [saveOpen, setSaveOpen] = useState(false);
+  const clearConfirm = useConfirmPopover();
   // Follow-current does its own scrolling on entry; otherwise restore the
   // previous position.
-  const scrollRef = useScrollMemory('queue', !followQueue)
+  const scrollRef = useScrollMemory("queue", !followQueue);
 
   const setFollowQueue = async (follow: boolean): Promise<void> => {
-    await saveSettings({ followQueue: follow })
-  }
+    await saveSettings({ followQueue: follow });
+  };
   const setLayout = async (queueLayout: ScreenLayout): Promise<void> => {
-    await saveSettings({ queueLayout })
-  }
+    await saveSettings({ queueLayout });
+  };
   // Cards get half a card of context above the target; rows get a full row.
   const scrollToCurrent = (): void => {
-    scrollToWithContext(currentRef.current, cards ? presetGap : 8, cards ? 0.5 : 1)
-    flashTarget(currentRef.current)
-  }
+    scrollToWithContext(currentRef.current, cards ? presetGap : 8, cards ? 0.5 : 1);
+    flashTarget(currentRef.current);
+  };
 
-  const showToast = useStore((s) => s.showToast)
+  const showToast = useStore((s) => s.showToast);
   // Right-click rather than a third hover button: the row already carries
   // remove and a grip, and Favorites established right-click for exactly this
   // (a local list of tracks whose rows are already busy).
-  const [rowMenu, setRowMenu] = useState<{ item: QueueListItem; x: number; y: number } | null>(null)
-  const [playlistFor, setPlaylistFor] = useState<{ item: QueueListItem; x: number; y: number } | null>(
-    null
-  )
+  const [rowMenu, setRowMenu] = useState<{ item: QueueListItem; x: number; y: number } | null>(
+    null,
+  );
+  const [playlistFor, setPlaylistFor] = useState<{
+    item: QueueListItem;
+    x: number;
+    y: number;
+  } | null>(null);
   const [presetFor, setPresetFor] = useState<{ item: QueueListItem; x: number; y: number } | null>(
-    null
-  )
-  const allItems = (queue?.items ?? []).filter((i) => i.id != null)
+    null,
+  );
+  const allItems = (queue?.items ?? []).filter((i) => i.id != null);
 
   /**
    * Snapshot the queue as a stored playlist. Entries carry CONTENT (the durable
@@ -158,34 +181,34 @@ export function QueueScreen(): React.JSX.Element {
       .map((i) => i.metadata)
       .filter((m): m is NonNullable<typeof m> => m != null)
       .map((m) => ({
-        title: m.title ?? 'Unknown track',
+        title: m.title ?? "Unknown track",
         artist: m.artist ?? null,
         album: m.album ?? null,
         artUrl: m.art_url ?? null,
         serverUdn: null,
         serverName: null,
         objectId: null,
-        durationSecs: m.duration ?? null
-      }))
-    if (items.length === 0) return
+        durationSecs: m.duration ?? null,
+      }));
+    if (items.length === 0) return;
     // Date alone collides the second time you save in a day — and two rows
     // reading "Queue — Jul 24" are indistinguishable. The time makes it unique
     // in practice AND tells you which session it was.
     const name = `Queue — ${new Date().toLocaleString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit'
-    })}`
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    })}`;
     // Toast the STORED name (two saves in the same minute uniquify to "… (2)").
-    const created = await tt.playlistCreate(name, items)
+    const created = await tt.playlistCreate(name, items);
     showToast({
-      kind: 'success',
+      kind: "success",
       text: `Saved ${items.length} tracks as “${created.name}”`,
-      action: { label: 'Open Playlists', screen: 'playlists' }
-    })
-  }
-  const performerOf = useQueuePerformer()
+      action: { label: "Open Playlists", screen: "playlists" },
+    });
+  };
+  const performerOf = useQueuePerformer();
 
   // Filter over everything we hold, displayed or not (genre, class, source).
   const items = filter
@@ -198,31 +221,31 @@ export function QueueScreen(): React.JSX.Element {
           i.metadata?.album,
           i.metadata?.genre,
           i.metadata?.class,
-          i.metadata?.source
-        ])
+          i.metadata?.source,
+        ]),
       )
-    : allItems
-  const playId = queue?.play_id ?? playState?.queue_id ?? null
+    : allItems;
+  const playId = queue?.play_id ?? playState?.queue_id ?? null;
   // The queue belongs to the MEDIA_PLAYER source. When another source is
   // active (AirPlay, radio, …) the device still reports a play_id — that row
   // is just where the queue is parked, and must not claim to be playing.
-  const queueSourceActive = activeSourceId(zoneState, nowPlaying) === 'MEDIA_PLAYER'
+  const queueSourceActive = activeSourceId(zoneState, nowPlaying) === "MEDIA_PLAYER";
 
-  const totalSecs = allItems.reduce((acc, i) => acc + (i.metadata?.duration ?? 0), 0)
+  const totalSecs = allItems.reduce((acc, i) => acc + (i.metadata?.duration ?? 0), 0);
 
   // Pointer AND keyboard (the playlists pattern): reordering a list you can't
   // drag is otherwise impossible for anyone without a mouse. The focused
   // handle owns space and the arrows — useShortcuts yields to it globally.
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  )
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
-  const currentRef = useRef<HTMLDivElement | null>(null)
+  const currentRef = useRef<HTMLDivElement | null>(null);
   // First follow after mount positions INSTANTLY — re-entering the screen
   // shouldn't replay a glide to a place you already were. The animation is
   // reserved for track changes while you're watching.
-  const firstFollow = useRef(true)
+  const firstFollow = useRef(true);
   useEffect(() => {
     // Follow pauses while a filter is active — the current row may be hidden.
     if (followQueue && !filter && currentRef.current) {
@@ -230,24 +253,24 @@ export function QueueScreen(): React.JSX.Element {
         currentRef.current,
         cards ? presetGap : 8,
         cards ? 0.5 : 1,
-        firstFollow.current ? 'auto' : undefined
-      )
+        firstFollow.current ? "auto" : undefined,
+      );
     }
-    firstFollow.current = false
-  }, [playId, followQueue, cards, presetGap, filter])
+    firstFollow.current = false;
+  }, [playId, followQueue, cards, presetGap, filter]);
 
   const onDragEnd = (event: DragEndEvent): void => {
-    const { active, over } = event
-    if (!over || active.id === over.id) return
-    const oldIndex = items.findIndex((i) => i.id === active.id)
-    const newIndex = items.findIndex((i) => i.id === over.id)
-    if (oldIndex < 0 || newIndex < 0) return
-    const from = items[oldIndex].position ?? oldIndex
-    const to = items[newIndex].position ?? newIndex
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = items.findIndex((i) => i.id === active.id);
+    const newIndex = items.findIndex((i) => i.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+    const from = items[oldIndex].position ?? oldIndex;
+    const to = items[newIndex].position ?? newIndex;
     // Optimistic reorder; the streamer re-announces the authoritative queue.
-    setQueueItems(arrayMove(items, oldIndex, newIndex))
-    void tt.command({ type: 'queueMove', id: active.id as number, from, to })
-  }
+    setQueueItems(arrayMove(items, oldIndex, newIndex));
+    void tt.command({ type: "queueMove", id: active.id as number, from, to });
+  };
 
   if (allItems.length === 0) {
     return (
@@ -257,7 +280,7 @@ export function QueueScreen(): React.JSX.Element {
         title="Queue is empty"
         caption="Queue tracks from the StreamMagic app or another controller — they'll show up here."
       />
-    )
+    );
   }
 
   return (
@@ -277,7 +300,7 @@ export function QueueScreen(): React.JSX.Element {
           <div className="flex items-center gap-1.5">
             <FilterInput
               value={filter}
-              onChange={(t) => setScreenFilter('queue', t)}
+              onChange={(t) => setScreenFilter("queue", t)}
               shown={items.length}
               total={allItems.length}
             />
@@ -307,9 +330,9 @@ export function QueueScreen(): React.JSX.Element {
               disabled={allItems.length === 0}
               onClick={(e) =>
                 clearConfirm.ask(e, {
-                  question: 'Clear the queue?',
-                  verb: 'Clear',
-                  onConfirm: () => void tt.command({ type: 'queueClear' })
+                  question: "Clear the queue?",
+                  verb: "Clear",
+                  onConfirm: () => void tt.command({ type: "queueClear" }),
                 })
               }
               className="no-drag tip-bottom p-2 disabled:opacity-40 motion-safe:active:scale-90"
@@ -319,10 +342,10 @@ export function QueueScreen(): React.JSX.Element {
             {clearConfirm.popover}
           </div>
           <div className="flex items-center gap-1.5">
-          <HeaderChip
-              data-tip={cards ? 'View as rows' : 'View as cards'}
-              aria-label={cards ? 'View as rows' : 'View as cards'}
-              onClick={() => void setLayout(cards ? 'rows' : 'cards')}
+            <HeaderChip
+              data-tip={cards ? "View as rows" : "View as cards"}
+              aria-label={cards ? "View as rows" : "View as cards"}
+              onClick={() => void setLayout(cards ? "rows" : "cards")}
               className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
             >
               {cards ? <Rows3 size={16} /> : <LayoutGrid size={16} />}
@@ -337,8 +360,8 @@ export function QueueScreen(): React.JSX.Element {
             </HeaderChip>
             <HeaderChip
               active={followQueue}
-              data-tip={followQueue ? 'Auto-follow: on' : 'Auto-follow: off'}
-              aria-label={followQueue ? 'Auto-follow: on' : 'Auto-follow: off'}
+              data-tip={followQueue ? "Auto-follow: on" : "Auto-follow: off"}
+              aria-label={followQueue ? "Auto-follow: on" : "Auto-follow: off"}
               onClick={() => void setFollowQueue(!followQueue)}
               className="no-drag tip-bottom p-2"
             >
@@ -350,37 +373,41 @@ export function QueueScreen(): React.JSX.Element {
 
       {rowMenu && (
         <RowMenu
-          title={rowMenu.item.metadata?.title ?? 'Track'}
+          title={rowMenu.item.metadata?.title ?? "Track"}
           at={{ x: rowMenu.x, y: rowMenu.y }}
           onClose={() => setRowMenu(null)}
           items={queueRowActions(rowMenu.item, {
             addToPlaylist: () => setPlaylistFor({ item: rowMenu.item, x: rowMenu.x, y: rowMenu.y }),
-            saveToPreset: () => setPresetFor({ item: rowMenu.item, x: rowMenu.x, y: rowMenu.y })
+            saveToPreset: () => setPresetFor({ item: rowMenu.item, x: rowMenu.x, y: rowMenu.y }),
           })}
         />
       )}
       {playlistFor && (
         <AddToPlaylistPanel
-          label={playlistFor.item.metadata?.title ?? 'this track'}
+          label={playlistFor.item.metadata?.title ?? "this track"}
           at={{ x: playlistFor.x, y: playlistFor.y }}
           onClose={() => setPlaylistFor(null)}
           resolve={async () => {
             // a queue id belongs to THIS queue, not to the library — content
             // is the identity, resolved fresh on activation
-            const ref = fromQueueItem(playlistFor.item)
-            return ref ? [refToPlaylistItem(ref)] : []
+            const ref = fromQueueItem(playlistFor.item);
+            return ref ? [refToPlaylistItem(ref)] : [];
           }}
         />
       )}
       {presetFor && (
         <PresetPicker
-          picker={{ node: { title: presetFor.item.metadata?.title ?? 'Track' }, x: presetFor.x, y: presetFor.y }}
+          picker={{
+            node: { title: presetFor.item.metadata?.title ?? "Track" },
+            x: presetFor.x,
+            y: presetFor.y,
+          }}
           onClose={() => setPresetFor(null)}
           onSave={async (slot, name) => {
-            const ref = fromQueueItem(presetFor.item)
-            if (!ref) throw new Error('no content identity')
-            await saveRefToPreset(ref, slot, name)
-            setPresetFor(null)
+            const ref = fromQueueItem(presetFor.item);
+            if (!ref) throw new Error("no content identity");
+            await saveRefToPreset(ref, slot, name);
+            setPresetFor(null);
           }}
         />
       )}
@@ -388,7 +415,13 @@ export function QueueScreen(): React.JSX.Element {
 
       {/* rows: pt-1 keeps the current ring unclipped; cards: pt-2 gives the
           hover grow + glow ring headroom on the top row */}
-      <div ref={scrollRef} className={cx('flex-1 overflow-y-auto', cards ? 'px-8 pb-8 pt-2' : 'px-6 pb-6 pt-1 divide-y divide-edge/50')}>
+      <div
+        ref={scrollRef}
+        className={cx(
+          "flex-1 overflow-y-auto",
+          cards ? "px-8 pb-8 pt-2" : "px-6 pb-6 pt-1 divide-y divide-edge/50",
+        )}
+      >
         {items.length === 0 && (
           <div className="text-[15px] text-faint pt-6 px-2">No matches for “{filter}”</div>
         )}
@@ -409,16 +442,16 @@ export function QueueScreen(): React.JSX.Element {
                   gridTemplateColumns: presetFillRows
                     ? `repeat(auto-fill, minmax(${presetCardSize}px, 1fr))`
                     : `repeat(auto-fill, ${presetCardSize}px)`,
-                  gap: presetGap
+                  gap: presetGap,
                 }}
               >
                 {items.map((item) => (
                   <QueueCard
                     key={item.id}
                     onMenu={(e) => {
-                      e.preventDefault()
-                      e.stopPropagation()
-                      setRowMenu({ item, x: e.clientX, y: e.clientY })
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setRowMenu({ item, x: e.clientX, y: e.clientY });
                     }}
                     item={item}
                     isCurrent={item.id === playId}
@@ -432,9 +465,9 @@ export function QueueScreen(): React.JSX.Element {
                 <QueueRow
                   key={item.id}
                   onMenu={(e) => {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    setRowMenu({ item, x: e.clientX, y: e.clientY })
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setRowMenu({ item, x: e.clientX, y: e.clientY });
                   }}
                   item={item}
                   isCurrent={item.id === playId}
@@ -447,7 +480,7 @@ export function QueueScreen(): React.JSX.Element {
         </DndContext>
       </div>
     </div>
-  )
+  );
 }
 
 /**
@@ -459,23 +492,26 @@ export function QueueScreen(): React.JSX.Element {
  * row while the wipe goes unguarded would protect the wrong thing.
  */
 function removeFromQueue(item: QueueListItem): void {
-  if (item.id == null) return
-  const md = item.metadata
-  const title = md?.title ?? null
-  const position = item.position ?? 0
-  void tt.command({ type: 'queueDelete', id: item.id })
+  if (item.id == null) return;
+  const md = item.metadata;
+  const title = md?.title ?? null;
+  const position = item.position ?? 0;
+  void tt.command({ type: "queueDelete", id: item.id });
   // No title, no content identity, nothing to find it by later — so no offer.
   // (Same rule as the row's heart: see queueItemFavorite.)
-  if (!title) return
+  if (!title) return;
   useStore.getState().showToast({
-    kind: 'success',
+    kind: "success",
     text: `Removed “${title}”`,
     action: {
-      label: 'Undo',
+      label: "Undo",
       undo: () =>
-        void restoreToQueue({ title, artist: md?.artist ?? null, album: md?.album ?? null }, position)
-    }
-  })
+        void restoreToQueue(
+          { title, artist: md?.artist ?? null, album: md?.album ?? null },
+          position,
+        ),
+    },
+  });
 }
 
 /**
@@ -484,73 +520,79 @@ function removeFromQueue(item: QueueListItem): void {
  * get one — a restore that quietly did nothing is the thing worth avoiding.
  */
 async function restoreToQueue(ref: ContentRef, position: number): Promise<void> {
-  const showToast = useStore.getState().showToast
-  let result: QueueRestoreResult
+  const showToast = useStore.getState().showToast;
+  let result: QueueRestoreResult;
   try {
-    result = await tt.queueRestore(ref, position)
+    result = await tt.queueRestore(ref, position);
   } catch {
-    result = 'failed'
+    result = "failed";
   }
-  if (result === 'ok') return
+  if (result === "ok") return;
   showToast({
-    kind: 'error',
+    kind: "error",
     text:
-      result === 'not-found'
+      result === "not-found"
         ? `Couldn't find “${ref.title}” to put back`
-        : `Couldn't put “${ref.title}” back`
-  })
+        : `Couldn't put “${ref.title}” back`,
+  });
 }
 
 interface QueueItemProps {
-  onMenu?(e: React.MouseEvent): void
-  item: QueueListItem
-  isCurrent: boolean
+  onMenu?(e: React.MouseEvent): void;
+  item: QueueListItem;
+  isCurrent: boolean;
   /** The queue's own source (MEDIA_PLAYER) is what's audible right now. */
-  sourceActive: boolean
-  currentRef?: React.MutableRefObject<HTMLDivElement | null>
+  sourceActive: boolean;
+  currentRef?: React.MutableRefObject<HTMLDivElement | null>;
 }
 
-function QueueRow({ item, isCurrent, sourceActive, currentRef, onMenu }: QueueItemProps): React.JSX.Element {
+function QueueRow({
+  item,
+  isCurrent,
+  sourceActive,
+  currentRef,
+  onMenu,
+}: QueueItemProps): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: item.id as number
-  })
-  const md = item.metadata
+    id: item.id as number,
+  });
+  const md = item.metadata;
   // the performer the library knows for a compilation entry (display only)
-  const artist = useQueuePerformer()(md) ?? md?.artist
-  const favorites = useStore((s) => s.favorites)
-  const ref = fromQueueItem(item)
-  const favorite = ref ? refToFavorite(ref) : null
+  const artist = useQueuePerformer()(md) ?? md?.artist;
+  const favorites = useStore((s) => s.favorites);
+  const ref = fromQueueItem(item);
+  const favorite = ref ? refToFavorite(ref) : null;
   const hearted =
-    favorite != null && favorites.some((f) => favoriteKey(f) === favoriteKey(favorite as Favorite))
+    favorite != null && favorites.some((f) => favoriteKey(f) === favoriteKey(favorite as Favorite));
 
   return (
     <div
       ref={(node) => {
-        setNodeRef(node)
-        if (currentRef) currentRef.current = node
+        setNodeRef(node);
+        if (currentRef) currentRef.current = node;
       }}
       style={{ transform: CSS.Transform.toString(lockVertical(transform)), transition }}
       className={cx(
-        'group grid grid-cols-[26px_44px_1fr_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5',
-        'cursor-default transition-colors',
-        isDragging && 'z-10 bg-raised shadow-xl',
+        "group grid grid-cols-[26px_44px_1fr_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5",
+        "cursor-default transition-colors",
+        isDragging && "z-10 bg-raised shadow-xl",
         // current + queue audible: full playing treatment; current while another
         // source plays: just the parked resume point, quietly set apart
-        isCurrent && sourceActive && 'row-playing bg-gold/10',
-        isCurrent && !sourceActive && 'ring-1 ring-edge2 bg-veil/60 hover:bg-veil',
-        !isCurrent && 'hover:bg-veil'
+        isCurrent && sourceActive && "row-playing bg-gold/10",
+        isCurrent && !sourceActive && "ring-1 ring-edge2 bg-veil/60 hover:bg-veil",
+        !isCurrent && "hover:bg-veil",
       )}
       onClick={() => {
-        if (item.id != null) void tt.command({ type: 'playQueueId', queueId: item.id })
+        if (item.id != null) void tt.command({ type: "playQueueId", queueId: item.id });
       }}
       onContextMenu={(e) => {
         // right-click = the ⋯, the app-wide rule (favorites established it)
-        e.preventDefault()
-        onMenu?.(e)
+        e.preventDefault();
+        onMenu?.(e);
       }}
     >
       <OrderHandle
-        label={`Reorder ${md?.title ?? 'track'}`}
+        label={`Reorder ${md?.title ?? "track"}`}
         attributes={attributes}
         listeners={listeners}
       >
@@ -566,11 +608,16 @@ function QueueRow({ item, isCurrent, sourceActive, currentRef, onMenu }: QueueIt
       <MediaArt src={md?.art_url} kind="track" />
 
       <div className="min-w-0">
-        <div className={cx('text-[13.5px] truncate', isCurrent && sourceActive ? 'text-gold' : 'text-ink')}>
-          {md?.title ?? md?.name ?? '—'}
+        <div
+          className={cx(
+            "text-[13.5px] truncate",
+            isCurrent && sourceActive ? "text-gold" : "text-ink",
+          )}
+        >
+          {md?.title ?? md?.name ?? "—"}
         </div>
         <div className="text-[12px] text-dim truncate">
-          {[artist, md?.album].filter(Boolean).join(' — ')}
+          {[artist, md?.album].filter(Boolean).join(" — ")}
         </div>
       </div>
 
@@ -589,7 +636,11 @@ function QueueRow({ item, isCurrent, sourceActive, currentRef, onMenu }: QueueIt
             right edge rather than leading the cluster — a set heart with the
             hidden ⋯/× columns between it and the time looked stranded. */}
         {favorite && (
-          <RowHeart favorited={hearted} held={false} onHeart={() => void toggleFavorite(favorite)} />
+          <RowHeart
+            favorited={hearted}
+            held={false}
+            onHeart={() => void toggleFavorite(favorite)}
+          />
         )}
       </div>
 
@@ -598,46 +649,52 @@ function QueueRow({ item, isCurrent, sourceActive, currentRef, onMenu }: QueueIt
           the actions come and go with hover. */}
       <DurationCell secs={md?.duration ?? null} />
     </div>
-  )
+  );
 }
 
 /** Card view of a queue track — mirrors PresetCard's inset-tile anatomy. */
-function QueueCard({ item, isCurrent, sourceActive, currentRef, onMenu }: QueueItemProps): React.JSX.Element {
+function QueueCard({
+  item,
+  isCurrent,
+  sourceActive,
+  currentRef,
+  onMenu,
+}: QueueItemProps): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: item.id as number
-  })
-  const md = item.metadata
-  const artist = useQueuePerformer()(md) ?? md?.artist
+    id: item.id as number,
+  });
+  const md = item.metadata;
+  const artist = useQueuePerformer()(md) ?? md?.artist;
 
   return (
     <div
       ref={(node) => {
-        setNodeRef(node)
-        if (currentRef) currentRef.current = node
+        setNodeRef(node);
+        if (currentRef) currentRef.current = node;
       }}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       {...attributes}
       {...listeners}
       onContextMenu={(e) => {
-        e.preventDefault()
-        onMenu?.(e)
+        e.preventDefault();
+        onMenu?.(e);
       }}
       className={cx(
         // Hover grow matches PresetCard; scale is layout-free so edge-clipped
         // cards simply clip at the scrollport seam.
-        'group text-left rounded-2xl p-2 pb-2.5 transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]',
-        isDragging && 'z-10 opacity-90',
+        "group text-left rounded-2xl p-2 pb-2.5 transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]",
+        isDragging && "z-10 opacity-90",
         isCurrent && sourceActive
-          ? 'bg-goldtile/70 tile-playing'
+          ? "bg-goldtile/70 tile-playing"
           : isCurrent
-            ? 'bg-veil/60 ring-1 ring-edge2 card-hover-glow'
-            : 'bg-raised/70 ring-1 ring-edge card-hover-glow'
+            ? "bg-veil/60 ring-1 ring-edge2 card-hover-glow"
+            : "bg-raised/70 ring-1 ring-edge card-hover-glow",
       )}
     >
       <button
         className="relative block w-full cursor-pointer"
         onClick={() => {
-          if (item.id != null) void tt.command({ type: 'playQueueId', queueId: item.id })
+          if (item.id != null) void tt.command({ type: "playQueueId", queueId: item.id });
         }}
       >
         <div className="aspect-square w-full rounded-lg overflow-hidden bg-panel/70 flex items-center justify-center">
@@ -663,8 +720,8 @@ function QueueCard({ item, isCurrent, sourceActive, currentRef, onMenu }: QueueI
           <span
             aria-label="More actions"
             onClick={(e) => {
-              e.stopPropagation()
-              onMenu?.(e)
+              e.stopPropagation();
+              onMenu?.(e);
             }}
             className="absolute bottom-1.5 right-1.5 z-10 h-8 w-8 rounded-lg bg-panel/80 ring-1 ring-edge text-dim hover:text-ink flex items-center justify-center transition-all opacity-0 group-hover:opacity-100"
           >
@@ -683,17 +740,17 @@ function QueueCard({ item, isCurrent, sourceActive, currentRef, onMenu }: QueueI
         <div className="flex-1 min-w-0">
           <div
             className={cx(
-              'text-[12.5px] leading-snug line-clamp-2',
-              isCurrent && sourceActive ? 'text-gold' : 'text-ink'
+              "text-[12.5px] leading-snug line-clamp-2",
+              isCurrent && sourceActive ? "text-gold" : "text-ink",
             )}
           >
-            {md?.title ?? md?.name ?? '—'}
+            {md?.title ?? md?.name ?? "—"}
           </div>
           <div className="text-[11px] text-dim truncate mt-0.5">
-            {[artist, md?.album].filter(Boolean).join(' — ')}
+            {[artist, md?.album].filter(Boolean).join(" — ")}
           </div>
           <div className="microlabel mt-1">
-            {String((item.position ?? 0) + 1).padStart(2, '0')} · {fmtTime(md?.duration)}
+            {String((item.position ?? 0) + 1).padStart(2, "0")} · {fmtTime(md?.duration)}
           </div>
         </div>
         <button
@@ -701,8 +758,8 @@ function QueueCard({ item, isCurrent, sourceActive, currentRef, onMenu }: QueueI
           aria-label="Remove from queue"
           onPointerDown={(e) => e.stopPropagation() /* keep dnd-kit's drag sensor out of it */}
           onClick={(e) => {
-            e.stopPropagation()
-            if (item.id != null) void tt.command({ type: 'queueDelete', id: item.id })
+            e.stopPropagation();
+            if (item.id != null) void tt.command({ type: "queueDelete", id: item.id });
           }}
           className="tip-bottom p-1 rounded text-faint opacity-0 group-hover:opacity-100 hover:text-alert transition-all"
         >
@@ -710,7 +767,7 @@ function QueueCard({ item, isCurrent, sourceActive, currentRef, onMenu }: QueueI
         </button>
       </div>
     </div>
-  )
+  );
 }
 
 /**
@@ -721,16 +778,16 @@ function QueueCard({ item, isCurrent, sourceActive, currentRef, onMenu }: QueueI
  */
 function queueRowActions(
   item: QueueListItem,
-  deps: { addToPlaylist: () => void; saveToPreset: () => void }
+  deps: { addToPlaylist: () => void; saveToPreset: () => void },
 ): MediaMenuItem[] {
   const remove: MediaMenuItem[] =
-    item.id != null ? [{ label: 'Remove from queue', run: () => removeFromQueue(item) }] : []
-  const ref = fromQueueItem(item)
-  if (!ref) return remove
+    item.id != null ? [{ label: "Remove from queue", run: () => removeFromQueue(item) }] : [];
+  const ref = fromQueueItem(item);
+  if (!ref) return remove;
   return trackMenuItems(ref, {
     addToPlaylist: deps.addToPlaylist,
     saveToPreset: deps.saveToPreset,
-    searchFrom: { screen: 'queue' },
-    extra: remove
-  })
+    searchFrom: { screen: "queue" },
+    extra: remove,
+  });
 }

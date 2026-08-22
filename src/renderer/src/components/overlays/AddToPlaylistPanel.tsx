@@ -1,10 +1,10 @@
-import { useState } from 'react'
-import { ListOrdered, Plus } from 'lucide-react'
-import type { PlaylistItem } from '@shared/model'
-import { tt } from '@/api'
-import { useStore } from '@/store'
-import { cx, fmtTime, matchesFilter } from '@/lib/format'
-import { PopoverCard } from '@/components/chrome/Overlay'
+import { useState } from "react";
+import { ListOrdered, Plus } from "lucide-react";
+import type { PlaylistItem } from "@shared/model";
+import { tt } from "@/api";
+import { useStore } from "@/store";
+import { cx, fmtTime, matchesFilter } from "@/lib/format";
+import { PopoverCard } from "@/components/chrome/Overlay";
 
 /**
  * The one add-to-playlist control, shared by every surface that shows a track
@@ -23,78 +23,76 @@ export function AddToPlaylistPanel({
   label,
   resolve,
   at,
-  onClose
+  onClose,
 }: {
   /** What's being added, shown in the header. */
-  label: string
-  resolve: () => Promise<PlaylistItem[]>
-  at: { x: number; y: number }
-  onClose(): void
+  label: string;
+  resolve: () => Promise<PlaylistItem[]>;
+  at: { x: number; y: number };
+  onClose(): void;
 }): React.JSX.Element {
-  const all = useStore((s) => s.playlists)
-  const showToast = useStore((s) => s.showToast)
-  const [creating, setCreating] = useState(false)
-  const [filter, setFilter] = useState('')
-  const [newName, setNewName] = useState('')
-  const [busy, setBusy] = useState(false)
+  const all = useStore((s) => s.playlists);
+  const showToast = useStore((s) => s.showToast);
+  const [creating, setCreating] = useState(false);
+  const [filter, setFilter] = useState("");
+  const [newName, setNewName] = useState("");
+  const [busy, setBusy] = useState(false);
 
   // A filter only earns its space once the list is long enough to hunt through.
   // Below that it's chrome in the way of a two-click action; the list is
   // newest-updated-first, so the one you just used is already at the top.
-  const showFilter = all.length > 8
-  const playlists = filter
-    ? all.filter((p) => matchesFilter(filter, [p.name]))
-    : all
+  const showFilter = all.length > 8;
+  const playlists = filter ? all.filter((p) => matchesFilter(filter, [p.name])) : all;
 
   const done = (count: number, name: string): void => {
     showToast({
-      kind: 'success',
-      text: `Added ${count} ${count === 1 ? 'track' : 'tracks'} to “${name}”`,
-      action: { label: 'Open Playlists', screen: 'playlists' }
-    })
-    onClose()
-  }
+      kind: "success",
+      text: `Added ${count} ${count === 1 ? "track" : "tracks"} to “${name}”`,
+      action: { label: "Open Playlists", screen: "playlists" },
+    });
+    onClose();
+  };
 
   const addTo = async (id: string, name: string): Promise<void> => {
-    setBusy(true)
+    setBusy(true);
     try {
-      const items = await resolve()
+      const items = await resolve();
       if (items.length === 0) {
-        showToast({ kind: 'error', text: `Nothing to add from “${label}”` })
-        onClose()
-        return
+        showToast({ kind: "error", text: `Nothing to add from “${label}”` });
+        onClose();
+        return;
       }
-      await tt.playlistAppend(id, items)
-      done(items.length, name)
+      await tt.playlistAppend(id, items);
+      done(items.length, name);
     } catch {
-      showToast({ kind: 'error', text: "Couldn't add to the playlist" })
-      onClose()
+      showToast({ kind: "error", text: "Couldn't add to the playlist" });
+      onClose();
     } finally {
-      setBusy(false)
+      setBusy(false);
     }
-  }
+  };
 
   const createWith = async (): Promise<void> => {
-    const name = newName.trim() || label
-    setBusy(true)
+    const name = newName.trim() || label;
+    setBusy(true);
     try {
-      const items = await resolve()
+      const items = await resolve();
       if (items.length === 0) {
-        showToast({ kind: 'error', text: `Nothing to add from “${label}”` })
-        onClose()
-        return
+        showToast({ kind: "error", text: `Nothing to add from “${label}”` });
+        onClose();
+        return;
       }
       // Toast the STORED name — a collision uniquifies it ("Jazz (2)"), and
       // the toast naming a playlist that isn't the one just made reads as a bug.
-      const created = await tt.playlistCreate(name, items)
-      done(items.length, created.name)
+      const created = await tt.playlistCreate(name, items);
+      done(items.length, created.name);
     } catch {
-      showToast({ kind: 'error', text: "Couldn't create the playlist" })
-      onClose()
+      showToast({ kind: "error", text: "Couldn't create the playlist" });
+      onClose();
     } finally {
-      setBusy(false)
+      setBusy(false);
     }
-  }
+  };
 
   return (
     <PopoverCard at={at} width="w-64" onClose={onClose} rightClickCloses className="p-1.5">
@@ -107,8 +105,9 @@ export function AddToPlaylistPanel({
             onChange={(e) => setFilter(e.target.value)}
             onKeyDown={(e) => {
               // Enter with exactly one match is the fast path
-              if (e.key === 'Enter' && playlists.length === 1) void addTo(playlists[0].id, playlists[0].name)
-              if (e.key === 'Escape') (filter ? setFilter('') : onClose())
+              if (e.key === "Enter" && playlists.length === 1)
+                void addTo(playlists[0].id, playlists[0].name);
+              if (e.key === "Escape") filter ? setFilter("") : onClose();
             }}
             placeholder={`Filter ${all.length} playlists`}
             aria-label="Filter playlists"
@@ -119,7 +118,7 @@ export function AddToPlaylistPanel({
 
       <div className="max-h-[280px] overflow-y-auto space-y-0.5">
         {playlists.map((p) => {
-          const secs = p.items.reduce((n, i) => n + (i.durationSecs ?? 0), 0)
+          const secs = p.items.reduce((n, i) => n + (i.durationSecs ?? 0), 0);
           return (
             <button
               key={p.id}
@@ -133,11 +132,11 @@ export function AddToPlaylistPanel({
                 {secs > 0 ? fmtTime(secs) : p.items.length}
               </span>
             </button>
-          )
+          );
         })}
         {playlists.length === 0 && (
           <div className="px-2.5 py-2 text-[12px] text-faint">
-            {all.length === 0 ? 'No playlists yet.' : 'No playlist matches that.'}
+            {all.length === 0 ? "No playlists yet." : "No playlist matches that."}
           </div>
         )}
       </div>
@@ -150,8 +149,8 @@ export function AddToPlaylistPanel({
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') void createWith()
-                if (e.key === 'Escape') setCreating(false)
+                if (e.key === "Enter") void createWith();
+                if (e.key === "Escape") setCreating(false);
               }}
               placeholder={label}
               aria-label="New playlist name"
@@ -161,8 +160,8 @@ export function AddToPlaylistPanel({
               disabled={busy}
               onClick={() => void createWith()}
               className={cx(
-                'mt-1 w-full rounded-lg h-7 text-[12px] bg-amberdim text-amber',
-                'hover:brightness-110 disabled:opacity-50 transition-all'
+                "mt-1 w-full rounded-lg h-7 text-[12px] bg-amberdim text-amber",
+                "hover:brightness-110 disabled:opacity-50 transition-all",
               )}
             >
               Create and add
@@ -179,21 +178,21 @@ export function AddToPlaylistPanel({
         )}
       </div>
     </PopoverCard>
-  )
+  );
 }
 
 /** Map a library node (already known to be a track) to a stored playlist entry. */
 export function itemFromNode(
   node: {
-    title: string
-    artist: string | null
-    album: string | null
-    artUrl: string | null
-    id: string
-    durationSecs: number | null
+    title: string;
+    artist: string | null;
+    album: string | null;
+    artUrl: string | null;
+    id: string;
+    durationSecs: number | null;
   },
   serverUdn: string | null,
-  serverName: string | null
+  serverName: string | null,
 ): PlaylistItem {
   return {
     title: node.title,
@@ -203,6 +202,6 @@ export function itemFromNode(
     serverUdn,
     serverName,
     objectId: node.id,
-    durationSecs: node.durationSecs
-  }
+    durationSecs: node.durationSecs,
+  };
 }
