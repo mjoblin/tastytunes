@@ -17,8 +17,9 @@ import prettier from 'eslint-config-prettier';
 
 export default tseslint.config(
   // src only: the type-aware rules need a tsconfig, and the root configs,
-  // scripts/ and dev/ are plain JS outside both project files
-  { ignores: ['out/**', 'dist/**', 'node_modules/**', 'dev/**', 'resources/**', 'build/**', 'scripts/**', '.github/**', '**/*.mjs', '**/*.js', '*.ts'] },
+  // scripts/ and dev/ are plain JS outside both project files; the ipad spike
+  // (apple branch) is its own project with its own tsconfig
+  { ignores: ['out/**', 'dist/**', 'node_modules/**', 'dev/**', 'resources/**', 'build/**', 'scripts/**', '.github/**', '**/*.mjs', '**/*.js', '*.ts', 'ipad/**'] },
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   {
