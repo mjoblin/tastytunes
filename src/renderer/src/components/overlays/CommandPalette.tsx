@@ -738,8 +738,6 @@ export function CommandPalette(): React.JSX.Element {
     setShortcutsOpen,
     setInfoOpen,
     setDisplayMode,
-    setSettings,
-    setPaletteOpen,
   ]);
 
   const q = query.trim().toLowerCase();
