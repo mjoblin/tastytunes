@@ -1,0 +1,9 @@
+# LF everywhere, including Windows checkouts: GitHub's Windows runners use core.autocrlf=true,
+# which turned every source file CRLF and failed prettier --check on the 0.4.0-rc.2 build.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.icns binary
+*.ico binary
+*.car binary
+*.woff2 binary
