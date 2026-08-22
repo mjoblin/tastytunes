@@ -16,13 +16,14 @@ import {
   Users,
   X
 } from 'lucide-react'
-import { presetVolumeKey, type AppSettings, type MediaIndexPools, type MediaNode, type MediaQueueAction, type MediaSearchAllGroup, type MediaServerInfo, type ScreenLayout, orderTracks, discGroups, albumFormat, fmtBytes, albumComposers, performerLine, albumTracksOf, artistSummary } from '@shared/model'
+import { presetVolumeKey, type AppSettings, type MediaNode, type MediaQueueAction, type MediaSearchAllGroup, type MediaServerInfo, type ScreenLayout, orderTracks, discGroups, albumFormat, fmtBytes, albumComposers, performerLine, albumTracksOf, artistSummary } from '@shared/model'
 import { favoriteKey, type Favorite, type FavoriteMedia } from '@shared/model'
 import type { QueueListItem } from '@shared/smoip'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { activeSourceId, cx, fmtTime, matchesFilter } from '@/lib/format'
 import { albumMatchesEntry, entryArtistMatches, playingQueueEntry, trackMatchesEntry } from '@/lib/playingEntry'
+import { useIndexPools } from '@/hooks/useIndexPools'
 import { MOD } from '@/lib/screens'
 import { flashTarget } from '@/lib/scroll'
 import { mediaKind, isAlbumClass, stripFurniture, isArtistClass } from '@/lib/media'
@@ -110,9 +111,6 @@ const UNIFIED_SEARCH_CRUMB_ID = '__from-search__'
 // Which lens the crumb leads back to (module scope — survives the scoped
 // album detour, like the lens components' own selection memories).
 let lensReturnTo: 'albums' | 'artists' | null = null
-// Pools snapshot cache keyed on the ready indexes' builtAt signature: lens
-// re-entry is instant; a rebuild (new signature) refetches.
-let poolsCache: { sig: string; pools: MediaIndexPools[] } | null = null
 // The Albums lens scrolls the page scroller — its spot is remembered apart
 // from the source list's (they share the root path key otherwise).
 let albumsLensScroll = 0
@@ -252,27 +250,9 @@ export function LibraryScreen(): React.JSX.Element {
   const doorsState: 'ready' | 'building' | 'failed' | 'hidden' =
     lensAvailable ? 'ready' : buildingCount > 0 ? 'building' : failedIndexes.length > 0 ? 'failed' : 'hidden'
   const [lens, setLens] = useState<'albums' | 'artists' | null>(null)
-  const [lensPools, setLensPools] = useState<MediaIndexPools[] | null>(null)
-  useEffect(() => {
-    if (!lens) return
-    const sig = readyIndexes
-      .map((x) => `${x.udn}:${x.builtAt}`)
-      .sort()
-      .join('|')
-    if (poolsCache?.sig === sig) {
-      setLensPools(poolsCache.pools)
-      return
-    }
-    let stale = false
-    void tt.mediaIndexPools().then((pools) => {
-      if (stale) return
-      poolsCache = { sig, pools }
-      setLensPools(pools)
-    })
-    return () => {
-      stale = true
-    }
-  }, [lens, readyIndexes])
+  // the pools snapshot (cached on the ready indexes' signature) — fetched
+  // when a lens opens, shared with the queue rows via useIndexPools
+  const lensPools = useIndexPools(lens != null)
   useEffect(() => {
     if (lens !== 'albums' || lensPools == null) return
     requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: albumsLensScroll }))

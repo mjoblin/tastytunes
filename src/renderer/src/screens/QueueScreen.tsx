@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useQueuePerformer } from '@/hooks/useQueuePerformer'
 import {
   DndContext,
   KeyboardSensor,
@@ -184,6 +185,8 @@ export function QueueScreen(): React.JSX.Element {
       action: { label: 'Open Playlists', screen: 'playlists' }
     })
   }
+  const performerOf = useQueuePerformer()
+
   // Filter over everything we hold, displayed or not (genre, class, source).
   const items = filter
     ? allItems.filter((i) =>
@@ -191,6 +194,7 @@ export function QueueScreen(): React.JSX.Element {
           i.metadata?.title,
           i.metadata?.name,
           i.metadata?.artist,
+          performerOf(i.metadata),
           i.metadata?.album,
           i.metadata?.genre,
           i.metadata?.class,
@@ -511,6 +515,8 @@ function QueueRow({ item, isCurrent, sourceActive, currentRef, onMenu }: QueueIt
     id: item.id as number
   })
   const md = item.metadata
+  // the performer the library knows for a compilation entry (display only)
+  const artist = useQueuePerformer()(md) ?? md?.artist
   const favorites = useStore((s) => s.favorites)
   const ref = fromQueueItem(item)
   const favorite = ref ? refToFavorite(ref) : null
@@ -564,7 +570,7 @@ function QueueRow({ item, isCurrent, sourceActive, currentRef, onMenu }: QueueIt
           {md?.title ?? md?.name ?? '—'}
         </div>
         <div className="text-[12px] text-dim truncate">
-          {[md?.artist, md?.album].filter(Boolean).join(' — ')}
+          {[artist, md?.album].filter(Boolean).join(' — ')}
         </div>
       </div>
 
@@ -601,6 +607,7 @@ function QueueCard({ item, isCurrent, sourceActive, currentRef, onMenu }: QueueI
     id: item.id as number
   })
   const md = item.metadata
+  const artist = useQueuePerformer()(md) ?? md?.artist
 
   return (
     <div
@@ -683,7 +690,7 @@ function QueueCard({ item, isCurrent, sourceActive, currentRef, onMenu }: QueueI
             {md?.title ?? md?.name ?? '—'}
           </div>
           <div className="text-[11px] text-dim truncate mt-0.5">
-            {[md?.artist, md?.album].filter(Boolean).join(' — ')}
+            {[artist, md?.album].filter(Boolean).join(' — ')}
           </div>
           <div className="microlabel mt-1">
             {String((item.position ?? 0) + 1).padStart(2, '0')} · {fmtTime(md?.duration)}

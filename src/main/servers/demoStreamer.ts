@@ -179,6 +179,10 @@ function buildDemo(host: string): {
       queue: { length: QUEUE_LEN, position: PLAYING_QUEUE_ID - 1, shuffle: 'off', repeat: 'off' },
       controls: ['play_pause', 'track_next', 'track_previous', 'seek', 'toggle_shuffle', 'toggle_repeat']
     },
+    // A queue entry's artist is the DIDL's FIRST upnp:artist (live 2026-08-21:
+    // Asset's AlbumArtist role, so compilation entries read "Various Artists";
+    // the mock's MOCK_QUEUE_COMPILATION stages it) — the renderer's queue rows
+    // show the performer the index knows. This scene holds no compilation.
     '/queue/list': {
       start: 0,
       count: QUEUE_LEN,

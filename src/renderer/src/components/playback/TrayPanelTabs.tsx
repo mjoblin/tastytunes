@@ -3,6 +3,7 @@ import { Disc3, ListMusic, Radio, RadioTower, X } from 'lucide-react'
 import { playlistTotalSecs, type ScreenLayout } from '@shared/model'
 import { tt } from '@/api'
 import { useStore } from '@/store'
+import { useQueuePerformer } from '@/hooks/useQueuePerformer'
 import { MediaRow } from '@/components/media/MediaRow'
 import { MediaArt } from '@/components/media/MediaArt'
 import { DurationCell } from '@/components/media/DurationCell'
@@ -151,6 +152,7 @@ export function QueueTab({
   opens: number
   density: TrayDensity
 }): React.JSX.Element {
+  const performerOf = useQueuePerformer()
   const queue = useStore((s) => s.queue)
   const playState = useStore((s) => s.playState)
   const zoneState = useStore((s) => s.zoneState)
@@ -218,7 +220,7 @@ export function QueueTab({
                 // 1 in the other is the same number telling two stories.
                 position={(item.position ?? 0) + 1}
                 title={md?.title ?? md?.name ?? '—'}
-                subtitle={md?.artist}
+                subtitle={performerOf(md) ?? md?.artist}
                 duration={md?.duration ?? null}
                 playing={playing}
                 parked={current && !queueAudible}
@@ -230,7 +232,7 @@ export function QueueTab({
                 parked={current && !queueAudible}
                 attrs={{ 'data-tray-row': 'queue' }}
                 title={md?.title ?? md?.name ?? '—'}
-                subtitle={[md?.artist, md?.album].filter(Boolean).join(' — ') || undefined}
+                subtitle={[performerOf(md) ?? md?.artist, md?.album].filter(Boolean).join(' — ') || undefined}
                 kind="track"
                 artUrl={md?.art_url ?? null}
                 playing={playing}
