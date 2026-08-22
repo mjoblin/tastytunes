@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useSavedPerformer } from '@/hooks/useQueuePerformer'
 import {
   DndContext,
   KeyboardSensor,
@@ -64,6 +65,8 @@ import { artUrlAt } from '@shared/artUrl'
  * silently dropped.
  */
 export function PlaylistsScreen(): React.JSX.Element {
+  // the performer the library knows for an entry saved from a compilation queue (display only)
+  const performerOf = useSavedPerformer()
   const playlists = useStore((s) => s.playlists)
   const activation = useStore((s) => s.playlistActivation)
   const queue = useStore((s) => s.queue)
@@ -381,8 +384,8 @@ export function PlaylistsScreen(): React.JSX.Element {
                     {queuedId === selected.id && <span className="text-gold">in the queue · </span>}
                     {selected.items.length} {selected.items.length === 1 ? 'track' : 'tracks'}
                     {totalSecs(selected) > 0 && ` · ${fmtDuration(totalSecs(selected))}`}
-                    {artistCount(selected) > 1 && (
-                      <span className="hidden @md:inline"> · {artistCount(selected)} artists</span>
+                    {artistCount(selected, performerOf) > 1 && (
+                      <span className="hidden @md:inline"> · {artistCount(selected, performerOf)} artists</span>
                     )}
                     {selected.lastPlayedAt && (
                       <span className="hidden @xs:inline"> · played {fmtRelative(selected.lastPlayedAt)}</span>
@@ -517,9 +520,11 @@ const PLAYLIST_SORT_IDS: readonly PlaylistSort[] = ['updated', 'created', 'playe
  *  panel shows it too, and two sums is how they'd drift. */
 const totalSecs = playlistTotalSecs
 
-/** How many distinct artists — a cheap read on how varied a playlist is. */
-const artistCount = (p: Playlist): number =>
-  new Set(p.items.map((i) => (i.artist ?? '').trim().toLowerCase()).filter(Boolean)).size
+/** How many distinct artists — a cheap read on how varied a playlist is
+ *  (performers where the library knows them: a compilation saved from the
+ *  queue stores "Various Artists" on every row and would otherwise count 1). */
+const artistCount = (p: Playlist, performerOf: (i: PlaylistItem) => string | null): number =>
+  new Set(p.items.map((i) => (performerOf(i) ?? i.artist ?? '').trim().toLowerCase()).filter(Boolean)).size
 
 /**
  * The first few covers, stacked. Playlists are far easier to recognise by their
@@ -594,6 +599,7 @@ function TrackRow({
 }): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
   const favorites = useStore((s) => s.favorites)
+  const artist = useSavedPerformer()(item) ?? item.artist
   // A playlist entry already carries the content identity favorites need.
   const favorite: Omit<FavoriteMedia, 'addedAt'> | null =
     item.title && item.artist
@@ -654,7 +660,7 @@ function TrackRow({
       <div className="min-w-0">
         <div className="text-[13.5px] truncate text-ink">{item.title}</div>
         <div className="text-[12px] text-dim truncate">
-          {[item.artist, item.album].filter(Boolean).join(' — ')}
+          {[artist, item.album].filter(Boolean).join(' — ')}
         </div>
       </div>
 

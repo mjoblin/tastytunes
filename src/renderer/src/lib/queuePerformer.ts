@@ -1,6 +1,5 @@
 import type { MediaIndexPools, MediaNode } from '@shared/model'
-import type { QueueListItemMetadata } from '@shared/smoip'
-import { trackMatchesEntry } from '@/lib/playingEntry'
+import { trackMatchesEntry, type EntryLike } from '@/lib/playingEntry'
 
 /**
  * WHAT A QUEUE ENTRY'S ROW SHOWS FOR "ARTIST".
@@ -54,10 +53,7 @@ export function trackIndexFor(pools: MediaIndexPools[] | null): TrackIndex {
 const sameName = (a: string, b: string): boolean => a.trim().toLowerCase() === b.trim().toLowerCase()
 
 /** The performer to show for a queue entry, or null when the device's string stands. */
-export function performerFor(
-  md: QueueListItemMetadata | null | undefined,
-  index: TrackIndex
-): string | null {
+export function performerFor(md: EntryLike | null | undefined, index: TrackIndex): string | null {
   if (!md?.title || !md.artist) return null
   const found = new Set<string>()
   for (const n of index.get(md.title) ?? []) {
@@ -67,4 +63,17 @@ export function performerFor(
     found.add(n.artist)
   }
   return found.size === 1 ? [...found][0] : null
+}
+
+/**
+ * A SAVED item — a favorite or a playlist entry — stored from the queue keeps
+ * the device's artist on disk BY DESIGN: that string is its identity (the
+ * queue↔playlist content hash, the matchers that find it to play and tell
+ * whether it is playing). Its row may still read the performer: the same
+ * rule, over the same fields, display only.
+ */
+export type SavedLike = { title: string; artist: string | null; album: string | null; durationSecs?: number | null }
+
+export function performerForSaved(item: SavedLike, index: TrackIndex): string | null {
+  return performerFor({ title: item.title, artist: item.artist, album: item.album, duration: item.durationSecs ?? null }, index)
 }

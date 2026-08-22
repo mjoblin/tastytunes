@@ -3,6 +3,13 @@ import { trackArtists } from '@shared/model'
 import type { QueueList, QueueListItem, QueueListItemMetadata, ZonePlayState } from '@shared/smoip'
 
 /**
+ * What the matchers need of a queue entry's metadata — the shape a SAVED item
+ * (favorite, playlist entry) maps onto too, since it stored exactly these
+ * fields from the queue it came from.
+ */
+export type EntryLike = Pick<QueueListItemMetadata, 'title' | 'artist' | 'album' | 'duration'>
+
+/**
  * WHICH QUEUE ENTRY IS PLAYING, and does a library item match it.
  *
  * The streamer's play_state.metadata is its FILE-TAG readout: from the first
@@ -56,7 +63,7 @@ export function entryArtistMatches(
  * is the content identity left (the device and UPnP round lengths
  * differently).
  */
-export function trackMatchesEntry(node: MediaNode, m: QueueListItemMetadata | null | undefined): boolean {
+export function trackMatchesEntry(node: MediaNode, m: EntryLike | null | undefined): boolean {
   if (m == null || m.title == null) return false
   return (
     node.title === m.title &&
@@ -67,7 +74,7 @@ export function trackMatchesEntry(node: MediaNode, m: QueueListItemMetadata | nu
 }
 
 /** Does a library ALBUM (container node) own a queue entry? Album title + artist identity. */
-export function albumMatchesEntry(node: MediaNode, m: QueueListItemMetadata | null | undefined): boolean {
+export function albumMatchesEntry(node: MediaNode, m: EntryLike | null | undefined): boolean {
   if (m == null || m.album == null) return false
   return m.album === node.title && entryArtistMatches(m.artist, node)
 }

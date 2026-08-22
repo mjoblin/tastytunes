@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useSavedPerformer } from '@/hooks/useQueuePerformer'
 import { Heart, Loader2, MoreHorizontal, Play } from 'lucide-react'
 import { type MediaNode, type MediaQueueAction, type MediaServerInfo } from '@shared/model'
 import {
@@ -45,6 +46,8 @@ const FAV_KINDS: readonly FavKind[] = ['all', 'station', 'album', 'track']
  * an accident) and is gone on the next visit.
  */
 export function FavoritesScreen(): React.JSX.Element {
+  // the performer the library knows for a track saved from a compilation queue (display only)
+  const performerOf = useSavedPerformer()
   const favorites = useStore((s) => s.favorites)
   const filter = useStore((s) => s.screenFilters.favorites)
   const setScreenFilter = useStore((s) => s.setScreenFilter)
@@ -114,7 +117,7 @@ export function FavoritesScreen(): React.JSX.Element {
   const match = (f: Favorite): boolean =>
     matchesFilter(
       filter,
-      f.kind === 'station' ? [f.name] : [f.title, f.artist, f.album, f.serverName]
+      f.kind === 'station' ? [f.name] : [f.title, f.artist, f.album, f.serverName, f.kind === 'track' ? performerOf(f) : null]
     )
   const kindShown = (k: Exclude<FavKind, 'all'>): boolean => kind === 'all' || kind === k
   const shownStations = kindShown('station') ? stations.filter(match) : []
@@ -435,7 +438,7 @@ export function FavoritesScreen(): React.JSX.Element {
                       artUrl={f.artUrl}
                       subtitle={
                         [
-                          [f.artist, f.album].filter(Boolean).join(' — '),
+                          [performerOf(f) ?? f.artist, f.album].filter(Boolean).join(' — '),
                           !routed && f.serverName ? `${f.serverName} is offline` : ''
                         ]
                           .filter(Boolean)
