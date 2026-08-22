@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { MoreHorizontal, Play, Search, X } from "lucide-react";
 import type { MediaNode, RadioStation } from "@shared/model";
 import type { Favorite, PlaylistItem } from "@shared/model";
@@ -74,6 +75,8 @@ const SEARCH_SORTS: Array<{ value: "relevance" | "name"; label: string; noRevers
  * were looking for, and this is never a setting.
  */
 let lastQuery = "";
+// …and the library partition, the same way (it reset to All on every return)
+let lastLibKind: "all" | "artists" | "albums" | "tracks" = "all";
 /*
  * Hidden categories and the sort are PERSISTED view defaults (settings
  * searchHidden/searchSort — the 2026-08-06 ruling), unlike the query above.
@@ -123,7 +126,12 @@ export function SearchScreen(): React.JSX.Element {
   });
   const sort = useStore((s) => s.settings.searchSort);
   const sortReversed = useStore((s) => s.settings.searchSortReversed);
-  const [libKind, setLibKind] = useState<"all" | "artists" | "albums" | "tracks">("all");
+  const [libKind, setLibKind] = useState<"all" | "artists" | "albums" | "tracks">(lastLibKind);
+  useEffect(() => {
+    lastLibKind = libKind;
+  }, [libKind]);
+  // the results list keeps its spot across a trip to another screen
+  const resultsScroll = useScrollMemory("search");
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const favorites = useStore((s) => s.favorites);
@@ -884,7 +892,7 @@ export function SearchScreen(): React.JSX.Element {
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto px-8 pb-10 pt-1">
+      <div ref={resultsScroll} className="flex-1 overflow-y-auto px-8 pb-10 pt-1">
         {!q ? (
           // Centered: with no query there is nothing else on the screen, and a
           // block hugging the top of an empty page reads as a loading state.

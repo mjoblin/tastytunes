@@ -64,6 +64,8 @@ import { artUrlAt } from "@shared/artUrl";
  * cancelled, and a track that can no longer be found is named rather than
  * silently dropped.
  */
+let lastSelectedId: string | null = null;
+
 export function PlaylistsScreen(): React.JSX.Element {
   // the performer the library knows for an entry saved from a compilation queue (display only)
   const performerOf = useSavedPerformer();
@@ -82,7 +84,9 @@ export function PlaylistsScreen(): React.JSX.Element {
   const liveHash = useMemo(() => queueContentHash(queue?.items ?? []), [queue]);
   const filter = useStore((s) => s.screenFilters.playlists);
   const setScreenFilter = useStore((s) => s.setScreenFilter);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Session memory: which playlist was open (component state died with the
+  // screen and every return showed the FIRST playlist, 2026-08-22)
+  const [selectedId, setSelectedId] = useState<string | null>(lastSelectedId);
   const [renaming, setRenaming] = useState<string | null>(null);
   const confirmDelete = useConfirmPopover();
   const [trackMenu, setTrackMenu] = useState<{
@@ -140,6 +144,11 @@ export function PlaylistsScreen(): React.JSX.Element {
     return reversed ? sorted.reverse() : sorted;
   }, [playlists, filter, sort, reversed]);
   const selected = playlists.find((p) => p.id === selectedId) ?? shown[0] ?? null;
+  useEffect(() => {
+    lastSelectedId = selected?.id ?? null;
+  }, [selected?.id]);
+  // the open playlist's track list keeps its spot, per playlist
+  const detailScroll = useScrollMemory(`playlist:${selected?.id ?? "none"}`);
   // The record keeps every title the last activation couldn't find, but the
   // note's job is pointing at a gap in THIS list — a missing track the user
   // has since edited out is a gap that no longer exists, so it drops from the
@@ -492,7 +501,10 @@ export function PlaylistsScreen(): React.JSX.Element {
               )}
               {/* divide-y divide-edge/50: the same hairline the queue and the
                   library's track lists use between rows */}
-              <div className="flex-1 min-h-0 overflow-y-auto px-1.5 -mx-1.5 py-1 -my-1 divide-y divide-edge/50">
+              <div
+                ref={detailScroll}
+                className="flex-1 min-h-0 overflow-y-auto px-1.5 -mx-1.5 py-1 -my-1 divide-y divide-edge/50"
+              >
                 <DndContext
                   sensors={sensors}
                   collisionDetection={closestCenter}

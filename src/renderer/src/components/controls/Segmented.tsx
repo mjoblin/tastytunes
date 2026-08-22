@@ -32,6 +32,7 @@ export function Segmented<T extends string | number | boolean>({
       {options.map((opt) => (
         <button
           key={String(opt.value)}
+          aria-pressed={value === opt.value}
           onClick={() => {
             if (!opt.disabled) onChange(opt.value);
           }}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useLayoutEffect } from "react";
 import {
   ArrowLeft,
   ChevronRight,
@@ -238,6 +238,16 @@ export function LibraryScreen(): React.JSX.Element {
   const [searchSortReversed, setSearchSortReversed] = useState(false);
   const [fetchNonce, setFetchNonce] = useState(0);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  // Which node the scroller currently shows, once its listing has landed —
+  // scroll memory records only for that node, so a fresh mount (scroller at
+  // 0, listing not yet fetched) can't clobber a remembered spot.
+  const loadedKey = useRef<string | null>(null);
+  const pendingScroll = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    if (pendingScroll.current == null || !scrollRef.current) return;
+    scrollRef.current.scrollTop = pendingScroll.current;
+    pendingScroll.current = null;
+  }, [nodes, state]);
   const atRoot = serverUdn == null;
 
   // Cross-server search: every READY index at once, grouped by server. It
@@ -412,8 +422,10 @@ export function LibraryScreen(): React.JSX.Element {
         if (stale) return;
         setNodes(stripFurniture(list));
         setState("ready");
-        const remembered = scrollMemory.get(nodeKey(serverUdn, path)) ?? 0;
-        requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: remembered }));
+        loadedKey.current = nodeKey(serverUdn, path);
+        // applied by the layout effect below, AFTER these rows commit — a rAF
+        // here could run against the previous listing and clamp to 0
+        pendingScroll.current = scrollMemory.get(nodeKey(serverUdn, path)) ?? 0;
       })
       .catch(() => {
         if (!stale) setState("error");
@@ -424,7 +436,9 @@ export function LibraryScreen(): React.JSX.Element {
   }, [serverUdn, path, fetchNonce]);
 
   const rememberScroll = (): void => {
-    if (scrollRef.current) scrollMemory.set(nodeKey(serverUdn, path), scrollRef.current.scrollTop);
+    const key = nodeKey(serverUdn, path);
+    if (scrollRef.current && loadedKey.current === key)
+      scrollMemory.set(key, scrollRef.current.scrollTop);
   };
 
   // Each level keeps its own filter: stash the current one, restore the
@@ -1748,8 +1762,16 @@ export function LibraryScreen(): React.JSX.Element {
       <div
         ref={scrollRef}
         onScroll={(e) => {
-          if (atRoot && lens === "albums" && !searchMode)
+          if (atRoot && lens === "albums" && !searchMode) {
             albumsLensScroll = e.currentTarget.scrollTop;
+            return;
+          }
+          // Recorded as you scroll, not only when you navigate: leaving for
+          // another screen UNMOUNTS this one, and the album you were halfway
+          // down came back at the top (user, 2026-08-22).
+          if (searchMode || lens) return;
+          const key = nodeKey(serverUdn, path);
+          if (loadedKey.current === key) scrollMemory.set(key, e.currentTarget.scrollTop);
         }}
         className={cx(
           // stable gutter: without it the scrollbar's appearance shifts every
