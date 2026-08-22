@@ -1,0 +1,10 @@
+# build output and dependencies
+out/
+dist/
+node_modules/
+# the private ops repo (its own conventions; dense harness one-liners)
+dev/
+# generated / vendored
+resources/
+build/
+*.md

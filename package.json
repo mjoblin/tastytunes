@@ -18,6 +18,8 @@
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\"",
     "dist:mac": "electron-vite build && electron-builder --mac",
     "dist:win": "electron-vite build && node scripts/build-win.mjs",
     "dist:linux": "electron-vite build && electron-builder --linux"
@@ -51,6 +53,7 @@
     "electron-builder": "^26.0.0",
     "electron-vite": "^3.0.0",
     "lucide-react": "^0.475.0",
+    "prettier": "3.9.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tailwindcss": "^4.0.0",
