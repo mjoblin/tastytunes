@@ -241,7 +241,7 @@ export function useShortcuts(opts?: { transportOnly?: boolean }): void {
       off();
       if (window.__ttShortcutsOff === off) window.__ttShortcutsOff = undefined;
     };
-  }, []);
+  }, [transportOnly]);
 }
 
 declare global {

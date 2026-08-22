@@ -107,7 +107,10 @@ export function AddToPlaylistPanel({
               // Enter with exactly one match is the fast path
               if (e.key === "Enter" && playlists.length === 1)
                 void addTo(playlists[0].id, playlists[0].name);
-              if (e.key === "Escape") filter ? setFilter("") : onClose();
+              if (e.key === "Escape") {
+                if (filter) setFilter("");
+                else onClose();
+              }
             }}
             placeholder={`Filter ${all.length} playlists`}
             aria-label="Filter playlists"

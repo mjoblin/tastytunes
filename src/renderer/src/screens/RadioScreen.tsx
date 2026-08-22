@@ -175,12 +175,19 @@ export function RadioScreen(): React.JSX.Element {
     }
     setSearching(true);
     const seq = ++searchSeq.current;
-    const t = setTimeout(async () => {
-      const stations = await tt.radioSearch(q);
-      if (seq !== searchSeq.current) return; // superseded by newer keystrokes
-      lastResults = stations;
-      setResults(stations);
-      setSearching(false);
+    const t = setTimeout(() => {
+      void (async () => {
+        try {
+          const stations = await tt.radioSearch(q);
+          if (seq !== searchSeq.current) return; // superseded by newer keystrokes
+          lastResults = stations;
+          setResults(stations);
+        } catch {
+          // the directory didn't answer: keep what was shown, stop searching
+          if (seq !== searchSeq.current) return;
+        }
+        if (seq === searchSeq.current) setSearching(false);
+      })();
     }, RADIO_DEBOUNCE_MS);
     return () => clearTimeout(t);
   }, [query]);

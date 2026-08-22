@@ -270,18 +270,20 @@ export function SearchScreen(): React.JSX.Element {
     const seq = ++radioSeq.current;
     setRadioPending(true);
     setRadioFailed(false);
-    const t = setTimeout(async () => {
-      try {
-        const stations = await tt.radioSearch(q);
-        if (seq !== radioSeq.current) return;
-        setRadio(stations);
-      } catch {
-        if (seq !== radioSeq.current) return;
-        setRadio(null);
-        setRadioFailed(true);
-      } finally {
-        if (seq === radioSeq.current) setRadioPending(false);
-      }
+    const t = setTimeout(() => {
+      void (async () => {
+        try {
+          const stations = await tt.radioSearch(q);
+          if (seq !== radioSeq.current) return;
+          setRadio(stations);
+        } catch {
+          if (seq !== radioSeq.current) return;
+          setRadio(null);
+          setRadioFailed(true);
+        } finally {
+          if (seq === radioSeq.current) setRadioPending(false);
+        }
+      })();
     }, RADIO_DEBOUNCE_MS);
     return () => clearTimeout(t);
   }, [q, hidden, radioDirectory]);

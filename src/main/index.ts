@@ -552,44 +552,50 @@ if (!gotLock) {
     mainWindow.focus();
   });
 
-  app.whenReady().then(() => {
-    registerIpc();
-    installAppMenu({
-      command: (cmd) => void deviceManager.command(cmd),
-      toggleMini: toggleMiniPlayer,
-      sendToMain: sendMenuCommand,
-    });
-    createWindow();
-    syncMediaKeys();
-    syncTray(getSettings().tray, trayDeps);
-    // The tray's menu is a native snapshot the OS holds — it can't read state
-    // on open the way the renderer does, so device movement has to push it.
-    deviceManager.onPush = (msg) => {
-      if (trayWantsRefresh(msg.kind)) refreshTrayMenu();
-    };
-    mcpBridge.sync(getSettings());
-    void deviceManager.startup();
-    startScheduler(deviceManager);
-    mediaIndex.init((statuses) => deviceManager.setMediaIndex(statuses));
-    startUpdater((state) => {
-      mainWindow?.webContents.send(IPC.push, { kind: "updateState", state });
-    });
+  app
+    .whenReady()
+    .then(() => {
+      registerIpc();
+      installAppMenu({
+        command: (cmd) => void deviceManager.command(cmd),
+        toggleMini: toggleMiniPlayer,
+        sendToMain: sendMenuCommand,
+      });
+      createWindow();
+      syncMediaKeys();
+      syncTray(getSettings().tray, trayDeps);
+      // The tray's menu is a native snapshot the OS holds — it can't read state
+      // on open the way the renderer does, so device movement has to push it.
+      deviceManager.onPush = (msg) => {
+        if (trayWantsRefresh(msg.kind)) refreshTrayMenu();
+      };
+      mcpBridge.sync(getSettings());
+      void deviceManager.startup();
+      startScheduler(deviceManager);
+      mediaIndex.init((statuses) => deviceManager.setMediaIndex(statuses));
+      startUpdater((state) => {
+        mainWindow?.webContents.send(IPC.push, { kind: "updateState", state });
+      });
 
-    // Node timers stall during system sleep. The sleep timer fires what came
-    // due; the SCHEDULER offers it instead (an alarm minutes late is a
-    // question, not an instruction) — see scheduler.ts for the three rules.
-    powerMonitor.on("suspend", () => noteSuspend());
-    powerMonitor.on("resume", () => {
-      deviceManager.healthCheck();
-      deviceManager.checkSleepTimer();
-      catchUpOnResume(deviceManager);
-    });
+      // Node timers stall during system sleep. The sleep timer fires what came
+      // due; the SCHEDULER offers it instead (an alarm minutes late is a
+      // question, not an instruction) — see scheduler.ts for the three rules.
+      powerMonitor.on("suspend", () => noteSuspend());
+      powerMonitor.on("resume", () => {
+        deviceManager.healthCheck();
+        deviceManager.checkSleepTimer();
+        catchUpOnResume(deviceManager);
+      });
 
-    // Dock-icon click. Asking for the MAIN window rather than "are there zero
-    // windows" matters now that a hidden tray panel can be the only window
-    // there is — counting windows would make the dock icon do nothing.
-    app.on("activate", () => showMainWindow());
-  });
+      // Dock-icon click. Asking for the MAIN window rather than "are there zero
+      // windows" matters now that a hidden tray panel can be the only window
+      // there is — counting windows would make the dock icon do nothing.
+      app.on("activate", () => showMainWindow());
+    })
+    .catch((e: unknown) => {
+      // a failure anywhere in startup used to vanish (floating promise)
+      console.error("startup failed:", e);
+    });
 
   app.on("before-quit", () => {
     isQuitting = true;
