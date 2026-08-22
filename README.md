@@ -296,6 +296,8 @@ live.
 npm install
 npm run dev        # run with HMR
 npm run typecheck  # typecheck main + preload + renderer
+npm run check      # typecheck, lint (ESLint) and format check (Prettier) — what CI runs
+npm run format     # format the source with Prettier
 npm run build      # bundle to out/
 npm run dist:mac   # package a dmg (also: dist:win, dist:linux)
 ```
