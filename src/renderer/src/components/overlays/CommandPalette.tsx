@@ -134,7 +134,6 @@ export function CommandPalette(): React.JSX.Element {
   const setLyricsOpen = useStore((s) => s.setLyricsOpen);
   const setArtistOpen = useStore((s) => s.setArtistOpen);
   const setContextTab = useStore((s) => s.setContextTab);
-  const setSettings = useStore((s) => s.setSettings);
 
   const connection = useStore((s) => s.connection);
   const systemPower = useStore((s) => s.systemPower);
