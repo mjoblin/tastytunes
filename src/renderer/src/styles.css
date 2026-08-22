@@ -14,10 +14,16 @@
      overrides per face); 1 = Fraunces, the default. Applied via the
      .font-display zoom rule below so all display text stays visually matched. */
   --font-display-scale: 1;
-  /* signal-quality lamps (SIGNAL_COLORS in lib/format.ts reads these) */
+  /* signal-quality lamps (SIGNAL_COLORS in lib/format.ts reads these).
+     GOLD / BLUE / GREY, not amber / green / grey (2026-08-21, a colour-vision
+     request): amber and green both land on the yellow side for red-green
+     colour blindness (~1 in 12 men) and the two good lamps collapsed into
+     one; gold and blue sit on the blue-yellow axis those eyes keep, and the
+     luminance steps with quality so greyscale still reads brighter = better.
+     SignalDot pairs each colour with a SHAPE, so hue is never the only cue. */
   --signal-hires: #f0a848;
-  --signal-lossless: #67dd8b;
-  --signal-lossy: #8d867a;
+  --signal-lossless: #5aa9ff;
+  --signal-lossy: #9d968a;
   --signal-unknown: #4a453d;
 }
 
@@ -113,8 +119,8 @@
   --color-golddim: rgb(var(--gold-rgb) / 0.2);
   /* Deeper signal colors — the dark theme's bright lamps wash out on paper. */
   --signal-hires: #b27610;
-  --signal-lossless: #1c9a51;
-  --signal-lossy: #7d7566;
+  --signal-lossless: #2f7fe0;
+  --signal-lossy: #6f675a;
   --signal-unknown: #a49b89;
   --color-bg: #f2eee6;
   --color-panel: #eae5da;

@@ -1,7 +1,33 @@
 import { useState } from 'react'
 import { useStore } from '@/store'
 import { SIGNAL_COLORS, SIGNAL_LABELS, cx, fmtKHz, signalGlow, signalQuality } from '@/lib/format'
+import type { SignalQuality } from '@/lib/format'
 import { PopoverCard } from '@/components/chrome/Overlay'
+
+/**
+ * The lamp glyph. Colour AND shape say the quality, so the lamp reads without
+ * hue (a colour-vision request, 2026-08-21 — amber vs green was one lamp to
+ * red-green colour-blind eyes): hi-res is a lit dot inside a halo ring,
+ * lossless a lit dot, lossy an unlit ring. ONE definition — the bar, Now
+ * Playing, the tray panel, the popover header and the Settings legend all
+ * draw this; nothing else may paint a signal colour on its own.
+ */
+export function SignalDot({
+  quality,
+  className = 'h-2.5 w-2.5'
+}: {
+  quality: SignalQuality
+  className?: string
+}): React.JSX.Element {
+  const color = SIGNAL_COLORS[quality]
+  const style: React.CSSProperties =
+    quality === 'hires'
+      ? { background: color, boxShadow: signalGlow(color), outline: `1.5px solid ${color}`, outlineOffset: '2px' }
+      : quality === 'lossy'
+        ? { boxShadow: `inset 0 0 0 2px ${color}` }
+        : { background: color, boxShadow: signalGlow(color) }
+  return <span data-signal={quality} className={cx('block rounded-full', className)} style={style} />
+}
 
 /**
  * Roon-style signal light: one glance says how good the stream is; a click shows
@@ -49,10 +75,7 @@ export function SignalLamp({
         }}
         className={cx(tipClass, 'p-2 rounded-md hover:bg-veil transition-colors')}
       >
-        <span
-          className="block h-2.5 w-2.5 rounded-full"
-          style={{ background: color, boxShadow: signalGlow(color) }}
-        />
+        <SignalDot quality={quality} />
       </button>
 
       {/* THE SHELL, not a hand-rolled box. This used to be an `absolute
@@ -64,10 +87,7 @@ export function SignalLamp({
       {at && (
         <PopoverCard at={at} width="w-60" onClose={() => setAt(null)} className="p-3">
           <div className="flex items-center gap-2 mb-2.5">
-            <span
-              className="block h-2 w-2 rounded-full"
-              style={{ background: color, boxShadow: signalGlow(color) }}
-            />
+            <SignalDot quality={quality} className="h-2 w-2" />
             <span className={cx('microlabel')} style={{ color }}>
               {SIGNAL_LABELS[quality]}
             </span>

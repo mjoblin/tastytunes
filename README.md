@@ -149,7 +149,7 @@ from another machine.
 - Large artwork over an ambient blurred-art backdrop
 - Optional art-derived accent: the gold tint follows the current album
 - Format badges: codec, sample rate, bit depth, lossless, MQA
-- Signal-quality lamp (amber for hi-res lossless, green for lossless, gray for lossy), with the full signal chain in a popover
+- Signal-quality lamp (gold with a halo for hi-res lossless, blue for lossless, a hollow gray ring for lossy — shape as well as color, so it reads without color vision), with the full signal chain in a popover
 - Internet-radio display, track *x* of *y*, and the current lyric line under the track details
 - Display mode (<kbd>F</kbd>): chrome-free full screen for a desk or shelf display
 - Info: what the streamer reports about the current stream (codec, sample rate, bit depth, bitrate, queue position), for any source: local media, radio, AirPlay

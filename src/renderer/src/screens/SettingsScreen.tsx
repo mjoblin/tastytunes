@@ -50,7 +50,8 @@ import { tt } from '@/api'
 import { useStore, type Screen } from '@/store'
 import { useScrollMemory } from '@/hooks/useScrollMemory'
 import { DISPLAY_FONTS } from '@/hooks/useDisplayFont'
-import { SIGNAL_COLORS, cx, signalGlow } from '@/lib/format'
+import { cx } from '@/lib/format'
+import { SignalDot } from '@/components/device/SignalLamp'
 import { clearRecentsWithUndo } from '@/lib/recents'
 import {
   MOD,
@@ -477,9 +478,9 @@ export function SettingsScreen(): React.JSX.Element {
                 playing — click it for the full signal chain.
               </div>
               <div className="space-y-2">
-                <LegendRow swatch={<Lamp color={SIGNAL_COLORS.hires} />} label="Hi-res lossless" desc="Lossless above CD quality (or MQA)." />
-                <LegendRow swatch={<Lamp color={SIGNAL_COLORS.lossless} />} label="Lossless" desc="Bit-perfect CD quality." />
-                <LegendRow swatch={<Lamp color={SIGNAL_COLORS.lossy} />} label="Lossy" desc="Compressed stream (internet radio, Bluetooth, AAC/MP3)." />
+                <LegendRow swatch={<SignalDot quality="hires" />} label="Hi-res lossless" desc="Lossless above CD quality (or MQA)." />
+                <LegendRow swatch={<SignalDot quality="lossless" />} label="Lossless" desc="Bit-perfect CD quality." />
+                <LegendRow swatch={<SignalDot quality="lossy" />} label="Lossy" desc="Compressed stream (internet radio, Bluetooth, AAC/MP3)." />
               </div>
             </div>
           </div>
@@ -1291,15 +1292,6 @@ function NumberField({
         widthClass,
         'bg-bg rounded-lg ring-1 ring-edge focus:ring-edge2 outline-none px-3 py-1.5 text-[13px] font-mono'
       )}
-    />
-  )
-}
-
-function Lamp({ color }: { color: string }): React.JSX.Element {
-  return (
-    <span
-      className="inline-block h-2.5 w-2.5 rounded-full"
-      style={{ background: color, boxShadow: signalGlow(color) }}
     />
   )
 }
