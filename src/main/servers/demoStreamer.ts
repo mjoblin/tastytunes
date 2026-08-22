@@ -139,6 +139,13 @@ function buildDemo(host: string): {
       mode_shuffle: 'off',
       metadata: {
         ...trackMeta(PLAYING_QUEUE_ID),
+        // FILE-TAG READOUT (live, 2026-08-21): play_state reports what the
+        // decoder read from the file, not what the server said — Asset
+        // renames multi-disc albums, so the readout says "[Disc 1]" while the
+        // queue entry and the library say "Amber Nights". Mirrors the mock's
+        // MOCK_TAG_METADATA shape so the demo proves the library matches by
+        // queue entry, never by this string.
+        album: 'Amber Nights [Disc 1]',
         playback_source: 'punnet',
         sample_format: '44.1kHz/16bit',
         mqa: 'none',

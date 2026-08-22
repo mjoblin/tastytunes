@@ -22,6 +22,7 @@ import type { QueueListItem } from '@shared/smoip'
 import { tt } from '@/api'
 import { useStore } from '@/store'
 import { activeSourceId, cx, fmtTime, matchesFilter } from '@/lib/format'
+import { albumMatchesEntry, entryArtistMatches, playingQueueEntry, trackMatchesEntry } from '@/lib/playingEntry'
 import { MOD } from '@/lib/screens'
 import { flashTarget } from '@/lib/scroll'
 import { mediaKind, isAlbumClass, stripFurniture, isArtistClass } from '@/lib/media'
@@ -965,16 +966,13 @@ export function LibraryScreen(): React.JSX.Element {
     return m
   }, [queue])
 
-  /** Queue entries whose metadata content-matches a library track. */
+  /**
+   * Queue entries whose metadata content-matches a library track — the ONE
+   * matcher (lib/playingEntry), so a compilation track whose entry carries
+   * the album artist is found, not duplicated on click.
+   */
   const queueMatches = (node: MediaNode): QueueListItem[] =>
-    (queueByTitle.get(node.title) ?? []).filter((i) => {
-      const m = i.metadata
-      return (
-        m != null &&
-        (m.album == null || node.album == null || m.album === node.album) &&
-        (m.artist == null || node.artist == null || m.artist === node.artist)
-      )
-    })
+    (queueByTitle.get(node.title) ?? []).filter((i) => trackMatchesEntry(node, i.metadata))
   const trackQueued = (node: MediaNode): boolean => queueMatches(node).length > 0
 
   /**
@@ -1186,25 +1184,31 @@ export function LibraryScreen(): React.JSX.Element {
   const crossTotal = crossState ? crossState.groups.reduce((acc, g) => acc + g.total, 0) : 0
 
   // Playing-item highlight, queue-screen rules: library items carry no queue
-  // ids, so match the playing metadata by content (title, plus artist/album
-  // when both sides have them), and only while the queue's source is audible.
+  // ids, so match by content — against the PLAYING QUEUE ENTRY's metadata
+  // (server-shaped, the same strings the library shows; see lib/playingEntry:
+  // play_state.metadata is the streamer's FILE-TAG readout and disagrees with
+  // the server on every album Asset renames), falling back to that readout
+  // only while the queue isn't known. Only while the queue's source is audible.
   const md = playState?.metadata ?? null
   const queueSourceActive = activeSourceId(zoneState, nowPlaying) === 'MEDIA_PLAYER'
+  const playingEntry = playingQueueEntry(queue, playState)?.metadata ?? null
   const isCurrentTrack = (node: MediaNode): boolean =>
-    md != null &&
-    node.title === md.title &&
-    (node.album == null || md.album == null || node.album === md.album) &&
-    (node.artist == null || md.artist == null || node.artist === md.artist) &&
-    // Twin titles on one album (a reprise, a bonus cut) are real — duration is
-    // the content identity left, so require agreement when both sides know it
-    // (±2s: the device and UPnP round track lengths differently).
-    (node.durationSecs == null ||
-      md.duration == null ||
-      Math.abs(node.durationSecs - md.duration) <= 2)
+    playingEntry != null
+      ? trackMatchesEntry(node, playingEntry)
+      : md != null &&
+        node.title === md.title &&
+        (node.album == null || md.album == null || node.album === md.album) &&
+        entryArtistMatches(md.artist, node) &&
+        // Twin titles on one album (a reprise, a bonus cut) are real — duration
+        // is the content identity left, so require agreement when both sides
+        // know it (±2s: the device and UPnP round track lengths differently).
+        (node.durationSecs == null ||
+          md.duration == null ||
+          Math.abs(node.durationSecs - md.duration) <= 2)
   const isPlayingAlbum = (node: MediaNode): boolean =>
-    md != null &&
-    md.album === node.title &&
-    (node.artist == null || md.artist == null || node.artist === md.artist)
+    playingEntry != null
+      ? albumMatchesEntry(node, playingEntry)
+      : md != null && md.album === node.title && entryArtistMatches(md.artist, node)
 
   const allTracks = useMemo(() => nodes.filter((n) => !n.isContainer), [nodes])
   const albumArt = albumNode ? (albumNode.artUrl ?? allTracks[0]?.artUrl ?? null) : null
