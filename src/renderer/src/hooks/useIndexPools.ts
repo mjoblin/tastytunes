@@ -13,6 +13,12 @@ import { useStore } from '@/store'
  * `enabled` defers the fetch until a surface actually needs the pools (the
  * Library fetches when a lens opens); the last snapshot stays available
  * either way.
+ *
+ * WHEN THE POOLS EXIST: a stored index is ready at boot, so every window has
+ * its pools from the first paint; on a fresh install nothing builds until
+ * the Library or Search first lists servers (the mediaServers IPC kicks
+ * ensureFresh), so a surface that only READS pools — the queue rows — shows
+ * the device's strings until then. That is the index's law, not this hook's.
  */
 let poolsCache: { sig: string; pools: MediaIndexPools[] } | null = null
 
