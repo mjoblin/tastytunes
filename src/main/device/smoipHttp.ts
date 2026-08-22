@@ -89,7 +89,7 @@ export async function streamRadio(host: string, url: string, name: string): Prom
  */
 export async function zoneSavePreset(host: string, slot: number): Promise<void> {
   const qs = new URLSearchParams({ preset: String(slot) });
-  const res = await fetch(`http://${host}/smoip/zone/save_preset?${qs}`, {
+  const res = await fetch(`http://${host}/smoip/zone/save_preset?${qs.toString()}`, {
     signal: AbortSignal.timeout(5000),
   });
   if (!res.ok) throw new Error(`GET /smoip/zone/save_preset -> HTTP ${res.status}`);
@@ -102,7 +102,7 @@ export async function zoneSavePreset(host: string, slot: number): Promise<void> 
  * the exact negative shape on non-EQ models is unobserved, so every
  * non-positive answer is treated as absence.
  */
-export async function getAudioSpec(host: string): Promise<unknown | null> {
+export async function getAudioSpec(host: string): Promise<unknown> {
   try {
     const res = await fetch(`http://${host}/smoip/zone/audio/spec?zone=ZONE1`, {
       signal: AbortSignal.timeout(5000),
@@ -120,7 +120,7 @@ export async function getAudioSpec(host: string): Promise<unknown | null> {
  * capability probe, mirroring getAudioSpec. null on any non-positive answer
  * (404 on a headless unit, timeout, junk) = "control not supported".
  */
-async function getSpec(host: string, path: string): Promise<unknown | null> {
+async function getSpec(host: string, path: string): Promise<unknown> {
   try {
     const res = await fetch(`http://${host}/smoip${path}`, { signal: AbortSignal.timeout(5000) });
     if (!res.ok) return null;
@@ -130,16 +130,15 @@ async function getSpec(host: string, path: string): Promise<unknown | null> {
     return null;
   }
 }
-export const getDisplaySpec = (host: string): Promise<unknown | null> =>
+export const getDisplaySpec = (host: string): Promise<unknown> =>
   getSpec(host, "/system/display/spec");
-export const getPowerSpec = (host: string): Promise<unknown | null> =>
-  getSpec(host, "/system/power/spec");
+export const getPowerSpec = (host: string): Promise<unknown> => getSpec(host, "/system/power/spec");
 
 /**
  * Fetch the preset list over HTTP — how vibin refreshes stale is_playing flags.
  * (A bare WS request for /presets/list is not proven against real hardware.)
  */
-export async function getPresets(host: string): Promise<unknown | null> {
+export async function getPresets(host: string): Promise<unknown> {
   const res = await fetch(`http://${host}/smoip/presets/list`, {
     signal: AbortSignal.timeout(5000),
   });

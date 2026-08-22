@@ -484,9 +484,7 @@ export function FavoritesScreen(): React.JSX.Element {
                                 onClick={(e: React.MouseEvent) =>
                                   playTrack(
                                     f,
-                                    (e.currentTarget as HTMLElement).closest(
-                                      "[data-fav-track]",
-                                    ) as HTMLElement,
+                                    (e.currentTarget as HTMLElement).closest("[data-fav-track]"),
                                   )
                                 }
                               />
@@ -527,9 +525,9 @@ export function FavoritesScreen(): React.JSX.Element {
           // never offered before the consistency pass.
           items={(() => {
             const shared = {
-              playNext: () => queueAction(menu.fav, "PLAY_NEXT" as MediaQueueAction, null),
-              append: () => queueAction(menu.fav, "APPEND" as MediaQueueAction, null),
-              replaceQueue: () => queueAction(menu.fav, "REPLACE" as MediaQueueAction, null),
+              playNext: () => queueAction(menu.fav, "PLAY_NEXT", null),
+              append: () => queueAction(menu.fav, "APPEND", null),
+              replaceQueue: () => queueAction(menu.fav, "REPLACE", null),
               saveToPreset: () => setPresetFor({ fav: menu.fav, x: menu.x, y: menu.y }),
               addToPlaylist: () => setPlaylistFor({ fav: menu.fav, x: menu.x, y: menu.y }),
               heart: {

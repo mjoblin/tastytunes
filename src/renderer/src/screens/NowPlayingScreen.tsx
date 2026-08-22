@@ -276,20 +276,22 @@ export function NowPlayingScreen(): React.JSX.Element {
           label={meta.title ?? "this track"}
           at={playlistAt}
           onClose={() => setPlaylistAt(null)}
-          resolve={async () => [
-            {
-              title: meta.title ?? "",
-              artist: meta.subtitle ?? null,
-              album: meta.album ?? null,
-              artUrl: meta.artUrl ?? null,
-              // play_state carries no library ids — content IS the identity,
-              // and activation resolves it fresh against whatever server has it
-              serverUdn: null,
-              serverName: null,
-              objectId: null,
-              durationSecs: md?.duration ?? null,
-            },
-          ]}
+          resolve={() =>
+            Promise.resolve([
+              {
+                title: meta.title ?? "",
+                artist: meta.subtitle ?? null,
+                album: meta.album ?? null,
+                artUrl: meta.artUrl ?? null,
+                // play_state carries no library ids — content IS the identity,
+                // and activation resolves it fresh against whatever server has it
+                serverUdn: null,
+                serverName: null,
+                objectId: null,
+                durationSecs: md?.duration ?? null,
+              },
+            ])
+          }
         />
       )}
       {lyricsFade.mounted && <LyricsPanel className={lyricsFade.faded} />}

@@ -387,11 +387,11 @@ export function QueueScreen(): React.JSX.Element {
           label={playlistFor.item.metadata?.title ?? "this track"}
           at={{ x: playlistFor.x, y: playlistFor.y }}
           onClose={() => setPlaylistFor(null)}
-          resolve={async () => {
+          resolve={() => {
             // a queue id belongs to THIS queue, not to the library — content
             // is the identity, resolved fresh on activation
             const ref = fromQueueItem(playlistFor.item);
-            return ref ? [refToPlaylistItem(ref)] : [];
+            return Promise.resolve(ref ? [refToPlaylistItem(ref)] : []);
           }}
         />
       )}

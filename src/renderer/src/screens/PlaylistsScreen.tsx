@@ -291,7 +291,7 @@ export function PlaylistsScreen(): React.JSX.Element {
           label={copyTo.item.title}
           at={{ x: copyTo.x, y: copyTo.y }}
           onClose={() => setCopyTo(null)}
-          resolve={async () => [copyTo.item]}
+          resolve={() => Promise.resolve([copyTo.item])}
         />
       )}
       {presetFor && (

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MoreHorizontal, Play, Search, X } from "lucide-react";
 import type { MediaNode, RadioStation } from "@shared/model";
-import type { Favorite, FavoriteMedia, PlaylistItem } from "@shared/model";
+import type { Favorite, PlaylistItem } from "@shared/model";
 import { favoriteKey } from "@shared/model";
 import { mediaKind, type MediaKind } from "@/lib/media";
 import { sanitizeNavHidden, sanitizeNavOrder } from "@/lib/screens";
@@ -309,7 +309,7 @@ export function SearchScreen(): React.JSX.Element {
       void playStation({ url: f.url, name: f.name, favicon: f.favicon });
       return;
     }
-    const media = f as FavoriteMedia;
+    const media = f;
     if (media.kind === "album") {
       void favoriteAct(media, async (udn, id) => {
         await tt.mediaBrowse(udn, id, media.titlePath ?? [media.title]);
@@ -406,7 +406,7 @@ export function SearchScreen(): React.JSX.Element {
 
   const openFavMenu = (f: Favorite, e: React.MouseEvent): void => {
     if (f.kind === "station") return; // stations: heart + click; no menu anywhere
-    const media = f as FavoriteMedia;
+    const media = f;
     e.preventDefault();
     e.stopPropagation();
     const ref = fromFavorite(media);
@@ -449,7 +449,7 @@ export function SearchScreen(): React.JSX.Element {
   const libShown = useMemo(
     () =>
       libKind === "all" ? libResults : libResults.filter((n) => `${nodeKind(n)}s` === libKind),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
     [libResults, libKind],
   );
 

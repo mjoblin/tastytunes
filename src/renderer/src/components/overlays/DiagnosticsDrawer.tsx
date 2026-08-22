@@ -40,7 +40,7 @@ export function DiagnosticsDrawer(): React.JSX.Element {
           key: `log-${l.at}-${l.text}`,
           at: l.at,
           log: l,
-          frame: null as never | null,
+          frame: null,
         }))
       : frames
           .filter((f) => filter === "all" || f.dir === filter)

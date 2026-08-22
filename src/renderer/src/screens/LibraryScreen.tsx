@@ -2004,7 +2004,7 @@ export function LibraryScreen(): React.JSX.Element {
                   onClick={(e) =>
                     void playContainer(
                       albumNode,
-                      (e.currentTarget.closest("[data-album-header]") as HTMLElement) ?? null,
+                      e.currentTarget.closest("[data-album-header]") ?? null,
                     )
                   }
                   className="tip-bottom flex items-center gap-2 px-4 py-2 rounded-full bg-amber text-bg text-[13px] font-medium motion-safe:active:scale-95 transition-all"

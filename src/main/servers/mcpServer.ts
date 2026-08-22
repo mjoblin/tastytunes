@@ -559,7 +559,7 @@ export class McpBridge {
         handler: async (a) => {
           this.connected();
           await dm.command({ type: "seek", positionSecs: a.position_seconds as number });
-          return ok(`Seeked to ${a.position_seconds}s.`);
+          return ok(`Seeked to ${String(a.position_seconds)}s.`);
         },
       },
       play_queue_item: {
@@ -567,7 +567,7 @@ export class McpBridge {
         handler: async (a) => {
           this.connected();
           await dm.command({ type: "playQueueId", queueId: a.id as number });
-          return ok(`Playing queue item ${a.id}.`);
+          return ok(`Playing queue item ${String(a.id)}.`);
         },
       },
       set_shuffle: {
@@ -598,7 +598,7 @@ export class McpBridge {
           return ok(
             capped
               ? `Volume set to ${limit}% (the app's volume limit).`
-              : `Volume set to ${a.percent}%.`,
+              : `Volume set to ${String(a.percent)}%.`,
           );
         },
       },
@@ -614,7 +614,7 @@ export class McpBridge {
         handler: async (a) => {
           this.connected();
           await dm.command({ type: "volumeStepChange", delta: a.steps as number });
-          return ok(`Volume nudged by ${a.steps} step(s).`);
+          return ok(`Volume nudged by ${String(a.steps)} step(s).`);
         },
       },
       set_mute: {
@@ -632,9 +632,9 @@ export class McpBridge {
         handler: async (a) => {
           const s = this.connected();
           const preset = (s.presets?.presets ?? []).find((p) => p.id === a.id);
-          if (!preset) return err(`No preset ${a.id}. Use list_presets.`);
+          if (!preset) return err(`No preset ${String(a.id)}. Use list_presets.`);
           await dm.command({ type: "recallPreset", presetId: a.id as number });
-          return ok(`Recalled preset ${a.id}${preset.name ? ` (${preset.name})` : ""}.`);
+          return ok(`Recalled preset ${String(a.id)}${preset.name ? ` (${preset.name})` : ""}.`);
         },
       },
       set_source: {
@@ -644,7 +644,7 @@ export class McpBridge {
         handler: async (a) => {
           const s = this.connected();
           const src = (s.sources?.sources ?? []).find((x) => x.id === a.id);
-          if (!src) return err(`Unknown source '${a.id}'. Use list_sources.`);
+          if (!src) return err(`Unknown source '${String(a.id)}'. Use list_sources.`);
           await dm.command({ type: "setSource", sourceId: a.id as string });
           return ok(`Switched to ${src.name}.`);
         },
@@ -661,7 +661,7 @@ export class McpBridge {
         inputSchema: { host: z.string().describe("Host or IP from list_devices.") },
         handler: (a) => {
           dm.connect(a.host as string);
-          return ok(`Connecting to ${a.host}. Call get_status to confirm.`);
+          return ok(`Connecting to ${String(a.host)}. Call get_status to confirm.`);
         },
       },
 
@@ -963,7 +963,7 @@ export class McpBridge {
           if (groups.length === 0) {
             return err(
               a.server_udn != null
-                ? `No ready index for server '${a.server_udn}'. Use list_media_servers.`
+                ? `No ready index for server '${String(a.server_udn)}'. Use list_media_servers.`
                 : this.kickIndex(),
             );
           }
@@ -1098,7 +1098,7 @@ export class McpBridge {
           if (groups.length === 0) {
             return err(
               a.server_udn != null
-                ? `No ready index for server '${a.server_udn}'. Use list_media_servers.`
+                ? `No ready index for server '${String(a.server_udn)}'. Use list_media_servers.`
                 : this.kickIndex(),
             );
           }
@@ -1166,7 +1166,7 @@ export class McpBridge {
             return err(
               indexPools().length === 0
                 ? this.kickIndex()
-                : `No ready index for server '${a.server_udn}'. Use list_media_servers.`,
+                : `No ready index for server '${String(a.server_udn)}'. Use list_media_servers.`,
             );
           const id = a.object_id as string;
           const node =
@@ -1373,7 +1373,7 @@ export class McpBridge {
         handler: async (a) => {
           this.connected();
           await dm.command({ type: "streamRadio", url: a.url as string, name: a.name as string });
-          return ok(`Tuning to ${a.name}.`);
+          return ok(`Tuning to ${String(a.name)}.`);
         },
       },
 
@@ -1399,7 +1399,7 @@ export class McpBridge {
         inputSchema: { id: z.string().describe("Playlist id from list_playlists.") },
         handler: (a) => {
           const p = dm.snapshot().playlists.find((x) => x.id === a.id);
-          if (!p) return err(`No playlist '${a.id}'. Use list_playlists.`);
+          if (!p) return err(`No playlist '${String(a.id)}'. Use list_playlists.`);
           return ok({
             id: p.id,
             name: p.name,
@@ -1417,7 +1417,7 @@ export class McpBridge {
         handler: async (a) => {
           this.connected();
           const p = dm.snapshot().playlists.find((x) => x.id === a.id);
-          if (!p) return err(`No playlist '${a.id}'. Use list_playlists.`);
+          if (!p) return err(`No playlist '${String(a.id)}'. Use list_playlists.`);
           if (p.items.length === 0) return err(`"${p.name}" is empty.`);
           const res = await dm.playlistActivate(a.id as string);
           const missed = res.missed.length;
@@ -1471,7 +1471,7 @@ export class McpBridge {
         handler: (a) => {
           const s = dm.snapshot();
           const p = s.playlists.find((x) => x.id === a.id);
-          if (!p) return err(`No playlist '${a.id}'. Use list_playlists.`);
+          if (!p) return err(`No playlist '${String(a.id)}'. Use list_playlists.`);
           const md = s.playState?.metadata;
           // A playlist is an ordered list of TRACKS; a stream has no position
           // in one, and content identity needs a title and an artist.
@@ -1497,7 +1497,7 @@ export class McpBridge {
         inputSchema: { id: z.string().describe("Playlist id from list_playlists.") },
         handler: (a) => {
           const p = dm.snapshot().playlists.find((x) => x.id === a.id);
-          if (!p) return err(`No playlist '${a.id}'. Use list_playlists.`);
+          if (!p) return err(`No playlist '${String(a.id)}'. Use list_playlists.`);
           dm.playlistDelete(a.id as string);
           return ok(`Deleted "${p.name}".`);
         },
@@ -1525,7 +1525,7 @@ export class McpBridge {
         handler: async (a) => {
           const s = this.connected();
           const fav = s.favorites.find((f) => favoriteKey(f) === a.key);
-          if (!fav) return err(`No favorite '${a.key}'. Use list_favorites.`);
+          if (!fav) return err(`No favorite '${String(a.key)}'. Use list_favorites.`);
           if (fav.kind === "station") {
             await dm.command({ type: "streamRadio", url: fav.url, name: fav.name });
             return ok(`Tuning to ${fav.name}.`);
@@ -1619,7 +1619,7 @@ export class McpBridge {
         handler: (a) => {
           const s = this.connected();
           const fav = s.favorites.find((f) => favoriteKey(f) === a.key);
-          if (!fav) return err(`No favorite with key '${a.key}'. Use list_favorites.`);
+          if (!fav) return err(`No favorite with key '${String(a.key)}'. Use list_favorites.`);
           dm.favoriteRemove(a.key as string);
           return ok(
             fav.kind === "station"
@@ -1667,7 +1667,7 @@ export class McpBridge {
             index: a.band as number,
             gain: a.gain_db as number,
           });
-          return ok(`Band ${a.band} set to ${a.gain_db} dB.`);
+          return ok(`Band ${String(a.band)} set to ${String(a.gain_db)} dB.`);
         },
       },
       set_tilt: {
@@ -1682,7 +1682,7 @@ export class McpBridge {
           if (s.zoneAudio?.tilt_eq?.enabled !== true)
             await dm.command({ type: "setTiltEq", enabled: true });
           await dm.command({ type: "setTiltIntensity", intensity: a.intensity as number });
-          return ok(`Tilt set to ${a.intensity}.`);
+          return ok(`Tilt set to ${String(a.intensity)}.`);
         },
       },
       set_balance: {
@@ -1695,7 +1695,7 @@ export class McpBridge {
           const { caps } = toneCaps();
           if (!caps.balance) return err("This streamer has no balance control.");
           await dm.command({ type: "setBalance", balance: a.balance as number });
-          return ok(`Balance set to ${a.balance}.`);
+          return ok(`Balance set to ${String(a.balance)}.`);
         },
       },
       apply_eq_preset: {
@@ -1704,7 +1704,9 @@ export class McpBridge {
           toneCaps();
           const preset = getSettings().eqPresets.find((p) => lc(p.name) === lc(a.name as string));
           if (!preset)
-            return err(`No saved EQ preset named '${a.name}'. get_audio_settings lists them.`);
+            return err(
+              `No saved EQ preset named '${String(a.name)}'. get_audio_settings lists them.`,
+            );
           await dm.command({ type: "setUserEq", enabled: true });
           await dm.command({ type: "setEqBands", gains: preset.gains });
           return ok(`Applied EQ preset "${preset.name}".`);
@@ -1729,7 +1731,7 @@ export class McpBridge {
             return err(`This display only supports: ${options.join(", ")}.`);
           }
           await dm.command({ type: "setBrightness", brightness: a.level as string });
-          return ok(`Display set to ${a.level}.`);
+          return ok(`Display set to ${String(a.level)}.`);
         },
       },
 
@@ -1814,9 +1816,9 @@ export class McpBridge {
         handler: async (a) => {
           const s = this.connected();
           const item = (s.queue?.items ?? []).find((i) => i.id === a.id);
-          if (!item) return err(`No queue item ${a.id}. Use list_queue.`);
+          if (!item) return err(`No queue item ${String(a.id)}. Use list_queue.`);
           await dm.command({ type: "queueDelete", id: a.id as number });
-          return ok(`Removed "${item.metadata?.title ?? `item ${a.id}`}" from the queue.`);
+          return ok(`Removed "${item.metadata?.title ?? `item ${String(a.id)}`}" from the queue.`);
         },
       },
       move_queue_item: {
@@ -1827,7 +1829,8 @@ export class McpBridge {
         handler: async (a) => {
           const s = this.connected();
           const item = (s.queue?.items ?? []).find((i) => i.id === a.id);
-          if (!item || item.position == null) return err(`No queue item ${a.id}. Use list_queue.`);
+          if (!item || item.position == null)
+            return err(`No queue item ${String(a.id)}. Use list_queue.`);
           const total = s.queue?.total ?? 0;
           if ((a.to_position as number) >= total) return err(`to_position must be below ${total}.`);
           await dm.command({
@@ -1837,7 +1840,7 @@ export class McpBridge {
             to: a.to_position as number,
           });
           return ok(
-            `Moved "${item.metadata?.title ?? `item ${a.id}`}" to position ${a.to_position}.`,
+            `Moved "${item.metadata?.title ?? `item ${String(a.id)}`}" to position ${String(a.to_position)}.`,
           );
         },
       },
@@ -1858,7 +1861,7 @@ export class McpBridge {
             slot: a.slot as number,
             name: a.name as string,
           });
-          return ok(`Saved the queue to preset ${a.slot} as "${a.name}".`);
+          return ok(`Saved the queue to preset ${String(a.slot)} as "${String(a.name)}".`);
         },
       },
       repair_preset: {
@@ -1917,7 +1920,7 @@ export class McpBridge {
             await dm.command({ type: "presetRename", slot: a.slot as number, name: a.name });
           }
           return ok(
-            `Saved the current playback to preset ${a.slot}${a.name ? ` as "${a.name}"` : ""}.`,
+            `Saved the current playback to preset ${String(a.slot)}${a.name ? ` as "${String(a.name)}"` : ""}.`,
           );
         },
       },
@@ -1979,7 +1982,7 @@ export class McpBridge {
         },
         handler: (a) => {
           const found = getSettings().schedules.find((x) => x.id === a.id);
-          if (!found) return err(`No schedule '${a.id}'. Use list_schedules.`);
+          if (!found) return err(`No schedule '${String(a.id)}'. Use list_schedules.`);
           this.mutateSchedules((list) =>
             list.map((x) => (x.id === a.id ? { ...x, enabled: a.enabled as boolean } : x)),
           );
@@ -1990,7 +1993,7 @@ export class McpBridge {
         inputSchema: { id: z.string().describe("Schedule id from list_schedules.") },
         handler: (a) => {
           const found = getSettings().schedules.find((x) => x.id === a.id);
-          if (!found) return err(`No schedule '${a.id}'. Use list_schedules.`);
+          if (!found) return err(`No schedule '${String(a.id)}'. Use list_schedules.`);
           this.mutateSchedules((list) => list.filter((x) => x.id !== a.id));
           return ok("Schedule deleted.");
         },

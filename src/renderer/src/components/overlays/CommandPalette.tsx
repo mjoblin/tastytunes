@@ -805,7 +805,6 @@ export function CommandPalette(): React.JSX.Element {
       >
         <div className="flex items-center gap-3 px-4 border-b border-edge">
           <Search size={17} className="text-faint shrink-0" />
-          {/* eslint-disable-next-line jsx-a11y/no-autofocus */}
           <input
             autoFocus
             value={query}

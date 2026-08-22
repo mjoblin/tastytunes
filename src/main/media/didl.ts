@@ -61,7 +61,7 @@ export const text = (v: unknown): string | null => {
   return inner == null ? null : String(inner);
 };
 /** First value of a possibly-repeated element — for fields that two namespaces can fold into (dc:date + upnp:date). */
-const first = (v: unknown): string | null => text(asArray(v as unknown | unknown[])[0]);
+const first = (v: unknown): string | null => text(asArray(v)[0]);
 const attr = (el: unknown, name: string): string =>
   el != null && typeof el === "object" && !Array.isArray(el)
     ? String((el as Record<string, unknown>)[`@_${name}`] ?? "")
@@ -84,7 +84,7 @@ const ART_RANK: Record<string, number> = {
 };
 export const pickArt = (v: unknown): string | null => {
   let best: { url: string; rank: number } | null = null;
-  for (const el of asArray(v as unknown | unknown[])) {
+  for (const el of asArray(v)) {
     const url = text(el);
     if (!url) continue;
     const profile = attr(el, "dlna:profileID") || attr(el, "profileID");
@@ -217,7 +217,7 @@ function nodeOf(raw: Record<string, unknown>, isContainer: boolean): MediaNode |
   const format = formatOf(res);
 
   // genres: repeated elements AND "Pop; Rock" packing (Asset), first-seen casing
-  const genres = splitNames(asArray(raw.genre as unknown | unknown[]).map(text));
+  const genres = splitNames(asArray(raw.genre).map(text));
 
   // ---- artists. upnp:artist is multi-valued THREE ways, all live-observed on
   // Asset (2026-08-15, a Daft Punk track with a featured singer):
@@ -229,7 +229,7 @@ function nodeOf(raw: Record<string, unknown>, isContainer: boolean): MediaNode |
   // performer list when there is more than one name — identity keys on those
   // two, never on the packed string. Composer/Conductor/… roles are not
   // performers.
-  const artistEls = asArray(raw.artist as unknown | unknown[]);
+  const artistEls = asArray(raw.artist);
   const roleOf = (el: unknown): string => attr(el, "role").toLowerCase();
   const roleless = artistEls.every((el) => roleOf(el) === "");
   let albumArtist = text(artistEls.find((el) => roleOf(el) === "albumartist"))?.trim() || null;
@@ -311,7 +311,7 @@ function nodeOf(raw: Record<string, unknown>, isContainer: boolean): MediaNode |
   // Jellyfin), same shapes.
   const composers = splitNames([
     ...artistEls.filter((e) => roleOf(e) === "composer").map(text),
-    ...asArray(raw.composer as unknown | unknown[]).map(text),
+    ...asArray(raw.composer).map(text),
   ]);
 
   const year = first(raw.date)?.slice(0, 4) ?? null; // NODE RULE dates: dc:date + upnp:date fold into one array (Gerbera) — the first is the release date on every server seen

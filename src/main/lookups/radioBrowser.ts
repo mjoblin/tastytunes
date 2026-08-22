@@ -98,7 +98,7 @@ export function radioSearch(query: string): Promise<RadioStation[]> {
     order: "clickcount",
     reverse: "true",
   });
-  return stations(`/stations/search?${params}`);
+  return stations(`/stations/search?${params.toString()}`);
 }
 
 /** The directory's most-listened stations — the screen's default rail. */
@@ -122,7 +122,7 @@ export async function radioByTags(tags: string[]): Promise<RadioStation[]> {
         order: "clickcount",
         reverse: "true",
       });
-      return fetchRaw(`/stations/search?${params}`);
+      return fetchRaw(`/stations/search?${params.toString()}`);
     }),
   );
   const merged = perTag.flat().sort((a, b) => (b.clickcount ?? 0) - (a.clickcount ?? 0));

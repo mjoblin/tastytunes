@@ -17,7 +17,7 @@ export type NewFavorite = {
 
 /** Add-or-remove by content key; resolves to the new "is favorited" state. */
 export async function toggleFavorite(fav: NewFavorite): Promise<boolean> {
-  const full = { ...fav, addedAt: Date.now() } as Favorite;
+  const full = { ...fav, addedAt: Date.now() };
   const key = favoriteKey(full);
   const exists = useStore.getState().favorites.some((f) => favoriteKey(f) === key);
   if (exists) {
@@ -81,7 +81,7 @@ export async function favoriteAct(
       const found = items.find((n) => favoriteMatchesNode(fav, n));
       if (!found) continue;
       await run(server.udn, found.id);
-      void tt.favoriteUpdate(favoriteKey(fav as Favorite), {
+      void tt.favoriteUpdate(favoriteKey(fav), {
         serverUdn: server.udn,
         serverName: server.name,
         objectId: found.id,

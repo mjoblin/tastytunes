@@ -28,7 +28,7 @@ export class DiskCache<T> {
     private readonly name: string,
     private readonly cap: number,
   ) {
-    all.push(this as DiskCache<unknown>);
+    all.push(this);
   }
 
   private get file(): string {

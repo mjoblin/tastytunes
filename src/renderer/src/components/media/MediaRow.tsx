@@ -106,13 +106,13 @@ export function MediaRow({
       data-media-row={title}
       role={onClick ? "button" : undefined}
       tabIndex={onClick && !dimmed ? 0 : undefined}
-      onClick={(e) => !dimmed && onClick?.(e.currentTarget as HTMLElement)}
+      onClick={(e) => !dimmed && onClick?.(e.currentTarget)}
       onContextMenu={onContextMenu}
       onKeyDown={(e) => {
         if (dimmed || !onClick) return;
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          onClick(e.currentTarget as HTMLElement);
+          onClick(e.currentTarget);
         }
       }}
       className={cx(

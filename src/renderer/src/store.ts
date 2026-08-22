@@ -237,8 +237,8 @@ interface TTState {
   /** One-shot deep link into a Settings tab (e.g. the nav update dot →
    *  Updates); SettingsScreen consumes and clears it. */
   settingsJump: string | null;
-  jumpToSettingsTab(tab: string): void;
-  clearSettingsJump(): void;
+  jumpToSettingsTab: (tab: string) => void;
+  clearSettingsJump: () => void;
   /**
    * One-shot ask: open the Library ready to search (palette / ⌘F).
    *
@@ -254,8 +254,8 @@ interface TTState {
   /** `query` seeds the search box (the Search→Library handoff: "See all N in
    *  the Library" brings the unified query along). Without it, ⌘F semantics —
    *  find-recall brings back the last search. */
-  requestLibrarySearch(query?: string): void;
-  clearLibrarySearchTarget(): void;
+  requestLibrarySearch: (query?: string) => void;
+  clearLibrarySearchTarget: () => void;
   /**
    * One-shot ask: open the unified Search screen with its input focused.
    * Same id-and-clear contract as librarySearchTarget — a request made before
@@ -268,50 +268,50 @@ interface TTState {
    *  so ⌘← on Search can return there — the mirror of the Library's
    *  from-search crumb. Any other navigation clears it; a plain S/⌘F ask has
    *  no "back", the same way a typed URL has none. */
-  requestSearch(query?: string, from?: SearchBack): void;
-  clearSearchRequest(): void;
+  requestSearch: (query?: string, from?: SearchBack) => void;
+  clearSearchRequest: () => void;
   /** Where ⌘← on the Search screen returns to, when a pivot brought you here. */
   searchBack: SearchBack | null;
   /** Consume searchBack: return where the pivot left. A pivot out of the
    *  library's SEARCH MODE goes back via find-recall (the browse position
    *  during a search is just the search's scope root — restoring it would
    *  land at the top of the Library, not in the results you left). */
-  searchGoBack(): void;
+  searchGoBack: () => void;
   /** One-shot ask: open Playlists with this playlist selected (search results
    *  OPEN a playlist rather than playing it — containers open, leaves play). */
   playlistsJump: string | null;
-  jumpToPlaylist(id: string): void;
-  clearPlaylistsJump(): void;
+  jumpToPlaylist: (id: string) => void;
+  clearPlaylistsJump: () => void;
 
   toast: ToastData | null;
-  showToast(toast: Omit<ToastData, "id">): void;
-  dismissToast(): void;
+  showToast: (toast: Omit<ToastData, "id">) => void;
+  dismissToast: () => void;
   /** In-app recall memory (see Snapshot.lastRecalledPresetId). */
   lastRecalledPresetId: number | null;
-  setScreen(screen: Screen): void;
-  setDiagnosticsOpen(open: boolean): void;
-  setShortcutsOpen(open: boolean): void;
-  setInfoOpen(open: boolean): void;
-  setMediaInfo(target: MediaInfoTarget | null): void;
-  setPaletteOpen(open: boolean): void;
-  setDisplayMode(on: boolean): void;
-  setLyricsOpen(open: boolean): void;
-  setArtistOpen(open: boolean): void;
-  setContextTab(tab: "artist" | "album"): void;
-  setScreenFilter(screen: keyof TTState["screenFilters"], text: string): void;
+  setScreen: (screen: Screen) => void;
+  setDiagnosticsOpen: (open: boolean) => void;
+  setShortcutsOpen: (open: boolean) => void;
+  setInfoOpen: (open: boolean) => void;
+  setMediaInfo: (target: MediaInfoTarget | null) => void;
+  setPaletteOpen: (open: boolean) => void;
+  setDisplayMode: (on: boolean) => void;
+  setLyricsOpen: (open: boolean) => void;
+  setArtistOpen: (open: boolean) => void;
+  setContextTab: (tab: "artist" | "album") => void;
+  setScreenFilter: (screen: keyof TTState["screenFilters"], text: string) => void;
   /** Navigate to the Library opened at a specific node (Favorites → album). */
-  openInLibrary(target: Omit<LibraryTarget, "nonce">): void;
-  clearLibraryTarget(): void;
-  setLastStation(st: LastStation): void;
-  setAmbientWindowActive(on: boolean): void;
-  setSettings(settings: AppSettings): void;
+  openInLibrary: (target: Omit<LibraryTarget, "nonce">) => void;
+  clearLibraryTarget: () => void;
+  setLastStation: (st: LastStation) => void;
+  setAmbientWindowActive: (on: boolean) => void;
+  setSettings: (settings: AppSettings) => void;
   /** THE settings write path: round-trip through main, adopt the result. */
-  saveSettings(patch: Partial<AppSettings>): Promise<void>;
-  setQueueItems(items: QueueListItem[]): void;
-  init(snapshot: Snapshot): void;
-  applyPush(msg: PushMessage): void;
+  saveSettings: (patch: Partial<AppSettings>) => Promise<void>;
+  setQueueItems: (items: QueueListItem[]) => void;
+  init: (snapshot: Snapshot) => void;
+  applyPush: (msg: PushMessage) => void;
   /** Application-menu clicks forwarded from the main process (main window only). */
-  applyMenu(command: MenuCommand): void;
+  applyMenu: (command: MenuCommand) => void;
 }
 
 export const useStore = create<TTState>((set, get) => ({

@@ -137,7 +137,7 @@ function sourcesNode(snap: Snapshot): TrayNode {
       id: `tray-source-${s.id}`,
       label: s.name || s.default_name || s.id,
       checked: s.id === current,
-      command: { type: "setSource", sourceId: s.id } as StreamerCommand,
+      command: { type: "setSource", sourceId: s.id },
     })),
   };
 }
@@ -749,7 +749,6 @@ export function noteClosedToTray(): void {
  * renderer should be able to quit the app or drive the device by menu id.
  */
 declare global {
-  // eslint-disable-next-line no-var
   var __ttTray:
     | {
         present(): boolean;

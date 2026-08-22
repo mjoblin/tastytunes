@@ -25,7 +25,7 @@ export function scrollToWithContext(
   behavior?: ScrollBehavior,
 ): void {
   if (!el) return;
-  const container = el.closest(".overflow-y-auto") as HTMLElement | null;
+  const container = el.closest(".overflow-y-auto");
   if (!container) return;
   const cRect = container.getBoundingClientRect();
   const eRect = el.getBoundingClientRect();
@@ -52,7 +52,7 @@ export function scrollToWithContext(
  */
 export function scrollToCentered(el: HTMLElement | null, behavior?: ScrollBehavior): void {
   if (!el) return;
-  const container = el.closest(".overflow-y-auto") as HTMLElement | null;
+  const container = el.closest(".overflow-y-auto");
   if (!container) return;
   const cRect = container.getBoundingClientRect();
   const eRect = el.getBoundingClientRect();
@@ -71,7 +71,7 @@ export function scrollToCentered(el: HTMLElement | null, behavior?: ScrollBehavi
  */
 export function scrollToVisible(el: HTMLElement | null, pad = 0): void {
   if (!el) return;
-  const container = el.closest(".overflow-y-auto") as HTMLElement | null;
+  const container = el.closest(".overflow-y-auto");
   if (!container) return;
   const cRect = container.getBoundingClientRect();
   const eRect = el.getBoundingClientRect();

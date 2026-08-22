@@ -206,7 +206,7 @@ export function RecentlyPlayedScreen(): React.JSX.Element {
           label={playlistFor.label}
           at={{ x: playlistFor.x, y: playlistFor.y }}
           onClose={() => setPlaylistFor(null)}
-          resolve={async () => [refToPlaylistItem(playlistRef)]}
+          resolve={() => Promise.resolve([refToPlaylistItem(playlistRef)])}
         />
       )}
 

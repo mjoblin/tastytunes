@@ -697,7 +697,7 @@ function buildDemo(host: string): {
   };
   const didlTrack = (alb: Album, n: number): string => {
     const md = alb.track(n);
-    return `<item id="${alb.id}-t${n}" parentID="${alb.id}" restricted="true"><dc:title>${xmlEsc(String(md.title))}</dc:title><upnp:class>object.item.audioItem.musicTrack</upnp:class>${didlArtists(md)}<upnp:album>${xmlEsc(String(md.album))}</upnp:album>${(alb.genres ?? []).map((g) => `<upnp:genre>${xmlEsc(g)}</upnp:genre>`).join("")}<upnp:originalTrackNumber>${md.trackNo ?? n}</upnp:originalTrackNumber>${md.disc ? `<upnp:originalDiscNumber>${md.disc}</upnp:originalDiscNumber><upnp:originalDiscCount>${md.discCount}</upnp:originalDiscCount>` : ""}<upnp:albumArtURI>${md.art_url}</upnp:albumArtURI>${didlRes(alb, n, md)}</item>`;
+    return `<item id="${alb.id}-t${n}" parentID="${alb.id}" restricted="true"><dc:title>${xmlEsc(String(md.title))}</dc:title><upnp:class>object.item.audioItem.musicTrack</upnp:class>${didlArtists(md)}<upnp:album>${xmlEsc(String(md.album))}</upnp:album>${(alb.genres ?? []).map((g) => `<upnp:genre>${xmlEsc(g)}</upnp:genre>`).join("")}<upnp:originalTrackNumber>${String(md.trackNo ?? n)}</upnp:originalTrackNumber>${md.disc ? `<upnp:originalDiscNumber>${String(md.disc)}</upnp:originalDiscNumber><upnp:originalDiscCount>${String(md.discCount)}</upnp:originalDiscCount>` : ""}<upnp:albumArtURI>${String(md.art_url)}</upnp:albumArtURI>${didlRes(alb, n, md)}</item>`;
   };
 
   const ARTIST_COUNT = 400;
@@ -850,7 +850,7 @@ function buildDemo(host: string): {
   const wireData = (path: string): unknown => {
     const power = (DATA["/system/power"] as Dict | undefined)?.power;
     if (path === "/zone/play_state" && power !== "ON") {
-      const ps = DATA["/zone/play_state"] as Dict;
+      const ps = DATA["/zone/play_state"];
       const { art_url: _dropped, ...metadata } = (ps.metadata ?? {}) as Dict;
       return { ...ps, state: "not_ready", metadata };
     }
@@ -912,7 +912,7 @@ function buildDemo(host: string): {
         return false;
       }
     }
-    DATA["/zone/audio"] = next as unknown as Dict;
+    DATA["/zone/audio"] = next;
     broadcast("/zone/audio");
     return true;
   }
@@ -950,7 +950,7 @@ function buildDemo(host: string): {
     };
     if (playItem) {
       const md = playItem.metadata;
-      const ps = DATA["/zone/play_state"] as Dict;
+      const ps = DATA["/zone/play_state"];
       DATA["/zone/play_state"] = {
         ...ps,
         state: "play",
@@ -962,7 +962,7 @@ function buildDemo(host: string): {
         // rebuilds metadata per track (library tracks carry no station)
         metadata: { ...(ps.metadata as Dict), station: null, radio_id: null, ...md },
       };
-      const np = DATA["/zone/now_playing"] as Dict;
+      const np = DATA["/zone/now_playing"];
       DATA["/zone/now_playing"] = {
         ...np,
         display: {
@@ -977,7 +977,7 @@ function buildDemo(host: string): {
       };
       // A queue play announces itself as a source switch to MEDIA_PLAYER —
       // firmware-faithful (mirror of dev/mock-streamer.mjs setQueue).
-      if ((DATA["/zone/state"] as Dict).source !== "MEDIA_PLAYER") {
+      if (DATA["/zone/state"].source !== "MEDIA_PLAYER") {
         DATA["/zone/state"] = { ...DATA["/zone/state"], source: "MEDIA_PLAYER" };
         DATA["/zone/now_playing"] = {
           ...DATA["/zone/now_playing"],
@@ -1626,8 +1626,8 @@ function buildDemo(host: string): {
           class: isRadio ? "stream.radio" : "stream.media.upnp",
           state: "OK",
           is_playing: false,
-          art_url: (meta.art_url as string | null) ?? null,
-          airable_radio_id: (meta.radio_id as string | null) ?? null,
+          art_url: meta.art_url ?? null,
+          airable_radio_id: meta.radio_id ?? null,
         });
         presets.sort((a, b) => a.id - b.id);
         DATA["/presets/list"] = { ...list, presets };
@@ -1691,7 +1691,7 @@ function buildDemo(host: string): {
         const idx = items.findIndex((it) => it.id === body.id);
         if (idx >= 0 && typeof body.to === "number") {
           const [it] = items.splice(idx, 1);
-          items.splice(Math.max(0, Math.min(items.length, body.to as number)), 0, it);
+          items.splice(Math.max(0, Math.min(items.length, body.to)), 0, it);
         }
         setQueue(items, null);
         res.writeHead(200, { "content-type": "application/json" });
@@ -1726,7 +1726,7 @@ function buildDemo(host: string): {
   // Move the playing track by ±1 and push updated state, so Next/Prev (and
   // "end of track" sleep timers) work in the demo. Queue mode only.
   function advanceTrack(delta: number, push: (path: string) => void): void {
-    const ps = DATA["/zone/play_state"] as Dict;
+    const ps = DATA["/zone/play_state"];
     const cur = (ps.queue_id as number | null) ?? PLAYING_QUEUE_ID;
     const next = Math.min(QUEUE_LEN, Math.max(1, cur + (delta > 0 ? 1 : -1)));
     if (next === cur) return;
@@ -1739,7 +1739,7 @@ function buildDemo(host: string): {
       metadata: { ...(ps.metadata as Dict), ...md, playback_source: "punnet" },
     };
     DATA["/zone/play_state/position"] = { position: 0 };
-    const np = DATA["/zone/now_playing"] as Dict;
+    const np = DATA["/zone/now_playing"];
     DATA["/zone/now_playing"] = {
       ...np,
       display: {
@@ -1842,7 +1842,7 @@ function buildDemo(host: string): {
                   id: nextQueueId++,
                   position: i,
                   metadata: {
-                    title: `${preset.name} — Track ${i + 1}`,
+                    title: `${String(preset.name)} — Track ${i + 1}`,
                     artist: "The Demo Artists",
                     album: preset.name,
                     art_url: (preset.art_url as string | null) ?? null,
@@ -1856,10 +1856,7 @@ function buildDemo(host: string): {
               }
             }, 900);
           }
-        } else if (
-          frame.path === "/zone/play_control" &&
-          (DATA["/system/power"] as Dict).power !== "ON"
-        ) {
+        } else if (frame.path === "/zone/play_control" && DATA["/system/power"].power !== "ON") {
           // FIRMWARE TRUTH (live-probed 2026-07-23, mirrored from the mock):
           // standby refuses every play_control verb (code 114) — nothing
           // plays, nothing wakes. Wake-on-intent sends power ON first.
@@ -1876,7 +1873,7 @@ function buildDemo(host: string): {
           // so wheel volume looked dead in demo mode once the mini's volume
           // slider became the seek slider; the slider's absolute writes echo,
           // which is why the gap had been invisible).
-          const zone = DATA["/zone/state"] as Dict;
+          const zone = DATA["/zone/state"];
           const curPercent = zone.volume_percent;
           if (typeof curPercent === "number") {
             const rawLimit = (DATA["/zone/audio"] as Dict | undefined)?.volume_limit_percent;
@@ -1897,8 +1894,8 @@ function buildDemo(host: string): {
           // this before 2026-07-25, so switching a source in the demo did
           // nothing at all). now_playing carries the source too; both move
           // together like the real device.
-          const id = params.source as string;
-          const sources = (DATA["/system/sources"] as Dict).sources as Dict[] | undefined;
+          const id = params.source;
+          const sources = DATA["/system/sources"].sources as Dict[] | undefined;
           const known = (sources ?? []).find((s) => s.id === id);
           DATA["/zone/state"] = { ...DATA["/zone/state"], source: id };
           DATA["/zone/now_playing"] = {
@@ -1927,14 +1924,14 @@ function buildDemo(host: string): {
           setTimeout(() => push("/zone/play_state"), 120);
         } else if (frame.path === "/zone/play_control" && typeof params.action === "string") {
           // echo transport state: play / pause / stop / toggle
-          const state = (DATA["/zone/play_state"] as Dict).state;
+          const state = DATA["/zone/play_state"].state;
           const next =
             params.action === "toggle" ? (state === "play" ? "pause" : "play") : params.action;
           DATA["/zone/play_state"] = { ...DATA["/zone/play_state"], state: next };
           setTimeout(() => push("/zone/play_state"), 120);
         } else if (frame.path === "/system/power") {
           // partial writes: power / standby_mode / auto_power_down (merge)
-          const cur = DATA["/system/power"] as Dict;
+          const cur = DATA["/system/power"];
           const next: Dict = { ...cur };
           if (typeof params.power === "string")
             next.power =

@@ -23,9 +23,7 @@ export function usePrefetchNextArt(): void {
     if (index == null || !items?.length) return;
     // `position` is the streamer's own ordering; fall back to array order for
     // partial pages that don't carry it.
-    const next =
-      items.find((i) => i.position === index + 1) ??
-      (items[index + 1] as (typeof items)[number] | undefined);
+    const next = items.find((i) => i.position === index + 1) ?? items[index + 1];
     const url = next?.metadata?.art_url;
     if (!url) return;
     // Detached probe — the browser cache is what the <img>/background-image

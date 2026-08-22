@@ -69,7 +69,7 @@ export async function fetchLyrics(q: LyricsQuery, force = false): Promise<Lyrics
   const exact = new URLSearchParams({ artist_name: q.artist, track_name: q.title });
   if (q.album) exact.set("album_name", q.album);
   if (q.duration != null) exact.set("duration", String(Math.round(q.duration)));
-  const got = await getJson(`${BASE}/get?${exact}`);
+  const got = await getJson(`${BASE}/get?${exact.toString()}`);
 
   let rec: ApiRecord | null = got.kind === "ok" ? (got.body as ApiRecord) : null;
   if (got.kind === "error") definitive = false;
@@ -87,7 +87,7 @@ export async function fetchLyrics(q: LyricsQuery, force = false): Promise<Lyrics
   let upgradeIncomplete = false;
   if (!rec || wantUpgrade) {
     const search = new URLSearchParams({ artist_name: q.artist, track_name: q.title });
-    const listGot = await getJson(`${BASE}/search?${search}`);
+    const listGot = await getJson(`${BASE}/search?${search.toString()}`);
     if (listGot.kind !== "ok") {
       // search has no 404 shape — anything non-ok is a failure to ask
       if (rec) upgradeIncomplete = true;
