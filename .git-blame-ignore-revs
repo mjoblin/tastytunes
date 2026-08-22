@@ -1,0 +1,2 @@
+# Whole-tree reformat commits: ignore in blame (git config blame.ignoreRevsFile .git-blame-ignore-revs)
+bb4895694481df2f0632e4f9a24dfb6de0ee4926
