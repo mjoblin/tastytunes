@@ -250,6 +250,7 @@ from another machine.
 - Mini player: frameless, always on top, remembers its position
 - Command palette (<kbd>⌘K</kbd>): transport, sources, presets by name, screens, library search, index rebuilds, devices, sleep timer, power
 - Keyboard throughout: single keys jump screens, <kbd>space</kbd> toggles play, arrows seek and nudge volume, <kbd>/</kbd> filters lists; <kbd>?</kbd> shows the overlay
+- Back and forward through everywhere you've been, like a browser: <kbd>⌘←</kbd>/<kbd>⌘→</kbd> (Alt+arrows on Windows and Linux), the mouse side buttons, or View › Back/Forward
 - Every reorderable list (queue, presets, playlists, the nav rail) reorders by keyboard as well as by drag
 - OS media keys, and a track-change notification with artwork when the window isn't focused
 - An application menu on macOS; an auto-hidden menu bar on Windows and Linux
