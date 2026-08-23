@@ -163,7 +163,7 @@ from another machine.
 - Info on any album, track, or artist: performers, album artist, composers, disc and track numbers, format, size, and source ids, as the media server reports them; copy as JSON
 - Play now, play next, append, or replace; a bare click never adds a track that's already queued
 - Save an album, a track, or the whole queue to one of the streamer's preset slots
-- Browser-style navigation: <kbd>⌘←</kbd>/<kbd>⌘→</kbd>, Backspace, mouse back button; per-folder filters and scroll memory
+- Backspace goes up a level; per-folder filters and scroll memory
 
 ### Radio
 

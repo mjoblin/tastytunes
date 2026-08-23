@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useLayoutEffect } from "react";
+import { setCurrentLibrarySpot } from "@/lib/navSpot";
+import type { LibrarySpot } from "@/store";
 import {
   ArrowLeft,
   ChevronRight,
@@ -443,21 +445,22 @@ export function LibraryScreen(): React.JSX.Element {
 
   // Each level keeps its own filter: stash the current one, restore the
   // destination's (or empty) whenever navigation happens.
-  // Browser-style history: back (⌘/Alt-←, Backspace, mouse-4) pushes the spot
-  // being left; forward (⌘/Alt-→, mouse-5) pops it. Any fresh navigation
-  // invalidates the forward stack — browser rules.
-  const fwdStack = useRef<
-    Array<{
-      udn: string | null;
-      path: Crumb[];
-      mode: boolean;
-      query: string;
-      searchNow: { query: string; items: MediaNode[]; total: number } | null;
-      crossNow: { query: string; groups: MediaSearchAllGroup[] } | null;
-      lens: "albums" | "artists" | null;
-    }>
-  >([]);
+  // HISTORY IS THE STORE'S (one stack across screens and within the Library,
+  // 2026-08-23): every move here records the spot being LEFT via navPush, and
+  // back/forward hand a spot back through navRestore. `restoring` marks a
+  // move that is itself a restore (or an arrival), which must not record.
   const restoring = useRef(false);
+  const navPush = useStore((s) => s.navPush);
+  /** This screen's spot right now, in history's shape. */
+  const snapshot = (): LibrarySpot => ({
+    udn: serverUdn,
+    path,
+    mode: searchMode,
+    query: searchQuery,
+    searchNow: searchState,
+    crossNow: crossState,
+    lens,
+  });
 
   const exitSearch = (): void => {
     setSearchMode(false);
@@ -472,7 +475,7 @@ export function LibraryScreen(): React.JSX.Element {
   };
 
   const moveTo = (udn: string | null, newPath: Crumb[]): void => {
-    if (!restoring.current) fwdStack.current = [];
+    if (!restoring.current) navPush({ screen: "library", library: snapshot() });
     rememberScroll();
     exitSearch();
     setLens(null);
@@ -483,7 +486,7 @@ export function LibraryScreen(): React.JSX.Element {
   };
 
   const openLens = (which: "albums" | "artists"): void => {
-    if (!restoring.current) fwdStack.current = [];
+    if (!restoring.current) navPush({ screen: "library", library: snapshot() });
     lensReturnTo = which;
     setLens(which);
   };
@@ -532,52 +535,61 @@ export function LibraryScreen(): React.JSX.Element {
     // bump while mounted re-runs this effect with a CHANGED nonce instead).
     const cameBack = handledNonce.current === null;
     handledNonce.current = libraryResetNonce;
-    const target = useStore.getState().libraryTarget;
-    // Nonce EQUALITY, not consume-and-clear (a StrictMode double-run must
-    // find the target intact — it skips above, but a THIRD mount shouldn't
-    // chase it either). A leftover target with an older nonce is stale — drop
-    // it and reset normally.
-    if (target && target.nonce !== libraryResetNonce) clearLibraryTarget();
-    if (target && target.nonce === libraryResetNonce) {
-      const last = target.titlePath.length - 1;
-      moveTo(
-        target.serverUdn,
-        target.titlePath.map((title, i) =>
-          i === last
-            ? {
-                id: target.objectId,
-                title,
-                // synthetic album node so the header renders without a
-                // metadata re-fetch (art falls back to the first track's)
-                node: {
+    // back/forward landed here with a spot to restore: the one-shot below
+    // does it; an arrival restore on top would browse twice and win wrongly
+    if (cameBack && useStore.getState().navRestore) return;
+    // every move in here is an ARRIVAL, never a navigation to record
+    restoring.current = true;
+    try {
+      const target = useStore.getState().libraryTarget;
+      // Nonce EQUALITY, not consume-and-clear (a StrictMode double-run must
+      // find the target intact — it skips above, but a THIRD mount shouldn't
+      // chase it either). A leftover target with an older nonce is stale — drop
+      // it and reset normally.
+      if (target && target.nonce !== libraryResetNonce) clearLibraryTarget();
+      if (target && target.nonce === libraryResetNonce) {
+        const last = target.titlePath.length - 1;
+        moveTo(
+          target.serverUdn,
+          target.titlePath.map((title, i) =>
+            i === last
+              ? {
                   id: target.objectId,
-                  parentId: null,
                   title,
-                  upnpClass: "object.container.album.musicAlbum",
-                  isContainer: true,
-                  artUrl: null,
-                  artist: null,
-                  album: null,
-                  year: null,
-                  trackNumber: null,
-                  durationSecs: null,
-                },
-              }
-            : { id: `__fav-crumb-${i}__`, title },
-        ),
-      );
-      if (target.fromSearch) {
-        setPath((p) => [{ id: UNIFIED_SEARCH_CRUMB_ID, title: "Search" }, ...p]);
+                  // synthetic album node so the header renders without a
+                  // metadata re-fetch (art falls back to the first track's)
+                  node: {
+                    id: target.objectId,
+                    parentId: null,
+                    title,
+                    upnpClass: "object.container.album.musicAlbum",
+                    isContainer: true,
+                    artUrl: null,
+                    artist: null,
+                    album: null,
+                    year: null,
+                    trackNumber: null,
+                    durationSecs: null,
+                  },
+                }
+              : { id: `__fav-crumb-${i}__`, title },
+          ),
+        );
+        if (target.fromSearch) {
+          setPath((p) => [{ id: UNIFIED_SEARCH_CRUMB_ID, title: "Search" }, ...p]);
+        }
+        return;
       }
-      return;
+      if (cameBack && positionMemory) {
+        const mem = positionMemory;
+        moveTo(mem.udn, mem.path);
+        setLens(mem.lens); // moveTo clears it; the remembered lens wins
+        return;
+      }
+      moveTo(null, []);
+    } finally {
+      restoring.current = false;
     }
-    if (cameBack && positionMemory) {
-      const mem = positionMemory;
-      moveTo(mem.udn, mem.path);
-      setLens(mem.lens); // moveTo clears it; the remembered lens wins
-      return;
-    }
-    moveTo(null, []);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [libraryResetNonce]);
 
@@ -809,33 +821,8 @@ export function LibraryScreen(): React.JSX.Element {
     else if (lens) setLens(null); // lens exits to the source list
   };
 
-  const goBack = (): void => {
-    // Arrived from unified search and still on that arrival trail: back means
-    // back to SEARCH, not to a library position you never visited. Deeper than
-    // that and normal history takes over, one level at a time.
-    if (path[0]?.id === UNIFIED_SEARCH_CRUMB_ID && path.length <= 2) return setScreen("search");
-    if (!searchMode && path.length === 0 && !serverUdn && !lens) return; // already at the front door
-    const snap = {
-      udn: serverUdn,
-      path,
-      mode: searchMode,
-      query: searchQuery,
-      searchNow: searchState,
-      crossNow: crossState,
-      lens,
-    };
-    restoring.current = true;
-    try {
-      goUp();
-    } finally {
-      restoring.current = false;
-    }
-    fwdStack.current.push(snap);
-  };
-
-  const goForward = (): void => {
-    const snap = fwdStack.current.pop();
-    if (!snap) return;
+  /** Put this screen at a spot history handed back (back/forward landed here). */
+  const restoreSpot = (snap: LibrarySpot): void => {
     restoring.current = true;
     try {
       moveTo(snap.udn, snap.path);
@@ -854,42 +841,34 @@ export function LibraryScreen(): React.JSX.Element {
       restoring.current = false;
     }
   };
+  const navRestore = useStore((s) => s.navRestore);
+  const clearNavRestore = useStore((s) => s.clearNavRestore);
+  useOneShotAsk(navRestore, (ask) => restoreSpot(ask.spot), {
+    claim: navRestore?.nonce,
+    clear: clearNavRestore,
+  });
+  // the store reads this when a navigation leaves the Library (lib/navSpot)
+  useEffect(() => {
+    setCurrentLibrarySpot(snapshot());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverUdn, path, searchMode, searchQuery, searchState, crossState, lens]);
+  useEffect(() => () => setCurrentLibrarySpot(null), []);
 
-  // Backspace and the mouse back button go up a level (arrows stay with
-  // transport seek/volume); above a source's root they land on the source list.
+  // Backspace goes UP a level (folder semantics; above a source's root it
+  // lands on the source list). ⌘/Alt ←/→ and mouse 4/5 are history, app-wide —
+  // useShortcuts owns them since 2026-08-23.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent): void => {
       const target = e.target as HTMLElement | null;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
       if (e.key === "Backspace" && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
-        goBack();
-      }
-      // browser-style history keys (⌘ on mac, Alt elsewhere)
-      if ((e.metaKey || e.altKey) && !e.ctrlKey && e.key === "ArrowLeft") {
-        e.preventDefault();
-        goBack();
-      }
-      if ((e.metaKey || e.altKey) && !e.ctrlKey && e.key === "ArrowRight") {
-        e.preventDefault();
-        goForward();
-      }
-    };
-    const onMouseUp = (e: MouseEvent): void => {
-      if (e.button === 3) {
-        e.preventDefault();
-        goBack();
-      }
-      if (e.button === 4) {
-        e.preventDefault();
-        goForward();
+        goUp();
       }
     };
     window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("mouseup", onMouseUp);
     return () => {
       window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("mouseup", onMouseUp);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -1560,8 +1539,8 @@ export function LibraryScreen(): React.JSX.Element {
                   el.value.length > 0
                 ) {
                   e.preventDefault();
-                  if (e.key === "ArrowLeft") goBack();
-                  else goForward();
+                  if (e.key === "ArrowLeft") useStore.getState().goBack();
+                  else useStore.getState().goForward();
                   return;
                 }
               }
@@ -1619,7 +1598,10 @@ export function LibraryScreen(): React.JSX.Element {
           )}
           <button
             data-library-search-exit
-            onClick={exitSearch}
+            onClick={() => {
+              navPush({ screen: "library", library: snapshot() });
+              exitSearch();
+            }}
             className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber text-bg text-[12.5px] font-medium motion-safe:active:scale-95 transition-all"
           >
             <ArrowLeft size={13} /> Back to browsing

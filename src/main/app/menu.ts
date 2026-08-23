@@ -125,6 +125,27 @@ export function installAppMenu(deps: MenuDeps): void {
       click: () => deps.sendToMain({ id: "toggleNav" }),
     },
     { type: "separator" },
+    // Back / Forward walk the app's ONE navigation history (store: NavEntry).
+    // macOS: ⌘[ / ⌘] are LIVE here — the menu owns them and the renderer owns
+    // ⌘←/→, two routes that never overlap. Windows/Linux: the native back/
+    // forward keys are Alt+←/→, which the renderer already owns, so the items
+    // only DISPLAY them — registerAccelerator: false is honoured on those
+    // platforms (not on macOS, see the display-mode note above).
+    {
+      id: "menu-back",
+      label: "Back",
+      accelerator: isMac ? "Cmd+[" : "Alt+Left",
+      ...(isMac ? {} : { registerAccelerator: false }),
+      click: () => deps.sendToMain({ id: "navBack" }),
+    },
+    {
+      id: "menu-forward",
+      label: "Forward",
+      accelerator: isMac ? "Cmd+]" : "Alt+Right",
+      ...(isMac ? {} : { registerAccelerator: false }),
+      click: () => deps.sendToMain({ id: "navForward" }),
+    },
+    { type: "separator" },
     { role: "togglefullscreen" },
   ];
   if (!app.isPackaged) {

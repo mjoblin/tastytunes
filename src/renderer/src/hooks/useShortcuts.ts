@@ -68,18 +68,24 @@ export function useShortcuts(opts?: { transportOnly?: boolean }): void {
       // Runs above the input guard so a blurred box isn't required… but only
       // when no input has focus; the search box handles its own just-landed
       // case (SearchScreen), the same split the Library's search bar uses.
+      // BROWSER-STYLE HISTORY, APP-WIDE (2026-08-23): ⌘/Alt/Ctrl + ←/→ walk ONE
+      // stack across screens and within the Library — back undoes the most
+      // recent navigation whatever kind it was. Never inside a text box (a
+      // caret key there; the search box handles its own just-landed case);
+      // the Library's Backspace stays "up a level". Mouse 4/5 below, same two
+      // actions, and View › Back/Forward relays to them too.
       if (
         !transportOnly &&
         (e.metaKey || e.ctrlKey || e.altKey) &&
-        e.key === "ArrowLeft" &&
-        !(e.target as HTMLElement | null)?.matches?.("input, textarea")
+        !e.shiftKey &&
+        (e.key === "ArrowLeft" || e.key === "ArrowRight") &&
+        !(e.target as HTMLElement | null)?.matches?.("input, textarea, [contenteditable]")
       ) {
+        e.preventDefault();
         const s = useStore.getState();
-        if (s.screen === "search" && s.searchBack) {
-          e.preventDefault();
-          s.searchGoBack();
-          return;
-        }
+        if (e.key === "ArrowLeft") s.goBack();
+        else s.goForward();
+        return;
       }
 
       const target = e.target as HTMLElement | null;
@@ -235,7 +241,21 @@ export function useShortcuts(opts?: { transportOnly?: boolean }): void {
     // evict it — these fire device commands, which must never fan out N×.
     window.__ttShortcutsOff?.();
     window.addEventListener("keydown", onKeyDown);
-    const off = (): void => window.removeEventListener("keydown", onKeyDown);
+    const onMouseUp = (e: MouseEvent): void => {
+      if (transportOnly) return;
+      if (e.button === 3) {
+        e.preventDefault();
+        useStore.getState().goBack();
+      } else if (e.button === 4) {
+        e.preventDefault();
+        useStore.getState().goForward();
+      }
+    };
+    window.addEventListener("mouseup", onMouseUp);
+    const off = (): void => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
     window.__ttShortcutsOff = off;
     return () => {
       off();

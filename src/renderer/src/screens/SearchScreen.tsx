@@ -776,13 +776,13 @@ export function SearchScreen(): React.JSX.Element {
                 const el = e.currentTarget;
                 const s = useStore.getState();
                 if (
-                  s.searchBack &&
+                  s.navBackStack.length > 0 &&
                   el.selectionStart === 0 &&
                   el.selectionEnd === el.value.length &&
                   el.value.length > 0
                 ) {
                   e.preventDefault();
-                  s.searchGoBack();
+                  s.goBack();
                   return;
                 }
               }

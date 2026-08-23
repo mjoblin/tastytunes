@@ -13,6 +13,8 @@ import type {
   NetRequestEntry,
   UpdateState,
   SleepTimer,
+  MediaSearchAllGroup,
+  MediaNode,
 } from "@shared/model";
 import type {
   Favorite,
@@ -38,6 +40,7 @@ import type {
   ZoneState,
 } from "@shared/smoip";
 import { DEFAULT_SETTINGS, FRAME_RING_SIZE, LOG_RING_SIZE, NET_RING_SIZE } from "@shared/model";
+import { currentLibrarySpot } from "@/lib/navSpot";
 import { tt } from "./api";
 
 export type Screen =
@@ -52,6 +55,33 @@ export type Screen =
   | "recently-played"
   | "device"
   | "settings";
+
+/**
+ * A Library spot as HISTORY remembers it — the Library's own snapshot shape
+ * (folder, search view, lens). Back and forward restore one of these.
+ */
+export interface LibrarySpot {
+  udn: string | null;
+  path: Array<{ id: string; title: string; node?: MediaNode }>;
+  mode: boolean;
+  query: string;
+  searchNow: { query: string; items: MediaNode[]; total: number } | null;
+  crossNow: { query: string; groups: MediaSearchAllGroup[] } | null;
+  lens: "albums" | "artists" | null;
+}
+
+/**
+ * One step of navigation history: the spot being LEFT — a screen, plus the
+ * Library's snapshot when that screen was the Library. ONE STACK across
+ * screens and within the Library (2026-08-23, user ask): back undoes the most
+ * recent navigation whatever kind it was — the browser rule, and the only one
+ * people can predict. Two stacks (screen-level and folder-level) made ⌘← in an
+ * album mean "parent folder" even when you had just arrived from the Queue.
+ */
+export interface NavEntry {
+  screen: Screen;
+  library?: LibrarySpot;
+}
 
 /** A Library destination planted by another screen (Favorites "open album"):
  *  the LibraryScreen consumes it on its next mount/reset and navigates there. */
@@ -143,6 +173,16 @@ interface TTState {
    *  stamped with the new value. A bump means "don't restore the last
    *  position"; plain navigation back to the library no longer bumps. */
   libraryResetNonce: number;
+  /** Navigation history — see NavEntry. Back pops navBackStack; forward pops navForwardStack. */
+  navBackStack: NavEntry[];
+  navForwardStack: NavEntry[];
+  /** A Library spot to restore after back/forward landed on the Library (one-shot, by nonce). */
+  navRestore: { nonce: number; spot: LibrarySpot } | null;
+  /** Record the spot being left by an in-Library move (the Library calls this). */
+  navPush: (entry: NavEntry) => void;
+  goBack: () => void;
+  goForward: () => void;
+  clearNavRestore: () => void;
   connection: ConnectionState;
   devices: DiscoveredDevice[];
   discovering: boolean;
@@ -314,9 +354,52 @@ interface TTState {
   applyMenu: (command: MenuCommand) => void;
 }
 
+/** The spot being left right now, as a history entry (the Library's snapshot rides along). */
+const leaving = (s: { screen: Screen }): NavEntry =>
+  s.screen === "library" && currentLibrarySpot()
+    ? { screen: "library", library: currentLibrarySpot() ?? undefined }
+    : { screen: s.screen };
+/** History push for a navigation to `screen` from state `s` — nothing for a same-screen re-invoke. */
+const navTo = (
+  s: { screen: Screen; navBackStack: NavEntry[] },
+  screen: Screen,
+): Partial<{ navBackStack: NavEntry[]; navForwardStack: NavEntry[] }> =>
+  screen === s.screen ? {} : { navBackStack: [...s.navBackStack, leaving(s)], navForwardStack: [] };
+let navRestoreSeq = 0;
+
 export const useStore = create<TTState>((set, get) => ({
   screen: "now-playing",
   libraryResetNonce: 0,
+  navBackStack: [],
+  navForwardStack: [],
+  navRestore: null,
+  navPush: (entry) =>
+    set((s) => ({ navBackStack: [...s.navBackStack, entry], navForwardStack: [] })),
+  goBack: () => {
+    const s = get();
+    const entry = s.navBackStack[s.navBackStack.length - 1];
+    if (!entry) return;
+    set({
+      navBackStack: s.navBackStack.slice(0, -1),
+      navForwardStack: [...s.navForwardStack, leaving(s)],
+      screen: entry.screen,
+      navRestore: entry.library ? { nonce: ++navRestoreSeq, spot: entry.library } : null,
+      searchBack: null,
+    });
+  },
+  goForward: () => {
+    const s = get();
+    const entry = s.navForwardStack[s.navForwardStack.length - 1];
+    if (!entry) return;
+    set({
+      navForwardStack: s.navForwardStack.slice(0, -1),
+      navBackStack: [...s.navBackStack, leaving(s)],
+      screen: entry.screen,
+      navRestore: entry.library ? { nonce: ++navRestoreSeq, spot: entry.library } : null,
+      searchBack: null,
+    });
+  },
+  clearNavRestore: () => set({ navRestore: null }),
   connection: { phase: "idle" },
   devices: [],
   discovering: false,
@@ -386,15 +469,21 @@ export const useStore = create<TTState>((set, get) => ({
   requestLibrarySearch: (query) =>
     // Deliberately NOT setScreen('library'): from inside the Library that's the
     // front door, and a ⌘F shouldn't throw away where you were browsing.
-    set({
+    set((s) => ({
+      ...navTo(s, "library"),
       screen: "library",
       librarySearchTarget: { id: ++librarySearchSeq, query },
       searchBack: null,
-    }),
+    })),
   clearLibrarySearchTarget: () => set({ librarySearchTarget: null }),
   searchRequest: null,
   requestSearch: (query, from) =>
-    set({ screen: "search", searchRequest: { id: ++searchSeq, query }, searchBack: from ?? null }),
+    set((s) => ({
+      ...navTo(s, "search"),
+      screen: "search",
+      searchRequest: { id: ++searchSeq, query },
+      searchBack: from ?? null,
+    })),
   clearSearchRequest: () => set({ searchRequest: null }),
   searchBack: null,
   searchGoBack: () => {
@@ -405,7 +494,13 @@ export const useStore = create<TTState>((set, get) => ({
     else get().setScreen(back.screen);
   },
   playlistsJump: null,
-  jumpToPlaylist: (id) => set({ screen: "playlists", playlistsJump: id, searchBack: null }),
+  jumpToPlaylist: (id) =>
+    set((s) => ({
+      ...navTo(s, "playlists"),
+      screen: "playlists",
+      playlistsJump: id,
+      searchBack: null,
+    })),
   clearPlaylistsJump: () => set({ playlistsJump: null }),
 
   toast: null,
@@ -429,6 +524,9 @@ export const useStore = create<TTState>((set, get) => ({
       // any plain navigation invalidates the pivot's back-link — browser
       // rules: going somewhere new kills the stale "back"
       searchBack: null,
+      // …and records the spot being left (history); a same-screen re-invoke
+      // of the Library is its front-door reset, not a navigation
+      ...navTo(s, screen),
       ...(screen === "library" && s.screen === "library"
         ? { screen, libraryResetNonce: s.libraryResetNonce + 1 }
         : { screen }),
@@ -453,6 +551,7 @@ export const useStore = create<TTState>((set, get) => ({
   // effect matches on it (idempotent; see LibraryTarget.nonce).
   openInLibrary: (target) =>
     set((s) => ({
+      ...navTo(s, "library"),
       libraryTarget: { ...target, nonce: s.libraryResetNonce + 1 },
       screen: "library",
       libraryResetNonce: s.libraryResetNonce + 1,
@@ -662,6 +761,12 @@ export const useStore = create<TTState>((set, get) => ({
         break;
       case "screen":
         s.setScreen(command.screen as Screen);
+        break;
+      case "navBack":
+        s.goBack();
+        break;
+      case "navForward":
+        s.goForward();
         break;
     }
   },

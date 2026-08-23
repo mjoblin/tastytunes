@@ -84,6 +84,8 @@ export type MenuCommand =
   | { id: "shortcuts" }
   | { id: "displayMode" }
   | { id: "toggleNav" }
+  | { id: "navBack" }
+  | { id: "navForward" }
   | { id: "screen"; screen: string };
 
 export type PushMessage =

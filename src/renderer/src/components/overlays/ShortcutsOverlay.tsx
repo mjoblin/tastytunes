@@ -43,7 +43,10 @@ const GROUPS: Array<{ title: string; rows: Array<[string, string]> }> = [
         "Now Playing · Queue · Search · lIbrary · Presets · plAylists · faVorites · Tuner · Recently Played · Device · sEttings",
       ],
       ["F", "Full-screen display mode"],
-      ["⌘← / ⌘→", "Back / forward in the Library (Backspace and mouse side buttons too)"],
+      [
+        "⌘← / ⌘→",
+        "Back / forward through everywhere you've been (mouse side buttons too; Backspace goes up a level in the Library)",
+      ],
       ["`", "SMOIP and Requests console"],
       ["?", "This overlay"],
     ],
