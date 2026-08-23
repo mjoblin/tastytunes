@@ -13,6 +13,7 @@ import {
   RadioTower,
   Search,
 } from "lucide-react";
+import { isStringArray } from "@shared/guards";
 import type { Screen } from "@/store";
 
 /**
@@ -106,7 +107,7 @@ export const NAV_UNHIDEABLE: Screen[] = ["now-playing", "settings"];
  * Settings card, and the palette all agree on what "hidden" means.
  */
 export function sanitizeNavHidden(raw: readonly string[] | null | undefined): Screen[] {
-  if (!Array.isArray(raw)) return [];
+  if (!isStringArray(raw)) return [];
   const hideable = new Set<string>(
     NAV_SCREENS.map((s) => s.id).filter((id) => !NAV_UNHIDEABLE.includes(id)),
   );
@@ -138,7 +139,7 @@ export function sanitizeNavHidden(raw: readonly string[] | null | undefined): Sc
  */
 export function sanitizeNavOrder(raw: readonly string[] | null | undefined): Screen[] {
   const registry = NAV_SCREENS.map((s) => s.id);
-  if (!Array.isArray(raw) || raw.length === 0) return registry;
+  if (!isStringArray(raw) || raw.length === 0) return registry;
 
   const known = new Set<string>(registry);
   const out: Screen[] = [];
@@ -198,7 +199,7 @@ export const NAV_TOOLS: NavToolDef[] = [
  * separate because tool ids and screen ids are different id-spaces.
  */
 export function sanitizeNavHiddenTools(raw: readonly string[] | null | undefined): NavTool[] {
-  if (!Array.isArray(raw)) return [];
+  if (!isStringArray(raw)) return [];
   const known = new Set<string>(NAV_TOOLS.map((t) => t.id));
   const out: NavTool[] = [];
   for (const id of raw) {

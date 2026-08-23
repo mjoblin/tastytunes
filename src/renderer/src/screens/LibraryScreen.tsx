@@ -275,6 +275,10 @@ export function LibraryScreen(): React.JSX.Element {
         flashTarget(row);
       }
     }
+    // runs when the LISTING commits (nodes, state); path and serverUdn are
+    // read through loadedKey's guard, and a path change without a new listing
+    // must not fire a restore against the old rows
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodes, state]);
   const atRoot = serverUdn == null;
 

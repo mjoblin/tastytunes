@@ -89,7 +89,8 @@ export class SmoipSocket {
     ws.on("message", (raw) => {
       let frame: SmoipFrame;
       try {
-        frame = JSON.parse(raw.toString());
+        // the wire's shape is the streamer's; readers guard each field they use
+        frame = JSON.parse(raw.toString()) as SmoipFrame;
       } catch {
         this.events.onLog("warn", `unparseable frame: ${raw.toString().slice(0, 200)}`);
         return;

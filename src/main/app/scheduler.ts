@@ -23,6 +23,7 @@
 //     and the user decides. Exactly one offer per sleep: the latest missed
 //     schedule, never a queue of them.
 import { Notification } from "electron";
+import { errorMessage } from "@shared/guards";
 import type { Schedule } from "@shared/model";
 import type { DeviceManager } from "../device/deviceManager";
 import { getSettings } from "../data/persist";
@@ -185,7 +186,7 @@ export function runMissedSchedule(dm: DeviceManager): void {
   dm.setMissedSchedule(null);
   if (!pick) return;
   void fire(dm, pick.schedule).catch((e) =>
-    console.warn(`catch-up ${pick.schedule.id} failed:`, e?.message ?? e),
+    console.warn(`catch-up ${pick.schedule.id} failed:`, errorMessage(e)),
   );
 }
 
@@ -232,7 +233,7 @@ export function startScheduler(dm: DeviceManager): void {
       lastFired.set(s.id, instance);
       // commands throw on a half-dead socket — a missed schedule is a log
       // line, never an unhandled rejection
-      void fire(dm, s).catch((e) => console.warn(`schedule ${s.id} failed:`, e?.message ?? e));
+      void fire(dm, s).catch((e) => console.warn(`schedule ${s.id} failed:`, errorMessage(e)));
     }
   };
   setInterval(check, TICK_MS);

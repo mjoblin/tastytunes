@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { isRecord } from "@shared/guards";
 import { join } from "node:path";
 import { app } from "electron";
 import { type RecentTrack, MAX_RECENTS } from "@shared/model";
@@ -90,12 +91,15 @@ function collapseConsecutive(list: RecentTrack[]): RecentTrack[] {
   return out;
 }
 
+const isRecentTrack = (x: unknown): x is RecentTrack => isRecord(x) && typeof x.at === "number";
+
 export function getRecents(): RecentTrack[] {
   if (cached) return cached;
   let raw: RecentTrack[] = [];
   try {
-    const parsed = JSON.parse(readFileSync(recentsPath(), "utf-8"));
-    if (Array.isArray(parsed)) raw = parsed as RecentTrack[];
+    const parsed: unknown = JSON.parse(readFileSync(recentsPath(), "utf-8"));
+    // our own file: keep the rows that have the one field everything sorts on
+    if (Array.isArray(parsed)) raw = parsed.filter(isRecentTrack);
   } catch {
     raw = [];
   }
