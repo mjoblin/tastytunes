@@ -534,7 +534,6 @@ export function FavoritesScreen(): React.JSX.Element {
                 active: activeKeys.has(favoriteKey(menu.fav)),
                 toggle: () => toggleHeart(menu.fav),
               },
-              searchFrom: { screen: "favorites" as const },
             };
             return menu.fav.kind === "album"
               ? albumMenuItems(fromFavorite(menu.fav), {

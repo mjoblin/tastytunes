@@ -2355,7 +2355,6 @@ export function LibraryScreen(): React.JSX.Element {
           // Back-link for the builders' search pivot: a browse pivot returns
           // via the position restore, a pivot out of SEARCH MODE returns via
           // find-recall (its browse position is just the search's scope root).
-          searchFrom={{ screen: "library", librarySearch: searchMode }}
           // Albums and tracks are heartable; plain folders and artists aren't.
           favorite={
             !menu.node.isContainer || isAlbumClass(menu.node.upnpClass)

@@ -297,7 +297,6 @@ export function PlaylistsScreen(): React.JSX.Element {
             saveToPreset: () =>
               setPresetFor({ item: trackMenu.item, x: trackMenu.x, y: trackMenu.y }),
             openInLibrary: () => void openRefInLibrary(fromPlaylistItem(trackMenu.item)),
-            searchFrom: { screen: "playlists" },
             extra: [{ label: "Remove from playlist", run: () => removeItem(trackMenu.index) }],
           })}
         />

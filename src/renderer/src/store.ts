@@ -152,17 +152,6 @@ let librarySearchSeq = 0;
 /** Monotonic id for unified-search asks — see searchRequest. */
 let searchSeq = 0;
 
-/**
- * What a Search pivot left behind — enough to go BACK to it. `librarySearch`
- * marks a pivot out of the library's search mode: its browse position during a
- * search is just the scope root, so going back means restoring the SEARCH
- * (find-recall holds it wholesale), not the position.
- */
-export interface SearchBack {
-  screen: Screen;
-  librarySearch?: boolean;
-}
-
 interface PlayheadSync {
   secs: number;
   at: number; // Date.now() when received — the UI interpolates from here
@@ -308,19 +297,11 @@ interface TTState {
    * <artist>"); without it the recalled query is merely selected.
    */
   searchRequest: { id: number; query?: string } | null;
-  /** `from` records where a PIVOT left (Library ⋯ → "Search everywhere"),
-   *  so ⌘← on Search can return there — the mirror of the Library's
-   *  from-search crumb. Any other navigation clears it; a plain S/⌘F ask has
-   *  no "back", the same way a typed URL has none. */
-  requestSearch: (query?: string, from?: SearchBack) => void;
+  /** A pivot ("Search everywhere for X" from a ⋯ menu) is an ordinary
+   *  navigation: the one history records where it left, so ⌘← returns there.
+   *  (Until 2026-08-23 a parallel back-pointer recorded by the pivot did this.) */
+  requestSearch: (query?: string) => void;
   clearSearchRequest: () => void;
-  /** Where ⌘← on the Search screen returns to, when a pivot brought you here. */
-  searchBack: SearchBack | null;
-  /** Consume searchBack: return where the pivot left. A pivot out of the
-   *  library's SEARCH MODE goes back via find-recall (the browse position
-   *  during a search is just the search's scope root — restoring it would
-   *  land at the top of the Library, not in the results you left). */
-  searchGoBack: () => void;
   /** One-shot ask: open Playlists with this playlist selected (search results
    *  OPEN a playlist rather than playing it — containers open, leaves play). */
   playlistsJump: string | null;
@@ -396,7 +377,6 @@ export const useStore = create<TTState>((set, get) => ({
       screen: entry.screen,
       arrivedByHistory: true,
       navRestore: entry.library ? { nonce: ++navRestoreSeq, spot: entry.library } : null,
-      searchBack: null,
     });
   },
   goForward: () => {
@@ -409,7 +389,6 @@ export const useStore = create<TTState>((set, get) => ({
       screen: entry.screen,
       arrivedByHistory: true,
       navRestore: entry.library ? { nonce: ++navRestoreSeq, spot: entry.library } : null,
-      searchBack: null,
     });
   },
   clearNavRestore: () => set({ navRestore: null }),
@@ -486,33 +465,22 @@ export const useStore = create<TTState>((set, get) => ({
       ...navTo(s, "library"),
       screen: "library",
       librarySearchTarget: { id: ++librarySearchSeq, query },
-      searchBack: null,
     })),
   clearLibrarySearchTarget: () => set({ librarySearchTarget: null }),
   searchRequest: null,
-  requestSearch: (query, from) =>
+  requestSearch: (query) =>
     set((s) => ({
       ...navTo(s, "search"),
       screen: "search",
       searchRequest: { id: ++searchSeq, query },
-      searchBack: from ?? null,
     })),
   clearSearchRequest: () => set({ searchRequest: null }),
-  searchBack: null,
-  searchGoBack: () => {
-    const back = get().searchBack;
-    if (!back) return;
-    // both paths clear searchBack themselves (requestLibrarySearch / setScreen)
-    if (back.screen === "library" && back.librarySearch) get().requestLibrarySearch();
-    else get().setScreen(back.screen);
-  },
   playlistsJump: null,
   jumpToPlaylist: (id) =>
     set((s) => ({
       ...navTo(s, "playlists"),
       screen: "playlists",
       playlistsJump: id,
-      searchBack: null,
     })),
   clearPlaylistsJump: () => set({ playlistsJump: null }),
 
@@ -536,7 +504,6 @@ export const useStore = create<TTState>((set, get) => ({
     set((s) => ({
       // any plain navigation invalidates the pivot's back-link — browser
       // rules: going somewhere new kills the stale "back"
-      searchBack: null,
       // …and records the spot being left (history); a same-screen re-invoke
       // of the Library is its front-door reset, not a navigation
       ...navTo(s, screen),
@@ -568,7 +535,6 @@ export const useStore = create<TTState>((set, get) => ({
       libraryTarget: { ...target, nonce: s.libraryResetNonce + 1 },
       screen: "library",
       libraryResetNonce: s.libraryResetNonce + 1,
-      searchBack: null,
     })),
   clearLibraryTarget: () => set({ libraryTarget: null }),
   setLastStation: (lastStation) => set({ lastStation }),

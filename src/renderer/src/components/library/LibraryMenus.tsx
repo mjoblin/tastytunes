@@ -11,7 +11,6 @@ import {
   type MediaMenuCaps,
   type MediaMenuItem,
 } from "@/lib/mediaMenus";
-import type { SearchBack } from "@/store";
 import { PopoverCard } from "@/components/chrome/Overlay";
 import { useConfirmTap } from "@/hooks/useConfirmTap";
 import { ArtImage } from "@/components/media/ArtImage";
@@ -26,7 +25,6 @@ export function ItemMenu({
   onAddToPlaylist,
   goToAlbum,
   goToArtist,
-  searchFrom,
   favorite,
   onInfo,
 }: {
@@ -40,8 +38,6 @@ export function ItemMenu({
   /** Search results give tracks navigate verbs (the row click still plays). */
   goToAlbum?(): void;
   goToArtist?(): void;
-  /** Back-link the search pivot records — see mediaMenus. */
-  searchFrom?: SearchBack;
   /** Overrides the builders' derived heart (the library stores richer
    *  favorites — titlePath from the crumbs). */
   favorite?: { active: boolean; toggle(): void };
@@ -69,12 +65,11 @@ export function ItemMenu({
     saveToPreset: onSavePreset,
     addToPlaylist: onAddToPlaylist,
     heart: favorite,
-    searchFrom,
     info: onInfo,
   };
   const items: MediaMenuItem[] =
     node.isContainer && isArtistClass(node.upnpClass)
-      ? artistMenuItems(ref, { searchFrom })
+      ? artistMenuItems(ref, {})
       : node.isContainer && !isAlbumClass(node.upnpClass)
         ? [
             { label: "Play", run: () => onAction("PLAY") },

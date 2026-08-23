@@ -157,7 +157,6 @@ export function RecentlyPlayedScreen(): React.JSX.Element {
           setPlaylistFor({ label: ref.title, ...at });
         },
         openInLibrary: () => void openRefInLibrary(ref),
-        searchFrom: { screen: "recently-played" },
       }),
     });
   };

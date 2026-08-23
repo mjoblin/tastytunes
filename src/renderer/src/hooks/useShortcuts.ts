@@ -61,13 +61,6 @@ export function useShortcuts(opts?: { transportOnly?: boolean }): void {
         return;
       }
 
-      // ⌘/Alt-← on a PIVOTED Search screen returns where the pivot left
-      // ("Search everywhere for X" from the Library) — the browser-back reflex,
-      // and the mirror of the Library's own from-search crumb. The library's
-      // position restore means landing back exactly where you were browsing.
-      // Runs above the input guard so a blurred box isn't required… but only
-      // when no input has focus; the search box handles its own just-landed
-      // case (SearchScreen), the same split the Library's search bar uses.
       // BROWSER-STYLE HISTORY, APP-WIDE (2026-08-23): ⌘/Alt/Ctrl + ←/→ walk ONE
       // stack across screens and within the Library — back undoes the most
       // recent navigation whatever kind it was. Never inside a text box (a

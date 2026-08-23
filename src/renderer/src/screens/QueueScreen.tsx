@@ -789,7 +789,6 @@ function queueRowActions(
     addToPlaylist: deps.addToPlaylist,
     saveToPreset: deps.saveToPreset,
     openInLibrary: () => void openRefInLibrary(ref),
-    searchFrom: { screen: "queue" },
     extra: remove,
   });
 }
