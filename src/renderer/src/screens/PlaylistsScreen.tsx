@@ -41,7 +41,7 @@ import { AddToPlaylistPanel } from "@/components/overlays/AddToPlaylistPanel";
 import { toggleFavorite } from "@/lib/favorites";
 import { activatePlaylist } from "@/lib/playlists";
 import { fromPlaylistItem } from "@/lib/mediaRef";
-import { saveRefToPreset } from "@/lib/mediaActions";
+import { saveRefToPreset, openRefInLibrary } from "@/lib/mediaActions";
 import { trackMenuItems } from "@/lib/mediaMenus";
 import { OrderHandle } from "@/components/controls/OrderHandle";
 import { ArtImage } from "@/components/media/ArtImage";
@@ -290,6 +290,7 @@ export function PlaylistsScreen(): React.JSX.Element {
               setCopyTo({ item: trackMenu.item, x: trackMenu.x, y: trackMenu.y }),
             saveToPreset: () =>
               setPresetFor({ item: trackMenu.item, x: trackMenu.x, y: trackMenu.y }),
+            openInLibrary: () => void openRefInLibrary(fromPlaylistItem(trackMenu.item)),
             searchFrom: { screen: "playlists" },
             extra: [{ label: "Remove from playlist", run: () => removeItem(trackMenu.index) }],
           })}

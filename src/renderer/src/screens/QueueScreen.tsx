@@ -51,7 +51,7 @@ import { lockVertical } from "@/lib/dnd";
 import { activeSourceId, cx, fmtTime, matchesFilter } from "@/lib/format";
 import { toggleFavorite } from "@/lib/favorites";
 import { fromQueueItem, refToFavorite, refToPlaylistItem } from "@/lib/mediaRef";
-import { saveRefToPreset } from "@/lib/mediaActions";
+import { saveRefToPreset, openRefInLibrary } from "@/lib/mediaActions";
 import { trackMenuItems, type MediaMenuItem } from "@/lib/mediaMenus";
 import { AddToPlaylistPanel } from "@/components/overlays/AddToPlaylistPanel";
 import { RowMenu } from "@/components/media/RowMenu";
@@ -787,6 +787,7 @@ function queueRowActions(
   return trackMenuItems(ref, {
     addToPlaylist: deps.addToPlaylist,
     saveToPreset: deps.saveToPreset,
+    openInLibrary: () => void openRefInLibrary(ref),
     searchFrom: { screen: "queue" },
     extra: remove,
   });

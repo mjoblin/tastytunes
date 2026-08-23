@@ -333,7 +333,7 @@ export function TrackRow({
       )}
       onClick={() => onPlayNow(ref.current)}
       onContextMenu={onMenu}
-      data-library-track
+      data-library-track={node.title}
     >
       {/* left-justified: numbers sit flush with the header/art above */}
       <span className="font-mono text-[10.5px] text-faint tabular-nums">

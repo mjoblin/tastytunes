@@ -48,7 +48,7 @@ import {
 } from "@/lib/playingEntry";
 import { useIndexPools } from "@/hooks/useIndexPools";
 import { MOD } from "@/lib/screens";
-import { flashTarget } from "@/lib/scroll";
+import { flashTarget, scrollToCentered } from "@/lib/scroll";
 import { mediaKind, isAlbumClass, stripFurniture, isArtistClass } from "@/lib/media";
 import { toggleFavorite } from "@/lib/favorites";
 import { ArtImage } from "@/components/media/ArtImage";
@@ -245,10 +245,30 @@ export function LibraryScreen(): React.JSX.Element {
   // 0, listing not yet fetched) can't clobber a remembered spot.
   const loadedKey = useRef<string | null>(null);
   const pendingScroll = useRef<number | null>(null);
+  /** A track title a destination asked to land on (LibraryTarget.track). */
+  const pendingTrack = useRef<string | null>(null);
   useLayoutEffect(() => {
-    if (pendingScroll.current == null || !scrollRef.current) return;
-    scrollRef.current.scrollTop = pendingScroll.current;
-    pendingScroll.current = null;
+    if (pendingScroll.current != null && scrollRef.current) {
+      scrollRef.current.scrollTop = pendingScroll.current;
+      pendingScroll.current = null;
+    }
+    // only once THIS destination's listing has landed — a fresh mount's first
+    // ready commit is the empty initial listing, and clearing there lost the
+    // track before the album ever rendered
+    if (
+      pendingTrack.current != null &&
+      state === "ready" &&
+      scrollRef.current &&
+      loadedKey.current === nodeKey(serverUdn, path)
+    ) {
+      const sel = `[data-library-track="${CSS.escape(pendingTrack.current)}"]`;
+      const row = scrollRef.current.querySelector<HTMLElement>(sel);
+      pendingTrack.current = null;
+      if (row) {
+        scrollToCentered(row, "auto");
+        flashTarget(row);
+      }
+    }
   }, [nodes, state]);
   const atRoot = serverUdn == null;
 
@@ -578,6 +598,7 @@ export function LibraryScreen(): React.JSX.Element {
         if (target.fromSearch) {
           setPath((p) => [{ id: UNIFIED_SEARCH_CRUMB_ID, title: "Search" }, ...p]);
         }
+        pendingTrack.current = target.track ?? null;
         return;
       }
       if (cameBack && positionMemory) {

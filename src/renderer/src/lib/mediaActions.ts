@@ -16,6 +16,56 @@ async function resolveRef(ref: MediaRef): Promise<{ serverUdn: string; objectId:
   return tt.contentResolve(refToContentRef(ref)).catch(() => null);
 }
 
+/**
+ * Open a ref's place in the Library: an album lands on itself, a track lands
+ * on its ALBUM with the track scrolled to and flashed (2026-08-23, user ask —
+ * every list that holds a ref can now lead back to where it came from:
+ * favorites, queue, playlists, recents, the Info modal). Content-resolved
+ * through the library index (mediaNodeInfo), hints first; the album is the
+ * resolved track's parent container, or the index's album by title when a
+ * server gives tracks no parent. True if the Library was pointed somewhere;
+ * a miss toasts and leaves you where you are.
+ */
+export async function openRefInLibrary(ref: MediaRef): Promise<boolean> {
+  const s = useStore.getState();
+  const miss = (): false => {
+    s.showToast({ kind: "error", text: `Couldn't find “${ref.title}” in the library` });
+    return false;
+  };
+  if (ref.kind !== "track" && ref.kind !== "album") return miss();
+  const info = await tt
+    .mediaNodeInfo({ kind: ref.kind, title: ref.title, artist: ref.artist, album: ref.album })
+    .catch(() => null);
+  const node = info?.node;
+  if (!node?.serverUdn) return miss();
+  if (ref.kind === "album") {
+    s.openInLibrary({
+      serverUdn: node.serverUdn,
+      objectId: node.id,
+      titlePath: [node.title],
+      title: node.title,
+    });
+    return true;
+  }
+  const albumTitle = node.album ?? ref.album ?? null;
+  let albumId: string | null = node.parentId;
+  if (!albumId && albumTitle) {
+    const album = await tt
+      .mediaNodeInfo({ kind: "album", title: albumTitle, artist: node.albumArtist ?? ref.artist })
+      .catch(() => null);
+    if (album?.node.serverUdn === node.serverUdn) albumId = album.node.id;
+  }
+  if (!albumId || !albumTitle) return miss();
+  s.openInLibrary({
+    serverUdn: node.serverUdn,
+    objectId: albumId,
+    titlePath: [albumTitle],
+    title: albumTitle,
+    track: node.title,
+  });
+  return true;
+}
+
 /** Play a track now. True if the command landed; failures are toasted. */
 export async function playRefNow(ref: MediaRef): Promise<boolean> {
   const showToast = useStore.getState().showToast;

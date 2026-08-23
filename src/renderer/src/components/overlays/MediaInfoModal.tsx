@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { Copy, Check, Disc3, Music2, User } from "lucide-react";
+import { Copy, Check, Disc3, Library, Music2, User } from "lucide-react";
 import {
   albumComposers,
   albumFormat,
@@ -18,6 +18,8 @@ import { ModalShell } from "@/components/chrome/Overlay";
 import { CloseButton } from "@/components/controls/CloseButton";
 import { ArtImage } from "@/components/media/ArtImage";
 import { fmtTime } from "@/lib/format";
+import { openRefInLibrary } from "@/lib/mediaActions";
+import { fromNode } from "@/lib/mediaRef";
 import { isAlbumClass, isArtistClass } from "@/lib/media";
 
 /**
@@ -364,6 +366,21 @@ function MediaInfoBody({
           </div>
           {subtitle && <div className="text-[13px] text-dim mt-0.5 truncate">{subtitle}</div>}
         </div>
+        {/* Found in a library index → lead there: an album lands on itself, a
+            track on its album with the row flashed. Hidden for a bare stub
+            (no serverUdn) and for artists (their page is this modal). */}
+        {node.serverUdn && (kind === "track" || kind === "album") && (
+          <button
+            data-info-open-library
+            onClick={() => {
+              close();
+              void openRefInLibrary(fromNode(node, node.serverUdn, serverName ?? null));
+            }}
+            className="shrink-0 self-start flex items-center gap-1.5 px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/80 text-[12px] text-dim hover:text-ink hover:bg-veil"
+          >
+            <Library size={13} /> Open in Library
+          </button>
+        )}
         <CloseButton onClick={close} />
       </div>
 

@@ -19,7 +19,7 @@ import { ContainerCard } from "@/components/library/LibraryCards";
 import { AddToPlaylistPanel } from "@/components/overlays/AddToPlaylistPanel";
 import { PresetPicker } from "@/components/library/LibraryMenus";
 import { fromFavorite, fromNode, refToPlaylistItem } from "@/lib/mediaRef";
-import { recordPresetSaved } from "@/lib/mediaActions";
+import { recordPresetSaved, openRefInLibrary } from "@/lib/mediaActions";
 import { albumMenuItems, trackMenuItems } from "@/lib/mediaMenus";
 import { EmptyState } from "@/components/chrome/EmptyState";
 import { FilterInput } from "@/components/controls/FilterInput";
@@ -545,6 +545,7 @@ export function FavoritesScreen(): React.JSX.Element {
               : trackMenuItems(fromFavorite(menu.fav), {
                   ...shared,
                   playNow: () => playTrack(menu.fav, null),
+                  openInLibrary: () => void openRefInLibrary(fromFavorite(menu.fav)),
                 });
           })()}
         />

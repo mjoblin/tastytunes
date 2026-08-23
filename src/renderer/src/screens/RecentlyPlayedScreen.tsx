@@ -20,7 +20,7 @@ import { RowMenu } from "@/components/media/RowMenu";
 import { AddToPlaylistPanel } from "@/components/overlays/AddToPlaylistPanel";
 import { toggleFavorite } from "@/lib/favorites";
 import { fromRecent, refToFavorite, refToPlaylistItem } from "@/lib/mediaRef";
-import { playRefNow } from "@/lib/mediaActions";
+import { playRefNow, openRefInLibrary } from "@/lib/mediaActions";
 import { trackMenuItems, type MediaMenuItem } from "@/lib/mediaMenus";
 import { cx, fmtDayBucket, fmtRelative, matchesFilter } from "@/lib/format";
 import { clearRecentsWithUndo } from "@/lib/recents";
@@ -153,6 +153,7 @@ export function RecentlyPlayedScreen(): React.JSX.Element {
           setPlaylistRef(ref);
           setPlaylistFor({ label: ref.title, ...at });
         },
+        openInLibrary: () => void openRefInLibrary(ref),
         searchFrom: { screen: "recently-played" },
       }),
     });
