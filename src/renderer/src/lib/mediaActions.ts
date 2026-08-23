@@ -1,4 +1,4 @@
-import { presetVolumeKey } from "@shared/model";
+import { presetVolumeKey, type MediaNode } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { refToContentRef, type MediaRef } from "@/lib/mediaRef";
@@ -58,8 +58,23 @@ export async function openRefInLibrary(ref: MediaRef): Promise<boolean> {
   const album = await tt
     .mediaNodeInfo({ kind: "album", title: albumTitle, artist: node.albumArtist ?? ref.artist })
     .catch(() => null);
+  // …and it must actually HOLD the track: a title shared by two albums
+  // ("Greatest Hits") with the album artist unknown could resolve to the
+  // other artist's album (2026-08-23 hardening). The index lists an album's
+  // tracks; when it does and ours isn't among them, the parent is the better
+  // bet, and a parent that is the search scope is caught by the miss toast
+  // rather than by landing on the whole library — see the parentId note.
+  const holds = (tracks: MediaNode[] | undefined): boolean =>
+    tracks == null ||
+    tracks.some(
+      (t) =>
+        t.title === node.title &&
+        (t.durationSecs == null ||
+          node.durationSecs == null ||
+          Math.abs(t.durationSecs - node.durationSecs) <= 2),
+    );
   const albumId =
-    album?.node.isContainer && album.node.serverUdn === node.serverUdn
+    album?.node.isContainer && album.node.serverUdn === node.serverUdn && holds(album.tracks)
       ? album.node.id
       : node.parentId;
   if (!albumId) return miss();
