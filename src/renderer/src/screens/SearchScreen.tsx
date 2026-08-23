@@ -254,6 +254,7 @@ export function SearchScreen(): React.JSX.Element {
       setLibTotal(0);
       return;
     }
+    if (seededQuery.current === q) return; // seeded from memory: nothing to fetch
     const seq = ++libSeq.current;
     void (async () => {
       try {
@@ -275,6 +276,18 @@ export function SearchScreen(): React.JSX.Element {
   const [radio, setRadio] = useState<RadioStation[] | null>(() =>
     lastResults?.query === lastQuery ? lastResults.radio : null,
   );
+  // The query this mount was SEEDED for: its first library and radio effects
+  // skip the fetch (the rows are already the answer; the radio lookup is a
+  // network call and showed as a fresh search on every return — user,
+  // 2026-08-23). A different query lifts the skip (cleanup below).
+  const seededQuery = useRef<string | null>(
+    lastResults?.query === lastQuery && lastQuery ? lastQuery : null,
+  );
+  useEffect(() => {
+    return () => {
+      seededQuery.current = null;
+    };
+  }, [q]);
   useEffect(() => {
     if (q) lastResults = { query: q, lib: libResults, libTotal, radio };
   }, [q, libResults, libTotal, radio]);
@@ -294,6 +307,7 @@ export function SearchScreen(): React.JSX.Element {
       setRadioFailed(false);
       return;
     }
+    if (seededQuery.current === q) return; // seeded from memory: no lookup, no spinner
     const seq = ++radioSeq.current;
     setRadioPending(true);
     setRadioFailed(false);
