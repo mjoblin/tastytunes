@@ -98,6 +98,35 @@ export async function playRefNow(ref: MediaRef): Promise<boolean> {
   }
 }
 
+/** Queue a track by ref — play next, append, or replace — hints first, then
+ *  content; failures toast (the write-verb rule). */
+export async function queueRef(
+  ref: MediaRef,
+  action: "PLAY_NEXT" | "APPEND" | "REPLACE",
+): Promise<boolean> {
+  const showToast = useStore.getState().showToast;
+  if (ref.serverUdn && ref.objectId) {
+    try {
+      await tt.mediaQueueAdd(ref.serverUdn, ref.objectId, action);
+      return true;
+    } catch {
+      // rotted hint — fall through to the content resolve
+    }
+  }
+  const found = await tt.contentResolve(refToContentRef(ref)).catch(() => null);
+  if (!found) {
+    showToast({ kind: "error", text: `Couldn't find “${ref.title}” on any server` });
+    return false;
+  }
+  try {
+    await tt.mediaQueueAdd(found.serverUdn, found.objectId, action);
+    return true;
+  } catch {
+    showToast({ kind: "error", text: `Couldn't queue “${ref.title}”` });
+    return false;
+  }
+}
+
 /**
  * The bookkeeping every preset save shares once the device write landed:
  * optional rename, the local artist record (settings.presetArtists —

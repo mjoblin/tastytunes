@@ -19,8 +19,9 @@ import { RowHeart } from "@/components/media/RowHeart";
 import { RowMenu } from "@/components/media/RowMenu";
 import { AddToPlaylistPanel } from "@/components/overlays/AddToPlaylistPanel";
 import { toggleFavorite } from "@/lib/favorites";
-import { fromRecent, refToFavorite, refToPlaylistItem } from "@/lib/mediaRef";
-import { playRefNow, openRefInLibrary } from "@/lib/mediaActions";
+import { fromRecent, refToFavorite, refToPlaylistItem, type MediaRef } from "@/lib/mediaRef";
+import { playRefNow, openRefInLibrary, saveRefToPreset } from "@/lib/mediaActions";
+import { PresetPicker } from "@/components/library/LibraryMenus";
 import { trackMenuItems, type MediaMenuItem } from "@/lib/mediaMenus";
 import { cx, fmtDayBucket, fmtRelative, matchesFilter } from "@/lib/format";
 import { clearRecentsWithUndo } from "@/lib/recents";
@@ -126,6 +127,7 @@ export function RecentlyPlayedScreen(): React.JSX.Element {
     const fav = ref ? refToFavorite(ref) : null;
     return fav != null && favKeys.has(favoriteKey(fav as Favorite));
   };
+  const [presetFor, setPresetFor] = useState<{ ref: MediaRef; x: number; y: number } | null>(null);
   const [rowMenu, setRowMenu] = useState<{
     title: string;
     x: number;
@@ -149,6 +151,7 @@ export function RecentlyPlayedScreen(): React.JSX.Element {
       ...at,
       items: trackMenuItems(ref, {
         playNow: () => void playRefNow(ref),
+        saveToPreset: () => setPresetFor({ ref, ...at }),
         addToPlaylist: () => {
           setPlaylistRef(ref);
           setPlaylistFor({ label: ref.title, ...at });
@@ -200,6 +203,16 @@ export function RecentlyPlayedScreen(): React.JSX.Element {
           at={{ x: rowMenu.x, y: rowMenu.y }}
           onClose={() => setRowMenu(null)}
           items={rowMenu.items}
+        />
+      )}
+      {presetFor && (
+        <PresetPicker
+          picker={{ node: { title: presetFor.ref.title }, x: presetFor.x, y: presetFor.y }}
+          onClose={() => setPresetFor(null)}
+          onSave={async (slot, name) => {
+            await saveRefToPreset(presetFor.ref, slot, name);
+            setPresetFor(null);
+          }}
         />
       )}
       {playlistFor && playlistRef && (

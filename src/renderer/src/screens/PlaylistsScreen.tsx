@@ -41,7 +41,7 @@ import { AddToPlaylistPanel } from "@/components/overlays/AddToPlaylistPanel";
 import { toggleFavorite } from "@/lib/favorites";
 import { activatePlaylist } from "@/lib/playlists";
 import { fromPlaylistItem } from "@/lib/mediaRef";
-import { saveRefToPreset, openRefInLibrary } from "@/lib/mediaActions";
+import { saveRefToPreset, openRefInLibrary, playRefNow, queueRef } from "@/lib/mediaActions";
 import { trackMenuItems } from "@/lib/mediaMenus";
 import { OrderHandle } from "@/components/controls/OrderHandle";
 import { ArtImage } from "@/components/media/ArtImage";
@@ -286,6 +286,12 @@ export function PlaylistsScreen(): React.JSX.Element {
           onClose={() => setTrackMenu(null)}
           // the shared track menu (heart, pivot, preset…) + the local remove
           items={trackMenuItems(fromPlaylistItem(trackMenu.item), {
+            // the play verbs every track menu offers (a playlist row reorders
+            // on click, so the menu is the only way to play ONE item)
+            playNow: () => void playRefNow(fromPlaylistItem(trackMenu.item)),
+            playNext: () => void queueRef(fromPlaylistItem(trackMenu.item), "PLAY_NEXT"),
+            append: () => void queueRef(fromPlaylistItem(trackMenu.item), "APPEND"),
+            replaceQueue: () => void queueRef(fromPlaylistItem(trackMenu.item), "REPLACE"),
             addToPlaylist: () =>
               setCopyTo({ item: trackMenu.item, x: trackMenu.x, y: trackMenu.y }),
             saveToPreset: () =>
