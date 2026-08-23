@@ -801,13 +801,13 @@ export function SearchScreen(): React.JSX.Element {
                 }
               }
               if (e.key !== "Escape") return;
-              // Escape clears, then LETS GO. The box takes focus on arrival and
-              // screen keys are suppressed while an input has it, so without the
-              // blur there is no keyboard way off this screen — you'd have to
-              // reach for the mouse to press N.
+              // Escape RELEASES FOCUS and keeps the query (2026-08-23, the
+              // app-wide rule — see FilterInput). The box takes focus on
+              // arrival and screen keys are suppressed while an input has it,
+              // so the blur is what gives the keyboard back; the query and its
+              // results are remembered for the return anyway.
               e.stopPropagation(); // ...before it closes anything else
-              if (query) setQuery("");
-              else e.currentTarget.blur();
+              e.currentTarget.blur();
             }}
             placeholder="Search everything"
             aria-label="Search everything"

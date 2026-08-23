@@ -61,14 +61,21 @@ export function FilterInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => {
+          // ESCAPE RELEASES FOCUS, NEVER CLEARS (user, 2026-08-23). A filter is
+          // persistent state — remembered per screen and per folder — and the
+          // most reflexive key on the keyboard must not destroy it; it used to
+          // clear first and release on a second press, which cost the filter
+          // every time someone wanted their hotkeys back. Clearing is the ✕
+          // and ⌘⌫. Enter releases focus too: the natural end of typing hands
+          // the hotkeys back without a reach for Escape.
           if (e.key === "Escape") {
             e.stopPropagation();
-            if (value) onChange("");
-            else (e.target as HTMLInputElement).blur();
+            (e.target as HTMLInputElement).blur();
           }
-          if (e.key === "Enter" && onSubmit) {
+          if (e.key === "Enter") {
             e.preventDefault();
-            onSubmit();
+            if (onSubmit) onSubmit();
+            else (e.target as HTMLInputElement).blur();
           }
         }}
         onFocus={() => document.documentElement.classList.add("filter-focused")}

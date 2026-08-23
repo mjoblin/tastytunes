@@ -1570,9 +1570,11 @@ export function LibraryScreen(): React.JSX.Element {
                 runSearch();
               }
               if (e.key === "Escape") {
+                // releases focus, keeps the query AND the results view (the
+                // app-wide rule, 2026-08-23); "Back to browsing" and ⌘← leave
+                // search mode
                 e.stopPropagation();
-                if (searchQuery) setSearchQuery("");
-                else exitSearch();
+                e.currentTarget.blur();
               }
             }}
             onFocus={() => document.documentElement.classList.add("filter-focused")}
