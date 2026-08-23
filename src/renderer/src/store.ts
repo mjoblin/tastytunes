@@ -180,6 +180,8 @@ interface TTState {
   navForwardStack: NavEntry[];
   /** A Library spot to restore after back/forward landed on the Library (one-shot, by nonce). */
   navRestore: { nonce: number; spot: LibrarySpot } | null;
+  /** true while the current screen was reached by Back/Forward — history restores, intent prepares (the Search box and the Library's search bar only take focus on intent). */
+  arrivedByHistory: boolean;
   /** Record the spot being left by an in-Library move (the Library calls this). */
   navPush: (entry: NavEntry) => void;
   goBack: () => void;
@@ -365,8 +367,14 @@ const leaving = (s: { screen: Screen }): NavEntry =>
 const navTo = (
   s: { screen: Screen; navBackStack: NavEntry[] },
   screen: Screen,
-): Partial<{ navBackStack: NavEntry[]; navForwardStack: NavEntry[] }> =>
-  screen === s.screen ? {} : { navBackStack: [...s.navBackStack, leaving(s)], navForwardStack: [] };
+): Partial<{ navBackStack: NavEntry[]; navForwardStack: NavEntry[]; arrivedByHistory: boolean }> =>
+  screen === s.screen
+    ? {}
+    : {
+        navBackStack: [...s.navBackStack, leaving(s)],
+        navForwardStack: [],
+        arrivedByHistory: false,
+      };
 let navRestoreSeq = 0;
 
 export const useStore = create<TTState>((set, get) => ({
@@ -375,6 +383,7 @@ export const useStore = create<TTState>((set, get) => ({
   navBackStack: [],
   navForwardStack: [],
   navRestore: null,
+  arrivedByHistory: false,
   navPush: (entry) =>
     set((s) => ({ navBackStack: [...s.navBackStack, entry], navForwardStack: [] })),
   goBack: () => {
@@ -385,6 +394,7 @@ export const useStore = create<TTState>((set, get) => ({
       navBackStack: s.navBackStack.slice(0, -1),
       navForwardStack: [...s.navForwardStack, leaving(s)],
       screen: entry.screen,
+      arrivedByHistory: true,
       navRestore: entry.library ? { nonce: ++navRestoreSeq, spot: entry.library } : null,
       searchBack: null,
     });
@@ -397,6 +407,7 @@ export const useStore = create<TTState>((set, get) => ({
       navForwardStack: s.navForwardStack.slice(0, -1),
       navBackStack: [...s.navBackStack, leaving(s)],
       screen: entry.screen,
+      arrivedByHistory: true,
       navRestore: entry.library ? { nonce: ++navRestoreSeq, spot: entry.library } : null,
       searchBack: null,
     });

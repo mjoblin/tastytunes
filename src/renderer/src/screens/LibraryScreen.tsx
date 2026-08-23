@@ -224,8 +224,14 @@ export function LibraryScreen(): React.JSX.Element {
     prevPath: Crumb[];
   } | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  /** Set by restoreSpot: a search-results spot coming back through Back/Forward keeps its bar blurred (history restores, intent prepares — see SearchScreen). */
+  const restoredSearch = useRef(false);
   useEffect(() => {
     if (searchMode) {
+      if (restoredSearch.current) {
+        restoredSearch.current = false;
+        return;
+      }
       searchInputRef.current?.focus();
       // find idiom: a recalled query arrives selected, so typing replaces it
       searchInputRef.current?.select();
@@ -848,7 +854,9 @@ export function LibraryScreen(): React.JSX.Element {
     try {
       moveTo(snap.udn, snap.path);
       if (snap.mode) {
-        // the spot being restored was a search-results view — re-enter it
+        // the spot being restored was a search-results view — re-enter it,
+        // without taking focus (only a false → true flip runs the focus effect)
+        if (!searchMode) restoredSearch.current = true;
         setSearchMode(true);
         setSearchQuery(snap.query);
         setSearchState(snap.searchNow);

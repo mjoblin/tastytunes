@@ -1,7 +1,7 @@
 import { CloseButton } from "@/components/controls/CloseButton";
 import { ModalShell } from "@/components/chrome/Overlay";
 import { useStore } from "@/store";
-import { MOD, SCREENS } from "@/lib/screens";
+import { IS_MAC, MOD, SCREENS } from "@/lib/screens";
 
 const GROUPS: Array<{ title: string; rows: Array<[string, string]> }> = [
   {
@@ -46,6 +46,10 @@ const GROUPS: Array<{ title: string; rows: Array<[string, string]> }> = [
       [
         "⌘← / ⌘→",
         "Back / forward through everywhere you've been (mouse side buttons too; Backspace goes up a level in the Library)",
+      ],
+      [
+        IS_MAC ? "⌘[ / ⌘]" : "Alt+← / Alt+→",
+        "Back / forward from inside a text box too (View menu)",
       ],
       ["`", "SMOIP and Requests console"],
       ["?", "This overlay"],

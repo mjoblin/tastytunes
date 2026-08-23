@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { tt } from "@/api";
 import { useStore, type Screen } from "@/store";
-import { SCREENS } from "@/lib/screens";
+import { SCREENS, IS_MAC } from "@/lib/screens";
 
 // Derived from the shared registry — the screen lookup runs before the
 // transport switch, so a registry key can shadow a transport shortcut (the
@@ -79,7 +79,13 @@ export function useShortcuts(opts?: { transportOnly?: boolean }): void {
         (e.metaKey || e.ctrlKey || e.altKey) &&
         !e.shiftKey &&
         (e.key === "ArrowLeft" || e.key === "ArrowRight") &&
-        !(e.target as HTMLElement | null)?.matches?.("input, textarea, [contenteditable]")
+        // never inside a text box when the chord is a caret key there: ⌘-arrow
+        // (line start/end) and ⌥-arrow (word) on macOS, Ctrl-arrow (word) on
+        // Windows/Linux. Alt-arrow has no text meaning on Windows/Linux, so there
+        // it goes back from inside a box too — as Chrome's Alt+Left does from
+        // the address bar.
+        (!(e.target as HTMLElement | null)?.matches?.("input, textarea, [contenteditable]") ||
+          (!IS_MAC && e.altKey && !e.metaKey && !e.ctrlKey))
       ) {
         e.preventDefault();
         const s = useStore.getState();
