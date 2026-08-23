@@ -77,6 +77,16 @@ const SEARCH_SORTS: Array<{ value: "relevance" | "name"; label: string; noRevers
 let lastQuery = "";
 // …and the library partition, the same way (it reset to All on every return)
 let lastLibKind: "all" | "artists" | "albums" | "tracks" = "all";
+// …and the RESULTS of the last query (2026-08-22): a return used to re-run
+// every search from scratch and the scroll could only settle once the
+// radio directory had answered again. Seeded on mount for the same query;
+// the effects still refresh in the background and swap in what changed.
+let lastResults: {
+  query: string;
+  lib: MediaNode[];
+  libTotal: number;
+  radio: RadioStation[] | null;
+} | null = null;
 /*
  * Hidden categories and the sort are PERSISTED view defaults (settings
  * searchHidden/searchSort — the 2026-08-06 ruling), unlike the query above.
@@ -231,8 +241,12 @@ export function SearchScreen(): React.JSX.Element {
 
   // ---- library: index-backed, so also instant, but it crosses the IPC bridge
 
-  const [libResults, setLibResults] = useState<MediaNode[]>([]);
-  const [libTotal, setLibTotal] = useState(0);
+  const [libResults, setLibResults] = useState<MediaNode[]>(() =>
+    lastResults?.query === lastQuery ? lastResults.lib : [],
+  );
+  const [libTotal, setLibTotal] = useState(() =>
+    lastResults?.query === lastQuery ? lastResults.libTotal : 0,
+  );
   const libSeq = useRef(0);
   useEffect(() => {
     if (!q) {
@@ -258,7 +272,12 @@ export function SearchScreen(): React.JSX.Element {
   // ---- radio: the one network call. Debounced, superseded, and allowed to
   // ---- fail without taking the local groups down with it.
 
-  const [radio, setRadio] = useState<RadioStation[] | null>(null);
+  const [radio, setRadio] = useState<RadioStation[] | null>(() =>
+    lastResults?.query === lastQuery ? lastResults.radio : null,
+  );
+  useEffect(() => {
+    if (q) lastResults = { query: q, lib: libResults, libTotal, radio };
+  }, [q, libResults, libTotal, radio]);
   const [radioPending, setRadioPending] = useState(false);
   const [radioFailed, setRadioFailed] = useState(false);
   const radioSeq = useRef(0);
