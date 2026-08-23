@@ -688,7 +688,7 @@ function QueueCard({
           ? "bg-goldtile/70 tile-playing"
           : isCurrent
             ? "bg-veil/60 ring-1 ring-edge2 card-hover-glow"
-            : "bg-raised/70 ring-1 ring-edge card-hover-glow",
+            : "bg-raised/50 ring-1 ring-edge card-hover-glow",
       )}
     >
       <button
@@ -697,7 +697,8 @@ function QueueCard({
           if (item.id != null) void tt.command({ type: "playQueueId", queueId: item.id });
         }}
       >
-        <div className="aspect-square w-full rounded-lg overflow-hidden bg-panel/70 flex items-center justify-center">
+        {/* the art well is a veil lift, never a panel hole — see LibraryCards */}
+        <div className="aspect-square w-full rounded-lg overflow-hidden bg-veil flex items-center justify-center">
           <ArtImage
             src={artUrlAt(md?.art_url, 240)}
             lazy

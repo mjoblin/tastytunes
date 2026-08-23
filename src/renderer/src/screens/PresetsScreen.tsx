@@ -709,7 +709,7 @@ function PresetCard({
         // cards just clip at the scrollport; z-10 keeps the grown card on top).
         "group relative text-left rounded-2xl p-2 pb-2.5 transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]",
         isDragging && "z-10 opacity-90",
-        playing ? "bg-goldtile/70 tile-playing" : "bg-raised/70 ring-1 ring-edge card-hover-glow",
+        playing ? "bg-goldtile/70 tile-playing" : "bg-raised/50 ring-1 ring-edge card-hover-glow",
         // held while this card's volume popover is open — the pointer has left,
         // but the card is still what's being edited
         pv.open && "ring-1 ring-edge2",
@@ -720,7 +720,8 @@ function PresetCard({
           speaker top-right, hover trash bottom-right */}
       <div className="relative">
         <button className="relative block w-full cursor-pointer" onClick={onRecall}>
-          <div className="aspect-square w-full rounded-lg overflow-hidden bg-panel/70 flex items-center justify-center">
+          {/* the art well is a veil lift, never a panel hole — see LibraryCards */}
+          <div className="aspect-square w-full rounded-lg overflow-hidden bg-veil flex items-center justify-center">
             {preset.art_urls && preset.art_urls.length > 1 ? (
               // saved-queue (MediaQueue) presets: collage of the queue's albums
               <div
@@ -734,7 +735,7 @@ function PresetCard({
                     key={u}
                     src={artUrlAt(u, 120)}
                     lazy
-                    fallback={<div className="bg-raised/70 h-full w-full" />}
+                    fallback={<div className="bg-veil h-full w-full" />}
                   />
                 ))}
               </div>

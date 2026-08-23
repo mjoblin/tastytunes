@@ -99,7 +99,7 @@ export function ContainerCard({
       data-library-card
       className={cx(
         "group relative text-left rounded-2xl p-2 pb-2.5 transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]",
-        playing ? "bg-goldtile/70 tile-playing" : "bg-raised/70 ring-1 ring-edge card-hover-glow",
+        playing ? "bg-goldtile/70 tile-playing" : "bg-raised/50 ring-1 ring-edge card-hover-glow",
         // held while this card's ⋯ menu / preset picker is open — the pointer
         // has left, but the card is still what's being acted on: keep the
         // full hover treatment (grow + glow), not just a ring

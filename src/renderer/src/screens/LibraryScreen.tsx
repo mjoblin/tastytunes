@@ -1888,7 +1888,7 @@ export function LibraryScreen(): React.JSX.Element {
                         openLens(door.key);
                       }}
                       className={cx(
-                        "group relative rounded-2xl p-2 pb-2.5 bg-raised/70 ring-1 ring-gold/25 transition-all duration-200 ease-out tip-bottom",
+                        "group relative rounded-2xl p-2 pb-2.5 bg-raised/50 ring-1 ring-gold/25 transition-all duration-200 ease-out tip-bottom",
                         doorsState === "building"
                           ? "opacity-60 cursor-default"
                           : "card-hover-glow cursor-pointer hover:z-10 motion-safe:hover:scale-[1.04]",
@@ -1962,7 +1962,7 @@ export function LibraryScreen(): React.JSX.Element {
                             : undefined
                         }
                         className={cx(
-                          "group relative rounded-2xl p-2 pb-2.5 bg-raised/70 ring-1 ring-edge card-hover-glow cursor-pointer transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]",
+                          "group relative rounded-2xl p-2 pb-2.5 bg-raised/50 ring-1 ring-edge card-hover-glow cursor-pointer transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]",
                           s.isStreamer && inStandby && "opacity-50 tip-bottom",
                         )}
                       >
