@@ -110,16 +110,21 @@ export function ContainerCard({
           art, never intercepting the open gesture (unlike preset cards,
           whose whole-card click IS the play action) */}
       <button className="block w-full cursor-pointer" onClick={onEnter}>
-        <div className="relative aspect-square w-full rounded-lg overflow-hidden bg-panel/70 flex items-center justify-center">
+        {/* the art well is a veil LIFT over the card, not a panel hole: the same
+            theme-flipping tint either way, so the ambient wash reads through
+            the well as it does through the shell (panel is darker than the
+            shell in the dark theme and lighter in the light one — a hole on
+            the faceplate, a plateau on paper) */}
+        <div className="relative aspect-square w-full rounded-lg overflow-hidden bg-veil flex items-center justify-center">
           <ArtImage
             src={artUrlAt(node.artUrl, 240)}
             lazy
             className={cx("h-full w-full object-cover", muted && "opacity-60 saturate-[.6]")}
             fallback={
               album ? (
-                <Disc3 size={34} strokeWidth={1.2} className="text-faint" />
+                <Disc3 size={34} strokeWidth={1.2} className="text-dim" />
               ) : (
-                <Folder size={34} strokeWidth={1.2} className="text-faint" />
+                <Folder size={34} strokeWidth={1.2} className="text-dim" />
               )
             }
           />

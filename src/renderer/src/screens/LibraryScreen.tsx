@@ -1894,7 +1894,7 @@ export function LibraryScreen(): React.JSX.Element {
                           : "card-hover-glow cursor-pointer hover:z-10 motion-safe:hover:scale-[1.04]",
                       )}
                     >
-                      <div className="aspect-square w-full rounded-lg ring-1 ring-gold/25 bg-golddim flex items-center justify-center">
+                      <div className="aspect-square w-full rounded-lg bg-golddim flex items-center justify-center">
                         <door.icon
                           size={40}
                           strokeWidth={1.1}
@@ -1966,18 +1966,19 @@ export function LibraryScreen(): React.JSX.Element {
                           s.isStreamer && inStandby && "opacity-50 tip-bottom",
                         )}
                       >
-                        <div className="aspect-square w-full rounded-lg ring-1 ring-edge bg-panel/70 flex items-center justify-center">
+                        {/* one frame per card: the well is a veil lift with no ring of its own (see LibraryCards) */}
+                        <div className="aspect-square w-full rounded-lg bg-veil flex items-center justify-center">
                           {s.isStreamer ? (
                             <Usb
                               size={40}
                               strokeWidth={1.1}
-                              className="text-faint group-hover:text-dim transition-colors"
+                              className="text-dim group-hover:text-ink transition-colors"
                             />
                           ) : (
                             <HardDrive
                               size={40}
                               strokeWidth={1.1}
-                              className="text-faint group-hover:text-dim transition-colors"
+                              className="text-dim group-hover:text-ink transition-colors"
                             />
                           )}
                         </div>
