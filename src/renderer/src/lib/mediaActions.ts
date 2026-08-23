@@ -48,14 +48,21 @@ export async function openRefInLibrary(ref: MediaRef): Promise<boolean> {
     return true;
   }
   const albumTitle = node.album ?? ref.album ?? null;
-  let albumId: string | null = node.parentId;
-  if (!albumId && albumTitle) {
-    const album = await tt
-      .mediaNodeInfo({ kind: "album", title: albumTitle, artist: node.albumArtist ?? ref.artist })
-      .catch(() => null);
-    if (album?.node.serverUdn === node.serverUdn) albumId = album.node.id;
-  }
-  if (!albumId || !albumTitle) return miss();
+  if (!albumTitle) return miss();
+  // The ALBUM comes from the index's albums pool, never from the track's
+  // parentId: a search-built index carries the SEARCH SCOPE as every track's
+  // parent — on Asset that is the library-wide "Title" view, 4,551 children —
+  // and landing there showed the whole library under the album's name (user,
+  // 2026-08-23). The parent is only the fallback for a server whose index has
+  // no album entity for this track (folder-only libraries).
+  const album = await tt
+    .mediaNodeInfo({ kind: "album", title: albumTitle, artist: node.albumArtist ?? ref.artist })
+    .catch(() => null);
+  const albumId =
+    album?.node.isContainer && album.node.serverUdn === node.serverUdn
+      ? album.node.id
+      : node.parentId;
+  if (!albumId) return miss();
   s.openInLibrary({
     serverUdn: node.serverUdn,
     objectId: albumId,
