@@ -21,19 +21,19 @@
 
 TastyTunes is a desktop controller for Cambridge Audio StreamMagic streamers.
 It shows what's playing with full artwork and synced lyrics, browses every
-media server and the streamer's USB drive as a single library, searches all of
-it instantly, tunes internet radio, and edits the queue and the streamer's 99
-presets.
+local media server and the streamer's USB drive as a single library,
+searches all of it instantly, tunes internet radio, and edits the queue and
+the streamer's 99 presets.
 
 Beyond that: playlists and favorites, a log of what you've played, artist and
 album notes, tone and EQ, a menu bar / system tray panel, a mini player, a
-full-screen display mode, sleep timers and schedules, scrobbling to
+Fullscreen Display mode, sleep timers and schedules, scrobbling to
 ListenBrainz, and an optional MCP server for local AI agents.
 
 It all runs on your machine and talks to the streamer over your own network.
-There's no account, and no cloud service requirements.
+There's no account and no cloud service requirements.
 
-## Getting started
+## Installing
 
 1. Get the installer for your platform from the
    [releases page](https://github.com/mjoblin/tastytunes/releases/latest):
@@ -61,7 +61,7 @@ Album art, track details, format badges and the live lyric line. The transport b
 
 ### The library as one collection
 
-UPnP servers and the streamer's USB drive, pooled into Artists and Albums views with genre and decade filters.
+Local UPnP servers and the streamer's USB drive, pooled into Artists and Albums views with genre and decade filters.
 
 <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/lens-albums.webp" alt="The Albums view pooling every library into one collection">
 
@@ -73,43 +73,43 @@ Libraries, playlists, favorites, presets and internet radio, with results groupe
 
 ### Synced lyrics
 
-The current line is highlighted and kept centered. Click a line to seek there.
+The current line is highlighted and kept in view. Click a line to seek there.
 
 <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/lyrics.webp" alt="Lyrics panel with the current line highlighted">
 
 ### Presets
 
-The streamer's preset slots as a card grid, each recallable with a click and holding its own volume. The playing preset stays lit.
+The streamer's preset slots as a card grid (or table rows), each recallable with a click and holding its own volume. The playing preset stays lit.
 
 <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/presets.webp" alt="The Presets grid with the playing preset lit">
 
-### Fullscreen
+### Fullscreen Display mode
 
-Press F for the front-panel view: album art, track details, the current lyric line and a clock.
+Press <kbd>F</kbd> for the front-panel view: album art, track details, the current lyric line and a clock.
 
 <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/display.webp" alt="Fullscreen display mode showing album art and the current lyric line">
 
 ### Mini player
 
-A small always-on-top window: art, transport, playhead, volume, and what's next.
+A small always-on-top window: art, transport, playhead, volume and what's next.
 
 <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/mini-player.webp" alt="Mini player window" width="360">
 
 ### Menu bar / system tray
 
-The icon's compact panel: now playing with transport and volume, and the queue, presets, playlists, and recents. The streamer without the window.
+Many of TastyTunes' features, shrunk down into a menu bar / system tray panel, accessible by clicking the TastyTunes icon from any desktop screen.
 
 <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/tray-panel.webp" alt="The menu-bar panel showing now playing and the queue" width="380">
 
 ### Settings
 
-Themes, fonts, layouts and sort orders, stored on your machine.
+Themes, fonts, layouts and sort orders, and much more, stored on your machine.
 
 <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/settings.webp" alt="Appearance settings">
 
 ### AI agents
 
-MCP tools for local agent control.
+MCP tools that let local AI agents see and control the streamer.
 
 <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/settings-agents.webp" alt="The AI agents settings tab">
 
@@ -126,45 +126,45 @@ claude mcp add --transport http tastytunes http://127.0.0.1:8555/mcp
 > *"what's playing?"* · *"how many albums do I have?"* · *"play a 90s rock album"* · *"put on some jazz radio"* · *"set a sleep timer for the end of this track"*
 
 The tools cover what the app itself does: playback and volume, presets and
-sources, library and radio, favorites, tone and EQ, sleep timers. The editing
+sources, library and radio, favorites, tone and EQ, sleep timers, etc. The editing
 ones, like queue and preset changes, are kept separate and off until you
-turn them on. Every tool has its own switch in Settings → AI agents, effective
+turn them on. Every tool has its own switch in Settings › AI agents, effective
 on the agent's next call. Agents inherit the same limits the UI has: the volume
-cap, the power-on guard, the Connections toggles. A lookup that's switched off
-just refuses. Bind it to localhost, or to your network to reach the streamer
-from another machine.
+cap, the power safeguards, the Connections toggles. A call to a disabled tool is
+refused. Bind it to localhost, or to your network to reach the streamer from
+another machine.
 
 ## Every feature
 
 ### Connection & devices
 
-- UPnP/SSDP discovery, with manual IP entry when discovery finds nothing
+- Automatic discovery of streamers on the local network, with manual IP entry when discovery finds nothing
 - Device switcher in the playback bar
-- Auto-reconnect with backoff, and connection health checks after system sleep
-- Power and standby, with a guard that never re-sends ON to a unit that's already on
+- Auto-reconnect, and connection health checks after system sleep
+- Power and standby
 - Demo mode: runs the whole app against a built-in virtual streamer and two sample libraries
 
 ### Now Playing
 
 - Large artwork over an ambient blurred-art backdrop
-- Optional art-derived accent: the gold tint follows the current album
+- Optional art-derived accent, with a gold tint following the current album
 - Format badges: codec, sample rate, bit depth, lossless, MQA
-- Signal-quality lamp (gold with a halo for hi-res lossless, blue for lossless, a hollow gray ring for lossy — shape as well as color, so it reads without color vision), with the full signal chain in a popover
+- Signal-quality lamp: gold with a halo for hi-res lossless, blue for lossless, a hollow gray ring for lossy. Each state has its own shape as well as its own color, so they are readable without color vision; the legend is in Settings › Status lamps, and the full signal chain is in a popover
 - Internet-radio display, track *x* of *y*, and the current lyric line under the track details
-- Display mode (<kbd>F</kbd>): chrome-free full screen for a desk or shelf display
+- Fullscreen Display mode (<kbd>F</kbd>): chrome-free full screen for a desk or shelf display
 - Info: what the streamer reports about the current stream (codec, sample rate, bit depth, bitrate, queue position), for any source: local media, radio, AirPlay
 
 ### Library
 
-- Browse every UPnP media server and the streamer's own USB storage
+- Browse every local UPnP media server and the streamer's own USB storage
 - A local, rebuildable index: search as you type, and <kbd>⌘F</kbd> searches every library at once, grouped by server
-- Artists & Albums views pooling all sources into one collection, with genre, decade, and albums ⇄ compilations filters and sorts
-- Albums read whole: featured guests stay in the album, compilations sit under Various Artists, multi-disc sets show disc dividers; format and size in every album header
-- Info on any album, track, or artist: performers, album artist, composers, disc and track numbers, format, size, and source ids, as the media server reports them; copy as JSON
-- Play now, play next, append, or replace; a bare click never adds a track that's already queued
+- Artists & Albums views pooling all sources into one collection, with genre, decade and albums ⇄ compilations filters and sorting
+- Albums stay intact: featured guests stay in the album, compilations sit under Various Artists, multi-disc sets show disc dividers; format and size in every album header
+- Info on any album, track or artist: performers, album artist, composers, disc and track numbers, format, size, and source ids, as the media server reports them; copy as JSON
+- Play now, play next, append, or replace
 - Save an album, a track, or the whole queue to one of the streamer's preset slots
-- Open in Library from the queue, favorites, playlists, Recently Played, and the Info panel: lands on the track's album with the track highlighted
-- Backspace goes up a level; per-folder filters and scroll memory
+- Open in Library from the queue, favorites, playlists, Recently Played and the Info panel: lands on the track's album with the track highlighted
+- <kbd>Backspace</kbd> goes up a level; filters are remembered per folder
 
 ### Radio
 
@@ -173,21 +173,21 @@ from another machine.
 
 ### Favorites
 
-- Stations, albums, and tracks, hearted from rows, cards, or Now Playing
-- Keyed on the content itself, so favorites survive a media server re-indexing
+- Stations, albums and tracks, hearted from rows, cards or Now Playing
+- Favorites key on content definition, so they survive a media server re-indexing
 
 ### Playlists
 
 - Ordered collections of tracks, stored locally: built from any track the app shows, or captured whole from the queue
-- Entries key on content, not on a server's object id, so a playlist survives a media server re-indexing and heals its stored ids as it goes
+- Entries key on content definition, so a playlist survives a media server re-indexing
 - Playing one replaces the queue a track at a time, with progress and a cancel; tracks that can't be found are listed rather than dropped silently
-- A playlist whose contents match the live queue is marked as such; the match is on content, so it also recognizes a queue loaded before the app started
-- Reorder by drag or keyboard, rename, and delete with an undo
+- A playlist whose contents match the live queue is marked as such
+- Reorder by drag or keyboard, rename, and delete with undo
 
 ### Transport & volume
 
 - Play, pause, stop, next, previous, seek, scrub; repeat and shuffle
-- Only the controls the streamer itself reports are offered
+- Only the controls the streamer itself reports (based on source) are enabled
 - Pre-amp mode (absolute volume) and Control Bus mode (nudge), mute, and an optional volume limit
 - Scroll-wheel volume on the volume cluster and the mini player
 
@@ -198,14 +198,14 @@ from another machine.
 
 ### Presets
 
-- All 99 hardware slots: recall, delete, drag-to-reorder; keys <kbd>1</kbd>–<kbd>9</kbd> recall directly
-- Per-preset volume: a preset can carry its own level, applied on every recall, remembered per device
-- A preset broken by a media server re-indexing is flagged in place; repairing it finds the same content again and re-saves the slot
+- All 99 hardware slots: recall, delete, drag-to-reorder; use keys <kbd>1</kbd>–<kbd>9</kbd> for immediate recall
+- Per-preset volume: each preset can carry its own volume level, applied on recall
+- A preset broken by a media server re-indexing is flagged in place, and can be repaired with a click
 
 ### Tone, EQ & device
 
-- Seven-band EQ, tilt, and balance: live device writes while dragging, with saveable presets (feature-detected per model)
-- Display brightness, standby mode, and auto power-down, probed from the device's own capabilities
+- Seven-band EQ, tilt, and balance: changes apply live while dragging, with saveable presets (feature-detected based on streamer model)
+- Display brightness, standby mode, and auto power-down, where the streamer supports them
 
 ### Sources
 
@@ -213,60 +213,59 @@ from another machine.
 
 ### Lyrics
 
-- Fetched from LRCLIB; synced lyrics highlight and center the current line, and clicking a line seeks there
-- Three forms: a full panel, an inline line under the track details, and a display-mode strip
+- Fetched from LRCLIB; synced lyrics are highlighted and follow the current line, and clicking a line seeks there
+- Shown in three locations: a full panel showing all track lyrics in Now Playing, an inline line under the track details also in Now Playing, and in the Fullscreen Display mode
 - Falls back to plain text, says why when there's nothing to show (instrumentals, radio), and can be force-refreshed
 
 ### Artist & album context
 
 - A short artist bio and album facts (year, label, genres, credits) in a side panel, from MusicBrainz and Wikipedia, with attribution links
-- Lookups cache to disk (bounded, clearable in Settings)
+- Lookups cache to disk (with local storage caps, clearable in Settings)
 
 ### Scrobbling
 
 - ListenBrainz: a listen submits only after real played time (half the track or four minutes)
 - Paused time doesn't count and seeking doesn't advance it; short tracks and radio never scrobble
-- Failed submissions queue and flush with the next success
+- Failed submissions are retried until successful
 
 ### History
 
-- Recently played: a bounded local log (200 entries, clearable) of tracks and stations, kept because the streamer itself keeps no history
+- Recently played: a capped local log (200 entries, clearable) of tracks and stations; station tracks are also logged when announced by the station
 
 ### Automation
 
 - Sleep timer: 15 minutes to 2 hours, or end of track; pause or standby; keeps running with the window closed, and survives a system sleep
-- Schedules: wake the streamer to a preset at a chosen volume, or send it to standby, per weekday (schedules fire while the app is running)
+- Schedules: wake the streamer to a preset at a chosen volume, or send it to standby, per weekday (schedules only trigger while the app is running)
 - A wake schedule missed while the computer was asleep is offered on waking rather than run late: once, within ten minutes of the missed time, and only if nothing is already playing
 
 ### Menu bar / system tray
 
-- An optional icon in the menu bar (macOS) or system tray (Windows, Linux), on by default, with a native menu: connection status, wake/standby, sources, and quit
-- On macOS and Windows, clicking the icon opens a compact panel: now playing with transport and volume, plus queue, presets, playlists, and recents; everything in them plays with a click, and picking something while the streamer sleeps wakes it first
-- The panel has its own density settings, down to an art-free compressed row, and shows presets as cards or rows, all separate from the main window's layout
-- On Windows and Linux, closing the main window keeps TastyTunes running in the tray (a one-time notification says so); Quit is in the icon's menu
+- An optional icon in the menu bar (macOS) or system tray (Windows, Linux), on by default, can be disabled in Settings
+- On macOS and Windows, clicking the icon opens a compact panel: now playing with transport and volume, plus queue, presets, playlists and Recently Played; picking something while the streamer sleeps wakes it first
+- On Windows and Linux, closing the main window keeps TastyTunes running in the tray; Quit is in the icon's menu
 - On Linux there's no panel, just the icon and its menu
 
 ### Windows & control
 
 - Mini player: frameless, always on top, remembers its position
-- Command palette (<kbd>⌘K</kbd>): transport, sources, presets by name, screens, library search, index rebuilds, devices, sleep timer, power
-- Keyboard throughout: single keys jump screens, <kbd>space</kbd> toggles play, arrows seek and nudge volume, <kbd>/</kbd> filters lists; <kbd>?</kbd> shows the overlay
-- Back and forward through everywhere you've been, like a browser: <kbd>⌘←</kbd>/<kbd>⌘→</kbd> (Alt+arrows on Windows and Linux), the mouse side buttons, or View › Back/Forward
+- Command palette (<kbd>⌘K</kbd>): transport, sources, presets by name, screens, and much more
+- Keyboard controls throughout: single keys jump screens, <kbd>space</kbd> toggles play, arrows seek and nudge volume, <kbd>/</kbd> filters lists; <kbd>?</kbd> shows the controls overlay
+- Back and forward through everywhere you've been, like a browser: <kbd>⌘←</kbd>/<kbd>⌘→</kbd> (Alt+arrows on Windows and Linux), the mouse side buttons, or View › Back/Forward, which also works from inside a text box (<kbd>⌘[</kbd>/<kbd>⌘]</kbd> on macOS)
+- Scroll position remembered in Library, Search and Playlists screens
 - Every reorderable list (queue, presets, playlists, the nav rail) reorders by keyboard as well as by drag
 - OS media keys, and a track-change notification with artwork when the window isn't focused
-- An application menu on macOS; an auto-hidden menu bar on Windows and Linux
 
 ### Appearance
 
 - Dark and light themes; optional per-album accent
 - Reduced motion: on, off, or follow the system setting
 - Card size and grid fill, cards ⇄ rows per screen, resizable side panels
-- The left nav can be reordered by drag or keyboard, and individual items hidden; shortcut keys don't move with position
+- The left nav can be reordered by drag or keyboard, and individual items hidden
 
 ### Transparency
 
-- A requests console (<kbd>`</kbd>) showing every outbound request the app makes: service, method, status, timing
-- A SMOIP console showing the raw streamer traffic, live
+- A requests console (<kbd>`</kbd>) listing every outbound request the app makes: service, method, status, timing
+- A SMOIP console showing the raw streamer traffic
 
 ### Updates & packaging
 
@@ -287,10 +286,10 @@ The complete list:
 | Update check | github.com | on by default; toggleable |
 | Scrobbles | listenbrainz.org | off until you add your token |
 
-No analytics, no telemetry, no accounts, and no radio "click" pings: the
-directory isn't told what you tuned to. Each row of Settings → Connections
-states what its service is sent, and the requests console shows the traffic
-live.
+No analytics, no telemetry, no accounts, and no radio "click" pings (the radio
+directory sees your searches, but not which station you played). Each row of
+Settings › Connections states what its service is sent, and the requests console
+shows the traffic live.
 
 ## Development
 
@@ -298,7 +297,7 @@ live.
 npm install
 npm run dev        # run with HMR
 npm run typecheck  # typecheck main + preload + renderer
-npm run check      # typecheck, lint (ESLint) and format check (Prettier) — what CI runs
+npm run check      # typecheck, lint (ESLint) and format check (Prettier); what CI runs
 npm run format     # format the source with Prettier
 npm run build      # bundle to out/
 npm run dist:mac   # package a dmg (also: dist:win, dist:linux)
@@ -330,7 +329,8 @@ queue/preset edits over SMOIP HTTP.
 TastyTunes is free. If it's been worth something to you, there's a
 name-your-price tip jar at [tastytunes.app](https://tastytunes.app/#support).
 For help (bugs, questions, requests) use
-[GitHub issues](https://github.com/mjoblin/tastytunes/issues).
+[GitHub issues](https://github.com/mjoblin/tastytunes/issues) or the TastyTunes
+[contact form](https://tastytunes.app/help/).
 
 ## License
 
