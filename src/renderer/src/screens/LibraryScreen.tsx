@@ -2041,12 +2041,11 @@ export function LibraryScreen(): React.JSX.Element {
               <div className="flex items-center gap-2 pt-2">
                 <button
                   data-tip="Replaces the queue"
-                  onClick={(e) =>
-                    void playContainer(
-                      albumNode,
-                      e.currentTarget.closest("[data-album-header]") ?? null,
-                    )
-                  }
+                  // no queue-ack flash on the album screen: the whole-header
+                  // pulse read as a glitch and even the art square was ruled
+                  // extra (user, 2026-08-24) — the button's own press state and
+                  // the playing row lighting up are feedback enough here
+                  onClick={() => void playContainer(albumNode, null)}
                   className="tip-bottom flex items-center gap-2 px-4 py-2 rounded-full bg-amber text-bg text-[13px] font-medium motion-safe:active:scale-95 transition-all"
                 >
                   <Play size={14} fill="currentColor" /> Play
