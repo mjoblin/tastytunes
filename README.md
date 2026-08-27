@@ -194,7 +194,7 @@ another machine.
 ### Queue
 
 - View, jump, drag-to-reorder, remove, clear
-- Cards ⇄ rows layouts; follow mode keeps the playing track in view
+- Cards, rows and album-grouped layouts; follow mode keeps the playing track in view
 
 ### Presets
 

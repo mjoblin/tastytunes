@@ -33,7 +33,7 @@ import {
   X,
 } from "lucide-react";
 import { queueContentHash, type QueueListItem } from "@shared/smoip";
-import { presetVolumeKey, type ScreenLayout } from "@shared/model";
+import { presetVolumeKey, type QueueLayout } from "@shared/model";
 import {
   favoriteKey,
   type ContentRef,
@@ -134,6 +134,7 @@ export function QueueScreen(): React.JSX.Element {
   const filter = useStore((s) => s.screenFilters.queue);
   const setScreenFilter = useStore((s) => s.setScreenFilter);
   const cards = queueLayout === "cards";
+  const albums = queueLayout === "albums";
   const [saveOpen, setSaveOpen] = useState(false);
   const clearConfirm = useConfirmPopover();
   // Follow-current does its own scrolling on entry; otherwise restore the
@@ -143,7 +144,7 @@ export function QueueScreen(): React.JSX.Element {
   const setFollowQueue = async (follow: boolean): Promise<void> => {
     await saveSettings({ followQueue: follow });
   };
-  const setLayout = async (queueLayout: ScreenLayout): Promise<void> => {
+  const setLayout = async (queueLayout: QueueLayout): Promise<void> => {
     await saveSettings({ queueLayout });
   };
   // Cards get half a card of context above the target; rows get a full row.
@@ -343,12 +344,18 @@ export function QueueScreen(): React.JSX.Element {
           </div>
           <div className="flex items-center gap-1.5">
             <HeaderChip
-              data-tip={cards ? "View as rows" : "View as cards"}
-              aria-label={cards ? "View as rows" : "View as cards"}
-              onClick={() => void setLayout(cards ? "rows" : "cards")}
+              data-tip={cards ? "View as rows" : albums ? "View as cards" : "View as albums"}
+              aria-label={cards ? "View as rows" : albums ? "View as cards" : "View as albums"}
+              onClick={() => void setLayout(cards ? "rows" : albums ? "cards" : "albums")}
               className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
             >
-              {cards ? <Rows3 size={16} /> : <LayoutGrid size={16} />}
+              {cards ? (
+                <Rows3 size={16} />
+              ) : albums ? (
+                <LayoutGrid size={16} />
+              ) : (
+                <ListMusic size={16} />
+              )}
             </HeaderChip>
             <HeaderChip
               data-tip="Scroll to the current track"
@@ -419,7 +426,13 @@ export function QueueScreen(): React.JSX.Element {
         ref={scrollRef}
         className={cx(
           "flex-1 overflow-y-auto",
-          cards ? "px-8 pb-8 pt-2" : "px-6 pb-6 pt-1 divide-y divide-edge/50",
+          // the albums view separates by its header surface, not by rules —
+          // dividers would double the boundary the veil bar already draws
+          cards
+            ? "px-8 pb-8 pt-2"
+            : albums
+              ? "px-6 pb-6 pt-1"
+              : "px-6 pb-6 pt-1 divide-y divide-edge/50",
         )}
       >
         {items.length === 0 && (
@@ -427,7 +440,7 @@ export function QueueScreen(): React.JSX.Element {
         )}
         {/* Reordering a partial list is ambiguous — drags are inert while filtered. */}
         <DndContext
-          sensors={filter ? [] : sensors}
+          sensors={filter || albums ? [] : sensors}
           collisionDetection={closestCenter}
           onDragEnd={onDragEnd}
         >
@@ -435,7 +448,19 @@ export function QueueScreen(): React.JSX.Element {
             items={items.map((i) => i.id as number)}
             strategy={cards ? rectSortingStrategy : verticalListSortingStrategy}
           >
-            {cards ? (
+            {albums ? (
+              <QueueAlbumGroups
+                items={items}
+                playId={playId}
+                sourceActive={queueSourceActive}
+                currentRef={currentRef}
+                onMenu={(item, e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setRowMenu({ item, x: e.clientX, y: e.clientY });
+                }}
+              />
+            ) : cards ? (
               <div
                 className="grid"
                 style={{
@@ -480,6 +505,178 @@ export function QueueScreen(): React.JSX.Element {
         </DndContext>
       </div>
     </div>
+  );
+}
+
+/**
+ * The album-grouped queue view (2026-08-24, a repeated forum ask: "cover
+ * once, tracks beneath, remove the album by its cover"). Groups are
+ * CONTIGUOUS runs of one album — queue order stays authoritative, so the
+ * same album queued twice shows twice. Albumless entries render as plain
+ * ungrouped rows. A reading-and-pruning view: drag reorder stays with the
+ * rows and cards layouts.
+ */
+function QueueAlbumGroups({
+  items,
+  playId,
+  sourceActive,
+  currentRef,
+  onMenu,
+}: {
+  items: QueueListItem[];
+  playId: number | null;
+  sourceActive: boolean;
+  currentRef: React.MutableRefObject<HTMLDivElement | null>;
+  onMenu(item: QueueListItem, e: React.MouseEvent): void;
+}): React.JSX.Element {
+  const performerFor = useQueuePerformer();
+  const groups: Array<{ album: string | null; items: QueueListItem[] }> = [];
+  for (const item of items) {
+    const album = item.metadata?.album ?? null;
+    const last = groups.at(-1);
+    if (album != null && last && last.album === album) last.items.push(item);
+    else groups.push({ album, items: [item] });
+  }
+  const removeAlbum = (g: { album: string | null; items: QueueListItem[] }): void => {
+    // Only titled entries can be found again — the same rule the single-row
+    // remove applies to its own undo offer.
+    const saved = g.items.flatMap((i) => {
+      const title = i.metadata?.title;
+      return title
+        ? [
+            {
+              content: {
+                title,
+                artist: i.metadata?.artist ?? null,
+                album: i.metadata?.album ?? null,
+              },
+              position: i.position ?? 0,
+            },
+          ]
+        : [];
+    });
+    for (const i of g.items) if (i.id != null) void tt.command({ type: "queueDelete", id: i.id });
+    useStore.getState().showToast({
+      kind: "success",
+      text: `Removed “${g.album}” — ${g.items.length} tracks`,
+      action: {
+        label: "Undo",
+        undo: () => {
+          for (const s of saved) void restoreToQueue(s.content, s.position);
+        },
+      },
+    });
+  };
+  return (
+    <>
+      {groups.map((g, gi) =>
+        g.album == null ? (
+          g.items.map((item) => (
+            <QueueRow
+              key={item.id}
+              onMenu={(e) => onMenu(item, e)}
+              item={item}
+              isCurrent={item.id === playId}
+              sourceActive={sourceActive}
+              currentRef={item.id === playId ? currentRef : undefined}
+            />
+          ))
+        ) : (
+          <div
+            key={`${g.album}-${g.items[0]?.id ?? gi}`}
+            data-queue-album={g.album}
+            className="mb-3"
+          >
+            <div
+              className={cx(
+                "group mb-1.5 grid grid-cols-[44px_1fr_auto] items-center gap-3 rounded-lg px-2 py-1.5",
+                // the header rests one veil step above the tracks (they are
+                // transparent until hover), and hover moves it one step further
+                // — the same ladder the wells and hover fills already use
+                "cursor-default ring-1 ring-edge2 bg-veil transition-colors hover:bg-veil2",
+              )}
+              onClick={() => {
+                const first = g.items[0];
+                if (first?.id != null) void tt.command({ type: "playQueueId", queueId: first.id });
+              }}
+            >
+              <MediaArt src={g.items[0]?.metadata?.art_url} kind="album" />
+              <div className="min-w-0">
+                <div className="flex min-w-0 items-center gap-2">
+                  <div className="text-[13.5px] truncate font-semibold text-ink">{g.album}</div>
+                  {g.items.some((i) => i.id === playId) && sourceActive && <Eqbars />}
+                </div>
+                <div className="text-[12px] text-dim truncate">
+                  {[
+                    performerFor(g.items[0]?.metadata) ?? g.items[0]?.metadata?.artist,
+                    `${g.items.length} tracks`,
+                    fmtTime(g.items.reduce((s, i) => s + (i.metadata?.duration ?? 0), 0)),
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </div>
+              </div>
+              <div className="flex items-center gap-0.5">
+                <RowAction
+                  icon={X}
+                  label="Remove album from queue"
+                  destructive
+                  onClick={() => removeAlbum(g)}
+                />
+              </div>
+            </div>
+            {g.items.map((item, i) => {
+              const isCurrent = item.id === playId;
+              return (
+                <div
+                  key={item.id}
+                  ref={isCurrent ? currentRef : undefined}
+                  className={cx(
+                    "group grid grid-cols-[44px_1fr_auto] items-center gap-3 rounded-lg py-1 pl-2 pr-2",
+                    "cursor-default transition-colors",
+                    isCurrent && sourceActive && "row-playing bg-gold/10",
+                    isCurrent && !sourceActive && "ring-1 ring-edge2 bg-veil/60 hover:bg-veil",
+                    !isCurrent && "hover:bg-veil",
+                  )}
+                  onClick={() => {
+                    if (item.id != null) void tt.command({ type: "playQueueId", queueId: item.id });
+                  }}
+                  onContextMenu={(e) => onMenu(item, e)}
+                >
+                  <span className="justify-self-end pr-1 font-mono text-[10.5px] text-faint tabular-nums">
+                    {isCurrent ? <Eqbars dim={!sourceActive} /> : i + 1}
+                  </span>
+                  <div
+                    className={cx(
+                      "min-w-0 truncate text-[13px]",
+                      isCurrent && sourceActive ? "text-gold" : "text-ink",
+                    )}
+                  >
+                    {item.metadata?.title ?? "—"}
+                  </div>
+                  <div className="flex items-center gap-0.5">
+                    <RowAction
+                      icon={X}
+                      label="Remove from queue"
+                      destructive
+                      onClick={() => removeFromQueue(item)}
+                    />
+                    <RowAction
+                      icon={MoreHorizontal}
+                      label="More actions"
+                      onClick={(e) => onMenu(item, e)}
+                    />
+                    <span className="pl-1 font-mono text-[11px] text-faint tabular-nums">
+                      {fmtTime(item.metadata?.duration ?? 0)}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ),
+      )}
+    </>
   );
 }
 

@@ -563,6 +563,8 @@ export const DISPLAY_FONT_IDS = [
 export type DisplayFont = (typeof DISPLAY_FONT_IDS)[number];
 /** How a collection screen lays out its items. */
 export type ScreenLayout = "rows" | "cards";
+/** The queue alone adds an album-grouped reading view (cover once, tracks beneath). */
+export type QueueLayout = ScreenLayout | "albums";
 /** Motion effects: follow the OS Reduce Motion setting, or force on/off. */
 export type MotionMode = "system" | "on" | "off";
 export type AmbientArtMode = "off" | "now-playing" | "all";
@@ -649,7 +651,7 @@ export interface AppSettings {
   followQueue: boolean;
   followPresets: boolean;
   /** Per-screen cards ⇄ rows layout. Card sizing shares the presetCard* settings. */
-  queueLayout: ScreenLayout;
+  queueLayout: QueueLayout;
   presetsLayout: ScreenLayout;
   libraryLayout: ScreenLayout;
   /** Album-grid sort in the Library (tracks always sort by track number). */
