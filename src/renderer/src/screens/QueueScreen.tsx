@@ -157,6 +157,11 @@ export function QueueScreen(): React.JSX.Element {
   // Right-click rather than a third hover button: the row already carries
   // remove and a grip, and Favorites established right-click for exactly this
   // (a local list of tracks whose rows are already busy).
+  // Multi-select (2026-08-24): ⌘/Ctrl-click toggles, ⇧-click extends from the
+  // anchor, a bare click clears and PLAYS as it always has, Esc clears. Held
+  // as ids so it survives reorders; pruned when entries leave the queue.
+  const [selected, setSelected] = useState<ReadonlySet<number>>(() => new Set());
+  const selAnchor = useRef<number | null>(null);
   const [rowMenu, setRowMenu] = useState<{ item: QueueListItem; x: number; y: number } | null>(
     null,
   );
@@ -243,6 +248,90 @@ export function QueueScreen(): React.JSX.Element {
   );
 
   const currentRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setSelected((prev) => {
+      if (prev.size === 0) return prev;
+      const ids = new Set(items.map((it) => it.id));
+      const next = new Set([...prev].filter((id) => ids.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [items]);
+  useEffect(() => {
+    if (selected.size === 0) return;
+    const onKey = (e: KeyboardEvent): void => {
+      const t = e.target;
+      if (t instanceof HTMLElement && t.matches("input, textarea, [contenteditable]")) return;
+      if (e.key === "Escape") setSelected(new Set());
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selected.size]);
+  /** True = the click was a selection chord; the caller must not play. */
+  const rowClick = (item: QueueListItem, e: React.MouseEvent): boolean => {
+    const id = item.id;
+    if (id == null) return false;
+    const idx = items.findIndex((it) => it.id === id);
+    if (e.metaKey || e.ctrlKey) {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+      selAnchor.current = idx;
+      return true;
+    }
+    if (e.shiftKey && selAnchor.current != null && idx >= 0) {
+      const [a, b] = [Math.min(selAnchor.current, idx), Math.max(selAnchor.current, idx)];
+      setSelected(new Set(items.slice(a, b + 1).flatMap((it) => (it.id == null ? [] : [it.id]))));
+      return true;
+    }
+    if (selected.size > 0) setSelected(new Set());
+    return false;
+  };
+  /** ⌘-click on an album header toggles its whole run. */
+  const groupModClick = (ids: number[], e: React.MouseEvent): boolean => {
+    if (!(e.metaKey || e.ctrlKey)) return false;
+    setSelected((prev) => {
+      const next = new Set(prev);
+      const allIn = ids.every((id) => next.has(id));
+      for (const id of ids) if (allIn) next.delete(id);
+      if (!allIn) for (const id of ids) next.add(id);
+      return next;
+    });
+    return true;
+  };
+  const removeSelected = (): void => {
+    const chosen = items.filter((it) => it.id != null && selected.has(it.id));
+    const saved = chosen.flatMap((i) => {
+      const title = i.metadata?.title;
+      return title
+        ? [
+            {
+              content: {
+                title,
+                artist: i.metadata?.artist ?? null,
+                album: i.metadata?.album ?? null,
+              },
+              position: i.position ?? 0,
+            },
+          ]
+        : [];
+    });
+    for (const i of chosen) void tt.command({ type: "queueDelete", id: i.id as number });
+    setSelected(new Set());
+    useStore.getState().showToast({
+      kind: "success",
+      text: `Removed ${chosen.length} tracks`,
+      action: {
+        label: "Undo",
+        undo: () => {
+          for (const s of saved) void restoreToQueue(s.content, s.position);
+        },
+      },
+    });
+  };
   // First follow after mount positions INSTANTLY — re-entering the screen
   // shouldn't replay a glide to a place you already were. The animation is
   // reserved for track changes while you're watching.
@@ -420,6 +509,23 @@ export function QueueScreen(): React.JSX.Element {
       )}
       <SaveQueueDialog open={saveOpen} onClose={() => setSaveOpen(false)} />
 
+      {selected.size > 0 && (
+        <div className="mx-6 mb-2 flex items-center gap-3 rounded-lg ring-1 ring-edge2 bg-veil px-3 py-2 text-[12.5px]">
+          <span className="text-dim tabular-nums">{selected.size} selected</span>
+          <button onClick={removeSelected} className="text-dim hover:text-alert transition-colors">
+            Remove from queue
+          </button>
+          <div className="flex-1" />
+          <button
+            onClick={() => setSelected(new Set())}
+            className="text-faint hover:text-ink transition-colors"
+            title="Esc"
+          >
+            Clear
+          </button>
+        </div>
+      )}
+
       {/* rows: pt-1 keeps the current ring unclipped; cards: pt-2 gives the
           hover grow + glow ring headroom on the top row */}
       <div
@@ -454,6 +560,9 @@ export function QueueScreen(): React.JSX.Element {
                 playId={playId}
                 sourceActive={queueSourceActive}
                 currentRef={currentRef}
+                selectedIds={selected}
+                onRowClick={rowClick}
+                onGroupModClick={groupModClick}
                 onMenu={(item, e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -482,6 +591,8 @@ export function QueueScreen(): React.JSX.Element {
                     isCurrent={item.id === playId}
                     sourceActive={queueSourceActive}
                     currentRef={item.id === playId ? currentRef : undefined}
+                    selected={item.id != null && selected.has(item.id)}
+                    onRowClick={(e) => rowClick(item, e)}
                   />
                 ))}
               </div>
@@ -498,6 +609,8 @@ export function QueueScreen(): React.JSX.Element {
                   isCurrent={item.id === playId}
                   sourceActive={queueSourceActive}
                   currentRef={item.id === playId ? currentRef : undefined}
+                  selected={item.id != null && selected.has(item.id)}
+                  onRowClick={(e) => rowClick(item, e)}
                 />
               ))
             )}
@@ -522,12 +635,18 @@ function QueueAlbumGroups({
   sourceActive,
   currentRef,
   onMenu,
+  selectedIds,
+  onRowClick,
+  onGroupModClick,
 }: {
   items: QueueListItem[];
   playId: number | null;
   sourceActive: boolean;
   currentRef: React.MutableRefObject<HTMLDivElement | null>;
   onMenu(item: QueueListItem, e: React.MouseEvent): void;
+  selectedIds: ReadonlySet<number>;
+  onRowClick(item: QueueListItem, e: React.MouseEvent): boolean;
+  onGroupModClick(ids: number[], e: React.MouseEvent): boolean;
 }): React.JSX.Element {
   const performerFor = useQueuePerformer();
   const groups: Array<{ album: string | null; items: QueueListItem[] }> = [];
@@ -579,6 +698,8 @@ function QueueAlbumGroups({
               isCurrent={item.id === playId}
               sourceActive={sourceActive}
               currentRef={item.id === playId ? currentRef : undefined}
+              selected={item.id != null && selectedIds.has(item.id)}
+              onRowClick={(e) => onRowClick(item, e)}
             />
           ))
         ) : (
@@ -595,7 +716,15 @@ function QueueAlbumGroups({
                 // — the same ladder the wells and hover fills already use
                 "cursor-default ring-1 ring-edge2 bg-veil transition-colors hover:bg-veil2",
               )}
-              onClick={() => {
+              onClick={(e) => {
+                // ⌘-click on the header selects the whole run
+                if (
+                  onGroupModClick(
+                    g.items.flatMap((i) => (i.id == null ? [] : [i.id])),
+                    e,
+                  )
+                )
+                  return;
                 const first = g.items[0];
                 if (first?.id != null) void tt.command({ type: "playQueueId", queueId: first.id });
               }}
@@ -627,6 +756,7 @@ function QueueAlbumGroups({
             </div>
             {g.items.map((item, i) => {
               const isCurrent = item.id === playId;
+              const isSelected = item.id != null && selectedIds.has(item.id);
               return (
                 <div
                   key={item.id}
@@ -635,10 +765,15 @@ function QueueAlbumGroups({
                     "group grid grid-cols-[44px_1fr_auto] items-center gap-3 rounded-lg py-1 pl-2 pr-2",
                     "cursor-default transition-colors",
                     isCurrent && sourceActive && "row-playing bg-gold/10",
-                    isCurrent && !sourceActive && "ring-1 ring-edge2 bg-veil/60 hover:bg-veil",
-                    !isCurrent && "hover:bg-veil",
+                    isCurrent &&
+                      !sourceActive &&
+                      !isSelected &&
+                      "ring-1 ring-edge2 bg-veil/60 hover:bg-veil",
+                    !isCurrent && !isSelected && "hover:bg-veil",
+                    isSelected && "ring-1 ring-edge2 bg-veil2",
                   )}
-                  onClick={() => {
+                  onClick={(e) => {
+                    if (onRowClick(item, e)) return;
                     if (item.id != null) void tt.command({ type: "playQueueId", queueId: item.id });
                   }}
                   onContextMenu={(e) => onMenu(item, e)}
@@ -741,6 +876,11 @@ interface QueueItemProps {
   /** The queue's own source (MEDIA_PLAYER) is what's audible right now. */
   sourceActive: boolean;
   currentRef?: React.MutableRefObject<HTMLDivElement | null>;
+  /** Part of the current multi-selection (⌘/⇧-click). */
+  selected?: boolean;
+  /** Selection first: returns true when the click was a ⌘/⇧ chord and the
+   *  row must NOT play — bare clicks keep meaning play, the app-wide rule. */
+  onRowClick?(e: React.MouseEvent): boolean;
 }
 
 function QueueRow({
@@ -749,6 +889,8 @@ function QueueRow({
   sourceActive,
   currentRef,
   onMenu,
+  selected = false,
+  onRowClick,
 }: QueueItemProps): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id as number,
@@ -776,10 +918,12 @@ function QueueRow({
         // current + queue audible: full playing treatment; current while another
         // source plays: just the parked resume point, quietly set apart
         isCurrent && sourceActive && "row-playing bg-gold/10",
-        isCurrent && !sourceActive && "ring-1 ring-edge2 bg-veil/60 hover:bg-veil",
-        !isCurrent && "hover:bg-veil",
+        isCurrent && !sourceActive && !selected && "ring-1 ring-edge2 bg-veil/60 hover:bg-veil",
+        !isCurrent && !selected && "hover:bg-veil",
+        selected && "ring-1 ring-edge2 bg-veil2",
       )}
-      onClick={() => {
+      onClick={(e) => {
+        if (onRowClick?.(e)) return;
         if (item.id != null) void tt.command({ type: "playQueueId", queueId: item.id });
       }}
       onContextMenu={(e) => {
@@ -856,6 +1000,8 @@ function QueueCard({
   sourceActive,
   currentRef,
   onMenu,
+  selected = false,
+  onRowClick,
 }: QueueItemProps): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id as number,
@@ -885,12 +1031,15 @@ function QueueCard({
           ? "bg-goldtile/70 tile-playing"
           : isCurrent
             ? "bg-veil/60 ring-1 ring-edge2 card-hover-glow"
-            : "bg-raised/50 ring-1 ring-edge card-hover-glow",
+            : selected
+              ? "bg-veil2 ring-1 ring-edge2 card-hover-glow"
+              : "bg-raised/50 ring-1 ring-edge card-hover-glow",
       )}
     >
       <button
         className="relative block w-full cursor-pointer"
-        onClick={() => {
+        onClick={(e) => {
+          if (onRowClick?.(e)) return;
           if (item.id != null) void tt.command({ type: "playQueueId", queueId: item.id });
         }}
       >
