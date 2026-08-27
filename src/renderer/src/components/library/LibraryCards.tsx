@@ -294,6 +294,8 @@ export function TrackRow({
   onHeart,
   onPlayNow,
   onMenu,
+  selected = false,
+  onRowClick,
   onAlbumLink,
   onArtistLink,
   note,
@@ -312,6 +314,10 @@ export function TrackRow({
   onHeart?(): void;
   onPlayNow(el: HTMLElement | null): void;
   onMenu(e: React.MouseEvent): void;
+  /** Part of the current multi-selection (⌘/⇧-click). */
+  selected?: boolean;
+  /** Selection first: true = the click was a chord and must not play. */
+  onRowClick?(e: React.MouseEvent): boolean;
   /** Search results: the album name renders as a link that navigates there
    *  (the row itself keeps the app-wide click contract: tracks play). */
   onAlbumLink?(): void;
@@ -337,9 +343,18 @@ export function TrackRow({
       className={cx(
         "group grid items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
         showArt ? "grid-cols-[26px_44px_1fr_auto_auto]" : "grid-cols-[26px_1fr_auto_auto]",
-        isCurrent ? "row-playing bg-gold/10" : menuOpen ? "bg-veil" : "hover:bg-veil",
+        isCurrent
+          ? "row-playing bg-gold/10"
+          : selected
+            ? "ring-1 ring-edge2 bg-veil2"
+            : menuOpen
+              ? "bg-veil"
+              : "hover:bg-veil",
       )}
-      onClick={() => onPlayNow(ref.current)}
+      onClick={(e) => {
+        if (onRowClick?.(e)) return;
+        onPlayNow(ref.current);
+      }}
       onContextMenu={onMenu}
       data-library-track={node.title}
     >

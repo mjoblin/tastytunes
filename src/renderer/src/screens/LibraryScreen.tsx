@@ -255,6 +255,16 @@ export function LibraryScreen(): React.JSX.Element {
   // Which node the scroller currently shows, once its listing has landed —
   // scroll memory records only for that node, so a fresh mount (scroller at
   // 0, listing not yet fetched) can't clobber a remembered spot.
+  // Multi-select over the visible track rows (2026-08-24): ⌘/Ctrl-click
+  // toggles, ⇧-click extends from the anchor, a bare click still plays, Esc
+  // clears. Keyed by node id; cleared whenever the listing changes under it.
+  const [selTracks, setSelTracks] = useState<ReadonlySet<string>>(() => new Set());
+  const selAnchor2 = useRef<string | null>(null);
+  const [playlistMulti, setPlaylistMulti] = useState<{
+    nodes: MediaNode[];
+    x: number;
+    y: number;
+  } | null>(null);
   const loadedKey = useRef<string | null>(null);
   const pendingScroll = useRef<number | null>(null);
   /** A track title a destination asked to land on (LibraryTarget.track). */
@@ -335,6 +345,21 @@ export function LibraryScreen(): React.JSX.Element {
         ? "failed"
         : "hidden";
   const [lens, setLens] = useState<"albums" | "artists" | null>(null);
+
+  useEffect(() => {
+    setSelTracks((prev) => (prev.size ? new Set() : prev));
+    setPlaylistMulti(null);
+  }, [serverUdn, path, lens, searchMode]);
+  useEffect(() => {
+    if (selTracks.size === 0) return;
+    const onKey = (e: KeyboardEvent): void => {
+      const el = e.target;
+      if (el instanceof HTMLElement && el.matches("input, textarea, [contenteditable]")) return;
+      if (e.key === "Escape") setSelTracks(new Set());
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selTracks.size]);
   // the pools snapshot (cached on the ready indexes' signature) — fetched
   // when a lens opens, shared with the queue rows via useIndexPools
   // pools also load while browsing a volume-suffixed album, so the header
@@ -1069,6 +1094,55 @@ export function LibraryScreen(): React.JSX.Element {
       return;
     }
     void act(node, "PLAY_NOW", el);
+  };
+
+  /** True = the click was a selection chord; the caller must not play. */
+  const trackRowClick = (node: MediaNode, e: React.MouseEvent): boolean => {
+    if (e.metaKey || e.ctrlKey) {
+      setSelTracks((prev) => {
+        const next = new Set(prev);
+        if (next.has(node.id)) next.delete(node.id);
+        else next.add(node.id);
+        return next;
+      });
+      selAnchor2.current = node.id;
+      return true;
+    }
+    if (e.shiftKey && selAnchor2.current != null) {
+      const order = tracks.map((n) => n.id);
+      const a = order.indexOf(selAnchor2.current);
+      const b = order.indexOf(node.id);
+      if (a >= 0 && b >= 0) {
+        setSelTracks(new Set(order.slice(Math.min(a, b), Math.max(a, b) + 1)));
+        return true;
+      }
+    }
+    if (selTracks.size > 0) setSelTracks(new Set());
+    return false;
+  };
+  const selectedNodes = (): MediaNode[] => tracks.filter((n) => selTracks.has(n.id));
+  /** The selection bar's queue verbs, in the visible order. PLAY_NEXT inserts
+   *  after the current track, so batches go in reversed to land in order. */
+  const queueSelected = async (mode: "now" | "next" | "append"): Promise<void> => {
+    const chosen = selectedNodes();
+    if (chosen.length === 0) return;
+    try {
+      if (mode === "now") {
+        await tt.mediaQueueAdd(nodeUdn(chosen[0]) ?? "", chosen[0].id, "PLAY_NOW");
+        for (const n of [...chosen.slice(1)].reverse())
+          await tt.mediaQueueAdd(nodeUdn(n) ?? "", n.id, "PLAY_NEXT");
+      } else if (mode === "next") {
+        for (const n of [...chosen].reverse())
+          await tt.mediaQueueAdd(nodeUdn(n) ?? "", n.id, "PLAY_NEXT");
+      } else {
+        for (const n of chosen) await tt.mediaQueueAdd(nodeUdn(n) ?? "", n.id, "APPEND");
+      }
+      if (mode !== "now")
+        showToast({ kind: "success", text: `Added ${chosen.length} tracks to the queue` });
+      setSelTracks(new Set());
+    } catch {
+      showNotice("Couldn't reach the streamer — nothing was queued.");
+    }
   };
 
   /** "Play" on a container: replace the queue with it and start at its first track. */
@@ -2236,6 +2310,45 @@ export function LibraryScreen(): React.JSX.Element {
         {/* tracks are ALWAYS rows — the app-wide idiom (Queue, Recently,
             Favorites, album tracklists). The cards ⇄ rows toggle governs
             container lists only. */}
+        {!atRoot && state === "ready" && selTracks.size > 0 && (
+          <div className="mt-3 flex items-center gap-3 rounded-lg ring-1 ring-edge2 bg-veil px-3 py-2 text-[12.5px]">
+            <span className="text-dim tabular-nums">{selTracks.size} selected</span>
+            <button
+              onClick={() => void queueSelected("now")}
+              className="text-dim hover:text-ink transition-colors"
+            >
+              Play now
+            </button>
+            <button
+              onClick={() => void queueSelected("next")}
+              className="text-dim hover:text-ink transition-colors"
+            >
+              Play next
+            </button>
+            <button
+              onClick={() => void queueSelected("append")}
+              className="text-dim hover:text-ink transition-colors"
+            >
+              Add to end of queue
+            </button>
+            <button
+              onClick={(e) =>
+                setPlaylistMulti({ nodes: selectedNodes(), x: e.clientX, y: e.clientY })
+              }
+              className="text-dim hover:text-ink transition-colors"
+            >
+              Add to playlist…
+            </button>
+            <div className="flex-1" />
+            <button
+              onClick={() => setSelTracks(new Set())}
+              className="text-faint hover:text-ink transition-colors"
+              title="Esc"
+            >
+              Clear
+            </button>
+          </div>
+        )}
         {!atRoot && state === "ready" && tracks.length > 0 ? (
           <div
             className={cx(
@@ -2264,6 +2377,8 @@ export function LibraryScreen(): React.JSX.Element {
                       favorited={nodeFavorited(node)}
                       onHeart={() => heartNode(node)}
                       onPlayNow={(el) => playTrack(node, el)}
+                      selected={selTracks.has(node.id)}
+                      onRowClick={(e) => trackRowClick(node, e)}
                       onMenu={(e) => openMenu(node, e)}
                       note={albumNoteFor(node)}
                       artistLabel={
@@ -2344,6 +2459,8 @@ export function LibraryScreen(): React.JSX.Element {
                           favorited={nodeFavorited(node)}
                           onHeart={() => heartNode(node)}
                           onPlayNow={(el) => playTrack(node, el)}
+                          selected={selTracks.has(node.id)}
+                          onRowClick={(e) => trackRowClick(node, e)}
                           onMenu={(e) => openMenu(node, e)}
                           onAlbumLink={
                             node.album && linkable(node, "albums")
@@ -2450,6 +2567,22 @@ export function LibraryScreen(): React.JSX.Element {
                 }
               : undefined
           }
+        />
+      )}
+      {playlistMulti && (
+        <AddToPlaylistPanel
+          label={`${playlistMulti.nodes.length} tracks`}
+          at={{ x: playlistMulti.x, y: playlistMulti.y }}
+          onClose={() => setPlaylistMulti(null)}
+          resolve={() => {
+            const items = playlistMulti.nodes.map((node) => {
+              const udn = node.serverUdn ?? serverUdn;
+              const name = servers?.find((s) => s.udn === udn)?.name ?? null;
+              return itemFromNode(node, udn, name);
+            });
+            setSelTracks(new Set());
+            return Promise.resolve(items);
+          }}
         />
       )}
       {playlistPicker && (
