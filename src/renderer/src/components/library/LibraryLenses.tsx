@@ -11,6 +11,7 @@ import {
   trackInAlbumOf,
   type MediaIndexPools,
   type MediaNode,
+  nameSortKey,
 } from "@shared/model";
 import { cx, fmtTime, matchesFilter } from "@/lib/format";
 import { useStore } from "@/store";
@@ -358,7 +359,10 @@ export function AlbumsLens({
       list = list.filter((a) => matchesFilter(mem.filter, [a.title, a.artist, a.year]));
     const sorted = [...list].sort((a, b) => {
       if (sort === "artist")
-        return (a.artist ?? "￿").localeCompare(b.artist ?? "￿") || a.title.localeCompare(b.title);
+        return (
+          nameSortKey(a.artist ?? "￿").localeCompare(nameSortKey(b.artist ?? "￿")) ||
+          a.title.localeCompare(b.title)
+        );
       if (sort === "year")
         return (b.year ?? "").localeCompare(a.year ?? "") || a.title.localeCompare(b.title);
       return (
@@ -584,7 +588,7 @@ export function ArtistsLens({
           (x, y) => (y.year ?? "").localeCompare(x.year ?? "") || x.title.localeCompare(y.title),
         ),
       }))
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .sort((a, b) => nameSortKey(a.name).localeCompare(nameSortKey(b.name)));
   }, [pools]);
 
   const baseArtists = useMemo(
@@ -671,7 +675,7 @@ export function ArtistsLens({
   }, []);
   const letterRefs = useRef(new Map<string, HTMLDivElement>());
   const letterOf = (name: string): string => {
-    const c = name[0]?.toUpperCase() ?? "#";
+    const c = nameSortKey(name)[0]?.toUpperCase() ?? "#";
     return c >= "A" && c <= "Z" ? c : "#";
   };
   const letters = useMemo(

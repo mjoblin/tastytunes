@@ -31,6 +31,7 @@ import {
   HIRES_BITS_ABOVE,
   HIRES_RATE_ABOVE,
   describeProfileNote,
+  nameSortKey,
 } from "@shared/model";
 import { favoriteKey, type Favorite } from "@shared/model";
 import { MCP_CLUSTERS, mcpClusterEnabled } from "@shared/mcpCatalog";
@@ -1030,7 +1031,8 @@ export class McpBridge {
           albums.sort((x, y) => {
             if (sort === "artist")
               return (
-                (x.artist ?? "￿").localeCompare(y.artist ?? "￿") || x.title.localeCompare(y.title)
+                nameSortKey(x.artist ?? "￿").localeCompare(nameSortKey(y.artist ?? "￿")) ||
+                x.title.localeCompare(y.title)
               );
             if (sort === "year")
               return (y.year ?? "").localeCompare(x.year ?? "") || x.title.localeCompare(y.title);
@@ -1140,8 +1142,8 @@ export class McpBridge {
           const sort = (a.sort as string | undefined) ?? "name";
           artists.sort((x, y) =>
             sort === "albums"
-              ? y.albums - x.albums || x.name.localeCompare(y.name)
-              : x.name.localeCompare(y.name),
+              ? y.albums - x.albums || nameSortKey(x.name).localeCompare(nameSortKey(y.name))
+              : nameSortKey(x.name).localeCompare(nameSortKey(y.name)),
           );
           const offset = (a.offset as number | undefined) ?? 0;
           const limit = (a.limit as number | undefined) ?? 100;

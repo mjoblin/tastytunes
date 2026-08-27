@@ -118,6 +118,17 @@ export type Favorite = FavoriteStation | FavoriteMedia;
  * media keys on lowercased content fields, deliberately WITHOUT the server
  * (the same album on two servers is the same music).
  */
+/**
+ * Sort key for an artist name: a leading "The " files under what follows (The
+ * Cure under C) — display never changes, only ordering and the A–Z rail.
+ * Deliberately ONLY "The": stripping "A "/"An" is where conventions disagree
+ * (A Tribe Called Quest divides rooms), so we take the unambiguous case and
+ * stop. Titles keep their articles; this is for people and groups.
+ */
+export function nameSortKey(name: string): string {
+  return /^the /i.test(name) ? name.slice(4) : name;
+}
+
 export function favoriteKey(f: Favorite): string {
   const lc = (s: string | null | undefined): string => (s ?? "").trim().toLowerCase();
   if (f.kind === "station") return `station:${f.url}`;

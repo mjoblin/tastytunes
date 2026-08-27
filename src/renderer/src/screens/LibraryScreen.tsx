@@ -34,6 +34,7 @@ import {
   performerLine,
   albumTracksOf,
   artistSummary,
+  nameSortKey,
 } from "@shared/model";
 import { favoriteKey, type Favorite, type FavoriteMedia } from "@shared/model";
 import type { QueueListItem } from "@shared/smoip";
@@ -152,7 +153,10 @@ const sortSearch = (list: MediaNode[], sort: SearchSort, reversed: boolean): Med
   if (sort !== "relevance") {
     out = [...list].sort((a, b) => {
       if (sort === "artist")
-        return (a.artist ?? "￿").localeCompare(b.artist ?? "￿") || a.title.localeCompare(b.title);
+        return (
+          nameSortKey(a.artist ?? "￿").localeCompare(nameSortKey(b.artist ?? "￿")) ||
+          a.title.localeCompare(b.title)
+        );
       if (sort === "year")
         return (b.year ?? "").localeCompare(a.year ?? "") || a.title.localeCompare(b.title);
       return a.title.localeCompare(b.title);
@@ -1178,7 +1182,8 @@ export function LibraryScreen(): React.JSX.Element {
           : [...list].sort((a, b) => {
               if (librarySort === "artist")
                 return (
-                  (a.artist ?? "￿").localeCompare(b.artist ?? "￿") || a.title.localeCompare(b.title)
+                  nameSortKey(a.artist ?? "￿").localeCompare(nameSortKey(b.artist ?? "￿")) ||
+                  a.title.localeCompare(b.title)
                 );
               if (librarySort === "year")
                 return (b.year ?? "").localeCompare(a.year ?? "") || a.title.localeCompare(b.title);
