@@ -2020,6 +2020,7 @@ export function LibraryScreen(): React.JSX.Element {
             <div className="h-[160px] w-[160px] shrink-0 rounded-xl overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
               <ArtImage
                 src={artUrlAt(albumArt, 160)}
+                fallbackArt={{ artist: albumArtist, album: albumNode.title }}
                 className="h-full w-full object-cover"
                 fallback={<Disc3 size={48} strokeWidth={1} className="text-faint" />}
               />

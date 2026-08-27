@@ -248,6 +248,8 @@ export interface Snapshot {
 
 export interface TastyTunesApi {
   getSnapshot(): Promise<Snapshot>;
+  /** Cover Art Archive fallback for an album the server has no art for (null when off or unknown). */
+  albumArt(artist: string, album: string): Promise<string | null>;
   discover(): Promise<DiscoveredDevice[]>;
   connect(host: string): Promise<void>;
   disconnect(): Promise<void>;
@@ -380,6 +382,7 @@ export interface TastyTunesApi {
 
 export const IPC = {
   getSnapshot: "tt:getSnapshot",
+  albumArt: "tt:albumArt",
   discover: "tt:discover",
   connect: "tt:connect",
   disconnect: "tt:disconnect",

@@ -17,6 +17,7 @@ import {
 
 const api: TastyTunesApi = {
   getSnapshot: () => ipcRenderer.invoke(IPC.getSnapshot),
+  albumArt: (artist, album) => ipcRenderer.invoke(IPC.albumArt, artist, album),
   discover: () => ipcRenderer.invoke(IPC.discover),
   connect: (host: string) => ipcRenderer.invoke(IPC.connect, host),
   disconnect: () => ipcRenderer.invoke(IPC.disconnect),

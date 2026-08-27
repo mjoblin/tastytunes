@@ -44,6 +44,7 @@ import { fetchLyrics } from "./lookups/lyrics";
 import { scrobbler } from "./lookups/scrobbler";
 import { fetchArtistInfo } from "./lookups/artistInfo";
 import { fetchAlbumInfo } from "./lookups/albumInfo";
+import { fetchCoverArt } from "./lookups/coverArt";
 import { radioByTags, radioSearch, radioTop } from "./lookups/radioBrowser";
 import { clearLookupCaches, flushLookupCaches, lookupCacheStats } from "./lookups/diskCache";
 import { browse as mediaBrowse, presetSave, queueAdd, refreshServers } from "./media/upnpBrowser";
@@ -395,6 +396,11 @@ function registerIpc(): void {
   );
   ipcMain.handle(IPC.fetchAlbumInfo, (_e, artist: string, album: string, force?: boolean) =>
     getSettings().artistInfo ? fetchAlbumInfo(artist, album, !!force) : null,
+  );
+  ipcMain.handle(IPC.albumArt, (_e, artist: string, album: string) =>
+    getSettings().artistInfo && typeof artist === "string" && typeof album === "string"
+      ? fetchCoverArt(artist, album)
+      : null,
   );
   ipcMain.handle(IPC.getRecents, () => getRecents());
   ipcMain.handle(IPC.clearRecents, () => deviceManager.clearRecents());

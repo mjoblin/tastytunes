@@ -118,6 +118,9 @@ export function ContainerCard({
         <div className="relative aspect-square w-full rounded-lg overflow-hidden bg-veil flex items-center justify-center">
           <ArtImage
             src={artUrlAt(node.artUrl, 240)}
+            fallbackArt={
+              album ? { artist: node.albumArtist ?? node.artist, album: node.title } : undefined
+            }
             lazy
             className={cx("h-full w-full object-cover", muted && "opacity-60 saturate-[.6]")}
             fallback={
