@@ -956,10 +956,18 @@ function SchedulesSection({
         <div key={s.id} className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-4">
           {missed?.scheduleId === s.id && <MissedRow dueAt={missed.dueAt} />}
           <div className="flex items-center gap-3">
+            {/* UNCONTROLLED while editing (defaultValue, not value): Chrome's
+                time input emits "" mid-edit — after the first minute digit —
+                and a controlled value would snap the field back between the
+                two keystrokes (user, 2026-08-24: "it only changes the second
+                of the two digits"). Complete values commit on change. */}
             <input
               type="time"
-              value={s.time}
-              onChange={(e) => e.target.value && update(s.id, { time: e.target.value })}
+              key={s.id}
+              defaultValue={s.time}
+              onChange={(e) => {
+                if (e.target.value) update(s.id, { time: e.target.value });
+              }}
               className="bg-bg rounded-lg ring-1 ring-edge px-2.5 py-1.5 text-[13px] font-mono outline-none focus:ring-edge2"
             />
             <Segmented<Schedule["action"]>
@@ -971,7 +979,7 @@ function SchedulesSection({
               ]}
             />
             <div className="flex-1" />
-            <MiniSwitch checked={s.enabled} onChange={(enabled) => update(s.id, { enabled })} />
+            <Switch checked={s.enabled} onChange={(enabled) => update(s.id, { enabled })} />
             <button
               onClick={() => remove(s.id)}
               aria-label="Delete schedule"
@@ -1082,34 +1090,6 @@ function SchedulesSection({
         Add schedule
       </HeaderChip>
     </section>
-  );
-}
-
-/** The Toggle's switch without the label row, for inline card use. */
-function MiniSwitch({
-  checked,
-  onChange,
-}: {
-  checked: boolean;
-  onChange(next: boolean): void;
-}): React.JSX.Element {
-  return (
-    <button
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className={cx(
-        "relative h-5 w-9 shrink-0 rounded-full transition-colors",
-        checked ? "bg-gold" : "bg-veil2 ring-1 ring-edge",
-      )}
-    >
-      <span
-        className={cx(
-          "absolute top-0.5 h-4 w-4 rounded-full bg-bg transition-all",
-          checked ? "left-[18px]" : "left-0.5",
-        )}
-      />
-    </button>
   );
 }
 
