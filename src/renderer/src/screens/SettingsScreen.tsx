@@ -1064,19 +1064,28 @@ function SchedulesSection({
                   onCommit={(volumePercent) => update(s.id, { volumePercent })}
                 />
               </label>
-              {s.volumePercent != null && (
-                <label
-                  className="flex items-center gap-2 text-[12.5px] text-dim cursor-pointer"
-                  title="Ramp up to the volume instead of jumping to it."
-                >
-                  Fade in
-                  <Switch
-                    size="sm"
-                    checked={s.fadeIn !== false}
-                    onChange={(fadeIn) => update(s.id, { fadeIn })}
-                  />
-                </label>
-              )}
+              {/* Always visible; disabled until the schedule has a volume to
+                  fade up to (the end-of-track pattern: a greyed switch
+                  teaches the rule, a hidden one buries it). */}
+              <label
+                className={cx(
+                  "flex items-center gap-2 text-[12.5px] text-dim",
+                  s.volumePercent == null ? "opacity-40" : "cursor-pointer",
+                )}
+                title={
+                  s.volumePercent == null
+                    ? "Set a volume for this schedule to fade up to."
+                    : "Ramp up to the volume instead of jumping to it."
+                }
+              >
+                Fade in
+                <Switch
+                  size="sm"
+                  checked={s.fadeIn !== false}
+                  disabled={s.volumePercent == null}
+                  onChange={(fadeIn) => update(s.id, { fadeIn })}
+                />
+              </label>
             </div>
           )}
         </div>
