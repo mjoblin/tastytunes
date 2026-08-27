@@ -450,9 +450,16 @@ export function SettingsScreen(): React.JSX.Element {
 
                   <Toggle
                     label="Artist & album context"
-                    hint="Adds a context panel to the Now Playing screen: Wikipedia summaries and release details matched via MusicBrainz, fetched when you open it. Sends the current artist and album names; off means no requests, ever. Also fills in missing album art from the Cover Art Archive."
+                    hint="Adds a context panel to the Now Playing screen: Wikipedia summaries and release details matched via MusicBrainz, fetched when you open it. Sends the current artist and album names; off means no requests, ever."
                     checked={settings.artistInfo}
                     onChange={(artistInfo) => void save({ artistInfo })}
+                  />
+
+                  <Toggle
+                    label="Missing album art"
+                    hint="Fills in art the media server doesn't have: MusicBrainz identifies the album, the Cover Art Archive supplies the image. Server art always wins."
+                    checked={settings.albumArtLookup}
+                    onChange={(albumArtLookup) => void save({ albumArtLookup })}
                   />
 
                   <Toggle

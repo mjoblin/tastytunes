@@ -398,7 +398,7 @@ function registerIpc(): void {
     getSettings().artistInfo ? fetchAlbumInfo(artist, album, !!force) : null,
   );
   ipcMain.handle(IPC.albumArt, (_e, artist: string, album: string) =>
-    getSettings().artistInfo && typeof artist === "string" && typeof album === "string"
+    getSettings().albumArtLookup && typeof artist === "string" && typeof album === "string"
       ? fetchCoverArt(artist, album)
       : null,
   );

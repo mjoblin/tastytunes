@@ -705,6 +705,10 @@ export interface AppSettings {
   lbToken: string;
   /** Artist bio panel on Now Playing (MusicBrainz + Wikipedia, on demand). */
   artistInfo: boolean;
+  /** Fill covers the media server doesn't have (MusicBrainz identifies the
+   *  album, the Cover Art Archive supplies the image). Its own switch,
+   *  independent of the context panel — the user's call, 2026-08-24. */
+  albumArtLookup: boolean;
   /**
    * Look stations up in the radio-browser.info directory. OFF means the app
    * never contacts it — not from the Radio screen, not from unified search,
@@ -850,6 +854,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   lbEnabled: false,
   lbToken: "",
   artistInfo: true,
+  albumArtLookup: true,
   radioDirectory: true,
   schedules: [],
   sleepFade: true,
