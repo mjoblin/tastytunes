@@ -5,6 +5,7 @@ import { tt } from "@/api";
 import { useStore } from "@/store";
 import { cx, deriveNowPlaying, fmtTime } from "@/lib/format";
 import { PopoverChrome } from "@/hooks/usePopover";
+import { Switch } from "@/components/controls/Switch";
 
 /** The sleep-timer menu, ONE list (2026-08-16): the bar popover and the command palette both offer exactly these. */
 export const SLEEP_DURATIONS: ReadonlyArray<{ minutes: number; label: string }> = [
@@ -142,13 +143,23 @@ export function SleepTimer(): React.JSX.Element {
                 minute, then the level is restored after the action. Pre-amp
                 mode only — control-bus has no absolute level to ramp. */}
             {preAmp && (
-              <label className="mt-2 flex items-center justify-between gap-2 text-[11.5px] text-dim cursor-pointer">
+              <label
+                className={cx(
+                  "mt-2 flex items-center justify-between gap-2 text-[11.5px] text-dim",
+                  endOfTrack ? "opacity-40" : "cursor-pointer",
+                )}
+                title={
+                  endOfTrack
+                    ? "An end-of-track timer fires without warning, so there is nothing to fade ahead of."
+                    : undefined
+                }
+              >
                 <span>Fade out at the end</span>
-                <input
-                  type="checkbox"
+                <Switch
+                  size="sm"
                   checked={sleepFade}
-                  onChange={(e) => void saveSettings({ sleepFade: e.target.checked })}
-                  className="accent-[color:var(--color-gold,#d9a520)]"
+                  disabled={endOfTrack}
+                  onChange={(sleepFade) => void saveSettings({ sleepFade })}
                 />
               </label>
             )}

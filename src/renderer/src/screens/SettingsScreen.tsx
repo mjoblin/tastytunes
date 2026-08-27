@@ -80,6 +80,7 @@ import {
   type ScreenDef,
 } from "@/lib/screens";
 import { Slider } from "@/components/controls/Slider";
+import { Switch } from "@/components/controls/Switch";
 import { OrderHandle } from "@/components/controls/OrderHandle";
 import { lockVertical } from "@/lib/dnd";
 import { HeaderChip, PrimaryButton, ScreenTitle } from "@/components/chrome/Chrome";
@@ -1060,13 +1061,12 @@ function SchedulesSection({
                   className="flex items-center gap-2 text-[12.5px] text-dim cursor-pointer"
                   title="Ramp up to the volume instead of jumping to it."
                 >
-                  <input
-                    type="checkbox"
-                    checked={s.fadeIn !== false}
-                    onChange={(e) => update(s.id, { fadeIn: e.target.checked })}
-                    className="accent-[color:var(--color-gold,#d9a520)]"
-                  />
                   Fade in
+                  <Switch
+                    size="sm"
+                    checked={s.fadeIn !== false}
+                    onChange={(fadeIn) => update(s.id, { fadeIn })}
+                  />
                 </label>
               )}
             </div>
@@ -1878,25 +1878,7 @@ function Toggle({
         <div className="text-[13.5px]">{label}</div>
         <div className="text-[11.5px] text-faint max-w-sm">{hint}</div>
       </div>
-      <button
-        role="switch"
-        aria-checked={checked}
-        onClick={(e) => {
-          e.preventDefault();
-          onChange(!checked);
-        }}
-        className={cx(
-          "relative h-5 w-9 shrink-0 rounded-full transition-colors",
-          checked ? "bg-gold" : "bg-veil2 ring-1 ring-edge",
-        )}
-      >
-        <span
-          className={cx(
-            "absolute top-0.5 h-4 w-4 rounded-full bg-bg transition-all",
-            checked ? "left-[18px]" : "left-0.5",
-          )}
-        />
-      </button>
+      <Switch checked={checked} onChange={onChange} />
     </label>
   );
 }
