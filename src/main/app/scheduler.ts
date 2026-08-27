@@ -61,6 +61,11 @@ async function fire(dm: DeviceManager, s: Schedule): Promise<void> {
   // Wake: power first (a no-op re-send is guarded off in DeviceManager), then
   // give the device a beat before the preset, and the preset before volume.
   await dm.command({ type: "power", power: "ON" });
+  // Fade-in (absent = on): start near silence and ramp to the schedule's
+  // volume instead of opening the day at full target. Pre-amp mode only —
+  // control-bus has no absolute level to ramp.
+  const fade = s.volumePercent != null && s.fadeIn !== false && dm.preAmpVolume() != null;
+  if (fade) await dm.command({ type: "setVolumePercent", percent: 1 });
   if (s.presetId != null) {
     await settle(2500);
     // A schedule with its own volume overrides the preset's saved one.
@@ -72,7 +77,8 @@ async function fire(dm: DeviceManager, s: Schedule): Promise<void> {
   }
   if (s.volumePercent != null) {
     await settle(1500);
-    await dm.command({ type: "setVolumePercent", percent: s.volumePercent });
+    if (fade) await dm.fadeInTo(s.volumePercent);
+    else await dm.command({ type: "setVolumePercent", percent: s.volumePercent });
   }
 }
 

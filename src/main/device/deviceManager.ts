@@ -17,6 +17,7 @@ import {
   type SleepTimer,
   FRAME_RING_SIZE,
   LOG_RING_SIZE,
+  VOLUME_FADE_MS,
 } from "@shared/model";
 import {
   type ContentRef,
@@ -125,6 +126,13 @@ export class DeviceManager {
   private queuePresetsTimer: NodeJS.Timeout | null = null;
   private sleep: SleepTimer | null = null;
   private sleepTimeout: NodeJS.Timeout | null = null;
+  /** Volume fade (sleep fade-out / schedule fade-in). Pre-amp mode only. */
+  private fadeTick: NodeJS.Timeout | null = null;
+  private fadeStartTimeout: NodeJS.Timeout | null = null;
+  /** The level to put back after a sleep fade's action fires (null = no fade ran). */
+  private fadeRestore: number | null = null;
+  /** True while the fade engine itself is writing volume — its own commands must not cancel it. */
+  private fadeWriting = false;
   /** Connected to the in-process demo device (labels the connection in the UI). */
   private demo = false;
   /** See Snapshot.lastRecalledPresetId — in-app recalls only, content-checked by consumers. */
@@ -239,6 +247,69 @@ export class DeviceManager {
     this.socket = null;
   }
 
+  // ---------------------------------------------------------------- volume fade
+
+  private fadeMs(): number {
+    const n = Number(process.env["TASTYTUNES_FADE_MS"]);
+    return Number.isFinite(n) && n > 0 ? n : VOLUME_FADE_MS;
+  }
+
+  /** Current pre-amp level, or null when the device is in control-bus mode (no fades there). */
+  preAmpVolume(): number | null {
+    return this.cache.zoneState?.volume_percent ?? null;
+  }
+
+  /** Stop any fade. `restore` puts the pre-fade level back (a cancelled fade-out); a user taking over passes false. */
+  private cancelFade(restore: boolean): void {
+    if (this.fadeTick) clearInterval(this.fadeTick);
+    this.fadeTick = null;
+    if (this.fadeStartTimeout) clearTimeout(this.fadeStartTimeout);
+    this.fadeStartTimeout = null;
+    const level = this.fadeRestore;
+    this.fadeRestore = null;
+    if (restore && level != null && this.connection.phase === "connected") {
+      void this.fadeVolumeWrite(level);
+    }
+  }
+
+  private async fadeVolumeWrite(percent: number): Promise<void> {
+    this.fadeWriting = true;
+    try {
+      await this.command({ type: "setVolumePercent", percent });
+    } finally {
+      this.fadeWriting = false;
+    }
+  }
+
+  /** Ramp the pre-amp volume to `to` over `ms`, one step per second. Resolves when done or cancelled. */
+  private rampVolume(to: number, ms: number): Promise<void> {
+    const from = this.preAmpVolume();
+    if (from == null || from === to) return Promise.resolve();
+    if (this.fadeTick) clearInterval(this.fadeTick);
+    const steps = Math.max(3, Math.round(ms / 1000));
+    const stepMs = ms / steps;
+    let i = 0;
+    this.log("info", "sleep", `fade ${from}% → ${to}% over ${Math.round(ms / 1000)}s`);
+    return new Promise((resolve) => {
+      this.fadeTick = setInterval(() => {
+        i += 1;
+        const level = Math.round(from + ((to - from) * i) / steps);
+        void this.fadeVolumeWrite(level);
+        if (i >= steps) {
+          if (this.fadeTick) clearInterval(this.fadeTick);
+          this.fadeTick = null;
+          resolve();
+        }
+      }, stepMs);
+    });
+  }
+
+  /** A wake schedule's fade-in: ramp from the pre-set low level up to `target`. */
+  async fadeInTo(target: number): Promise<void> {
+    this.fadeRestore = null;
+    await this.rampVolume(target, this.fadeMs());
+  }
+
   // ---------------------------------------------------------------- sleep timer
 
   /**
@@ -261,6 +332,8 @@ export class DeviceManager {
           : `armed: ${sleep.action} at end of track`,
       );
     }
+    // Arming (or re-arming) replaces any fade in flight; clearing restores the level.
+    this.cancelFade(sleep == null);
     if (sleep?.firesAt != null) {
       const ms = sleep.firesAt - Date.now();
       if (ms <= 0) {
@@ -268,6 +341,23 @@ export class DeviceManager {
         return;
       }
       this.sleepTimeout = setTimeout(() => this.fireSleep(), ms);
+      // Countdown fade-out: ramp to near-silence over the last stretch, pre-amp
+      // mode only, honoring the setting. End-of-track timers never fade (no
+      // advance warning), and a timer shorter than the fade ramps from now.
+      if (getSettings().sleepFade && this.preAmpVolume() != null) {
+        // End the ramp a beat BEFORE the action so the last step (near
+        // silence) lands instead of racing fireSleep's cleanup.
+        const fadeMs = Math.min(this.fadeMs(), Math.max(0, ms - 1000));
+        if (fadeMs > 0) {
+          this.fadeStartTimeout = setTimeout(
+            () => {
+              this.fadeRestore = this.preAmpVolume();
+              void this.rampVolume(1, fadeMs);
+            },
+            Math.max(0, ms - fadeMs - 1000),
+          );
+        }
+      }
     }
     this.push({ kind: "sleep", sleep: this.sleep });
   }
@@ -287,11 +377,27 @@ export class DeviceManager {
     this.push({ kind: "sleep", sleep: null });
     // Only touch the streamer while connected — a timer that expires after a
     // dropout should quietly clear, never pause on reconnect.
+    if (this.fadeTick) clearInterval(this.fadeTick);
+    this.fadeTick = null;
+    if (this.fadeStartTimeout) clearTimeout(this.fadeStartTimeout);
+    this.fadeStartTimeout = null;
+    const restore = this.fadeRestore;
+    this.fadeRestore = null;
     if (action && this.connection.phase === "connected") {
       this.log("info", "sleep", `fired: ${action}`);
-      void this.command(
-        action === "standby" ? { type: "power", power: "NETWORK" } : { type: "pause" },
-      );
+      // Pause first either way, put the faded level back while nothing plays
+      // (so tomorrow's first press isn't a whisper), then standby if asked.
+      void (async () => {
+        await this.command({ type: "pause" });
+        if (restore != null) {
+          await new Promise((r) => setTimeout(r, 400));
+          await this.fadeVolumeWrite(restore);
+        }
+        if (action === "standby") {
+          await new Promise((r) => setTimeout(r, 400));
+          await this.command({ type: "power", power: "NETWORK" });
+        }
+      })();
     }
   }
 
@@ -348,6 +454,22 @@ export class DeviceManager {
   }
 
   async command(cmd: StreamerCommand): Promise<void> {
+    // A user touching volume, power or transport takes over from a running
+    // fade — cancel it without restoring (their level wins). The fade engine's
+    // own writes are flagged and pass through.
+    if (
+      !this.fadeWriting &&
+      (this.fadeTick != null || this.fadeStartTimeout != null) &&
+      (cmd.type === "setVolumePercent" ||
+        cmd.type === "setVolumeStep" ||
+        cmd.type === "volumeStepChange" ||
+        cmd.type === "power" ||
+        cmd.type === "pause" ||
+        cmd.type === "play" ||
+        cmd.type === "togglePlayback")
+    ) {
+      this.cancelFade(false);
+    }
     const socket = this.socket;
     const host = socket?.host;
     if (!socket || !host) {

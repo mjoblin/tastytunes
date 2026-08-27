@@ -1048,6 +1048,20 @@ function SchedulesSection({
                   onCommit={(volumePercent) => update(s.id, { volumePercent })}
                 />
               </label>
+              {s.volumePercent != null && (
+                <label
+                  className="flex items-center gap-2 text-[12.5px] text-dim cursor-pointer"
+                  title="Ramp up to the volume instead of jumping to it."
+                >
+                  <input
+                    type="checkbox"
+                    checked={s.fadeIn !== false}
+                    onChange={(e) => update(s.id, { fadeIn: e.target.checked })}
+                    className="accent-[color:var(--color-gold,#d9a520)]"
+                  />
+                  Fade in
+                </label>
+              )}
             </div>
           )}
         </div>

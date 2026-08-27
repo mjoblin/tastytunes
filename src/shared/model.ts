@@ -393,7 +393,17 @@ export interface Schedule {
   presetId: number | null;
   /** Wake only: volume to set after the preset settles. */
   volumePercent: number | null;
+  /** Wake only, with a volume: ramp up to it instead of jumping (absent = true). */
+  fadeIn?: boolean;
 }
+
+/**
+ * Volume fade length for the sleep timer's fade-out and a wake schedule's
+ * fade-in, one constant for both directions. Test harnesses shrink it via
+ * TASTYTUNES_FADE_MS; there is deliberately no user knob (a good constant
+ * beats a knob, the standing instinct).
+ */
+export const VOLUME_FADE_MS = 60_000;
 
 /**
  * A wake schedule that came due while the computer was asleep, offered rather
@@ -506,6 +516,10 @@ export type SleepAction = "pause" | "standby";
  * `minutes: null` means "end of the current track", in which case `trackKey`
  * is the armed track's identity and `firesAt` is unused.
  */
+/** Countdown sleep timers fade the volume down over the last VOLUME_FADE_MS
+ *  (pre-amp mode only; the level is restored after the action so tomorrow's
+ *  first play isn't a whisper). End-of-track timers fire at a boundary the
+ *  app can't see coming, so they never fade. */
 export interface SleepTimer {
   action: SleepAction;
   minutes: number | null;
@@ -698,6 +712,8 @@ export interface AppSettings {
   radioDirectory: boolean;
   /** Scheduled actions (alarms) — fire only while the app is running. */
   schedules: Schedule[];
+  /** Countdown sleep timers ramp the volume down before firing (pre-amp mode only). */
+  sleepFade: boolean;
   /**
    * Per-preset volume overrides (feature 10): recalling the preset through
    * TastyTunes also sets this volume. Keyed via presetVolumeKey (device udn +
@@ -834,6 +850,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   artistInfo: true,
   radioDirectory: true,
   schedules: [],
+  sleepFade: true,
   presetVolumes: {},
   queueSignatures: {},
   mcp: {

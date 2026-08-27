@@ -31,6 +31,8 @@ export function SleepTimer(): React.JSX.Element {
   // Never trust the stored value blindly — an older settings file (or a skewed
   // dev reload) can leave it unset, which would arm a timer with no action.
   const action: SleepAction = stored === "pause" || stored === "standby" ? stored : "standby";
+  const sleepFade = useStore((s) => s.settings.sleepFade);
+  const preAmp = useStore((s) => s.zoneState?.volume_percent != null);
   const endOfTrack = sleep != null && sleep.minutes == null;
 
   // Tick once a second while a countdown is live so the popover / tooltip stay fresh.
@@ -135,6 +137,21 @@ export function SleepTimer(): React.JSX.Element {
                 End of track
               </button>
             </div>
+
+            {/* Fade-out: countdown timers ramp the volume down over the last
+                minute, then the level is restored after the action. Pre-amp
+                mode only — control-bus has no absolute level to ramp. */}
+            {preAmp && (
+              <label className="mt-2 flex items-center justify-between gap-2 text-[11.5px] text-dim cursor-pointer">
+                <span>Fade out at the end</span>
+                <input
+                  type="checkbox"
+                  checked={sleepFade}
+                  onChange={(e) => void saveSettings({ sleepFade: e.target.checked })}
+                  className="accent-[color:var(--color-gold,#d9a520)]"
+                />
+              </label>
+            )}
 
             {/* Always present so the popover height never jumps between states. */}
             <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-edge pt-2.5">
