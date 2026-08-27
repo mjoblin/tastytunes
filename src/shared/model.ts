@@ -119,6 +119,21 @@ export type Favorite = FavoriteStation | FavoriteMedia;
  * (the same album on two servers is the same music).
  */
 /**
+ * A multi-volume set member: "Nature's Best 2 [Disc 1]", "Symphonies Vol. 3",
+ * "Anthology, Part 2". Base + volume when the title carries a trailing
+ * disc/volume/part marker; null otherwise. Same FULL title twice (two
+ * editions of one album) is deliberately NOT a set — no marker, no match.
+ */
+export function albumVolume(title: string): { base: string; volume: number } | null {
+  const m =
+    /^(.*?)[\s\-–—:,]*[[(]?\s*(?:disc|disk|cd|vol(?:ume)?\.?|part|pt\.?)\s*(\d+)\s*[\])]?\s*$/i.exec(
+      title.trim(),
+    );
+  if (!m || !m[1].trim()) return null;
+  return { base: m[1].trim(), volume: Number(m[2]) };
+}
+
+/**
  * Sort key for an artist name: a leading "The " files under what follows (The
  * Cure under C) — display never changes, only ordering and the A–Z rail.
  * Deliberately ONLY "The": stripping "A "/"An" is where conventions disagree

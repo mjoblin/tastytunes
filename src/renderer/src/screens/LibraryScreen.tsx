@@ -35,6 +35,7 @@ import {
   albumTracksOf,
   artistSummary,
   nameSortKey,
+  albumVolume,
 } from "@shared/model";
 import { favoriteKey, type Favorite, type FavoriteMedia } from "@shared/model";
 import type { QueueListItem } from "@shared/smoip";
@@ -335,7 +336,10 @@ export function LibraryScreen(): React.JSX.Element {
   const [lens, setLens] = useState<"albums" | "artists" | null>(null);
   // the pools snapshot (cached on the ready indexes' signature) — fetched
   // when a lens opens, shared with the queue rows via useIndexPools
-  const lensPools = useIndexPools(lens != null);
+  // pools also load while browsing a volume-suffixed album, so the header
+  // can offer the set line without a lens ever having been opened
+  const tailVol = albumVolume(path.at(-1)?.title ?? "");
+  const lensPools = useIndexPools(lens != null || tailVol != null);
   useEffect(() => {
     if (lens !== "albums" || lensPools == null) return;
     requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: albumsLensScroll }));
@@ -1164,6 +1168,24 @@ export function LibraryScreen(): React.JSX.Element {
   const lastCrumbNode = path.length > 0 ? path[path.length - 1].node : undefined;
   const albumNode =
     !searchMode && lastCrumbNode && isAlbumClass(lastCrumbNode.upnpClass) ? lastCrumbNode : null;
+  const albumVol = albumNode ? albumVolume(albumNode.title) : null;
+  /** The browsed album's volume siblings (same parsed base + artist), by volume. */
+  const setSiblings = useMemo(() => {
+    if (!albumVol || !albumNode || !lensPools) return null;
+    const artist = (albumNode.albumArtist ?? albumNode.artist ?? "").toLowerCase();
+    const found = lensPools
+      .flatMap((g) => g.albums)
+      .filter((a) => {
+        const v = albumVolume(a.title);
+        return (
+          v != null &&
+          v.base.toLowerCase() === albumVol.base.toLowerCase() &&
+          (a.albumArtist ?? a.artist ?? "").toLowerCase() === artist
+        );
+      })
+      .sort((a, b) => (albumVolume(a.title)?.volume ?? 0) - (albumVolume(b.title)?.volume ?? 0));
+    return found.length >= 2 ? found : null;
+  }, [albumVol, albumNode, lensPools]);
 
   // Filtered + sorted listings are memoized: unmemoized they re-ran the
   // localeCompare sorts and filter scans on every store push — once a second
@@ -2038,6 +2060,45 @@ export function LibraryScreen(): React.JSX.Element {
                   composer line is only there when every track agrees) */}
               <div className="space-y-0.5">
                 {albumFacts && <div className="text-[12.5px] text-faint">{albumFacts}</div>}
+                {setSiblings && albumVol && (
+                  <div
+                    className="flex items-center gap-1.5 text-[12.5px] text-faint"
+                    data-album-set
+                  >
+                    <button
+                      onClick={() => {
+                        const i = setSiblings.findIndex((a) => a.id === albumNode?.id);
+                        const prev = setSiblings[i - 1];
+                        if (prev?.serverUdn)
+                          moveTo(prev.serverUdn, [{ id: prev.id, title: prev.title, node: prev }]);
+                      }}
+                      disabled={setSiblings.findIndex((a) => a.id === albumNode?.id) <= 0}
+                      className="px-1 text-dim hover:text-ink disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                      aria-label="Previous volume"
+                    >
+                      ‹
+                    </button>
+                    <span>
+                      {albumVol.base} · {albumVol.volume} of {setSiblings.length}
+                    </span>
+                    <button
+                      onClick={() => {
+                        const i = setSiblings.findIndex((a) => a.id === albumNode?.id);
+                        const next = setSiblings[i + 1];
+                        if (next?.serverUdn)
+                          moveTo(next.serverUdn, [{ id: next.id, title: next.title, node: next }]);
+                      }}
+                      disabled={
+                        setSiblings.findIndex((a) => a.id === albumNode?.id) >=
+                        setSiblings.length - 1
+                      }
+                      className="px-1 text-dim hover:text-ink disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                      aria-label="Next volume"
+                    >
+                      ›
+                    </button>
+                  </div>
+                )}
                 {albumComposerLine && (
                   <div className="text-[12.5px] text-faint" data-album-composers>
                     {albumComposerLine}

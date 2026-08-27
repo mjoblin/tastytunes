@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUpRight, ChevronDown, MoreHorizontal } from "lucide-react";
 import {
+  albumVolume,
   albumFormat,
   orderTracks,
   discGroups,
@@ -372,6 +373,43 @@ export function AlbumsLens({
     return reversed ? sorted.reverse() : sorted;
   }, [all, mem, sort, reversed, kind, compilationKeys]);
 
+  /**
+   * Box sets (2026-08-24): volume siblings — same parsed base + artist, ≥2
+   * members with trailing Disc/Vol/Part markers — collapse to ONE tile at
+   * the first member's position, ordered by volume. Two same-titled
+   * EDITIONS never match (no marker). The tile opens volume 1; the album
+   * header's set line walks the rest.
+   */
+  const tiles = useMemo(() => {
+    const groups = new Map<string, MediaNode[]>();
+    for (const n of shown) {
+      const v = albumVolume(n.title);
+      if (!v) continue;
+      const k = `${lc(v.base)}|${lc(n.albumArtist ?? n.artist ?? "")}`;
+      const list = groups.get(k);
+      if (list) list.push(n);
+      else groups.set(k, [n]);
+    }
+    const seen = new Set<string>();
+    const out: Array<{ node: MediaNode; set?: { base: string; volumes: MediaNode[] } }> = [];
+    for (const n of shown) {
+      const v = albumVolume(n.title);
+      const k = v ? `${lc(v.base)}|${lc(n.albumArtist ?? n.artist ?? "")}` : null;
+      const g = k ? groups.get(k) : undefined;
+      if (!v || !g || g.length < 2) {
+        out.push({ node: n });
+        continue;
+      }
+      if (seen.has(k as string)) continue;
+      seen.add(k as string);
+      const volumes = [...g].sort(
+        (a, b) => (albumVolume(a.title)?.volume ?? 0) - (albumVolume(b.title)?.volume ?? 0),
+      );
+      out.push({ node: volumes[0], set: { base: v.base, volumes } });
+    }
+    return out;
+  }, [shown]);
+
   return (
     <div data-lens-albums>
       <div className="flex items-start gap-3 pb-3">
@@ -453,34 +491,48 @@ export function AlbumsLens({
               : undefined
           }
         >
-          {shown.map((node) =>
-            cards ? (
+          {tiles.map(({ node: rawNode, set }) => {
+            // a set tile is volume 1 wearing the base title and a count badge
+            const node = set ? { ...rawNode, title: set.base, year: null } : rawNode;
+            return cards ? (
               <ContainerCard
-                key={nodeKey(node)}
+                key={nodeKey(rawNode)}
                 node={node}
-                playing={actions.isPlayingAlbum(node)}
+                playing={
+                  set
+                    ? set.volumes.some((v) => actions.isPlayingAlbum(v))
+                    : actions.isPlayingAlbum(node)
+                }
                 menuOpen={actions.menuNodeId === node.id}
-                favorited={actions.nodeFavorited(node)}
-                badge={multiServer ? node.serverName : undefined}
-                onHeart={() => actions.heartNode(node)}
-                onEnter={() => actions.openAlbum(node)}
-                onPlay={(el) => void actions.playContainer(node, el)}
-                onMenu={(e) => actions.openMenu(node, e)}
+                favorited={actions.nodeFavorited(rawNode)}
+                badge={
+                  set ? `${set.volumes.length} volumes` : multiServer ? node.serverName : undefined
+                }
+                onHeart={() => actions.heartNode(rawNode)}
+                onEnter={() => actions.openAlbum(rawNode)}
+                onPlay={(el) => void actions.playContainer(rawNode, el)}
+                onMenu={(e) => actions.openMenu(rawNode, e)}
               />
             ) : (
               <ContainerRow
-                key={nodeKey(node)}
+                key={nodeKey(rawNode)}
                 node={node}
-                playing={actions.isPlayingAlbum(node)}
+                playing={
+                  set
+                    ? set.volumes.some((v) => actions.isPlayingAlbum(v))
+                    : actions.isPlayingAlbum(node)
+                }
                 menuOpen={actions.menuNodeId === node.id}
-                favorited={actions.nodeFavorited(node)}
-                badge={multiServer ? node.serverName : undefined}
-                onHeart={() => actions.heartNode(node)}
-                onEnter={() => actions.openAlbum(node)}
-                onMenu={(e) => actions.openMenu(node, e)}
+                favorited={actions.nodeFavorited(rawNode)}
+                badge={
+                  set ? `${set.volumes.length} volumes` : multiServer ? node.serverName : undefined
+                }
+                onHeart={() => actions.heartNode(rawNode)}
+                onEnter={() => actions.openAlbum(rawNode)}
+                onMenu={(e) => actions.openMenu(rawNode, e)}
               />
-            ),
-          )}
+            );
+          })}
         </div>
       )}
     </div>
