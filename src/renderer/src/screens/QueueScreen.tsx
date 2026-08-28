@@ -609,6 +609,10 @@ export function QueueScreen(): React.JSX.Element {
         // and anything interactive are excluded, rows handle themselves
         if (selected.size === 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
         const t = e.target as HTMLElement;
+        // a portaled surface's dismiss click (popover backdrop, menu, panel —
+        // React bubbles through portals) is its own gesture, never a
+        // background click: the target must really live inside this screen
+        if (!e.currentTarget.contains(t)) return;
         if (
           t.closest("button, input, a, [data-queue-id], [data-queue-album], [data-selection-bar]")
         )
@@ -919,6 +923,7 @@ export function QueueScreen(): React.JSX.Element {
                     }
                     selStart={!(prev?.id != null && selected.has(prev.id))}
                     selEnd={!(next?.id != null && selected.has(next.id))}
+                    bodyDrag={selected.size > 0}
                   />
                 );
               })
@@ -1282,6 +1287,12 @@ interface QueueItemProps {
   selEnd?: boolean;
   /** The gold insertion line — where the block will land on release. */
   insertLine?: "before" | "after";
+  /** While a selection exists the whole row body drags (selection mode
+   *  suspends click-to-play, so the body is free — the Photos rule); with
+   *  no selection the grip stays the one drag affordance, keeping sloppy
+   *  clicks from reordering. Listeners only, never dnd attributes, on a
+   *  container that holds other controls (the useShortcuts law). */
+  bodyDrag?: boolean;
 }
 
 function QueueRow({
@@ -1296,6 +1307,7 @@ function QueueRow({
   insertLine,
   selStart = true,
   selEnd = true,
+  bodyDrag = false,
 }: QueueItemProps): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id as number,
@@ -1321,6 +1333,7 @@ function QueueRow({
           : { transform: CSS.Transform.toString(lockVertical(transform)), transition }
       }
       data-queue-id={item.id}
+      {...(bodyDrag ? listeners : {})}
       className={cx(
         "group relative grid grid-cols-[26px_44px_1fr_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5",
         "cursor-default transition-colors",

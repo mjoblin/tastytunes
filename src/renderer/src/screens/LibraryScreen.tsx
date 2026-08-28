@@ -1622,6 +1622,8 @@ export function LibraryScreen(): React.JSX.Element {
         // blank-space click clears the selection (the Finder rule)
         if (selTracks.size === 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
         const t = e.target as HTMLElement;
+        // portaled dismiss clicks are their own gesture (the queue's rule)
+        if (!e.currentTarget.contains(t)) return;
         if (t.closest("button, input, a, [data-library-track], [data-selection-bar]")) return;
         setSelTracks(new Set());
       }}

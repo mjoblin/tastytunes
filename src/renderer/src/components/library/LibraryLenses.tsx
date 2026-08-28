@@ -817,6 +817,8 @@ export function ArtistsLens({
         // blank-space click clears the selection (the Finder rule)
         if (selT.size === 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
         const t = e.target as HTMLElement;
+        // portaled dismiss clicks are their own gesture (the queue's rule)
+        if (!e.currentTarget.contains(t)) return;
         if (
           t.closest(
             "button, input, a, [data-library-track], [data-lens-artist-row], [data-lens-album-row], [data-lens-selection-bar]",
