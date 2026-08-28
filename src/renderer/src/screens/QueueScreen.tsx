@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useQueuePerformer } from "@/hooks/useQueuePerformer";
 import {
   DndContext,
@@ -408,6 +408,43 @@ export function QueueScreen(): React.JSX.Element {
     updateInsert({ id: overId, after });
   };
 
+  // THE LANDING ANIMATES (user, 2026-08-27 — an instant re-order after the
+  // line model read as a teleport): a FLIP pass flies every displaced row
+  // from its old rect to its new one. WAAPI (el.animate), not style
+  // mutation, so the streamer's re-announce mid-flight can't snap a row out
+  // of its animation; skipped under reduced motion.
+  const flipSnap = useRef<Map<number, { x: number; y: number }> | null>(null);
+  const snapRows = (): void => {
+    const m = new Map<number, { x: number; y: number }>();
+    document.querySelectorAll<HTMLElement>("[data-queue-id]").forEach((el) => {
+      const r = el.getBoundingClientRect();
+      m.set(Number(el.dataset.queueId), { x: r.left, y: r.top });
+    });
+    flipSnap.current = m;
+  };
+  useLayoutEffect(() => {
+    const snap = flipSnap.current;
+    if (!snap) return;
+    flipSnap.current = null;
+    if (
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+      document.documentElement.classList.contains("reduce-motion")
+    )
+      return;
+    document.querySelectorAll<HTMLElement>("[data-queue-id]").forEach((el) => {
+      const old = snap.get(Number(el.dataset.queueId));
+      if (!old) return;
+      const r = el.getBoundingClientRect();
+      const dx = old.x - r.left;
+      const dy = old.y - r.top;
+      if (dx === 0 && dy === 0) return;
+      el.animate(
+        [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "translate(0, 0)" }],
+        { duration: 220, easing: "cubic-bezier(0.2, 0.7, 0.3, 1)" },
+      );
+    });
+  }, [queue]);
+
   /** Reorder to `final` (full queue order): optimistic locally, then the
    *  simulated per-item moves to the device (see movesToTransform). */
   const applyOrder = (final: number[]): void => {
@@ -415,6 +452,7 @@ export function QueueScreen(): React.JSX.Element {
     const order = allItems.map((it) => it.id as number);
     const moves = movesToTransform(order, final);
     if (moves.length === 0) return;
+    snapRows();
     setQueueItems(final.flatMap((id) => (byId.has(id) ? [byId.get(id)!] : [])));
     for (const m of moves) void tt.command({ type: "queueMove", id: m.id, from: m.from, to: m.to });
   };
@@ -1158,6 +1196,7 @@ function QueueRow({
           ? undefined
           : { transform: CSS.Transform.toString(lockVertical(transform)), transition }
       }
+      data-queue-id={item.id}
       className={cx(
         "group relative grid grid-cols-[26px_44px_1fr_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5",
         "cursor-default transition-colors",
@@ -1274,6 +1313,7 @@ function QueueCard({
         setNodeRef(node);
         if (currentRef) currentRef.current = node;
       }}
+      data-queue-id={item.id}
       style={staticDrag ? undefined : { transform: CSS.Transform.toString(transform), transition }}
       {...attributes}
       {...listeners}
