@@ -26,6 +26,7 @@ import { Chip } from "@/components/chrome/Chrome";
 import { SortChip } from "@/components/controls/SortChip";
 import { Segmented } from "@/components/controls/Segmented";
 import { ContainerCard, ContainerRow, TrackRow } from "@/components/library/LibraryCards";
+import { RowMenu } from "@/components/media/RowMenu";
 import { Eqbars } from "@/components/media/Eqbars";
 
 // The library lenses: OUR views over the union of every ready index —
@@ -714,21 +715,31 @@ export function ArtistsLens({
   // the artist or album selection moves, and by Esc (the app-wide release).
   const [selT, setSelT] = useState<ReadonlySet<string>>(() => new Set());
   const selTAnchor = useRef<number | null>(null);
-  const visibleTracks = albumTracks ?? looseTracks ?? [];
+  const visibleTracks = useMemo(() => albumTracks ?? looseTracks ?? [], [albumTracks, looseTracks]);
   useEffect(() => {
     setSelT(new Set());
     selTAnchor.current = null;
   }, [mem.artist, mem.album]);
   useEffect(() => {
-    if (selT.size === 0) return;
     const onKey = (e: KeyboardEvent): void => {
       const t = e.target;
       if (t instanceof HTMLElement && t.matches("input, textarea, [contenteditable]")) return;
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "a") {
+        if (visibleTracks.length === 0) return;
+        e.preventDefault();
+        setSelT(new Set(visibleTracks.map(nodeKey)));
+        return;
+      }
+      if (selT.size === 0) return;
       if (e.key === "Escape") setSelT(new Set());
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selT.size]);
+  }, [visibleTracks, selT.size]);
+  /** The plural ⋯: a menu invoked ON a selected track speaks for the whole
+   *  selection (the Finder/Spotify convention); unselected rows keep the
+   *  single-track builder menu via actions.openMenu. */
+  const [lensMenu, setLensMenu] = useState<{ x: number; y: number } | null>(null);
   /** True = the click was a selection chord; the caller must not play. */
   const trackRowClick = (t: MediaNode, e: React.MouseEvent): boolean => {
     const key = nodeKey(t);
@@ -1180,7 +1191,13 @@ export function ArtistsLens({
                         onRowClick={(e) => trackRowClick(t, e)}
                         onHeart={() => actions.heartNode(t)}
                         onPlayNow={(el) => actions.playTrack(t, el)}
-                        onMenu={(e) => actions.openMenu(t, e)}
+                        onMenu={(e) => {
+                          if (selT.size > 1 && selT.has(nodeKey(t))) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setLensMenu({ x: e.clientX, y: e.clientY });
+                          } else actions.openMenu(t, e);
+                        }}
                       />
                     ))}
                   </div>
@@ -1194,6 +1211,43 @@ export function ArtistsLens({
           </div>
         </div>
       </div>
+      {lensMenu && (
+        <RowMenu
+          title={`${selT.size} tracks`}
+          at={lensMenu}
+          onClose={() => setLensMenu(null)}
+          items={[
+            {
+              label: "Play now",
+              run: () => actions.queueTracks(chosenT(), "now", () => setSelT(new Set())),
+            },
+            {
+              label: "Play next",
+              run: () => actions.queueTracks(chosenT(), "next", () => setSelT(new Set())),
+            },
+            {
+              label: "Add to end of queue",
+              run: () => actions.queueTracks(chosenT(), "append", () => setSelT(new Set())),
+            },
+            {
+              label: "Add to playlist…",
+              run: () => actions.addTracksToPlaylist(chosenT(), lensMenu, () => setSelT(new Set())),
+            },
+            (() => {
+              const nodes = chosenT();
+              const allIn = nodes.length > 0 && nodes.every(actions.nodeFavorited);
+              return {
+                label: allIn ? "Remove from favorites" : "Add to favorites",
+                run: () => {
+                  for (const n of nodes)
+                    if (allIn ? actions.nodeFavorited(n) : !actions.nodeFavorited(n))
+                      actions.heartNode(n);
+                },
+              };
+            })(),
+          ]}
+        />
+      )}
     </div>
   );
 }

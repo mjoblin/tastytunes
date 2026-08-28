@@ -265,16 +265,6 @@ export function QueueScreen(): React.JSX.Element {
       return next.size === prev.size ? prev : next;
     });
   }, [items]);
-  useEffect(() => {
-    if (selected.size === 0) return;
-    const onKey = (e: KeyboardEvent): void => {
-      const t = e.target;
-      if (t instanceof HTMLElement && t.matches("input, textarea, [contenteditable]")) return;
-      if (e.key === "Escape") setSelected(new Set());
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [selected.size]);
   /** True = the click was a selection chord; the caller must not play. */
   const rowClick = (item: QueueListItem, e: React.MouseEvent): boolean => {
     const id = item.id;
@@ -324,7 +314,7 @@ export function QueueScreen(): React.JSX.Element {
     });
     return true;
   };
-  const removeSelected = (): void => {
+  const removeSelected = useCallback((): void => {
     const chosen = items.filter((it) => it.id != null && selected.has(it.id));
     const saved = chosen.flatMap((i) => {
       const title = i.metadata?.title;
@@ -353,7 +343,26 @@ export function QueueScreen(): React.JSX.Element {
         },
       },
     });
-  };
+  }, [items, selected]);
+  // The selection's keyboard: ⌘A gathers everything visible (respecting a
+  // filter); with a selection, Esc exits and Delete/Backspace is Remove from
+  // queue — the Finder/Spotify keys. Never inside a text box.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      const t = e.target;
+      if (t instanceof HTMLElement && t.matches("input, textarea, [contenteditable]")) return;
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "a") {
+        e.preventDefault();
+        setSelected(new Set(items.flatMap((it) => (it.id != null ? [it.id] : []))));
+        return;
+      }
+      if (selected.size === 0) return;
+      if (e.key === "Escape") setSelected(new Set());
+      if (e.key === "Delete" || e.key === "Backspace") removeSelected();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [items, selected.size, removeSelected]);
   // First follow after mount positions INSTANTLY — re-entering the screen
   // shouldn't replay a glide to a place you already were. The animation is
   // reserved for track changes while you're watching.
@@ -712,17 +721,45 @@ export function QueueScreen(): React.JSX.Element {
         </div>
       </header>
 
-      {rowMenu && (
-        <RowMenu
-          title={rowMenu.item.metadata?.title ?? "Track"}
-          at={{ x: rowMenu.x, y: rowMenu.y }}
-          onClose={() => setRowMenu(null)}
-          items={queueRowActions(rowMenu.item, {
-            addToPlaylist: () => setPlaylistFor({ item: rowMenu.item, x: rowMenu.x, y: rowMenu.y }),
-            saveToPreset: () => setPresetFor({ item: rowMenu.item, x: rowMenu.x, y: rowMenu.y }),
-          })}
-        />
-      )}
+      {/* a menu invoked ON a selected row speaks for the whole selection,
+          pluralized — the Finder/Spotify convention; on an unselected row
+          it stays that row's menu */}
+      {rowMenu &&
+        (rowMenu.item.id != null && selected.has(rowMenu.item.id) && selected.size > 1 ? (
+          <RowMenu
+            title={`${selected.size} tracks`}
+            at={{ x: rowMenu.x, y: rowMenu.y }}
+            onClose={() => setRowMenu(null)}
+            items={[
+              { label: "Move to top", run: () => moveSelected("top") },
+              { label: "Move to bottom", run: () => moveSelected("bottom") },
+              {
+                label: "Add to playlist…",
+                run: () => setPlaylistBatch({ x: rowMenu.x, y: rowMenu.y }),
+              },
+              ...(selFavs.length > 0
+                ? [
+                    {
+                      label: selAllHearted ? "Remove from favorites" : "Add to favorites",
+                      run: heartSelected,
+                    },
+                  ]
+                : []),
+              { label: "Remove from queue", run: removeSelected },
+            ]}
+          />
+        ) : (
+          <RowMenu
+            title={rowMenu.item.metadata?.title ?? "Track"}
+            at={{ x: rowMenu.x, y: rowMenu.y }}
+            onClose={() => setRowMenu(null)}
+            items={queueRowActions(rowMenu.item, {
+              addToPlaylist: () =>
+                setPlaylistFor({ item: rowMenu.item, x: rowMenu.x, y: rowMenu.y }),
+              saveToPreset: () => setPresetFor({ item: rowMenu.item, x: rowMenu.x, y: rowMenu.y }),
+            })}
+          />
+        ))}
       {playlistFor && (
         <AddToPlaylistPanel
           label={playlistFor.item.metadata?.title ?? "this track"}
@@ -1336,7 +1373,9 @@ function QueueRow({
       {...(bodyDrag ? listeners : {})}
       className={cx(
         "group relative grid grid-cols-[26px_44px_1fr_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5",
-        "cursor-default transition-colors",
+        // a selected row carries the block, and says so (the grip's cursor)
+        bodyDrag && selected ? "cursor-grab active:cursor-grabbing" : "cursor-default",
+        "transition-colors",
         isDragging && !staticDrag && "z-10 bg-raised shadow-xl",
         // current + queue audible: full playing treatment; current while another
         // source plays: just the parked resume point, quietly set apart

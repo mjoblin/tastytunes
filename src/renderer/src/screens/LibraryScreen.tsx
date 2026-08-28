@@ -61,6 +61,7 @@ import { SortChip } from "@/components/controls/SortChip";
 import { AlbumsLens, ArtistsLens, type LensActions } from "@/components/library/LibraryLenses";
 import { AddToPlaylistPanel, itemFromNode } from "@/components/overlays/AddToPlaylistPanel";
 import { ItemMenu, PresetPicker } from "@/components/library/LibraryMenus";
+import { RowMenu } from "@/components/media/RowMenu";
 import type { MediaMenuItem } from "@/lib/mediaMenus";
 import { EmptyState } from "@/components/chrome/EmptyState";
 import { HeaderChip, PrimaryButton, ScreenTitle } from "@/components/chrome/Chrome";
@@ -353,16 +354,8 @@ export function LibraryScreen(): React.JSX.Element {
     setSelTracks((prev) => (prev.size ? new Set() : prev));
     setPlaylistMulti(null);
   }, [serverUdn, path, lens, searchMode]);
-  useEffect(() => {
-    if (selTracks.size === 0) return;
-    const onKey = (e: KeyboardEvent): void => {
-      const el = e.target;
-      if (el instanceof HTMLElement && el.matches("input, textarea, [contenteditable]")) return;
-      if (e.key === "Escape") setSelTracks(new Set());
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [selTracks.size]);
+  // (⌘A/Esc keyboard handling lives below the listing memo — its deps need
+  // the visible tracks.)
   // the pools snapshot (cached on the ready indexes' signature) — fetched
   // when a lens opens, shared with the queue rows via useIndexPools
   // pools also load while browsing a volume-suffixed album, so the header
@@ -1364,6 +1357,24 @@ export function LibraryScreen(): React.JSX.Element {
     searchSort,
     searchSortReversed,
   ]);
+  // The selection's keyboard: ⌘A gathers the visible track listing (the open
+  // lens owns its own ⌘A); with a selection, Esc exits. Never in a text box.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      const el = e.target;
+      if (el instanceof HTMLElement && el.matches("input, textarea, [contenteditable]")) return;
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "a") {
+        if (lens != null || atRoot || state !== "ready" || tracks.length === 0) return;
+        e.preventDefault();
+        setSelTracks(new Set(tracks.map((n) => n.id)));
+        return;
+      }
+      if (selTracks.size === 0) return;
+      if (e.key === "Escape") setSelTracks(new Set());
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [lens, atRoot, state, tracks, selTracks.size]);
   const server = servers?.find((s) => s.udn === serverUdn) ?? null;
   // Sort/layout affordances key off the UNFILTERED level: filtering down to
   // one match must not unmount them (the header controls would jump around).
@@ -2545,7 +2556,36 @@ export function LibraryScreen(): React.JSX.Element {
           })}
       </div>
 
-      {menu && (
+      {/* a menu invoked ON a selected track speaks for the whole selection,
+          pluralized — the Finder/Spotify convention */}
+      {menu && !menu.node.isContainer && selTracks.has(menu.node.id) && selTracks.size > 1 && (
+        <RowMenu
+          title={`${selTracks.size} tracks`}
+          at={{ x: menu.x, y: menu.y }}
+          onClose={() => setMenu(null)}
+          items={[
+            { label: "Play now", run: () => void queueSelected("now") },
+            { label: "Play next", run: () => void queueSelected("next") },
+            { label: "Add to end of queue", run: () => void queueSelected("append") },
+            {
+              label: "Add to playlist…",
+              run: () => setPlaylistMulti({ nodes: selectedNodes(), x: menu.x, y: menu.y }),
+            },
+            (() => {
+              const nodes = selectedNodes();
+              const allIn = nodes.length > 0 && nodes.every(nodeFavorited);
+              return {
+                label: allIn ? "Remove from favorites" : "Add to favorites",
+                run: () => {
+                  for (const n of nodes)
+                    if (allIn ? nodeFavorited(n) : !nodeFavorited(n)) heartNode(n);
+                },
+              };
+            })(),
+          ]}
+        />
+      )}
+      {menu && !(!menu.node.isContainer && selTracks.has(menu.node.id) && selTracks.size > 1) && (
         <ItemMenu
           menu={menu}
           onClose={() => setMenu(null)}
