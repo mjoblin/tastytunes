@@ -271,7 +271,7 @@ export function RadioScreen(): React.JSX.Element {
               "no-drag rounded-full px-3 py-1 text-[12px] ring-1 transition-all motion-safe:active:scale-95 flex items-center gap-1.5",
               cat === FAV_CAT
                 ? "ring-gold/50 bg-golddim text-gold"
-                : "ring-gold/30 bg-panel/60 text-gold/80 hover:text-gold hover:ring-gold/50 hover:bg-golddim/40",
+                : "ring-gold/30 bg-panel/70 text-gold/80 hover:text-gold hover:ring-gold/50 hover:bg-golddim/40",
             )}
           >
             <Heart size={11} fill="currentColor" /> Favorites

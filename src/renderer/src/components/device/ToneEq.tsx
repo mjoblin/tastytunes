@@ -265,7 +265,7 @@ export function ToneEq({ label = true }: { label?: boolean } = {}): React.JSX.El
                         "group/chip flex items-center rounded-full ring-1 transition-all",
                         active
                           ? "ring-gold/50 bg-golddim text-gold"
-                          : "ring-edge bg-panel/60 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70",
+                          : "ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70",
                       )}
                     >
                       <button
@@ -292,7 +292,7 @@ export function ToneEq({ label = true }: { label?: boolean } = {}): React.JSX.El
                     setSavePos({ x: r.left, y: r.bottom + 6 });
                   }}
                   data-eq-save-preset
-                  className="rounded-full px-3 py-1 text-[12px] ring-1 ring-edge bg-panel/60 text-amber hover:brightness-110 hover:ring-edge2 transition-all motion-safe:active:scale-95"
+                  className="rounded-full px-3 py-1 text-[12px] ring-1 ring-edge bg-panel/70 text-amber hover:brightness-110 hover:ring-edge2 transition-all motion-safe:active:scale-95"
                 >
                   Save as preset…
                 </button>

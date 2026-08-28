@@ -104,7 +104,7 @@ export function Chip({
             ? "ring-gold/50 bg-golddim text-gold"
             : state === "open"
               ? "ring-edge2 bg-raised text-ink"
-              : "ring-edge bg-panel/60 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70",
+              : "ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70",
         className,
       )}
       {...rest}
