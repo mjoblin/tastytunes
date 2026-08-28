@@ -53,6 +53,15 @@ export interface LensActions {
   /** The playing track's artist while the queue source is live — cheap
    *  content identity for the artists column (no per-render track scans). */
   playingArtist: string | null;
+  /** The tracks column's selection bar: queue the batch (visible order —
+   *  onDone fires only when the writes landed) and the batch-shaped playlist
+   *  panel (onAdded fires when a target was picked, not on cancel). */
+  queueTracks(chosen: MediaNode[], mode: "now" | "next" | "append", onDone?: () => void): void;
+  addTracksToPlaylist(
+    chosen: MediaNode[],
+    at: { x: number; y: number },
+    onAdded?: () => void,
+  ): void;
 }
 
 const lc = (s: string | null | undefined): string => (s ?? "").trim().toLowerCase();
@@ -700,6 +709,50 @@ export function ArtistsLens({
   // headline format + per-row deviation notes, decided together so they agree
   const albumFmt = albumFormat(albumTracks ?? []);
 
+  // Track-column multi-select — the queue/Library grammar on its third
+  // surface. Keyed by nodeKey so twin editions stay distinct; cleared when
+  // the artist or album selection moves, and by Esc (the app-wide release).
+  const [selT, setSelT] = useState<ReadonlySet<string>>(() => new Set());
+  const selTAnchor = useRef<number | null>(null);
+  const visibleTracks = albumTracks ?? looseTracks ?? [];
+  useEffect(() => {
+    setSelT(new Set());
+    selTAnchor.current = null;
+  }, [mem.artist, mem.album]);
+  useEffect(() => {
+    if (selT.size === 0) return;
+    const onKey = (e: KeyboardEvent): void => {
+      const t = e.target;
+      if (t instanceof HTMLElement && t.matches("input, textarea, [contenteditable]")) return;
+      if (e.key === "Escape") setSelT(new Set());
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selT.size]);
+  /** True = the click was a selection chord; the caller must not play. */
+  const trackRowClick = (t: MediaNode, e: React.MouseEvent): boolean => {
+    const key = nodeKey(t);
+    const idx = visibleTracks.findIndex((x) => nodeKey(x) === key);
+    if (e.metaKey || e.ctrlKey) {
+      setSelT((prev) => {
+        const next = new Set(prev);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        return next;
+      });
+      selTAnchor.current = idx;
+      return true;
+    }
+    if (e.shiftKey && selTAnchor.current != null && idx >= 0) {
+      const [a, b] = [Math.min(selTAnchor.current, idx), Math.max(selTAnchor.current, idx)];
+      setSelT(new Set(visibleTracks.slice(a, b + 1).map(nodeKey)));
+      return true;
+    }
+    if (selT.size > 0) setSelT(new Set());
+    return false;
+  };
+  const chosenT = (): MediaNode[] => visibleTracks.filter((t) => selT.has(nodeKey(t)));
+
   // A-Z fast travel: letter anchors in the artists column.
   const artistsColRef = useRef<HTMLDivElement | null>(null);
   const selectedRowRef = useRef<HTMLDivElement | null>(null);
@@ -1005,6 +1058,66 @@ export function ArtistsLens({
                 ? String(looseTracks.length)
                 : undefined,
           )}
+          {selT.size > 0 && (
+            <div
+              className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg ring-1 ring-edge2 bg-veil px-3 py-2 text-[12.5px]"
+              data-lens-selection-bar
+            >
+              <span className="text-dim tabular-nums">{selT.size} selected</span>
+              <button
+                onClick={() => actions.queueTracks(chosenT(), "now", () => setSelT(new Set()))}
+                className="text-dim hover:text-ink transition-colors"
+              >
+                Play now
+              </button>
+              <button
+                onClick={() => actions.queueTracks(chosenT(), "next", () => setSelT(new Set()))}
+                className="text-dim hover:text-ink transition-colors"
+              >
+                Play next
+              </button>
+              <button
+                onClick={() => actions.queueTracks(chosenT(), "append", () => setSelT(new Set()))}
+                className="text-dim hover:text-ink transition-colors"
+              >
+                Add to end of queue
+              </button>
+              <button
+                onClick={(e) =>
+                  actions.addTracksToPlaylist(chosenT(), { x: e.clientX, y: e.clientY }, () =>
+                    setSelT(new Set()),
+                  )
+                }
+                className="text-dim hover:text-ink transition-colors"
+              >
+                Add to playlist…
+              </button>
+              {(() => {
+                const nodes = chosenT();
+                const allIn = nodes.length > 0 && nodes.every(actions.nodeFavorited);
+                return (
+                  <button
+                    onClick={() => {
+                      for (const n of nodes)
+                        if (allIn ? actions.nodeFavorited(n) : !actions.nodeFavorited(n))
+                          actions.heartNode(n);
+                    }}
+                    className="text-dim hover:text-ink transition-colors"
+                  >
+                    {allIn ? "Remove from favorites" : "Add to favorites"}
+                  </button>
+                );
+              })()}
+              <div className="flex-1" />
+              <button
+                onClick={() => setSelT(new Set())}
+                className="text-faint hover:text-ink transition-colors"
+                title="Esc"
+              >
+                Clear
+              </button>
+            </div>
+          )}
           <div
             ref={tracksColRef}
             onScroll={(e) => {
@@ -1037,6 +1150,8 @@ export function ArtistsLens({
                         queued={actions.trackQueued(t)}
                         menuOpen={actions.menuNodeId === t.id}
                         favorited={actions.nodeFavorited(t)}
+                        selected={selT.has(nodeKey(t))}
+                        onRowClick={(e) => trackRowClick(t, e)}
                         onHeart={() => actions.heartNode(t)}
                         onPlayNow={(el) => actions.playTrack(t, el)}
                         onMenu={(e) => actions.openMenu(t, e)}

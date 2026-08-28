@@ -264,6 +264,9 @@ export function LibraryScreen(): React.JSX.Element {
     nodes: MediaNode[];
     x: number;
     y: number;
+    /** The invoking surface's selection-clear, run only when a target was
+     *  picked (cancel keeps the selection — the bar rule). */
+    clear?(): void;
   } | null>(null);
   const loadedKey = useRef<string | null>(null);
   const pendingScroll = useRef<number | null>(null);
@@ -1123,9 +1126,15 @@ export function LibraryScreen(): React.JSX.Element {
   const selectedNodes = (): MediaNode[] => tracks.filter((n) => selTracks.has(n.id));
   /** The selection bar's queue verbs, in the visible order. PLAY_NEXT inserts
    *  after the current track, so batches go in reversed to land in order. */
-  const queueSelected = async (mode: "now" | "next" | "append"): Promise<void> => {
-    const chosen = selectedNodes();
-    if (chosen.length === 0) return;
+  /** Queue a batch of track nodes — the ONE implementation behind the main
+   *  listing's bar and the lens column's (chosen arrives in visible order;
+   *  PLAY_NEXT inserts reversed so the batch lands in order). Resolves true
+   *  when the writes landed, so callers clear their selection only then. */
+  const queueNodes = async (
+    chosen: MediaNode[],
+    mode: "now" | "next" | "append",
+  ): Promise<boolean> => {
+    if (chosen.length === 0) return false;
     try {
       if (mode === "now") {
         await tt.mediaQueueAdd(nodeUdn(chosen[0]) ?? "", chosen[0].id, "PLAY_NOW");
@@ -1139,10 +1148,14 @@ export function LibraryScreen(): React.JSX.Element {
       }
       if (mode !== "now")
         showToast({ kind: "success", text: `Added ${chosen.length} tracks to the queue` });
-      setSelTracks(new Set());
+      return true;
     } catch {
       showNotice("Couldn't reach the streamer — nothing was queued.");
+      return false;
     }
+  };
+  const queueSelected = async (mode: "now" | "next" | "append"): Promise<void> => {
+    if (await queueNodes(selectedNodes(), mode)) setSelTracks(new Set());
   };
 
   /** "Play" on a container: replace the queue with it and start at its first track. */
@@ -1517,6 +1530,13 @@ export function LibraryScreen(): React.JSX.Element {
     isCurrentTrack: (node) => queueSourceActive && isCurrentTrack(node),
     isPlayingAlbum: (node) => queueSourceActive && isPlayingAlbum(node),
     playingArtist: queueSourceActive ? (md?.artist ?? null) : null,
+    queueTracks: (chosen, mode, onDone) => {
+      void queueNodes(chosen, mode).then((ok) => {
+        if (ok) onDone?.();
+      });
+    },
+    addTracksToPlaylist: (chosen, at, onAdded) =>
+      setPlaylistMulti({ nodes: chosen, x: at.x, y: at.y, clear: onAdded }),
   };
 
   // ------------------------------------------------------------------ render
@@ -2339,6 +2359,23 @@ export function LibraryScreen(): React.JSX.Element {
             >
               Add to playlist…
             </button>
+            {/* one verb with the album-header rule: adds what's missing, reads
+                "Remove" only when every member is already a favorite */}
+            {(() => {
+              const nodes = selectedNodes();
+              const allIn = nodes.length > 0 && nodes.every(nodeFavorited);
+              return (
+                <button
+                  onClick={() => {
+                    for (const n of nodes)
+                      if (allIn ? nodeFavorited(n) : !nodeFavorited(n)) heartNode(n);
+                  }}
+                  className="text-dim hover:text-ink transition-colors"
+                >
+                  {allIn ? "Remove from favorites" : "Add to favorites"}
+                </button>
+              );
+            })()}
             <div className="flex-1" />
             <button
               onClick={() => setSelTracks(new Set())}
@@ -2581,6 +2618,7 @@ export function LibraryScreen(): React.JSX.Element {
               return itemFromNode(node, udn, name);
             });
             setSelTracks(new Set());
+            playlistMulti.clear?.();
             return Promise.resolve(items);
           }}
         />

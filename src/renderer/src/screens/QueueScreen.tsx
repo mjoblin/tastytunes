@@ -8,6 +8,7 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragStartEvent,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -173,6 +174,11 @@ export function QueueScreen(): React.JSX.Element {
   const [presetFor, setPresetFor] = useState<{ item: QueueListItem; x: number; y: number } | null>(
     null,
   );
+  /** The selection bar's Add to playlist… — the same batch-shaped panel the
+   *  Library bar uses (its New playlist… path is how a selection becomes a
+   *  stored playlist of its own). */
+  const [playlistBatch, setPlaylistBatch] = useState<{ x: number; y: number } | null>(null);
+  const favorites = useStore((s) => s.favorites);
   const allItems = (queue?.items ?? []).filter((i) => i.id != null);
 
   /**
@@ -349,17 +355,92 @@ export function QueueScreen(): React.JSX.Element {
     firstFollow.current = false;
   }, [playId, followQueue, cards, presetGap, filter]);
 
+  // A drag that starts on a SELECTED row moves the whole selection as a block
+  // (the Finder contract — the first thing reached for once selection exists);
+  // starting on an unselected row concerns that row alone and drops the
+  // selection. Captured at drag start so the drop knows which grammar it is.
+  // Drags only run unfiltered, so ids here are in full queue order.
+  const [dragBatch, setDragBatch] = useState<number[] | null>(null);
+  const onDragStart = (event: DragStartEvent): void => {
+    const id = event.active.id as number;
+    if (selected.has(id) && selected.size > 1) {
+      setDragBatch(items.flatMap((it) => (it.id != null && selected.has(it.id) ? [it.id] : [])));
+    } else {
+      if (selected.size > 0) setSelected(new Set());
+      setDragBatch(null);
+    }
+  };
+
+  /** Reorder to `final` (full queue order): optimistic locally, then the
+   *  simulated per-item moves to the device (see movesToTransform). */
+  const applyOrder = (final: number[]): void => {
+    const byId = new Map(allItems.map((it) => [it.id as number, it]));
+    const order = allItems.map((it) => it.id as number);
+    const moves = movesToTransform(order, final);
+    if (moves.length === 0) return;
+    setQueueItems(final.flatMap((id) => (byId.has(id) ? [byId.get(id)!] : [])));
+    for (const m of moves) void tt.command({ type: "queueMove", id: m.id, from: m.from, to: m.to });
+  };
+
   const onDragEnd = (event: DragEndEvent): void => {
+    const batch = dragBatch;
+    setDragBatch(null);
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     const oldIndex = items.findIndex((i) => i.id === active.id);
     const newIndex = items.findIndex((i) => i.id === over.id);
     if (oldIndex < 0 || newIndex < 0) return;
+    if (batch && batch.length > 1) {
+      // Where the dragged row landed is where the block lands: place the
+      // block (queue order) at the active row's destination, the other
+      // members collapsing into it.
+      const batchSet = new Set(batch);
+      const landed = arrayMove(
+        items.map((i) => i.id as number),
+        oldIndex,
+        newIndex,
+      );
+      const final = landed.flatMap((id) =>
+        id === active.id ? batch : batchSet.has(id) ? [] : [id],
+      );
+      applyOrder(final);
+      return;
+    }
     const from = items[oldIndex].position ?? oldIndex;
     const to = items[newIndex].position ?? newIndex;
     // Optimistic reorder; the streamer re-announces the authoritative queue.
     setQueueItems(arrayMove(items, oldIndex, newIndex));
     void tt.command({ type: "queueMove", id: active.id as number, from, to });
+  };
+
+  // The selection's favorites as ONE verb with the album-header rule: adds
+  // what's missing, and only reads "Remove" when every member is already
+  // there. The hearts light up on the rows themselves, so no toast.
+  const selFavs = items.flatMap((it) => {
+    if (it.id == null || !selected.has(it.id)) return [];
+    const ref = fromQueueItem(it);
+    const fav = ref ? refToFavorite(ref) : null;
+    return fav ? [fav] : [];
+  });
+  const selAllHearted =
+    selFavs.length > 0 &&
+    selFavs.every((f) => favorites.some((x) => favoriteKey(x) === favoriteKey(f as Favorite)));
+  const heartSelected = (): void => {
+    for (const f of selFavs) {
+      const has = favorites.some((x) => favoriteKey(x) === favoriteKey(f as Favorite));
+      if (selAllHearted ? has : !has) void toggleFavorite(f);
+    }
+  };
+
+  /** The bar's block moves — unambiguous even under a filter (the visible
+   *  selection goes to the very top or bottom of the FULL queue, keeping its
+   *  relative order), so unlike drags these stay live while filtering. */
+  const moveSelected = (where: "top" | "bottom"): void => {
+    const ids = items.flatMap((it) => (it.id != null && selected.has(it.id) ? [it.id] : []));
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
+    const rest = allItems.flatMap((it) => (it.id != null && !idSet.has(it.id) ? [it.id] : []));
+    applyOrder(where === "top" ? [...ids, ...rest] : [...rest, ...ids]);
   };
 
   if (allItems.length === 0) {
@@ -491,6 +572,23 @@ export function QueueScreen(): React.JSX.Element {
           }}
         />
       )}
+      {playlistBatch && (
+        <AddToPlaylistPanel
+          label={`${selected.size} tracks`}
+          at={playlistBatch}
+          onClose={() => setPlaylistBatch(null)}
+          resolve={() => {
+            // content identity, resolved fresh on activation (the per-row rule)
+            const refs = items.flatMap((it) =>
+              it.id != null && selected.has(it.id) ? [fromQueueItem(it)] : [],
+            );
+            setSelected(new Set());
+            return Promise.resolve(
+              refs.flatMap((r) => (r != null ? [refToPlaylistItem(r)] : [])),
+            );
+          }}
+        />
+      )}
       {presetFor && (
         <PresetPicker
           picker={{
@@ -512,6 +610,29 @@ export function QueueScreen(): React.JSX.Element {
       {selected.size > 0 && (
         <div className="mx-6 mb-2 flex items-center gap-3 rounded-lg ring-1 ring-edge2 bg-veil px-3 py-2 text-[12.5px]">
           <span className="text-dim tabular-nums">{selected.size} selected</span>
+          <button
+            onClick={() => moveSelected("top")}
+            className="text-dim hover:text-ink transition-colors"
+          >
+            Move to top
+          </button>
+          <button
+            onClick={() => moveSelected("bottom")}
+            className="text-dim hover:text-ink transition-colors"
+          >
+            Move to bottom
+          </button>
+          <button
+            onClick={(e) => setPlaylistBatch({ x: e.clientX, y: e.clientY })}
+            className="text-dim hover:text-ink transition-colors"
+          >
+            Add to playlist…
+          </button>
+          {selFavs.length > 0 && (
+            <button onClick={heartSelected} className="text-dim hover:text-ink transition-colors">
+              {selAllHearted ? "Remove from favorites" : "Add to favorites"}
+            </button>
+          )}
           <button onClick={removeSelected} className="text-dim hover:text-alert transition-colors">
             Remove from queue
           </button>
@@ -548,6 +669,8 @@ export function QueueScreen(): React.JSX.Element {
         <DndContext
           sensors={filter || albums ? [] : sensors}
           collisionDetection={closestCenter}
+          onDragStart={onDragStart}
+          onDragCancel={() => setDragBatch(null)}
           onDragEnd={onDragEnd}
         >
           <SortableContext
@@ -593,6 +716,8 @@ export function QueueScreen(): React.JSX.Element {
                     currentRef={item.id === playId ? currentRef : undefined}
                     selected={item.id != null && selected.has(item.id)}
                     onRowClick={(e) => rowClick(item, e)}
+                    batchCount={dragBatch?.length}
+                    batchGhost={dragBatch != null && item.id != null && dragBatch.includes(item.id)}
                   />
                 ))}
               </div>
@@ -611,6 +736,8 @@ export function QueueScreen(): React.JSX.Element {
                   currentRef={item.id === playId ? currentRef : undefined}
                   selected={item.id != null && selected.has(item.id)}
                   onRowClick={(e) => rowClick(item, e)}
+                  batchCount={dragBatch?.length}
+                  batchGhost={dragBatch != null && item.id != null && dragBatch.includes(item.id)}
                 />
               ))
             )}
@@ -869,6 +996,31 @@ async function restoreToQueue(ref: ContentRef, position: number): Promise<void> 
   });
 }
 
+/**
+ * The move commands that turn one id order into another, simulated stepwise:
+ * queueMove takes CURRENT positions, and every move renumbers the queue, so
+ * each command's from/to comes from a working copy that has already applied
+ * the moves before it (the device applies them in the same order — the WS is
+ * FIFO). Walks the target order and pulls each misplaced id into its slot,
+ * so a block move emits at most one move per block member.
+ */
+function movesToTransform(
+  from: number[],
+  to: number[],
+): Array<{ id: number; from: number; to: number }> {
+  const work = [...from];
+  const moves: Array<{ id: number; from: number; to: number }> = [];
+  for (let i = 0; i < to.length; i++) {
+    if (work[i] === to[i]) continue;
+    const j = work.indexOf(to[i]);
+    if (j < 0) continue;
+    work.splice(j, 1);
+    work.splice(i, 0, to[i]);
+    moves.push({ id: to[i], from: j, to: i });
+  }
+  return moves;
+}
+
 interface QueueItemProps {
   onMenu?(e: React.MouseEvent): void;
   item: QueueListItem;
@@ -881,6 +1033,11 @@ interface QueueItemProps {
   /** Selection first: returns true when the click was a ⌘/⇧ chord and the
    *  row must NOT play — bare clicks keep meaning play, the app-wide rule. */
   onRowClick?(e: React.MouseEvent): boolean;
+  /** Size of the block a batch drag is carrying (the dragged row wears the
+   *  count while it moves). */
+  batchCount?: number;
+  /** A non-dragged member of the block in flight — ghosted until the drop. */
+  batchGhost?: boolean;
 }
 
 function QueueRow({
@@ -891,6 +1048,8 @@ function QueueRow({
   onMenu,
   selected = false,
   onRowClick,
+  batchCount,
+  batchGhost = false,
 }: QueueItemProps): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id as number,
@@ -912,9 +1071,10 @@ function QueueRow({
       }}
       style={{ transform: CSS.Transform.toString(lockVertical(transform)), transition }}
       className={cx(
-        "group grid grid-cols-[26px_44px_1fr_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5",
+        "group relative grid grid-cols-[26px_44px_1fr_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5",
         "cursor-default transition-colors",
         isDragging && "z-10 bg-raised shadow-xl",
+        batchGhost && !isDragging && "opacity-40",
         // current + queue audible: full playing treatment; current while another
         // source plays: just the parked resume point, quietly set apart
         isCurrent && sourceActive && "row-playing bg-gold/10",
@@ -932,6 +1092,11 @@ function QueueRow({
         onMenu?.(e);
       }}
     >
+      {isDragging && (batchCount ?? 0) > 1 && (
+        <span className="absolute -top-2 right-2 z-20 rounded-full bg-gold text-bg text-[10.5px] font-medium px-2 py-0.5 shadow-lg">
+          {batchCount} tracks
+        </span>
+      )}
       <OrderHandle
         label={`Reorder ${md?.title ?? "track"}`}
         attributes={attributes}
@@ -1002,6 +1167,8 @@ function QueueCard({
   onMenu,
   selected = false,
   onRowClick,
+  batchCount,
+  batchGhost = false,
 }: QueueItemProps): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id as number,
@@ -1025,8 +1192,9 @@ function QueueCard({
       className={cx(
         // Hover grow matches PresetCard; scale is layout-free so edge-clipped
         // cards simply clip at the scrollport seam.
-        "group text-left rounded-2xl p-2 pb-2.5 transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]",
+        "group relative text-left rounded-2xl p-2 pb-2.5 transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]",
         isDragging && "z-10 opacity-90",
+        batchGhost && !isDragging && "opacity-40",
         isCurrent && sourceActive
           ? "bg-goldtile/70 tile-playing"
           : isCurrent
@@ -1036,6 +1204,11 @@ function QueueCard({
               : "bg-raised/50 ring-1 ring-edge card-hover-glow",
       )}
     >
+      {isDragging && (batchCount ?? 0) > 1 && (
+        <span className="absolute -top-2 -right-1 z-20 rounded-full bg-gold text-bg text-[10.5px] font-medium px-2 py-0.5 shadow-lg">
+          {batchCount} tracks
+        </span>
+      )}
       <button
         className="relative block w-full cursor-pointer"
         onClick={(e) => {
