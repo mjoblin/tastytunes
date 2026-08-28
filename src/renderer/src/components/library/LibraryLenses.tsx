@@ -748,7 +748,12 @@ export function ArtistsLens({
       setSelT(new Set(visibleTracks.slice(a, b + 1).map(nodeKey)));
       return true;
     }
-    if (selT.size > 0) setSelT(new Set());
+    // selection mode suspends playback (the queue's rule, one grammar):
+    // the first bare click exits the selection, the next plays
+    if (selT.size > 0) {
+      setSelT(new Set());
+      return true;
+    }
     return false;
   };
   const chosenT = (): MediaNode[] => visibleTracks.filter((t) => selT.has(nodeKey(t)));
@@ -805,7 +810,22 @@ export function ArtistsLens({
 
   let lastLetter = "";
   return (
-    <div data-lens-artists className="h-full min-h-0 flex flex-col">
+    <div
+      data-lens-artists
+      className="h-full min-h-0 flex flex-col"
+      onClick={(e) => {
+        // blank-space click clears the selection (the Finder rule)
+        if (selT.size === 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
+        const t = e.target as HTMLElement;
+        if (
+          t.closest(
+            "button, input, a, [data-library-track], [data-lens-artist-row], [data-lens-album-row], [data-lens-selection-bar]",
+          )
+        )
+          return;
+        setSelT(new Set());
+      }}
+    >
       {/* the filter sits ABOVE the columns (left — over the artists column
           it scopes), so all three columns' headings and rows stay aligned */}
       <div className="shrink-0 pb-3 flex items-center gap-2">

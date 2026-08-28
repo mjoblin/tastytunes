@@ -295,12 +295,26 @@ export function QueueScreen(): React.JSX.Element {
       setSelected(new Set(items.slice(a, b + 1).flatMap((it) => (it.id == null ? [] : [it.id]))));
       return true;
     }
-    if (selected.size > 0) setSelected(new Set());
+    // SELECTION MODE SUSPENDS PLAYBACK (user, 2026-08-27; the Photos/Files
+    // rule for single-click-play surfaces): the first bare click exits the
+    // selection and must not also fire a track — a mis-click otherwise
+    // blasts playback mid-curation. The next click plays as always.
+    if (selected.size > 0) {
+      setSelected(new Set());
+      return true;
+    }
     return false;
   };
   /** ⌘-click on an album header toggles its whole run. */
   const groupModClick = (ids: number[], e: React.MouseEvent): boolean => {
-    if (!(e.metaKey || e.ctrlKey)) return false;
+    if (!(e.metaKey || e.ctrlKey)) {
+      // a bare header click in selection mode exits it too (jump suspended)
+      if (selected.size > 0) {
+        setSelected(new Set());
+        return true;
+      }
+      return false;
+    }
     setSelected((prev) => {
       const next = new Set(prev);
       const allIn = ids.every((id) => next.has(id));
@@ -588,7 +602,20 @@ export function QueueScreen(): React.JSX.Element {
   }
 
   return (
-    <div className="relative h-full flex flex-col">
+    <div
+      className="relative h-full flex flex-col"
+      onClick={(e) => {
+        // blank-space click clears the selection (the Finder rule); chords
+        // and anything interactive are excluded, rows handle themselves
+        if (selected.size === 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
+        const t = e.target as HTMLElement;
+        if (
+          t.closest("button, input, a, [data-queue-id], [data-queue-album], [data-selection-bar]")
+        )
+          return;
+        setSelected(new Set());
+      }}
+    >
       <header className="drag-region flex items-center gap-4 px-8 pt-8 pb-4">
         <ScreenTitle>Queue</ScreenTitle>
         <span className="font-mono text-[11px] text-faint">
@@ -743,7 +770,10 @@ export function QueueScreen(): React.JSX.Element {
           landed, a re-layout of the exact rows being picked (user,
           2026-08-27); the list scrolls beneath it instead */}
       {selected.size > 0 && (
-        <div className="toast-in absolute bottom-4 inset-x-6 z-30 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl ring-1 ring-edge2 bg-raised shadow-xl px-3 py-2 text-[12.5px]">
+        <div
+          data-selection-bar
+          className="toast-in absolute bottom-4 inset-x-6 z-30 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl ring-1 ring-edge2 bg-raised shadow-xl px-3 py-2 text-[12.5px]"
+        >
           <span className="text-dim tabular-nums">{selected.size} selected</span>
           <button
             onClick={() => moveSelected("top")}

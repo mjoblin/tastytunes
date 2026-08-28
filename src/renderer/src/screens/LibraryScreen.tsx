@@ -1120,7 +1120,12 @@ export function LibraryScreen(): React.JSX.Element {
         return true;
       }
     }
-    if (selTracks.size > 0) setSelTracks(new Set());
+    // selection mode suspends playback (the queue's rule, one grammar):
+    // the first bare click exits the selection, the next plays
+    if (selTracks.size > 0) {
+      setSelTracks(new Set());
+      return true;
+    }
     return false;
   };
   const selectedNodes = (): MediaNode[] => tracks.filter((n) => selTracks.has(n.id));
@@ -1611,7 +1616,16 @@ export function LibraryScreen(): React.JSX.Element {
   }
 
   return (
-    <div className="relative h-full flex flex-col">
+    <div
+      className="relative h-full flex flex-col"
+      onClick={(e) => {
+        // blank-space click clears the selection (the Finder rule)
+        if (selTracks.size === 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
+        const t = e.target as HTMLElement;
+        if (t.closest("button, input, a, [data-library-track], [data-selection-bar]")) return;
+        setSelTracks(new Set());
+      }}
+    >
       <header className="drag-region flex items-center gap-4 px-8 pt-8 pb-2">
         <ScreenTitle>Library</ScreenTitle>
         <div className="flex-1" />
@@ -2334,7 +2348,10 @@ export function LibraryScreen(): React.JSX.Element {
             it pushed the rows being picked; anchored to the screen root, so
             the scroller neither clips nor carries it (user, 2026-08-27) */}
         {!atRoot && state === "ready" && selTracks.size > 0 && (
-          <div className="toast-in absolute bottom-4 inset-x-8 z-30 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl ring-1 ring-edge2 bg-raised shadow-xl px-3 py-2 text-[12.5px]">
+          <div
+            data-selection-bar
+            className="toast-in absolute bottom-4 inset-x-8 z-30 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl ring-1 ring-edge2 bg-raised shadow-xl px-3 py-2 text-[12.5px]"
+          >
             <span className="text-dim tabular-nums">{selTracks.size} selected</span>
             <button
               onClick={() => void queueSelected("now")}
