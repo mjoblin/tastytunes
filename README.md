@@ -136,9 +136,9 @@ another machine.
 
 ### Home Assistant
 
-The server answers plain HTTP posts, so Home Assistant can drive the streamer
-with a `rest_command` and no extra integration. A scene or automation then
-calls it like any other service:
+Home Assistant can control the streamer with a `rest_command` with no additional
+integrations required. A scene or automation can then call it like any other
+service:
 
 ```yaml
 rest_command:
@@ -149,9 +149,9 @@ rest_command:
     payload: '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"recall_preset","arguments":{"id":3}}}'
 ```
 
-Any enabled tool works the same way, such as `set_volume`, `set_power` and
+Any enabled tool works the same way, such as `set_volume`, `set_power`, and
 `pause`. Bind the server to your network in Settings › AI agents, enable the
-tools the automation needs, and keep TastyTunes running.
+tools the Home Assistant automation needs, and keep TastyTunes running.
 
 ## Every feature
 
