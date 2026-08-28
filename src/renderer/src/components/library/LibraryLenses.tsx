@@ -1041,7 +1041,7 @@ export function ArtistsLens({
         </div>
 
         {/* Tracks -------------------------------------------------------- */}
-        <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+        <div className="relative flex-1 min-w-0 min-h-0 flex flex-col">
           {colHeading(
             "Tracks",
             selectedAlbum
@@ -1058,9 +1058,11 @@ export function ArtistsLens({
                 ? String(looseTracks.length)
                 : undefined,
           )}
+          {/* floats over the column's own list bottom, like its two siblings
+              (toast entrance, popover surface — never a re-layout) */}
           {selT.size > 0 && (
             <div
-              className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg ring-1 ring-edge2 bg-veil px-3 py-2 text-[12.5px]"
+              className="toast-in absolute bottom-2 inset-x-0 z-20 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl ring-1 ring-edge2 bg-raised shadow-xl px-3 py-2 text-[12.5px]"
               data-lens-selection-bar
             >
               <span className="text-dim tabular-nums">{selT.size} selected</span>

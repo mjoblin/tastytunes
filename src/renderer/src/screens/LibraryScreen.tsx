@@ -1611,7 +1611,7 @@ export function LibraryScreen(): React.JSX.Element {
   }
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="relative h-full flex flex-col">
       <header className="drag-region flex items-center gap-4 px-8 pt-8 pb-2">
         <ScreenTitle>Library</ScreenTitle>
         <div className="flex-1" />
@@ -2330,8 +2330,11 @@ export function LibraryScreen(): React.JSX.Element {
         {/* tracks are ALWAYS rows — the app-wide idiom (Queue, Recently,
             Favorites, album tracklists). The cards ⇄ rows toggle governs
             container lists only. */}
+        {/* floats over the list (toast entrance, popover surface) — in flow
+            it pushed the rows being picked; anchored to the screen root, so
+            the scroller neither clips nor carries it (user, 2026-08-27) */}
         {!atRoot && state === "ready" && selTracks.size > 0 && (
-          <div className="mt-3 flex items-center gap-3 rounded-lg ring-1 ring-edge2 bg-veil px-3 py-2 text-[12.5px]">
+          <div className="toast-in absolute bottom-4 inset-x-8 z-30 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl ring-1 ring-edge2 bg-raised shadow-xl px-3 py-2 text-[12.5px]">
             <span className="text-dim tabular-nums">{selTracks.size} selected</span>
             <button
               onClick={() => void queueSelected("now")}

@@ -360,11 +360,14 @@ export function QueueScreen(): React.JSX.Element {
   // starting on an unselected row concerns that row alone and drops the
   // selection. Captured at drag start so the drop knows which grammar it is.
   // Drags only run unfiltered, so ids here are in full queue order.
-  const [dragBatch, setDragBatch] = useState<number[] | null>(null);
+  const [dragBatch, setDragBatch] = useState<{ ids: number[]; active: number } | null>(null);
   const onDragStart = (event: DragStartEvent): void => {
     const id = event.active.id as number;
     if (selected.has(id) && selected.size > 1) {
-      setDragBatch(items.flatMap((it) => (it.id != null && selected.has(it.id) ? [it.id] : [])));
+      setDragBatch({
+        ids: items.flatMap((it) => (it.id != null && selected.has(it.id) ? [it.id] : [])),
+        active: id,
+      });
     } else {
       if (selected.size > 0) setSelected(new Set());
       setDragBatch(null);
@@ -387,31 +390,41 @@ export function QueueScreen(): React.JSX.Element {
     setDragBatch(null);
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    const oldIndex = items.findIndex((i) => i.id === active.id);
-    const newIndex = items.findIndex((i) => i.id === over.id);
-    if (oldIndex < 0 || newIndex < 0) return;
-    if (batch && batch.length > 1) {
-      // Where the dragged row landed is where the block lands: place the
-      // block (queue order) at the active row's destination, the other
-      // members collapsing into it.
-      const batchSet = new Set(batch);
-      const landed = arrayMove(
-        items.map((i) => i.id as number),
-        oldIndex,
-        newIndex,
+    if (batch && batch.ids.length > 1) {
+      // The drop matches the preview exactly: the drag ran over the LIFTED
+      // list (members hidden), so land the active row there and expand it
+      // into the whole block, in queue order.
+      const bset = new Set(batch.ids);
+      const vis = items.flatMap((it) =>
+        it.id != null && (it.id === batch.active || !bset.has(it.id)) ? [it.id] : [],
       );
-      const final = landed.flatMap((id) =>
-        id === active.id ? batch : batchSet.has(id) ? [] : [id],
-      );
+      const oldI = vis.indexOf(active.id as number);
+      const newI = vis.indexOf(over.id as number);
+      if (oldI < 0 || newI < 0) return;
+      const landed = arrayMove(vis, oldI, newI);
+      const final = landed.flatMap((id) => (id === batch.active ? batch.ids : [id]));
       applyOrder(final);
       return;
     }
+    const oldIndex = items.findIndex((i) => i.id === active.id);
+    const newIndex = items.findIndex((i) => i.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
     const from = items[oldIndex].position ?? oldIndex;
     const to = items[newIndex].position ?? newIndex;
     // Optimistic reorder; the streamer re-announces the authoritative queue.
     setQueueItems(arrayMove(items, oldIndex, newIndex));
     void tt.command({ type: "queueMove", id: active.id as number, from, to });
   };
+
+  // A batch drag LIFTS the block: the non-dragged members leave the list for
+  // the drag's duration, so the make-room preview shows exactly the shape the
+  // drop will produce and the count badge is the one thing in flight. Planted
+  // ghosts read as faded selected rows, not movement (user, 2026-08-27).
+  const batchSet = dragBatch ? new Set(dragBatch.ids) : null;
+  const shownItems =
+    dragBatch && batchSet
+      ? items.filter((it) => it.id === dragBatch.active || !batchSet.has(it.id as number))
+      : items;
 
   // The selection's favorites as ONE verb with the album-header rule: adds
   // what's missing, and only reads "Remove" when every member is already
@@ -455,7 +468,7 @@ export function QueueScreen(): React.JSX.Element {
   }
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="relative h-full flex flex-col">
       <header className="drag-region flex items-center gap-4 px-8 pt-8 pb-4">
         <ScreenTitle>Queue</ScreenTitle>
         <span className="font-mono text-[11px] text-faint">
@@ -607,8 +620,12 @@ export function QueueScreen(): React.JSX.Element {
       )}
       <SaveQueueDialog open={saveOpen} onClose={() => setSaveOpen(false)} />
 
+      {/* the selection bar FLOATS over the list (toast entrance, popover
+          surface) — in flow it pushed every row down the moment a chord
+          landed, a re-layout of the exact rows being picked (user,
+          2026-08-27); the list scrolls beneath it instead */}
       {selected.size > 0 && (
-        <div className="mx-6 mb-2 flex items-center gap-3 rounded-lg ring-1 ring-edge2 bg-veil px-3 py-2 text-[12.5px]">
+        <div className="toast-in absolute bottom-4 inset-x-6 z-30 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl ring-1 ring-edge2 bg-raised shadow-xl px-3 py-2 text-[12.5px]">
           <span className="text-dim tabular-nums">{selected.size} selected</span>
           <button
             onClick={() => moveSelected("top")}
@@ -674,7 +691,7 @@ export function QueueScreen(): React.JSX.Element {
           onDragEnd={onDragEnd}
         >
           <SortableContext
-            items={items.map((i) => i.id as number)}
+            items={shownItems.map((i) => i.id as number)}
             strategy={cards ? rectSortingStrategy : verticalListSortingStrategy}
           >
             {albums ? (
@@ -702,7 +719,7 @@ export function QueueScreen(): React.JSX.Element {
                   gap: presetGap,
                 }}
               >
-                {items.map((item) => (
+                {shownItems.map((item) => (
                   <QueueCard
                     key={item.id}
                     onMenu={(e) => {
@@ -716,13 +733,12 @@ export function QueueScreen(): React.JSX.Element {
                     currentRef={item.id === playId ? currentRef : undefined}
                     selected={item.id != null && selected.has(item.id)}
                     onRowClick={(e) => rowClick(item, e)}
-                    batchCount={dragBatch?.length}
-                    batchGhost={dragBatch != null && item.id != null && dragBatch.includes(item.id)}
+                    batchCount={dragBatch?.ids.length}
                   />
                 ))}
               </div>
             ) : (
-              items.map((item) => (
+              shownItems.map((item) => (
                 <QueueRow
                   key={item.id}
                   onMenu={(e) => {
@@ -736,8 +752,7 @@ export function QueueScreen(): React.JSX.Element {
                   currentRef={item.id === playId ? currentRef : undefined}
                   selected={item.id != null && selected.has(item.id)}
                   onRowClick={(e) => rowClick(item, e)}
-                  batchCount={dragBatch?.length}
-                  batchGhost={dragBatch != null && item.id != null && dragBatch.includes(item.id)}
+                  batchCount={dragBatch?.ids.length}
                 />
               ))
             )}
@@ -1034,10 +1049,8 @@ interface QueueItemProps {
    *  row must NOT play — bare clicks keep meaning play, the app-wide rule. */
   onRowClick?(e: React.MouseEvent): boolean;
   /** Size of the block a batch drag is carrying (the dragged row wears the
-   *  count while it moves). */
+   *  count while it moves; the other members are lifted out of the list). */
   batchCount?: number;
-  /** A non-dragged member of the block in flight — ghosted until the drop. */
-  batchGhost?: boolean;
 }
 
 function QueueRow({
@@ -1049,7 +1062,6 @@ function QueueRow({
   selected = false,
   onRowClick,
   batchCount,
-  batchGhost = false,
 }: QueueItemProps): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id as number,
@@ -1074,7 +1086,6 @@ function QueueRow({
         "group relative grid grid-cols-[26px_44px_1fr_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5",
         "cursor-default transition-colors",
         isDragging && "z-10 bg-raised shadow-xl",
-        batchGhost && !isDragging && "opacity-40",
         // current + queue audible: full playing treatment; current while another
         // source plays: just the parked resume point, quietly set apart
         isCurrent && sourceActive && "row-playing bg-gold/10",
@@ -1168,7 +1179,6 @@ function QueueCard({
   selected = false,
   onRowClick,
   batchCount,
-  batchGhost = false,
 }: QueueItemProps): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id as number,
@@ -1194,7 +1204,6 @@ function QueueCard({
         // cards simply clip at the scrollport seam.
         "group relative text-left rounded-2xl p-2 pb-2.5 transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]",
         isDragging && "z-10 opacity-90",
-        batchGhost && !isDragging && "opacity-40",
         isCurrent && sourceActive
           ? "bg-goldtile/70 tile-playing"
           : isCurrent
