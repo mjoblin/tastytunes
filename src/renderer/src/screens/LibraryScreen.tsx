@@ -2092,25 +2092,6 @@ export function LibraryScreen(): React.JSX.Element {
                   </div>
                 )}
               </div>
-              {/* a box set's volumes as the app's own picker — one pill per
-                  volume, the open one lit. The old faint ‹ › facts line went
-                  unnoticed as navigation (user, 2026-08-27); the Segmented is
-                  the control that already means "pick one of these". */}
-              {setSiblings && albumVol && (
-                <div className="flex pt-1" data-album-set>
-                  <Segmented<string>
-                    value={albumNode.id}
-                    options={setSiblings.map((a) => ({
-                      value: a.id,
-                      label: volumeMarker(a.title),
-                    }))}
-                    onChange={(id) => {
-                      const next = setSiblings.find((a) => a.id === id);
-                      if (next) openVolume(next);
-                    }}
-                  />
-                </div>
-              )}
               <div className="flex items-center gap-2 pt-2">
                 <button
                   data-tip="Replaces the queue"
@@ -2149,6 +2130,31 @@ export function LibraryScreen(): React.JSX.Element {
                 </HeaderChip>
               </div>
             </div>
+          </div>
+        )}
+        {/* a box set's volumes as the app's own picker — one pill per volume,
+            the open one lit, on its own row above the tracks they switch (the
+            app's Segmented-above-its-listing idiom; moved out of the header
+            column, which is sized to sit beside the art — user placement,
+            2026-08-27). The old faint ‹ › facts line went unnoticed as
+            navigation. */}
+        {!atRoot && state === "ready" && albumNode && setSiblings && (
+          <div className="-mt-1.5 pb-5 flex" data-album-set>
+            {/* px-4 pills: a volume row is a few short labels with room to
+                spare, so they wear looser padding than the dense partition
+                controls (user, 2026-08-27) */}
+            <Segmented<string>
+              className="[&>button]:px-4"
+              value={albumNode.id}
+              options={setSiblings.map((a) => ({
+                value: a.id,
+                label: volumeMarker(a.title),
+              }))}
+              onChange={(id) => {
+                const next = setSiblings.find((a) => a.id === id);
+                if (next) openVolume(next);
+              }}
+            />
           </div>
         )}
 
