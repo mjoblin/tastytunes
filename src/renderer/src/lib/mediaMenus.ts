@@ -34,6 +34,9 @@ export interface MediaMenuCaps {
   replaceQueue?(): void;
   /** Inserted after the queue verbs — the Library's "Play album from here". */
   extraQueueVerbs?: MediaMenuItem[];
+  /** Inserted with the navigate verbs — the Library's box-set walk
+   *  ("Next volume: …" on the open album's menu). Albums only. */
+  extraNavVerbs?: MediaMenuItem[];
   /** Open the entity's home in the Library (favorites, search results). */
   openInLibrary?(): void;
   goToAlbum?(): void;
@@ -130,6 +133,7 @@ export function albumMenuItems(ref: MediaRef, caps: MediaMenuCaps = {}): MediaMe
     ...cap("Replace queue", caps.replaceQueue),
     ...(caps.extraQueueVerbs ?? []),
     ...cap("Open in Library", caps.openInLibrary),
+    ...(caps.extraNavVerbs ?? []),
     ...pivotItem(ref),
     ...cap("Save to preset…", caps.saveToPreset),
     ...cap("Add to playlist…", caps.addToPlaylist),

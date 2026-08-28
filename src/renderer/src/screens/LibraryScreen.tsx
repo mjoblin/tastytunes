@@ -61,6 +61,7 @@ import { SortChip } from "@/components/controls/SortChip";
 import { AlbumsLens, ArtistsLens, type LensActions } from "@/components/library/LibraryLenses";
 import { AddToPlaylistPanel, itemFromNode } from "@/components/overlays/AddToPlaylistPanel";
 import { ItemMenu, PresetPicker } from "@/components/library/LibraryMenus";
+import type { MediaMenuItem } from "@/lib/mediaMenus";
 import { EmptyState } from "@/components/chrome/EmptyState";
 import { HeaderChip, PrimaryButton, ScreenTitle } from "@/components/chrome/Chrome";
 import { useOneShotAsk } from "@/hooks/useOneShotAsk";
@@ -1186,6 +1187,31 @@ export function LibraryScreen(): React.JSX.Element {
       .sort((a, b) => (albumVolume(a.title)?.volume ?? 0) - (albumVolume(b.title)?.volume ?? 0));
     return found.length >= 2 ? found : null;
   }, [albumVol, albumNode, lensPools]);
+  /** A sibling's own marker text — its title minus the set's base ("Boxed
+   *  Winds [Disc 2]" → "Disc 2"), keeping whatever word the title used. */
+  const volumeMarker = (title: string): string => {
+    if (!albumVol) return title;
+    const tail = title.trim().slice(albumVol.base.length);
+    return tail.replace(/^[\s\-–—:,([]+/, "").replace(/[\])\s]+$/, "") || title;
+  };
+  /** Jump to a volume sibling — the single-crumb move the set header has
+   *  always used (the volume is its own album; Back returns in one step). */
+  const openVolume = (a: MediaNode): void => {
+    if (a.serverUdn) moveTo(a.serverUdn, [{ id: a.id, title: a.title, node: a }]);
+  };
+  /** ⋯-menu garnish on a box set's open album: the volume walk as named
+   *  verbs, so menu-first users see the same navigation the pills offer. */
+  const volumeNavVerbs = (node: MediaNode): MediaMenuItem[] | undefined => {
+    if (!setSiblings || !albumNode || node.id !== albumNode.id) return undefined;
+    const i = setSiblings.findIndex((a) => a.id === albumNode.id);
+    if (i < 0) return undefined;
+    const verbs: MediaMenuItem[] = [];
+    const prev = setSiblings[i - 1];
+    const next = setSiblings[i + 1];
+    if (prev) verbs.push({ label: `Previous volume: ${prev.title}`, run: () => openVolume(prev) });
+    if (next) verbs.push({ label: `Next volume: ${next.title}`, run: () => openVolume(next) });
+    return verbs.length > 0 ? verbs : undefined;
+  };
 
   // Filtered + sorted listings are memoized: unmemoized they re-ran the
   // localeCompare sorts and filter scans on every store push — once a second
@@ -2060,51 +2086,31 @@ export function LibraryScreen(): React.JSX.Element {
                   composer line is only there when every track agrees) */}
               <div className="space-y-0.5">
                 {albumFacts && <div className="text-[12.5px] text-faint">{albumFacts}</div>}
-                {setSiblings && albumVol && (
-                  <div
-                    className="flex items-center gap-1.5 text-[12.5px] text-faint"
-                    data-album-set
-                  >
-                    <button
-                      onClick={() => {
-                        const i = setSiblings.findIndex((a) => a.id === albumNode?.id);
-                        const prev = setSiblings[i - 1];
-                        if (prev?.serverUdn)
-                          moveTo(prev.serverUdn, [{ id: prev.id, title: prev.title, node: prev }]);
-                      }}
-                      disabled={setSiblings.findIndex((a) => a.id === albumNode?.id) <= 0}
-                      className="px-1 text-dim hover:text-ink disabled:opacity-30 disabled:pointer-events-none transition-colors"
-                      aria-label="Previous volume"
-                    >
-                      ‹
-                    </button>
-                    <span>
-                      {albumVol.base} · {albumVol.volume} of {setSiblings.length}
-                    </span>
-                    <button
-                      onClick={() => {
-                        const i = setSiblings.findIndex((a) => a.id === albumNode?.id);
-                        const next = setSiblings[i + 1];
-                        if (next?.serverUdn)
-                          moveTo(next.serverUdn, [{ id: next.id, title: next.title, node: next }]);
-                      }}
-                      disabled={
-                        setSiblings.findIndex((a) => a.id === albumNode?.id) >=
-                        setSiblings.length - 1
-                      }
-                      className="px-1 text-dim hover:text-ink disabled:opacity-30 disabled:pointer-events-none transition-colors"
-                      aria-label="Next volume"
-                    >
-                      ›
-                    </button>
-                  </div>
-                )}
                 {albumComposerLine && (
                   <div className="text-[12.5px] text-faint" data-album-composers>
                     {albumComposerLine}
                   </div>
                 )}
               </div>
+              {/* a box set's volumes as the app's own picker — one pill per
+                  volume, the open one lit. The old faint ‹ › facts line went
+                  unnoticed as navigation (user, 2026-08-27); the Segmented is
+                  the control that already means "pick one of these". */}
+              {setSiblings && albumVol && (
+                <div className="flex pt-1" data-album-set>
+                  <Segmented<string>
+                    value={albumNode.id}
+                    options={setSiblings.map((a) => ({
+                      value: a.id,
+                      label: volumeMarker(a.title),
+                    }))}
+                    onChange={(id) => {
+                      const next = setSiblings.find((a) => a.id === id);
+                      if (next) openVolume(next);
+                    }}
+                  />
+                </div>
+              )}
               <div className="flex items-center gap-2 pt-2">
                 <button
                   data-tip="Replaces the queue"
@@ -2357,6 +2363,7 @@ export function LibraryScreen(): React.JSX.Element {
         <ItemMenu
           menu={menu}
           onClose={() => setMenu(null)}
+          navVerbs={volumeNavVerbs(menu.node)}
           goToAlbum={
             searchMode && !menu.node.isContainer && menu.node.album && linkable(menu.node, "albums")
               ? () => {

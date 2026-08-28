@@ -27,6 +27,7 @@ export function ItemMenu({
   goToArtist,
   favorite,
   onInfo,
+  navVerbs,
 }: {
   menu: { node: MediaNode; x: number; y: number };
   onClose(): void;
@@ -43,6 +44,8 @@ export function ItemMenu({
   favorite?: { active: boolean; toggle(): void };
   /** Open the Info modal on this node (every entity menu offers it). */
   onInfo?(): void;
+  /** The box-set walk on the open album's menu (Previous/Next volume). */
+  navVerbs?: MediaMenuItem[];
 }): React.JSX.Element {
   const { node } = menu;
   // The item lists come from the per-entity builders (lib/mediaMenus) — the
@@ -62,6 +65,7 @@ export function ItemMenu({
         : undefined,
     goToAlbum,
     goToArtist,
+    extraNavVerbs: navVerbs,
     saveToPreset: onSavePreset,
     addToPlaylist: onAddToPlaylist,
     heart: favorite,
