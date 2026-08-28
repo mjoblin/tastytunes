@@ -300,6 +300,8 @@ export function TrackRow({
   onArtistLink,
   note,
   artistLabel,
+  selStart = true,
+  selEnd = true,
 }: {
   node: MediaNode;
   /** Loose tracks in mixed folders get a thumb; album views carry the art in the header. */
@@ -318,6 +320,10 @@ export function TrackRow({
   selected?: boolean;
   /** Selection first: true = the click was a chord and must not play. */
   onRowClick?(e: React.MouseEvent): boolean;
+  /** Contiguous-selection run edges — a run draws ONE border, so a row whose
+   *  neighbor is also selected drops the shared side. */
+  selStart?: boolean;
+  selEnd?: boolean;
   /** Search results: the album name renders as a link that navigates there
    *  (the row itself keeps the app-wide click contract: tracks play). */
   onAlbumLink?(): void;
@@ -341,15 +347,17 @@ export function TrackRow({
     <div
       ref={ref}
       className={cx(
-        "group grid items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
+        "group relative grid items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
         showArt ? "grid-cols-[26px_44px_1fr_auto_auto]" : "grid-cols-[26px_1fr_auto_auto]",
         isCurrent
           ? "row-playing bg-gold/10"
           : selected
-            ? "ring-1 ring-edge2 bg-veil2"
+            ? "bg-veil2"
             : menuOpen
               ? "bg-veil"
               : "hover:bg-veil",
+        !isCurrent && selected && !selStart && "rounded-t-none",
+        !isCurrent && selected && !selEnd && "rounded-b-none",
       )}
       onClick={(e) => {
         if (onRowClick?.(e)) return;
@@ -358,6 +366,22 @@ export function TrackRow({
       onContextMenu={onMenu}
       data-library-track={node.title}
     >
+      {!isCurrent && selected && (
+        <span
+          aria-hidden
+          data-sel-run
+          className={cx(
+            "pointer-events-none absolute inset-0 rounded-[inherit] border-edge2",
+            selStart && selEnd
+              ? "border"
+              : selStart
+                ? "border-x border-t"
+                : selEnd
+                  ? "border-x border-b"
+                  : "border-x",
+          )}
+        />
+      )}
       {/* left-justified: numbers sit flush with the header/art above */}
       <span className="font-mono text-[10.5px] text-faint tabular-nums">
         {isCurrent ? <Eqbars /> : (trackPosition(node) ?? "")}

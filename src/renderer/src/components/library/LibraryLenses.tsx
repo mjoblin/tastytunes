@@ -1160,7 +1160,7 @@ export function ArtistsLens({
                     </div>
                   )}
                   <div className="divide-y divide-edge/50">
-                    {g.tracks.map((t) => (
+                    {g.tracks.map((t, ti) => (
                       <TrackRow
                         key={nodeKey(t)}
                         node={t}
@@ -1173,6 +1173,8 @@ export function ArtistsLens({
                         menuOpen={actions.menuNodeId === t.id}
                         favorited={actions.nodeFavorited(t)}
                         selected={selT.has(nodeKey(t))}
+                        selStart={!(ti > 0 && selT.has(nodeKey(g.tracks[ti - 1])))}
+                        selEnd={!(ti < g.tracks.length - 1 && selT.has(nodeKey(g.tracks[ti + 1])))}
                         onRowClick={(e) => trackRowClick(t, e)}
                         onHeart={() => actions.heartNode(t)}
                         onPlayNow={(el) => actions.playTrack(t, el)}

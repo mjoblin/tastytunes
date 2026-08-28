@@ -896,26 +896,32 @@ export function QueueScreen(): React.JSX.Element {
                 ))}
               </div>
             ) : (
-              items.map((item) => (
-                <QueueRow
-                  key={item.id}
-                  onMenu={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setRowMenu({ item, x: e.clientX, y: e.clientY });
-                  }}
-                  item={item}
-                  isCurrent={item.id === playId}
-                  sourceActive={queueSourceActive}
-                  currentRef={item.id === playId ? currentRef : undefined}
-                  selected={item.id != null && selected.has(item.id)}
-                  onRowClick={(e) => rowClick(item, e)}
-                  staticDrag={dragBatch != null}
-                  insertLine={
-                    insertAt?.id === item.id ? (insertAt.after ? "after" : "before") : undefined
-                  }
-                />
-              ))
+              items.map((item, idx) => {
+                const prev = items[idx - 1];
+                const next = items[idx + 1];
+                return (
+                  <QueueRow
+                    key={item.id}
+                    onMenu={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setRowMenu({ item, x: e.clientX, y: e.clientY });
+                    }}
+                    item={item}
+                    isCurrent={item.id === playId}
+                    sourceActive={queueSourceActive}
+                    currentRef={item.id === playId ? currentRef : undefined}
+                    selected={item.id != null && selected.has(item.id)}
+                    onRowClick={(e) => rowClick(item, e)}
+                    staticDrag={dragBatch != null}
+                    insertLine={
+                      insertAt?.id === item.id ? (insertAt.after ? "after" : "before") : undefined
+                    }
+                    selStart={!(prev?.id != null && selected.has(prev.id))}
+                    selEnd={!(next?.id != null && selected.has(next.id))}
+                  />
+                );
+              })
             )}
           </SortableContext>
           {/* the batch drag's cursor chip: the active track as a stacked card
@@ -1095,12 +1101,16 @@ function QueueAlbumGroups({
             {g.items.map((item, i) => {
               const isCurrent = item.id === playId;
               const isSelected = item.id != null && selectedIds.has(item.id);
+              const prev = g.items[i - 1];
+              const next = g.items[i + 1];
+              const runStart = !(prev?.id != null && selectedIds.has(prev.id));
+              const runEnd = !(next?.id != null && selectedIds.has(next.id));
               return (
                 <div
                   key={item.id}
                   ref={isCurrent ? currentRef : undefined}
                   className={cx(
-                    "group grid grid-cols-[44px_1fr_auto] items-center gap-3 rounded-lg py-1 pl-2 pr-2",
+                    "group relative grid grid-cols-[44px_1fr_auto] items-center gap-3 rounded-lg py-1 pl-2 pr-2",
                     "cursor-default transition-colors",
                     isCurrent && sourceActive && "row-playing bg-gold/10",
                     isCurrent &&
@@ -1108,7 +1118,9 @@ function QueueAlbumGroups({
                       !isSelected &&
                       "ring-1 ring-edge2 bg-veil/60 hover:bg-veil",
                     !isCurrent && !isSelected && "hover:bg-veil",
-                    isSelected && "ring-1 ring-edge2 bg-veil2",
+                    isSelected && "bg-veil2",
+                    isSelected && !runStart && "rounded-t-none",
+                    isSelected && !runEnd && "rounded-b-none",
                   )}
                   onClick={(e) => {
                     if (onRowClick(item, e)) return;
@@ -1116,6 +1128,22 @@ function QueueAlbumGroups({
                   }}
                   onContextMenu={(e) => onMenu(item, e)}
                 >
+                  {isSelected && (
+                    <span
+                      aria-hidden
+                      data-sel-run
+                      className={cx(
+                        "pointer-events-none absolute inset-0 rounded-[inherit] border-edge2",
+                        runStart && runEnd
+                          ? "border"
+                          : runStart
+                            ? "border-x border-t"
+                            : runEnd
+                              ? "border-x border-b"
+                              : "border-x",
+                      )}
+                    />
+                  )}
                   <span className="justify-self-end pr-1 font-mono text-[10.5px] text-faint tabular-nums">
                     {isCurrent ? <Eqbars dim={!sourceActive} /> : i + 1}
                   </span>
@@ -1247,6 +1275,11 @@ interface QueueItemProps {
   /** A batch drag is running: rows hold still (no make-room transforms, no
    *  in-place drag styling) — the DragOverlay chip carries the story. */
   staticDrag?: boolean;
+  /** Contiguous-selection run edges: a run draws ONE border, so a row whose
+   *  neighbor is also selected drops the shared side (rows only — the card
+   *  grid has gaps, so its rings never overlap). */
+  selStart?: boolean;
+  selEnd?: boolean;
   /** The gold insertion line — where the block will land on release. */
   insertLine?: "before" | "after";
 }
@@ -1261,6 +1294,8 @@ function QueueRow({
   onRowClick,
   staticDrag = false,
   insertLine,
+  selStart = true,
+  selEnd = true,
 }: QueueItemProps): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id as number,
@@ -1295,7 +1330,13 @@ function QueueRow({
         isCurrent && sourceActive && "row-playing bg-gold/10",
         isCurrent && !sourceActive && !selected && "ring-1 ring-edge2 bg-veil/60 hover:bg-veil",
         !isCurrent && !selected && "hover:bg-veil",
-        selected && "ring-1 ring-edge2 bg-veil2",
+        // a contiguous run reads as ONE block: the fill continues and the
+        // border is drawn by the data-sel-run span on the run's outer
+        // boundary only (overlapping per-row rings doubled up and read
+        // brighter between neighbors — user, 2026-08-27)
+        selected && "bg-veil2",
+        selected && !selStart && "rounded-t-none",
+        selected && !selEnd && "rounded-b-none",
       )}
       onClick={(e) => {
         if (onRowClick?.(e)) return;
@@ -1307,6 +1348,22 @@ function QueueRow({
         onMenu?.(e);
       }}
     >
+      {selected && (
+        <span
+          aria-hidden
+          data-sel-run
+          className={cx(
+            "pointer-events-none absolute inset-0 rounded-[inherit] border-edge2",
+            selStart && selEnd
+              ? "border"
+              : selStart
+                ? "border-x border-t"
+                : selEnd
+                  ? "border-x border-b"
+                  : "border-x",
+          )}
+        />
+      )}
       {insertLine && (
         <span
           aria-hidden

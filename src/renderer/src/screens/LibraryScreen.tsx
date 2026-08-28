@@ -2423,7 +2423,7 @@ export function LibraryScreen(): React.JSX.Element {
                   </div>
                 )}
                 <div className="divide-y divide-edge/50">
-                  {g.tracks.map((node) => (
+                  {g.tracks.map((node, ti) => (
                     <TrackRow
                       key={node.id}
                       node={node}
@@ -2435,6 +2435,8 @@ export function LibraryScreen(): React.JSX.Element {
                       onHeart={() => heartNode(node)}
                       onPlayNow={(el) => playTrack(node, el)}
                       selected={selTracks.has(node.id)}
+                      selStart={!(ti > 0 && selTracks.has(g.tracks[ti - 1].id))}
+                      selEnd={!(ti < g.tracks.length - 1 && selTracks.has(g.tracks[ti + 1].id))}
                       onRowClick={(e) => trackRowClick(node, e)}
                       onMenu={(e) => openMenu(node, e)}
                       note={albumNoteFor(node)}
@@ -2505,7 +2507,7 @@ export function LibraryScreen(): React.JSX.Element {
                   <>
                     {kindLabel("Tracks")}
                     <div className="divide-y divide-edge/50 -mx-2">
-                      {g.tracks.map((node) => (
+                      {g.tracks.map((node, ti) => (
                         <TrackRow
                           key={node.id}
                           node={node}
@@ -2517,6 +2519,8 @@ export function LibraryScreen(): React.JSX.Element {
                           onHeart={() => heartNode(node)}
                           onPlayNow={(el) => playTrack(node, el)}
                           selected={selTracks.has(node.id)}
+                          selStart={!(ti > 0 && selTracks.has(g.tracks[ti - 1].id))}
+                          selEnd={!(ti < g.tracks.length - 1 && selTracks.has(g.tracks[ti + 1].id))}
                           onRowClick={(e) => trackRowClick(node, e)}
                           onMenu={(e) => openMenu(node, e)}
                           onAlbumLink={
