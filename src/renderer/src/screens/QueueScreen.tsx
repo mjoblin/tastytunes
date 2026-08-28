@@ -1103,10 +1103,28 @@ function QueueRow({
         onMenu?.(e);
       }}
     >
+      {/* a batch drag reads as a STACK being carried: layer cards peek out
+          beneath the row (negative z keeps them under the row's own fill),
+          the count rides top-right — one row with a badge read as a
+          single-item drag (user, 2026-08-27) */}
       {isDragging && (batchCount ?? 0) > 1 && (
-        <span className="absolute -top-2 right-2 z-20 rounded-full bg-gold text-bg text-[10.5px] font-medium px-2 py-0.5 shadow-lg">
-          {batchCount} tracks
-        </span>
+        <>
+          <span className="absolute -top-2 right-2 z-20 rounded-full bg-gold text-bg text-[10.5px] font-medium px-2 py-0.5 shadow-lg">
+            {batchCount} tracks
+          </span>
+          <span
+            aria-hidden
+            data-drag-stack
+            className="absolute inset-x-1.5 top-1.5 -bottom-1.5 -z-10 rounded-lg bg-raised ring-1 ring-edge2 shadow-lg"
+          />
+          {(batchCount ?? 0) > 2 && (
+            <span
+              aria-hidden
+              data-drag-stack
+              className="absolute inset-x-3 top-3 -bottom-3 -z-20 rounded-lg bg-raised ring-1 ring-edge shadow-md"
+            />
+          )}
+        </>
       )}
       <OrderHandle
         label={`Reorder ${md?.title ?? "track"}`}
@@ -1214,9 +1232,23 @@ function QueueCard({
       )}
     >
       {isDragging && (batchCount ?? 0) > 1 && (
-        <span className="absolute -top-2 -right-1 z-20 rounded-full bg-gold text-bg text-[10.5px] font-medium px-2 py-0.5 shadow-lg">
-          {batchCount} tracks
-        </span>
+        <>
+          <span className="absolute -top-2 -right-1 z-20 rounded-full bg-gold text-bg text-[10.5px] font-medium px-2 py-0.5 shadow-lg">
+            {batchCount} tracks
+          </span>
+          <span
+            aria-hidden
+            data-drag-stack
+            className="absolute inset-x-2 top-2 -bottom-2 -z-10 rounded-2xl bg-raised ring-1 ring-edge2 shadow-lg"
+          />
+          {(batchCount ?? 0) > 2 && (
+            <span
+              aria-hidden
+              data-drag-stack
+              className="absolute inset-x-4 top-4 -bottom-4 -z-20 rounded-2xl bg-raised ring-1 ring-edge shadow-md"
+            />
+          )}
+        </>
       )}
       <button
         className="relative block w-full cursor-pointer"
