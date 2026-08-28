@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useQueuePerformer } from "@/hooks/useQueuePerformer";
 import {
   DndContext,
@@ -371,42 +371,96 @@ export function QueueScreen(): React.JSX.Element {
   // Single-row drags keep the make-room feel the app has always had.
   const [insertAt, setInsertAt] = useState<{ id: number; after: boolean } | null>(null);
   const insertRef = useRef<typeof insertAt>(null);
-  const updateInsert = (v: { id: number; after: boolean } | null): void => {
+  const updateInsert = useCallback((v: { id: number; after: boolean } | null): void => {
     insertRef.current = v;
-    setInsertAt((prev) =>
-      prev?.id === v?.id && prev?.after === v?.after ? prev : v,
-    );
-  };
+    setInsertAt((prev) => (prev?.id === v?.id && prev?.after === v?.after ? prev : v));
+  }, []);
+  // The line is computed from LIVE geometry, never from dnd-kit's cached
+  // collision rects: row bands are measured once at drag start in
+  // scroll-content coordinates (the rows are planted, so they stay true for
+  // the whole drag), the overlay's centre is re-read on every move AND every
+  // scroll (auto-scroll moves the list under a stationary pointer), and the
+  // drop re-derives the line at the instant of release — so the landing IS
+  // the line, by construction (the first cut trusted over.rect and landed
+  // wrong after scrolls and over members; user, 2026-08-27).
+  const scrollElRef = useRef<HTMLDivElement | null>(null);
+  const dragGeom = useRef<{
+    bands: Array<{ id: number; mid: number }>;
+    scrollerTop: number;
+    lastCenter: number | null;
+  } | null>(null);
+  const computeInsert = useCallback(
+    (centerY: number | null): { id: number; after: boolean } | null => {
+      const g = dragGeom.current;
+      const sc = scrollElRef.current;
+      if (g == null || sc == null || centerY == null || g.bands.length === 0) return null;
+      const y = centerY - g.scrollerTop + sc.scrollTop;
+      let best = g.bands[0];
+      for (const b of g.bands) if (Math.abs(b.mid - y) < Math.abs(best.mid - y)) best = b;
+      return { id: best.id, after: y > best.mid };
+    },
+    [],
+  );
   const onDragStart = (event: DragStartEvent): void => {
     updateInsert(null);
+    dragGeom.current = null;
     const id = event.active.id as number;
     if (selected.has(id) && selected.size > 1) {
-      setDragBatch({
-        ids: items.flatMap((it) => (it.id != null && selected.has(it.id) ? [it.id] : [])),
-        active: id,
-      });
+      const ids = items.flatMap((it) => (it.id != null && selected.has(it.id) ? [it.id] : []));
+      setDragBatch({ ids, active: id });
+      const sc = scrollElRef.current;
+      if (sc && !cards) {
+        const scRect = sc.getBoundingClientRect();
+        const bset = new Set(ids);
+        const bands: Array<{ id: number; mid: number }> = [];
+        sc.querySelectorAll<HTMLElement>("[data-queue-id]").forEach((el) => {
+          const bandId = Number(el.dataset.queueId);
+          if (bset.has(bandId)) return;
+          const r = el.getBoundingClientRect();
+          bands.push({ id: bandId, mid: r.top + r.height / 2 - scRect.top + sc.scrollTop });
+        });
+        dragGeom.current = { bands, scrollerTop: scRect.top, lastCenter: null };
+      }
     } else {
       if (selected.size > 0) setSelected(new Set());
       setDragBatch(null);
     }
   };
-  /** The line follows the pointer between NON-member rows; over a member it
-   *  simply holds its last position — the line never lies about the drop. */
   const onDragMove = (event: DragMoveEvent): void => {
     if (!dragBatch) return;
     const { active, over } = event;
+    const a = active.rect.current.translated;
+    if (!a) return;
+    if (!cards) {
+      const center = a.top + a.height / 2;
+      const g = dragGeom.current;
+      if (g) g.lastCenter = center;
+      updateInsert(computeInsert(center));
+      return;
+    }
+    // the card grid keeps the over-based path: 2D bands buy nothing there,
+    // and the grid neither auto-scrolls far nor hides the pointer's card
     if (!over) return;
     const overId = over.id as number;
     if (dragBatch.ids.includes(overId)) return;
-    const a = active.rect.current.translated;
-    if (!a) return;
     const dy = a.top + a.height / 2 - (over.rect.top + over.rect.height / 2);
     const dx = a.left + a.width / 2 - (over.rect.left + over.rect.width / 2);
-    // rows read vertically; the card grid reads in reading order (vertical
-    // when clearly another band, horizontal within one)
-    const after = cards ? (Math.abs(dy) > over.rect.height / 2 ? dy > 0 : dx > 0) : dy > 0;
+    const after = Math.abs(dy) > over.rect.height / 2 ? dy > 0 : dx > 0;
     updateInsert({ id: overId, after });
   };
+  // Auto-scroll moves the rows' viewport positions while the pointer (and so
+  // dnd-kit's move events) can stay still — the line follows the scroll too.
+  useEffect(() => {
+    if (!dragBatch || cards) return;
+    const sc = scrollElRef.current;
+    if (!sc) return;
+    const onScroll = (): void => {
+      const c = dragGeom.current?.lastCenter ?? null;
+      if (c != null) updateInsert(computeInsert(c));
+    };
+    sc.addEventListener("scroll", onScroll);
+    return () => sc.removeEventListener("scroll", onScroll);
+  }, [dragBatch, cards, computeInsert, updateInsert]);
 
   // THE LANDING ANIMATES (user, 2026-08-27 — an instant re-order after the
   // line model read as a teleport): a FLIP pass flies every displaced row
@@ -438,10 +492,10 @@ export function QueueScreen(): React.JSX.Element {
       const dx = old.x - r.left;
       const dy = old.y - r.top;
       if (dx === 0 && dy === 0) return;
-      el.animate(
-        [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "translate(0, 0)" }],
-        { duration: 220, easing: "cubic-bezier(0.2, 0.7, 0.3, 1)" },
-      );
+      el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "translate(0, 0)" }], {
+        duration: 220,
+        easing: "cubic-bezier(0.2, 0.7, 0.3, 1)",
+      });
     });
   }, [queue]);
 
@@ -459,14 +513,18 @@ export function QueueScreen(): React.JSX.Element {
 
   const onDragEnd = (event: DragEndEvent): void => {
     const batch = dragBatch;
-    const ins = insertRef.current;
+    // the line one final time, from the release position itself — never a
+    // stale earlier value (the card grid keeps the last tracked line)
+    const ins = cards ? insertRef.current : computeInsert(dragGeom.current?.lastCenter ?? null);
     setDragBatch(null);
+    dragGeom.current = null;
     updateInsert(null);
     const { active, over } = event;
-    if (!over) return;
     if (batch && batch.ids.length > 1) {
       // The block gathers AT THE LINE, in queue order — the line was the
-      // whole promise, so the drop reads it and nothing else.
+      // whole promise, so the drop reads it and nothing else (a release
+      // past the list edge or over the floating bar still lands: the line
+      // was visible, dnd-kit's over is irrelevant).
       if (!ins) return;
       const bset = new Set(batch.ids);
       const rest = items.flatMap((it) => (it.id != null && !bset.has(it.id) ? [it.id] : []));
@@ -477,7 +535,7 @@ export function QueueScreen(): React.JSX.Element {
       applyOrder(final);
       return;
     }
-    if (active.id === over.id) return;
+    if (!over || active.id === over.id) return;
     const oldIndex = items.findIndex((i) => i.id === active.id);
     const newIndex = items.findIndex((i) => i.id === over.id);
     if (oldIndex < 0 || newIndex < 0) return;
@@ -658,9 +716,7 @@ export function QueueScreen(): React.JSX.Element {
               it.id != null && selected.has(it.id) ? [fromQueueItem(it)] : [],
             );
             setSelected(new Set());
-            return Promise.resolve(
-              refs.flatMap((r) => (r != null ? [refToPlaylistItem(r)] : [])),
-            );
+            return Promise.resolve(refs.flatMap((r) => (r != null ? [refToPlaylistItem(r)] : [])));
           }}
         />
       )}
@@ -729,7 +785,10 @@ export function QueueScreen(): React.JSX.Element {
       {/* rows: pt-1 keeps the current ring unclipped; cards: pt-2 gives the
           hover grow + glow ring headroom on the top row */}
       <div
-        ref={scrollRef}
+        ref={(el) => {
+          scrollRef(el);
+          scrollElRef.current = el;
+        }}
         className={cx(
           "flex-1 overflow-y-auto",
           // the albums view separates by its header surface, not by rules —
