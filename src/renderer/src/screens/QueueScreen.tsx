@@ -2,12 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import { useQueuePerformer } from "@/hooks/useQueuePerformer";
 import {
   DndContext,
+  DragOverlay,
   KeyboardSensor,
   PointerSensor,
   closestCenter,
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragMoveEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
 import {
@@ -361,7 +363,22 @@ export function QueueScreen(): React.JSX.Element {
   // selection. Captured at drag start so the drop knows which grammar it is.
   // Drags only run unfiltered, so ids here are in full queue order.
   const [dragBatch, setDragBatch] = useState<{ ids: number[]; active: number } | null>(null);
+  // THE INSERTION-LINE MODEL for batch drags (the Spotify/Music/Finder
+  // contract, chosen with the user 2026-08-27 after the lift felt
+  // unpredictable with gapped selections): the rows hold still — no lift,
+  // no make-room — a stacked chip rides the cursor via DragOverlay, and a
+  // gold line between rows is the one truth about where the block lands.
+  // Single-row drags keep the make-room feel the app has always had.
+  const [insertAt, setInsertAt] = useState<{ id: number; after: boolean } | null>(null);
+  const insertRef = useRef<typeof insertAt>(null);
+  const updateInsert = (v: { id: number; after: boolean } | null): void => {
+    insertRef.current = v;
+    setInsertAt((prev) =>
+      prev?.id === v?.id && prev?.after === v?.after ? prev : v,
+    );
+  };
   const onDragStart = (event: DragStartEvent): void => {
+    updateInsert(null);
     const id = event.active.id as number;
     if (selected.has(id) && selected.size > 1) {
       setDragBatch({
@@ -372,6 +389,23 @@ export function QueueScreen(): React.JSX.Element {
       if (selected.size > 0) setSelected(new Set());
       setDragBatch(null);
     }
+  };
+  /** The line follows the pointer between NON-member rows; over a member it
+   *  simply holds its last position — the line never lies about the drop. */
+  const onDragMove = (event: DragMoveEvent): void => {
+    if (!dragBatch) return;
+    const { active, over } = event;
+    if (!over) return;
+    const overId = over.id as number;
+    if (dragBatch.ids.includes(overId)) return;
+    const a = active.rect.current.translated;
+    if (!a) return;
+    const dy = a.top + a.height / 2 - (over.rect.top + over.rect.height / 2);
+    const dx = a.left + a.width / 2 - (over.rect.left + over.rect.width / 2);
+    // rows read vertically; the card grid reads in reading order (vertical
+    // when clearly another band, horizontal within one)
+    const after = cards ? (Math.abs(dy) > over.rect.height / 2 ? dy > 0 : dx > 0) : dy > 0;
+    updateInsert({ id: overId, after });
   };
 
   /** Reorder to `final` (full queue order): optimistic locally, then the
@@ -387,25 +421,25 @@ export function QueueScreen(): React.JSX.Element {
 
   const onDragEnd = (event: DragEndEvent): void => {
     const batch = dragBatch;
+    const ins = insertRef.current;
     setDragBatch(null);
+    updateInsert(null);
     const { active, over } = event;
-    if (!over || active.id === over.id) return;
+    if (!over) return;
     if (batch && batch.ids.length > 1) {
-      // The drop matches the preview exactly: the drag ran over the LIFTED
-      // list (members hidden), so land the active row there and expand it
-      // into the whole block, in queue order.
+      // The block gathers AT THE LINE, in queue order — the line was the
+      // whole promise, so the drop reads it and nothing else.
+      if (!ins) return;
       const bset = new Set(batch.ids);
-      const vis = items.flatMap((it) =>
-        it.id != null && (it.id === batch.active || !bset.has(it.id)) ? [it.id] : [],
-      );
-      const oldI = vis.indexOf(active.id as number);
-      const newI = vis.indexOf(over.id as number);
-      if (oldI < 0 || newI < 0) return;
-      const landed = arrayMove(vis, oldI, newI);
-      const final = landed.flatMap((id) => (id === batch.active ? batch.ids : [id]));
+      const rest = items.flatMap((it) => (it.id != null && !bset.has(it.id) ? [it.id] : []));
+      const k = rest.indexOf(ins.id);
+      if (k < 0) return;
+      const at = k + (ins.after ? 1 : 0);
+      const final = [...rest.slice(0, at), ...batch.ids, ...rest.slice(at)];
       applyOrder(final);
       return;
     }
+    if (active.id === over.id) return;
     const oldIndex = items.findIndex((i) => i.id === active.id);
     const newIndex = items.findIndex((i) => i.id === over.id);
     if (oldIndex < 0 || newIndex < 0) return;
@@ -415,16 +449,6 @@ export function QueueScreen(): React.JSX.Element {
     setQueueItems(arrayMove(items, oldIndex, newIndex));
     void tt.command({ type: "queueMove", id: active.id as number, from, to });
   };
-
-  // A batch drag LIFTS the block: the non-dragged members leave the list for
-  // the drag's duration, so the make-room preview shows exactly the shape the
-  // drop will produce and the count badge is the one thing in flight. Planted
-  // ghosts read as faded selected rows, not movement (user, 2026-08-27).
-  const batchSet = dragBatch ? new Set(dragBatch.ids) : null;
-  const shownItems =
-    dragBatch && batchSet
-      ? items.filter((it) => it.id === dragBatch.active || !batchSet.has(it.id as number))
-      : items;
 
   // The selection's favorites as ONE verb with the album-header rule: adds
   // what's missing, and only reads "Remove" when every member is already
@@ -687,11 +711,15 @@ export function QueueScreen(): React.JSX.Element {
           sensors={filter || albums ? [] : sensors}
           collisionDetection={closestCenter}
           onDragStart={onDragStart}
-          onDragCancel={() => setDragBatch(null)}
+          onDragMove={onDragMove}
+          onDragCancel={() => {
+            setDragBatch(null);
+            updateInsert(null);
+          }}
           onDragEnd={onDragEnd}
         >
           <SortableContext
-            items={shownItems.map((i) => i.id as number)}
+            items={items.map((i) => i.id as number)}
             strategy={cards ? rectSortingStrategy : verticalListSortingStrategy}
           >
             {albums ? (
@@ -719,7 +747,7 @@ export function QueueScreen(): React.JSX.Element {
                   gap: presetGap,
                 }}
               >
-                {shownItems.map((item) => (
+                {items.map((item) => (
                   <QueueCard
                     key={item.id}
                     onMenu={(e) => {
@@ -733,12 +761,15 @@ export function QueueScreen(): React.JSX.Element {
                     currentRef={item.id === playId ? currentRef : undefined}
                     selected={item.id != null && selected.has(item.id)}
                     onRowClick={(e) => rowClick(item, e)}
-                    batchCount={dragBatch?.ids.length}
+                    staticDrag={dragBatch != null}
+                    insertLine={
+                      insertAt?.id === item.id ? (insertAt.after ? "after" : "before") : undefined
+                    }
                   />
                 ))}
               </div>
             ) : (
-              shownItems.map((item) => (
+              items.map((item) => (
                 <QueueRow
                   key={item.id}
                   onMenu={(e) => {
@@ -752,11 +783,49 @@ export function QueueScreen(): React.JSX.Element {
                   currentRef={item.id === playId ? currentRef : undefined}
                   selected={item.id != null && selected.has(item.id)}
                   onRowClick={(e) => rowClick(item, e)}
-                  batchCount={dragBatch?.ids.length}
+                  staticDrag={dragBatch != null}
+                  insertLine={
+                    insertAt?.id === item.id ? (insertAt.after ? "after" : "before") : undefined
+                  }
                 />
               ))
             )}
           </SortableContext>
+          {/* the batch drag's cursor chip: the active track as a stacked card
+              with the count — the rows themselves never move */}
+          <DragOverlay dropAnimation={null}>
+            {dragBatch &&
+              (() => {
+                const activeItem = allItems.find((it) => it.id === dragBatch.active);
+                const md = activeItem?.metadata;
+                const n = dragBatch.ids.length;
+                return (
+                  <div className="relative w-[320px]">
+                    {n > 2 && (
+                      <span
+                        aria-hidden
+                        data-drag-stack
+                        className="absolute inset-x-3 top-3 -bottom-3 -z-20 rounded-lg bg-raised ring-1 ring-edge shadow-md"
+                      />
+                    )}
+                    <span
+                      aria-hidden
+                      data-drag-stack
+                      className="absolute inset-x-1.5 top-1.5 -bottom-1.5 -z-10 rounded-lg bg-raised ring-1 ring-edge2 shadow-lg"
+                    />
+                    <div className="flex items-center gap-2.5 rounded-lg bg-raised ring-1 ring-edge2 shadow-xl px-2.5 py-1.5">
+                      <MediaArt src={md?.art_url} kind="track" />
+                      <div className="min-w-0 flex-1 text-[13px] text-ink truncate">
+                        {md?.title ?? md?.name ?? "—"}
+                      </div>
+                      <span className="shrink-0 rounded-full bg-gold text-bg text-[10.5px] font-medium px-2 py-0.5">
+                        {n} tracks
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
+          </DragOverlay>
         </DndContext>
       </div>
     </div>
@@ -1048,9 +1117,11 @@ interface QueueItemProps {
   /** Selection first: returns true when the click was a ⌘/⇧ chord and the
    *  row must NOT play — bare clicks keep meaning play, the app-wide rule. */
   onRowClick?(e: React.MouseEvent): boolean;
-  /** Size of the block a batch drag is carrying (the dragged row wears the
-   *  count while it moves; the other members are lifted out of the list). */
-  batchCount?: number;
+  /** A batch drag is running: rows hold still (no make-room transforms, no
+   *  in-place drag styling) — the DragOverlay chip carries the story. */
+  staticDrag?: boolean;
+  /** The gold insertion line — where the block will land on release. */
+  insertLine?: "before" | "after";
 }
 
 function QueueRow({
@@ -1061,7 +1132,8 @@ function QueueRow({
   onMenu,
   selected = false,
   onRowClick,
-  batchCount,
+  staticDrag = false,
+  insertLine,
 }: QueueItemProps): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id as number,
@@ -1081,11 +1153,15 @@ function QueueRow({
         setNodeRef(node);
         if (currentRef) currentRef.current = node;
       }}
-      style={{ transform: CSS.Transform.toString(lockVertical(transform)), transition }}
+      style={
+        staticDrag
+          ? undefined
+          : { transform: CSS.Transform.toString(lockVertical(transform)), transition }
+      }
       className={cx(
         "group relative grid grid-cols-[26px_44px_1fr_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5",
         "cursor-default transition-colors",
-        isDragging && "z-10 bg-raised shadow-xl",
+        isDragging && !staticDrag && "z-10 bg-raised shadow-xl",
         // current + queue audible: full playing treatment; current while another
         // source plays: just the parked resume point, quietly set apart
         isCurrent && sourceActive && "row-playing bg-gold/10",
@@ -1103,28 +1179,15 @@ function QueueRow({
         onMenu?.(e);
       }}
     >
-      {/* a batch drag reads as a STACK being carried: layer cards peek out
-          beneath the row (negative z keeps them under the row's own fill),
-          the count rides top-right — one row with a badge read as a
-          single-item drag (user, 2026-08-27) */}
-      {isDragging && (batchCount ?? 0) > 1 && (
-        <>
-          <span className="absolute -top-2 right-2 z-20 rounded-full bg-gold text-bg text-[10.5px] font-medium px-2 py-0.5 shadow-lg">
-            {batchCount} tracks
-          </span>
-          <span
-            aria-hidden
-            data-drag-stack
-            className="absolute inset-x-1.5 top-1.5 -bottom-1.5 -z-10 rounded-lg bg-raised ring-1 ring-edge2 shadow-lg"
-          />
-          {(batchCount ?? 0) > 2 && (
-            <span
-              aria-hidden
-              data-drag-stack
-              className="absolute inset-x-3 top-3 -bottom-3 -z-20 rounded-lg bg-raised ring-1 ring-edge shadow-md"
-            />
+      {insertLine && (
+        <span
+          aria-hidden
+          data-insert-line
+          className={cx(
+            "absolute inset-x-1 z-20 h-[2px] rounded-full bg-gold shadow-[0_0_6px_rgb(var(--gold-rgb)_/_0.6)]",
+            insertLine === "before" ? "-top-px" : "-bottom-px",
           )}
-        </>
+        />
       )}
       <OrderHandle
         label={`Reorder ${md?.title ?? "track"}`}
@@ -1196,7 +1259,8 @@ function QueueCard({
   onMenu,
   selected = false,
   onRowClick,
-  batchCount,
+  staticDrag = false,
+  insertLine,
 }: QueueItemProps): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id as number,
@@ -1210,7 +1274,7 @@ function QueueCard({
         setNodeRef(node);
         if (currentRef) currentRef.current = node;
       }}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
+      style={staticDrag ? undefined : { transform: CSS.Transform.toString(transform), transition }}
       {...attributes}
       {...listeners}
       onContextMenu={(e) => {
@@ -1221,7 +1285,7 @@ function QueueCard({
         // Hover grow matches PresetCard; scale is layout-free so edge-clipped
         // cards simply clip at the scrollport seam.
         "group relative text-left rounded-2xl p-2 pb-2.5 transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]",
-        isDragging && "z-10 opacity-90",
+        isDragging && !staticDrag && "z-10 opacity-90",
         isCurrent && sourceActive
           ? "bg-goldtile/70 tile-playing"
           : isCurrent
@@ -1231,24 +1295,15 @@ function QueueCard({
               : "bg-raised/50 ring-1 ring-edge card-hover-glow",
       )}
     >
-      {isDragging && (batchCount ?? 0) > 1 && (
-        <>
-          <span className="absolute -top-2 -right-1 z-20 rounded-full bg-gold text-bg text-[10.5px] font-medium px-2 py-0.5 shadow-lg">
-            {batchCount} tracks
-          </span>
-          <span
-            aria-hidden
-            data-drag-stack
-            className="absolute inset-x-2 top-2 -bottom-2 -z-10 rounded-2xl bg-raised ring-1 ring-edge2 shadow-lg"
-          />
-          {(batchCount ?? 0) > 2 && (
-            <span
-              aria-hidden
-              data-drag-stack
-              className="absolute inset-x-4 top-4 -bottom-4 -z-20 rounded-2xl bg-raised ring-1 ring-edge shadow-md"
-            />
+      {insertLine && (
+        <span
+          aria-hidden
+          data-insert-line
+          className={cx(
+            "absolute inset-y-2 z-20 w-[2px] rounded-full bg-gold shadow-[0_0_6px_rgb(var(--gold-rgb)_/_0.6)]",
+            insertLine === "before" ? "-left-[3px]" : "-right-[3px]",
           )}
-        </>
+        />
       )}
       <button
         className="relative block w-full cursor-pointer"
