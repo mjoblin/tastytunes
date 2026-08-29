@@ -529,8 +529,11 @@ export function QueueScreen(): React.JSX.Element {
         };
       }
     } else {
-      // a chord-held drag never destroys a selection it did not consume
-      if (selected.size > 0 && !chord) setSelected(new Set());
+      // a chord-held drag never destroys a selection it did not consume —
+      // and neither does dragging the ONE selected row (a selection survives
+      // its own drop, single like plural); clearing is for a bare press on
+      // an UNSELECTED row, the Finder rule
+      if (selected.size > 0 && !chord && !selected.has(id)) setSelected(new Set());
       setDragBatch(null);
     }
   };
@@ -1803,10 +1806,7 @@ function QueueCard({
           onPointerDown={(e) => e.stopPropagation() /* keep dnd-kit's drag sensor out of it */}
           onClick={(e) => {
             e.stopPropagation();
-            if (item.id != null) {
-              snapQueueRows();
-              void tt.command({ type: "queueDelete", id: item.id });
-            }
+            removeFromQueue(item);
           }}
           className="tip-bottom p-1 rounded text-faint opacity-0 group-hover:opacity-100 hover:text-alert transition-all"
         >
