@@ -31,7 +31,7 @@ Fullscreen Display mode, sleep timers and schedules, scrobbling to
 ListenBrainz, and an optional MCP server for local AI agents.
 
 It all runs on your machine and talks to the streamer over your own network.
-There's no account and no cloud service requirements.
+There's no account and no cloud service required.
 
 ## Installing
 
@@ -181,8 +181,8 @@ tools the Home Assistant automation needs, and keep TastyTunes running.
 - Albums stay intact: featured guests stay in the album, compilations sit under Various Artists, multi-disc sets show disc dividers, and multi-volume box sets collapse to one album with a volume selector; format and size in every album header
 - Info on any album, track or artist: performers, album artist, composers, disc and track numbers, format, size, and source ids, as the media server reports them; copy as JSON
 - Play now, play next, append, or replace
-- Select several tracks (<kbd>⌘</kbd>-click, <kbd>⇧</kbd>-click) and queue, favorite or playlist them together
-- Albums with no artwork on the media server get a cover from the Cover Art Archive (can be disabled in Settings)
+- Select several tracks (<kbd>⌘</kbd>-click, <kbd>⇧</kbd>-click) and queue them, heart them or add them to a playlist together
+- Albums with no artwork on the local media server get a cover from the Cover Art Archive (can be disabled in Settings)
 - Save an album, a track, or the whole queue to one of the streamer's preset slots
 - Open in Library from the queue, favorites, playlists, Recently Played and the Info panel: lands on the track's album with the track highlighted
 - <kbd>Backspace</kbd> goes up a level; filters are remembered per folder
@@ -215,7 +215,7 @@ tools the Home Assistant automation needs, and keep TastyTunes running.
 ### Queue
 
 - View, jump, drag-to-reorder, remove, clear
-- Multi-select with <kbd>⌘</kbd>-click and <kbd>⇧</kbd>-click (<kbd>⌘A</kbd> for everything): the selected tracks move, remove, favorite or playlist together, and drag as one
+- Multi-select with <kbd>⌘</kbd>-click and <kbd>⇧</kbd>-click (<kbd>⌘A</kbd> for everything): the selected tracks can be moved, removed, hearted or added to a playlist together, and a drag moves the whole selection
 - Cards, rows and album-grouped layouts; follow mode keeps the playing track in view
 
 ### Presets
@@ -226,7 +226,7 @@ tools the Home Assistant automation needs, and keep TastyTunes running.
 
 ### Tone, EQ & device
 
-- Seven-band EQ, tilt, and balance: changes apply live while dragging, with saveable presets (feature-detected based on streamer model)
+- Seven-band EQ, tilt, and balance: changes apply live while dragging, with saveable presets (based on streamer model)
 - Display brightness, standby mode, and auto power-down, where the streamer supports them
 
 ### Sources

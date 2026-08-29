@@ -59,6 +59,14 @@ import { loggedFetch } from "./netlog";
 import { getSettings, updateSettings } from "./data/persist";
 import { getRecents } from "./data/recents";
 
+// A dead log pipe must never crash the app: when a parent process that
+// spawned us (a script, a test harness) dies, our stdout/stderr writes
+// eventually hit EPIPE once the kernel buffer fills — hours later — and an
+// unhandled stream error becomes Electron's uncaught-exception dialog on
+// the user's desktop (live, 2026-08-29). Swallow stream errors; logging is
+// best-effort by nature.
+for (const stream of [process.stdout, process.stderr]) stream?.on?.("error", () => {});
+
 // Pin the identity and settings location: when Electron is launched with a
 // bare file path (dev harnesses), it doesn't read package.json and userData
 // would silently default to ".../Electron". TASTYTUNES_USER_DATA lets test
