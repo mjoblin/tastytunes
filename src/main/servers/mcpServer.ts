@@ -33,7 +33,8 @@ import {
   describeProfileNote,
   nameSortKey,
 } from "@shared/model";
-import { favoriteKey, type Favorite } from "@shared/model";
+import { favoriteKey, isListen, type Favorite, type ListeningPlayEvent } from "@shared/model";
+import { listeningRecord } from "../data/listeningRecord";
 import { MCP_CLUSTERS, mcpClusterEnabled } from "@shared/mcpCatalog";
 import {
   EQ_GAIN_MAX,
@@ -910,6 +911,142 @@ export class McpBridge {
                 }
               : {}),
             results: page,
+          });
+        },
+      },
+      list_history: {
+        inputSchema: {
+          from: z.string().optional().describe("Earliest local date, YYYY-MM-DD."),
+          to: z.string().optional().describe("Latest local date, YYYY-MM-DD, inclusive."),
+          kind: z
+            .enum(["play", "radio-session", "radio-track", "external"])
+            .optional()
+            .describe("One kind only; default all."),
+          limit: z.number().int().min(1).max(200).optional().describe("Default 50."),
+          offset: z.number().int().min(0).optional().describe("For paging; default 0."),
+        },
+        // Local files only — works with the streamer off, so no connected() gate.
+        handler: async (a) => {
+          const { events, unreadable } = await listeningRecord.readAll();
+          const fromMs = a.from != null ? Date.parse(`${a.from as string}T00:00:00`) : null;
+          const toMs = a.to != null ? Date.parse(`${a.to as string}T23:59:59.999`) : null;
+          const filtered = events
+            .filter(
+              (e) =>
+                (fromMs == null || e.at >= fromMs) &&
+                (toMs == null || e.at <= toMs) &&
+                (a.kind == null || e.kind === a.kind),
+            )
+            .sort((x, y) => y.at - x.at);
+          const offset = (a.offset as number | undefined) ?? 0;
+          const limit = (a.limit as number | undefined) ?? 50;
+          const page = filtered.slice(offset, offset + limit).map((e) => ({
+            ...e,
+            at: new Date(e.at).toISOString(),
+            ...(e.kind === "play" ? { listen: isListen(e.playedSeconds, e.duration) } : {}),
+          }));
+          return ok({
+            total: filtered.length,
+            offset,
+            returned: page.length,
+            ...(unreadable > 0 ? { unreadable_lines: unreadable } : {}),
+            events: page,
+          });
+        },
+      },
+      history_top: {
+        inputSchema: {
+          by: z.enum(["artists", "albums", "tracks"]).describe("What to rank."),
+          from: z.string().optional().describe("Earliest local date, YYYY-MM-DD."),
+          to: z.string().optional().describe("Latest local date, YYYY-MM-DD, inclusive."),
+          limit: z.number().int().min(1).max(100).optional().describe("Default 20."),
+        },
+        handler: async (a) => {
+          const { events } = await listeningRecord.readAll();
+          const fromMs = a.from != null ? Date.parse(`${a.from as string}T00:00:00`) : null;
+          const toMs = a.to != null ? Date.parse(`${a.to as string}T23:59:59.999`) : null;
+          const counts = new Map<string, { label: string; plays: number; listens: number }>();
+          for (const e of events) {
+            // Library plays only: a count means "played from the library".
+            if (e.kind !== "play") continue;
+            if ((fromMs != null && e.at < fromMs) || (toMs != null && e.at > toMs)) continue;
+            const label =
+              a.by === "artists"
+                ? (e.artist ?? "Unknown artist")
+                : a.by === "albums"
+                  ? `${e.album ?? "Unknown album"}${e.artist ? ` · ${e.artist}` : ""}`
+                  : `${e.title}${e.artist ? ` · ${e.artist}` : ""}`;
+            const key = label.toLowerCase();
+            const row = counts.get(key) ?? { label, plays: 0, listens: 0 };
+            row.plays += 1;
+            if (isListen(e.playedSeconds, e.duration)) row.listens += 1;
+            counts.set(key, row);
+          }
+          const limit = (a.limit as number | undefined) ?? 20;
+          const results = [...counts.values()]
+            .sort((x, y) => y.listens - x.listens || y.plays - x.plays)
+            .slice(0, limit);
+          return ok({
+            by: a.by,
+            listen_definition: "half the track or four minutes of real play time",
+            results,
+          });
+        },
+      },
+      history_on_this_day: {
+        inputSchema: {
+          month: z.number().int().min(1).max(12).optional().describe("Default: today's month."),
+          day: z.number().int().min(1).max(31).optional().describe("Default: today's day."),
+        },
+        handler: async (a) => {
+          const now = new Date();
+          const month = (a.month as number | undefined) ?? now.getMonth() + 1;
+          const day = (a.day as number | undefined) ?? now.getDate();
+          const { events } = await listeningRecord.readAll();
+          const hits = events
+            .filter((e) => {
+              // The local day AS IT WAS RECORDED: shift by the stored tz
+              // offset, then read the shifted date's UTC fields.
+              const local = new Date(e.at - e.tzOffsetMin * 60000);
+              return local.getUTCMonth() + 1 === month && local.getUTCDate() === day;
+            })
+            .sort((x, y) => y.at - x.at)
+            .map((e) => ({
+              ...e,
+              at: new Date(e.at).toISOString(),
+              ...(e.kind === "play" ? { listen: isListen(e.playedSeconds, e.duration) } : {}),
+            }));
+          return ok({ month, day, total: hits.length, events: hits });
+        },
+      },
+      history_first_listen: {
+        inputSchema: {
+          title: z.string().describe("Track title, case-insensitive exact match."),
+          artist: z
+            .string()
+            .optional()
+            .describe("Narrow by artist, case-insensitive substring of the recorded artist."),
+        },
+        handler: async (a) => {
+          const lc = (v: string): string => v.trim().toLowerCase();
+          const { events } = await listeningRecord.readAll();
+          const plays = events
+            .filter(
+              (e): e is ListeningPlayEvent =>
+                e.kind === "play" &&
+                lc(e.title) === lc(a.title as string) &&
+                (a.artist == null ||
+                  (e.artist ?? "").toLowerCase().includes(lc(a.artist as string))),
+            )
+            .sort((x, y) => x.at - y.at);
+          if (plays.length === 0) return ok({ found: false });
+          const listens = plays.filter((e) => isListen(e.playedSeconds, e.duration));
+          return ok({
+            found: true,
+            first_played: new Date(plays[0].at).toISOString(),
+            first_listen: listens.length > 0 ? new Date(listens[0].at).toISOString() : null,
+            plays: plays.length,
+            listens: listens.length,
           });
         },
       },

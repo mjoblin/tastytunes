@@ -348,6 +348,39 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
     ],
   },
   {
+    id: "history",
+    title: "Listening history",
+    group: "read",
+    optIn: true,
+    description:
+      "Read the local listening record: what played, when, and for how long. Off by default; what an agent can read is data that reaches that agent's model.",
+    tools: [
+      {
+        name: "list_history",
+        title: "List history",
+        description:
+          "Events from the listening record, newest first, filtered by date range and kind. A play's listen flag is derived: half the track or four minutes of real play time.",
+      },
+      {
+        name: "history_top",
+        title: "Top played",
+        description:
+          "Most-listened artists, albums or tracks over a date range, counting library plays that reached half the track or four minutes of real play time.",
+      },
+      {
+        name: "history_on_this_day",
+        title: "On this day",
+        description:
+          "Plays from one calendar day across every year of the record, using the local day as it was recorded.",
+      },
+      {
+        name: "history_first_listen",
+        title: "First listen",
+        description: "When a track was first played, and when it first reached a full listen.",
+      },
+    ],
+  },
+  {
     id: "playlistedit",
     title: "Playlist editing",
     group: "write",

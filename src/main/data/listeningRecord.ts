@@ -289,6 +289,19 @@ export const listeningRecord = {
     return { events, unreadable };
   },
 
+  /** Every event across all years, with the unreadable-line total — the MCP
+   *  read tools' feedstock. Order follows the files (per year, append order). */
+  async readAll(): Promise<{ events: ListeningEvent[]; unreadable: number }> {
+    const events: ListeningEvent[] = [];
+    let unreadable = 0;
+    for (const year of await listYears()) {
+      const r = this.readYear(year);
+      events.push(...r.events);
+      unreadable += r.unreadable;
+    }
+    return { events, unreadable };
+  },
+
   /** The Settings truth row, computed fresh from the files. */
   async stats(): Promise<ListeningRecordStats> {
     let events = 0;
