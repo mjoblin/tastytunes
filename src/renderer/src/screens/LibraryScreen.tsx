@@ -10,6 +10,7 @@ import {
   LayoutGrid,
   Library,
   ListEnd,
+  Loader2,
   ListPlus,
   ListStart,
   MoreHorizontal,
@@ -2075,7 +2076,7 @@ export function LibraryScreen(): React.JSX.Element {
                       aria-disabled={doorsState === "building" ? true : undefined}
                       data-tip={
                         buildingCount > 0 && doorsState !== "failed"
-                          ? `Indexing ${buildingCount === 1 ? "a library" : `${buildingCount} libraries`}…${doorsState === "ready" ? " — what is already indexed is browsable now" : ""}`
+                          ? `Indexing ${buildingCount === 1 ? "a library" : `${buildingCount} libraries`}…${doorsState === "ready" ? " What is already indexed is browsable now." : ""}`
                           : doorsState === "failed"
                             ? `Couldn't index: ${failedIndexes.map((x) => `${x.serverName} — ${x.failure ?? "no index"}`).join("; ")}. Click to retry.`
                             : undefined
@@ -2089,24 +2090,41 @@ export function LibraryScreen(): React.JSX.Element {
                         openLens(door.key);
                       }}
                       className={cx(
-                        "group relative rounded-2xl p-2 pb-2.5 bg-raised/50 ring-1 ring-gold/25 transition-all duration-200 ease-out tip-bottom",
+                        // tip-wide anchors the tooltip to the card's LEFT edge and wraps it:
+                        // centered, the indexing tip poked past the scrollport's left
+                        // edge and clipped (user, 2026-08-29)
+                        "group relative rounded-2xl p-2 pb-2.5 bg-raised/50 ring-1 ring-gold/25 transition-all duration-200 ease-out tip-bottom tip-wide",
                         doorsState === "building"
                           ? "opacity-60 cursor-default"
                           : "card-hover-glow cursor-pointer hover:z-10 motion-safe:hover:scale-[1.04]",
                       )}
                     >
                       <div className="aspect-square w-full rounded-lg bg-golddim flex items-center justify-center">
-                        <door.icon
-                          size={40}
-                          strokeWidth={1.1}
-                          className={cx(
-                            "text-gold/70 group-hover:text-gold transition-colors",
-                            // pulses while ANYTHING is still building — including the
-                            // mixed case where one index is ready (the streamer's USB
-                            // storage lands in a moment) and the big one is not
-                            buildingCount > 0 && "motion-safe:animate-pulse",
-                          )}
-                        />
+                        {buildingCount > 0 && doorsState !== "failed" ? (
+                          <>
+                            {/* the boot screen's own loading glyph at the door icon's
+                                size, while ANYTHING is still building — the icon's
+                                pulse read as styling, not activity (user, 2026-08-29).
+                                Reduced motion keeps the icon: a frozen spinner reads
+                                as broken. */}
+                            <Loader2
+                              size={40}
+                              strokeWidth={1.1}
+                              className="spin text-gold/70 motion-reduce:hidden"
+                            />
+                            <door.icon
+                              size={40}
+                              strokeWidth={1.1}
+                              className="hidden motion-reduce:block text-gold/70"
+                            />
+                          </>
+                        ) : (
+                          <door.icon
+                            size={40}
+                            strokeWidth={1.1}
+                            className="text-gold/70 group-hover:text-gold transition-colors"
+                          />
+                        )}
                       </div>
                       <div className="pt-1.5 text-[12.5px] truncate">{door.title}</div>
                       {/* the count line fades in when the index lands (motion-safe, the modal's 140ms) — the door itself never moves */}
