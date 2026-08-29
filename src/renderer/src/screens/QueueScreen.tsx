@@ -6,8 +6,10 @@ import {
   KeyboardSensor,
   PointerSensor,
   closestCenter,
+  pointerWithin,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
   type DragMoveEvent,
   type DragStartEvent,
@@ -412,6 +414,11 @@ export function QueueScreen(): React.JSX.Element {
     scrollerTop: number;
     lastCenter: number | null;
   } | null>(null);
+  // The POINTER drives the line, not the drag chip: the chip is a 320px card
+  // anchored at the grab point, so its centre can sit far from the cursor
+  // (in the card grid it pushed the line a half-card right — user,
+  // 2026-08-28). Start position + dnd-kit's delta = the live pointer.
+  const dragStartPt = useRef<{ x: number; y: number } | null>(null);
   const computeInsert = useCallback(
     (centerY: number | null): { id: number; after: boolean } | null => {
       const g = dragGeom.current;
@@ -427,6 +434,9 @@ export function QueueScreen(): React.JSX.Element {
   const onDragStart = (event: DragStartEvent): void => {
     updateInsert(null);
     dragGeom.current = null;
+    const ae = event.activatorEvent;
+    dragStartPt.current =
+      ae instanceof MouseEvent ? { x: ae.clientX, y: ae.clientY } : null;
     const id = event.active.id as number;
     if (selected.has(id) && selected.size > 1) {
       const ids = items.flatMap((it) => (it.id != null && selected.has(it.id) ? [it.id] : []));
@@ -454,11 +464,13 @@ export function QueueScreen(): React.JSX.Element {
     const { active, over } = event;
     const a = active.rect.current.translated;
     if (!a) return;
+    const start = dragStartPt.current;
+    const px = start ? start.x + event.delta.x : a.left + a.width / 2;
+    const py = start ? start.y + event.delta.y : a.top + a.height / 2;
     if (!cards) {
-      const center = a.top + a.height / 2;
       const g = dragGeom.current;
-      if (g) g.lastCenter = center;
-      updateInsert(computeInsert(center));
+      if (g) g.lastCenter = py;
+      updateInsert(computeInsert(py));
       return;
     }
     // the card grid keeps the over-based path: 2D bands buy nothing there,
@@ -466,8 +478,8 @@ export function QueueScreen(): React.JSX.Element {
     if (!over) return;
     const overId = over.id as number;
     if (dragBatch.ids.includes(overId)) return;
-    const dy = a.top + a.height / 2 - (over.rect.top + over.rect.height / 2);
-    const dx = a.left + a.width / 2 - (over.rect.left + over.rect.width / 2);
+    const dy = py - (over.rect.top + over.rect.height / 2);
+    const dx = px - (over.rect.left + over.rect.width / 2);
     const after = Math.abs(dy) > over.rect.height / 2 ? dy > 0 : dx > 0;
     updateInsert({ id: overId, after });
   };
@@ -541,6 +553,7 @@ export function QueueScreen(): React.JSX.Element {
     const ins = cards ? insertRef.current : computeInsert(dragGeom.current?.lastCenter ?? null);
     setDragBatch(null);
     dragGeom.current = null;
+    dragStartPt.current = null;
     updateInsert(null);
     const { active, over } = event;
     if (batch && batch.ids.length > 1) {
@@ -877,11 +890,13 @@ export function QueueScreen(): React.JSX.Element {
         {/* Reordering a partial list is ambiguous — drags are inert while filtered. */}
         <DndContext
           sensors={filter || albums ? [] : sensors}
-          collisionDetection={closestCenter}
+          collisionDetection={cards && dragBatch ? pointerFirstCollision : closestCenter}
           onDragStart={onDragStart}
           onDragMove={onDragMove}
           onDragCancel={() => {
             setDragBatch(null);
+            dragGeom.current = null;
+            dragStartPt.current = null;
             updateInsert(null);
           }}
           onDragEnd={onDragEnd}
@@ -1276,6 +1291,15 @@ async function restoreToQueue(ref: ContentRef, position: number): Promise<void> 
         : `Couldn't put “${ref.title}” back`,
   });
 }
+
+/** Batch drags in the card grid collide by POINTER, not by the drag chip's
+ *  rect — the 320px chip's centre picks cards to the right of the cursor
+ *  (the same offset that pushed the line right); between cards, the nearest
+ *  centre still answers. */
+const pointerFirstCollision: CollisionDetection = (args) => {
+  const hits = pointerWithin(args);
+  return hits.length > 0 ? hits : closestCenter(args);
+};
 
 /**
  * The move commands that turn one id order into another, simulated stepwise:
