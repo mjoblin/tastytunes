@@ -351,9 +351,8 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
     id: "history",
     title: "Listening history",
     group: "read",
-    optIn: true,
     description:
-      "Read the local listening record: what played, when, and for how long. Off by default; what an agent can read is data that reaches that agent's model.",
+      "Read the local listening record: what played, when, and for how long. What an agent can read is data that reaches that agent's model.",
     tools: [
       {
         name: "list_history",
