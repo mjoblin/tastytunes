@@ -22,6 +22,8 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
+  ArrowDownToLine,
+  ArrowUpToLine,
   BookmarkPlus,
   Check,
   Crosshair,
@@ -30,7 +32,9 @@ import {
   LayoutGrid,
   ListMusic,
   ListOrdered,
+  ListPlus,
   ListX,
+  Heart,
   MoreHorizontal,
   Play,
   Rows3,
@@ -948,17 +952,30 @@ export function QueueScreen(): React.JSX.Element {
           onClear={() => setSelected(new Set())}
           className="bottom-4 inset-x-6 z-30"
         >
-          <SelectionVerb onClick={() => moveSelected("top")}>Move to top</SelectionVerb>
-          <SelectionVerb onClick={() => moveSelected("bottom")}>Move to bottom</SelectionVerb>
-          <SelectionVerb onClick={(e) => setPlaylistBatch({ x: e.clientX, y: e.clientY })}>
+          <SelectionVerb icon={<ArrowUpToLine size={13} />} onClick={() => moveSelected("top")}>
+            Move to top
+          </SelectionVerb>
+          <SelectionVerb
+            icon={<ArrowDownToLine size={13} />}
+            onClick={() => moveSelected("bottom")}
+          >
+            Move to bottom
+          </SelectionVerb>
+          <SelectionVerb
+            icon={<ListPlus size={13} />}
+            onClick={(e) => setPlaylistBatch({ x: e.clientX, y: e.clientY })}
+          >
             Add to playlist…
           </SelectionVerb>
           {selFavs.length > 0 && (
-            <SelectionVerb onClick={heartSelected}>
+            <SelectionVerb
+              icon={<Heart size={13} fill={selAllHearted ? "currentColor" : "none"} />}
+              onClick={heartSelected}
+            >
               {selAllHearted ? "Remove from favorites" : "Add to favorites"}
             </SelectionVerb>
           )}
-          <SelectionVerb destructive onClick={removeSelected}>
+          <SelectionVerb destructive icon={<X size={13} />} onClick={removeSelected}>
             Remove from queue
           </SelectionVerb>
         </SelectionBar>

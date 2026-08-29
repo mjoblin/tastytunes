@@ -9,6 +9,9 @@ import {
   Heart,
   LayoutGrid,
   Library,
+  ListEnd,
+  ListPlus,
+  ListStart,
   MoreHorizontal,
   Play,
   RotateCw,
@@ -2386,12 +2389,23 @@ export function LibraryScreen(): React.JSX.Element {
             onClear={() => setSelTracks(new Set())}
             className="bottom-4 inset-x-8 z-30"
           >
-            <SelectionVerb onClick={() => void queueSelected("now")}>Play now</SelectionVerb>
-            <SelectionVerb onClick={() => void queueSelected("next")}>Play next</SelectionVerb>
-            <SelectionVerb onClick={() => void queueSelected("append")}>
+            <SelectionVerb icon={<Play size={13} />} onClick={() => void queueSelected("now")}>
+              Play now
+            </SelectionVerb>
+            <SelectionVerb
+              icon={<ListStart size={13} />}
+              onClick={() => void queueSelected("next")}
+            >
+              Play next
+            </SelectionVerb>
+            <SelectionVerb
+              icon={<ListEnd size={13} />}
+              onClick={() => void queueSelected("append")}
+            >
               Add to end of queue
             </SelectionVerb>
             <SelectionVerb
+              icon={<ListPlus size={13} />}
               onClick={(e) =>
                 setPlaylistMulti({ nodes: selectedNodes(), x: e.clientX, y: e.clientY })
               }
@@ -2405,6 +2419,7 @@ export function LibraryScreen(): React.JSX.Element {
               const allIn = nodes.length > 0 && nodes.every(nodeFavorited);
               return (
                 <SelectionVerb
+                  icon={<Heart size={13} fill={allIn ? "currentColor" : "none"} />}
                   onClick={() => {
                     for (const n of nodes)
                       if (allIn ? nodeFavorited(n) : !nodeFavorited(n)) heartNode(n);

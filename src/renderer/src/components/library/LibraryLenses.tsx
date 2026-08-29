@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUpRight, ChevronDown, MoreHorizontal } from "lucide-react";
+import {
+  ArrowUpRight,
+  ChevronDown,
+  Heart,
+  ListEnd,
+  ListPlus,
+  ListStart,
+  MoreHorizontal,
+  Play,
+} from "lucide-react";
 import {
   albumVolume,
   albumFormat,
@@ -1114,21 +1123,25 @@ export function ArtistsLens({
               data-lens-selection-bar
             >
               <SelectionVerb
+                icon={<Play size={13} />}
                 onClick={() => actions.queueTracks(chosenT(), "now", () => setSelT(new Set()))}
               >
                 Play now
               </SelectionVerb>
               <SelectionVerb
+                icon={<ListStart size={13} />}
                 onClick={() => actions.queueTracks(chosenT(), "next", () => setSelT(new Set()))}
               >
                 Play next
               </SelectionVerb>
               <SelectionVerb
+                icon={<ListEnd size={13} />}
                 onClick={() => actions.queueTracks(chosenT(), "append", () => setSelT(new Set()))}
               >
                 Add to end of queue
               </SelectionVerb>
               <SelectionVerb
+                icon={<ListPlus size={13} />}
                 onClick={(e) =>
                   actions.addTracksToPlaylist(chosenT(), { x: e.clientX, y: e.clientY }, () =>
                     setSelT(new Set()),
@@ -1142,6 +1155,7 @@ export function ArtistsLens({
                 const allIn = nodes.length > 0 && nodes.every(actions.nodeFavorited);
                 return (
                   <SelectionVerb
+                    icon={<Heart size={13} fill={allIn ? "currentColor" : "none"} />}
                     onClick={() => {
                       for (const n of nodes)
                         if (allIn ? actions.nodeFavorited(n) : !actions.nodeFavorited(n))

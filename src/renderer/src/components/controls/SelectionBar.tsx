@@ -34,8 +34,8 @@ export function SelectionBar({
       )}
       {...rest}
     >
-      <span className="shrink-0 py-px text-dim tabular-nums">{count} selected</span>
-      <div className="min-w-0 flex-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+      <span className="shrink-0 py-px text-dim tabular-nums mt-[3px]">{count} selected</span>
+      <div className="min-w-0 flex-1 flex flex-wrap items-center gap-x-2 gap-y-1.5">
         {children}
         <button
           onClick={onClear}
@@ -52,11 +52,14 @@ export function SelectionBar({
 /** One verb on the bar — the quiet text button, `destructive` for the verbs
  *  that take things away (hover warms to the alert color). */
 export function SelectionVerb({
+  icon,
   destructive = false,
   className,
   children,
   ...rest
 }: {
+  /** The verb's face — a small (13px) lucide glyph beside the label. */
+  icon?: React.ReactNode;
   destructive?: boolean;
   className?: string;
   children?: React.ReactNode;
@@ -67,12 +70,15 @@ export function SelectionVerb({
   return (
     <button
       className={cx(
-        "transition-colors text-dim",
-        destructive ? "hover:text-alert" : "hover:text-ink",
+        "inline-flex items-center gap-1.5 rounded-full ring-1 ring-edge bg-veil/40 px-2.5 py-1 transition-colors text-dim",
+        destructive
+          ? "hover:text-alert hover:ring-alert/40 hover:bg-alert/10"
+          : "hover:text-ink hover:bg-veil hover:ring-edge2",
         className,
       )}
       {...rest}
     >
+      {icon}
       {children}
     </button>
   );
