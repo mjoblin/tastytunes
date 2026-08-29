@@ -307,7 +307,7 @@ export function PresetsScreen(): React.JSX.Element {
         className="h-full"
         icon={Radio}
         title="No presets"
-        caption="Save radio stations or albums to a preset slot from their menus anywhere in the app — they'll appear here for one-click recall."
+        caption="Save radio stations or albums to a preset slot from their menus anywhere in the app and they'll appear here for one-click recall."
       />
     );
   }

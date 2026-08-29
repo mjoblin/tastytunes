@@ -745,7 +745,7 @@ export function QueueScreen(): React.JSX.Element {
         className="h-full"
         icon={ListMusic}
         title="Queue is empty"
-        caption="Queue tracks from the Library, Search or Playlists — they'll show up here."
+        caption="Queue tracks from the Library, Search or Playlists and they'll show up here."
       />
     );
   }
