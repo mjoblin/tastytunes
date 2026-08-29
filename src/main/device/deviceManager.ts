@@ -50,6 +50,7 @@ import { SmoipSocket } from "./smoipSocket";
 import * as smoipHttp from "./smoipHttp";
 import { getSettings, updateSettings } from "../data/persist";
 import { clearRecents, getRecents, recordRecent, restoreRecents } from "../data/recents";
+import { listeningRecord } from "../data/listeningRecord";
 import { addFavorite, getFavorites, removeFavorite, updateFavorite } from "../data/favorites";
 import {
   appendToPlaylist,
@@ -720,6 +721,10 @@ export class DeviceManager {
         this.recordRecentlyPlayed(this.cache.playState);
         this.sleepBoundaryCheck(this.cache.playState);
         scrobbler.onPlayState(this.cache.playState);
+        listeningRecord.onPlayState(
+          this.cache.playState,
+          this.cache.nowPlaying?.source?.name ?? this.cache.playState.metadata?.source ?? null,
+        );
         return this.push({ kind: "playState", data: this.cache.playState });
       case "/zone/play_state/position":
         this.cache.position = data as ZonePosition;
@@ -1088,7 +1093,12 @@ export class DeviceManager {
     this.connection = state;
     // Wallclock-based listen accounting can't survive a dead link or a device
     // switch — drop the in-flight track rather than over-count it.
-    if (state.phase !== "connected") scrobbler.reset();
+    if (state.phase !== "connected") {
+      scrobbler.reset();
+      // Close out the open play so its accumulated time reaches the record —
+      // a disconnect or device switch must not lose the last track.
+      listeningRecord.flush();
+    }
     this.push({ kind: "connection", state });
   }
 

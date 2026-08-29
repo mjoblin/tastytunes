@@ -28,6 +28,7 @@ import {
   EyeOff,
   Globe,
   Heart,
+  History,
   LayoutGrid,
   Library,
   Loader2,
@@ -45,11 +46,13 @@ import {
 import { version } from "../../../../package.json";
 import {
   DEFAULT_SETTINGS,
+  LISTEN_FLOOR_SECS,
   type AlignH,
   type AlignV,
   type AmbientArtMode,
   type AmbientCoverage,
   type AppSettings,
+  type ListeningRecordStats,
   type McpBind,
   type McpSettings,
   type MotionMode,
@@ -60,6 +63,7 @@ import {
 import { MCP_CLUSTERS, mcpClusterEnabled, type McpClusterInfo } from "@shared/mcpCatalog";
 import { REPO_URL } from "@shared/ipc";
 import { tt } from "@/api";
+import { useConfirmPopover } from "@/components/chrome/Confirm";
 import { useStore, type Screen } from "@/store";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { DISPLAY_FONTS } from "@/hooks/useDisplayFont";
@@ -92,6 +96,7 @@ const TABS = [
   { id: "behavior", label: "Behavior", icon: SlidersHorizontal },
   { id: "connections", label: "Connections", icon: Globe },
   { id: "libraries", label: "Libraries", icon: Library },
+  { id: "history", label: "History", icon: History },
   { id: "updates", label: "Updates", icon: ArrowUpCircle },
   { id: "schedules", label: "Schedules", icon: AlarmClock },
   { id: "agents", label: "AI agents", icon: Bot },
@@ -478,6 +483,8 @@ export function SettingsScreen(): React.JSX.Element {
             )}
 
             {tab === "libraries" && <LibrariesSection settings={settings} save={save} />}
+
+            {tab === "history" && <HistorySection settings={settings} save={save} />}
 
             {tab === "updates" && <UpdatesSection settings={settings} save={save} />}
 
@@ -1188,6 +1195,102 @@ function LibrariesSection({
           </div>
         ))}
       </div>
+    </section>
+  );
+}
+
+/**
+ * The History tab: the listening record — a local, append-only play log as
+ * durable user data (the streamer keeps no history of its own). Recording is
+ * on by default because a diary can't be backfilled; there are deliberately
+ * no retention knobs (a diary that silently deletes itself was rejected).
+ * The truth row reads the files fresh; torn lines and write failures are
+ * surfaced here, never hidden.
+ */
+function HistorySection({
+  settings,
+  save,
+}: {
+  settings: AppSettings;
+  save(patch: Partial<AppSettings>): Promise<void>;
+}): React.JSX.Element {
+  const [stats, setStats] = useState<ListeningRecordStats | null>(null);
+  useEffect(() => {
+    void tt.listeningStats().then(setStats);
+  }, []);
+  const confirmClear = useConfirmPopover();
+  const showToast = useStore((s) => s.showToast);
+  const sinceLabel =
+    stats?.since != null
+      ? new Date(stats.since).toLocaleDateString(undefined, { month: "short", year: "numeric" })
+      : null;
+
+  return (
+    <section className="space-y-3">
+      <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
+        <Toggle
+          label="Listening record"
+          hint="Keeps a local log of everything that plays (tracks, radio stations and play time) in plain files. The record stays on this computer."
+          checked={settings.listeningRecord}
+          onChange={(listeningRecord) => void save({ listeningRecord })}
+        />
+
+        <SettingRow
+          label="The record"
+          hint={
+            stats == null
+              ? "…"
+              : stats.events === 0
+                ? `Empty. Plays are recorded after ${LISTEN_FLOOR_SECS} seconds of real play time.`
+                : `${stats.events.toLocaleString()} events · ${fmtBytes(stats.bytes)}${sinceLabel ? ` · since ${sinceLabel}` : ""}`
+          }
+        >
+          <div className="flex items-center gap-2">
+            <HeaderChip
+              onClick={() =>
+                void tt.listeningExport().then((n) => {
+                  if (n != null)
+                    showToast({
+                      kind: "success",
+                      text:
+                        n === 0 ? "The record is empty" : `Exported ${n} file${n === 1 ? "" : "s"}`,
+                    });
+                })
+              }
+              className="shrink-0 text-[12.5px] px-3 py-1.5 motion-safe:active:scale-90"
+            >
+              Export…
+            </HeaderChip>
+            <button
+              onClick={(e) =>
+                confirmClear.ask(e, {
+                  question: "Delete the whole listening record? There is no undo.",
+                  verb: "Delete",
+                  onConfirm: () => void tt.listeningClear().then(setStats),
+                })
+              }
+              disabled={stats == null || stats.events === 0}
+              className="shrink-0 text-[12.5px] px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-alert hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all disabled:opacity-40 disabled:hover:text-dim disabled:hover:ring-edge disabled:hover:bg-panel/70"
+            >
+              Clear
+            </button>
+          </div>
+        </SettingRow>
+
+        {stats != null && stats.unreadableLines > 0 && (
+          <div className="rounded-lg bg-bg ring-1 ring-edge px-3 py-2.5 text-[12px] text-dim">
+            {stats.unreadableLines} unreadable line{stats.unreadableLines === 1 ? "" : "s"} skipped
+            while reading the record (an interrupted write leaves a partial last line; the rest of
+            the record is unaffected).
+          </div>
+        )}
+        {stats?.writeError != null && (
+          <div className="rounded-lg bg-bg ring-1 ring-alert/40 px-3 py-2.5 text-[12px] text-alert">
+            Couldn&apos;t write to the record: {stats.writeError}
+          </div>
+        )}
+      </div>
+      {confirmClear.popover}
     </section>
   );
 }

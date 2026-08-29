@@ -6,13 +6,12 @@
 // Failed listens queue in memory (bounded) and flush with the next success.
 import { version } from "../../../package.json";
 import { isRadioMetadata, type ZonePlayState } from "@shared/smoip";
+import { isListen } from "@shared/model";
 import { getSettings } from "../data/persist";
 import { loggedFetch } from "../netlog";
 
 // TASTYTUNES_LB_URL lets test harnesses point submissions at a local server.
 const BASE = process.env["TASTYTUNES_LB_URL"] ?? "https://api.listenbrainz.org";
-const MIN_TRACK_SECS = 30;
-const SUBMIT_CAP_SECS = 240;
 const PENDING_MAX = 100;
 
 interface TrackMeta {
@@ -100,10 +99,9 @@ function playedSecs(t: CurrentTrack): number {
 
 function checkThreshold(): void {
   if (!current || current.submitted || !enabled()) return;
-  const d = current.meta.durationSecs;
-  if (d != null && d < MIN_TRACK_SECS) return;
-  const threshold = d != null ? Math.min(d / 2, SUBMIT_CAP_SECS) : SUBMIT_CAP_SECS;
-  if (playedSecs(current) >= threshold) {
+  // ONE definition of a listen, shared with the listening record: half the
+  // track or four minutes of real played time, short tracks never count.
+  if (isListen(playedSecs(current), current.meta.durationSecs)) {
     current.submitted = true;
     void submitListen({
       listened_at: current.startedAt,

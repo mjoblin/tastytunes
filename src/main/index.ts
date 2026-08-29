@@ -1,4 +1,13 @@
-import { app, BrowserWindow, globalShortcut, ipcMain, powerMonitor, screen, shell } from "electron";
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  globalShortcut,
+  ipcMain,
+  powerMonitor,
+  screen,
+  shell,
+} from "electron";
 import { join } from "node:path";
 import { IPC, type MenuCommand, type StreamerCommand } from "@shared/ipc";
 import {
@@ -58,6 +67,7 @@ import {
 import { loggedFetch } from "./netlog";
 import { getSettings, updateSettings } from "./data/persist";
 import { getRecents } from "./data/recents";
+import { listeningRecord } from "./data/listeningRecord";
 
 // A dead log pipe must never crash the app: when a parent process that
 // spawned us (a script, a test harness) dies, our stdout/stderr writes
@@ -457,6 +467,28 @@ function registerIpc(): void {
     }
   });
   ipcMain.handle(IPC.playlistActivateCancel, () => deviceManager.cancelPlaylistActivation());
+  ipcMain.handle(IPC.listeningStats, () => listeningRecord.stats());
+  ipcMain.handle(IPC.listeningClear, async () => {
+    await listeningRecord.clear();
+    return listeningRecord.stats();
+  });
+  ipcMain.handle(IPC.listeningExport, async () => {
+    const win = BrowserWindow.getFocusedWindow() ?? mainWindow;
+    const picked = win
+      ? await dialog.showOpenDialog(win, {
+          title: "Export listening history",
+          buttonLabel: "Export here",
+          properties: ["openDirectory", "createDirectory"],
+        })
+      : await dialog.showOpenDialog({
+          title: "Export listening history",
+          buttonLabel: "Export here",
+          properties: ["openDirectory", "createDirectory"],
+        });
+    const dir = picked.filePaths[0];
+    if (picked.canceled || !dir) return null;
+    return listeningRecord.exportTo(dir);
+  });
   ipcMain.handle(IPC.lookupCacheStats, () => lookupCacheStats());
   ipcMain.handle(IPC.clearLookupCaches, () => clearLookupCaches());
 
@@ -632,5 +664,8 @@ if (!gotLock) {
     deviceManager.shutdown();
     stopDemoStreamer();
     flushLookupCaches();
+    // Quitting mid-track: the open play's accumulated time reaches the
+    // record (synchronous append; see listeningRecord).
+    listeningRecord.flush();
   });
 }

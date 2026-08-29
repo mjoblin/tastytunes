@@ -250,6 +250,109 @@ export const NET_RING_SIZE = 200;
 export const MAX_RECENTS = 200;
 
 /**
+ * The ONE definition of "a listen", shared by the scrobbler and the listening
+ * record: a track counts once it has actually PLAYED for half its length or
+ * four minutes, whichever is first — the Last.fm/Audioscrobbler convention
+ * ListenBrainz also recommends. Tracks shorter than the floor never count,
+ * and the floor doubles as the record's write threshold (below it a play is
+ * a skip-burst, not history). Real played seconds only: pauses don't count
+ * and seeks can't cheat — the accumulation rule, not this predicate, owns
+ * that.
+ */
+export const LISTEN_FLOOR_SECS = 30;
+export const LISTEN_CAP_SECS = 240;
+export function listenThresholdSecs(durationSecs: number | null): number {
+  return durationSecs != null ? Math.min(durationSecs / 2, LISTEN_CAP_SECS) : LISTEN_CAP_SECS;
+}
+export function isListen(playedSecs: number, durationSecs: number | null): boolean {
+  if (durationSecs != null && durationSecs < LISTEN_FLOOR_SECS) return false;
+  return playedSecs >= listenThresholdSecs(durationSecs);
+}
+
+/**
+ * One line of the listening record (history/<year>.jsonl in userData).
+ *
+ * The envelope is versioned PER LINE (`v`) so exported files survive
+ * concatenation across versions, carries the tz offset for day-boundary
+ * stats, and evolves ADDITIVELY ONLY: readers skip unknown fields and
+ * unknown kinds, which is what makes future event types (diary notes, skip
+ * events, action events) additive rather than migrations. Tag values are
+ * stored RAW — normalization is the matcher's job at read time, so matching
+ * can improve without rewriting history. `at` is when the play STARTED
+ * (epoch ms); `tzOffsetMin` is `Date#getTimezoneOffset()` at write time.
+ */
+export interface ListeningEventBase {
+  v: 1;
+  at: number;
+  tzOffsetMin: number;
+  kind: string;
+}
+/** A library play (MEDIA_PLAYER, USB included) — the only kind that feeds
+ *  play counts. Format facts are captured at play time; provenance fields
+ *  ride along where known but are never identity. */
+export interface ListeningPlayEvent extends ListeningEventBase {
+  kind: "play";
+  title: string;
+  artist: string | null;
+  album: string | null;
+  playedSeconds: number;
+  duration: number | null;
+  codec: string | null;
+  sampleRate: number | null;
+  bitDepth: number | null;
+  lossless: boolean | null;
+  source: string | null;
+  sourceId: string | null;
+}
+/** A stretch of internet radio on one station — "heard", never a listen. */
+export interface ListeningRadioSessionEvent extends ListeningEventBase {
+  kind: "radio-session";
+  station: string | null;
+  radioId: number | null;
+  playedSeconds: number;
+}
+/** A track a station announced during a session (keyed station:title, the
+ *  recents convention) — a sighting, with no played-time semantics. */
+export interface ListeningRadioTrackEvent extends ListeningEventBase {
+  kind: "radio-track";
+  station: string | null;
+  title: string;
+  artist: string | null;
+}
+/** Playback from an external source (AirPlay, Chromecast, the streamer's own
+ *  services) — logged with its source, excluded from library counts even on
+ *  a content match: a count means "played from the library". */
+export interface ListeningExternalEvent extends ListeningEventBase {
+  kind: "external";
+  source: string | null;
+  sourceId: string | null;
+  title: string | null;
+  artist: string | null;
+  album: string | null;
+  playedSeconds: number;
+  duration: number | null;
+}
+export type ListeningEvent =
+  | ListeningPlayEvent
+  | ListeningRadioSessionEvent
+  | ListeningRadioTrackEvent
+  | ListeningExternalEvent;
+
+/** The Settings truth row: what the record holds and whether writes work. */
+export interface ListeningRecordStats {
+  events: number;
+  bytes: number;
+  /** Epoch ms of the earliest event, or null for an empty record. */
+  since: number | null;
+  /** Torn/unparseable lines encountered while reading — surfaced, never
+   *  silently dropped. */
+  unreadableLines: number;
+  /** The last append failure (disk full, permissions), or null while writes
+   *  are healthy. */
+  writeError: string | null;
+}
+
+/**
  * A playlist's content hash in the SAME shape queueContentHash produces for a
  * live queue, so the two can be compared directly. That comparison is how a
  * playlist knows it's the thing currently queued — content-based, so it also
@@ -716,6 +819,9 @@ export interface AppSettings {
   lyricsLine: boolean;
   /** Current synced line in full-screen display mode (toggled from its chrome). */
   displayLyrics: boolean;
+  /** The listening record: a local, append-only play log (history/<year>.jsonl
+   *  in userData). On by default — a diary can't be backfilled. */
+  listeningRecord: boolean;
   /** Scrobble listens to ListenBrainz (needs a user token; radio is never scrobbled). */
   lbEnabled: boolean;
   /** ListenBrainz user token, from listenbrainz.org/settings. Stored locally. */
@@ -868,6 +974,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   lyrics: true,
   lyricsLine: true,
   displayLyrics: true,
+  listeningRecord: true,
   lbEnabled: false,
   lbToken: "",
   artistInfo: true,

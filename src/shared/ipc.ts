@@ -61,6 +61,7 @@ import type {
   PlaylistItem,
   QueueRestoreResult,
   RadioStation,
+  ListeningRecordStats,
   RecentTrack,
   SleepTimer,
   UpdateCheckResult,
@@ -373,6 +374,13 @@ export interface TastyTunesApi {
   radioTop(): Promise<RadioStation[]>;
   /** Stations for a curated category: any-of the given tags, popularity-ranked. */
   radioByTags(tags: string[]): Promise<RadioStation[]>;
+  /** The listening record's truth row: events, bytes, since, health. */
+  listeningStats(): Promise<ListeningRecordStats>;
+  /** Delete the listening record's files (the UI confirms; no undo). */
+  listeningClear(): Promise<ListeningRecordStats>;
+  /** Pick a folder and copy the record's year files there. Resolves to the
+   *  number of files copied, or null if the picker was cancelled. */
+  listeningExport(): Promise<number | null>;
   /** Combined size of the on-disk lookup caches (lyrics, artist context). */
   lookupCacheStats(): Promise<{ entries: number; bytes: number }>;
   /** Wipe the lookup caches (memory + disk); resolves to the fresh stats. */
@@ -419,6 +427,9 @@ export const IPC = {
   playlistAppend: "tt:playlistAppend",
   playlistActivate: "tt:playlistActivate",
   playlistActivateCancel: "tt:playlistActivateCancel",
+  listeningStats: "tt:listeningStats",
+  listeningClear: "tt:listeningClear",
+  listeningExport: "tt:listeningExport",
   lookupCacheStats: "tt:lookupCacheStats",
   clearLookupCaches: "tt:clearLookupCaches",
   mediaServers: "tt:mediaServers",
