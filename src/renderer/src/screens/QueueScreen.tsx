@@ -441,6 +441,8 @@ export function QueueScreen(): React.JSX.Element {
     scrollerLeft: number;
     lastX: number | null;
     lastY: number | null;
+    /** a real pointermove was seen — the delta fallback must stay out */
+    pointerSeen: boolean;
   } | null>(null);
   // The POINTER drives the line, not the drag chip: the chip is a 320px card
   // anchored at the grab point, so its centre can sit far from the cursor
@@ -521,8 +523,9 @@ export function QueueScreen(): React.JSX.Element {
           bands,
           scrollerTop: scRect.top,
           scrollerLeft: scRect.left,
-          lastX: null,
-          lastY: null,
+          lastX: dragStartPt.current?.x ?? null,
+          lastY: dragStartPt.current?.y ?? null,
+          pointerSeen: false,
         };
       }
     } else {
@@ -531,19 +534,22 @@ export function QueueScreen(): React.JSX.Element {
       setDragBatch(null);
     }
   };
+  // The REAL pointer drives the line (a window pointermove listener while a
+  // batch drag runs — see the effect below): dnd-kit's delta compensates for
+  // container scroll, so start+delta drifts from the cursor by the
+  // auto-scrolled distance and pinned the line to the list top after an
+  // auto-scroll up (user, 2026-08-28). onDragMove remains only as the
+  // keyboard-sensor fallback, where the moving overlay IS the position.
   const onDragMove = (event: DragMoveEvent): void => {
     if (!dragBatch) return;
-    const { active } = event;
-    const a = active.rect.current.translated;
-    if (!a) return;
-    const start = dragStartPt.current;
-    const px = start ? start.x + event.delta.x : a.left + a.width / 2;
-    const py = start ? start.y + event.delta.y : a.top + a.height / 2;
     const g = dragGeom.current;
-    if (g) {
-      g.lastX = px;
-      g.lastY = py;
-    }
+    if (!g || g.pointerSeen) return;
+    const a = event.active.rect.current.translated;
+    if (!a) return;
+    const px = a.left + a.width / 2;
+    const py = a.top + a.height / 2;
+    g.lastX = px;
+    g.lastY = py;
     updateInsert(computeInsert(px, py, cards));
   };
   // Auto-scroll moves the rows' viewport positions while the pointer (and so
@@ -552,12 +558,24 @@ export function QueueScreen(): React.JSX.Element {
     if (!dragBatch) return;
     const sc = scrollElRef.current;
     if (!sc) return;
+    const onPointerMove = (e: PointerEvent): void => {
+      const g = dragGeom.current;
+      if (!g) return;
+      g.pointerSeen = true;
+      g.lastX = e.clientX;
+      g.lastY = e.clientY;
+      updateInsert(computeInsert(e.clientX, e.clientY, cards));
+    };
     const onScroll = (): void => {
       const g = dragGeom.current;
       if (g?.lastX != null) updateInsert(computeInsert(g.lastX, g.lastY, cards));
     };
+    window.addEventListener("pointermove", onPointerMove);
     sc.addEventListener("scroll", onScroll);
-    return () => sc.removeEventListener("scroll", onScroll);
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      sc.removeEventListener("scroll", onScroll);
+    };
   }, [dragBatch, cards, computeInsert, updateInsert]);
 
   // THE LANDING ANIMATES (user, 2026-08-27 — an instant re-order after the
