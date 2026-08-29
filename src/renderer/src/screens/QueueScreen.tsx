@@ -609,6 +609,7 @@ export function QueueScreen(): React.JSX.Element {
     snapQueueRows();
     setQueueItems(final.flatMap((id) => (byId.has(id) ? [byId.get(id)!] : [])));
     const work = [...order];
+    const moves: Array<{ id: number; from: number; to: number }> = [];
     for (let k = 0; k < blockIds.length; k++) {
       const id = blockIds[k];
       const from = work.indexOf(id);
@@ -620,8 +621,17 @@ export function QueueScreen(): React.JSX.Element {
             : work.indexOf(rest[at - 1]) + 1
           : work.indexOf(blockIds[k - 1]) + 1;
       work.splice(to, 0, id);
-      if (from !== to) void tt.command({ type: "queueMove", id, from, to });
+      if (from !== to) moves.push({ id, from, to });
     }
+    // SEQUENCED, never parallel: each move's positions assume the one before
+    // it has already applied, and the renderer's unawaited commands become
+    // concurrent HTTP posts in main — the device can apply them out of order
+    // and split the block (live-observed on a gapped drop into the block's
+    // own span; user, 2026-08-28)
+    void (async () => {
+      for (const m of moves)
+        await tt.command({ type: "queueMove", id: m.id, from: m.from, to: m.to });
+    })();
     return true;
   };
 
