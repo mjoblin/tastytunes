@@ -743,7 +743,8 @@ export function ArtistsLens({
       const t = e.target;
       if (!(t instanceof HTMLElement)) return;
       if (e.metaKey || e.ctrlKey || e.shiftKey) return;
-      if (!t.closest("[data-app-nav]") || t.closest("button, input, a")) return;
+      if (!t.closest("[data-app-nav], [data-app-playbar]")) return;
+      if (t.closest("button, input, a, [aria-valuenow]")) return;
       setSelT(new Set());
     };
     window.addEventListener("click", onWin);

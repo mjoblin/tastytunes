@@ -39,6 +39,7 @@ export function PlaybackBar(): React.JSX.Element {
 
   return (
     <footer
+      data-app-playbar
       className={cx(
         // Three columns: now-playing | transport + seek | volume cluster. The
         // SIDES share the leftover equally (both 1fr) so the transport stays

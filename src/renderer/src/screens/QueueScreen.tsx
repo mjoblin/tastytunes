@@ -333,6 +333,7 @@ export function QueueScreen(): React.JSX.Element {
           ]
         : [];
     });
+    snapQueueRows();
     for (const i of chosen) void tt.command({ type: "queueDelete", id: i.id as number });
     setSelected(new Set());
     useStore.getState().showToast({
@@ -343,9 +344,13 @@ export function QueueScreen(): React.JSX.Element {
         undo: () => {
           // sequential, ascending positions — parallel restores raced each
           // other's inserts and resolves, failing tracks on an immediate
-          // undo (user, 2026-08-28)
+          // undo; each restore arms the FLIP so neighbors part with motion
+          // and the returning track fades in (user, 2026-08-28)
           void (async () => {
-            for (const s of saved) await restoreToQueue(s.content, s.position);
+            for (const s of saved) {
+              snapQueueRows();
+              await restoreToQueue(s.content, s.position);
+            }
           })();
         },
       },
@@ -379,7 +384,8 @@ export function QueueScreen(): React.JSX.Element {
       const t = e.target;
       if (!(t instanceof HTMLElement)) return;
       if (e.metaKey || e.ctrlKey || e.shiftKey) return;
-      if (!t.closest("[data-app-nav]") || t.closest("button, input, a")) return;
+      if (!t.closest("[data-app-nav], [data-app-playbar]")) return;
+      if (t.closest("button, input, a, [aria-valuenow]")) return;
       setSelected(new Set());
     };
     window.addEventListener("click", onWin);
@@ -521,19 +527,10 @@ export function QueueScreen(): React.JSX.Element {
   // from its old rect to its new one. WAAPI (el.animate), not style
   // mutation, so the streamer's re-announce mid-flight can't snap a row out
   // of its animation; skipped under reduced motion.
-  const flipSnap = useRef<Map<number, { x: number; y: number }> | null>(null);
-  const snapRows = (): void => {
-    const m = new Map<number, { x: number; y: number }>();
-    document.querySelectorAll<HTMLElement>("[data-queue-id]").forEach((el) => {
-      const r = el.getBoundingClientRect();
-      m.set(Number(el.dataset.queueId), { x: r.left, y: r.top });
-    });
-    flipSnap.current = m;
-  };
   useLayoutEffect(() => {
-    const snap = flipSnap.current;
+    const snap = flipSnap;
     if (!snap) return;
-    flipSnap.current = null;
+    flipSnap = null;
     if (
       window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
       document.documentElement.classList.contains("reduce-motion")
@@ -541,7 +538,12 @@ export function QueueScreen(): React.JSX.Element {
       return;
     document.querySelectorAll<HTMLElement>("[data-queue-id]").forEach((el) => {
       const old = snap.get(Number(el.dataset.queueId));
-      if (!old) return;
+      if (!old) {
+        // no old rect = a row that just entered (an undo's restore) — it
+        // fades in while its neighbors FLIP out of the way
+        el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180, easing: "ease-out" });
+        return;
+      }
       const r = el.getBoundingClientRect();
       const dx = old.x - r.left;
       const dy = old.y - r.top;
@@ -553,16 +555,36 @@ export function QueueScreen(): React.JSX.Element {
     });
   }, [queue]);
 
-  /** Reorder to `final` (full queue order): optimistic locally, then the
-   *  simulated per-item moves to the device (see movesToTransform). */
-  const applyOrder = (final: number[]): boolean => {
+  /** Move the BLOCK to `at` (its index in the queue WITHOUT the block):
+   *  optimistic locally, then ONE device command per member — each step
+   *  simulated with the firmware's remove-then-insert semantics and anchored
+   *  to live neighbor identity. The old whole-queue diff emitted up to N
+   *  moves (22 for a 3-track move-to-bottom of 25) and long command runs
+   *  scrambled on the real streamer; the mock swallowed them, which is why
+   *  the suite stayed green (user, 2026-08-28). */
+  const applyBlockMove = (blockIds: number[], at: number): boolean => {
     const byId = new Map(allItems.map((it) => [it.id as number, it]));
     const order = allItems.map((it) => it.id as number);
-    const moves = movesToTransform(order, final);
-    if (moves.length === 0) return false;
-    snapRows();
+    const bset = new Set(blockIds);
+    const rest = order.filter((id) => !bset.has(id));
+    const final = [...rest.slice(0, at), ...blockIds, ...rest.slice(at)];
+    if (final.join() === order.join()) return false;
+    snapQueueRows();
     setQueueItems(final.flatMap((id) => (byId.has(id) ? [byId.get(id)!] : [])));
-    for (const m of moves) void tt.command({ type: "queueMove", id: m.id, from: m.from, to: m.to });
+    const work = [...order];
+    for (let k = 0; k < blockIds.length; k++) {
+      const id = blockIds[k];
+      const from = work.indexOf(id);
+      work.splice(from, 1);
+      const to =
+        k === 0
+          ? at === 0
+            ? 0
+            : work.indexOf(rest[at - 1]) + 1
+          : work.indexOf(blockIds[k - 1]) + 1;
+      work.splice(to, 0, id);
+      if (from !== to) void tt.command({ type: "queueMove", id, from, to });
+    }
     return true;
   };
 
@@ -586,9 +608,7 @@ export function QueueScreen(): React.JSX.Element {
       const rest = items.flatMap((it) => (it.id != null && !bset.has(it.id) ? [it.id] : []));
       const k = rest.indexOf(ins.id);
       if (k < 0) return;
-      const at = k + (ins.after ? 1 : 0);
-      const final = [...rest.slice(0, at), ...batch.ids, ...rest.slice(at)];
-      applyOrder(final);
+      applyBlockMove(batch.ids, k + (ins.after ? 1 : 0));
       return;
     }
     if (!over || active.id === over.id) return;
@@ -627,9 +647,7 @@ export function QueueScreen(): React.JSX.Element {
   const moveSelected = (where: "top" | "bottom"): void => {
     const ids = items.flatMap((it) => (it.id != null && selected.has(it.id) ? [it.id] : []));
     if (ids.length === 0) return;
-    const idSet = new Set(ids);
-    const rest = allItems.flatMap((it) => (it.id != null && !idSet.has(it.id) ? [it.id] : []));
-    if (!applyOrder(where === "top" ? [...ids, ...rest] : [...rest, ...ids])) return;
+    if (!applyBlockMove(ids, where === "top" ? 0 : allItems.length - ids.length)) return;
     // the landing must be SEEN: follow the block to its end of the list, or
     // "Move to bottom" reads as nothing happening (user, 2026-08-28). An
     // INSTANT jump — a smooth scroll dies with the reorder's re-render —
@@ -1111,6 +1129,7 @@ function QueueAlbumGroups({
           ]
         : [];
     });
+    snapQueueRows();
     for (const i of g.items) if (i.id != null) void tt.command({ type: "queueDelete", id: i.id });
     useStore.getState().showToast({
       kind: "success",
@@ -1120,9 +1139,13 @@ function QueueAlbumGroups({
         undo: () => {
           // sequential, ascending positions — parallel restores raced each
           // other's inserts and resolves, failing tracks on an immediate
-          // undo (user, 2026-08-28)
+          // undo; each restore arms the FLIP so neighbors part with motion
+          // and the returning track fades in (user, 2026-08-28)
           void (async () => {
-            for (const s of saved) await restoreToQueue(s.content, s.position);
+            for (const s of saved) {
+              snapQueueRows();
+              await restoreToQueue(s.content, s.position);
+            }
           })();
         },
       },
@@ -1292,6 +1315,7 @@ function removeFromQueue(item: QueueListItem): void {
   const md = item.metadata;
   const title = md?.title ?? null;
   const position = item.position ?? 0;
+  snapQueueRows();
   void tt.command({ type: "queueDelete", id: item.id });
   // No title, no content identity, nothing to find it by later — so no offer.
   // (Same rule as the row's heart: see queueItemFavorite.)
@@ -1301,11 +1325,13 @@ function removeFromQueue(item: QueueListItem): void {
     text: `Removed “${title}”`,
     action: {
       label: "Undo",
-      undo: () =>
+      undo: () => {
+        snapQueueRows();
         void restoreToQueue(
           { title, artist: md?.artist ?? null, album: md?.album ?? null },
           position,
-        ),
+        );
+      },
     },
   });
 }
@@ -1342,29 +1368,18 @@ const pointerFirstCollision: CollisionDetection = (args) => {
   return hits.length > 0 ? hits : closestCenter(args);
 };
 
-/**
- * The move commands that turn one id order into another, simulated stepwise:
- * queueMove takes CURRENT positions, and every move renumbers the queue, so
- * each command's from/to comes from a working copy that has already applied
- * the moves before it (the device applies them in the same order — the WS is
- * FIFO). Walks the target order and pulls each misplaced id into its slot,
- * so a block move emits at most one move per block member.
- */
-function movesToTransform(
-  from: number[],
-  to: number[],
-): Array<{ id: number; from: number; to: number }> {
-  const work = [...from];
-  const moves: Array<{ id: number; from: number; to: number }> = [];
-  for (let i = 0; i < to.length; i++) {
-    if (work[i] === to[i]) continue;
-    const j = work.indexOf(to[i]);
-    if (j < 0) continue;
-    work.splice(j, 1);
-    work.splice(i, 0, to[i]);
-    moves.push({ id: to[i], from: j, to: i });
-  }
-  return moves;
+/** The FLIP snapshot lives at module scope so the album-grouped view's
+ *  remove/undo (a child component in this file) can arm it too: every row's
+ *  rect, captured just before a queue mutation, consumed by the screen's
+ *  layout effect when the new order commits. */
+let flipSnap: Map<number, { x: number; y: number }> | null = null;
+function snapQueueRows(): void {
+  const m = new Map<number, { x: number; y: number }>();
+  document.querySelectorAll<HTMLElement>("[data-queue-id]").forEach((el) => {
+    const r = el.getBoundingClientRect();
+    m.set(Number(el.dataset.queueId), { x: r.left, y: r.top });
+  });
+  flipSnap = m;
 }
 
 interface QueueItemProps {
@@ -1687,7 +1702,10 @@ function QueueCard({
           onPointerDown={(e) => e.stopPropagation() /* keep dnd-kit's drag sensor out of it */}
           onClick={(e) => {
             e.stopPropagation();
-            if (item.id != null) void tt.command({ type: "queueDelete", id: item.id });
+            if (item.id != null) {
+              snapQueueRows();
+              void tt.command({ type: "queueDelete", id: item.id });
+            }
           }}
           className="tip-bottom p-1 rounded text-faint opacity-0 group-hover:opacity-100 hover:text-alert transition-all"
         >
