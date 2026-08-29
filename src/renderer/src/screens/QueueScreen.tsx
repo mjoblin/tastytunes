@@ -463,8 +463,22 @@ export function QueueScreen(): React.JSX.Element {
     const ae = event.activatorEvent;
     dragStartPt.current = ae instanceof MouseEvent ? { x: ae.clientX, y: ae.clientY } : null;
     const id = event.active.id as number;
-    if (selected.has(id) && selected.size > 1) {
-      const ids = items.flatMap((it) => (it.id != null && selected.has(it.id) ? [it.id] : []));
+    // THE FLUENT GESTURE (live-reproduced, user 2026-08-28): the last ⌘-click
+    // often flows straight into the drag, and selection lands on mouse-UP —
+    // which the drag swallows — so at drag start the pressed row is not yet
+    // selected. A held chord on an unselected row therefore means "this one
+    // too", never "drop everything": the row is ADOPTED into the selection
+    // and the batch drags. A plain body-press on an unselected row keeps the
+    // Finder rule (drop the selection, drag that row alone).
+    const chord = ae instanceof MouseEvent && (ae.metaKey || ae.ctrlKey || ae.shiftKey);
+    const adopt = chord && selected.size > 0 && !selected.has(id);
+    if ((selected.has(id) && selected.size > 1) || adopt) {
+      const sel = adopt ? new Set([...selected, id]) : selected;
+      if (adopt) {
+        setSelected(sel);
+        selAnchor.current = items.findIndex((it) => it.id === id);
+      }
+      const ids = items.flatMap((it) => (it.id != null && sel.has(it.id) ? [it.id] : []));
       setDragBatch({ ids, active: id });
       const sc = scrollElRef.current;
       if (sc && !cards) {
@@ -480,7 +494,8 @@ export function QueueScreen(): React.JSX.Element {
         dragGeom.current = { bands, scrollerTop: scRect.top, lastCenter: null };
       }
     } else {
-      if (selected.size > 0) setSelected(new Set());
+      // a chord-held drag never destroys a selection it did not consume
+      if (selected.size > 0 && !chord) setSelected(new Set());
       setDragBatch(null);
     }
   };
