@@ -27,6 +27,7 @@ import { SortChip } from "@/components/controls/SortChip";
 import { Segmented } from "@/components/controls/Segmented";
 import { ContainerCard, ContainerRow, TrackRow } from "@/components/library/LibraryCards";
 import { RowMenu } from "@/components/media/RowMenu";
+import { SelectionBar, SelectionVerb } from "@/components/controls/SelectionBar";
 import { Eqbars } from "@/components/media/Eqbars";
 
 // The library lenses: OUR views over the union of every ready index —
@@ -1105,68 +1106,53 @@ export function ArtistsLens({
                 ? String(looseTracks.length)
                 : undefined,
           )}
-          {/* floats over the column's own list bottom, like its two siblings
-              (toast entrance, popover surface — never a re-layout) */}
           {selT.size > 0 && (
-            <div
-              className="toast-in absolute bottom-2 inset-x-0 z-20 flex items-start gap-3 rounded-xl ring-1 ring-edge2 bg-raised shadow-xl px-3 py-2 text-[12.5px]"
+            <SelectionBar
+              count={selT.size}
+              onClear={() => setSelT(new Set())}
+              className="bottom-2 inset-x-0 z-20"
               data-lens-selection-bar
             >
-              <span className="shrink-0 py-px text-dim tabular-nums">{selT.size} selected</span>
-              <div className="min-w-0 flex-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-                <button
-                  onClick={() => actions.queueTracks(chosenT(), "now", () => setSelT(new Set()))}
-                  className="text-dim hover:text-ink transition-colors"
-                >
-                  Play now
-                </button>
-                <button
-                  onClick={() => actions.queueTracks(chosenT(), "next", () => setSelT(new Set()))}
-                  className="text-dim hover:text-ink transition-colors"
-                >
-                  Play next
-                </button>
-                <button
-                  onClick={() => actions.queueTracks(chosenT(), "append", () => setSelT(new Set()))}
-                  className="text-dim hover:text-ink transition-colors"
-                >
-                  Add to end of queue
-                </button>
-                <button
-                  onClick={(e) =>
-                    actions.addTracksToPlaylist(chosenT(), { x: e.clientX, y: e.clientY }, () =>
-                      setSelT(new Set()),
-                    )
-                  }
-                  className="text-dim hover:text-ink transition-colors"
-                >
-                  Add to playlist…
-                </button>
-                {(() => {
-                  const nodes = chosenT();
-                  const allIn = nodes.length > 0 && nodes.every(actions.nodeFavorited);
-                  return (
-                    <button
-                      onClick={() => {
-                        for (const n of nodes)
-                          if (allIn ? actions.nodeFavorited(n) : !actions.nodeFavorited(n))
-                            actions.heartNode(n);
-                      }}
-                      className="text-dim hover:text-ink transition-colors"
-                    >
-                      {allIn ? "Remove from favorites" : "Add to favorites"}
-                    </button>
-                  );
-                })()}
-                <button
-                  onClick={() => setSelT(new Set())}
-                  className="ml-auto text-faint hover:text-ink transition-colors"
-                  title="Esc"
-                >
-                  Clear
-                </button>
-              </div>
-            </div>
+              <SelectionVerb
+                onClick={() => actions.queueTracks(chosenT(), "now", () => setSelT(new Set()))}
+              >
+                Play now
+              </SelectionVerb>
+              <SelectionVerb
+                onClick={() => actions.queueTracks(chosenT(), "next", () => setSelT(new Set()))}
+              >
+                Play next
+              </SelectionVerb>
+              <SelectionVerb
+                onClick={() => actions.queueTracks(chosenT(), "append", () => setSelT(new Set()))}
+              >
+                Add to end of queue
+              </SelectionVerb>
+              <SelectionVerb
+                onClick={(e) =>
+                  actions.addTracksToPlaylist(chosenT(), { x: e.clientX, y: e.clientY }, () =>
+                    setSelT(new Set()),
+                  )
+                }
+              >
+                Add to playlist…
+              </SelectionVerb>
+              {(() => {
+                const nodes = chosenT();
+                const allIn = nodes.length > 0 && nodes.every(actions.nodeFavorited);
+                return (
+                  <SelectionVerb
+                    onClick={() => {
+                      for (const n of nodes)
+                        if (allIn ? actions.nodeFavorited(n) : !actions.nodeFavorited(n))
+                          actions.heartNode(n);
+                    }}
+                  >
+                    {allIn ? "Remove from favorites" : "Add to favorites"}
+                  </SelectionVerb>
+                );
+              })()}
+            </SelectionBar>
           )}
           <div
             ref={tracksColRef}

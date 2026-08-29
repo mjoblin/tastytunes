@@ -67,6 +67,7 @@ import { ArtImage } from "@/components/media/ArtImage";
 import { MediaArt } from "@/components/media/MediaArt";
 import { DurationCell } from "@/components/media/DurationCell";
 import { FilterInput } from "@/components/controls/FilterInput";
+import { SelectionBar, SelectionVerb } from "@/components/controls/SelectionBar";
 import { ModalShell } from "@/components/chrome/Overlay";
 import { PresetSavePanel, PresetPicker } from "@/components/library/LibraryMenus";
 import { HeaderChip, ScreenTitle } from "@/components/chrome/Chrome";
@@ -879,55 +880,26 @@ export function QueueScreen(): React.JSX.Element {
       )}
       <SaveQueueDialog open={saveOpen} onClose={() => setSaveOpen(false)} />
 
-      {/* the selection bar FLOATS over the list (toast entrance, popover
-          surface) — in flow it pushed every row down the moment a chord
-          landed, a re-layout of the exact rows being picked (user,
-          2026-08-27); the list scrolls beneath it instead */}
       {selected.size > 0 && (
-        <div
-          data-selection-bar
-          className="toast-in absolute bottom-4 inset-x-6 z-30 flex items-start gap-3 rounded-xl ring-1 ring-edge2 bg-raised shadow-xl px-3 py-2 text-[12.5px]"
+        <SelectionBar
+          count={selected.size}
+          onClear={() => setSelected(new Set())}
+          className="bottom-4 inset-x-6 z-30"
         >
-          <span className="shrink-0 py-px text-dim tabular-nums">{selected.size} selected</span>
-          <div className="min-w-0 flex-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-            <button
-              onClick={() => moveSelected("top")}
-              className="text-dim hover:text-ink transition-colors"
-            >
-              Move to top
-            </button>
-            <button
-              onClick={() => moveSelected("bottom")}
-              className="text-dim hover:text-ink transition-colors"
-            >
-              Move to bottom
-            </button>
-            <button
-              onClick={(e) => setPlaylistBatch({ x: e.clientX, y: e.clientY })}
-              className="text-dim hover:text-ink transition-colors"
-            >
-              Add to playlist…
-            </button>
-            {selFavs.length > 0 && (
-              <button onClick={heartSelected} className="text-dim hover:text-ink transition-colors">
-                {selAllHearted ? "Remove from favorites" : "Add to favorites"}
-              </button>
-            )}
-            <button
-              onClick={removeSelected}
-              className="text-dim hover:text-alert transition-colors"
-            >
-              Remove from queue
-            </button>
-            <button
-              onClick={() => setSelected(new Set())}
-              className="ml-auto text-faint hover:text-ink transition-colors"
-              title="Esc"
-            >
-              Clear
-            </button>
-          </div>
-        </div>
+          <SelectionVerb onClick={() => moveSelected("top")}>Move to top</SelectionVerb>
+          <SelectionVerb onClick={() => moveSelected("bottom")}>Move to bottom</SelectionVerb>
+          <SelectionVerb onClick={(e) => setPlaylistBatch({ x: e.clientX, y: e.clientY })}>
+            Add to playlist…
+          </SelectionVerb>
+          {selFavs.length > 0 && (
+            <SelectionVerb onClick={heartSelected}>
+              {selAllHearted ? "Remove from favorites" : "Add to favorites"}
+            </SelectionVerb>
+          )}
+          <SelectionVerb destructive onClick={removeSelected}>
+            Remove from queue
+          </SelectionVerb>
+        </SelectionBar>
       )}
 
       {/* rows: pt-1 keeps the current ring unclipped; cards: pt-2 gives the
