@@ -1234,7 +1234,7 @@ function HistorySection({
       <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
         <Toggle
           label="Listening record"
-          hint={`Keeps a local log of everything that plays (tracks, radio stations and play time) in plain files. A play is recorded when its track changes or stops, once it has ${LISTEN_FLOOR_SECS} seconds of real play time. The record stays on this computer.`}
+          hint={`Keeps a local log of what plays and for how long (local media, radio, AirPlay and other sources) in plain files. A play is recorded when its track changes or stops, once it has ${LISTEN_FLOOR_SECS} seconds of real play time. The record stays on this computer.`}
           checked={settings.listeningRecord}
           onChange={(listeningRecord) => void save({ listeningRecord })}
         />
