@@ -23,6 +23,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   BookmarkPlus,
+  Check,
   Crosshair,
   Disc3,
   Footprints,
@@ -1688,6 +1689,18 @@ function QueueCard({
           {isCurrent && (
             <span className="absolute top-1.5 left-1.5 flex items-center rounded-lg bg-panel/80 ring-1 ring-edge px-1.5 h-7">
               <Eqbars dim={!sourceActive} />
+            </span>
+          )}
+
+          {/* selection is a STATUS on the art (the card-chip grammar): the
+              ring alone whispered under the artwork and moved selections
+              were kept without anyone noticing (user, 2026-08-28) */}
+          {selected && (
+            <span
+              data-sel-check
+              className="absolute top-1.5 right-1.5 z-10 h-6 w-6 rounded-full bg-gold text-bg flex items-center justify-center shadow-lg"
+            >
+              <Check size={13} strokeWidth={3} />
             </span>
           )}
         </div>
