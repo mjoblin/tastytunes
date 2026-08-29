@@ -39,7 +39,13 @@ import type {
   ZonePlayState,
   ZoneState,
 } from "@shared/smoip";
-import { DEFAULT_SETTINGS, FRAME_RING_SIZE, LOG_RING_SIZE, NET_RING_SIZE } from "@shared/model";
+import {
+  type ListeningRecordStats,
+  DEFAULT_SETTINGS,
+  FRAME_RING_SIZE,
+  LOG_RING_SIZE,
+  NET_RING_SIZE,
+} from "@shared/model";
 import { currentLibrarySpot } from "@/lib/navSpot";
 import { tt } from "./api";
 
@@ -249,6 +255,9 @@ interface TTState {
   sleep: SleepTimer | null;
   /** Local recently-played log, newest first (mirrored from the main process). */
   recents: RecentTrack[];
+  /** The listening record's truth row, pushed after every append. Null until
+   *  the History tab's first fetch or the first push. */
+  listeningStats: ListeningRecordStats | null;
   /** Local favorites, newest-hearted first (mirrored from the main process). */
   favorites: Favorite[];
   playlists: Playlist[];
@@ -442,6 +451,7 @@ export const useStore = create<TTState>((set, get) => ({
   trayOpens: 0,
   sleep: null,
   recents: [],
+  listeningStats: null,
   favorites: [],
   playlists: [],
   playlistActivation: null,
@@ -683,6 +693,8 @@ export const useStore = create<TTState>((set, get) => ({
           return { lastRecalledPresetId: msg.id };
         case "recents":
           return { recents: msg.data };
+        case "listening":
+          return { listeningStats: msg.data };
         case "favorites":
           return { favorites: msg.data };
         case "mcpStatus":

@@ -113,6 +113,7 @@ export type PushMessage =
   | { kind: "frame"; entry: FrameEntry }
   | { kind: "log"; entry: LogEntry }
   | { kind: "recents"; data: RecentTrack[] }
+  | { kind: "listening"; data: ListeningRecordStats }
   /** Settings changed OUTSIDE the renderer (e.g. an MCP tool created a schedule). */
   | { kind: "settings"; settings: AppSettings }
   /** Wake-on-intent in flight: a play-shaped command is waking the streamer. */

@@ -1214,10 +1214,14 @@ function HistorySection({
   settings: AppSettings;
   save(patch: Partial<AppSettings>): Promise<void>;
 }): React.JSX.Element {
-  const [stats, setStats] = useState<ListeningRecordStats | null>(null);
+  const [fetched, setFetched] = useState<ListeningRecordStats | null>(null);
   useEffect(() => {
-    void tt.listeningStats().then(setStats);
+    void tt.listeningStats().then(setFetched);
   }, []);
+  // Live: main pushes fresh stats after every append, so the row ticks at
+  // the moment an event lands — the rule demonstrating itself.
+  const pushed = useStore((s) => s.listeningStats);
+  const stats = pushed ?? fetched;
   const confirmClear = useConfirmPopover();
   const showToast = useStore((s) => s.showToast);
   const sinceLabel =
@@ -1230,7 +1234,7 @@ function HistorySection({
       <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
         <Toggle
           label="Listening record"
-          hint="Keeps a local log of everything that plays (tracks, radio stations and play time) in plain files. The record stays on this computer."
+          hint={`Keeps a local log of everything that plays (tracks, radio stations and play time) in plain files. A play is recorded when its track changes or stops, once it has ${LISTEN_FLOOR_SECS} seconds of real play time. The record stays on this computer.`}
           checked={settings.listeningRecord}
           onChange={(listeningRecord) => void save({ listeningRecord })}
         />
@@ -1266,7 +1270,7 @@ function HistorySection({
                 confirmClear.ask(e, {
                   question: "Delete the whole listening record? There is no undo.",
                   verb: "Delete",
-                  onConfirm: () => void tt.listeningClear().then(setStats),
+                  onConfirm: () => void tt.listeningClear().then(setFetched),
                 })
               }
               disabled={stats == null || stats.events === 0}

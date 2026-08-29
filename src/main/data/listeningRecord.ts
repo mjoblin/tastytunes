@@ -57,6 +57,9 @@ interface OpenPlay {
 }
 
 let current: OpenPlay | null = null;
+/** Called after every append (and failed append) so the Settings truth row
+ *  can stay live — main wires this to the renderer push. */
+let notify: (() => void) | null = null;
 /** Consecutive-dedupe key for announced radio tracks (station:title). */
 let lastRadioTrackKey: string | null = null;
 let writeError: string | null = null;
@@ -115,6 +118,7 @@ function append(event: ListeningEvent): void {
     writeError = err instanceof Error ? err.message : String(err);
     console.error("listening record append failed", err);
   }
+  notify?.();
 }
 
 function closeCurrent(): void {
@@ -145,6 +149,10 @@ function pauseCurrent(): void {
 }
 
 export const listeningRecord = {
+  setNotifier(fn: () => void): void {
+    notify = fn;
+  },
+
   /** Feed every /zone/play_state push through here (DeviceManager does,
    *  beside the scrobbler). `sourceName` is now_playing's display name. */
   onPlayState(ps: ZonePlayState, sourceName: string | null): void {

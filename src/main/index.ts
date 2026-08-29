@@ -112,6 +112,18 @@ function broadcastSettings(settings: AppSettings): void {
   }
 }
 
+// The History tab's truth row stays live: every append (or failed append)
+// re-reads the stats and pushes them — the recents pattern, at track-boundary
+// frequency.
+function broadcastListening(): void {
+  void listeningRecord.stats().then((data) => {
+    for (const w of BrowserWindow.getAllWindows()) {
+      w.webContents.send(IPC.push, { kind: "listening", data });
+    }
+  });
+}
+listeningRecord.setNotifier(broadcastListening);
+
 // MCP tools can mutate settings (schedules) — the renderer must hear about it
 mcpBridge.onSettingsMutated = (settings) => broadcastSettings(settings);
 
@@ -470,6 +482,7 @@ function registerIpc(): void {
   ipcMain.handle(IPC.listeningStats, () => listeningRecord.stats());
   ipcMain.handle(IPC.listeningClear, async () => {
     await listeningRecord.clear();
+    broadcastListening();
     return listeningRecord.stats();
   });
   ipcMain.handle(IPC.listeningExport, async () => {
