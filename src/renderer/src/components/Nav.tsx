@@ -136,6 +136,7 @@ export function Nav(): React.JSX.Element {
 
   return (
     <nav
+      data-app-nav
       className={cx(
         "shrink-0 flex flex-col border-r border-edge transition-all",
         collapsed ? "w-16" : "w-56",

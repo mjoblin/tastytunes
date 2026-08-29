@@ -736,6 +736,19 @@ export function ArtistsLens({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [visibleTracks, selT.size]);
+  // nav-rail blank clicks clear too (the queue's rule)
+  useEffect(() => {
+    if (selT.size === 0) return;
+    const onWin = (e: MouseEvent): void => {
+      const t = e.target;
+      if (!(t instanceof HTMLElement)) return;
+      if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+      if (!t.closest("[data-app-nav]") || t.closest("button, input, a")) return;
+      setSelT(new Set());
+    };
+    window.addEventListener("click", onWin);
+    return () => window.removeEventListener("click", onWin);
+  }, [selT.size]);
   /** The plural ⋯: a menu invoked ON a selected track speaks for the whole
    *  selection (the Finder/Spotify convention); unselected rows keep the
    *  single-track builder menu via actions.openMenu. */

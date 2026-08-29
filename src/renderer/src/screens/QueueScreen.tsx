@@ -341,7 +341,12 @@ export function QueueScreen(): React.JSX.Element {
       action: {
         label: "Undo",
         undo: () => {
-          for (const s of saved) void restoreToQueue(s.content, s.position);
+          // sequential, ascending positions — parallel restores raced each
+          // other's inserts and resolves, failing tracks on an immediate
+          // undo (user, 2026-08-28)
+          void (async () => {
+            for (const s of saved) await restoreToQueue(s.content, s.position);
+          })();
         },
       },
     });
@@ -365,6 +370,21 @@ export function QueueScreen(): React.JSX.Element {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [items, selected.size, removeSelected]);
+  // Clicking the app shell OUTSIDE the screen — the nav rail's blank areas —
+  // clears too. (The top strips are drag-region: the window's own drag
+  // handle, so the OS swallows those clicks like any title bar.)
+  useEffect(() => {
+    if (selected.size === 0) return;
+    const onWin = (e: MouseEvent): void => {
+      const t = e.target;
+      if (!(t instanceof HTMLElement)) return;
+      if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+      if (!t.closest("[data-app-nav]") || t.closest("button, input, a")) return;
+      setSelected(new Set());
+    };
+    window.addEventListener("click", onWin);
+    return () => window.removeEventListener("click", onWin);
+  }, [selected.size]);
   // First follow after mount positions INSTANTLY — re-entering the screen
   // shouldn't replay a glide to a place you already were. The animation is
   // reserved for track changes while you're watching.
@@ -435,8 +455,7 @@ export function QueueScreen(): React.JSX.Element {
     updateInsert(null);
     dragGeom.current = null;
     const ae = event.activatorEvent;
-    dragStartPt.current =
-      ae instanceof MouseEvent ? { x: ae.clientX, y: ae.clientY } : null;
+    dragStartPt.current = ae instanceof MouseEvent ? { x: ae.clientX, y: ae.clientY } : null;
     const id = event.active.id as number;
     if (selected.has(id) && selected.size > 1) {
       const ids = items.flatMap((it) => (it.id != null && selected.has(it.id) ? [it.id] : []));
@@ -536,14 +555,15 @@ export function QueueScreen(): React.JSX.Element {
 
   /** Reorder to `final` (full queue order): optimistic locally, then the
    *  simulated per-item moves to the device (see movesToTransform). */
-  const applyOrder = (final: number[]): void => {
+  const applyOrder = (final: number[]): boolean => {
     const byId = new Map(allItems.map((it) => [it.id as number, it]));
     const order = allItems.map((it) => it.id as number);
     const moves = movesToTransform(order, final);
-    if (moves.length === 0) return;
+    if (moves.length === 0) return false;
     snapRows();
     setQueueItems(final.flatMap((id) => (byId.has(id) ? [byId.get(id)!] : [])));
     for (const m of moves) void tt.command({ type: "queueMove", id: m.id, from: m.from, to: m.to });
+    return true;
   };
 
   const onDragEnd = (event: DragEndEvent): void => {
@@ -609,7 +629,14 @@ export function QueueScreen(): React.JSX.Element {
     if (ids.length === 0) return;
     const idSet = new Set(ids);
     const rest = allItems.flatMap((it) => (it.id != null && !idSet.has(it.id) ? [it.id] : []));
-    applyOrder(where === "top" ? [...ids, ...rest] : [...rest, ...ids]);
+    if (!applyOrder(where === "top" ? [...ids, ...rest] : [...rest, ...ids])) return;
+    // the landing must be SEEN: follow the block to its end of the list, or
+    // "Move to bottom" reads as nothing happening (user, 2026-08-28). An
+    // INSTANT jump — a smooth scroll dies with the reorder's re-render —
+    // and the FLIP supplies the motion: the rows fly in from off-screen
+    // (under reduced motion both are skipped and it is a clean jump).
+    const sc = scrollElRef.current;
+    if (sc) sc.scrollTo({ top: where === "top" ? 0 : sc.scrollHeight });
   };
 
   if (allItems.length === 0) {
@@ -874,7 +901,10 @@ export function QueueScreen(): React.JSX.Element {
           scrollElRef.current = el;
         }}
         className={cx(
-          "flex-1 overflow-y-auto",
+          // overflow-anchor off: Chromium's scroll anchoring re-adjusts scrollTop
+          // when rows reorder above the viewport, dragging the Move-to-bottom
+          // jump back up — this list manages its own scrolling
+          "flex-1 overflow-y-auto [overflow-anchor:none]",
           // the albums view separates by its header surface, not by rules —
           // dividers would double the boundary the veil bar already draws
           cards
@@ -912,6 +942,7 @@ export function QueueScreen(): React.JSX.Element {
                 sourceActive={queueSourceActive}
                 currentRef={currentRef}
                 selectedIds={selected}
+                menuId={rowMenu?.item.id ?? null}
                 onRowClick={rowClick}
                 onGroupModClick={groupModClick}
                 onMenu={(item, e) => {
@@ -948,6 +979,7 @@ export function QueueScreen(): React.JSX.Element {
                     insertLine={
                       insertAt?.id === item.id ? (insertAt.after ? "after" : "before") : undefined
                     }
+                    menuOpen={rowMenu?.item.id === item.id}
                   />
                 ))}
               </div>
@@ -976,6 +1008,7 @@ export function QueueScreen(): React.JSX.Element {
                     selStart={!(prev?.id != null && selected.has(prev.id))}
                     selEnd={!(next?.id != null && selected.has(next.id))}
                     bodyDrag={selected.size > 0}
+                    menuOpen={rowMenu?.item.id === item.id}
                   />
                 );
               })
@@ -1037,12 +1070,15 @@ function QueueAlbumGroups({
   currentRef,
   onMenu,
   selectedIds,
+  menuId,
   onRowClick,
   onGroupModClick,
 }: {
   items: QueueListItem[];
   playId: number | null;
   sourceActive: boolean;
+  /** The row whose ⋯ menu is open holds its hover treatment. */
+  menuId: number | null;
   currentRef: React.MutableRefObject<HTMLDivElement | null>;
   onMenu(item: QueueListItem, e: React.MouseEvent): void;
   selectedIds: ReadonlySet<number>;
@@ -1082,7 +1118,12 @@ function QueueAlbumGroups({
       action: {
         label: "Undo",
         undo: () => {
-          for (const s of saved) void restoreToQueue(s.content, s.position);
+          // sequential, ascending positions — parallel restores raced each
+          // other's inserts and resolves, failing tracks on an immediate
+          // undo (user, 2026-08-28)
+          void (async () => {
+            for (const s of saved) await restoreToQueue(s.content, s.position);
+          })();
         },
       },
     });
@@ -1174,7 +1215,7 @@ function QueueAlbumGroups({
                       !sourceActive &&
                       !isSelected &&
                       "ring-1 ring-edge2 bg-veil/60 hover:bg-veil",
-                    !isCurrent && !isSelected && "hover:bg-veil",
+                    !isCurrent && !isSelected && (item.id === menuId ? "bg-veil" : "hover:bg-veil"),
                     isSelected && "bg-veil2",
                     isSelected && !runStart && "rounded-t-none",
                     isSelected && !runEnd && "rounded-b-none",
@@ -1348,6 +1389,9 @@ interface QueueItemProps {
   selEnd?: boolean;
   /** The gold insertion line — where the block will land on release. */
   insertLine?: "before" | "after";
+  /** This row's ⋯ menu is open — hold the hover treatment (the Library's
+   *  menuNodeId rule; losing it read as the row deselecting itself). */
+  menuOpen?: boolean;
   /** While a selection exists the whole row body drags (selection mode
    *  suspends click-to-play, so the body is free — the Photos rule); with
    *  no selection the grip stays the one drag affordance, keeping sloppy
@@ -1369,6 +1413,7 @@ function QueueRow({
   selStart = true,
   selEnd = true,
   bodyDrag = false,
+  menuOpen = false,
 }: QueueItemProps): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id as number,
@@ -1405,7 +1450,7 @@ function QueueRow({
         // source plays: just the parked resume point, quietly set apart
         isCurrent && sourceActive && "row-playing bg-gold/10",
         isCurrent && !sourceActive && !selected && "ring-1 ring-edge2 bg-veil/60 hover:bg-veil",
-        !isCurrent && !selected && "hover:bg-veil",
+        !isCurrent && !selected && (menuOpen ? "bg-veil" : "hover:bg-veil"),
         // a contiguous run reads as ONE block: the fill continues and the
         // border is drawn by the data-sel-run span on the run's outer
         // boundary only (overlapping per-row rings doubled up and read
@@ -1522,6 +1567,7 @@ function QueueCard({
   onRowClick,
   staticDrag = false,
   insertLine,
+  menuOpen = false,
 }: QueueItemProps): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id as number,
@@ -1548,6 +1594,7 @@ function QueueCard({
         // cards simply clip at the scrollport seam.
         "group relative text-left rounded-2xl p-2 pb-2.5 transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]",
         isDragging && !staticDrag && "z-10 opacity-90",
+        menuOpen && "z-10 motion-safe:scale-[1.04]",
         isCurrent && sourceActive
           ? "bg-goldtile/70 tile-playing"
           : isCurrent
@@ -1601,7 +1648,10 @@ function QueueCard({
               e.stopPropagation();
               onMenu?.(e);
             }}
-            className="absolute bottom-1.5 right-1.5 z-10 h-8 w-8 rounded-lg bg-panel/80 ring-1 ring-edge text-dim hover:text-ink flex items-center justify-center transition-all opacity-0 group-hover:opacity-100"
+            className={cx(
+              "absolute bottom-1.5 right-1.5 z-10 h-8 w-8 rounded-lg bg-panel/80 ring-1 ring-edge text-dim hover:text-ink flex items-center justify-center transition-all",
+              menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+            )}
           >
             <MoreHorizontal size={15} />
           </span>

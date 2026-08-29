@@ -1375,6 +1375,20 @@ export function LibraryScreen(): React.JSX.Element {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [lens, atRoot, state, tracks, selTracks.size]);
+  // nav-rail blank clicks clear too (the queue's rule; top strips are
+  // drag-region and never deliver clicks)
+  useEffect(() => {
+    if (selTracks.size === 0) return;
+    const onWin = (e: MouseEvent): void => {
+      const t = e.target;
+      if (!(t instanceof HTMLElement)) return;
+      if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+      if (!t.closest("[data-app-nav]") || t.closest("button, input, a")) return;
+      setSelTracks(new Set());
+    };
+    window.addEventListener("click", onWin);
+    return () => window.removeEventListener("click", onWin);
+  }, [selTracks.size]);
   const server = servers?.find((s) => s.udn === serverUdn) ?? null;
   // Sort/layout affordances key off the UNFILTERED level: filtering down to
   // one match must not unmount them (the header controls would jump around).
