@@ -178,9 +178,11 @@ tools the Home Assistant automation needs, and keep TastyTunes running.
 - Browse every local UPnP media server and the streamer's own USB storage
 - A local, rebuildable index: search as you type, and <kbd>⌘F</kbd> searches every library at once, grouped by server
 - Artists & Albums views pooling all sources into one collection, with genre, decade and albums ⇄ compilations filters and sorting
-- Albums stay intact: featured guests stay in the album, compilations sit under Various Artists, multi-disc sets show disc dividers; format and size in every album header
+- Albums stay intact: featured guests stay in the album, compilations sit under Various Artists, multi-disc sets show disc dividers, and multi-volume box sets collapse to one album with a volume selector; format and size in every album header
 - Info on any album, track or artist: performers, album artist, composers, disc and track numbers, format, size, and source ids, as the media server reports them; copy as JSON
 - Play now, play next, append, or replace
+- Select several tracks (<kbd>⌘</kbd>-click, <kbd>⇧</kbd>-click) and queue, favorite or playlist them together
+- Albums with no artwork on the media server get a cover from the Cover Art Archive (can be disabled in Settings)
 - Save an album, a track, or the whole queue to one of the streamer's preset slots
 - Open in Library from the queue, favorites, playlists, Recently Played and the Info panel: lands on the track's album with the track highlighted
 - <kbd>Backspace</kbd> goes up a level; filters are remembered per folder
@@ -213,6 +215,7 @@ tools the Home Assistant automation needs, and keep TastyTunes running.
 ### Queue
 
 - View, jump, drag-to-reorder, remove, clear
+- Multi-select with <kbd>⌘</kbd>-click and <kbd>⇧</kbd>-click (<kbd>⌘A</kbd> for everything): the selected tracks move, remove, favorite or playlist together, and drag as one
 - Cards, rows and album-grouped layouts; follow mode keeps the playing track in view
 
 ### Presets
@@ -253,8 +256,8 @@ tools the Home Assistant automation needs, and keep TastyTunes running.
 
 ### Automation
 
-- Sleep timer: 15 minutes to 2 hours, or end of track; pause or standby; keeps running with the window closed, and survives a system sleep
-- Schedules: wake the streamer to a preset at a chosen volume, or send it to standby, per weekday (schedules only trigger while the app is running)
+- Sleep timer: 15 minutes to 2 hours, or end of track; pause or standby, with an optional volume fade-out (pre-amp mode); keeps running with the window closed, and survives a system sleep
+- Schedules: wake the streamer to a preset at a chosen volume, fading in, or send it to standby, per weekday (schedules only trigger while the app is running)
 - A wake schedule missed while the computer was asleep is offered on waking rather than run late: once, within ten minutes of the missed time, and only if nothing is already playing
 
 ### Menu bar / system tray
