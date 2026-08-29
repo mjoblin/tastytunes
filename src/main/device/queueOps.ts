@@ -216,16 +216,16 @@ export class QueueOps {
    */
   async queueRestore(ref: ContentRef, position: number): Promise<QueueRestoreResult> {
     const host = this.host.host();
-    if (!host) return "failed";
+    if (!host) return { status: "failed" };
 
     const found = await resolveContent(host, ref);
-    if (!found) return "not-found";
+    if (!found) return { status: "not-found" };
 
     const before = this.host.queue()?.items?.length ?? 0;
     try {
       await queueAdd(host, found.serverUdn, found.objectId, "APPEND");
     } catch {
-      return "failed";
+      return { status: "failed" };
     }
 
     // APPEND lands at the end, but the id it landed under only arrives with the
@@ -234,10 +234,10 @@ export class QueueOps {
     try {
       this.host.socket()?.send("/queue/list");
     } catch {
-      return "ok"; // it IS in the queue; reconnect will refetch and show it
+      return { status: "ok" }; // it IS in the queue; reconnect will refetch and show it
     }
     const grown = await this.waitForQueue((q) => (q.items?.length ?? 0) > before, 4000);
-    if (!grown) return "ok";
+    if (!grown) return { status: "ok" };
 
     const items = grown.items ?? [];
     const from = items.length - 1;
@@ -250,7 +250,7 @@ export class QueueOps {
         // it's in the queue, just not where it was — see the doc comment
       }
     }
-    return "ok";
+    return landed?.id != null ? { status: "ok", id: landed.id } : { status: "ok" };
   }
 
   /**

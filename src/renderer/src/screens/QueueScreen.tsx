@@ -584,6 +584,11 @@ export function QueueScreen(): React.JSX.Element {
   // mutation, so the streamer's re-announce mid-flight can't snap a row out
   // of its animation; skipped under reduced motion.
   useLayoutEffect(() => {
+    // arrival washes are keyed on identity + position, not on the armed
+    // snapshot — a restore's landing announce often arrives with no
+    // mutation of ours armed (see pendingWash)
+    lastQueueItems = queue?.items ?? [];
+    washArrivals();
     const snap = flipSnap;
     if (!snap) return;
     flipSnap = null;
@@ -595,19 +600,12 @@ export function QueueScreen(): React.JSX.Element {
     document.querySelectorAll<HTMLElement>("[data-queue-id]").forEach((el) => {
       const old = snap.get(Number(el.dataset.queueId));
       if (!old) {
-        // no old rect = a row that just entered (an undo's restore) — it
-        // fades in under a gold wash that decays (user, 2026-08-28: the bare
-        // fade read as nothing happening; sequential restores mean each row
-        // washes as it lands, so the return is watchable). var() keeps the
-        // wash on the theme's own gold.
+        // no old rect = a row that just entered — it fades in while its
+        // neighbors FLIP out of the way. No wash here: this branch also
+        // fires for a restore's transient tail append, which is exactly
+        // where the wash must NOT go (it lit the off-screen tail, not the
+        // landing) — washArrivals owns the gold.
         el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180, easing: "ease-out" });
-        el.animate(
-          [
-            { backgroundColor: "rgb(var(--gold-rgb) / 0.25)" },
-            { backgroundColor: "rgb(var(--gold-rgb) / 0)" },
-          ],
-          { duration: 1100, easing: "ease-out" },
-        );
         return;
       }
       const r = el.getBoundingClientRect();
@@ -1398,16 +1396,65 @@ async function restoreToQueue(ref: ContentRef, position: number): Promise<void> 
   try {
     result = await tt.queueRestore(ref, position);
   } catch {
-    result = "failed";
+    result = { status: "failed" };
   }
-  if (result === "ok") return;
+  if (result.status === "ok") {
+    if (result.id != null) armArrivalWash(result.id, position);
+    return;
+  }
   showToast({
     kind: "error",
     text:
-      result === "not-found"
+      result.status === "not-found"
         ? `Couldn't find “${ref.title}” to put back`
         : `Couldn't put “${ref.title}” back`,
   });
+}
+
+/** Rows an undo just put back: the queue id each landed under → the slot it
+ *  was restored to. A restore is an append at the tail plus a move into
+ *  place — TWO announces — and washing on "row just appeared" lit the tail
+ *  off-screen instead of the landing (user, 2026-08-28: three tracks came
+ *  back, one brief wash). The wash instead fires when the queue shows the id
+ *  AT its restored position, from whichever side wins the announce-vs-IPC
+ *  race; entries expire quietly (a filtered view may never render the row). */
+const pendingWash = new Map<number, { position: number; until: number }>();
+function armArrivalWash(id: number, position: number): void {
+  pendingWash.set(id, { position, until: Date.now() + 15000 });
+  // the landing announce may already have been processed before the
+  // restore's IPC round-trip resolved — sweep now, not only on the next
+  // queue change
+  requestAnimationFrame(() => washArrivals());
+}
+let lastQueueItems: QueueListItem[] = [];
+function washArrivals(): void {
+  if (pendingWash.size === 0) return;
+  const reduced =
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+    document.documentElement.classList.contains("reduce-motion");
+  const at = new Map<number, number>();
+  lastQueueItems.forEach((it, i) => {
+    if (it.id != null) at.set(it.id, it.position ?? i);
+  });
+  for (const [id, w] of pendingWash) {
+    if (w.until < Date.now()) {
+      pendingWash.delete(id);
+      continue;
+    }
+    if (at.get(id) !== w.position) continue;
+    const el = document.querySelector<HTMLElement>(`[data-queue-id="${id}"]`);
+    if (!el) continue;
+    pendingWash.delete(id);
+    if (reduced) continue;
+    el.animate(
+      [
+        { backgroundColor: "rgb(var(--gold-rgb) / 0.3)", offset: 0 },
+        { backgroundColor: "rgb(var(--gold-rgb) / 0.3)", offset: 0.3 },
+        { backgroundColor: "rgb(var(--gold-rgb) / 0)", offset: 1 },
+      ],
+      { duration: 2600, easing: "ease-out" },
+    );
+  }
 }
 
 /** The FLIP snapshot lives at module scope so the album-grouped view's

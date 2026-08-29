@@ -191,9 +191,11 @@ export interface ContentRef {
  * 'not-found' = the track couldn't be found on any server (say so — the user
  * is looking at a queue it didn't reappear in), 'failed' = the streamer or the
  * connection refused, 'ok' = it's back (possibly not in its old slot; see
- * queueRestore).
+ * queueRestore). An ok carries the queue id the row landed under when the
+ * re-announce arrived in time — the renderer's arrival wash keys on it.
  */
-export type QueueRestoreResult = "ok" | "not-found" | "failed";
+export type QueueRestoreResult =
+  { status: "ok"; id?: number } | { status: "not-found" } | { status: "failed" };
 
 /** A stored, ordered collection of tracks. Bounded local JSON, no database. */
 export interface Playlist {
