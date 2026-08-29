@@ -1,5 +1,6 @@
 import { searchAllIndexes, searchServer as librarySearch } from "./mediaIndex";
 import { refreshServers } from "./upnpBrowser";
+import { trackArtists } from "@shared/model";
 import type { MediaNode } from "@shared/model";
 import type { ContentRef } from "@shared/model";
 
@@ -26,15 +27,36 @@ export interface ResolvedContent {
 
 const lc = (v: string | null | undefined): string => (v ?? "").trim().toLowerCase();
 
+/** The ref's artist is the FIRMWARE's display string — split it the
+ *  servers' way ("; " packing) so identity can intersect per performer. */
+const refArtists = (s: string): string[] =>
+  s
+    .split(";")
+    .map((x) => x.trim())
+    .filter(Boolean);
+
 /**
  * Title must match; artist must match only when BOTH sides claim one. That
  * asymmetry is deliberate and matches favoriteMatchesNode: a server that
  * reports no artist shouldn't veto a title we're confident about.
+ *
+ * ARTIST IDENTITY GOES THROUGH THE PERFORMER SETS, never the packed display
+ * string (the app-wide trackArtists rule): the firmware renders a queue
+ * entry's artist its own way — the album artist alone, or a re-joined
+ * performer list — so an exact-string test vetoed real library matches and
+ * queue undo toasted "Couldn't find" on compilation rows (live-proven on
+ * "Coyote" / "Kacey Musgraves; Gregory Alan Isakov", 2026-08-28). Two sides
+ * match when they share ANY performer, each side's album artist counting as
+ * one of its own.
  */
 function matches(ref: ContentRef, n: MediaNode): boolean {
   if (n.isContainer) return false;
   if (lc(n.title) !== lc(ref.title)) return false;
-  if (ref.artist != null && n.artist != null && lc(n.artist) !== lc(ref.artist)) return false;
+  if (ref.artist != null && n.artist != null) {
+    const wanted = new Set(refArtists(ref.artist).map(lc));
+    const candidates = [...trackArtists(n).map(lc), lc(n.albumArtist)].filter(Boolean);
+    if (!candidates.some((a) => wanted.has(a))) return false;
+  }
   return true;
 }
 

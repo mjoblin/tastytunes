@@ -1159,7 +1159,12 @@ export function ArtistsLens({
             onScroll={(e) => {
               artistsMem.scroll.tracks = e.currentTarget.scrollTop;
             }}
-            className="min-h-0 flex-1 overflow-y-auto px-1.5 -mx-1.5 py-1 -my-1"
+            className={cx(
+              "min-h-0 flex-1 overflow-y-auto px-1.5 -mx-1.5 -my-1",
+              // the floating bar overlaps the last rows at full scroll —
+              // selection mode adds scroll-room so every row can clear it
+              selT.size > 0 ? "pt-1 pb-24" : "py-1",
+            )}
             data-lens-tracks-col
           >
             {albumTracks || looseTracks ? (

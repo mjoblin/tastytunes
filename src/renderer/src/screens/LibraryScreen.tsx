@@ -1988,7 +1988,11 @@ export function LibraryScreen(): React.JSX.Element {
           // the miller view scrolls its own columns — the page must not
           atRoot && lens === "artists" && !searchMode
             ? "overflow-hidden min-h-0 pb-6"
-            : "overflow-y-auto pb-8",
+            : // the floating bar overlaps the last rows at full scroll —
+              // selection mode adds scroll-room so every row can clear it
+              selTracks.size > 0
+              ? "overflow-y-auto pb-28"
+              : "overflow-y-auto pb-8",
         )}
       >
         {showLoading && (

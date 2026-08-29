@@ -1086,6 +1086,15 @@ function buildDemo(host: string): {
       return;
     }
 
+    // A queue entry's artist is the DIDL's FIRST upnp:artist (the AlbumArtist
+    // role when present, else the lead performer) — never the packed "A; B"
+    // display string; the firmware truth this file's /queue/list already
+    // documents, now applied to dynamic adds too (mirrors the mock).
+    for (const it of newItems) {
+      const m = it.metadata as { artist?: string; albumArtist?: string } | undefined;
+      if (m?.artist) m.artist = m.albumArtist ?? m.artist.split(";")[0].trim();
+    }
+
     const cur = queueList().items ?? [];
     const curPlayIdx = cur.findIndex((i) => i.id === queueList().play_id);
     const action = params.action;

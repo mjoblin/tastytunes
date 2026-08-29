@@ -967,11 +967,10 @@ export function QueueScreen(): React.JSX.Element {
           "flex-1 overflow-y-auto [overflow-anchor:none]",
           // the albums view separates by its header surface, not by rules —
           // dividers would double the boundary the veil bar already draws
-          cards
-            ? "px-8 pb-8 pt-2"
-            : albums
-              ? "px-6 pb-6 pt-1"
-              : "px-6 pb-6 pt-1 divide-y divide-edge/50",
+          cards ? "px-8 pt-2" : albums ? "px-6 pt-1" : "px-6 pt-1 divide-y divide-edge/50",
+          // the floating bar overlaps the last rows at full scroll — selection
+          // mode adds scroll-room below the content so every row can clear it
+          selected.size > 0 ? "pb-28" : cards ? "pb-8" : "pb-6",
         )}
       >
         {items.length === 0 && (
