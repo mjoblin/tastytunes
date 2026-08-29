@@ -596,8 +596,18 @@ export function QueueScreen(): React.JSX.Element {
       const old = snap.get(Number(el.dataset.queueId));
       if (!old) {
         // no old rect = a row that just entered (an undo's restore) — it
-        // fades in while its neighbors FLIP out of the way
+        // fades in under a gold wash that decays (user, 2026-08-28: the bare
+        // fade read as nothing happening; sequential restores mean each row
+        // washes as it lands, so the return is watchable). var() keeps the
+        // wash on the theme's own gold.
         el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180, easing: "ease-out" });
+        el.animate(
+          [
+            { backgroundColor: "rgb(var(--gold-rgb) / 0.25)" },
+            { backgroundColor: "rgb(var(--gold-rgb) / 0)" },
+          ],
+          { duration: 1100, easing: "ease-out" },
+        );
         return;
       }
       const r = el.getBoundingClientRect();
