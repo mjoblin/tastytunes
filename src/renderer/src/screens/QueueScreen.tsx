@@ -6,10 +6,8 @@ import {
   KeyboardSensor,
   PointerSensor,
   closestCenter,
-  pointerWithin,
   useSensor,
   useSensors,
-  type CollisionDetection,
   type DragEndEvent,
   type DragMoveEvent,
   type DragStartEvent,
@@ -437,24 +435,44 @@ export function QueueScreen(): React.JSX.Element {
   // wrong after scrolls and over members; user, 2026-08-27).
   const scrollElRef = useRef<HTMLDivElement | null>(null);
   const dragGeom = useRef<{
-    bands: Array<{ id: number; mid: number }>;
+    bands: Array<{ id: number; x: number; y: number; w: number; h: number }>;
     scrollerTop: number;
-    lastCenter: number | null;
+    scrollerLeft: number;
+    lastX: number | null;
+    lastY: number | null;
   } | null>(null);
   // The POINTER drives the line, not the drag chip: the chip is a 320px card
   // anchored at the grab point, so its centre can sit far from the cursor
   // (in the card grid it pushed the line a half-card right — user,
   // 2026-08-28). Start position + dnd-kit's delta = the live pointer.
   const dragStartPt = useRef<{ x: number; y: number } | null>(null);
+  // nearest NON-member band to the pointer, in scroll-content coordinates;
+  // the edge follows reading order (beyond a band's row decides vertically;
+  // within one, the card grid decides horizontally and list rows vertically)
   const computeInsert = useCallback(
-    (centerY: number | null): { id: number; after: boolean } | null => {
+    (
+      px: number | null,
+      py: number | null,
+      grid: boolean,
+    ): { id: number; after: boolean } | null => {
       const g = dragGeom.current;
       const sc = scrollElRef.current;
-      if (g == null || sc == null || centerY == null || g.bands.length === 0) return null;
-      const y = centerY - g.scrollerTop + sc.scrollTop;
+      if (g == null || sc == null || px == null || py == null || g.bands.length === 0) return null;
+      const x = px - g.scrollerLeft + sc.scrollLeft;
+      const y = py - g.scrollerTop + sc.scrollTop;
       let best = g.bands[0];
-      for (const b of g.bands) if (Math.abs(b.mid - y) < Math.abs(best.mid - y)) best = b;
-      return { id: best.id, after: y > best.mid };
+      let bd = Infinity;
+      for (const b of g.bands) {
+        const d = (b.x - x) * (b.x - x) + (b.y - y) * (b.y - y);
+        if (d < bd) {
+          bd = d;
+          best = b;
+        }
+      }
+      const dy = y - best.y;
+      const dx = x - best.x;
+      const after = Math.abs(dy) > best.h / 2 ? dy > 0 : grid ? dx > 0 : dy > 0;
+      return { id: best.id, after };
     },
     [],
   );
@@ -482,17 +500,29 @@ export function QueueScreen(): React.JSX.Element {
       const ids = items.flatMap((it) => (it.id != null && sel.has(it.id) ? [it.id] : []));
       setDragBatch({ ids, active: id });
       const sc = scrollElRef.current;
-      if (sc && !cards) {
+      if (sc) {
         const scRect = sc.getBoundingClientRect();
         const bset = new Set(ids);
-        const bands: Array<{ id: number; mid: number }> = [];
+        const bands: Array<{ id: number; x: number; y: number; w: number; h: number }> = [];
         sc.querySelectorAll<HTMLElement>("[data-queue-id]").forEach((el) => {
           const bandId = Number(el.dataset.queueId);
           if (bset.has(bandId)) return;
           const r = el.getBoundingClientRect();
-          bands.push({ id: bandId, mid: r.top + r.height / 2 - scRect.top + sc.scrollTop });
+          bands.push({
+            id: bandId,
+            x: r.left + r.width / 2 - scRect.left + sc.scrollLeft,
+            y: r.top + r.height / 2 - scRect.top + sc.scrollTop,
+            w: r.width,
+            h: r.height,
+          });
         });
-        dragGeom.current = { bands, scrollerTop: scRect.top, lastCenter: null };
+        dragGeom.current = {
+          bands,
+          scrollerTop: scRect.top,
+          scrollerLeft: scRect.left,
+          lastX: null,
+          lastY: null,
+        };
       }
     } else {
       // a chord-held drag never destroys a selection it did not consume
@@ -502,37 +532,28 @@ export function QueueScreen(): React.JSX.Element {
   };
   const onDragMove = (event: DragMoveEvent): void => {
     if (!dragBatch) return;
-    const { active, over } = event;
+    const { active } = event;
     const a = active.rect.current.translated;
     if (!a) return;
     const start = dragStartPt.current;
     const px = start ? start.x + event.delta.x : a.left + a.width / 2;
     const py = start ? start.y + event.delta.y : a.top + a.height / 2;
-    if (!cards) {
-      const g = dragGeom.current;
-      if (g) g.lastCenter = py;
-      updateInsert(computeInsert(py));
-      return;
+    const g = dragGeom.current;
+    if (g) {
+      g.lastX = px;
+      g.lastY = py;
     }
-    // the card grid keeps the over-based path: 2D bands buy nothing there,
-    // and the grid neither auto-scrolls far nor hides the pointer's card
-    if (!over) return;
-    const overId = over.id as number;
-    if (dragBatch.ids.includes(overId)) return;
-    const dy = py - (over.rect.top + over.rect.height / 2);
-    const dx = px - (over.rect.left + over.rect.width / 2);
-    const after = Math.abs(dy) > over.rect.height / 2 ? dy > 0 : dx > 0;
-    updateInsert({ id: overId, after });
+    updateInsert(computeInsert(px, py, cards));
   };
   // Auto-scroll moves the rows' viewport positions while the pointer (and so
   // dnd-kit's move events) can stay still — the line follows the scroll too.
   useEffect(() => {
-    if (!dragBatch || cards) return;
+    if (!dragBatch) return;
     const sc = scrollElRef.current;
     if (!sc) return;
     const onScroll = (): void => {
-      const c = dragGeom.current?.lastCenter ?? null;
-      if (c != null) updateInsert(computeInsert(c));
+      const g = dragGeom.current;
+      if (g?.lastX != null) updateInsert(computeInsert(g.lastX, g.lastY, cards));
     };
     sc.addEventListener("scroll", onScroll);
     return () => sc.removeEventListener("scroll", onScroll);
@@ -607,8 +628,9 @@ export function QueueScreen(): React.JSX.Element {
   const onDragEnd = (event: DragEndEvent): void => {
     const batch = dragBatch;
     // the line one final time, from the release position itself — never a
-    // stale earlier value (the card grid keeps the last tracked line)
-    const ins = cards ? insertRef.current : computeInsert(dragGeom.current?.lastCenter ?? null);
+    // stale earlier value, on either layout
+    const gEnd = dragGeom.current;
+    const ins = computeInsert(gEnd?.lastX ?? null, gEnd?.lastY ?? null, cards) ?? insertRef.current;
     setDragBatch(null);
     dragGeom.current = null;
     dragStartPt.current = null;
@@ -929,7 +951,7 @@ export function QueueScreen(): React.JSX.Element {
         {/* Reordering a partial list is ambiguous — drags are inert while filtered. */}
         <DndContext
           sensors={filter || albums ? [] : sensors}
-          collisionDetection={cards && dragBatch ? pointerFirstCollision : closestCenter}
+          collisionDetection={closestCenter}
           onDragStart={onDragStart}
           onDragMove={onDragMove}
           onDragCancel={() => {
@@ -1349,15 +1371,6 @@ async function restoreToQueue(ref: ContentRef, position: number): Promise<void> 
         : `Couldn't put “${ref.title}” back`,
   });
 }
-
-/** Batch drags in the card grid collide by POINTER, not by the drag chip's
- *  rect — the 320px chip's centre picks cards to the right of the cursor
- *  (the same offset that pushed the line right); between cards, the nearest
- *  centre still answers. */
-const pointerFirstCollision: CollisionDetection = (args) => {
-  const hits = pointerWithin(args);
-  return hits.length > 0 ? hits : closestCenter(args);
-};
 
 /** The FLIP snapshot lives at module scope so the album-grouped view's
  *  remove/undo (a child component in this file) can arm it too: every row's
