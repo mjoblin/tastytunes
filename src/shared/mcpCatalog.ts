@@ -438,7 +438,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
     group: "read",
     readOnly: true,
     description:
-      "Lyrics and artist/album context for what's playing. These call the same services as the app's own panels and obey the Connections toggles — while a toggle is off, the matching tool refuses (off means no requests, ever).",
+      "Lyrics and artist/album context for what's playing. These call the same services as the app's own panels and obey the Connections toggles; while a toggle is off, the matching tool refuses (off means no requests will be sent).",
     tools: [
       {
         name: "get_lyrics",

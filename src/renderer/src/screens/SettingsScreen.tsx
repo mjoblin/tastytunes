@@ -207,7 +207,7 @@ export function SettingsScreen(): React.JSX.Element {
 
                   <SettingRow
                     label="Display font"
-                    hint="The face for titles and big text. Every option previews itself."
+                    hint="The font for titles and big text. Click a font name to see how it looks."
                   >
                     <div className="flex flex-wrap justify-end gap-1.5 max-w-[340px]">
                       {DISPLAY_FONTS.map((f) => (
@@ -299,7 +299,7 @@ export function SettingsScreen(): React.JSX.Element {
 
                   <Toggle
                     label="Accent follows album art"
-                    hint="Tint controls and glows with the playing album's dominant color. The tastytunes gold — the logo and the playing markers — never changes."
+                    hint="Tint controls and glows with the playing album's dominant color. The tastytunes gold (the logo and the playing markers) never changes."
                     checked={settings.accentFollowsArt}
                     onChange={(accentFollowsArt) => void save({ accentFollowsArt })}
                   />
@@ -334,7 +334,7 @@ export function SettingsScreen(): React.JSX.Element {
 
                     <Toggle
                       label="Fill rows"
-                      hint="Stretch cards so each row spans the full width — sizes flex with the window. Off keeps cards at the exact size above."
+                      hint="Stretch cards so each row spans the full width, sizes flexing with the window. Off keeps cards at the exact size above."
                       checked={settings.presetFillRows}
                       onChange={(presetFillRows) => void save({ presetFillRows })}
                     />
@@ -352,14 +352,14 @@ export function SettingsScreen(): React.JSX.Element {
                 app's reach-without-a-window face, and this is its switch. */}
                   <Toggle
                     label="Menu bar icon"
-                    hint="Adds a TastyTunes icon to the menu bar — switch source, wake or standby the streamer, and reach settings without opening the app. It's the system tray on Windows and Linux, where TastyTunes then keeps running after you close the window."
+                    hint="Add a TastyTunes icon to the menu bar to control the streamer without opening the full TastyTunes app. (Found in the system tray on Windows and Linux)."
                     checked={settings.tray}
                     onChange={(tray) => void save({ tray })}
                   />
 
                   <SettingRow
                     label="Animations"
-                    hint="Motion effects — hover growth, the small equalizer bars that indicate what's playing, smooth scrolling. System follows your OS Reduce Motion setting."
+                    hint="Motion effects: hover growth, the small equalizer bars that indicate what's playing, smooth scrolling. System follows your OS Reduce Motion setting."
                   >
                     <Segmented<MotionMode>
                       value={settings.motion}
@@ -413,7 +413,7 @@ export function SettingsScreen(): React.JSX.Element {
 
                   <SettingRow
                     label="Volume limit (%)"
-                    hint="Caps the volume TastyTunes will set — the streamer's own remote and other apps aren't affected. Leave empty for no limit."
+                    hint="Caps the volume TastyTunes will set. The streamer's own remote and other apps aren't affected; leave empty for no limit."
                   >
                     <NumberField
                       value={settings.volumeLimitPercent}
@@ -436,14 +436,14 @@ export function SettingsScreen(): React.JSX.Element {
                 <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
                   <Toggle
                     label="Lyrics on Now Playing"
-                    hint="Adds a lyrics panel to the Now Playing screen, fetched (when open) from lrclib.net. Sends the current track's title and artist to LRCLIB; off means no requests, ever."
+                    hint="Adds a lyrics panel to the Now Playing screen, fetched (when open) from lrclib.net. Sends the current track's title and artist to LRCLIB; off means no requests will be sent."
                     checked={settings.lyrics}
                     onChange={(lyrics) => void save({ lyrics })}
                   />
 
                   <Toggle
                     label="Current lyric line"
-                    hint="Shows the live synced lyric under the track details on Now Playing (hidden while the full panel is open). Looks up each track as it plays — the same LRCLIB request as above."
+                    hint="Shows the live synced lyric under the track details on Now Playing (hidden while the full panel is open). Looks up each track as it plays, the same LRCLIB request as above."
                     disabled={!settings.lyrics}
                     checked={settings.lyricsLine}
                     onChange={(lyricsLine) => void save({ lyricsLine })}
@@ -451,7 +451,7 @@ export function SettingsScreen(): React.JSX.Element {
 
                   <Toggle
                     label="Artist & album context"
-                    hint="Adds a context panel to the Now Playing screen: Wikipedia summaries and release details matched via MusicBrainz, fetched when you open it. Sends the current artist and album names; off means no requests, ever."
+                    hint="Adds a context panel to the Now Playing screen: Wikipedia summaries and release details matched via MusicBrainz, fetched when you open it. Sends the current artist and album names; off means no requests will be sent."
                     checked={settings.artistInfo}
                     onChange={(artistInfo) => void save({ artistInfo })}
                   />
@@ -465,7 +465,7 @@ export function SettingsScreen(): React.JSX.Element {
 
                   <Toggle
                     label="Internet radio directory"
-                    hint="Finds stations through radio-browser.info — the Radio screen's search and top lists, and the radio results in unified search. Sends what you type; off means no requests, ever. Favorited stations still play either way: a favorite carries its own stream URL."
+                    hint="Finds stations through radio-browser.info: the Radio screen's search and top lists, and the radio results in unified search. Sends what you type; off means no requests will be sent. Favorited stations still play either way: a favorite keeps its own stream URL."
                     checked={settings.radioDirectory}
                     onChange={(radioDirectory) => void save({ radioDirectory })}
                   />
@@ -507,7 +507,7 @@ export function SettingsScreen(): React.JSX.Element {
                       <LegendRow
                         swatch={<span className="led led-off" />}
                         label="Offline"
-                        desc="No connection to this streamer."
+                        desc="No connection to a streamer."
                       />
                     </div>
                   </div>
@@ -516,7 +516,7 @@ export function SettingsScreen(): React.JSX.Element {
                     <div className="text-[13.5px] mb-0.5">Signal quality</div>
                     <div className="text-[11.5px] text-faint mb-2.5">
                       Appears in the transport bar and beside the Now Playing badges while something
-                      is playing — click it for the full signal chain.
+                      is playing. Click it for the full signal chain.
                     </div>
                     <div className="space-y-2">
                       <LegendRow
@@ -645,7 +645,7 @@ function McpSection({
                   text={`"tastytunes": { "type": "http", "url": "${status.url}" }`}
                   copied={copied === "json"}
                   onCopy={() => copy("json", mcpJsonSnippet(status.url!))}
-                  hint='For clients configured via an "mcpServers" JSON block — copies the full block.'
+                  hint='For clients configured via an "mcpServers" JSON block; copies the full block.'
                 />
               </div>
             )}
@@ -655,7 +655,7 @@ function McpSection({
         <div className={cx("space-y-5", !mcp.enabled && "opacity-40 pointer-events-none")}>
           <SettingRow
             label="Reachable from"
-            hint="Your streamer already accepts commands from anything on your local network — allowing that here is no wider. This computer is the cautious default."
+            hint="Your streamer already accepts commands from anything on your local network, so allowing that here is no wider. This computer is the cautious default."
           >
             <Segmented<McpBind>
               value={mcp.bind}
@@ -769,11 +769,11 @@ function McpSection({
 
 /** The Settings-side grouping of MCP clusters by what they can affect. */
 const MCP_GROUPS: Array<{ id: McpClusterInfo["group"]; label: string; note: string }> = [
-  { id: "read", label: "Read-only", note: "Seeing and looking things up — nothing changes." },
+  { id: "read", label: "Read-only", note: "Seeing and looking things up; nothing changes." },
   {
     id: "control",
     label: "Control",
-    note: "Playing, tuning, and adjusting — transient, like pressing the buttons yourself.",
+    note: "Playing, tuning, and adjusting; transient, like pressing the buttons yourself.",
   },
   {
     id: "write",
@@ -844,7 +844,7 @@ function MissedRow({ dueAt }: { dueAt: number }): React.JSX.Element {
     >
       <AlarmClock size={14} strokeWidth={1.9} className="shrink-0 text-gold" />
       <span className="flex-1 min-w-0 text-[12.5px] text-gold">
-        Missed {time} — your computer was asleep.
+        Missed {time} while your computer was asleep.
       </span>
       <PrimaryButton
         onClick={() => void tt.scheduleRunMissed()}
@@ -866,8 +866,8 @@ function MissedRow({ dueAt }: { dueAt: number }): React.JSX.Element {
 
 /** Plain-English one-liner of exactly what a schedule will (or won't) do. */
 function describeSchedule(s: Schedule): string {
-  if (!s.enabled) return "Off — flip the switch to enable it.";
-  if (s.days.length === 0) return "Never fires — no days selected.";
+  if (!s.enabled) return "Off. Flip the switch to enable it.";
+  if (s.days.length === 0) return "Never fires: no days selected.";
   const days =
     s.days.length === 7
       ? "every day"
@@ -1140,7 +1140,7 @@ function LibrariesSection({
       <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
         <Toggle
           label="Build indexes automatically"
-          hint="Index each searchable media server when the Library lists it, and rebuild when the server reports changes. Off means indexes only build from the buttons below."
+          hint="Automatically index each searchable media server in the Library screen, and rebuild when the server reports changes. Off means indexes only build from the buttons below."
           checked={settings.mediaIndexAuto}
           onChange={(mediaIndexAuto) => void save({ mediaIndexAuto })}
         />
@@ -1148,14 +1148,14 @@ function LibrariesSection({
         <div>
           <div className="text-[13.5px]">Library index</div>
           <div className="text-[11.5px] text-faint max-w-sm">
-            A local copy of each media server&apos;s track list so library search answers instantly.
-            Rebuilds itself when the server reports changes; nothing here can&apos;t be regenerated.
+            A local copy of each media server&apos;s track list for fast local searching. Rebuilds
+            itself when the server reports changes, and everything here can be rebuilt at any time.
           </div>
         </div>
 
         {statuses.length === 0 && (
           <div className="rounded-lg bg-bg ring-1 ring-edge px-3 py-2.5 text-[12px] text-dim">
-            No media servers seen yet — they appear here once the streamer lists them. Open the
+            No media servers seen yet; they appear here once the streamer lists them. Open the
             Library (I), or attach USB storage to the streamer.
           </div>
         )}
@@ -1167,9 +1167,9 @@ function LibrariesSection({
                 {st.state === "building"
                   ? "building…"
                   : st.state === "failed"
-                    ? `couldn't index — ${st.failure ?? "no index"}`
+                    ? `couldn't index · ${st.failure ?? "no index"}`
                     : st.state === "none"
-                      ? "not indexed — search asks the server live"
+                      ? "not indexed · search asks the server live"
                       : `${st.tracks.toLocaleString()} tracks · ${st.albums.toLocaleString()} albums · updated ${age(st.builtAt)}`}
               </span>
             </span>
@@ -1201,7 +1201,7 @@ function CacheRow(): React.JSX.Element {
   return (
     <SettingRow
       label="Cached lookups"
-      hint="Lyrics, artist, and album lookups are kept on disk (a fixed size — the entries you haven't used longest drop first) so repeat plays don't re-ask the services above. The panels' refresh buttons overwrite the stored copy."
+      hint="Lyrics, artist, and album lookups are kept on disk (a fixed size; the entries you haven't used longest drop first) so repeat plays don't re-ask the services above. The panels' refresh buttons overwrite the stored copy."
     >
       <button
         onClick={() => void tt.clearLookupCaches().then(setStats)}
@@ -1245,9 +1245,9 @@ function ListenBrainzSection({
     : tokenStatus === "checking" || tokenStatus === "idle"
       ? "Checking token…"
       : tokenStatus === null
-        ? "Can't reach listenbrainz.org — will retry when scrobbling."
+        ? "Can't reach listenbrainz.org; it will be retried when scrobbling."
         : tokenStatus.valid
-          ? `Token valid — scrobbling as ${tokenStatus.userName ?? "you"}.`
+          ? `Token valid, scrobbling as ${tokenStatus.userName ?? "you"}.`
           : "Token rejected by ListenBrainz.";
 
   return (
@@ -1267,8 +1267,8 @@ function ListenBrainzSection({
         label="Scrobble to ListenBrainz"
         hint={
           hasToken
-            ? "Log what you listen to at listenbrainz.org: artist, title, and album are sent as tracks play. Queue and streamed tracks with real metadata only — radio is never scrobbled."
-            : "Add your user token above first — the switch unlocks once a token is saved."
+            ? "Log what you listen to at listenbrainz.org: artist, title, and album are sent as tracks play. Queue and streamed tracks with real metadata only; radio is never scrobbled."
+            : "Add your user token above first; the switch is enabled once a token is saved."
         }
         disabled={!hasToken}
         checked={settings.lbEnabled}
@@ -1435,7 +1435,7 @@ function UpdatesSection({
 
         <Toggle
           label="Automatically check for updates"
-          hint="Check for version updates at launch and every few hours. When a new version is available, a dot appears on the tastytunes name in the left nav and on this tab — nothing downloads or installs itself."
+          hint="Check for version updates at launch and every few hours. When a new version is available, a dot appears on the tastytunes name in the left nav and on this tab. TastyTunes will not download or install itself."
           checked={settings.updateCheck}
           onChange={(updateCheck) => void save({ updateCheck })}
         />
@@ -1449,11 +1449,11 @@ function UpdatesSection({
             {manual === "checking" ? (
               "Checking…"
             ) : manual?.status === "none" ? (
-              `Nothing newer — v${version} is the latest release.`
+              `Nothing newer; v${version} is the latest release.`
             ) : manual?.status === "error" ? (
               <span className="text-alert break-all">Couldn&apos;t check: {manual.error}</span>
             ) : settings.updateCheck ? (
-              `You're on v${version} — no newer version is known.`
+              `You're on v${version}; no newer version is known.`
             ) : (
               "Automatic update checks are off."
             )}
@@ -1490,7 +1490,7 @@ function UpdatePanel(): React.JSX.Element | null {
             <span className="block text-[13.5px] text-gold">v{update.version} is available</span>
             <span className="block font-mono text-[10.5px] text-faint mt-0.5">
               {update.canDownload
-                ? "nothing downloads until you say so"
+                ? "nothing downloads until you click Download"
                 : "open the release page to download"}
               {update.canDownload && (
                 <>
@@ -1544,7 +1544,7 @@ function UpdatePanel(): React.JSX.Element | null {
           <span className="min-w-0">
             <span className="block text-[13.5px] text-gold">v{update.version} is ready</span>
             <span className="block font-mono text-[10.5px] text-faint mt-0.5">
-              installs when you quit — or restart now{" · "}
+              installs when you quit, or restart now{" · "}
               <button
                 onClick={() => void tt.openExternal(update.url)}
                 aria-label={`What's new in v${update.version}`}
@@ -1635,7 +1635,7 @@ function SidebarSection(): React.JSX.Element {
             Drag to reorder the left nav, and hide what you don&apos;t use. Hidden screens stay
             reachable by their keyboard shortcut and the command palette; Commands stays on {MOD}K;
             the mini player stays in the palette and the View menu.{" "}
-            <span className="text-dim">Shortcut keys never move with position.</span>
+            <span className="text-dim">Each screen keeps its shortcut key wherever it moves.</span>
           </p>
           {customized && (
             <HeaderChip
