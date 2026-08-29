@@ -8,7 +8,7 @@ import {
   screen,
   shell,
 } from "electron";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { IPC, type MenuCommand, type StreamerCommand } from "@shared/ipc";
 import {
   type AppSettings,
@@ -473,21 +473,16 @@ function registerIpc(): void {
     return listeningRecord.stats();
   });
   ipcMain.handle(IPC.listeningExport, async () => {
+    const opts = {
+      title: "Export listening history",
+      defaultPath: join(app.getPath("downloads"), "tastytunes-history.jsonl"),
+      filters: [{ name: "JSON Lines", extensions: ["jsonl"] }],
+    };
     const win = BrowserWindow.getFocusedWindow() ?? mainWindow;
-    const picked = win
-      ? await dialog.showOpenDialog(win, {
-          title: "Export listening history",
-          buttonLabel: "Export here",
-          properties: ["openDirectory", "createDirectory"],
-        })
-      : await dialog.showOpenDialog({
-          title: "Export listening history",
-          buttonLabel: "Export here",
-          properties: ["openDirectory", "createDirectory"],
-        });
-    const dir = picked.filePaths[0];
-    if (picked.canceled || !dir) return null;
-    return listeningRecord.exportTo(dir);
+    const picked = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts);
+    if (picked.canceled || !picked.filePath) return null;
+    const events = await listeningRecord.exportToFile(picked.filePath);
+    return { file: basename(picked.filePath), events };
   });
   ipcMain.handle(IPC.lookupCacheStats, () => lookupCacheStats());
   ipcMain.handle(IPC.clearLookupCaches, () => clearLookupCaches());

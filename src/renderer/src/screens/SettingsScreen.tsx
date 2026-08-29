@@ -1248,16 +1248,16 @@ function HistorySection({
           <div className="flex items-center gap-2">
             <HeaderChip
               onClick={() =>
-                void tt.listeningExport().then((n) => {
-                  if (n != null)
+                void tt.listeningExport().then((res) => {
+                  if (res != null)
                     showToast({
                       kind: "success",
-                      text:
-                        n === 0 ? "The record is empty" : `Exported ${n} file${n === 1 ? "" : "s"}`,
+                      text: `Exported ${res.events.toLocaleString()} events to ${res.file}`,
                     });
                 })
               }
-              className="shrink-0 text-[12.5px] px-3 py-1.5 motion-safe:active:scale-90"
+              disabled={stats == null || stats.events === 0}
+              className="shrink-0 text-[12.5px] px-3 py-1.5 motion-safe:active:scale-90 disabled:opacity-40 disabled:pointer-events-none"
             >
               Export…
             </HeaderChip>

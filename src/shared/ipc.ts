@@ -378,9 +378,10 @@ export interface TastyTunesApi {
   listeningStats(): Promise<ListeningRecordStats>;
   /** Delete the listening record's files (the UI confirms; no undo). */
   listeningClear(): Promise<ListeningRecordStats>;
-  /** Pick a folder and copy the record's year files there. Resolves to the
-   *  number of files copied, or null if the picker was cancelled. */
-  listeningExport(): Promise<number | null>;
+  /** Save the whole record to one chosen file (the years concatenated — the
+   *  per-line envelope makes that safe). Resolves to the written file's name
+   *  and event count, or null if the save dialog was cancelled. */
+  listeningExport(): Promise<{ file: string; events: number } | null>;
   /** Combined size of the on-disk lookup caches (lyrics, artist context). */
   lookupCacheStats(): Promise<{ entries: number; bytes: number }>;
   /** Wipe the lookup caches (memory + disk); resolves to the fresh stats. */

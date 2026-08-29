@@ -8,7 +8,7 @@ import {
   readSync,
   statSync,
 } from "node:fs";
-import { copyFile, readdir, stat, unlink } from "node:fs/promises";
+import { readdir, stat, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { app } from "electron";
 import { isRecord } from "@shared/guards";
@@ -303,13 +303,26 @@ export const listeningRecord = {
     for (const year of await listYears()) await unlink(yearFile(year));
   },
 
-  /** Copy the year files into `dir` — the live files ARE the export. */
-  async exportTo(dir: string): Promise<number> {
-    const years = await listYears();
-    for (const year of years) {
-      await copyFile(yearFile(year), join(dir, `tastytunes-history-${year}.jsonl`));
+  /** Write the whole record to one file at `path` — the years concatenated
+   *  in order. The per-line envelope makes concatenation safe by design; a
+   *  torn tail line stays its own line (never merged into the next year's
+   *  first event). Returns the number of events written. */
+  async exportToFile(path: string): Promise<number> {
+    let out = "";
+    let events = 0;
+    for (const year of await listYears()) {
+      let chunk: string;
+      try {
+        chunk = readFileSync(yearFile(year), "utf-8");
+      } catch {
+        continue;
+      }
+      if (chunk !== "" && !chunk.endsWith("\n")) chunk += "\n";
+      out += chunk;
+      events += this.readYear(year).events.length;
     }
-    return years.length;
+    await writeFile(path, out);
+    return events;
   },
 };
 
