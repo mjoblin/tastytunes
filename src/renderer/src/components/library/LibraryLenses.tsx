@@ -1109,62 +1109,63 @@ export function ArtistsLens({
               (toast entrance, popover surface — never a re-layout) */}
           {selT.size > 0 && (
             <div
-              className="toast-in absolute bottom-2 inset-x-0 z-20 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl ring-1 ring-edge2 bg-raised shadow-xl px-3 py-2 text-[12.5px]"
+              className="toast-in absolute bottom-2 inset-x-0 z-20 flex items-start gap-3 rounded-xl ring-1 ring-edge2 bg-raised shadow-xl px-3 py-2 text-[12.5px]"
               data-lens-selection-bar
             >
-              <span className="text-dim tabular-nums">{selT.size} selected</span>
-              <button
-                onClick={() => actions.queueTracks(chosenT(), "now", () => setSelT(new Set()))}
-                className="text-dim hover:text-ink transition-colors"
-              >
-                Play now
-              </button>
-              <button
-                onClick={() => actions.queueTracks(chosenT(), "next", () => setSelT(new Set()))}
-                className="text-dim hover:text-ink transition-colors"
-              >
-                Play next
-              </button>
-              <button
-                onClick={() => actions.queueTracks(chosenT(), "append", () => setSelT(new Set()))}
-                className="text-dim hover:text-ink transition-colors"
-              >
-                Add to end of queue
-              </button>
-              <button
-                onClick={(e) =>
-                  actions.addTracksToPlaylist(chosenT(), { x: e.clientX, y: e.clientY }, () =>
-                    setSelT(new Set()),
-                  )
-                }
-                className="text-dim hover:text-ink transition-colors"
-              >
-                Add to playlist…
-              </button>
-              {(() => {
-                const nodes = chosenT();
-                const allIn = nodes.length > 0 && nodes.every(actions.nodeFavorited);
-                return (
-                  <button
-                    onClick={() => {
-                      for (const n of nodes)
-                        if (allIn ? actions.nodeFavorited(n) : !actions.nodeFavorited(n))
-                          actions.heartNode(n);
-                    }}
-                    className="text-dim hover:text-ink transition-colors"
-                  >
-                    {allIn ? "Remove from favorites" : "Add to favorites"}
-                  </button>
-                );
-              })()}
-              <div className="flex-1" />
-              <button
-                onClick={() => setSelT(new Set())}
-                className="text-faint hover:text-ink transition-colors"
-                title="Esc"
-              >
-                Clear
-              </button>
+              <span className="shrink-0 py-px text-dim tabular-nums">{selT.size} selected</span>
+              <div className="min-w-0 flex-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                <button
+                  onClick={() => actions.queueTracks(chosenT(), "now", () => setSelT(new Set()))}
+                  className="text-dim hover:text-ink transition-colors"
+                >
+                  Play now
+                </button>
+                <button
+                  onClick={() => actions.queueTracks(chosenT(), "next", () => setSelT(new Set()))}
+                  className="text-dim hover:text-ink transition-colors"
+                >
+                  Play next
+                </button>
+                <button
+                  onClick={() => actions.queueTracks(chosenT(), "append", () => setSelT(new Set()))}
+                  className="text-dim hover:text-ink transition-colors"
+                >
+                  Add to end of queue
+                </button>
+                <button
+                  onClick={(e) =>
+                    actions.addTracksToPlaylist(chosenT(), { x: e.clientX, y: e.clientY }, () =>
+                      setSelT(new Set()),
+                    )
+                  }
+                  className="text-dim hover:text-ink transition-colors"
+                >
+                  Add to playlist…
+                </button>
+                {(() => {
+                  const nodes = chosenT();
+                  const allIn = nodes.length > 0 && nodes.every(actions.nodeFavorited);
+                  return (
+                    <button
+                      onClick={() => {
+                        for (const n of nodes)
+                          if (allIn ? actions.nodeFavorited(n) : !actions.nodeFavorited(n))
+                            actions.heartNode(n);
+                      }}
+                      className="text-dim hover:text-ink transition-colors"
+                    >
+                      {allIn ? "Remove from favorites" : "Add to favorites"}
+                    </button>
+                  );
+                })()}
+                <button
+                  onClick={() => setSelT(new Set())}
+                  className="ml-auto text-faint hover:text-ink transition-colors"
+                  title="Esc"
+                >
+                  Clear
+                </button>
+              </div>
             </div>
           )}
           <div

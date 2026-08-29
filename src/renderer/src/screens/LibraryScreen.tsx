@@ -2378,60 +2378,61 @@ export function LibraryScreen(): React.JSX.Element {
         {!atRoot && state === "ready" && selTracks.size > 0 && (
           <div
             data-selection-bar
-            className="toast-in absolute bottom-4 inset-x-8 z-30 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl ring-1 ring-edge2 bg-raised shadow-xl px-3 py-2 text-[12.5px]"
+            className="toast-in absolute bottom-4 inset-x-8 z-30 flex items-start gap-3 rounded-xl ring-1 ring-edge2 bg-raised shadow-xl px-3 py-2 text-[12.5px]"
           >
-            <span className="text-dim tabular-nums">{selTracks.size} selected</span>
-            <button
-              onClick={() => void queueSelected("now")}
-              className="text-dim hover:text-ink transition-colors"
-            >
-              Play now
-            </button>
-            <button
-              onClick={() => void queueSelected("next")}
-              className="text-dim hover:text-ink transition-colors"
-            >
-              Play next
-            </button>
-            <button
-              onClick={() => void queueSelected("append")}
-              className="text-dim hover:text-ink transition-colors"
-            >
-              Add to end of queue
-            </button>
-            <button
-              onClick={(e) =>
-                setPlaylistMulti({ nodes: selectedNodes(), x: e.clientX, y: e.clientY })
-              }
-              className="text-dim hover:text-ink transition-colors"
-            >
-              Add to playlist…
-            </button>
-            {/* one verb with the album-header rule: adds what's missing, reads
+            <span className="shrink-0 py-px text-dim tabular-nums">{selTracks.size} selected</span>
+            <div className="min-w-0 flex-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+              <button
+                onClick={() => void queueSelected("now")}
+                className="text-dim hover:text-ink transition-colors"
+              >
+                Play now
+              </button>
+              <button
+                onClick={() => void queueSelected("next")}
+                className="text-dim hover:text-ink transition-colors"
+              >
+                Play next
+              </button>
+              <button
+                onClick={() => void queueSelected("append")}
+                className="text-dim hover:text-ink transition-colors"
+              >
+                Add to end of queue
+              </button>
+              <button
+                onClick={(e) =>
+                  setPlaylistMulti({ nodes: selectedNodes(), x: e.clientX, y: e.clientY })
+                }
+                className="text-dim hover:text-ink transition-colors"
+              >
+                Add to playlist…
+              </button>
+              {/* one verb with the album-header rule: adds what's missing, reads
                 "Remove" only when every member is already a favorite */}
-            {(() => {
-              const nodes = selectedNodes();
-              const allIn = nodes.length > 0 && nodes.every(nodeFavorited);
-              return (
-                <button
-                  onClick={() => {
-                    for (const n of nodes)
-                      if (allIn ? nodeFavorited(n) : !nodeFavorited(n)) heartNode(n);
-                  }}
-                  className="text-dim hover:text-ink transition-colors"
-                >
-                  {allIn ? "Remove from favorites" : "Add to favorites"}
-                </button>
-              );
-            })()}
-            <div className="flex-1" />
-            <button
-              onClick={() => setSelTracks(new Set())}
-              className="text-faint hover:text-ink transition-colors"
-              title="Esc"
-            >
-              Clear
-            </button>
+              {(() => {
+                const nodes = selectedNodes();
+                const allIn = nodes.length > 0 && nodes.every(nodeFavorited);
+                return (
+                  <button
+                    onClick={() => {
+                      for (const n of nodes)
+                        if (allIn ? nodeFavorited(n) : !nodeFavorited(n)) heartNode(n);
+                    }}
+                    className="text-dim hover:text-ink transition-colors"
+                  >
+                    {allIn ? "Remove from favorites" : "Add to favorites"}
+                  </button>
+                );
+              })()}
+              <button
+                onClick={() => setSelTracks(new Set())}
+                className="ml-auto text-faint hover:text-ink transition-colors"
+                title="Esc"
+              >
+                Clear
+              </button>
+            </div>
           </div>
         )}
         {!atRoot && state === "ready" && tracks.length > 0 ? (
