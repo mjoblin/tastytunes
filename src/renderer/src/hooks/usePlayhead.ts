@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { isRadioMetadata } from "@shared/smoip";
 import { useStore } from "@/store";
 
 /**
@@ -18,6 +19,18 @@ export function usePlayhead(): { position: number; duration: number | null } {
     const timer = setInterval(() => forceTick((n) => n + 1), 250);
     return () => clearInterval(timer);
   }, [playing]);
+
+  const stationTunedAt = useStore((s) => s.stationTunedAt);
+
+  // RADIO: the streamer reports no position at all (live-probed 2026-08-30 —
+  // /zone/position answers empty and play_state has no position field), so
+  // the stale track playhead would keep animating a lie. The app's tuned-at
+  // stamp is the one honest elapsed: 0:00 at every station change, counting
+  // how long this station has been playing.
+  if (isRadioMetadata(playState?.metadata)) {
+    const position = playing && stationTunedAt != null ? (Date.now() - stationTunedAt) / 1000 : 0;
+    return { position, duration: null };
+  }
 
   const duration = playState?.metadata?.duration ?? nowPlaying?.display?.progress?.duration ?? null;
 

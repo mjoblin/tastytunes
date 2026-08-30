@@ -47,6 +47,7 @@ import {
   LOG_RING_SIZE,
   NET_RING_SIZE,
 } from "@shared/model";
+import { isRadioMetadata } from "@shared/smoip";
 import { currentLibrarySpot } from "@/lib/navSpot";
 import { tt } from "./api";
 
@@ -202,6 +203,16 @@ interface TTState {
   settings: AppSettings;
 
   playState: ZonePlayState | null;
+  /**
+   * When the current radio station was tuned, as THIS APP observed it —
+   * stamped on every station-identity change in the play-state pushes, so
+   * it counts correctly whoever tuned the radio. The streamer reports NO
+   * position during radio (live-probed 2026-08-30: /zone/position answers
+   * empty, play_state carries no position field), so this stamp is the one
+   * honest source for the bar's elapsed readout. Session truth; null off
+   * radio.
+   */
+  stationTunedAt: number | null;
   nowPlaying: ZoneNowPlaying | null;
   zoneState: ZoneState | null;
   queue: QueueList | null;
@@ -458,6 +469,7 @@ export const useStore = create<TTState>((set, get) => ({
   settings: DEFAULT_SETTINGS,
 
   playState: null,
+  stationTunedAt: null,
   nowPlaying: null,
   zoneState: null,
   queue: null,
@@ -648,6 +660,9 @@ export const useStore = create<TTState>((set, get) => ({
       discovering: snap.discovering,
       settings: snap.settings,
       playState: snap.playState,
+      // Opened mid-broadcast: count from app start — honest for what the
+      // app has observed.
+      stationTunedAt: isRadioMetadata(snap.playState?.metadata) ? Date.now() : null,
       nowPlaying: snap.nowPlaying,
       zoneState: snap.zoneState,
       lastRecalledPresetId: snap.lastRecalledPresetId,
@@ -698,6 +713,7 @@ export const useStore = create<TTState>((set, get) => ({
             return {
               connection: msg.state,
               playState: null,
+              stationTunedAt: null,
               nowPlaying: null,
               zoneState: null,
               queue: null,
@@ -722,12 +738,23 @@ export const useStore = create<TTState>((set, get) => ({
         }
         case "devices":
           return { devices: msg.devices, discovering: msg.discovering };
-        case "playState":
+        case "playState": {
+          const radioNow = isRadioMetadata(msg.data.metadata);
+          const stationChanged =
+            radioNow &&
+            (!isRadioMetadata(s.playState?.metadata) ||
+              msg.data.metadata?.station !== s.playState?.metadata?.station);
           return {
             playState: msg.data,
+            stationTunedAt: !radioNow
+              ? null
+              : stationChanged
+                ? Date.now()
+                : (s.stationTunedAt ?? Date.now()),
             playhead:
               msg.data.position != null ? { secs: msg.data.position, at: Date.now() } : s.playhead,
           };
+        }
         case "position":
           return { playhead: { secs: msg.data.position, at: Date.now() } };
         case "nowPlaying":
