@@ -124,13 +124,65 @@ export type Favorite = FavoriteStation | FavoriteMedia;
  * disc/volume/part marker; null otherwise. Same FULL title twice (two
  * editions of one album) is deliberately NOT a set — no marker, no match.
  */
+const VOLUME_WORDS: Record<string, number> = {
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  eleven: 11,
+  twelve: 12,
+  thirteen: 13,
+  fourteen: 14,
+  fifteen: 15,
+  sixteen: 16,
+  seventeen: 17,
+  eighteen: 18,
+  nineteen: 19,
+  twenty: 20,
+};
+const VOLUME_ROMAN: Record<string, number> = {
+  i: 1,
+  ii: 2,
+  iii: 3,
+  iv: 4,
+  v: 5,
+  vi: 6,
+  vii: 7,
+  viii: 8,
+  ix: 9,
+  x: 10,
+  xi: 11,
+  xii: 12,
+  xiii: 13,
+  xiv: 14,
+  xv: 15,
+  xvi: 16,
+  xvii: 17,
+  xviii: 18,
+  xix: 19,
+  xx: 20,
+};
+
 export function albumVolume(title: string): { base: string; volume: number } | null {
+  // The value can be digits, a spelled-out word (one–twenty) or a Roman
+  // numeral (I–XX) — real servers produce all three. The keyword is still
+  // required, so "Rocky IV" and "Formula One" never parse; a candidate that
+  // is not a real word or numeral (e.g. "Part Time") resolves to null.
   const m =
-    /^(.*?)[\s\-–—:,]*[[(]?\s*(?:disc|disk|cd|vol(?:ume)?\.?|part|pt\.?)\s*(\d+)\s*[\])]?\s*$/i.exec(
+    /^(.*?)[\s\-–—:,]*[[(]?\s*(?:disc|disk|cd|vol(?:ume)?\.?|part|pt\.?)\s*(\d+|[a-z]+)\s*[\])]?\s*$/i.exec(
       title.trim(),
     );
   if (!m || !m[1].trim()) return null;
-  return { base: m[1].trim(), volume: Number(m[2]) };
+  const raw = m[2].toLowerCase();
+  const volume = /^\d+$/.test(raw) ? Number(raw) : (VOLUME_WORDS[raw] ?? VOLUME_ROMAN[raw] ?? null);
+  if (volume == null) return null;
+  return { base: m[1].trim(), volume };
 }
 
 /**
