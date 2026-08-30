@@ -1232,10 +1232,10 @@ function HistorySection({
   return (
     <section className="space-y-3">
       <p className="text-[11.5px] text-faint px-1">
-        The record is the listening history the streamer itself never keeps. AI agents can read it
-        today (Settings › AI agents), and future versions of TastyTunes will build on it: play
-        counts and a year-end review are the kind of thing it makes possible. It records from today
-        so the history exists when those features arrive.
+        The record is a long-term history of your listening. AI agents can read it today (Settings ›
+        AI agents), and future versions of TastyTunes will build on it: play counts and a year-end
+        review are the kind of thing it makes possible. It records from today so the history exists
+        when those features arrive.
       </p>
       <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
         <Toggle
