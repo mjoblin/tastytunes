@@ -7,6 +7,7 @@ import { CloseButton } from "@/components/controls/CloseButton";
 import { ModalShell } from "@/components/chrome/Overlay";
 
 const SUPPORT_URL = "https://tastytunes.app/#support";
+const CONTACT_URL = "https://tastytunes.app/contact";
 
 export function InfoModal(): React.JSX.Element | null {
   const open = useStore((s) => s.infoOpen);
@@ -27,6 +28,22 @@ export function InfoModal(): React.JSX.Element | null {
       </div>
 
       <div className="mt-6 space-y-3">
+        {/* TOP of the stack at the user's call (2026-08-27): a way to reach a
+            person leads the doors. Links to the site's /contact, which lands
+            on the help page's write-to-me form. */}
+        <button
+          onClick={() => void tt.openExternal(CONTACT_URL)}
+          className="w-full flex items-center justify-between rounded-xl ring-1 ring-edge bg-raised/70 px-4 py-3 text-left hover:ring-edge2"
+        >
+          <span>
+            <span className="block text-[13.5px]">Contact</span>
+            <span className="block font-mono text-[10.5px] text-faint mt-0.5">
+              tastytunes.app/contact
+            </span>
+          </span>
+          <ExternalLink size={14} className="text-faint shrink-0" />
+        </button>
+
         <button
           onClick={() => void tt.openExternal(REPO_URL)}
           className="w-full flex items-center justify-between rounded-xl ring-1 ring-edge bg-raised/70 px-4 py-3 text-left hover:ring-edge2"
