@@ -323,6 +323,14 @@ export function SettingsScreen(): React.JSX.Element {
                     checked={settings.waveformSeekBar}
                     onChange={(waveformSeekBar) => void save({ waveformSeekBar })}
                   />
+
+                  <Toggle
+                    label="Waveform on the Now Playing screen"
+                    hint="Draws the playing track's waveform under the album art, with its peak and loudness details."
+                    disabled={!settings.waveforms}
+                    checked={settings.waveformNowPlaying}
+                    onChange={(waveformNowPlaying) => void save({ waveformNowPlaying })}
+                  />
                 </div>
               </section>
             )}

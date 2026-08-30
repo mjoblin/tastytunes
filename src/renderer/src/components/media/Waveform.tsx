@@ -304,7 +304,7 @@ export function DisplayWaveform({
 /** Under the album art on Now Playing: the waveform as pure form — playhead,
  *  no controls, absent (zero height) when the track has no peaks. */
 export function NowPlayingWaveform(): React.JSX.Element | null {
-  const enabled = useStore((s) => s.settings.waveforms);
+  const enabled = useStore((s) => s.settings.waveforms && s.settings.waveformNowPlaying);
   const ref = usePlayingFileRef();
   const analysis = usePeaks(enabled ? (ref?.serverUdn ?? null) : null, ref?.objectId ?? null);
   const progress = useProgress();

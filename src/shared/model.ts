@@ -945,6 +945,7 @@ export interface AppSettings {
    */
   waveforms: boolean;
   waveformSeekBar: boolean;
+  waveformNowPlaying: boolean;
   displayWaveform: boolean;
   lyrics: boolean;
   /** Inline flavor: current synced line under the Now Playing track details. */
@@ -1106,6 +1107,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   updateCheck: true,
   waveforms: true,
   waveformSeekBar: true,
+  waveformNowPlaying: true,
   displayWaveform: true,
   lyrics: true,
   lyricsLine: true,
