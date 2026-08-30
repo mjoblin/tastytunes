@@ -64,7 +64,11 @@ export function Slider({
     // Clamp so a scrub at either extreme doesn't hang off the window. 34px is
     // half a wide timestamp ("1:02:03") plus its padding.
     const x = Math.min(Math.max(rect.left + ratio * rect.width, 34), window.innerWidth - 34);
-    setBubble({ left: x, top: rect.top - 10 });
+    // Anchor from the track's CENTER, not its top: the plain and waveform
+    // tracks differ in height, and a top-anchored bubble floated higher above
+    // the tall one, reading as detached (user, 2026-08-30). Center minus 18
+    // reproduces the plain track's exact gap on both.
+    setBubble({ left: x, top: rect.top + rect.height / 2 - 18 });
   }, []);
 
   // Claimed synchronously on pointerdown and released by whichever handler ends
