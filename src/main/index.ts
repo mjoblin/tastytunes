@@ -16,6 +16,7 @@ import {
   type MediaQueueAction,
   type SleepTimer,
   type MediaInfoQuery,
+  type TrackInfoQuery,
 } from "@shared/model";
 import {
   type ContentRef,
@@ -53,6 +54,7 @@ import { fetchLyrics } from "./lookups/lyrics";
 import { scrobbler } from "./lookups/scrobbler";
 import { fetchArtistInfo } from "./lookups/artistInfo";
 import { fetchAlbumInfo } from "./lookups/albumInfo";
+import { fetchTrackInfo } from "./lookups/trackInfo";
 import { fetchCoverArt } from "./lookups/coverArt";
 import { radioByTags, radioSearch, radioTop } from "./lookups/radioBrowser";
 import { clearLookupCaches, flushLookupCaches, lookupCacheStats } from "./lookups/diskCache";
@@ -436,6 +438,13 @@ function registerIpc(): void {
   );
   ipcMain.handle(IPC.fetchAlbumInfo, (_e, artist: string, album: string, force?: boolean) =>
     getSettings().artistInfo ? fetchAlbumInfo(artist, album, !!force) : null,
+  );
+  ipcMain.handle(IPC.fetchTrackInfo, (_e, query: TrackInfoQuery, force?: boolean) =>
+    getSettings().artistInfo &&
+    typeof query?.artist === "string" &&
+    typeof query?.title === "string"
+      ? fetchTrackInfo(query, !!force)
+      : null,
   );
   ipcMain.handle(IPC.albumArt, (_e, artist: string, album: string) =>
     getSettings().albumArtLookup && typeof artist === "string" && typeof album === "string"

@@ -230,7 +230,7 @@ interface TTState {
   /** Artist-context drawer on Now Playing (mutually exclusive with lyrics). */
   artistOpen: boolean;
   /** Active tab in the context drawer — remembered for the session only. */
-  contextTab: "artist" | "album";
+  contextTab: "artist" | "album" | "track" | "stream";
   /** Per-screen list filters — session only; always visible in the screen's header box. */
   screenFilters: {
     queue: string;
@@ -352,7 +352,7 @@ interface TTState {
   setDisplayMode: (on: boolean) => void;
   setLyricsOpen: (open: boolean) => void;
   setArtistOpen: (open: boolean) => void;
-  setContextTab: (tab: "artist" | "album") => void;
+  setContextTab: (tab: "artist" | "album" | "track" | "stream") => void;
   setScreenFilter: (screen: keyof TTState["screenFilters"], text: string) => void;
   /** Navigate to the Library opened at a specific node (Favorites → album). */
   openInLibrary: (target: Omit<LibraryTarget, "nonce">) => void;

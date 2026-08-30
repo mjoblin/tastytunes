@@ -635,6 +635,36 @@ export interface AlbumInfo {
   musicbrainzUrl: string | null;
 }
 
+export interface TrackInfoQuery {
+  artist: string;
+  title: string;
+  album: string | null;
+  /** Playing length in seconds, if known — disambiguates same-titled recordings. */
+  duration: number | null;
+}
+
+export interface TrackCredit {
+  /** Human role: an instrument name, "Lead vocals", "Producer", "Composer"… */
+  role: string;
+  name: string;
+}
+
+/**
+ * Recording-level credits for the playing track — who is actually ON it.
+ * Groups mirror how MusicBrainz relates people to a recording: performers
+ * (instrument/vocal relationships on the recording), production (producer,
+ * engineering, mixing), and writing (composer/lyricist from the linked work).
+ * Any group can be empty; coverage varies a lot by catalogue era.
+ */
+export interface TrackInfo {
+  /** MusicBrainz's canonical title for the matched recording. */
+  title: string;
+  performers: TrackCredit[];
+  production: TrackCredit[];
+  writing: TrackCredit[];
+  musicbrainzUrl: string | null;
+}
+
 // ------------------------------------------------------------------- lyrics
 
 export interface LyricsQuery {

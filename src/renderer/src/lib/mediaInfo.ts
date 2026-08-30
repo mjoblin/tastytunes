@@ -1,4 +1,4 @@
-import type { MediaInfoQuery, MediaNode, StreamInfo } from "@shared/model";
+import type { MediaInfoQuery, MediaInfoTarget, MediaNode, StreamInfo } from "@shared/model";
 import type { ZoneNowPlaying, ZonePlayState } from "@shared/smoip";
 import { tt } from "@/api";
 import { useStore } from "@/store";
@@ -66,18 +66,17 @@ export async function openInfoForRef(ref: MediaRef): Promise<void> {
 }
 
 /**
- * Info for WHAT IS PLAYING NOW — every source. The streamer's own account of
- * the stream (codec, rate, depth, bitrate, source, controls…) opens at once;
- * for local media the library node is looked up by content and its sections
- * join (file format beside stream format, composers, disc, ids). Radio and
- * AirPlay have no library node and keep the stream page — no lookup, no
- * caveat, that IS the page. Nothing loaded → nothing to open (the button
- * dims instead).
+ * The pure half of "info for what is playing now": the streamer's own account
+ * of the stream plus a stub node, built synchronously from the pushes — and,
+ * for local media, the content query that finds the library node. Shared by
+ * the Info modal path below and the context drawer's Stream tab, so the two
+ * surfaces can never derive the stream differently. Null when nothing is
+ * loaded.
  */
-export async function openInfoForNowPlaying(
+export function nowPlayingInfoTarget(
   playState: ZonePlayState | null,
   nowPlaying: ZoneNowPlaying | null,
-): Promise<void> {
+): { target: MediaInfoTarget; localQuery: MediaInfoQuery | null } | null {
   const md = playState?.metadata ?? null;
   const display = nowPlaying?.display ?? null;
   const klass = md?.class ?? display?.class ?? null;
@@ -85,7 +84,7 @@ export async function openInfoForNowPlaying(
   const title = isRadio
     ? (md?.title ?? display?.line2 ?? md?.station ?? display?.line1 ?? null)
     : (md?.title ?? display?.line1 ?? null);
-  if (!title && !md?.station) return;
+  if (!title && !md?.station) return null;
   const stream: StreamInfo = {
     source: nowPlaying?.source?.name ?? md?.source ?? null,
     playbackSource: md?.playback_source ?? display?.playback_source ?? null,
@@ -122,22 +121,47 @@ export async function openInfoForNowPlaying(
     trackNumber: md?.track_number ?? null,
     durationSecs: md?.duration ?? display?.progress?.duration ?? null,
   };
-  const set = useStore.getState().setMediaInfo;
-  set({ node: stub, stream, serverName: null });
   // local media only: enrich from the library, by content
   const local =
     !isRadio &&
     !/airplay|cast|bluetooth|spotify|tidal|qobuz/i.test(
       `${klass ?? ""} ${stream.playbackSource ?? ""} ${stream.source ?? ""}`,
     );
-  if (!local || !title) return;
+  return {
+    target: { node: stub, stream, serverName: null },
+    localQuery: local && title ? { kind: "track", title, artist, album } : null,
+  };
+}
+
+/**
+ * Info for WHAT IS PLAYING NOW — every source. The streamer's own account of
+ * the stream (codec, rate, depth, bitrate, source, controls…) opens at once;
+ * for local media the library node is looked up by content and its sections
+ * join (file format beside stream format, composers, disc, ids). Radio and
+ * AirPlay have no library node and keep the stream page — no lookup, no
+ * caveat, that IS the page. Nothing loaded → nothing to open.
+ */
+export async function openInfoForNowPlaying(
+  playState: ZonePlayState | null,
+  nowPlaying: ZoneNowPlaying | null,
+): Promise<void> {
+  const built = nowPlayingInfoTarget(playState, nowPlaying);
+  if (!built) return;
+  const { target, localQuery } = built;
+  const set = useStore.getState().setMediaInfo;
+  set(target);
+  if (!localQuery) return;
   let found = null;
   try {
-    found = await tt.mediaNodeInfo({ kind: "track", title, artist, album });
+    found = await tt.mediaNodeInfo(localQuery);
   } catch {
     found = null;
   }
   const current = useStore.getState().mediaInfo;
-  if (!current || current.node !== stub || !found) return;
-  set({ ...found, stream, node: { ...found.node, artUrl: found.node.artUrl ?? stub.artUrl } });
+  if (!current || current.node !== target.node || !found) return;
+  set({
+    ...found,
+    stream: target.stream,
+    node: { ...found.node, artUrl: found.node.artUrl ?? target.node.artUrl },
+  });
 }

@@ -64,6 +64,8 @@ import type {
   ListeningRecordStats,
   RecentTrack,
   SleepTimer,
+  TrackInfo,
+  TrackInfoQuery,
   UpdateCheckResult,
   UpdateState,
   MediaInfoQuery,
@@ -281,6 +283,9 @@ export interface TastyTunesApi {
   /** Album details via MusicBrainz + Wikipedia (main process, cached; null = no match).
    *  `force` bypasses the cache read — the user-driven refresh. */
   fetchAlbumInfo(artist: string, album: string, force?: boolean): Promise<AlbumInfo | null>;
+  /** Recording-level credits for the playing track via MusicBrainz (main
+   *  process, cached; null = no match). `force` bypasses the cache read. */
+  fetchTrackInfo(query: TrackInfoQuery, force?: boolean): Promise<TrackInfo | null>;
   /** Open/close the mini player window. */
   toggleMini(): Promise<void>;
   /** Show and focus the main window. */
@@ -413,6 +418,7 @@ export const IPC = {
   updateCheckNow: "tt:updateCheckNow",
   fetchArtistInfo: "tt:fetchArtistInfo",
   fetchAlbumInfo: "tt:fetchAlbumInfo",
+  fetchTrackInfo: "tt:fetchTrackInfo",
   toggleMini: "tt:toggleMini",
   showMain: "tt:showMain",
   setSleep: "tt:setSleep",

@@ -455,8 +455,8 @@ export function SettingsScreen(): React.JSX.Element {
                   />
 
                   <Toggle
-                    label="Artist & album context"
-                    hint="Adds a context panel to the Now Playing screen: Wikipedia summaries and release details matched via MusicBrainz, fetched when you open it. Sends the current artist and album names; off means no requests will be sent."
+                    label="Artist, album & track context"
+                    hint="Adds Artist, Album and Track tabs to the context panel on Now Playing: Wikipedia summaries, release details and track credits matched via MusicBrainz, fetched when you open them. Sends the current artist, album and track names; off means no requests will be sent. The panel's Stream tab stays either way."
                     checked={settings.artistInfo}
                     onChange={(artistInfo) => void save({ artistInfo })}
                   />

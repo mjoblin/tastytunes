@@ -6,9 +6,8 @@ import {
   ListOrdered,
   Maximize2,
   MicVocal,
-  RadioTower,
-  UserRound,
   Info,
+  RadioTower,
 } from "lucide-react";
 import { useStore } from "@/store";
 import { cx, deriveNowPlaying } from "@/lib/format";
@@ -23,7 +22,6 @@ import { LyricsPanel } from "@/components/overlays/LyricsPanel";
 import { LyricLine } from "@/components/playback/LyricLine";
 import { EmptyState } from "@/components/chrome/EmptyState";
 import { ArtistPanel } from "@/components/overlays/ArtistPanel";
-import { openInfoForNowPlaying } from "@/lib/mediaInfo";
 
 const ALIGN_H = { left: "justify-start", center: "justify-center", right: "justify-end" } as const;
 const ALIGN_V = { top: "items-start", center: "items-center", bottom: "items-end" } as const;
@@ -69,11 +67,13 @@ export function NowPlayingScreen(): React.JSX.Element {
 
   // Lyrics need real track metadata — hidden for radio and title-only sources.
   const lyricsAvailable = lyricsEnabled && !meta.isRadio && !!meta.title && !!meta.subtitle;
-  const { artistInfo: artistEnabled } = useStore((s) => s.settings);
-  const artistAvailable = artistEnabled && !meta.isRadio && !!meta.subtitle;
+  // The About drawer opens for EVERY source — its Stream tab is device truth
+  // and needs only something loaded; the MB tabs gate themselves inside.
+  const aboutAvailable =
+    (meta.title != null && meta.title !== "") || playState?.metadata?.station != null;
   // Quick fade on open/close — see useFadePresence for why 140ms.
   const lyricsFade = useFadePresence(lyricsAvailable && lyricsOpen);
-  const artistFade = useFadePresence(artistAvailable && artistOpen);
+  const artistFade = useFadePresence(aboutAvailable && artistOpen);
 
   // The heart: content-only favoriting of whatever is playing. Shared with the
   // tray panel — the track/station/last-station asymmetry lives in the hook.
@@ -127,9 +127,6 @@ export function NowPlayingScreen(): React.JSX.Element {
   /** Every header button hides on this pair; naming it once also stopped the two
    *  lyrics buttons from spelling the same condition in two different orders. */
   const drawersClosed = !lyricsOpen && !artistOpen;
-  // Info has something to say whenever anything is loaded — a title or a station
-  const infoAvailable =
-    (meta.title != null && meta.title !== "") || playState?.metadata?.station != null;
 
   // Titleless top band: preserves the header's vertical rhythm (and houses the
   // display-mode button) so the art/text sit where they did with a title.
@@ -139,15 +136,18 @@ export function NowPlayingScreen(): React.JSX.Element {
     // button, so the empty band never eats the drawer ✕ beneath it. Window
     // dragging is unaffected: app-region is a native hit-test, not CSS.
     <header className="drag-region relative z-20 pointer-events-none flex items-center justify-end gap-6 px-8 pt-8 pb-4 min-h-[83px]">
-      {/* TWO GROUPS, told apart by a gap (user call 2026-07-24). The strip ran
-          six buttons at one even spacing, but they do two different jobs: the
-          first pair WRITES to stored collections, the rest only change what
-          you're LOOKING at. Grouped by proximity rather than a hairline rule —
-          proximity is already the app's grouping device (see the row-action
-          clusters), a rule would be the loudest thing in a strip meant to sit
-          quietly over album art, and since every button here is conditional a
-          divider would need its own logic to avoid floating with nothing left
-          to separate. A gap between two groups just collapses.
+      {/* THREE GROUPS, told apart by gaps (two groups user call 2026-07-24;
+          the third named 2026-08-30 when the Info button folded into the About
+          drawer's Stream tab). The strip's buttons do three different jobs:
+          the first pair WRITES to stored collections, the middle pair opens a
+          SIDE PANEL about the music, and the last pair changes what THIS
+          SCREEN shows (the lyric line, display mode). Grouped by proximity
+          rather than a hairline rule — proximity is already the app's grouping
+          device (see the row-action clusters), a rule would be the loudest
+          thing in a strip meant to sit quietly over album art, and since most
+          buttons here are conditional a divider would need its own logic to
+          avoid floating with nothing left to separate. A gap between groups
+          just collapses.
           gap-6 here against the Queue header's gap-4 on purpose: these are bare
           icons and those are ringed chips, which already separate themselves.
           The aim is equal PERCEIVED separation, not equal pixels.
@@ -185,8 +185,32 @@ export function NowPlayingScreen(): React.JSX.Element {
           )}
         </div>
       )}
+      {drawersClosed && (lyricsAvailable || aboutAvailable) && (
+        <div data-np-group="panels" className="flex items-center">
+          {lyricsAvailable && (
+            <button
+              onClick={() => setLyricsOpen(true)}
+              data-tip="Lyrics"
+              aria-label="Lyrics"
+              className="no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-full text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
+            >
+              <MicVocal size={16} />
+            </button>
+          )}
+          {aboutAvailable && (
+            <button
+              onClick={() => setArtistOpen(true)}
+              data-tip="About the music"
+              aria-label="About the music"
+              className="no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-full text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
+            >
+              <Info size={16} />
+            </button>
+          )}
+        </div>
+      )}
       {drawersClosed && (
-        <div data-np-group="view" className="flex items-center">
+        <div data-np-group="screen" className="flex items-center">
           {lyricsAvailable && (
             <button
               onClick={() => void toggleLyricLine()}
@@ -200,46 +224,6 @@ export function NowPlayingScreen(): React.JSX.Element {
               <Captions size={16} />
             </button>
           )}
-          {lyricsAvailable && (
-            <button
-              onClick={() => setLyricsOpen(true)}
-              data-tip="Lyrics"
-              aria-label="Lyrics"
-              className="no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-full text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
-            >
-              <MicVocal size={16} />
-            </button>
-          )}
-          {artistAvailable && (
-            <button
-              onClick={() => setArtistOpen(true)}
-              data-tip="About the artist"
-              aria-label="About the artist"
-              className="no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-full text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
-            >
-              <UserRound size={16} />
-            </button>
-          )}
-          {/* Info: what is playing, as the streamer reports it — every source
-              (radio, AirPlay, local media alike); local media adds the library's
-              file facts. Dimmed only when nothing is loaded. */}
-          <button
-            onClick={() =>
-              infoAvailable ? void openInfoForNowPlaying(playState, nowPlaying) : undefined
-            }
-            data-tip={infoAvailable ? "Now playing info" : "Nothing playing"}
-            aria-label="Now playing info"
-            aria-disabled={!infoAvailable}
-            data-np-info={infoAvailable ? "on" : "off"}
-            className={cx(
-              "no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-full transition-all",
-              infoAvailable
-                ? "text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90"
-                : "text-faint/40 cursor-default",
-            )}
-          >
-            <Info size={16} />
-          </button>
           <button
             onClick={() => setDisplayMode(true)}
             data-tip="Full-screen display mode (F)"

@@ -517,6 +517,20 @@ export function CommandPalette(): React.JSX.Element {
           },
         });
       }
+      if (settings.artistInfo && !npMeta.isRadio && npMeta.subtitle && npMeta.title) {
+        cmds.push({
+          id: "view:track",
+          label: "About the track",
+          group: "View",
+          icon: AudioLines,
+          keywords: "track credits performers musicians personnel writers context",
+          run: () => {
+            setScreen("now-playing");
+            setContextTab("track");
+            setArtistOpen(true);
+          },
+        });
+      }
     }
     // Toggle from the RESOLVED theme (the stored preference may be 'system');
     // running it always writes an explicit theme, which is what a toggle means.
