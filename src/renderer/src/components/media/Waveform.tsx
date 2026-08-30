@@ -314,8 +314,8 @@ export function NowPlayingWaveform(): React.JSX.Element | null {
 
   if (!ready) return null;
   return (
-    <div data-np-waveform className="pt-4">
-      <canvas ref={canvasRef} className="w-full h-8 block" />
+    <div data-np-waveform className="pt-5">
+      <canvas ref={canvasRef} className="w-full h-16 block" />
     </div>
   );
 }
