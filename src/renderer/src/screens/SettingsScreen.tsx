@@ -311,7 +311,7 @@ export function SettingsScreen(): React.JSX.Element {
 
                   <Toggle
                     label="Waveforms"
-                    hint="Retrieve waveforms from audio files on your local media server."
+                    hint="Generate waveforms from audio files on your local media server."
                     checked={settings.waveforms}
                     onChange={(waveforms) => void save({ waveforms })}
                   />
