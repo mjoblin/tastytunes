@@ -13,6 +13,18 @@ import { useStore } from "@/store";
  * exact inverse — so it toasts with Undo and lands on the Cmd-Z stack
  * instead of asking "Sure?".
  */
+/**
+ * "last seen …" for a device-book row. A streamer seen this session reads
+ * "today", not a date that makes two minutes ago sound like history (seen
+ * live, 2026-08-30); beyond yesterday the plain date is the honest answer.
+ */
+export function lastSeenLabel(at: number): string {
+  const day = (t: number): string => new Date(t).toDateString();
+  if (day(at) === day(Date.now())) return "today";
+  if (day(at) === day(Date.now() - 86_400_000)) return "yesterday";
+  return new Date(at).toLocaleDateString();
+}
+
 export function forgetDevice(dev: KnownDevice): void {
   const { settings, connection, saveSettings, pushUndo, runUndo, showToast } = useStore.getState();
   const prevKnown = settings.knownDevices;

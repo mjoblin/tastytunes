@@ -106,7 +106,11 @@ async function fetchDescription(location: string): Promise<DeviceDescription | n
     manufacturer: String(device.manufacturer ?? ""),
     friendlyName: String(device.friendlyName ?? ""),
     model: String(device.modelName ?? ""),
-    udn: String(device.UDN ?? ""),
+    // ONE spelling for identity: the description writes "uuid:X" where
+    // /system/info writes bare "X", and the device book keys on the latter —
+    // an unstripped prefix made every remembered streamer fail to match its
+    // own live discovery and render twice (user, 2026-08-30).
+    udn: String(device.UDN ?? "").replace(/^uuid:/i, ""),
   };
 }
 

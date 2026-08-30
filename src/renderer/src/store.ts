@@ -195,6 +195,15 @@ interface TTState {
   presets: Presets | null;
   systemInfo: SystemInfo | null;
   systemPower: SystemPower | null;
+  /**
+   * True only while systemPower was pushed DURING the current connection.
+   * Same-host reconnects deliberately keep the last state (a blip must not
+   * flash the UI empty), but the last power push before an eco power-off says
+   * "standby" — and trusting it walled Now Playing with the sleeping face for
+   * a beat after every power-on (user, 2026-08-30). A WALL needs current
+   * certainty; the stale value stays readable for ordinary rows.
+   */
+  systemPowerFresh: boolean;
   /** A wake-on-intent is in flight (playing something from standby). */
   waking: boolean;
   /** Last standby_mode seen from ANY device this session — survives the
@@ -434,6 +443,7 @@ export const useStore = create<TTState>((set, get) => ({
   presets: null,
   systemInfo: null,
   systemPower: null,
+  systemPowerFresh: false,
   waking: false,
   lastStandbyMode: null,
   firmwareUpdate: null,
@@ -619,6 +629,9 @@ export const useStore = create<TTState>((set, get) => ({
       presets: snap.presets,
       systemInfo: snap.systemInfo,
       systemPower: snap.systemPower,
+      // Snapshot power is main's live cache — fresh exactly when the snapshot
+      // describes a connection that is up right now.
+      systemPowerFresh: snap.connection.phase === "connected" && snap.systemPower != null,
       // The eco hint needs the standby mode even when systemPower arrives via
       // the boot snapshot rather than a push (fresh launches).
       ...(snap.systemPower?.standby_mode != null
@@ -665,6 +678,7 @@ export const useStore = create<TTState>((set, get) => ({
               presets: null,
               systemInfo: null,
               systemPower: null,
+              systemPowerFresh: false,
               firmwareUpdate: null,
               sources: null,
               zoneAudio: null,
@@ -676,7 +690,9 @@ export const useStore = create<TTState>((set, get) => ({
               playhead: null,
             };
           }
-          return { connection: msg.state };
+          return msg.state.phase === "connected"
+            ? { connection: msg.state }
+            : { connection: msg.state, systemPowerFresh: false };
         }
         case "devices":
           return { devices: msg.devices, discovering: msg.discovering };
@@ -701,6 +717,7 @@ export const useStore = create<TTState>((set, get) => ({
         case "systemPower":
           return {
             systemPower: msg.data,
+            systemPowerFresh: true,
             lastStandbyMode: msg.data?.standby_mode ?? s.lastStandbyMode,
           };
         case "waking":

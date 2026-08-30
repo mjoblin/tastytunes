@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { CircleAlert, CircleCheck, Loader2, Moon, Power, Search, Sparkles, X } from "lucide-react";
-import { RECONNECT_GRACE_MS } from "@shared/model";
+import { RECONNECT_GRACE_MS, type KnownDevice } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { useShortcuts } from "@/hooks/useShortcuts";
@@ -11,7 +11,7 @@ import { useMotionPreference } from "@/hooks/useMotionPreference";
 import { useTheme } from "@/hooks/useTheme";
 import { useDisplayFont } from "@/hooks/useDisplayFont";
 import { cx, deriveNowPlaying } from "@/lib/format";
-import { forgetDevice } from "@/lib/devices";
+import { forgetDevice, lastSeenLabel } from "@/lib/devices";
 import { Nav } from "@/components/Nav";
 import { PlaybackBar } from "@/components/playback/PlaybackBar";
 import { DiagnosticsDrawer } from "@/components/overlays/DiagnosticsDrawer";
@@ -61,8 +61,10 @@ export default function App(): React.JSX.Element {
   // between the wake finishing and the streamer actually arriving.
   const waking = useStore((s) => s.waking);
   const holding = useWakeHold();
+  const systemPowerFresh = useStore((s) => s.systemPowerFresh);
   const inStandby =
-    connected && ((systemPower != null && systemPower.power !== "ON") || waking || holding);
+    connected &&
+    ((systemPowerFresh && systemPower != null && systemPower.power !== "ON") || waking || holding);
 
   // Per-album accent tint (Plexamp-style), from the current art.
   const theme = useTheme(settings.theme);
@@ -310,8 +312,37 @@ function ConnectGate(): React.JSX.Element {
   // survives a power cycle) and forgettable — Bluetooth semantics, except a
   // forgotten device that answers a later sweep reappears as a plain
   // discovery: memory is deletable, live truth is not.
+  // ONE list, keyed by identity, with CONSTANT geometry for remembered
+  // streamers: a book member's card carries its last-seen line and its ×
+  // whether or not the sweep can see it right now, so sliding between
+  // "answering" and "remembered" changes only the card's brightness — which
+  // transition-colors already fades. The first cut let the third line come
+  // and go with liveness and the card resized with every sweep (user,
+  // 2026-08-30). Only a never-connected stranger gets the two-line card,
+  // and a stranger never transitions to remembered (only connecting writes
+  // the book, and a connect leaves this gate).
   const foundUdns = new Set(devices.map((d) => d.udn).filter(Boolean));
-  const remembered = knownDevices.filter((d) => !foundUdns.has(d.udn));
+  const bookByUdn = new Map(knownDevices.map((d) => [d.udn, d]));
+  const gateRows = [
+    ...devices.map((d) => ({
+      key: d.udn || d.host,
+      live: true,
+      friendlyName: d.friendlyName,
+      model: d.model,
+      host: d.host,
+      book: (d.udn ? bookByUdn.get(d.udn) : null) ?? (null as KnownDevice | null),
+    })),
+    ...knownDevices
+      .filter((d) => !foundUdns.has(d.udn))
+      .map((d) => ({
+        key: d.udn,
+        live: false,
+        friendlyName: d.friendlyName,
+        model: d.model,
+        host: d.host,
+        book: d,
+      })),
+  ];
 
   return (
     <div className="h-full flex flex-col items-center justify-center gap-5 text-center px-8">
@@ -358,44 +389,47 @@ function ConnectGate(): React.JSX.Element {
               standby.
             </div>
           )}
-          {devices.length > 0 || remembered.length > 0 ? (
+          {gateRows.length > 0 ? (
             <div className="space-y-2">
-              {devices.map((d) => (
-                <button
-                  key={d.udn || d.host}
-                  onClick={() => void tt.connect(d.host)}
-                  className="block w-72 rounded-xl ring-1 ring-edge bg-panel hover:bg-raised px-4 py-3 transition-colors"
-                >
-                  <div className="text-[13.5px]">{d.friendlyName}</div>
-                  <div className="font-mono text-[10.5px] text-faint">
-                    {d.model} · {d.host}
-                  </div>
-                </button>
-              ))}
-              {remembered.map((d) => (
+              {gateRows.map((row) => (
                 <div
-                  key={d.udn}
-                  data-known-device={d.udn}
-                  className="relative w-72 rounded-xl ring-1 ring-edge bg-panel/60 transition-colors hover:bg-raised/70"
+                  key={row.key}
+                  data-known-device={row.live ? undefined : row.key}
+                  className={cx(
+                    "relative w-72 rounded-xl ring-1 ring-edge transition-colors",
+                    row.live ? "bg-panel hover:bg-raised" : "bg-panel/60 hover:bg-raised/70",
+                  )}
                 >
                   <button
-                    onClick={() => void tt.connect(d.host)}
-                    className="block w-full px-4 py-3 pr-10 text-left"
+                    onClick={() => void tt.connect(row.host)}
+                    className={cx("block w-full px-4 py-3 text-left", row.book && "pr-10")}
                   >
-                    <div className="text-[13.5px] text-dim">{d.friendlyName}</div>
-                    <div className="font-mono text-[10.5px] text-faint">
-                      {d.model} · {d.host} · last seen {new Date(d.lastSeenAt).toLocaleDateString()}
+                    <div className={cx("text-[13.5px]", !row.live && "text-dim")}>
+                      {row.friendlyName}
                     </div>
+                    {/* Stacked on purpose — in a 288px card these wrap mid-
+                        phrase as one line, and a deliberate stack reads
+                        calmer than an accidental wrap (user, 2026-08-30). */}
+                    <div className="font-mono text-[10.5px] text-faint truncate">
+                      {row.model} · {row.host}
+                    </div>
+                    {row.book && (
+                      <div className="font-mono text-[10.5px] text-faint">
+                        last seen {lastSeenLabel(row.book.lastSeenAt)}
+                      </div>
+                    )}
                   </button>
-                  <button
-                    onClick={() => forgetDevice(d)}
-                    data-forget-device={d.udn}
-                    aria-label={`Forget ${d.friendlyName}`}
-                    data-tip={`Forget ${d.friendlyName}`}
-                    className="tip-bottom tip-end absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
-                  >
-                    <X size={13} />
-                  </button>
+                  {row.book && (
+                    <button
+                      onClick={() => forgetDevice(row.book!)}
+                      data-forget-device={row.key}
+                      aria-label={`Forget ${row.friendlyName}`}
+                      data-tip={`Forget ${row.friendlyName}`}
+                      className="tip-bottom tip-end absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
+                    >
+                      <X size={13} />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -414,7 +448,9 @@ function ConnectGate(): React.JSX.Element {
             <button
               onClick={() => void tt.discover()}
               disabled={discovering}
-              className="text-[13px] px-4 py-2 rounded-lg bg-amber text-bg font-medium hover:brightness-110 transition-all disabled:opacity-50"
+              // Fixed width: the label alternates with the background sweep
+              // and the row must not breathe with it (user, 2026-08-30).
+              className="min-w-[128px] text-center text-[13px] px-4 py-2 rounded-lg bg-amber text-bg font-medium hover:brightness-110 transition-all disabled:opacity-50"
             >
               {discovering ? "Searching…" : "Find devices"}
             </button>

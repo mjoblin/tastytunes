@@ -16,7 +16,7 @@ import { tt } from "@/api";
 import { useStore } from "@/store";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { cx } from "@/lib/format";
-import { forgetDevice } from "@/lib/devices";
+import { forgetDevice, lastSeenLabel } from "@/lib/devices";
 import { Segmented } from "@/components/controls/Segmented";
 import { SourcesPanel } from "@/components/device/SourcesPanel";
 import { ToneEq } from "@/components/device/ToneEq";
@@ -47,8 +47,11 @@ export function DeviceScreen(): React.JSX.Element {
   const [searchCameBackEmpty, setSearchCameBackEmpty] = useState(false);
   const wasDiscovering = useRef(false);
   useEffect(() => {
+    // Set ONLY on completion, never cleared at sweep start — the manager
+    // re-sweeps every 10s while disconnected, and clearing on each start made
+    // the flag (and everything promoted by it) pulse with the background
+    // rhythm. A sweep that finds something overwrites it to false here.
     if (wasDiscovering.current && !discovering) setSearchCameBackEmpty(devices.length === 0);
-    if (discovering) setSearchCameBackEmpty(false);
     wasDiscovering.current = discovering;
   }, [discovering, devices.length]);
   // Tabs are UNCONDITIONAL now: every streamer has inputs, so there are always
@@ -90,7 +93,12 @@ export function DeviceScreen(): React.JSX.Element {
    * thing on the screen. While devices are listed it stays quiet: shouting
    * every time would just be noise over the path most people take.
    */
-  const needsManual = !connected && !discovering && devices.length === 0;
+  // STICKY across background sweeps: the manager re-sweeps every 10s while
+  // disconnected, and a promotion that blinked with each sweep made the whole
+  // card pulse (seen live, 2026-08-30). Promote once a search has genuinely
+  // come back empty and stay promoted until something is found — only the
+  // Find-devices button animates the sweep itself.
+  const needsManual = !connected && searchCameBackEmpty && devices.length === 0;
   // Hand over the caret when a search has come back empty — at that point
   // typing an address is the only thing left to do, and making someone click
   // into the field first is a small unkindness. Never on mere arrival: the
@@ -177,7 +185,9 @@ export function DeviceScreen(): React.JSX.Element {
                     <button
                       onClick={() => void tt.discover()}
                       disabled={discovering}
-                      className="flex items-center gap-1.5 text-[12.5px] px-3 h-8 rounded-lg ring-1 ring-edge bg-panel/70 text-amber hover:brightness-110 hover:ring-edge2 motion-safe:active:scale-95 transition-all disabled:opacity-50"
+                      // Fixed width: the label alternates with the background
+                      // sweep and the row must not breathe with it.
+                      className="flex min-w-[128px] items-center justify-center gap-1.5 text-[12.5px] px-3 h-8 rounded-lg ring-1 ring-edge bg-panel/70 text-amber hover:brightness-110 hover:ring-edge2 motion-safe:active:scale-95 transition-all disabled:opacity-50"
                     >
                       {discovering ? (
                         <Loader2 size={13} className="spin" />
@@ -188,7 +198,7 @@ export function DeviceScreen(): React.JSX.Element {
                     </button>
                   </div>
 
-                  {devices.length === 0 && !discovering && (
+                  {devices.length === 0 && (searchCameBackEmpty || !discovering) && (
                     <div className="text-[12.5px] text-faint">
                       Nothing found yet. Ensure the streamer is on the same network — or connect to
                       it directly below.
@@ -234,8 +244,7 @@ export function DeviceScreen(): React.JSX.Element {
                         <div className="flex-1 min-w-0">
                           <div className="text-[13px] text-dim truncate">{d.friendlyName}</div>
                           <div className="font-mono text-[10.5px] text-faint truncate">
-                            {d.model} · {d.host} · last seen{" "}
-                            {new Date(d.lastSeenAt).toLocaleDateString()}
+                            {d.model} · {d.host} · last seen {lastSeenLabel(d.lastSeenAt)}
                           </div>
                         </div>
                         <button
