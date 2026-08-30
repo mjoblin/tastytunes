@@ -58,7 +58,13 @@ import { fetchTrackInfo } from "./lookups/trackInfo";
 import { fetchCoverArt } from "./lookups/coverArt";
 import { radioByTags, radioSearch, radioTop } from "./lookups/radioBrowser";
 import { clearLookupCaches, flushLookupCaches, lookupCacheStats } from "./lookups/diskCache";
-import { browse as mediaBrowse, presetSave, queueAdd, refreshServers } from "./media/upnpBrowser";
+import {
+  audioResUrl,
+  browse as mediaBrowse,
+  presetSave,
+  queueAdd,
+  refreshServers,
+} from "./media/upnpBrowser";
 import {
   catchUpOnResume,
   dismissMissedSchedule,
@@ -439,6 +445,24 @@ function registerIpc(): void {
   ipcMain.handle(IPC.fetchAlbumInfo, (_e, artist: string, album: string, force?: boolean) =>
     getSettings().artistInfo ? fetchAlbumInfo(artist, album, !!force) : null,
   );
+  // EXPERIMENT (0.7 exploration): fetch one track's audio bytes for the
+  // renderer's waveform decode. Read-only ranged-capable GET against the
+  // LOCAL media server; capped so a mistake can't balloon over IPC.
+  ipcMain.handle(IPC.expTrackAudio, async (_e, serverUdn: string, objectId: string) => {
+    const host = streamerHost();
+    if (!host || typeof serverUdn !== "string" || typeof objectId !== "string") return null;
+    const url = await audioResUrl(host, serverUdn, objectId);
+    if (!url) return null;
+    try {
+      const res = await loggedFetch("media-audio", url, { signal: AbortSignal.timeout(60_000) });
+      if (!res.ok) return null;
+      const buf = Buffer.from(await res.arrayBuffer());
+      if (buf.byteLength > 64 * 1024 * 1024) return null;
+      return buf;
+    } catch {
+      return null;
+    }
+  });
   ipcMain.handle(IPC.fetchTrackInfo, (_e, query: TrackInfoQuery, force?: boolean) =>
     getSettings().artistInfo &&
     typeof query?.artist === "string" &&

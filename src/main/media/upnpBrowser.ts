@@ -411,6 +411,28 @@ export async function browseMetadataNode(
 }
 
 /**
+ * EXPERIMENT (0.7 exploration): the raw audio res URL for one object. The
+ * parser deliberately drops res URLs (they are ephemeral — resolve fresh at
+ * use, never store), so this reads the raw DIDL from a BrowseMetadata and
+ * takes the first res whose protocolInfo says audio. Null on any miss.
+ */
+export async function audioResUrl(
+  host: string,
+  serverUdn: string,
+  objectId: string,
+): Promise<string | null> {
+  try {
+    const entry = await entryFor(host, serverUdn);
+    const r = await soapBrowse(entry, objectId, "BrowseMetadata", 0, 1);
+    if (!r) return null;
+    const m = /<res\b[^>]*audio[^>]*>\s*(http[^<\s]+)\s*<\/res>/i.exec(r.didl);
+    return m ? m[1].replace(/&amp;/g, "&") : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * The server's SystemUpdateID — a MANDATORY ContentDirectory action, so even
  * search-less servers answer it. Bumps whenever the library changes; the one
  * cheap question that keeps the media index honest.
