@@ -311,14 +311,14 @@ export function SettingsScreen(): React.JSX.Element {
 
                   <Toggle
                     label="Waveforms"
-                    hint="Draws each track's waveform from its audio file, read from your local media server, on the Now Playing screen and in the Info/Context panel. Off means no files are read."
+                    hint="Retrieve waveforms from audio files on your local media server."
                     checked={settings.waveforms}
                     onChange={(waveforms) => void save({ waveforms })}
                   />
 
                   <Toggle
                     label="Waveform as the seek bar"
-                    hint="Draws the playing track's waveform as the seek bar. The plain bar returns for radio and tracks without a waveform."
+                    hint="Displays the playing track's waveform as the seek bar. The plain bar returns for radio and tracks without a waveform."
                     disabled={!settings.waveforms}
                     checked={settings.waveformSeekBar}
                     onChange={(waveformSeekBar) => void save({ waveformSeekBar })}
@@ -326,7 +326,7 @@ export function SettingsScreen(): React.JSX.Element {
 
                   <Toggle
                     label="Waveform on the Now Playing screen"
-                    hint="Draws the playing track's waveform under the album art, with its peak and loudness details."
+                    hint="Displays the playing track's waveform under the album art, with its peak and loudness details."
                     disabled={!settings.waveforms}
                     checked={settings.waveformNowPlaying}
                     onChange={(waveformNowPlaying) => void save({ waveformNowPlaying })}
