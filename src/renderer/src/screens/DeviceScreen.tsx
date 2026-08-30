@@ -9,12 +9,14 @@ import {
   Router,
   Sparkles,
   Unplug,
+  X,
 } from "lucide-react";
 import { audioCaps } from "@shared/smoip";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { cx } from "@/lib/format";
+import { forgetDevice } from "@/lib/devices";
 import { Segmented } from "@/components/controls/Segmented";
 import { SourcesPanel } from "@/components/device/SourcesPanel";
 import { ToneEq } from "@/components/device/ToneEq";
@@ -24,6 +26,7 @@ import { HeaderChip, ScreenTitle } from "@/components/chrome/Chrome";
 export function DeviceScreen(): React.JSX.Element {
   const connection = useStore((s) => s.connection);
   const devices = useStore((s) => s.devices);
+  const knownDevices = useStore((s) => s.settings.knownDevices);
   const discovering = useStore((s) => s.discovering);
   const systemInfo = useStore((s) => s.systemInfo);
   // PASSIVE firmware awareness: shown here, never acted on. There is no check or
@@ -215,6 +218,43 @@ export function DeviceScreen(): React.JSX.Element {
                       )}
                     </div>
                   ))}
+
+                  {/* The device book: remembered streamers the sweep hasn't
+                      confirmed — connectable on faith (the address usually
+                      survives a power cycle), forgettable (Bluetooth
+                      semantics; the rule lives in lib/devices). */}
+                  {knownDevices
+                    .filter((d) => !devices.some((seen) => seen.udn === d.udn))
+                    .map((d) => (
+                      <div
+                        key={d.udn}
+                        data-known-device={d.udn}
+                        className="flex items-center gap-3 rounded-lg bg-raised/40 ring-1 ring-edge px-3 py-2"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[13px] text-dim truncate">{d.friendlyName}</div>
+                          <div className="font-mono text-[10.5px] text-faint truncate">
+                            {d.model} · {d.host} · last seen{" "}
+                            {new Date(d.lastSeenAt).toLocaleDateString()}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => void tt.connect(d.host)}
+                          className="text-[12px] px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 motion-safe:active:scale-95 transition-all"
+                        >
+                          Connect
+                        </button>
+                        <button
+                          onClick={() => forgetDevice(d)}
+                          data-forget-device={d.udn}
+                          aria-label={`Forget ${d.friendlyName}`}
+                          data-tip={`Forget ${d.friendlyName}`}
+                          className="tip-bottom tip-end p-1.5 rounded-full text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
+                        >
+                          <X size={13} />
+                        </button>
+                      </div>
+                    ))}
                 </div>
               )}
 

@@ -10,19 +10,27 @@ import { loggedFetch } from "../netlog";
 import { XMLParser } from "fast-xml-parser";
 import type { DiscoveredDevice } from "@shared/model";
 
-// TASTYTUNES_SSDP_TARGET ('host:port') lets test harnesses stand in for the
-// LAN: the M-SEARCH goes there unicast instead of to the multicast group, so
-// harness runs never sweep (or find) the real network.
-const OVERRIDE = process.env["TASTYTUNES_SSDP_TARGET"]?.split(":");
-const SSDP_ADDRESS = OVERRIDE?.[0] ?? "239.255.255.250";
-const SSDP_PORT = OVERRIDE?.[1] ? Number(OVERRIDE[1]) : 1900;
+// TASTYTUNES_SSDP_TARGET ('host:port', comma-separated for several) lets test
+// harnesses stand in for the LAN: the M-SEARCH goes there unicast instead of
+// to the multicast group, so harness runs never sweep (or find) the real
+// network. Multiple targets exist for the multi-streamer scenarios — each
+// mock instance answers on its own port.
+const TARGETS: Array<{ address: string; port: number }> = (
+  process.env["TASTYTUNES_SSDP_TARGET"] ?? "239.255.255.250:1900"
+)
+  .split(",")
+  .map((t) => {
+    const [address, port] = t.trim().split(":");
+    return { address, port: port ? Number(port) : 1900 };
+  });
+const OVERRIDDEN = process.env["TASTYTUNES_SSDP_TARGET"] != null;
 const SEARCH_TARGET = "urn:schemas-upnp-org:device:MediaRenderer:1";
 
-function mSearchDatagram(): Buffer {
+function mSearchDatagram(target: { address: string; port: number }): Buffer {
   return Buffer.from(
     [
       "M-SEARCH * HTTP/1.1",
-      `HOST: ${SSDP_ADDRESS}:${SSDP_PORT}`,
+      `HOST: ${target.address}:${target.port}`,
       'MAN: "ssdp:discover"',
       "MX: 2",
       `ST: ${SEARCH_TARGET}`,
@@ -47,12 +55,14 @@ function ssdpSearch(timeoutMs: number): Promise<string[]> {
       resolvePromise([...locations]);
     };
 
-    const timer = setTimeout(finish, timeoutMs);
+    setTimeout(finish, timeoutMs);
 
-    socket.on("error", () => {
-      clearTimeout(timer);
-      finish();
-    });
+    // A send to a DEAD unicast target surfaces here as an ICMP refusal
+    // (ECONNREFUSED) — which is exactly what a powered-off streamer's port
+    // does. Ending the sweep on it would let one dead device silence every
+    // live one (the multi-streamer eco report), so errors are swallowed and
+    // the timeout above is the only closer.
+    socket.on("error", () => {});
 
     socket.on("message", (msg) => {
       const match = /^location:\s*(.+)$/im.exec(msg.toString());
@@ -60,16 +70,19 @@ function ssdpSearch(timeoutMs: number): Promise<string[]> {
     });
 
     socket.bind(() => {
-      const datagram = mSearchDatagram();
-      // Send twice — SSDP is UDP and responders routinely miss a single probe.
-      socket.send(datagram, SSDP_PORT, SSDP_ADDRESS);
-      setTimeout(() => {
-        try {
-          socket.send(datagram, SSDP_PORT, SSDP_ADDRESS);
-        } catch {
-          // socket may already be closed
+      // Send twice per target — SSDP is UDP and responders routinely miss a
+      // single probe.
+      const sendAll = (): void => {
+        for (const target of TARGETS) {
+          try {
+            socket.send(mSearchDatagram(target), target.port, target.address);
+          } catch {
+            // socket may already be closed
+          }
         }
-      }, 400);
+      };
+      sendAll();
+      setTimeout(sendAll, 400);
     });
   });
 }
@@ -115,7 +128,11 @@ export async function discoverStreamers(timeoutMs = 3500): Promise<DiscoveredDev
     if (!entry) continue;
     const { location, desc } = entry;
     if (!/cambridge audio/i.test(desc.manufacturer)) continue;
-    const host = new URL(location).hostname;
+    // Real streamers serve SMOIP on port 80 while the UPnP description lives
+    // on its own port (8050 on the Evo), so the connect target is the bare
+    // hostname. The harness override runs mock streamers whose SMOIP shares
+    // the description port — there, the port IS the identity.
+    const host = OVERRIDDEN ? new URL(location).host : new URL(location).hostname;
     const key = desc.udn || host;
     if (!devices.has(key)) {
       devices.set(key, {

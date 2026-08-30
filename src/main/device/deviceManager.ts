@@ -21,10 +21,13 @@ import {
 } from "@shared/model";
 import {
   type ContentRef,
+  type KnownDevice,
   type Playlist,
   type PlaylistActivation,
   type QueueRestoreResult,
   type RecentTrack,
+  KNOWN_DEVICES_MAX,
+  RECONNECT_GRACE_MS,
 } from "@shared/model";
 import type {
   Presets,
@@ -141,6 +144,20 @@ export class DeviceManager {
   private mcpStatus: McpStatus = { running: false, url: null, error: null };
   private missedSchedule: MissedSchedule | null = null;
   private mediaIndexStatuses: MediaIndexStatus[] = [];
+  /**
+   * When the current connection FIRST failed (null = never / healthy).
+   * The socket oscillates connecting ↔ disconnected while it retries, so this
+   * stamps the start of the whole outage, not the latest attempt. Past
+   * RECONNECT_GRACE_MS the outage counts as STRANDED: the device is treated
+   * as gone (eco standby never comes back on its own) and the sweep's
+   * single-candidate courtesy may switch to the one streamer that IS alive.
+   * Cleared on connect success, on a new manual target, and on deliberate
+   * disconnect — a user who chose to disconnect asked for silence, not a
+   * search party.
+   */
+  private disconnectedSince: number | null = null;
+  /** The periodic sweep that runs while not connected — see ensureRediscover. */
+  private rediscoverTimer: NodeJS.Timeout | null = null;
 
   // ------------------------------------------------------------------ lifecycle
 
@@ -148,6 +165,9 @@ export class DeviceManager {
   async startup(): Promise<void> {
     const { lastHost } = getSettings();
     if (lastHost) this.connect(lastHost);
+    // Arm the not-connected sweep even when there is no lastHost to chase —
+    // connect() is what normally starts it, and a first run never calls it.
+    this.ensureRediscover();
     await this.discover();
   }
 
@@ -164,14 +184,88 @@ export class DeviceManager {
       this.discovering = false;
       this.pushDevices();
     }
+    // A sweep that SEES a remembered streamer refreshes its entry — the
+    // address is a hint, the UDN is the identity, so a DHCP reassignment
+    // self-heals here without a connect.
+    this.refreshKnownFromSweep();
     // Never-connected + idle + something found -> just connect. Lives here
     // (not only in startup) so the connect gate's auto-retry sweeps get the
     // same courtesy — a streamer that boots a minute after the app does is
     // picked up hands-free on a first run.
     if (!getSettings().lastHost && this.connection.phase === "idle" && this.devices.length > 0) {
       this.connect(this.devices[0].host);
+    } else {
+      // The STRANDED courtesy (the multi-streamer eco report, 2026-08-30):
+      // the current target has been gone past the grace — eco standby powers
+      // its network off, so it is not coming back on its own — and the sweep
+      // finds exactly ONE streamer that isn't it. Connecting to the only
+      // streamer alive is the better default; two or more candidates are a
+      // choice, so they get listed, never guessed at.
+      const failingHost =
+        this.connection.phase === "connecting" || this.connection.phase === "disconnected"
+          ? this.connection.host
+          : null;
+      const stranded =
+        this.disconnectedSince != null && Date.now() - this.disconnectedSince >= RECONNECT_GRACE_MS;
+      if (
+        stranded &&
+        failingHost != null &&
+        this.devices.length === 1 &&
+        this.devices[0].host !== failingHost
+      ) {
+        this.log(
+          "info",
+          "discovery",
+          `${failingHost} has been gone ${Math.round((Date.now() - (this.disconnectedSince ?? 0)) / 1000)}s — switching to ${this.devices[0].friendlyName} (${this.devices[0].host}), the one streamer answering`,
+        );
+        this.connect(this.devices[0].host);
+      }
     }
     return this.devices;
+  }
+
+  /**
+   * Keep sweeping while not connected, so a streamer that powers on later is
+   * noticed without anyone clicking anything — the manager owns this (not the
+   * connect gate) because the gate only sweeps while mounted and visible,
+   * which is exactly what stranded the multi-streamer household. Idle after a
+   * deliberate disconnect still sweeps (the gate lists what it finds) but
+   * auto-connects nowhere: both courtesies carry their own guards.
+   */
+  private ensureRediscover(): void {
+    if (this.connection.phase === "connected") {
+      if (this.rediscoverTimer) {
+        clearInterval(this.rediscoverTimer);
+        this.rediscoverTimer = null;
+      }
+      return;
+    }
+    if (this.rediscoverTimer) return;
+    this.rediscoverTimer = setInterval(() => void this.discover(), 10_000);
+    this.rediscoverTimer.unref?.();
+  }
+
+  /** Upsert one streamer into the device book: newest-first, UDN-keyed, LRU-capped. */
+  private rememberDevice(dev: Omit<KnownDevice, "lastSeenAt">): void {
+    if (!dev.udn) return; // identity or nothing — a host alone can't be remembered safely
+    const rest = getSettings().knownDevices.filter((d) => d.udn !== dev.udn);
+    const knownDevices = [{ ...dev, lastSeenAt: Date.now() }, ...rest].slice(0, KNOWN_DEVICES_MAX);
+    this.push({ kind: "settings", settings: updateSettings({ knownDevices }) });
+  }
+
+  private refreshKnownFromSweep(): void {
+    const known = getSettings().knownDevices;
+    for (const seen of this.devices) {
+      const match = seen.udn ? known.find((d) => d.udn === seen.udn) : undefined;
+      if (match) {
+        this.rememberDevice({
+          udn: match.udn,
+          host: seen.host,
+          friendlyName: seen.friendlyName || match.friendlyName,
+          model: seen.model || match.model,
+        });
+      }
+    }
   }
 
   connect(host: string, opts?: { remember?: boolean; demo?: boolean }): void {
@@ -188,6 +282,8 @@ export class DeviceManager {
     // The demo device passes remember:false — its ephemeral loopback port
     // must never become the reconnect target of the next launch.
     if (opts?.remember !== false) updateSettings({ lastHost: host });
+    // A new target is a fresh benefit of the doubt.
+    this.disconnectedSince = null;
 
     // Callbacks from a replaced socket must be ignored: its async close event
     // would otherwise stomp the new connection's state.
@@ -205,6 +301,7 @@ export class DeviceManager {
       },
       onConnected: () => {
         if (isCurrent(socket)) {
+          this.disconnectedSince = null;
           this.setConnection({ phase: "connected", host });
           // Capability probes — refreshed every (re)connect. The /spec
           // endpoints aren't proven over the WS, so they ride HTTP like presets.
@@ -213,8 +310,13 @@ export class DeviceManager {
         }
       },
       onDisconnected: (reason, reconnecting) => {
-        if (isCurrent(socket))
+        if (isCurrent(socket)) {
+          // Stamp the START of the outage — the socket oscillates
+          // connecting ↔ disconnected while retrying, and the stranded
+          // clock must measure the whole silence, not the latest attempt.
+          if (reconnecting && this.disconnectedSince == null) this.disconnectedSince = Date.now();
           this.setConnection({ phase: "disconnected", host, reason, reconnecting });
+        }
       },
       onLog: (level, text) => {
         if (isCurrent(socket)) this.log(level, "socket", text);
@@ -231,6 +333,8 @@ export class DeviceManager {
     this.cache = emptyCache();
     this.demo = false;
     this.setRecalledPreset(null);
+    // Deliberate — no outage clock, no stranded courtesy.
+    this.disconnectedSince = null;
     this.setConnection({ phase: "idle" });
   }
 
@@ -746,9 +850,23 @@ export class DeviceManager {
       case "/presets/list":
         this.cache.presets = data as Presets;
         return this.push({ kind: "presets", data: this.cache.presets });
-      case "/system/info":
+      case "/system/info": {
         this.cache.systemInfo = data as SystemInfo;
+        // The device book learns a streamer HERE — a successful connection
+        // that told us its identity — never from a mere sweep sighting of a
+        // stranger (refreshKnownFromSweep only updates devices already known).
+        const info = this.cache.systemInfo;
+        // Never the demo: its loopback port is as ephemeral as its lastHost.
+        if (info.udn && this.socket && !this.demo) {
+          this.rememberDevice({
+            udn: info.udn,
+            host: this.socket.host,
+            friendlyName: info.name ?? info.model ?? this.socket.host,
+            model: info.model ?? "",
+          });
+        }
         return this.push({ kind: "systemInfo", data: this.cache.systemInfo });
+      }
       case "/system/power": {
         const prev = this.cache.systemPower?.power;
         this.cache.systemPower = data as SystemPower;
@@ -1091,6 +1209,7 @@ export class DeviceManager {
   private setConnection(state: ConnectionState): void {
     if (state.phase !== "idle" && this.demo) state.demo = true;
     this.connection = state;
+    this.ensureRediscover();
     // Wallclock-based listen accounting can't survive a dead link or a device
     // switch — drop the in-flight track rather than over-count it.
     if (state.phase !== "connected") {

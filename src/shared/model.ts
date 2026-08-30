@@ -781,8 +781,41 @@ export type AmbientCoverage = "main" | "window";
 export type AlignH = "left" | "center" | "right";
 export type AlignV = "top" | "center" | "bottom";
 
+/**
+ * A streamer this app has actually connected to — the device book behind
+ * multi-streamer households. Keyed by UDN (identity), because the ADDRESS is
+ * only a hint: every sweep or connect that sees the device again refreshes
+ * `host` and `lastSeenAt` in place, so a DHCP reassignment self-heals. The
+ * book never ages by clock — a summer-house streamer seen twice a year is
+ * exactly what it exists to remember; the only exits are the LRU cap and the
+ * user's explicit Forget.
+ */
+export interface KnownDevice {
+  udn: string;
+  host: string;
+  friendlyName: string;
+  model: string;
+  lastSeenAt: number;
+}
+
+/** LRU cap on the device book — nobody owns eight streamers; churners get
+ *  least-recently-seen eviction for free. */
+export const KNOWN_DEVICES_MAX = 8;
+
+/**
+ * How long a failing reconnect keeps the benefit of the doubt. Under this,
+ * the loss reads as a blip (Wi-Fi hiccup, reboot) and the app just retries;
+ * past it, the device is treated as GONE — the connect gate un-walls into
+ * the full surface and the single-candidate auto-connect may act. Eco
+ * standby powers the network interface down, so an eco-configured device
+ * skips the doubt entirely at the gate.
+ */
+export const RECONNECT_GRACE_MS = 15_000;
+
 export interface AppSettings {
   lastHost: string | null;
+  /** Every streamer ever connected — see KnownDevice. */
+  knownDevices: KnownDevice[];
   mediaKeys: boolean;
   volumeLimitPercent: number | null;
   notifications: boolean;
@@ -1014,6 +1047,7 @@ export interface AppSettings {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   lastHost: null,
+  knownDevices: [],
   mediaKeys: true,
   volumeLimitPercent: null,
   notifications: true,

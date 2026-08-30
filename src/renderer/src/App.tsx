@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { CircleAlert, CircleCheck, Loader2, Moon, Power, Search, Sparkles } from "lucide-react";
+import { CircleAlert, CircleCheck, Loader2, Moon, Power, Search, Sparkles, X } from "lucide-react";
+import { RECONNECT_GRACE_MS } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { useShortcuts } from "@/hooks/useShortcuts";
@@ -10,6 +11,7 @@ import { useMotionPreference } from "@/hooks/useMotionPreference";
 import { useTheme } from "@/hooks/useTheme";
 import { useDisplayFont } from "@/hooks/useDisplayFont";
 import { cx, deriveNowPlaying } from "@/lib/format";
+import { forgetDevice } from "@/lib/devices";
 import { Nav } from "@/components/Nav";
 import { PlaybackBar } from "@/components/playback/PlaybackBar";
 import { DiagnosticsDrawer } from "@/components/overlays/DiagnosticsDrawer";
@@ -257,9 +259,11 @@ function ConnectGate(): React.JSX.Element {
   const devices = useStore((s) => s.devices);
   const discovering = useStore((s) => s.discovering);
   const setScreen = useStore((s) => s.setScreen);
+  const knownDevices = useStore((s) => s.settings.knownDevices);
+  const lastHost = useStore((s) => s.settings.lastHost);
   // Never connected to anything = a true first run: the gate doubles as the
   // welcome screen (connect() stamps lastHost on the first attempt).
-  const firstRun = useStore((s) => s.settings.lastHost == null);
+  const firstRun = lastHost == null;
   // If the device we lost had ECO standby configured, the honest hint is
   // that it may have LEFT THE NETWORK on purpose (eco powers the network
   // interface down — probed 2026-07-23; app-wake is impossible there).
@@ -269,21 +273,45 @@ function ConnectGate(): React.JSX.Element {
     connection.phase === "connecting" ||
     (connection.phase === "disconnected" && connection.reconnecting);
 
-  // While the gate sits empty-handed, sweep again every 10s — a streamer
-  // that's slow to answer (or powers on later) gets found hands-free. Count
-  // completed sweeps so the manual-IP hint can surface after a few misses.
+  // A failing reconnect gets RECONNECT_GRACE_MS of benefit of the doubt (a
+  // blip should read as a blip), then the gate stops being a wall: the
+  // retry demotes to a status line and the full surface — found streamers,
+  // remembered streamers, manual entry — comes back. Eco standby skips the
+  // doubt: eco powers the network off, so the device is not coming back on
+  // its own (the multi-streamer eco report, 2026-08-30). The reconnect
+  // itself keeps running underneath; if the device returns, it still wins.
+  const [stuck, setStuck] = useState(false);
+  useEffect(() => {
+    if (!busy) {
+      setStuck(false);
+      return;
+    }
+    if (maybeEco) {
+      setStuck(true);
+      return;
+    }
+    const t = setTimeout(() => setStuck(true), RECONNECT_GRACE_MS);
+    return () => clearTimeout(t);
+  }, [busy, maybeEco]);
+
+  // Count completed sweeps so the manual-IP hint can surface after a few
+  // misses. (The periodic re-sweep itself lives in DeviceManager now — it
+  // must run whether or not this gate is mounted and unwalled.)
   const [sweeps, setSweeps] = useState(0);
   const prevDiscovering = useRef(discovering);
   useEffect(() => {
     if (prevDiscovering.current && !discovering) setSweeps((n) => n + 1);
     prevDiscovering.current = discovering;
   }, [discovering]);
-  useEffect(() => {
-    if (busy || devices.length > 0) return;
-    const t = setInterval(() => void tt.discover(), 10_000);
-    return () => clearInterval(t);
-  }, [busy, devices.length]);
   const stillLooking = !busy && devices.length === 0 && sweeps >= 3;
+
+  // The device book: remembered streamers the sweep has NOT confirmed render
+  // dimmed under the live results, connectable on faith (the address usually
+  // survives a power cycle) and forgettable — Bluetooth semantics, except a
+  // forgotten device that answers a later sweep reappears as a plain
+  // discovery: memory is deletable, live truth is not.
+  const foundUdns = new Set(devices.map((d) => d.udn).filter(Boolean));
+  const remembered = knownDevices.filter((d) => !foundUdns.has(d.udn));
 
   return (
     <div className="h-full flex flex-col items-center justify-center gap-5 text-center px-8">
@@ -296,7 +324,7 @@ function ConnectGate(): React.JSX.Element {
           The streamer may be in eco standby — eco turns its network off, so wake it at the device.
         </div>
       )}
-      {busy ? (
+      {busy && !stuck ? (
         <>
           <Loader2 size={40} className="spin text-amber" />
           <div className="font-display text-xl text-dim">
@@ -323,7 +351,14 @@ function ConnectGate(): React.JSX.Element {
               <div className="font-display text-2xl text-dim">No streamer connected</div>
             </>
           )}
-          {devices.length > 0 ? (
+          {busy && stuck && (
+            <div data-still-trying className="flex items-center gap-2 text-[12.5px] text-faint">
+              <Loader2 size={12} className="spin" />
+              Still trying {(connection as { host: string }).host} — it may be off or in eco
+              standby.
+            </div>
+          )}
+          {devices.length > 0 || remembered.length > 0 ? (
             <div className="space-y-2">
               {devices.map((d) => (
                 <button
@@ -336,6 +371,32 @@ function ConnectGate(): React.JSX.Element {
                     {d.model} · {d.host}
                   </div>
                 </button>
+              ))}
+              {remembered.map((d) => (
+                <div
+                  key={d.udn}
+                  data-known-device={d.udn}
+                  className="relative w-72 rounded-xl ring-1 ring-edge bg-panel/60 transition-colors hover:bg-raised/70"
+                >
+                  <button
+                    onClick={() => void tt.connect(d.host)}
+                    className="block w-full px-4 py-3 pr-10 text-left"
+                  >
+                    <div className="text-[13.5px] text-dim">{d.friendlyName}</div>
+                    <div className="font-mono text-[10.5px] text-faint">
+                      {d.model} · {d.host} · last seen {new Date(d.lastSeenAt).toLocaleDateString()}
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => forgetDevice(d)}
+                    data-forget-device={d.udn}
+                    aria-label={`Forget ${d.friendlyName}`}
+                    data-tip={`Forget ${d.friendlyName}`}
+                    className="tip-bottom tip-end absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
               ))}
             </div>
           ) : (
