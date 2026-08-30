@@ -922,10 +922,16 @@ function SchedulesSection({
     const removed = schedules[index];
     if (!removed) return;
     void save({ schedules: schedules.filter((s) => s.id !== id) });
+    const undoId = useStore
+      .getState()
+      .pushUndo(
+        `Delete the ${removed.time} ${removed.action === "on" ? "Wake" : "Standby"} Schedule`,
+        () => restore(index, removed),
+      );
     showToast({
       kind: "success",
       text: `Deleted the ${removed.time} ${removed.action === "on" ? "wake" : "standby"} schedule`,
-      action: { label: "Undo", undo: () => restore(index, removed) },
+      action: { label: "Undo", undo: () => useStore.getState().runUndo(undoId) },
     });
   };
 

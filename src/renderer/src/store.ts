@@ -153,6 +153,7 @@ export type ToastAction =
   | { label: string; screen: Screen; undo?: never }
   | { label: string; undo: () => void; screen?: never };
 let toastNonce = 0;
+let undoNonce = 0;
 /** Monotonic id for search asks — see librarySearchTarget. */
 let librarySearchSeq = 0;
 /** Monotonic id for unified-search asks — see searchRequest. */
@@ -255,6 +256,11 @@ interface TTState {
   sleep: SleepTimer | null;
   /** Local recently-played log, newest first (mirrored from the main process). */
   recents: RecentTrack[];
+  /** The session's undo stack (Cmd-Z), newest last. UNDO-ONLY by design —
+   *  redo doubles the closure engineering; the shape allows adding it later.
+   *  Entries are exact-inverse closures; the toast Undo buttons and Cmd-Z
+   *  consume the SAME entries, so they can never double-restore. */
+  undoStack: Array<{ id: number; label: string; run(): void | Promise<void> }>;
   /** The listening record's truth row, pushed after every append. Null until
    *  the History tab's first fetch or the first push. */
   listeningStats: ListeningRecordStats | null;
@@ -319,6 +325,13 @@ interface TTState {
 
   toast: ToastData | null;
   showToast: (toast: Omit<ToastData, "id">) => void;
+  /** Push an undoable action; returns the entry id for a toast button to
+   *  target. `label` names the ORIGINAL action, Title Case ("Move 3
+   *  Tracks") — the menu shows "Undo <label>", the toast "Undid <label>". */
+  pushUndo: (label: string, run: () => void | Promise<void>) => number;
+  /** Run and consume one undo entry — the top for Cmd-Z, a specific id for
+   *  a toast button. False when there is nothing (left) to undo. */
+  runUndo: (id?: number) => boolean;
   dismissToast: () => void;
   /** In-app recall memory (see Snapshot.lastRecalledPresetId). */
   lastRecalledPresetId: number | null;
@@ -452,6 +465,7 @@ export const useStore = create<TTState>((set, get) => ({
   sleep: null,
   recents: [],
   listeningStats: null,
+  undoStack: [],
   favorites: [],
   playlists: [],
   playlistActivation: null,
@@ -496,6 +510,25 @@ export const useStore = create<TTState>((set, get) => ({
 
   toast: null,
   showToast: (toast) => set({ toast: { ...toast, id: ++toastNonce } }),
+  pushUndo: (label, run) => {
+    const id = ++undoNonce;
+    // Cap ~20: an undo stack is a pocket, not an archive.
+    const undoStack = [...get().undoStack, { id, label, run }].slice(-20);
+    set({ undoStack });
+    void tt.undoLabelSet(label);
+    return id;
+  },
+  runUndo: (id) => {
+    const stack = get().undoStack;
+    const entry = id != null ? stack.find((e) => e.id === id) : stack[stack.length - 1];
+    if (!entry) return false;
+    const undoStack = stack.filter((e) => e !== entry);
+    set({ undoStack });
+    void tt.undoLabelSet(undoStack[undoStack.length - 1]?.label ?? null);
+    void entry.run();
+    get().showToast({ kind: "success", text: `Undid ${entry.label}` });
+    return true;
+  },
   dismissToast: () => set({ toast: null }),
   lastRecalledPresetId: null,
   /**
@@ -732,6 +765,17 @@ export const useStore = create<TTState>((set, get) => ({
   applyMenu: (command) => {
     const s = get();
     switch (command.id) {
+      case "undo": {
+        // The Edit menu owns Cmd-Z app-wide; route it here: a focused text
+        // box keeps NATIVE text undo, everything else hits the app's stack.
+        const el = document.activeElement;
+        if (el instanceof HTMLElement && el.matches("input, textarea, [contenteditable]")) {
+          document.execCommand("undo");
+          break;
+        }
+        s.runUndo();
+        break;
+      }
       case "about":
         s.setInfoOpen(true);
         break;

@@ -80,6 +80,7 @@ export const REPO_URL = "https://github.com/mjoblin/tastytunes";
  * window only (never the mini player); `screen` values are renderer Screen ids.
  */
 export type MenuCommand =
+  | { id: "undo" }
   | { id: "about" }
   | { id: "palette" }
   | { id: "shortcuts" }
@@ -384,6 +385,9 @@ export interface TastyTunesApi {
    *  and event count, or null if the save dialog was cancelled. */
   listeningExport(): Promise<{ file: string; events: number } | null>;
   /** Combined size of the on-disk lookup caches (lyrics, artist context). */
+  /** The undo stack's top label (or null when empty) — the Edit menu's
+   *  Undo item names its target from this, the Music.app pattern. */
+  undoLabelSet(label: string | null): Promise<void>;
   lookupCacheStats(): Promise<{ entries: number; bytes: number }>;
   /** Wipe the lookup caches (memory + disk); resolves to the fresh stats. */
   clearLookupCaches(): Promise<{ entries: number; bytes: number }>;
@@ -432,6 +436,7 @@ export const IPC = {
   listeningStats: "tt:listeningStats",
   listeningClear: "tt:listeningClear",
   listeningExport: "tt:listeningExport",
+  undoLabelSet: "tt:undoLabelSet",
   lookupCacheStats: "tt:lookupCacheStats",
   clearLookupCaches: "tt:clearLookupCaches",
   mediaServers: "tt:mediaServers",

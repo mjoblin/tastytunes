@@ -15,11 +15,31 @@ export type NewFavorite = {
   [K in Favorite as K["kind"]]: Omit<K, "addedAt">;
 }[Favorite["kind"]];
 
-/** Add-or-remove by content key; resolves to the new "is favorited" state. */
-export async function toggleFavorite(fav: NewFavorite): Promise<boolean> {
+/**
+ * Add-or-remove by content key; resolves to the new "is favorited" state.
+ *
+ * Every UI toggle lands on the undo stack (the inverse is the same toggle);
+ * `silent` is for the calls that must NOT push — undo closures themselves,
+ * and batch verbs that push one aggregate entry for the lot.
+ */
+export async function toggleFavorite(
+  fav: NewFavorite,
+  opts?: { silent?: boolean },
+): Promise<boolean> {
   const full = { ...fav, addedAt: Date.now() };
   const key = favoriteKey(full);
   const exists = useStore.getState().favorites.some((f) => favoriteKey(f) === key);
+  if (!opts?.silent) {
+    const name = ("title" in fav ? fav.title : null) ?? ("name" in fav ? fav.name : null);
+    useStore
+      .getState()
+      .pushUndo(
+        exists
+          ? `Remove ${name ? `“${name}”` : "Favorite"} from Favorites`
+          : `Add ${name ? `“${name}”` : "Favorite"} to Favorites`,
+        () => void toggleFavorite(fav, { silent: true }),
+      );
+  }
   if (exists) {
     await tt.favoriteRemove(key);
     return false;

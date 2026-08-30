@@ -19,9 +19,12 @@ export async function clearRecentsWithUndo(): Promise<void> {
   if (recents.length === 0) return;
   const snapshot = recents;
   await tt.clearRecents();
+  const undoId = useStore
+    .getState()
+    .pushUndo("Clear Recently Played", () => void tt.recentsRestore(snapshot));
   showToast({
     kind: "success",
     text: `Cleared ${snapshot.length} ${snapshot.length === 1 ? "entry" : "entries"}`,
-    action: { label: "Undo", undo: () => void tt.recentsRestore(snapshot) },
+    action: { label: "Undo", undo: () => useStore.getState().runUndo(undoId) },
   });
 }

@@ -8,6 +8,8 @@ export interface MenuDeps {
   toggleMini(): void;
   /** Deliver a MenuCommand to the main window, creating/focusing it first. */
   sendToMain(command: MenuCommand): void;
+  /** The renderer's undo-stack top, for the Undo item's label. */
+  undoLabel(): string | null;
 }
 
 // Item ids exist for the test harness (Menu.getMenuItemById().click()).
@@ -54,7 +56,18 @@ export function installAppMenu(deps: MenuDeps): void {
   const editMenu: MenuItemConstructorOptions = {
     label: "Edit",
     submenu: [
-      { role: "undo" },
+      // ONE owner for Cmd-Z (the bare-F lesson, inverted: this key MUST be
+      // an accelerator, because a role's native undo would fire before the
+      // renderer could see the key). The renderer routes it: text fields
+      // get native undo, everything else the app's undo stack. The label
+      // names its target — "Undo Move 3 Tracks" — the Music.app pattern;
+      // main rebuilds the menu when the top of the stack changes.
+      {
+        id: "menu-undo",
+        label: deps.undoLabel() != null ? `Undo ${deps.undoLabel()}` : "Undo",
+        accelerator: "CmdOrCtrl+Z",
+        click: () => deps.sendToMain({ id: "undo" }),
+      },
       { role: "redo" },
       { type: "separator" },
       { role: "cut" },

@@ -127,6 +127,16 @@ listeningRecord.setNotifier(broadcastListening);
 // MCP tools can mutate settings (schedules) — the renderer must hear about it
 mcpBridge.onSettingsMutated = (settings) => broadcastSettings(settings);
 
+// The Edit menu's Undo item names the undo stack's top; the renderer keeps
+// this in sync and a change rebuilds the menu (labels are baked at build).
+let undoMenuLabel: string | null = null;
+const menuDeps = {
+  command: (cmd: StreamerCommand) => void deviceManager.command(cmd),
+  toggleMini: () => toggleMiniPlayer(),
+  sendToMain: (c: MenuCommand) => sendMenuCommand(c),
+  undoLabel: () => undoMenuLabel,
+};
+
 const MIN_WIDTH = 800;
 const MIN_HEIGHT = 520;
 
@@ -479,6 +489,12 @@ function registerIpc(): void {
     }
   });
   ipcMain.handle(IPC.playlistActivateCancel, () => deviceManager.cancelPlaylistActivation());
+  ipcMain.handle(IPC.undoLabelSet, (_e, label: string | null) => {
+    if (label !== undoMenuLabel) {
+      undoMenuLabel = label;
+      installAppMenu(menuDeps);
+    }
+  });
   ipcMain.handle(IPC.listeningStats, () => listeningRecord.stats());
   ipcMain.handle(IPC.listeningClear, async () => {
     await listeningRecord.clear();
@@ -610,11 +626,7 @@ if (!gotLock) {
     .whenReady()
     .then(() => {
       registerIpc();
-      installAppMenu({
-        command: (cmd) => void deviceManager.command(cmd),
-        toggleMini: toggleMiniPlayer,
-        sendToMain: sendMenuCommand,
-      });
+      installAppMenu(menuDeps);
       createWindow();
       syncMediaKeys();
       syncTray(getSettings().tray, trayDeps);

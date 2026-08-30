@@ -217,10 +217,13 @@ export function PlaylistsScreen(): React.JSX.Element {
       selected.id,
       selected.items.filter((_, i) => i !== index),
     );
+    const undoId = useStore
+      .getState()
+      .pushUndo(`Remove “${item.title}” from Playlist`, () => restoreItem(id, index, item));
     showToast({
       kind: "success",
       text: `Removed “${item.title}”`,
-      action: { label: "Undo", undo: () => restoreItem(id, index, item) },
+      action: { label: "Undo", undo: () => useStore.getState().runUndo(undoId) },
     });
   };
 
@@ -481,10 +484,19 @@ export function PlaylistsScreen(): React.JSX.Element {
                           // after the delete there is nowhere left to read them.
                           const deleted = selected;
                           void tt.playlistDelete(deleted.id);
+                          const undoId = useStore
+                            .getState()
+                            .pushUndo(
+                              `Delete Playlist “${deleted.name}”`,
+                              () => void tt.playlistRestore(deleted),
+                            );
                           showToast({
                             kind: "success",
                             text: `Deleted “${deleted.name}”`,
-                            action: { label: "Undo", undo: () => void tt.playlistRestore(deleted) },
+                            action: {
+                              label: "Undo",
+                              undo: () => useStore.getState().runUndo(undoId),
+                            },
                           });
                         },
                       })

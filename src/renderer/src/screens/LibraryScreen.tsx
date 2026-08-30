@@ -1536,8 +1536,26 @@ export function LibraryScreen(): React.JSX.Element {
   });
   const nodeFavorited = (node: MediaNode): boolean =>
     favKeys.has(favoriteKey(mediaFav(node) as Favorite));
-  const heartNode = (node: MediaNode): void => {
-    void toggleFavorite(mediaFav(node));
+  const heartNode = (node: MediaNode, opts?: { silent?: boolean }): void => {
+    void toggleFavorite(mediaFav(node), opts);
+  };
+  /** The batch heart verbs: one aggregate undo entry for the lot (per-item
+   *  pushes would flood the stack), silent per-item toggles. */
+  const heartNodes = (nodes: MediaNode[], allIn: boolean): void => {
+    const touched = nodes.filter((n) => (allIn ? nodeFavorited(n) : !nodeFavorited(n)));
+    for (const n of touched) heartNode(n, { silent: true });
+    if (touched.length === 0) return;
+    const count = touched.length;
+    useStore
+      .getState()
+      .pushUndo(
+        allIn
+          ? `Remove ${count} ${count === 1 ? "Track" : "Tracks"} from Favorites`
+          : `Add ${count} ${count === 1 ? "Track" : "Tracks"} to Favorites`,
+        () => {
+          for (const n of touched) heartNode(n, { silent: true });
+        },
+      );
   };
 
   // "Retrieving…" only appears when a browse actually takes a moment —
@@ -1561,6 +1579,7 @@ export function LibraryScreen(): React.JSX.Element {
     openMenu,
     menuNodeId,
     heartNode,
+    heartNodes,
     nodeFavorited,
     trackQueued,
     isCurrentTrack: (node) => queueSourceActive && isCurrentTrack(node),
@@ -2438,10 +2457,7 @@ export function LibraryScreen(): React.JSX.Element {
               return (
                 <SelectionVerb
                   icon={<Heart size={13} fill={allIn ? "currentColor" : "none"} />}
-                  onClick={() => {
-                    for (const n of nodes)
-                      if (allIn ? nodeFavorited(n) : !nodeFavorited(n)) heartNode(n);
-                  }}
+                  onClick={() => heartNodes(nodes, allIn)}
                 >
                   {allIn ? "Remove from favorites" : "Add to favorites"}
                 </SelectionVerb>
@@ -2606,10 +2622,7 @@ export function LibraryScreen(): React.JSX.Element {
               const allIn = nodes.length > 0 && nodes.every(nodeFavorited);
               return {
                 label: allIn ? "Remove from favorites" : "Add to favorites",
-                run: () => {
-                  for (const n of nodes)
-                    if (allIn ? nodeFavorited(n) : !nodeFavorited(n)) heartNode(n);
-                },
+                run: () => heartNodes(nodes, allIn),
               };
             })(),
           ]}

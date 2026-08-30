@@ -340,24 +340,21 @@ export function QueueScreen(): React.JSX.Element {
     snapQueueRows();
     for (const i of chosen) void tt.command({ type: "queueDelete", id: i.id as number });
     setSelected(new Set());
+    // ONE closure, two entry points (the toast button and Cmd-Z consume the
+    // same stack entry, so they can never double-restore). Sequential,
+    // ascending positions — parallel restores raced each other's inserts
+    // and resolves; each restore arms the FLIP so neighbors part with
+    // motion (user, 2026-08-28).
+    const undoId = useStore.getState().pushUndo(`Remove ${chosen.length} Tracks`, async () => {
+      for (const s of saved) {
+        snapQueueRows();
+        await restoreToQueue(s.content, s.position);
+      }
+    });
     useStore.getState().showToast({
       kind: "success",
       text: `Removed ${chosen.length} tracks`,
-      action: {
-        label: "Undo",
-        undo: () => {
-          // sequential, ascending positions — parallel restores raced each
-          // other's inserts and resolves, failing tracks on an immediate
-          // undo; each restore arms the FLIP so neighbors part with motion
-          // and the returning track fades in (user, 2026-08-28)
-          void (async () => {
-            for (const s of saved) {
-              snapQueueRows();
-              await restoreToQueue(s.content, s.position);
-            }
-          })();
-        },
-      },
+      action: { label: "Undo", undo: () => useStore.getState().runUndo(undoId) },
     });
   }, [items, selected]);
   // The selection's keyboard: ⌘A gathers everything visible (respecting a
@@ -633,7 +630,7 @@ export function QueueScreen(): React.JSX.Element {
    *  moves (22 for a 3-track move-to-bottom of 25) and long command runs
    *  scrambled on the real streamer; the mock swallowed them, which is why
    *  the suite stayed green (user, 2026-08-28). */
-  const applyBlockMove = (blockIds: number[], at: number): boolean => {
+  const applyBlockMove = (blockIds: number[], at: number, undoLabel: string): boolean => {
     const byId = new Map(allItems.map((it) => [it.id as number, it]));
     const order = allItems.map((it) => it.id as number);
     const bset = new Set(blockIds);
@@ -666,6 +663,7 @@ export function QueueScreen(): React.JSX.Element {
       for (const m of moves)
         await tt.command({ type: "queueMove", id: m.id, from: m.from, to: m.to });
     })();
+    useStore.getState().pushUndo(undoLabel, () => restoreQueueOrder(order));
     return true;
   };
 
@@ -690,7 +688,7 @@ export function QueueScreen(): React.JSX.Element {
       const rest = items.flatMap((it) => (it.id != null && !bset.has(it.id) ? [it.id] : []));
       const k = rest.indexOf(ins.id);
       if (k < 0) return;
-      applyBlockMove(batch.ids, k + (ins.after ? 1 : 0));
+      applyBlockMove(batch.ids, k + (ins.after ? 1 : 0), `Move ${batch.ids.length} Tracks`);
       return;
     }
     if (!over || active.id === over.id) return;
@@ -699,9 +697,16 @@ export function QueueScreen(): React.JSX.Element {
     if (oldIndex < 0 || newIndex < 0) return;
     const from = items[oldIndex].position ?? oldIndex;
     const to = items[newIndex].position ?? newIndex;
+    const prevOrder = allItems.flatMap((i) => (i.id != null ? [i.id] : []));
     // Optimistic reorder; the streamer re-announces the authoritative queue.
     setQueueItems(arrayMove(items, oldIndex, newIndex));
     void tt.command({ type: "queueMove", id: active.id as number, from, to });
+    const movedTitle = items[oldIndex].metadata?.title;
+    useStore
+      .getState()
+      .pushUndo(movedTitle ? `Move “${movedTitle}”` : "Move Track", () =>
+        restoreQueueOrder(prevOrder),
+      );
   };
 
   // The selection's favorites as ONE verb with the album-header rule: adds
@@ -717,10 +722,25 @@ export function QueueScreen(): React.JSX.Element {
     selFavs.length > 0 &&
     selFavs.every((f) => favorites.some((x) => favoriteKey(x) === favoriteKey(f as Favorite)));
   const heartSelected = (): void => {
-    for (const f of selFavs) {
+    const touched = selFavs.filter((f) => {
       const has = favorites.some((x) => favoriteKey(x) === favoriteKey(f as Favorite));
-      if (selAllHearted ? has : !has) void toggleFavorite(f);
-    }
+      return selAllHearted ? has : !has;
+    });
+    for (const f of touched) void toggleFavorite(f, { silent: true });
+    if (touched.length === 0) return;
+    // One aggregate undo entry for the batch (per-item pushes would flood
+    // the stack with entries no one asked for).
+    const n = touched.length;
+    useStore
+      .getState()
+      .pushUndo(
+        selAllHearted
+          ? `Remove ${n} ${n === 1 ? "Track" : "Tracks"} from Favorites`
+          : `Add ${n} ${n === 1 ? "Track" : "Tracks"} to Favorites`,
+        () => {
+          for (const f of touched) void toggleFavorite(f, { silent: true });
+        },
+      );
   };
 
   /** The bar's block moves — unambiguous even under a filter (the visible
@@ -729,7 +749,14 @@ export function QueueScreen(): React.JSX.Element {
   const moveSelected = (where: "top" | "bottom"): void => {
     const ids = items.flatMap((it) => (it.id != null && selected.has(it.id) ? [it.id] : []));
     if (ids.length === 0) return;
-    if (!applyBlockMove(ids, where === "top" ? 0 : allItems.length - ids.length)) return;
+    if (
+      !applyBlockMove(
+        ids,
+        where === "top" ? 0 : allItems.length - ids.length,
+        `Move ${ids.length} ${ids.length === 1 ? "Track" : "Tracks"} to ${where === "top" ? "Top" : "Bottom"}`,
+      )
+    )
+      return;
     // the landing must be SEEN: follow the block to its end of the list, or
     // "Move to bottom" reads as nothing happening (user, 2026-08-28). An
     // INSTANT jump — a smooth scroll dies with the reorder's re-render —
@@ -1200,24 +1227,23 @@ function QueueAlbumGroups({
     });
     snapQueueRows();
     for (const i of g.items) if (i.id != null) void tt.command({ type: "queueDelete", id: i.id });
+    // One closure, two entry points — sequential, ascending positions, each
+    // restore arming the FLIP (the batch-remove pattern exactly).
+    const undoId = useStore
+      .getState()
+      .pushUndo(
+        g.album != null ? `Remove “${g.album}”` : `Remove ${g.items.length} Tracks`,
+        async () => {
+          for (const s of saved) {
+            snapQueueRows();
+            await restoreToQueue(s.content, s.position);
+          }
+        },
+      );
     useStore.getState().showToast({
       kind: "success",
       text: `Removed “${g.album}” — ${g.items.length} tracks`,
-      action: {
-        label: "Undo",
-        undo: () => {
-          // sequential, ascending positions — parallel restores raced each
-          // other's inserts and resolves, failing tracks on an immediate
-          // undo; each restore arms the FLIP so neighbors part with motion
-          // and the returning track fades in (user, 2026-08-28)
-          void (async () => {
-            for (const s of saved) {
-              snapQueueRows();
-              await restoreToQueue(s.content, s.position);
-            }
-          })();
-        },
-      },
+      action: { label: "Undo", undo: () => useStore.getState().runUndo(undoId) },
     });
   };
   return (
@@ -1389,19 +1415,14 @@ function removeFromQueue(item: QueueListItem): void {
   // No title, no content identity, nothing to find it by later — so no offer.
   // (Same rule as the row's heart: see queueItemFavorite.)
   if (!title) return;
+  const undoId = useStore.getState().pushUndo(`Remove “${title}”`, () => {
+    snapQueueRows();
+    void restoreToQueue({ title, artist: md?.artist ?? null, album: md?.album ?? null }, position);
+  });
   useStore.getState().showToast({
     kind: "success",
     text: `Removed “${title}”`,
-    action: {
-      label: "Undo",
-      undo: () => {
-        snapQueueRows();
-        void restoreToQueue(
-          { title, artist: md?.artist ?? null, album: md?.album ?? null },
-          position,
-        );
-      },
-    },
+    action: { label: "Undo", undo: () => useStore.getState().runUndo(undoId) },
   });
 }
 
@@ -1429,6 +1450,29 @@ async function restoreToQueue(ref: ContentRef, position: number): Promise<void> 
         ? `Couldn't find “${ref.title}” to put back`
         : `Couldn't put “${ref.title}” back`,
   });
+}
+
+/**
+ * The exact inverse of a reorder: put the queue back in `prev` order, by
+ * SEQUENCED moves against the live queue (the multi-select law — parallel
+ * posts split blocks on the device). Best-effort like every inverse here:
+ * ids that left the queue are skipped, ids that arrived keep their spots.
+ */
+async function restoreQueueOrder(prev: number[]): Promise<void> {
+  const snap = await tt.getSnapshot();
+  const liveIds = (snap.queue?.items ?? []).flatMap((i) => (i.id != null ? [i.id] : []));
+  const live = new Set(liveIds);
+  const target = prev.filter((id) => live.has(id));
+  const work = [...liveIds];
+  snapQueueRows();
+  for (let k = 0; k < target.length; k++) {
+    const id = target[k];
+    const from = work.indexOf(id);
+    if (from === k) continue;
+    work.splice(from, 1);
+    work.splice(k, 0, id);
+    await tt.command({ type: "queueMove", id, from, to: k });
+  }
 }
 
 /** Rows an undo just put back: the queue id each landed under → the slot it

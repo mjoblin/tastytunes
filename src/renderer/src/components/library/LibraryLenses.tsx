@@ -57,6 +57,8 @@ export interface LensActions {
   openMenu(node: MediaNode, e: React.MouseEvent): void;
   menuNodeId: string | null;
   heartNode(node: MediaNode): void;
+  /** Batch hearts: silent per-item toggles behind ONE aggregate undo entry. */
+  heartNodes(nodes: MediaNode[], allIn: boolean): void;
   nodeFavorited(node: MediaNode): boolean;
   trackQueued(node: MediaNode): boolean;
   isCurrentTrack(node: MediaNode): boolean;
@@ -1156,11 +1158,7 @@ export function ArtistsLens({
                 return (
                   <SelectionVerb
                     icon={<Heart size={13} fill={allIn ? "currentColor" : "none"} />}
-                    onClick={() => {
-                      for (const n of nodes)
-                        if (allIn ? actions.nodeFavorited(n) : !actions.nodeFavorited(n))
-                          actions.heartNode(n);
-                    }}
+                    onClick={() => actions.heartNodes(nodes, allIn)}
                   >
                     {allIn ? "Remove from favorites" : "Add to favorites"}
                   </SelectionVerb>
@@ -1258,11 +1256,7 @@ export function ArtistsLens({
               const allIn = nodes.length > 0 && nodes.every(actions.nodeFavorited);
               return {
                 label: allIn ? "Remove from favorites" : "Add to favorites",
-                run: () => {
-                  for (const n of nodes)
-                    if (allIn ? actions.nodeFavorited(n) : !actions.nodeFavorited(n))
-                      actions.heartNode(n);
-                },
+                run: () => actions.heartNodes(nodes, allIn),
               };
             })(),
           ]}
