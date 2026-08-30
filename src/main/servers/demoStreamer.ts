@@ -1559,7 +1559,8 @@ function buildDemo(host: string): {
         DATA["/zone/state"] = { ...DATA["/zone/state"], source: "IR" };
         DATA["/zone/play_state"] = {
           state: "play",
-          position: 0,
+          // No position: the real device reports none during radio
+          // (live-probed 2026-08-30) — the app derives elapsed itself.
           presettable: true,
           queue_index: null,
           queue_length: null,
