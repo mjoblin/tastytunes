@@ -32,6 +32,7 @@ export function PlaybackBar(): React.JSX.Element {
   const t = useTransport(duration);
   const { shownPosition, slider } = useSeekScrub(position, duration, t.seek);
   const seekWaveform = useSeekWaveform();
+  const seekWaveformOn = useStore((s) => s.settings.waveforms && s.settings.waveformSeekBar);
   const [showRemaining, setShowRemaining] = useState(false);
 
   const waking = useStore((s) => s.waking);
@@ -50,11 +51,15 @@ export function PlaybackBar(): React.JSX.Element {
         // of truncating at a fixed 280px (user, 2026-08-17). Minimums keep
         // the volume slider unsqueezed at the 800px window minimum:
         // 160 + 320 + 215 + gaps 48 + padding 32 = 775.
-        // The bar breathes taller when the seek is a waveform (its track is
-        // 32px against the plain 16px) so the transport keeps its air instead
-        // of crowding the top edge — animated, since the swap happens live
-        // when tracks change coverage (user, 2026-08-30).
-        seekWaveform ? "h-[108px]" : "h-[92px]",
+        // CONSTANT GEOMETRY, keyed on the SETTING, not the track's luck: with
+        // the waveform seek enabled the bar holds 108px and the seek's
+        // centerline holds its place whether or not the playing track has a
+        // waveform (radio, AirPlay, USB and unanalyzed tracks don't) — the
+        // wave fills the reserved room, the plain line rests on the same
+        // center. The height animates only at the one legitimate moment: the
+        // toggle itself (user call, 2026-08-30 — the gate cards' doctrine,
+        // one level down).
+        seekWaveformOn ? "h-[108px]" : "h-[92px]",
         "shrink-0 border-t border-edge grid grid-cols-[minmax(160px,1fr)_minmax(320px,520px)_minmax(215px,1fr)] items-center gap-6 px-4 transition-[height,background-color] duration-300",
         ambientWindow ? "bg-transparent" : "bg-panel/80 backdrop-blur",
       )}
@@ -153,6 +158,7 @@ export function PlaybackBar(): React.JSX.Element {
               ariaLabel="Playhead"
               scrubLabel={duration ? (v) => fmtTime(v * duration) : undefined}
               track={active && t.canSeek ? (seekWaveform ?? undefined) : undefined}
+              tall={seekWaveformOn}
               {...slider}
             />
           </div>

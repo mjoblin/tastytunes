@@ -26,6 +26,10 @@ interface SliderProps {
    * home; the renderer receives the shown 0..1 value and draws.
    */
   track?(shown: number): React.JSX.Element;
+  /** Reserve the tall (waveform) height even without a track renderer, so
+   *  the centerline never moves as coverage comes and goes — the plain line
+   *  simply rests on the same center. */
+  tall?: boolean;
 }
 
 /** A pointer-driven slider styled as a thin faceplate track with an amber fill. */
@@ -39,6 +43,7 @@ export function Slider({
   thumb = "hover",
   scrubLabel,
   track,
+  tall,
 }: SliderProps): React.JSX.Element {
   const trackRef = useRef<HTMLDivElement>(null);
   const [dragValue, setDragValue] = useState<number | null>(null);
@@ -127,7 +132,7 @@ export function Slider({
       aria-valuenow={Math.round(shown * 100)}
       className={cx(
         "group relative flex items-center no-drag",
-        track ? "h-8" : "h-4",
+        track || tall ? "h-8" : "h-4",
         disabled ? "opacity-35 pointer-events-none" : "cursor-pointer",
       )}
       onPointerDown={(e) => {
