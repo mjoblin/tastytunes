@@ -350,6 +350,10 @@ export interface ListeningRecordStats {
   /** The last append failure (disk full, permissions), or null while writes
    *  are healthy. */
   writeError: string | null;
+  /** The open play being timed right now (its title, or the station), or
+   *  null while nothing plays. Not yet on disk: it is written when the play
+   *  closes. */
+  pending: string | null;
 }
 
 /**

@@ -130,7 +130,11 @@ function closeCurrent(): void {
     p.playingSince = null;
   }
   const played = Math.round(p.playedMs / 1000);
-  if (played < LISTEN_FLOOR_SECS) return;
+  if (played < LISTEN_FLOOR_SECS) {
+    // Nothing written, but the pending play is gone — the row must hear.
+    notify?.();
+    return;
+  }
   append({
     v: 1,
     at: p.startedAt,
@@ -224,6 +228,8 @@ export const listeningRecord = {
         payload,
       };
       if (!isRadio) lastRadioTrackKey = null;
+      // A new open play: push so the truth row can name what it is timing.
+      notify?.();
     }
 
     // Announced radio tracks are sightings, appended as the title changes —
@@ -315,7 +321,12 @@ export const listeningRecord = {
       unreadableLines += unreadable;
       for (const e of list) if (since == null || e.at < since) since = e.at;
     }
-    return { events, bytes, since, unreadableLines, writeError };
+    const pending = current
+      ? ((current.payload.title as string | null | undefined) ??
+        (current.payload.station as string | null | undefined) ??
+        null)
+      : null;
+    return { events, bytes, since, unreadableLines, writeError, pending };
   },
 
   /** Delete the record (the UI confirms first — this cannot be undone). */

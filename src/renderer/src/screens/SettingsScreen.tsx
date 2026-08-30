@@ -1240,7 +1240,7 @@ function HistorySection({
       <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
         <Toggle
           label="Listening record"
-          hint={`Keeps a local log of what plays and for how long (local media, radio, AirPlay and other sources) in plain files. A play is recorded when its track changes or stops, once it has ${LISTEN_FLOOR_SECS} seconds of real play time. The record stays on this computer.`}
+          hint={`Keeps a local log of what plays and for how long (local media, radio, AirPlay and other sources) in plain files. A play is recorded when its track changes or stops, if it played for at least ${LISTEN_FLOOR_SECS} seconds by then. The record stays on this computer.`}
           checked={settings.listeningRecord}
           onChange={(listeningRecord) => void save({ listeningRecord })}
         />
@@ -1286,6 +1286,12 @@ function HistorySection({
             </button>
           </div>
         </SettingRow>
+
+        {stats?.pending != null && (
+          <div className="text-[11.5px] text-faint">
+            &ldquo;{stats.pending}&rdquo; will be added when the track changes or stops.
+          </div>
+        )}
 
         {stats != null && stats.unreadableLines > 0 && (
           <div className="rounded-lg bg-bg ring-1 ring-edge px-3 py-2.5 text-[12px] text-dim">
