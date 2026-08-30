@@ -202,7 +202,7 @@ function DisplayLyric(): React.JSX.Element | null {
   if (!synced) return null;
   const placeholder = shown === "♪";
   return (
-    <div className="absolute inset-x-0 bottom-10 px-16 text-center pointer-events-none">
+    <div className="absolute inset-x-0 bottom-16 px-16 text-center pointer-events-none">
       <div
         className={cx(
           "font-display text-[clamp(17px,2.8vmin,30px)] leading-snug line-clamp-2 text-balance transition-opacity duration-200",

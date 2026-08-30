@@ -32,6 +32,20 @@ interface Analysis {
 
 const cache = new Map<string, Promise<Analysis | null>>();
 
+/**
+ * Optimistic seek hold, shared by every waveform surface: between a click
+ * and the device's playhead catching up, the streamer's position pushes
+ * pass through transient values (a beat of zero included) — without the
+ * hold, the played region snapped to nothing and popped back at the target
+ * (seen live, 2026-08-30). The hold releases when the device lands near
+ * the target, or after its window — the optimistic-hold family's shape.
+ */
+let seekHold: { pct: number; until: number } | null = null;
+const SEEK_HOLD_MS = 2500;
+function holdSeek(pct: number): void {
+  seekHold = { pct, until: Date.now() + SEEK_HOLD_MS };
+}
+
 function analyze(serverUdn: string, objectId: string): Promise<Analysis | null> {
   const key = `${serverUdn}|${objectId}`;
   const hit = cache.get(key);
@@ -147,7 +161,12 @@ function useProgress(): number | null {
   }, []);
   if (playhead == null || duration == null || duration <= 0) return null;
   const secs = playhead.secs + (playing ? (now - playhead.at) / 1000 : 0);
-  return Math.max(0, Math.min(1, secs / duration));
+  const device = Math.max(0, Math.min(1, secs / duration));
+  if (seekHold) {
+    if (now > seekHold.until || Math.abs(device - seekHold.pct) < 0.02) seekHold = null;
+    else return seekHold.pct;
+  }
+  return device;
 }
 
 function draw(
@@ -228,6 +247,7 @@ export function Waveform({
               if (duration == null || duration <= 0) return;
               const r = e.currentTarget.getBoundingClientRect();
               const pct = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+              holdSeek(pct);
               void tt.command({ type: "seek", positionSecs: Math.round(pct * duration) });
             }}
           />
@@ -256,16 +276,46 @@ export function DisplayWaveform({
   const ref = usePlayingFileRef();
   const analysis = usePeaks(ref?.serverUdn ?? null, ref?.objectId ?? null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const ready = analysis != null && analysis !== "loading";
 
   useEffect(() => {
-    if (canvasRef.current && analysis && analysis !== "loading")
-      draw(canvasRef.current, analysis, progress, true);
-  }, [analysis, progress]);
+    if (canvasRef.current && ready) draw(canvasRef.current, analysis, progress, true);
+  }, [analysis, ready, progress]);
 
-  if (!analysis || analysis === "loading") return fallback;
+  // CONSTANT GEOMETRY: the strip's 40px band exists from first paint, with
+  // the plain bar rendering at its foot until (unless) peaks arrive — the
+  // waveform fades into reserved space instead of landing under the lyric
+  // line mid-track (seen live, 2026-08-30).
   return (
-    <div className="absolute inset-x-0 bottom-0 h-10 px-3">
-      <canvas ref={canvasRef} className="w-full h-full block" />
+    <div className="absolute inset-x-0 bottom-0 h-10">
+      {ready ? (
+        <div className="h-full px-3">
+          <canvas ref={canvasRef} className="w-full h-full block" />
+        </div>
+      ) : (
+        fallback
+      )}
+    </div>
+  );
+}
+
+/** Under the album art on Now Playing: the waveform as pure form — playhead,
+ *  no controls, absent (zero height) when the track has no peaks. */
+export function NowPlayingWaveform(): React.JSX.Element | null {
+  const ref = usePlayingFileRef();
+  const analysis = usePeaks(ref?.serverUdn ?? null, ref?.objectId ?? null);
+  const progress = useProgress();
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const ready = analysis != null && analysis !== "loading";
+
+  useEffect(() => {
+    if (canvasRef.current && ready) draw(canvasRef.current, analysis, progress, false);
+  }, [analysis, ready, progress]);
+
+  if (!ready) return null;
+  return (
+    <div data-np-waveform className="pt-4">
+      <canvas ref={canvasRef} className="w-full h-8 block" />
     </div>
   );
 }
