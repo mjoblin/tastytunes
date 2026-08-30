@@ -14,6 +14,7 @@ import { tt } from "@/api";
 import { useStore } from "@/store";
 import { usePlayhead } from "@/hooks/usePlayhead";
 import { useSeekScrub } from "@/hooks/useSeekScrub";
+import { useSeekWaveform } from "@/components/media/Waveform";
 import { cx, deriveNowPlaying, fmtTime } from "@/lib/format";
 import { Slider } from "../controls/Slider";
 import { ArtImage } from "../media/ArtImage";
@@ -30,6 +31,7 @@ export function PlaybackBar(): React.JSX.Element {
   const { position, duration } = usePlayhead();
   const t = useTransport(duration);
   const { shownPosition, slider } = useSeekScrub(position, duration, t.seek);
+  const seekWaveform = useSeekWaveform();
   const [showRemaining, setShowRemaining] = useState(false);
 
   const waking = useStore((s) => s.waking);
@@ -145,6 +147,7 @@ export function PlaybackBar(): React.JSX.Element {
               disabled={!active || !t.canSeek}
               ariaLabel="Playhead"
               scrubLabel={duration ? (v) => fmtTime(v * duration) : undefined}
+              track={active && t.canSeek ? (seekWaveform ?? undefined) : undefined}
               {...slider}
             />
           </div>

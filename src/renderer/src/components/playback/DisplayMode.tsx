@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Captions, Disc3, RadioTower, X } from "lucide-react";
+import { Captions, Disc3, RadioTower, X, AudioLines } from "lucide-react";
 import { useStore } from "@/store";
 import { CrossfadeArt } from "@/components/media/CrossfadeArt";
 import { usePlayhead } from "@/hooks/usePlayhead";
@@ -98,6 +98,22 @@ export function DisplayMode(): React.JSX.Element {
 
       {/* top-RIGHT: the top-left corner belongs to macOS's (hidden but still
           click-swallowing) traffic-light zone in frameless windows */}
+      {/* EXPERIMENT: display mode's own waveform toggle — an in-mode button
+          like the lyrics one, never a Settings row (the face composes
+          itself). Hidden entirely when the master toggle is off. */}
+      {settings.waveforms && (
+        <button
+          onClick={() => void saveSettings({ displayWaveform: !settings.displayWaveform })}
+          title={settings.displayWaveform ? "Hide waveform" : "Show waveform"}
+          className={cx(
+            "absolute top-4 right-28 z-20 p-2 rounded-full hover:bg-veil2 transition-opacity",
+            settings.displayWaveform ? "text-gold" : "text-dim hover:text-ink",
+            cursorIdle ? "opacity-0" : "opacity-100",
+          )}
+        >
+          <AudioLines size={18} />
+        </button>
+      )}
       {lyricsToggleable && (
         <button
           onClick={() => void toggleLyrics()}

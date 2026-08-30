@@ -936,6 +936,16 @@ export interface AppSettings {
   /** Check GitHub releases for a newer version on launch and every few hours. */
   updateCheck: boolean;
   /** Lyrics panel on Now Playing — fetches from LRCLIB on demand when opened. */
+  /**
+   * Waveforms drawn from each track's audio file, read from the local media
+   * server (EXPERIMENT, 0.7 exploration). The master is the fetch off-switch;
+   * the seek-bar sub-toggle exists because restyling permanent chrome is a
+   * different question from wanting waveform information (the tray-icon
+   * precedent); displayWaveform is display mode's own in-mode button.
+   */
+  waveforms: boolean;
+  waveformSeekBar: boolean;
+  displayWaveform: boolean;
   lyrics: boolean;
   /** Inline flavor: current synced line under the Now Playing track details. */
   lyricsLine: boolean;
@@ -1094,6 +1104,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   recentsGrouped: true,
   motion: "system",
   updateCheck: true,
+  waveforms: true,
+  waveformSeekBar: true,
+  displayWaveform: true,
   lyrics: true,
   lyricsLine: true,
   displayLyrics: true,

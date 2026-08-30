@@ -455,6 +455,21 @@ export function SettingsScreen(): React.JSX.Element {
                   />
 
                   <Toggle
+                    label="Waveforms"
+                    hint="Draws each track's waveform from its audio file, read from your local media server, on the Now Playing screen and in the Info/Context panel. Off means no files are read."
+                    checked={settings.waveforms}
+                    onChange={(waveforms) => void save({ waveforms })}
+                  />
+
+                  <Toggle
+                    label="Waveform as the seek bar"
+                    hint="Draws the playing track's waveform as the seek bar. The plain bar returns for radio and tracks without a waveform."
+                    disabled={!settings.waveforms}
+                    checked={settings.waveformSeekBar}
+                    onChange={(waveformSeekBar) => void save({ waveformSeekBar })}
+                  />
+
+                  <Toggle
                     label="Artist, album & track context"
                     hint="Adds Artist, Album and Track tabs to the context panel on Now Playing: Wikipedia summaries, release details and track credits matched via MusicBrainz, fetched when you open them. Sends the current artist, album and track names; off means no requests will be sent. The panel's Stream tab stays either way."
                     checked={settings.artistInfo}

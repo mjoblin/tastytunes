@@ -20,6 +20,12 @@ interface SliderProps {
    * the readout off at the end of the bar. Omitted, the slider is unchanged.
    */
   scrubLabel?(value: number): string;
+  /**
+   * Replace the VISUAL track only (EXPERIMENT: the seek bar's waveform). All
+   * interaction machinery — drag, scrub, capture, escape — stays here, one
+   * home; the renderer receives the shown 0..1 value and draws.
+   */
+  track?(shown: number): React.JSX.Element;
 }
 
 /** A pointer-driven slider styled as a thin faceplate track with an amber fill. */
@@ -32,6 +38,7 @@ export function Slider({
   ariaLabel,
   thumb = "hover",
   scrubLabel,
+  track,
 }: SliderProps): React.JSX.Element {
   const trackRef = useRef<HTMLDivElement>(null);
   const [dragValue, setDragValue] = useState<number | null>(null);
@@ -119,7 +126,8 @@ export function Slider({
       aria-valuemax={100}
       aria-valuenow={Math.round(shown * 100)}
       className={cx(
-        "group relative h-4 flex items-center no-drag",
+        "group relative flex items-center no-drag",
+        track ? "h-8" : "h-4",
         disabled ? "opacity-35 pointer-events-none" : "cursor-pointer",
       )}
       onPointerDown={(e) => {
@@ -182,11 +190,20 @@ export function Slider({
         onCancel?.();
       }}
     >
-      <div className="relative h-[3px] w-full rounded-full bg-veil2 overflow-visible">
-        <div
-          className="absolute inset-y-0 left-0 rounded-full bg-gold"
-          style={{ width: `${shown * 100}%` }}
-        />
+      <div
+        className={cx(
+          "relative w-full overflow-visible",
+          track ? "h-8" : "h-[3px] rounded-full bg-veil2",
+        )}
+      >
+        {track ? (
+          track(shown)
+        ) : (
+          <div
+            className="absolute inset-y-0 left-0 rounded-full bg-gold"
+            style={{ width: `${shown * 100}%` }}
+          />
+        )}
         <div
           className={cx(
             "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 h-3 w-3 rounded-full bg-gold",

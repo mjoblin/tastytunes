@@ -221,7 +221,8 @@ export function Waveform({
   objectId: string;
 }): React.JSX.Element | null {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const analysis = usePeaks(serverUdn, objectId);
+  const enabled = useStore((s) => s.settings.waveforms);
+  const analysis = usePeaks(enabled ? serverUdn : null, enabled ? objectId : null);
   const progress = useProgress();
   const duration = useStore((s) => s.playState?.metadata?.duration ?? null);
 
@@ -273,8 +274,9 @@ export function DisplayWaveform({
   progress: number;
   fallback: React.JSX.Element;
 }): React.JSX.Element {
+  const enabled = useStore((s) => s.settings.waveforms && s.settings.displayWaveform);
   const ref = usePlayingFileRef();
-  const analysis = usePeaks(ref?.serverUdn ?? null, ref?.objectId ?? null);
+  const analysis = usePeaks(enabled ? (ref?.serverUdn ?? null) : null, ref?.objectId ?? null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const ready = analysis != null && analysis !== "loading";
 
@@ -302,8 +304,9 @@ export function DisplayWaveform({
 /** Under the album art on Now Playing: the waveform as pure form — playhead,
  *  no controls, absent (zero height) when the track has no peaks. */
 export function NowPlayingWaveform(): React.JSX.Element | null {
+  const enabled = useStore((s) => s.settings.waveforms);
   const ref = usePlayingFileRef();
-  const analysis = usePeaks(ref?.serverUdn ?? null, ref?.objectId ?? null);
+  const analysis = usePeaks(enabled ? (ref?.serverUdn ?? null) : null, ref?.objectId ?? null);
   const progress = useProgress();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const ready = analysis != null && analysis !== "loading";
@@ -322,4 +325,26 @@ export function NowPlayingWaveform(): React.JSX.Element | null {
       </div>
     </div>
   );
+}
+
+/** The seek bar's waveform track — the marquee consumer, previewed. Returns
+ *  a track renderer for the Slider when both toggles allow and the playing
+ *  track has peaks; null falls the bar back to its plain line. */
+export function useSeekWaveform(): ((shown: number) => React.JSX.Element) | null {
+  const enabled = useStore((s) => s.settings.waveforms && s.settings.waveformSeekBar);
+  const ref = usePlayingFileRef();
+  const analysis = usePeaks(enabled ? (ref?.serverUdn ?? null) : null, ref?.objectId ?? null);
+  if (!enabled || analysis == null || analysis === "loading") return null;
+  const track = (shown: number): React.JSX.Element => (
+    <SeekTrack analysis={analysis} shown={shown} />
+  );
+  return track;
+}
+
+function SeekTrack({ analysis, shown }: { analysis: Analysis; shown: number }): React.JSX.Element {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  useEffect(() => {
+    if (canvasRef.current) draw(canvasRef.current, analysis, shown, true);
+  }, [analysis, shown]);
+  return <canvas ref={canvasRef} className="w-full h-8 block" data-seek-waveform />;
 }
