@@ -60,6 +60,21 @@ let current: OpenPlay | null = null;
 /** Called after every append (and failed append) so the Settings truth row
  *  can stay live — main wires this to the renderer push. */
 let notify: (() => void) | null = null;
+/** Fires when the open play crosses the floor: the truth row's promise
+ *  changes shape at that moment (conditional to unconditional). */
+let floorTimer: NodeJS.Timeout | null = null;
+
+function armFloorTimer(): void {
+  if (floorTimer) clearTimeout(floorTimer);
+  floorTimer = null;
+  if (!current || current.playingSince == null) return;
+  const remainingMs = LISTEN_FLOOR_SECS * 1000 - current.playedMs;
+  if (remainingMs <= 0) return;
+  floorTimer = setTimeout(() => {
+    floorTimer = null;
+    notify?.();
+  }, remainingMs + 250);
+}
 /** Consecutive-dedupe key for announced radio tracks (station:title). */
 let lastRadioTrackKey: string | null = null;
 let writeError: string | null = null;
@@ -149,6 +164,10 @@ function pauseCurrent(): void {
   if (current?.playingSince != null) {
     current.playedMs += Date.now() - current.playingSince;
     current.playingSince = null;
+  }
+  if (floorTimer) {
+    clearTimeout(floorTimer);
+    floorTimer = null;
   }
 }
 
@@ -254,7 +273,10 @@ export const listeningRecord = {
     // The scrobbler's accumulation rule exactly: wallclock only while the
     // state is 'play' — buffering, pause and stop all freeze the clock.
     if (ps.state === "play") {
-      if (current.playingSince == null) current.playingSince = Date.now();
+      if (current.playingSince == null) {
+        current.playingSince = Date.now();
+        armFloorTimer();
+      }
     } else {
       pauseCurrent();
     }
@@ -326,7 +348,20 @@ export const listeningRecord = {
         (current.payload.station as string | null | undefined) ??
         null)
       : null;
-    return { events, bytes, since, unreadableLines, writeError, pending };
+    const pendingSecs = current
+      ? (current.playedMs +
+          (current.playingSince != null ? Date.now() - current.playingSince : 0)) /
+        1000
+      : 0;
+    return {
+      events,
+      bytes,
+      since,
+      unreadableLines,
+      writeError,
+      pending,
+      pendingEligible: pendingSecs >= LISTEN_FLOOR_SECS,
+    };
   },
 
   /** Delete the record (the UI confirms first — this cannot be undone). */

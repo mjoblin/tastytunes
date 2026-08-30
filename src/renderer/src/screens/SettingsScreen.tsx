@@ -1289,7 +1289,14 @@ function HistorySection({
 
         {stats?.pending != null && (
           <div className="text-[11.5px] text-faint">
-            &ldquo;{stats.pending}&rdquo; will be added when the track changes or stops.
+            {stats.pendingEligible ? (
+              <>&ldquo;{stats.pending}&rdquo; will be added when it changes or stops.</>
+            ) : (
+              <>
+                &ldquo;{stats.pending}&rdquo; will be added if it plays for at least{" "}
+                {LISTEN_FLOOR_SECS} seconds.
+              </>
+            )}
           </div>
         )}
 

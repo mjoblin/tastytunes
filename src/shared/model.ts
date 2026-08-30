@@ -354,6 +354,9 @@ export interface ListeningRecordStats {
    *  null while nothing plays. Not yet on disk: it is written when the play
    *  closes. */
   pending: string | null;
+  /** True once the open play has crossed the floor, so closing it WILL
+   *  write an event; false while a change would still discard it. */
+  pendingEligible: boolean;
 }
 
 /**
