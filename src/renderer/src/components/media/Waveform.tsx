@@ -316,6 +316,10 @@ export function NowPlayingWaveform(): React.JSX.Element | null {
   return (
     <div data-np-waveform className="pt-5">
       <canvas ref={canvasRef} className="w-full h-16 block" />
+      <div className="mt-2 text-center font-mono text-[10.5px] text-faint">
+        peak {fmtDb(analysis.peakDb)} · rms {fmtDb(analysis.rmsDb)} · crest{" "}
+        {fmtDb(analysis.crestDb)}
+      </div>
     </div>
   );
 }
