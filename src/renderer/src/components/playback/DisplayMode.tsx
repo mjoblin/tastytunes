@@ -7,6 +7,7 @@ import { useArtLoadable } from "@/hooks/useArtLoadable";
 import { useFadedText, useLyrics } from "@/hooks/useLyrics";
 import { useSettledSnapshot } from "@/hooks/useSettledSnapshot";
 import { cx, deriveNowPlaying } from "@/lib/format";
+import { DisplayWaveform } from "@/components/media/Waveform";
 
 /**
  * Full-screen "display mode" (Roon display mode / Volumio now-playing kiosk):
@@ -169,12 +170,20 @@ export function DisplayMode(): React.JSX.Element {
       </div>
 
       {duration != null && duration > 0 && (
-        <div className="absolute inset-x-0 bottom-0 h-[3px] bg-veil2">
-          <div
-            className="h-full bg-amber transition-[width] duration-300 ease-linear"
-            style={{ width: `${Math.min(100, (position / duration) * 100)}%` }}
-          />
-        </div>
+        /* EXPERIMENT (0.7 exploration): the waveform stands in for the
+           progress strip when the playing track's peaks exist; the plain
+           bar is the fallback for radio, casts and unanalyzed tracks. */
+        <DisplayWaveform
+          progress={Math.min(1, position / duration)}
+          fallback={
+            <div className="absolute inset-x-0 bottom-0 h-[3px] bg-veil2">
+              <div
+                className="h-full bg-amber transition-[width] duration-300 ease-linear"
+                style={{ width: `${Math.min(100, (position / duration) * 100)}%` }}
+              />
+            </div>
+          }
+        />
       )}
     </div>
   );
