@@ -75,6 +75,8 @@ export function Nav(): React.JSX.Element {
   // ORDER FIRST, then hide. A hidden screen keeps its slot in navOrder, so
   // unhiding puts it back where it was rather than at the bottom.
   const visibleScreens = orderedNavScreens(settings.navOrder).filter((s) => !hiddenSet.has(s.id));
+  const navDropTarget = useStore((s) => s.navDropTarget);
+  const navDragActive = useStore((s) => s.navDragActive);
 
   const hiddenTools = sanitizeNavHiddenTools(settings.navHiddenTools);
   const hiddenToolSet = new Set(hiddenTools);
@@ -101,6 +103,7 @@ export function Nav(): React.JSX.Element {
   const navItem = ({ id, label, icon: Icon, key }: ScreenDef): React.JSX.Element => (
     <button
       key={id}
+      data-nav-screen={id}
       onClick={() => setScreen(id)}
       // Right-click → "Hide from sidebar" (the fast path). Not for the
       // unhideable screens (now-playing): no menu at all there.
@@ -118,6 +121,11 @@ export function Nav(): React.JSX.Element {
         "w-full flex items-center rounded-lg h-9 text-[13.5px] transition-colors",
         collapsed ? "justify-center px-0" : "gap-3 px-3",
         screen === id ? "bg-amberdim text-amber" : "text-dim hover:text-ink hover:bg-veil",
+        // While a rail-capable drag is live, hover must not suggest
+        // droppability — only a real target lights, via the class below.
+        navDragActive && "pointer-events-none",
+        // a live drag hovering this row: the drop glow (drag-to-rail)
+        navDropTarget === id && "ring-1 ring-gold/60 bg-golddim text-gold",
       )}
     >
       <Icon size={16} strokeWidth={1.8} className="shrink-0" />

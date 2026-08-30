@@ -66,6 +66,8 @@ import { AlbumsLens, ArtistsLens, type LensActions } from "@/components/library/
 import { AddToPlaylistPanel, itemFromNode } from "@/components/overlays/AddToPlaylistPanel";
 import { ItemMenu, PresetPicker } from "@/components/library/LibraryMenus";
 import { RowMenu } from "@/components/media/RowMenu";
+import { useNavDrag } from "@/hooks/useNavDrag";
+import { flashNavTarget } from "@/lib/navDrop";
 import { SelectionBar, SelectionVerb } from "@/components/controls/SelectionBar";
 import type { MediaMenuItem } from "@/lib/mediaMenus";
 import { EmptyState } from "@/components/chrome/EmptyState";
@@ -273,6 +275,9 @@ export function LibraryScreen(): React.JSX.Element {
     /** The invoking surface's selection-clear, run only when a target was
      *  picked (cancel keeps the selection — the bar rule). */
     clear?(): void;
+    /** An unselected row dragged alone: its drop must not clear a selection
+     *  it never carried (the Finder rule). */
+    keepSelection?: boolean;
   } | null>(null);
   const loadedKey = useRef<string | null>(null);
   const pendingScroll = useRef<number | null>(null);
@@ -1138,6 +1143,13 @@ export function LibraryScreen(): React.JSX.Element {
     mode: "now" | "next" | "append",
   ): Promise<boolean> => {
     if (chosen.length === 0) return false;
+    // The undo identity: device-assigned queue ids snapshotted before the
+    // writes — after the re-announce, the added entries are exactly the ids
+    // that were not there. (Play now is deliberately not undoable: its
+    // inverse is not a removal, it would yank the playing track.)
+    const beforeIds = new Set(
+      ((await tt.getSnapshot()).queue?.items ?? []).flatMap((i) => (i.id != null ? [i.id] : [])),
+    );
     try {
       if (mode === "now") {
         await tt.mediaQueueAdd(nodeUdn(chosen[0]) ?? "", chosen[0].id, "PLAY_NOW");
@@ -1149,16 +1161,86 @@ export function LibraryScreen(): React.JSX.Element {
       } else {
         for (const n of chosen) await tt.mediaQueueAdd(nodeUdn(n) ?? "", n.id, "APPEND");
       }
-      if (mode !== "now")
+      if (mode !== "now") {
         showToast({ kind: "success", text: `Added ${chosen.length} tracks to the queue` });
+        void armQueueAddUndo(beforeIds, chosen.length, mode);
+      }
       return true;
     } catch {
       showNotice("Couldn't reach the streamer — nothing was queued.");
       return false;
     }
   };
+  /** Wait for the re-announce, identify the landed entries by id, and arm
+   *  the undo. Skipped honestly when the count is ambiguous (another
+   *  controller added in the same window). */
+  const armQueueAddUndo = async (
+    beforeIds: ReadonlySet<number>,
+    count: number,
+    mode: "next" | "append",
+  ): Promise<void> => {
+    for (let i = 0; i < 10; i++) {
+      await new Promise((r) => setTimeout(r, 500));
+      const items = (await tt.getSnapshot()).queue?.items ?? [];
+      const added = items.flatMap((it) => (it.id != null && !beforeIds.has(it.id) ? [it.id] : []));
+      if (added.length < count) continue;
+      if (added.length > count) return;
+      useStore
+        .getState()
+        .pushUndo(
+          mode === "append"
+            ? `Add ${count} ${count === 1 ? "Track" : "Tracks"} to Queue`
+            : `Play ${count} ${count === 1 ? "Track" : "Tracks"} Next`,
+          async () => {
+            for (const id of added) await tt.command({ type: "queueDelete", id });
+          },
+        );
+      return;
+    }
+  };
+
   const queueSelected = async (mode: "now" | "next" | "append"): Promise<void> => {
     if (await queueNodes(selectedNodes(), mode)) setSelTracks(new Set());
+  };
+
+  // Drag-to-rail: ANY track row drags onto Queue, Playlists or Favorites in
+  // the nav — the Finder rule decides the payload: a selected row carries
+  // the whole selection, an unselected row carries itself alone and leaves
+  // the selection untouched. Queue appends (the bar verb's semantics),
+  // Favorites ADDS what's missing (a drop is additive intent), Playlists
+  // opens the batch panel at the release point.
+  const dragCargo = useRef<{ nodes: MediaNode[]; fromSelection: boolean }>({
+    nodes: [],
+    fromSelection: false,
+  });
+  const navDrag = useNavDrag({
+    targets: ["queue", "playlists", "favorites"],
+    payload: () => {
+      const { nodes } = dragCargo.current;
+      if (nodes.length === 0) return null;
+      return { count: nodes.length, title: nodes[0].title };
+    },
+    onDrop: (target, at) => {
+      const { nodes, fromSelection } = dragCargo.current;
+      if (target === "queue") {
+        void queueNodes(nodes, "append").then((ok) => {
+          if (ok) {
+            if (fromSelection) setSelTracks(new Set());
+            flashNavTarget("queue");
+          }
+        });
+      } else if (target === "favorites") {
+        heartNodes(nodes, false);
+        flashNavTarget("favorites");
+      } else if (target === "playlists") {
+        setPlaylistMulti({ nodes, x: at.x, y: at.y, keepSelection: !fromSelection });
+      }
+    },
+  });
+  const startTrackDrag = (node: MediaNode, e: React.PointerEvent): void => {
+    const fromSelection = selTracks.has(node.id);
+    dragCargo.current = { nodes: fromSelection ? selectedNodes() : [node], fromSelection };
+    navDrag.start(e);
   };
 
   /** "Play" on a container: replace the queue with it and start at its first track. */
@@ -2497,6 +2579,7 @@ export function LibraryScreen(): React.JSX.Element {
                       selStart={!(ti > 0 && selTracks.has(g.tracks[ti - 1].id))}
                       selEnd={!(ti < g.tracks.length - 1 && selTracks.has(g.tracks[ti + 1].id))}
                       onRowClick={(e) => trackRowClick(node, e)}
+                      onNavDrag={(e) => startTrackDrag(node, e)}
                       onMenu={(e) => openMenu(node, e)}
                       note={albumNoteFor(node)}
                       artistLabel={
@@ -2581,6 +2664,7 @@ export function LibraryScreen(): React.JSX.Element {
                           selStart={!(ti > 0 && selTracks.has(g.tracks[ti - 1].id))}
                           selEnd={!(ti < g.tracks.length - 1 && selTracks.has(g.tracks[ti + 1].id))}
                           onRowClick={(e) => trackRowClick(node, e)}
+                          onNavDrag={(e) => startTrackDrag(node, e)}
                           onMenu={(e) => openMenu(node, e)}
                           onAlbumLink={
                             node.album && linkable(node, "albums")
@@ -2715,6 +2799,7 @@ export function LibraryScreen(): React.JSX.Element {
           }
         />
       )}
+      {navDrag.ghost}
       {playlistMulti && (
         <AddToPlaylistPanel
           label={`${playlistMulti.nodes.length} tracks`}
@@ -2726,7 +2811,7 @@ export function LibraryScreen(): React.JSX.Element {
               const name = servers?.find((s) => s.udn === udn)?.name ?? null;
               return itemFromNode(node, udn, name);
             });
-            setSelTracks(new Set());
+            if (!playlistMulti.keepSelection) setSelTracks(new Set());
             playlistMulti.clear?.();
             return Promise.resolve(items);
           }}

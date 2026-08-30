@@ -261,6 +261,12 @@ interface TTState {
    *  Entries are exact-inverse closures; the toast Undo buttons and Cmd-Z
    *  consume the SAME entries, so they can never double-restore. */
   undoStack: Array<{ id: number; label: string; run(): void | Promise<void> }>;
+  /** The nav-rail row a live drag is hovering (drag-to-rail) — the Nav
+   *  reads it for the drop highlight; null outside a drag. */
+  navDropTarget: Screen | null;
+  /** True while any drag that could reach the rail is in flight — the Nav
+   *  suppresses its hover treatments so only real targets ever light. */
+  navDragActive: boolean;
   /** The listening record's truth row, pushed after every append. Null until
    *  the History tab's first fetch or the first push. */
   listeningStats: ListeningRecordStats | null;
@@ -332,6 +338,8 @@ interface TTState {
   /** Run and consume one undo entry — the top for Cmd-Z, a specific id for
    *  a toast button. False when there is nothing (left) to undo. */
   runUndo: (id?: number) => boolean;
+  setNavDropTarget: (target: Screen | null) => void;
+  setNavDragActive: (active: boolean) => void;
   dismissToast: () => void;
   /** In-app recall memory (see Snapshot.lastRecalledPresetId). */
   lastRecalledPresetId: number | null;
@@ -466,6 +474,8 @@ export const useStore = create<TTState>((set, get) => ({
   recents: [],
   listeningStats: null,
   undoStack: [],
+  navDropTarget: null,
+  navDragActive: false,
   favorites: [],
   playlists: [],
   playlistActivation: null,
@@ -510,6 +520,12 @@ export const useStore = create<TTState>((set, get) => ({
 
   toast: null,
   showToast: (toast) => set({ toast: { ...toast, id: ++toastNonce } }),
+  setNavDropTarget: (target) => {
+    if (get().navDropTarget !== target) set({ navDropTarget: target });
+  },
+  setNavDragActive: (active) => {
+    if (get().navDragActive !== active) set({ navDragActive: active });
+  },
   pushUndo: (label, run) => {
     const id = ++undoNonce;
     // Cap ~20: an undo stack is a pocket, not an archive.

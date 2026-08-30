@@ -62,7 +62,20 @@ export function AddToPlaylistPanel({
         onClose();
         return;
       }
+      // The exact inverse at push time: the item list as it was before the
+      // append (a snapshot restore — edits made while the entry waits are
+      // the same best-effort trade every restore here makes).
+      const prior = useStore.getState().playlists.find((p) => p.id === id)?.items ?? null;
       await tt.playlistAppend(id, items);
+      if (prior != null) {
+        const n = items.length;
+        useStore
+          .getState()
+          .pushUndo(
+            `Add ${n} ${n === 1 ? "Track" : "Tracks"} to Playlist “${name}”`,
+            () => void tt.playlistSetItems(id, prior),
+          );
+      }
       done(items.length, name);
     } catch {
       showToast({ kind: "error", text: "Couldn't add to the playlist" });
@@ -85,6 +98,12 @@ export function AddToPlaylistPanel({
       // Toast the STORED name — a collision uniquifies it ("Jazz (2)"), and
       // the toast naming a playlist that isn't the one just made reads as a bug.
       const created = await tt.playlistCreate(name, items);
+      // Creation's inverse is exactly delete. The closure is a raw delete —
+      // undo closures never push entries of their own (that would be redo
+      // by the back door, and redo is out of scope by design).
+      useStore
+        .getState()
+        .pushUndo(`Create Playlist “${created.name}”`, () => void tt.playlistDelete(created.id));
       done(items.length, created.name);
     } catch {
       showToast({ kind: "error", text: "Couldn't create the playlist" });

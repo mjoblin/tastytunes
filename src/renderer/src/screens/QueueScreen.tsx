@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useQueuePerformer } from "@/hooks/useQueuePerformer";
 import {
   DndContext,
@@ -21,6 +22,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import type { Modifier } from "@dnd-kit/core";
 import {
   ArrowDownToLine,
   ArrowUpToLine,
@@ -71,6 +73,8 @@ import { MediaArt } from "@/components/media/MediaArt";
 import { DurationCell } from "@/components/media/DurationCell";
 import { FilterInput } from "@/components/controls/FilterInput";
 import { SelectionBar, SelectionVerb } from "@/components/controls/SelectionBar";
+import { DragChip } from "@/components/controls/DragChip";
+import { clampChipPos, flashNavTarget, navDropTargetAt } from "@/lib/navDrop";
 import { ModalShell } from "@/components/chrome/Overlay";
 import { PresetSavePanel, PresetPicker } from "@/components/library/LibraryMenus";
 import { HeaderChip, ScreenTitle } from "@/components/chrome/Chrome";
@@ -185,7 +189,13 @@ export function QueueScreen(): React.JSX.Element {
   /** The selection bar's Add to playlist… — the same batch-shaped panel the
    *  Library bar uses (its New playlist… path is how a selection becomes a
    *  stored playlist of its own). */
-  const [playlistBatch, setPlaylistBatch] = useState<{ x: number; y: number } | null>(null);
+  const [playlistBatch, setPlaylistBatch] = useState<{
+    x: number;
+    y: number;
+    /** Rail drops name their tracks; the bar verb omits this and the panel
+     *  takes the live selection. */
+    ids?: number[];
+  } | null>(null);
   const favorites = useStore((s) => s.favorites);
   const allItems = (queue?.items ?? []).filter((i) => i.id != null);
 
@@ -370,7 +380,7 @@ export function QueueScreen(): React.JSX.Element {
         return;
       }
       if (selected.size === 0) return;
-      if (e.key === "Escape") setSelected(new Set());
+      if (e.key === "Escape" && !dragLiveRef.current) setSelected(new Set());
       if (e.key === "Delete" || e.key === "Backspace") removeSelected();
     };
     window.addEventListener("keydown", onKey);
@@ -415,6 +425,24 @@ export function QueueScreen(): React.JSX.Element {
   // selection. Captured at drag start so the drop knows which grammar it is.
   // Drags only run unfiltered, so ids here are in full queue order.
   const [dragBatch, setDragBatch] = useState<{ ids: number[]; active: number } | null>(null);
+  /** A single-row drag in flight (grip or body) — tracked so the rail
+   *  handoff can freeze the list and put the chip on the cursor. */
+  const [dragSingle, setDragSingle] = useState<{ id: number } | null>(null);
+  /** The rail target under the pointer mid-drag (drag-to-rail). While set,
+   *  the insertion line hides and a single drag hands off to the chip. */
+  const [navHover, setNavHover] = useState<ReturnType<typeof navDropTargetAt>>(null);
+  const navHoverRef = useRef<ReturnType<typeof navDropTargetAt>>(null);
+  const lastPtRef = useRef<{ x: number; y: number } | null>(null);
+  /** Pointer anywhere over the rail: the line hides and a release without a
+   *  real target does NOTHING — no line, no move (the line-is-the-promise
+   *  rule; user, 2026-08-30: releasing on Radio performed the queue move). */
+  const overRailRef = useRef(false);
+  /** True through a drag AND the event that ends it: the Esc that cancels a
+   *  drag must not also clear the selection, and both handlers hear the
+   *  same keydown — cleared a tick later so the guard outlives the event. */
+  const dragLiveRef = useRef(false);
+  /** The pointer while over the rail — anchors the cursor-fixed ghost. */
+  const [railPt, setRailPt] = useState<{ x: number; y: number } | null>(null);
   // THE INSERTION-LINE MODEL for batch drags (the Spotify/Music/Finder
   // contract, chosen with the user 2026-08-27 after the lift felt
   // unpredictable with gapped selections): the rows hold still — no lift,
@@ -481,6 +509,8 @@ export function QueueScreen(): React.JSX.Element {
     [],
   );
   const onDragStart = (event: DragStartEvent): void => {
+    dragLiveRef.current = true;
+    useStore.getState().setNavDragActive(true);
     updateInsert(null);
     dragGeom.current = null;
     const ae = event.activatorEvent;
@@ -536,6 +566,7 @@ export function QueueScreen(): React.JSX.Element {
       // an UNSELECTED row, the Finder rule
       if (selected.size > 0 && !chord && !selected.has(id)) setSelected(new Set());
       setDragBatch(null);
+      setDragSingle({ id });
     }
   };
   // The REAL pointer drives the line (a window pointermove listener while a
@@ -559,20 +590,38 @@ export function QueueScreen(): React.JSX.Element {
   // Auto-scroll moves the rows' viewport positions while the pointer (and so
   // dnd-kit's move events) can stay still — the line follows the scroll too.
   useEffect(() => {
-    if (!dragBatch) return;
+    if (!dragBatch && !dragSingle) return;
     const sc = scrollElRef.current;
     if (!sc) return;
     const onPointerMove = (e: PointerEvent): void => {
+      lastPtRef.current = { x: e.clientX, y: e.clientY };
+      // drag-to-rail: the rail target under the pointer, batch or single.
+      // Over a target the insertion line hides — the drop leaves the list.
+      const nav = navDropTargetAt(e.clientX, e.clientY, ["playlists", "favorites"]);
+      const railRect = document.querySelector("[data-app-nav]")?.getBoundingClientRect();
+      overRailRef.current =
+        railRect != null &&
+        e.clientX >= railRect.left &&
+        e.clientX <= railRect.right &&
+        e.clientY >= railRect.top &&
+        e.clientY <= railRect.bottom;
+      if (nav !== navHoverRef.current) {
+        navHoverRef.current = nav;
+        setNavHover(nav);
+        useStore.getState().setNavDropTarget(nav);
+      }
+      if (nav != null) setRailPt({ x: e.clientX, y: e.clientY });
       const g = dragGeom.current;
       if (!g) return;
       g.pointerSeen = true;
       g.lastX = e.clientX;
       g.lastY = e.clientY;
-      updateInsert(computeInsert(e.clientX, e.clientY, cards));
+      updateInsert(overRailRef.current ? null : computeInsert(e.clientX, e.clientY, cards));
     };
     const onScroll = (): void => {
       const g = dragGeom.current;
-      if (g?.lastX != null) updateInsert(computeInsert(g.lastX, g.lastY, cards));
+      if (g?.lastX != null && !overRailRef.current)
+        updateInsert(computeInsert(g.lastX, g.lastY, cards));
     };
     window.addEventListener("pointermove", onPointerMove);
     sc.addEventListener("scroll", onScroll);
@@ -580,7 +629,7 @@ export function QueueScreen(): React.JSX.Element {
       window.removeEventListener("pointermove", onPointerMove);
       sc.removeEventListener("scroll", onScroll);
     };
-  }, [dragBatch, cards, computeInsert, updateInsert]);
+  }, [dragBatch, dragSingle, cards, computeInsert, updateInsert]);
 
   // THE LANDING ANIMATES (user, 2026-08-27 — an instant re-order after the
   // line model read as a teleport): a FLIP pass flies every displaced row
@@ -669,14 +718,48 @@ export function QueueScreen(): React.JSX.Element {
 
   const onDragEnd = (event: DragEndEvent): void => {
     const batch = dragBatch;
+    const single = dragSingle;
+    const nav = navHoverRef.current;
+    const overRail = overRailRef.current;
+    const releasePt = lastPtRef.current;
+    useStore.getState().setNavDragActive(false);
+    overRailRef.current = false;
+    setTimeout(() => {
+      dragLiveRef.current = false;
+    }, 0);
     // the line one final time, from the release position itself — never a
     // stale earlier value, on either layout
     const gEnd = dragGeom.current;
     const ins = computeInsert(gEnd?.lastX ?? null, gEnd?.lastY ?? null, cards) ?? insertRef.current;
     setDragBatch(null);
+    setDragSingle(null);
     dragGeom.current = null;
     dragStartPt.current = null;
+    navHoverRef.current = null;
+    setNavHover(null);
+    setRailPt(null);
+    useStore.getState().setNavDropTarget(null);
     updateInsert(null);
+    // Released on the rail: the drop leaves the list — route it and never
+    // reorder. The release point decides, single and batch alike.
+    if (nav != null) {
+      const ids = batch ? batch.ids : single ? [single.id] : [];
+      if (ids.length === 0) return;
+      if (nav === "favorites") {
+        heartQueueIds(ids);
+        flashNavTarget("favorites");
+      } else if (nav === "playlists") {
+        setPlaylistBatch({
+          x: releasePt?.x ?? window.innerWidth / 2,
+          y: releasePt?.y ?? window.innerHeight / 2,
+          ids,
+        });
+      }
+      return;
+    }
+    // Released over the rail but not on a target: the line was hidden, so
+    // nothing was promised — the drop is inert.
+    if (overRail) return;
     const { active, over } = event;
     if (batch && batch.ids.length > 1) {
       // The block gathers AT THE LINE, in queue order — the line was the
@@ -741,6 +824,27 @@ export function QueueScreen(): React.JSX.Element {
           for (const f of touched) void toggleFavorite(f, { silent: true });
         },
       );
+  };
+
+  /** A rail drop on Favorites: ADD what's missing, never remove (a drop is
+   *  additive intent, unlike the toggle verb), as ONE aggregate undo entry. */
+  const heartQueueIds = (ids: number[]): void => {
+    const idSet = new Set(ids);
+    const favs = allItems.flatMap((it) => {
+      if (it.id == null || !idSet.has(it.id)) return [];
+      const ref = fromQueueItem(it);
+      const fav = ref ? refToFavorite(ref) : null;
+      return fav ? [fav] : [];
+    });
+    const missing = favs.filter(
+      (f) => !favorites.some((x) => favoriteKey(x) === favoriteKey(f as Favorite)),
+    );
+    for (const f of missing) void toggleFavorite(f, { silent: true });
+    if (missing.length === 0) return;
+    const n = missing.length;
+    useStore.getState().pushUndo(`Add ${n} ${n === 1 ? "Track" : "Tracks"} to Favorites`, () => {
+      for (const f of missing) void toggleFavorite(f, { silent: true });
+    });
   };
 
   /** The bar's block moves — unambiguous even under a filter (the visible
@@ -942,13 +1046,14 @@ export function QueueScreen(): React.JSX.Element {
       )}
       {playlistBatch && (
         <AddToPlaylistPanel
-          label={`${selected.size} tracks`}
+          label={`${(playlistBatch.ids ?? [...selected]).length} tracks`}
           at={playlistBatch}
           onClose={() => setPlaylistBatch(null)}
           resolve={() => {
+            const chosen = new Set(playlistBatch.ids ?? [...selected]);
             // content identity, resolved fresh on activation (the per-row rule)
             const refs = items.flatMap((it) =>
-              it.id != null && selected.has(it.id) ? [fromQueueItem(it)] : [],
+              it.id != null && chosen.has(it.id) ? [fromQueueItem(it)] : [],
             );
             setSelected(new Set());
             return Promise.resolve(refs.flatMap((r) => (r != null ? [refToPlaylistItem(r)] : [])));
@@ -1039,9 +1144,34 @@ export function QueueScreen(): React.JSX.Element {
           onDragMove={onDragMove}
           onDragCancel={() => {
             setDragBatch(null);
+            setDragSingle(null);
             dragGeom.current = null;
             dragStartPt.current = null;
+            navHoverRef.current = null;
+            setNavHover(null);
+            setRailPt(null);
+            overRailRef.current = false;
+            setTimeout(() => {
+              dragLiveRef.current = false;
+            }, 0);
+            useStore.getState().setNavDropTarget(null);
+            useStore.getState().setNavDragActive(false);
             updateInsert(null);
+            // An Esc-cancelled drag ends with the button still held, and the
+            // eventual RELEASE lands as a row click — which plays a track, or
+            // exits selection mode via the bare-click rule (user: Esc then
+            // release deselected). The abort's release is exactly the next
+            // pointerup, whenever it comes: swallow the click that follows
+            // it, and only that one.
+            const swallow = (ce: MouseEvent): void => {
+              ce.stopPropagation();
+              ce.preventDefault();
+            };
+            const onAbortRelease = (): void => {
+              window.addEventListener("click", swallow, { capture: true, once: true });
+              setTimeout(() => window.removeEventListener("click", swallow, true), 200);
+            };
+            window.addEventListener("pointerup", onAbortRelease, { capture: true, once: true });
           }}
           onDragEnd={onDragEnd}
         >
@@ -1089,7 +1219,8 @@ export function QueueScreen(): React.JSX.Element {
                     currentRef={item.id === playId ? currentRef : undefined}
                     selected={item.id != null && selected.has(item.id)}
                     onRowClick={(e) => rowClick(item, e)}
-                    staticDrag={dragBatch != null}
+                    staticDrag={dragBatch != null || navHover != null}
+                    dragLive={dragBatch != null || dragSingle != null}
                     insertLine={
                       insertAt?.id === item.id ? (insertAt.after ? "after" : "before") : undefined
                     }
@@ -1115,7 +1246,8 @@ export function QueueScreen(): React.JSX.Element {
                     currentRef={item.id === playId ? currentRef : undefined}
                     selected={item.id != null && selected.has(item.id)}
                     onRowClick={(e) => rowClick(item, e)}
-                    staticDrag={dragBatch != null}
+                    staticDrag={dragBatch != null || navHover != null}
+                    dragLive={dragBatch != null || dragSingle != null}
                     insertLine={
                       insertAt?.id === item.id ? (insertAt.after ? "after" : "before") : undefined
                     }
@@ -1130,39 +1262,47 @@ export function QueueScreen(): React.JSX.Element {
           </SortableContext>
           {/* the batch drag's cursor chip: the active track as a stacked card
               with the count — the rows themselves never move */}
-          <DragOverlay dropAnimation={null}>
-            {dragBatch &&
-              (() => {
-                const activeItem = allItems.find((it) => it.id === dragBatch.active);
-                const md = activeItem?.metadata;
-                const n = dragBatch.ids.length;
-                return (
-                  <div className="relative w-[320px]">
-                    {n > 2 && (
-                      <span
-                        aria-hidden
-                        data-drag-stack
-                        className="absolute inset-x-3 top-3 -bottom-3 -z-20 rounded-lg bg-raised ring-1 ring-edge shadow-md"
-                      />
-                    )}
-                    <span
-                      aria-hidden
-                      data-drag-stack
-                      className="absolute inset-x-1.5 top-1.5 -bottom-1.5 -z-10 rounded-lg bg-raised ring-1 ring-edge2 shadow-lg"
-                    />
-                    <div className="flex items-center gap-2.5 rounded-lg bg-raised ring-1 ring-edge2 shadow-xl px-2.5 py-1.5">
-                      <MediaArt src={md?.art_url} kind="track" />
-                      <div className="min-w-0 flex-1 text-[13px] text-ink truncate">
-                        {md?.title ?? md?.name ?? "—"}
-                      </div>
-                      <span className="shrink-0 rounded-full bg-gold text-bg text-[10.5px] font-medium px-2 py-0.5">
-                        {n} tracks
-                      </span>
-                    </div>
-                  </div>
-                );
-              })()}
+          {/* IN THE LIST the batch chip rides dnd-kit's overlay (anchored at
+              the grab point, the make-room grammar); OVER THE RAIL both
+              batch and single drags hand off to a cursor-anchored ghost —
+              the overlay's grab offset would park the chip ON TOP of the
+              target row, and the glow must stay visible (the two-state
+              model, ruled with the user 2026-08-30). */}
+          <DragOverlay dropAnimation={null} modifiers={[chipToCursor]}>
+            {(() => {
+              if (!dragBatch || navHover != null) return null;
+              const md = allItems.find((it) => it.id === dragBatch.active)?.metadata;
+              return (
+                <DragChip
+                  title={md?.title ?? md?.name ?? "—"}
+                  artUrl={md?.art_url}
+                  count={dragBatch.ids.length}
+                />
+              );
+            })()}
           </DragOverlay>
+          {navHover != null &&
+            railPt != null &&
+            (() => {
+              const carried = dragBatch ?? dragSingle;
+              if (!carried) return null;
+              const activeId = "active" in carried ? carried.active : carried.id;
+              const md = allItems.find((it) => it.id === activeId)?.metadata;
+              return createPortal(
+                <div
+                  data-nav-drag-ghost
+                  className="pointer-events-none fixed z-50"
+                  style={clampChipPos(railPt.x, railPt.y)}
+                >
+                  <DragChip
+                    title={md?.title ?? md?.name ?? "—"}
+                    artUrl={md?.art_url}
+                    count={"ids" in carried ? carried.ids.length : 1}
+                  />
+                </div>,
+                document.body,
+              );
+            })()}
         </DndContext>
       </div>
     </div>
@@ -1475,6 +1615,29 @@ async function restoreQueueOrder(prev: number[]): Promise<void> {
   }
 }
 
+/**
+ * Anchor the drag chip to the CURSOR (+14, +10), not the grabbed row's rect:
+ * dnd-kit places an overlay at the dragged node's rect plus the delta, so
+ * grabbing a row's far side parked the 320px chip far from the pointer —
+ * and the rail ghost uses the same +14/+10, so crossing onto the rail never
+ * makes the chip jump (user, 2026-08-30).
+ */
+const chipToCursor: Modifier = ({ activatorEvent, draggingNodeRect, transform }) => {
+  if (draggingNodeRect == null || !(activatorEvent instanceof MouseEvent)) return transform;
+  // The cursor's live position in viewport space, then clamped so the chip
+  // never clips at the window's edge (clampChipPos, shared with the ghosts).
+  const cursorX =
+    draggingNodeRect.left + (activatorEvent.clientX - draggingNodeRect.left) + transform.x;
+  const cursorY =
+    draggingNodeRect.top + (activatorEvent.clientY - draggingNodeRect.top) + transform.y;
+  const pos = clampChipPos(cursorX, cursorY);
+  return {
+    ...transform,
+    x: pos.left - draggingNodeRect.left,
+    y: pos.top - draggingNodeRect.top,
+  };
+};
+
 /** Rows an undo just put back: the queue id each landed under → the slot it
  *  was restored to. A restore is an append at the tail plus a move into
  *  place — TWO announces — and washing on "row just appeared" lit the tail
@@ -1566,6 +1729,12 @@ interface QueueItemProps {
    *  clicks from reordering. Listeners only, never dnd attributes, on a
    *  container that holds other controls (the useShortcuts law). */
   bodyDrag?: boolean;
+  /** A queue drag is live: rows take no pointer events, so hover fills,
+   *  card grows and hover-revealed buttons stay dark under a passing drag
+   *  — mid-drag the line and the drop targets are the only affordances
+   *  (the nav rail's rule, applied at home; user, 2026-08-30). dnd-kit is
+   *  unaffected: its tracking is window-level and rect-based. */
+  dragLive?: boolean;
 }
 
 function QueueRow({
@@ -1582,6 +1751,7 @@ function QueueRow({
   selEnd = true,
   bodyDrag = false,
   menuOpen = false,
+  dragLive = false,
 }: QueueItemProps): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id as number,
@@ -1610,6 +1780,7 @@ function QueueRow({
       {...(bodyDrag ? listeners : {})}
       className={cx(
         "group relative grid grid-cols-[26px_44px_1fr_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5",
+        dragLive && "pointer-events-none",
         // a selected row carries the block, and says so (the grip's cursor)
         bodyDrag && selected ? "cursor-grab active:cursor-grabbing" : "cursor-default",
         "transition-colors",
@@ -1736,6 +1907,7 @@ function QueueCard({
   staticDrag = false,
   insertLine,
   menuOpen = false,
+  dragLive = false,
 }: QueueItemProps): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id as number,
@@ -1761,6 +1933,7 @@ function QueueCard({
         // Hover grow matches PresetCard; scale is layout-free so edge-clipped
         // cards simply clip at the scrollport seam.
         "group relative text-left rounded-2xl p-2 pb-2.5 transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]",
+        dragLive && "pointer-events-none",
         isDragging && !staticDrag && "z-10 opacity-90",
         menuOpen && "z-10 motion-safe:scale-[1.04]",
         isCurrent && sourceActive

@@ -36,6 +36,8 @@ import { SortChip } from "@/components/controls/SortChip";
 import { Segmented } from "@/components/controls/Segmented";
 import { ContainerCard, ContainerRow, TrackRow } from "@/components/library/LibraryCards";
 import { RowMenu } from "@/components/media/RowMenu";
+import { useNavDrag } from "@/hooks/useNavDrag";
+import { flashNavTarget } from "@/lib/navDrop";
 import { SelectionBar, SelectionVerb } from "@/components/controls/SelectionBar";
 import { Eqbars } from "@/components/media/Eqbars";
 
@@ -795,6 +797,44 @@ export function ArtistsLens({
   };
   const chosenT = (): MediaNode[] => visibleTracks.filter((t) => selT.has(nodeKey(t)));
 
+  // Drag-to-rail from the lens's track column — same targets and semantics
+  // as the Library lists, routed through the actions the lens already has.
+  const lensDragCargo = useRef<{ nodes: MediaNode[]; fromSelection: boolean }>({
+    nodes: [],
+    fromSelection: false,
+  });
+  const lensNavDrag = useNavDrag({
+    targets: ["queue", "playlists", "favorites"],
+    payload: () => {
+      const { nodes } = lensDragCargo.current;
+      if (nodes.length === 0) return null;
+      return { count: nodes.length, title: nodes[0].title };
+    },
+    onDrop: (target, at) => {
+      const { nodes, fromSelection } = lensDragCargo.current;
+      if (target === "queue") {
+        actions.queueTracks(nodes, "append", () => {
+          if (fromSelection) setSelT(new Set());
+          flashNavTarget("queue");
+        });
+      } else if (target === "favorites") {
+        actions.heartNodes(nodes, false);
+        flashNavTarget("favorites");
+      } else if (target === "playlists") {
+        actions.addTracksToPlaylist(
+          nodes,
+          at,
+          fromSelection ? () => setSelT(new Set()) : undefined,
+        );
+      }
+    },
+  });
+  const startLensTrackDrag = (t: MediaNode, e: React.PointerEvent): void => {
+    const fromSelection = selT.has(nodeKey(t));
+    lensDragCargo.current = { nodes: fromSelection ? chosenT() : [t], fromSelection };
+    lensNavDrag.start(e);
+  };
+
   // A-Z fast travel: letter anchors in the artists column.
   const artistsColRef = useRef<HTMLDivElement | null>(null);
   const selectedRowRef = useRef<HTMLDivElement | null>(null);
@@ -1207,6 +1247,7 @@ export function ArtistsLens({
                         selStart={!(ti > 0 && selT.has(nodeKey(g.tracks[ti - 1])))}
                         selEnd={!(ti < g.tracks.length - 1 && selT.has(nodeKey(g.tracks[ti + 1])))}
                         onRowClick={(e) => trackRowClick(t, e)}
+                        onNavDrag={(e) => startLensTrackDrag(t, e)}
                         onHeart={() => actions.heartNode(t)}
                         onPlayNow={(el) => actions.playTrack(t, el)}
                         onMenu={(e) => {
@@ -1229,6 +1270,7 @@ export function ArtistsLens({
           </div>
         </div>
       </div>
+      {lensNavDrag.ghost}
       {lensMenu && (
         <RowMenu
           title={`${selT.size} tracks`}

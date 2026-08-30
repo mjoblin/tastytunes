@@ -296,6 +296,7 @@ export function TrackRow({
   onMenu,
   selected = false,
   onRowClick,
+  onNavDrag,
   onAlbumLink,
   onArtistLink,
   note,
@@ -320,6 +321,9 @@ export function TrackRow({
   selected?: boolean;
   /** Selection first: true = the click was a chord and must not play. */
   onRowClick?(e: React.MouseEvent): boolean;
+  /** Drag-to-rail: the press that may become a drag (wired only while the
+   *  row is selected — the drag carries the selection). */
+  onNavDrag?(e: React.PointerEvent): void;
   /** Contiguous-selection run edges — a run draws ONE border, so a row whose
    *  neighbor is also selected drops the shared side. */
   selStart?: boolean;
@@ -363,6 +367,7 @@ export function TrackRow({
         if (onRowClick?.(e)) return;
         onPlayNow(ref.current);
       }}
+      onPointerDown={onNavDrag}
       onContextMenu={onMenu}
       data-library-track={node.title}
     >
