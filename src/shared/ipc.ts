@@ -70,6 +70,8 @@ import type {
   UpdateState,
   MediaInfoQuery,
   MediaInfoTarget,
+  AudioAnalysis,
+  AlbumDr,
 } from "./model";
 
 /** The one copy of the project URL — user agents, Help menu, release pages. */
@@ -289,6 +291,14 @@ export interface TastyTunesApi {
   /** EXPERIMENT (0.7 exploration): the playing track's raw audio bytes from
    *  its local media server, for renderer-side decode. Null on any miss. */
   expTrackAudio(serverUdn: string, objectId: string): Promise<ArrayBuffer | null>;
+  /** EXPERIMENT: a stored analysis by content key (null = none yet). */
+  audioAnalysisGet(key: string): Promise<AudioAnalysis | null>;
+  /** EXPERIMENT: persist a finished analysis under its content key. */
+  audioAnalysisPut(key: string, analysis: AudioAnalysis): Promise<void>;
+  /** EXPERIMENT: the whole album-DR map (albumDrKey -> AlbumDr). */
+  albumDrMap(): Promise<Record<string, AlbumDr>>;
+  /** EXPERIMENT: record an album's DR (written only when complete). */
+  albumDrPut(key: string, entry: AlbumDr): Promise<void>;
   /** Open/close the mini player window. */
   toggleMini(): Promise<void>;
   /** Show and focus the main window. */
@@ -423,6 +433,10 @@ export const IPC = {
   fetchAlbumInfo: "tt:fetchAlbumInfo",
   fetchTrackInfo: "tt:fetchTrackInfo",
   expTrackAudio: "tt:expTrackAudio",
+  audioAnalysisGet: "tt:audioAnalysisGet",
+  audioAnalysisPut: "tt:audioAnalysisPut",
+  albumDrMap: "tt:albumDrMap",
+  albumDrPut: "tt:albumDrPut",
   toggleMini: "tt:toggleMini",
   showMain: "tt:showMain",
   setSleep: "tt:setSleep",

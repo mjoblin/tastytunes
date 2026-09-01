@@ -21,6 +21,7 @@ import { Segmented } from "@/components/controls/Segmented";
 import { HeaderChip } from "@/components/chrome/Chrome";
 import { Section, sourceRows, streamRows, trackFormatRows } from "@/components/media/InfoRows";
 import { Waveform } from "@/components/media/Waveform";
+import { audioAnalysisKey } from "@shared/model";
 
 type Status = "loading" | "ready" | "none";
 type Tab = "artist" | "album" | "track" | "stream";
@@ -414,7 +415,11 @@ export function ArtistPanel({ className }: { className?: string }): React.JSX.El
             {/* EXPERIMENT (0.7 exploration): the waveform, from the file's
                 own bytes, for indexed local media only. */}
             {streamTarget.node.serverUdn && streamTarget.node.id && (
-              <Waveform serverUdn={streamTarget.node.serverUdn} objectId={streamTarget.node.id} />
+              <Waveform
+                serverUdn={streamTarget.node.serverUdn}
+                objectId={streamTarget.node.id}
+                contentKey={audioAnalysisKey(streamTarget.node)}
+              />
             )}
           </div>
         )}

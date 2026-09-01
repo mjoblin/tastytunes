@@ -55,6 +55,12 @@ import { scrobbler } from "./lookups/scrobbler";
 import { fetchArtistInfo } from "./lookups/artistInfo";
 import { fetchAlbumInfo } from "./lookups/albumInfo";
 import { fetchTrackInfo } from "./lookups/trackInfo";
+import {
+  albumDrMap,
+  albumDrPut,
+  audioAnalysisGet,
+  audioAnalysisPut,
+} from "./lookups/audioAnalysis";
 import { fetchCoverArt } from "./lookups/coverArt";
 import { radioByTags, radioSearch, radioTop } from "./lookups/radioBrowser";
 import { clearLookupCaches, flushLookupCaches, lookupCacheStats } from "./lookups/diskCache";
@@ -462,6 +468,19 @@ function registerIpc(): void {
     } catch {
       return null;
     }
+  });
+  // EXPERIMENT (0.7 exploration): the persisted analysis stores — content-
+  // keyed track analyses and the album-DR map (lookups/audioAnalysis holds
+  // the shape guards; the store is a cache, never truth).
+  ipcMain.handle(IPC.audioAnalysisGet, (_e, key: unknown) =>
+    typeof key === "string" ? audioAnalysisGet(key) : null,
+  );
+  ipcMain.handle(IPC.audioAnalysisPut, (_e, key: unknown, analysis: unknown) => {
+    if (typeof key === "string") audioAnalysisPut(key, analysis);
+  });
+  ipcMain.handle(IPC.albumDrMap, () => albumDrMap());
+  ipcMain.handle(IPC.albumDrPut, (_e, key: unknown, entry: unknown) => {
+    if (typeof key === "string") albumDrPut(key, entry);
   });
   ipcMain.handle(IPC.fetchTrackInfo, (_e, query: TrackInfoQuery, force?: boolean) =>
     getSettings().artistInfo &&

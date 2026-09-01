@@ -22,9 +22,11 @@ import {
   type MediaIndexPools,
   type MediaNode,
   nameSortKey,
+  albumDrKey,
 } from "@shared/model";
 import { cx, fmtTime, matchesFilter } from "@/lib/format";
 import { useStore } from "@/store";
+import { useAlbumDr } from "@/lib/audioAnalysis";
 import { scrollToVisible } from "@/lib/scroll";
 import { isAlbumClass } from "@/lib/media";
 import { MediaArt } from "@/components/media/MediaArt";
@@ -279,10 +281,11 @@ function PickerPill({
 
 // ------------------------------------------------------------------- albums
 
-const ALBUM_SORTS: Array<{ value: "title" | "artist" | "year"; label: string }> = [
+const ALBUM_SORTS: Array<{ value: "title" | "artist" | "year" | "dr"; label: string }> = [
   { value: "title", label: "Title" },
   { value: "artist", label: "Artist" },
   { value: "year", label: "Year (newest first)" },
+  { value: "dr", label: "Dynamic range" },
 ];
 
 // Sort + direction live in settings (view defaults persist, 2026-08-06);
@@ -317,6 +320,7 @@ export function AlbumsLens({
   const sort = useStore((s) => s.settings.lensAlbumsSort);
   const reversed = useStore((s) => s.settings.lensAlbumsSortReversed);
   const saveSettings = useStore((s) => s.saveSettings);
+  const albumDr = useAlbumDr();
 
   const all = useMemo(() => pools.flatMap((g) => g.albums), [pools]);
   const multiServer = useMemo(() => pools.filter((g) => g.albums.length > 0).length > 1, [pools]);
@@ -390,12 +394,17 @@ export function AlbumsLens({
         );
       if (sort === "year")
         return (b.year ?? "").localeCompare(a.year ?? "") || a.title.localeCompare(b.title);
+      if (sort === "dr") {
+        // analyzed albums first, most dynamic leading; the rest alphabetical
+        const d = (n: MediaNode): number => albumDr[albumDrKey(n)]?.dr ?? -1;
+        return d(b) - d(a) || a.title.localeCompare(b.title);
+      }
       return (
         a.title.localeCompare(b.title) || (a.serverName ?? "").localeCompare(b.serverName ?? "")
       );
     });
     return reversed ? sorted.reverse() : sorted;
-  }, [all, mem, sort, reversed, kind, compilationKeys]);
+  }, [all, mem, sort, reversed, kind, compilationKeys, albumDr]);
 
   /**
    * Box sets (2026-08-24): volume siblings — same parsed base + artist, ≥2

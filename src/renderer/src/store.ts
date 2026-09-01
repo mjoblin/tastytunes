@@ -15,6 +15,7 @@ import type {
   SleepTimer,
   MediaSearchAllGroup,
   MediaNode,
+  AlbumDr,
 } from "@shared/model";
 import type {
   Favorite,
@@ -357,6 +358,11 @@ interface TTState {
   setShortcutsOpen: (open: boolean) => void;
   setInfoOpen: (open: boolean) => void;
   setMediaInfo: (target: MediaInfoTarget | null) => void;
+  /** EXPERIMENT (0.7 exploration): the album-DR map (albumDrKey -> AlbumDr),
+   *  loaded lazily by useAlbumDr and updated in place by Analyze audio. */
+  albumDr: Record<string, AlbumDr>;
+  setAlbumDr: (map: Record<string, AlbumDr>) => void;
+  setAlbumDrEntry: (key: string, entry: AlbumDr) => void;
   setPaletteOpen: (open: boolean) => void;
   setDisplayMode: (on: boolean) => void;
   setLyricsOpen: (open: boolean) => void;
@@ -584,6 +590,9 @@ export const useStore = create<TTState>((set, get) => ({
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   setInfoOpen: (infoOpen) => set({ infoOpen }),
   setMediaInfo: (mediaInfo) => set({ mediaInfo }),
+  albumDr: {},
+  setAlbumDr: (albumDr) => set({ albumDr }),
+  setAlbumDrEntry: (key, entry) => set((s) => ({ albumDr: { ...s.albumDr, [key]: entry } })),
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
   setDisplayMode: (displayMode) => set({ displayMode }),
   // The two Now Playing drawers are mutually exclusive — opening one closes

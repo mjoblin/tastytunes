@@ -42,6 +42,9 @@ import {
   albumVolume,
 } from "@shared/model";
 import { favoriteKey, type Favorite, type FavoriteMedia } from "@shared/model";
+import { albumDrKey } from "@shared/model";
+import { analyzeAlbum, useAlbumDr } from "@/lib/audioAnalysis";
+import { DrBadge } from "@/components/media/Waveform";
 import type { QueueListItem } from "@shared/smoip";
 import { tt } from "@/api";
 import { useStore } from "@/store";
@@ -1385,6 +1388,31 @@ export function LibraryScreen(): React.JSX.Element {
     return verbs.length > 0 ? verbs : undefined;
   };
 
+  // EXPERIMENT (0.7 exploration): the Analyze-audio sweep — every track of
+  // the album measured and cached, the album DR recorded when the set
+  // completes. Album menus only, gated on the waveforms master like all
+  // audio analysis.
+  const waveformsOn = useStore((s) => s.settings.waveforms);
+  const runAnalyzeAlbum = async (node: MediaNode, udn: string): Promise<void> => {
+    showToast({ kind: "success", text: `Analyzing “${node.title}”…` });
+    const r = await analyzeAlbum(
+      node,
+      udn,
+      path.map((c) => c.title),
+    );
+    if (r === "busy") return; // the running sweep's own toast will land
+    if (r == null) showNotice(`Couldn't read “${node.title}” from the server.`);
+    else if (r.dr == null)
+      showNotice(`Read ${r.analyzed} of ${r.tracks} tracks — an album DR needs all of them.`);
+    else showToast({ kind: "success", text: `“${node.title}” analyzed — DR${r.dr}` });
+  };
+  const analyzeVerbs = (node: MediaNode): MediaMenuItem[] | undefined => {
+    if (!waveformsOn || !node.isContainer || !isAlbumClass(node.upnpClass)) return undefined;
+    const udn = nodeUdn(node);
+    if (!udn) return undefined;
+    return [{ label: "Analyze audio", run: () => void runAnalyzeAlbum(node, udn) }];
+  };
+
   // Filtered + sorted listings are memoized: unmemoized they re-ran the
   // localeCompare sorts and filter scans on every store push — once a second
   // during playback, under grids that can hold 400+ cards.
@@ -1579,6 +1607,16 @@ export function LibraryScreen(): React.JSX.Element {
   // classical case, and a band that writes its own); silent otherwise
   const composers = albumNode ? albumComposers(allTracks) : [];
   const albumComposerLine = composers.length > 0 ? `Composed by ${composers.join(", ")}` : null;
+  // EXPERIMENT (0.7 exploration): the album's recorded TT-DR, shown only
+  // while the sweep's track count still matches the listing (a changed
+  // album re-earns its number). Zero listed tracks = a box set's volume
+  // view — the recorded count stands.
+  const albumDrMap = useAlbumDr();
+  const albumDrEntry = albumNode ? (albumDrMap[albumDrKey(albumNode)] ?? null) : null;
+  const albumDrShown =
+    albumDrEntry && (allTracks.length === 0 || albumDrEntry.tracks === allTracks.length)
+      ? albumDrEntry.dr
+      : null;
   // the note a row carries when its format differs from the album headline
   const albumNoteFor = (node: MediaNode): string | null => {
     if (!albumNode) return null;
@@ -2348,7 +2386,12 @@ export function LibraryScreen(): React.JSX.Element {
               {/* facts + composers are one thought too, set tight (the
                   composer line is only there when every track agrees) */}
               <div className="space-y-0.5">
-                {albumFacts && <div className="text-[12.5px] text-faint">{albumFacts}</div>}
+                {(albumFacts || albumDrShown != null) && (
+                  <div className="text-[12.5px] text-faint">
+                    {albumFacts}
+                    {albumDrShown != null && <DrBadge dr={albumDrShown} />}
+                  </div>
+                )}
                 {albumComposerLine && (
                   <div className="text-[12.5px] text-faint" data-album-composers>
                     {albumComposerLine}
@@ -2717,6 +2760,7 @@ export function LibraryScreen(): React.JSX.Element {
           menu={menu}
           onClose={() => setMenu(null)}
           navVerbs={volumeNavVerbs(menu.node)}
+          extraVerbs={analyzeVerbs(menu.node)}
           goToAlbum={
             searchMode && !menu.node.isContainer && menu.node.album && linkable(menu.node, "albums")
               ? () => {

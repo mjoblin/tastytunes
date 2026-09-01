@@ -28,6 +28,7 @@ export function ItemMenu({
   favorite,
   onInfo,
   navVerbs,
+  extraVerbs,
 }: {
   menu: { node: MediaNode; x: number; y: number };
   onClose(): void;
@@ -46,6 +47,9 @@ export function ItemMenu({
   onInfo?(): void;
   /** The box-set walk on the open album's menu (Previous/Next volume). */
   navVerbs?: MediaMenuItem[];
+  /** Local verbs appended last (the builders' `extra` slot) — the album's
+   *  Analyze audio lives here. */
+  extraVerbs?: MediaMenuItem[];
 }): React.JSX.Element {
   const { node } = menu;
   // The item lists come from the per-entity builders (lib/mediaMenus) — the
@@ -70,6 +74,7 @@ export function ItemMenu({
     addToPlaylist: onAddToPlaylist,
     heart: favorite,
     info: onInfo,
+    extra: extraVerbs,
   };
   const items: MediaMenuItem[] =
     node.isContainer && isArtistClass(node.upnpClass)

@@ -908,7 +908,7 @@ export interface AppSettings {
    * later belongs here too.
    */
   /** Albums lens sort (the native album grid above keeps librarySort). */
-  lensAlbumsSort: "title" | "artist" | "year";
+  lensAlbumsSort: "title" | "artist" | "year" | "dr";
   lensAlbumsSortReversed: boolean;
   /** Artists lens: hide artists that only have loose tracks. */
   lensArtistsAlbumsOnly: boolean;
@@ -1502,6 +1502,49 @@ export function fmtBytes(n: number): string {
   if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toFixed(n >= 10 * 1024 ** 3 ? 0 : 1)} GB`;
   if (n >= 1024 ** 2) return `${Math.round(n / 1024 ** 2)} MB`;
   return `${Math.max(1, Math.round(n / 1024))} KB`;
+}
+
+/**
+ * EXPERIMENT (0.7 exploration): a track's stored audio analysis — what the
+ * renderer's decode persists (main's disk cache) and every waveform surface
+ * rereads. Envelopes are quantized to integer thousandths of full scale so
+ * the cache file stays humane; dB stats ride as null when non-finite
+ * (silence), since JSON has no -Infinity.
+ */
+export interface AudioAnalysis {
+  /** TT dynamic range integer; <= 0 means "no honest number". */
+  dr: number;
+  peakDb: number | null;
+  rmsDb: number | null;
+  crestDb: number | null;
+  /** Peak/RMS envelopes at capture resolution, amplitude x1000 (0..1000). */
+  peakQ: number[];
+  rmsQ: number[];
+}
+
+/** An album's recorded DR — written ONLY when every track measured (the TT
+ *  album value is the mean of ALL its tracks; a partial read has no honest
+ *  number). `tracks` lets surfaces retire a stale entry when the album's
+ *  track count changes. */
+export interface AlbumDr {
+  dr: number;
+  tracks: number;
+  analyzedAt: number;
+}
+
+/** Content identity for stored audio analysis — the trackInfo key precedent
+ *  (artist|album|title, lowercased) plus duration, so a remaster sharing
+ *  its name doesn't inherit another edition's waveform. Identity, not
+ *  location: server object ids churn on rescans. */
+export function audioAnalysisKey(
+  t: Pick<MediaNode, "title" | "artist" | "album" | "durationSecs">,
+): string {
+  return `${t.artist ?? ""}|${t.album ?? ""}|${t.title}|${t.durationSecs ?? ""}`.toLowerCase();
+}
+
+/** Album identity for the DR map — artist|title, lowercased. */
+export function albumDrKey(a: Pick<MediaNode, "title" | "artist">): string {
+  return `${a.artist ?? ""}|${a.title}`.toLowerCase();
 }
 
 /**

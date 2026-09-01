@@ -3,6 +3,7 @@ import { tt } from "@/api";
 import { useStore } from "@/store";
 import { nowPlayingInfoTarget } from "@/lib/mediaInfo";
 import { computeDr14 } from "@/lib/dr14";
+import { audioAnalysisKey, type AudioAnalysis } from "@shared/model";
 
 /**
  * EXPERIMENT (0.7 exploration, the audio-file-data GO): waveforms from the
@@ -10,9 +11,11 @@ import { computeDr14 } from "@/lib/dr14";
  * module decodes with WebAudio and keeps TWO envelopes per track — peak and
  * RMS — so the drawing shows dynamics, not just shape: a crushed master
  * reads as a solid brick, an open one as gold hills inside a pale outline.
- * Everything is best-effort and silent on failure; analyses are cached (as
- * in-flight promises, so StrictMode's double effects share one fetch) for
- * the session.
+ * Everything is best-effort and silent on failure; analyses are cached
+ * twice over: in-flight promises for the session (StrictMode's double
+ * effects share one fetch), and main's disk cache under CONTENT identity —
+ * a track analyzed once (played, or swept by Analyze audio) never fetches
+ * again. lib/audioAnalysis holds the album sweep.
  *
  * Two faces: the Stream tab's panel view (envelopes, playhead, click-to-
  * seek, a quiet stats row) and display mode's bottom strip, where the
@@ -58,11 +61,47 @@ function holdSeek(pct: number): void {
   seekHold = { pct, until: Date.now() + SEEK_HOLD_MS };
 }
 
-function analyze(serverUdn: string, objectId: string): Promise<Analysis | null> {
+// Disk shape round trip: envelopes quantized to thousandths (the JSON
+// stays humane); non-finite dB (silence) rides as null.
+const QUANT = 1000;
+function toStored(a: Analysis): AudioAnalysis {
+  const num = (v: number): number | null => (Number.isFinite(v) ? v : null);
+  return {
+    dr: a.dr,
+    peakDb: num(a.peakDb),
+    rmsDb: num(a.rmsDb),
+    crestDb: num(a.crestDb),
+    peakQ: Array.from(a.peak, (v) => Math.round(v * QUANT)),
+    rmsQ: Array.from(a.rms, (v) => Math.round(v * QUANT)),
+  };
+}
+function fromStored(st: AudioAnalysis): Analysis {
+  return {
+    dr: st.dr,
+    peakDb: st.peakDb ?? -Infinity,
+    rmsDb: st.rmsDb ?? -Infinity,
+    crestDb: st.crestDb ?? -Infinity,
+    peak: Float32Array.from(st.peakQ, (v) => v / QUANT),
+    rms: Float32Array.from(st.rmsQ, (v) => v / QUANT),
+  };
+}
+
+/** The analysis engine, exported for the Analyze-audio sweep
+ *  (lib/audioAnalysis). contentKey engages the disk cache; the in-memory
+ *  key stays LOCATION (udn|objectId), scoped to the session. */
+export function analyzeTrack(
+  serverUdn: string,
+  objectId: string,
+  contentKey: string | null = null,
+): Promise<Analysis | null> {
   const key = `${serverUdn}|${objectId}`;
   const hit = cache.get(key);
   if (hit) return hit;
   const p = (async (): Promise<Analysis | null> => {
+    if (contentKey) {
+      const stored = await tt.audioAnalysisGet(contentKey);
+      if (stored) return fromStored(stored);
+    }
     const bytes = await tt.expTrackAudio(serverUdn, objectId);
     if (!bytes) return null;
     const u8 = new Uint8Array(bytes);
@@ -118,7 +157,9 @@ function analyze(serverUdn: string, objectId: string): Promise<Analysis | null> 
       const peakDb = db(globalPeak);
       const rmsDb = db(globalN > 0 ? Math.sqrt(globalSumSq / globalN) : 0);
       const dr = computeDr14(chans, audio.sampleRate);
-      return { peak, rms, peakDb, rmsDb, crestDb: peakDb - rmsDb, dr };
+      const analysis: Analysis = { peak, rms, peakDb, rmsDb, crestDb: peakDb - rmsDb, dr };
+      if (contentKey) void tt.audioAnalysisPut(contentKey, toStored(analysis));
+      return analysis;
     } catch {
       return null;
     } finally {
@@ -129,7 +170,11 @@ function analyze(serverUdn: string, objectId: string): Promise<Analysis | null> 
   return p;
 }
 
-function usePeaks(serverUdn: string | null, objectId: string | null): Analysis | null | "loading" {
+function usePeaks(
+  serverUdn: string | null,
+  objectId: string | null,
+  contentKey: string | null = null,
+): Analysis | null | "loading" {
   const [state, setState] = useState<Analysis | null | "loading">("loading");
   useEffect(() => {
     if (!serverUdn || !objectId) {
@@ -138,22 +183,30 @@ function usePeaks(serverUdn: string | null, objectId: string | null): Analysis |
     }
     let stale = false;
     setState("loading");
-    void analyze(serverUdn, objectId).then((a) => {
+    void analyzeTrack(serverUdn, objectId, contentKey).then((a) => {
       if (!stale) setState(a);
     });
     return () => {
       stale = true;
     };
-  }, [serverUdn, objectId]);
+  }, [serverUdn, objectId, contentKey]);
   return state;
 }
 
 /** The playing track's library identity, resolved by content — for surfaces
  *  (display mode) that don't already hold the Stream tab's enriched node. */
-export function usePlayingFileRef(): { serverUdn: string; objectId: string } | null {
+export function usePlayingFileRef(): {
+  serverUdn: string;
+  objectId: string;
+  contentKey: string;
+} | null {
   const playState = useStore((s) => s.playState);
   const nowPlaying = useStore((s) => s.nowPlaying);
-  const [ref, setRef] = useState<{ serverUdn: string; objectId: string } | null>(null);
+  const [ref, setRef] = useState<{
+    serverUdn: string;
+    objectId: string;
+    contentKey: string;
+  } | null>(null);
   const md = playState?.metadata;
   const trackKey = `${md?.title ?? ""}|${md?.artist ?? ""}|${md?.album ?? ""}`;
   const psRef = useRef(playState);
@@ -169,7 +222,11 @@ export function usePlayingFileRef(): { serverUdn: string; objectId: string } | n
       .mediaNodeInfo(built.localQuery)
       .then((found) => {
         if (stale || !found?.node.serverUdn || !found.node.id) return;
-        setRef({ serverUdn: found.node.serverUdn, objectId: found.node.id });
+        setRef({
+          serverUdn: found.node.serverUdn,
+          objectId: found.node.id,
+          contentKey: audioAnalysisKey(found.node),
+        });
       })
       .catch(() => {});
     return () => {
@@ -315,7 +372,7 @@ function fmtDb(v: number): string {
 
 /** The database-style DR integer; absent rather than wrong when the
  *  procedure declines to speak (silence, sub-floor, clamped). */
-function DrBadge({ dr }: { dr: number }): React.JSX.Element | null {
+export function DrBadge({ dr }: { dr: number }): React.JSX.Element | null {
   if (dr <= 0) return null;
   // The database's traffic-light convention (red = crushed, green = open;
   // DR14 was the campaign's target), translated into the house palette:
@@ -346,13 +403,15 @@ function DrBadge({ dr }: { dr: number }): React.JSX.Element | null {
 export function Waveform({
   serverUdn,
   objectId,
+  contentKey = null,
 }: {
   serverUdn: string;
   objectId: string;
+  contentKey?: string | null;
 }): React.JSX.Element | null {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const enabled = useStore((s) => s.settings.waveforms);
-  const analysis = usePeaks(enabled ? serverUdn : null, enabled ? objectId : null);
+  const analysis = usePeaks(enabled ? serverUdn : null, enabled ? objectId : null, contentKey);
   const progress = useProgress();
   const duration = useStore((s) => s.playState?.metadata?.duration ?? null);
 
@@ -407,7 +466,11 @@ export function DisplayWaveform({
 }): React.JSX.Element {
   const enabled = useStore((s) => s.settings.waveforms && s.settings.displayWaveform);
   const ref = usePlayingFileRef();
-  const analysis = usePeaks(enabled ? (ref?.serverUdn ?? null) : null, ref?.objectId ?? null);
+  const analysis = usePeaks(
+    enabled ? (ref?.serverUdn ?? null) : null,
+    ref?.objectId ?? null,
+    ref?.contentKey ?? null,
+  );
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const ready = analysis != null && analysis !== "loading";
 
@@ -438,7 +501,11 @@ export function DisplayWaveform({
 export function NowPlayingWaveform(): React.JSX.Element | null {
   const enabled = useStore((s) => s.settings.waveforms && s.settings.waveformNowPlaying);
   const ref = usePlayingFileRef();
-  const analysis = usePeaks(enabled ? (ref?.serverUdn ?? null) : null, ref?.objectId ?? null);
+  const analysis = usePeaks(
+    enabled ? (ref?.serverUdn ?? null) : null,
+    ref?.objectId ?? null,
+    ref?.contentKey ?? null,
+  );
   const progress = useProgress();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const ready = analysis != null && analysis !== "loading";
@@ -469,7 +536,11 @@ export function NowPlayingWaveform(): React.JSX.Element | null {
 export function useSeekWaveform(): ((shown: number) => React.JSX.Element) | null {
   const enabled = useStore((s) => s.settings.waveforms && s.settings.waveformSeekBar);
   const ref = usePlayingFileRef();
-  const analysis = usePeaks(enabled ? (ref?.serverUdn ?? null) : null, ref?.objectId ?? null);
+  const analysis = usePeaks(
+    enabled ? (ref?.serverUdn ?? null) : null,
+    ref?.objectId ?? null,
+    ref?.contentKey ?? null,
+  );
   if (!enabled || analysis == null || analysis === "loading") return null;
   const track = (shown: number): React.JSX.Element => (
     <SeekTrack analysis={analysis} shown={shown} />
