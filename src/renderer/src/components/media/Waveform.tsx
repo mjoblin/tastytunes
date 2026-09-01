@@ -387,8 +387,10 @@ export function NowPlayingWaveform(): React.JSX.Element | null {
   const ready = analysis != null && analysis !== "loading";
 
   useEffect(() => {
+    // The envelope, like fullscreen: at art width its silhouette reads as
+    // form; position shows as the played/unplayed split (user, 2026-08-30).
     if (canvasRef.current && ready)
-      draw(canvasRef.current, analysis, progress, { strip: false, style: "bars" });
+      draw(canvasRef.current, analysis, progress, { strip: false, style: "envelope" });
   }, [analysis, ready, progress]);
 
   if (!ready) return null;
@@ -420,7 +422,11 @@ export function useSeekWaveform(): ((shown: number) => React.JSX.Element) | null
 function SeekTrack({ analysis, shown }: { analysis: Analysis; shown: number }): React.JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   useEffect(() => {
-    if (canvasRef.current) draw(canvasRef.current, analysis, shown, { strip: true, style: "bars" });
+    // Bars stay for the CONTROL — segments read as grabbable — but at the
+    // pre-upgrade density: ~2.25px pitch reproduces the 240-bucket look at
+    // the bar's usual width; the finer pitch read as busy (user, 2026-08-30).
+    if (canvasRef.current)
+      draw(canvasRef.current, analysis, shown, { strip: true, style: "bars", pitch: 2.25 });
   }, [analysis, shown]);
   return <canvas ref={canvasRef} className="w-full h-8 block" data-seek-waveform />;
 }
