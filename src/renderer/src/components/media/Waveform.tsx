@@ -64,31 +64,48 @@ function analyze(serverUdn: string, objectId: string): Promise<Analysis | null> 
     const ctx = new AudioContext();
     try {
       const audio = await ctx.decodeAudioData(u8.slice().buffer);
-      const data = audio.getChannelData(0);
+      const chans: Float32Array[] = [];
+      for (let c = 0; c < audio.numberOfChannels; c++) chans.push(audio.getChannelData(c));
+      const frames = chans[0].length;
+      // The GLOBAL peak is a full scan of every sample on every channel —
+      // stride sampling could miss the single hottest sample and understate
+      // peak (and crest with it) by whole dB on percussive material. One
+      // pass over the floats costs tens of milliseconds, once per track.
+      // Still SAMPLE peak, honestly: true peak (dBTP, 4x oversampled) is
+      // the R128 pass's job.
+      let globalPeak = 0;
+      for (const data of chans) {
+        for (let i = 0; i < frames; i++) {
+          const a = Math.abs(data[i]);
+          if (a > globalPeak) globalPeak = a;
+        }
+      }
+      // Bucket envelopes and global RMS read BOTH channels (power-combined),
+      // strided within each bucket — RMS is statistically robust to the
+      // stride; peak above is not, hence the split.
       const peak = new Float32Array(CAPTURE_BUCKETS);
       const rms = new Float32Array(CAPTURE_BUCKETS);
-      const per = Math.max(1, Math.floor(data.length / CAPTURE_BUCKETS));
-      let globalPeak = 0;
+      const per = Math.max(1, Math.floor(frames / CAPTURE_BUCKETS));
       let globalSumSq = 0;
       let globalN = 0;
       for (let b = 0; b < CAPTURE_BUCKETS; b++) {
         const start = b * per;
-        const end = Math.min(start + per, data.length);
-        // Sample within the bucket rather than touching every frame.
+        const end = Math.min(start + per, frames);
         const step = Math.max(1, Math.floor((end - start) / 200));
         let max = 0;
         let sumSq = 0;
         let n = 0;
-        for (let i = start; i < end; i += step) {
-          const v = data[i];
-          const a = Math.abs(v);
-          if (a > max) max = a;
-          sumSq += v * v;
-          n++;
+        for (const data of chans) {
+          for (let i = start; i < end; i += step) {
+            const v = data[i];
+            const a = Math.abs(v);
+            if (a > max) max = a;
+            sumSq += v * v;
+            n++;
+          }
         }
         peak[b] = max;
         rms[b] = n > 0 ? Math.sqrt(sumSq / n) : 0;
-        if (max > globalPeak) globalPeak = max;
         globalSumSq += sumSq;
         globalN += n;
       }
