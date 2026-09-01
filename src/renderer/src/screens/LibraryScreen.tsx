@@ -1808,7 +1808,7 @@ export function LibraryScreen(): React.JSX.Element {
             baseline), so no CSS truncation here — an overflow-hidden flex
             item forfeits its text baseline (the box bottom substitutes) —
             and the long-title ellipsis lives in the data instead. */}
-        <div className="flex min-w-0 items-baseline gap-4">
+        <div className="flex min-w-0 items-baseline gap-6">
           <ScreenTitle>Library</ScreenTitle>
           {analysisProgress && (
             <div
