@@ -313,8 +313,28 @@ function fmtDb(v: number): string {
  *  procedure declines to speak (silence, sub-floor, clamped). */
 function DrBadge({ dr }: { dr: number }): React.JSX.Element | null {
   if (dr <= 0) return null;
+  // The database's traffic-light convention (red = crushed, green = open;
+  // DR14 was the campaign's target), translated into the house palette:
+  // ember for the loudness-war band, the app's own gold for the middle,
+  // sage for a genuinely dynamic master. A quiet tinted chip, not a lamp.
+  const [tone, word] =
+    dr <= 7
+      ? ["#bc5a45", "compressed"]
+      : dr <= 13
+        ? ["var(--gold)", "moderate dynamics"]
+        : ["#6f9a68", "dynamic"];
   return (
-    <span title="Dynamic range (the TT DR procedure, as in the DR database)">{` · DR${dr}`}</span>
+    <span
+      title={`Dynamic range (the TT DR procedure, as in the DR database) — ${word}`}
+      className="ml-1.5 rounded px-1 py-px"
+      style={{
+        color: tone,
+        backgroundColor: `color-mix(in srgb, ${tone} 12%, transparent)`,
+        boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${tone} 35%, transparent)`,
+      }}
+    >
+      {`DR${dr}`}
+    </span>
   );
 }
 
