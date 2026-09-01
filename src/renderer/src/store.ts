@@ -124,6 +124,18 @@ export interface LastStation {
   radioBrowserUuid: string | null;
 }
 
+/** EXPERIMENT (0.7 exploration): the Analyze-audio sweep's live position. */
+export interface AnalysisProgress {
+  /** albumDrKey of the album under the needle. */
+  key: string;
+  album: string;
+  done: number;
+  /** 0 while the sweep is still counting (browse in flight). */
+  total: number;
+  /** Sweeps waiting behind this one (the queue is global). */
+  queued: number;
+}
+
 /**
  * The one transient-feedback slot (single toast, replace-don't-stack).
  * Reserved for actions whose effect isn't visible from the current screen
@@ -363,6 +375,9 @@ interface TTState {
   albumDr: Record<string, AlbumDr>;
   setAlbumDr: (map: Record<string, AlbumDr>) => void;
   setAlbumDrEntry: (key: string, entry: AlbumDr) => void;
+  /** EXPERIMENT: the running sweep's position (null = idle). */
+  analysisProgress: AnalysisProgress | null;
+  setAnalysisProgress: (p: AnalysisProgress | null) => void;
   setPaletteOpen: (open: boolean) => void;
   setDisplayMode: (on: boolean) => void;
   setLyricsOpen: (open: boolean) => void;
@@ -593,6 +608,8 @@ export const useStore = create<TTState>((set, get) => ({
   albumDr: {},
   setAlbumDr: (albumDr) => set({ albumDr }),
   setAlbumDrEntry: (key, entry) => set((s) => ({ albumDr: { ...s.albumDr, [key]: entry } })),
+  analysisProgress: null,
+  setAnalysisProgress: (analysisProgress) => set({ analysisProgress }),
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
   setDisplayMode: (displayMode) => set({ displayMode }),
   // The two Now Playing drawers are mutually exclusive — opening one closes

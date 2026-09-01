@@ -1,10 +1,11 @@
 // EXPERIMENT (0.7 exploration): the Analyze-audio sweep and the album-DR
-// map's renderer face. The sweep is SEQUENTIAL by design — media servers
-// dislike concurrent fetches (the range sweep's Asset lesson) — and an
-// album's DR is recorded only when EVERY track measured: the TT album
-// value is the mean of all its tracks, so a partial read has no honest
-// number (per-track results still persist, so a retry only reads what's
-// missing).
+// map's renderer face. Sweeps are SEQUENTIAL and GLOBALLY SERIALIZED —
+// media servers dislike concurrent fetches (the range sweep's Asset
+// lesson), and one queue gives the progress affordance a single honest
+// position. An album's DR is recorded only when EVERY track measured: the
+// TT album value is the mean of all its tracks, so a partial read has no
+// honest number (per-track results still persist, so a retry only reads
+// what's missing).
 import { useEffect } from "react";
 import { tt } from "@/api";
 import { useStore } from "@/store";
@@ -12,7 +13,9 @@ import { albumDrKey, audioAnalysisKey, type AlbumDr, type MediaNode } from "@sha
 import { albumDr14 } from "@/lib/dr14";
 import { analyzeTrack } from "@/components/media/Waveform";
 
-const inFlight = new Set<string>();
+const pending = new Set<string>();
+let queueTail: Promise<unknown> = Promise.resolve();
+let waiting = 0;
 
 export interface AnalyzeAlbumResult {
   tracks: number;
@@ -27,8 +30,39 @@ export async function analyzeAlbum(
   pathTitles: string[],
 ): Promise<AnalyzeAlbumResult | "busy" | null> {
   const key = albumDrKey(album);
-  if (inFlight.has(key)) return "busy";
-  inFlight.add(key);
+  if (pending.has(key)) return "busy";
+  pending.add(key);
+  waiting++;
+  const run = queueTail.then(() => {
+    waiting--;
+    return sweep(key, album, serverUdn, pathTitles);
+  });
+  queueTail = run.catch(() => undefined);
+  try {
+    return await run;
+  } finally {
+    pending.delete(key);
+  }
+}
+
+async function sweep(
+  key: string,
+  album: MediaNode,
+  serverUdn: string,
+  pathTitles: string[],
+): Promise<AnalyzeAlbumResult | null> {
+  const progress = (done: number, total: number): void =>
+    useStore.getState().setAnalysisProgress({
+      key,
+      album: album.title,
+      done,
+      total,
+      queued: waiting,
+    });
+  // Visible from the first breath — the browse and the first fetch are
+  // exactly the silent seconds the affordance exists for (total 0 = "still
+  // counting"; the indicator withholds numbers until they're real).
+  progress(0, 0);
   try {
     let nodes: MediaNode[];
     try {
@@ -50,10 +84,13 @@ export async function analyzeAlbum(
     }
     if (tracks.length === 0) return null;
     const drs: number[] = [];
-    for (const t of tracks) {
+    for (let i = 0; i < tracks.length; i++) {
+      progress(i, tracks.length);
+      const t = tracks[i];
       const a = await analyzeTrack(t.serverUdn ?? serverUdn, t.id, audioAnalysisKey(t));
       if (a) drs.push(a.dr);
     }
+    progress(tracks.length, tracks.length);
     if (drs.length !== tracks.length)
       return { tracks: tracks.length, analyzed: drs.length, dr: null };
     const entry: AlbumDr = { dr: albumDr14(drs), tracks: tracks.length, analyzedAt: Date.now() };
@@ -61,7 +98,8 @@ export async function analyzeAlbum(
     useStore.getState().setAlbumDrEntry(key, entry);
     return { tracks: tracks.length, analyzed: drs.length, dr: entry.dr };
   } finally {
-    inFlight.delete(key);
+    // a queued sweep repaints the affordance immediately; otherwise go quiet
+    if (waiting === 0) useStore.getState().setAnalysisProgress(null);
   }
 }
 

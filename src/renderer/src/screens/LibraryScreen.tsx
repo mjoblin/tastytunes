@@ -1393,6 +1393,7 @@ export function LibraryScreen(): React.JSX.Element {
   // completes. Album menus only, gated on the waveforms master like all
   // audio analysis.
   const waveformsOn = useStore((s) => s.settings.waveforms);
+  const analysisProgress = useStore((s) => s.analysisProgress);
   const runAnalyzeAlbum = async (node: MediaNode, udn: string): Promise<void> => {
     showToast({ kind: "success", text: `Analyzing “${node.title}”…` });
     const r = await analyzeAlbum(
@@ -1617,6 +1618,7 @@ export function LibraryScreen(): React.JSX.Element {
     albumDrEntry && (allTracks.length === 0 || albumDrEntry.tracks === allTracks.length)
       ? albumDrEntry.dr
       : null;
+  const albumSweeping = albumNode != null && analysisProgress?.key === albumDrKey(albumNode);
   // the note a row carries when its format differs from the album headline
   const albumNoteFor = (node: MediaNode): string | null => {
     if (!albumNode) return null;
@@ -1800,6 +1802,19 @@ export function LibraryScreen(): React.JSX.Element {
     >
       <header className="drag-region flex items-center gap-4 px-8 pt-8 pb-2">
         <ScreenTitle>Library</ScreenTitle>
+        {/* EXPERIMENT (0.7 exploration): the Analyze-audio sweep's pulse —
+            the silent seconds between its toasts, made visible (the panel
+            waveform's "Reading the file…" grammar) */}
+        {analysisProgress && (
+          <div
+            data-analysis-progress
+            className="min-w-0 truncate font-mono text-[11px] text-faint motion-safe:animate-pulse"
+          >
+            Analyzing “{analysisProgress.album}”
+            {analysisProgress.total > 0 && ` · ${analysisProgress.done}/${analysisProgress.total}`}
+            {analysisProgress.queued > 0 && ` · +${analysisProgress.queued} queued`}
+          </div>
+        )}
         <div className="flex-1" />
         <div className="flex items-center gap-1.5">
           {filterAvailable && (
@@ -2386,10 +2401,20 @@ export function LibraryScreen(): React.JSX.Element {
               {/* facts + composers are one thought too, set tight (the
                   composer line is only there when every track agrees) */}
               <div className="space-y-0.5">
-                {(albumFacts || albumDrShown != null) && (
+                {(albumFacts || albumDrShown != null || albumSweeping) && (
                   <div className="text-[12.5px] text-faint">
                     {albumFacts}
-                    {albumDrShown != null && <DrBadge dr={albumDrShown} />}
+                    {albumSweeping ? (
+                      <span className="ml-2.5 motion-safe:animate-pulse" data-album-analyzing>
+                        analyzing
+                        {analysisProgress != null &&
+                          analysisProgress.total > 0 &&
+                          ` ${analysisProgress.done}/${analysisProgress.total}`}
+                        …
+                      </span>
+                    ) : (
+                      albumDrShown != null && <DrBadge dr={albumDrShown} />
+                    )}
                   </div>
                 )}
                 {albumComposerLine && (
@@ -2760,7 +2785,7 @@ export function LibraryScreen(): React.JSX.Element {
           menu={menu}
           onClose={() => setMenu(null)}
           navVerbs={volumeNavVerbs(menu.node)}
-          extraVerbs={analyzeVerbs(menu.node)}
+          utilityVerbs={analyzeVerbs(menu.node)}
           goToAlbum={
             searchMode && !menu.node.isContainer && menu.node.album && linkable(menu.node, "albums")
               ? () => {
