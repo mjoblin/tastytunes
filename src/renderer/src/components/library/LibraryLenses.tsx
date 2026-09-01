@@ -560,6 +560,7 @@ export function AlbumsLens({
                 badge={
                   set ? `${set.volumes.length} volumes` : multiServer ? node.serverName : undefined
                 }
+                dr={albumDr[albumDrKey(node)]?.dr ?? null}
                 onHeart={() => actions.heartNode(rawNode)}
                 onEnter={() => actions.openAlbum(rawNode)}
                 onMenu={(e) => actions.openMenu(rawNode, e)}

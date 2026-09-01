@@ -372,7 +372,14 @@ function fmtDb(v: number): string {
 
 /** The database-style DR integer; absent rather than wrong when the
  *  procedure declines to speak (silence, sub-floor, clamped). */
-export function DrBadge({ dr }: { dr: number }): React.JSX.Element | null {
+export function DrBadge({
+  dr,
+  className,
+}: {
+  dr: number;
+  /** Overrides the default ml-2.5 (row cells manage their own spacing). */
+  className?: string;
+}): React.JSX.Element | null {
   if (dr <= 0) return null;
   // The database's traffic-light convention (red = crushed, green = open;
   // DR14 was the campaign's target), translated into the house palette:
@@ -387,7 +394,7 @@ export function DrBadge({ dr }: { dr: number }): React.JSX.Element | null {
   return (
     <span
       title={`Dynamic range (the TT DR procedure, as in the DR database) — ${word}`}
-      className="ml-2.5 rounded px-1 py-px"
+      className={`rounded px-1 py-px ${className ?? "ml-2.5"}`}
       style={{
         color: tone,
         backgroundColor: `color-mix(in srgb, ${tone} 12%, transparent)`,

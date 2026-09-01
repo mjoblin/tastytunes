@@ -7,6 +7,7 @@ import { RowAction } from "@/components/media/RowAction";
 import { RowHeart } from "@/components/media/RowHeart";
 import { ArtImage } from "@/components/media/ArtImage";
 import { MediaArt } from "@/components/media/MediaArt";
+import { DrBadge } from "@/components/media/Waveform";
 import { DurationCell } from "@/components/media/DurationCell";
 import { Eqbars } from "@/components/media/Eqbars";
 import { artUrlAt } from "@shared/artUrl";
@@ -206,6 +207,7 @@ export function ContainerRow({
   menuOpen,
   favorited,
   badge,
+  dr,
   onHeart,
   onEnter,
   onMenu,
@@ -217,6 +219,9 @@ export function ContainerRow({
   favorited?: boolean;
   /** Provenance chip beside the subline (lens listings pooling several servers). */
   badge?: string;
+  /** EXPERIMENT (0.7): the album's recorded TT-DR for the data cluster;
+   *  null renders the reserved cell empty (absence as absence). */
+  dr?: number | null;
   onHeart?(): void;
   onEnter(): void;
   onMenu(e: React.MouseEvent): void;
@@ -230,7 +235,7 @@ export function ContainerRow({
   return (
     <div
       className={cx(
-        "group grid grid-cols-[44px_1fr_auto_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
+        "group grid grid-cols-[44px_1fr_auto_auto_auto_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
         playing ? "row-playing bg-gold/10" : menuOpen ? "bg-veil" : "hover:bg-veil",
       )}
       onClick={onEnter}
@@ -260,6 +265,19 @@ export function ContainerRow({
           </div>
         )}
       </div>
+      {/* The rows view is the data view: year and DR ride RESERVED cells on
+          album rows (the duration-cell principle — alignment holds whether or
+          not a value exists; empty tracks collapse on non-album rows). */}
+      {album && (
+        <div className="w-9 text-right font-mono text-[11px] text-faint tabular-nums">
+          {node.year ?? ""}
+        </div>
+      )}
+      {album && (
+        <div className="flex w-12 justify-end font-mono text-[10.5px]">
+          {dr != null && <DrBadge dr={dr} className="" />}
+        </div>
+      )}
       {playing ? <Eqbars /> : <span />}
       {album && onHeart ? (
         <RowHeart favorited={favorited === true} held={menuOpen} onHeart={onHeart} />
