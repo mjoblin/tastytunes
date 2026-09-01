@@ -8,6 +8,8 @@ import {
   ListStart,
   MoreHorizontal,
   Play,
+  LayoutGrid,
+  Rows3,
 } from "lucide-react";
 import {
   albumVolume,
@@ -33,7 +35,7 @@ import { MediaArt } from "@/components/media/MediaArt";
 import { FilterInput } from "@/components/controls/FilterInput";
 import { PopoverChrome } from "@/hooks/usePopover";
 import { POPOVER_CARD } from "@/components/chrome/Overlay";
-import { Chip } from "@/components/chrome/Chrome";
+import { Chip, HeaderChip } from "@/components/chrome/Chrome";
 import { SortChip } from "@/components/controls/SortChip";
 import { Segmented } from "@/components/controls/Segmented";
 import { ContainerCard, ContainerRow, TrackRow } from "@/components/library/LibraryCards";
@@ -84,116 +86,6 @@ export interface LensActions {
 const lc = (s: string | null | undefined): string => (s ?? "").trim().toLowerCase();
 const nodeKey = (n: MediaNode): string => `${n.serverUdn ?? ""}|${n.id}`;
 
-/** Facet chips, the radio-category pill idiom: single-select, click the
- *  active chip to clear (facet-shaped data may earn multi-select someday —
- *  see the partition-vs-facet note in the ROADMAP — but it starts here).
- *  With `max`, the rail shows the top chips and folds the tail behind a
- *  "+N more" popover — real tag data grows genre lists without bound, and
- *  a hard cap would silently strand whatever fell off. The active value
- *  always surfaces in the rail, even when picked from the tail. */
-function ChipRail({
-  rail,
-  options,
-  value,
-  max,
-  lead,
-  onChange,
-}: {
-  rail: string;
-  options: Array<{ value: string; label: string; count: number }>;
-  value: string | null;
-  max?: number;
-  /** A leading control sharing the row (the decade picker pill). */
-  lead?: React.ReactNode;
-  onChange(value: string | null): void;
-}): React.JSX.Element | null {
-  const [moreOpen, setMoreOpen] = useState(false);
-  const showChips = options.length >= 2;
-  if (!showChips && lead == null) return null;
-  let visible = max != null && options.length > max ? options.slice(0, max) : options;
-  if (value && !visible.some((o) => o.value === value)) {
-    const active = options.find((o) => o.value === value);
-    if (active) visible = [...visible.slice(0, -1), active];
-  }
-  const moreCount = options.length - visible.length;
-  const chip = (o: { value: string; label: string; count: number }): React.JSX.Element => (
-    <Chip
-      key={o.value}
-      state={value === o.value ? "active" : "idle"}
-      data-lens-chip={o.label}
-      onClick={() => {
-        onChange(value === o.value ? null : o.value);
-        setMoreOpen(false);
-      }}
-      className="no-drag motion-safe:active:scale-95"
-    >
-      {o.label}
-      <span
-        className={cx(
-          "ml-1.5 font-mono text-[10px]",
-          value === o.value ? "text-gold/70" : "text-faint",
-        )}
-      >
-        {o.count}
-      </span>
-    </Chip>
-  );
-  return (
-    <div data-lens-rail={rail} className="flex items-center gap-1.5 flex-wrap">
-      {lead}
-      {showChips && visible.map(chip)}
-      {showChips && moreCount > 0 && (
-        <div className="relative">
-          <Chip
-            state={moreOpen ? "open" : "idle"}
-            data-lens-more={rail}
-            onClick={() => setMoreOpen((o) => !o)}
-            className="no-drag motion-safe:active:scale-95"
-          >
-            +{moreCount} more
-          </Chip>
-          {moreOpen && (
-            <>
-              <PopoverChrome onClose={() => setMoreOpen(false)} />
-              <div className="fixed inset-0 z-20" onClick={() => setMoreOpen(false)} />
-              <div
-                data-lens-more-popover
-                className={cx(
-                  "absolute left-0 top-full mt-1.5 z-30 w-56 max-h-72 overflow-y-auto",
-                  POPOVER_CARD,
-                  "p-1.5 space-y-0.5",
-                )}
-              >
-                {options.map((o) => (
-                  <button
-                    key={o.value}
-                    data-lens-chip={o.label}
-                    onClick={() => {
-                      onChange(value === o.value ? null : o.value);
-                      setMoreOpen(false);
-                    }}
-                    className={cx(
-                      "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-[13px] transition-colors",
-                      value === o.value
-                        ? "text-gold bg-golddim"
-                        : "text-dim hover:text-ink hover:bg-veil",
-                    )}
-                  >
-                    <span className="min-w-0 flex-1 truncate">{o.label}</span>
-                    <span className="font-mono text-[10.5px] text-faint tabular-nums">
-                      {o.count}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 /** One pill that opens a picker popover — for bounded facets (decades) that
  *  shouldn't spend a whole rail row. The chevron marks it as a picker, not a
  *  toggle chip; an active pick renders gold like any active chip. Clicking the
@@ -235,7 +127,7 @@ function PickerPill({
           <div
             data-lens-picker-popover={id}
             className={cx(
-              "absolute left-0 top-full mt-1.5 z-30 w-44 max-h-72 overflow-y-auto",
+              "absolute left-0 top-full mt-1.5 z-30 w-56 max-h-72 overflow-y-auto",
               POPOVER_CARD,
               "p-1.5 space-y-0.5",
             )}
@@ -304,6 +196,7 @@ export function AlbumsLens({
   cardSize,
   cardGap,
   fillRows,
+  onToggleLayout,
 }: {
   pools: MediaIndexPools[];
   actions: LensActions;
@@ -311,6 +204,9 @@ export function AlbumsLens({
   cardSize: number;
   cardGap: number;
   fillRows: boolean;
+  /** Flips libraryLayout — sort and layout are one presentation pairing
+   *  (adjacent in the browse header), kept together here too. */
+  onToggleLayout?: () => void;
 }): React.JSX.Element {
   const [mem, setMemState] = useState(albumsMem);
   const setMem = (patch: Partial<typeof albumsMem>): void => {
@@ -447,53 +343,67 @@ export function AlbumsLens({
     <div data-lens-albums>
       <div className="flex items-start gap-3 pb-3">
         <div className="flex-1 min-w-0">
-          {/* one row: the decade picker leads, genres chip along after it —
-              a bounded facet doesn't get to spend a whole rail row */}
-          <ChipRail
-            rail="genre"
-            options={genreOptions}
-            value={mem.genre}
-            max={8}
-            lead={
-              <>
-                {/* FILTER FIRST, on the LEFT — the lens sub-row rule (user
-                    call 2026-08-16, matching the Artists lens): text filter,
-                    then the partition, then the facets; the sort chip sits
-                    alone on the right. This filter used to sit right, beside
-                    the sort chip — the one text filter in the app next to a
-                    sort control, and its sibling lens did the opposite. */}
-                <FilterInput
-                  value={mem.filter}
-                  onChange={(filter) => setMem({ filter })}
-                  shown={shown.length}
-                  total={all.length}
-                />
-                {/* the PARTITION follows: everything · artist albums ·
-                    compilations. A view default — it persists (S12). */}
-                <Segmented<"all" | "albums" | "compilations">
-                  value={kind}
-                  onChange={(v) => void saveSettings({ lensAlbumsKind: v })}
-                  options={[
-                    { value: "all", label: "All" },
-                    { value: "albums", label: "Albums" },
-                    { value: "compilations", label: "Compilations", tip: "Various-artists albums" },
-                  ]}
-                />
-                <PickerPill
-                  id="decade"
-                  neutral="Decade"
-                  clearLabel="All decades"
-                  options={decadeOptions}
-                  value={mem.decade}
-                  onChange={(decade) => setMem({ decade })}
-                />
-              </>
-            }
-            onChange={(genre) => setMem({ genre })}
-          />
+          {/* one row: filter, partition, then the two facet PICKERS.
+              Genre joined Decade as a PickerPill (user, 2026-08-31): real
+              tag data made the chip rail read as overwhelm — dozens of
+              genres spending rows — and the bounded picker already owned
+              the same job for decades. The rail pattern retired with it. */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            {/* FILTER FIRST, on the LEFT — the lens sub-row rule (user
+                call 2026-08-16, matching the Artists lens): text filter,
+                then the partition, then the facets; the sort chip sits
+                alone on the right. This filter used to sit right, beside
+                the sort chip — the one text filter in the app next to a
+                sort control, and its sibling lens did the opposite. */}
+            <FilterInput
+              value={mem.filter}
+              onChange={(filter) => setMem({ filter })}
+              shown={shown.length}
+              total={all.length}
+            />
+            {/* the PARTITION follows: everything · artist albums ·
+                compilations. A view default — it persists (S12). */}
+            <Segmented<"all" | "albums" | "compilations">
+              value={kind}
+              onChange={(v) => void saveSettings({ lensAlbumsKind: v })}
+              options={[
+                { value: "all", label: "All" },
+                { value: "albums", label: "Albums" },
+                { value: "compilations", label: "Compilations", tip: "Various-artists albums" },
+              ]}
+            />
+            <PickerPill
+              id="decade"
+              neutral="Decade"
+              clearLabel="All decades"
+              options={decadeOptions}
+              value={mem.decade}
+              onChange={(decade) => setMem({ decade })}
+            />
+            <PickerPill
+              id="genre"
+              neutral="Genre"
+              clearLabel="All genres"
+              options={genreOptions}
+              value={mem.genre}
+              onChange={(genre) => setMem({ genre })}
+            />
+          </div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-          {/* the sort chip keeps its lone right spot */}
+          {/* layout beside sort — the browse header's presentation pairing
+              ("alone on the right" bars filters and facets, not sort's own
+              established partner) */}
+          {onToggleLayout && (
+            <HeaderChip
+              data-tip={cards ? "Albums as rows" : "Albums as cards"}
+              aria-label={cards ? "Albums as rows" : "Albums as cards"}
+              onClick={onToggleLayout}
+              className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
+            >
+              {cards ? <Rows3 size={16} /> : <LayoutGrid size={16} />}
+            </HeaderChip>
+          )}
           <SortChip
             sorts={ALBUM_SORTS}
             neutral="title"

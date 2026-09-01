@@ -1888,22 +1888,23 @@ export function LibraryScreen(): React.JSX.Element {
           {/* the rows⇄cards toggle governs CONTAINER lists only (tracks are
               always rows); hidden wherever it would sit dead — the root
               (sources always cards), album views, and pure-track folders.
-              The ALBUMS LENS honors the same setting and shows the toggle
-              too (2026-08-31 — the lens case had slipped through these
-              conditions and quietly locked the lens to cards). */}
-          {((!searchMode && lens === "albums") ||
-            (!atRoot &&
-              !albumNode &&
-              (searchMode ? containers.length > 0 : rawContainerCount > 0))) && (
-            <HeaderChip
-              data-tip={cards ? "Albums & folders as rows" : "Albums & folders as cards"}
-              aria-label={cards ? "Albums & folders as rows" : "Albums & folders as cards"}
-              onClick={() => void setLayout(cards ? "rows" : "cards")}
-              className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
-            >
-              {cards ? <Rows3 size={16} /> : <LayoutGrid size={16} />}
-            </HeaderChip>
-          )}
+              The ALBUMS LENS carries its own toggle beside its sort chip
+              (2026-08-31 — sort and layout are one presentation pairing,
+              and the lens keeps sort in its sub-row; the lens case had
+              slipped through these conditions and quietly locked the lens
+              to cards). */}
+          {!atRoot &&
+            !albumNode &&
+            (searchMode ? containers.length > 0 : rawContainerCount > 0) && (
+              <HeaderChip
+                data-tip={cards ? "Albums & folders as rows" : "Albums & folders as cards"}
+                aria-label={cards ? "Albums & folders as rows" : "Albums & folders as cards"}
+                onClick={() => void setLayout(cards ? "rows" : "cards")}
+                className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
+              >
+                {cards ? <Rows3 size={16} /> : <LayoutGrid size={16} />}
+              </HeaderChip>
+            )}
         </div>
       </header>
 
@@ -2196,6 +2197,7 @@ export function LibraryScreen(): React.JSX.Element {
               cardSize={presetCardSize}
               cardGap={presetGap}
               fillRows={presetFillRows}
+              onToggleLayout={() => void setLayout(cards ? "rows" : "cards")}
             />
           ) : (
             <ArtistsLens pools={lensPools} actions={lensActions} />
