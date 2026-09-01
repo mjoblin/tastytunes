@@ -36,6 +36,18 @@ function roundHalfEven(x: number): number {
   return f % 2 === 0 ? f : f + 1;
 }
 
+/**
+ * The album's official DR — the reference's dynamic_range_meter.py sums
+ * each track's INTEGER DR and divides by the scanned-track count, rounded
+ * half-to-even like everything else. A decoded DR0 track (a silent
+ * interlude) counts in the mean; only tracks that failed to decode don't.
+ * An album value therefore exists only when EVERY track is measured.
+ */
+export function albumDr14(trackDrs: readonly number[]): number {
+  if (trackDrs.length === 0) return 0;
+  return roundHalfEven(trackDrs.reduce((s, v) => s + v, 0) / trackDrs.length);
+}
+
 export function computeDr14(channels: readonly Float32Array[], sampleRate: number): number {
   const ch = channels.length;
   if (ch === 0 || channels[0].length === 0) return 0;
