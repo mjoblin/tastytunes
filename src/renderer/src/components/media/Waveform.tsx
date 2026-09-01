@@ -246,7 +246,11 @@ function draw(
   if (!ctx || w <= 0) return;
   ctx.scale(dpr, dpr);
   const styles = getComputedStyle(document.documentElement);
-  const gold = styles.getPropertyValue("--gold").trim() || "#d3a13c";
+  // The theme speaks in --gold-rgb (a space-separated triple); a bare
+  // --gold does not exist, and the old fallback quietly painted every
+  // theme the same hex (caught via the badge, 2026-08-31).
+  const goldRgb = styles.getPropertyValue("--gold-rgb").trim() || "240 168 72";
+  const gold = `rgb(${goldRgb})`;
   ctx.fillStyle = gold;
   const mid = h / 2;
 
@@ -321,7 +325,7 @@ function DrBadge({ dr }: { dr: number }): React.JSX.Element | null {
     dr <= 7
       ? ["#bc5a45", "compressed"]
       : dr <= 13
-        ? ["var(--gold)", "moderate dynamics"]
+        ? ["rgb(var(--gold-rgb))", "moderate dynamics"]
         : ["#6f9a68", "dynamic"];
   return (
     <span
