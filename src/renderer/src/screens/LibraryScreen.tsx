@@ -561,6 +561,17 @@ export function LibraryScreen(): React.JSX.Element {
     setLens(which);
   };
 
+  /** Entering search is a NAVIGATION: record the spot being left (lens
+   *  included) so Back returns exactly there — found 2026-08-31 when Back
+   *  after "Search libraries" dumped the Albums lens at the top level.
+   *  The ⌘F flows that RELOCATE first go through moveTo, which already
+   *  pushed (a second push here would cost two Backs); history restores
+   *  (restoreSpot) call setSearchMode directly and must never push. */
+  const enterSearch = (): void => {
+    if (!restoring.current) navPush({ screen: "library", library: snapshot() });
+    setSearchMode(true);
+  };
+
   /** A lens result opens the SHARED native album leaf, scoped to its server;
    *  the lens crumb offers the way back with the lens state intact. */
   const openAlbumFromLens = (node: MediaNode): void => {
@@ -729,7 +740,8 @@ export function LibraryScreen(): React.JSX.Element {
       }
       const current = servers.find((x) => x.udn === serverUdn);
       if (current && eligible(current)) {
-        setSearchMode(true);
+        // no relocation on this path — enterSearch records the spot itself
+        enterSearch();
         if (seeded != null) setSearchQuery(seeded);
         return;
       }
@@ -1780,7 +1792,7 @@ export function LibraryScreen(): React.JSX.Element {
               // the shortcut in the tip: ⌘F is contextual (the library's own
               // search HERE, unified Search elsewhere) and nothing else says so
               data-tip={crossAvailable ? `${MOD}F` : "Building library indexes…"}
-              onClick={() => crossAvailable && setSearchMode(true)}
+              onClick={() => crossAvailable && enterSearch()}
               className={cx(
                 "no-drag tip-bottom tip-end flex items-center gap-2 px-3.5 h-8 rounded-lg text-[12.5px] font-medium transition-all",
                 crossAvailable
@@ -1797,7 +1809,7 @@ export function LibraryScreen(): React.JSX.Element {
             <PrimaryButton
               data-library-search-button
               data-tip={`${MOD}F`}
-              onClick={() => setSearchMode(true)}
+              onClick={() => enterSearch()}
               className="no-drag tip-bottom tip-end flex items-center gap-2 px-3.5 h-8 text-[12.5px]"
             >
               <Search size={14} strokeWidth={2.2} />
