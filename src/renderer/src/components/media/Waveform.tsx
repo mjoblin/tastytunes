@@ -18,9 +18,16 @@ import { nowPlayingInfoTarget } from "@/lib/mediaInfo";
  * waveform stands in for the progress bar when peaks exist. Honest labels
  * only: peak/RMS/crest are what this decode truly measures — "LUFS" and
  * "DR" wait for the real R128 analysis pass.
+ *
+ * RESOLUTION IS A CAPTURE PROPERTY, BAR WIDTH A PER-SURFACE FIT: analysis
+ * keeps 1200 buckets (~10KB/track) and every renderer downsamples to its
+ * own density — bars hold a ~1.5px pitch wherever they draw, and the
+ * fullscreen strip renders a continuous filled envelope instead of
+ * stretching a fixed bucket count into 10px slabs (user, 2026-08-30, on
+ * noticing exactly that).
  */
 
-const BUCKETS = 240;
+const CAPTURE_BUCKETS = 1200;
 
 interface Analysis {
   peak: Float32Array;
@@ -58,17 +65,17 @@ function analyze(serverUdn: string, objectId: string): Promise<Analysis | null> 
     try {
       const audio = await ctx.decodeAudioData(u8.slice().buffer);
       const data = audio.getChannelData(0);
-      const peak = new Float32Array(BUCKETS);
-      const rms = new Float32Array(BUCKETS);
-      const per = Math.max(1, Math.floor(data.length / BUCKETS));
+      const peak = new Float32Array(CAPTURE_BUCKETS);
+      const rms = new Float32Array(CAPTURE_BUCKETS);
+      const per = Math.max(1, Math.floor(data.length / CAPTURE_BUCKETS));
       let globalPeak = 0;
       let globalSumSq = 0;
       let globalN = 0;
-      for (let b = 0; b < BUCKETS; b++) {
+      for (let b = 0; b < CAPTURE_BUCKETS; b++) {
         const start = b * per;
         const end = Math.min(start + per, data.length);
         // Sample within the bucket rather than touching every frame.
-        const step = Math.max(1, Math.floor((end - start) / 400));
+        const step = Math.max(1, Math.floor((end - start) / 200));
         let max = 0;
         let sumSq = 0;
         let n = 0;
@@ -169,11 +176,43 @@ function useProgress(): number | null {
   return device;
 }
 
+/** Fold the 1200-bucket capture to a surface's own density. Peak folds by
+ *  max; RMS folds in the power domain (root of the mean of squares), so a
+ *  coarse view never overstates or understates loudness. */
+function downsample(a: Analysis, n: number): { peak: Float32Array; rms: Float32Array } {
+  const len = a.peak.length;
+  if (n >= len) return { peak: a.peak, rms: a.rms };
+  const peak = new Float32Array(n);
+  const rms = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const start = Math.floor((i * len) / n);
+    const end = Math.max(start + 1, Math.floor(((i + 1) * len) / n));
+    let max = 0;
+    let sumSq = 0;
+    for (let k = start; k < end; k++) {
+      if (a.peak[k] > max) max = a.peak[k];
+      sumSq += a.rms[k] * a.rms[k];
+    }
+    peak[i] = max;
+    rms[i] = Math.sqrt(sumSq / (end - start));
+  }
+  return { peak, rms };
+}
+
+interface DrawOpts {
+  /** Strip alphas (played/unplayed split, no playhead line) vs panel alphas. */
+  strip: boolean;
+  /** Bars at a fixed pitch, or the continuous filled envelope (fullscreen). */
+  style: "bars" | "envelope";
+  /** Bar pitch in CSS px — the ~1.5px look every bar surface shares. */
+  pitch?: number;
+}
+
 function draw(
   canvas: HTMLCanvasElement,
   a: Analysis,
   progress: number | null,
-  strip: boolean,
+  opts: DrawOpts,
 ): void {
   const dpr = window.devicePixelRatio || 1;
   const w = canvas.clientWidth;
@@ -181,29 +220,64 @@ function draw(
   canvas.width = w * dpr;
   canvas.height = h * dpr;
   const ctx = canvas.getContext("2d");
-  if (!ctx) return;
+  if (!ctx || w <= 0) return;
   ctx.scale(dpr, dpr);
   const styles = getComputedStyle(document.documentElement);
   const gold = styles.getPropertyValue("--gold").trim() || "#d3a13c";
-  const barW = w / a.peak.length;
+  ctx.fillStyle = gold;
   const mid = h / 2;
-  for (let i = 0; i < a.peak.length; i++) {
-    const played = progress != null && i / a.peak.length <= progress;
+
+  if (opts.style === "envelope") {
+    // Continuous filled silhouettes at ~2px steps — the wide-canvas answer:
+    // no slabs, just the mountain. Played/unplayed split via clip regions.
+    const d = downsample(a, Math.max(2, Math.min(a.peak.length, Math.floor(w / 2))));
+    const trace = (values: Float32Array): void => {
+      const step = w / (values.length - 1);
+      ctx.beginPath();
+      ctx.moveTo(0, mid - values[0] * mid);
+      for (let i = 1; i < values.length; i++) ctx.lineTo(i * step, mid - values[i] * mid);
+      for (let i = values.length - 1; i >= 0; i--) ctx.lineTo(i * step, mid + values[i] * mid);
+      ctx.closePath();
+      ctx.fill();
+    };
+    const region = (x0: number, x1: number, peakAlpha: number, rmsAlpha: number): void => {
+      if (x1 <= x0) return;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(x0, 0, x1 - x0, h);
+      ctx.clip();
+      ctx.globalAlpha = peakAlpha;
+      trace(d.peak);
+      ctx.globalAlpha = rmsAlpha;
+      trace(d.rms);
+      ctx.restore();
+    };
+    const split = progress != null ? progress * w : 0;
+    region(0, split, 0.4, 1);
+    region(split, w, 0.16, 0.4);
+    return;
+  }
+
+  const d = downsample(
+    a,
+    Math.max(60, Math.min(a.peak.length, Math.round(w / (opts.pitch ?? 1.5)))),
+  );
+  const barW = w / d.peak.length;
+  for (let i = 0; i < d.peak.length; i++) {
+    const played = progress != null && i / d.peak.length <= progress;
     const x = i * barW;
     const bw = Math.max(0.5, barW - 0.75);
     // Peak envelope: the pale outline of what the track could do.
-    ctx.fillStyle = gold;
-    ctx.globalAlpha = strip ? (played ? 0.4 : 0.16) : played ? 0.5 : 0.24;
-    const ph = Math.max(0.5, a.peak[i] * mid);
+    ctx.globalAlpha = opts.strip ? (played ? 0.4 : 0.16) : played ? 0.5 : 0.24;
+    const ph = Math.max(0.5, d.peak[i] * mid);
     ctx.fillRect(x, mid - ph, bw, ph * 2);
     // RMS envelope: the solid gold of what it actually does.
-    ctx.globalAlpha = strip ? (played ? 1 : 0.4) : played ? 1 : 0.55;
-    const rh = Math.max(0.5, a.rms[i] * mid);
+    ctx.globalAlpha = opts.strip ? (played ? 1 : 0.4) : played ? 1 : 0.55;
+    const rh = Math.max(0.5, d.rms[i] * mid);
     ctx.fillRect(x, mid - rh, bw, rh * 2);
   }
-  if (progress != null && !strip) {
+  if (progress != null && !opts.strip) {
     ctx.globalAlpha = 0.9;
-    ctx.fillStyle = gold;
     ctx.fillRect(progress * w - 0.5, 0, 1, h);
   }
 }
@@ -228,7 +302,7 @@ export function Waveform({
 
   useEffect(() => {
     if (canvasRef.current && analysis && analysis !== "loading")
-      draw(canvasRef.current, analysis, progress, false);
+      draw(canvasRef.current, analysis, progress, { strip: false, style: "bars" });
   }, [analysis, progress]);
 
   if (analysis === null) return null;
@@ -281,7 +355,8 @@ export function DisplayWaveform({
   const ready = analysis != null && analysis !== "loading";
 
   useEffect(() => {
-    if (canvasRef.current && ready) draw(canvasRef.current, analysis, progress, true);
+    if (canvasRef.current && ready)
+      draw(canvasRef.current, analysis, progress, { strip: true, style: "envelope" });
   }, [analysis, ready, progress]);
 
   // CONSTANT GEOMETRY: the strip's 40px band exists from first paint, with
@@ -312,7 +387,8 @@ export function NowPlayingWaveform(): React.JSX.Element | null {
   const ready = analysis != null && analysis !== "loading";
 
   useEffect(() => {
-    if (canvasRef.current && ready) draw(canvasRef.current, analysis, progress, false);
+    if (canvasRef.current && ready)
+      draw(canvasRef.current, analysis, progress, { strip: false, style: "bars" });
   }, [analysis, ready, progress]);
 
   if (!ready) return null;
@@ -344,7 +420,7 @@ export function useSeekWaveform(): ((shown: number) => React.JSX.Element) | null
 function SeekTrack({ analysis, shown }: { analysis: Analysis; shown: number }): React.JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   useEffect(() => {
-    if (canvasRef.current) draw(canvasRef.current, analysis, shown, true);
+    if (canvasRef.current) draw(canvasRef.current, analysis, shown, { strip: true, style: "bars" });
   }, [analysis, shown]);
   return <canvas ref={canvasRef} className="w-full h-8 block" data-seek-waveform />;
 }
