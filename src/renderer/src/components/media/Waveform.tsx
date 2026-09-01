@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { nowPlayingInfoTarget } from "@/lib/mediaInfo";
+import { computeDr14 } from "@/lib/dr14";
 
 /**
  * EXPERIMENT (0.7 exploration, the audio-file-data GO): waveforms from the
@@ -16,8 +17,10 @@ import { nowPlayingInfoTarget } from "@/lib/mediaInfo";
  * Two faces: the Stream tab's panel view (envelopes, playhead, click-to-
  * seek, a quiet stats row) and display mode's bottom strip, where the
  * waveform stands in for the progress bar when peaks exist. Honest labels
- * only: peak/RMS/crest are what this decode truly measures — "LUFS" and
- * "DR" wait for the real R128 analysis pass.
+ * only: peak/RMS/crest are what this decode truly measures, and DR is the
+ * real TT procedure (lib/dr14.ts, validated integer-exact against the
+ * reference — a name that specific is a citation, so nothing less would
+ * do). "LUFS" still waits for the R128 analysis pass.
  *
  * RESOLUTION IS A CAPTURE PROPERTY, BAR WIDTH A PER-SURFACE FIT: analysis
  * keeps 1200 buckets (~10KB/track) and every renderer downsamples to its
@@ -35,6 +38,8 @@ interface Analysis {
   peakDb: number;
   rmsDb: number;
   crestDb: number;
+  /** TT dynamic range integer; <= 0 means "no honest number" and hides. */
+  dr: number;
 }
 
 const cache = new Map<string, Promise<Analysis | null>>();
@@ -112,7 +117,8 @@ function analyze(serverUdn: string, objectId: string): Promise<Analysis | null> 
       const db = (v: number): number => (v > 0 ? 20 * Math.log10(v) : -Infinity);
       const peakDb = db(globalPeak);
       const rmsDb = db(globalN > 0 ? Math.sqrt(globalSumSq / globalN) : 0);
-      return { peak, rms, peakDb, rmsDb, crestDb: peakDb - rmsDb };
+      const dr = computeDr14(chans, audio.sampleRate);
+      return { peak, rms, peakDb, rmsDb, crestDb: peakDb - rmsDb, dr };
     } catch {
       return null;
     } finally {
@@ -303,6 +309,15 @@ function fmtDb(v: number): string {
   return Number.isFinite(v) ? `${v.toFixed(1)} dB` : "–";
 }
 
+/** The database-style DR integer; absent rather than wrong when the
+ *  procedure declines to speak (silence, sub-floor, clamped). */
+function DrBadge({ dr }: { dr: number }): React.JSX.Element | null {
+  if (dr <= 0) return null;
+  return (
+    <span title="Dynamic range (the TT DR procedure, as in the DR database)">{` · DR${dr}`}</span>
+  );
+}
+
 /** The Stream tab's panel view: envelopes, playhead, click-to-seek, stats. */
 export function Waveform({
   serverUdn,
@@ -346,6 +361,7 @@ export function Waveform({
           <div className="mt-1.5 font-mono text-[10.5px] text-faint">
             peak {fmtDb(analysis.peakDb)} · rms {fmtDb(analysis.rmsDb)} · crest{" "}
             {fmtDb(analysis.crestDb)}
+            <DrBadge dr={analysis.dr} />
           </div>
         </>
       )}
@@ -417,6 +433,7 @@ export function NowPlayingWaveform(): React.JSX.Element | null {
       <div className="mt-2 text-center font-mono text-[10.5px] text-faint">
         peak {fmtDb(analysis.peakDb)} · rms {fmtDb(analysis.rmsDb)} · crest{" "}
         {fmtDb(analysis.crestDb)}
+        <DrBadge dr={analysis.dr} />
       </div>
     </div>
   );
