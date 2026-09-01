@@ -1,6 +1,6 @@
 {
   "name": "tastytunes",
-  "version": "0.6.0-rc.1",
+  "version": "0.7.0",
   "description": "A desktop controller for Cambridge Audio StreamMagic streamers.",
   "repository": {
     "type": "git",
