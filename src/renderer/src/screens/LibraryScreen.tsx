@@ -1801,20 +1801,31 @@ export function LibraryScreen(): React.JSX.Element {
       }}
     >
       <header className="drag-region flex items-center gap-4 px-8 pt-8 pb-2">
-        <ScreenTitle>Library</ScreenTitle>
         {/* EXPERIMENT (0.7 exploration): the Analyze-audio sweep's pulse —
             the silent seconds between its toasts, made visible (the panel
-            waveform's "Reading the file…" grammar) */}
-        {analysisProgress && (
-          <div
-            data-analysis-progress
-            className="min-w-0 truncate font-mono text-[11px] text-faint motion-safe:animate-pulse"
-          >
-            Analyzing “{analysisProgress.album}”
-            {analysisProgress.total > 0 && ` · ${analysisProgress.done}/${analysisProgress.total}`}
-            {analysisProgress.queued > 0 && ` · +${analysisProgress.queued} queued`}
-          </div>
-        )}
+            waveform's "Reading the file…" grammar). BASELINE-paired with the
+            title (annotation text reads placed only on the title's own
+            baseline), so no CSS truncation here — an overflow-hidden flex
+            item forfeits its text baseline (the box bottom substitutes) —
+            and the long-title ellipsis lives in the data instead. */}
+        <div className="flex min-w-0 items-baseline gap-4">
+          <ScreenTitle>Library</ScreenTitle>
+          {analysisProgress && (
+            <div
+              data-analysis-progress
+              className="whitespace-nowrap font-mono text-[11px] text-faint motion-safe:animate-pulse"
+            >
+              Analyzing “
+              {analysisProgress.album.length > 40
+                ? `${analysisProgress.album.slice(0, 39)}…`
+                : analysisProgress.album}
+              ”
+              {analysisProgress.total > 0 &&
+                ` · ${analysisProgress.done}/${analysisProgress.total}`}
+              {analysisProgress.queued > 0 && ` · +${analysisProgress.queued} queued`}
+            </div>
+          )}
+        </div>
         <div className="flex-1" />
         <div className="flex items-center gap-1.5">
           {filterAvailable && (
