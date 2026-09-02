@@ -12,6 +12,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useDisplayFont } from "@/hooks/useDisplayFont";
 import { cx, deriveNowPlaying } from "@/lib/format";
 import { forgetDevice, lastSeenLabel } from "@/lib/devices";
+import { useConfirmPopover } from "@/components/chrome/Confirm";
 import { Nav } from "@/components/Nav";
 import { PlaybackBar } from "@/components/playback/PlaybackBar";
 import { DiagnosticsDrawer } from "@/components/overlays/DiagnosticsDrawer";
@@ -261,6 +262,11 @@ function ConnectGate(): React.JSX.Element {
   const devices = useStore((s) => s.devices);
   const discovering = useStore((s) => s.discovering);
   const setScreen = useStore((s) => s.setScreen);
+  // Forgetting is the one unreconstructible act on this screen — an eco
+  // streamer that's off can't re-teach itself until it next wakes — and a
+  // tester lost one to a stray click (rc.1, 2026-08-31). The anchored
+  // popover, never the in-place morph: the × must not move under the cursor.
+  const forgetConfirm = useConfirmPopover();
   const knownDevices = useStore((s) => s.settings.knownDevices);
   const lastHost = useStore((s) => s.settings.lastHost);
   // Never connected to anything = a true first run: the gate doubles as the
@@ -421,7 +427,13 @@ function ConnectGate(): React.JSX.Element {
                   </button>
                   {row.book && (
                     <button
-                      onClick={() => forgetDevice(row.book!)}
+                      onClick={(e) =>
+                        forgetConfirm.ask(e, {
+                          question: `Forget “${row.friendlyName}”? It won't be remembered again until it's next seen on the network.`,
+                          verb: "Forget",
+                          onConfirm: () => forgetDevice(row.book!),
+                        })
+                      }
                       data-forget-device={row.key}
                       aria-label={`Forget ${row.friendlyName}`}
                       data-tip={`Forget ${row.friendlyName}`}
@@ -432,6 +444,7 @@ function ConnectGate(): React.JSX.Element {
                   )}
                 </div>
               ))}
+              {forgetConfirm.popover}
             </div>
           ) : (
             <div className="text-[13px] text-faint max-w-sm">
