@@ -17,6 +17,7 @@ import { useStore } from "@/store";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { cx } from "@/lib/format";
 import { forgetDevice, lastSeenLabel } from "@/lib/devices";
+import { useConfirmPopover } from "@/components/chrome/Confirm";
 import { Segmented } from "@/components/controls/Segmented";
 import { SourcesPanel } from "@/components/device/SourcesPanel";
 import { ToneEq } from "@/components/device/ToneEq";
@@ -28,6 +29,9 @@ export function DeviceScreen(): React.JSX.Element {
   const devices = useStore((s) => s.devices);
   const knownDevices = useStore((s) => s.settings.knownDevices);
   const discovering = useStore((s) => s.discovering);
+  // Same confirm as the connect gate's cards (see ConnectGate): forgetting
+  // is unreconstructible while the streamer sleeps, so it asks first.
+  const forgetConfirm = useConfirmPopover();
   const systemInfo = useStore((s) => s.systemInfo);
   // PASSIVE firmware awareness: shown here, never acted on. There is no check or
   // install control anywhere — updating is the user's job via the official app
@@ -254,7 +258,13 @@ export function DeviceScreen(): React.JSX.Element {
                           Connect
                         </button>
                         <button
-                          onClick={() => forgetDevice(d)}
+                          onClick={(e) =>
+                            forgetConfirm.ask(e, {
+                              question: `Forget “${d.friendlyName}”? It won't be remembered again until it's next seen on the network.`,
+                              verb: "Forget",
+                              onConfirm: () => forgetDevice(d),
+                            })
+                          }
                           data-forget-device={d.udn}
                           aria-label={`Forget ${d.friendlyName}`}
                           data-tip={`Forget ${d.friendlyName}`}
@@ -264,6 +274,7 @@ export function DeviceScreen(): React.JSX.Element {
                         </button>
                       </div>
                     ))}
+                  {forgetConfirm.popover}
                 </div>
               )}
 
