@@ -38,7 +38,7 @@ import { playStation, playingStationName, RADIO_DEBOUNCE_MS } from "@/lib/radio"
 import { useStationTuning } from "@/hooks/useStationTuning";
 import { useLitPresets } from "@/hooks/useLitPresets";
 import { cx, matchesFilter } from "@/lib/format";
-import { Chip, ScreenTitle } from "@/components/chrome/Chrome";
+import { Chip, ScreenTitle, GAP_BETWEEN, GAP_WITHIN } from "@/components/chrome/Chrome";
 
 /** Below this, a query matches half the library and every station on earth. */
 const MIN_RADIO_CHARS = 2;
@@ -879,7 +879,7 @@ export function SearchScreen(): React.JSX.Element {
           chip, because "we looked and found nothing" is an answer and its
           absence would read as "we didn't look". */}
       {q && (
-        <div className="no-drag flex items-center gap-1.5 flex-wrap px-8 pb-3">
+        <div className={`no-drag flex items-center ${GAP_BETWEEN} flex-wrap px-8 pb-3`}>
           {/* The library is the only category with KINDS inside it (the index
               answers artists, albums and tracks). Its partition appears once
               the library is the screen — same All/Artists/Albums/Tracks
@@ -897,34 +897,38 @@ export function SearchScreen(): React.JSX.Element {
               ]}
             />
           )}
-          {cats.map((c) => {
-            // THREE states, not two: matched-and-showing, matched-and-hidden,
-            // and NOTHING TO SHOW. The third is disabled rather than merely
-            // unlit — a chip you can toggle to no effect is a lie about what
-            // is behind it. It still renders, because "we looked here and
-            // found nothing" is the answer it exists to give.
-            const empty = c.total === 0 && !c.pending && !c.unknown;
-            const on = !hidden.has(c.id) && !empty;
-            return (
-              <Chip
-                key={c.id}
-                state={empty ? "disabled" : on ? "active" : "idle"}
-                data-search-chip={c.id}
-                data-on={on}
-                data-empty={empty || undefined}
-                onClick={() => !empty && toggleCat(c.id)}
-                disabled={empty}
-                aria-pressed={on}
-                title={empty ? `No ${c.label.toLowerCase()} matches` : undefined}
-                className={cx(!empty && "motion-safe:active:scale-95")}
-              >
-                {c.label}{" "}
-                <span className="tabular-nums opacity-70">
-                  {c.pending ? "…" : c.unknown ? "—" : c.total}
-                </span>
-              </Chip>
-            );
-          })}
+          <div className={`flex flex-wrap items-center ${GAP_WITHIN}`}>
+            {cats.map((c) => {
+              // THREE states, not two: matched-and-showing, matched-and-hidden,
+              // and NOTHING TO SHOW. The third is disabled rather than merely
+              // unlit — a chip you can toggle to no effect is a lie about what
+              // is behind it. It still renders, because "we looked here and
+              // found nothing" is the answer it exists to give.
+              const empty = c.total === 0 && !c.pending && !c.unknown;
+              const on = !hidden.has(c.id) && !empty;
+              return (
+                <Chip
+                  key={c.id}
+                  state={empty ? "disabled" : on ? "active" : "idle"}
+                  data-search-chip={c.id}
+                  data-on={on}
+                  data-empty={empty || undefined}
+                  onClick={() => !empty && toggleCat(c.id)}
+                  disabled={empty}
+                  aria-pressed={on}
+                  title={empty ? `No ${c.label.toLowerCase()} matches` : undefined}
+                  // the Chip is a flex box (one toolbar height), so a bare space
+                  // between label and count would collapse — the gap is explicit
+                  className={cx("gap-1.5", !empty && "motion-safe:active:scale-95")}
+                >
+                  {c.label}
+                  <span className="tabular-nums opacity-70">
+                    {c.pending ? "…" : c.unknown ? "—" : c.total}
+                  </span>
+                </Chip>
+              );
+            })}
+          </div>
           <div className="flex-1" />
           {/* Only two sorts generalize across five heterogeneous groups: each
               source's own ranking, and A–Z. Artist/year are library-shaped and

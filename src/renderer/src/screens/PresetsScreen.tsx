@@ -49,7 +49,7 @@ import { FilterInput } from "@/components/controls/FilterInput";
 import { Slider } from "@/components/controls/Slider";
 import { ArtImage } from "@/components/media/ArtImage";
 import { PopoverChrome } from "@/hooks/usePopover";
-import { HeaderChip, ScreenTitle } from "@/components/chrome/Chrome";
+import { HeaderChip, ScreenTitle, GAP_BETWEEN, GAP_WITHIN } from "@/components/chrome/Chrome";
 import { useConfirmPopover } from "@/components/chrome/Confirm";
 import { artUrlAt } from "@shared/artUrl";
 import { TUNING_WINDOW_MS } from "@/hooks/useStationTuning";
@@ -320,38 +320,40 @@ export function PresetsScreen(): React.JSX.Element {
           {allItems.length} / {presets?.max_presets ?? "—"} slots
         </span>
         <div className="flex-1" />
-        <div className="flex items-center gap-1.5">
+        <div className={`flex items-center ${GAP_BETWEEN}`}>
           <FilterInput
             value={filter}
             onChange={(t) => setScreenFilter("presets", t)}
             shown={items.length}
             total={allItems.length}
           />
-          <HeaderChip
-            data-tip={cards ? "View as rows" : "View as cards"}
-            aria-label={cards ? "View as rows" : "View as cards"}
-            onClick={() => void setLayout(cards ? "rows" : "cards")}
-            className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
-          >
-            {cards ? <Rows3 size={16} /> : <LayoutGrid size={16} />}
-          </HeaderChip>
-          <HeaderChip
-            data-tip="Scroll to the playing preset"
-            aria-label="Scroll to the playing preset"
-            onClick={() => scrollToPlaying(true)}
-            className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
-          >
-            <Crosshair size={16} />
-          </HeaderChip>
-          <HeaderChip
-            active={followPresets}
-            data-tip={followPresets ? "Auto-follow: on" : "Auto-follow: off"}
-            aria-label={followPresets ? "Auto-follow: on" : "Auto-follow: off"}
-            onClick={() => void setFollowPresets(!followPresets)}
-            className="no-drag tip-bottom p-2"
-          >
-            <Footprints size={16} />
-          </HeaderChip>
+          <div className={`flex items-center ${GAP_WITHIN}`}>
+            <HeaderChip
+              data-tip={cards ? "View as rows" : "View as cards"}
+              aria-label={cards ? "View as rows" : "View as cards"}
+              onClick={() => void setLayout(cards ? "rows" : "cards")}
+              className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
+            >
+              {cards ? <Rows3 size={16} /> : <LayoutGrid size={16} />}
+            </HeaderChip>
+            <HeaderChip
+              data-tip="Scroll to the playing preset"
+              aria-label="Scroll to the playing preset"
+              onClick={() => scrollToPlaying(true)}
+              className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
+            >
+              <Crosshair size={16} />
+            </HeaderChip>
+            <HeaderChip
+              active={followPresets}
+              data-tip={followPresets ? "Auto-follow: on" : "Auto-follow: off"}
+              aria-label={followPresets ? "Auto-follow: on" : "Auto-follow: off"}
+              onClick={() => void setFollowPresets(!followPresets)}
+              className="no-drag tip-bottom p-2"
+            >
+              <Footprints size={16} />
+            </HeaderChip>
+          </div>
         </div>
       </header>
 

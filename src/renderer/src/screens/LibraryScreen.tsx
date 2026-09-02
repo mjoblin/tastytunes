@@ -82,7 +82,13 @@ import { flashNavTarget } from "@/lib/navDrop";
 import { SelectionBar, SelectionVerb } from "@/components/controls/SelectionBar";
 import type { MediaMenuItem } from "@/lib/mediaMenus";
 import { EmptyState } from "@/components/chrome/EmptyState";
-import { HeaderChip, PrimaryButton, ScreenTitle } from "@/components/chrome/Chrome";
+import {
+  HeaderChip,
+  PrimaryButton,
+  ScreenTitle,
+  GAP_BETWEEN,
+  GAP_WITHIN,
+} from "@/components/chrome/Chrome";
 import { useOneShotAsk } from "@/hooks/useOneShotAsk";
 import { artUrlAt } from "@shared/artUrl";
 
@@ -1948,7 +1954,7 @@ export function LibraryScreen(): React.JSX.Element {
           )}
         </div>
         <div className="flex-1" />
-        <div className="flex items-center gap-1.5">
+        <div className={`flex items-center ${GAP_BETWEEN}`}>
           {filterAvailable && (
             <FilterInput
               value={filter}
@@ -1989,23 +1995,25 @@ export function LibraryScreen(): React.JSX.Element {
               Search all of {server?.name ?? "this library"}
             </PrimaryButton>
           )}
-          {!searchMode &&
-            !atRoot &&
-            (rawContainerCount > 1 || (!albumNode && rawTrackCount > 1)) && (
-              <SortChip
-                sorts={SORTS}
-                neutral="server"
-                value={librarySort}
-                reversed={librarySortReversed}
-                onChange={(librarySort) => void saveSettings({ librarySort })}
-                onToggleReverse={() =>
-                  void tt
-                    .setSettings({ librarySortReversed: !librarySortReversed })
-                    .then(setSettings)
-                }
-              />
-            )}
-          {/* the rows⇄cards toggle governs CONTAINER lists only (tracks are
+          {/* sort and layout are one presentation pairing: one group */}
+          <div className={`flex items-center ${GAP_WITHIN} empty:hidden`}>
+            {!searchMode &&
+              !atRoot &&
+              (rawContainerCount > 1 || (!albumNode && rawTrackCount > 1)) && (
+                <SortChip
+                  sorts={SORTS}
+                  neutral="server"
+                  value={librarySort}
+                  reversed={librarySortReversed}
+                  onChange={(librarySort) => void saveSettings({ librarySort })}
+                  onToggleReverse={() =>
+                    void tt
+                      .setSettings({ librarySortReversed: !librarySortReversed })
+                      .then(setSettings)
+                  }
+                />
+              )}
+            {/* the rows⇄cards toggle governs CONTAINER lists only (tracks are
               always rows); hidden wherever it would sit dead — the root
               (sources always cards), album views, and pure-track folders.
               The ALBUMS LENS carries its own toggle beside its sort chip
@@ -2013,18 +2021,19 @@ export function LibraryScreen(): React.JSX.Element {
               and the lens keeps sort in its sub-row; the lens case had
               slipped through these conditions and quietly locked the lens
               to cards). */}
-          {!atRoot &&
-            !albumNode &&
-            (searchMode ? containers.length > 0 : rawContainerCount > 0) && (
-              <HeaderChip
-                data-tip={cards ? "Albums & folders as rows" : "Albums & folders as cards"}
-                aria-label={cards ? "Albums & folders as rows" : "Albums & folders as cards"}
-                onClick={() => void setLayout(cards ? "rows" : "cards")}
-                className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
-              >
-                {cards ? <Rows3 size={16} /> : <LayoutGrid size={16} />}
-              </HeaderChip>
-            )}
+            {!atRoot &&
+              !albumNode &&
+              (searchMode ? containers.length > 0 : rawContainerCount > 0) && (
+                <HeaderChip
+                  data-tip={cards ? "Albums & folders as rows" : "Albums & folders as cards"}
+                  aria-label={cards ? "Albums & folders as rows" : "Albums & folders as cards"}
+                  onClick={() => void setLayout(cards ? "rows" : "cards")}
+                  className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
+                >
+                  {cards ? <Rows3 size={16} /> : <LayoutGrid size={16} />}
+                </HeaderChip>
+              )}
+          </div>
         </div>
       </header>
 
@@ -2133,7 +2142,10 @@ export function LibraryScreen(): React.JSX.Element {
           Kind options follow the hierarchy — artists make albums, albums
           contain tracks — and the sections below render in the same order. */}
       {searchMode && (atRoot ? crossState != null : searchState != null) && (
-        <div data-library-search-controls className="no-drag mx-8 mb-3 flex items-center gap-3">
+        <div
+          data-library-search-controls
+          className={`no-drag mx-8 mb-3 flex items-center ${GAP_BETWEEN}`}
+        >
           <Segmented<"all" | "albums" | "artists" | "tracks">
             value={searchKind}
             onChange={setSearchKind}

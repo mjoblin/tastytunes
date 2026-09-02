@@ -31,7 +31,7 @@ import { favoriteAct, favoriteHasRoute, type FavoriteActResult } from "@/lib/fav
 import { flashTarget } from "@/lib/scroll";
 import { playingStationName } from "@/lib/radio";
 import { useStationTuning } from "@/hooks/useStationTuning";
-import { ScreenTitle } from "@/components/chrome/Chrome";
+import { ScreenTitle, GAP_BETWEEN } from "@/components/chrome/Chrome";
 
 /** Kind visibility — session memory, like the Radio screen's chip state. */
 type FavKind = "all" | "station" | "album" | "track";
@@ -310,7 +310,7 @@ export function FavoritesScreen(): React.JSX.Element {
 
   return (
     <div className="h-full flex flex-col">
-      <header className="drag-region flex items-center gap-3 px-8 pt-8 pb-4">
+      <header className={`drag-region flex items-center ${GAP_BETWEEN} px-8 pt-8 pb-4`}>
         <ScreenTitle>Favorites</ScreenTitle>
         <div className="flex-1" />
         {total > 0 && (

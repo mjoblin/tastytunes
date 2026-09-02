@@ -77,7 +77,7 @@ import { DragChip } from "@/components/controls/DragChip";
 import { clampChipPos, flashNavTarget, navDropTargetAt } from "@/lib/navDrop";
 import { ModalShell } from "@/components/chrome/Overlay";
 import { PresetSavePanel, PresetPicker } from "@/components/library/LibraryMenus";
-import { HeaderChip, ScreenTitle } from "@/components/chrome/Chrome";
+import { HeaderChip, ScreenTitle, GAP_BETWEEN, GAP_WITHIN } from "@/components/chrome/Chrome";
 import { artUrlAt } from "@shared/artUrl";
 
 /**
@@ -908,17 +908,18 @@ export function QueueScreen(): React.JSX.Element {
         <div className="flex-1" />
         {/* Same split as the Now Playing header: the two SAVE verbs create
             stored things, the three after them only change what you're looking
-            at. Told apart by the wider gap-4 BETWEEN groups against the gap-1.5
-            within one. The filter needs no group of its own — it's an input,
-            already a different shape from the chips. */}
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1.5">
-            <FilterInput
-              value={filter}
-              onChange={(t) => setScreenFilter("queue", t)}
-              shown={items.length}
-              total={allItems.length}
-            />
+            at. Told apart by the wider tier BETWEEN groups against the tier
+            within one — the app-wide toolbar tiers, one home in Chrome
+            (GAP_BETWEEN / GAP_WITHIN). The filter stands alone: typing is its
+            own kind of act, so the between tier separates it from the verbs. */}
+        <div className={`flex items-center ${GAP_BETWEEN}`}>
+          <FilterInput
+            value={filter}
+            onChange={(t) => setScreenFilter("queue", t)}
+            shown={items.length}
+            total={allItems.length}
+          />
+          <div className={`flex items-center ${GAP_WITHIN}`}>
             <HeaderChip
               data-tip="Save queue as a playlist"
               aria-label="Save queue as a playlist"
@@ -956,7 +957,7 @@ export function QueueScreen(): React.JSX.Element {
             </HeaderChip>
             {clearConfirm.popover}
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className={`flex items-center ${GAP_WITHIN}`}>
             <HeaderChip
               data-tip={cards ? "View as rows" : albums ? "View as cards" : "View as albums"}
               aria-label={cards ? "View as rows" : albums ? "View as cards" : "View as albums"}

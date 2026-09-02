@@ -26,7 +26,7 @@ import { trackMenuItems, type MediaMenuItem } from "@/lib/mediaMenus";
 import { cx, fmtDayBucket, fmtRelative, matchesFilter } from "@/lib/format";
 import { clearRecentsWithUndo } from "@/lib/recents";
 import { FilterInput } from "@/components/controls/FilterInput";
-import { ScreenTitle } from "@/components/chrome/Chrome";
+import { ScreenTitle, GAP_BETWEEN } from "@/components/chrome/Chrome";
 
 interface Block {
   session: string | null;
@@ -163,7 +163,7 @@ export function RecentlyPlayedScreen(): React.JSX.Element {
 
   return (
     <div className="h-full flex flex-col">
-      <header className="drag-region flex items-center gap-3 px-8 pt-8 pb-4">
+      <header className={`drag-region flex items-center ${GAP_BETWEEN} px-8 pt-8 pb-4`}>
         <ScreenTitle>Recently Played</ScreenTitle>
         <div className="flex-1" />
         {recents.length > 0 && (
@@ -186,7 +186,7 @@ export function RecentlyPlayedScreen(): React.JSX.Element {
               onClick={() => void clearRecentsWithUndo()}
               data-tip="Clear history"
               aria-label="Clear history"
-              className="no-drag flex items-center gap-2 px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-[12.5px] text-dim
+              className="no-drag flex items-center gap-2 h-8 px-3 rounded-lg ring-1 ring-edge bg-panel/70 text-[12.5px] text-dim
                          hover:text-alert hover:ring-edge2 hover:bg-raised/70 transition-all"
             >
               <Trash2 size={14} strokeWidth={1.8} />

@@ -386,7 +386,8 @@ function MediaInfoBody({
               <button
                 data-info-analyze-album
                 onClick={runAlbumAnalysis}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/80 text-[12px] text-dim hover:text-ink hover:bg-veil transition-colors"
+                // no transition inside the frosted shell (S11): the shell fades as a whole
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/80 text-[12px] text-dim hover:text-ink hover:bg-veil"
               >
                 <AudioLines size={13} /> Analyze audio
               </button>

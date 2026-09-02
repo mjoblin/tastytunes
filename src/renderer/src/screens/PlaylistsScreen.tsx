@@ -52,7 +52,13 @@ import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { lockVertical } from "@/lib/dnd";
 import { activeSourceId, cx, fmtDuration, fmtRelative, matchesFilter } from "@/lib/format";
 import { Eqbars } from "@/components/media/Eqbars";
-import { HeaderChip, PrimaryButton, ScreenTitle } from "@/components/chrome/Chrome";
+import {
+  HeaderChip,
+  PrimaryButton,
+  ScreenTitle,
+  GAP_BETWEEN,
+  GAP_WITHIN,
+} from "@/components/chrome/Chrome";
 import { useConfirmPopover } from "@/components/chrome/Confirm";
 import { useOneShotAsk } from "@/hooks/useOneShotAsk";
 import { artUrlAt } from "@shared/artUrl";
@@ -251,7 +257,7 @@ export function PlaylistsScreen(): React.JSX.Element {
 
   return (
     <div className="h-full flex flex-col">
-      <header className="px-8 pt-8 pb-4 flex items-center gap-4">
+      <header className={`px-8 pt-8 pb-4 flex items-center ${GAP_BETWEEN}`}>
         <ScreenTitle>Playlists</ScreenTitle>
         <div className="flex-1" />
         {/* header clusters read Filter first, then partition/sort/chips
@@ -424,7 +430,7 @@ export function PlaylistsScreen(): React.JSX.Element {
                   </div>
                 </div>
 
-                <div data-playlist-actions className="shrink-0 flex items-center gap-2">
+                <div data-playlist-actions className={`shrink-0 flex items-center ${GAP_BETWEEN}`}>
                   {/* Progress lives IN the button that started it — the button is
                       already inert during the run, and an inserted banner pushed
                       the whole list down and back up again. Clicking mid-run
@@ -466,47 +472,50 @@ export function PlaylistsScreen(): React.JSX.Element {
                       Play
                     </span>
                   </PrimaryButton>
-                  <HeaderChip
-                    onClick={() => setRenaming(selected.id)}
-                    data-tip="Rename"
-                    aria-label="Rename playlist"
-                    className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
-                  >
-                    <Pencil size={16} />
-                  </HeaderChip>
-                  <button
-                    onClick={(e) =>
-                      confirmDelete.ask(e, {
-                        question: `Delete “${selected.name}”?`,
-                        onConfirm: () => {
-                          // Snapshot the WHOLE playlist, not its id: undo has to
-                          // put back the name, the items and the timestamps, and
-                          // after the delete there is nowhere left to read them.
-                          const deleted = selected;
-                          void tt.playlistDelete(deleted.id);
-                          const undoId = useStore
-                            .getState()
-                            .pushUndo(
-                              `Delete Playlist “${deleted.name}”`,
-                              () => void tt.playlistRestore(deleted),
-                            );
-                          showToast({
-                            kind: "success",
-                            text: `Deleted “${deleted.name}”`,
-                            action: {
-                              label: "Undo",
-                              undo: () => useStore.getState().runUndo(undoId),
-                            },
-                          });
-                        },
-                      })
-                    }
-                    data-tip="Delete playlist"
-                    aria-label="Delete playlist"
-                    className="no-drag tip-bottom tip-end rounded-lg motion-safe:active:scale-90 transition-all p-2 ring-1 ring-edge bg-panel/70 text-dim hover:text-alert hover:ring-edge2 hover:bg-raised/70"
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                  {/* the play verb | the edit chips: two kinds, two tiers */}
+                  <div className={`flex items-center ${GAP_WITHIN}`}>
+                    <HeaderChip
+                      onClick={() => setRenaming(selected.id)}
+                      data-tip="Rename"
+                      aria-label="Rename playlist"
+                      className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
+                    >
+                      <Pencil size={16} />
+                    </HeaderChip>
+                    <button
+                      onClick={(e) =>
+                        confirmDelete.ask(e, {
+                          question: `Delete “${selected.name}”?`,
+                          onConfirm: () => {
+                            // Snapshot the WHOLE playlist, not its id: undo has to
+                            // put back the name, the items and the timestamps, and
+                            // after the delete there is nowhere left to read them.
+                            const deleted = selected;
+                            void tt.playlistDelete(deleted.id);
+                            const undoId = useStore
+                              .getState()
+                              .pushUndo(
+                                `Delete Playlist “${deleted.name}”`,
+                                () => void tt.playlistRestore(deleted),
+                              );
+                            showToast({
+                              kind: "success",
+                              text: `Deleted “${deleted.name}”`,
+                              action: {
+                                label: "Undo",
+                                undo: () => useStore.getState().runUndo(undoId),
+                              },
+                            });
+                          },
+                        })
+                      }
+                      data-tip="Delete playlist"
+                      aria-label="Delete playlist"
+                      className="no-drag tip-bottom tip-end rounded-lg motion-safe:active:scale-90 transition-all p-2 ring-1 ring-edge bg-panel/70 text-dim hover:text-alert hover:ring-edge2 hover:bg-raised/70"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                   {confirmDelete.popover}
                 </div>
               </div>

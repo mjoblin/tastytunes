@@ -39,7 +39,13 @@ import { MediaArt } from "@/components/media/MediaArt";
 import { FilterInput } from "@/components/controls/FilterInput";
 import { PopoverChrome } from "@/hooks/usePopover";
 import { POPOVER_CARD } from "@/components/chrome/Overlay";
-import { Chip, HeaderChip, PrimaryButton } from "@/components/chrome/Chrome";
+import {
+  Chip,
+  HeaderChip,
+  PrimaryButton,
+  GAP_BETWEEN,
+  GAP_WITHIN,
+} from "@/components/chrome/Chrome";
 import { SortChip } from "@/components/controls/SortChip";
 import { Segmented } from "@/components/controls/Segmented";
 import { ContainerCard, ContainerRow, TrackRow } from "@/components/library/LibraryCards";
@@ -138,7 +144,7 @@ function PickerPill({
         state={active ? "active" : open ? "open" : "idle"}
         data-lens-picker={id}
         onClick={() => setOpen((o) => !o)}
-        className="no-drag flex items-center gap-1 motion-safe:active:scale-95"
+        className="no-drag gap-1 motion-safe:active:scale-95"
       >
         {active ? active.label : neutral}
         <ChevronDown size={12} className={active ? "text-gold/70" : "text-faint"} />
@@ -403,7 +409,7 @@ export function AlbumsLens({
               tag data made the chip rail read as overwhelm — dozens of
               genres spending rows — and the bounded picker already owned
               the same job for decades. The rail pattern retired with it. */}
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className={`flex flex-wrap items-center ${GAP_BETWEEN}`}>
             {/* FILTER FIRST, on the LEFT — the lens sub-row rule (user
                 call 2026-08-16, matching the Artists lens): text filter,
                 then the partition, then the facets; the sort chip sits
@@ -427,36 +433,38 @@ export function AlbumsLens({
                 { value: "compilations", label: "Compilations", tip: "Various-artists albums" },
               ]}
             />
-            <PickerPill
-              id="decade"
-              neutral="Decade"
-              clearLabel="All decades"
-              options={decadeOptions}
-              value={mem.decade}
-              onChange={(decade) => setMem({ decade })}
-            />
-            <PickerPill
-              id="genre"
-              neutral="Genre"
-              clearLabel="All genres"
-              options={genreOptions}
-              value={mem.genre}
-              onChange={(genre) => setMem({ genre })}
-            />
-            {/* the DR facet appears with the first analyzed album (user,
+            <div className={`flex flex-wrap items-center ${GAP_WITHIN} empty:hidden`}>
+              <PickerPill
+                id="decade"
+                neutral="Decade"
+                clearLabel="All decades"
+                options={decadeOptions}
+                value={mem.decade}
+                onChange={(decade) => setMem({ decade })}
+              />
+              <PickerPill
+                id="genre"
+                neutral="Genre"
+                clearLabel="All genres"
+                options={genreOptions}
+                value={mem.genre}
+                onChange={(genre) => setMem({ genre })}
+              />
+              {/* the DR facet appears with the first analyzed album (user,
                 2026-09-01: "show me all my DR13") */}
-            <PickerPill
-              id="dr"
-              neutral="DR"
-              clearLabel="Any DR"
-              options={drOptions}
-              value={mem.dr}
-              onChange={(dr) => setMem({ dr })}
-              min={1}
-            />
+              <PickerPill
+                id="dr"
+                neutral="DR"
+                clearLabel="Any DR"
+                options={drOptions}
+                value={mem.dr}
+                onChange={(dr) => setMem({ dr })}
+                min={1}
+              />
+            </div>
           </div>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className={`flex items-center ${GAP_WITHIN} shrink-0`}>
           {/* layout beside sort — the browse header's presentation pairing
               ("alone on the right" bars filters and facets, not sort's own
               established partner) */}
@@ -949,7 +957,7 @@ export function ArtistsLens({
     >
       {/* the filter sits ABOVE the columns (left — over the artists column
           it scopes), so all three columns' headings and rows stay aligned */}
-      <div className="shrink-0 pb-3 flex items-center gap-2">
+      <div className={`shrink-0 pb-3 flex items-center ${GAP_BETWEEN}`}>
         <FilterInput
           value={mem.filter}
           onChange={(filter) => setMem({ filter })}
@@ -1648,38 +1656,40 @@ export function TracksLens({
       <div className="flex items-start gap-3 pb-3 shrink-0">
         <div className="flex-1 min-w-0">
           {/* FILTER FIRST, then the facet pickers — the lens sub-row rule */}
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className={`flex flex-wrap items-center ${GAP_BETWEEN}`}>
             <FilterInput
               value={mem.filter}
               onChange={(filter) => setMem({ filter })}
               shown={shown.length}
               total={all.length}
             />
-            <PickerPill
-              id="decade"
-              neutral="Decade"
-              clearLabel="All decades"
-              options={decadeOptions}
-              value={mem.decade}
-              onChange={(decade) => setMem({ decade })}
-            />
-            <PickerPill
-              id="genre"
-              neutral="Genre"
-              clearLabel="All genres"
-              options={genreOptions}
-              value={mem.genre}
-              onChange={(genre) => setMem({ genre })}
-            />
-            <PickerPill
-              id="dr"
-              neutral="DR"
-              clearLabel="Any DR"
-              options={drOptions}
-              value={mem.dr}
-              onChange={(dr) => setMem({ dr })}
-              min={1}
-            />
+            <div className={`flex flex-wrap items-center ${GAP_WITHIN} empty:hidden`}>
+              <PickerPill
+                id="decade"
+                neutral="Decade"
+                clearLabel="All decades"
+                options={decadeOptions}
+                value={mem.decade}
+                onChange={(decade) => setMem({ decade })}
+              />
+              <PickerPill
+                id="genre"
+                neutral="Genre"
+                clearLabel="All genres"
+                options={genreOptions}
+                value={mem.genre}
+                onChange={(genre) => setMem({ genre })}
+              />
+              <PickerPill
+                id="dr"
+                neutral="DR"
+                clearLabel="Any DR"
+                options={drOptions}
+                value={mem.dr}
+                onChange={(dr) => setMem({ dr })}
+                min={1}
+              />
+            </div>
             {/* the narrowed list as the queue, in one gesture — the album
                 Play button's semantics (replaces the queue) for what's shown */}
             {
@@ -1716,7 +1726,7 @@ export function TracksLens({
             }
           </div>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className={`flex items-center ${GAP_WITHIN} shrink-0`}>
           {/* the sort chip keeps its lone right spot */}
           <SortChip
             sorts={TRACK_SORTS}

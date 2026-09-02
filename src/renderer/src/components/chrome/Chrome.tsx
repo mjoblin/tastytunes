@@ -13,6 +13,22 @@ import { cx } from "@/lib/format";
  */
 
 /**
+ * TOOLBAR SPACING, TWO TIERS (user call 2026-09-01: every control row sat at
+ * one 6px gap, which read cramped AND said nothing about grouping). Controls
+ * that do one kind of job sit GAP_WITHIN apart (the facet pickers; sort +
+ * layout; the queue's three save verbs); kinds sit GAP_BETWEEN apart (the
+ * text filter | a partition | the facets | a verb | the sort chip). A text
+ * filter is always its own group — typing is a different kind of act from
+ * clicking. The between tier carries a smaller row gap so a wrapping rail
+ * (the Search categories) stacks close. Every toolbar row reads these two
+ * names; a raw gap class on a control row is drift (S55). Sized 6px / 12px
+ * (user, 2026-09-02: one level down from the first cut's 8 / 16 — the
+ * distinction, not the air, was the point).
+ */
+export const GAP_WITHIN = "gap-1.5";
+export const GAP_BETWEEN = "gap-x-3 gap-y-1.5";
+
+/**
  * The ringed icon/label button that sits in screen headers, settings rows and
  * side panels — 22 hand-written copies before this.
  *
@@ -97,7 +113,10 @@ export function Chip({
   return (
     <button
       className={cx(
-        "rounded-full px-3 py-1 text-[12px] ring-1 transition-all",
+        // h-8: the toolbar height every control shares (FilterInput, HeaderChip's
+        // p-2 + 16px glyph, PrimaryButton, Segmented) — a 26px pill beside a 32px
+        // filter box read as a different row (user, 2026-09-01)
+        "inline-flex items-center rounded-full h-8 px-3 text-[12px] ring-1 transition-all",
         state === "disabled"
           ? "ring-edge/60 bg-panel/40 text-faint/50 cursor-default"
           : state === "active"
