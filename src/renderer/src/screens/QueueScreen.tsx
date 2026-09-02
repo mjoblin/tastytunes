@@ -58,7 +58,7 @@ import { EmptyState } from "@/components/chrome/EmptyState";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { flashTarget, scrollToWithContext } from "@/lib/scroll";
 import { lockVertical } from "@/lib/dnd";
-import { activeSourceId, cx, fmtTime, matchesFilter } from "@/lib/format";
+import { activeSourceId, cx, fmtTime, matchesFilter, fmtCount } from "@/lib/format";
 import { toggleFavorite } from "@/lib/favorites";
 import { fromQueueItem, refToFavorite, refToPlaylistItem } from "@/lib/mediaRef";
 import { saveRefToPreset, openRefInLibrary } from "@/lib/mediaActions";
@@ -126,7 +126,7 @@ function SaveQueueDialog({
       </div>
       <PresetSavePanel
         title="Current queue"
-        subtitle={`${trackCount} tracks — stored on the streamer`}
+        subtitle={`${fmtCount(trackCount)} tracks — stored on the streamer`}
         nameAutoFocus
         onSave={onSave}
       />

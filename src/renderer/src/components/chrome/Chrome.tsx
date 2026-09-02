@@ -141,6 +141,12 @@ export function PrimaryButton({
       className={cx(
         "rounded-lg bg-gold text-bg font-medium shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.3)]",
         "hover:brightness-110 disabled:opacity-40 disabled:shadow-none",
+        // a disabled primary is INERT, not merely dim: no hover lift, no press
+        // squash (Chromium keeps matching :active on a disabled button, so the
+        // Tracks lens's waiting Play these still animated under a click —
+        // user, 2026-09-01), and the arrow cursor of a native disabled control
+        // rather than the web's scolding not-allowed sign
+        "disabled:hover:brightness-100 motion-safe:disabled:active:scale-100 disabled:cursor-default",
         "motion-safe:active:scale-95 transition-all",
         className,
       )}

@@ -914,6 +914,10 @@ export interface AppSettings {
   lensArtistsAlbumsOnly: boolean;
   /** Albums lens partition: everything, artist albums only, or compilations only. */
   lensAlbumsKind: "all" | "albums" | "compilations";
+  /** Tracks lens sort — the third lens (2026-09-01), every track across the
+   *  ready indexes; DR sorts newest-analysis-first once the sweep has run. */
+  lensTracksSort: "title" | "artist" | "album" | "year" | "duration" | "dr";
+  lensTracksSortReversed: boolean;
   playlistsSort: "updated" | "created" | "played" | "name" | "length";
   playlistsSortReversed: boolean;
   /** Favorites kind partition (All / Stations / Albums / Tracks). */
@@ -1102,6 +1106,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   lensAlbumsSortReversed: false,
   lensArtistsAlbumsOnly: false,
   lensAlbumsKind: "all",
+  lensTracksSort: "title",
+  lensTracksSortReversed: false,
   playlistsSort: "updated",
   playlistsSortReversed: false,
   favoritesKind: "all",
@@ -1425,6 +1431,23 @@ export function albumTracksOf(
         (!twins || sameArt(t.artUrl, album.artUrl)),
     ),
   );
+}
+
+/**
+ * The album node a pool track belongs to — the inverse of albumTracksOf:
+ * same title, and the track's performers pass trackInAlbumOf against the
+ * album's credited artist (twin editions fall back to the first match).
+ * Null when the index holds no such album. Content identity, no network:
+ * the Tracks lens's album link enters the album through the lens crumb.
+ */
+export function albumOfTrack(
+  track: Pick<MediaNode, "album" | "artist" | "artists" | "albumArtist">,
+  pool: { albums: MediaNode[] },
+): MediaNode | null {
+  if (!track.album) return null;
+  const want = track.album.trim().toLowerCase();
+  const matches = pool.albums.filter((a) => a.title.trim().toLowerCase() === want);
+  return matches.find((a) => trackInAlbumOf(track, a.artist)) ?? matches[0] ?? null;
 }
 
 /**

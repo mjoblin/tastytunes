@@ -75,7 +75,7 @@ export interface LibrarySpot {
   query: string;
   searchNow: { query: string; items: MediaNode[]; total: number } | null;
   crossNow: { query: string; groups: MediaSearchAllGroup[] } | null;
-  lens: "albums" | "artists" | null;
+  lens: "albums" | "artists" | "tracks" | null;
 }
 
 /**

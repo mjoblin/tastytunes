@@ -83,14 +83,7 @@ async function sweep(
       }
     }
     if (tracks.length === 0) return null;
-    const drs: number[] = [];
-    for (let i = 0; i < tracks.length; i++) {
-      progress(i, tracks.length);
-      const t = tracks[i];
-      const a = await analyzeTrack(t.serverUdn ?? serverUdn, t.id, audioAnalysisKey(t));
-      if (a) drs.push(a.dr);
-    }
-    progress(tracks.length, tracks.length);
+    const drs = await sweepTracks(tracks, serverUdn, progress);
     if (drs.length !== tracks.length)
       return { tracks: tracks.length, analyzed: drs.length, dr: null };
     const entry: AlbumDr = { dr: albumDr14(drs), tracks: tracks.length, analyzedAt: Date.now() };
@@ -100,6 +93,60 @@ async function sweep(
   } finally {
     // a queued sweep repaints the affordance immediately; otherwise go quiet
     if (waiting === 0) useStore.getState().setAnalysisProgress(null);
+  }
+}
+
+/** The per-track loop every sweep shares: sequential, progress at each step,
+ *  the DRs of the tracks that read. */
+async function sweepTracks(
+  tracks: readonly MediaNode[],
+  serverUdn: string,
+  progress: (done: number, total: number) => void,
+): Promise<number[]> {
+  const drs: number[] = [];
+  for (let i = 0; i < tracks.length; i++) {
+    progress(i, tracks.length);
+    const t = tracks[i];
+    const a = await analyzeTrack(t.serverUdn ?? serverUdn, t.id, audioAnalysisKey(t));
+    if (a) drs.push(a.dr);
+  }
+  progress(tracks.length, tracks.length);
+  return drs;
+}
+
+/**
+ * Analyze an arbitrary set of tracks — the Tracks lens's "Analyze audio" on
+ * whatever is shown ("all my 2023 tracks"). Same queue, same pulse (labelled
+ * by the caller: "48 tracks"), same per-track persistence; no album DR is
+ * written — an album's number needs an album's every track, and a filter is
+ * not an album. Returns how many read.
+ */
+export async function analyzeTracks(
+  label: string,
+  tracks: readonly MediaNode[],
+): Promise<{ tracks: number; analyzed: number } | "busy" | null> {
+  if (tracks.length === 0) return null;
+  const key = `tracks:${label}`;
+  if (pending.has(key)) return "busy";
+  pending.add(key);
+  waiting++;
+  const run = queueTail.then(async () => {
+    waiting--;
+    const progress = (done: number, total: number): void =>
+      useStore.getState().setAnalysisProgress({ key, album: label, done, total, queued: waiting });
+    progress(0, tracks.length);
+    try {
+      const drs = await sweepTracks(tracks, tracks[0].serverUdn ?? "", progress);
+      return { tracks: tracks.length, analyzed: drs.length };
+    } finally {
+      if (waiting === 0) useStore.getState().setAnalysisProgress(null);
+    }
+  });
+  queueTail = run.catch(() => undefined);
+  try {
+    return await run;
+  } finally {
+    pending.delete(key);
   }
 }
 

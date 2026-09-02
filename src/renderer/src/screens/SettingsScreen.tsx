@@ -67,7 +67,7 @@ import { useConfirmPopover } from "@/components/chrome/Confirm";
 import { useStore, type Screen } from "@/store";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { DISPLAY_FONTS } from "@/hooks/useDisplayFont";
-import { cx } from "@/lib/format";
+import { cx, fmtCount } from "@/lib/format";
 import { SignalDot } from "@/components/device/SignalLamp";
 import { clearRecentsWithUndo } from "@/lib/recents";
 import {
@@ -1214,7 +1214,7 @@ function LibrariesSection({
                     ? `couldn't index · ${st.failure ?? "no index"}`
                     : st.state === "none"
                       ? "not indexed · search asks the server live"
-                      : `${st.tracks.toLocaleString()} tracks · ${st.albums.toLocaleString()} albums · updated ${age(st.builtAt)}`}
+                      : `${fmtCount(st.tracks)} tracks · ${fmtCount(st.albums)} albums · updated ${age(st.builtAt)}`}
               </span>
             </span>
             <HeaderChip
@@ -1289,7 +1289,7 @@ function HistorySection({
               ? "…"
               : stats.events === 0
                 ? `Empty. Plays are recorded after ${LISTEN_FLOOR_SECS} seconds of real play time.`
-                : `${stats.events.toLocaleString()} events · ${fmtBytes(stats.bytes)}${sinceLabel ? ` · since ${sinceLabel}` : ""}`
+                : `${fmtCount(stats.events)} events · ${fmtBytes(stats.bytes)}${sinceLabel ? ` · since ${sinceLabel}` : ""}`
           }
         >
           <div className="flex items-center gap-2">
@@ -1299,7 +1299,7 @@ function HistorySection({
                   if (res != null)
                     showToast({
                       kind: "success",
-                      text: `Exported ${res.events.toLocaleString()} events to ${res.file}`,
+                      text: `Exported ${fmtCount(res.events)} events to ${res.file}`,
                     });
                 })
               }

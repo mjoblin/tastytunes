@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Search, X } from "lucide-react";
-import { cx } from "@/lib/format";
+import { cx, fmtCount } from "@/lib/format";
 
 /**
  * Compact text filter for the list screens' headers. `/` focuses it from
@@ -89,9 +89,9 @@ export function FilterInput({
           worst case), so no count it can ever show grows it */}
       <span
         className="font-mono text-[10.5px] text-dim tabular-nums text-right"
-        style={{ minWidth: `${Math.max(9, String(total).length * 2 + 1)}ch` }}
+        style={{ minWidth: `${Math.max(9, fmtCount(total).length * 2 + 1)}ch` }}
       >
-        {value ? `${shown}/${total}` : ""}
+        {value ? `${fmtCount(shown)}/${fmtCount(total)}` : ""}
       </span>
       <button
         aria-label="Clear filter"
