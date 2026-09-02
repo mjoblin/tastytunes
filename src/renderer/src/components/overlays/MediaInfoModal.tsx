@@ -1,8 +1,10 @@
-import { useState, useRef } from "react";
-import { Copy, Check, Disc3, Library, Music2, User } from "lucide-react";
+import { useEffect, useState, useRef } from "react";
+import { AudioLines, Copy, Check, Disc3, Library, Music2, User } from "lucide-react";
 import {
   albumComposers,
+  albumDrKey,
   albumFormat,
+  audioAnalysisKey,
   discGroups,
   fmtBytes,
   formatLabel,
@@ -11,11 +13,22 @@ import {
   type MediaInfoTarget,
   type MediaNode,
 } from "@shared/model";
+import { tt } from "@/api";
+import { albumDr14 } from "@/lib/dr14";
+import { analyzeAlbum, useAlbumDr } from "@/lib/audioAnalysis";
 import { artUrlAt } from "@shared/artUrl";
 import { useStore } from "@/store";
 import { ModalShell } from "@/components/chrome/Overlay";
 import { CloseButton } from "@/components/controls/CloseButton";
 import { ArtImage } from "@/components/media/ArtImage";
+import { DrChip, InfoWaveform, useKnownAnalysis } from "@/components/media/Waveform";
+import {
+  FACT_SEP,
+  albumFactsLine,
+  albumFormatChips,
+  formatChips,
+  trackFactsLine,
+} from "@/lib/mediaFacts";
 import {
   Section,
   sourceRows,
@@ -74,7 +87,7 @@ function MediaInfoBody({
 }): React.JSX.Element {
   const setMediaInfo = useStore((s) => s.setMediaInfo);
   const close = (): void => setMediaInfo(null);
-  const { node, tracks, serverName, note, artist, stream, serverProfile } = target;
+  const { node, tracks, serverName, serverUdn, note, artist, stream, serverProfile } = target;
   const kind = kindOf(node);
   const [copied, setCopied] = useState(false);
 
@@ -85,6 +98,68 @@ function MediaInfoBody({
       setTimeout(() => setCopied(false), 1500);
     });
   };
+
+  // ---- analysis (EXPERIMENT, 0.7): the track's known analysis feeds the
+  // header's DR chip, the Format row and the waveform from ONE state; an
+  // album's coverage comes from one bulk cache-only read of its tracks.
+  const udn = node.serverUdn ?? serverUdn ?? null;
+  const known = useKnownAnalysis(kind === "track" ? udn : null, node.id, audioAnalysisKey(node));
+  const trackDr =
+    known.state != null && known.state !== "loading" && known.state !== "unknown"
+      ? known.state.dr
+      : null;
+  const waveformsOn = useStore((s) => s.settings.waveforms);
+  const albumDrMap = useAlbumDr();
+  const albumEntry = kind === "album" ? (albumDrMap[albumDrKey(node)] ?? null) : null;
+  const progress = useStore((s) => s.analysisProgress);
+  const sweeping = kind === "album" && progress?.key === albumDrKey(node);
+  const [trackDrs, setTrackDrs] = useState<number[] | null>(null);
+  const [coverageNonce, setCoverageNonce] = useState(0);
+  useEffect(() => {
+    if (kind !== "album" || !tracks || tracks.length === 0 || !waveformsOn) {
+      setTrackDrs(null);
+      return;
+    }
+    let stale = false;
+    void tt
+      .audioDrMany(tracks.map((t) => audioAnalysisKey(t)))
+      .then((m) => {
+        if (!stale) setTrackDrs(Object.values(m));
+      })
+      .catch(() => {});
+    return () => {
+      stale = true;
+    };
+  }, [kind, tracks, waveformsOn, coverageNonce]);
+  const albumTotal = tracks?.length ?? 0;
+  const albumKnown = trackDrs?.length ?? 0;
+  const albumComplete = albumTotal > 0 && albumKnown === albumTotal;
+  const albumDr = albumEntry?.dr ?? (albumComplete && trackDrs ? albumDr14(trackDrs) : null);
+  const drRange =
+    trackDrs && trackDrs.length > 0
+      ? { min: Math.min(...trackDrs), max: Math.max(...trackDrs) }
+      : null;
+  const runAlbumAnalysis = (): void => {
+    if (!udn) return;
+    void analyzeAlbum(node, udn, []).then(() => setCoverageNonce((n) => n + 1));
+  };
+  const headerDr = kind === "track" ? trackDr : kind === "album" ? albumDr : null;
+  // the catalog facts line — the Library album header's exact string (one
+  // home, lib/mediaFacts); a track gets its own in the same register
+  const factsLine =
+    kind === "track"
+      ? trackFactsLine(node)
+      : kind === "album" && tracks && tracks.length > 0
+        ? albumFactsLine(node, tracks)
+        : "";
+
+  // the format TOKENS beside it, as chips — the Now Playing row's spelling
+  const chips: string[] =
+    kind === "track"
+      ? formatChips(node.format)
+      : kind === "album" && tracks && tracks.length > 0
+        ? albumFormatChips(tracks)
+        : [];
 
   // ---- identity
   const performers = trackArtists(node);
@@ -116,7 +191,7 @@ function MediaInfoBody({
         : [["Name", node.title], ...(node.artist ? ([["Artist", node.artist]] as Row[]) : [])];
 
   // ---- format (a track's own; an album's summed from its tracks)
-  const trackFormat: Row[] = kind === "track" ? trackFormatRows(node) : [];
+  const trackFormat: Row[] = kind === "track" ? trackFormatRows(node, trackDr) : [];
   const albumRows: Row[] = (() => {
     if (kind !== "album" || !tracks || tracks.length === 0) return [];
     const secs = tracks.reduce((a, t) => a + (t.durationSecs ?? 0), 0);
@@ -217,7 +292,7 @@ function MediaInfoBody({
     kind === "track"
       ? [node.artist, node.album].filter(Boolean).join(" · ")
       : kind === "album"
-        ? [node.artist, node.year].filter(Boolean).join(" · ")
+        ? (node.artist ?? null)
         : null;
 
   return (
@@ -244,6 +319,24 @@ function MediaInfoBody({
             {node.title}
           </div>
           {subtitle && <div className="text-[13px] text-dim mt-0.5 truncate">{subtitle}</div>}
+          {/* two registers (lib/mediaFacts): collection facts as prose, then
+              the format TOKENS as chips with the DR chip closing the row —
+              the clothes Now Playing taught the eye (user call, 2026-09-01) */}
+          {factsLine && (
+            <div className="mt-1.5 text-[12.5px] text-faint" data-info-facts>
+              {factsLine}
+            </div>
+          )}
+          {(chips.length > 0 || headerDr != null) && (
+            <div className="mt-2 flex flex-wrap items-center gap-1.5" data-info-chips>
+              {chips.map((b) => (
+                <span key={b} className="badge">
+                  {b}
+                </span>
+              ))}
+              {headerDr != null && <DrChip dr={headerDr} />}
+            </div>
+          )}
         </div>
         {/* Found in a library index → lead there: an album lands on itself, a
             track on its album with the row flashed. Hidden for a bare stub
@@ -262,6 +355,45 @@ function MediaInfoBody({
         )}
         <CloseButton onClick={close} />
       </div>
+
+      {kind === "track" && known.available && (
+        <InfoWaveform state={known.state} onAnalyze={known.analyze} />
+      )}
+      {/* An album's analysis coverage, and the sweep on offer — the same verb
+          as the album menu and the track modal's button, one vocabulary. */}
+      {kind === "album" && waveformsOn && udn && albumTotal > 0 && trackDrs != null && (
+        <div className="mt-4" data-info-analysis>
+          <div className="microlabel mb-1.5">analysis</div>
+          {sweeping ? (
+            <div className="text-[11.5px] text-faint motion-safe:animate-pulse">
+              analyzing
+              {progress != null && progress.total > 0 && ` ${progress.done}/${progress.total}`}…
+            </div>
+          ) : albumComplete ? (
+            <div className="text-[12.5px] text-dim">
+              All {albumTotal} tracks measured
+              {drRange && drRange.min !== drRange.max
+                ? `${FACT_SEP}DR${drRange.min} to DR${drRange.max} across tracks`
+                : ""}
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              {albumKnown > 0 && (
+                <span className="text-[11.5px] text-faint">
+                  {albumKnown} of {albumTotal} tracks analyzed
+                </span>
+              )}
+              <button
+                data-info-analyze-album
+                onClick={runAlbumAnalysis}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/80 text-[12px] text-dim hover:text-ink hover:bg-veil transition-colors"
+              >
+                <AudioLines size={13} /> Analyze audio
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {note && (
         <div className="mt-3 text-[11.5px] text-faint" data-info-note>

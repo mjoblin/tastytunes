@@ -299,6 +299,9 @@ export interface TastyTunesApi {
   albumDrMap(): Promise<Record<string, AlbumDr>>;
   /** EXPERIMENT: record an album's DR (written only when complete). */
   albumDrPut(key: string, entry: AlbumDr): Promise<void>;
+  /** EXPERIMENT: the KNOWN DR per content key (cache-only, never a fetch) —
+   *  the album modal's coverage line in one round trip. */
+  audioDrMany(keys: string[]): Promise<Record<string, number>>;
   /** Open/close the mini player window. */
   toggleMini(): Promise<void>;
   /** Show and focus the main window. */
@@ -437,6 +440,7 @@ export const IPC = {
   audioAnalysisPut: "tt:audioAnalysisPut",
   albumDrMap: "tt:albumDrMap",
   albumDrPut: "tt:albumDrPut",
+  audioDrMany: "tt:audioDrMany",
   toggleMini: "tt:toggleMini",
   showMain: "tt:showMain",
   setSleep: "tt:setSleep",

@@ -33,7 +33,6 @@ import {
   orderTracks,
   discGroups,
   albumFormat,
-  fmtBytes,
   albumComposers,
   performerLine,
   albumTracksOf,
@@ -44,11 +43,12 @@ import {
 import { favoriteKey, type Favorite, type FavoriteMedia } from "@shared/model";
 import { albumDrKey } from "@shared/model";
 import { analyzeAlbum, useAlbumDr } from "@/lib/audioAnalysis";
-import { DrBadge } from "@/components/media/Waveform";
+import { FACT_SEP, albumFactsLine, albumFormatChips } from "@/lib/mediaFacts";
+import { DrChip } from "@/components/media/Waveform";
 import type { QueueListItem } from "@shared/smoip";
 import { tt } from "@/api";
 import { useStore } from "@/store";
-import { activeSourceId, cx, fmtTime, matchesFilter } from "@/lib/format";
+import { activeSourceId, cx, matchesFilter } from "@/lib/format";
 import {
   albumMatchesEntry,
   entryArtistMatches,
@@ -1598,23 +1598,16 @@ export function LibraryScreen(): React.JSX.Element {
           ? "Various artists"
           : null))
     : null;
-  const albumSecs = allTracks.reduce((acc, t) => acc + (t.durationSecs ?? 0), 0);
   const albumInQueue = allTracks.length > 0 && allTracks.every(trackQueued);
   // Format and size come from the tracks' <res> (Asset describes them; the
   // USB server doesn't, and then the facts simply don't mention them).
-  const albumBytes = allTracks.reduce((acc, t) => acc + (t.format?.sizeBytes ?? 0), 0);
   const albumFmt = albumFormat(allTracks);
+  // the catalog facts line has ONE home (lib/mediaFacts) — the album Info
+  // modal reads the identical string; only the queue note is this screen's
   const albumFacts = albumNode
-    ? [
-        albumNode.year ?? allTracks[0]?.year ?? null,
-        allTracks.length > 0 ? `${allTracks.length} tracks` : null,
-        albumSecs > 0 ? fmtTime(albumSecs) : null,
-        albumBytes > 0 ? fmtBytes(albumBytes) : null,
-        albumFmt.label,
-        albumInQueue ? "in the queue" : null,
-      ]
+    ? [albumFactsLine(albumNode, allTracks), albumInQueue ? "in the queue" : null]
         .filter(Boolean)
-        .join(" · ")
+        .join(FACT_SEP)
     : "";
   // one composer credit for the whole album, when every track agrees (the
   // classical case, and a band that writes its own); silent otherwise
@@ -2431,11 +2424,22 @@ export function LibraryScreen(): React.JSX.Element {
               {/* facts + composers are one thought too, set tight (the
                   composer line is only there when every track agrees) */}
               <div className="space-y-0.5">
-                {(albumFacts || albumDrShown != null || albumSweeping) && (
-                  <div className="text-[12.5px] text-faint">
-                    {albumFacts}
+                {albumFacts && <div className="text-[12.5px] text-faint">{albumFacts}</div>}
+                {/* the format TOKENS as chips, the DR chip (or the sweep's
+                    pulse in its place) closing the row — two registers, one
+                    home (lib/mediaFacts; user call, 2026-09-01) */}
+                {(allTracks.length > 0 || albumDrShown != null || albumSweeping) && (
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1" data-album-chips>
+                    {albumFormatChips(allTracks).map((b) => (
+                      <span key={b} className="badge">
+                        {b}
+                      </span>
+                    ))}
                     {albumSweeping ? (
-                      <span className="ml-2.5 motion-safe:animate-pulse" data-album-analyzing>
+                      <span
+                        className="text-[11.5px] text-faint motion-safe:animate-pulse"
+                        data-album-analyzing
+                      >
                         analyzing
                         {analysisProgress != null &&
                           analysisProgress.total > 0 &&
@@ -2443,7 +2447,7 @@ export function LibraryScreen(): React.JSX.Element {
                         …
                       </span>
                     ) : (
-                      albumDrShown != null && <DrBadge dr={albumDrShown} />
+                      albumDrShown != null && <DrChip dr={albumDrShown} />
                     )}
                   </div>
                 )}
@@ -2869,6 +2873,7 @@ export function LibraryScreen(): React.JSX.Element {
               tracks: artist ? undefined : tracksForInfo(n),
               artist,
               serverName: n.serverName ?? server?.name ?? null,
+              serverUdn: nodeUdn(n),
               // what the index learned about this server (the modal's Indexed line + notes)
               ...(pool?.profile ? { serverProfile: pool.profile } : {}),
             });

@@ -947,6 +947,13 @@ export interface AppSettings {
   waveformSeekBar: boolean;
   waveformNowPlaying: boolean;
   displayWaveform: boolean;
+  /** EVIDENCE, not preference: flips true the first time an analysis is
+   *  served (stored or read back) and never clears. The playback bar's
+   *  taller geometry keys on the setting AND this — a household with no
+   *  local media server never pays 16px for a waveform it can't have. A
+   *  settings flag rather than a cache probe, so Clear cached lookups
+   *  can't shrink the bar. */
+  waveformSeen: boolean;
   lyrics: boolean;
   /** Inline flavor: current synced line under the Now Playing track details. */
   lyricsLine: boolean;
@@ -1107,8 +1114,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   updateCheck: true,
   waveforms: true,
   waveformSeekBar: true,
-  waveformNowPlaying: true,
+  waveformNowPlaying: false,
   displayWaveform: true,
+  waveformSeen: false,
   lyrics: true,
   lyricsLine: true,
   displayLyrics: true,
@@ -1747,6 +1755,10 @@ export interface MediaInfoTarget {
   node: MediaNode;
   tracks?: MediaNode[];
   serverName?: string | null;
+  /** The server the node lives on when the node itself carries no stamp —
+   *  browse listings hold theirs in the screen's state (nodeUdn), and the
+   *  Info modal's waveform needs it to find the file. */
+  serverUdn?: string | null;
   /** A caveat to show — e.g. the item wasn't found in any library index and this is only what the list knew. */
   note?: string | null;
   /** For an artist: their library page (albums, credits) — from artistSummary. */

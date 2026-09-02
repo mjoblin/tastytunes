@@ -22,7 +22,7 @@ import { LyricsPanel } from "@/components/overlays/LyricsPanel";
 import { LyricLine } from "@/components/playback/LyricLine";
 import { EmptyState } from "@/components/chrome/EmptyState";
 import { ArtistPanel } from "@/components/overlays/ArtistPanel";
-import { NowPlayingWaveform } from "@/components/media/Waveform";
+import { NowPlayingWaveform, PlayingDrChip } from "@/components/media/Waveform";
 
 const ALIGN_H = { left: "justify-start", center: "justify-center", right: "justify-end" } as const;
 const ALIGN_V = { top: "items-start", center: "items-center", bottom: "items-end" } as const;
@@ -364,6 +364,7 @@ export function NowPlayingScreen(): React.JSX.Element {
                     {b}
                   </span>
                 ))}
+                <PlayingDrChip />
                 <SignalLamp />
               </div>
             )}

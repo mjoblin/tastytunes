@@ -60,6 +60,7 @@ import {
   albumDrPut,
   audioAnalysisGet,
   audioAnalysisPut,
+  audioDrMany,
 } from "./lookups/audioAnalysis";
 import { fetchCoverArt } from "./lookups/coverArt";
 import { radioByTags, radioSearch, radioTop } from "./lookups/radioBrowser";
@@ -453,7 +454,10 @@ function registerIpc(): void {
   );
   // EXPERIMENT (0.7 exploration): fetch one track's audio bytes for the
   // renderer's waveform decode. Read-only ranged-capable GET against the
-  // LOCAL media server; capped so a mistake can't balloon over IPC.
+  // LOCAL media server; capped so a mistake can't balloon over IPC. 256MB
+  // covers ~20 minutes of 24/44.1 or ~7 of 24/96 (the experiment's 64MB
+  // silently dropped a 71MB five-minute track, 2026-09-01); the streaming
+  // decoder retires the cap outright (ROADMAP).
   ipcMain.handle(IPC.expTrackAudio, async (_e, serverUdn: string, objectId: string) => {
     const host = streamerHost();
     if (!host || typeof serverUdn !== "string" || typeof objectId !== "string") return null;
@@ -463,7 +467,7 @@ function registerIpc(): void {
       const res = await loggedFetch("media-audio", url, { signal: AbortSignal.timeout(60_000) });
       if (!res.ok) return null;
       const buf = Buffer.from(await res.arrayBuffer());
-      if (buf.byteLength > 64 * 1024 * 1024) return null;
+      if (buf.byteLength > 256 * 1024 * 1024) return null;
       return buf;
     } catch {
       return null;
@@ -472,13 +476,27 @@ function registerIpc(): void {
   // EXPERIMENT (0.7 exploration): the persisted analysis stores — content-
   // keyed track analyses and the album-DR map (lookups/audioAnalysis holds
   // the shape guards; the store is a cache, never truth).
-  ipcMain.handle(IPC.audioAnalysisGet, (_e, key: unknown) =>
-    typeof key === "string" ? audioAnalysisGet(key) : null,
-  );
+  // The first analysis SERVED — stored or read back — is the evidence the
+  // playback bar keys its taller geometry on (settings.waveformSeen); set
+  // once, here, at the one seam every analysis crosses.
+  const noteWaveformSeen = (): void => {
+    if (getSettings().waveformSeen) return;
+    broadcastSettings(updateSettings({ waveformSeen: true }));
+  };
+  ipcMain.handle(IPC.audioAnalysisGet, (_e, key: unknown) => {
+    const hit = typeof key === "string" ? audioAnalysisGet(key) : null;
+    if (hit) noteWaveformSeen();
+    return hit;
+  });
   ipcMain.handle(IPC.audioAnalysisPut, (_e, key: unknown, analysis: unknown) => {
-    if (typeof key === "string") audioAnalysisPut(key, analysis);
+    if (typeof key !== "string") return;
+    audioAnalysisPut(key, analysis);
+    noteWaveformSeen();
   });
   ipcMain.handle(IPC.albumDrMap, () => albumDrMap());
+  ipcMain.handle(IPC.audioDrMany, (_e, keys: unknown) =>
+    Array.isArray(keys) ? audioDrMany(keys.filter((k): k is string => typeof k === "string")) : {},
+  );
   ipcMain.handle(IPC.albumDrPut, (_e, key: unknown, entry: unknown) => {
     if (typeof key === "string") albumDrPut(key, entry);
   });

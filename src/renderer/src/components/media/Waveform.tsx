@@ -4,6 +4,7 @@ import { useStore } from "@/store";
 import { nowPlayingInfoTarget } from "@/lib/mediaInfo";
 import { computeDr14 } from "@/lib/dr14";
 import { audioAnalysisKey, type AudioAnalysis } from "@shared/model";
+import { AudioLines } from "lucide-react";
 
 /**
  * EXPERIMENT (0.7 exploration, the audio-file-data GO): waveforms from the
@@ -372,6 +373,17 @@ function fmtDb(v: number): string {
 
 /** The database-style DR integer; absent rather than wrong when the
  *  procedure declines to speak (silence, sub-floor, clamped). */
+/** The database's traffic-light convention (red = crushed, green = open;
+ *  DR14 was the campaign's target), translated into the house palette:
+ *  ember for the loudness-war band, the app's own gold for the middle,
+ *  sage for a genuinely dynamic master. ONE home for the bands (S21) —
+ *  the stats badge and Now Playing's format chip both read it. */
+export function drTone(dr: number): { tone: string; word: string } {
+  if (dr <= 7) return { tone: "#bc5a45", word: "compressed" };
+  if (dr <= 13) return { tone: "rgb(var(--gold-rgb))", word: "moderate dynamics" };
+  return { tone: "#6f9a68", word: "dynamic" };
+}
+
 export function DrBadge({
   dr,
   className,
@@ -381,19 +393,10 @@ export function DrBadge({
   className?: string;
 }): React.JSX.Element | null {
   if (dr <= 0) return null;
-  // The database's traffic-light convention (red = crushed, green = open;
-  // DR14 was the campaign's target), translated into the house palette:
-  // ember for the loudness-war band, the app's own gold for the middle,
-  // sage for a genuinely dynamic master. A quiet tinted chip, not a lamp.
-  const [tone, word] =
-    dr <= 7
-      ? ["#bc5a45", "compressed"]
-      : dr <= 13
-        ? ["rgb(var(--gold-rgb))", "moderate dynamics"]
-        : ["#6f9a68", "dynamic"];
+  const { tone, word } = drTone(dr);
   return (
     <span
-      title={`Dynamic range (the TT DR procedure, as in the DR database) — ${word}`}
+      title={`Dynamic range (the TT DR procedure, as in the DR database): ${word}`}
       className={`rounded px-1 py-px ${className ?? "ml-2.5"}`}
       style={{
         color: tone,
@@ -427,7 +430,20 @@ export function Waveform({
       draw(canvasRef.current, analysis, progress, { strip: false, style: "bars" });
   }, [analysis, progress]);
 
-  if (analysis === null) return null;
+  // Absence explains itself here, quietly — the one place a curious user
+  // looks when a track has no waveform (a 71MB track met the fetch cap in
+  // silence, 2026-09-01). The reason isn't known this side of the IPC, so
+  // the line names the two real causes rather than guessing at one.
+  if (analysis === null)
+    return enabled ? (
+      <div data-waveform className="pt-1">
+        <div className="microlabel mb-1.5">waveform</div>
+        <div className="text-[11.5px] text-faint" data-waveform-absent>
+          No waveform for this file. It may be too large to analyze, or in a format that can't be
+          decoded.
+        </div>
+      </div>
+    ) : null;
   return (
     <div data-waveform className="pt-1">
       <div className="microlabel mb-1.5">waveform</div>
@@ -451,7 +467,6 @@ export function Waveform({
           <div className="mt-1.5 font-mono text-[10.5px] text-faint">
             peak {fmtDb(analysis.peakDb)} · rms {fmtDb(analysis.rmsDb)} · crest{" "}
             {fmtDb(analysis.crestDb)}
-            <DrBadge dr={analysis.dr} />
           </div>
         </>
       )}
@@ -471,7 +486,9 @@ export function DisplayWaveform({
   progress: number;
   fallback: React.JSX.Element;
 }): React.JSX.Element {
-  const enabled = useStore((s) => s.settings.waveforms && s.settings.displayWaveform);
+  const enabled = useStore(
+    (s) => s.settings.waveforms && s.settings.displayWaveform && s.settings.waveformSeen,
+  );
   const ref = usePlayingFileRef();
   const analysis = usePeaks(
     enabled ? (ref?.serverUdn ?? null) : null,
@@ -531,10 +548,161 @@ export function NowPlayingWaveform(): React.JSX.Element | null {
       <div className="mt-2 text-center font-mono text-[10.5px] text-faint">
         peak {fmtDb(analysis.peakDb)} · rms {fmtDb(analysis.rmsDb)} · crest{" "}
         {fmtDb(analysis.crestDb)}
-        <DrBadge dr={analysis.dr} />
       </div>
     </div>
   );
+}
+
+/** A cache-only look — the in-memory promise, then the disk store — never a
+ *  fetch. undefined = known nowhere (the Info modal offers Analyze instead). */
+async function peekAnalysis(
+  serverUdn: string,
+  objectId: string,
+  contentKey: string,
+): Promise<Analysis | null | undefined> {
+  const hit = cache.get(`${serverUdn}|${objectId}`);
+  if (hit) return hit;
+  const stored = await tt.audioAnalysisGet(contentKey);
+  return stored ? fromStored(stored) : undefined;
+}
+
+export type KnownAnalysis = Analysis | null | "loading" | "unknown";
+
+/**
+ * The Info modal's analysis state, lifted out of the picture so the header's
+ * DR chip and the waveform read ONE state: a cache-only peek on mount
+ * (memory, then disk — a metadata modal never fetches and decodes a track
+ * for being opened), and an explicit analyze() for the button. `available`
+ * is false when waveforms are off or the node has no server — render nothing.
+ */
+export function useKnownAnalysis(
+  serverUdn: string | null,
+  objectId: string,
+  contentKey: string,
+): { available: boolean; state: KnownAnalysis; analyze(): void } {
+  const enabled = useStore((s) => s.settings.waveforms);
+  const [state, setState] = useState<KnownAnalysis>("loading");
+  useEffect(() => {
+    if (!enabled || !serverUdn) return;
+    let stale = false;
+    setState("loading");
+    void peekAnalysis(serverUdn, objectId, contentKey).then((a) => {
+      if (!stale) setState(a === undefined ? "unknown" : a);
+    });
+    return () => {
+      stale = true;
+    };
+  }, [enabled, serverUdn, objectId, contentKey]);
+  const analyze = (): void => {
+    if (!serverUdn) return;
+    setState("loading");
+    void analyzeTrack(serverUdn, objectId, contentKey).then((a) => setState(a));
+  };
+  return { available: enabled && serverUdn != null, state, analyze };
+}
+
+/**
+ * The Info modal's waveform, directly under the header — the contemplation
+ * surface the under-art envelope was made for. Shown when the analysis is
+ * KNOWN; otherwise an Analyze audio button stands in its place (the album
+ * menu's verb, so the vocabulary stays one). Absence renders as an offer.
+ * THE PLACEMENT RULE (2026-09-01): the waveform lives directly beneath the
+ * art wherever a track is being studied — Now Playing (for those who turn
+ * it on), the Stream tab, and here. The stats row is peak/RMS/crest only:
+ * measurements of the picture. DR is a fact about the master and lives with
+ * the file facts (the header chips, the Format rows) — one home per fact.
+ */
+export function InfoWaveform({
+  state,
+  onAnalyze,
+}: {
+  state: KnownAnalysis;
+  onAnalyze(): void;
+}): React.JSX.Element | null {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const ready = state != null && state !== "loading" && state !== "unknown";
+  useEffect(() => {
+    // A study view, not a playhead: the whole envelope wears the "played"
+    // brightness (progress 1) — nothing here is dim for being unheard.
+    if (canvasRef.current && ready)
+      draw(canvasRef.current, state, 1, { strip: false, style: "envelope" });
+  }, [state, ready]);
+
+  if (state === "loading") return null;
+  return (
+    <div className="mt-4" data-info-waveform>
+      <div className="microlabel mb-1.5">waveform</div>
+      {state === "unknown" ? (
+        <button
+          data-info-analyze
+          onClick={onAnalyze}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/80 text-[12px] text-dim hover:text-ink hover:bg-veil transition-colors"
+        >
+          <AudioLines size={13} /> Analyze audio
+        </button>
+      ) : state === null ? (
+        <div className="text-[11.5px] text-faint" data-waveform-absent>
+          No waveform for this file. It may be too large to analyze, or in a format that can't be
+          decoded.
+        </div>
+      ) : (
+        <>
+          <canvas ref={canvasRef} className="w-full h-16 block" />
+          <div className="mt-1.5 font-mono text-[10.5px] text-faint">
+            peak {fmtDb(state.peakDb)} · rms {fmtDb(state.rmsDb)} · crest {fmtDb(state.crestDb)}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * DR as a format chip — the .badge grammar, band-tinted. Its HOME is with
+ * the file facts, because DR is a property of the master beside codec, rate
+ * and depth: Now Playing's chip row, both Info modals' header chips, the
+ * Format sections' Dynamic range row. Never a second time beside a waveform
+ * (user call, 2026-09-01: one home per fact).
+ */
+export function DrChip({ dr }: { dr: number }): React.JSX.Element | null {
+  if (dr <= 0) return null;
+  const { tone, word } = drTone(dr);
+  return (
+    <span
+      className="badge"
+      data-dr-chip
+      title={`Dynamic range (the TT DR procedure, as in the DR database): ${word}`}
+      style={{
+        color: tone,
+        borderColor: `color-mix(in srgb, ${tone} 45%, transparent)`,
+        backgroundColor: `color-mix(in srgb, ${tone} 10%, transparent)`,
+      }}
+    >
+      {`DR${dr}`}
+    </span>
+  );
+}
+
+/** The playing track's DR, or null until its analysis lands — live, not from
+ *  the settled snapshot: the analysis arrives seconds after the track does. */
+export function usePlayingDr(): number | null {
+  const enabled = useStore((s) => s.settings.waveforms);
+  const ref = usePlayingFileRef();
+  const analysis = usePeaks(
+    enabled ? (ref?.serverUdn ?? null) : null,
+    ref?.objectId ?? null,
+    ref?.contentKey ?? null,
+  );
+  return analysis != null && analysis !== "loading" && analysis.dr > 0 ? analysis.dr : null;
+}
+
+/** Now Playing's format row wears the playing track's DR — at the END of the
+ *  chips, before the lamp: a verdict about the master beside the verdict
+ *  about the signal, facts first, the lamp still the row's closing mark; a
+ *  late arrival nudges only the lamp (user call, 2026-09-01). */
+export function PlayingDrChip(): React.JSX.Element | null {
+  const dr = usePlayingDr();
+  return dr == null ? null : <DrChip dr={dr} />;
 }
 
 /** The seek bar's waveform track — the marquee consumer, previewed. Returns

@@ -38,6 +38,16 @@ export function audioAnalysisPut(key: string, analysis: unknown): void {
   if (isAnalysisShape(analysis)) tracks.set(key, analysis);
 }
 
+/** The known DR per key — cache-only, for the album modal's coverage line. */
+export function audioDrMany(keys: string[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const k of keys) {
+    const a = tracks.get(k);
+    if (a && a.dr > 0) out[k] = a.dr;
+  }
+  return out;
+}
+
 export function albumDrPut(key: string, entry: unknown): void {
   if (isAlbumDrShape(entry)) albums.set(key, entry);
 }

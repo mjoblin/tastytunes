@@ -32,7 +32,9 @@ export function PlaybackBar(): React.JSX.Element {
   const t = useTransport(duration);
   const { shownPosition, slider } = useSeekScrub(position, duration, t.seek);
   const seekWaveform = useSeekWaveform();
-  const seekWaveformOn = useStore((s) => s.settings.waveforms && s.settings.waveformSeekBar);
+  const seekWaveformOn = useStore(
+    (s) => s.settings.waveforms && s.settings.waveformSeekBar && s.settings.waveformSeen,
+  );
   const [showRemaining, setShowRemaining] = useState(false);
 
   const waking = useStore((s) => s.waking);
@@ -51,13 +53,16 @@ export function PlaybackBar(): React.JSX.Element {
         // of truncating at a fixed 280px (user, 2026-08-17). Minimums keep
         // the volume slider unsqueezed at the 800px window minimum:
         // 160 + 320 + 215 + gaps 48 + padding 32 = 775.
-        // CONSTANT GEOMETRY, keyed on the SETTING, not the track's luck: with
-        // the waveform seek enabled the bar holds 108px and the seek's
-        // centerline holds its place whether or not the playing track has a
-        // waveform (radio, AirPlay, USB and unanalyzed tracks don't) — the
-        // wave fills the reserved room, the plain line rests on the same
-        // center. The height animates only at the one legitimate moment: the
-        // toggle itself (user call, 2026-08-30 — the gate cards' doctrine,
+        // CONSTANT GEOMETRY, keyed on the SETTING AND ON EVIDENCE, never the
+        // track's luck: with the waveform seek enabled AND a waveform ever
+        // seen on this installation (settings.waveformSeen) the bar holds
+        // 108px and the seek's centerline holds its place whether or not the
+        // playing track has a waveform (radio, AirPlay, USB and unanalyzed
+        // tracks don't) — the wave fills the reserved room, the plain line
+        // rests on the same center. Evidence joined the key 2026-09-01 (user
+        // call): a household with no local media server never pays the
+        // height. The bar animates at exactly two legitimate moments: the
+        // toggle, and the once-ever first waveform (the gate cards' doctrine,
         // one level down).
         seekWaveformOn ? "h-[108px]" : "h-[92px]",
         "shrink-0 border-t border-edge grid grid-cols-[minmax(160px,1fr)_minmax(320px,520px)_minmax(215px,1fr)] items-center gap-6 px-4 transition-[height,background-color] duration-300",
@@ -73,7 +78,14 @@ export function PlaybackBar(): React.JSX.Element {
         onClick={() => setScreen("now-playing")}
         disabled={!active}
       >
-        <div className="h-[52px] w-[52px] shrink-0 rounded-md overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
+        {/* The art keeps the bar's fill ratio (52 in 92 ≈ 64 in 108) and grows
+            in the same 300ms as the bar, so the two read as one motion. */}
+        <div
+          className={cx(
+            "shrink-0 rounded-md overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center transition-[width,height] duration-300",
+            seekWaveformOn ? "h-16 w-16" : "h-[52px] w-[52px]",
+          )}
+        >
           <ArtImage
             src={active ? meta.artUrl : null}
             fallback={

@@ -20,7 +20,7 @@ import { PanelResizeHandle } from "@/components/controls/PanelResizeHandle";
 import { Segmented } from "@/components/controls/Segmented";
 import { HeaderChip } from "@/components/chrome/Chrome";
 import { Section, sourceRows, streamRows, trackFormatRows } from "@/components/media/InfoRows";
-import { Waveform } from "@/components/media/Waveform";
+import { Waveform, usePlayingDr } from "@/components/media/Waveform";
 import { audioAnalysisKey } from "@shared/model";
 
 type Status = "loading" | "ready" | "none";
@@ -50,6 +50,7 @@ const TRACK_SETTLE_MS = 2000;
  * cache makes revisits instant, and the Stream tab's lookup is local.
  */
 export function ArtistPanel({ className }: { className?: string }): React.JSX.Element {
+  const playingDr = usePlayingDr();
   const playState = useStore((s) => s.playState);
   const nowPlaying = useStore((s) => s.nowPlaying);
   const setArtistOpen = useStore((s) => s.setArtistOpen);
@@ -399,11 +400,23 @@ export function ArtistPanel({ className }: { className?: string }): React.JSX.El
 
         {tab === "stream" && streamTarget && (
           <div className="space-y-5 py-1" data-stream-tab>
+            {/* EXPERIMENT (0.7 exploration): the waveform, from the file's
+                own bytes, for indexed local media only — FIRST, under the
+                art: the tab's one picture leads, the facts follow (the
+                placement rule, 2026-09-01: the waveform lives directly
+                beneath the art wherever a track is studied). */}
+            {streamTarget.node.serverUdn && streamTarget.node.id && (
+              <Waveform
+                serverUdn={streamTarget.node.serverUdn}
+                objectId={streamTarget.node.id}
+                contentKey={audioAnalysisKey(streamTarget.node)}
+              />
+            )}
             <Section
               title="Stream"
               rows={streamTarget.stream ? streamRows(streamTarget.stream) : []}
             />
-            <Section title="Format" rows={trackFormatRows(streamTarget.node)} />
+            <Section title="Format" rows={trackFormatRows(streamTarget.node, playingDr)} />
             <Section
               title="Source"
               rows={sourceRows(
@@ -412,15 +425,6 @@ export function ArtistPanel({ className }: { className?: string }): React.JSX.El
                 streamTarget.serverProfile,
               )}
             />
-            {/* EXPERIMENT (0.7 exploration): the waveform, from the file's
-                own bytes, for indexed local media only. */}
-            {streamTarget.node.serverUdn && streamTarget.node.id && (
-              <Waveform
-                serverUdn={streamTarget.node.serverUdn}
-                objectId={streamTarget.node.id}
-                contentKey={audioAnalysisKey(streamTarget.node)}
-              />
-            )}
           </div>
         )}
 

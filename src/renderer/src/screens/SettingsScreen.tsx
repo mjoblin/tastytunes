@@ -311,7 +311,15 @@ export function SettingsScreen(): React.JSX.Element {
 
                   <Toggle
                     label="Waveforms"
-                    hint="Generate waveforms from audio files on your local media server."
+                    // The second sentence exists only until the first waveform
+                    // proves the feature real here (settings.waveformSeen) —
+                    // an honest answer for the household whose toggles would
+                    // otherwise never visibly do anything.
+                    hint={
+                      settings.waveformSeen
+                        ? "Generate waveforms from audio files on your local media server."
+                        : "Generate waveforms from audio files on your local media server. None yet. They appear once a track from a local media server has played."
+                    }
                     checked={settings.waveforms}
                     onChange={(waveforms) => void save({ waveforms })}
                   />
