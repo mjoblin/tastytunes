@@ -3,6 +3,7 @@ import { tt } from "@/api";
 import { useStore } from "@/store";
 import { nowPlayingInfoTarget } from "@/lib/mediaInfo";
 import { computeDr14 } from "@/lib/dr14";
+import { sniffSampleRate } from "@/lib/audioHeader";
 import { audioAnalysisKey, type AudioAnalysis } from "@shared/model";
 import { AudioLines } from "lucide-react";
 
@@ -106,7 +107,24 @@ export function analyzeTrack(
     const bytes = await tt.expTrackAudio(serverUdn, objectId);
     if (!bytes) return null;
     const u8 = new Uint8Array(bytes);
-    const ctx = new AudioContext();
+    // NATIVE RATE (2026-09-01): decodeAudioData resamples to its context's
+    // rate, and at the device's 48k a 44.1k FLAC came back with a +0.5 dB
+    // "peak" and a DR computed on interpolated samples — the harness had
+    // validated the math on ffmpeg's native decode, the app pipeline had
+    // not been held to it. An OFFLINE context at the file's own rate (from
+    // its header) makes the decode bit-exact for lossless files and never
+    // touches an audio device. When the rate can't be read, or the context
+    // refuses it, the decode still runs for the picture — but the DR is
+    // WITHHELD: a citation is never approximated.
+    const rate = sniffSampleRate(u8);
+    let ctx: OfflineAudioContext;
+    let native = false;
+    try {
+      ctx = new OfflineAudioContext(1, 1, rate ?? 48000);
+      native = rate != null;
+    } catch {
+      ctx = new OfflineAudioContext(1, 1, 48000);
+    }
     try {
       const audio = await ctx.decodeAudioData(u8.slice().buffer);
       const chans: Float32Array[] = [];
@@ -157,14 +175,12 @@ export function analyzeTrack(
       const db = (v: number): number => (v > 0 ? 20 * Math.log10(v) : -Infinity);
       const peakDb = db(globalPeak);
       const rmsDb = db(globalN > 0 ? Math.sqrt(globalSumSq / globalN) : 0);
-      const dr = computeDr14(chans, audio.sampleRate);
+      const dr = native ? computeDr14(chans, audio.sampleRate) : 0;
       const analysis: Analysis = { peak, rms, peakDb, rmsDb, crestDb: peakDb - rmsDb, dr };
       if (contentKey) void tt.audioAnalysisPut(contentKey, toStored(analysis));
       return analysis;
     } catch {
       return null;
-    } finally {
-      void ctx.close();
     }
   })();
   cache.set(key, p);
