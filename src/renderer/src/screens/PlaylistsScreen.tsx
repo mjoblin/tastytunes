@@ -42,6 +42,7 @@ import { toggleFavorite } from "@/lib/favorites";
 import { activatePlaylist } from "@/lib/playlists";
 import { fromPlaylistItem } from "@/lib/mediaRef";
 import { saveRefToPreset, openRefInLibrary, playRefNow, queueRef } from "@/lib/mediaActions";
+import { NameLine } from "@/components/media/NameLine";
 import { trackMenuItems } from "@/lib/mediaMenus";
 import { OrderHandle } from "@/components/controls/OrderHandle";
 import { ArtImage } from "@/components/media/ArtImage";
@@ -717,7 +718,7 @@ function TrackRow({
       <div className="min-w-0">
         <div className="text-[13.5px] truncate text-ink">{item.title}</div>
         <div className="text-[12px] text-dim truncate">
-          {[artist, item.album].filter(Boolean).join(" — ")}
+          <NameLine artist={artist} album={item.album} ref={fromPlaylistItem(item)} />
         </div>
       </div>
 

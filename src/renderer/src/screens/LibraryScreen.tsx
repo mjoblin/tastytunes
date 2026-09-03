@@ -695,6 +695,15 @@ export function LibraryScreen(): React.JSX.Element {
       // it and reset normally.
       if (target && target.nonce !== libraryResetNonce) clearLibraryTarget();
       if (target && target.nonce === libraryResetNonce) {
+        if ("artist" in target) {
+          // a NAME from another screen's row: the Artists lens at the root,
+          // focused and revealed on it (the Tracks lens's link, app-wide)
+          focusArtistsLens(target.artist);
+          moveTo(null, []);
+          lensReturnTo = "artists";
+          setLens("artists");
+          return;
+        }
         const last = target.titlePath.length - 1;
         moveTo(
           target.serverUdn,

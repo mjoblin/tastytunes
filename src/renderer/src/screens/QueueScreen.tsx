@@ -62,6 +62,7 @@ import { activeSourceId, cx, fmtTime, matchesFilter, fmtCount } from "@/lib/form
 import { toggleFavorite } from "@/lib/favorites";
 import { fromQueueItem, refToFavorite, refToPlaylistItem } from "@/lib/mediaRef";
 import { saveRefToPreset, openRefInLibrary } from "@/lib/mediaActions";
+import { NameLine } from "@/components/media/NameLine";
 import { trackMenuItems, type MediaMenuItem } from "@/lib/mediaMenus";
 import { AddToPlaylistPanel } from "@/components/overlays/AddToPlaylistPanel";
 import { RowMenu } from "@/components/media/RowMenu";
@@ -1861,7 +1862,7 @@ function QueueRow({
           {md?.title ?? md?.name ?? "—"}
         </div>
         <div className="text-[12px] text-dim truncate">
-          {[artist, md?.album].filter(Boolean).join(" — ")}
+          <NameLine artist={artist} album={md?.album} ref={ref} />
         </div>
       </div>
 

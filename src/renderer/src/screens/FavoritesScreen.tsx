@@ -20,6 +20,7 @@ import { AddToPlaylistPanel } from "@/components/overlays/AddToPlaylistPanel";
 import { PresetPicker } from "@/components/library/LibraryMenus";
 import { fromFavorite, fromNode, refToPlaylistItem } from "@/lib/mediaRef";
 import { recordPresetSaved, openRefInLibrary } from "@/lib/mediaActions";
+import { NameLine } from "@/components/media/NameLine";
 import { albumMenuItems, trackMenuItems } from "@/lib/mediaMenus";
 import { EmptyState } from "@/components/chrome/EmptyState";
 import { FilterInput } from "@/components/controls/FilterInput";
@@ -456,12 +457,16 @@ export function FavoritesScreen(): React.JSX.Element {
                       kind="track"
                       artUrl={f.artUrl}
                       subtitle={
-                        [
-                          [performerOf(f) ?? f.artist, f.album].filter(Boolean).join(" — "),
-                          !routed && f.serverName ? `${f.serverName} is offline` : "",
-                        ]
-                          .filter(Boolean)
-                          .join(" · ") || undefined
+                        <>
+                          <NameLine
+                            artist={performerOf(f) ?? f.artist}
+                            album={f.album}
+                            ref={fromFavorite(f)}
+                          />
+                          {!routed && f.serverName
+                            ? `${(performerOf(f) ?? f.artist ?? f.album) ? " · " : ""}${f.serverName} is offline`
+                            : ""}
+                        </>
                       }
                       playing={trackPlaying(f)}
                       dimmed={!active || !routed}

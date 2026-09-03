@@ -93,7 +93,7 @@ export interface NavEntry {
 
 /** A Library destination planted by another screen (Favorites "open album"):
  *  the LibraryScreen consumes it on its next mount/reset and navigates there. */
-export interface LibraryTarget {
+export interface LibraryNodeTarget {
   serverUdn: string;
   objectId: string;
   /** Breadcrumb titles from root INCLUDING the target's own title — feeds the
@@ -115,6 +115,15 @@ export interface LibraryTarget {
    */
   nonce: number;
 }
+
+/** A NAME asked for from another screen's row (2026-09-02): the Library
+ *  opens the Artists lens at the root, focused and revealed on that artist. */
+export interface LibraryArtistTarget {
+  artist: string;
+  nonce: number;
+}
+
+export type LibraryTarget = LibraryNodeTarget | LibraryArtistTarget;
 
 /** The station most recently streamed BY THIS APP this session — the only way
  *  Now Playing can heart a radio stream (play_state carries no URL). */
@@ -396,7 +405,8 @@ interface TTState {
   setContextTab: (tab: "artist" | "album" | "track" | "stream") => void;
   setScreenFilter: (screen: keyof TTState["screenFilters"], text: string) => void;
   /** Navigate to the Library opened at a specific node (Favorites → album). */
-  openInLibrary: (target: Omit<LibraryTarget, "nonce">) => void;
+  openInLibrary: (target: Omit<LibraryNodeTarget, "nonce">) => void;
+  openArtistInLibrary: (artist: string) => void;
   clearLibraryTarget: () => void;
   setLastStation: (st: LastStation) => void;
   setAmbientWindowActive: (on: boolean) => void;
@@ -640,6 +650,13 @@ export const useStore = create<TTState>((set, get) => ({
     set((s) => ({
       ...navTo(s, "library"),
       libraryTarget: { ...target, nonce: s.libraryResetNonce + 1 },
+      screen: "library",
+      libraryResetNonce: s.libraryResetNonce + 1,
+    })),
+  openArtistInLibrary: (artist) =>
+    set((s) => ({
+      ...navTo(s, "library"),
+      libraryTarget: { artist, nonce: s.libraryResetNonce + 1 },
       screen: "library",
       libraryResetNonce: s.libraryResetNonce + 1,
     })),

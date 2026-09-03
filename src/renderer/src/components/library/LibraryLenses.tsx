@@ -1023,17 +1023,24 @@ export function ArtistsLens({
                     data-lens-artist-row={a.key}
                     className={cx(
                       "group grid grid-cols-[44px_1fr_auto] items-center gap-2.5 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
-                      selected
-                        ? "bg-raised/70 ring-1 ring-edge2"
-                        : playing
-                          ? "bg-gold/10"
-                          : "hover:bg-veil",
+                      // SELECTED is "open here" — the Playlists sidebar's amber, so it
+                      // reads apart from gold (= playing); a row that is both keeps
+                      // the playing signals (gold title, eqbars) on the amber fill
+                      // (user, 2026-09-02: the selection "didn't look distinctive").
+                      // PLAYING is the app-wide row treatment — fill, ring and glow
+                      // (row-playing), the same as ContainerRow and every track row —
+                      // and it rides on top of the selection: a fill and an edge.
+                      playing && "row-playing",
+                      selected ? "bg-amberdim" : playing ? "bg-gold/10" : "hover:bg-veil",
                     )}
                   >
                     <MediaArt src={a.artUrl} kind="artist" />
                     <div className="min-w-0">
                       <div
-                        className={cx("text-[13.5px] truncate", playing ? "text-gold" : "text-ink")}
+                        className={cx(
+                          "text-[13.5px] truncate",
+                          playing ? "text-gold" : selected ? "text-amber" : "text-ink",
+                        )}
                       >
                         {a.name}
                       </div>
@@ -1112,11 +1119,15 @@ export function ArtistsLens({
                     onClick={() => setMem({ album: selected ? null : nodeKey(alb) })}
                     className={cx(
                       "group grid grid-cols-[44px_1fr_auto_auto] items-center gap-2.5 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
-                      selected
-                        ? "bg-raised/70 ring-1 ring-edge2"
-                        : playing
-                          ? "bg-gold/10"
-                          : "hover:bg-veil",
+                      // SELECTED is "open here" — the Playlists sidebar's amber, so it
+                      // reads apart from gold (= playing); a row that is both keeps
+                      // the playing signals (gold title, eqbars) on the amber fill
+                      // (user, 2026-09-02: the selection "didn't look distinctive").
+                      // PLAYING is the app-wide row treatment — fill, ring and glow
+                      // (row-playing), the same as ContainerRow and every track row —
+                      // and it rides on top of the selection: a fill and an edge.
+                      playing && "row-playing",
+                      selected ? "bg-amberdim" : playing ? "bg-gold/10" : "hover:bg-veil",
                     )}
                   >
                     <MediaArt src={alb.artUrl} kind="album" />
@@ -1124,7 +1135,7 @@ export function ArtistsLens({
                       <div
                         className={cx(
                           "flex items-center gap-2 text-[13.5px]",
-                          playing ? "text-gold" : "text-ink",
+                          playing ? "text-gold" : selected ? "text-amber" : "text-ink",
                         )}
                       >
                         {/* no position cell in this list, so the playing marker

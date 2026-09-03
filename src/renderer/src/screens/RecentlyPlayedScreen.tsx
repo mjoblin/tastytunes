@@ -21,6 +21,7 @@ import { AddToPlaylistPanel } from "@/components/overlays/AddToPlaylistPanel";
 import { toggleFavorite } from "@/lib/favorites";
 import { fromRecent, refToFavorite, refToPlaylistItem, type MediaRef } from "@/lib/mediaRef";
 import { playRefNow, openRefInLibrary, saveRefToPreset } from "@/lib/mediaActions";
+import { NameLine } from "@/components/media/NameLine";
 import { PresetPicker } from "@/components/library/LibraryMenus";
 import { trackMenuItems, type MediaMenuItem } from "@/lib/mediaMenus";
 import { cx, fmtDayBucket, fmtRelative, matchesFilter } from "@/lib/format";
@@ -298,12 +299,15 @@ function TrackRow({
   const title = entry.isRadio ? (entry.station ?? entry.title) : entry.title;
   // Queue-row anatomy: title up top, artist — album below (songText would
   // repeat the title in the subtitle).
-  const subtitle = entry.isRadio
-    ? entry.title
-    : [entry.artist, entry.album].filter(Boolean).join(" — ") || null;
   // Verbs only where there's an identity to act on (fromRecent is null for
   // radio and songless rows — no stream URL / no content is stored for them).
   const ref = fromRecent(entry);
+  // the names in the line navigate (NameLine); a station's line is its song
+  const subtitle = entry.isRadio ? (
+    entry.title
+  ) : (
+    <NameLine artist={entry.artist} album={entry.album} ref={ref} />
+  );
   const fav = ref ? refToFavorite(ref) : null;
   return (
     <MediaRow
