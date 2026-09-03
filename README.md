@@ -253,6 +253,8 @@ tools the Home Assistant automation needs, and keep TastyTunes running.
 ### History
 
 - Recently played: a capped local log (200 entries, clearable) of tracks and stations; station tracks are also logged when announced by the station
+- Listening record: a local log of what plays and for how long (local media, radio, AirPlay and other sources), kept in plain JSON Lines files on your computer, one per year; a play is recorded once it ends, if it played for at least 30 seconds. Export or clear it in Settings › History; can be disabled (on by default). The file format is documented at [tastytunes.app/listening-record](https://tastytunes.app/listening-record/)
+- AI agents can read the listening record through the MCP server's history tools: what played, when, and for how long, including "on this day"
 
 ### Automation
 
