@@ -608,9 +608,13 @@ export function LibraryScreen(): React.JSX.Element {
 
   /** A lens result opens the SHARED native album leaf, scoped to its server;
    *  the lens crumb offers the way back with the lens state intact. */
-  const openAlbumFromLens = (node: MediaNode): void => {
+  const openAlbumFromLens = (node: MediaNode, track?: string): void => {
     if (!node.serverUdn || !lens) return;
     lensReturnTo = lens;
+    // a track's album (the Tracks lens's link or Go to album): land on THE
+    // TRACK, scrolled to and washed, exactly as the Queue's link does through
+    // openRefInLibrary — one gesture, one landing (user, 2026-09-02)
+    pendingTrack.current = track ?? null;
     // from the Artists lens the artist rides between the lens crumb and the
     // album — the trail says the path you took, and the crumb is the way
     // back to the lens focused on them
@@ -639,7 +643,7 @@ export function LibraryScreen(): React.JSX.Element {
       showNotice(`Couldn't find "${track.album ?? "that album"}" in this library.`);
       return;
     }
-    openAlbumFromLens(album);
+    openAlbumFromLens(album, track.title);
   };
   const goToArtistFromLens = (node: MediaNode): void => {
     if (!node.artist) return;

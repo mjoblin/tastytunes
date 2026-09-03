@@ -1658,9 +1658,6 @@ function armArrivalWash(id: number, position: number): void {
 let lastQueueItems: QueueListItem[] = [];
 function washArrivals(): void {
   if (pendingWash.size === 0) return;
-  const reduced =
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
-    document.documentElement.classList.contains("reduce-motion");
   const at = new Map<number, number>();
   lastQueueItems.forEach((it, i) => {
     if (it.id != null) at.set(it.id, it.position ?? i);
@@ -1674,15 +1671,7 @@ function washArrivals(): void {
     const el = document.querySelector<HTMLElement>(`[data-queue-id="${id}"]`);
     if (!el) continue;
     pendingWash.delete(id);
-    if (reduced) continue;
-    el.animate(
-      [
-        { backgroundColor: "rgb(var(--gold-rgb) / 0.3)", offset: 0 },
-        { backgroundColor: "rgb(var(--gold-rgb) / 0.3)", offset: 0.3 },
-        { backgroundColor: "rgb(var(--gold-rgb) / 0)", offset: 1 },
-      ],
-      { duration: 2600, easing: "ease-out" },
-    );
+    flashTarget(el); // the arrival wash, one home (lib/scroll)
   }
 }
 

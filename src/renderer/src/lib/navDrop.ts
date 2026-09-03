@@ -1,4 +1,5 @@
 import type { Screen } from "@/store";
+import { flashTarget } from "@/lib/scroll";
 
 /**
  * Drag-to-rail geometry: which nav target sits under the pointer. Pure
@@ -18,14 +19,9 @@ export function navDropTargetAt(x: number, y: number, allowed: Screen[]): Screen
 }
 
 /** The gold acknowledgment on a rail row that just received a drop — the
- *  scroll-to-current flash, reused. */
+ *  arrival wash, reused (one signal for "here is the row you asked for"). */
 export function flashNavTarget(id: Screen): void {
-  const el = document.querySelector<HTMLElement>(`[data-nav-screen="${id}"]`);
-  if (!el) return;
-  el.classList.remove("target-flash");
-  void el.offsetWidth;
-  el.classList.add("target-flash");
-  setTimeout(() => el.classList.remove("target-flash"), 900);
+  flashTarget(document.querySelector<HTMLElement>(`[data-nav-screen="${id}"]`));
 }
 
 /** The chip's footprint for clamping (320px card + stack overhang). */

@@ -1,14 +1,29 @@
 /**
- * Brief gold outline pulse on the scroll target — click feedback for the
- * scroll-to-current buttons even when nothing needed to move.
+ * THE ARRIVAL WASH — the one "here is the row you asked for" signal (ruled
+ * 2026-09-02, user call): a gold fill at 30% that holds for the first 0.8s
+ * and fades over the next 1.8s. Born as the Queue's undo-restore wash; now
+ * also the landing after Open in Library / a name link / a Favorites jump,
+ * the scroll-to-current click feedback, and the nav rail's drop
+ * acknowledgment — which all used to pulse a 0.8s gold OUTLINE instead
+ * (target-flash), a second grammar for the same meaning. WAAPI, not a
+ * class, so a re-render mid-wash can't snap it; skipped under reduced
+ * motion (the OS preference or the app's own setting).
  */
 export function flashTarget(el: HTMLElement | null): void {
   if (!el) return;
-  el.classList.remove("target-flash");
-  // restart the animation if it's already running
-  void el.offsetWidth;
-  el.classList.add("target-flash");
-  setTimeout(() => el.classList.remove("target-flash"), 900);
+  if (
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+    document.documentElement.classList.contains("reduce-motion")
+  )
+    return;
+  el.animate(
+    [
+      { backgroundColor: "rgb(var(--gold-rgb) / 0.3)", offset: 0 },
+      { backgroundColor: "rgb(var(--gold-rgb) / 0.3)", offset: 0.3 },
+      { backgroundColor: "rgb(var(--gold-rgb) / 0)", offset: 1 },
+    ],
+    { duration: 2600, easing: "ease-out" },
+  );
 }
 
 /**

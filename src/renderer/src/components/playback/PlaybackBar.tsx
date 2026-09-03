@@ -99,7 +99,10 @@ export function PlaybackBar(): React.JSX.Element {
         </div>
         <div className="min-w-0">
           <div className="font-display font-bold text-[15px] leading-tight tracking-tight text-ink truncate">
-            {(active && meta.title) || "—"}
+            {/* idle shows nothing (the empty art tile already says so) — the
+                non-breaking space keeps the line's height so the block
+                doesn't re-centre and jump when a title arrives */}
+            {(active && meta.title) || "\u00A0"}
           </div>
           {/* min-h reserves the line while the subtitle is still on its way
               (the source's name lands a beat before now_playing fills the

@@ -1184,7 +1184,7 @@ function LibrariesSection({
       <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
         <Toggle
           label="Build indexes automatically"
-          hint="Automatically index each searchable media server in the Library screen, and rebuild when the server reports changes. Off means indexes only build from the buttons below."
+          hint="Automatically index each searchable media server when the streamer connects, and rebuild when the server reports changes. Off means indexes only build from the buttons below."
           checked={settings.mediaIndexAuto}
           onChange={(mediaIndexAuto) => void save({ mediaIndexAuto })}
         />

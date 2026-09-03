@@ -704,6 +704,20 @@ if (!gotLock) {
       // on open the way the renderer does, so device movement has to push it.
       deviceManager.onPush = (msg) => {
         if (trayWantsRefresh(msg.kind)) refreshTrayMenu();
+        // INDEX AT CONNECT (2026-09-02, user call): the media indexes used to
+        // build only when the Library screen first listed servers, so on a
+        // fresh install the Queue's album links and Open in Library could "not
+        // find" an album the app had simply never looked for. The same
+        // fire-and-forget freshness pass now runs the moment a streamer
+        // connects; ensureFresh is idempotent (fresh indexes are skipped, the
+        // auto toggle is honoured) and the Library's own listing still re-runs
+        // it. Completion off-screen is what the indexing toast reports.
+        if (msg.kind === "connection" && msg.state.phase === "connected") {
+          const host = msg.state.host;
+          void refreshServers(host)
+            .then((servers) => mediaIndex.ensureFresh(host, servers))
+            .catch(() => {});
+        }
       };
       mcpBridge.sync(getSettings());
       void deviceManager.startup();
