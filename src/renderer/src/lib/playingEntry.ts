@@ -29,10 +29,61 @@ export type EntryLike = Pick<QueueListItemMetadata, "title" | "artist" | "album"
 export function playingQueueEntry(
   queue: QueueList | null,
   playState: ZonePlayState | null,
+  /** The store's settled id (see contentPlayId); the raw pointer when absent. */
+  effectiveId?: number | null,
 ): QueueListItem | null {
-  const playId = queue?.play_id ?? playState?.queue_id ?? null;
+  const playId = effectiveId ?? queue?.play_id ?? playState?.queue_id ?? null;
   if (playId == null) return null;
   return queue?.items?.find((i) => i.id === playId) ?? null;
+}
+
+/**
+ * THE POINTER CAN LIE (live, the user's Evo, 2026-09-02). A queue edit that
+ * lands after the decoder has pre-opened the next file makes the streamer
+ * PLAY the prefetched file — audio and tag readout both the old next — while
+ * its queue pointer (play_id / queue_id / queue_index) advances to whatever
+ * now sits in the next slot. For one track the device's own report describes
+ * two songs, and an app that mirrors it shows Now Playing (the readout) and
+ * the Queue's playing row (the pointer) disagreeing — the 2026-08-28 report.
+ *
+ * The readout is the audible truth, so the playing row should follow CONTENT
+ * when the pointer's entry does not match it. STRICTLY: title equal and
+ * duration within 2s, and exactly one other entry matching — the readout
+ * legitimately differs from an entry on renaming servers (Asset's "[Disc n]"
+ * merge changes the album, never title or length), and duplicates of the
+ * playing entry match the pointer's entry too, so neither can re-target.
+ * Callers settle the disagreement for PLAYING_SETTLE_MS before acting on it:
+ * at an ordinary boundary the pointer and the readout arrive as separate
+ * pushes and disagree for a moment.
+ */
+export const PLAYING_SETTLE_MS = 3000;
+
+export function entryMatchesReadout(
+  entry: QueueListItem,
+  md: EntryLike | null | undefined,
+): boolean {
+  const e = entry.metadata;
+  if (md == null || md.title == null || e?.title == null) return false;
+  return (
+    e.title === md.title &&
+    (e.duration == null || md.duration == null || Math.abs(e.duration - md.duration) <= 2)
+  );
+}
+
+/** The raw pointer, and the entry the READOUT names when the pointer's entry
+ *  does not (null when they agree, or when no single entry matches). */
+export function contentPlayId(
+  queue: QueueList | null,
+  playState: ZonePlayState | null,
+): { raw: number | null; content: number | null } {
+  const raw = queue?.play_id ?? playState?.queue_id ?? null;
+  const md = playState?.metadata;
+  const items = queue?.items;
+  if (raw == null || !md?.title || !items) return { raw, content: null };
+  const pointed = items.find((i) => i.id === raw);
+  if (!pointed || entryMatchesReadout(pointed, md)) return { raw, content: null };
+  const matches = items.filter((i) => entryMatchesReadout(i, md));
+  return { raw, content: matches.length === 1 ? matches[0].id : null };
 }
 
 const sameName = (a: string, b: string): boolean =>

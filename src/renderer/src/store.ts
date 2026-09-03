@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { contentPlayId, PLAYING_SETTLE_MS } from "@/lib/playingEntry";
 import type { MenuCommand, PushMessage, Snapshot } from "@shared/ipc";
 import type {
   AppSettings,
@@ -212,6 +213,13 @@ interface TTState {
   settings: AppSettings;
 
   playState: ZonePlayState | null;
+  /**
+   * THE playing queue id every surface reads (the Queue's row, the tray
+   * panel, the mini's "next", the Library/Favorites/Playlists highlights):
+   * the pointer, unless the readout has named a different single entry for
+   * PLAYING_SETTLE_MS — then that entry (lib/playingEntry, contentPlayId).
+   */
+  effectivePlayId: number | null;
   /**
    * When the current radio station was tuned, as THIS APP observed it —
    * stamped on every station-identity change in the play-state pushes, so
@@ -439,6 +447,33 @@ const navTo = (
       };
 let navRestoreSeq = 0;
 
+// The pointer-vs-readout disagreement (lib/playingEntry) must PERSIST before
+// the playing row moves: an ordinary boundary delivers the two as separate
+// pushes and they disagree for a beat. The clock lives here, beside the one
+// field it feeds; the timer re-derives once the window has passed.
+let disagree: { key: string; since: number } | null = null;
+let settleTimer: ReturnType<typeof setTimeout> | null = null;
+function settledPlayId(queue: QueueList | null, playState: ZonePlayState | null): number | null {
+  const { raw, content } = contentPlayId(queue, playState);
+  if (content == null) {
+    disagree = null;
+    return raw;
+  }
+  const key = `${raw}|${content}`;
+  const now = Date.now();
+  if (!disagree || disagree.key !== key) {
+    disagree = { key, since: now };
+    if (settleTimer) clearTimeout(settleTimer);
+    settleTimer = setTimeout(() => {
+      settleTimer = null;
+      const s = useStore.getState();
+      useStore.setState({ effectivePlayId: settledPlayId(s.queue, s.playState) });
+    }, PLAYING_SETTLE_MS + 50);
+    return raw;
+  }
+  return now - disagree.since >= PLAYING_SETTLE_MS ? content : raw;
+}
+
 export const useStore = create<TTState>((set, get) => ({
   screen: "now-playing",
   libraryResetNonce: 0,
@@ -479,6 +514,7 @@ export const useStore = create<TTState>((set, get) => ({
   settings: DEFAULT_SETTINGS,
 
   playState: null,
+  effectivePlayId: null,
   stationTunedAt: null,
   nowPlaying: null,
   zoneState: null,
@@ -677,6 +713,7 @@ export const useStore = create<TTState>((set, get) => ({
       discovering: snap.discovering,
       settings: snap.settings,
       playState: snap.playState,
+      effectivePlayId: settledPlayId(snap.queue, snap.playState),
       // Opened mid-broadcast: count from app start — honest for what the
       // app has observed.
       stationTunedAt: isRadioMetadata(snap.playState?.metadata) ? Date.now() : null,
@@ -763,6 +800,7 @@ export const useStore = create<TTState>((set, get) => ({
               msg.data.metadata?.station !== s.playState?.metadata?.station);
           return {
             playState: msg.data,
+            effectivePlayId: settledPlayId(s.queue, msg.data),
             stationTunedAt: !radioNow
               ? null
               : stationChanged
@@ -779,7 +817,7 @@ export const useStore = create<TTState>((set, get) => ({
         case "zoneState":
           return { zoneState: msg.data };
         case "queue":
-          return { queue: msg.data };
+          return { queue: msg.data, effectivePlayId: settledPlayId(msg.data, s.playState) };
         case "presets":
           return { presets: msg.data };
         case "systemInfo":

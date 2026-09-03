@@ -138,7 +138,6 @@ function SaveQueueDialog({
 export function QueueScreen(): React.JSX.Element {
   const queue = useStore((s) => s.queue);
   const saveSettings = useStore((s) => s.saveSettings);
-  const playState = useStore((s) => s.playState);
   const nowPlaying = useStore((s) => s.nowPlaying);
   const zoneState = useStore((s) => s.zoneState);
   const { followQueue, queueLayout, presetCardSize, presetGap, presetFillRows } = useStore(
@@ -256,7 +255,9 @@ export function QueueScreen(): React.JSX.Element {
         ]),
       )
     : allItems;
-  const playId = queue?.play_id ?? playState?.queue_id ?? null;
+  // the SETTLED playing id (store.effectivePlayId): the pointer, unless the
+  // readout has named another entry for long enough — see lib/playingEntry
+  const playId = useStore((s) => s.effectivePlayId);
   // The queue belongs to the MEDIA_PLAYER source. When another source is
   // active (AirPlay, radio, …) the device still reports a play_id — that row
   // is just where the queue is parked, and must not claim to be playing.

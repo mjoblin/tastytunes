@@ -53,6 +53,7 @@ export function FavoritesScreen(): React.JSX.Element {
   const filter = useStore((s) => s.screenFilters.favorites);
   const setScreenFilter = useStore((s) => s.setScreenFilter);
   const playState = useStore((s) => s.playState);
+  const effectivePlayId = useStore((s) => s.effectivePlayId);
   const nowPlaying = useStore((s) => s.nowPlaying);
   const zoneState = useStore((s) => s.zoneState);
   const queue = useStore((s) => s.queue);
@@ -208,8 +209,7 @@ export function FavoritesScreen(): React.JSX.Element {
     const items = queue?.items ?? [];
     const matches = favQueueMatches(f);
     if (matches.length > 0) {
-      const playId = queue?.play_id ?? playState?.queue_id ?? null;
-      const curIdx = items.findIndex((i) => i.id === playId);
+      const curIdx = items.findIndex((i) => i.id === effectivePlayId);
       const target = matches.find((mi) => items.indexOf(mi) >= curIdx) ?? matches[0];
       void tt.command({ type: "playQueueId", queueId: target.id as number });
       if (el) flashTarget(el);

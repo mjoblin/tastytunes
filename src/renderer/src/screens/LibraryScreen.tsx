@@ -227,6 +227,7 @@ export function LibraryScreen(): React.JSX.Element {
   const setScreenFilter = useStore((s) => s.setScreenFilter);
   const setScreen = useStore((s) => s.setScreen);
   const playState = useStore((s) => s.playState);
+  const effectivePlayId = useStore((s) => s.effectivePlayId);
   const nowPlaying = useStore((s) => s.nowPlaying);
   const zoneState = useStore((s) => s.zoneState);
   const queue = useStore((s) => s.queue);
@@ -1189,8 +1190,7 @@ export function LibraryScreen(): React.JSX.Element {
     const items = queue?.items ?? [];
     const matches = queueMatches(node);
     if (matches.length > 0) {
-      const playId = queue?.play_id ?? playState?.queue_id ?? null;
-      const curIdx = items.findIndex((i) => i.id === playId);
+      const curIdx = items.findIndex((i) => i.id === effectivePlayId);
       const target = matches.find((mi) => items.indexOf(mi) >= curIdx) ?? matches[0];
       void tt.command({ type: "playQueueId", queueId: target.id as number });
       if (el) flashTarget(el);
@@ -1690,7 +1690,7 @@ export function LibraryScreen(): React.JSX.Element {
   // only while the queue isn't known. Only while the queue's source is audible.
   const md = playState?.metadata ?? null;
   const queueSourceActive = activeSourceId(zoneState, nowPlaying) === "MEDIA_PLAYER";
-  const playingEntry = playingQueueEntry(queue, playState)?.metadata ?? null;
+  const playingEntry = playingQueueEntry(queue, playState, effectivePlayId)?.metadata ?? null;
   const isCurrentTrack = (node: MediaNode): boolean =>
     playingEntry != null
       ? trackMatchesEntry(node, playingEntry)

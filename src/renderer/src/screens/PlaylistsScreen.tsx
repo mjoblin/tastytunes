@@ -127,15 +127,14 @@ export function PlaylistsScreen(): React.JSX.Element {
   // playlist are content-identical INCLUDING ORDER (the hash is
   // order-sensitive), so the playing queue POSITION is the playlist index —
   // no title matching, and twin-titled tracks can't cross-light.
-  const playState = useStore((s) => s.playState);
+  const effectivePlayId = useStore((s) => s.effectivePlayId);
   const zoneState = useStore((s) => s.zoneState);
   const nowPlaying = useStore((s) => s.nowPlaying);
   const queueSourceActive = activeSourceId(zoneState, nowPlaying) === "MEDIA_PLAYER";
   const playingIndex = useMemo(() => {
-    const playId = queue?.play_id ?? playState?.queue_id ?? null;
-    if (playId == null) return null;
-    return queue?.items?.find((it) => it.id === playId)?.position ?? null;
-  }, [queue, playState]);
+    if (effectivePlayId == null) return null;
+    return queue?.items?.find((it) => it.id === effectivePlayId)?.position ?? null;
+  }, [effectivePlayId, queue]);
 
   const shown = useMemo(() => {
     const list = playlists.filter((p) => matchesFilter(filter, [p.name]));
