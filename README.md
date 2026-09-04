@@ -59,11 +59,25 @@ Album art, track details, format badges and the live lyric line. The transport b
 
 <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/now-playing.webp" alt="The Now Playing screen with album art, track details and the current lyric line">
 
+### Audio analysis
+
+For music on your local media servers, TastyTunes reads the audio file and shows its waveform under the artwork and in the seek bar (both optional, in Settings › Appearance), with the track's dynamic range beside the format badges. Once analyzed, an album's dynamic range becomes a filter and is sortable in the Library.
+
+<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/audio-analysis.webp" alt="Now Playing with the waveform under the album art and the dynamic range beside the format badges">
+
 ### The library as one collection
 
-Local UPnP servers and the streamer's USB drive, pooled into Artists and Albums views with genre and decade filters.
+Local UPnP servers and the streamer's USB drive, pooled into Artists, Albums and Tracks views with genre, decade, format and dynamic range filters.
 
 <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/lens-albums.webp" alt="The Albums view pooling every library into one collection">
+
+#### Artists and Tracks views
+
+The Artists view shows your artists, the selected artist's albums, and the selected album's tracks. The Tracks view is every track in every library as one list, narrowed by decade, genre, format and dynamic range, and the narrowed list can be played as a whole.
+
+<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/lens-artists.webp" alt="The Artists view with an artist selected, their albums in the middle column and the tracks of one album on the right">
+
+<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/lens-tracks.webp" alt="The Tracks view narrowed by decade and dynamic range, with the Play these button live">
 
 ### One search
 
@@ -76,6 +90,12 @@ Libraries, playlists, favorites, presets and internet radio, with results groupe
 The current line is highlighted and kept in view. Click a line to seek there.
 
 <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/lyrics.webp" alt="Lyrics panel with the current line highlighted">
+
+### Artist, album and track notes
+
+View a short biography of the artist, the album's year, label and genres with a summary, and the track's performers, writers and production credits. The notes come from MusicBrainz and Wikipedia, with a link to each source.
+
+<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/context-panel.webp" alt="The context panel showing the album's year, genres, summary and source links" width="380">
 
 ### Presets
 
@@ -172,20 +192,33 @@ tools the Home Assistant automation needs, and keep TastyTunes running.
 - Internet-radio display, track *x* of *y*, and the current lyric line under the track details
 - Fullscreen Display mode (<kbd>F</kbd>): chrome-free full screen for a desk or shelf display
 - Info: what the streamer reports about the current stream (codec, sample rate, bit depth, bitrate, queue position), for any source: local media, radio, AirPlay
+- The artist and album names link to the Library (local media only)
+
+### Audio analysis
+
+- Waveform of the playing track in the seek bar and under the artwork on Now Playing, generated from the audio file on the local media server the first time the track plays (local media only; the plain seek bar returns for radio and tracks without a waveform). Can be disabled in Settings › Appearance (on by default)
+- Dynamic range for every analyzed track and album, following the DR database's TT-DR procedure: shown beside the format badges on Now Playing, in track rows in the Library, Queue, Playlists and Favorites, and in the album header once the whole album has been analyzed
+- Analyze audio on any album from its menu, or on the tracks shown in the Tracks view; albums with a dynamic range can be filtered and sorted by it
+- Peak and loudness details under the Now Playing waveform, and a Dynamic range row in Info
 
 ### Library
 
 - Browse every local UPnP media server and the streamer's own USB storage
 - A local, rebuildable index: search as you type, and <kbd>⌘F</kbd> searches every library at once, grouped by server
-- Artists & Albums views pooling all sources into one collection, with genre, decade and albums ⇄ compilations filters and sorting
+- Artists, Albums and Tracks views pooling all sources into one collection, with genre, decade, format (codec, lossless, hi-res), dynamic range and albums ⇄ compilations filters and sorting; the Albums view as cards or rows
+- The Artists view shows your artists, the selected artist's albums, and the selected album's tracks
+- The Tracks view lists every track in every library; narrow it with the filters and play the whole narrowed list
+- Artist and album names link to the Library from every track row: the Library, Queue, Playlists, Favorites, Recently Played, Search and Now Playing
 - Albums stay intact: featured guests stay in the album, compilations sit under Various Artists, multi-disc sets show disc dividers, and multi-volume box sets collapse to one album with a volume selector; format and size in every album header
 - Info on any album, track or artist: performers, album artist, composers, disc and track numbers, format, size, and source ids, as the media server reports them; copy as JSON
 - Play now, play next, append, or replace
 - Select several tracks (<kbd>⌘</kbd>-click, <kbd>⇧</kbd>-click) and queue them, heart them or add them to a playlist together
+- Drag tracks, or an album, onto Queue, Playlists or Favorites in the navigation panel
 - Albums with no artwork on the local media server get a cover from the Cover Art Archive (can be disabled in Settings)
 - Save an album, a track, or the whole queue to one of the streamer's preset slots
 - Open in Library from the queue, favorites, playlists, Recently Played and the Info panel: lands on the track's album with the track highlighted
 - <kbd>Backspace</kbd> goes up a level; filters are remembered per folder
+- The library index is checked for changes when the app connects, and a notice appears when indexing finishes while you are on another screen
 
 ### Radio
 
@@ -277,6 +310,7 @@ tools the Home Assistant automation needs, and keep TastyTunes running.
 - Back and forward through everywhere you've been, like a browser: <kbd>⌘←</kbd>/<kbd>⌘→</kbd> (Alt+arrows on Windows and Linux), the mouse side buttons, or View › Back/Forward, which also works from inside a text box (<kbd>⌘[</kbd>/<kbd>⌘]</kbd> on macOS)
 - Scroll position remembered in Library, Search and Playlists screens
 - Every reorderable list (queue, presets, playlists, the nav rail) reorders by keyboard as well as by drag
+- Undo for queue edits, favorites, playlist additions and schedule deletions, from the notice that follows each change
 - OS media keys, and a track-change notification with artwork when the window isn't focused
 
 ### Appearance
