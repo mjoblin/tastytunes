@@ -19,6 +19,44 @@ import { cx } from "@/lib/format";
  * Renders nothing when there is neither name, so a caller can compose it
  * with trailing facts ("· server is offline") without a stray separator.
  */
+/**
+ * ONE name, one link — the primitive NameLine and Now Playing both render.
+ * The artist navigates by NAME (the Artists lens focused on it); the album by
+ * the row's REF through openRefInLibrary (content-resolved, the track flashed).
+ * `name` is the identity to navigate by; `children` is what to show when the
+ * two differ (Now Playing shows the settled readout while navigating by the
+ * queue entry). An album with no ref is not a link — render text instead.
+ */
+export function NameLink({
+  kind,
+  name,
+  ref,
+  className,
+  children,
+}: {
+  kind: "artist" | "album";
+  name: string;
+  ref?: MediaRef | null;
+  className?: string;
+  children?: React.ReactNode;
+}): React.JSX.Element {
+  return (
+    <button
+      data-tip={kind === "artist" ? "Go to artist" : "Go to album"}
+      data-name-link={kind}
+      aria-label={`Go to ${kind} ${name}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (kind === "artist") openArtistInLibrary(name);
+        else if (ref) void openRefInLibrary(ref);
+      }}
+      className={cx("tip-bottom transition-colors", className)}
+    >
+      {children ?? name}
+    </button>
+  );
+}
+
 export function NameLine({
   artist,
   album,
@@ -36,41 +74,17 @@ export function NameLine({
 }): React.JSX.Element | null {
   if (!artist && !album) return null;
   const link = cx(
-    "tip-bottom hover:underline underline-offset-2 transition-colors",
+    "hover:underline underline-offset-2",
     tone === "dim" ? "hover:text-ink" : "hover:text-dim",
   );
   return (
     <>
-      {artist && (
-        <button
-          data-tip="Go to artist"
-          data-name-link="artist"
-          aria-label={`Go to artist ${artist}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            openArtistInLibrary(artist);
-          }}
-          className={link}
-        >
-          {artist}
-        </button>
-      )}
+      {artist && <NameLink kind="artist" name={artist} className={link} />}
       {album &&
         (ref ? (
           <>
             {artist ? sep : ""}
-            <button
-              data-tip="Go to album"
-              data-name-link="album"
-              aria-label={`Go to album ${album}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                void openRefInLibrary(ref);
-              }}
-              className={link}
-            >
-              {album}
-            </button>
+            <NameLink kind="album" name={album} ref={ref} className={link} />
           </>
         ) : (
           <>

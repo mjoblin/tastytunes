@@ -248,6 +248,19 @@ function drOptionsOf(
     .sort((a, b) => Number(b.value) - Number(a.value));
 }
 
+/** Distinct codecs present, most common first — "show me my MP3s" (user ask,
+ *  2026-09-02). Offered from two codecs on (the picker's default min): a
+ *  one-format library needs no Format facet. */
+function formatOptionsOf(
+  codecs: ReadonlyArray<string | null | undefined>,
+): Array<{ value: string; label: string; count: number }> {
+  const counts = new Map<string, number>();
+  for (const c of codecs) if (c) counts.set(c, (counts.get(c) ?? 0) + 1);
+  return [...counts.entries()]
+    .map(([value, count]) => ({ value, label: value, count }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+}
+
 const decadeOf = (year: string | null | undefined): string | null =>
   year ? `${Math.floor(Number(year) / 10) * 10}s` : null;
 
@@ -267,8 +280,9 @@ let albumsMem: {
   genre: string | null;
   decade: string | null;
   dr: string | null;
+  format: string | null;
   filter: string;
-} = { genre: null, decade: null, dr: null, filter: "" };
+} = { genre: null, decade: null, dr: null, format: null, filter: "" };
 
 export function AlbumsLens({
   pools,
@@ -311,6 +325,28 @@ export function AlbumsLens({
     () => drOptionsOf(all.map((a) => albumDr[albumDrKey(a)]?.dr ?? null)),
     [all, albumDr],
   );
+  // an album's codecs = the union over its tracks in the pool (a mixed album
+  // matches every codec it holds, the way Genre aggregates)
+  const albumCodecs = useMemo(() => {
+    const m = new Map<string, Set<string>>();
+    for (const g of pools)
+      for (const t of g.tracks) {
+        const c = t.format?.codec;
+        if (!t.album || !c) continue;
+        const k = `${g.udn}|${lc(t.album)}`;
+        const set = m.get(k);
+        if (set) set.add(c);
+        else m.set(k, new Set([c]));
+      }
+    return m;
+  }, [pools]);
+  const formatOptions = useMemo(
+    () =>
+      formatOptionsOf(
+        all.flatMap((a) => [...(albumCodecs.get(`${a.serverUdn}|${lc(a.title)}`) ?? [])]),
+      ),
+    [all, albumCodecs],
+  );
 
   // Compilation = named so by its album artist, or (tracks known) credited to
   // an album artist none of its performers is; "Daft Punk feat. …" is not.
@@ -341,6 +377,11 @@ export function AlbumsLens({
         (a) => a.year != null && `${Math.floor(Number(a.year) / 10) * 10}s` === mem.decade,
       );
     if (mem.dr) list = list.filter((a) => String(albumDr[albumDrKey(a)]?.dr ?? "") === mem.dr);
+    const fmt = mem.format;
+    if (fmt)
+      list = list.filter(
+        (a) => albumCodecs.get(`${a.serverUdn}|${lc(a.title)}`)?.has(fmt) ?? false,
+      );
     if (mem.filter)
       list = list.filter((a) => matchesFilter(mem.filter, [a.title, a.artist, a.year]));
     const sorted = [...list].sort((a, b) => {
@@ -361,7 +402,7 @@ export function AlbumsLens({
       );
     });
     return reversed ? sorted.reverse() : sorted;
-  }, [all, mem, sort, reversed, kind, compilationKeys, albumDr]);
+  }, [all, mem, sort, reversed, kind, compilationKeys, albumDr, albumCodecs]);
 
   /**
    * Box sets (2026-08-24): volume siblings — same parsed base + artist, ≥2
@@ -452,6 +493,14 @@ export function AlbumsLens({
               />
               {/* the DR facet appears with the first analyzed album (user,
                 2026-09-01: "show me all my DR13") */}
+              <PickerPill
+                id="format"
+                neutral="Format"
+                clearLabel="All formats"
+                options={formatOptions}
+                value={mem.format}
+                onChange={(format) => setMem({ format })}
+              />
               <PickerPill
                 id="dr"
                 neutral="DR"
@@ -1398,9 +1447,10 @@ let tracksMem: {
   genre: string | null;
   decade: string | null;
   dr: string | null;
+  format: string | null;
   filter: string;
   scroll: number;
-} = { genre: null, decade: null, dr: null, filter: "", scroll: 0 };
+} = { genre: null, decade: null, dr: null, format: null, filter: "", scroll: 0 };
 
 /**
  * THE TRACKS LENS (2026-09-01, user: "it feels like an obvious gap"): every
@@ -1459,12 +1509,18 @@ export function TracksLens({
     () => drOptionsOf(all.map((t) => drByKey[audioAnalysisKey(t)] ?? null)),
     [all, drByKey],
   );
+  const formatOptions = useMemo(
+    () => formatOptionsOf(all.map((t) => t.format?.codec ?? null)),
+    [all],
+  );
 
   const shown = useMemo(() => {
     let list = all;
     if (mem.genre) list = list.filter((t) => (t.genre ?? []).some((g) => lc(g) === mem.genre));
     if (mem.decade) list = list.filter((t) => decadeOf(t.year) === mem.decade);
     if (mem.dr) list = list.filter((t) => String(drOf(t) ?? "") === mem.dr);
+    const fmt = mem.format;
+    if (fmt) list = list.filter((t) => t.format?.codec === fmt);
     if (mem.filter)
       list = list.filter((t) => matchesFilter(mem.filter, [t.title, t.artist, t.album, t.year]));
     const byTitle = (a: MediaNode, b: MediaNode): number =>
@@ -1515,7 +1571,7 @@ export function TracksLens({
     return () => ro.disconnect();
   }, []);
   const total = shown.length;
-  const narrowed = Boolean(mem.filter || mem.genre || mem.decade || mem.dr);
+  const narrowed = Boolean(mem.filter || mem.genre || mem.decade || mem.dr || mem.format);
   const overCap = shown.length > PLAY_THESE_MAX;
   // CONSTANT GEOMETRY for the split button (user call, 2026-09-01: popping
   // on and off read as distraction; a standing slot invites the gesture):
@@ -1542,6 +1598,7 @@ export function TracksLens({
     mem.filter ? `"${mem.filter.trim()}"` : null,
     mem.genre ? (genreOptions.find((g) => g.value === mem.genre)?.label ?? mem.genre) : null,
     mem.decade,
+    mem.format,
     mem.dr ? `DR${mem.dr}` : null,
   ]
     .filter(Boolean)
@@ -1562,7 +1619,7 @@ export function TracksLens({
   useEffect(() => {
     setSelT(new Set());
     selTAnchor.current = null;
-  }, [mem.genre, mem.decade, mem.dr, mem.filter, sort, reversed]);
+  }, [mem.genre, mem.decade, mem.dr, mem.format, mem.filter, sort, reversed]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       const t = e.target;
@@ -1690,6 +1747,14 @@ export function TracksLens({
                 options={genreOptions}
                 value={mem.genre}
                 onChange={(genre) => setMem({ genre })}
+              />
+              <PickerPill
+                id="format"
+                neutral="Format"
+                clearLabel="All formats"
+                options={formatOptions}
+                value={mem.format}
+                onChange={(format) => setMem({ format })}
               />
               <PickerPill
                 id="dr"

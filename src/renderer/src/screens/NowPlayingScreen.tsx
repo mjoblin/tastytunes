@@ -10,7 +10,10 @@ import {
   RadioTower,
 } from "lucide-react";
 import { useStore } from "@/store";
-import { cx, deriveNowPlaying } from "@/lib/format";
+import { activeSourceId, cx, deriveNowPlaying } from "@/lib/format";
+import { playingQueueEntry } from "@/lib/playingEntry";
+import { fromQueueItem } from "@/lib/mediaRef";
+import { NameLink } from "@/components/media/NameLine";
 import { useSettledSnapshot } from "@/hooks/useSettledSnapshot";
 import { useNowPlayingHeart } from "@/hooks/useNowPlayingHeart";
 import { useDecodedArt } from "@/hooks/useDecodedArt";
@@ -31,6 +34,10 @@ export function NowPlayingScreen(): React.JSX.Element {
   const playState = useStore((s) => s.playState);
   const saveSettings = useStore((s) => s.saveSettings);
   const nowPlaying = useStore((s) => s.nowPlaying);
+  const queue = useStore((s) => s.queue);
+  const zoneState = useStore((s) => s.zoneState);
+  const effectivePlayId = useStore((s) => s.effectivePlayId);
+  const displayMode = useStore((s) => s.displayMode);
   const setDisplayMode = useStore((s) => s.setDisplayMode);
   const lyricsOpen = useStore((s) => s.lyricsOpen);
   const setLyricsOpen = useStore((s) => s.setLyricsOpen);
@@ -43,6 +50,21 @@ export function NowPlayingScreen(): React.JSX.Element {
     lyricsLine,
   } = useStore((s) => s.settings);
   const meta = deriveNowPlaying(playState, nowPlaying);
+  // NAMES NAVIGATE (2026-09-02, the rule reaches Now Playing): for a LIBRARY
+  // track — the media player source, a queue entry resolving through the
+  // settled playing id — the artist and album lines are links. Identity is
+  // the QUEUE ENTRY's (the readout is the file tags, which renaming servers
+  // and a lying pointer can both disagree with); the text shown stays the
+  // settled snapshot's. Display mode keeps the hero quiet; radio, AirPlay and
+  // the other sources show plain text.
+  const playingEntry = playingQueueEntry(queue, playState, effectivePlayId);
+  const linkable =
+    !displayMode &&
+    !meta.isRadio &&
+    playingEntry != null &&
+    activeSourceId(zoneState, nowPlaying) === "MEDIA_PLAYER";
+  const entryRef = linkable && playingEntry ? fromQueueItem(playingEntry) : null;
+  const entryArtist = linkable ? (playingEntry?.metadata?.artist ?? null) : null;
 
   // Title/artist/album/badges render from a SETTLED snapshot and fade as one
   // group on track change (same idea as display mode): fade out, wait for the
@@ -343,11 +365,40 @@ export function NowPlayingScreen(): React.JSX.Element {
               </h1>
               {shownTrack.subtitle && (
                 <div className="font-display text-[23px] leading-tight tracking-tight text-ink/80 truncate">
-                  {shownTrack.subtitle}
+                  {entryArtist ? (
+                    <NameLink
+                      kind="artist"
+                      name={entryArtist}
+                      // display type: a lift to ink and a hairline gold underline set
+                      // well below the baseline — the row treatment's underline would
+                      // read heavy at this size; nothing at rest
+                      className="hover:text-ink hover:underline decoration-1 decoration-gold/50 underline-offset-[6px]"
+                    >
+                      {shownTrack.subtitle}
+                    </NameLink>
+                  ) : (
+                    shownTrack.subtitle
+                  )}
                 </div>
               )}
               {shownTrack.album && (
-                <div className="text-[14px] text-dim truncate">{shownTrack.album}</div>
+                <div className="text-[14px] text-dim truncate">
+                  {entryRef ? (
+                    <NameLink
+                      kind="album"
+                      name={shownTrack.album}
+                      ref={entryRef}
+                      // the same quiet grammar as the artist line, scaled to 14px: a hairline
+                      // gold underline at low alpha, a half step up in tone (the ink lift and
+                      // an ink underline read too dramatic here — user, 2026-09-02)
+                      className="hover:text-ink/80 hover:underline decoration-1 decoration-gold/40 underline-offset-[4px]"
+                    >
+                      {shownTrack.album}
+                    </NameLink>
+                  ) : (
+                    shownTrack.album
+                  )}
+                </div>
               )}
             </div>
 

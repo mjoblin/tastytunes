@@ -28,6 +28,7 @@ export function PlaybackBar(): React.JSX.Element {
   const playState = useStore((s) => s.playState);
   const nowPlaying = useStore((s) => s.nowPlaying);
   const setScreen = useStore((s) => s.setScreen);
+  const screen = useStore((s) => s.screen);
   const { position, duration } = usePlayhead();
   const t = useTransport(duration);
   const { shownPosition, slider } = useSeekScrub(position, duration, t.seek);
@@ -70,13 +71,16 @@ export function PlaybackBar(): React.JSX.Element {
       )}
     >
       {/* now playing mini */}
+      {/* the face opens Now Playing — and is INERT, hover included, while Now
+          Playing is already showing: a hover that promises a click doing
+          nothing is a lie (user, 2026-09-02: "nothing happens when I click") */}
       <button
         className={cx(
           "flex items-center gap-3 min-w-0 text-left rounded-lg p-1.5 -m-1.5 transition-colors",
-          active && "hover:bg-veil",
+          active && screen !== "now-playing" && "hover:bg-veil",
         )}
         onClick={() => setScreen("now-playing")}
-        disabled={!active}
+        disabled={!active || screen === "now-playing"}
       >
         {/* The art keeps the bar's fill ratio (52 in 92 ≈ 64 in 108) and grows
             in the same 300ms as the bar, so the two read as one motion. */}
