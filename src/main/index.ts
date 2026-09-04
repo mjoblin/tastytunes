@@ -155,6 +155,19 @@ const menuDeps = {
 const MIN_WIDTH = 800;
 const MIN_HEIGHT = 520;
 
+const TEST_INACTIVE = process.env.TASTYTUNES_TEST_INACTIVE === "1";
+/** Show the main window; inactive (no focus steal) under the suite's flag. */
+function showMain(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (TEST_INACTIVE) mainWindow.showInactive();
+  else mainWindow.show();
+}
+/** Focus the main window, unless the suite asked us never to take focus. */
+function focusMain(): void {
+  if (TEST_INACTIVE || !mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.focus();
+}
+
 function createWindow(): void {
   // Reopen at the remembered size/position — but only place it if the saved
   // spot is still on a connected display (mirrors the mini-player logic), and
@@ -190,7 +203,12 @@ function createWindow(): void {
     },
   });
 
-  mainWindow.on("ready-to-show", () => mainWindow?.show());
+  // TASTYTUNES_TEST_INACTIVE (2026-09-03): the verification suite drives the
+  // app through CDP, which needs no OS focus. Showing the window inactive keeps
+  // the user's keyboard where it was (their keystrokes used to land in the app
+  // under test and corrupt the run). Blocks that need real key-window status
+  // opt out and launch normally.
+  mainWindow.on("ready-to-show", () => showMain());
   mainWindow.on("focus", () => deviceManager.healthCheck());
   // Null the handle when the window closes (macOS keeps the app alive) —
   // late callers (updater announce, second-instance) otherwise poke a
@@ -348,8 +366,8 @@ function showMainWindow(): void {
     return;
   }
   if (mainWindow.isMinimized()) mainWindow.restore();
-  mainWindow.show();
-  mainWindow.focus();
+  showMain();
+  focusMain();
 }
 
 const trayDeps = {
@@ -389,8 +407,8 @@ function sendMenuCommand(command: MenuCommand): void {
     return;
   }
   if (mainWindow.isMinimized()) mainWindow.restore();
-  mainWindow.show();
-  mainWindow.focus();
+  showMain();
+  focusMain();
   mainWindow.webContents.send(IPC.push, { kind: "menu", command });
 }
 
@@ -689,7 +707,7 @@ if (!gotLock) {
     // first instance is running window-less (macOS after close).
     if (!mainWindow) return createWindow();
     if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.focus();
+    focusMain();
   });
 
   app
