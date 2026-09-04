@@ -727,7 +727,12 @@ function TrackRow({
         onMenu(e);
       }}
       className={cx(
-        "group grid grid-cols-[26px_44px_1fr_auto_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5",
+        "group grid items-center gap-3 rounded-lg px-2 py-1.5",
+        // the DR cell is a sixth column only while it renders: an empty auto
+        // column would still cost a gap and inset the duration
+        dr !== undefined
+          ? "grid-cols-[26px_44px_1fr_auto_auto_auto]"
+          : "grid-cols-[26px_44px_1fr_auto_auto]",
         "transition-colors",
         isDragging && "z-10 bg-raised shadow-xl",
         // current + queue audible: the queue row's full playing treatment;

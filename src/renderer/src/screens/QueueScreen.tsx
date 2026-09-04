@@ -1796,7 +1796,12 @@ function QueueRow({
       data-queue-id={item.id}
       {...(bodyDrag ? listeners : {})}
       className={cx(
-        "group relative grid grid-cols-[26px_44px_1fr_auto_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5",
+        "group relative grid items-center gap-3 rounded-lg px-2 py-1.5",
+        // the DR cell is a sixth column only while it renders: an empty auto
+        // column would still cost a gap and inset the duration
+        dr !== undefined
+          ? "grid-cols-[26px_44px_1fr_auto_auto_auto]"
+          : "grid-cols-[26px_44px_1fr_auto_auto]",
         dragLive && "pointer-events-none",
         // a selected row carries the block, and says so (the grip's cursor)
         bodyDrag && selected ? "cursor-grab active:cursor-grabbing" : "cursor-default",
