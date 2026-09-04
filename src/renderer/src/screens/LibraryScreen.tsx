@@ -1312,19 +1312,54 @@ export function LibraryScreen(): React.JSX.Element {
   // the selection untouched. Queue appends (the bar verb's semantics),
   // Favorites ADDS what's missing (a drop is additive intent), Playlists
   // opens the batch panel at the release point.
-  const dragCargo = useRef<{ nodes: MediaNode[]; fromSelection: boolean }>({
+  const dragCargo = useRef<{
+    nodes: MediaNode[];
+    fromSelection: boolean;
+    /** Album cargo (2026-09-02): the ordered containers and the chip's title. */
+    albums?: { title: string };
+  }>({
     nodes: [],
     fromSelection: false,
   });
   const navDrag = useNavDrag({
     targets: ["queue", "playlists", "favorites"],
     payload: () => {
-      const { nodes } = dragCargo.current;
+      const { nodes, albums } = dragCargo.current;
       if (nodes.length === 0) return null;
+      if (albums)
+        return {
+          count: nodes.length,
+          title: albums.title,
+          artUrl: nodes[0].artUrl,
+          noun: nodes.length === 1 ? "album" : "volumes",
+          artKind: "album" as const,
+        };
       return { count: nodes.length, title: nodes[0].title };
     },
     onDrop: (target, at) => {
-      const { nodes, fromSelection } = dragCargo.current;
+      const { nodes, fromSelection, albums } = dragCargo.current;
+      if (albums) {
+        // ALBUMS drop with the meanings of the album's own menu verbs: Queue =
+        // Add to end of queue (each volume of a set in order), Favorites = the
+        // tile's heart (volume 1 of a set, added not toggled), Playlists = Add
+        // to playlist… (the album expanded to tracks first; a set's volumes
+        // expanded in order). Single album per drag, by design.
+        if (target === "queue") {
+          void queueNodes(nodes, "append").then((ok) => {
+            if (ok) flashNavTarget("queue");
+          });
+        } else if (target === "favorites") {
+          if (!nodeFavorited(nodes[0])) heartNode(nodes[0]);
+          flashNavTarget("favorites");
+        } else if (target === "playlists") {
+          if (nodes.length === 1) setPlaylistPicker({ node: nodes[0], x: at.x, y: at.y });
+          else
+            void expandVolumes(nodes).then((tracks) =>
+              setPlaylistMulti({ nodes: tracks, x: at.x, y: at.y }),
+            );
+        }
+        return;
+      }
       if (target === "queue") {
         void queueNodes(nodes, "append").then((ok) => {
           if (ok) {
@@ -1340,9 +1375,29 @@ export function LibraryScreen(): React.JSX.Element {
       }
     },
   });
+  /** A box set's volumes, expanded to their tracks in volume order (the
+   *  playlist panel stores tracks, never container references). */
+  const expandVolumes = async (volumes: MediaNode[]): Promise<MediaNode[]> => {
+    const out: MediaNode[] = [];
+    for (const v of volumes) {
+      const udn = nodeUdn(v);
+      if (!udn) continue;
+      const kids = await tt.mediaBrowse(udn, v.id, []).catch(() => [] as MediaNode[]);
+      out.push(...kids.filter((c) => !c.isContainer));
+    }
+    return out;
+  };
+  const startAlbumDrag = (nodes: MediaNode[], e: React.PointerEvent, title: string): void => {
+    dragCargo.current = { nodes, fromSelection: false, albums: { title } };
+    navDrag.start(e);
+  };
   const startTrackDrag = (node: MediaNode, e: React.PointerEvent): void => {
     const fromSelection = selTracks.has(node.id);
-    dragCargo.current = { nodes: fromSelection ? selectedNodes() : [node], fromSelection };
+    dragCargo.current = {
+      nodes: fromSelection ? selectedNodes() : [node],
+      fromSelection,
+      albums: undefined,
+    };
     navDrag.start(e);
   };
 
@@ -1845,6 +1900,7 @@ export function LibraryScreen(): React.JSX.Element {
     addTracksToPlaylist: (chosen, at, onAdded) =>
       setPlaylistMulti({ nodes: chosen, x: at.x, y: at.y, clear: onAdded }),
     goToAlbum: goToAlbumFromLens,
+    dragAlbum: startAlbumDrag,
     goToArtist: goToArtistFromLens,
     saveAsPlaylist: (chosen, name) => void saveNodesAsPlaylist(chosen, name),
     analyzeTracks: (chosen, label) => void runAnalyzeTracks(chosen, label),
@@ -1886,6 +1942,11 @@ export function LibraryScreen(): React.JSX.Element {
             onEnter={() => enter(node)}
             onPlay={(el) => void playContainer(node, el)}
             onMenu={(e) => openMenu(node, e)}
+            onNavDrag={
+              isAlbumClass(node.upnpClass)
+                ? (e) => startAlbumDrag([node], e, node.title)
+                : undefined
+            }
           />
         ) : (
           <ContainerRow
@@ -1903,6 +1964,11 @@ export function LibraryScreen(): React.JSX.Element {
             onHeart={isAlbumClass(node.upnpClass) ? () => heartNode(node) : undefined}
             onEnter={() => enter(node)}
             onMenu={(e) => openMenu(node, e)}
+            onNavDrag={
+              isAlbumClass(node.upnpClass)
+                ? (e) => startAlbumDrag([node], e, node.title)
+                : undefined
+            }
           />
         ),
       )}

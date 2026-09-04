@@ -68,6 +68,7 @@ export function ContainerCard({
   onEnter,
   onPlay,
   onMenu,
+  onNavDrag,
 }: {
   node: MediaNode;
   /** The playing track belongs to this album (and the queue source is live). */
@@ -82,6 +83,9 @@ export function ContainerCard({
   onEnter(): void;
   onPlay(el: HTMLElement | null): void;
   onMenu(e: React.MouseEvent): void;
+  /** Albums drag to the nav rail (2026-09-02): a press on the card BODY arms
+   *  the shared drag; the corner chips (play bloom, heart, ⋯) never do. */
+  onNavDrag?(e: React.PointerEvent): void;
 }): React.JSX.Element {
   const ref = useRef<HTMLDivElement | null>(null);
   // Queue/preset verbs only make sense on albums — plain folders (USB
@@ -111,7 +115,15 @@ export function ContainerCard({
       {/* the card CENTER always enters — play/menu are corner chips on the
           art, never intercepting the open gesture (unlike preset cards,
           whose whole-card click IS the play action) */}
-      <button className="block w-full cursor-pointer" onClick={onEnter}>
+      <button
+        className="block w-full cursor-pointer"
+        onClick={onEnter}
+        onPointerDown={(e) => {
+          // only the body: a press that lands on a nested control (the bloom) is that control's
+          if ((e.target as HTMLElement).closest("button") !== e.currentTarget) return;
+          onNavDrag?.(e);
+        }}
+      >
         {/* the art well is a veil LIFT over the card, not a panel hole: the same
             theme-flipping tint either way, so the ambient wash reads through
             the well as it does through the shell (panel is darker than the
@@ -210,6 +222,7 @@ export function ContainerRow({
   badge,
   dr,
   onArtistLink,
+  onNavDrag,
   onHeart,
   onEnter,
   onMenu,
@@ -227,6 +240,8 @@ export function ContainerRow({
   /** The album artist as a link (rows are the data view: names navigate;
    *  the row itself keeps opening the album). */
   onArtistLink?(): void;
+  /** Albums drag to the nav rail: a press on the row body arms the shared drag. */
+  onNavDrag?(e: React.PointerEvent): void;
   onHeart?(): void;
   onEnter(): void;
   onMenu(e: React.MouseEvent): void;
@@ -244,6 +259,10 @@ export function ContainerRow({
         playing ? "row-playing bg-gold/10" : menuOpen ? "bg-veil" : "hover:bg-veil",
       )}
       onClick={onEnter}
+      onPointerDown={(e) => {
+        if ((e.target as HTMLElement).closest("button")) return; // the row's controls and links keep their own presses
+        onNavDrag?.(e);
+      }}
       onContextMenu={menuable ? onMenu : undefined}
       data-library-row
     >

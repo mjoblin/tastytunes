@@ -1796,7 +1796,7 @@ function QueueRow({
       data-queue-id={item.id}
       {...(bodyDrag ? listeners : {})}
       className={cx(
-        "group relative grid grid-cols-[26px_44px_1fr_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5",
+        "group relative grid grid-cols-[26px_44px_1fr_auto_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5",
         dragLive && "pointer-events-none",
         // a selected row carries the block, and says so (the grip's cursor)
         bodyDrag && selected ? "cursor-grab active:cursor-grabbing" : "cursor-default",

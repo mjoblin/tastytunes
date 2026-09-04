@@ -77,6 +77,9 @@ export interface LensActions {
   heartNode(node: MediaNode): void;
   /** Batch hearts: silent per-item toggles behind ONE aggregate undo entry. */
   heartNodes(nodes: MediaNode[], allIn: boolean): void;
+  /** Albums drag to the nav rail (2026-09-02): the ordered containers (a box
+   *  set's volumes) and the title the chip shows. */
+  dragAlbum(nodes: MediaNode[], e: React.PointerEvent, title: string): void;
   nodeFavorited(node: MediaNode): boolean;
   trackQueued(node: MediaNode): boolean;
   isCurrentTrack(node: MediaNode): boolean;
@@ -603,6 +606,7 @@ export function AlbumsLens({
                 onEnter={() => actions.openAlbum(rawNode)}
                 onPlay={(el) => void actions.playContainer(rawNode, el)}
                 onMenu={(e) => actions.openMenu(rawNode, e)}
+                onNavDrag={(e) => actions.dragAlbum(set ? set.volumes : [rawNode], e, node.title)}
               />
             ) : (
               <ContainerRow
@@ -625,6 +629,7 @@ export function AlbumsLens({
                 onHeart={() => actions.heartNode(rawNode)}
                 onEnter={() => actions.openAlbum(rawNode)}
                 onMenu={(e) => actions.openMenu(rawNode, e)}
+                onNavDrag={(e) => actions.dragAlbum(set ? set.volumes : [rawNode], e, node.title)}
               />
             );
           })}
@@ -1191,6 +1196,10 @@ export function ArtistsLens({
                     key={nodeKey(alb)}
                     data-lens-album-row={alb.title}
                     onClick={() => setMem({ album: selected ? null : nodeKey(alb) })}
+                    onPointerDown={(e) => {
+                      if ((e.target as HTMLElement).closest("button")) return;
+                      actions.dragAlbum([alb], e, alb.title);
+                    }}
                     className={cx(
                       "group grid grid-cols-[44px_1fr_auto_auto] items-center gap-2.5 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
                       // SELECTED is "open here" — the Playlists sidebar's amber, so it
