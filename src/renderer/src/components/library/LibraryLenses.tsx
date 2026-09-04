@@ -27,12 +27,14 @@ import {
   albumDrKey,
   audioAnalysisKey,
   trackPosition,
+  LOSSLESS_CODECS,
+  isHiRes,
+  type MediaFormat,
 } from "@shared/model";
 import { cx, fmtTime, matchesFilter, fmtCount } from "@/lib/format";
 import { useStore } from "@/store";
-import { tt } from "@/api";
 import { FACT_SEP } from "@/lib/mediaFacts";
-import { useAlbumDr } from "@/lib/audioAnalysis";
+import { useAlbumDr, useKnownDrs } from "@/lib/audioAnalysis";
 import { scrollToVisible } from "@/lib/scroll";
 import { isAlbumClass } from "@/lib/media";
 import { MediaArt } from "@/components/media/MediaArt";
@@ -248,17 +250,39 @@ function drOptionsOf(
     .sort((a, b) => Number(b.value) - Number(a.value));
 }
 
-/** Distinct codecs present, most common first — "show me my MP3s" (user ask,
- *  2026-09-02). Offered from two codecs on (the picker's default min): a
- *  one-format library needs no Format facet. */
+/** The Format facet's tags for one track: its codec, plus the two DERIVED
+ *  qualities (user, 2026-09-02: "what's still lossy" in one click) — from the
+ *  app's one home for each predicate (LOSSLESS_CODECS, isHiRes). */
+const LOSSLESS_TAG = "__lossless";
+const HIRES_TAG = "__hires";
+const FORMAT_LABEL: Record<string, string> = { [LOSSLESS_TAG]: "Lossless", [HIRES_TAG]: "Hi-res" };
+function formatTags(f: MediaFormat | undefined | null): string[] {
+  if (!f?.codec) return [];
+  const tags = [f.codec];
+  if (LOSSLESS_CODECS.has(f.codec)) tags.push(LOSSLESS_TAG);
+  if (isHiRes({ bits: f.bits, rate: f.rate })) tags.push(HIRES_TAG);
+  return tags;
+}
+
+/** The Format facet's options over a list of tags (one per item per tag):
+ *  Lossless and Hi-res first — offered only when they would actually
+ *  narrow (0 < count < total) — then the codecs present, most common first.
+ *  Offered from two options on (the picker's default min): a one-format
+ *  library needs no Format facet. */
 function formatOptionsOf(
-  codecs: ReadonlyArray<string | null | undefined>,
+  tags: ReadonlyArray<string>,
+  total: number,
 ): Array<{ value: string; label: string; count: number }> {
   const counts = new Map<string, number>();
-  for (const c of codecs) if (c) counts.set(c, (counts.get(c) ?? 0) + 1);
-  return [...counts.entries()]
+  for (const t of tags) counts.set(t, (counts.get(t) ?? 0) + 1);
+  const derived = [LOSSLESS_TAG, HIRES_TAG]
+    .map((value) => ({ value, label: FORMAT_LABEL[value], count: counts.get(value) ?? 0 }))
+    .filter((o) => o.count > 0 && o.count < total);
+  const codecs = [...counts.entries()]
+    .filter(([value]) => !(value in FORMAT_LABEL))
     .map(([value, count]) => ({ value, label: value, count }))
     .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  return [...derived, ...codecs];
 }
 
 const decadeOf = (year: string | null | undefined): string | null =>
@@ -331,12 +355,12 @@ export function AlbumsLens({
     const m = new Map<string, Set<string>>();
     for (const g of pools)
       for (const t of g.tracks) {
-        const c = t.format?.codec;
-        if (!t.album || !c) continue;
+        const tags = formatTags(t.format);
+        if (!t.album || tags.length === 0) continue;
         const k = `${g.udn}|${lc(t.album)}`;
-        const set = m.get(k);
-        if (set) set.add(c);
-        else m.set(k, new Set([c]));
+        const set = m.get(k) ?? new Set<string>();
+        for (const tag of tags) set.add(tag);
+        m.set(k, set);
       }
     return m;
   }, [pools]);
@@ -344,6 +368,7 @@ export function AlbumsLens({
     () =>
       formatOptionsOf(
         all.flatMap((a) => [...(albumCodecs.get(`${a.serverUdn}|${lc(a.title)}`) ?? [])]),
+        all.length,
       ),
     [all, albumCodecs],
   );
@@ -1488,29 +1513,19 @@ export function TracksLens({
   // Per-track DR: one bulk cache-only read (never a fetch), refreshed each
   // time a sweep finishes — the DR sort has its numbers without asking the
   // server for anything.
-  const waveformsOn = useStore((s) => s.settings.waveforms);
-  const sweepIdle = useStore((s) => s.analysisProgress == null);
-  const [drByKey, setDrByKey] = useState<Record<string, number>>({});
-  useEffect(() => {
-    if (!waveformsOn || !sweepIdle || all.length === 0) return;
-    let stale = false;
-    void tt
-      .audioDrMany(all.map((t) => audioAnalysisKey(t)))
-      .then((m) => {
-        if (!stale) setDrByKey(m);
-      })
-      .catch(() => {});
-    return () => {
-      stale = true;
-    };
-  }, [all, sweepIdle, waveformsOn]);
+  const drKeys = useMemo(() => all.map((t) => audioAnalysisKey(t)), [all]);
+  const drByKey = useKnownDrs(drKeys); // one home for known DRs (lib/audioAnalysis)
   const drOf = (t: MediaNode): number | null => drByKey[audioAnalysisKey(t)] ?? null;
   const drOptions = useMemo(
     () => drOptionsOf(all.map((t) => drByKey[audioAnalysisKey(t)] ?? null)),
     [all, drByKey],
   );
   const formatOptions = useMemo(
-    () => formatOptionsOf(all.map((t) => t.format?.codec ?? null)),
+    () =>
+      formatOptionsOf(
+        all.flatMap((t) => formatTags(t.format)),
+        all.length,
+      ),
     [all],
   );
 
@@ -1520,7 +1535,7 @@ export function TracksLens({
     if (mem.decade) list = list.filter((t) => decadeOf(t.year) === mem.decade);
     if (mem.dr) list = list.filter((t) => String(drOf(t) ?? "") === mem.dr);
     const fmt = mem.format;
-    if (fmt) list = list.filter((t) => t.format?.codec === fmt);
+    if (fmt) list = list.filter((t) => formatTags(t.format).includes(fmt));
     if (mem.filter)
       list = list.filter((t) => matchesFilter(mem.filter, [t.title, t.artist, t.album, t.year]));
     const byTitle = (a: MediaNode, b: MediaNode): number =>
@@ -1598,7 +1613,7 @@ export function TracksLens({
     mem.filter ? `"${mem.filter.trim()}"` : null,
     mem.genre ? (genreOptions.find((g) => g.value === mem.genre)?.label ?? mem.genre) : null,
     mem.decade,
-    mem.format,
+    mem.format ? (formatOptions.find((o) => o.value === mem.format)?.label ?? mem.format) : null,
     mem.dr ? `DR${mem.dr}` : null,
   ]
     .filter(Boolean)

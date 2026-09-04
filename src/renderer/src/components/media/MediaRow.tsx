@@ -1,4 +1,5 @@
 import { Loader2 } from "lucide-react";
+import { DrBadge } from "@/components/media/Waveform";
 import { DurationCell } from "@/components/media/DurationCell";
 import { MediaArt, type MediaArtKind } from "@/components/media/MediaArt";
 import { Eqbars } from "@/components/media/Eqbars";
@@ -27,6 +28,7 @@ export function MediaRow({
   badge,
   meta,
   duration,
+  dr,
   playing,
   tuning,
   dimmed,
@@ -52,6 +54,9 @@ export function MediaRow({
   /** Track length. Pass null/undefined-able seconds to RESERVE the column
    *  ('–:––' when unknown); omit the prop entirely for kinds without one. */
   duration?: number | null;
+  /** A known TT-DR for this track: a reserved cell before the duration once the
+   *  surface knows any (undefined = no cell; null = the cell, empty). */
+  dr?: number | null;
   playing?: boolean;
   /** Play sent, stream/queue not landed yet — half-lit, spinner by the title. */
   tuning?: boolean;
@@ -190,6 +195,11 @@ export function MediaRow({
       </div>
       {actions && <div className="shrink-0 flex items-center gap-0.5">{actions}</div>}
       {meta && <span className="shrink-0 text-[11px] text-faint tabular-nums">{meta}</span>}
+      {dr !== undefined && (
+        <span className="flex w-12 shrink-0 justify-end font-mono text-[10.5px]" data-track-dr>
+          {dr != null && <DrBadge dr={dr} className="" />}
+        </span>
+      )}
       {duration !== undefined && <DurationCell secs={duration} />}
     </div>
   );

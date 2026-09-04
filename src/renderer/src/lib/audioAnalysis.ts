@@ -6,7 +6,7 @@
 // TT album value is the mean of all its tracks, so a partial read has no
 // honest number (per-track results still persist, so a retry only reads
 // what's missing).
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { albumDrKey, audioAnalysisKey, type AlbumDr, type MediaNode } from "@shared/model";
@@ -165,5 +165,34 @@ export function useAlbumDr(): Record<string, AlbumDr> {
       .then((m) => useStore.getState().setAlbumDr(m))
       .catch(() => {});
   }, []);
+  return map;
+}
+
+/**
+ * The KNOWN DR per content key — cache-only, never a fetch (audioDrMany) —
+ * for every surface that shows a DR cell beside a track: the Tracks lens,
+ * the Queue, a playlist's tracks, the Favorites tracks (2026-09-02, "DR
+ * wherever a track row is"). Re-read when the key set changes and when a
+ * sweep finishes; empty while waveforms are off. Recently Played cannot join:
+ * its entries keep no duration, and duration is part of the content key.
+ */
+export function useKnownDrs(keys: readonly string[]): Record<string, number> {
+  const waveformsOn = useStore((s) => s.settings.waveforms);
+  const sweepIdle = useStore((s) => s.analysisProgress == null);
+  const sig = keys.join("\u0000");
+  const [map, setMap] = useState<Record<string, number>>({});
+  useEffect(() => {
+    if (!waveformsOn || !sweepIdle || sig === "") return;
+    let stale = false;
+    void tt
+      .audioDrMany(sig.split("\u0000"))
+      .then((m) => {
+        if (!stale) setMap(m);
+      })
+      .catch(() => {});
+    return () => {
+      stale = true;
+    };
+  }, [sig, sweepIdle, waveformsOn]);
   return map;
 }

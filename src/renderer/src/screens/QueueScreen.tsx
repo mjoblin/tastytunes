@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useMemo } from "react";
+import { useKnownDrs } from "@/lib/audioAnalysis";
+import { DrBadge } from "@/components/media/Waveform";
 import { createPortal } from "react-dom";
 import { useQueuePerformer } from "@/hooks/useQueuePerformer";
 import {
@@ -43,7 +45,7 @@ import {
   X,
 } from "lucide-react";
 import { queueContentHash, type QueueListItem } from "@shared/smoip";
-import { presetVolumeKey, type QueueLayout } from "@shared/model";
+import { presetVolumeKey, type QueueLayout, audioAnalysisKey } from "@shared/model";
 import {
   favoriteKey,
   type ContentRef,
@@ -258,6 +260,20 @@ export function QueueScreen(): React.JSX.Element {
   // the SETTLED playing id (store.effectivePlayId): the pointer, unless the
   // readout has named another entry for long enough — see lib/playingEntry
   const playId = useStore((s) => s.effectivePlayId);
+  // DR wherever a track row is (2026-09-02): the known integers by content key,
+  // a reserved cell in every row once the queue knows any
+  const keyOf = (i: QueueListItem): string =>
+    audioAnalysisKey({
+      title: i.metadata?.title ?? "",
+      artist: i.metadata?.artist ?? null,
+      album: i.metadata?.album ?? null,
+      durationSecs: i.metadata?.duration ?? null,
+    });
+  const drKeys = useMemo(() => allItems.map(keyOf), [allItems]);
+  const drByKey = useKnownDrs(drKeys);
+  const anyDr = Object.keys(drByKey).length > 0;
+  const drFor = (i: QueueListItem): number | null | undefined =>
+    anyDr ? (drByKey[keyOf(i)] ?? null) : undefined;
   // The queue belongs to the MEDIA_PLAYER source. When another source is
   // active (AirPlay, radio, …) the device still reports a play_id — that row
   // is just where the queue is parked, and must not claim to be playing.
@@ -1186,6 +1202,7 @@ export function QueueScreen(): React.JSX.Element {
               <QueueAlbumGroups
                 items={items}
                 playId={playId}
+                drFor={drFor}
                 sourceActive={queueSourceActive}
                 currentRef={currentRef}
                 selectedIds={selected}
@@ -1244,6 +1261,7 @@ export function QueueScreen(): React.JSX.Element {
                       setRowMenu({ item, x: e.clientX, y: e.clientY });
                     }}
                     item={item}
+                    dr={drFor(item)}
                     isCurrent={item.id === playId}
                     sourceActive={queueSourceActive}
                     currentRef={item.id === playId ? currentRef : undefined}
@@ -1330,9 +1348,12 @@ function QueueAlbumGroups({
   menuId,
   onRowClick,
   onGroupModClick,
+  drFor,
 }: {
   items: QueueListItem[];
   playId: number | null;
+  /** The screen's known-DR lookup (a reserved cell once the queue knows any). */
+  drFor: (i: QueueListItem) => number | null | undefined;
   sourceActive: boolean;
   /** The row whose ⋯ menu is open holds its hover treatment. */
   menuId: number | null;
@@ -1398,6 +1419,7 @@ function QueueAlbumGroups({
               key={item.id}
               onMenu={(e) => onMenu(item, e)}
               item={item}
+              dr={drFor(item)}
               isCurrent={item.id === playId}
               sourceActive={sourceActive}
               currentRef={item.id === playId ? currentRef : undefined}
@@ -1691,6 +1713,8 @@ function snapQueueRows(): void {
 }
 
 interface QueueItemProps {
+  /** A known TT-DR (undefined = the queue knows none yet, no cell). */
+  dr?: number | null;
   onMenu?(e: React.MouseEvent): void;
   item: QueueListItem;
   isCurrent: boolean;
@@ -1744,6 +1768,7 @@ function QueueRow({
   bodyDrag = false,
   menuOpen = false,
   dragLive = false,
+  dr,
 }: QueueItemProps): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id as number,
@@ -1882,6 +1907,11 @@ function QueueRow({
       {/* Duration sits at the far right of the CONTENT, after the actions —
           it's always-visible information, so it wants a stable column, while
           the actions come and go with hover. */}
+      {dr !== undefined && (
+        <span className="flex w-12 shrink-0 justify-end font-mono text-[10.5px]" data-track-dr>
+          {dr != null && <DrBadge dr={dr} className="" />}
+        </span>
+      )}
       <DurationCell secs={md?.duration ?? null} />
     </div>
   );

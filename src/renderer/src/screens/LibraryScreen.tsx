@@ -1504,8 +1504,8 @@ export function LibraryScreen(): React.JSX.Element {
     if (r === "busy") return; // the running sweep's own toast will land
     if (r == null) showNotice(`Couldn't read “${node.title}” from the server.`);
     else if (r.dr == null)
-      showNotice(`Read ${r.analyzed} of ${r.tracks} tracks — an album DR needs all of them.`);
-    else showToast({ kind: "success", text: `“${node.title}” analyzed — DR${r.dr}` });
+      showNotice(`Read ${r.analyzed} of ${r.tracks} tracks. An album DR needs all of them.`);
+    else showToast({ kind: "success", text: `“${node.title}” analyzed: DR${r.dr}` });
   };
   /** The Tracks lens's sweep over what's shown — the album sweep's toasts,
    *  minus the album DR (a filter is not an album). */
@@ -1515,7 +1515,7 @@ export function LibraryScreen(): React.JSX.Element {
     if (r === "busy" || r == null) return;
     if (r.analyzed === r.tracks)
       showToast({ kind: "success", text: `Analyzed ${fmtCount(r.tracks)} tracks` });
-    else showNotice(`Read ${r.analyzed} of ${r.tracks} tracks; the rest couldn't be decoded.`);
+    else showNotice(`Read ${r.analyzed} of ${r.tracks} tracks. The rest couldn't be read.`);
   };
   /** One-click save of a shown list as a playlist (the Queue's precedent:
    *  auto-named, toasted with the STORED name, undoable as a create). */

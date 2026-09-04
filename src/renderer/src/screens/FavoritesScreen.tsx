@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useKnownDrs } from "@/lib/audioAnalysis";
 import { useSavedPerformer } from "@/hooks/useQueuePerformer";
 import { Heart, Loader2, MoreHorizontal, Play } from "lucide-react";
-import { type MediaNode, type MediaQueueAction, type MediaServerInfo } from "@shared/model";
+import {
+  type MediaNode,
+  type MediaQueueAction,
+  type MediaServerInfo,
+  audioAnalysisKey,
+} from "@shared/model";
 import {
   favoriteKey,
   type Favorite,
@@ -50,6 +56,36 @@ export function FavoritesScreen(): React.JSX.Element {
   // the performer the library knows for a track saved from a compilation queue (display only)
   const performerOf = useSavedPerformer();
   const favorites = useStore((s) => s.favorites);
+  // DR wherever a track row is (2026-09-02): the favorite tracks' known integers
+  const favTracks = useMemo(
+    () => favorites.filter((f): f is FavoriteMedia => f.kind === "track"),
+    [favorites],
+  );
+  const drKeys = useMemo(
+    () =>
+      favTracks.map((f) =>
+        audioAnalysisKey({
+          title: f.title,
+          artist: f.artist,
+          album: f.album,
+          durationSecs: f.durationSecs ?? null,
+        }),
+      ),
+    [favTracks],
+  );
+  const drByKey = useKnownDrs(drKeys);
+  const anyDr = Object.keys(drByKey).length > 0;
+  const drFor = (f: FavoriteMedia): number | null | undefined =>
+    anyDr
+      ? (drByKey[
+          audioAnalysisKey({
+            title: f.title,
+            artist: f.artist,
+            album: f.album,
+            durationSecs: f.durationSecs ?? null,
+          })
+        ] ?? null)
+      : undefined;
   const filter = useStore((s) => s.screenFilters.favorites);
   const setScreenFilter = useStore((s) => s.setScreenFilter);
   const playState = useStore((s) => s.playState);
@@ -471,6 +507,7 @@ export function FavoritesScreen(): React.JSX.Element {
                       playing={trackPlaying(f)}
                       dimmed={!active || !routed}
                       duration={f.durationSecs ?? null}
+                      dr={drFor(f)}
                       onClick={(el) => playTrack(f, el)}
                       onContextMenu={(e) => openMenu(f, e)}
                       actions={

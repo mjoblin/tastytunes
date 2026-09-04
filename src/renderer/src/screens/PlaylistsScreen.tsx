@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { useKnownDrs } from "@/lib/audioAnalysis";
+import { DrBadge } from "@/components/media/Waveform";
 import { useSavedPerformer } from "@/hooks/useQueuePerformer";
 import {
   DndContext,
@@ -28,6 +30,7 @@ import {
   type FavoriteMedia,
   type Playlist,
   type PlaylistItem,
+  audioAnalysisKey,
 } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
@@ -150,6 +153,32 @@ export function PlaylistsScreen(): React.JSX.Element {
     return reversed ? sorted.reverse() : sorted;
   }, [playlists, filter, sort, reversed]);
   const selected = playlists.find((p) => p.id === selectedId) ?? shown[0] ?? null;
+  // DR wherever a track row is (2026-09-02): the open playlist's known integers
+  const drKeys = useMemo(
+    () =>
+      (selected?.items ?? []).map((i) =>
+        audioAnalysisKey({
+          title: i.title,
+          artist: i.artist,
+          album: i.album,
+          durationSecs: i.durationSecs ?? null,
+        }),
+      ),
+    [selected],
+  );
+  const drByKey = useKnownDrs(drKeys);
+  const anyDr = Object.keys(drByKey).length > 0;
+  const drFor = (i: PlaylistItem): number | null | undefined =>
+    anyDr
+      ? (drByKey[
+          audioAnalysisKey({
+            title: i.title,
+            artist: i.artist,
+            album: i.album,
+            durationSecs: i.durationSecs ?? null,
+          })
+        ] ?? null)
+      : undefined;
   useEffect(() => {
     lastSelectedId = selected?.id ?? null;
   }, [selected?.id]);
@@ -543,6 +572,7 @@ export function PlaylistsScreen(): React.JSX.Element {
                         key={ids[i]}
                         id={ids[i]}
                         index={i}
+                        dr={drFor(item)}
                         item={item}
                         current={queuedId === selected.id && playingIndex === i}
                         sourceActive={queueSourceActive}
@@ -645,6 +675,7 @@ function TrackRow({
   sourceActive,
   onRemove,
   onMenu,
+  dr,
 }: {
   id: string;
   index: number;
@@ -655,6 +686,8 @@ function TrackRow({
   sourceActive: boolean;
   onRemove: () => void;
   onMenu: (e: React.MouseEvent) => void;
+  /** A known TT-DR (undefined = the playlist knows none yet, no cell). */
+  dr?: number | null;
 }): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
@@ -741,6 +774,11 @@ function TrackRow({
       </div>
 
       {/* far right of the content, after the hover actions — see QueueRow */}
+      {dr !== undefined && (
+        <span className="flex w-12 shrink-0 justify-end font-mono text-[10.5px]" data-track-dr>
+          {dr != null && <DrBadge dr={dr} className="" />}
+        </span>
+      )}
       <DurationCell secs={item.durationSecs ?? null} />
     </div>
   );
