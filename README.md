@@ -153,7 +153,8 @@ turn them on. Every tool has its own switch in Settings › AI agents, effective
 on the agent's next call. Agents inherit the same limits the UI has: the volume
 cap, the power safeguards, the Connections toggles. A call to a disabled tool is
 refused. Bind it to localhost, or to your network to reach the streamer from
-another machine.
+another machine. The setup for each client (Claude Code, Cursor, VS Code, Gemini CLI,
+Codex CLI, Claude Desktop, ChatGPT) is at [tastytunes.app/agents](https://tastytunes.app/agents/).
 
 ### Home Assistant
 

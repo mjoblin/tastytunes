@@ -204,7 +204,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
     id: "sleep",
     group: "control",
     title: "Sleep timer",
-    description: "Arm or cancel the sleep timer.",
+    description: "Enable or cancel the sleep timer.",
     tools: [
       {
         name: "set_sleep_timer",
@@ -421,7 +421,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
     group: "write",
     optIn: true,
     description:
-      "Create playlists, add the playing track to one, and delete them. These write the user's own stored collection.",
+      "Create playlists, add the playing track to one, and delete them. These change the playlists TastyTunes stores on your computer.",
     tools: [
       {
         name: "create_playlist",
