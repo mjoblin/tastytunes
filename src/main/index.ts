@@ -83,6 +83,7 @@ import { loggedFetch } from "./netlog";
 import { getSettings, updateSettings } from "./data/persist";
 import { getRecents } from "./data/recents";
 import { listeningRecord } from "./data/listeningRecord";
+import { playStatsFromRecord } from "./data/playStats";
 
 // A dead log pipe must never crash the app: when a parent process that
 // spawned us (a script, a test harness) dies, our stdout/stderr writes
@@ -138,6 +139,13 @@ function broadcastListening(): void {
   });
 }
 listeningRecord.setNotifier(broadcastListening);
+// Each appended line reaches the renderer's play stats as ONE event (the fold
+// is shared with main's builder), so counts and last-played stay live at
+// track boundaries without re-reading the files.
+listeningRecord.setEventNotifier((event) => {
+  for (const w of BrowserWindow.getAllWindows())
+    w.webContents.send(IPC.push, { kind: "playEvent", event });
+});
 
 // MCP tools can mutate settings (schedules) — the renderer must hear about it
 mcpBridge.onSettingsMutated = (settings) => broadcastSettings(settings);
@@ -584,8 +592,14 @@ function registerIpc(): void {
     }
   });
   ipcMain.handle(IPC.listeningStats, () => listeningRecord.stats());
+  ipcMain.handle(IPC.playStats, () => playStatsFromRecord());
   ipcMain.handle(IPC.listeningClear, async () => {
     await listeningRecord.clear();
+    // the reading surfaces re-seed from the (now empty) record
+    void playStatsFromRecord().then((data) => {
+      for (const w of BrowserWindow.getAllWindows())
+        w.webContents.send(IPC.push, { kind: "playStats", data });
+    });
     broadcastListening();
     return listeningRecord.stats();
   });

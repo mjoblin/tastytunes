@@ -62,6 +62,8 @@ import type {
   QueueRestoreResult,
   RadioStation,
   ListeningRecordStats,
+  ListeningEvent,
+  PlayStats,
   RecentTrack,
   SleepTimer,
   TrackInfo,
@@ -119,6 +121,10 @@ export type PushMessage =
   | { kind: "log"; entry: LogEntry }
   | { kind: "recents"; data: RecentTrack[] }
   | { kind: "listening"; data: ListeningRecordStats }
+  /** The record's aggregate, whole (after a clear) — the reading surfaces' seed. */
+  | { kind: "playStats"; data: PlayStats }
+  /** One line appended to the record — the renderer folds it into its stats. */
+  | { kind: "playEvent"; event: ListeningEvent }
   /** Settings changed OUTSIDE the renderer (e.g. an MCP tool created a schedule). */
   | { kind: "settings"; settings: AppSettings }
   /** Wake-on-intent in flight: a play-shaped command is waking the streamer. */
@@ -405,6 +411,9 @@ export interface TastyTunesApi {
    *  per-line envelope makes that safe). Resolves to the written file's name
    *  and event count, or null if the save dialog was cancelled. */
   listeningExport(): Promise<{ file: string; events: number } | null>;
+  /** The record aggregated for the reading surfaces: per-track plays and last
+   *  played, the most recent plays, when the record began. */
+  playStats(): Promise<PlayStats>;
   /** Combined size of the on-disk lookup caches (lyrics, artist context). */
   /** The undo stack's top label (or null when empty) — the Edit menu's
    *  Undo item names its target from this, the Music.app pattern. */
@@ -464,6 +473,7 @@ export const IPC = {
   listeningStats: "tt:listeningStats",
   listeningClear: "tt:listeningClear",
   listeningExport: "tt:listeningExport",
+  playStats: "tt:playStats",
   undoLabelSet: "tt:undoLabelSet",
   lookupCacheStats: "tt:lookupCacheStats",
   clearLookupCaches: "tt:clearLookupCaches",

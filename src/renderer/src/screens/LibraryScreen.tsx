@@ -46,11 +46,12 @@ import { favoriteKey, type Favorite, type FavoriteMedia } from "@shared/model";
 import { albumDrKey } from "@shared/model";
 import { analyzeAlbum, analyzeTracks, useAlbumDr } from "@/lib/audioAnalysis";
 import { FACT_SEP, albumFactsLine, albumFormatChips } from "@/lib/mediaFacts";
+import { usePlayStats } from "@/lib/playStats";
 import { DrChip } from "@/components/media/Waveform";
 import type { QueueListItem } from "@shared/smoip";
 import { tt } from "@/api";
 import { useStore } from "@/store";
-import { activeSourceId, cx, matchesFilter, fmtCount } from "@/lib/format";
+import { activeSourceId, cx, matchesFilter, fmtCount, fmtAgo } from "@/lib/format";
 import {
   albumMatchesEntry,
   entryArtistMatches,
@@ -486,6 +487,7 @@ export function LibraryScreen(): React.JSX.Element {
   // Action feedback: the app-wide toast for failures, a gold pulse for wins.
   // (The screen's original local notice banner graduated into the toast.)
   const showToast = useStore((s) => s.showToast);
+  const playStats = usePlayStats();
   const showNotice = (msg: string): void => showToast({ kind: "error", text: msg });
 
   const loadServers = useCallback((): void => {
@@ -1780,8 +1782,14 @@ export function LibraryScreen(): React.JSX.Element {
   const albumFmt = albumFormat(allTracks);
   // the catalog facts line has ONE home (lib/mediaFacts) — the album Info
   // modal reads the identical string; only the queue note is this screen's
+  const albumLastPlayed = playStats.album(allTracks).lastAt;
   const albumFacts = albumNode
-    ? [albumFactsLine(albumNode, allTracks), albumInQueue ? "in the queue" : null]
+    ? [
+        albumFactsLine(albumNode, allTracks),
+        // the listening record's fact (0.8.0): when this album last played
+        albumLastPlayed != null ? `last played ${fmtAgo(albumLastPlayed)}` : null,
+        albumInQueue ? "in the queue" : null,
+      ]
         .filter(Boolean)
         .join(FACT_SEP)
     : "";

@@ -322,6 +322,63 @@ export function isListen(playedSecs: number, durationSecs: number | null): boole
 }
 
 /**
+ * The listening record's CONTENT KEY for a track (0.8.0, the record's reading
+ * surfaces): title, artist and album, each trimmed, lowercased and
+ * whitespace-collapsed. The record stores tags raw and matches at read time,
+ * so this is the one place the match rule lives — main builds the stats with
+ * it and the renderer looks nodes up with it. Improving the match (feat.
+ * stripping, diacritics) happens here and applies to all history at once.
+ */
+export function playKey(
+  title: string | null | undefined,
+  artist: string | null | undefined,
+  album: string | null | undefined,
+): string {
+  const n = (v: string | null | undefined): string =>
+    (v ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  return `${n(title)}|${n(artist)}|${n(album)}`;
+}
+
+/** One track's tally in the record: recorded plays (each ≥ the 30s floor),
+ *  listens (the house definition), the most recent start, and seconds heard. */
+export interface PlayStat {
+  plays: number;
+  listens: number;
+  lastAt: number;
+  seconds: number;
+}
+/** The record aggregated for the reading surfaces: per-track tallies keyed by
+ *  playKey, the most recent plays in order (for "pick up where you left
+ *  off"), and when the record began. Built once by main from the files and
+ *  kept current in the renderer by folding each new play event in. */
+export interface PlayStats {
+  tracks: Record<string, PlayStat>;
+  recent: ListeningPlayEvent[];
+  since: number | null;
+}
+/** The most recent plays kept in `recent` — enough for any album run. */
+export const PLAY_STATS_RECENT = 300;
+/** Fold one record line into the stats. Library plays only: an "external"
+ *  line (AirPlay, casting) never counts, even on a content match — a count
+ *  means "played from the library". Main builds with it, the renderer folds
+ *  each pushed event with it, so the two never disagree. */
+export function foldPlayEvent(stats: PlayStats, e: ListeningEvent): void {
+  if (e.kind !== "play") return;
+  const ev = e;
+  const k = playKey(ev.title, ev.artist, ev.album);
+  const row = stats.tracks[k] ?? { plays: 0, listens: 0, lastAt: 0, seconds: 0 };
+  row.plays += 1;
+  if (isListen(ev.playedSeconds, ev.duration)) row.listens += 1;
+  if (ev.at > row.lastAt) row.lastAt = ev.at;
+  row.seconds += ev.playedSeconds;
+  stats.tracks[k] = row;
+  stats.recent.push(ev);
+  if (stats.recent.length > PLAY_STATS_RECENT)
+    stats.recent.splice(0, stats.recent.length - PLAY_STATS_RECENT);
+  if (stats.since == null || ev.at < stats.since) stats.since = ev.at;
+}
+
+/**
  * One line of the listening record (history/<year>.jsonl in userData).
  *
  * The envelope is versioned PER LINE (`v`) so exported files survive
@@ -908,7 +965,7 @@ export interface AppSettings {
    * later belongs here too.
    */
   /** Albums lens sort (the native album grid above keeps librarySort). */
-  lensAlbumsSort: "title" | "artist" | "year" | "dr";
+  lensAlbumsSort: "title" | "artist" | "year" | "dr" | "lastPlayed" | "plays";
   lensAlbumsSortReversed: boolean;
   /** Artists lens: hide artists that only have loose tracks. */
   lensArtistsAlbumsOnly: boolean;
@@ -916,7 +973,8 @@ export interface AppSettings {
   lensAlbumsKind: "all" | "albums" | "compilations";
   /** Tracks lens sort — the third lens (2026-09-01), every track across the
    *  ready indexes; DR sorts newest-analysis-first once the sweep has run. */
-  lensTracksSort: "title" | "artist" | "album" | "year" | "duration" | "dr";
+  lensTracksSort:
+    "title" | "artist" | "album" | "year" | "duration" | "dr" | "lastPlayed" | "plays";
   lensTracksSortReversed: boolean;
   playlistsSort: "updated" | "created" | "played" | "name" | "length";
   playlistsSortReversed: boolean;
@@ -966,6 +1024,10 @@ export interface AppSettings {
   /** The listening record: a local, append-only play log (history/<year>.jsonl
    *  in userData). On by default — a diary can't be backfilled. */
   listeningRecord: boolean;
+  /** The record's READING surfaces (0.8.0): last played in album headers, play
+   *  counts and the Played filter in the Library, the resume offer on Now
+   *  Playing. Off hides them all; the record itself keeps logging. */
+  showListeningHistory: boolean;
   /** Scrobble listens to ListenBrainz (needs a user token; radio is never scrobbled). */
   lbEnabled: boolean;
   /** ListenBrainz user token, from listenbrainz.org/settings. Stored locally. */
@@ -1127,6 +1189,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   lyricsLine: true,
   displayLyrics: true,
   listeningRecord: true,
+  showListeningHistory: true,
   lbEnabled: false,
   lbToken: "",
   artistInfo: true,

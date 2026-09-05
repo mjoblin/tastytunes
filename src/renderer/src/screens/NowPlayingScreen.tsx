@@ -24,6 +24,7 @@ import { useFadePresence } from "@/hooks/useFadePresence";
 import { LyricsPanel } from "@/components/overlays/LyricsPanel";
 import { LyricLine } from "@/components/playback/LyricLine";
 import { EmptyState } from "@/components/chrome/EmptyState";
+import { ResumeCard } from "@/components/playback/ResumeCard";
 import { ArtistPanel } from "@/components/overlays/ArtistPanel";
 import { NowPlayingWaveform, PlayingDrChip } from "@/components/media/Waveform";
 
@@ -268,7 +269,10 @@ export function NowPlayingScreen(): React.JSX.Element {
           icon={Disc3}
           title="Nothing playing"
           caption="Start playback from a queue, recall a preset, or stream to the device from another app."
-        />
+        >
+          {/* the listening record's offer (0.8.0): an album left unfinished */}
+          <ResumeCard />
+        </EmptyState>
       </div>
     );
   }

@@ -31,7 +31,8 @@ import {
   isHiRes,
   type MediaFormat,
 } from "@shared/model";
-import { cx, fmtTime, matchesFilter, fmtCount } from "@/lib/format";
+import { cx, fmtTime, matchesFilter, fmtCount, fmtAgo } from "@/lib/format";
+import { usePlayStats, playedBucket, playedOptionsOf } from "@/lib/playStats";
 import { useStore } from "@/store";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { useAlbumDr, useKnownDrs } from "@/lib/audioAnalysis";
@@ -293,11 +294,18 @@ const decadeOf = (year: string | null | undefined): string | null =>
 
 // ------------------------------------------------------------------- albums
 
-const ALBUM_SORTS: Array<{ value: "title" | "artist" | "year" | "dr"; label: string }> = [
+/** The sorts that read the listening record — offered only while it has stats. */
+const RECORD_SORTS = new Set<string>(["lastPlayed", "plays"]);
+const ALBUM_SORTS: Array<{
+  value: "title" | "artist" | "year" | "dr" | "lastPlayed" | "plays";
+  label: string;
+}> = [
   { value: "title", label: "Title" },
   { value: "artist", label: "Artist" },
   { value: "year", label: "Year (newest first)" },
   { value: "dr", label: "Dynamic range" },
+  { value: "lastPlayed", label: "Last played" },
+  { value: "plays", label: "Most played" },
 ];
 
 // Sort + direction live in settings (view defaults persist, 2026-08-06);
@@ -308,8 +316,10 @@ let albumsMem: {
   decade: string | null;
   dr: string | null;
   format: string | null;
+  /** The Played facet (0.8.0): a playedBucket, or null for any. */
+  played: string | null;
   filter: string;
-} = { genre: null, decade: null, dr: null, format: null, filter: "" };
+} = { genre: null, decade: null, dr: null, format: null, played: null, filter: "" };
 
 export function AlbumsLens({
   pools,
@@ -335,8 +345,17 @@ export function AlbumsLens({
     albumsMem = { ...albumsMem, ...patch };
     setMemState(albumsMem);
   };
-  const sort = useStore((s) => s.settings.lensAlbumsSort);
+  const sortSetting = useStore((s) => s.settings.lensAlbumsSort);
   const reversed = useStore((s) => s.settings.lensAlbumsSortReversed);
+  // the listening record's reading surfaces (0.8.0): an album's plays are the
+  // fold of its tracks' plays (so a compilation's land on the compilation)
+  const play = usePlayStats();
+  // the record's sorts exist only while stats do; a persisted one falls back
+  // to title until they return (the setting itself is left alone)
+  const albumSorts = play.ready
+    ? ALBUM_SORTS
+    : ALBUM_SORTS.filter((o) => !RECORD_SORTS.has(o.value));
+  const sort = !play.ready && RECORD_SORTS.has(sortSetting) ? "title" : sortSetting;
   const saveSettings = useStore((s) => s.saveSettings);
   const albumDr = useAlbumDr();
 
@@ -375,6 +394,30 @@ export function AlbumsLens({
       ),
     [all, albumCodecs],
   );
+  const albumPlay = useMemo(() => {
+    const m = new Map<string, { plays: number; lastAt: number | null }>();
+    if (!play.ready) return m;
+    for (const g of pools)
+      for (const t of g.tracks) {
+        if (!t.album) continue;
+        const st = play.track(t);
+        if (!st) continue;
+        const k = `${g.udn}|${lc(t.album)}`;
+        const row = m.get(k) ?? { plays: 0, lastAt: null };
+        row.plays += st.plays;
+        if (row.lastAt == null || st.lastAt > row.lastAt) row.lastAt = st.lastAt;
+        m.set(k, row);
+      }
+    return m;
+  }, [pools, play]);
+  const playOf = (a: MediaNode): { plays: number; lastAt: number | null } =>
+    albumPlay.get(`${a.serverUdn}|${lc(a.title)}`) ?? { plays: 0, lastAt: null };
+  const playedOptions = useMemo(
+    () => (play.ready ? playedOptionsOf(all.map((a) => playOf(a).lastAt)) : []),
+    // playOf reads albumPlay; listing it keeps the memo honest
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [all, albumPlay, play.ready],
+  );
 
   // Compilation = named so by its album artist, or (tracks known) credited to
   // an album artist none of its performers is; "Daft Punk feat. …" is not.
@@ -405,6 +448,7 @@ export function AlbumsLens({
         (a) => a.year != null && `${Math.floor(Number(a.year) / 10) * 10}s` === mem.decade,
       );
     if (mem.dr) list = list.filter((a) => String(albumDr[albumDrKey(a)]?.dr ?? "") === mem.dr);
+    if (mem.played) list = list.filter((a) => playedBucket(playOf(a).lastAt) === mem.played);
     const fmt = mem.format;
     if (fmt)
       list = list.filter(
@@ -425,12 +469,19 @@ export function AlbumsLens({
         const d = (n: MediaNode): number => albumDr[albumDrKey(n)]?.dr ?? -1;
         return d(b) - d(a) || a.title.localeCompare(b.title);
       }
+      // the record's sorts: most recent / most played first, unplayed last
+      if (sort === "lastPlayed")
+        return (playOf(b).lastAt ?? 0) - (playOf(a).lastAt ?? 0) || a.title.localeCompare(b.title);
+      if (sort === "plays")
+        return playOf(b).plays - playOf(a).plays || a.title.localeCompare(b.title);
       return (
         a.title.localeCompare(b.title) || (a.serverName ?? "").localeCompare(b.serverName ?? "")
       );
     });
     return reversed ? sorted.reverse() : sorted;
-  }, [all, mem, sort, reversed, kind, compilationKeys, albumDr, albumCodecs]);
+    // playOf reads albumPlay; listing it keeps the memo honest
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [all, mem, sort, reversed, kind, compilationKeys, albumDr, albumCodecs, albumPlay]);
 
   /**
    * Box sets (2026-08-24): volume siblings — same parsed base + artist, ≥2
@@ -538,6 +589,15 @@ export function AlbumsLens({
                 onChange={(dr) => setMem({ dr })}
                 min={1}
               />
+              <PickerPill
+                id="played"
+                neutral="Played"
+                clearLabel="Any time"
+                options={playedOptions}
+                value={mem.played}
+                onChange={(played) => setMem({ played })}
+                min={1}
+              />
             </div>
           </div>
         </div>
@@ -556,7 +616,7 @@ export function AlbumsLens({
             </HeaderChip>
           )}
           <SortChip
-            sorts={ALBUM_SORTS}
+            sorts={albumSorts}
             neutral="title"
             value={sort}
             reversed={reversed}
@@ -1455,7 +1515,7 @@ export function ArtistsLens({
 // ------------------------------------------------------------------- tracks
 
 const TRACK_SORTS: Array<{
-  value: "title" | "artist" | "album" | "year" | "duration" | "dr";
+  value: "title" | "artist" | "album" | "year" | "duration" | "dr" | "lastPlayed" | "plays";
   label: string;
 }> = [
   { value: "title", label: "Title" },
@@ -1464,6 +1524,8 @@ const TRACK_SORTS: Array<{
   { value: "year", label: "Year (newest first)" },
   { value: "duration", label: "Duration (longest first)" },
   { value: "dr", label: "Dynamic range" },
+  { value: "lastPlayed", label: "Last played" },
+  { value: "plays", label: "Plays" },
 ];
 
 /** "Play these N" appears once the list is NARROWED (a filter or a facet) —
@@ -1482,9 +1544,11 @@ let tracksMem: {
   decade: string | null;
   dr: string | null;
   format: string | null;
+  /** The Played facet (0.8.0): a playedBucket, or null for any. */
+  played: string | null;
   filter: string;
   scroll: number;
-} = { genre: null, decade: null, dr: null, format: null, filter: "", scroll: 0 };
+} = { genre: null, decade: null, dr: null, format: null, played: null, filter: "", scroll: 0 };
 
 /**
  * THE TRACKS LENS (2026-09-01, user: "it feels like an obvious gap"): every
@@ -1511,8 +1575,13 @@ export function TracksLens({
     tracksMem = { ...tracksMem, ...patch };
     setMemState(tracksMem);
   };
-  const sort = useStore((s) => s.settings.lensTracksSort);
+  const sortSetting = useStore((s) => s.settings.lensTracksSort);
   const reversed = useStore((s) => s.settings.lensTracksSortReversed);
+  const play = usePlayStats();
+  const trackSorts = play.ready
+    ? TRACK_SORTS
+    : TRACK_SORTS.filter((o) => !RECORD_SORTS.has(o.value));
+  const sort = !play.ready && RECORD_SORTS.has(sortSetting) ? "title" : sortSetting;
   const saveSettings = useStore((s) => s.saveSettings);
 
   const all = useMemo(() => pools.flatMap((g) => g.tracks), [pools]);
@@ -1543,6 +1612,8 @@ export function TracksLens({
     if (mem.genre) list = list.filter((t) => (t.genre ?? []).some((g) => lc(g) === mem.genre));
     if (mem.decade) list = list.filter((t) => decadeOf(t.year) === mem.decade);
     if (mem.dr) list = list.filter((t) => String(drOf(t) ?? "") === mem.dr);
+    if (mem.played)
+      list = list.filter((t) => playedBucket(play.track(t)?.lastAt ?? null) === mem.played);
     const fmt = mem.format;
     if (fmt) list = list.filter((t) => formatTags(t.format).includes(fmt));
     if (mem.filter)
@@ -1566,12 +1637,33 @@ export function TracksLens({
       if (sort === "duration")
         return (b.durationSecs ?? 0) - (a.durationSecs ?? 0) || byTitle(a, b);
       if (sort === "dr") return (drOf(b) ?? -1) - (drOf(a) ?? -1) || byTitle(a, b);
+      // the record's sorts: most recent / most played first, unplayed last
+      if (sort === "lastPlayed")
+        return (play.track(b)?.lastAt ?? 0) - (play.track(a)?.lastAt ?? 0) || byTitle(a, b);
+      if (sort === "plays")
+        return (play.track(b)?.plays ?? 0) - (play.track(a)?.plays ?? 0) || byTitle(a, b);
       return byTitle(a, b);
     });
     return reversed ? sorted.reverse() : sorted;
     // drOf reads drByKey; listing it keeps the memo honest
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [all, mem, sort, reversed, drByKey]);
+  }, [all, mem, sort, reversed, drByKey, play]);
+  const playedOptions = useMemo(
+    () => (play.ready ? playedOptionsOf(all.map((t) => play.track(t)?.lastAt ?? null)) : []),
+    [all, play],
+  );
+  /** The record's cell while sorted by it: plays, or how long ago. */
+  const metaOf = (t: MediaNode): string | null | undefined => {
+    if (sort === "plays") {
+      const n = play.track(t)?.plays ?? 0;
+      return n > 0 ? `${n} ${n === 1 ? "play" : "plays"}` : null;
+    }
+    if (sort === "lastPlayed") {
+      const at = play.track(t)?.lastAt;
+      return at != null ? fmtAgo(at) : null;
+    }
+    return undefined;
+  };
 
   // WINDOWED LIST (2026-09-01, user: the cap read as a wall): render only
   // the rows near the viewport, so every sort over thousands of tracks stays
@@ -1595,7 +1687,9 @@ export function TracksLens({
     return () => ro.disconnect();
   }, []);
   const total = shown.length;
-  const narrowed = Boolean(mem.filter || mem.genre || mem.decade || mem.dr || mem.format);
+  const narrowed = Boolean(
+    mem.filter || mem.genre || mem.decade || mem.dr || mem.format || mem.played,
+  );
   const overCap = shown.length > PLAY_THESE_MAX;
   // CONSTANT GEOMETRY for the split button (user call, 2026-09-01: popping
   // on and off read as distraction; a standing slot invites the gesture):
@@ -1789,6 +1883,15 @@ export function TracksLens({
                 onChange={(dr) => setMem({ dr })}
                 min={1}
               />
+              <PickerPill
+                id="played"
+                neutral="Played"
+                clearLabel="Any time"
+                options={playedOptions}
+                value={mem.played}
+                onChange={(played) => setMem({ played })}
+                min={1}
+              />
             </div>
             {/* the narrowed list as the queue, in one gesture — the album
                 Play button's semantics (replaces the queue) for what's shown */}
@@ -1829,7 +1932,7 @@ export function TracksLens({
         <div className={`flex items-center ${GAP_WITHIN} shrink-0`}>
           {/* the sort chip keeps its lone right spot */}
           <SortChip
-            sorts={TRACK_SORTS}
+            sorts={trackSorts}
             neutral="title"
             value={sort}
             reversed={reversed}
@@ -1932,6 +2035,7 @@ export function TracksLens({
                         selStart={!(idx > 0 && selT.has(nodeKey(shown[idx - 1])))}
                         selEnd={!(idx < total - 1 && selT.has(nodeKey(shown[idx + 1])))}
                         dr={drOf(t)}
+                        meta={metaOf(t)}
                         // the second line's links — the search-results
                         // treatment: the row plays, the names navigate
                         onAlbumLink={

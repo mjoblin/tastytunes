@@ -352,6 +352,14 @@ const TRACK_GRID: Record<string, string> = {
   art: "grid-cols-[44px_1fr_auto_auto]",
   dr: "grid-cols-[1fr_auto_auto_auto]",
   "": "grid-cols-[1fr_auto_auto]",
+  // …and with the META cell (the Tracks lens's plays / last-played column,
+  // present only while the list is sorted by it)
+  "pos-art-dr-meta": "grid-cols-[26px_44px_1fr_auto_auto_auto_auto]",
+  "pos-art-meta": "grid-cols-[26px_44px_1fr_auto_auto_auto]",
+  "art-dr-meta": "grid-cols-[44px_1fr_auto_auto_auto_auto]",
+  "art-meta": "grid-cols-[44px_1fr_auto_auto_auto]",
+  "dr-meta": "grid-cols-[1fr_auto_auto_auto_auto]",
+  meta: "grid-cols-[1fr_auto_auto_auto]",
 };
 
 export function TrackRow({
@@ -372,11 +380,16 @@ export function TrackRow({
   note,
   artistLabel,
   dr,
+  meta,
   showPosition = true,
   selStart = true,
   selEnd = true,
 }: {
   node: MediaNode;
+  /** The listening record's cell (0.8.0): "12 plays" or "3 weeks ago" while
+   *  the Tracks lens is sorted by plays / last played; undefined = no cell,
+   *  null = the cell reserved but empty (never played). */
+  meta?: string | null;
   /** Loose tracks in mixed folders get a thumb; album views carry the art in the header. */
   showArt: boolean;
   /** This is what's playing right now (queue source live) — queue-row treatment. */
@@ -433,7 +446,12 @@ export function TrackRow({
       className={cx(
         "group relative grid items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
         TRACK_GRID[
-          [showPosition && "pos", showArt && "art", dr !== undefined && "dr"]
+          [
+            showPosition && "pos",
+            showArt && "art",
+            dr !== undefined && "dr",
+            meta !== undefined && "meta",
+          ]
             .filter(Boolean)
             .join("-")
         ],
@@ -555,6 +573,14 @@ export function TrackRow({
       {dr !== undefined && (
         <div className="flex w-12 justify-end font-mono text-[10.5px]" data-track-dr>
           {dr != null && <DrBadge dr={dr} className="" />}
+        </div>
+      )}
+      {meta !== undefined && (
+        <div
+          className="flex w-24 justify-end font-mono text-[10.5px] text-faint tabular-nums whitespace-nowrap"
+          data-track-meta
+        >
+          {meta}
         </div>
       )}
       <DurationCell secs={node.durationSecs} />

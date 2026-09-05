@@ -47,6 +47,8 @@ import {
   FRAME_RING_SIZE,
   LOG_RING_SIZE,
   NET_RING_SIZE,
+  type PlayStats,
+  foldPlayEvent,
 } from "@shared/model";
 import { isRadioMetadata } from "@shared/smoip";
 import { currentLibrarySpot } from "@/lib/navSpot";
@@ -177,6 +179,7 @@ export type ToastAction =
   | { label: string; screen: Screen; undo?: never }
   | { label: string; undo: () => void; screen?: never };
 let toastNonce = 0;
+let playStatsLoading = false;
 let undoNonce = 0;
 /** Monotonic id for search asks — see librarySearchTarget. */
 let librarySearchSeq = 0;
@@ -320,6 +323,11 @@ interface TTState {
   /** The listening record's truth row, pushed after every append. Null until
    *  the History tab's first fetch or the first push. */
   listeningStats: ListeningRecordStats | null;
+  /** The record aggregated for the reading surfaces (0.8.0): null until the
+   *  first surface asks (loadPlayStats), then kept live by folding each pushed
+   *  play event with the shared fold. */
+  playStats: PlayStats | null;
+  loadPlayStats(): Promise<void>;
   /** Local favorites, newest-hearted first (mirrored from the main process). */
   favorites: Favorite[];
   playlists: Playlist[];
@@ -562,6 +570,7 @@ export const useStore = create<TTState>((set, get) => ({
   sleep: null,
   recents: [],
   listeningStats: null,
+  playStats: null,
   undoStack: [],
   navDropTarget: null,
   navDragActive: false,
@@ -609,6 +618,18 @@ export const useStore = create<TTState>((set, get) => ({
 
   toast: null,
   showToast: (toast) => set({ toast: { ...toast, id: ++toastNonce } }),
+  loadPlayStats: async () => {
+    if (get().playStats != null || playStatsLoading) return;
+    playStatsLoading = true;
+    try {
+      const data = await tt.playStats();
+      set({ playStats: data });
+    } catch {
+      // the record is unreadable or absent: the surfaces simply show no counts
+    } finally {
+      playStatsLoading = false;
+    }
+  },
   setNavDropTarget: (target) => {
     if (get().navDropTarget !== target) set({ navDropTarget: target });
   },
@@ -869,6 +890,20 @@ export const useStore = create<TTState>((set, get) => ({
           return { recents: msg.data };
         case "listening":
           return { listeningStats: msg.data };
+        case "playStats":
+          return { playStats: msg.data };
+        case "playEvent": {
+          const cur = s.playStats;
+          if (!cur) return {};
+          // fold into a copy: the surfaces select by reference
+          const next: PlayStats = {
+            tracks: { ...cur.tracks },
+            recent: [...cur.recent],
+            since: cur.since,
+          };
+          foldPlayEvent(next, msg.event);
+          return { playStats: next };
+        }
         case "favorites":
           return { favorites: msg.data };
         case "mcpStatus":

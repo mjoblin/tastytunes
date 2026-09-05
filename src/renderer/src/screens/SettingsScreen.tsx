@@ -1269,10 +1269,10 @@ function HistorySection({
   return (
     <section className="space-y-3">
       <p className="text-[11.5px] text-faint px-1">
-        The record is a local-only, long-term history of your listening. AI agents can read it today
-        (Settings › AI agents), and future versions of TastyTunes will build on it: play counts and
-        a year-end review are the kind of thing it makes possible. It records from today so the
-        history exists when those features arrive.
+        The record is a local-only, long-term history of your listening. TastyTunes reads it for
+        play counts and last-played facts in the Library and for the resume offer on Now Playing,
+        and AI agents can read it (Settings › AI agents). More will build on it: a year-end review
+        is the kind of thing it makes possible.
       </p>
       <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
         <Toggle
@@ -1280,6 +1280,13 @@ function HistorySection({
           hint={`Keeps a local log of what plays and for how long (local media, radio, AirPlay and other sources) in plain files. A play is recorded when its track changes or stops, if it played for at least ${LISTEN_FLOOR_SECS} seconds by then. The record stays on this computer.`}
           checked={settings.listeningRecord}
           onChange={(listeningRecord) => void save({ listeningRecord })}
+        />
+
+        <Toggle
+          label="Show listening history in the app"
+          hint="Last played in album headers, play counts and the Played filter in the Library, and the resume offer on Now Playing. The record itself keeps logging."
+          checked={settings.showListeningHistory}
+          onChange={(showListeningHistory) => void save({ showListeningHistory })}
         />
 
         <SettingRow

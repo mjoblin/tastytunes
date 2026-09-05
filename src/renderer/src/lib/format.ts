@@ -49,6 +49,21 @@ export function fmtRelative(at: number, now: number = Date.now()): string {
   return new Date(at).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+/** Coarse "how long ago" for LAST-PLAYED facts (0.8.0): days, then weeks,
+ *  months, years — a fact line reads "last played 3 weeks ago", never a date. */
+export function fmtAgo(at: number, now: number = Date.now()): string {
+  const d = Math.floor((now - at) / 86_400_000);
+  if (d <= 0) return "today";
+  if (d === 1) return "yesterday";
+  if (d < 14) return `${d} days ago`;
+  const w = Math.round(d / 7);
+  if (d < 60) return `${w} weeks ago`;
+  const m = Math.round(d / 30.44);
+  if (d < 365) return `${m} months ago`;
+  const y = Math.round(d / 365.25);
+  return y === 1 ? "a year ago" : `${y} years ago`;
+}
+
 /** Day-bucket header for grouping the recently-played log. */
 export function fmtDayBucket(at: number, now: number = Date.now()): string {
   const start = (ms: number): number => {
@@ -80,8 +95,17 @@ export function deriveNowPlaying(
   playState: ZonePlayState | null,
   nowPlaying: ZoneNowPlaying | null,
 ): NowPlayingMeta {
-  const md = playState?.metadata ?? null;
-  const display = nowPlaying?.display ?? null;
+  // NOTHING LOADED (observed on the Evo 2026-09-04): with the queue emptied the
+  // streamer reports state "ready", no queue_id, and metadata that still
+  // carries the LAST track's title (artist, album, duration gone). That is an
+  // idle streamer, not a loaded track — read it as empty here, the one home,
+  // so Now Playing, the bar, the mini and the tray all agree.
+  const unloaded =
+    playState?.state === "ready" &&
+    playState.queue_id == null &&
+    playState.metadata?.duration == null;
+  const md = unloaded ? null : (playState?.metadata ?? null);
+  const display = unloaded ? null : (nowPlaying?.display ?? null);
   const klass = md?.class ?? display?.class ?? "";
   const isRadio = /radio/i.test(klass) || md?.station != null;
 

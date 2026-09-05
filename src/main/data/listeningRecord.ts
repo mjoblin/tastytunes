@@ -60,6 +60,9 @@ let current: OpenPlay | null = null;
 /** Called after every append (and failed append) so the Settings truth row
  *  can stay live — main wires this to the renderer push. */
 let notify: (() => void) | null = null;
+/** Called with each event that was APPENDED (never on a failed append) — main
+ *  pushes it so the renderer's play stats fold it in without a re-read. */
+let notifyEvent: ((event: ListeningEvent) => void) | null = null;
 /** Fires when the open play crosses the floor: the truth row's promise
  *  changes shape at that moment (conditional to unconditional). */
 let floorTimer: NodeJS.Timeout | null = null;
@@ -124,6 +127,7 @@ function append(event: ListeningEvent): void {
     const fd = openSync(file, "a");
     try {
       appendFileSync(fd, `${JSON.stringify(event)}\n`);
+      notifyEvent?.(event);
       fsyncSync(fd);
     } finally {
       closeSync(fd);
@@ -172,6 +176,9 @@ function pauseCurrent(): void {
 }
 
 export const listeningRecord = {
+  setEventNotifier(fn: (event: ListeningEvent) => void): void {
+    notifyEvent = fn;
+  },
   setNotifier(fn: () => void): void {
     notify = fn;
   },
