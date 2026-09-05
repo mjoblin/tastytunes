@@ -14,7 +14,9 @@ import { fmtAgo } from "@/lib/format";
  * before the album's end — resolved against the library for the track to
  * resume from. Resume = the album's Play from here, starting at that track.
  * "Not now" hides the offer for this run (session memory; a new run makes a
- * new offer).
+ * new offer). Two homes: the "Nothing playing" state and the STANDBY face
+ * (2026-09-04, user: standby is how a streamer usually sits idle; a play verb
+ * wakes it), where it stands in for the Last played line when it has an offer.
  */
 interface Offer {
   key: string;
@@ -30,7 +32,12 @@ let dismissedKey: string | null = null;
 /** More tracks than any album has — a folder, a genre, a whole library. */
 const RESUME_MAX_TRACKS = 100;
 
-export function ResumeCard(): React.JSX.Element | null {
+export function ResumeCard({
+  fallback = null,
+}: {
+  /** Rendered when there is no offer — the standby face keeps its Last played line. */
+  fallback?: React.ReactNode;
+}): React.JSX.Element | null {
   const play = usePlayStats();
   const showToast = useStore((s) => s.showToast);
   const run = useMemo(() => resumeRun(play.recent), [play.recent]);
@@ -81,7 +88,7 @@ export function ResumeCard(): React.JSX.Element | null {
     };
   }, [run, runKey]);
 
-  if (!offer) return null;
+  if (!offer) return <>{fallback}</>;
   const resume = async (): Promise<void> => {
     setBusy(true);
     try {

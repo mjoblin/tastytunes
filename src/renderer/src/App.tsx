@@ -16,6 +16,7 @@ import { forgetDevice, lastSeenLabel } from "@/lib/devices";
 import { useConfirmPopover } from "@/components/chrome/Confirm";
 import { Nav } from "@/components/Nav";
 import { PlaybackBar } from "@/components/playback/PlaybackBar";
+import { ResumeCard } from "@/components/playback/ResumeCard";
 import { DiagnosticsDrawer } from "@/components/overlays/DiagnosticsDrawer";
 import { ShortcutsOverlay } from "@/components/overlays/ShortcutsOverlay";
 import { CommandPalette } from "@/components/overlays/CommandPalette";
@@ -530,18 +531,25 @@ function StandbyGate({ busy }: { busy: boolean }): React.JSX.Element {
           {systemInfo?.name ?? "Streamer"} is asleep
         </div>
         <div className="text-[13px] text-faint mt-1.5 min-h-[19px]">
-          {busy ? "Waking…" : "Press the lamp — or just play something, from any screen."}
+          {busy ? "Waking…" : "Press the lamp, or play something from any screen."}
         </div>
-        <div className="text-[12px] text-faint mt-4 min-h-[17px]">
-          {last != null && (
-            <>
-              Last played:{" "}
-              <span className="text-dim">
-                {last.title ?? last.station}
-                {last.artist ? ` — ${last.artist}` : ""}
-              </span>
-            </>
-          )}
+        <div className="text-[12px] text-faint mt-4 min-h-[17px] flex justify-center">
+          {/* the listening record's offer stands in for the last-played line
+              when it has one (a play verb wakes the streamer); the line holds
+              the height otherwise */}
+          <ResumeCard
+            fallback={
+              last != null && (
+                <span>
+                  Last played:{" "}
+                  <span className="text-dim">
+                    {last.title ?? last.station}
+                    {last.artist ? ` — ${last.artist}` : ""}
+                  </span>
+                </span>
+              )
+            }
+          />
         </div>
       </div>
     </div>
