@@ -146,7 +146,8 @@ claude mcp add --transport http tastytunes http://127.0.0.1:8555/mcp
 > *"what's playing?"* · *"how many albums do I have?"* · *"play a 90s rock album"* · *"put on some jazz radio"* · *"set a sleep timer for the end of this track"*
 
 The tools cover what the app itself does: playback and volume, presets and
-sources, library and radio, favorites, tone and EQ, sleep timers, etc. The editing
+sources, library and radio, favorites, tone and EQ, sleep timers, the listening
+record (plays, last played, what was left unfinished) and audio analysis, etc. The editing
 ones, like queue and preset changes, are kept separate and off until you
 turn them on. Every tool has its own switch in Settings › AI agents, effective
 on the agent's next call. Agents inherit the same limits the UI has: the volume

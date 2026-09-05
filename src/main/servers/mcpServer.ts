@@ -33,7 +33,19 @@ import {
   describeProfileNote,
   nameSortKey,
 } from "@shared/model";
-import { favoriteKey, isListen, type Favorite, type ListeningPlayEvent } from "@shared/model";
+import {
+  favoriteKey,
+  isListen,
+  type Favorite,
+  type ListeningPlayEvent,
+  audioAnalysisKey,
+  albumDrKey,
+  playKey,
+  LOSSLESS_CODECS,
+  isHiRes,
+} from "@shared/model";
+import { audioAnalysisGet, albumDrMap } from "../lookups/audioAnalysis";
+import { playStatsFromRecord } from "../data/playStats";
 import { listeningRecord } from "../data/listeningRecord";
 import { MCP_CLUSTERS, mcpClusterEnabled } from "@shared/mcpCatalog";
 import {
@@ -1050,6 +1062,208 @@ export class McpBridge {
           });
         },
       },
+      // ---- the record's reading surfaces as tools (0.8.0)
+      history_stats: {
+        inputSchema: {
+          title: z
+            .string()
+            .optional()
+            .describe(
+              "A track title (add artist/album to disambiguate). Omit title AND album for the playing track.",
+            ),
+          artist: z.string().optional(),
+          album: z.string().optional().describe("With no title: the whole album's tally."),
+        },
+        handler: async (a) => {
+          const stats = await playStatsFromRecord();
+          const md = dm.snapshot().playState?.metadata;
+          const title =
+            (a.title as string | undefined) ?? (a.album ? undefined : (md?.title ?? undefined));
+          const artist =
+            (a.artist as string | undefined) ??
+            (a.title || a.album ? undefined : (md?.artist ?? undefined));
+          const album =
+            (a.album as string | undefined) ?? (a.title ? undefined : (md?.album ?? undefined));
+          const since = stats.since != null ? new Date(stats.since).toISOString() : null;
+          const lc = (v: string | null | undefined): string => (v ?? "").trim().toLowerCase();
+          if (title) {
+            const exact = stats.tracks[playKey(title, artist ?? null, album ?? null)];
+            const loose = exact
+              ? [exact]
+              : Object.entries(stats.tracks)
+                  .filter(
+                    ([k]) =>
+                      k.startsWith(`${lc(title)}|`) && (!artist || k.includes(`|${lc(artist)}|`)),
+                  )
+                  .map(([, v]) => v);
+            if (loose.length === 0)
+              return ok({
+                track: { title, artist: artist ?? null, album: album ?? null },
+                plays: 0,
+                listens: 0,
+                last_played: null,
+                seconds_heard: 0,
+                record_since: since,
+              });
+            const plays = loose.reduce((n, v) => n + v.plays, 0);
+            const listens = loose.reduce((n, v) => n + v.listens, 0);
+            const lastAt = Math.max(...loose.map((v) => v.lastAt));
+            const seconds = loose.reduce((n, v) => n + v.seconds, 0);
+            return ok({
+              track: { title, artist: artist ?? null, album: album ?? null },
+              plays,
+              listens,
+              last_played: new Date(lastAt).toISOString(),
+              seconds_heard: seconds,
+              record_since: since,
+            });
+          }
+          if (album) {
+            let plays = 0,
+              listens = 0,
+              seconds = 0,
+              lastAt = 0;
+            const titles = new Set<string>();
+            for (const [k, v] of Object.entries(stats.tracks)) {
+              const [t, ar, al] = k.split("|");
+              if (al !== lc(album)) continue;
+              if (artist && ar !== lc(artist)) continue;
+              plays += v.plays;
+              listens += v.listens;
+              seconds += v.seconds;
+              lastAt = Math.max(lastAt, v.lastAt);
+              titles.add(t);
+            }
+            return ok({
+              album: { title: album, artist: artist ?? null },
+              plays,
+              listens,
+              distinct_tracks_played: titles.size,
+              last_played: lastAt > 0 ? new Date(lastAt).toISOString() : null,
+              seconds_heard: seconds,
+              record_since: since,
+            });
+          }
+          return err("Nothing is playing and no track or album was named.");
+        },
+      },
+      history_unplayed: {
+        inputSchema: {
+          artist: z.string().optional().describe("Case-insensitive substring on the album artist."),
+          genre: z.string().optional(),
+          decade: z.string().optional().describe("e.g. '1990s'."),
+          limit: z.number().int().min(1).max(200).optional().describe("Default 50."),
+          offset: z.number().int().min(0).optional(),
+        },
+        handler: async (a) => {
+          const groups = indexPools();
+          if (groups.length === 0) return err(this.kickIndex());
+          const stats = await playStatsFromRecord();
+          const poolOf = new Map(groups.map((p) => [p.udn, p]));
+          const artistNeedle = (a.artist as string | undefined)?.toLowerCase();
+          const genreNeedle = (a.genre as string | undefined)?.toLowerCase();
+          const decade = a.decade != null ? String(a.decade).replace(/s$/i, "") : null;
+          const albums = groups
+            .flatMap((p) => p.albums)
+            .filter(
+              (n) => artistNeedle == null || (n.artist ?? "").toLowerCase().includes(artistNeedle),
+            )
+            .filter(
+              (n) =>
+                genreNeedle == null || (n.genre ?? []).some((g) => g.toLowerCase() === genreNeedle),
+            )
+            .filter(
+              (n) =>
+                decade == null ||
+                (n.year != null && String(Math.floor(Number(n.year) / 10) * 10) === decade),
+            )
+            .filter((n) => {
+              const pool = n.serverUdn ? poolOf.get(n.serverUdn) : undefined;
+              const tracks = pool ? albumTracksOf(n, pool) : [];
+              return !tracks.some((t) => stats.tracks[playKey(t.title, t.artist, t.album)] != null);
+            })
+            .sort(
+              (x, y) =>
+                nameSortKey(x.artist ?? "￿").localeCompare(nameSortKey(y.artist ?? "￿")) ||
+                x.title.localeCompare(y.title),
+            );
+          const offset = (a.offset as number | undefined) ?? 0;
+          const limit = (a.limit as number | undefined) ?? 50;
+          const page = albums.slice(offset, offset + limit);
+          return ok({
+            record_since: stats.since != null ? new Date(stats.since).toISOString() : null,
+            note: "Unplayed means no recorded play since the listening record began, not never.",
+            total: albums.length,
+            offset,
+            returned: page.length,
+            albums: page.map((n) => ({
+              server_udn: n.serverUdn,
+              object_id: n.id,
+              title: n.title,
+              artist: n.artist,
+              year: n.year,
+              genres: n.genre ?? [],
+            })),
+          });
+        },
+      },
+      history_rediscover: {
+        inputSchema: {
+          not_since: z
+            .string()
+            .optional()
+            .describe(
+              "Local date YYYY-MM-DD; albums last played BEFORE this. Default: 90 days ago.",
+            ),
+          min_plays: z.number().int().min(1).optional().describe("Default 1."),
+          limit: z.number().int().min(1).max(200).optional().describe("Default 30."),
+        },
+        handler: async (a) => {
+          const groups = indexPools();
+          if (groups.length === 0) return err(this.kickIndex());
+          const stats = await playStatsFromRecord();
+          const cutoff =
+            a.not_since != null
+              ? Date.parse(`${a.not_since as string}T00:00:00`)
+              : Date.now() - 90 * 86_400_000;
+          if (Number.isNaN(cutoff)) return err("not_since must be YYYY-MM-DD.");
+          const minPlays = (a.min_plays as number | undefined) ?? 1;
+          const poolOf = new Map(groups.map((p) => [p.udn, p]));
+          const rows = groups
+            .flatMap((p) => p.albums)
+            .flatMap((n) => {
+              const pool = n.serverUdn ? poolOf.get(n.serverUdn) : undefined;
+              const tracks = pool ? albumTracksOf(n, pool) : [];
+              let plays = 0,
+                lastAt = 0;
+              for (const t of tracks) {
+                const st = stats.tracks[playKey(t.title, t.artist, t.album)];
+                if (!st) continue;
+                plays += st.plays;
+                lastAt = Math.max(lastAt, st.lastAt);
+              }
+              return plays >= minPlays && lastAt > 0 && lastAt < cutoff
+                ? [{ n, plays, lastAt }]
+                : [];
+            });
+          rows.sort((x, y) => x.lastAt - y.lastAt);
+          const limit = (a.limit as number | undefined) ?? 30;
+          return ok({
+            not_since: new Date(cutoff).toISOString(),
+            total: rows.length,
+            returned: Math.min(limit, rows.length),
+            albums: rows.slice(0, limit).map(({ n, plays, lastAt }) => ({
+              server_udn: n.serverUdn,
+              object_id: n.id,
+              title: n.title,
+              artist: n.artist,
+              year: n.year,
+              plays,
+              last_played: new Date(lastAt).toISOString(),
+            })),
+          });
+        },
+      },
       list_albums: {
         inputSchema: {
           artist: z
@@ -1087,10 +1301,25 @@ export class McpBridge {
             .string()
             .optional()
             .describe("Limit to one server (see list_media_servers)."),
-          sort: z
-            .enum(["title", "artist", "year"])
+          lossless: z
+            .boolean()
             .optional()
-            .describe("Default 'title'; 'year' sorts newest first."),
+            .describe("true = only albums whose every track is lossless (FLAC, ALAC, WAV, …)."),
+          min_dr: z
+            .number()
+            .int()
+            .min(1)
+            .max(30)
+            .optional()
+            .describe(
+              "Only albums whose recorded dynamic range (DR, whole album analyzed) is at least this; albums without one are excluded.",
+            ),
+          sort: z
+            .enum(["title", "artist", "year", "dr"])
+            .optional()
+            .describe(
+              "Default 'title'; 'year' sorts newest first; 'dr' most dynamic first, unanalyzed last.",
+            ),
           limit: z.number().int().min(1).max(100).optional().describe("Default 40."),
           offset: z.number().int().min(0).optional().describe("For paging; default 0."),
         },
@@ -1146,6 +1375,21 @@ export class McpBridge {
           else if (kind === "albums")
             albums = albums.filter((n) => !summaryFor(n).sum.isCompilation);
           if (a.hires === true) albums = albums.filter((n) => summaryFor(n).sum.hires);
+          // the analysis round's facets (0.7.0): the album's recorded DR, all-lossless
+          const drMap = albumDrMap();
+          const albumDr = (n: MediaNode): number | null => drMap[albumDrKey(n)]?.dr ?? null;
+          if (a.lossless === true)
+            albums = albums.filter((n) => {
+              const { tracks } = summaryFor(n);
+              return (
+                tracks.length > 0 &&
+                tracks.every((t) => LOSSLESS_CODECS.has((t.format?.codec ?? "").toUpperCase()))
+              );
+            });
+          if (a.min_dr != null) {
+            const min = a.min_dr as number;
+            albums = albums.filter((n) => (albumDr(n) ?? -1) >= min);
+          }
           const formatNeedle = (a.format as string | undefined)?.toLowerCase();
           if (formatNeedle != null)
             albums = albums.filter((n) => {
@@ -1173,6 +1417,8 @@ export class McpBridge {
               );
             if (sort === "year")
               return (y.year ?? "").localeCompare(x.year ?? "") || x.title.localeCompare(y.title);
+            if (sort === "dr")
+              return (albumDr(y) ?? -1) - (albumDr(x) ?? -1) || x.title.localeCompare(y.title);
             return x.title.localeCompare(y.title);
           });
           const offset = (a.offset as number | undefined) ?? 0;
@@ -1201,6 +1447,7 @@ export class McpBridge {
                 ...(sum.format ? { format: sum.format } : {}),
                 ...(sum.formatOdd > 0 ? { format_tracks_differ: sum.formatOdd } : {}),
                 hires: sum.hires,
+                ...(albumDr(n) != null ? { dr: albumDr(n) } : {}),
                 ...(sum.composers.length > 0 ? { composers: sum.composers } : {}),
                 is_compilation: sum.isCompilation,
               };
@@ -1286,6 +1533,213 @@ export class McpBridge {
           const limit = (a.limit as number | undefined) ?? 100;
           const page = artists.slice(offset, offset + limit);
           return ok({ total: artists.length, offset, returned: page.length, artists: page });
+        },
+      },
+      list_tracks: {
+        inputSchema: {
+          artist: z
+            .string()
+            .optional()
+            .describe("Case-insensitive substring on the track's performers."),
+          album: z.string().optional().describe("Case-insensitive substring on the album title."),
+          genre: z.string().optional().describe("Case-insensitive genre."),
+          decade: z.string().optional().describe("e.g. '1990s'."),
+          format: z
+            .string()
+            .optional()
+            .describe(
+              "Case-insensitive substring of the format label, e.g. 'FLAC', '24/96', 'MP3'.",
+            ),
+          lossless: z.boolean().optional().describe("true = lossless codecs only."),
+          hires: z
+            .boolean()
+            .optional()
+            .describe(`true = above ${HIRES_BITS_ABOVE}-bit or ${HIRES_RATE_ABOVE / 1000} kHz.`),
+          min_dr: z
+            .number()
+            .int()
+            .min(1)
+            .max(30)
+            .optional()
+            .describe(
+              "Only tracks with a recorded DR at least this; unanalyzed tracks are excluded.",
+            ),
+          sort: z
+            .enum(["title", "artist", "album", "year", "duration", "dr", "plays", "last_played"])
+            .optional()
+            .describe(
+              "Default 'title'. 'plays' most played first; 'last_played' most recent first; 'dr' most dynamic first; 'duration' longest first.",
+            ),
+          limit: z.number().int().min(1).max(200).optional().describe("Default 50."),
+          offset: z.number().int().min(0).optional().describe("For paging; default 0."),
+          server_udn: z
+            .string()
+            .optional()
+            .describe("Limit to one server (see list_media_servers)."),
+        },
+        handler: async (a) => {
+          const groups = indexPools().filter((p) => a.server_udn == null || p.udn === a.server_udn);
+          if (groups.length === 0)
+            return err(
+              a.server_udn != null
+                ? `No ready index for server '${String(a.server_udn)}'. Use list_media_servers.`
+                : this.kickIndex(),
+            );
+          const lc = (v: string | null | undefined): string => (v ?? "").toLowerCase();
+          const artistNeedle = (a.artist as string | undefined)?.toLowerCase();
+          const albumNeedle = (a.album as string | undefined)?.toLowerCase();
+          const genreNeedle = (a.genre as string | undefined)?.toLowerCase();
+          const decade = a.decade != null ? String(a.decade).replace(/s$/i, "") : null;
+          const formatNeedle = (a.format as string | undefined)?.toLowerCase();
+          const drOf = (t: MediaNode): number | null => {
+            const an = audioAnalysisGet(audioAnalysisKey(t));
+            return an && an.dr > 0 ? an.dr : null;
+          };
+          let tracks = groups.flatMap((p) => p.tracks);
+          if (artistNeedle != null)
+            tracks = tracks.filter(
+              (t) =>
+                trackArtists(t).some((n) => n.toLowerCase().includes(artistNeedle)) ||
+                lc(t.artist).includes(artistNeedle),
+            );
+          if (albumNeedle != null) tracks = tracks.filter((t) => lc(t.album).includes(albumNeedle));
+          if (genreNeedle != null)
+            tracks = tracks.filter((t) =>
+              (t.genre ?? []).some((g) => g.toLowerCase() === genreNeedle),
+            );
+          if (decade != null)
+            tracks = tracks.filter(
+              (t) => t.year != null && String(Math.floor(Number(t.year) / 10) * 10) === decade,
+            );
+          if (formatNeedle != null)
+            tracks = tracks.filter(
+              (t) =>
+                (formatLabel(t.format) ?? "").toLowerCase().includes(formatNeedle) ||
+                lc(t.format?.codec).includes(formatNeedle),
+            );
+          if (a.lossless === true)
+            tracks = tracks.filter((t) =>
+              LOSSLESS_CODECS.has((t.format?.codec ?? "").toUpperCase()),
+            );
+          if (a.hires === true)
+            tracks = tracks.filter((t) => (t.format ? isHiRes(t.format) : false));
+          if (a.min_dr != null) {
+            const min = a.min_dr as number;
+            tracks = tracks.filter((t) => (drOf(t) ?? -1) >= min);
+          }
+          const stats = await playStatsFromRecord();
+          const statOf = (t: MediaNode) =>
+            stats.tracks[playKey(t.title, t.artist, t.album)] ?? null;
+          const sort = (a.sort as string | undefined) ?? "title";
+          const byTitle = (x: MediaNode, y: MediaNode): number =>
+            x.title.localeCompare(y.title) || lc(x.artist).localeCompare(lc(y.artist));
+          const byAlbum = (x: MediaNode, y: MediaNode): number =>
+            lc(x.album).localeCompare(lc(y.album)) ||
+            (trackPosition(x) ?? 0) - (trackPosition(y) ?? 0) ||
+            byTitle(x, y);
+          tracks = [...tracks].sort((x, y) => {
+            if (sort === "artist")
+              return (
+                nameSortKey(x.artist ?? "￿").localeCompare(nameSortKey(y.artist ?? "￿")) ||
+                byAlbum(x, y)
+              );
+            if (sort === "album") return byAlbum(x, y);
+            if (sort === "year") return (y.year ?? "").localeCompare(x.year ?? "") || byAlbum(x, y);
+            if (sort === "duration")
+              return (y.durationSecs ?? 0) - (x.durationSecs ?? 0) || byTitle(x, y);
+            if (sort === "dr") return (drOf(y) ?? -1) - (drOf(x) ?? -1) || byTitle(x, y);
+            if (sort === "plays")
+              return (statOf(y)?.plays ?? 0) - (statOf(x)?.plays ?? 0) || byTitle(x, y);
+            if (sort === "last_played")
+              return (statOf(y)?.lastAt ?? 0) - (statOf(x)?.lastAt ?? 0) || byTitle(x, y);
+            return byTitle(x, y);
+          });
+          const offset = (a.offset as number | undefined) ?? 0;
+          const limit = (a.limit as number | undefined) ?? 50;
+          const page = tracks.slice(offset, offset + limit);
+          return ok({
+            total: tracks.length,
+            offset,
+            returned: page.length,
+            tracks: page.map((t) => {
+              const st = statOf(t);
+              const dr = drOf(t);
+              return {
+                server_udn: t.serverUdn,
+                object_id: t.id,
+                title: t.title,
+                artist: t.artist,
+                album: t.album,
+                year: t.year,
+                ...(t.trackNumber != null ? { track_number: t.trackNumber } : {}),
+                duration_seconds: t.durationSecs,
+                ...(formatLabel(t.format) ? { format: formatLabel(t.format) } : {}),
+                ...(dr != null ? { dr } : {}),
+                plays: st?.plays ?? 0,
+                last_played: st ? new Date(st.lastAt).toISOString() : null,
+              };
+            }),
+          });
+        },
+      },
+      get_track_analysis: {
+        inputSchema: {
+          title: z
+            .string()
+            .optional()
+            .describe("A track title in the library; omit for the playing track."),
+          artist: z.string().optional(),
+          album: z.string().optional(),
+        },
+        handler: (a) => {
+          const lc = (v: string | null | undefined): string => (v ?? "").toLowerCase();
+          let t:
+            | (Pick<MediaNode, "title" | "artist" | "album" | "durationSecs"> & {
+                albumArtist?: string | null;
+              })
+            | null = null;
+          if (a.title) {
+            const title = lc(a.title as string);
+            t =
+              indexPools()
+                .flatMap((p) => p.tracks)
+                .find(
+                  (n) =>
+                    lc(n.title) === title &&
+                    (!a.artist || lc(n.artist).includes(lc(a.artist as string))) &&
+                    (!a.album || lc(n.album).includes(lc(a.album as string))),
+                ) ?? null;
+            if (!t)
+              return err(
+                `No indexed track titled "${String(a.title)}". Use list_tracks or search_library.`,
+              );
+          } else {
+            const md = dm.snapshot().playState?.metadata;
+            if (!md?.title) return err("Nothing is playing and no track was named.");
+            t = { title: md.title, artist: md.artist, album: md.album, durationSecs: md.duration };
+          }
+          const an = audioAnalysisGet(audioAnalysisKey(t));
+          const albumDr = t.album
+            ? (albumDrMap()[albumDrKey({ title: t.album, artist: t.albumArtist ?? t.artist })]
+                ?.dr ?? null)
+            : null;
+          return ok({
+            track: { title: t.title, artist: t.artist, album: t.album },
+            analyzed: an != null,
+            ...(an
+              ? {
+                  dr: an.dr > 0 ? an.dr : null,
+                  peak_db: an.peakDb,
+                  rms_db: an.rmsDb,
+                  crest_db: an.crestDb,
+                }
+              : {
+                  note: "Not analyzed yet. It is analyzed the first time it plays in TastyTunes, or with Analyze audio on its album.",
+                }),
+            album_dr: albumDr,
+            dr_definition:
+              "TT-DR, the DR database's procedure; the album value needs every track analyzed.",
+          });
         },
       },
       get_media_info: {
@@ -1958,6 +2412,14 @@ export class McpBridge {
           if (!item) return err(`No queue item ${String(a.id)}. Use list_queue.`);
           await dm.command({ type: "queueDelete", id: a.id as number });
           return ok(`Removed "${item.metadata?.title ?? `item ${String(a.id)}`}" from the queue.`);
+        },
+      },
+      clear_queue: {
+        handler: async () => {
+          const s = this.connected();
+          const n = s.queue?.total ?? s.queue?.items?.length ?? 0;
+          await dm.command({ type: "queueClear" });
+          return ok(`Queue cleared (${n} items removed).`);
         },
       },
       move_queue_item: {
