@@ -378,6 +378,59 @@ export function foldPlayEvent(stats: PlayStats, e: ListeningEvent): void {
   if (stats.since == null || ev.at < stats.since) stats.since = ev.at;
 }
 
+/** "Pick up where you left off": the most recent RUN of plays from one album
+ *  (consecutive plays of the same album with at most `gapMs` between one
+ *  play's end and the next's start), if it ended within `withinMs`. Shared
+ *  by the resume card and the MCP history_resume / resume_playback tools. */
+export interface ResumeRun {
+  album: string;
+  artist: string | null;
+  /** The run's plays, in order. */
+  plays: ListeningPlayEvent[];
+  /** The last play in the run, and whether it counted as a listen. */
+  last: ListeningPlayEvent;
+  lastListened: boolean;
+}
+export function resumeRun(
+  recent: ReadonlyArray<ListeningPlayEvent>,
+  now: number = Date.now(),
+  { withinMs = 7 * 86_400_000, gapMs = 30 * 60_000 } = {},
+): ResumeRun | null {
+  if (recent.length === 0) return null;
+  const last = recent[recent.length - 1];
+  if (!last.album) return null;
+  const endOf = (e: ListeningPlayEvent): number => e.at + e.playedSeconds * 1000;
+  if (now - endOf(last) > withinMs) return null;
+  const key = (e: ListeningPlayEvent): string => playKey(null, null, e.album);
+  const plays: ListeningPlayEvent[] = [last];
+  for (let i = recent.length - 2; i >= 0; i--) {
+    const e = recent[i];
+    if (key(e) !== key(last)) break;
+    if (plays[0].at - endOf(e) > gapMs) break;
+    plays.unshift(e);
+  }
+  return {
+    album: last.album,
+    artist: last.artist,
+    plays,
+    last,
+    lastListened: isListen(last.playedSeconds, last.duration),
+  };
+}
+
+/** Given the album's tracks in running order, the track to resume from: the
+ *  one after the last listened track, or the interrupted track itself when
+ *  the last play never became a listen. Null when the run reached the end. */
+export function resumeTarget(run: ResumeRun, tracks: ReadonlyArray<MediaNode>): MediaNode | null {
+  if (tracks.length < 2) return null;
+  const idx = tracks.findIndex(
+    (t) => playKey(t.title, null, null) === playKey(run.last.title, null, null),
+  );
+  if (idx < 0) return null;
+  if (!run.lastListened) return tracks[idx];
+  return idx + 1 < tracks.length ? tracks[idx + 1] : null;
+}
+
 /**
  * One line of the listening record (history/<year>.jsonl in userData).
  *

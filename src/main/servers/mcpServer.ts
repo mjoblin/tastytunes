@@ -41,6 +41,8 @@ import {
   audioAnalysisKey,
   albumDrKey,
   playKey,
+  resumeRun,
+  resumeTarget,
   LOSSLESS_CODECS,
   isHiRes,
 } from "@shared/model";
@@ -63,7 +65,7 @@ import { fetchArtistInfo } from "../lookups/artistInfo";
 import { fetchAlbumInfo } from "../lookups/albumInfo";
 import { fetchLyrics } from "../lookups/lyrics";
 import { radioSearch, radioByTags } from "../lookups/radioBrowser";
-import { presetSave, queueAdd, refreshServers } from "../media/upnpBrowser";
+import { browseChildrenOf, presetSave, queueAdd, refreshServers } from "../media/upnpBrowser";
 import {
   searchServer as librarySearch,
   status as indexStatus,
@@ -276,6 +278,38 @@ export class McpBridge {
   // --------------------------------------------------------------- tool handlers
 
   /** Snapshot when connected, or a throw that becomes a clean tool error. */
+  /** The resume card's offer, resolved in main: the record's most recent
+   *  unfinished album run (shared resumeRun) against the index's albums. */
+  private async resumeOffer(): Promise<
+    | {
+        run: ReturnType<typeof resumeRun> & object;
+        node: MediaNode;
+        target: MediaNode;
+        position: number;
+        total: number;
+      }
+    | { reason: string }
+  > {
+    const stats = await playStatsFromRecord();
+    const run = resumeRun(stats.recent);
+    if (!run) return { reason: "No album was left unfinished in the past week." };
+    const lc = (v: string | null | undefined): string => (v ?? "").trim().toLowerCase();
+    const groups = indexPools();
+    const albums = groups.flatMap((p) => p.albums);
+    const node =
+      albums.find(
+        (n) => lc(n.title) === lc(run.album) && (!run.artist || lc(n.artist) === lc(run.artist)),
+      ) ?? albums.find((n) => lc(n.title) === lc(run.album));
+    if (!node) return { reason: `"${run.album}" is not in any library index.` };
+    const pool = groups.find((p) => p.udn === node.serverUdn);
+    const tracks = (pool ? albumTracksOf(node, pool) : []).sort(
+      (x, y) => (trackPosition(x) ?? 0) - (trackPosition(y) ?? 0),
+    );
+    const target = resumeTarget(run, tracks);
+    if (!target) return { reason: `"${run.album}" was played to the end.` };
+    return { run, node, target, position: tracks.indexOf(target) + 1, total: tracks.length };
+  }
+
   private connected(): Snapshot & { connection: Extract<ConnectionState, { phase: "connected" }> } {
     const snap = this.dm.snapshot();
     if (snap.connection.phase !== "connected") {
@@ -1261,6 +1295,24 @@ export class McpBridge {
               plays,
               last_played: new Date(lastAt).toISOString(),
             })),
+          });
+        },
+      },
+      history_resume: {
+        handler: async () => {
+          const offer = await this.resumeOffer();
+          if ("reason" in offer) return ok({ offer: null, reason: offer.reason });
+          return ok({
+            offer: {
+              album: offer.node.title,
+              artist: offer.node.artist,
+              server_udn: offer.node.serverUdn,
+              object_id: offer.node.id,
+              resume_from: { title: offer.target.title, track: offer.position, of: offer.total },
+              last_played: new Date(offer.run.last.at).toISOString(),
+              plays_in_run: offer.run.plays.length,
+              how: "resume_playback plays it from that track (opt-in queue editing).",
+            },
           });
         },
       },
@@ -2420,6 +2472,30 @@ export class McpBridge {
           const n = s.queue?.total ?? s.queue?.items?.length ?? 0;
           await dm.command({ type: "queueClear" });
           return ok(`Queue cleared (${n} items removed).`);
+        },
+      },
+      resume_playback: {
+        handler: async () => {
+          const s = this.connected();
+          const offer = await this.resumeOffer();
+          if ("reason" in offer) return err(offer.reason);
+          // the album's OWN browse listing supplies the container and track ids —
+          // a pooled track's id and parentId belong to the index's search scope
+          // (Play from here on that container once queued 2,528 tracks)
+          const udn = offer.node.serverUdn;
+          if (!udn) return err("The album's server is unknown.");
+          const kids = (await browseChildrenOf(s.connection.host, udn, offer.node.id)) ?? [];
+          const tracks = kids
+            .filter((k) => !k.isContainer)
+            .sort((x, y) => (trackPosition(x) ?? 0) - (trackPosition(y) ?? 0));
+          if (tracks.length === 0 || tracks.length > 100)
+            return err("The album could not be browsed as an album-sized container.");
+          const target = resumeTarget(offer.run, tracks);
+          if (!target) return err("The run reached the album's end; nothing to resume.");
+          await queueAdd(s.connection.host, udn, offer.node.id, "PLAY_FROM_HERE", target.id);
+          return ok(
+            `Resuming "${offer.node.title}" from track ${tracks.indexOf(target) + 1}, "${target.title}".`,
+          );
         },
       },
       move_queue_item: {

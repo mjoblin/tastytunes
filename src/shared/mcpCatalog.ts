@@ -407,6 +407,12 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         description:
           "Albums that HAVE been played but not since a date (default: 90 days ago), longest-unheard first, with their play counts — the 'not heard since spring' list.",
       },
+      {
+        name: "history_resume",
+        title: "Where you left off",
+        description:
+          "The album most recently left unfinished (a run of plays within the past week that stopped before the album's end) and the track to resume from. Read-only; resume_playback acts on it.",
+      },
     ],
   },
   {
@@ -544,6 +550,12 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         name: "clear_queue",
         title: "Clear queue",
         description: "Remove every item from the play queue (the streamer's clear-all).",
+      },
+      {
+        name: "resume_playback",
+        title: "Resume where you left off",
+        description:
+          "Play the album history_resume names from the track it names: the queue is replaced with that album from that track on (the app's Play from here). Refuses when nothing is left unfinished.",
       },
     ],
   },
