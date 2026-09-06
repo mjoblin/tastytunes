@@ -20,6 +20,7 @@ import { useDecodedArt } from "@/hooks/useDecodedArt";
 import { AddToPlaylistPanel } from "@/components/overlays/AddToPlaylistPanel";
 import { SignalLamp } from "@/components/device/SignalLamp";
 import { ArtImage } from "@/components/media/ArtImage";
+import { useBestArt } from "@/lib/bestArt";
 import { useFadePresence } from "@/hooks/useFadePresence";
 import { LyricsPanel } from "@/components/overlays/LyricsPanel";
 import { LyricLine } from "@/components/playback/LyricLine";
@@ -116,7 +117,14 @@ export function NowPlayingScreen(): React.JSX.Element {
   const state = playState?.state;
   // The tile renders the last DECODED cover (see useDecodedArt) — a hard swap
   // between two real images, never a swap to an empty box mid-download.
-  const { art: tileArt } = useDecodedArt(meta.artUrl);
+  // the best art for the hero: the server's unless it is small and the file
+  // carries a bigger picture (lib/bestArt) — local media only
+  const heroQuery =
+    !meta.isRadio && meta.title && activeSourceId(zoneState, nowPlaying) === "MEDIA_PLAYER"
+      ? { title: meta.title, artist: meta.subtitle ?? null, album: meta.album ?? null }
+      : null;
+  const heroArt = useBestArt(meta.artUrl, heroQuery);
+  const { art: tileArt } = useDecodedArt(heroArt);
   // Live, not snapshotted — the queue moves independently of the track.
   const queueIndex = playState?.queue_index;
   const queueLength = playState?.queue_length;

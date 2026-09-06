@@ -6,10 +6,17 @@
 // TT album value is the mean of all its tracks, so a partial read has no
 // honest number (per-track results still persist, so a retry only reads
 // what's missing).
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { tt } from "@/api";
 import { useStore } from "@/store";
-import { albumDrKey, audioAnalysisKey, type AlbumDr, type MediaNode } from "@shared/model";
+import {
+  albumDrKey,
+  audioAnalysisKey,
+  type AlbumDr,
+  type MediaNode,
+  integrateLoudnessHistograms,
+  type KnownStats,
+} from "@shared/model";
 import { albumDr14 } from "@/lib/dr14";
 import { analyzeTrack } from "@/components/media/Waveform";
 
@@ -86,7 +93,20 @@ async function sweep(
     const drs = await sweepTracks(tracks, serverUdn, progress);
     if (drs.length !== tracks.length)
       return { tracks: tracks.length, analyzed: drs.length, dr: null };
-    const entry: AlbumDr = { dr: albumDr14(drs), tracks: tracks.length, analyzedAt: Date.now() };
+    // the album's loudness integrates across every track's gated blocks (the
+    // standard's album measurement), read back from the cache just written
+    const stored = await Promise.all(
+      tracks.map((t) => tt.audioAnalysisGet(audioAnalysisKey(t)).catch(() => null)),
+    );
+    const hists: number[][] = [];
+    for (const a of stored) if (a?.loudHist) hists.push(a.loudHist);
+    const lufs = hists.length === tracks.length ? integrateLoudnessHistograms(hists) : null;
+    const entry: AlbumDr = {
+      dr: albumDr14(drs),
+      tracks: tracks.length,
+      analyzedAt: Date.now(),
+      lufs,
+    };
     void tt.albumDrPut(key, entry);
     useStore.getState().setAlbumDrEntry(key, entry);
     return { tracks: tracks.length, analyzed: drs.length, dr: entry.dr };
@@ -176,16 +196,18 @@ export function useAlbumDr(): Record<string, AlbumDr> {
  * sweep finishes; empty while waveforms are off. Recently Played cannot join:
  * its entries keep no duration, and duration is part of the content key.
  */
-export function useKnownDrs(keys: readonly string[]): Record<string, number> {
+/** Known DR and loudness per content key — ONE cache-only read (main's
+ *  audioStatsMany), re-read when the keys change or a sweep ends. */
+export function useKnownStats(keys: readonly string[]): Record<string, KnownStats> {
   const waveformsOn = useStore((s) => s.settings.waveforms);
   const sweepIdle = useStore((s) => s.analysisProgress == null);
   const sig = keys.join("\u0000");
-  const [map, setMap] = useState<Record<string, number>>({});
+  const [map, setMap] = useState<Record<string, KnownStats>>({});
   useEffect(() => {
     if (!waveformsOn || !sweepIdle || sig === "") return;
     let stale = false;
     void tt
-      .audioDrMany(sig.split("\u0000"))
+      .audioStatsMany(sig.split("\u0000"))
       .then((m) => {
         if (!stale) setMap(m);
       })
@@ -195,4 +217,14 @@ export function useKnownDrs(keys: readonly string[]): Record<string, number> {
     };
   }, [sig, sweepIdle, waveformsOn]);
   return map;
+}
+
+/** The DR view of useKnownStats — what the Queue, Playlists and Favorites rows read. */
+export function useKnownDrs(keys: readonly string[]): Record<string, number> {
+  const stats = useKnownStats(keys);
+  return useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const [k, v] of Object.entries(stats)) if (v.dr != null) out[k] = v.dr;
+    return out;
+  }, [stats]);
 }

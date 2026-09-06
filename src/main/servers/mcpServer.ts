@@ -1367,10 +1367,10 @@ export class McpBridge {
               "Only albums whose recorded dynamic range (DR, whole album analyzed) is at least this; albums without one are excluded.",
             ),
           sort: z
-            .enum(["title", "artist", "year", "dr"])
+            .enum(["title", "artist", "year", "dr", "loudness"])
             .optional()
             .describe(
-              "Default 'title'; 'year' sorts newest first; 'dr' most dynamic first, unanalyzed last.",
+              "Default 'title'; 'year' sorts newest first; 'dr' most dynamic first, unanalyzed last; 'loudness' loudest first (integrated LUFS), unmeasured last.",
             ),
           limit: z.number().int().min(1).max(100).optional().describe("Default 40."),
           offset: z.number().int().min(0).optional().describe("For paging; default 0."),
@@ -1430,6 +1430,7 @@ export class McpBridge {
           // the analysis round's facets (0.7.0): the album's recorded DR, all-lossless
           const drMap = albumDrMap();
           const albumDr = (n: MediaNode): number | null => drMap[albumDrKey(n)]?.dr ?? null;
+          const albumLufs = (n: MediaNode): number | null => drMap[albumDrKey(n)]?.lufs ?? null;
           if (a.lossless === true)
             albums = albums.filter((n) => {
               const { tracks } = summaryFor(n);
@@ -1471,6 +1472,10 @@ export class McpBridge {
               return (y.year ?? "").localeCompare(x.year ?? "") || x.title.localeCompare(y.title);
             if (sort === "dr")
               return (albumDr(y) ?? -1) - (albumDr(x) ?? -1) || x.title.localeCompare(y.title);
+            if (sort === "loudness")
+              return (
+                (albumLufs(y) ?? -1000) - (albumLufs(x) ?? -1000) || x.title.localeCompare(y.title)
+              );
             return x.title.localeCompare(y.title);
           });
           const offset = (a.offset as number | undefined) ?? 0;
@@ -1617,7 +1622,17 @@ export class McpBridge {
               "Only tracks with a recorded DR at least this; unanalyzed tracks are excluded.",
             ),
           sort: z
-            .enum(["title", "artist", "album", "year", "duration", "dr", "plays", "last_played"])
+            .enum([
+              "title",
+              "artist",
+              "album",
+              "year",
+              "duration",
+              "dr",
+              "loudness",
+              "plays",
+              "last_played",
+            ])
             .optional()
             .describe(
               "Default 'title'. 'plays' most played first; 'last_played' most recent first; 'dr' most dynamic first; 'duration' longest first.",
@@ -1647,6 +1662,8 @@ export class McpBridge {
             const an = audioAnalysisGet(audioAnalysisKey(t));
             return an && an.dr > 0 ? an.dr : null;
           };
+          const lufsOf = (t: MediaNode): number | null =>
+            audioAnalysisGet(audioAnalysisKey(t))?.lufs ?? null;
           let tracks = groups.flatMap((p) => p.tracks);
           if (artistNeedle != null)
             tracks = tracks.filter(
@@ -1700,6 +1717,8 @@ export class McpBridge {
             if (sort === "duration")
               return (y.durationSecs ?? 0) - (x.durationSecs ?? 0) || byTitle(x, y);
             if (sort === "dr") return (drOf(y) ?? -1) - (drOf(x) ?? -1) || byTitle(x, y);
+            if (sort === "loudness")
+              return (lufsOf(y) ?? -1000) - (lufsOf(x) ?? -1000) || byTitle(x, y);
             if (sort === "plays")
               return (statOf(y)?.plays ?? 0) - (statOf(x)?.plays ?? 0) || byTitle(x, y);
             if (sort === "last_played")
@@ -1771,10 +1790,11 @@ export class McpBridge {
             t = { title: md.title, artist: md.artist, album: md.album, durationSecs: md.duration };
           }
           const an = audioAnalysisGet(audioAnalysisKey(t));
-          const albumDr = t.album
-            ? (albumDrMap()[albumDrKey({ title: t.album, artist: t.albumArtist ?? t.artist })]
-                ?.dr ?? null)
+          const albumEntry = t.album
+            ? (albumDrMap()[albumDrKey({ title: t.album, artist: t.albumArtist ?? t.artist })] ??
+              null)
             : null;
+          const albumDr = albumEntry?.dr ?? null;
           return ok({
             track: { title: t.title, artist: t.artist, album: t.album },
             analyzed: an != null,
@@ -1784,13 +1804,19 @@ export class McpBridge {
                   peak_db: an.peakDb,
                   rms_db: an.rmsDb,
                   crest_db: an.crestDb,
+                  lufs: an.lufs ?? null,
+                  loudness_range_lu: an.lra ?? null,
+                  true_peak_dbtp: an.truePeakDb ?? null,
                 }
               : {
                   note: "Not analyzed yet. It is analyzed the first time it plays in TastyTunes, or with Analyze audio on its album.",
                 }),
             album_dr: albumDr,
+            album_lufs: albumEntry?.lufs ?? null,
             dr_definition:
               "TT-DR, the DR database's procedure; the album value needs every track analyzed.",
+            loudness_definition:
+              "EBU R128 integrated loudness (LUFS) with true peak (dBTP); the album value integrates across every track, gated as one programme.",
           });
         },
       },

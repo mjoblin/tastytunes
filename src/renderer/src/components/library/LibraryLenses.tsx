@@ -35,7 +35,8 @@ import { cx, fmtTime, matchesFilter, fmtCount, fmtAgo } from "@/lib/format";
 import { usePlayStats, playedBucket, playedOptionsOf } from "@/lib/playStats";
 import { useStore } from "@/store";
 import { FACT_SEP } from "@/lib/mediaFacts";
-import { useAlbumDr, useKnownDrs } from "@/lib/audioAnalysis";
+import { useAlbumDr, useKnownStats } from "@/lib/audioAnalysis";
+import { fmtLufs } from "@/components/media/Waveform";
 import { scrollToVisible } from "@/lib/scroll";
 import { isAlbumClass } from "@/lib/media";
 import { MediaArt } from "@/components/media/MediaArt";
@@ -297,13 +298,14 @@ const decadeOf = (year: string | null | undefined): string | null =>
 /** The sorts that read the listening record — offered only while it has stats. */
 const RECORD_SORTS = new Set<string>(["lastPlayed", "plays"]);
 const ALBUM_SORTS: Array<{
-  value: "title" | "artist" | "year" | "dr" | "lastPlayed" | "plays";
+  value: "title" | "artist" | "year" | "dr" | "loudness" | "lastPlayed" | "plays";
   label: string;
 }> = [
   { value: "title", label: "Title" },
   { value: "artist", label: "Artist" },
   { value: "year", label: "Year (newest first)" },
   { value: "dr", label: "Dynamic range" },
+  { value: "loudness", label: "Loudness" },
   { value: "lastPlayed", label: "Last played" },
   { value: "plays", label: "Most played" },
 ];
@@ -468,6 +470,11 @@ export function AlbumsLens({
         // analyzed albums first, most dynamic leading; the rest alphabetical
         const d = (n: MediaNode): number => albumDr[albumDrKey(n)]?.dr ?? -1;
         return d(b) - d(a) || a.title.localeCompare(b.title);
+      }
+      if (sort === "loudness") {
+        // measured albums first, loudest leading; unmeasured alphabetical after
+        const l = (n: MediaNode): number => albumDr[albumDrKey(n)]?.lufs ?? -1000;
+        return l(b) - l(a) || a.title.localeCompare(b.title);
       }
       // the record's sorts: most recent / most played first, unplayed last
       if (sort === "lastPlayed")
@@ -1515,7 +1522,8 @@ export function ArtistsLens({
 // ------------------------------------------------------------------- tracks
 
 const TRACK_SORTS: Array<{
-  value: "title" | "artist" | "album" | "year" | "duration" | "dr" | "lastPlayed" | "plays";
+  value:
+    "title" | "artist" | "album" | "year" | "duration" | "dr" | "loudness" | "lastPlayed" | "plays";
   label: string;
 }> = [
   { value: "title", label: "Title" },
@@ -1524,6 +1532,7 @@ const TRACK_SORTS: Array<{
   { value: "year", label: "Year (newest first)" },
   { value: "duration", label: "Duration (longest first)" },
   { value: "dr", label: "Dynamic range" },
+  { value: "loudness", label: "Loudness" },
   { value: "lastPlayed", label: "Last played" },
   { value: "plays", label: "Plays" },
 ];
@@ -1592,11 +1601,14 @@ export function TracksLens({
   // time a sweep finishes — the DR sort has its numbers without asking the
   // server for anything.
   const drKeys = useMemo(() => all.map((t) => audioAnalysisKey(t)), [all]);
-  const drByKey = useKnownDrs(drKeys); // one home for known DRs (lib/audioAnalysis)
-  const drOf = (t: MediaNode): number | null => drByKey[audioAnalysisKey(t)] ?? null;
+  const statsByKey = useKnownStats(drKeys); // one home for known DR + loudness (lib/audioAnalysis)
+  const drOf = (t: MediaNode): number | null => statsByKey[audioAnalysisKey(t)]?.dr ?? null;
+  const lufsOf = (t: MediaNode): number | null => statsByKey[audioAnalysisKey(t)]?.lufs ?? null;
   const drOptions = useMemo(
-    () => drOptionsOf(all.map((t) => drByKey[audioAnalysisKey(t)] ?? null)),
-    [all, drByKey],
+    () => drOptionsOf(all.map((t) => drOf(t))),
+    // drOf reads statsByKey; listing it keeps the memo honest
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [all, statsByKey],
   );
   const formatOptions = useMemo(
     () =>
@@ -1637,6 +1649,7 @@ export function TracksLens({
       if (sort === "duration")
         return (b.durationSecs ?? 0) - (a.durationSecs ?? 0) || byTitle(a, b);
       if (sort === "dr") return (drOf(b) ?? -1) - (drOf(a) ?? -1) || byTitle(a, b);
+      if (sort === "loudness") return (lufsOf(b) ?? -1000) - (lufsOf(a) ?? -1000) || byTitle(a, b);
       // the record's sorts: most recent / most played first, unplayed last
       if (sort === "lastPlayed")
         return (play.track(b)?.lastAt ?? 0) - (play.track(a)?.lastAt ?? 0) || byTitle(a, b);
@@ -1645,9 +1658,9 @@ export function TracksLens({
       return byTitle(a, b);
     });
     return reversed ? sorted.reverse() : sorted;
-    // drOf reads drByKey; listing it keeps the memo honest
+    // drOf and lufsOf read statsByKey; listing it keeps the memo honest
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [all, mem, sort, reversed, drByKey, play]);
+  }, [all, mem, sort, reversed, statsByKey, play]);
   const playedOptions = useMemo(
     () => (play.ready ? playedOptionsOf(all.map((t) => play.track(t)?.lastAt ?? null)) : []),
     [all, play],
@@ -1661,6 +1674,10 @@ export function TracksLens({
     if (sort === "lastPlayed") {
       const at = play.track(t)?.lastAt;
       return at != null ? fmtAgo(at) : null;
+    }
+    if (sort === "loudness") {
+      const l = lufsOf(t);
+      return l != null ? fmtLufs(l) : null;
     }
     return undefined;
   };
@@ -2035,6 +2052,7 @@ export function TracksLens({
                         selStart={!(idx > 0 && selT.has(nodeKey(shown[idx - 1])))}
                         selEnd={!(idx < total - 1 && selT.has(nodeKey(shown[idx + 1])))}
                         dr={drOf(t)}
+                        lufs={lufsOf(t)}
                         meta={metaOf(t)}
                         // the second line's links — the search-results
                         // treatment: the row plays, the names navigate

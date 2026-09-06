@@ -380,6 +380,7 @@ export function TrackRow({
   note,
   artistLabel,
   dr,
+  lufs = null,
   meta,
   showPosition = true,
   selStart = true,
@@ -434,6 +435,9 @@ export function TrackRow({
    *  pass it (null included) to reserve the cell; leave it undefined and
    *  the row has no DR column (album listings, search results). */
   dr?: number | null;
+  /** The track's integrated loudness (0.8.0), when known — the DR badge's
+   *  tooltip carries it; the cell itself stays the DR number. */
+  lufs?: number | null;
   /** The Tracks lens turns the number off: a track's position within ITS
    *  album reads as noise in a flat list across albums. The cell stays —
    *  the playing eqbars still live there (the flat-row rule). */
@@ -572,7 +576,7 @@ export function TrackRow({
           principle) — alignment holds whether or not a value exists */}
       {dr !== undefined && (
         <div className="flex w-12 justify-end font-mono text-[10.5px]" data-track-dr>
-          {dr != null && <DrBadge dr={dr} className="" />}
+          {dr != null && <DrBadge dr={dr} lufs={lufs} className="" />}
         </div>
       )}
       {meta !== undefined && (

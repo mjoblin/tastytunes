@@ -27,6 +27,7 @@ const api: TastyTunesApi = {
   getSettings: () => ipcRenderer.invoke(IPC.getSettings),
   setSettings: (patch: Partial<AppSettings>) => ipcRenderer.invoke(IPC.setSettings, patch),
   fetchArt: (url: string) => ipcRenderer.invoke(IPC.fetchArt, url),
+  embeddedArt: (query) => ipcRenderer.invoke(IPC.embeddedArt, query),
   fetchLyrics: (query: LyricsQuery, force?: boolean) =>
     ipcRenderer.invoke(IPC.fetchLyrics, query, force),
   lbValidate: () => ipcRenderer.invoke(IPC.lbValidate),
@@ -47,6 +48,7 @@ const api: TastyTunesApi = {
   albumDrMap: () => ipcRenderer.invoke(IPC.albumDrMap),
   albumDrPut: (key: string, entry: AlbumDr) => ipcRenderer.invoke(IPC.albumDrPut, key, entry),
   audioDrMany: (keys: string[]) => ipcRenderer.invoke(IPC.audioDrMany, keys),
+  audioStatsMany: (keys: string[]) => ipcRenderer.invoke(IPC.audioStatsMany, keys),
   toggleMini: () => ipcRenderer.invoke(IPC.toggleMini),
   showMain: (screen?: string) => ipcRenderer.invoke(IPC.showMain, screen),
   setSleep: (sleep: SleepTimer | null) => ipcRenderer.invoke(IPC.setSleep, sleep),

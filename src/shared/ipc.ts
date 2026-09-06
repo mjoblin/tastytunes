@@ -64,6 +64,9 @@ import type {
   ListeningRecordStats,
   ListeningEvent,
   PlayStats,
+  EmbeddedArt,
+  EmbeddedArtQuery,
+  KnownStats,
   RecentTrack,
   SleepTimer,
   TrackInfo,
@@ -274,6 +277,9 @@ export interface TastyTunesApi {
   setSettings(patch: Partial<AppSettings>): Promise<AppSettings>;
   /** Fetch album art via the main process (bypasses CORS) as a data URL. */
   fetchArt(url: string): Promise<{ dataUrl: string } | null>;
+  /** The picture embedded in a track's audio file, for surfaces the server's
+   *  small artwork can't fill. Null when off, unresolvable, or untagged. */
+  embeddedArt(query: EmbeddedArtQuery): Promise<EmbeddedArt | null>;
   /** Look up lyrics via LRCLIB (main process, in-memory cached; null = not found).
    *  `force` bypasses the cache read — the user-driven refresh. */
   fetchLyrics(query: LyricsQuery, force?: boolean): Promise<LyricsResult | null>;
@@ -308,6 +314,8 @@ export interface TastyTunesApi {
   /** EXPERIMENT: the KNOWN DR per content key (cache-only, never a fetch) —
    *  the album modal's coverage line in one round trip. */
   audioDrMany(keys: string[]): Promise<Record<string, number>>;
+  /** Cache-only DR and loudness for many content keys (the rows' cells and tooltips). */
+  audioStatsMany(keys: string[]): Promise<Record<string, KnownStats>>;
   /** Open/close the mini player window. */
   toggleMini(): Promise<void>;
   /** Show and focus the main window. */
@@ -436,6 +444,7 @@ export const IPC = {
   getSettings: "tt:getSettings",
   setSettings: "tt:setSettings",
   fetchArt: "tt:fetchArt",
+  embeddedArt: "tt:embeddedArt",
   fetchLyrics: "tt:fetchLyrics",
   lbValidate: "tt:lbValidate",
   updateDownload: "tt:updateDownload",
@@ -450,6 +459,7 @@ export const IPC = {
   albumDrMap: "tt:albumDrMap",
   albumDrPut: "tt:albumDrPut",
   audioDrMany: "tt:audioDrMany",
+  audioStatsMany: "tt:audioStatsMany",
   toggleMini: "tt:toggleMini",
   showMain: "tt:showMain",
   setSleep: "tt:setSleep",

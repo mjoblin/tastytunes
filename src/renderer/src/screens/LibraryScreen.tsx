@@ -47,7 +47,8 @@ import { albumDrKey } from "@shared/model";
 import { analyzeAlbum, analyzeTracks, useAlbumDr } from "@/lib/audioAnalysis";
 import { FACT_SEP, albumFactsLine, albumFormatChips } from "@/lib/mediaFacts";
 import { usePlayStats } from "@/lib/playStats";
-import { DrChip } from "@/components/media/Waveform";
+import { useBestArt } from "@/lib/bestArt";
+import { DrChip, LufsChip } from "@/components/media/Waveform";
 import type { QueueListItem } from "@shared/smoip";
 import { tt } from "@/api";
 import { useStore } from "@/store";
@@ -1767,7 +1768,16 @@ export function LibraryScreen(): React.JSX.Element {
       : md != null && md.album === node.title && entryArtistMatches(md.artist, node);
 
   const allTracks = useMemo(() => nodes.filter((n) => !n.isContainer), [nodes]);
-  const albumArt = albumNode ? (albumNode.artUrl ?? allTracks[0]?.artUrl ?? null) : null;
+  const albumArtServer = albumNode ? (albumNode.artUrl ?? allTracks[0]?.artUrl ?? null) : null;
+  // the header's 160px tile (320 on retina) asks the first track's file when
+  // the server's art is small (lib/bestArt)
+  const firstTrack = allTracks[0];
+  const albumArt = useBestArt(
+    albumArtServer,
+    firstTrack && nodeUdn(firstTrack)
+      ? { serverUdn: nodeUdn(firstTrack) ?? "", objectId: firstTrack.id }
+      : null,
+  );
   const albumArtist = albumNode
     ? (albumNode.artist ??
       (allTracks.length > 0 && allTracks.every((t) => t.artist === allTracks[0].artist)
@@ -1807,6 +1817,8 @@ export function LibraryScreen(): React.JSX.Element {
     albumDrEntry && (allTracks.length === 0 || albumDrEntry.tracks === allTracks.length)
       ? albumDrEntry.dr
       : null;
+  // the album's integrated loudness (0.8.0) rides the same freshness rule
+  const albumLufsShown = albumDrShown != null ? (albumDrEntry?.lufs ?? null) : null;
   const albumSweeping = albumNode != null && analysisProgress?.key === albumDrKey(albumNode);
   // the note a row carries when its format differs from the album headline
   const albumNoteFor = (node: MediaNode): string | null => {
@@ -2633,9 +2645,14 @@ export function LibraryScreen(): React.JSX.Element {
                 fallback={<Disc3 size={48} strokeWidth={1} className="text-faint" />}
               />
             </div>
-            <div className="min-w-0 pt-1 space-y-1.5">
-              {/* title + artist are one thought — set tight; the facts keep
-                  the block's own rhythm below them */}
+            {/* the text column is at least the art's height with the verb row
+                pinned to its bottom: a header without a composer line is
+                exactly the art's height on every album (the track list starts
+                at one place), the verbs sit on the art's bottom edge, and only
+                a composer line or a wrapped title grows the header (user call,
+                2026-09-05, measured: 153px of 160 without, ~180 with). */}
+            <div className="min-w-0 pt-1 flex min-h-[160px] flex-col gap-1.5">
+              {/* title + artist are one thought — set tight */}
               <div className="space-y-0.5">
                 <div className="font-display font-bold text-[24px] tracking-tight leading-tight">
                   {albumNode.title}
@@ -2669,8 +2686,11 @@ export function LibraryScreen(): React.JSX.Element {
                       </span>
                     ))}
                     {albumSweeping ? (
+                      // bare text beside padded badges: 6px of its own air on
+                      // the left matches a badge's inset, so the word sits as
+                      // far from the last chip as chip text sits from chip text
                       <span
-                        className="text-[11.5px] text-faint motion-safe:animate-pulse"
+                        className="ml-1.5 text-[11.5px] text-faint motion-safe:animate-pulse"
                         data-album-analyzing
                       >
                         analyzing
@@ -2680,17 +2700,22 @@ export function LibraryScreen(): React.JSX.Element {
                         …
                       </span>
                     ) : (
-                      albumDrShown != null && <DrChip dr={albumDrShown} />
+                      <>
+                        {albumDrShown != null && <DrChip dr={albumDrShown} />}
+                        {albumLufsShown != null && <LufsChip lufs={albumLufsShown} />}
+                      </>
                     )}
                   </div>
                 )}
+                {/* the credit gets 8px of air above (6px here + the group's
+                    2px rhythm) so it reads as its own thought (user, 2026-09-05) */}
                 {albumComposerLine && (
-                  <div className="text-[12.5px] text-faint" data-album-composers>
+                  <div className="text-[12.5px] text-faint pt-1.5" data-album-composers>
                     {albumComposerLine}
                   </div>
                 )}
               </div>
-              <div className="flex items-center gap-2 pt-2">
+              <div className="flex items-center gap-2 pt-2 mt-auto">
                 <button
                   data-tip="Replaces the queue"
                   // no queue-ack flash on the album screen: the whole-header

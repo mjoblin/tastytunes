@@ -36,6 +36,7 @@ import { SearchScreen } from "@/screens/SearchScreen";
 import { SettingsScreen } from "@/screens/SettingsScreen";
 import { AmbientArt } from "@/components/media/AmbientArt";
 import { useDecodedArt } from "@/hooks/useDecodedArt";
+import { useBestArt } from "@/lib/bestArt";
 import { usePrefetchNextArt } from "@/hooks/usePrefetchNextArt";
 import { useFontScaleGuard } from "@/hooks/useFontScaleGuard";
 import { HeaderChip } from "@/components/chrome/Chrome";
@@ -79,7 +80,14 @@ export default function App(): React.JSX.Element {
   const artLoadable = useArtLoadable(artActive);
   // The wash renders the last DECODED art, so a slow remote cover can't blank
   // the window while it downloads (see useDecodedArt).
-  const { art: ambientArtUrl } = useDecodedArt(artActive);
+  // the wash reads the same best-art rule as the hero (lib/bestArt)
+  const ambientBest = useBestArt(
+    artActive,
+    !meta.isRadio && meta.title
+      ? { title: meta.title, artist: meta.subtitle ?? null, album: meta.album ?? null }
+      : null,
+  );
+  const { art: ambientArtUrl } = useDecodedArt(ambientBest);
   useArtAccent(settings.accentFollowsArt ? artActive : null, theme);
   useMotionPreference(settings.motion);
   // Queue playback knows the next track's art before it's needed — warm it so

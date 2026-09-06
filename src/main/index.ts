@@ -61,6 +61,7 @@ import {
   audioAnalysisGet,
   audioAnalysisPut,
   audioDrMany,
+  audioStatsMany,
 } from "./lookups/audioAnalysis";
 import { fetchCoverArt } from "./lookups/coverArt";
 import { radioByTags, radioSearch, radioTop } from "./lookups/radioBrowser";
@@ -84,6 +85,8 @@ import { getSettings, updateSettings } from "./data/persist";
 import { getRecents } from "./data/recents";
 import { listeningRecord } from "./data/listeningRecord";
 import { playStatsFromRecord } from "./data/playStats";
+import { embeddedArtFor } from "./lookups/embeddedArt";
+import type { EmbeddedArtQuery } from "@shared/model";
 
 // A dead log pipe must never crash the app: when a parent process that
 // spawned us (a script, a test harness) dies, our stdout/stderr writes
@@ -523,6 +526,11 @@ function registerIpc(): void {
   ipcMain.handle(IPC.audioDrMany, (_e, keys: unknown) =>
     Array.isArray(keys) ? audioDrMany(keys.filter((k): k is string => typeof k === "string")) : {},
   );
+  ipcMain.handle(IPC.audioStatsMany, (_e, keys: unknown) =>
+    Array.isArray(keys)
+      ? audioStatsMany(keys.filter((k): k is string => typeof k === "string"))
+      : {},
+  );
   ipcMain.handle(IPC.albumDrPut, (_e, key: unknown, entry: unknown) => {
     if (typeof key === "string") albumDrPut(key, entry);
   });
@@ -680,6 +688,9 @@ function registerIpc(): void {
   // navigates — the exact sequence the tray menu's own items rely on.
   ipcMain.handle(IPC.showMain, (_e, screen?: string) =>
     screen ? sendMenuCommand({ id: "screen", screen }) : showMainWindow(),
+  );
+  ipcMain.handle(IPC.embeddedArt, (_e, query: EmbeddedArtQuery) =>
+    embeddedArtFor(streamerHost(), query),
   );
   ipcMain.handle(IPC.fetchArt, async (_e, url: string) => {
     if (!/^https?:/i.test(url)) return null;

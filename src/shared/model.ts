@@ -238,6 +238,17 @@ export interface ContentRef {
   album?: string | null;
 }
 
+/** A picture read from an audio file's own tags (FLAC PICTURE, ID3 APIC),
+ *  resized for display; width/height are the ORIGINAL picture's, so a surface
+ *  can tell whether it beats the server's artwork. */
+export interface EmbeddedArt {
+  dataUrl: string;
+  width: number;
+  height: number;
+}
+/** What to read the picture from: a resolved library object, or a track by content. */
+export type EmbeddedArtQuery = { serverUdn: string; objectId: string } | ContentRef;
+
 /**
  * Queue undo is a re-resolve, not a rollback, so it reports which happened:
  * 'not-found' = the track couldn't be found on any server (say so — the user
@@ -1018,7 +1029,7 @@ export interface AppSettings {
    * later belongs here too.
    */
   /** Albums lens sort (the native album grid above keeps librarySort). */
-  lensAlbumsSort: "title" | "artist" | "year" | "dr" | "lastPlayed" | "plays";
+  lensAlbumsSort: "title" | "artist" | "year" | "dr" | "loudness" | "lastPlayed" | "plays";
   lensAlbumsSortReversed: boolean;
   /** Artists lens: hide artists that only have loose tracks. */
   lensArtistsAlbumsOnly: boolean;
@@ -1027,7 +1038,7 @@ export interface AppSettings {
   /** Tracks lens sort — the third lens (2026-09-01), every track across the
    *  ready indexes; DR sorts newest-analysis-first once the sweep has run. */
   lensTracksSort:
-    "title" | "artist" | "album" | "year" | "duration" | "dr" | "lastPlayed" | "plays";
+    "title" | "artist" | "album" | "year" | "duration" | "dr" | "loudness" | "lastPlayed" | "plays";
   lensTracksSortReversed: boolean;
   playlistsSort: "updated" | "created" | "played" | "name" | "length";
   playlistsSortReversed: boolean;
@@ -1081,6 +1092,10 @@ export interface AppSettings {
    *  counts and the Played filter in the Library, the resume offer on Now
    *  Playing. Off hides them all; the record itself keeps logging. */
   showListeningHistory: boolean;
+  /** Album art from the audio files themselves (0.8.0): when a media server
+   *  sends small artwork, the full picture is read from the file's own tags for
+   *  the big surfaces. Reads from the media server over the local network. */
+  artFromFiles: boolean;
   /** Scrobble listens to ListenBrainz (needs a user token; radio is never scrobbled). */
   lbEnabled: boolean;
   /** ListenBrainz user token, from listenbrainz.org/settings. Stored locally. */
@@ -1243,6 +1258,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   displayLyrics: true,
   listeningRecord: true,
   showListeningHistory: true,
+  artFromFiles: true,
   lbEnabled: false,
   lbToken: "",
   artistInfo: true,
@@ -1667,6 +1683,61 @@ export interface AudioAnalysis {
   /** Peak/RMS envelopes at capture resolution, amplitude x1000 (0..1000). */
   peakQ: number[];
   rmsQ: number[];
+  /** EBU R128 (0.8.0): integrated loudness in LUFS (null = gated to
+   *  nothing, or measured before this field existed), loudness range in LU,
+   *  true peak in dBTP (4× oversampled), and the gated block-loudness
+   *  histogram (LOUD_HIST_BINS bins of LOUD_HIST_STEP LU from LOUD_HIST_MIN)
+   *  so an ALBUM's loudness integrates across its tracks the way the
+   *  standard says, not as an average of track values. */
+  lufs?: number | null;
+  lra?: number | null;
+  truePeakDb?: number | null;
+  loudHist?: number[] | null;
+}
+
+/** What a row can know without decoding: the cached DR and loudness. */
+export interface KnownStats {
+  dr: number | null;
+  lufs: number | null;
+}
+
+/** The block-loudness histogram: 0.1 LU bins from −70 LUFS (the absolute
+ *  gate) to +10. */
+export const LOUD_HIST_MIN = -70;
+export const LOUD_HIST_STEP = 0.1;
+export const LOUD_HIST_BINS = 800;
+/** BS.1770's offset: loudness = −0.691 + 10·log10(mean square energy). */
+export const LOUD_OFFSET = -0.691;
+
+/** Integrate several tracks' block histograms into ONE loudness (the album
+ *  value): the relative gate is applied over the combined distribution.
+ *  Null when the histograms hold no gated blocks. */
+export function integrateLoudnessHistograms(
+  hists: ReadonlyArray<ReadonlyArray<number>>,
+): number | null {
+  const counts = new Float64Array(LOUD_HIST_BINS);
+  for (const h of hists) for (let i = 0; i < LOUD_HIST_BINS && i < h.length; i++) counts[i] += h[i];
+  const energyAt = (bin: number): number =>
+    10 ** ((LOUD_HIST_MIN + (bin + 0.5) * LOUD_HIST_STEP - LOUD_OFFSET) / 10);
+  let n = 0;
+  let sum = 0;
+  for (let i = 0; i < LOUD_HIST_BINS; i++) {
+    if (counts[i] === 0) continue;
+    n += counts[i];
+    sum += counts[i] * energyAt(i);
+  }
+  if (n === 0) return null;
+  const threshold = LOUD_OFFSET + 10 * Math.log10(sum / n) - 10;
+  let n2 = 0;
+  let sum2 = 0;
+  for (let i = 0; i < LOUD_HIST_BINS; i++) {
+    if (counts[i] === 0) continue;
+    const l = LOUD_HIST_MIN + (i + 0.5) * LOUD_HIST_STEP;
+    if (l <= threshold) continue;
+    n2 += counts[i];
+    sum2 += counts[i] * energyAt(i);
+  }
+  return n2 === 0 ? null : LOUD_OFFSET + 10 * Math.log10(sum2 / n2);
 }
 
 /** An album's recorded DR — written ONLY when every track measured (the TT
@@ -1677,6 +1748,9 @@ export interface AlbumDr {
   dr: number;
   tracks: number;
   analyzedAt: number;
+  /** The album's integrated loudness (R128, gated across all tracks), when
+   *  every track carried a histogram. */
+  lufs?: number | null;
 }
 
 /** Content identity for stored audio analysis — the trackInfo key precedent

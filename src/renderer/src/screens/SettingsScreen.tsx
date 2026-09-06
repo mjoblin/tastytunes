@@ -340,6 +340,13 @@ export function SettingsScreen(): React.JSX.Element {
                     onChange={(waveformNowPlaying) => void save({ waveformNowPlaying })}
                   />
                 </div>
+
+                <Toggle
+                  label="Album art from audio files"
+                  hint="When a media server sends small artwork, the full picture is read from the audio file itself, for the Now Playing screen, Display mode and album headers. Reads from your media server over your local network."
+                  checked={settings.artFromFiles}
+                  onChange={(artFromFiles) => void save({ artFromFiles })}
+                />
               </section>
             )}
 
