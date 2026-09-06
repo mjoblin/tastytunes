@@ -34,10 +34,14 @@ export interface PlayStatsView {
   since: number | null;
   recent: ListeningPlayEvent[];
   track(node: Pick<MediaNode, "title" | "artist" | "album">): PlayStat | null;
-  /** An album's tally over its tracks: total plays, most recent start. */
+  /** An album's tally over its tracks: total plays, most recent start, and
+   *  its WHOLE listens — runs in which every one of these tracks was heard as
+   *  a listen (0.8.0 round two; the record's runs against the index's tracks). */
   album(tracks: ReadonlyArray<Pick<MediaNode, "title" | "artist" | "album">>): {
     plays: number;
     lastAt: number | null;
+    whole: number;
+    lastWholeAt: number | null;
   };
 }
 
@@ -46,7 +50,7 @@ const EMPTY: PlayStatsView = {
   since: null,
   recent: [],
   track: () => null,
-  album: () => ({ plays: 0, lastAt: null }),
+  album: () => ({ plays: 0, lastAt: null, whole: 0, lastWholeAt: null }),
 };
 
 export function viewOf(stats: PlayStats | null): PlayStatsView {
@@ -67,7 +71,28 @@ export function viewOf(stats: PlayStats | null): PlayStatsView {
         plays += st.plays;
         if (lastAt == null || st.lastAt > lastAt) lastAt = st.lastAt;
       }
-      return { plays, lastAt };
+      // whole listens: a run that heard every track (by play key) as a listen
+      let whole = 0;
+      let lastWholeAt: number | null = null;
+      if (tracks.length > 0) {
+        const keys = new Set(tracks.map((t) => playKey(t.title, t.artist, t.album)));
+        const albumKeys = new Set(tracks.map((t) => playKey(null, null, t.album)));
+        for (const ak of albumKeys)
+          for (const run of stats.albumRuns[ak] ?? []) {
+            if (run.listened.length < keys.size) continue;
+            const heard = new Set(run.listened);
+            let all = true;
+            for (const k of keys)
+              if (!heard.has(k)) {
+                all = false;
+                break;
+              }
+            if (!all) continue;
+            whole += 1;
+            if (lastWholeAt == null || run.endAt > lastWholeAt) lastWholeAt = run.endAt;
+          }
+      }
+      return { plays, lastAt, whole, lastWholeAt };
     },
   };
 }

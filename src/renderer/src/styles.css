@@ -240,6 +240,12 @@ img {
 /* Same landmark voice, a step down — the mini player's next-up line sits in a
    132px strip where 11px caps read as a fourth content row rather than a
    whisper. Same cascade note as .badge-sm: must stay after .microlabel. */
+/* the label as an ANCHOR rather than a caption (the Timeline's day headers):
+   the same mono uppercase, in ink. A modifier class for the same cascade
+   reason as .badge-sm: a utility beside .microlabel loses to it. */
+.microlabel-strong {
+  @apply text-ink;
+}
 .microlabel-sm {
   @apply text-[10px];
 }
@@ -605,6 +611,21 @@ img {
   left: 0;
   right: auto;
   translate: 0 0;
+}
+/* a wide tip on a control near the RIGHT edge (the Timeline's Listens only
+   chip): wrap as tip-wide does, but grow leftward from the element's right
+   edge — the two modifiers together, since each alone anchors one side */
+[data-tip].tip-wide.tip-end::after {
+  left: auto;
+  right: 0;
+}
+
+/* a scroller whose content dissolves over its top strip — under the History
+   Timeline's held day header, so the label sits on the plain ground with no
+   veil or blur behind it (a blur read as distraction, a tint as a band). */
+.fade-top {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, transparent 26px, #000 50px);
+  mask-image: linear-gradient(to bottom, transparent 0, transparent 26px, #000 50px);
 }
 
 /* display mode hides the cursor after idle */

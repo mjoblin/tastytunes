@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronRight, History, MoreHorizontal, Play, Trash2 } from "lucide-react";
+import {
+  CalendarDays,
+  ChevronRight,
+  History,
+  ListMusic,
+  MoreHorizontal,
+  Play,
+  Trash2,
+} from "lucide-react";
 import {
   favoriteKey,
   recentMatchesPlayState,
@@ -28,6 +36,8 @@ import { cx, fmtDayBucket, fmtRelative, matchesFilter } from "@/lib/format";
 import { clearRecentsWithUndo } from "@/lib/recents";
 import { FilterInput } from "@/components/controls/FilterInput";
 import { ScreenTitle, GAP_BETWEEN } from "@/components/chrome/Chrome";
+import { HistoryTimeline, filterEvents } from "@/components/history/HistoryTimeline";
+import { FACT_SEP } from "@/lib/mediaFacts";
 
 interface Block {
   session: string | null;
@@ -57,14 +67,29 @@ function buildBlocks(recents: RecentTrack[]): Block[] {
 const songText = (e: RecentTrack): string | null =>
   e.isRadio ? e.title : [e.title, e.artist].filter(Boolean).join(" — ") || null;
 
-/** Read-only local history of tracks the streamer has played. */
-export function RecentlyPlayedScreen(): React.JSX.Element {
+/** The History screen's sections (0.8.0 round two), on the Settings rail
+ *  pattern: Recent is the device log as it always was (the screen's first
+ *  view); Timeline reads the listening record. Same slot, same R key, same
+ *  screen id (recently-played), so saved nav orders survive the rename. */
+const VIEWS: Array<{ id: "recent" | "timeline"; label: string; icon: typeof History }> = [
+  { id: "recent", label: "Recent", icon: ListMusic },
+  { id: "timeline", label: "Timeline", icon: CalendarDays },
+];
+
+/** History: the local device log (Recent) and the listening record (Timeline). */
+export function HistoryScreen(): React.JSX.Element {
   const recents = useStore((s) => s.recents);
   const saveSettings = useStore((s) => s.saveSettings);
   const grouped = useStore((s) => s.settings.recentsGrouped);
+  const view = useStore((s) => s.settings.historyView);
   const playState = useStore((s) => s.playState);
   const filter = useStore((s) => s.screenFilters["recently-played"]);
   const setScreenFilter = useStore((s) => s.setScreenFilter);
+  const historyLoaded = useStore((s) => s.history.loaded);
+  const timelineCounts = useMemo(() => {
+    const all = Object.values(historyLoaded).flat();
+    return { total: all.length, shown: filter ? filterEvents(all, filter).length : all.length };
+  }, [historyLoaded, filter]);
 
   // Filter entries BEFORE session/day grouping so groups rebuild from matches.
   const shownRecents = useMemo(
@@ -165,9 +190,17 @@ export function RecentlyPlayedScreen(): React.JSX.Element {
   return (
     <div className="h-full flex flex-col">
       <header className={`drag-region flex items-center ${GAP_BETWEEN} px-8 pt-8 pb-4`}>
-        <ScreenTitle>Recently Played</ScreenTitle>
+        <ScreenTitle>History</ScreenTitle>
         <div className="flex-1" />
-        {recents.length > 0 && (
+        {view === "timeline" && timelineCounts.total > 0 && (
+          <FilterInput
+            value={filter}
+            onChange={(t) => setScreenFilter("recently-played", t)}
+            shown={timelineCounts.shown}
+            total={timelineCounts.total}
+          />
+        )}
+        {view === "recent" && recents.length > 0 && (
           <>
             <FilterInput
               value={filter}
@@ -224,55 +257,81 @@ export function RecentlyPlayedScreen(): React.JSX.Element {
         />
       )}
 
-      {recents.length === 0 ? (
-        <EmptyState
-          icon={History}
-          title="No history yet"
-          caption="Tracks and stations you play will collect here — a local log, kept only on this computer."
-        />
-      ) : (
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-8 pb-8 pt-1">
-          <div className="max-w-2xl space-y-6">
-            {days.length === 0 && (
-              <div className="text-[15px] text-faint pt-6 px-1">No matches for “{filter}”</div>
-            )}
-            {days.map((day) => (
-              <div key={day.label}>
-                <div className="microlabel mb-2 px-1">{day.label}</div>
-                <div className="space-y-1 divide-y divide-edge/50">
-                  {day.blocks.map((block) =>
-                    grouped && block.session != null ? (
-                      <SessionRow
-                        key={block.id}
-                        block={block}
-                        now={now}
-                        live={headIsLive && block === blocks[0]}
-                        expanded={expanded.has(block.id)}
-                        onToggle={() => toggleExpand(block.id)}
-                      />
-                    ) : (
-                      // Discrete track, or "All songs" mode: one row per entry.
-                      block.entries.map((entry, i) => (
-                        <TrackRow
-                          key={`${block.id}-${i}`}
-                          entry={entry}
-                          now={now}
-                          live={headIsLive && block === blocks[0] && i === 0}
-                          hearted={heartedOf(entry)}
-                          onMenu={openRowMenu}
-                        />
-                      ))
-                    ),
-                  )}
-                </div>
+      {/* the section rail (the Settings pattern) beside the section's own scroller */}
+      <div className="flex-1 min-h-0 flex gap-5 px-8 pb-8 pt-1">
+        <nav className="w-36 shrink-0 space-y-0.5" data-history-rail>
+          {VIEWS.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => void saveSettings({ historyView: id })}
+              data-history-view={id}
+              className={cx(
+                "w-full flex items-center gap-3 rounded-lg h-9 px-3 text-[13.5px] transition-colors",
+                view === id ? "bg-amberdim text-amber" : "text-dim hover:text-ink hover:bg-veil",
+              )}
+            >
+              <Icon size={15} strokeWidth={1.8} className="shrink-0" />
+              <span className="flex-1 text-left">{label}</span>
+            </button>
+          ))}
+        </nav>
+        <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+          {view === "timeline" ? (
+            <HistoryTimeline filter={filter} />
+          ) : recents.length === 0 ? (
+            <EmptyState
+              icon={History}
+              title="No history yet"
+              caption="Tracks and stations you play will collect here — a local log, kept only on this computer."
+            />
+          ) : (
+            <div
+              ref={scrollRef}
+              className="flex-1 overflow-y-auto px-1" /* px-1: ring room at the scrollport's edges */
+            >
+              <div className="max-w-2xl space-y-6">
+                {days.length === 0 && (
+                  <div className="text-[15px] text-faint pt-6 px-1">No matches for “{filter}”</div>
+                )}
+                {days.map((day) => (
+                  <div key={day.label}>
+                    <div className="microlabel mb-2 px-1">{day.label}</div>
+                    <div className="space-y-1 divide-y divide-edge/50">
+                      {day.blocks.map((block) =>
+                        grouped && block.session != null ? (
+                          <SessionRow
+                            key={block.id}
+                            block={block}
+                            now={now}
+                            live={headIsLive && block === blocks[0]}
+                            expanded={expanded.has(block.id)}
+                            onToggle={() => toggleExpand(block.id)}
+                          />
+                        ) : (
+                          // Discrete track, or "All songs" mode: one row per entry.
+                          block.entries.map((entry, i) => (
+                            <TrackRow
+                              key={`${block.id}-${i}`}
+                              entry={entry}
+                              now={now}
+                              live={headIsLive && block === blocks[0] && i === 0}
+                              hearted={heartedOf(entry)}
+                              onMenu={openRowMenu}
+                            />
+                          ))
+                        ),
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-          <div className="microlabel mt-6 px-1">
-            up to {MAX_RECENTS} entries · stored locally · clears on demand
-          </div>
+              <div className="microlabel mt-6 px-1">
+                up to {MAX_RECENTS} entries{FACT_SEP}stored locally{FACT_SEP}clears on demand
+              </div>
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -362,7 +421,7 @@ function SessionRow({
   const latest = songText(songs[0] ?? head);
   const subtitle =
     songs.length > 1
-      ? `${latest} · ${songs.length} songs`
+      ? `${latest}${FACT_SEP}${songs.length} songs`
       : (latest ?? (head.isRadio ? "Live" : null));
   // Expandable whenever there's at least one song, so a single-song session
   // lists its song the same way a multi-song one does.

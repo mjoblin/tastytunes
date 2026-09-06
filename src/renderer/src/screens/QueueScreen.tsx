@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useMemo } from "react";
 import { useKnownDrs } from "@/lib/audioAnalysis";
+import { useWindowedList } from "@/hooks/useWindowedList";
 import { DrBadge } from "@/components/media/Waveform";
 import { createPortal } from "react-dom";
 import { useQueuePerformer } from "@/hooks/useQueuePerformer";
@@ -277,61 +278,18 @@ export function QueueScreen(): React.JSX.Element {
   // follow keep working. Only above LEAN_QUEUE: an ordinary queue renders
   // every row exactly as before.
   const leanRows = !cards && !albums && items.length > LEAN_QUEUE;
-  const [leanView, setLeanView] = useState({ top: 0, height: 800, offset: 0, pitch: 57 });
-  const leanRangeRef = useRef<[number, number]>([0, 0]);
-  useEffect(() => {
-    if (!leanRows) return;
-    const sc = scrollElRef.current;
-    if (!sc) return;
-    let raf = 0;
-    const measure = (): void => {
-      raf = 0;
-      const rows = sc.querySelectorAll<HTMLElement>("[data-queue-id]");
-      const r0 = rows[0]?.getBoundingClientRect();
-      const r1 = rows[1]?.getBoundingClientRect();
-      const scTop = sc.getBoundingClientRect().top;
-      setLeanView((v) => {
-        const pitch = r0 && r1 && r1.top > r0.top ? r1.top - r0.top : v.pitch;
-        // where row 0 would sit in the scroll content: the first rendered row's
-        // position, less the rows before it
-        const offset = r0
-          ? r0.top - scTop + sc.scrollTop - leanRangeRef.current[0] * pitch
-          : v.offset;
-        const next = { top: sc.scrollTop, height: sc.clientHeight, offset, pitch };
-        return v.top === next.top &&
-          v.height === next.height &&
-          v.offset === next.offset &&
-          v.pitch === next.pitch
-          ? v
-          : next;
-      });
-    };
-    const onScroll = (): void => {
-      if (!raf) raf = requestAnimationFrame(measure);
-    };
-    measure();
-    sc.addEventListener("scroll", onScroll, { passive: true });
-    const ro = new ResizeObserver(onScroll);
-    ro.observe(sc);
-    return () => {
-      sc.removeEventListener("scroll", onScroll);
-      ro.disconnect();
-      if (raf) cancelAnimationFrame(raf);
-    };
-  }, [leanRows]);
-  const leanRange = ((): [number, number] => {
-    if (!leanRows) return [0, items.length - 1];
-    const { top, height, offset, pitch } = leanView;
-    const first = Math.max(0, Math.floor((top - offset) / pitch) - LEAN_OVERSCAN);
-    const last = Math.min(
-      items.length - 1,
-      Math.ceil((top - offset + height) / pitch) + LEAN_OVERSCAN,
-    );
-    return [first, Math.max(first, last)];
-  })();
-  leanRangeRef.current = leanRange;
-  const leanViewRef = useRef(leanView);
-  leanViewRef.current = leanView;
+  // the shared hook (hooks/useWindowedList, 2026-09-05): the pitch from the
+  // rendered rows, the offset of row 0 below the header inside the scroller
+  const scrollElRef = useRef<HTMLDivElement | null>(null);
+  const leanWin = useWindowedList({
+    scrollRef: scrollElRef,
+    count: items.length,
+    itemSelector: "[data-queue-id]",
+    estimate: 57,
+    overscan: LEAN_OVERSCAN,
+    enabled: leanRows,
+  });
+  const leanRange: [number, number] = [leanWin.first, leanWin.last];
 
   const drKeys = useMemo(() => allItems.map(keyOf), [allItems]);
   const drByKey = useKnownDrs(drKeys);
@@ -501,12 +459,10 @@ export function QueueScreen(): React.JSX.Element {
       // the current row is outside the rendered window: land it by index
       const idx = items.findIndex((i) => i.id === playId);
       const sc = scrollElRef.current;
-      const v = leanViewRef.current;
-      if (idx >= 0 && sc)
-        sc.scrollTop = Math.max(0, v.offset + idx * v.pitch - sc.clientHeight / 2);
+      if (idx >= 0 && sc) sc.scrollTop = Math.max(0, leanWin.offsetOf(idx) - sc.clientHeight / 2);
     }
     firstFollow.current = false;
-    // leanRows/items are read for the windowed landing only; the effect stays keyed on the pointer
+    // leanRows/items/leanWin are read for the windowed landing only; the effect stays keyed on the pointer
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playId, followQueue, cards, presetGap, filter]);
 
@@ -554,7 +510,6 @@ export function QueueScreen(): React.JSX.Element {
   // drop re-derives the line at the instant of release — so the landing IS
   // the line, by construction (the first cut trusted over.rect and landed
   // wrong after scrolls and over members; user, 2026-08-27).
-  const scrollElRef = useRef<HTMLDivElement | null>(null);
   const dragGeom = useRef<{
     bands: Array<{ id: number; x: number; y: number; w: number; h: number }>;
     scrollerTop: number;
@@ -1324,7 +1279,7 @@ export function QueueScreen(): React.JSX.Element {
             ) : (
               <>
                 {leanRows && leanRange[0] > 0 && (
-                  <div data-lean-spacer="top" style={{ height: leanRange[0] * leanView.pitch }} />
+                  <div data-lean-spacer="top" style={{ height: leanWin.padTop }} />
                 )}
                 {items.slice(leanRange[0], leanRange[1] + 1).map((item, k) => {
                   const idx = leanRange[0] + k;
@@ -1358,10 +1313,7 @@ export function QueueScreen(): React.JSX.Element {
                   );
                 })}
                 {leanRows && leanRange[1] < items.length - 1 && (
-                  <div
-                    data-lean-spacer="bottom"
-                    style={{ height: (items.length - 1 - leanRange[1]) * leanView.pitch }}
-                  />
+                  <div data-lean-spacer="bottom" style={{ height: leanWin.padBottom }} />
                 )}
               </>
             )}

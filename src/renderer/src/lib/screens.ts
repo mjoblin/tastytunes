@@ -79,7 +79,9 @@ export const NAV_SCREENS: ScreenDef[] = [
   { id: "favorites", label: "Favorites", icon: Heart, key: "V" },
   // T as in Tuner — the classic hi-fi name for the radio section
   { id: "radio", label: "Radio", icon: RadioTower, key: "T" },
-  { id: "recently-played", label: "Recently Played", icon: History, key: "R" },
+  // History (0.8.0): the device log AND the listening record; the id stays
+  // recently-played so saved nav orders and the key survive the rename
+  { id: "recently-played", label: "History", icon: History, key: "R" },
   // Sources USED to be its own row (key 'C'); it's a section of the Device
   // screen now — both are "system, not music", and Sources is one rarely-used
   // action. 'C' is free again and deliberately not reused.

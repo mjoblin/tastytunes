@@ -17,6 +17,7 @@ import {
   type SleepTimer,
   type MediaInfoQuery,
   type TrackInfoQuery,
+  playKey,
 } from "@shared/model";
 import {
   type ContentRef,
@@ -83,6 +84,7 @@ import {
 import { loggedFetch } from "./netlog";
 import { getSettings, updateSettings } from "./data/persist";
 import { getRecents } from "./data/recents";
+import { decorateRecents, recentArtGet, setRecentArtNotifier } from "./lookups/recentArt";
 import { listeningRecord } from "./data/listeningRecord";
 import { playStatsFromRecord } from "./data/playStats";
 import { embeddedArtFor } from "./lookups/embeddedArt";
@@ -546,7 +548,8 @@ function registerIpc(): void {
       ? fetchCoverArt(artist, album)
       : null,
   );
-  ipcMain.handle(IPC.getRecents, () => getRecents());
+  ipcMain.handle(IPC.getRecents, () => decorateRecents(getRecents()));
+  setRecentArtNotifier(() => deviceManager.repushRecents());
   ipcMain.handle(IPC.clearRecents, () => deviceManager.clearRecents());
   ipcMain.handle(IPC.recentsRestore, (_e, list: RecentTrack[]) =>
     deviceManager.recentsRestore(list),
@@ -601,6 +604,26 @@ function registerIpc(): void {
   });
   ipcMain.handle(IPC.listeningStats, () => listeningRecord.stats());
   ipcMain.handle(IPC.playStats, () => playStatsFromRecord());
+  // the Timeline's art: the record stores none, the index knows the track
+  ipcMain.handle(IPC.libraryArtByKeys, (_e, keys: unknown) => {
+    const want = new Set(
+      Array.isArray(keys) ? keys.filter((k): k is string => typeof k === "string") : [],
+    );
+    const out: Record<string, string | null> = {};
+    if (want.size === 0) return out;
+    for (const g of mediaIndex.pools())
+      for (const t of g.tracks) {
+        const k = playKey(t.title, t.artist, t.album);
+        if (want.has(k) && out[k] == null) out[k] = t.artUrl ?? null;
+      }
+    // not in the library: the device log's captured picture, if any
+    for (const k of want) if (out[k] == null) out[k] = recentArtGet(k) ?? out[k] ?? null;
+    return out;
+  });
+  ipcMain.handle(IPC.listeningYears, () => listeningRecord.years());
+  ipcMain.handle(IPC.listeningYear, (_e, year: unknown) =>
+    typeof year === "number" ? listeningRecord.readYear(year) : { events: [], unreadable: 0 },
+  );
   ipcMain.handle(IPC.listeningClear, async () => {
     await listeningRecord.clear();
     // the reading surfaces re-seed from the (now empty) record

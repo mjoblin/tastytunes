@@ -53,6 +53,7 @@ import { SmoipSocket } from "./smoipSocket";
 import * as smoipHttp from "./smoipHttp";
 import { getSettings, updateSettings } from "../data/persist";
 import { clearRecents, getRecents, recordRecent, restoreRecents } from "../data/recents";
+import { captureRecentArt, decorateRecents } from "../lookups/recentArt";
 import { listeningRecord } from "../data/listeningRecord";
 import { addFavorite, getFavorites, removeFavorite, updateFavorite } from "../data/favorites";
 import {
@@ -1064,7 +1065,14 @@ export class DeviceManager {
       session,
     };
     const { list, changed } = recordRecent(entry);
-    if (changed) this.push({ kind: "recents", data: list });
+    // a transient picture (AirPlay, casting) is captured while its URL lives
+    if (changed) captureRecentArt(list[0]);
+    if (changed) this.push({ kind: "recents", data: decorateRecents(list) });
+  }
+
+  /** The log again, with any picture captured since (the art cache's notifier). */
+  repushRecents(): void {
+    this.push({ kind: "recents", data: decorateRecents(getRecents()) });
   }
 
   clearRecents(): void {
@@ -1072,7 +1080,7 @@ export class DeviceManager {
   }
 
   recentsRestore(list: Parameters<typeof restoreRecents>[0]): void {
-    this.push({ kind: "recents", data: restoreRecents(list) });
+    this.push({ kind: "recents", data: decorateRecents(restoreRecents(list)) });
   }
 
   // ------------------------------------------------------------------ favorites
@@ -1251,7 +1259,9 @@ export class DeviceManager {
       ...this.cache,
       sleep: this.sleep,
       lastRecalledPresetId: this.lastRecalledPresetId,
-      recents: getRecents(),
+      // the snapshot carries the captured pictures too (a capture that landed
+      // before the window existed would otherwise show the dead URL)
+      recents: decorateRecents(getRecents()),
       favorites: getFavorites(),
       playlists: getPlaylists(),
       playlistActivation: this.queueOps.activation,

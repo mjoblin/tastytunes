@@ -366,6 +366,9 @@ export interface PlayStats {
   tracks: Record<string, PlayStat>;
   recent: ListeningPlayEvent[];
   since: number | null;
+  /** Every RUN of plays per album (keyed playKey(null, null, album)), oldest
+   *  first — the album header's "played whole N times" (0.8.0 round two). */
+  albumRuns: Record<string, AlbumRun[]>;
 }
 /** The most recent plays kept in `recent` — enough for any album run. */
 export const PLAY_STATS_RECENT = 300;
@@ -383,6 +386,25 @@ export function foldPlayEvent(stats: PlayStats, e: ListeningEvent): void {
   if (ev.at > row.lastAt) row.lastAt = ev.at;
   row.seconds += ev.playedSeconds;
   stats.tracks[k] = row;
+  // the album's runs: this play extends the last run when the previous
+  // library play was the same album within the session gap, else opens one
+  if (ev.album) {
+    const ak = playKey(null, null, ev.album);
+    const runs = stats.albumRuns[ak] ?? (stats.albumRuns[ak] = []);
+    const prev = stats.recent[stats.recent.length - 1];
+    const last = runs[runs.length - 1];
+    const continues =
+      prev != null &&
+      last != null &&
+      playKey(null, null, prev.album) === ak &&
+      ev.at >= prev.at &&
+      ev.at - last.endAt <= SESSION_GAP_MS;
+    if (!continues) runs.push({ startAt: ev.at, endAt: ev.at, plays: 0, listened: [] });
+    const run = runs[runs.length - 1];
+    run.plays += 1;
+    run.endAt = Math.max(run.endAt, ev.at + ev.playedSeconds * 1000);
+    if (isListen(ev.playedSeconds, ev.duration) && !run.listened.includes(k)) run.listened.push(k);
+  }
   stats.recent.push(ev);
   if (stats.recent.length > PLAY_STATS_RECENT)
     stats.recent.splice(0, stats.recent.length - PLAY_STATS_RECENT);
@@ -510,6 +532,56 @@ export type ListeningEvent =
   | ListeningRadioSessionEvent
   | ListeningRadioTrackEvent
   | ListeningExternalEvent;
+
+/** A LISTENING SESSION (0.8.0, History round two): consecutive record lines
+ *  with at most SESSION_GAP_MS between one line's end and the next's start,
+ *  over every kind — a library run, a radio stretch, an AirPlay evening, or
+ *  one evening spanning them. The Timeline's unit; whole-album listens
+ *  (albumRuns) use the same gap. */
+export const SESSION_GAP_MS = 30 * 60_000;
+
+export interface ListeningSession {
+  startAt: number;
+  endAt: number;
+  /** In time order. */
+  events: ListeningEvent[];
+}
+
+/** When a line's play ended: its start plus the seconds it played (a radio
+ *  sighting has no played time and ends where it starts). */
+export function eventEnd(e: ListeningEvent): number {
+  return (
+    e.at +
+    ("playedSeconds" in e && typeof e.playedSeconds === "number" ? e.playedSeconds * 1000 : 0)
+  );
+}
+
+export function groupSessions(
+  events: readonly ListeningEvent[],
+  gapMs: number = SESSION_GAP_MS,
+): ListeningSession[] {
+  const sorted = [...events].sort((a, b) => a.at - b.at);
+  const out: ListeningSession[] = [];
+  for (const e of sorted) {
+    const cur = out[out.length - 1];
+    if (cur && e.at - cur.endAt <= gapMs) {
+      cur.events.push(e);
+      cur.endAt = Math.max(cur.endAt, eventEnd(e));
+    } else out.push({ startAt: e.at, endAt: eventEnd(e), events: [e] });
+  }
+  return out;
+}
+
+/** One RUN of plays from one album (consecutive library plays of the same
+ *  album, SESSION_GAP_MS apart at most), with the distinct tracks heard as
+ *  LISTENS — the renderer decides "whole" against the album's indexed tracks,
+ *  since the record carries no track counts. */
+export interface AlbumRun {
+  startAt: number;
+  endAt: number;
+  plays: number;
+  listened: string[];
+}
 
 /** The Settings truth row: what the record holds and whether writes work. */
 export interface ListeningRecordStats {
@@ -1057,6 +1129,10 @@ export interface AppSettings {
   sleepAction: SleepAction;
   /** Recently Played: collapse continuous sessions (radio/AirPlay/…) to one row, vs a row per song. */
   recentsGrouped: boolean;
+  /** The History screen's section (0.8.0): the device log, or the record's Timeline. */
+  historyView: "recent" | "timeline";
+  /** The Timeline's unit (0.8.0): sessions collapsed to a line each, or every play. */
+  historyTimelineMode: "sessions" | "plays";
   /** Motion effects (hover growth, eqbars, smooth scrolling). */
   motion: MotionMode;
   /** Check GitHub releases for a newer version on launch and every few hours. */
@@ -1246,6 +1322,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   searchHidden: null,
   sleepAction: "standby",
   recentsGrouped: true,
+  historyView: "recent",
+  historyTimelineMode: "sessions",
   motion: "system",
   updateCheck: true,
   waveforms: true,

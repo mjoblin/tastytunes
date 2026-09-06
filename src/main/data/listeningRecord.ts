@@ -176,6 +176,10 @@ function pauseCurrent(): void {
 }
 
 export const listeningRecord = {
+  /** The years the record holds (one file each), ascending. */
+  years(): Promise<number[]> {
+    return listYears();
+  },
   setEventNotifier(fn: (event: ListeningEvent) => void): void {
     notifyEvent = fn;
   },

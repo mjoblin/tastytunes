@@ -316,6 +316,9 @@ export interface TastyTunesApi {
   audioDrMany(keys: string[]): Promise<Record<string, number>>;
   /** Cache-only DR and loudness for many content keys (the rows' cells and tooltips). */
   audioStatsMany(keys: string[]): Promise<Record<string, KnownStats>>;
+  /** Art URLs from the library index for content keys (playKey) — the History
+   *  Timeline's rows, which the record itself stores no art for. */
+  libraryArtByKeys(keys: string[]): Promise<Record<string, string | null>>;
   /** Open/close the mini player window. */
   toggleMini(): Promise<void>;
   /** Show and focus the main window. */
@@ -422,6 +425,10 @@ export interface TastyTunesApi {
   /** The record aggregated for the reading surfaces: per-track plays and last
    *  played, the most recent plays, when the record began. */
   playStats(): Promise<PlayStats>;
+  /** The record's years (one file each), ascending — the Timeline loads a year at a time. */
+  listeningYears(): Promise<number[]>;
+  /** One year's lines, in file order, with the unreadable-line count. */
+  listeningYear(year: number): Promise<{ events: ListeningEvent[]; unreadable: number }>;
   /** Combined size of the on-disk lookup caches (lyrics, artist context). */
   /** The undo stack's top label (or null when empty) — the Edit menu's
    *  Undo item names its target from this, the Music.app pattern. */
@@ -460,6 +467,7 @@ export const IPC = {
   albumDrPut: "tt:albumDrPut",
   audioDrMany: "tt:audioDrMany",
   audioStatsMany: "tt:audioStatsMany",
+  libraryArtByKeys: "tt:libraryArtByKeys",
   toggleMini: "tt:toggleMini",
   showMain: "tt:showMain",
   setSleep: "tt:setSleep",
@@ -484,6 +492,8 @@ export const IPC = {
   listeningClear: "tt:listeningClear",
   listeningExport: "tt:listeningExport",
   playStats: "tt:playStats",
+  listeningYears: "tt:listeningYears",
+  listeningYear: "tt:listeningYear",
   undoLabelSet: "tt:undoLabelSet",
   lookupCacheStats: "tt:lookupCacheStats",
   clearLookupCaches: "tt:clearLookupCaches",

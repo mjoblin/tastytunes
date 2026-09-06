@@ -153,7 +153,7 @@ export function SettingsScreen(): React.JSX.Element {
 
       {/* pinned header + tab rail; only the per-tab panel scrolls */}
       <div className="flex-1 min-h-0 flex gap-5 px-8 pb-8 pt-1">
-        <nav className="w-44 shrink-0 space-y-0.5">
+        <nav className="w-44 shrink-0 space-y-0.5" data-settings-rail>
           {TABS.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
@@ -431,7 +431,7 @@ export function SettingsScreen(): React.JSX.Element {
 
                   <SettingRow
                     label="Recently played"
-                    hint="A local log of tracks and stations you've played, shown on the Recently Played screen (R). Kept only on this computer."
+                    hint="A local log of tracks and stations you've played, shown under Recent on the History screen (R). Kept only on this computer."
                   >
                     <button
                       onClick={() => void clearRecentsWithUndo()}

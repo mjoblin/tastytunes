@@ -36,13 +36,12 @@ import { usePlayStats, playedBucket, playedOptionsOf } from "@/lib/playStats";
 import { useStore } from "@/store";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { useAlbumDr, useKnownStats } from "@/lib/audioAnalysis";
+import { useWindowedList } from "@/hooks/useWindowedList";
 import { fmtLufs } from "@/components/media/Waveform";
 import { scrollToVisible } from "@/lib/scroll";
 import { isAlbumClass } from "@/lib/media";
 import { MediaArt } from "@/components/media/MediaArt";
 import { FilterInput } from "@/components/controls/FilterInput";
-import { PopoverChrome } from "@/hooks/usePopover";
-import { POPOVER_CARD } from "@/components/chrome/Overlay";
 import {
   Chip,
   HeaderChip,
@@ -51,6 +50,7 @@ import {
   GAP_WITHIN,
 } from "@/components/chrome/Chrome";
 import { SortChip } from "@/components/controls/SortChip";
+import { PickerPill } from "@/components/controls/PickerPill";
 import { Segmented } from "@/components/controls/Segmented";
 import { ContainerCard, ContainerRow, TrackRow } from "@/components/library/LibraryCards";
 import { RowMenu } from "@/components/media/RowMenu";
@@ -122,91 +122,6 @@ const nodeKey = (n: MediaNode): string => `${n.serverUdn ?? ""}|${n.id}`;
  *  toggle chip; an active pick renders gold like any active chip. Clicking the
  *  active option still toggles it off, but a picker popover reads as
  *  "choose one" — the explicit clear row is the discoverable way back out. */
-function PickerPill({
-  id,
-  neutral,
-  clearLabel,
-  options,
-  value,
-  onChange,
-  min,
-}: {
-  id: string;
-  neutral: string;
-  clearLabel: string;
-  options: Array<{ value: string; label: string; count: number }>;
-  value: string | null;
-  onChange(value: string | null): void;
-  /** Options needed before the pill shows (default 2 — a facet that can't
-   *  distinguish is furniture; DR passes 1: one known value still filters
-   *  the analyzed from the rest). */
-  min?: number;
-}): React.JSX.Element | null {
-  const [open, setOpen] = useState(false);
-  if (options.length < (min ?? 2)) return null;
-  const active = value ? options.find((o) => o.value === value) : null;
-  return (
-    <div className="relative">
-      <Chip
-        state={active ? "active" : open ? "open" : "idle"}
-        data-lens-picker={id}
-        onClick={() => setOpen((o) => !o)}
-        className="no-drag gap-1 motion-safe:active:scale-95"
-      >
-        {active ? active.label : neutral}
-        <ChevronDown size={12} className={active ? "text-gold/70" : "text-faint"} />
-      </Chip>
-      {open && (
-        <>
-          <PopoverChrome onClose={() => setOpen(false)} />
-          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
-          <div
-            data-lens-picker-popover={id}
-            className={cx(
-              "absolute left-0 top-full mt-1.5 z-30 w-56 max-h-72 overflow-y-auto",
-              POPOVER_CARD,
-              "p-1.5 space-y-0.5",
-            )}
-          >
-            <button
-              data-lens-chip={clearLabel}
-              onClick={() => {
-                onChange(null);
-                setOpen(false);
-              }}
-              className={cx(
-                "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-[13px] transition-colors",
-                value === null ? "text-gold bg-golddim" : "text-dim hover:text-ink hover:bg-veil",
-              )}
-            >
-              <span className="min-w-0 flex-1 truncate">{clearLabel}</span>
-            </button>
-            {options.map((o) => (
-              <button
-                key={o.value}
-                data-lens-chip={o.label}
-                onClick={() => {
-                  onChange(value === o.value ? null : o.value);
-                  setOpen(false);
-                }}
-                className={cx(
-                  "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-[13px] transition-colors",
-                  value === o.value
-                    ? "text-gold bg-golddim"
-                    : "text-dim hover:text-ink hover:bg-veil",
-                )}
-              >
-                <span className="min-w-0 flex-1 truncate">{o.label}</span>
-                <span className="font-mono text-[10.5px] text-faint tabular-nums">{o.count}</span>
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
 // ------------------------------------------------------------------- facets
 
 /** Genres by count (raw tagger strings, case-normalized by key). No cap:
@@ -1688,22 +1603,19 @@ export function TracksLens({
   // rendered one is measured, so the math never assumes a pixel. Selection,
   // ⌘A, shift-runs and drag operate on `shown` (the sorted list), never on
   // the rendered slice.
-  const OVERSCAN = 8;
-  const [rowH, setRowH] = useState(57);
-  const [view, setView] = useState({ top: 0, height: 600 });
   const listRef = useRef<HTMLDivElement | null>(null);
-  const probeRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    const el = listRef.current;
-    if (!el) return;
-    const measure = (): void =>
-      setView((v) => (v.height === el.clientHeight ? v : { ...v, height: el.clientHeight }));
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
   const total = shown.length;
+  // the shared hook (hooks/useWindowedList, 2026-09-05): one kind of row,
+  // always on — the lens has no cap, so the window is its only guarantee
+  const win = useWindowedList({
+    scrollRef: listRef,
+    count: total,
+    itemSelector: "[data-win-item]",
+    estimate: 57,
+    overscan: 8,
+  });
+  const start = win.first;
+  const end = total === 0 ? 0 : win.last + 1;
   const narrowed = Boolean(
     mem.filter || mem.genre || mem.decade || mem.dr || mem.format || mem.played,
   );
@@ -1739,13 +1651,6 @@ export function TracksLens({
     .filter(Boolean)
     .join(FACT_SEP);
   const [theseMenu, setTheseMenu] = useState<{ x: number; y: number } | null>(null);
-  // measure once rows exist (and again if the list empties and refills)
-  useEffect(() => {
-    const h = probeRef.current?.offsetHeight ?? 0;
-    if (h > 0 && h !== rowH) setRowH(h);
-  }, [total, rowH]);
-  const start = Math.max(0, Math.floor(view.top / rowH) - OVERSCAN);
-  const end = Math.min(total, Math.ceil((view.top + view.height) / rowH) + OVERSCAN);
   const windowed = shown.slice(start, end);
 
   // ---- selection (the Artists lens's grammar, over the VISIBLE rows)
@@ -2016,11 +1921,7 @@ export function TracksLens({
           <div
             ref={listRef}
             onScroll={(e) => {
-              const top = e.currentTarget.scrollTop;
-              tracksMem.scroll = top;
-              // snap to a row so a pixel of scroll never re-renders the slice
-              const snapped = Math.floor(top / rowH) * rowH;
-              setView((v) => (v.top === snapped ? v : { ...v, top: snapped }));
+              tracksMem.scroll = e.currentTarget.scrollTop;
             }}
             className={cx(
               "min-h-0 flex-1 overflow-y-auto px-1.5 -mx-1.5 -my-1",
@@ -2028,16 +1929,13 @@ export function TracksLens({
             )}
             data-lens-tracks-list
           >
-            <div style={{ height: total * rowH, position: "relative" }}>
-              <div style={{ position: "absolute", top: start * rowH, left: 0, right: 0 }}>
+            <div>
+              {win.padTop > 0 && <div data-win-spacer="top" style={{ height: win.padTop }} />}
+              <div>
                 {windowed.map((t, i) => {
                   const idx = start + i;
                   return (
-                    <div
-                      key={nodeKey(t)}
-                      ref={i === 0 ? probeRef : undefined}
-                      className="border-b border-edge/50"
-                    >
+                    <div key={nodeKey(t)} data-win-item className="border-b border-edge/50">
                       <TrackRow
                         node={t}
                         // art, not a running-order number: a track's position
@@ -2078,6 +1976,9 @@ export function TracksLens({
                   );
                 })}
               </div>
+              {win.padBottom > 0 && (
+                <div data-win-spacer="bottom" style={{ height: win.padBottom }} />
+              )}
             </div>
           </div>
           {lensMenu && (

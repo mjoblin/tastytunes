@@ -1792,17 +1792,22 @@ export function LibraryScreen(): React.JSX.Element {
   const albumFmt = albumFormat(allTracks);
   // the catalog facts line has ONE home (lib/mediaFacts) — the album Info
   // modal reads the identical string; only the queue note is this screen's
-  const albumLastPlayed = playStats.album(allTracks).lastAt;
+  const albumPlay = playStats.album(allTracks);
+  const albumLastPlayed = albumPlay.lastAt;
+  // the catalog facts, then the listening record's whole-listen count; the
+  // "last played" fact renders apart as a LINK into History's Timeline
+  // (0.8.0 round 2b) and the queue note closes the line
   const albumFacts = albumNode
     ? [
         albumFactsLine(albumNode, allTracks),
-        // the listening record's fact (0.8.0): when this album last played
-        albumLastPlayed != null ? `last played ${fmtAgo(albumLastPlayed)}` : null,
-        albumInQueue ? "in the queue" : null,
+        albumPlay.whole > 0
+          ? `played whole ${albumPlay.whole === 1 ? "once" : albumPlay.whole === 2 ? "twice" : `${albumPlay.whole} times`}`
+          : null,
       ]
         .filter(Boolean)
         .join(FACT_SEP)
     : "";
+  const jumpToHistory = useStore((s) => s.jumpToHistory);
   // one composer credit for the whole album, when every track agrees (the
   // classical case, and a band that writes its own); silent otherwise
   const composers = albumNode ? albumComposers(allTracks) : [];
@@ -2674,7 +2679,30 @@ export function LibraryScreen(): React.JSX.Element {
               {/* facts + composers are one thought too, set tight (the
                   composer line is only there when every track agrees) */}
               <div className="space-y-0.5">
-                {albumFacts && <div className="text-[12.5px] text-faint">{albumFacts}</div>}
+                {(albumFacts || albumLastPlayed != null || albumInQueue) && (
+                  <div className="text-[12.5px] text-faint" data-album-facts>
+                    {albumFacts}
+                    {albumLastPlayed != null && (
+                      <>
+                        {albumFacts && FACT_SEP}
+                        <button
+                          data-album-last-played
+                          data-tip="Show in History"
+                          onClick={() => jumpToHistory(albumLastPlayed)}
+                          className="tip-bottom hover:text-ink hover:underline underline-offset-2 transition-colors"
+                        >
+                          {`last played ${fmtAgo(albumLastPlayed)}`}
+                        </button>
+                      </>
+                    )}
+                    {albumInQueue && (
+                      <>
+                        {(albumFacts || albumLastPlayed != null) && FACT_SEP}
+                        in the queue
+                      </>
+                    )}
+                  </div>
+                )}
                 {/* the format TOKENS as chips, the DR chip (or the sweep's
                     pulse in its place) closing the row — two registers, one
                     home (lib/mediaFacts; user call, 2026-09-01) */}
