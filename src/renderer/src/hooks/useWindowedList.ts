@@ -120,25 +120,39 @@ export function useWindowedList({
       raf = 0;
       const els = sc.querySelectorAll<HTMLElement>(itemSelector);
       if (els.length > 0) {
+        const scRect = sc.getBoundingClientRect();
         const r0 = els[0].getBoundingClientRect();
-        // heights: the first rendered element of each kind speaks for the kind
+        // heights: the first IN-VIEW element of each kind speaks for the kind.
+        // Never an off-screen one: a row under content-visibility: auto that
+        // the browser has skipped reports its placeholder box, not its real
+        // height (the Queue's lean rows: 69px placeholder against 53px real,
+        // and a scroll to the end landed 570 rows short — 2026-09-05).
         let nextHeights: Record<string, number> | null = null;
         const seen = new Set<string>();
+        let prevInView: DOMRect | null = null;
+        let gapSeen = false;
         for (const el of els) {
+          const r = el.getBoundingClientRect();
+          const inView = r.bottom > scRect.top && r.top < scRect.bottom;
+          if (!inView) {
+            prevInView = null;
+            continue;
+          }
           const k = el.dataset.winKind ?? ONE;
-          if (seen.has(k)) continue;
-          seen.add(k);
-          const h = el.getBoundingClientRect().height;
-          if (h > 0 && Math.abs((heightsRef.current[k] ?? -1) - h) > 0.5)
-            nextHeights = { ...(nextHeights ?? heightsRef.current), [k]: h };
+          if (!seen.has(k)) {
+            seen.add(k);
+            if (r.height > 0 && Math.abs((heightsRef.current[k] ?? -1) - r.height) > 0.5)
+              nextHeights = { ...(nextHeights ?? heightsRef.current), [k]: r.height };
+          }
+          // the gap between items, from two in-view neighbours (space-y / flex gap)
+          if (prevInView && !gapSeen) {
+            gapSeen = true;
+            const g = r.top - prevInView.bottom;
+            if (g >= 0 && g < 64 && Math.abs(g - gapRef.current) > 0.5) setGap(g);
+          }
+          prevInView = r;
         }
         if (nextHeights) setHeights(nextHeights);
-        // the gap between items, from two neighbours (space-y / flex gap)
-        if (els.length > 1) {
-          const r1 = els[1].getBoundingClientRect();
-          const g = r1.top - r0.bottom;
-          if (g >= 0 && g < 64 && Math.abs(g - gapRef.current) > 0.5) setGap(g);
-        }
         // where item 0 would sit in the scroll content: the first rendered
         // element's position, less the content the prefix says is above it
         offsetRef.current =

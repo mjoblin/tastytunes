@@ -1802,7 +1802,10 @@ const LEAN_QUEUE = 200;
 /** Rows rendered beyond each edge of the viewport (rows layout, lean mode). */
 const LEAN_OVERSCAN = 12;
 /** The row's settled height, so skipped rows keep the scroll height honest. */
-const LEAN_ROW = "[content-visibility:auto] [contain-intrinsic-size:auto_56px]";
+// the placeholder is the CONTENT box: a row is 53px with 12px of padding and a
+// 1px ring, so 40px here makes a skipped row measure the same as a laid-out one
+// (56 made it 69, and the windowing hook read that as the pitch — 2026-09-05)
+const LEAN_ROW = "[content-visibility:auto] [contain-intrinsic-size:auto_40px]";
 const LEAN_CARD = "[content-visibility:auto] [contain-intrinsic-size:auto_220px]";
 const useLeanQueue = (): boolean => useStore((s) => (s.queue?.total ?? 0) > LEAN_QUEUE);
 
