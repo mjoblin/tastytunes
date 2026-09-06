@@ -40,7 +40,7 @@ const GROUPS: Array<{ title: string; rows: Array<[string, string]> }> = [
       // letters derive from the shared registry; the prose stays hand-written
       [
         SCREENS.map((s) => s.key).join(" "),
-        "Now Playing · Queue · Search · lIbrary · Presets · plAylists · faVorites · Tuner · histoRy · Device · sEttings",
+        "Now Playing · Queue · Search · lIbrary · Presets · plAylists · faVorites · Tuner · History · Device · sEttings",
       ],
       ["F", "Full-screen display mode"],
       [

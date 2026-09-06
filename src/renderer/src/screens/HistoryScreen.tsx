@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  BarChart3,
   CalendarDays,
   ChevronRight,
   History,
@@ -37,6 +38,7 @@ import { clearRecentsWithUndo } from "@/lib/recents";
 import { FilterInput } from "@/components/controls/FilterInput";
 import { ScreenTitle, GAP_BETWEEN } from "@/components/chrome/Chrome";
 import { HistoryTimeline, filterEvents } from "@/components/history/HistoryTimeline";
+import { HistoryStats } from "@/components/history/HistoryStats";
 import { FACT_SEP } from "@/lib/mediaFacts";
 
 interface Block {
@@ -71,9 +73,10 @@ const songText = (e: RecentTrack): string | null =>
  *  pattern: Recent is the device log as it always was (the screen's first
  *  view); Timeline reads the listening record. Same slot, same R key, same
  *  screen id (recently-played), so saved nav orders survive the rename. */
-const VIEWS: Array<{ id: "recent" | "timeline"; label: string; icon: typeof History }> = [
+const VIEWS: Array<{ id: "recent" | "timeline" | "stats"; label: string; icon: typeof History }> = [
   { id: "recent", label: "Recent", icon: ListMusic },
   { id: "timeline", label: "Timeline", icon: CalendarDays },
+  { id: "stats", label: "Stats", icon: BarChart3 },
 ];
 
 /** History: the local device log (Recent) and the listening record (Timeline). */
@@ -278,6 +281,8 @@ export function HistoryScreen(): React.JSX.Element {
         <div className="flex-1 min-w-0 min-h-0 flex flex-col">
           {view === "timeline" ? (
             <HistoryTimeline filter={filter} />
+          ) : view === "stats" ? (
+            <HistoryStats />
           ) : recents.length === 0 ? (
             <EmptyState
               icon={History}

@@ -20,14 +20,17 @@ export function fmtTime(secs: number | null | undefined): string {
  * form is right for a playhead but reads badly for a total (a 72-minute
  * playlist as "72:00" invites being misread as 72 hours or 72 seconds).
  */
-export function fmtDuration(secs: number): string {
+export function fmtDuration(secs: number, { coarse = false } = {}): string {
   // Round to whole minutes FIRST, then split — rounding the remainder after
   // splitting can produce 60 ("1 hr 60 min" at 1:59:36, "60 min" at 59:40).
   const mins = Math.round(Math.max(0, secs) / 60);
+  if (mins === 0) return secs > 0 ? "under a minute" : "0 min";
   const h = Math.floor(mins / 60);
   const m = mins % 60;
   if (h === 0) return `${m} min`;
-  return m > 0 ? `${h} hr ${m} min` : `${h} hr`;
+  const hrs = `${h} ${h === 1 ? "hr" : "hrs"}`;
+  // coarse: a headline figure drops the minutes once the hours run to two digits
+  return m > 0 && !(coarse && h >= 10) ? `${hrs} ${m} min` : hrs;
 }
 
 export function fmtKHz(sampleRate: number): string {

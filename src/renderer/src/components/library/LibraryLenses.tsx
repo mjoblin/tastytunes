@@ -211,9 +211,9 @@ const decadeOf = (year: string | null | undefined): string | null =>
 // ------------------------------------------------------------------- albums
 
 /** The sorts that read the listening record — offered only while it has stats. */
-const RECORD_SORTS = new Set<string>(["lastPlayed", "plays"]);
+const RECORD_SORTS = new Set<string>(["lastPlayed", "plays", "wholeListens"]);
 const ALBUM_SORTS: Array<{
-  value: "title" | "artist" | "year" | "dr" | "loudness" | "lastPlayed" | "plays";
+  value: "title" | "artist" | "year" | "dr" | "loudness" | "lastPlayed" | "plays" | "wholeListens";
   label: string;
 }> = [
   { value: "title", label: "Title" },
@@ -223,6 +223,7 @@ const ALBUM_SORTS: Array<{
   { value: "loudness", label: "Loudness" },
   { value: "lastPlayed", label: "Last played" },
   { value: "plays", label: "Most played" },
+  { value: "wholeListens", label: "Whole listens" },
 ];
 
 // Sort + direction live in settings (view defaults persist, 2026-08-06);
@@ -312,23 +313,28 @@ export function AlbumsLens({
     [all, albumCodecs],
   );
   const albumPlay = useMemo(() => {
-    const m = new Map<string, { plays: number; lastAt: number | null }>();
+    const m = new Map<string, { plays: number; lastAt: number | null; whole: number }>();
     if (!play.ready) return m;
+    // an album's tracks together: plays and last played fold per track, and
+    // the WHOLE listens are the record's runs against this track set
+    const groups = new Map<string, MediaNode[]>();
     for (const g of pools)
       for (const t of g.tracks) {
         if (!t.album) continue;
-        const st = play.track(t);
-        if (!st) continue;
         const k = `${g.udn}|${lc(t.album)}`;
-        const row = m.get(k) ?? { plays: 0, lastAt: null };
-        row.plays += st.plays;
-        if (row.lastAt == null || st.lastAt > row.lastAt) row.lastAt = st.lastAt;
-        m.set(k, row);
+        const list = groups.get(k);
+        if (list) list.push(t);
+        else groups.set(k, [t]);
       }
+    for (const [k, tracks] of groups) {
+      const a = play.album(tracks);
+      if (a.plays > 0 || a.whole > 0)
+        m.set(k, { plays: a.plays, lastAt: a.lastAt, whole: a.whole });
+    }
     return m;
   }, [pools, play]);
-  const playOf = (a: MediaNode): { plays: number; lastAt: number | null } =>
-    albumPlay.get(`${a.serverUdn}|${lc(a.title)}`) ?? { plays: 0, lastAt: null };
+  const playOf = (a: MediaNode): { plays: number; lastAt: number | null; whole: number } =>
+    albumPlay.get(`${a.serverUdn}|${lc(a.title)}`) ?? { plays: 0, lastAt: null, whole: 0 };
   const playedOptions = useMemo(
     () => (play.ready ? playedOptionsOf(all.map((a) => playOf(a).lastAt)) : []),
     // playOf reads albumPlay; listing it keeps the memo honest
@@ -396,6 +402,12 @@ export function AlbumsLens({
         return (playOf(b).lastAt ?? 0) - (playOf(a).lastAt ?? 0) || a.title.localeCompare(b.title);
       if (sort === "plays")
         return playOf(b).plays - playOf(a).plays || a.title.localeCompare(b.title);
+      if (sort === "wholeListens")
+        return (
+          playOf(b).whole - playOf(a).whole ||
+          playOf(b).plays - playOf(a).plays ||
+          a.title.localeCompare(b.title)
+        );
       return (
         a.title.localeCompare(b.title) || (a.serverName ?? "").localeCompare(b.serverName ?? "")
       );

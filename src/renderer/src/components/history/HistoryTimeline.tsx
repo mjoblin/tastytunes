@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronRight, Clock, MoreHorizontal, Play } from "lucide-react";
 import {
   groupSessions,
@@ -6,7 +6,7 @@ import {
   type ListeningPlayEvent,
   type ListeningSession,
   isListen,
-  LISTEN_CAP_SECS,
+  LISTEN_DEFINITION,
   playKey,
 } from "@shared/model";
 import { useStore } from "@/store";
@@ -19,13 +19,15 @@ import { NameLine } from "@/components/media/NameLine";
 import { RowAction } from "@/components/media/RowAction";
 import { RowMenu } from "@/components/media/RowMenu";
 import { useOneShotAsk } from "@/hooks/useOneShotAsk";
+import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { useWindowedList } from "@/hooks/useWindowedList";
 import { useArtByKeys } from "@/lib/artByKey";
 import { fromPlayEvent } from "@/lib/mediaRef";
 import { openRefInLibrary, playRefNow } from "@/lib/mediaActions";
 import { trackMenuItems, type MediaMenuItem } from "@/lib/mediaMenus";
-import { cx, fmtCount, fmtTime, matchesFilter } from "@/lib/format";
+import { cx, fmtCount, fmtDuration, fmtTime, matchesFilter } from "@/lib/format";
 import { FACT_SEP } from "@/lib/mediaFacts";
+import { monthLine, monthStartOf, statsFor } from "@/lib/historyStats";
 
 /**
  * The History screen's TIMELINE (0.8.0, rounds two and 2b): the whole
@@ -45,11 +47,12 @@ import { FACT_SEP } from "@/lib/mediaFacts";
  */
 
 type Item =
+  | { kind: "month"; key: string; month: number; line: string | null }
   | { kind: "day"; key: string; day: number }
   | { kind: "session"; key: string; session: ListeningSession; open: boolean }
   | { kind: "play"; key: string; event: ListeningEvent; session: ListeningSession };
 
-const ITEM_ESTIMATE = { day: 34, session: 46, play: 61 };
+const ITEM_ESTIMATE = { month: 44, day: 34, session: 46, play: 61 };
 const WINDOW_ABOVE = 200;
 const FLASH_MS = 1800;
 
@@ -59,6 +62,10 @@ let timelineMem: { source: string | null; period: string | null; listensOnly: bo
   period: null,
   listensOnly: false,
 };
+/** The open set too (2026-09-05): coming back from an artist finds the session
+ *  still open under the remembered scroll spot. Kept with the mode it belongs
+ *  to, since the set means "open" in Sessions and "closed" in Every play. */
+let toggledMem: { mode: string; keys: ReadonlySet<string> } = { mode: "sessions", keys: new Set() };
 
 const dayStart = (ms: number): number => {
   const d = new Date(ms);
@@ -85,16 +92,6 @@ function dayLabel(at: number, now: number): string {
 
 const timeOf = (at: number): string =>
   new Date(at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-
-/** "51 min", "1 hr 10 min", "under a minute". */
-function fmtSpan(ms: number): string {
-  const m = Math.round(ms / 60_000);
-  if (m < 1) return "under a minute";
-  if (m < 60) return `${m} min`;
-  const h = Math.floor(m / 60);
-  const rest = m % 60;
-  return rest > 0 ? `${h} hr ${rest} min` : `${h} hr`;
-}
 
 const eventText = (e: ListeningEvent): Array<string | null> => {
   switch (e.kind) {
@@ -270,8 +267,18 @@ export function HistoryTimeline({ filter }: { filter: string }): React.JSX.Eleme
 
   // which sessions are open: in Sessions mode the toggled set is the OPEN set,
   // in Every play it is the CLOSED set
-  const [toggled, setToggled] = useState<ReadonlySet<string>>(() => new Set());
-  useEffect(() => setToggled(new Set()), [mode]);
+  const [toggled, setToggled] = useState<ReadonlySet<string>>(() =>
+    toggledMem.mode === mode ? toggledMem.keys : new Set(),
+  );
+  const toggledModeRef = useRef(mode);
+  useEffect(() => {
+    if (toggledModeRef.current === mode) return;
+    toggledModeRef.current = mode;
+    setToggled(new Set());
+  }, [mode]);
+  useEffect(() => {
+    toggledMem = { mode, keys: toggled };
+  }, [mode, toggled]);
   const toggle = (key: string): void =>
     setToggled((prev) => {
       const next = new Set(prev);
@@ -280,12 +287,32 @@ export function HistoryTimeline({ filter }: { filter: string }): React.JSX.Eleme
       return next;
     });
 
+  // a month's figures for its divider, from the shown lines (one home: lib/historyStats)
+  const monthLines = useMemo(() => {
+    const byMonth = new Map<number, ListeningEvent[]>();
+    for (const e of shown) {
+      const m = monthStartOf(e.at);
+      const list = byMonth.get(m);
+      if (list) list.push(e);
+      else byMonth.set(m, [e]);
+    }
+    const out = new Map<number, string | null>();
+    for (const [m, list] of byMonth) out.set(m, monthLine(statsFor(list)));
+    return out;
+  }, [shown]);
   const { items, dayOf } = useMemo(() => {
     const items: Item[] = [];
     const dayOf: number[] = [];
     let day: number | null = null;
+    let month: number | null = null;
     for (const s of sessions) {
       const d = dayStart(s.endAt);
+      const m = monthStartOf(s.endAt);
+      if (month !== m) {
+        month = m;
+        items.push({ kind: "month", key: `m${m}`, month: m, line: monthLines.get(m) ?? null });
+        dayOf.push(d);
+      }
       if (day !== d) {
         day = d;
         items.push({ kind: "day", key: `d${d}`, day: d });
@@ -303,10 +330,21 @@ export function HistoryTimeline({ filter }: { filter: string }): React.JSX.Eleme
         }
     }
     return { items, dayOf };
-  }, [sessions, mode, toggled]);
+  }, [sessions, mode, toggled, monthLines]);
   const kinds = useMemo(() => items.map((i) => i.kind), [items]);
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  // the spot is remembered across visits like every other screen's (user,
+  // 2026-09-05: ⌘← from an artist landed back at the top); one callback ref
+  // feeds both the memory and the windowing hook's element
+  const rememberScroll = useScrollMemory("history:timeline");
+  const attachScroller = useCallback(
+    (node: HTMLDivElement | null) => {
+      scrollRef.current = node;
+      rememberScroll(node);
+    },
+    [rememberScroll],
+  );
   const win = useWindowedList({
     scrollRef,
     count: items.length,
@@ -328,15 +366,14 @@ export function HistoryTimeline({ filter }: { filter: string }): React.JSX.Eleme
   const rail = useMemo(() => {
     const out: Array<{ year: number; months: Array<{ month: number; index: number }> }> = [];
     items.forEach((it, index) => {
-      if (it.kind !== "day") return;
-      const d = new Date(it.day);
+      if (it.kind !== "month") return;
+      const d = new Date(it.month);
       let y = out[out.length - 1];
       if (!y || y.year !== d.getFullYear()) {
         y = { year: d.getFullYear(), months: [] };
         out.push(y);
       }
-      if (!y.months.some((m) => m.month === d.getMonth()))
-        y.months.push({ month: d.getMonth(), index });
+      y.months.push({ month: d.getMonth(), index });
     });
     return out;
   }, [items]);
@@ -558,7 +595,7 @@ export function HistoryTimeline({ filter }: { filter: string }): React.JSX.Eleme
           state={mem.listensOnly ? "active" : "idle"}
           onClick={() => setMem({ listensOnly: !mem.listensOnly })}
           data-history-listens-only={mem.listensOnly ? "on" : "off"}
-          data-tip={`A listen is a play that ran for at least half its track, or ${LISTEN_CAP_SECS / 60} minutes, whichever is shorter. Hides the partial plays.`}
+          data-tip={`${LISTEN_DEFINITION} Hides the partial plays.`}
           className="no-drag tip-bottom tip-wide tip-end motion-safe:active:scale-95"
         >
           Listens only
@@ -586,7 +623,7 @@ export function HistoryTimeline({ filter }: { filter: string }): React.JSX.Eleme
           {/* fade-top only while a day is held: at rest the first header must
               not dissolve; scrolled, the rows dissolve before they reach the label */}
           <div
-            ref={scrollRef}
+            ref={attachScroller}
             className={cx("h-full overflow-y-auto px-1", overlayDay != null && "fade-top")}
             data-history-timeline
           >
@@ -599,6 +636,31 @@ export function HistoryTimeline({ filter }: { filter: string }): React.JSX.Eleme
               {win.padTop > 0 && <div data-win-spacer="top" style={{ height: win.padTop }} />}
               {slice.map((it, i) => {
                 const index = win.first + i;
+                if (it.kind === "month") {
+                  const d = new Date(it.month);
+                  const thisYear = d.getFullYear() === new Date(now).getFullYear();
+                  return (
+                    <div
+                      key={it.key}
+                      data-win-kind="month"
+                      data-win-index={index}
+                      data-history-month-divider
+                      className="flex items-baseline gap-3 px-1 pt-6 pb-1 first:pt-1"
+                    >
+                      <span className="shrink-0 font-display text-[15px] text-ink">
+                        {d.toLocaleDateString(undefined, {
+                          month: "long",
+                          ...(thisYear ? {} : { year: "numeric" }),
+                        })}
+                      </span>
+                      {it.line && (
+                        <span className="min-w-0 flex-1 truncate text-[11.5px] text-faint">
+                          {it.line}
+                        </span>
+                      )}
+                    </div>
+                  );
+                }
                 if (it.kind === "day")
                   return (
                     <div
@@ -633,7 +695,7 @@ export function HistoryTimeline({ filter }: { filter: string }): React.JSX.Eleme
                         {sessionSummary(s)}
                       </span>
                       <span className="shrink-0 text-[11px] text-faint tabular-nums">
-                        {fmtSpan(s.endAt - s.startAt)}
+                        {fmtDuration((s.endAt - s.startAt) / 1000)}
                       </span>
                       <ChevronRight
                         size={14}
@@ -780,7 +842,7 @@ function EventRow({
         subtitle="Internet radio"
         kind="station"
         artUrl={artUrl}
-        meta={<Meta at={e.at} detail={fmtSpan(e.playedSeconds * 1000)} />}
+        meta={<Meta at={e.at} detail={fmtDuration((e.playedSeconds * 1000) / 1000)} />}
       />
     );
   return (

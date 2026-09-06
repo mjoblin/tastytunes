@@ -29,6 +29,10 @@ export interface ScreenDef {
   label: string;
   icon: typeof Disc3;
   key: string;
+  /** Keys that still reach the screen but are shown nowhere (the nav, the
+   *  palette and the ? overlay name `key` alone): a retired key kept for
+   *  the fingers that learned it, for one cycle. */
+  altKeys?: string[];
 }
 
 /**
@@ -80,8 +84,10 @@ export const NAV_SCREENS: ScreenDef[] = [
   // T as in Tuner — the classic hi-fi name for the radio section
   { id: "radio", label: "Radio", icon: RadioTower, key: "T" },
   // History (0.8.0): the device log AND the listening record; the id stays
-  // recently-played so saved nav orders and the key survive the rename
-  { id: "recently-played", label: "History", icon: History, key: "R" },
+  // recently-played so saved nav orders survive the rename. H as in History
+  // (user call 2026-09-06); R was Recently Played's and stays a hidden alias
+  // for this cycle, retired in 0.9.0 (filed)
+  { id: "recently-played", label: "History", icon: History, key: "H", altKeys: ["R"] },
   // Sources USED to be its own row (key 'C'); it's a section of the Device
   // screen now — both are "system, not music", and Sources is one rarely-used
   // action. 'C' is free again and deliberately not reused.

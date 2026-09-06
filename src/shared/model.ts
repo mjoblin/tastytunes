@@ -327,6 +327,10 @@ export const LISTEN_CAP_SECS = 240;
 export function listenThresholdSecs(durationSecs: number | null): number {
   return durationSecs != null ? Math.min(durationSecs / 2, LISTEN_CAP_SECS) : LISTEN_CAP_SECS;
 }
+/** The house definition in words — the Listens only chip, the Plays tile,
+ *  anywhere a "listen" needs explaining, so no two surfaces phrase it apart. */
+export const LISTEN_DEFINITION = `A listen is a play that ran for at least half its track, or ${LISTEN_CAP_SECS / 60} minutes, whichever is shorter.`;
+
 export function isListen(playedSecs: number, durationSecs: number | null): boolean {
   if (durationSecs != null && durationSecs < LISTEN_FLOOR_SECS) return false;
   return playedSecs >= listenThresholdSecs(durationSecs);
@@ -1101,7 +1105,8 @@ export interface AppSettings {
    * later belongs here too.
    */
   /** Albums lens sort (the native album grid above keeps librarySort). */
-  lensAlbumsSort: "title" | "artist" | "year" | "dr" | "loudness" | "lastPlayed" | "plays";
+  lensAlbumsSort:
+    "title" | "artist" | "year" | "dr" | "loudness" | "lastPlayed" | "plays" | "wholeListens";
   lensAlbumsSortReversed: boolean;
   /** Artists lens: hide artists that only have loose tracks. */
   lensArtistsAlbumsOnly: boolean;
@@ -1130,7 +1135,7 @@ export interface AppSettings {
   /** Recently Played: collapse continuous sessions (radio/AirPlay/…) to one row, vs a row per song. */
   recentsGrouped: boolean;
   /** The History screen's section (0.8.0): the device log, or the record's Timeline. */
-  historyView: "recent" | "timeline";
+  historyView: "recent" | "timeline" | "stats";
   /** The Timeline's unit (0.8.0): sessions collapsed to a line each, or every play. */
   historyTimelineMode: "sessions" | "plays";
   /** Motion effects (hover growth, eqbars, smooth scrolling). */

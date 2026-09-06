@@ -6,8 +6,9 @@ import { SCREENS, IS_MAC } from "@/lib/screens";
 // Derived from the shared registry — the screen lookup runs before the
 // transport switch, so a registry key can shadow a transport shortcut (the
 // old hand-written copy had l: 'library', silently eating seek-forward).
+// A screen's hidden aliases (altKeys) reach it the same way; only its key is shown.
 const SCREEN_KEYS: Record<string, Screen> = Object.fromEntries(
-  SCREENS.map((s) => [s.key.toLowerCase(), s.id]),
+  SCREENS.flatMap((s) => [s.key, ...(s.altKeys ?? [])].map((k) => [k.toLowerCase(), s.id])),
 );
 
 /**
