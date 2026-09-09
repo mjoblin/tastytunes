@@ -84,7 +84,12 @@ import {
 import { loggedFetch } from "./netlog";
 import { getSettings, updateSettings } from "./data/persist";
 import { getRecents } from "./data/recents";
-import { decorateRecents, recentArtGet, setRecentArtNotifier } from "./lookups/recentArt";
+import {
+  decorateRecents,
+  recentArtGet,
+  recentCoverGet,
+  setRecentArtNotifier,
+} from "./lookups/recentArt";
 import { listeningRecord } from "./data/listeningRecord";
 import { playStatsFromRecord } from "./data/playStats";
 import { embeddedArtFor } from "./lookups/embeddedArt";
@@ -549,6 +554,9 @@ function registerIpc(): void {
       : null,
   );
   ipcMain.handle(IPC.getRecents, () => decorateRecents(getRecents()));
+  ipcMain.handle(IPC.recentCover, (_e, key: string) =>
+    typeof key === "string" ? recentCoverGet(key) : null,
+  );
   setRecentArtNotifier(() => deviceManager.repushRecents());
   ipcMain.handle(IPC.clearRecents, () => deviceManager.clearRecents());
   ipcMain.handle(IPC.recentsRestore, (_e, list: RecentTrack[]) =>
@@ -655,6 +663,11 @@ function registerIpc(): void {
     if (conn.phase !== "connected") throw new Error("not connected to a streamer");
     return conn.host;
   };
+  // best-effort lookups answer null while the socket recycles rather than throw
+  const connectedHost = (): string | null => {
+    const conn = deviceManager.snapshot().connection;
+    return conn.phase === "connected" ? conn.host : null;
+  };
   ipcMain.handle(IPC.mediaServers, async () => {
     const servers = await refreshServers(streamerHost());
     // Fire-and-forget freshness: Tier A indexes build/rebuild in the
@@ -713,7 +726,7 @@ function registerIpc(): void {
     screen ? sendMenuCommand({ id: "screen", screen }) : showMainWindow(),
   );
   ipcMain.handle(IPC.embeddedArt, (_e, query: EmbeddedArtQuery) =>
-    embeddedArtFor(streamerHost(), query),
+    embeddedArtFor(connectedHost(), query),
   );
   ipcMain.handle(IPC.fetchArt, async (_e, url: string) => {
     if (!/^https?:/i.test(url)) return null;

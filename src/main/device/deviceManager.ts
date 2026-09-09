@@ -1065,8 +1065,14 @@ export class DeviceManager {
       session,
     };
     const { list, changed } = recordRecent(entry);
-    // a transient picture (AirPlay, casting) is captured while its URL lives
-    if (changed) captureRecentArt(list[0]);
+    // a transient picture (AirPlay, casting) is captured while its URL lives,
+    // a few seconds on: the log can wait, and the streamer's small HTTP
+    // server should not be asked for the same picture by the capture, the
+    // accent and the hero at once (the startup burst, 2026-09-06)
+    if (changed) {
+      const first = list[0];
+      setTimeout(() => captureRecentArt(first), 3000);
+    }
     if (changed) this.push({ kind: "recents", data: decorateRecents(list) });
   }
 

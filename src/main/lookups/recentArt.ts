@@ -18,6 +18,12 @@ import { DiskCache } from "./diskCache";
  */
 const cache = new DiskCache<string>("recentart", 600);
 const THUMB = 160;
+/** The same capture at hero size, for the Now Playing tile and display mode
+ *  when the streamer's URL has died (2026-09-06: an AirPlay cover's URL
+ *  answered 500 for the whole track after an app restart while the Evo's own
+ *  display showed it). Few and larger: 48 × ~80 KB. */
+const covers = new DiskCache<string>("recentcover", 48);
+const COVER = 640;
 const FETCH_MS = 8000;
 const inflight = new Set<string>();
 let onCaptured: ((key: string) => void) | null = null;
@@ -34,6 +40,11 @@ export function recentArtGet(key: string): string | null {
   return cache.get(key) ?? null;
 }
 
+/** The hero-size copy, when the capture landed while the URL lived. */
+export function recentCoverGet(key: string): string | null {
+  return covers.get(key) ?? null;
+}
+
 export function setRecentArtNotifier(fn: (key: string) => void): void {
   onCaptured = fn;
 }
@@ -43,7 +54,7 @@ export function setRecentArtNotifier(fn: (key: string) => void): void {
 export function captureRecentArt(e: RecentTrack): void {
   if (!transient(e)) return;
   const key = recentArtKey(e);
-  if (cache.has(key) || inflight.has(key)) return;
+  if ((cache.has(key) && covers.has(key)) || inflight.has(key)) return;
   inflight.add(key);
   void (async () => {
     try {
@@ -51,7 +62,10 @@ export function captureRecentArt(e: RecentTrack): void {
       const timer = setTimeout(() => ctrl.abort(), FETCH_MS);
       const res = await fetch(e.artUrl as string, { signal: ctrl.signal });
       clearTimeout(timer);
-      if (!res.ok) return;
+      if (!res.ok) {
+        console.warn(`[recentart] ${res.status} for ${e.artUrl}`);
+        return;
+      }
       const buf = Buffer.from(await res.arrayBuffer());
       if (buf.length === 0 || buf.length > 8 * 1024 * 1024) return;
       const img = nativeImage.createFromBuffer(buf);
@@ -59,9 +73,12 @@ export function captureRecentArt(e: RecentTrack): void {
       const { width } = img.getSize();
       const shown = width > THUMB ? img.resize({ width: THUMB, quality: "good" }) : img;
       cache.set(key, `data:image/jpeg;base64,${shown.toJPEG(82).toString("base64")}`);
+      const cover = width > COVER ? img.resize({ width: COVER, quality: "good" }) : img;
+      covers.set(key, `data:image/jpeg;base64,${cover.toJPEG(85).toString("base64")}`);
       onCaptured?.(key);
-    } catch {
+    } catch (err) {
       // a dead or slow URL: the row keeps its icon
+      console.warn(`[recentart] capture failed for ${e.artUrl}: ${String(err)}`);
     } finally {
       inflight.delete(key);
     }

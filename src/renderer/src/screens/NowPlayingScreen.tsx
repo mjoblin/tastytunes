@@ -118,12 +118,18 @@ export function NowPlayingScreen(): React.JSX.Element {
   // The tile renders the last DECODED cover (see useDecodedArt) — a hard swap
   // between two real images, never a swap to an empty box mid-download.
   // the best art for the hero: the server's unless it is small and the file
-  // carries a bigger picture (lib/bestArt) — local media only
+  // carries a bigger picture (lib/bestArt), read for local media only; every
+  // titled track keeps its query so a DEAD streamer URL (an AirPlay cover's,
+  // 2026-09-06) can fall back to the log's own copy
   const heroQuery =
-    !meta.isRadio && meta.title && activeSourceId(zoneState, nowPlaying) === "MEDIA_PLAYER"
+    !meta.isRadio && meta.title
       ? { title: meta.title, artist: meta.subtitle ?? null, album: meta.album ?? null }
       : null;
-  const heroArt = useBestArt(meta.artUrl, heroQuery);
+  const heroArt = useBestArt(
+    meta.artUrl,
+    heroQuery,
+    activeSourceId(zoneState, nowPlaying) === "MEDIA_PLAYER",
+  );
   const { art: tileArt } = useDecodedArt(heroArt);
   // Live, not snapshotted — the queue moves independently of the track.
   const queueIndex = playState?.queue_index;

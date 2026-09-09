@@ -337,6 +337,8 @@ export interface TastyTunesApi {
   scheduleDismissMissed(): Promise<void>;
   /** The local recently-played log, newest first. */
   getRecents(): Promise<RecentTrack[]>;
+  /** The device log's hero-size copy of a transient cover (AirPlay, casts), by playKey; null when never captured. */
+  recentCover(key: string): Promise<string | null>;
   /** Wipe the recently-played log. */
   clearRecents(): Promise<void>;
   /** Undo a clear: merges the snapshot back under anything logged since. */
@@ -474,6 +476,7 @@ export const IPC = {
   scheduleRunMissed: "tt:scheduleRunMissed",
   scheduleDismissMissed: "tt:scheduleDismissMissed",
   getRecents: "tt:getRecents",
+  recentCover: "tt:recentCover",
   clearRecents: "tt:clearRecents",
   recentsRestore: "tt:recentsRestore",
   favoriteAdd: "tt:favoriteAdd",

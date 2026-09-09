@@ -56,6 +56,7 @@ const api: TastyTunesApi = {
   scheduleRunMissed: () => ipcRenderer.invoke(IPC.scheduleRunMissed),
   scheduleDismissMissed: () => ipcRenderer.invoke(IPC.scheduleDismissMissed),
   getRecents: () => ipcRenderer.invoke(IPC.getRecents),
+  recentCover: (key: string) => ipcRenderer.invoke(IPC.recentCover, key),
   clearRecents: () => ipcRenderer.invoke(IPC.clearRecents),
   recentsRestore: (list: RecentTrack[]) => ipcRenderer.invoke(IPC.recentsRestore, list),
   favoriteAdd: (fav: Favorite) => ipcRenderer.invoke(IPC.favoriteAdd, fav),
