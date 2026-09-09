@@ -1,10 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { tt } from "@/api";
+import { cx, fmtTime } from "@/lib/format";
 import { useStore } from "@/store";
 import { nowPlayingInfoTarget } from "@/lib/mediaInfo";
-import { computeDr14 } from "@/lib/dr14";
-import { computeR128 } from "@/lib/r128";
 import { sniffSampleRate } from "@/lib/audioHeader";
+import { stripFromStored, stripToStored } from "@/lib/featureStrip";
+import { onsetsFromStored, onsetsToStored } from "@/lib/onsets";
+import { FEATURES_VERSION, featuresFromStored, featuresToStored } from "@/lib/features";
+import { measureOffThread } from "@/lib/measureClient";
+import type { Measured } from "@/lib/measure";
 import { audioAnalysisKey, type AudioAnalysis } from "@shared/model";
 import { AudioLines } from "lucide-react";
 
@@ -38,22 +42,8 @@ import { AudioLines } from "lucide-react";
 
 const CAPTURE_BUCKETS = 1200;
 
-interface Analysis {
-  peak: Float32Array;
-  rms: Float32Array;
-  peakDb: number;
-  rmsDb: number;
-  crestDb: number;
-  /** EBU R128 (0.8.0): integrated loudness, loudness range, true peak, and the
-   *  gated block histogram for album integration. Null when the file's rate
-   *  could not be read honestly (the same rule as DR). */
-  lufs: number | null;
-  lra: number | null;
-  truePeakDb: number | null;
-  loudHist: number[] | null;
-  /** TT dynamic range integer; <= 0 means "no honest number" and hides. */
-  dr: number;
-}
+/** What a decoded track measures as (lib/measure), the shape every surface reads. */
+export type Analysis = Measured;
 
 const cache = new Map<string, Promise<Analysis | null>>();
 
@@ -87,11 +77,21 @@ function toStored(a: Analysis): AudioAnalysis {
     lra: a.lra,
     truePeakDb: a.truePeakDb,
     loudHist: a.loudHist,
+    strip: a.strip ? stripToStored(a.strip) : null,
+    onsets: a.onsets ? onsetsToStored(a.onsets) : null,
+    features: a.features ? featuresToStored(a.features) : null,
   };
 }
 /** True for a stored analysis written before the loudness fields existed
  *  (the field is absent; a measured-but-null loudness is stored as null). */
 const predatesLoudness = (st: AudioAnalysis): boolean => st.loudHist === undefined;
+/** Likewise for the feature strip (0.8.0's scenes). */
+const predatesStrip = (st: AudioAnalysis): boolean => st.strip === undefined;
+/** And for the drum onsets (display mode's hits). */
+const predatesOnsets = (st: AudioAnalysis): boolean => st.onsets === undefined;
+/** And for the music features, which also re-measure when their version moved on. */
+const predatesFeatures = (st: AudioAnalysis): boolean =>
+  st.features === undefined || (st.features != null && st.features.version !== FEATURES_VERSION);
 
 function fromStored(st: AudioAnalysis): Analysis {
   return {
@@ -105,6 +105,9 @@ function fromStored(st: AudioAnalysis): Analysis {
     lra: st.lra ?? null,
     truePeakDb: st.truePeakDb ?? null,
     loudHist: st.loudHist ?? null,
+    strip: st.strip ? stripFromStored(st.strip) : null,
+    onsets: st.onsets ? onsetsFromStored(st.onsets) : null,
+    features: st.features ? featuresFromStored(st.features) : null,
   };
 }
 
@@ -125,7 +128,14 @@ export function analyzeTrack(
       // an entry from before loudness (0.7.0's cache shape) is incomplete:
       // measure it again ONCE, on the next play or Analyze audio, rather than
       // carry the gap forever (user, 2026-09-05: re-analysis showed only DR)
-      if (stored && !predatesLoudness(stored)) return fromStored(stored);
+      if (
+        stored &&
+        !predatesLoudness(stored) &&
+        !predatesStrip(stored) &&
+        !predatesOnsets(stored) &&
+        !predatesFeatures(stored)
+      )
+        return fromStored(stored);
     }
     const bytes = await tt.expTrackAudio(serverUdn, objectId);
     if (!bytes) return null;
@@ -152,67 +162,14 @@ export function analyzeTrack(
       const audio = await ctx.decodeAudioData(u8.slice().buffer);
       const chans: Float32Array[] = [];
       for (let c = 0; c < audio.numberOfChannels; c++) chans.push(audio.getChannelData(c));
-      const frames = chans[0].length;
-      // The GLOBAL peak is a full scan of every sample on every channel —
-      // stride sampling could miss the single hottest sample and understate
-      // peak (and crest with it) by whole dB on percussive material. One
-      // pass over the floats costs tens of milliseconds, once per track.
-      // Still SAMPLE peak, honestly: true peak (dBTP, 4x oversampled) is
-      // the R128 pass's job.
-      let globalPeak = 0;
-      for (const data of chans) {
-        for (let i = 0; i < frames; i++) {
-          const a = Math.abs(data[i]);
-          if (a > globalPeak) globalPeak = a;
-        }
-      }
-      // Bucket envelopes and global RMS read BOTH channels (power-combined),
-      // strided within each bucket — RMS is statistically robust to the
-      // stride; peak above is not, hence the split.
-      const peak = new Float32Array(CAPTURE_BUCKETS);
-      const rms = new Float32Array(CAPTURE_BUCKETS);
-      const per = Math.max(1, Math.floor(frames / CAPTURE_BUCKETS));
-      let globalSumSq = 0;
-      let globalN = 0;
-      for (let b = 0; b < CAPTURE_BUCKETS; b++) {
-        const start = b * per;
-        const end = Math.min(start + per, frames);
-        const step = Math.max(1, Math.floor((end - start) / 200));
-        let max = 0;
-        let sumSq = 0;
-        let n = 0;
-        for (const data of chans) {
-          for (let i = start; i < end; i += step) {
-            const v = data[i];
-            const a = Math.abs(v);
-            if (a > max) max = a;
-            sumSq += v * v;
-            n++;
-          }
-        }
-        peak[b] = max;
-        rms[b] = n > 0 ? Math.sqrt(sumSq / n) : 0;
-        globalSumSq += sumSq;
-        globalN += n;
-      }
-      const db = (v: number): number => (v > 0 ? 20 * Math.log10(v) : -Infinity);
-      const peakDb = db(globalPeak);
-      const rmsDb = db(globalN > 0 ? Math.sqrt(globalSumSq / globalN) : 0);
-      const dr = native ? computeDr14(chans, audio.sampleRate) : 0;
-      // loudness rides the same honesty rule as DR: only at the file's own rate
-      const r128 = native ? computeR128(chans, audio.sampleRate) : null;
-      const analysis: Analysis = {
-        peak,
-        rms,
-        peakDb,
-        rmsDb,
-        crestDb: peakDb - rmsDb,
-        dr,
-        lufs: r128?.lufs ?? null,
-        lra: r128?.lra ?? null,
-        truePeakDb: r128?.truePeakDb ?? null,
-        loudHist: r128?.hist ?? null,
-      };
+      // the arithmetic (peaks, envelopes, DR, R128, the scenes' strip, onsets and
+      // features) runs in the analysis worker; the channel buffers go over transferred
+      const analysis: Analysis = await measureOffThread(
+        chans,
+        audio.sampleRate,
+        native,
+        CAPTURE_BUCKETS,
+      );
       if (contentKey) void tt.audioAnalysisPut(contentKey, toStored(analysis));
       return analysis;
     } catch {
@@ -287,6 +244,19 @@ export function usePlayingFileRef(): {
     };
   }, [trackKey]);
   return ref;
+}
+
+/** The playing track's analysis for display mode's scenes: resolved by
+ *  content like the strip below, measured on first play when it isn't cached
+ *  (the decode is the same one the waveform needs). Null for radio, casts and
+ *  tracks no library knows; nothing is fetched while `enabled` is false. */
+export function usePlayingAnalysis(enabled: boolean): Analysis | null | "loading" {
+  const ref = usePlayingFileRef();
+  return usePeaks(
+    enabled ? (ref?.serverUdn ?? null) : null,
+    ref?.objectId ?? null,
+    ref?.contentKey ?? null,
+  );
 }
 
 /** Interpolated play progress 0..1, ticking gently; null without a duration. */
@@ -542,11 +512,19 @@ export function Waveform({
  */
 export function DisplayWaveform({
   progress,
+  duration,
   fallback,
+  onSeek,
 }: {
   progress: number;
+  /** The track's seconds, for the hover's target time. */
+  duration?: number;
   fallback: React.JSX.Element;
+  /** A click on the strip seeks to that share of the track (like the Stream tab's panel). */
+  onSeek?: (pct: number) => void;
 }): React.JSX.Element {
+  /** Where the pointer hovers over the strip: its share of the width, or null. */
+  const [hover, setHover] = useState<number | null>(null);
   const enabled = useStore(
     (s) => s.settings.waveforms && s.settings.displayWaveform && s.settings.waveformSeen,
   );
@@ -569,10 +547,52 @@ export function DisplayWaveform({
   // waveform fades into reserved space instead of landing under the lyric
   // line mid-track (seen live, 2026-08-30).
   return (
-    <div className="absolute inset-x-0 bottom-0 h-10">
+    // z-10: the hover tip stands above the strip's band, where the scene canvases would
+    // otherwise paint over it (they sit earlier in the DOM but are appended after mount)
+    <div data-display-waveform className="absolute inset-x-0 bottom-0 z-10 h-10">
       {ready ? (
-        <div className="h-full px-3">
+        <div
+          className={cx("relative h-full px-3", onSeek && "cursor-pointer")}
+          onMouseMove={
+            onSeek
+              ? (e) => {
+                  const rect = canvasRef.current?.getBoundingClientRect();
+                  if (!rect || rect.width <= 0) return;
+                  setHover(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)));
+                }
+              : undefined
+          }
+          onMouseLeave={() => setHover(null)}
+          onClick={
+            onSeek
+              ? (e) => {
+                  const rect = canvasRef.current?.getBoundingClientRect();
+                  if (!rect || rect.width <= 0) return;
+                  const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                  holdSeek(pct);
+                  onSeek(pct);
+                }
+              : undefined
+          }
+        >
           <canvas ref={canvasRef} className="w-full h-full block" />
+          {hover != null && onSeek && (
+            // the hover: a hairline where the pointer is and the time it would seek to, above
+            // the strip (the strip is the seek bar here, so it says what a click would do)
+            <>
+              <div
+                className="pointer-events-none absolute inset-y-0 w-px bg-ink/40"
+                style={{ left: `calc(0.75rem + ${hover} * (100% - 1.5rem))` }}
+              />
+              <div
+                data-display-seek-tip
+                className="pointer-events-none absolute bottom-full mb-1.5 -translate-x-1/2 whitespace-nowrap rounded bg-panel/90 px-1.5 py-0.5 font-mono text-[11px] tabular-nums text-ink ring-1 ring-edge"
+                style={{ left: `calc(0.75rem + ${hover} * (100% - 1.5rem))` }}
+              >
+                {duration != null ? fmtTime(hover * duration) : `${Math.round(hover * 100)}%`}
+              </div>
+            </>
+          )}
         </div>
       ) : (
         fallback

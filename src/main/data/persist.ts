@@ -2,7 +2,12 @@ import { readFileSync } from "node:fs";
 import { isRecord } from "@shared/guards";
 import { join } from "node:path";
 import { app } from "electron";
-import { DEFAULT_SETTINGS, DISPLAY_FONT_IDS, type AppSettings } from "@shared/model";
+import {
+  DEFAULT_SETTINGS,
+  DISPLAY_FONT_IDS,
+  DISPLAY_SCENE_IDS,
+  type AppSettings,
+} from "@shared/model";
 import { atomicWriteFileSync } from "./jsonStore";
 
 let cached: AppSettings | null = null;
@@ -26,6 +31,9 @@ export function getSettings(): AppSettings {
     // longer in the curated set) back to the default so the picker stays in sync.
     if (!DISPLAY_FONT_IDS.includes(loaded.displayFont)) {
       loaded.displayFont = DEFAULT_SETTINGS.displayFont;
+    }
+    if (!DISPLAY_SCENE_IDS.includes(loaded.displayScene)) {
+      loaded.displayScene = DEFAULT_SETTINGS.displayScene;
     }
   } catch {
     loaded = { ...DEFAULT_SETTINGS };

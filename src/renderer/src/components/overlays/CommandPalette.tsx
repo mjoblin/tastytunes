@@ -33,10 +33,12 @@ import {
   Sun,
   Terminal,
   Usb,
+  Sparkles,
   UserRound,
   Volume2,
   VolumeX,
 } from "lucide-react";
+import { SCENES } from "@/components/display/scenes";
 import { sleepTrackKey, type SleepAction } from "@shared/model";
 import { favoriteKey, type Favorite } from "@shared/model";
 import { activatePlaylist } from "@/lib/playlists";
@@ -445,6 +447,19 @@ export function CommandPalette(): React.JSX.Element {
         keywords: "fullscreen wall",
         run: () => setDisplayMode(!displayMode),
       });
+      // the scenes by name: pick one and display mode opens on it
+      for (const sc of SCENES)
+        cmds.push({
+          id: `view:scene:${sc.id}`,
+          label: `Display scene: ${sc.label}`,
+          group: "View",
+          icon: Sparkles,
+          keywords: `visualizer visual screensaver scene ${sc.blurb}`,
+          run: () => {
+            void saveSettings({ displayScene: sc.id });
+            if (!displayMode) setDisplayMode(true);
+          },
+        });
     }
     // The drawers live on Now Playing — running these navigates there first.
     // Same metadata gating as the screen's header buttons (no radio, needs artist).

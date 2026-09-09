@@ -1078,6 +1078,27 @@ export const DISPLAY_FONT_IDS = [
   "instrument-sans",
 ] as const;
 export type DisplayFont = (typeof DISPLAY_FONT_IDS)[number];
+/** Display mode's SCENE: what fills the screen (0.8.0). Sleeve is the art
+ *  face; the rest are abstract scenes drawn from the track's feature strip
+ *  and its timed lyrics; shuffle draws a fresh abstract scene each track. */
+export const DISPLAY_SCENE_IDS = [
+  "sleeve",
+  "tide",
+  "terrain",
+  "orbit",
+  "type",
+  "survey",
+  "conduit",
+  "confluence",
+  "pit",
+  "roll",
+  "sea",
+  "terminal",
+  "shuffle",
+] as const;
+export type DisplayScene = (typeof DISPLAY_SCENE_IDS)[number];
+/** A scene's declared setting value (slider, toggle or select). */
+export type SceneSettingValue = number | boolean | string;
 /** How a collection screen lays out its items. */
 export type ScreenLayout = "rows" | "cards";
 /** The queue alone adds an album-grouped reading view (cover once, tracks beneath). */
@@ -1277,6 +1298,33 @@ export interface AppSettings {
   lyricsLine: boolean;
   /** Current synced line in full-screen display mode (toggled from its chrome). */
   displayLyrics: boolean;
+  /** Display mode's scene (its in-mode picker, Tab cycles). */
+  displayScene: DisplayScene;
+  /** Each scene's own settings, by scene id, over the scene's declared defaults. */
+  displaySceneSettings: Record<string, Record<string, SceneSettingValue>>;
+  /** Display mode's sync nudge in ms, added to the shown clock: the streamer reports its
+   *  position about once a second and the pipeline has its own latency, so the scenes'
+   *  hits and words may sit a constant offset from what is heard. In-mode, remembered. */
+  displaySyncMs: number;
+  /** How much lull a DROP needs (lib/features DROP_TIERS): loose, normal (three seconds of
+   *  chill or one of near silence), strict. Taste and genre, so it is in-mode. */
+  displayDrops: "loose" | "normal" | "strict";
+  /** A finish over every display-mode scene: plain, or a cathode glass (scanlines, a slight
+   *  curve, phosphor glow, a vignette). Taste, so it is in-mode; never on the picker's tiles.
+   *  Cathode by default (user, 2026-09-07). */
+  displayFinish: "plain" | "cathode";
+  /** The Cathode glass: how much the picture bows (deep is about twice a real tube, gentle
+   *  about life), and whether it overscans so the picture meets the frame at the edges and
+   *  only the corners fall behind the glass. In-mode, beside Finish. */
+  displayCathodeCurve: "gentle" | "deep";
+  displayCathodeFill: boolean;
+  /** Shuffle: the order it walks the scenes (sequential is the picker's alphabetical order,
+   *  random, the default, never repeats the one before), how many tracks each scene stays for ("album"
+   *  changes when the album does), and the scenes left out of the rotation, by id (the sleeve
+   *  is out unless asked in). In-mode, on the Shuffle tile. */
+  displayShuffleOrder: "sequential" | "random";
+  displayShuffleEvery: 1 | 2 | 3 | "album";
+  displayShuffleExclude: string[];
   /** The listening record: a local, append-only play log (history/<year>.jsonl
    *  in userData). On by default — a diary can't be backfilled. */
   listeningRecord: boolean;
@@ -1452,6 +1500,16 @@ export const DEFAULT_SETTINGS: AppSettings = {
   lyrics: true,
   lyricsLine: true,
   displayLyrics: true,
+  displayScene: "sleeve",
+  displaySceneSettings: {},
+  displaySyncMs: 0,
+  displayDrops: "normal",
+  displayFinish: "cathode",
+  displayCathodeCurve: "deep",
+  displayCathodeFill: false,
+  displayShuffleOrder: "random",
+  displayShuffleEvery: 1,
+  displayShuffleExclude: ["sleeve"],
   listeningRecord: true,
   showListeningHistory: true,
   artFromFiles: true,
@@ -1890,6 +1948,57 @@ export interface AudioAnalysis {
   lra?: number | null;
   truePeakDb?: number | null;
   loudHist?: number[] | null;
+  /** The FEATURE STRIP (0.8.0, display mode's scenes): STRIP_BANDS band
+   *  energies and one loudness per frame at `fps`, a byte each (0 = −60 dBFS,
+   *  255 = 0 dBFS), base64. Absent = measured before the strip existed (the
+   *  next play or Analyze audio measures again, the loudness precedent);
+   *  null = the file's rate could not be read honestly (the DR rule). */
+  strip?: AnalysisStrip | null;
+  /** DRUM ONSETS (0.8.0, display mode's hits): every percussive onset the
+   *  file's own decode found (lib/onsets: spectral flux on 10 ms steps),
+   *  packed four bytes each (u16 gap in 10 ms steps, u8 strength, u8 type:
+   *  0 kick, 1 snare, 2 hat), base64. Absent = measured before onsets
+   *  existed (the next play or Analyze audio measures again, the strip's
+   *  precedent); null = the file's rate could not be read honestly. */
+  onsets?: AnalysisOnsets | null;
+  /** MUSIC FEATURES (0.8.0, display mode): beat grid, sections, chroma and
+   *  key, chord changes, stereo image, timbre, silences and drops, packed
+   *  (lib/features). Absent or an older `version` = measure again once on
+   *  the next play; null = the file's rate could not be read honestly. */
+  features?: AnalysisFeatures | null;
+}
+
+export interface AnalysisOnsets {
+  count: number;
+  data: string;
+}
+
+export interface AnalysisFeatures {
+  version: number;
+  beats: { bpm: number; confidence: number; downbeat: number; count: number; times: string } | null;
+  sections: { count: number; bounds: string; kinds: string; energy: string } | null;
+  chroma: { fps: number; data: string } | null;
+  key: { tonic: number; mode: "major" | "minor"; confidence: number } | null;
+  changes: string;
+  stereo: { fps: number; pan: string; width: string } | null;
+  timbre: { fps: number; brightness: string; noisiness: string } | null;
+  silences: string;
+  drops: {
+    count: number;
+    buildFrom: string;
+    at: string;
+    strength: string;
+    chill: string;
+    breath: string;
+    cut: string;
+  };
+}
+
+export const STRIP_BANDS = 6;
+export interface AnalysisStrip {
+  fps: number;
+  bands: string;
+  loud: string;
 }
 
 /** What a row can know without decoding: the cached DR and loudness. */
