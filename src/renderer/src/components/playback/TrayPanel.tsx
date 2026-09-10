@@ -9,6 +9,7 @@ import {
   Rows2,
   Rows4,
   Maximize2,
+  MonitorSpeaker,
   Moon,
   Power,
   RadioTower,
@@ -45,6 +46,9 @@ import { ArtImage } from "@/components/media/ArtImage";
 import { AmbientArt } from "@/components/media/AmbientArt";
 import { SignalLamp } from "@/components/device/SignalLamp";
 import { Segmented } from "@/components/controls/Segmented";
+import { ScrollOnce } from "@/components/playback/ScrollOnce";
+import { StreamerList, useStreamerList } from "@/components/device/DeviceSwitcher";
+import { PopoverChrome } from "@/hooks/usePopover";
 import {
   PlaylistsTab,
   PresetsTab,
@@ -174,6 +178,15 @@ export function TrayPanel(): React.JSX.Element {
   // — nothing here needs to tell it. This local flag is only for the cue.
 
   const meta = deriveNowPlaying(playState, nowPlaying);
+  // the three lines: radio puts the song first, the artist second, the station
+  // third; everything else keeps title, artist, album
+  const lines = meta.isRadio
+    ? {
+        title: meta.subtitle ?? meta.title,
+        second: playState?.metadata?.artist ?? null,
+        third: meta.subtitle != null ? meta.title : null,
+      }
+    : { title: meta.title, second: meta.subtitle, third: meta.album };
   useArtAccent(settings.accentFollowsArt && active ? meta.artUrl : null, theme);
   const { art } = useDecodedArt(meta.artUrl);
 
@@ -291,11 +304,19 @@ export function TrayPanel(): React.JSX.Element {
                 </div>
                 <div className="flex-1 min-w-0 pt-0.5">
                   {/* min-heights keep the lines occupying space through the brief
-                  metadata gap on a track change, so nothing shifts. */}
-                  <div className="flex items-center gap-1.5 min-h-[17px]">
-                    <span className="font-display no-optical font-bold tracking-tight text-[14px] text-ink truncate leading-tight">
-                      {active ? (meta.title ?? " ") : "Nothing playing"}
-                    </span>
+                  metadata gap on a track change, so nothing shifts.
+                  RADIO SWAPS THE HIERARCHY (0.8.0, a user whose station's artist
+                  and song "very often" did not fit): the song takes the big line
+                  and may wrap to two, the artist the second, the station, the
+                  stable fact, the third. Every line shows its start, scrolls
+                  once when it changes, and carries its full text as a tip. */}
+                  <div className="flex items-start gap-1.5 min-h-[17px]">
+                    <ScrollOnce
+                      text={active ? (lines.title ?? " ") : "Nothing playing"}
+                      wrap={active && meta.isRadio}
+                      className="flex-1 font-display no-optical font-bold tracking-tight text-[14px] text-ink leading-tight"
+                      tipClass="tip-bottom"
+                    />
                     {/* THE HEART SITS WITH THE TITLE, not in the corner. It acts on
                     the TRACK, so belonging to the track's name is if anything
                     more honest than the corner was — and the corner is worth
@@ -315,12 +336,14 @@ export function TrayPanel(): React.JSX.Element {
                       </button>
                     )}
                   </div>
-                  <div className="font-display no-optical tracking-tight text-[12px] text-dim truncate leading-tight min-h-[14px]">
-                    {(active && meta.subtitle) || " "}
-                  </div>
-                  <div className="text-[11px] text-faint truncate leading-tight min-h-[13px]">
-                    {(active && meta.album) || " "}
-                  </div>
+                  <ScrollOnce
+                    text={(active && lines.second) || " "}
+                    className="font-display no-optical tracking-tight text-[12px] text-dim leading-tight min-h-[14px]"
+                  />
+                  <ScrollOnce
+                    text={(active && lines.third) || " "}
+                    className="text-[11px] text-faint leading-tight min-h-[13px]"
+                  />
                 </div>
                 {/* VOLUME OWNS THE TOP-RIGHT CORNER — the squarest space the panel
                 has, which is the shape an arc wants and a slider doesn't. */}
@@ -534,6 +557,13 @@ export function TrayPanel(): React.JSX.Element {
                 13px they collapse into something that looks like a ✕. */}
             {density === "detailed" ? <Rows4 size={13} /> : <Rows2 size={13} />}
           </ViewChip>
+          {/* THE STREAMER (0.8.0, a two-streamer household's ask): the bar's
+              switcher at panel scale, the same glyph and the same list, shown
+              only when there is more than one streamer to choose from. Here in
+              the tabs row with the other square controls: switching is a
+              one-shot act, not a list to browse (so not a fifth tab), and the
+              status row has no room for it. */}
+          <TrayStreamers />
           {/* Same glyph the mini player uses for the same job — one icon means
               "take me to the app" wherever you meet it. */}
           <ViewChip tip="Open TastyTunes" onClick={() => void tt.showMain()}>
@@ -585,6 +615,40 @@ export function TrayPanel(): React.JSX.Element {
  * is precisely the drift the chrome kit exists to prevent; only the panel-
  * scale padding and the tooltip placement live here.
  */
+/** The tabs row's streamer chip: MonitorSpeaker like the playback bar's switcher,
+ *  the tip naming the streamer the panel controls, the shared list in a popover
+ *  that opens DOWN into the panel. Nothing with one streamer. */
+function TrayStreamers(): React.JSX.Element | null {
+  const { listed, connectedHost } = useStreamerList({ includeKnown: true });
+  const [open, setOpen] = useState(false);
+  if (listed.length <= 1) return null;
+  const current = listed.find((d) => d.host === connectedHost)?.friendlyName;
+  return (
+    <div className="relative shrink-0" data-tray-streamers>
+      <ViewChip
+        tip={current ? `Streamer: ${current}` : "Streamers"}
+        active={open}
+        attrs={{ "data-tray-streamer": current ?? "" }}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <MonitorSpeaker size={13} />
+      </ViewChip>
+      {open && (
+        <>
+          <PopoverChrome onClose={() => setOpen(false)} />
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div
+            data-tray-streamers-popover
+            className="absolute right-0 top-full mt-1.5 z-40 w-64 rounded-xl bg-raised ring-1 ring-edge2 shadow-2xl p-2"
+          >
+            <StreamerList onPick={() => setOpen(false)} />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function ViewChip({
   children,
   tip,

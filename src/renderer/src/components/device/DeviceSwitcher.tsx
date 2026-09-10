@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Loader2, MonitorSpeaker, RefreshCw } from "lucide-react";
 import { tt } from "@/api";
+import type { DiscoveredDevice } from "@shared/model";
 import { useStore } from "@/store";
 import { cx } from "@/lib/format";
 import { PopoverChrome } from "@/hooks/usePopover";
@@ -11,13 +12,22 @@ import { PopoverChrome } from "@/hooks/usePopover";
  * it (the Device screen covers list/connect/discover), and the bar's right
  * cluster is contested space.
  */
-export function DeviceSwitcher(): React.JSX.Element | null {
+/** The streamers a switcher can offer (one home, 0.8.0: the bar and the tray
+ *  panel read the same list). Discovered devices, plus the connected one when it
+ *  was reached by hand; `includeKnown` adds the device book's remembered
+ *  streamers that discovery has not seen this session, so a second streamer in
+ *  standby still has a row. */
+export function useStreamerList(opts?: { includeKnown?: boolean }): {
+  listed: DiscoveredDevice[];
+  connectedHost: string | null;
+  busyHost: string | null;
+  discovering: boolean;
+} {
   const connection = useStore((s) => s.connection);
   const devices = useStore((s) => s.devices);
   const discovering = useStore((s) => s.discovering);
   const systemInfo = useStore((s) => s.systemInfo);
-  const [open, setOpen] = useState(false);
-
+  const knownDevices = useStore((s) => s.settings.knownDevices);
   const connectedHost = connection.phase === "connected" ? connection.host : null;
   const busyHost =
     connection.phase === "connecting"
@@ -25,7 +35,6 @@ export function DeviceSwitcher(): React.JSX.Element | null {
       : connection.phase === "disconnected" && connection.reconnecting
         ? connection.host
         : null;
-
   // The connected device may have been connected manually and never discovered.
   const listed = [...devices];
   if (connectedHost && !listed.some((d) => d.host === connectedHost)) {
@@ -37,6 +46,80 @@ export function DeviceSwitcher(): React.JSX.Element | null {
       descriptionUrl: "",
     });
   }
+  if (opts?.includeKnown) {
+    for (const k of knownDevices) {
+      if (listed.some((d) => d.udn === k.udn || d.host === k.host)) continue;
+      listed.push({
+        host: k.host,
+        friendlyName: k.friendlyName,
+        model: k.model,
+        udn: k.udn,
+        descriptionUrl: "",
+      });
+    }
+  }
+  return { listed, connectedHost, busyHost, discovering };
+}
+
+/** The list itself, for a popover the caller places: the header with Find
+ *  devices, then a row per streamer, the connected one in gold. */
+export function StreamerList({ onPick }: { onPick(): void }): React.JSX.Element {
+  const { listed, connectedHost, busyHost, discovering } = useStreamerList({ includeKnown: true });
+  return (
+    <>
+      <div className="flex items-center justify-between px-2 pt-1.5 pb-2">
+        <span className="microlabel">streamers</span>
+        <button
+          title="Find devices"
+          onClick={() => void tt.discover()}
+          disabled={discovering}
+          className="p-1 text-faint hover:text-gold transition-colors disabled:opacity-50"
+        >
+          {discovering ? <Loader2 size={13} className="spin" /> : <RefreshCw size={13} />}
+        </button>
+      </div>
+      {listed.length === 0 && (
+        <div className="px-2 pb-2 text-[12px] text-faint">
+          {discovering ? "Searching the network…" : "No streamers found."}
+        </div>
+      )}
+      {listed.map((device) => {
+        const isConnected = device.host === connectedHost;
+        const isBusy = device.host === busyHost;
+        return (
+          <button
+            key={device.udn || device.host}
+            data-streamer-row={device.friendlyName}
+            onClick={() => {
+              if (!isConnected) void tt.connect(device.host);
+              onPick();
+            }}
+            className={cx(
+              "w-full flex items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors",
+              isConnected ? "bg-gold/10" : "hover:bg-veil",
+            )}
+          >
+            <span className={cx("led", isConnected ? "led-on" : isBusy ? "led-busy" : "led-off")} />
+            <span className="flex-1 min-w-0">
+              <span
+                className={cx("block text-[13px] truncate", isConnected ? "text-gold" : "text-ink")}
+              >
+                {device.friendlyName}
+              </span>
+              <span className="block font-mono text-[10px] text-faint truncate">
+                {[device.model, device.host].filter(Boolean).join(" · ")}
+              </span>
+            </span>
+          </button>
+        );
+      })}
+    </>
+  );
+}
+
+export function DeviceSwitcher(): React.JSX.Element | null {
+  const { listed } = useStreamerList();
+  const [open, setOpen] = useState(false);
 
   if (listed.length <= 1) return null;
 
@@ -59,58 +142,7 @@ export function DeviceSwitcher(): React.JSX.Element | null {
           <PopoverChrome onClose={() => setOpen(false)} />
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
           <div className="absolute bottom-11 right-0 z-40 w-72 rounded-xl bg-raised ring-1 ring-edge2 shadow-2xl p-2">
-            <div className="flex items-center justify-between px-2 pt-1.5 pb-2">
-              <span className="microlabel">streamers</span>
-              <button
-                title="Find devices"
-                onClick={() => void tt.discover()}
-                disabled={discovering}
-                className="p-1 text-faint hover:text-gold transition-colors disabled:opacity-50"
-              >
-                {discovering ? <Loader2 size={13} className="spin" /> : <RefreshCw size={13} />}
-              </button>
-            </div>
-
-            {listed.length === 0 && (
-              <div className="px-2 pb-2 text-[12px] text-faint">
-                {discovering ? "Searching the network…" : "No streamers found."}
-              </div>
-            )}
-
-            {listed.map((device) => {
-              const isConnected = device.host === connectedHost;
-              const isBusy = device.host === busyHost;
-              return (
-                <button
-                  key={device.udn || device.host}
-                  onClick={() => {
-                    if (!isConnected) void tt.connect(device.host);
-                    setOpen(false);
-                  }}
-                  className={cx(
-                    "w-full flex items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors",
-                    isConnected ? "bg-gold/10" : "hover:bg-veil",
-                  )}
-                >
-                  <span
-                    className={cx("led", isConnected ? "led-on" : isBusy ? "led-busy" : "led-off")}
-                  />
-                  <span className="flex-1 min-w-0">
-                    <span
-                      className={cx(
-                        "block text-[13px] truncate",
-                        isConnected ? "text-gold" : "text-ink",
-                      )}
-                    >
-                      {device.friendlyName}
-                    </span>
-                    <span className="block font-mono text-[10px] text-faint truncate">
-                      {[device.model, device.host].filter(Boolean).join(" · ")}
-                    </span>
-                  </span>
-                </button>
-              );
-            })}
+            <StreamerList onPick={() => setOpen(false)} />
           </div>
         </>
       )}
