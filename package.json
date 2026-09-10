@@ -54,7 +54,7 @@
     "@types/ws": "^8.5.13",
     "@vitejs/plugin-react": "^4.3.4",
     "electron": "^38.0.0",
-    "electron-builder": "^26.0.0",
+    "electron-builder": "^26.16.1",
     "electron-vite": "^3.0.0",
     "eslint": "^9.39.5",
     "eslint-config-prettier": "^10.1.8",
