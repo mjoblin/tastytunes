@@ -61,7 +61,7 @@ import {
   type UpdateCheckResult,
 } from "@shared/model";
 import { MCP_CLUSTERS, mcpClusterEnabled, type McpClusterInfo } from "@shared/mcpCatalog";
-import { REPO_URL } from "@shared/ipc";
+import { AGENTS_GUIDE_URL, REPO_URL } from "@shared/ipc";
 import { tt } from "@/api";
 import { useConfirmPopover } from "@/components/chrome/Confirm";
 import { useStore, type Screen } from "@/store";
@@ -655,6 +655,22 @@ function McpSection({
           onChange={(enabled) => saveMcp({ enabled })}
         />
 
+        {/* the guide is the way in for anyone who has not connected a client yet, so it is
+            its own row under the switch, live whether the server is on or off */}
+        <SettingRow
+          label="Setup guide"
+          hint="How to connect Claude Code, Cursor, VS Code, Claude Desktop and other clients, and what an agent can and cannot do."
+        >
+          <HeaderChip
+            active
+            onClick={() => void tt.openExternal(AGENTS_GUIDE_URL)}
+            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-[12.5px] motion-safe:active:scale-90"
+          >
+            <ExternalLink size={13} />
+            Open the guide
+          </HeaderChip>
+        </SettingRow>
+
         {/* live status + ways to connect a client */}
         {mcp.enabled && (
           <div className="rounded-lg bg-bg ring-1 ring-edge px-3 py-2.5 space-y-2">
@@ -690,7 +706,7 @@ function McpSection({
                   text={`"tastytunes": { "type": "http", "url": "${status.url}" }`}
                   copied={copied === "json"}
                   onCopy={() => copy("json", mcpJsonSnippet(status.url!))}
-                  hint='For clients configured via an "mcpServers" JSON block; copies the full block.'
+                  hint='For Cursor and other clients that take an "mcpServers" block with a url; copies the full block.'
                 />
               </div>
             )}
@@ -827,7 +843,9 @@ const MCP_GROUPS: Array<{ id: McpClusterInfo["group"]; label: string; note: stri
   },
 ];
 
-/** The near-universal "mcpServers" JSON block (Claude Desktop, Cursor, VS Code, …). */
+/** The "mcpServers" JSON block with a url, the shape Cursor-style clients take. Claude Desktop
+ *  is stdio-only and reaches the server through a bridge, and VS Code wants a "servers" root:
+ *  the Setup guide covers each one. */
 function mcpJsonSnippet(url: string): string {
   return JSON.stringify({ mcpServers: { tastytunes: { type: "http", url } } }, null, 2);
 }

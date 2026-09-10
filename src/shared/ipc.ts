@@ -81,6 +81,8 @@ import type {
 
 /** The one copy of the project URL — user agents, Help menu, release pages. */
 export const REPO_URL = "https://github.com/mjoblin/tastytunes";
+/** The connection recipes per client and what an agent can and cannot do, one page on the website. */
+export const AGENTS_GUIDE_URL = "https://tastytunes.app/agents/";
 
 // -------------------------------------------------------- main -> renderer push
 

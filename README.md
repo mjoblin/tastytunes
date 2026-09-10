@@ -136,7 +136,7 @@ MCP tools that let local AI agents see and control the streamer.
 ## MCP server
 
 TastyTunes can host a local MCP server (off by default), so AI agents on your
-network (Claude Code, Claude Desktop, anything that speaks MCP) can see and
+network (Claude Code, Cursor, anything that speaks MCP over HTTP) can see and
 control the streamer:
 
 ```bash
