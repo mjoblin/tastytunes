@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUpRight,
+  AudioLines,
   ChevronDown,
   Heart,
   ListEnd,
@@ -12,24 +13,25 @@ import {
   Rows3,
 } from "lucide-react";
 import {
-  albumVolume,
+  albumDrKey,
   albumFormat,
-  orderTracks,
+  albumTracksOf,
+  albumVolume,
+  audioAnalysisKey,
   discGroups,
   isCompilation,
+  isHiRes,
+  LOSSLESS_CODECS,
+  type MediaFormat,
+  type MediaIndexPools,
+  type MediaNode,
+  nameSortKey,
+  orderTracks,
   performerLine,
   sameArt,
   trackArtists,
   trackInAlbumOf,
-  type MediaIndexPools,
-  type MediaNode,
-  nameSortKey,
-  albumDrKey,
-  audioAnalysisKey,
   trackPosition,
-  LOSSLESS_CODECS,
-  isHiRes,
-  type MediaFormat,
 } from "@shared/model";
 import { cx, fmtTime, matchesFilter, fmtCount, fmtAgo } from "@/lib/format";
 import { usePlayStats, playedBucket, playedOptionsOf } from "@/lib/playStats";
@@ -80,8 +82,13 @@ export interface LensActions {
   /** Batch hearts: silent per-item toggles behind ONE aggregate undo entry. */
   heartNodes(nodes: MediaNode[], allIn: boolean): void;
   /** Albums drag to the nav rail (2026-09-02): the ordered containers (a box
-   *  set's volumes) and the title the chip shows. */
-  dragAlbum(nodes: MediaNode[], e: React.PointerEvent, title: string): void;
+   *  set's volumes) and the title the chip shows; `noun` names a multi-album
+   *  selection's cargo ("albums", 0.8.0) where the chip would otherwise say
+   *  volumes. */
+  dragAlbum(nodes: MediaNode[], e: React.PointerEvent, title: string, noun?: string): void;
+  /** The album selection bar's Analyze audio: each album's own sweep, in order
+   *  (album DRs need every track of the album, so a track sweep will not do). */
+  analyzeAlbums(nodes: MediaNode[]): void;
   nodeFavorited(node: MediaNode): boolean;
   trackQueued(node: MediaNode): boolean;
   isCurrentTrack(node: MediaNode): boolean;
@@ -238,6 +245,11 @@ let albumsMem: {
   played: string | null;
   filter: string;
 } = { genre: null, decade: null, dr: null, format: null, played: null, filter: "" };
+
+/** The queue write's cap, shared by Play these and the album selection bar (user
+ *  call, 2026-09-01 / 2026-09-02): queue writes are one call per track with no
+ *  progress affordance, so no gesture may hand the queue fifty albums. */
+const PLAY_THESE_MAX = 50;
 
 export function AlbumsLens({
   pools,
@@ -454,6 +466,110 @@ export function AlbumsLens({
     return out;
   }, [shown]);
 
+  // ALBUM MULTI-SELECT (0.8.0): the tracks' grammar on the album tiles. Keyed by
+  // nodeKey over the TILES (a box set is one tile, one pick, every volume of it
+  // in the batch); ⌘/ctrl-click toggles, shift-click ranges from the anchor,
+  // a bare click in selection mode clears instead of opening, Esc clears, ⌘A
+  // takes every tile shown, a click on the nav rail or the bar clears. The
+  // selection prunes itself to the tiles still shown when the facets move.
+  const [selA, setSelA] = useState<ReadonlySet<string>>(() => new Set());
+  const selAAnchor = useRef<number | null>(null);
+  const tileKeys = useMemo(() => tiles.map((t) => nodeKey(t.node)), [tiles]);
+  useEffect(() => {
+    setSelA((prev) => {
+      if (prev.size === 0) return prev;
+      const keep = new Set(tileKeys);
+      const next = new Set([...prev].filter((k) => keep.has(k)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [tileKeys]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      const t = e.target;
+      if (t instanceof HTMLElement && t.matches("input, textarea, [contenteditable]")) return;
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "a") {
+        if (tileKeys.length === 0) return;
+        e.preventDefault();
+        setSelA(new Set(tileKeys));
+        return;
+      }
+      if (selA.size === 0) return;
+      if (e.key === "Escape") setSelA(new Set());
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [tileKeys, selA.size]);
+  useEffect(() => {
+    if (selA.size === 0) return;
+    const onWin = (e: MouseEvent): void => {
+      const t = e.target;
+      if (!(t instanceof HTMLElement)) return;
+      if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+      if (!t.closest("[data-app-nav], [data-app-playbar]")) return;
+      if (t.closest("button, input, a, [aria-valuenow]")) return;
+      setSelA(new Set());
+    };
+    window.addEventListener("click", onWin);
+    return () => window.removeEventListener("click", onWin);
+  }, [selA.size]);
+  /** True = the click was a selection chord; the caller must not open. */
+  const albumClick = (raw: MediaNode, e: React.MouseEvent): boolean => {
+    const key = nodeKey(raw);
+    const idx = tileKeys.indexOf(key);
+    if (e.metaKey || e.ctrlKey) {
+      setSelA((prev) => {
+        const next = new Set(prev);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        return next;
+      });
+      selAAnchor.current = idx;
+      return true;
+    }
+    if (e.shiftKey && selAAnchor.current != null && idx >= 0) {
+      const [a, b] = [Math.min(selAAnchor.current, idx), Math.max(selAAnchor.current, idx)];
+      setSelA(new Set(tileKeys.slice(a, b + 1)));
+      return true;
+    }
+    if (selA.size > 0) {
+      setSelA(new Set());
+      return true;
+    }
+    return false;
+  };
+  /** The picked albums as containers, a set's volumes in order. */
+  const chosenA = (): MediaNode[] =>
+    tiles
+      .filter((t) => selA.has(nodeKey(t.node)))
+      .flatMap((t) => (t.set ? t.set.volumes : [t.node]));
+  /** The same, expanded to tracks from the index (the queue and playlist verbs
+   *  want tracks, and the cap counts them). */
+  const chosenATracks = (): MediaNode[] =>
+    chosenA().flatMap((alb) => {
+      const pool = pools.find((g) => g.udn === alb.serverUdn);
+      return pool ? albumTracksOf(alb, pool) : [];
+    });
+  const selATrackCount = useMemo(
+    () => (selA.size === 0 ? 0 : chosenATracks().length),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chosenATracks reads selA and tiles, both listed
+    [selA, tiles, pools],
+  );
+  const selAOverCap = selATrackCount > PLAY_THESE_MAX;
+  const capTip = `Choose albums that come to ${fmtCount(PLAY_THESE_MAX)} tracks or fewer`;
+  /** A drag from a picked tile carries the whole selection (under the cap; over
+   *  it, the pressed album alone, so the queue is never handed too much). */
+  const startAlbumTileDrag = (
+    raw: MediaNode,
+    set: { volumes: MediaNode[] } | null | undefined,
+    title: string,
+    e: React.PointerEvent,
+  ): void => {
+    if (selA.has(nodeKey(raw)) && selA.size > 1 && !selAOverCap) {
+      actions.dragAlbum(chosenA(), e, `${fmtCount(selA.size)} albums`, "albums");
+      return;
+    }
+    actions.dragAlbum(set ? set.volumes : [raw], e, title);
+  };
   return (
     <div data-lens-albums>
       <div className="flex items-start gap-3 pb-3">
@@ -565,7 +681,11 @@ export function AlbumsLens({
         <div className="text-[15px] text-faint pt-4 px-1">Nothing matches those filters.</div>
       ) : (
         <div
-          className={cx(!cards && "divide-y divide-edge/50 -mx-2")}
+          className={cx(
+            !cards && "divide-y divide-edge/50 -mx-2",
+            // selection mode adds scroll-room under the floating bar (the S45 rule)
+            selA.size > 0 && "pb-24",
+          )}
           style={
             cards
               ? {
@@ -579,7 +699,7 @@ export function AlbumsLens({
               : undefined
           }
         >
-          {tiles.map(({ node: rawNode, set }) => {
+          {tiles.map(({ node: rawNode, set }, ti) => {
             // a set tile is volume 1 wearing the base title and a count badge
             const node = set ? { ...rawNode, title: set.base, year: null } : rawNode;
             return cards ? (
@@ -596,16 +716,23 @@ export function AlbumsLens({
                 badge={
                   set ? `${set.volumes.length} volumes` : multiServer ? node.serverName : undefined
                 }
+                selected={selA.has(nodeKey(rawNode))}
                 onHeart={() => actions.heartNode(rawNode)}
-                onEnter={() => actions.openAlbum(rawNode)}
+                onEnter={(e) => {
+                  if (albumClick(rawNode, e)) return;
+                  actions.openAlbum(rawNode);
+                }}
                 onPlay={(el) => void actions.playContainer(rawNode, el)}
                 onMenu={(e) => actions.openMenu(rawNode, e)}
-                onNavDrag={(e) => actions.dragAlbum(set ? set.volumes : [rawNode], e, node.title)}
+                onNavDrag={(e) => startAlbumTileDrag(rawNode, set, node.title, e)}
               />
             ) : (
               <ContainerRow
                 key={nodeKey(rawNode)}
                 node={node}
+                selected={selA.has(nodeKey(rawNode))}
+                selStart={!(ti > 0 && selA.has(tileKeys[ti - 1]))}
+                selEnd={!(ti < tileKeys.length - 1 && selA.has(tileKeys[ti + 1]))}
                 playing={
                   set
                     ? set.volumes.some((v) => actions.isPlayingAlbum(v))
@@ -621,13 +748,88 @@ export function AlbumsLens({
                   actions.goToArtist && node.artist ? () => actions.goToArtist?.(node) : undefined
                 }
                 onHeart={() => actions.heartNode(rawNode)}
-                onEnter={() => actions.openAlbum(rawNode)}
+                onEnter={(e) => {
+                  if (albumClick(rawNode, e)) return;
+                  actions.openAlbum(rawNode);
+                }}
                 onMenu={(e) => actions.openMenu(rawNode, e)}
-                onNavDrag={(e) => actions.dragAlbum(set ? set.volumes : [rawNode], e, node.title)}
+                onNavDrag={(e) => startAlbumTileDrag(rawNode, set, node.title, e)}
               />
             );
           })}
         </div>
+      )}
+      {selA.size > 0 && (
+        <SelectionBar
+          count={selA.size}
+          onClear={() => setSelA(new Set())}
+          className="bottom-2 inset-x-0 z-20"
+          data-albums-selection-bar
+        >
+          <SelectionVerb
+            icon={<Play size={13} />}
+            disabled={selAOverCap}
+            data-tip={selAOverCap ? capTip : undefined}
+            className={cx(selAOverCap && "tip-top opacity-50")}
+            onClick={() =>
+              actions.queueTracks(chosenATracks(), "replace", () => setSelA(new Set()))
+            }
+          >
+            Play
+          </SelectionVerb>
+          <SelectionVerb
+            icon={<ListStart size={13} />}
+            disabled={selAOverCap}
+            data-tip={selAOverCap ? capTip : undefined}
+            className={cx(selAOverCap && "tip-top opacity-50")}
+            onClick={() => actions.queueTracks(chosenATracks(), "next", () => setSelA(new Set()))}
+          >
+            Play next
+          </SelectionVerb>
+          <SelectionVerb
+            icon={<ListEnd size={13} />}
+            disabled={selAOverCap}
+            data-tip={selAOverCap ? capTip : undefined}
+            className={cx(selAOverCap && "tip-top opacity-50")}
+            onClick={() => actions.queueTracks(chosenATracks(), "append", () => setSelA(new Set()))}
+          >
+            Add to end of queue
+          </SelectionVerb>
+          <SelectionVerb
+            icon={<ListPlus size={13} />}
+            onClick={(e) =>
+              actions.addTracksToPlaylist(chosenATracks(), { x: e.clientX, y: e.clientY }, () =>
+                setSelA(new Set()),
+              )
+            }
+          >
+            Add to playlist…
+          </SelectionVerb>
+          {(() => {
+            const nodes = chosenA();
+            const allIn = nodes.length > 0 && nodes.every(actions.nodeFavorited);
+            return (
+              <SelectionVerb
+                icon={<Heart size={13} fill={allIn ? "currentColor" : "none"} />}
+                onClick={() => actions.heartNodes(nodes, allIn)}
+              >
+                {allIn ? "Remove from favorites" : "Add to favorites"}
+              </SelectionVerb>
+            );
+          })()}
+          <SelectionVerb
+            icon={<AudioLines size={13} />}
+            onClick={() => {
+              actions.analyzeAlbums(chosenA());
+              setSelA(new Set());
+            }}
+          >
+            Analyze audio
+          </SelectionVerb>
+          <span className="shrink-0 py-px text-faint tabular-nums mt-[3px] text-[11.5px]">
+            {fmtCount(selATrackCount)} {selATrackCount === 1 ? "track" : "tracks"}
+          </span>
+        </SelectionBar>
       )}
     </div>
   );
@@ -1471,8 +1673,6 @@ const TRACK_SORTS: Array<{
  *  queue writes are one call per track with no progress affordance, so
  *  fifty stays a few seconds where two hundred was a silent quarter minute
  *  (user call, 2026-09-01). */
-const PLAY_THESE_MAX = 50;
-
 // Sort + direction persist (view defaults); this is the session workspace —
 // the filter, the facets and the scroll come back as they were left.
 let tracksMem: {

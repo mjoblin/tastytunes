@@ -62,6 +62,7 @@ export function ContainerCard({
   node,
   playing,
   menuOpen,
+  selected = false,
   favorited,
   badge,
   onHeart,
@@ -75,12 +76,17 @@ export function ContainerCard({
   playing: boolean;
   /** This card's ⋯ menu or preset picker is open — hold the hover treatment. */
   menuOpen: boolean;
+  /** Part of a multi-selection (album multi-select, 0.8.0): the tracks' own
+   *  raised veil and edge ring, so a picked card reads as picked, not playing. */
+  selected?: boolean;
   /** With onHeart: the art-corner heart chip (albums only make sense). */
   favorited?: boolean;
   /** Provenance chip on the subtitle line (lens grids pooling several servers). */
   badge?: string;
   onHeart?(): void;
-  onEnter(): void;
+  /** The body click, with its event: a caller with a selection model reads the
+   *  chord (⌘/ctrl, shift) and decides whether this click opens or picks. */
+  onEnter(e: React.MouseEvent): void;
   onPlay(el: HTMLElement | null): void;
   onMenu(e: React.MouseEvent): void;
   /** Albums drag to the nav rail (2026-09-02): a press on the card BODY arms
@@ -103,9 +109,14 @@ export function ContainerCard({
       ref={ref}
       onContextMenu={menuable ? onMenu : undefined}
       data-library-card
+      data-selected={selected || undefined}
       className={cx(
         "group relative text-left rounded-2xl p-2 pb-2.5 transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]",
-        playing ? "bg-goldtile/70 tile-playing" : "bg-raised/50 ring-1 ring-edge card-hover-glow",
+        playing
+          ? "bg-goldtile/70 tile-playing"
+          : selected
+            ? "bg-veil2 ring-2 ring-edge2"
+            : "bg-raised/50 ring-1 ring-edge card-hover-glow",
         // held while this card's ⋯ menu / preset picker is open — the pointer
         // has left, but the card is still what's being acted on: keep the
         // full hover treatment (grow + glow), not just a ring
@@ -218,6 +229,9 @@ export function ContainerRow({
   node,
   playing,
   menuOpen,
+  selected = false,
+  selStart = true,
+  selEnd = true,
   favorited,
   badge,
   dr,
@@ -230,6 +244,11 @@ export function ContainerRow({
   node: MediaNode;
   playing: boolean;
   menuOpen: boolean;
+  /** Part of a multi-selection (album multi-select, 0.8.0): the tracks' own
+   *  treatment, a raised veil with an edge outline that runs over neighbours. */
+  selected?: boolean;
+  selStart?: boolean;
+  selEnd?: boolean;
   /** With onHeart: the heart button in the row's action cluster (albums). */
   favorited?: boolean;
   /** Provenance chip beside the subline (lens listings pooling several servers). */
@@ -243,7 +262,8 @@ export function ContainerRow({
   /** Albums drag to the nav rail: a press on the row body arms the shared drag. */
   onNavDrag?(e: React.PointerEvent): void;
   onHeart?(): void;
-  onEnter(): void;
+  /** The row click, with its event (see ContainerCard.onEnter). */
+  onEnter(e: React.MouseEvent): void;
   onMenu(e: React.MouseEvent): void;
 }): React.JSX.Element {
   // Same rule as cards: albums carry the full ⋯ menu; ARTISTS carry it too now
@@ -255,8 +275,16 @@ export function ContainerRow({
   return (
     <div
       className={cx(
-        "group grid grid-cols-[44px_1fr_auto_auto_auto_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
-        playing ? "row-playing bg-gold/10" : menuOpen ? "bg-veil" : "hover:bg-veil",
+        "group relative grid grid-cols-[44px_1fr_auto_auto_auto_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
+        playing
+          ? "row-playing bg-gold/10"
+          : selected
+            ? "bg-veil2"
+            : menuOpen
+              ? "bg-veil"
+              : "hover:bg-veil",
+        !playing && selected && !selStart && "rounded-t-none",
+        !playing && selected && !selEnd && "rounded-b-none",
       )}
       onClick={onEnter}
       onPointerDown={(e) => {
@@ -265,7 +293,24 @@ export function ContainerRow({
       }}
       onContextMenu={menuable ? onMenu : undefined}
       data-library-row
+      data-selected={selected || undefined}
     >
+      {!playing && selected && (
+        <span
+          aria-hidden
+          data-sel-run
+          className={cx(
+            "pointer-events-none absolute inset-0 rounded-[inherit] border-edge2",
+            selStart && selEnd
+              ? "border"
+              : selStart
+                ? "border-x border-t"
+                : selEnd
+                  ? "border-x border-b"
+                  : "border-x",
+          )}
+        />
+      )}
       <MediaArt
         src={artUrlAt(node.artUrl, 240)}
         kind={album ? "album" : isArtistClass(node.upnpClass) ? "artist" : "folder"}

@@ -1319,7 +1319,7 @@ export function LibraryScreen(): React.JSX.Element {
     nodes: MediaNode[];
     fromSelection: boolean;
     /** Album cargo (2026-09-02): the ordered containers and the chip's title. */
-    albums?: { title: string };
+    albums?: { title: string; noun?: string };
   }>({
     nodes: [],
     fromSelection: false,
@@ -1334,7 +1334,7 @@ export function LibraryScreen(): React.JSX.Element {
           count: nodes.length,
           title: albums.title,
           artUrl: nodes[0].artUrl,
-          noun: nodes.length === 1 ? "album" : "volumes",
+          noun: albums.noun ?? (nodes.length === 1 ? "album" : "volumes"),
           artKind: "album" as const,
         };
       return { count: nodes.length, title: nodes[0].title };
@@ -1352,7 +1352,8 @@ export function LibraryScreen(): React.JSX.Element {
             if (ok) flashNavTarget("queue");
           });
         } else if (target === "favorites") {
-          if (!nodeFavorited(nodes[0])) heartNode(nodes[0]);
+          if (fromSelection) heartNodes(nodes, false);
+          else if (!nodeFavorited(nodes[0])) heartNode(nodes[0]);
           flashNavTarget("favorites");
         } else if (target === "playlists") {
           if (nodes.length === 1) setPlaylistPicker({ node: nodes[0], x: at.x, y: at.y });
@@ -1390,8 +1391,15 @@ export function LibraryScreen(): React.JSX.Element {
     }
     return out;
   };
-  const startAlbumDrag = (nodes: MediaNode[], e: React.PointerEvent, title: string): void => {
-    dragCargo.current = { nodes, fromSelection: false, albums: { title } };
+  const startAlbumDrag = (
+    nodes: MediaNode[],
+    e: React.PointerEvent,
+    title: string,
+    noun?: string,
+  ): void => {
+    // a multi-album selection (0.8.0) is a selection: every album hearts on the
+    // Favorites drop, where a box set hearts volume 1 alone
+    dragCargo.current = { nodes, fromSelection: noun === "albums", albums: { title, noun } };
     navDrag.start(e);
   };
   const startTrackDrag = (node: MediaNode, e: React.PointerEvent): void => {
@@ -1564,6 +1572,14 @@ export function LibraryScreen(): React.JSX.Element {
     else if (r.dr == null)
       showNotice(`Read ${r.analyzed} of ${r.tracks} tracks. An album DR needs all of them.`);
     else showToast({ kind: "success", text: `“${node.title}” analyzed: DR${r.dr}` });
+  };
+  /** The album selection bar's Analyze audio (0.8.0): each album's own sweep in
+   *  turn, so every one lands its album DR; the sweep queue serializes them. */
+  const runAnalyzeAlbums = async (nodes: MediaNode[]): Promise<void> => {
+    for (const node of nodes) {
+      const udn = nodeUdn(node);
+      if (udn) await runAnalyzeAlbum(node, udn);
+    }
   };
   /** The Tracks lens's sweep over what's shown — the album sweep's toasts,
    *  minus the album DR (a filter is not an album). */
@@ -1926,6 +1942,7 @@ export function LibraryScreen(): React.JSX.Element {
       setPlaylistMulti({ nodes: chosen, x: at.x, y: at.y, clear: onAdded }),
     goToAlbum: goToAlbumFromLens,
     dragAlbum: startAlbumDrag,
+    analyzeAlbums: (nodes) => void runAnalyzeAlbums(nodes),
     goToArtist: goToArtistFromLens,
     saveAsPlaylist: (chosen, name) => void saveNodesAsPlaylist(chosen, name),
     analyzeTracks: (chosen, label) => void runAnalyzeTracks(chosen, label),
