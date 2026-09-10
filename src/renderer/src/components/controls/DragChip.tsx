@@ -11,10 +11,15 @@ export function DragChip({
   title,
   artUrl,
   count,
+  noun,
+  artKind = "track",
 }: {
   title: string;
   artUrl?: string | null;
   count: number;
+  /** What the count counts — "tracks" unless the cargo is albums ("album", "volumes"). */
+  noun?: string;
+  artKind?: "track" | "album";
 }): React.JSX.Element {
   return (
     <div className="relative w-[320px]" data-drag-chip>
@@ -33,10 +38,10 @@ export function DragChip({
         />
       )}
       <div className="flex items-center gap-2.5 rounded-lg bg-raised ring-1 ring-edge2 shadow-xl px-2.5 py-1.5">
-        <MediaArt src={artUrl} kind="track" />
+        <MediaArt src={artUrl} kind={artKind} />
         <div className="min-w-0 flex-1 text-[13px] text-ink truncate">{title}</div>
         <span className="shrink-0 rounded-full bg-gold text-bg text-[10.5px] font-medium px-2 py-0.5">
-          {count} {count === 1 ? "track" : "tracks"}
+          {count} {noun ?? (count === 1 ? "track" : "tracks")}
         </span>
       </div>
     </div>

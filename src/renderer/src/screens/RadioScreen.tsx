@@ -13,7 +13,7 @@ import { PresetSavePanel } from "@/components/library/LibraryMenus";
 import { PopoverCard } from "@/components/chrome/Overlay";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { cx } from "@/lib/format";
-import { Chip, ScreenTitle } from "@/components/chrome/Chrome";
+import { Chip, ScreenTitle, GAP_WITHIN } from "@/components/chrome/Chrome";
 
 /**
  * Internet radio via the radio-browser.info community directory (keyless —
@@ -257,7 +257,7 @@ export function RadioScreen(): React.JSX.Element {
         </div>
       </header>
 
-      <div className="px-8 pb-3 flex flex-wrap gap-1.5">
+      <div className={`px-8 pb-3 flex flex-wrap items-center ${GAP_WITHIN}`}>
         {/* The in-domain view of hearted stations — the union lives on the
             Favorites screen; chip appears once anything is hearted. NOT a
             <Chip>: its unselected skin is gold-tinted (a ring that says "yours"
@@ -268,7 +268,7 @@ export function RadioScreen(): React.JSX.Element {
             onClick={() => pickCat(FAV_CAT)}
             data-radio-cat="Favorites"
             className={cx(
-              "no-drag rounded-full px-3 py-1 text-[12px] ring-1 transition-all motion-safe:active:scale-95 flex items-center gap-1.5",
+              "no-drag rounded-full h-8 px-3 text-[12px] ring-1 transition-all motion-safe:active:scale-95 flex items-center gap-1.5",
               cat === FAV_CAT
                 ? "ring-gold/50 bg-golddim text-gold"
                 : "ring-gold/30 bg-panel/70 text-gold/80 hover:text-gold hover:ring-gold/50 hover:bg-golddim/40",

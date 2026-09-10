@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useMemo } from "react";
+import { useKnownDrs } from "@/lib/audioAnalysis";
+import { DrBadge } from "@/components/media/Waveform";
 import { createPortal } from "react-dom";
 import { useQueuePerformer } from "@/hooks/useQueuePerformer";
 import {
@@ -43,7 +45,7 @@ import {
   X,
 } from "lucide-react";
 import { queueContentHash, type QueueListItem } from "@shared/smoip";
-import { presetVolumeKey, type QueueLayout } from "@shared/model";
+import { presetVolumeKey, type QueueLayout, audioAnalysisKey } from "@shared/model";
 import {
   favoriteKey,
   type ContentRef,
@@ -58,10 +60,11 @@ import { EmptyState } from "@/components/chrome/EmptyState";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { flashTarget, scrollToWithContext } from "@/lib/scroll";
 import { lockVertical } from "@/lib/dnd";
-import { activeSourceId, cx, fmtTime, matchesFilter } from "@/lib/format";
+import { activeSourceId, cx, fmtTime, matchesFilter, fmtCount } from "@/lib/format";
 import { toggleFavorite } from "@/lib/favorites";
 import { fromQueueItem, refToFavorite, refToPlaylistItem } from "@/lib/mediaRef";
 import { saveRefToPreset, openRefInLibrary } from "@/lib/mediaActions";
+import { NameLine } from "@/components/media/NameLine";
 import { trackMenuItems, type MediaMenuItem } from "@/lib/mediaMenus";
 import { AddToPlaylistPanel } from "@/components/overlays/AddToPlaylistPanel";
 import { RowMenu } from "@/components/media/RowMenu";
@@ -77,7 +80,7 @@ import { DragChip } from "@/components/controls/DragChip";
 import { clampChipPos, flashNavTarget, navDropTargetAt } from "@/lib/navDrop";
 import { ModalShell } from "@/components/chrome/Overlay";
 import { PresetSavePanel, PresetPicker } from "@/components/library/LibraryMenus";
-import { HeaderChip, ScreenTitle } from "@/components/chrome/Chrome";
+import { HeaderChip, ScreenTitle, GAP_BETWEEN, GAP_WITHIN } from "@/components/chrome/Chrome";
 import { artUrlAt } from "@shared/artUrl";
 
 /**
@@ -126,7 +129,7 @@ function SaveQueueDialog({
       </div>
       <PresetSavePanel
         title="Current queue"
-        subtitle={`${trackCount} tracks — stored on the streamer`}
+        subtitle={`${fmtCount(trackCount)} tracks — stored on the streamer`}
         nameAutoFocus
         onSave={onSave}
       />
@@ -137,7 +140,6 @@ function SaveQueueDialog({
 export function QueueScreen(): React.JSX.Element {
   const queue = useStore((s) => s.queue);
   const saveSettings = useStore((s) => s.saveSettings);
-  const playState = useStore((s) => s.playState);
   const nowPlaying = useStore((s) => s.nowPlaying);
   const zoneState = useStore((s) => s.zoneState);
   const { followQueue, queueLayout, presetCardSize, presetGap, presetFillRows } = useStore(
@@ -255,7 +257,23 @@ export function QueueScreen(): React.JSX.Element {
         ]),
       )
     : allItems;
-  const playId = queue?.play_id ?? playState?.queue_id ?? null;
+  // the SETTLED playing id (store.effectivePlayId): the pointer, unless the
+  // readout has named another entry for long enough — see lib/playingEntry
+  const playId = useStore((s) => s.effectivePlayId);
+  // DR wherever a track row is (2026-09-02): the known integers by content key,
+  // a reserved cell in every row once the queue knows any
+  const keyOf = (i: QueueListItem): string =>
+    audioAnalysisKey({
+      title: i.metadata?.title ?? "",
+      artist: i.metadata?.artist ?? null,
+      album: i.metadata?.album ?? null,
+      durationSecs: i.metadata?.duration ?? null,
+    });
+  const drKeys = useMemo(() => allItems.map(keyOf), [allItems]);
+  const drByKey = useKnownDrs(drKeys);
+  const anyDr = Object.keys(drByKey).length > 0;
+  const drFor = (i: QueueListItem): number | null | undefined =>
+    anyDr ? (drByKey[keyOf(i)] ?? null) : undefined;
   // The queue belongs to the MEDIA_PLAYER source. When another source is
   // active (AirPlay, radio, …) the device still reports a play_id — that row
   // is just where the queue is parked, and must not claim to be playing.
@@ -908,17 +926,18 @@ export function QueueScreen(): React.JSX.Element {
         <div className="flex-1" />
         {/* Same split as the Now Playing header: the two SAVE verbs create
             stored things, the three after them only change what you're looking
-            at. Told apart by the wider gap-4 BETWEEN groups against the gap-1.5
-            within one. The filter needs no group of its own — it's an input,
-            already a different shape from the chips. */}
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1.5">
-            <FilterInput
-              value={filter}
-              onChange={(t) => setScreenFilter("queue", t)}
-              shown={items.length}
-              total={allItems.length}
-            />
+            at. Told apart by the wider tier BETWEEN groups against the tier
+            within one — the app-wide toolbar tiers, one home in Chrome
+            (GAP_BETWEEN / GAP_WITHIN). The filter stands alone: typing is its
+            own kind of act, so the between tier separates it from the verbs. */}
+        <div className={`flex items-center ${GAP_BETWEEN}`}>
+          <FilterInput
+            value={filter}
+            onChange={(t) => setScreenFilter("queue", t)}
+            shown={items.length}
+            total={allItems.length}
+          />
+          <div className={`flex items-center ${GAP_WITHIN}`}>
             <HeaderChip
               data-tip="Save queue as a playlist"
               aria-label="Save queue as a playlist"
@@ -956,7 +975,7 @@ export function QueueScreen(): React.JSX.Element {
             </HeaderChip>
             {clearConfirm.popover}
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className={`flex items-center ${GAP_WITHIN}`}>
             <HeaderChip
               data-tip={cards ? "View as rows" : albums ? "View as cards" : "View as albums"}
               aria-label={cards ? "View as rows" : albums ? "View as cards" : "View as albums"}
@@ -1183,6 +1202,7 @@ export function QueueScreen(): React.JSX.Element {
               <QueueAlbumGroups
                 items={items}
                 playId={playId}
+                drFor={drFor}
                 sourceActive={queueSourceActive}
                 currentRef={currentRef}
                 selectedIds={selected}
@@ -1241,6 +1261,7 @@ export function QueueScreen(): React.JSX.Element {
                       setRowMenu({ item, x: e.clientX, y: e.clientY });
                     }}
                     item={item}
+                    dr={drFor(item)}
                     isCurrent={item.id === playId}
                     sourceActive={queueSourceActive}
                     currentRef={item.id === playId ? currentRef : undefined}
@@ -1327,9 +1348,12 @@ function QueueAlbumGroups({
   menuId,
   onRowClick,
   onGroupModClick,
+  drFor,
 }: {
   items: QueueListItem[];
   playId: number | null;
+  /** The screen's known-DR lookup (a reserved cell once the queue knows any). */
+  drFor: (i: QueueListItem) => number | null | undefined;
   sourceActive: boolean;
   /** The row whose ⋯ menu is open holds its hover treatment. */
   menuId: number | null;
@@ -1395,6 +1419,7 @@ function QueueAlbumGroups({
               key={item.id}
               onMenu={(e) => onMenu(item, e)}
               item={item}
+              dr={drFor(item)}
               isCurrent={item.id === playId}
               sourceActive={sourceActive}
               currentRef={item.id === playId ? currentRef : undefined}
@@ -1656,9 +1681,6 @@ function armArrivalWash(id: number, position: number): void {
 let lastQueueItems: QueueListItem[] = [];
 function washArrivals(): void {
   if (pendingWash.size === 0) return;
-  const reduced =
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
-    document.documentElement.classList.contains("reduce-motion");
   const at = new Map<number, number>();
   lastQueueItems.forEach((it, i) => {
     if (it.id != null) at.set(it.id, it.position ?? i);
@@ -1672,15 +1694,7 @@ function washArrivals(): void {
     const el = document.querySelector<HTMLElement>(`[data-queue-id="${id}"]`);
     if (!el) continue;
     pendingWash.delete(id);
-    if (reduced) continue;
-    el.animate(
-      [
-        { backgroundColor: "rgb(var(--gold-rgb) / 0.3)", offset: 0 },
-        { backgroundColor: "rgb(var(--gold-rgb) / 0.3)", offset: 0.3 },
-        { backgroundColor: "rgb(var(--gold-rgb) / 0)", offset: 1 },
-      ],
-      { duration: 2600, easing: "ease-out" },
-    );
+    flashTarget(el); // the arrival wash, one home (lib/scroll)
   }
 }
 
@@ -1699,6 +1713,8 @@ function snapQueueRows(): void {
 }
 
 interface QueueItemProps {
+  /** A known TT-DR (undefined = the queue knows none yet, no cell). */
+  dr?: number | null;
   onMenu?(e: React.MouseEvent): void;
   item: QueueListItem;
   isCurrent: boolean;
@@ -1752,6 +1768,7 @@ function QueueRow({
   bodyDrag = false,
   menuOpen = false,
   dragLive = false,
+  dr,
 }: QueueItemProps): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id as number,
@@ -1779,7 +1796,12 @@ function QueueRow({
       data-queue-id={item.id}
       {...(bodyDrag ? listeners : {})}
       className={cx(
-        "group relative grid grid-cols-[26px_44px_1fr_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5",
+        "group relative grid items-center gap-3 rounded-lg px-2 py-1.5",
+        // the DR cell is a sixth column only while it renders: an empty auto
+        // column would still cost a gap and inset the duration
+        dr !== undefined
+          ? "grid-cols-[26px_44px_1fr_auto_auto_auto]"
+          : "grid-cols-[26px_44px_1fr_auto_auto]",
         dragLive && "pointer-events-none",
         // a selected row carries the block, and says so (the grip's cursor)
         bodyDrag && selected ? "cursor-grab active:cursor-grabbing" : "cursor-default",
@@ -1860,7 +1882,7 @@ function QueueRow({
           {md?.title ?? md?.name ?? "—"}
         </div>
         <div className="text-[12px] text-dim truncate">
-          {[artist, md?.album].filter(Boolean).join(" — ")}
+          <NameLine artist={artist} album={md?.album} ref={ref} />
         </div>
       </div>
 
@@ -1890,6 +1912,11 @@ function QueueRow({
       {/* Duration sits at the far right of the CONTENT, after the actions —
           it's always-visible information, so it wants a stable column, while
           the actions come and go with hover. */}
+      {dr !== undefined && (
+        <span className="flex w-12 shrink-0 justify-end font-mono text-[10.5px]" data-track-dr>
+          {dr != null && <DrBadge dr={dr} className="" />}
+        </span>
+      )}
       <DurationCell secs={md?.duration ?? null} />
     </div>
   );

@@ -151,7 +151,6 @@ export function QueueTab({
 }): React.JSX.Element {
   const performerOf = useQueuePerformer();
   const queue = useStore((s) => s.queue);
-  const playState = useStore((s) => s.playState);
   const zoneState = useStore((s) => s.zoneState);
   const nowPlaying = useStore((s) => s.nowPlaying);
   const followQueue = useStore((s) => s.settings.followQueue);
@@ -159,7 +158,7 @@ export function QueueTab({
 
   const offline = useOffline();
   const items = queue?.items ?? [];
-  const playId = queue?.play_id ?? playState?.queue_id ?? null;
+  const playId = useStore((s) => s.effectivePlayId); // the settled id, one home
   // THE QUEUE BELONGS TO MEDIA_PLAYER. Switch to a radio preset (or AirPlay)
   // and the device still reports a play_id — that row is just where the queue
   // is PARKED, and a panel that leaves eqbars dancing on it is claiming a

@@ -8,6 +8,8 @@ interface DragInfo {
   count: number;
   title: string;
   artUrl?: string | null;
+  noun?: string;
+  artKind?: "track" | "album";
 }
 
 /**
@@ -109,7 +111,13 @@ export function useNavDrag({
             className="pointer-events-none fixed z-50"
             style={clampChipPos(drag.x, drag.y)}
           >
-            <DragChip title={drag.title} artUrl={drag.artUrl} count={drag.count} />
+            <DragChip
+              title={drag.title}
+              artUrl={drag.artUrl}
+              count={drag.count}
+              noun={drag.noun}
+              artKind={drag.artKind}
+            />
           </div>,
           document.body,
         )

@@ -7,6 +7,8 @@ import { RowAction } from "@/components/media/RowAction";
 import { RowHeart } from "@/components/media/RowHeart";
 import { ArtImage } from "@/components/media/ArtImage";
 import { MediaArt } from "@/components/media/MediaArt";
+import { DrBadge } from "@/components/media/Waveform";
+import { FACT_SEP } from "@/lib/mediaFacts";
 import { DurationCell } from "@/components/media/DurationCell";
 import { Eqbars } from "@/components/media/Eqbars";
 import { artUrlAt } from "@shared/artUrl";
@@ -66,6 +68,7 @@ export function ContainerCard({
   onEnter,
   onPlay,
   onMenu,
+  onNavDrag,
 }: {
   node: MediaNode;
   /** The playing track belongs to this album (and the queue source is live). */
@@ -80,6 +83,9 @@ export function ContainerCard({
   onEnter(): void;
   onPlay(el: HTMLElement | null): void;
   onMenu(e: React.MouseEvent): void;
+  /** Albums drag to the nav rail (2026-09-02): a press on the card BODY arms
+   *  the shared drag; the corner chips (play bloom, heart, ⋯) never do. */
+  onNavDrag?(e: React.PointerEvent): void;
 }): React.JSX.Element {
   const ref = useRef<HTMLDivElement | null>(null);
   // Queue/preset verbs only make sense on albums — plain folders (USB
@@ -109,7 +115,15 @@ export function ContainerCard({
       {/* the card CENTER always enters — play/menu are corner chips on the
           art, never intercepting the open gesture (unlike preset cards,
           whose whole-card click IS the play action) */}
-      <button className="block w-full cursor-pointer" onClick={onEnter}>
+      <button
+        className="block w-full cursor-pointer"
+        onClick={onEnter}
+        onPointerDown={(e) => {
+          // only the body: a press that lands on a nested control (the bloom) is that control's
+          if ((e.target as HTMLElement).closest("button") !== e.currentTarget) return;
+          onNavDrag?.(e);
+        }}
+      >
         {/* the art well is a veil LIFT over the card, not a panel hole: the same
             theme-flipping tint either way, so the ambient wash reads through
             the well as it does through the shell (panel is darker than the
@@ -206,6 +220,9 @@ export function ContainerRow({
   menuOpen,
   favorited,
   badge,
+  dr,
+  onArtistLink,
+  onNavDrag,
   onHeart,
   onEnter,
   onMenu,
@@ -217,6 +234,14 @@ export function ContainerRow({
   favorited?: boolean;
   /** Provenance chip beside the subline (lens listings pooling several servers). */
   badge?: string;
+  /** EXPERIMENT (0.7): the album's recorded TT-DR for the data cluster;
+   *  null renders the reserved cell empty (absence as absence). */
+  dr?: number | null;
+  /** The album artist as a link (rows are the data view: names navigate;
+   *  the row itself keeps opening the album). */
+  onArtistLink?(): void;
+  /** Albums drag to the nav rail: a press on the row body arms the shared drag. */
+  onNavDrag?(e: React.PointerEvent): void;
   onHeart?(): void;
   onEnter(): void;
   onMenu(e: React.MouseEvent): void;
@@ -230,10 +255,14 @@ export function ContainerRow({
   return (
     <div
       className={cx(
-        "group grid grid-cols-[44px_1fr_auto_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
+        "group grid grid-cols-[44px_1fr_auto_auto_auto_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
         playing ? "row-playing bg-gold/10" : menuOpen ? "bg-veil" : "hover:bg-veil",
       )}
       onClick={onEnter}
+      onPointerDown={(e) => {
+        if ((e.target as HTMLElement).closest("button")) return; // the row's controls and links keep their own presses
+        onNavDrag?.(e);
+      }}
       onContextMenu={menuable ? onMenu : undefined}
       data-library-row
     >
@@ -248,7 +277,22 @@ export function ContainerRow({
         </div>
         {(node.artist || badge) && (
           <div className="flex items-center gap-1.5 min-w-0">
-            {node.artist && <div className="text-[12px] text-faint truncate">{node.artist}</div>}
+            {node.artist &&
+              (onArtistLink ? (
+                <button
+                  data-tip="Go to artist"
+                  aria-label={`Go to artist ${node.artist}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onArtistLink();
+                  }}
+                  className="tip-bottom text-[12px] text-faint truncate hover:text-dim hover:underline underline-offset-2 transition-colors"
+                >
+                  {node.artist}
+                </button>
+              ) : (
+                <div className="text-[12px] text-faint truncate">{node.artist}</div>
+              ))}
             {badge && (
               <span
                 data-card-badge={badge}
@@ -260,6 +304,19 @@ export function ContainerRow({
           </div>
         )}
       </div>
+      {/* The rows view is the data view: year and DR ride RESERVED cells on
+          album rows (the duration-cell principle — alignment holds whether or
+          not a value exists; empty tracks collapse on non-album rows). */}
+      {album && (
+        <div className="w-9 text-right font-mono text-[11px] text-faint tabular-nums">
+          {node.year ?? ""}
+        </div>
+      )}
+      {album && (
+        <div className="flex w-12 justify-end font-mono text-[10.5px]">
+          {dr != null && <DrBadge dr={dr} className="" />}
+        </div>
+      )}
       {playing ? <Eqbars /> : <span />}
       {album && onHeart ? (
         <RowHeart favorited={favorited === true} held={menuOpen} onHeart={onHeart} />
@@ -284,6 +341,19 @@ export function ContainerRow({
   );
 }
 
+/** Every TrackRow column set as a literal class (Tailwind's scanner needs the
+ *  whole string): position · art · title · actions · [DR] · duration. */
+const TRACK_GRID: Record<string, string> = {
+  "pos-art-dr": "grid-cols-[26px_44px_1fr_auto_auto_auto]",
+  "pos-art": "grid-cols-[26px_44px_1fr_auto_auto]",
+  "pos-dr": "grid-cols-[26px_1fr_auto_auto_auto]",
+  pos: "grid-cols-[26px_1fr_auto_auto]",
+  "art-dr": "grid-cols-[44px_1fr_auto_auto_auto]",
+  art: "grid-cols-[44px_1fr_auto_auto]",
+  dr: "grid-cols-[1fr_auto_auto_auto]",
+  "": "grid-cols-[1fr_auto_auto]",
+};
+
 export function TrackRow({
   node,
   showArt,
@@ -301,6 +371,8 @@ export function TrackRow({
   onArtistLink,
   note,
   artistLabel,
+  dr,
+  showPosition = true,
   selStart = true,
   selEnd = true,
 }: {
@@ -345,6 +417,14 @@ export function TrackRow({
    * = the packed string, which is the honest default everywhere else.
    */
   artistLabel?: string | null;
+  /** EXPERIMENT (0.7): the track's recorded TT-DR for the data cluster —
+   *  pass it (null included) to reserve the cell; leave it undefined and
+   *  the row has no DR column (album listings, search results). */
+  dr?: number | null;
+  /** The Tracks lens turns the number off: a track's position within ITS
+   *  album reads as noise in a flat list across albums. The cell stays —
+   *  the playing eqbars still live there (the flat-row rule). */
+  showPosition?: boolean;
 }): React.JSX.Element {
   const ref = useRef<HTMLDivElement | null>(null);
   return (
@@ -352,7 +432,11 @@ export function TrackRow({
       ref={ref}
       className={cx(
         "group relative grid items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
-        showArt ? "grid-cols-[26px_44px_1fr_auto_auto]" : "grid-cols-[26px_1fr_auto_auto]",
+        TRACK_GRID[
+          [showPosition && "pos", showArt && "art", dr !== undefined && "dr"]
+            .filter(Boolean)
+            .join("-")
+        ],
         isCurrent
           ? "row-playing bg-gold/10"
           : selected
@@ -387,13 +471,19 @@ export function TrackRow({
           )}
         />
       )}
-      {/* left-justified: numbers sit flush with the header/art above */}
-      <span className="font-mono text-[10.5px] text-faint tabular-nums">
-        {isCurrent ? <Eqbars /> : (trackPosition(node) ?? "")}
-      </span>
+      {/* left-justified: numbers sit flush with the header/art above. The
+          cell leaves with its number (the Tracks lens) rather than sitting
+          as a phantom gutter; the playing eqbars then move inline before the
+          title, the floating-row placement. */}
+      {showPosition && (
+        <span className="font-mono text-[10.5px] text-faint tabular-nums">
+          {isCurrent ? <Eqbars /> : (trackPosition(node) ?? "")}
+        </span>
+      )}
       {showArt && <MediaArt src={node.artUrl} kind="track" />}
       <div className="min-w-0">
         <div className="flex items-baseline gap-2 min-w-0">
+          {isCurrent && !showPosition && <Eqbars />}
           <div className={cx("text-[13.5px] truncate", isCurrent ? "text-gold" : "text-ink")}>
             {node.title}
           </div>
@@ -417,7 +507,7 @@ export function TrackRow({
                     e.stopPropagation();
                     onArtistLink();
                   }}
-                  className="tip-bottom hover:text-ink hover:underline underline-offset-2 transition-colors"
+                  className="tip-bottom hover:text-dim hover:underline underline-offset-2 transition-colors"
                 >
                   {artistLabel ?? node.artist}
                 </button>
@@ -426,7 +516,7 @@ export function TrackRow({
               ))}
             {onAlbumLink && node.album && (
               <>
-                {node.artist ? " · " : ""}
+                {node.artist ? FACT_SEP : ""}
                 <button
                   data-tip="Go to album"
                   aria-label={`Go to album ${node.album}`}
@@ -434,7 +524,7 @@ export function TrackRow({
                     e.stopPropagation();
                     onAlbumLink();
                   }}
-                  className="tip-bottom hover:text-ink hover:underline underline-offset-2 transition-colors"
+                  className="tip-bottom hover:text-dim hover:underline underline-offset-2 transition-colors"
                 >
                   {node.album}
                 </button>
@@ -460,6 +550,13 @@ export function TrackRow({
             behind the hover-only actions (see QueueRow) */}
         {onHeart && <RowHeart favorited={favorited === true} held={menuOpen} onHeart={onHeart} />}
       </div>
+      {/* the Tracks lens's data cluster: a RESERVED DR cell (the duration-cell
+          principle) — alignment holds whether or not a value exists */}
+      {dr !== undefined && (
+        <div className="flex w-12 justify-end font-mono text-[10.5px]" data-track-dr>
+          {dr != null && <DrBadge dr={dr} className="" />}
+        </div>
+      )}
       <DurationCell secs={node.durationSecs} />
     </div>
   );

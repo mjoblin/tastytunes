@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useKnownDrs } from "@/lib/audioAnalysis";
 import { useSavedPerformer } from "@/hooks/useQueuePerformer";
 import { Heart, Loader2, MoreHorizontal, Play } from "lucide-react";
-import { type MediaNode, type MediaQueueAction, type MediaServerInfo } from "@shared/model";
+import {
+  type MediaNode,
+  type MediaQueueAction,
+  type MediaServerInfo,
+  audioAnalysisKey,
+} from "@shared/model";
 import {
   favoriteKey,
   type Favorite,
@@ -20,6 +26,7 @@ import { AddToPlaylistPanel } from "@/components/overlays/AddToPlaylistPanel";
 import { PresetPicker } from "@/components/library/LibraryMenus";
 import { fromFavorite, fromNode, refToPlaylistItem } from "@/lib/mediaRef";
 import { recordPresetSaved, openRefInLibrary } from "@/lib/mediaActions";
+import { NameLine } from "@/components/media/NameLine";
 import { albumMenuItems, trackMenuItems } from "@/lib/mediaMenus";
 import { EmptyState } from "@/components/chrome/EmptyState";
 import { FilterInput } from "@/components/controls/FilterInput";
@@ -31,7 +38,7 @@ import { favoriteAct, favoriteHasRoute, type FavoriteActResult } from "@/lib/fav
 import { flashTarget } from "@/lib/scroll";
 import { playingStationName } from "@/lib/radio";
 import { useStationTuning } from "@/hooks/useStationTuning";
-import { ScreenTitle } from "@/components/chrome/Chrome";
+import { ScreenTitle, GAP_BETWEEN } from "@/components/chrome/Chrome";
 
 /** Kind visibility — session memory, like the Radio screen's chip state. */
 type FavKind = "all" | "station" | "album" | "track";
@@ -49,9 +56,40 @@ export function FavoritesScreen(): React.JSX.Element {
   // the performer the library knows for a track saved from a compilation queue (display only)
   const performerOf = useSavedPerformer();
   const favorites = useStore((s) => s.favorites);
+  // DR wherever a track row is (2026-09-02): the favorite tracks' known integers
+  const favTracks = useMemo(
+    () => favorites.filter((f): f is FavoriteMedia => f.kind === "track"),
+    [favorites],
+  );
+  const drKeys = useMemo(
+    () =>
+      favTracks.map((f) =>
+        audioAnalysisKey({
+          title: f.title,
+          artist: f.artist,
+          album: f.album,
+          durationSecs: f.durationSecs ?? null,
+        }),
+      ),
+    [favTracks],
+  );
+  const drByKey = useKnownDrs(drKeys);
+  const anyDr = Object.keys(drByKey).length > 0;
+  const drFor = (f: FavoriteMedia): number | null | undefined =>
+    anyDr
+      ? (drByKey[
+          audioAnalysisKey({
+            title: f.title,
+            artist: f.artist,
+            album: f.album,
+            durationSecs: f.durationSecs ?? null,
+          })
+        ] ?? null)
+      : undefined;
   const filter = useStore((s) => s.screenFilters.favorites);
   const setScreenFilter = useStore((s) => s.setScreenFilter);
   const playState = useStore((s) => s.playState);
+  const effectivePlayId = useStore((s) => s.effectivePlayId);
   const nowPlaying = useStore((s) => s.nowPlaying);
   const zoneState = useStore((s) => s.zoneState);
   const queue = useStore((s) => s.queue);
@@ -207,8 +245,7 @@ export function FavoritesScreen(): React.JSX.Element {
     const items = queue?.items ?? [];
     const matches = favQueueMatches(f);
     if (matches.length > 0) {
-      const playId = queue?.play_id ?? playState?.queue_id ?? null;
-      const curIdx = items.findIndex((i) => i.id === playId);
+      const curIdx = items.findIndex((i) => i.id === effectivePlayId);
       const target = matches.find((mi) => items.indexOf(mi) >= curIdx) ?? matches[0];
       void tt.command({ type: "playQueueId", queueId: target.id as number });
       if (el) flashTarget(el);
@@ -310,7 +347,7 @@ export function FavoritesScreen(): React.JSX.Element {
 
   return (
     <div className="h-full flex flex-col">
-      <header className="drag-region flex items-center gap-3 px-8 pt-8 pb-4">
+      <header className={`drag-region flex items-center ${GAP_BETWEEN} px-8 pt-8 pb-4`}>
         <ScreenTitle>Favorites</ScreenTitle>
         <div className="flex-1" />
         {total > 0 && (
@@ -456,16 +493,21 @@ export function FavoritesScreen(): React.JSX.Element {
                       kind="track"
                       artUrl={f.artUrl}
                       subtitle={
-                        [
-                          [performerOf(f) ?? f.artist, f.album].filter(Boolean).join(" — "),
-                          !routed && f.serverName ? `${f.serverName} is offline` : "",
-                        ]
-                          .filter(Boolean)
-                          .join(" · ") || undefined
+                        <>
+                          <NameLine
+                            artist={performerOf(f) ?? f.artist}
+                            album={f.album}
+                            ref={fromFavorite(f)}
+                          />
+                          {!routed && f.serverName
+                            ? `${(performerOf(f) ?? f.artist ?? f.album) ? " · " : ""}${f.serverName} is offline`
+                            : ""}
+                        </>
                       }
                       playing={trackPlaying(f)}
                       dimmed={!active || !routed}
                       duration={f.durationSecs ?? null}
+                      dr={drFor(f)}
                       onClick={(el) => playTrack(f, el)}
                       onContextMenu={(e) => openMenu(f, e)}
                       actions={

@@ -67,7 +67,7 @@ import { useConfirmPopover } from "@/components/chrome/Confirm";
 import { useStore, type Screen } from "@/store";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { DISPLAY_FONTS } from "@/hooks/useDisplayFont";
-import { cx } from "@/lib/format";
+import { cx, fmtCount } from "@/lib/format";
 import { SignalDot } from "@/components/device/SignalLamp";
 import { clearRecentsWithUndo } from "@/lib/recents";
 import {
@@ -307,6 +307,37 @@ export function SettingsScreen(): React.JSX.Element {
                     hint="Tint controls and glows with the playing album's dominant color. The tastytunes gold (the logo and the playing markers) never changes."
                     checked={settings.accentFollowsArt}
                     onChange={(accentFollowsArt) => void save({ accentFollowsArt })}
+                  />
+
+                  <Toggle
+                    label="Waveforms"
+                    // The second sentence exists only until the first waveform
+                    // proves the feature real here (settings.waveformSeen) —
+                    // an honest answer for the household whose toggles would
+                    // otherwise never visibly do anything.
+                    hint={
+                      settings.waveformSeen
+                        ? "Generate waveforms from audio files on your local media server."
+                        : "Generate waveforms from audio files on your local media server. None yet. They appear once a track from a local media server has played."
+                    }
+                    checked={settings.waveforms}
+                    onChange={(waveforms) => void save({ waveforms })}
+                  />
+
+                  <Toggle
+                    label="Waveform as the seek bar"
+                    hint="Displays the playing track's waveform as the seek bar. The plain bar returns for radio and tracks without a waveform."
+                    disabled={!settings.waveforms}
+                    checked={settings.waveformSeekBar}
+                    onChange={(waveformSeekBar) => void save({ waveformSeekBar })}
+                  />
+
+                  <Toggle
+                    label="Waveform on the Now Playing screen"
+                    hint="Displays the playing track's waveform under the album art, with its peak and loudness details."
+                    disabled={!settings.waveforms}
+                    checked={settings.waveformNowPlaying}
+                    onChange={(waveformNowPlaying) => void save({ waveformNowPlaying })}
                   />
                 </div>
               </section>
@@ -1153,7 +1184,7 @@ function LibrariesSection({
       <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
         <Toggle
           label="Build indexes automatically"
-          hint="Automatically index each searchable media server in the Library screen, and rebuild when the server reports changes. Off means indexes only build from the buttons below."
+          hint="Automatically index each searchable media server when the streamer connects, and rebuild when the server reports changes. Off means indexes only build from the buttons below."
           checked={settings.mediaIndexAuto}
           onChange={(mediaIndexAuto) => void save({ mediaIndexAuto })}
         />
@@ -1183,7 +1214,7 @@ function LibrariesSection({
                     ? `couldn't index · ${st.failure ?? "no index"}`
                     : st.state === "none"
                       ? "not indexed · search asks the server live"
-                      : `${st.tracks.toLocaleString()} tracks · ${st.albums.toLocaleString()} albums · updated ${age(st.builtAt)}`}
+                      : `${fmtCount(st.tracks)} tracks · ${fmtCount(st.albums)} albums · updated ${age(st.builtAt)}`}
               </span>
             </span>
             <HeaderChip
@@ -1258,7 +1289,7 @@ function HistorySection({
               ? "…"
               : stats.events === 0
                 ? `Empty. Plays are recorded after ${LISTEN_FLOOR_SECS} seconds of real play time.`
-                : `${stats.events.toLocaleString()} events · ${fmtBytes(stats.bytes)}${sinceLabel ? ` · since ${sinceLabel}` : ""}`
+                : `${fmtCount(stats.events)} events · ${fmtBytes(stats.bytes)}${sinceLabel ? ` · since ${sinceLabel}` : ""}`
           }
         >
           <div className="flex items-center gap-2">
@@ -1268,7 +1299,7 @@ function HistorySection({
                   if (res != null)
                     showToast({
                       kind: "success",
-                      text: `Exported ${res.events.toLocaleString()} events to ${res.file}`,
+                      text: `Exported ${fmtCount(res.events)} events to ${res.file}`,
                     });
                 })
               }

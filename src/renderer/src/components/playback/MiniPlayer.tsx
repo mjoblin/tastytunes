@@ -46,6 +46,7 @@ import { cx, deriveNowPlaying, fmtTime } from "@/lib/format";
  */
 export function MiniPlayer(): React.JSX.Element {
   const playState = useStore((s) => s.playState);
+  const effectivePlayId = useStore((s) => s.effectivePlayId);
   const nowPlaying = useStore((s) => s.nowPlaying);
   const zoneState = useStore((s) => s.zoneState);
   const queue = useStore((s) => s.queue);
@@ -88,7 +89,7 @@ export function MiniPlayer(): React.JSX.Element {
 
   // what's next in the queue
   const items = queue?.items ?? [];
-  const currentIdx = items.findIndex((i) => i.id === (queue?.play_id ?? playState?.queue_id));
+  const currentIdx = items.findIndex((i) => i.id === effectivePlayId);
   const next = currentIdx >= 0 ? (items[currentIdx + 1] ?? null) : null;
 
   // Shared mute toggle: same as before (gold when muted). Tooltip also teaches

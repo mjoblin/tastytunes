@@ -13,6 +13,22 @@ import { cx } from "@/lib/format";
  */
 
 /**
+ * TOOLBAR SPACING, TWO TIERS (user call 2026-09-01: every control row sat at
+ * one 6px gap, which read cramped AND said nothing about grouping). Controls
+ * that do one kind of job sit GAP_WITHIN apart (the facet pickers; sort +
+ * layout; the queue's three save verbs); kinds sit GAP_BETWEEN apart (the
+ * text filter | a partition | the facets | a verb | the sort chip). A text
+ * filter is always its own group — typing is a different kind of act from
+ * clicking. The between tier carries a smaller row gap so a wrapping rail
+ * (the Search categories) stacks close. Every toolbar row reads these two
+ * names; a raw gap class on a control row is drift (S55). Sized 6px / 12px
+ * (user, 2026-09-02: one level down from the first cut's 8 / 16 — the
+ * distinction, not the air, was the point).
+ */
+export const GAP_WITHIN = "gap-1.5";
+export const GAP_BETWEEN = "gap-x-3 gap-y-1.5";
+
+/**
  * The ringed icon/label button that sits in screen headers, settings rows and
  * side panels — 22 hand-written copies before this.
  *
@@ -97,7 +113,10 @@ export function Chip({
   return (
     <button
       className={cx(
-        "rounded-full px-3 py-1 text-[12px] ring-1 transition-all",
+        // h-8: the toolbar height every control shares (FilterInput, HeaderChip's
+        // p-2 + 16px glyph, PrimaryButton, Segmented) — a 26px pill beside a 32px
+        // filter box read as a different row (user, 2026-09-01)
+        "inline-flex items-center rounded-full h-8 px-3 text-[12px] ring-1 transition-all",
         state === "disabled"
           ? "ring-edge/60 bg-panel/40 text-faint/50 cursor-default"
           : state === "active"
@@ -141,6 +160,12 @@ export function PrimaryButton({
       className={cx(
         "rounded-lg bg-gold text-bg font-medium shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.3)]",
         "hover:brightness-110 disabled:opacity-40 disabled:shadow-none",
+        // a disabled primary is INERT, not merely dim: no hover lift, no press
+        // squash (Chromium keeps matching :active on a disabled button, so the
+        // Tracks lens's waiting Play these still animated under a click —
+        // user, 2026-09-01), and the arrow cursor of a native disabled control
+        // rather than the web's scolding not-allowed sign
+        "disabled:hover:brightness-100 motion-safe:disabled:active:scale-100 disabled:cursor-default",
         "motion-safe:active:scale-95 transition-all",
         className,
       )}

@@ -94,6 +94,15 @@ export class DiskCache<T> {
     }
   }
 
+  /** Every live entry's value, no LRU bump — for bulk map reads (the
+   *  album-DR map is read whole by the lens sort). Definitive-miss nulls
+   *  are skipped. */
+  snapshot(): Array<[string, T]> {
+    const out: Array<[string, T]> = [];
+    for (const [k, e] of this.load()) if (e.v != null) out.push([k, e.v]);
+    return out;
+  }
+
   stats(): { entries: number; bytes: number } {
     // Report the last-flushed file size rather than forcing a synchronous
     // write on the main thread (Settings polls this); pending entries are

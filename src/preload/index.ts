@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
-import type { MediaInfoQuery, TrackInfoQuery } from "@shared/model";
+import type { AlbumDr, AudioAnalysis, MediaInfoQuery, TrackInfoQuery } from "@shared/model";
 import { IPC, type PushMessage, type StreamerCommand, type TastyTunesApi } from "@shared/ipc";
 import {
   type AppSettings,
@@ -39,6 +39,14 @@ const api: TastyTunesApi = {
     ipcRenderer.invoke(IPC.fetchAlbumInfo, artist, album, force),
   fetchTrackInfo: (query: TrackInfoQuery, force?: boolean) =>
     ipcRenderer.invoke(IPC.fetchTrackInfo, query, force),
+  expTrackAudio: (serverUdn: string, objectId: string) =>
+    ipcRenderer.invoke(IPC.expTrackAudio, serverUdn, objectId),
+  audioAnalysisGet: (key: string) => ipcRenderer.invoke(IPC.audioAnalysisGet, key),
+  audioAnalysisPut: (key: string, analysis: AudioAnalysis) =>
+    ipcRenderer.invoke(IPC.audioAnalysisPut, key, analysis),
+  albumDrMap: () => ipcRenderer.invoke(IPC.albumDrMap),
+  albumDrPut: (key: string, entry: AlbumDr) => ipcRenderer.invoke(IPC.albumDrPut, key, entry),
+  audioDrMany: (keys: string[]) => ipcRenderer.invoke(IPC.audioDrMany, keys),
   toggleMini: () => ipcRenderer.invoke(IPC.toggleMini),
   showMain: (screen?: string) => ipcRenderer.invoke(IPC.showMain, screen),
   setSleep: (sleep: SleepTimer | null) => ipcRenderer.invoke(IPC.setSleep, sleep),

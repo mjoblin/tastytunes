@@ -4,6 +4,7 @@ import { RECONNECT_GRACE_MS, type KnownDevice } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { useShortcuts } from "@/hooks/useShortcuts";
+import { useIndexingToast } from "@/hooks/useIndexingToast";
 import { useWakeHold } from "@/hooks/useWakeHold";
 import { useArtAccent } from "@/hooks/useArtAccent";
 import { useArtLoadable } from "@/hooks/useArtLoadable";
@@ -40,6 +41,7 @@ import { HeaderChip } from "@/components/chrome/Chrome";
 
 export default function App(): React.JSX.Element {
   useShortcuts();
+  useIndexingToast();
 
   const screen = useStore((s) => s.screen);
   const connection = useStore((s) => s.connection);

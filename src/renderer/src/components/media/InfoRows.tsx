@@ -6,6 +6,7 @@ import {
   type MediaNode,
   type MediaServerProfile,
 } from "@shared/model";
+import { drTone } from "@/components/media/Waveform";
 import type { StreamInfo } from "@shared/model";
 
 /**
@@ -111,7 +112,7 @@ export function streamRows(stream: StreamInfo): Row[] {
 }
 
 /** A track's own file format facts, from the library index. */
-export function trackFormatRows(node: MediaNode): Row[] {
+export function trackFormatRows(node: MediaNode, dr: number | null = null): Row[] {
   const f = node.format;
   if (node.isContainer || !f) return [];
   return [
@@ -121,6 +122,17 @@ export function trackFormatRows(node: MediaNode): Row[] {
     ["Bitrate", f.kbps ? `${f.kbps} kbps` : null],
     ["Channels", f.channels ?? null],
     ["File size", f.sizeBytes ? fmtBytes(f.sizeBytes) : null],
+    // DR is a fact about the MASTER, so it files with the file facts. Rows
+    // are PROSE: tinted text with the band word attached — the detail layer
+    // says what the token only points at (user call, 2026-09-01).
+    [
+      "Dynamic range",
+      dr != null && dr > 0 ? (
+        <span style={{ color: drTone(dr).tone }} data-info-dr>
+          {`DR${dr} · ${drTone(dr).word}`}
+        </span>
+      ) : null,
+    ],
   ];
 }
 

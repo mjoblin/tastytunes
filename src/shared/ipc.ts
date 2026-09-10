@@ -70,6 +70,8 @@ import type {
   UpdateState,
   MediaInfoQuery,
   MediaInfoTarget,
+  AudioAnalysis,
+  AlbumDr,
 } from "./model";
 
 /** The one copy of the project URL — user agents, Help menu, release pages. */
@@ -286,6 +288,20 @@ export interface TastyTunesApi {
   /** Recording-level credits for the playing track via MusicBrainz (main
    *  process, cached; null = no match). `force` bypasses the cache read. */
   fetchTrackInfo(query: TrackInfoQuery, force?: boolean): Promise<TrackInfo | null>;
+  /** EXPERIMENT (0.7 exploration): the playing track's raw audio bytes from
+   *  its local media server, for renderer-side decode. Null on any miss. */
+  expTrackAudio(serverUdn: string, objectId: string): Promise<ArrayBuffer | null>;
+  /** EXPERIMENT: a stored analysis by content key (null = none yet). */
+  audioAnalysisGet(key: string): Promise<AudioAnalysis | null>;
+  /** EXPERIMENT: persist a finished analysis under its content key. */
+  audioAnalysisPut(key: string, analysis: AudioAnalysis): Promise<void>;
+  /** EXPERIMENT: the whole album-DR map (albumDrKey -> AlbumDr). */
+  albumDrMap(): Promise<Record<string, AlbumDr>>;
+  /** EXPERIMENT: record an album's DR (written only when complete). */
+  albumDrPut(key: string, entry: AlbumDr): Promise<void>;
+  /** EXPERIMENT: the KNOWN DR per content key (cache-only, never a fetch) —
+   *  the album modal's coverage line in one round trip. */
+  audioDrMany(keys: string[]): Promise<Record<string, number>>;
   /** Open/close the mini player window. */
   toggleMini(): Promise<void>;
   /** Show and focus the main window. */
@@ -419,6 +435,12 @@ export const IPC = {
   fetchArtistInfo: "tt:fetchArtistInfo",
   fetchAlbumInfo: "tt:fetchAlbumInfo",
   fetchTrackInfo: "tt:fetchTrackInfo",
+  expTrackAudio: "tt:expTrackAudio",
+  audioAnalysisGet: "tt:audioAnalysisGet",
+  audioAnalysisPut: "tt:audioAnalysisPut",
+  albumDrMap: "tt:albumDrMap",
+  albumDrPut: "tt:albumDrPut",
+  audioDrMany: "tt:audioDrMany",
   toggleMini: "tt:toggleMini",
   showMain: "tt:showMain",
   setSleep: "tt:setSleep",

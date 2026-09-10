@@ -1735,18 +1735,24 @@ function buildDemo(host: string): {
 
   // Move the playing track by ±1 and push updated state, so Next/Prev (and
   // "end of track" sleep timers) work in the demo. Queue mode only.
+  // Advance by POSITION, as the device walks the list (a moved entry is
+  // reached where it now sits) — the mock's rule, mirrored. The demo has no
+  // playhead ticker, so its boundaries are skips only and the firmware's
+  // gapless-prefetch quirk (mock-streamer.mjs, 2026-09-02) cannot arise here.
   function advanceTrack(delta: number, push: (path: string) => void): void {
     const ps = DATA["/zone/play_state"];
+    const items = (DATA["/queue/list"] as { items?: QueueItem[] }).items ?? [];
     const cur = (ps.queue_id as number | null) ?? PLAYING_QUEUE_ID;
-    const next = Math.min(QUEUE_LEN, Math.max(1, cur + (delta > 0 ? 1 : -1)));
-    if (next === cur) return;
-    const md = trackMeta(next);
+    const curIdx = items.findIndex((it) => it.id === cur);
+    const nextItem = curIdx >= 0 ? items[curIdx + (delta > 0 ? 1 : -1)] : undefined;
+    if (!nextItem) return;
+    const md = nextItem.metadata as { title?: string; art_url?: string; duration?: number };
     DATA["/zone/play_state"] = {
       ...ps,
       position: 0,
-      queue_index: next - 1,
-      queue_id: next,
-      metadata: { ...(ps.metadata as Dict), ...md, playback_source: "punnet" },
+      queue_index: nextItem.position,
+      queue_id: nextItem.id,
+      metadata: { ...(ps.metadata as Dict), ...nextItem.metadata, playback_source: "punnet" },
     };
     DATA["/zone/play_state/position"] = { position: 0 };
     const np = DATA["/zone/now_playing"];
@@ -1758,9 +1764,13 @@ function buildDemo(host: string): {
         art_url: md.art_url,
         progress: { position: 0, duration: md.duration },
       },
-      queue: { ...(np.queue as Dict), position: next - 1 },
+      queue: { ...(np.queue as Dict), position: nextItem.position },
     };
-    DATA["/queue/list"] = { ...DATA["/queue/list"], play_postition: next - 1, play_id: next };
+    DATA["/queue/list"] = {
+      ...DATA["/queue/list"],
+      play_postition: nextItem.position,
+      play_id: nextItem.id,
+    };
     push("/zone/play_state");
     push("/zone/play_state/position");
     push("/zone/now_playing");

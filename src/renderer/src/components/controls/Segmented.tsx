@@ -28,7 +28,9 @@ export function Segmented<T extends string | number | boolean>({
   className?: string;
 }): React.JSX.Element {
   return (
-    <div className={cx("no-drag flex rounded-lg ring-1 ring-edge bg-panel/70 p-0.5", className)}>
+    <div
+      className={cx("no-drag flex h-8 rounded-lg ring-1 ring-edge bg-panel/70 p-0.5", className)}
+    >
       {options.map((opt) => (
         <button
           key={String(opt.value)}
@@ -39,7 +41,7 @@ export function Segmented<T extends string | number | boolean>({
           aria-disabled={opt.disabled || undefined}
           data-tip={opt.tip}
           className={cx(
-            "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] transition-colors",
+            "flex items-center gap-1.5 px-3 rounded-md text-[12px] transition-colors",
             opt.tip && "tip-top",
             opt.disabled
               ? "text-faint opacity-50 cursor-default"

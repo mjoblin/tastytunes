@@ -55,10 +55,23 @@ import { scrobbler } from "./lookups/scrobbler";
 import { fetchArtistInfo } from "./lookups/artistInfo";
 import { fetchAlbumInfo } from "./lookups/albumInfo";
 import { fetchTrackInfo } from "./lookups/trackInfo";
+import {
+  albumDrMap,
+  albumDrPut,
+  audioAnalysisGet,
+  audioAnalysisPut,
+  audioDrMany,
+} from "./lookups/audioAnalysis";
 import { fetchCoverArt } from "./lookups/coverArt";
 import { radioByTags, radioSearch, radioTop } from "./lookups/radioBrowser";
 import { clearLookupCaches, flushLookupCaches, lookupCacheStats } from "./lookups/diskCache";
-import { browse as mediaBrowse, presetSave, queueAdd, refreshServers } from "./media/upnpBrowser";
+import {
+  audioResUrl,
+  browse as mediaBrowse,
+  presetSave,
+  queueAdd,
+  refreshServers,
+} from "./media/upnpBrowser";
 import {
   catchUpOnResume,
   dismissMissedSchedule,
@@ -142,6 +155,19 @@ const menuDeps = {
 const MIN_WIDTH = 800;
 const MIN_HEIGHT = 520;
 
+const TEST_INACTIVE = process.env.TASTYTUNES_TEST_INACTIVE === "1";
+/** Show the main window; inactive (no focus steal) under the suite's flag. */
+function showMain(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (TEST_INACTIVE) mainWindow.showInactive();
+  else mainWindow.show();
+}
+/** Focus the main window, unless the suite asked us never to take focus. */
+function focusMain(): void {
+  if (TEST_INACTIVE || !mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.focus();
+}
+
 function createWindow(): void {
   // Reopen at the remembered size/position — but only place it if the saved
   // spot is still on a connected display (mirrors the mini-player logic), and
@@ -177,7 +203,12 @@ function createWindow(): void {
     },
   });
 
-  mainWindow.on("ready-to-show", () => mainWindow?.show());
+  // TASTYTUNES_TEST_INACTIVE (2026-09-03): the verification suite drives the
+  // app through CDP, which needs no OS focus. Showing the window inactive keeps
+  // the user's keyboard where it was (their keystrokes used to land in the app
+  // under test and corrupt the run). Blocks that need real key-window status
+  // opt out and launch normally.
+  mainWindow.on("ready-to-show", () => showMain());
   mainWindow.on("focus", () => deviceManager.healthCheck());
   // Null the handle when the window closes (macOS keeps the app alive) —
   // late callers (updater announce, second-instance) otherwise poke a
@@ -335,8 +366,8 @@ function showMainWindow(): void {
     return;
   }
   if (mainWindow.isMinimized()) mainWindow.restore();
-  mainWindow.show();
-  mainWindow.focus();
+  showMain();
+  focusMain();
 }
 
 const trayDeps = {
@@ -376,8 +407,8 @@ function sendMenuCommand(command: MenuCommand): void {
     return;
   }
   if (mainWindow.isMinimized()) mainWindow.restore();
-  mainWindow.show();
-  mainWindow.focus();
+  showMain();
+  focusMain();
   mainWindow.webContents.send(IPC.push, { kind: "menu", command });
 }
 
@@ -439,6 +470,54 @@ function registerIpc(): void {
   ipcMain.handle(IPC.fetchAlbumInfo, (_e, artist: string, album: string, force?: boolean) =>
     getSettings().artistInfo ? fetchAlbumInfo(artist, album, !!force) : null,
   );
+  // EXPERIMENT (0.7 exploration): fetch one track's audio bytes for the
+  // renderer's waveform decode. Read-only ranged-capable GET against the
+  // LOCAL media server; capped so a mistake can't balloon over IPC. 256MB
+  // covers ~20 minutes of 24/44.1 or ~7 of 24/96 (the experiment's 64MB
+  // silently dropped a 71MB five-minute track, 2026-09-01); the streaming
+  // decoder retires the cap outright (ROADMAP).
+  ipcMain.handle(IPC.expTrackAudio, async (_e, serverUdn: string, objectId: string) => {
+    const host = streamerHost();
+    if (!host || typeof serverUdn !== "string" || typeof objectId !== "string") return null;
+    const url = await audioResUrl(host, serverUdn, objectId);
+    if (!url) return null;
+    try {
+      const res = await loggedFetch("media-audio", url, { signal: AbortSignal.timeout(60_000) });
+      if (!res.ok) return null;
+      const buf = Buffer.from(await res.arrayBuffer());
+      if (buf.byteLength > 256 * 1024 * 1024) return null;
+      return buf;
+    } catch {
+      return null;
+    }
+  });
+  // EXPERIMENT (0.7 exploration): the persisted analysis stores — content-
+  // keyed track analyses and the album-DR map (lookups/audioAnalysis holds
+  // the shape guards; the store is a cache, never truth).
+  // The first analysis SERVED — stored or read back — is the evidence the
+  // playback bar keys its taller geometry on (settings.waveformSeen); set
+  // once, here, at the one seam every analysis crosses.
+  const noteWaveformSeen = (): void => {
+    if (getSettings().waveformSeen) return;
+    broadcastSettings(updateSettings({ waveformSeen: true }));
+  };
+  ipcMain.handle(IPC.audioAnalysisGet, (_e, key: unknown) => {
+    const hit = typeof key === "string" ? audioAnalysisGet(key) : null;
+    if (hit) noteWaveformSeen();
+    return hit;
+  });
+  ipcMain.handle(IPC.audioAnalysisPut, (_e, key: unknown, analysis: unknown) => {
+    if (typeof key !== "string") return;
+    audioAnalysisPut(key, analysis);
+    noteWaveformSeen();
+  });
+  ipcMain.handle(IPC.albumDrMap, () => albumDrMap());
+  ipcMain.handle(IPC.audioDrMany, (_e, keys: unknown) =>
+    Array.isArray(keys) ? audioDrMany(keys.filter((k): k is string => typeof k === "string")) : {},
+  );
+  ipcMain.handle(IPC.albumDrPut, (_e, key: unknown, entry: unknown) => {
+    if (typeof key === "string") albumDrPut(key, entry);
+  });
   ipcMain.handle(IPC.fetchTrackInfo, (_e, query: TrackInfoQuery, force?: boolean) =>
     getSettings().artistInfo &&
     typeof query?.artist === "string" &&
@@ -628,7 +707,7 @@ if (!gotLock) {
     // first instance is running window-less (macOS after close).
     if (!mainWindow) return createWindow();
     if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.focus();
+    focusMain();
   });
 
   app
@@ -643,6 +722,20 @@ if (!gotLock) {
       // on open the way the renderer does, so device movement has to push it.
       deviceManager.onPush = (msg) => {
         if (trayWantsRefresh(msg.kind)) refreshTrayMenu();
+        // INDEX AT CONNECT (2026-09-02, user call): the media indexes used to
+        // build only when the Library screen first listed servers, so on a
+        // fresh install the Queue's album links and Open in Library could "not
+        // find" an album the app had simply never looked for. The same
+        // fire-and-forget freshness pass now runs the moment a streamer
+        // connects; ensureFresh is idempotent (fresh indexes are skipped, the
+        // auto toggle is honoured) and the Library's own listing still re-runs
+        // it. Completion off-screen is what the indexing toast reports.
+        if (msg.kind === "connection" && msg.state.phase === "connected") {
+          const host = msg.state.host;
+          void refreshServers(host)
+            .then((servers) => mediaIndex.ensureFresh(host, servers))
+            .catch(() => {});
+        }
       };
       mcpBridge.sync(getSettings());
       void deviceManager.startup();

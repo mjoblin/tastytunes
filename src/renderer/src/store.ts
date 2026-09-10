@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { contentPlayId, PLAYING_SETTLE_MS } from "@/lib/playingEntry";
 import type { MenuCommand, PushMessage, Snapshot } from "@shared/ipc";
 import type {
   AppSettings,
@@ -15,6 +16,7 @@ import type {
   SleepTimer,
   MediaSearchAllGroup,
   MediaNode,
+  AlbumDr,
 } from "@shared/model";
 import type {
   Favorite,
@@ -74,7 +76,7 @@ export interface LibrarySpot {
   query: string;
   searchNow: { query: string; items: MediaNode[]; total: number } | null;
   crossNow: { query: string; groups: MediaSearchAllGroup[] } | null;
-  lens: "albums" | "artists" | null;
+  lens: "albums" | "artists" | "tracks" | null;
 }
 
 /**
@@ -92,7 +94,7 @@ export interface NavEntry {
 
 /** A Library destination planted by another screen (Favorites "open album"):
  *  the LibraryScreen consumes it on its next mount/reset and navigates there. */
-export interface LibraryTarget {
+export interface LibraryNodeTarget {
   serverUdn: string;
   objectId: string;
   /** Breadcrumb titles from root INCLUDING the target's own title — feeds the
@@ -115,6 +117,15 @@ export interface LibraryTarget {
   nonce: number;
 }
 
+/** A NAME asked for from another screen's row (2026-09-02): the Library
+ *  opens the Artists lens at the root, focused and revealed on that artist. */
+export interface LibraryArtistTarget {
+  artist: string;
+  nonce: number;
+}
+
+export type LibraryTarget = LibraryNodeTarget | LibraryArtistTarget;
+
 /** The station most recently streamed BY THIS APP this session — the only way
  *  Now Playing can heart a radio stream (play_state carries no URL). */
 export interface LastStation {
@@ -122,6 +133,18 @@ export interface LastStation {
   name: string;
   favicon: string | null;
   radioBrowserUuid: string | null;
+}
+
+/** EXPERIMENT (0.7 exploration): the Analyze-audio sweep's live position. */
+export interface AnalysisProgress {
+  /** albumDrKey of the album under the needle. */
+  key: string;
+  album: string;
+  done: number;
+  /** 0 while the sweep is still counting (browse in flight). */
+  total: number;
+  /** Sweeps waiting behind this one (the queue is global). */
+  queued: number;
 }
 
 /**
@@ -190,6 +213,13 @@ interface TTState {
   settings: AppSettings;
 
   playState: ZonePlayState | null;
+  /**
+   * THE playing queue id every surface reads (the Queue's row, the tray
+   * panel, the mini's "next", the Library/Favorites/Playlists highlights):
+   * the pointer, unless the readout has named a different single entry for
+   * PLAYING_SETTLE_MS — then that entry (lib/playingEntry, contentPlayId).
+   */
+  effectivePlayId: number | null;
   /**
    * When the current radio station was tuned, as THIS APP observed it —
    * stamped on every station-identity change in the play-state pushes, so
@@ -368,6 +398,14 @@ interface TTState {
   setShortcutsOpen: (open: boolean) => void;
   setInfoOpen: (open: boolean) => void;
   setMediaInfo: (target: MediaInfoTarget | null) => void;
+  /** EXPERIMENT (0.7 exploration): the album-DR map (albumDrKey -> AlbumDr),
+   *  loaded lazily by useAlbumDr and updated in place by Analyze audio. */
+  albumDr: Record<string, AlbumDr>;
+  setAlbumDr: (map: Record<string, AlbumDr>) => void;
+  setAlbumDrEntry: (key: string, entry: AlbumDr) => void;
+  /** EXPERIMENT: the running sweep's position (null = idle). */
+  analysisProgress: AnalysisProgress | null;
+  setAnalysisProgress: (p: AnalysisProgress | null) => void;
   setPaletteOpen: (open: boolean) => void;
   setDisplayMode: (on: boolean) => void;
   setLyricsOpen: (open: boolean) => void;
@@ -375,7 +413,8 @@ interface TTState {
   setContextTab: (tab: "artist" | "album" | "track" | "stream") => void;
   setScreenFilter: (screen: keyof TTState["screenFilters"], text: string) => void;
   /** Navigate to the Library opened at a specific node (Favorites → album). */
-  openInLibrary: (target: Omit<LibraryTarget, "nonce">) => void;
+  openInLibrary: (target: Omit<LibraryNodeTarget, "nonce">) => void;
+  openArtistInLibrary: (artist: string) => void;
   clearLibraryTarget: () => void;
   setLastStation: (st: LastStation) => void;
   setAmbientWindowActive: (on: boolean) => void;
@@ -407,6 +446,33 @@ const navTo = (
         arrivedByHistory: false,
       };
 let navRestoreSeq = 0;
+
+// The pointer-vs-readout disagreement (lib/playingEntry) must PERSIST before
+// the playing row moves: an ordinary boundary delivers the two as separate
+// pushes and they disagree for a beat. The clock lives here, beside the one
+// field it feeds; the timer re-derives once the window has passed.
+let disagree: { key: string; since: number } | null = null;
+let settleTimer: ReturnType<typeof setTimeout> | null = null;
+function settledPlayId(queue: QueueList | null, playState: ZonePlayState | null): number | null {
+  const { raw, content } = contentPlayId(queue, playState);
+  if (content == null) {
+    disagree = null;
+    return raw;
+  }
+  const key = `${raw}|${content}`;
+  const now = Date.now();
+  if (!disagree || disagree.key !== key) {
+    disagree = { key, since: now };
+    if (settleTimer) clearTimeout(settleTimer);
+    settleTimer = setTimeout(() => {
+      settleTimer = null;
+      const s = useStore.getState();
+      useStore.setState({ effectivePlayId: settledPlayId(s.queue, s.playState) });
+    }, PLAYING_SETTLE_MS + 50);
+    return raw;
+  }
+  return now - disagree.since >= PLAYING_SETTLE_MS ? content : raw;
+}
 
 export const useStore = create<TTState>((set, get) => ({
   screen: "now-playing",
@@ -448,6 +514,7 @@ export const useStore = create<TTState>((set, get) => ({
   settings: DEFAULT_SETTINGS,
 
   playState: null,
+  effectivePlayId: null,
   stationTunedAt: null,
   nowPlaying: null,
   zoneState: null,
@@ -596,6 +663,11 @@ export const useStore = create<TTState>((set, get) => ({
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   setInfoOpen: (infoOpen) => set({ infoOpen }),
   setMediaInfo: (mediaInfo) => set({ mediaInfo }),
+  albumDr: {},
+  setAlbumDr: (albumDr) => set({ albumDr }),
+  setAlbumDrEntry: (key, entry) => set((s) => ({ albumDr: { ...s.albumDr, [key]: entry } })),
+  analysisProgress: null,
+  setAnalysisProgress: (analysisProgress) => set({ analysisProgress }),
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
   setDisplayMode: (displayMode) => set({ displayMode }),
   // The two Now Playing drawers are mutually exclusive — opening one closes
@@ -617,6 +689,13 @@ export const useStore = create<TTState>((set, get) => ({
       screen: "library",
       libraryResetNonce: s.libraryResetNonce + 1,
     })),
+  openArtistInLibrary: (artist) =>
+    set((s) => ({
+      ...navTo(s, "library"),
+      libraryTarget: { artist, nonce: s.libraryResetNonce + 1 },
+      screen: "library",
+      libraryResetNonce: s.libraryResetNonce + 1,
+    })),
   clearLibraryTarget: () => set({ libraryTarget: null }),
   setLastStation: (lastStation) => set({ lastStation }),
   setAmbientWindowActive: (ambientWindowActive) => set({ ambientWindowActive }),
@@ -634,6 +713,7 @@ export const useStore = create<TTState>((set, get) => ({
       discovering: snap.discovering,
       settings: snap.settings,
       playState: snap.playState,
+      effectivePlayId: settledPlayId(snap.queue, snap.playState),
       // Opened mid-broadcast: count from app start — honest for what the
       // app has observed.
       stationTunedAt: isRadioMetadata(snap.playState?.metadata) ? Date.now() : null,
@@ -720,6 +800,7 @@ export const useStore = create<TTState>((set, get) => ({
               msg.data.metadata?.station !== s.playState?.metadata?.station);
           return {
             playState: msg.data,
+            effectivePlayId: settledPlayId(s.queue, msg.data),
             stationTunedAt: !radioNow
               ? null
               : stationChanged
@@ -736,7 +817,7 @@ export const useStore = create<TTState>((set, get) => ({
         case "zoneState":
           return { zoneState: msg.data };
         case "queue":
-          return { queue: msg.data };
+          return { queue: msg.data, effectivePlayId: settledPlayId(msg.data, s.playState) };
         case "presets":
           return { presets: msg.data };
         case "systemInfo":

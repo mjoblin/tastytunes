@@ -256,6 +256,18 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
           "Artists from the local library index with album and track counts — filter by name, sort by name or album count, page with limit/offset. role 'performers' (default) counts album artists and every performer, featured guests included; role 'composers' lists who wrote the tracks. Needs a ready index (see list_media_servers).",
       },
       {
+        name: "list_tracks",
+        title: "List tracks",
+        description:
+          "Every indexed track as one list, filtered by artist, album, genre, decade, format, lossless, hi-res or minimum dynamic range (DR), sorted by title, artist, album, year, duration, DR, plays or last played. Each row carries its play count and last-played time from the listening record when known. The app's Tracks view as a tool.",
+      },
+      {
+        name: "get_track_analysis",
+        title: "Get track analysis",
+        description:
+          "The audio analysis TastyTunes has for a track (the playing track by default): dynamic range (DR, the TT-DR procedure), peak, RMS and crest in dB, plus the album's DR when the whole album has been analyzed. Says so when a track has not been analyzed yet.",
+      },
+      {
         name: "get_media_info",
         title: "Get media info",
         description:
@@ -376,6 +388,24 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         name: "history_first_listen",
         title: "First listen",
         description: "When a track was first played, and when it first reached a full listen.",
+      },
+      {
+        name: "history_stats",
+        title: "History stats",
+        description:
+          "Plays, listens, last played and time heard for one track (the playing track by default) or, given only an album, for the whole album — from the listening record, library plays only.",
+      },
+      {
+        name: "history_unplayed",
+        title: "Unplayed albums",
+        description:
+          "Albums in the library with no recorded play since the listening record began (the record's start date is included). Filter by artist, genre or decade.",
+      },
+      {
+        name: "history_rediscover",
+        title: "Rediscover",
+        description:
+          "Albums that HAVE been played but not since a date (default: 90 days ago), longest-unheard first, with their play counts — the 'not heard since spring' list.",
       },
     ],
   },
@@ -509,6 +539,11 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         name: "move_queue_item",
         title: "Move queue item",
         description: "Move a queue track (by id) to a new position (0-based; see list_queue).",
+      },
+      {
+        name: "clear_queue",
+        title: "Clear queue",
+        description: "Remove every item from the play queue (the streamer's clear-all).",
       },
     ],
   },

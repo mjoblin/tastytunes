@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Captions, Disc3, RadioTower, X } from "lucide-react";
+import { Captions, Disc3, RadioTower, X, AudioLines } from "lucide-react";
 import { useStore } from "@/store";
 import { CrossfadeArt } from "@/components/media/CrossfadeArt";
 import { usePlayhead } from "@/hooks/usePlayhead";
@@ -7,6 +7,7 @@ import { useArtLoadable } from "@/hooks/useArtLoadable";
 import { useFadedText, useLyrics } from "@/hooks/useLyrics";
 import { useSettledSnapshot } from "@/hooks/useSettledSnapshot";
 import { cx, deriveNowPlaying } from "@/lib/format";
+import { DisplayWaveform } from "@/components/media/Waveform";
 
 /**
  * Full-screen "display mode" (Roon display mode / Volumio now-playing kiosk):
@@ -85,7 +86,10 @@ export function DisplayMode(): React.JSX.Element {
 
       <div
         className={cx(
-          "absolute bottom-6 right-7 font-mono text-[13px] text-dim transition-opacity",
+          // The clock shares the lyric line's vertical band (bottom-16), clear of
+          // the waveform strip below — one bottom edge for everything that
+          // floats above the strip (user call, 2026-08-30).
+          "absolute bottom-16 right-7 font-mono text-[13px] text-dim transition-opacity",
           cursorIdle && "opacity-60",
         )}
       >
@@ -94,6 +98,22 @@ export function DisplayMode(): React.JSX.Element {
 
       {/* top-RIGHT: the top-left corner belongs to macOS's (hidden but still
           click-swallowing) traffic-light zone in frameless windows */}
+      {/* EXPERIMENT: display mode's own waveform toggle — an in-mode button
+          like the lyrics one, never a Settings row (the face composes
+          itself). Hidden entirely when the master toggle is off. */}
+      {settings.waveforms && (
+        <button
+          onClick={() => void saveSettings({ displayWaveform: !settings.displayWaveform })}
+          title={settings.displayWaveform ? "Hide waveform" : "Show waveform"}
+          className={cx(
+            "absolute top-4 right-28 z-20 p-2 rounded-full hover:bg-veil2 transition-opacity",
+            settings.displayWaveform ? "text-gold" : "text-dim hover:text-ink",
+            cursorIdle ? "opacity-0" : "opacity-100",
+          )}
+        >
+          <AudioLines size={18} />
+        </button>
+      )}
       {lyricsToggleable && (
         <button
           onClick={() => void toggleLyrics()}
@@ -169,12 +189,20 @@ export function DisplayMode(): React.JSX.Element {
       </div>
 
       {duration != null && duration > 0 && (
-        <div className="absolute inset-x-0 bottom-0 h-[3px] bg-veil2">
-          <div
-            className="h-full bg-amber transition-[width] duration-300 ease-linear"
-            style={{ width: `${Math.min(100, (position / duration) * 100)}%` }}
-          />
-        </div>
+        /* EXPERIMENT (0.7 exploration): the waveform stands in for the
+           progress strip when the playing track's peaks exist; the plain
+           bar is the fallback for radio, casts and unanalyzed tracks. */
+        <DisplayWaveform
+          progress={Math.min(1, position / duration)}
+          fallback={
+            <div className="absolute inset-x-0 bottom-0 h-[3px] bg-veil2">
+              <div
+                className="h-full bg-amber transition-[width] duration-300 ease-linear"
+                style={{ width: `${Math.min(100, (position / duration) * 100)}%` }}
+              />
+            </div>
+          }
+        />
       )}
     </div>
   );
@@ -193,7 +221,7 @@ function DisplayLyric(): React.JSX.Element | null {
   if (!synced) return null;
   const placeholder = shown === "♪";
   return (
-    <div className="absolute inset-x-0 bottom-10 px-16 text-center pointer-events-none">
+    <div className="absolute inset-x-0 bottom-16 px-16 text-center pointer-events-none">
       <div
         className={cx(
           "font-display text-[clamp(17px,2.8vmin,30px)] leading-snug line-clamp-2 text-balance transition-opacity duration-200",

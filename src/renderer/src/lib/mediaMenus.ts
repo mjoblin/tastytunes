@@ -46,6 +46,10 @@ export interface MediaMenuCaps {
   /** Override the derived heart (the Library stores richer favorites). */
   heart?: { active: boolean; toggle(): void };
   /** Local verbs, appended last — Remove from queue, delete, unheart… */
+  /** Once-and-done utilities (Analyze audio) — above Info…, which anchors
+   *  the bottom as the every-time verb; only destructive terminals (extra)
+   *  sit beneath it (amended 2026-08-31). */
+  utilityVerbs?: MediaMenuItem[];
   extra?: MediaMenuItem[];
   /**
    * Open the Info modal on this entity — everything the DIDL said about it
@@ -105,7 +109,8 @@ function heartItem(ref: MediaRef, caps: MediaMenuCaps): MediaMenuItem[] {
 const cap = (label: string, run?: () => void): MediaMenuItem[] => (run ? [{ label, run }] : []);
 
 /** Order everywhere: play verbs · navigate (go-to / open / pivot) · write
- *  verbs (preset, playlist) · heart · local extras. */
+ *  verbs (preset, playlist) · heart · utilities · Info… · destructive
+ *  local extras last. */
 export function trackMenuItems(ref: MediaRef, caps: MediaMenuCaps = {}): MediaMenuItem[] {
   return [
     ...cap("Play now", caps.playNow),
@@ -120,6 +125,7 @@ export function trackMenuItems(ref: MediaRef, caps: MediaMenuCaps = {}): MediaMe
     ...cap("Save to preset…", caps.saveToPreset),
     ...cap("Add to playlist…", caps.addToPlaylist),
     ...heartItem(ref, caps),
+    ...(caps.utilityVerbs ?? []),
     ...infoItem(ref, caps),
     ...(caps.extra ?? []),
   ];
@@ -138,6 +144,7 @@ export function albumMenuItems(ref: MediaRef, caps: MediaMenuCaps = {}): MediaMe
     ...cap("Save to preset…", caps.saveToPreset),
     ...cap("Add to playlist…", caps.addToPlaylist),
     ...heartItem(ref, caps),
+    ...(caps.utilityVerbs ?? []),
     ...infoItem(ref, caps),
     ...(caps.extra ?? []),
   ];
@@ -148,5 +155,10 @@ export function albumMenuItems(ref: MediaRef, caps: MediaMenuCaps = {}): MediaMe
  *  album/track identity. Thin, but it's the one cross-collection question an
  *  artist can answer, and any future artist verb has a home here. */
 export function artistMenuItems(ref: MediaRef, caps: MediaMenuCaps = {}): MediaMenuItem[] {
-  return [...pivotItem(ref), ...infoItem(ref, caps), ...(caps.extra ?? [])];
+  return [
+    ...pivotItem(ref),
+    ...(caps.utilityVerbs ?? []),
+    ...infoItem(ref, caps),
+    ...(caps.extra ?? []),
+  ];
 }

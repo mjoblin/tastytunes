@@ -181,3 +181,7 @@ export const activeSourceId = (
   zoneState: { source: string | null } | null,
   nowPlaying: { source: { id: string | null } | null } | null,
 ): string | null => zoneState?.source ?? nowPlaying?.source?.id ?? null;
+
+/** A count in the user's locale style — "4,590 tracks" (user, 2026-09-01);
+ *  one home, so every large number the app prints agrees. */
+export const fmtCount = (n: number): string => n.toLocaleString();

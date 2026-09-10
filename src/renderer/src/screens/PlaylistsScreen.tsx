@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { useKnownDrs } from "@/lib/audioAnalysis";
+import { DrBadge } from "@/components/media/Waveform";
 import { useSavedPerformer } from "@/hooks/useQueuePerformer";
 import {
   DndContext,
@@ -28,6 +30,7 @@ import {
   type FavoriteMedia,
   type Playlist,
   type PlaylistItem,
+  audioAnalysisKey,
 } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
@@ -42,6 +45,7 @@ import { toggleFavorite } from "@/lib/favorites";
 import { activatePlaylist } from "@/lib/playlists";
 import { fromPlaylistItem } from "@/lib/mediaRef";
 import { saveRefToPreset, openRefInLibrary, playRefNow, queueRef } from "@/lib/mediaActions";
+import { NameLine } from "@/components/media/NameLine";
 import { trackMenuItems } from "@/lib/mediaMenus";
 import { OrderHandle } from "@/components/controls/OrderHandle";
 import { ArtImage } from "@/components/media/ArtImage";
@@ -52,7 +56,13 @@ import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { lockVertical } from "@/lib/dnd";
 import { activeSourceId, cx, fmtDuration, fmtRelative, matchesFilter } from "@/lib/format";
 import { Eqbars } from "@/components/media/Eqbars";
-import { HeaderChip, PrimaryButton, ScreenTitle } from "@/components/chrome/Chrome";
+import {
+  HeaderChip,
+  PrimaryButton,
+  ScreenTitle,
+  GAP_BETWEEN,
+  GAP_WITHIN,
+} from "@/components/chrome/Chrome";
 import { useConfirmPopover } from "@/components/chrome/Confirm";
 import { useOneShotAsk } from "@/hooks/useOneShotAsk";
 import { artUrlAt } from "@shared/artUrl";
@@ -120,15 +130,14 @@ export function PlaylistsScreen(): React.JSX.Element {
   // playlist are content-identical INCLUDING ORDER (the hash is
   // order-sensitive), so the playing queue POSITION is the playlist index —
   // no title matching, and twin-titled tracks can't cross-light.
-  const playState = useStore((s) => s.playState);
+  const effectivePlayId = useStore((s) => s.effectivePlayId);
   const zoneState = useStore((s) => s.zoneState);
   const nowPlaying = useStore((s) => s.nowPlaying);
   const queueSourceActive = activeSourceId(zoneState, nowPlaying) === "MEDIA_PLAYER";
   const playingIndex = useMemo(() => {
-    const playId = queue?.play_id ?? playState?.queue_id ?? null;
-    if (playId == null) return null;
-    return queue?.items?.find((it) => it.id === playId)?.position ?? null;
-  }, [queue, playState]);
+    if (effectivePlayId == null) return null;
+    return queue?.items?.find((it) => it.id === effectivePlayId)?.position ?? null;
+  }, [effectivePlayId, queue]);
 
   const shown = useMemo(() => {
     const list = playlists.filter((p) => matchesFilter(filter, [p.name]));
@@ -144,6 +153,32 @@ export function PlaylistsScreen(): React.JSX.Element {
     return reversed ? sorted.reverse() : sorted;
   }, [playlists, filter, sort, reversed]);
   const selected = playlists.find((p) => p.id === selectedId) ?? shown[0] ?? null;
+  // DR wherever a track row is (2026-09-02): the open playlist's known integers
+  const drKeys = useMemo(
+    () =>
+      (selected?.items ?? []).map((i) =>
+        audioAnalysisKey({
+          title: i.title,
+          artist: i.artist,
+          album: i.album,
+          durationSecs: i.durationSecs ?? null,
+        }),
+      ),
+    [selected],
+  );
+  const drByKey = useKnownDrs(drKeys);
+  const anyDr = Object.keys(drByKey).length > 0;
+  const drFor = (i: PlaylistItem): number | null | undefined =>
+    anyDr
+      ? (drByKey[
+          audioAnalysisKey({
+            title: i.title,
+            artist: i.artist,
+            album: i.album,
+            durationSecs: i.durationSecs ?? null,
+          })
+        ] ?? null)
+      : undefined;
   useEffect(() => {
     lastSelectedId = selected?.id ?? null;
   }, [selected?.id]);
@@ -251,7 +286,7 @@ export function PlaylistsScreen(): React.JSX.Element {
 
   return (
     <div className="h-full flex flex-col">
-      <header className="px-8 pt-8 pb-4 flex items-center gap-4">
+      <header className={`px-8 pt-8 pb-4 flex items-center ${GAP_BETWEEN}`}>
         <ScreenTitle>Playlists</ScreenTitle>
         <div className="flex-1" />
         {/* header clusters read Filter first, then partition/sort/chips
@@ -424,7 +459,7 @@ export function PlaylistsScreen(): React.JSX.Element {
                   </div>
                 </div>
 
-                <div data-playlist-actions className="shrink-0 flex items-center gap-2">
+                <div data-playlist-actions className={`shrink-0 flex items-center ${GAP_BETWEEN}`}>
                   {/* Progress lives IN the button that started it — the button is
                       already inert during the run, and an inserted banner pushed
                       the whole list down and back up again. Clicking mid-run
@@ -466,47 +501,50 @@ export function PlaylistsScreen(): React.JSX.Element {
                       Play
                     </span>
                   </PrimaryButton>
-                  <HeaderChip
-                    onClick={() => setRenaming(selected.id)}
-                    data-tip="Rename"
-                    aria-label="Rename playlist"
-                    className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
-                  >
-                    <Pencil size={16} />
-                  </HeaderChip>
-                  <button
-                    onClick={(e) =>
-                      confirmDelete.ask(e, {
-                        question: `Delete “${selected.name}”?`,
-                        onConfirm: () => {
-                          // Snapshot the WHOLE playlist, not its id: undo has to
-                          // put back the name, the items and the timestamps, and
-                          // after the delete there is nowhere left to read them.
-                          const deleted = selected;
-                          void tt.playlistDelete(deleted.id);
-                          const undoId = useStore
-                            .getState()
-                            .pushUndo(
-                              `Delete Playlist “${deleted.name}”`,
-                              () => void tt.playlistRestore(deleted),
-                            );
-                          showToast({
-                            kind: "success",
-                            text: `Deleted “${deleted.name}”`,
-                            action: {
-                              label: "Undo",
-                              undo: () => useStore.getState().runUndo(undoId),
-                            },
-                          });
-                        },
-                      })
-                    }
-                    data-tip="Delete playlist"
-                    aria-label="Delete playlist"
-                    className="no-drag tip-bottom tip-end rounded-lg motion-safe:active:scale-90 transition-all p-2 ring-1 ring-edge bg-panel/70 text-dim hover:text-alert hover:ring-edge2 hover:bg-raised/70"
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                  {/* the play verb | the edit chips: two kinds, two tiers */}
+                  <div className={`flex items-center ${GAP_WITHIN}`}>
+                    <HeaderChip
+                      onClick={() => setRenaming(selected.id)}
+                      data-tip="Rename"
+                      aria-label="Rename playlist"
+                      className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
+                    >
+                      <Pencil size={16} />
+                    </HeaderChip>
+                    <button
+                      onClick={(e) =>
+                        confirmDelete.ask(e, {
+                          question: `Delete “${selected.name}”?`,
+                          onConfirm: () => {
+                            // Snapshot the WHOLE playlist, not its id: undo has to
+                            // put back the name, the items and the timestamps, and
+                            // after the delete there is nowhere left to read them.
+                            const deleted = selected;
+                            void tt.playlistDelete(deleted.id);
+                            const undoId = useStore
+                              .getState()
+                              .pushUndo(
+                                `Delete Playlist “${deleted.name}”`,
+                                () => void tt.playlistRestore(deleted),
+                              );
+                            showToast({
+                              kind: "success",
+                              text: `Deleted “${deleted.name}”`,
+                              action: {
+                                label: "Undo",
+                                undo: () => useStore.getState().runUndo(undoId),
+                              },
+                            });
+                          },
+                        })
+                      }
+                      data-tip="Delete playlist"
+                      aria-label="Delete playlist"
+                      className="no-drag tip-bottom tip-end rounded-lg motion-safe:active:scale-90 transition-all p-2 ring-1 ring-edge bg-panel/70 text-dim hover:text-alert hover:ring-edge2 hover:bg-raised/70"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                   {confirmDelete.popover}
                 </div>
               </div>
@@ -534,6 +572,7 @@ export function PlaylistsScreen(): React.JSX.Element {
                         key={ids[i]}
                         id={ids[i]}
                         index={i}
+                        dr={drFor(item)}
                         item={item}
                         current={queuedId === selected.id && playingIndex === i}
                         sourceActive={queueSourceActive}
@@ -636,6 +675,7 @@ function TrackRow({
   sourceActive,
   onRemove,
   onMenu,
+  dr,
 }: {
   id: string;
   index: number;
@@ -646,6 +686,8 @@ function TrackRow({
   sourceActive: boolean;
   onRemove: () => void;
   onMenu: (e: React.MouseEvent) => void;
+  /** A known TT-DR (undefined = the playlist knows none yet, no cell). */
+  dr?: number | null;
 }): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
@@ -685,7 +727,12 @@ function TrackRow({
         onMenu(e);
       }}
       className={cx(
-        "group grid grid-cols-[26px_44px_1fr_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5",
+        "group grid items-center gap-3 rounded-lg px-2 py-1.5",
+        // the DR cell is a sixth column only while it renders: an empty auto
+        // column would still cost a gap and inset the duration
+        dr !== undefined
+          ? "grid-cols-[26px_44px_1fr_auto_auto_auto]"
+          : "grid-cols-[26px_44px_1fr_auto_auto]",
         "transition-colors",
         isDragging && "z-10 bg-raised shadow-xl",
         // current + queue audible: the queue row's full playing treatment;
@@ -708,7 +755,7 @@ function TrackRow({
       <div className="min-w-0">
         <div className="text-[13.5px] truncate text-ink">{item.title}</div>
         <div className="text-[12px] text-dim truncate">
-          {[artist, item.album].filter(Boolean).join(" — ")}
+          <NameLine artist={artist} album={item.album} ref={fromPlaylistItem(item)} />
         </div>
       </div>
 
@@ -732,6 +779,11 @@ function TrackRow({
       </div>
 
       {/* far right of the content, after the hover actions — see QueueRow */}
+      {dr !== undefined && (
+        <span className="flex w-12 shrink-0 justify-end font-mono text-[10.5px]" data-track-dr>
+          {dr != null && <DrBadge dr={dr} className="" />}
+        </span>
+      )}
       <DurationCell secs={item.durationSecs ?? null} />
     </div>
   );

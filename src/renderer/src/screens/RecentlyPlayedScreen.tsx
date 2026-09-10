@@ -21,12 +21,13 @@ import { AddToPlaylistPanel } from "@/components/overlays/AddToPlaylistPanel";
 import { toggleFavorite } from "@/lib/favorites";
 import { fromRecent, refToFavorite, refToPlaylistItem, type MediaRef } from "@/lib/mediaRef";
 import { playRefNow, openRefInLibrary, saveRefToPreset } from "@/lib/mediaActions";
+import { NameLine } from "@/components/media/NameLine";
 import { PresetPicker } from "@/components/library/LibraryMenus";
 import { trackMenuItems, type MediaMenuItem } from "@/lib/mediaMenus";
 import { cx, fmtDayBucket, fmtRelative, matchesFilter } from "@/lib/format";
 import { clearRecentsWithUndo } from "@/lib/recents";
 import { FilterInput } from "@/components/controls/FilterInput";
-import { ScreenTitle } from "@/components/chrome/Chrome";
+import { ScreenTitle, GAP_BETWEEN } from "@/components/chrome/Chrome";
 
 interface Block {
   session: string | null;
@@ -163,7 +164,7 @@ export function RecentlyPlayedScreen(): React.JSX.Element {
 
   return (
     <div className="h-full flex flex-col">
-      <header className="drag-region flex items-center gap-3 px-8 pt-8 pb-4">
+      <header className={`drag-region flex items-center ${GAP_BETWEEN} px-8 pt-8 pb-4`}>
         <ScreenTitle>Recently Played</ScreenTitle>
         <div className="flex-1" />
         {recents.length > 0 && (
@@ -186,7 +187,7 @@ export function RecentlyPlayedScreen(): React.JSX.Element {
               onClick={() => void clearRecentsWithUndo()}
               data-tip="Clear history"
               aria-label="Clear history"
-              className="no-drag flex items-center gap-2 px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-[12.5px] text-dim
+              className="no-drag flex items-center gap-2 h-8 px-3 rounded-lg ring-1 ring-edge bg-panel/70 text-[12.5px] text-dim
                          hover:text-alert hover:ring-edge2 hover:bg-raised/70 transition-all"
             >
               <Trash2 size={14} strokeWidth={1.8} />
@@ -298,12 +299,15 @@ function TrackRow({
   const title = entry.isRadio ? (entry.station ?? entry.title) : entry.title;
   // Queue-row anatomy: title up top, artist — album below (songText would
   // repeat the title in the subtitle).
-  const subtitle = entry.isRadio
-    ? entry.title
-    : [entry.artist, entry.album].filter(Boolean).join(" — ") || null;
   // Verbs only where there's an identity to act on (fromRecent is null for
   // radio and songless rows — no stream URL / no content is stored for them).
   const ref = fromRecent(entry);
+  // the names in the line navigate (NameLine); a station's line is its song
+  const subtitle = entry.isRadio ? (
+    entry.title
+  ) : (
+    <NameLine artist={entry.artist} album={entry.album} ref={ref} />
+  );
   const fav = ref ? refToFavorite(ref) : null;
   return (
     <MediaRow

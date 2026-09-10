@@ -322,6 +322,63 @@ export function isListen(playedSecs: number, durationSecs: number | null): boole
 }
 
 /**
+ * The listening record's CONTENT KEY for a track (0.8.0, the record's reading
+ * surfaces): title, artist and album, each trimmed, lowercased and
+ * whitespace-collapsed. The record stores tags raw and matches at read time,
+ * so this is the one place the match rule lives — main builds the stats with
+ * it and the renderer looks nodes up with it. Improving the match (feat.
+ * stripping, diacritics) happens here and applies to all history at once.
+ */
+export function playKey(
+  title: string | null | undefined,
+  artist: string | null | undefined,
+  album: string | null | undefined,
+): string {
+  const n = (v: string | null | undefined): string =>
+    (v ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  return `${n(title)}|${n(artist)}|${n(album)}`;
+}
+
+/** One track's tally in the record: recorded plays (each ≥ the 30s floor),
+ *  listens (the house definition), the most recent start, and seconds heard. */
+export interface PlayStat {
+  plays: number;
+  listens: number;
+  lastAt: number;
+  seconds: number;
+}
+/** The record aggregated for the reading surfaces: per-track tallies keyed by
+ *  playKey, the most recent plays in order (for "pick up where you left
+ *  off"), and when the record began. Built once by main from the files and
+ *  kept current in the renderer by folding each new play event in. */
+export interface PlayStats {
+  tracks: Record<string, PlayStat>;
+  recent: ListeningPlayEvent[];
+  since: number | null;
+}
+/** The most recent plays kept in `recent` — enough for any album run. */
+export const PLAY_STATS_RECENT = 300;
+/** Fold one record line into the stats. Library plays only: an "external"
+ *  line (AirPlay, casting) never counts, even on a content match — a count
+ *  means "played from the library". Main builds with it, the renderer folds
+ *  each pushed event with it, so the two never disagree. */
+export function foldPlayEvent(stats: PlayStats, e: ListeningEvent): void {
+  if (e.kind !== "play") return;
+  const ev = e;
+  const k = playKey(ev.title, ev.artist, ev.album);
+  const row = stats.tracks[k] ?? { plays: 0, listens: 0, lastAt: 0, seconds: 0 };
+  row.plays += 1;
+  if (isListen(ev.playedSeconds, ev.duration)) row.listens += 1;
+  if (ev.at > row.lastAt) row.lastAt = ev.at;
+  row.seconds += ev.playedSeconds;
+  stats.tracks[k] = row;
+  stats.recent.push(ev);
+  if (stats.recent.length > PLAY_STATS_RECENT)
+    stats.recent.splice(0, stats.recent.length - PLAY_STATS_RECENT);
+  if (stats.since == null || ev.at < stats.since) stats.since = ev.at;
+}
+
+/**
  * One line of the listening record (history/<year>.jsonl in userData).
  *
  * The envelope is versioned PER LINE (`v`) so exported files survive
@@ -908,12 +965,16 @@ export interface AppSettings {
    * later belongs here too.
    */
   /** Albums lens sort (the native album grid above keeps librarySort). */
-  lensAlbumsSort: "title" | "artist" | "year";
+  lensAlbumsSort: "title" | "artist" | "year" | "dr";
   lensAlbumsSortReversed: boolean;
   /** Artists lens: hide artists that only have loose tracks. */
   lensArtistsAlbumsOnly: boolean;
   /** Albums lens partition: everything, artist albums only, or compilations only. */
   lensAlbumsKind: "all" | "albums" | "compilations";
+  /** Tracks lens sort — the third lens (2026-09-01), every track across the
+   *  ready indexes; DR sorts newest-analysis-first once the sweep has run. */
+  lensTracksSort: "title" | "artist" | "album" | "year" | "duration" | "dr";
+  lensTracksSortReversed: boolean;
   playlistsSort: "updated" | "created" | "played" | "name" | "length";
   playlistsSortReversed: boolean;
   /** Favorites kind partition (All / Stations / Albums / Tracks). */
@@ -936,6 +997,24 @@ export interface AppSettings {
   /** Check GitHub releases for a newer version on launch and every few hours. */
   updateCheck: boolean;
   /** Lyrics panel on Now Playing — fetches from LRCLIB on demand when opened. */
+  /**
+   * Waveforms drawn from each track's audio file, read from the local media
+   * server (EXPERIMENT, 0.7 exploration). The master is the fetch off-switch;
+   * the seek-bar sub-toggle exists because restyling permanent chrome is a
+   * different question from wanting waveform information (the tray-icon
+   * precedent); displayWaveform is display mode's own in-mode button.
+   */
+  waveforms: boolean;
+  waveformSeekBar: boolean;
+  waveformNowPlaying: boolean;
+  displayWaveform: boolean;
+  /** EVIDENCE, not preference: flips true the first time an analysis is
+   *  served (stored or read back) and never clears. The playback bar's
+   *  taller geometry keys on the setting AND this — a household with no
+   *  local media server never pays 16px for a waveform it can't have. A
+   *  settings flag rather than a cache probe, so Clear cached lookups
+   *  can't shrink the bar. */
+  waveformSeen: boolean;
   lyrics: boolean;
   /** Inline flavor: current synced line under the Now Playing track details. */
   lyricsLine: boolean;
@@ -1084,6 +1163,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   lensAlbumsSortReversed: false,
   lensArtistsAlbumsOnly: false,
   lensAlbumsKind: "all",
+  lensTracksSort: "title",
+  lensTracksSortReversed: false,
   playlistsSort: "updated",
   playlistsSortReversed: false,
   favoritesKind: "all",
@@ -1094,6 +1175,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
   recentsGrouped: true,
   motion: "system",
   updateCheck: true,
+  waveforms: true,
+  waveformSeekBar: true,
+  waveformNowPlaying: false,
+  displayWaveform: true,
+  waveformSeen: false,
   lyrics: true,
   lyricsLine: true,
   displayLyrics: true,
@@ -1405,6 +1491,23 @@ export function albumTracksOf(
 }
 
 /**
+ * The album node a pool track belongs to — the inverse of albumTracksOf:
+ * same title, and the track's performers pass trackInAlbumOf against the
+ * album's credited artist (twin editions fall back to the first match).
+ * Null when the index holds no such album. Content identity, no network:
+ * the Tracks lens's album link enters the album through the lens crumb.
+ */
+export function albumOfTrack(
+  track: Pick<MediaNode, "album" | "artist" | "artists" | "albumArtist">,
+  pool: { albums: MediaNode[] },
+): MediaNode | null {
+  if (!track.album) return null;
+  const want = track.album.trim().toLowerCase();
+  const matches = pool.albums.filter((a) => a.title.trim().toLowerCase() === want);
+  return matches.find((a) => trackInAlbumOf(track, a.artist)) ?? matches[0] ?? null;
+}
+
+/**
  * Order an album's tracks: by (disc, position) when that key is UNIQUE across
  * the list, otherwise the LISTING ORDER stands. minidlna (rig-verified
  * 2026-08-16) sends no disc number and per-disc track numbers — a two-disc
@@ -1487,6 +1590,49 @@ export function fmtBytes(n: number): string {
   if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toFixed(n >= 10 * 1024 ** 3 ? 0 : 1)} GB`;
   if (n >= 1024 ** 2) return `${Math.round(n / 1024 ** 2)} MB`;
   return `${Math.max(1, Math.round(n / 1024))} KB`;
+}
+
+/**
+ * EXPERIMENT (0.7 exploration): a track's stored audio analysis — what the
+ * renderer's decode persists (main's disk cache) and every waveform surface
+ * rereads. Envelopes are quantized to integer thousandths of full scale so
+ * the cache file stays humane; dB stats ride as null when non-finite
+ * (silence), since JSON has no -Infinity.
+ */
+export interface AudioAnalysis {
+  /** TT dynamic range integer; <= 0 means "no honest number". */
+  dr: number;
+  peakDb: number | null;
+  rmsDb: number | null;
+  crestDb: number | null;
+  /** Peak/RMS envelopes at capture resolution, amplitude x1000 (0..1000). */
+  peakQ: number[];
+  rmsQ: number[];
+}
+
+/** An album's recorded DR — written ONLY when every track measured (the TT
+ *  album value is the mean of ALL its tracks; a partial read has no honest
+ *  number). `tracks` lets surfaces retire a stale entry when the album's
+ *  track count changes. */
+export interface AlbumDr {
+  dr: number;
+  tracks: number;
+  analyzedAt: number;
+}
+
+/** Content identity for stored audio analysis — the trackInfo key precedent
+ *  (artist|album|title, lowercased) plus duration, so a remaster sharing
+ *  its name doesn't inherit another edition's waveform. Identity, not
+ *  location: server object ids churn on rescans. */
+export function audioAnalysisKey(
+  t: Pick<MediaNode, "title" | "artist" | "album" | "durationSecs">,
+): string {
+  return `${t.artist ?? ""}|${t.album ?? ""}|${t.title}|${t.durationSecs ?? ""}`.toLowerCase();
+}
+
+/** Album identity for the DR map — artist|title, lowercased. */
+export function albumDrKey(a: Pick<MediaNode, "title" | "artist">): string {
+  return `${a.artist ?? ""}|${a.title}`.toLowerCase();
 }
 
 /**
@@ -1689,6 +1835,10 @@ export interface MediaInfoTarget {
   node: MediaNode;
   tracks?: MediaNode[];
   serverName?: string | null;
+  /** The server the node lives on when the node itself carries no stamp —
+   *  browse listings hold theirs in the screen's state (nodeUdn), and the
+   *  Info modal's waveform needs it to find the file. */
+  serverUdn?: string | null;
   /** A caveat to show — e.g. the item wasn't found in any library index and this is only what the list knew. */
   note?: string | null;
   /** For an artist: their library page (albums, credits) — from artistSummary. */

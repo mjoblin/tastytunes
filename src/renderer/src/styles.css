@@ -607,30 +607,6 @@ img {
   translate: 0 0;
 }
 
-/* click feedback for scroll-to-current: a gold pulse just inside the target
-   row, so it never extends past the scroll container and gets clipped */
-.target-flash {
-  outline: 3px solid transparent;
-  outline-offset: -3px;
-  animation: target-flash 0.8s ease-out;
-}
-@keyframes target-flash {
-  0% {
-    outline-color: rgb(var(--gold-rgb) / 0);
-  }
-  20% {
-    outline-color: rgb(var(--gold-rgb) / 0.85);
-  }
-  100% {
-    outline-color: rgb(var(--gold-rgb) / 0);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .target-flash {
-    animation: none;
-  }
-}
-
 /* display mode hides the cursor after idle */
 .cursor-hidden,
 .cursor-hidden * {
