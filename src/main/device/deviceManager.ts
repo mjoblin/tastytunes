@@ -646,6 +646,12 @@ export class DeviceManager {
         return socket.send("/zone/play_control", { mode_shuffle: cmd.mode });
       case "recallPreset": {
         this.setRecalledPreset(cmd.presetId);
+        listeningRecord.openContext({
+          kind: "preset",
+          id: cmd.presetId,
+          name: this.cache.presets?.presets?.find((p) => p.id === cmd.presetId)?.name ?? null,
+          streamer: this.cache.systemInfo?.udn ?? null,
+        });
         socket.send("/zone/recall_preset", { preset: cmd.presetId });
         // Feature 10: the preset's local volume override rides along on every
         // recall through the app — after a beat for the source switch — unless
@@ -687,6 +693,7 @@ export class DeviceManager {
       case "queueDelete":
         return smoipHttp.queueDelete(host, cmd.id);
       case "queueClear":
+        listeningRecord.endContext();
         return smoipHttp.queueClear(host);
       case "queueMove":
         return smoipHttp.queueMove(host, cmd.id, cmd.from, cmd.to);
@@ -829,6 +836,7 @@ export class DeviceManager {
         listeningRecord.onPlayState(
           this.cache.playState,
           this.cache.nowPlaying?.source?.name ?? this.cache.playState.metadata?.source ?? null,
+          this.cache.systemInfo?.udn ?? null,
         );
         return this.push({ kind: "playState", data: this.cache.playState });
       case "/zone/play_state/position":
@@ -844,6 +852,9 @@ export class DeviceManager {
         return this.push({ kind: "zoneState", data: this.cache.zoneState });
       case "/queue/list":
         this.cache.queue = data as QueueList;
+        listeningRecord.onQueue(
+          (this.cache.queue.items ?? []).map((i) => i.id).filter((id): id is number => id != null),
+        );
         // Mid-batch (playlist activation) the cache stays current but the
         // renderer hears nothing — one authoritative push lands at the end.
         if (this.queueOps.batching) return;

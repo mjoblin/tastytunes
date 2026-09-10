@@ -5,6 +5,7 @@ import type { QueueList } from "@shared/smoip";
 import type { SmoipSocket } from "./smoipSocket";
 import * as smoipHttp from "./smoipHttp";
 import { getPlaylists, healPlaylistItem, markPlaylistPlayed } from "../data/playlists";
+import { listeningRecord } from "../data/listeningRecord";
 import { queueAdd } from "../media/upnpBrowser";
 import { resolveContent, type ResolvedContent } from "../media/resolveContent";
 
@@ -116,6 +117,12 @@ export class QueueOps {
       finished: false,
     };
     this.current = activation;
+    // the record: what plays from here started from this playlist, bound to the
+    // entries once the batch has appended them all
+    listeningRecord.openContext(
+      { kind: "playlist", id, name: playlist.name },
+      { holdBinding: true },
+    );
     const announce = (): void => this.host.push({ kind: "playlistActivation", state: activation });
     announce();
 
@@ -191,6 +198,8 @@ export class QueueOps {
       }
       activation.cancelled = this.cancelled;
       activation.finished = true;
+      if (batchStarted) listeningRecord.releaseContextBinding();
+      else listeningRecord.endContext();
       // INVARIANT 3 — stamp the attempt only if the queue was actually touched.
       if (batchStarted) markPlaylistPlayed(id, activation.missed);
       announce();

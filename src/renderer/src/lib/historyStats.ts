@@ -21,6 +21,9 @@ export interface TopEntry {
   album: string | null;
   plays: number;
   seconds: number;
+  /** A preset row: the udn of the streamer whose slot it is, so two streamers' slot 3
+   *  stay two rows and the view can name the streamer when the names collide. */
+  streamer?: string | null;
 }
 
 export interface ListeningStats {
@@ -49,6 +52,15 @@ export interface ListeningStats {
   bySource: Array<{ source: string; seconds: number; count: number; unit: string }>;
   /** Library seconds by the file's quality, hi-res being a subset of lossless. */
   quality: { lossless: number; lossy: number; unknown: number; hires: number };
+  /** Started from a preset or a playlist through TastyTunes (`via`): plays and
+   *  time by preset, by playlist, and the split against everything else. Only
+   *  the app's own verbs are known, so "Elsewhere" holds the streamer's own
+   *  buttons and other apps too. */
+  topPresets: TopEntry[];
+  topPlaylists: TopEntry[];
+  startedFrom: Array<{ label: string; seconds: number; count: number }>;
+  /** Some line carried `via`: the Started from facet has something to say. */
+  viaSeen: boolean;
   /** Seconds by weekday × hour, Monday first (7 × 24). */
   byWeekdayHour: number[];
   /** Seconds by day (dayStart ms), every kind. */
@@ -94,6 +106,41 @@ export function statsFor(
   const byDay = new Map<number, number>();
   const byWeekdayHour = new Array<number>(7 * 24).fill(0);
   const quality = { lossless: 0, lossy: 0, unknown: 0, hires: 0 };
+  const presets = new Map<string, TopEntry>();
+  const playlists = new Map<string, TopEntry>();
+  const started = {
+    Presets: { seconds: 0, count: 0 },
+    Playlists: { seconds: 0, count: 0 },
+    Elsewhere: { seconds: 0, count: 0 },
+  };
+  const startedFrom = (e: ListeningEvent, secs: number, isPlay: boolean): void => {
+    if (e.kind !== "play" && e.kind !== "radio-session") return;
+    const via = e.via;
+    const bucket =
+      via?.kind === "preset"
+        ? started.Presets
+        : via?.kind === "playlist"
+          ? started.Playlists
+          : started.Elsewhere;
+    bucket.seconds += secs;
+    if (isPlay) bucket.count += 1;
+    if (!via) return;
+    const m = via.kind === "preset" ? presets : playlists;
+    // a preset is a slot on one streamer: the streamer is part of the key
+    const key =
+      via.kind === "preset" ? `preset:${via.streamer ?? "?"}:${via.id}` : `playlist:${via.id}`;
+    const row = m.get(key) ?? {
+      name: via.kind === "preset" ? (via.name ?? `Preset ${via.id}`) : via.name,
+      sub: null,
+      album: null,
+      plays: 0,
+      seconds: 0,
+      ...(via.kind === "preset" ? { streamer: via.streamer } : {}),
+    };
+    if (isPlay) row.plays += 1;
+    row.seconds += secs;
+    m.set(key, row);
+  };
   let plays = 0;
   let listens = 0;
   let seconds = 0;
@@ -138,6 +185,7 @@ export function statsFor(
     }
     if (e.kind === "radio-session") radioSeconds += secs;
     if (e.kind === "external") externalSeconds += secs;
+    startedFrom(e, secs, e.kind === "play");
     if (e.kind !== "play") continue;
     const ev: ListeningPlayEvent = e;
     plays += 1;
@@ -185,6 +233,13 @@ export function statsFor(
       .map(([source, r]) => ({ source, ...r }))
       .sort((a, b) => b.seconds - a.seconds),
     quality,
+    topPresets: top(presets),
+    topPlaylists: top(playlists),
+    startedFrom: (["Presets", "Playlists", "Elsewhere"] as const).map((label) => ({
+      label,
+      ...started[label],
+    })),
+    viaSeen: presets.size + playlists.size > 0,
     byWeekdayHour,
     byDay,
   };

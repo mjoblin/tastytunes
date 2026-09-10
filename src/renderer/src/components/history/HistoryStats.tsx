@@ -91,6 +91,23 @@ export function HistoryStats(): React.JSX.Element {
     [period, now],
   );
   const stats = useMemo(() => statsFor(all, range), [all, range]);
+  // two streamers' slots can share a name: only then does a preset row name its streamer,
+  // from the device book first (remembered streamers) and live discovery second
+  const knownDevices = useStore((st) => st.settings.knownDevices);
+  const devices = useStore((st) => st.devices);
+  const topPresets = useMemo(() => {
+    const names = new Map<string, number>();
+    for (const r of stats.topPresets) names.set(r.name, (names.get(r.name) ?? 0) + 1);
+    if (![...names.values()].some((n) => n > 1)) return stats.topPresets;
+    const streamerName = (udn: string | null | undefined): string =>
+      (udn &&
+        (knownDevices.find((d) => d.udn === udn)?.friendlyName ??
+          devices.find((d) => d.udn === udn)?.friendlyName)) ||
+      "another streamer";
+    return stats.topPresets.map((r) =>
+      (names.get(r.name) ?? 0) > 1 ? { ...r, sub: streamerName(r.streamer) } : r,
+    );
+  }, [stats.topPresets, knownDevices, devices]);
   // the trailing year, always, whatever the period: the calendar is the shape
   // of the year, and the period is the lens on the figures
   const yearStats = useMemo(
@@ -172,6 +189,12 @@ export function HistoryStats(): React.JSX.Element {
                   {stats.topStations.length > 0 && (
                     <TopList title="Stations" kind="station" rows={stats.topStations} />
                   )}
+                  {topPresets.length > 0 && (
+                    <TopList title="Presets" kind="preset" rows={topPresets} />
+                  )}
+                  {stats.topPlaylists.length > 0 && (
+                    <TopList title="Playlists" kind="playlist" rows={stats.topPlaylists} />
+                  )}
                 </div>
               </section>
 
@@ -189,6 +212,28 @@ export function HistoryStats(): React.JSX.Element {
                 />
               </section>
 
+              {stats.viaSeen && (
+                <section data-stats-started>
+                  <div className="microlabel mb-3 px-1">Started from</div>
+                  <Bars
+                    rows={stats.startedFrom
+                      .filter((r) => r.seconds > 0)
+                      .map((r) => ({
+                        label: r.label,
+                        seconds: r.seconds,
+                        detail:
+                          r.count > 0
+                            ? `${fmtCount(r.count)} ${r.count === 1 ? "play" : "plays"}`
+                            : null,
+                      }))}
+                  />
+                  <div data-stats-started-note className="mt-3 px-1 text-[12px] text-faint/70">
+                    Only what TastyTunes itself started is known. A preset pressed on the streamer,
+                    or a queue another app built, counts as elsewhere.
+                  </div>
+                </section>
+              )}
+
               {stats.seconds > 0 && (
                 <section data-stats-quality>
                   <div className="microlabel mb-3 px-1">The files</div>
@@ -200,7 +245,7 @@ export function HistoryStats(): React.JSX.Element {
                     ].filter((r) => r.seconds > 0)}
                   />
                   {stats.quality.hires > 0 && (
-                    <div className="mt-2 px-1 text-[12px] text-faint">
+                    <div className="mt-3 px-1 text-[12px] text-faint/70">
                       {fmtDuration(stats.quality.hires)} of the lossless time was hi-res.
                     </div>
                   )}
@@ -335,13 +380,13 @@ function TopList({
   rows,
 }: {
   title: string;
-  kind: "album" | "artist" | "track" | "station";
+  kind: "album" | "artist" | "track" | "station" | "preset" | "playlist";
   rows: TopEntry[];
 }): React.JSX.Element {
-  // a station has no Library home: its rows are facts, the others open
-  const linked = kind !== "station";
+  // a station, a preset or a playlist has no Library home: its rows are facts, the others open
+  const linked = kind !== "station" && kind !== "preset" && kind !== "playlist";
   const open = (r: TopEntry): void => {
-    if (kind === "station") return;
+    if (!linked) return;
     if (kind === "artist") openArtistInLibrary(r.name);
     else void openRefInLibrary(refOf(kind, r));
   };
@@ -383,7 +428,9 @@ function TopList({
                 lead={r.name}
                 leadClass="text-ink"
                 sub={
-                  r.sub && kind !== "artist" ? (
+                  r.sub && (kind === "preset" || kind === "playlist") ? (
+                    <span>{r.sub}</span>
+                  ) : r.sub && kind !== "artist" ? (
                     <NameLink
                       kind="artist"
                       name={r.sub}
@@ -399,7 +446,9 @@ function TopList({
               <span className="shrink-0 text-[11px] text-faint tabular-nums">
                 {kind === "station"
                   ? `${fmtDuration(r.seconds)}${r.plays > 0 ? `${FACT_SEP}${fmtCount(r.plays)} ${r.plays === 1 ? "song" : "songs"} heard` : ""}`
-                  : `${fmtCount(r.plays)} ${r.plays === 1 ? "play" : "plays"}${FACT_SEP}${fmtDuration(r.seconds)}`}
+                  : r.plays === 0
+                    ? fmtDuration(r.seconds) // a station preset: time heard, no plays to count
+                    : `${fmtCount(r.plays)} ${r.plays === 1 ? "play" : "plays"}${FACT_SEP}${fmtDuration(r.seconds)}`}
               </span>
             </li>
           ))}

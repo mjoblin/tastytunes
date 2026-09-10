@@ -485,7 +485,22 @@ export interface ListeningEventBase {
   at: number;
   tzOffsetMin: number;
   kind: string;
+  /** The streamer that played it, by udn (0.8.0 on, additive): the record is one
+   *  listening life across every streamer the app has driven, and this is what
+   *  lets a reader narrow it to one. Lines written before it carry none. */
+  streamer?: string | null;
 }
+/** How a play was STARTED, when one of TastyTunes' own verbs started it (0.8.0,
+ *  additive): a preset recall or a playlist activation. It rides on play and
+ *  radio-session lines only while what the verb loaded is what is playing (its
+ *  queue entries, or its station); a preset pressed on the streamer or a queue
+ *  another app built never carries it, so a reader must say "started from
+ *  TastyTunes", never "played from a preset". */
+export type ListeningVia =
+  /** A preset is a slot on one streamer, so the streamer's udn is part of its identity
+   *  (slot 3 on two streamers are two presets); null only when the device never said. */
+  | { kind: "preset"; id: number; name: string | null; streamer: string | null }
+  | { kind: "playlist"; id: string; name: string };
 /** A library play (MEDIA_PLAYER, USB included) — the only kind that feeds
  *  play counts. Format facts are captured at play time; provenance fields
  *  ride along where known but are never identity. */
@@ -502,6 +517,7 @@ export interface ListeningPlayEvent extends ListeningEventBase {
   lossless: boolean | null;
   source: string | null;
   sourceId: string | null;
+  via?: ListeningVia;
 }
 /** A stretch of internet radio on one station — "heard", never a listen. */
 export interface ListeningRadioSessionEvent extends ListeningEventBase {
@@ -509,6 +525,7 @@ export interface ListeningRadioSessionEvent extends ListeningEventBase {
   station: string | null;
   radioId: number | null;
   playedSeconds: number;
+  via?: ListeningVia;
 }
 /** A track a station announced during a session (keyed station:title, the
  *  recents convention) — a sighting, with no played-time semantics. */

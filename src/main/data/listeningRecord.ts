@@ -12,7 +12,12 @@ import { readdir, stat, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { app } from "electron";
 import { isRecord } from "@shared/guards";
-import { LISTEN_FLOOR_SECS, type ListeningEvent, type ListeningRecordStats } from "@shared/model";
+import {
+  LISTEN_FLOOR_SECS,
+  type ListeningEvent,
+  type ListeningRecordStats,
+  type ListeningVia,
+} from "@shared/model";
 import { isRadioMetadata, radioTrackTitle, type ZonePlayState } from "@shared/smoip";
 import { getSettings } from "./persist";
 
@@ -81,6 +86,76 @@ function armFloorTimer(): void {
 /** Consecutive-dedupe key for announced radio tracks (station:title). */
 let lastRadioTrackKey: string | null = null;
 let writeError: string | null = null;
+
+/**
+ * PLAY PROVENANCE (0.8.0): the verb that started what is playing. A preset
+ * recall or a playlist activation opens a context, and the plays that begin
+ * while it is open carry `via`. The context is bound to WHAT THE VERB LOADED,
+ * never to time: for a queue verb, the queue entries it loaded (a play whose
+ * queue_id is not one of them is not the context's, so an insert into the same
+ * queue stays unattributed, and a queue that no longer holds any of them ends
+ * it); for a station preset, the station (another station, or any library
+ * play, ends it). Only the app's own verbs open one, so a preset pressed on the
+ * streamer or a queue another app built is never attributed. The binding waits
+ * for the first play after the verb: a preset's queue lands with the recall,
+ * while a playlist activation appends slowly and holds the binding until its
+ * batch ends, attributing the plays that start meanwhile.
+ */
+interface ViaContext {
+  via: ListeningVia;
+  openedAt: number;
+  /** The loaded queue entries, once bound; null while unbound. */
+  queueIds: Set<number> | null;
+  /** A station preset's station, once a radio session bound it. */
+  station: string | null;
+  /** The verb is still loading the queue: bind on the first list after release. */
+  holdBinding: boolean;
+  /** A play was attributed while unbound; the next queue list binds. */
+  bindOnNextQueue: boolean;
+}
+let context: ViaContext | null = null;
+let lastQueueIds: Set<number> | null = null;
+let lastQueueAt = 0;
+
+function clearContext(): void {
+  context = null;
+}
+
+/** The open context's `via` for a play that is starting, or nothing; binds and
+ *  ends the context by the rules above. */
+function attribute(
+  kind: OpenPlay["kind"],
+  queueId: number | null,
+  station: string | null,
+): ListeningVia | undefined {
+  const c = context;
+  if (!c || kind === "external") return undefined;
+  if (kind === "radio-session") {
+    // a queue verb's context has nothing to say about the radio
+    if (c.queueIds != null || c.holdBinding || c.bindOnNextQueue) return undefined;
+    if (c.station == null) {
+      c.station = station;
+      return c.via;
+    }
+    if (c.station === station) return c.via;
+    clearContext();
+    return undefined;
+  }
+  if (c.station != null) {
+    clearContext();
+    return undefined;
+  }
+  if (c.queueIds == null) {
+    if (!c.holdBinding) {
+      // the recall's queue may already have landed; otherwise the next list binds
+      if (lastQueueAt > c.openedAt && lastQueueIds && queueId != null && lastQueueIds.has(queueId))
+        c.queueIds = new Set(lastQueueIds);
+      else c.bindOnNextQueue = true;
+    }
+    return c.via;
+  }
+  return queueId != null && c.queueIds.has(queueId) ? c.via : undefined;
+}
 
 function historyDir(): string {
   return join(app.getPath("userData"), "history");
@@ -188,8 +263,9 @@ export const listeningRecord = {
   },
 
   /** Feed every /zone/play_state push through here (DeviceManager does,
-   *  beside the scrobbler). `sourceName` is now_playing's display name. */
-  onPlayState(ps: ZonePlayState, sourceName: string | null): void {
+   *  beside the scrobbler). `sourceName` is now_playing's display name;
+   *  `streamer` the connected device's udn, stamped on every line it plays. */
+  onPlayState(ps: ZonePlayState, sourceName: string | null, streamer: string | null): void {
     if (!getSettings().listeningRecord) {
       // Off mid-playback: freeze accumulation; the open play stays open so
       // flipping the switch back on doesn't split one play into two events.
@@ -212,6 +288,7 @@ export const listeningRecord = {
       payload = {
         station: md.station ?? null,
         radioId: md.radio_id ?? null,
+        streamer,
       };
     } else if (md?.title && ps.queue_id != null) {
       kind = "play";
@@ -227,6 +304,7 @@ export const listeningRecord = {
         lossless: md.lossless ?? null,
         source: sourceName,
         sourceId,
+        streamer,
       };
     } else if (md?.title) {
       kind = "external";
@@ -238,6 +316,7 @@ export const listeningRecord = {
         artist: md.artist ?? null,
         album: md.album ?? null,
         duration: md.duration ?? null,
+        streamer,
       };
     }
 
@@ -249,6 +328,8 @@ export const listeningRecord = {
 
     if (!current || current.key !== key) {
       closeCurrent();
+      const via = attribute(kind, ps.queue_id ?? null, isRadio ? (md.station ?? null) : null);
+      if (via) payload.via = via;
       current = {
         kind,
         key,
@@ -277,6 +358,7 @@ export const listeningRecord = {
           station: md.station ?? null,
           title,
           artist: md.artist ?? null,
+          streamer,
         });
       }
     }
@@ -291,6 +373,47 @@ export const listeningRecord = {
     } else {
       pauseCurrent();
     }
+  },
+
+  /** A verb of the app's own started what plays next: a preset recall (bound on
+   *  the first play, to the recall's queue or its station) or a playlist
+   *  activation (`holdBinding` while its batch still appends). Replaces any
+   *  open context. */
+  openContext(via: ListeningVia, opts?: { holdBinding?: boolean }): void {
+    context = {
+      via,
+      openedAt: Date.now(),
+      queueIds: null,
+      station: null,
+      holdBinding: opts?.holdBinding === true,
+      bindOnNextQueue: false,
+    };
+  },
+  /** The activation's batch is over: the next queue list is what it loaded. */
+  releaseContextBinding(): void {
+    if (context?.holdBinding) {
+      context.holdBinding = false;
+      context.bindOnNextQueue = true;
+    }
+  },
+  /** The queue was cleared, or the verb came to nothing. */
+  endContext(): void {
+    clearContext();
+  },
+  /** Every /queue/list the device pushes, batches included: binds a waiting
+   *  context to the loaded entries, and ends a bound one whose entries are gone. */
+  onQueue(ids: number[]): void {
+    lastQueueIds = new Set(ids);
+    lastQueueAt = Date.now();
+    const c = context;
+    if (!c) return;
+    if (c.bindOnNextQueue && !c.holdBinding) {
+      c.queueIds = new Set(ids);
+      c.bindOnNextQueue = false;
+      return;
+    }
+    const set = c.queueIds;
+    if (set && !ids.some((id) => set.has(id))) clearContext();
   },
 
   /** Connection lost, device switched, or the app is quitting: close out the
