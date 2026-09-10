@@ -255,6 +255,19 @@ export const listeningRecord = {
   years(): Promise<number[]> {
     return listYears();
   },
+  /** The streamers the record holds, by udn, with a line count each; null counts the
+   *  lines from before the field (0.8.0). The History screen's filter reads this, so the
+   *  renderer never loads every year just to learn whether there is more than one. */
+  async streamers(): Promise<Array<{ streamer: string | null; count: number }>> {
+    const counts = new Map<string | null, number>();
+    for (const e of (await this.readAll()).events) {
+      const key = typeof e.streamer === "string" ? e.streamer : null;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .map(([streamer, count]) => ({ streamer, count }))
+      .sort((a, b) => b.count - a.count);
+  },
   setEventNotifier(fn: (event: ListeningEvent) => void): void {
     notifyEvent = fn;
   },

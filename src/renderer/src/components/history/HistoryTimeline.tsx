@@ -11,6 +11,7 @@ import {
 } from "@shared/model";
 import { useStore } from "@/store";
 import { Chip } from "@/components/chrome/Chrome";
+import { narrowToStreamer } from "@/lib/historyStreamers";
 import { EmptyState } from "@/components/chrome/EmptyState";
 import { PickerPill } from "@/components/controls/PickerPill";
 import { Segmented } from "@/components/controls/Segmented";
@@ -180,7 +181,14 @@ const sessionKey = (s: ListeningSession): string => `s${s.startAt}`;
 const MONTH_LABEL = (m: number): string =>
   new Date(2000, m, 1).toLocaleDateString(undefined, { month: "short" });
 
-export function HistoryTimeline({ filter }: { filter: string }): React.JSX.Element {
+export function HistoryTimeline({
+  filter,
+  streamer,
+}: {
+  filter: string;
+  /** The rail's streamer facet (lib/historyStreamers): null is every streamer. */
+  streamer: string | null;
+}): React.JSX.Element {
   const years = useStore((s) => s.history.years);
   const loaded = useStore((s) => s.history.loaded);
   const loadYears = useStore((s) => s.loadHistoryYears);
@@ -202,7 +210,12 @@ export function HistoryTimeline({ filter }: { filter: string }): React.JSX.Eleme
   // the newest year first; the years before wait for "Show <year>" — unless a
   // filter or a facet is on, which means the whole record, not the loaded part
   const newest = years && years.length > 0 ? years[years.length - 1] : null;
-  const needAll = filter !== "" || mem.source != null || mem.period != null || mem.listensOnly;
+  const needAll =
+    filter !== "" ||
+    mem.source != null ||
+    mem.period != null ||
+    mem.listensOnly ||
+    streamer != null;
   useEffect(() => {
     if (newest != null && loaded[newest] == null) void loadYear(newest);
     if (needAll && years) for (const y of years) if (loaded[y] == null) void loadYear(y);
@@ -235,8 +248,8 @@ export function HistoryTimeline({ filter }: { filter: string }): React.JSX.Eleme
   const all = useMemo(() => {
     const out: ListeningEvent[] = [];
     for (const y of loadedYears) out.push(...(loaded[y] ?? []));
-    return out;
-  }, [loaded, loadedYears]);
+    return narrowToStreamer(out, streamer);
+  }, [loaded, loadedYears, streamer]);
   const textShown = useMemo(() => (filter ? filterEvents(all, filter) : all), [all, filter]);
   // the facets' options, count-carrying, from the text-narrowed pool
   const sourceOptions = useMemo(() => {
@@ -550,7 +563,12 @@ export function HistoryTimeline({ filter }: { filter: string }): React.JSX.Eleme
       />
     );
   }
-  const narrowed = filter !== "" || mem.source != null || mem.period != null || mem.listensOnly;
+  const narrowed =
+    filter !== "" ||
+    mem.source != null ||
+    mem.period != null ||
+    mem.listensOnly ||
+    streamer != null;
 
   return (
     <div className="h-full flex flex-col">

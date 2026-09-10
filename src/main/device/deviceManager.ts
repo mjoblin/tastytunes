@@ -1074,6 +1074,7 @@ export class DeviceManager {
       isRadio,
       radioId: md.radio_id ?? null,
       session,
+      streamer: this.cache.systemInfo?.udn ?? null,
     };
     const { list, changed } = recordRecent(entry);
     // a transient picture (AirPlay, casting) is captured while its URL lives,

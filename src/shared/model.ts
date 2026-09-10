@@ -48,6 +48,8 @@ export interface RecentTrack {
    * discrete queued track, which never groups. Optional so pre-upgrade logs still load.
    */
   session: string | null;
+  /** The streamer that played it, by udn (0.8.0 on, additive; older entries carry none). */
+  streamer?: string | null;
 }
 
 /**

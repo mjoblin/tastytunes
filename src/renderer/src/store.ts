@@ -332,8 +332,14 @@ interface TTState {
   /** The History Timeline's feedstock (0.8.0 round two): the record's years,
    *  and the years read so far — a year at a time, the newest on first visit.
    *  A pushed event lands in its year when that year is loaded. */
-  history: { years: number[] | null; loaded: Record<number, ListeningEvent[]> };
+  history: {
+    years: number[] | null;
+    loaded: Record<number, ListeningEvent[]>;
+    /** The record's streamers with line counts (lib/historyStreamers reads it); null until asked. */
+    streamers: Array<{ streamer: string | null; count: number }> | null;
+  };
   loadHistoryYears(): Promise<void>;
+  loadHistoryStreamers(): Promise<void>;
   loadHistoryYear(year: number): Promise<void>;
   /** Local favorites, newest-hearted first (mirrored from the main process). */
   favorites: Favorite[];
@@ -583,7 +589,7 @@ export const useStore = create<TTState>((set, get) => ({
   recents: [],
   listeningStats: null,
   playStats: null,
-  history: { years: null, loaded: {} },
+  history: { years: null, loaded: {}, streamers: null },
   undoStack: [],
   navDropTarget: null,
   navDragActive: false,
@@ -657,6 +663,14 @@ export const useStore = create<TTState>((set, get) => ({
       set((s) => ({ history: { ...s.history, years } }));
     } catch {
       set((s) => ({ history: { ...s.history, years: [] } }));
+    }
+  },
+  loadHistoryStreamers: async () => {
+    try {
+      const streamers = await tt.listeningStreamers();
+      set((s) => ({ history: { ...s.history, streamers } }));
+    } catch {
+      set((s) => ({ history: { ...s.history, streamers: [] } }));
     }
   },
   loadHistoryYear: async (year) => {
@@ -932,7 +946,7 @@ export const useStore = create<TTState>((set, get) => ({
           return { listeningStats: msg.data };
         case "playStats":
           // a re-seed (the record was cleared): the Timeline re-reads too
-          return { playStats: msg.data, history: { years: null, loaded: {} } };
+          return { playStats: msg.data, history: { years: null, loaded: {}, streamers: null } };
         case "playEvent": {
           // the Timeline: a new line lands in its year when that year is loaded
           const y = new Date(msg.event.at).getFullYear();
@@ -943,6 +957,8 @@ export const useStore = create<TTState>((set, get) => ({
                   ? s.history.years
                   : [...(s.history.years ?? []), y].sort((a, b) => a - b),
                 loaded: { ...s.history.loaded, [y]: [...loadedYear, msg.event] },
+                // the census re-reads on the listening push that follows every append
+                streamers: s.history.streamers,
               }
             : s.history;
           const cur = s.playStats;

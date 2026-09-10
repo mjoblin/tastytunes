@@ -629,6 +629,7 @@ function registerIpc(): void {
     return out;
   });
   ipcMain.handle(IPC.listeningYears, () => listeningRecord.years());
+  ipcMain.handle(IPC.listeningStreamers, () => listeningRecord.streamers());
   ipcMain.handle(IPC.listeningYear, (_e, year: unknown) =>
     typeof year === "number" ? listeningRecord.readYear(year) : { events: [], unreadable: 0 },
   );

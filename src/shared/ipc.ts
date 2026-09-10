@@ -431,6 +431,9 @@ export interface TastyTunesApi {
   playStats(): Promise<PlayStats>;
   /** The record's years (one file each), ascending — the Timeline loads a year at a time. */
   listeningYears(): Promise<number[]>;
+  /** The streamers the record holds, by udn, with how many lines each played; null is the
+   *  lines written before 0.8.0 named one. One walk over the files, no events crossing. */
+  listeningStreamers(): Promise<Array<{ streamer: string | null; count: number }>>;
   /** One year's lines, in file order, with the unreadable-line count. */
   listeningYear(year: number): Promise<{ events: ListeningEvent[]; unreadable: number }>;
   /** Combined size of the on-disk lookup caches (lyrics, artist context). */
@@ -498,6 +501,7 @@ export const IPC = {
   listeningExport: "tt:listeningExport",
   playStats: "tt:playStats",
   listeningYears: "tt:listeningYears",
+  listeningStreamers: "tt:listeningStreamers",
   listeningYear: "tt:listeningYear",
   undoLabelSet: "tt:undoLabelSet",
   lookupCacheStats: "tt:lookupCacheStats",

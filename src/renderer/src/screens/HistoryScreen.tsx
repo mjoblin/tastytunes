@@ -21,6 +21,8 @@ import { Eqbars } from "@/components/media/Eqbars";
 import { EmptyState } from "@/components/chrome/EmptyState";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { Segmented } from "@/components/controls/Segmented";
+import { PickerPill } from "@/components/controls/PickerPill";
+import { narrowToStreamer, streamerOptions } from "@/lib/historyStreamers";
 import { MediaArt } from "@/components/media/MediaArt";
 import { MediaRow } from "@/components/media/MediaRow";
 import { RowAction } from "@/components/media/RowAction";
@@ -79,9 +81,12 @@ const VIEWS: Array<{ id: "recent" | "timeline" | "stats"; label: string; icon: t
   { id: "stats", label: "Stats", icon: BarChart3 },
 ];
 
+/** The streamer choice lives for the session, like the Stats period: All streamers on launch. */
+let historyMem: { streamer: string | null } = { streamer: null };
+
 /** History: the local device log (Recent) and the listening record (Timeline). */
 export function HistoryScreen(): React.JSX.Element {
-  const recents = useStore((s) => s.recents);
+  const allRecents = useStore((s) => s.recents);
   const saveSettings = useStore((s) => s.saveSettings);
   const grouped = useStore((s) => s.settings.recentsGrouped);
   const view = useStore((s) => s.settings.historyView);
@@ -89,10 +94,35 @@ export function HistoryScreen(): React.JSX.Element {
   const filter = useStore((s) => s.screenFilters["recently-played"]);
   const setScreenFilter = useStore((s) => s.setScreenFilter);
   const historyLoaded = useStore((s) => s.history.loaded);
+  // THE STREAMER FACET (0.8.0): one record across every streamer, narrowed to one
+  // here for all three views at once; the pill shows only when the record holds
+  // more than one streamer, so a one-streamer household never sees it
+  const census = useStore((s) => s.history.streamers);
+  const loadStreamers = useStore((s) => s.loadHistoryStreamers);
+  const recordEvents = useStore((s) => s.listeningStats?.events);
+  const knownDevices = useStore((s) => s.settings.knownDevices);
+  const devices = useStore((s) => s.devices);
+  useEffect(() => {
+    void loadStreamers();
+  }, [loadStreamers, recordEvents]);
+  const [streamer, setStreamerState] = useState<string | null>(historyMem.streamer);
+  const setStreamer = (next: string | null): void => {
+    historyMem = { streamer: next };
+    setStreamerState(next);
+  };
+  const streamerChoices = useMemo(
+    () => streamerOptions(census, knownDevices, devices),
+    [census, knownDevices, devices],
+  );
+  // a streamer the record no longer offers (the census shrank, a clear) falls back to all
+  useEffect(() => {
+    if (streamer != null && !streamerChoices.some((o) => o.value === streamer)) setStreamer(null);
+  }, [streamer, streamerChoices]);
+  const recents = useMemo(() => narrowToStreamer(allRecents, streamer), [allRecents, streamer]);
   const timelineCounts = useMemo(() => {
-    const all = Object.values(historyLoaded).flat();
+    const all = narrowToStreamer(Object.values(historyLoaded).flat(), streamer);
     return { total: all.length, shown: filter ? filterEvents(all, filter).length : all.length };
-  }, [historyLoaded, filter]);
+  }, [historyLoaded, filter, streamer]);
 
   // Filter entries BEFORE session/day grouping so groups rebuild from matches.
   const shownRecents = useMemo(
@@ -277,12 +307,24 @@ export function HistoryScreen(): React.JSX.Element {
               <span className="flex-1 text-left">{label}</span>
             </button>
           ))}
+          {streamerChoices.length > 0 && (
+            <div className="pt-3 px-1" data-history-streamer>
+              <PickerPill
+                id="streamer"
+                neutral="All streamers"
+                clearLabel="All streamers"
+                options={streamerChoices}
+                value={streamer}
+                onChange={setStreamer}
+              />
+            </div>
+          )}
         </nav>
         <div className="flex-1 min-w-0 min-h-0 flex flex-col">
           {view === "timeline" ? (
-            <HistoryTimeline filter={filter} />
+            <HistoryTimeline filter={filter} streamer={streamer} />
           ) : view === "stats" ? (
-            <HistoryStats />
+            <HistoryStats streamer={streamer} />
           ) : recents.length === 0 ? (
             <EmptyState
               icon={History}

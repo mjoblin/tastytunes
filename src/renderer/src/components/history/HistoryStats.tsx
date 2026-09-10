@@ -12,6 +12,7 @@ import type { MediaRef } from "@/lib/mediaRef";
 import { cx, fmtCount, fmtDuration } from "@/lib/format";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { dayStartOf, statsFor, type ListeningStats, type TopEntry } from "@/lib/historyStats";
+import { narrowToStreamer } from "@/lib/historyStreamers";
 
 /**
  * The History screen's STATS (0.8.0, round three): the record as figures for
@@ -53,7 +54,12 @@ function heat(value: number, max: number): string {
 const hourLabel = (h: number): string =>
   new Date(2000, 0, 1, h).toLocaleTimeString(undefined, { hour: "numeric" });
 
-export function HistoryStats(): React.JSX.Element {
+export function HistoryStats({
+  streamer,
+}: {
+  /** The rail's streamer facet (lib/historyStreamers): null is every streamer. */
+  streamer: string | null;
+}): React.JSX.Element {
   const years = useStore((s) => s.history.years);
   const loaded = useStore((s) => s.history.loaded);
   const loadYears = useStore((s) => s.loadHistoryYears);
@@ -84,8 +90,8 @@ export function HistoryStats(): React.JSX.Element {
       .map(Number)
       .sort((a, b) => a - b))
       out.push(...(loaded[y] ?? []));
-    return out;
-  }, [loaded]);
+    return narrowToStreamer(out, streamer);
+  }, [loaded, streamer]);
   const range = useMemo(
     () => (period === "all" ? null : { from: now - PERIOD_MS[period], to: now + 1 }),
     [period, now],

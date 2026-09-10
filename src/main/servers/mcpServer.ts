@@ -60,6 +60,28 @@ import {
 import { app } from "electron";
 import type { DeviceManager } from "../device/deviceManager";
 import { getSettings, updateSettings } from "../data/persist";
+
+/** The history tools' optional streamer: a name from the device book or a live
+ *  device, or a udn; "before-0.8.0" for the lines written before the field. */
+const STREAMER_ARG = z
+  .string()
+  .optional()
+  .describe(
+    "Only what one streamer played: its name or udn (list_devices). 'before-0.8.0' for lines written before the record named streamers.",
+  );
+function streamerKeep(
+  arg: unknown,
+  devices: ReadonlyArray<{ udn: string; friendlyName: string }>,
+): ((e: { streamer?: string | null }) => boolean) | null {
+  if (typeof arg !== "string" || arg.trim() === "") return null;
+  const needle = arg.trim().toLowerCase();
+  if (needle === "before-0.8.0") return (e) => e.streamer == null;
+  const byName = [...getSettings().knownDevices, ...devices].find(
+    (d) => d.friendlyName.trim().toLowerCase() === needle,
+  );
+  const udn = byName?.udn ?? arg.trim();
+  return (e) => e.streamer === udn;
+}
 import { randomUUID } from "node:crypto";
 import { fetchArtistInfo } from "../lookups/artistInfo";
 import { fetchAlbumInfo } from "../lookups/albumInfo";
@@ -962,6 +984,7 @@ export class McpBridge {
       },
       list_history: {
         inputSchema: {
+          streamer: STREAMER_ARG,
           from: z.string().optional().describe("Earliest local date, YYYY-MM-DD."),
           to: z.string().optional().describe("Latest local date, YYYY-MM-DD, inclusive."),
           kind: z
@@ -973,7 +996,9 @@ export class McpBridge {
         },
         // Local files only — works with the streamer off, so no connected() gate.
         handler: async (a) => {
-          const { events, unreadable } = await listeningRecord.readAll();
+          const { events: everyLine, unreadable } = await listeningRecord.readAll();
+          const keep = streamerKeep(a.streamer, dm.snapshot().devices);
+          const events = keep ? everyLine.filter(keep) : everyLine;
           const fromMs = a.from != null ? Date.parse(`${a.from as string}T00:00:00`) : null;
           const toMs = a.to != null ? Date.parse(`${a.to as string}T23:59:59.999`) : null;
           const filtered = events
@@ -1002,13 +1027,16 @@ export class McpBridge {
       },
       history_top: {
         inputSchema: {
+          streamer: STREAMER_ARG,
           by: z.enum(["artists", "albums", "tracks"]).describe("What to rank."),
           from: z.string().optional().describe("Earliest local date, YYYY-MM-DD."),
           to: z.string().optional().describe("Latest local date, YYYY-MM-DD, inclusive."),
           limit: z.number().int().min(1).max(100).optional().describe("Default 20."),
         },
         handler: async (a) => {
-          const { events } = await listeningRecord.readAll();
+          const { events: everyLine } = await listeningRecord.readAll();
+          const keep = streamerKeep(a.streamer, dm.snapshot().devices);
+          const events = keep ? everyLine.filter(keep) : everyLine;
           const fromMs = a.from != null ? Date.parse(`${a.from as string}T00:00:00`) : null;
           const toMs = a.to != null ? Date.parse(`${a.to as string}T23:59:59.999`) : null;
           const counts = new Map<string, { label: string; plays: number; listens: number }>();
@@ -1041,6 +1069,7 @@ export class McpBridge {
       },
       history_on_this_day: {
         inputSchema: {
+          streamer: STREAMER_ARG,
           month: z.number().int().min(1).max(12).optional().describe("Default: today's month."),
           day: z.number().int().min(1).max(31).optional().describe("Default: today's day."),
         },
@@ -1048,7 +1077,9 @@ export class McpBridge {
           const now = new Date();
           const month = (a.month as number | undefined) ?? now.getMonth() + 1;
           const day = (a.day as number | undefined) ?? now.getDate();
-          const { events } = await listeningRecord.readAll();
+          const { events: everyLine } = await listeningRecord.readAll();
+          const keep = streamerKeep(a.streamer, dm.snapshot().devices);
+          const events = keep ? everyLine.filter(keep) : everyLine;
           const hits = events
             .filter((e) => {
               // The local day AS IT WAS RECORDED: shift by the stored tz
@@ -1067,6 +1098,7 @@ export class McpBridge {
       },
       history_first_listen: {
         inputSchema: {
+          streamer: STREAMER_ARG,
           title: z.string().describe("Track title, case-insensitive exact match."),
           artist: z
             .string()
@@ -1075,7 +1107,9 @@ export class McpBridge {
         },
         handler: async (a) => {
           const lc = (v: string): string => v.trim().toLowerCase();
-          const { events } = await listeningRecord.readAll();
+          const { events: everyLine } = await listeningRecord.readAll();
+          const keep = streamerKeep(a.streamer, dm.snapshot().devices);
+          const events = keep ? everyLine.filter(keep) : everyLine;
           const plays = events
             .filter(
               (e): e is ListeningPlayEvent =>
@@ -1099,6 +1133,7 @@ export class McpBridge {
       // ---- the record's reading surfaces as tools (0.8.0)
       history_stats: {
         inputSchema: {
+          streamer: STREAMER_ARG,
           title: z
             .string()
             .optional()
@@ -1109,7 +1144,7 @@ export class McpBridge {
           album: z.string().optional().describe("With no title: the whole album's tally."),
         },
         handler: async (a) => {
-          const stats = await playStatsFromRecord();
+          const stats = await playStatsFromRecord(streamerKeep(a.streamer, dm.snapshot().devices));
           const md = dm.snapshot().playState?.metadata;
           const title =
             (a.title as string | undefined) ?? (a.album ? undefined : (md?.title ?? undefined));
@@ -1183,6 +1218,7 @@ export class McpBridge {
       },
       history_unplayed: {
         inputSchema: {
+          streamer: STREAMER_ARG,
           artist: z.string().optional().describe("Case-insensitive substring on the album artist."),
           genre: z.string().optional(),
           decade: z.string().optional().describe("e.g. '1990s'."),
@@ -1192,7 +1228,7 @@ export class McpBridge {
         handler: async (a) => {
           const groups = indexPools();
           if (groups.length === 0) return err(this.kickIndex());
-          const stats = await playStatsFromRecord();
+          const stats = await playStatsFromRecord(streamerKeep(a.streamer, dm.snapshot().devices));
           const poolOf = new Map(groups.map((p) => [p.udn, p]));
           const artistNeedle = (a.artist as string | undefined)?.toLowerCase();
           const genreNeedle = (a.genre as string | undefined)?.toLowerCase();
@@ -1243,6 +1279,7 @@ export class McpBridge {
       },
       history_rediscover: {
         inputSchema: {
+          streamer: STREAMER_ARG,
           not_since: z
             .string()
             .optional()
@@ -1255,7 +1292,7 @@ export class McpBridge {
         handler: async (a) => {
           const groups = indexPools();
           if (groups.length === 0) return err(this.kickIndex());
-          const stats = await playStatsFromRecord();
+          const stats = await playStatsFromRecord(streamerKeep(a.streamer, dm.snapshot().devices));
           const cutoff =
             a.not_since != null
               ? Date.parse(`${a.not_since as string}T00:00:00`)
