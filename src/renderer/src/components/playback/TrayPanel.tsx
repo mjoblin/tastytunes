@@ -317,10 +317,13 @@ export function TrayPanel(): React.JSX.Element {
                   full text as a tip when it overflows (0.8.0, a user whose
                   station's artist and song "very often" did not fit); on radio
                   the song line may wrap to two, an ellipsis and the tip past that. */}
-                    <div className="flex items-start gap-1.5 min-h-[17px]">
+                    {/* The title sizes to its TEXT (no flex-1) and shrinks only when
+                  it overflows, so the heart follows the title rather than the
+                  column's far edge (user, 2026-09-10: flex-1 had parked it there). */}
+                    <div className="flex items-center gap-1.5 min-h-[17px]">
                       <ScrollOnce
                         text={active ? (lines.title ?? " ") : "Nothing playing"}
-                        className="flex-1 font-display no-optical font-bold tracking-tight text-[14px] text-ink leading-tight"
+                        className="font-display no-optical font-bold tracking-tight text-[14px] text-ink leading-tight"
                         tipClass="tip-bottom"
                       />
                       {/* THE HEART SITS WITH THE TITLE, not in the corner. It acts on
