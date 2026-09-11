@@ -40,7 +40,7 @@ export const tt: TastyTunesApi = {
       // form would be a cycle; the failure path can afford the lazy load.
       const { useStore } = await import("./store");
       const label = WRITE_FAILURES[cmd.type] ?? "The streamer refused the command";
-      useStore.getState().showToast({ kind: "error", text: `${label} — streamer error.` });
+      useStore.getState().showToast({ kind: "error", text: `${label}.` });
       // Callers that await (dialogs) still need to know it failed.
       throw err;
     }

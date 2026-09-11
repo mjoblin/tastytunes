@@ -1443,7 +1443,7 @@ function QueueAlbumGroups({
       );
     useStore.getState().showToast({
       kind: "success",
-      text: `Removed “${g.album}” — ${g.items.length} tracks`,
+      text: `Removed ${g.items.length} ${g.items.length === 1 ? "track" : "tracks"} from “${g.album}”`,
       action: { label: "Undo", undo: () => useStore.getState().runUndo(undoId) },
     });
   };

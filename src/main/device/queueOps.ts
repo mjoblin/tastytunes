@@ -102,7 +102,7 @@ export class QueueOps {
     // INVARIANT 1 — the claim below is synchronous with this check: no await
     // between them.
     if (this.current && !this.current.finished) {
-      throw new Error(`Already loading "${this.current.name}" — cancel that run first`);
+      throw new Error(`Already loading “${this.current.name}”. Cancel that run first.`);
     }
 
     this.cancelled = false;

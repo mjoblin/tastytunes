@@ -442,7 +442,7 @@ export function notePanelActivationEnd(
     body: result.cancelled
       ? `${result.added} of ${result.total} tracks queued.`
       : missed > 0
-        ? `${result.added} of ${result.total} tracks — ${missed} not found.`
+        ? `${result.added} of ${result.total} tracks queued. ${missed} ${missed === 1 ? "wasn't" : "weren't"} found.`
         : `${result.added} ${result.added === 1 ? "track" : "tracks"} queued.`,
     silent: true,
   }).show();
@@ -734,7 +734,7 @@ export function noteClosedToTray(): void {
   if (!Notification.isSupported()) return;
   new Notification({
     title: "TastyTunes is still running",
-    body: "It lives in the system tray — open it or quit from there.",
+    body: "It's in the system tray. Open it or quit from there.",
     silent: true,
   }).show();
 }

@@ -166,6 +166,9 @@ const LENS_ARTIST_CRUMB_ID = "__lens-artist__";
  * as "⌘← takes me to the top of the library".
  */
 const UNIFIED_SEARCH_CRUMB_ID = "__from-search__";
+
+/** One wording for a queue write that didn't land, whichever verb sent it. */
+const QUEUE_FAILED = "Couldn't reach the streamer. Nothing was queued.";
 // Which lens the crumb leads back to (module scope — survives the scoped
 // album detour, like the lens components' own selection memories).
 /** The three lenses over the union of ready indexes, and their crumb/door
@@ -1081,7 +1084,7 @@ export function LibraryScreen(): React.JSX.Element {
     void tt
       .mediaSearch(serverUdn, query)
       .then((res) => setSearchState({ query, ...res }))
-      .catch(() => showNotice("Search failed — the server didn't answer."))
+      .catch(() => showNotice("Search failed. The server didn't answer."))
       .finally(() => setSearching(false));
   };
 
@@ -1154,7 +1157,7 @@ export function LibraryScreen(): React.JSX.Element {
       await tt.mediaQueueAdd(udn, node.id, action, playFromId);
       if (el) flashTarget(el);
     } catch {
-      showNotice("Couldn't reach the streamer — nothing was queued.");
+      showNotice(QUEUE_FAILED);
     }
   };
 
@@ -1273,7 +1276,7 @@ export function LibraryScreen(): React.JSX.Element {
       }
       return true;
     } catch {
-      showNotice("Couldn't reach the streamer — nothing was queued.");
+      showNotice(QUEUE_FAILED);
       return false;
     }
   };
@@ -1429,7 +1432,7 @@ export function LibraryScreen(): React.JSX.Element {
       }
       if (el) flashTarget(el);
     } catch {
-      showNotice("Couldn't reach the streamer — nothing was queued.");
+      showNotice(QUEUE_FAILED);
     }
   };
 

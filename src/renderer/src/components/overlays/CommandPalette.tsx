@@ -624,7 +624,7 @@ export function CommandPalette(): React.JSX.Element {
           // Libraries, invisible from wherever the palette left you
           showToast({
             kind: "success",
-            text: `${idx.state === "ready" ? "Rebuilding" : "Building"} the ${idx.serverName} index — progress in Settings → Libraries.`,
+            text: `${idx.state === "ready" ? "Rebuilding" : "Building"} the ${idx.serverName} index. Progress shows in Settings › Libraries.`,
           });
         },
       });
