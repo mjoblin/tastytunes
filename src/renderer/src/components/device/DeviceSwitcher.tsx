@@ -83,36 +83,46 @@ export function StreamerList({ onPick }: { onPick(): void }): React.JSX.Element 
           {discovering ? "Searching the network…" : "No streamers found."}
         </div>
       )}
-      {listed.map((device) => {
-        const isConnected = device.host === connectedHost;
-        const isBusy = device.host === busyHost;
-        return (
-          <button
-            key={device.udn || device.host}
-            data-streamer-row={device.friendlyName}
-            onClick={() => {
-              if (!isConnected) void tt.connect(device.host);
-              onPick();
-            }}
-            className={cx(
-              "w-full flex items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors",
-              isConnected ? "bg-gold/10" : "hover:bg-veil",
-            )}
-          >
-            <span className={cx("led", isConnected ? "led-on" : isBusy ? "led-busy" : "led-off")} />
-            <span className="flex-1 min-w-0">
+      {/* The floating-row gap (space-y-1.5, as Favorites, Search and the tray's
+          detailed rows): these rows fill on hover and the connected one is
+          tinted, so flush rows let one fill butt against the next. */}
+      <div className="space-y-1.5">
+        {listed.map((device) => {
+          const isConnected = device.host === connectedHost;
+          const isBusy = device.host === busyHost;
+          return (
+            <button
+              key={device.udn || device.host}
+              data-streamer-row={device.friendlyName}
+              onClick={() => {
+                if (!isConnected) void tt.connect(device.host);
+                onPick();
+              }}
+              className={cx(
+                "w-full flex items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors",
+                isConnected ? "bg-gold/10" : "hover:bg-veil",
+              )}
+            >
               <span
-                className={cx("block text-[13px] truncate", isConnected ? "text-gold" : "text-ink")}
-              >
-                {device.friendlyName}
+                className={cx("led", isConnected ? "led-on" : isBusy ? "led-busy" : "led-off")}
+              />
+              <span className="flex-1 min-w-0">
+                <span
+                  className={cx(
+                    "block text-[13px] truncate",
+                    isConnected ? "text-gold" : "text-ink",
+                  )}
+                >
+                  {device.friendlyName}
+                </span>
+                <span className="block font-mono text-[10px] text-faint truncate">
+                  {[device.model, device.host].filter(Boolean).join(" · ")}
+                </span>
               </span>
-              <span className="block font-mono text-[10px] text-faint truncate">
-                {[device.model, device.host].filter(Boolean).join(" · ")}
-              </span>
-            </span>
-          </button>
-        );
-      })}
+            </button>
+          );
+        })}
+      </div>
     </>
   );
 }
