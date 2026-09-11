@@ -10,7 +10,7 @@
 // tools change saved things gets `optIn: true` and stays off until the user
 // says otherwise.
 
-import type { McpSettings } from "./model";
+import { LARGE_QUEUE_TRACKS, type McpSettings } from "./model";
 
 export interface McpToolInfo {
   name: string;
@@ -276,8 +276,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
       {
         name: "play_media",
         title: "Play media",
-        description:
-          "Play an album or track by server_udn + object id (from search_library). mode 'play_now' (default) keeps the queue, 'play_next'/'append' insert into it; 'replace' CLEARS the queue first — only use replace when asked to.",
+        description: `Play an album or track by server_udn + object id (from search_library). mode 'play_now' (default) keeps the queue, 'play_next'/'append' insert into it; 'replace' CLEARS the queue first — only use replace when asked to. A container over ${LARGE_QUEUE_TRACKS} tracks is refused until the user agrees: ask, then call again with confirm_large: true.`,
       },
     ],
   },
@@ -317,8 +316,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
       {
         name: "play_favorite",
         title: "Play favorite",
-        description:
-          "Play a favorite by its key (see list_favorites). Albums and tracks are found by content — a stale library id heals via search.",
+        description: `Play a favorite by its key (see list_favorites). Albums and tracks are found by content — a stale library id heals via search. An album over ${LARGE_QUEUE_TRACKS} tracks is refused until the user agrees: ask, then call again with confirm_large: true.`,
       },
       {
         name: "add_favorite",

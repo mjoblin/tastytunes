@@ -1,5 +1,5 @@
 import { presetVolumeKey, type MediaNode } from "@shared/model";
-import { tt } from "@/api";
+import { isDeclined, tt } from "@/api";
 import { useStore } from "@/store";
 import { refToContentRef, type MediaRef } from "@/lib/mediaRef";
 
@@ -102,7 +102,9 @@ export async function playRefNow(ref: MediaRef): Promise<boolean> {
     try {
       await tt.mediaQueueAdd(ref.serverUdn, ref.objectId, "PLAY_NOW");
       return true;
-    } catch {
+    } catch (e) {
+      // declined at the large-queue ask: nothing failed, nothing to resolve
+      if (isDeclined(e)) return false;
       // rotted hint — fall through to the content resolve
     }
   }
@@ -114,8 +116,8 @@ export async function playRefNow(ref: MediaRef): Promise<boolean> {
   try {
     await tt.mediaQueueAdd(found.serverUdn, found.objectId, "PLAY_NOW");
     return true;
-  } catch {
-    showToast({ kind: "error", text: `Couldn't play “${ref.title}”` });
+  } catch (e) {
+    if (!isDeclined(e)) showToast({ kind: "error", text: `Couldn't play “${ref.title}”` });
     return false;
   }
 }
@@ -131,7 +133,9 @@ export async function queueRef(
     try {
       await tt.mediaQueueAdd(ref.serverUdn, ref.objectId, action);
       return true;
-    } catch {
+    } catch (e) {
+      // declined at the large-queue ask: nothing failed, nothing to resolve
+      if (isDeclined(e)) return false;
       // rotted hint — fall through to the content resolve
     }
   }
@@ -143,8 +147,8 @@ export async function queueRef(
   try {
     await tt.mediaQueueAdd(found.serverUdn, found.objectId, action);
     return true;
-  } catch {
-    showToast({ kind: "error", text: `Couldn't queue “${ref.title}”` });
+  } catch (e) {
+    if (!isDeclined(e)) showToast({ kind: "error", text: `Couldn't queue “${ref.title}”` });
     return false;
   }
 }

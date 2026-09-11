@@ -2212,6 +2212,14 @@ export interface MediaIndexPools {
 /** Queue-write verbs of /smoip/queue/add (semantics per vibin's reverse-engineering). */
 export type MediaQueueAction = "REPLACE" | "APPEND" | "PLAY_NEXT" | "PLAY_NOW" | "PLAY_FROM_HERE";
 
+/**
+ * A container verb over this many tracks asks first, from every surface (the
+ * guard lives in main's queueAdd). Filed after Play from here on a search
+ * scope queued 2,528 tracks on the user's Evo (2026-09-04): a box set
+ * queues without a prompt, a library-sized container never does.
+ */
+export const LARGE_QUEUE_TRACKS = 200;
+
 // ------------------------------------------------------------------ internet radio
 
 /** A station from the radio-browser.info community directory (main-process lookup). */

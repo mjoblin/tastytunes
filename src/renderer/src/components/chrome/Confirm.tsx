@@ -1,5 +1,49 @@
 import { useState } from "react";
 import { PopoverCard } from "@/components/chrome/Overlay";
+import { cx } from "@/lib/format";
+
+/**
+ * The confirm's two buttons: Cancel takes initial focus so Enter is always the
+ * safe answer, and the verb is a deliberate reach in alert red. One pair for
+ * the anchored popover below and the large-queue dialog; `modal` drops the
+ * hover transitions, which a ModalShell forbids (on the software path every
+ * animated hover frame re-runs the backdrop blur).
+ */
+export function ConfirmActions({
+  verb,
+  onCancel,
+  onConfirm,
+  modal = false,
+}: {
+  verb: string;
+  onCancel(): void;
+  onConfirm(): void;
+  modal?: boolean;
+}): React.JSX.Element {
+  return (
+    <div className="mt-2.5 flex items-center justify-end gap-1.5">
+      <button
+        autoFocus
+        onClick={onCancel}
+        className={cx(
+          "px-2.5 py-1 rounded-lg text-[12px] ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70",
+          !modal && "transition-colors",
+        )}
+      >
+        Cancel
+      </button>
+      <button
+        onClick={onConfirm}
+        className={cx(
+          "px-2.5 py-1 rounded-lg text-[12px] bg-alert text-white hover:brightness-110",
+          !modal && "motion-safe:active:scale-95 transition-all",
+        )}
+      >
+        {verb}
+      </button>
+    </div>
+  );
+}
 
 /**
  * The destructive-action confirm: a small popover anchored under the control
@@ -60,25 +104,15 @@ export function useConfirmPopover(): {
   const popover = open != null && (
     <PopoverCard at={open.at} width="w-60" onClose={() => setOpen(null)} className="p-3">
       <div className="text-[12.5px] text-ink leading-snug">{open.question}</div>
-      <div className="mt-2.5 flex items-center justify-end gap-1.5">
-        <button
-          autoFocus
-          onClick={() => setOpen(null)}
-          className="px-2.5 py-1 rounded-lg text-[12px] ring-1 ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 transition-colors"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={() => {
-            const fire = open.onConfirm;
-            setOpen(null);
-            fire();
-          }}
-          className="px-2.5 py-1 rounded-lg text-[12px] bg-alert text-white hover:brightness-110 motion-safe:active:scale-95 transition-all"
-        >
-          {open.verb}
-        </button>
-      </div>
+      <ConfirmActions
+        verb={open.verb}
+        onCancel={() => setOpen(null)}
+        onConfirm={() => {
+          const fire = open.onConfirm;
+          setOpen(null);
+          fire();
+        }}
+      />
     </PopoverCard>
   );
 

@@ -1,4 +1,4 @@
-import type { StreamerCommand, TastyTunesApi } from "@shared/ipc";
+import { largeQueueCount, type StreamerCommand, type TastyTunesApi } from "@shared/ipc";
 
 const raw: TastyTunesApi = window.tastytunes;
 
@@ -30,6 +30,19 @@ const WRITE_FAILURES: Partial<Record<StreamerCommand["type"], string>> = {
   setAutoPowerDown: "Couldn't change the auto power-down",
 };
 
+/**
+ * The user said no at the large-queue ask. Nothing was queued and nothing
+ * failed, so a caller that heals a stale id by trying again stops on it, and
+ * a caller with a failure notice stays quiet (isDeclined).
+ */
+export class QueueDeclined extends Error {
+  constructor() {
+    super("The large-queue confirm was declined");
+    this.name = "QueueDeclined";
+  }
+}
+export const isDeclined = (e: unknown): boolean => e instanceof QueueDeclined;
+
 export const tt: TastyTunesApi = {
   ...raw,
   command: async (cmd) => {
@@ -43,6 +56,24 @@ export const tt: TastyTunesApi = {
       useStore.getState().showToast({ kind: "error", text: `${label}.` });
       // Callers that await (dialogs) still need to know it failed.
       throw err;
+    }
+  },
+  // THE LARGE-QUEUE ASK, for every caller at once (2026-09-10). Main refuses a
+  // container over LARGE_QUEUE_TRACKS until confirmed (upnpBrowser's guard);
+  // the ask lives here so no surface can queue a library-sized container
+  // without it. Declining rejects with QueueDeclined.
+  mediaQueueAdd: async (serverUdn, objectId, action, playFromId, confirmLarge) => {
+    try {
+      return await raw.mediaQueueAdd(serverUdn, objectId, action, playFromId, confirmLarge);
+    } catch (err) {
+      const tracks = confirmLarge ? null : largeQueueCount(err);
+      if (tracks == null) throw err;
+      // lazy for the same reason as the store above: the dialog's module
+      // reaches modules that import tt
+      const { askLargeQueue } = await import("./components/overlays/LargeQueueConfirm");
+      const replaces = action === "REPLACE" || action === "PLAY_FROM_HERE";
+      if (!(await askLargeQueue(tracks, replaces))) throw new QueueDeclined();
+      return raw.mediaQueueAdd(serverUdn, objectId, action, playFromId, true);
     }
   },
 };

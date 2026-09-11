@@ -41,6 +41,7 @@ import {
   nameSortKey,
   albumVolume,
   albumOfTrack,
+  trackPosition,
 } from "@shared/model";
 import { favoriteKey, type Favorite, type FavoriteMedia } from "@shared/model";
 import { albumDrKey } from "@shared/model";
@@ -50,7 +51,7 @@ import { usePlayStats } from "@/lib/playStats";
 import { useBestArt } from "@/lib/bestArt";
 import { DrChip, LufsChip } from "@/components/media/Waveform";
 import type { QueueListItem } from "@shared/smoip";
-import { tt } from "@/api";
+import { isDeclined, tt } from "@/api";
 import { useStore } from "@/store";
 import { activeSourceId, cx, matchesFilter, fmtCount, fmtAgo } from "@/lib/format";
 import {
@@ -1156,8 +1157,8 @@ export function LibraryScreen(): React.JSX.Element {
     try {
       await tt.mediaQueueAdd(udn, node.id, action, playFromId);
       if (el) flashTarget(el);
-    } catch {
-      showNotice(QUEUE_FAILED);
+    } catch (e) {
+      if (!isDeclined(e)) showNotice(QUEUE_FAILED);
     }
   };
 
@@ -1431,9 +1432,42 @@ export function LibraryScreen(): React.JSX.Element {
         await tt.mediaQueueAdd(udn, node.id, "REPLACE");
       }
       if (el) flashTarget(el);
-    } catch {
-      showNotice(QUEUE_FAILED);
+    } catch (e) {
+      if (!isDeclined(e)) showNotice(QUEUE_FAILED);
     }
+  };
+
+  /** "Play album from here" on a track: the album's OWN browse supplies both
+   *  ids, the album view's contract (and the resume card's). A pooled or
+   *  searched track's parentId is the search scope, the whole library on
+   *  Asset, and its id belongs to that path: Play from here on it queued
+   *  2,528 tracks (2026-09-04). A row of the album leaf on screen came from
+   *  that browse and is used as it is. */
+  const playAlbumFrom = async (track: MediaNode): Promise<void> => {
+    const udn = nodeUdn(track);
+    if (!udn) return;
+    const leaf = path[path.length - 1];
+    if (leaf && track.parentId === leaf.id && nodes.some((n) => n.id === track.id)) {
+      await act({ ...track, id: leaf.id }, "PLAY_FROM_HERE", null, track.id);
+      return;
+    }
+    const pools = lensPools ?? (await tt.mediaIndexPools().catch(() => null));
+    const pool = pools?.find((g) => g.udn === udn);
+    const album = pool ? albumOfTrack(track, pool) : null;
+    const kids = album
+      ? await tt.mediaBrowse(udn, album.id, [album.title]).catch(() => null)
+      : null;
+    const title = track.title.trim().toLowerCase();
+    const same = (kids ?? []).filter(
+      (k) => !k.isContainer && k.title.trim().toLowerCase() === title,
+    );
+    // twin titles on one album are real (a reprise): the position tells them apart
+    const start = same.find((k) => trackPosition(k) === trackPosition(track)) ?? same[0];
+    if (!album || !start) {
+      showNotice(`Couldn't find "${track.album ?? "that album"}" in this library.`);
+      return;
+    }
+    await act({ ...album, serverUdn: udn }, "PLAY_FROM_HERE", null, start.id);
   };
 
   // Throws on failure so the shared panel stays open; closes the picker itself
@@ -3161,14 +3195,7 @@ export function LibraryScreen(): React.JSX.Element {
           onAction={(action, playFromId) => {
             setMenu(null);
             if (action === "PLAY") void playContainer(menu.node, null);
-            else if (action === "PLAY_FROM_HERE" && menu.node.parentId != null)
-              // needs the parent ALBUM's DIDL, starting from this track
-              void act(
-                { ...menu.node, id: menu.node.parentId },
-                "PLAY_FROM_HERE",
-                null,
-                playFromId,
-              );
+            else if (action === "PLAY_FROM_HERE") void playAlbumFrom(menu.node);
             else void act(menu.node, action, null, playFromId);
           }}
           onSavePreset={() => {

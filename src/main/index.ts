@@ -701,11 +701,14 @@ function registerIpc(): void {
       objectId: string,
       action: MediaQueueAction,
       playFromId?: string,
+      confirmLarge?: boolean,
     ) => {
       // Library plays are wake intents too — queue writes to a standby
       // streamer would otherwise land on deaf ears (probed 2026-07-23).
       await deviceManager.ensureAwake();
-      return queueAdd(streamerHost(), serverUdn, objectId, action, playFromId);
+      return queueAdd(streamerHost(), serverUdn, objectId, action, playFromId, {
+        confirmLarge: confirmLarge === true,
+      });
     },
   );
   ipcMain.handle(IPC.radioSearch, (_e, query: string) => radioSearch(query));

@@ -84,6 +84,18 @@ export const REPO_URL = "https://github.com/mjoblin/tastytunes";
 /** The connection recipes per client and what an agent can and cannot do, one page on the website. */
 export const AGENTS_GUIDE_URL = "https://tastytunes.app/agents/";
 
+/**
+ * How main's large-queue refusal crosses IPC: an invoke rejection arrives as
+ * a plain Error whose message wraps the original, so the count rides in the
+ * message behind this token. Main throws it (LargeQueueError), the renderer's
+ * tt wrapper reads it back with largeQueueCount and asks.
+ */
+export const LARGE_QUEUE_TOKEN = "TT_LARGE_QUEUE";
+export function largeQueueCount(e: unknown): number | null {
+  const m = new RegExp(`${LARGE_QUEUE_TOKEN}:(\\d+)`).exec(e instanceof Error ? e.message : "");
+  return m ? Number(m[1]) : null;
+}
+
 // -------------------------------------------------------- main -> renderer push
 
 /**
@@ -389,12 +401,15 @@ export interface TastyTunesApi {
   mediaSearchAll(query: string): Promise<MediaSearchAllGroup[]>;
   /** Every ready index's full pools — feeds the Artists/Albums lenses. */
   mediaIndexPools(): Promise<MediaIndexPools[]>;
-  /** Queue a browsed item on the streamer (DIDL stays in the main process). */
+  /** Queue a browsed item on the streamer (DIDL stays in the main process). A
+   *  container over LARGE_QUEUE_TRACKS rejects with LARGE_QUEUE_TOKEN unless
+   *  `confirmLarge`; the renderer's tt wrapper asks and calls again. */
   mediaQueueAdd(
     serverUdn: string,
     objectId: string,
     action: MediaQueueAction,
     playFromId?: string,
+    confirmLarge?: boolean,
   ): Promise<void>;
   /** Save a browsed item to a preset slot (1-99). */
   mediaPresetSave(serverUdn: string, objectId: string, slot: number): Promise<void>;

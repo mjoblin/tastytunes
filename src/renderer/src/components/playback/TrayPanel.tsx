@@ -47,6 +47,7 @@ import { AmbientArt } from "@/components/media/AmbientArt";
 import { SignalLamp } from "@/components/device/SignalLamp";
 import { Segmented } from "@/components/controls/Segmented";
 import { ScrollOnce } from "@/components/playback/ScrollOnce";
+import { LargeQueueConfirm } from "@/components/overlays/LargeQueueConfirm";
 import { StreamerList, useStreamerList } from "@/components/device/DeviceSwitcher";
 import { PopoverChrome } from "@/hooks/usePopover";
 import {
@@ -625,6 +626,7 @@ export function TrayPanel(): React.JSX.Element {
           {tab === "recent" && <RecentTab density={density} />}
         </div>
       </div>
+      <LargeQueueConfirm />
     </div>
   );
 }

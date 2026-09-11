@@ -45,6 +45,7 @@ import {
   resumeTarget,
   LOSSLESS_CODECS,
   isHiRes,
+  LARGE_QUEUE_TRACKS,
 } from "@shared/model";
 import { audioAnalysisGet, albumDrMap } from "../lookups/audioAnalysis";
 import { playStatsFromRecord } from "../data/playStats";
@@ -87,7 +88,13 @@ import { fetchArtistInfo } from "../lookups/artistInfo";
 import { fetchAlbumInfo } from "../lookups/albumInfo";
 import { fetchLyrics } from "../lookups/lyrics";
 import { radioSearch, radioByTags } from "../lookups/radioBrowser";
-import { browseChildrenOf, presetSave, queueAdd, refreshServers } from "../media/upnpBrowser";
+import {
+  browseChildrenOf,
+  LargeQueueError,
+  presetSave,
+  queueAdd,
+  refreshServers,
+} from "../media/upnpBrowser";
 import {
   searchServer as librarySearch,
   status as indexStatus,
@@ -380,6 +387,10 @@ export class McpBridge {
       append: "APPEND",
       replace: "REPLACE",
     };
+    /** The agent's side of the large-queue guard: the app asks the user in a
+     *  dialog; an agent is told to ask, and how to say yes. */
+    const largeQueueAsk = (tracks: number, tool: string): string =>
+      `That item holds ${tracks.toLocaleString()} tracks. Ask the user before queueing that many, then call ${tool} again with confirm_large: true.`;
 
     /** Tone/EQ gate: caps when the streamer has them, a clean error otherwise. */
     const toneCaps = (): { s: Snapshot; caps: NonNullable<ReturnType<typeof audioCaps>> } => {
@@ -1993,6 +2004,12 @@ export class McpBridge {
             .describe(
               "Default play_now (keeps the queue). 'replace' clears the queue — only when asked to.",
             ),
+          confirm_large: z
+            .boolean()
+            .optional()
+            .describe(
+              `Only after the user agreed: queue a container over ${LARGE_QUEUE_TRACKS} tracks anyway.`,
+            ),
         },
         handler: async (a) => {
           const s = this.connected();
@@ -2004,8 +2021,11 @@ export class McpBridge {
               a.server_udn as string,
               a.object_id as string,
               QUEUE_MODES[mode],
+              undefined,
+              { confirmLarge: a.confirm_large === true },
             );
           } catch (e) {
+            if (e instanceof LargeQueueError) return err(largeQueueAsk(e.tracks, "play_media"));
             return err(
               `Couldn't queue that item — its object id may be stale; run search_library again. (${(e as Error).message})`,
             );
@@ -2229,7 +2249,15 @@ export class McpBridge {
         },
       },
       play_favorite: {
-        inputSchema: { key: z.string().describe("Favorite key from list_favorites.") },
+        inputSchema: {
+          key: z.string().describe("Favorite key from list_favorites."),
+          confirm_large: z
+            .boolean()
+            .optional()
+            .describe(
+              `Only after the user agreed: play an album favorite over ${LARGE_QUEUE_TRACKS} tracks anyway.`,
+            ),
+        },
         handler: async (a) => {
           const s = this.connected();
           const fav = s.favorites.find((f) => favoriteKey(f) === a.key);
@@ -2239,12 +2267,15 @@ export class McpBridge {
             return ok(`Tuning to ${fav.name}.`);
           }
           const host = s.connection.host;
+          const confirm = { confirmLarge: a.confirm_large === true };
           await dm.ensureAwake(); // favorites are wake intents too
           if (fav.serverUdn && fav.objectId) {
             try {
-              await queueAdd(host, fav.serverUdn, fav.objectId, "PLAY_NOW");
+              await queueAdd(host, fav.serverUdn, fav.objectId, "PLAY_NOW", undefined, confirm);
               return ok(`Playing ${fav.title}.`);
-            } catch {
+            } catch (e) {
+              if (e instanceof LargeQueueError)
+                return err(largeQueueAsk(e.tracks, "play_favorite"));
               // stored id went stale — heal by content below (the app's model:
               // object ids are hints, title/artist identity is the truth)
             }
@@ -2258,7 +2289,13 @@ export class McpBridge {
                 (fav.artist == null || n.artist == null || lc(n.artist) === lc(fav.artist)),
             );
             if (match) {
-              await queueAdd(host, server.udn, match.id, "PLAY_NOW");
+              try {
+                await queueAdd(host, server.udn, match.id, "PLAY_NOW", undefined, confirm);
+              } catch (e) {
+                if (e instanceof LargeQueueError)
+                  return err(largeQueueAsk(e.tracks, "play_favorite"));
+                throw e;
+              }
               dm.favoriteUpdate(a.key as string, {
                 serverUdn: server.udn,
                 serverName: server.name,

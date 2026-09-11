@@ -1,6 +1,6 @@
 import { type MediaNode, type MediaServerInfo } from "@shared/model";
 import { favoriteKey, type Favorite, type FavoriteMedia } from "@shared/model";
-import { tt } from "@/api";
+import { isDeclined, tt } from "@/api";
 import { useStore } from "@/store";
 import { isAlbumClass } from "@/lib/media";
 
@@ -64,7 +64,7 @@ export function favoriteMatchesNode(fav: FavoriteMedia, n: MediaNode): boolean {
 export const favoriteHasRoute = (fav: FavoriteMedia, servers: MediaServerInfo[]): boolean =>
   servers.some((s) => s.udn === fav.serverUdn) || servers.some((s) => s.searchable);
 
-export type FavoriteActResult = "ok" | "healed" | "missing" | "no-server";
+export type FavoriteActResult = "ok" | "healed" | "missing" | "no-server" | "declined";
 
 /**
  * Run a library action against a media favorite. The stored objectId on its
@@ -87,7 +87,9 @@ export async function favoriteAct(
     try {
       await run(own.udn, fav.objectId);
       return "ok";
-    } catch {
+    } catch (e) {
+      // declined at the large-queue ask: nothing failed, nothing to heal
+      if (isDeclined(e)) return "declined";
       // stale id (or standby-rotted USB) — fall through to the search path
     }
   }
@@ -112,7 +114,8 @@ export async function favoriteAct(
         titlePath: null, // the old trail is meaningless on the healed server
       });
       return "healed";
-    } catch {
+    } catch (e) {
+      if (isDeclined(e)) return "declined";
       continue;
     }
   }

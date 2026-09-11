@@ -22,6 +22,7 @@ import { ShortcutsOverlay } from "@/components/overlays/ShortcutsOverlay";
 import { CommandPalette } from "@/components/overlays/CommandPalette";
 import { InfoModal } from "@/components/overlays/InfoModal";
 import { MediaInfoModal } from "@/components/overlays/MediaInfoModal";
+import { LargeQueueConfirm } from "@/components/overlays/LargeQueueConfirm";
 import { DisplayMode } from "@/components/playback/DisplayMode";
 import { NowPlayingScreen } from "@/screens/NowPlayingScreen";
 import { QueueScreen } from "@/screens/QueueScreen";
@@ -183,6 +184,7 @@ export default function App(): React.JSX.Element {
         {paletteOpen && <CommandPalette />}
         <InfoModal />
         <MediaInfoModal target={mediaInfo} />
+        <LargeQueueConfirm />
       </div>
     </div>
   );

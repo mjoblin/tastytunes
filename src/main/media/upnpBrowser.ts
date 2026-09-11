@@ -6,7 +6,13 @@
 // file except encoded inside /smoip/queue/add (queue writes) or a JSON body
 // (action=PRESET — preset saves). Streamer-directed SMOIP traffic is
 // unlogged (it has its own console); media-server traffic logs as 'upnp'.
-import type { MediaNode, MediaQueueAction, MediaServerInfo } from "@shared/model";
+import {
+  LARGE_QUEUE_TRACKS,
+  type MediaNode,
+  type MediaQueueAction,
+  type MediaServerInfo,
+} from "@shared/model";
+import { LARGE_QUEUE_TOKEN } from "@shared/ipc";
 import { asArray, didlToNodes, parser, text } from "./didl";
 import { loggedFetch } from "../netlog";
 
@@ -471,15 +477,36 @@ async function metadataDidl(entry: ServerEntry, objectId: string): Promise<strin
   return r.didl;
 }
 
+/**
+ * THE LARGE-QUEUE GUARD (2026-09-10). Every surface reaches the streamer
+ * through queueAdd, the MCP too, and a container verb queues whatever the
+ * container lists: Play from here on a search scope once queued 2,528 tracks
+ * on the user's Evo (2026-09-04). A container over LARGE_QUEUE_TRACKS refuses
+ * with this unless the caller confirmed; the renderer's tt wrapper asks and
+ * calls again, an agent is told to ask the user. The count is the container's
+ * direct listing (TotalMatches of a one-item Browse, one extra round trip per
+ * container verb); a server that reports no total is not guarded.
+ */
+export class LargeQueueError extends Error {
+  constructor(readonly tracks: number) {
+    super(`${LARGE_QUEUE_TOKEN}:${tracks}`);
+  }
+}
+
 export async function queueAdd(
   host: string,
   serverUdn: string,
   objectId: string,
   action: MediaQueueAction,
   playFromId?: string,
+  opts: { confirmLarge?: boolean } = {},
 ): Promise<void> {
   const entry = await entryFor(host, serverUdn);
   const didl = await metadataDidl(entry, objectId);
+  if (!opts.confirmLarge && /<container[\s>]/.test(didl)) {
+    const probe = await soapBrowse(entry, objectId, "BrowseDirectChildren", 0, 1);
+    if (probe && probe.total > LARGE_QUEUE_TRACKS) throw new LargeQueueError(probe.total);
+  }
   const udn = serverUdn.replace(/^uuid:/, "");
   // The endpoint is encoding-sensitive: EVERY special character in the DIDL
   // must be percent-encoded (vibin's hard-won quote(didl, safe="") lesson).
