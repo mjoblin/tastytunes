@@ -121,7 +121,7 @@ export function DiagnosticsDrawer(): React.JSX.Element {
             ))}
             {netRequests.length === 0 && (
               <div className="text-faint py-2">
-                No outbound requests yet — lyrics, artist info, scrobbles, and update checks land
+                No outbound requests yet. Lyrics, artist info, scrobbles, and update checks land
                 here.
               </div>
             )}

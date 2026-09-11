@@ -61,7 +61,7 @@ export async function openInfoForRef(ref: MediaRef): Promise<void> {
     set({
       node: stub,
       serverName: ref.serverName ?? null,
-      note: "Not found in any library index — showing what this list knows.",
+      note: "Not found in any library index. Showing what this list knows.",
     });
 }
 

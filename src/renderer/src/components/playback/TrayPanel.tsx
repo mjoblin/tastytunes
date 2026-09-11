@@ -819,7 +819,7 @@ function TrayStandby({
           <span className="truncate">{systemInfo?.name ?? "Streamer"} is asleep</span>
         </div>
         <div className="text-[11.5px] text-faint truncate min-h-[15px]">
-          {busy ? "Waking…" : "Press to wake — or start something below."}
+          {busy ? "Waking…" : "Press to wake, or start something below."}
         </div>
         <div className="text-[11px] text-faint mt-0.5 truncate min-h-[14px]">
           {last != null && (

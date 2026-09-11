@@ -371,7 +371,7 @@ function ConnectGate(): React.JSX.Element {
           className="flex items-center gap-2 text-[12.5px] text-amber/90 border border-amber/20 bg-amberdim/40 rounded-full px-4 py-1.5"
         >
           <Moon size={12} strokeWidth={2} />
-          The streamer may be in eco standby — eco turns its network off, so wake it at the device.
+          The streamer may be in eco standby, which turns its network off. Wake it at the device.
         </div>
       )}
       {busy && !stuck ? (
@@ -404,8 +404,7 @@ function ConnectGate(): React.JSX.Element {
           {busy && stuck && (
             <div data-still-trying className="flex items-center gap-2 text-[12.5px] text-faint">
               <Loader2 size={12} className="spin" />
-              Still trying {(connection as { host: string }).host} — it may be off or in eco
-              standby.
+              Still trying {(connection as { host: string }).host}. It may be off or in eco standby.
             </div>
           )}
           {gateRows.length > 0 ? (
@@ -466,7 +465,7 @@ function ConnectGate(): React.JSX.Element {
           )}
           {stillLooking && (
             <div className="text-[12.5px] text-faint max-w-sm leading-relaxed">
-              Still looking — the search repeats on its own. If the streamer sits on a different
+              Still looking. The search repeats on its own. If the streamer sits on a different
               subnet or Wi-Fi band, enter its IP manually below.
             </div>
           )}
@@ -492,7 +491,7 @@ function ConnectGate(): React.JSX.Element {
             className="mt-4 flex items-center gap-2 text-[13px] text-faint hover:text-dim transition-colors"
           >
             <Sparkles size={14} className="text-gold/70" />
-            Try without a streamer — explore with the built-in demo →
+            Try the built-in demo, no streamer needed →
           </button>
         </>
       )}

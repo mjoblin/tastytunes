@@ -614,7 +614,7 @@ export function CommandPalette(): React.JSX.Element {
       if (idx.state === "building") continue;
       cmds.push({
         id: `library:rebuild:${idx.udn}`,
-        label: `${idx.state === "ready" ? "Rebuild" : "Build"} library index — ${idx.serverName}`,
+        label: `${idx.state === "ready" ? "Rebuild" : "Build"} the ${idx.serverName} library index`,
         group: "Library",
         icon: RefreshCw,
         keywords: "index scan media server refresh",
@@ -828,7 +828,7 @@ export function CommandPalette(): React.JSX.Element {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onKeyDown}
-            placeholder="Type a command — transport, sources, presets, screens…"
+            placeholder="Type a command: transport, sources, presets, screens…"
             className="flex-1 bg-transparent outline-none py-3.5 text-[14px] placeholder:text-faint"
           />
           <span className="microlabel shrink-0">⌘K</span>

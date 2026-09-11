@@ -96,7 +96,7 @@ export function MiniPlayer(): React.JSX.Element {
   // the invisible wheel-anywhere volume.
   const muteBtn = (
     <button
-      data-tip={muted ? "Unmute — scroll for volume" : "Mute — scroll for volume"}
+      data-tip={muted ? "Unmute (scroll for volume)" : "Mute (scroll for volume)"}
       aria-label={muted ? "Unmute" : "Mute"}
       onClick={() => void tt.command({ type: "setMute", mute: !muted })}
       className={cx(

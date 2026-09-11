@@ -130,7 +130,7 @@ function SaveQueueDialog({
       </div>
       <PresetSavePanel
         title="Current queue"
-        subtitle={`${fmtCount(trackCount)} tracks — stored on the streamer`}
+        subtitle={`${fmtCount(trackCount)} tracks, stored on the streamer`}
         nameAutoFocus
         onSave={onSave}
       />

@@ -2504,7 +2504,7 @@ export function LibraryScreen(): React.JSX.Element {
                         buildingCount > 0 && doorsState !== "failed"
                           ? `Indexing ${buildingCount === 1 ? "a library" : `${buildingCount} libraries`}…${doorsState === "ready" ? " What is already indexed is browsable now." : ""}`
                           : doorsState === "failed"
-                            ? `Couldn't index: ${failedIndexes.map((x) => `${x.serverName} — ${x.failure ?? "no index"}`).join("; ")}. Click to retry.`
+                            ? `Couldn't index ${failedIndexes.map((x) => `${x.serverName} (${x.failure ?? "no index"})`).join(", ")}. Click to retry.`
                             : undefined
                       }
                       onClick={() => {
@@ -2603,7 +2603,7 @@ export function LibraryScreen(): React.JSX.Element {
                         onClick={() => enterServer(s.udn)}
                         data-tip={
                           s.isStreamer && inStandby
-                            ? "In standby — USB content appears once the streamer wakes"
+                            ? "In standby. USB content appears once the streamer wakes."
                             : undefined
                         }
                         className={cx(
@@ -2833,7 +2833,7 @@ export function LibraryScreen(): React.JSX.Element {
         )}
         {crossMode && !crossState && !searching && (
           <div className="text-[15px] text-faint pt-4 px-1">
-            Search every built library index at once —{" "}
+            Search every built library index at once:{" "}
             {readyIndexes.map((x) => x.serverName).join(", ")}.
           </div>
         )}

@@ -909,8 +909,8 @@ function RepairChip({
     variant === "card" ? (
       <button
         data-preset-dead
-        data-tip="Didn't load — click to repair"
-        aria-label="Preset didn't load — repair"
+        data-tip="Didn't load. Click to repair."
+        aria-label="Repair preset (didn't load)"
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => void openFrom(e)}
         className="tip-bottom absolute top-2 left-2 z-10 flex h-7 w-7 items-center justify-center rounded-lg bg-panel/80 ring-1 ring-alert/50 text-alert"
@@ -920,8 +920,8 @@ function RepairChip({
     ) : (
       <button
         data-preset-dead
-        data-tip="Didn't load — click to repair"
-        aria-label="Preset didn't load — repair"
+        data-tip="Didn't load. Click to repair."
+        aria-label="Repair preset (didn't load)"
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => void openFrom(e)}
         className="tip-bottom p-1 rounded text-alert hover:text-ink transition-colors"
@@ -954,9 +954,9 @@ function RepairChip({
             >
               <span className="microlabel text-dim block mb-2">preset didn't load</span>
               <span className="block text-[11px] text-faint leading-relaxed">
-                This preset points at something the media server no longer has — its id changed,
-                most likely when the library was rescanned. The streamer accepts the recall and then
-                does nothing.
+                This preset points at something the media server no longer has. Its id changed, most
+                likely when the library was rescanned. The streamer accepts the recall and then does
+                nothing.
               </span>
               {match === undefined && (
                 <span className="block text-[11px] text-faint mt-2.5">Looking in the index…</span>

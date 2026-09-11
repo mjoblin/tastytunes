@@ -129,7 +129,7 @@ export function DeviceScreen(): React.JSX.Element {
           : `Connected to ${connection.host}`;
       case "disconnected":
         return connection.reconnecting
-          ? `Lost connection to ${connection.host} (${connection.reason}) — reconnecting…`
+          ? `Lost connection to ${connection.host} (${connection.reason}). Reconnecting…`
           : `Disconnected from ${connection.host}`;
     }
   })();
@@ -204,7 +204,7 @@ export function DeviceScreen(): React.JSX.Element {
 
                   {devices.length === 0 && (searchCameBackEmpty || !discovering) && (
                     <div className="text-[12.5px] text-faint">
-                      Nothing found yet. Ensure the streamer is on the same network — or connect to
+                      Nothing found yet. Ensure the streamer is on the same network, or connect to
                       it directly below.
                     </div>
                   )}
@@ -312,7 +312,7 @@ export function DeviceScreen(): React.JSX.Element {
                     // this state actually has is "where do I find that?", and
                     // answering it beats another line of reassurance.
                     <p className="text-[11.5px] text-faint leading-snug mb-2">
-                      Your streamer shows its IP under Settings → Network on its own display, and
+                      Your streamer shows its IP under Settings › Network on its own display, and
                       your router lists it among connected devices.
                     </p>
                   )}
@@ -355,7 +355,7 @@ export function DeviceScreen(): React.JSX.Element {
                   className="mt-9 flex items-center gap-2 text-[13px] text-faint hover:text-dim transition-colors"
                 >
                   <Sparkles size={14} className="text-gold/70" />
-                  Try without a streamer — explore with the built-in demo →
+                  Try the built-in demo, no streamer needed →
                 </button>
               )}
             </div>
@@ -439,7 +439,7 @@ export function DeviceScreen(): React.JSX.Element {
                     <div className="min-w-0">
                       <div className="text-[12.5px] text-gold">Firmware update available</div>
                       <div className="text-[11px] text-faint mt-0.5">
-                        Install it in the Cambridge Audio app or the streamer&rsquo;s web admin —
+                        Install it in the Cambridge Audio app or the streamer&rsquo;s web admin.
                         TastyTunes never updates firmware itself.
                       </div>
                     </div>

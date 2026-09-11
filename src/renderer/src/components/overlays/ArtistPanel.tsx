@@ -326,15 +326,15 @@ export function ArtistPanel({ className }: { className?: string }): React.JSX.El
             {tab === "artist"
               ? artist
                 ? `Nothing found for ${artist}.`
-                : "Artist info needs track metadata — not available for this source."
+                : "Artist info needs track metadata, which this source doesn't provide."
               : tab === "album"
                 ? album
                   ? `Nothing found for ${album}.`
-                  : "Album info needs track metadata — not available for this source."
+                  : "Album info needs track metadata, which this source doesn't provide."
                 : tab === "track"
                   ? title
                     ? `Nothing found for ${title}.`
-                    : "Track info needs track metadata — not available for this source."
+                    : "Track info needs track metadata, which this source doesn't provide."
                   : "Nothing is playing."}
           </div>
         )}

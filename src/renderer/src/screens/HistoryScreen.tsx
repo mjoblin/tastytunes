@@ -329,7 +329,7 @@ export function HistoryScreen(): React.JSX.Element {
             <EmptyState
               icon={History}
               title="No history yet"
-              caption="Tracks and stations you play will collect here — a local log, kept only on this computer."
+              caption="Tracks and stations you play will collect here, in a local log kept only on this computer."
             />
           ) : (
             <div
@@ -431,7 +431,7 @@ function TrackRow({
             <RowAction
               icon={Play}
               label="Play again"
-              tip="Play now — slots in after the current track"
+              tip="Play now, slotted in after the current track"
               onClick={() => void playRefNow(ref)}
             />
             <RowAction

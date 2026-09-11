@@ -157,8 +157,12 @@ export function Nav(): React.JSX.Element {
           // the dot's promise: with an update pending, the wordmark lands on
           // Settings → Updates (the panel's home); otherwise it opens About
           onClick={() => (update ? jumpToSettingsTab("updates") : setInfoOpen(true))}
-          data-tip={update ? `v${update.version} available — open Updates` : "About TastyTunes"}
-          aria-label={update ? `v${update.version} available — open Updates` : "About TastyTunes"}
+          data-tip={
+            update ? `v${update.version} available. Click for Updates.` : "About TastyTunes"
+          }
+          aria-label={
+            update ? `v${update.version} available. Click for Updates.` : "About TastyTunes"
+          }
           className="no-drag relative inline-block align-top font-wordmark font-bold text-[21px] leading-none tracking-tight cursor-pointer"
         >
           {collapsed ? (
@@ -189,7 +193,7 @@ export function Nav(): React.JSX.Element {
           // main area's screen title (and loses the paint-order fight there)
           <button
             onClick={() => void tt.disconnect()}
-            data-tip="You're in the demo — click to exit"
+            data-tip="You're in the demo. Click to exit."
             aria-label="Exit demo"
             className="no-drag tip-bottom z-[70] ml-2 align-[3px] px-1.5 py-0.5 rounded-md ring-1 ring-gold/40 bg-golddim font-mono text-[9px] uppercase tracking-widest text-gold hover:brightness-110 motion-safe:active:scale-95 transition-all"
           >

@@ -2181,21 +2181,21 @@ export function describeProfileNote(note: ProfileNote): string {
           ? `${n(note.count, "navigation entry", "navigation entries")} left out of the artists`
           : `${n(note.count, "entry", "entries")} that ${note.count === 1 ? "was" : "were"} not a track left out of the tracks`;
     case "albums-found-by-browsing":
-      return `the server's album search returned nothing — ${n(note.count, "album was", "albums were")} found by browsing instead`;
+      return `the server's album search returned nothing, so ${n(note.count, "album was", "albums were")} found by browsing instead`;
     case "albums-assembled-from-tracks":
-      return `this server doesn't list albums — TastyTunes assembled them from its ${n(note.count, "track", "tracks")}`;
+      return `this server doesn't list albums, so TastyTunes assembled them from its ${n(note.count, "track", "tracks")}`;
     case "duplicate-albums-merged":
-      return `${n(note.count, "duplicate album entry", "duplicate album entries")} merged — the server lists some albums more than once`;
+      return `${n(note.count, "duplicate album entry", "duplicate album entries")} merged, because the server lists some albums more than once`;
     case "years-from-tracks":
       return note.count === 1
         ? "1 album with no year took the year from its tracks"
         : `${note.count} albums with no year took the year from their tracks`;
     case "search-failed-browsed-instead":
-      return "the server's search failed — the library was indexed by browsing instead";
+      return "the server's search failed, so the library was indexed by browsing instead";
     case "search-paged-smaller":
-      return "the server's search failed on large pages — read in smaller pages instead";
+      return "the server's search failed on large pages, so it was read in smaller pages instead";
     case "browse-capped":
-      return `browsing stopped after ${note.count} folders — a very large library may be only partly indexed`;
+      return `browsing stopped after ${note.count} folders, so a very large library may be only partly indexed`;
   }
 }
 
