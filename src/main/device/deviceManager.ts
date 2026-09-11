@@ -52,7 +52,7 @@ import { discoverStreamers } from "./discovery";
 import { SmoipSocket } from "./smoipSocket";
 import * as smoipHttp from "./smoipHttp";
 import { getSettings, updateSettings } from "../data/persist";
-import { clearRecents, getRecents, recordRecent, restoreRecents } from "../data/recents";
+import { clearRecents, getRecents, recentKey, recordRecent, restoreRecents } from "../data/recents";
 import { captureRecentArt, decorateRecents } from "../lookups/recentArt";
 import { listeningRecord } from "../data/listeningRecord";
 import { addFavorite, getFavorites, removeFavorite, updateFavorite } from "../data/favorites";
@@ -1082,8 +1082,14 @@ export class DeviceManager {
     // server should not be asked for the same picture by the capture, the
     // accent and the hero at once (the startup burst, 2026-09-06)
     if (changed) {
-      const first = list[0];
-      setTimeout(() => captureRecentArt(first), 3000);
+      // capture the head AS IT IS when the timer fires, not as it was: a second
+      // frame for the same track may have replaced the cover URL meanwhile
+      // (the AirPlay first-frame case), and the merge now takes the newer one
+      const key = recentKey(list[0]);
+      setTimeout(() => {
+        const head = getRecents()[0];
+        if (head && recentKey(head) === key) captureRecentArt(head);
+      }, 3000);
     }
     if (changed) this.push({ kind: "recents", data: decorateRecents(list) });
   }

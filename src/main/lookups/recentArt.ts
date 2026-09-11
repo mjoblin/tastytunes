@@ -63,7 +63,11 @@ export function captureRecentArt(e: RecentTrack): void {
       const res = await fetch(e.artUrl as string, { signal: ctrl.signal });
       clearTimeout(timer);
       if (!res.ok) {
-        console.warn(`[recentart] ${res.status} for ${e.artUrl}`);
+        // a retired id: the streamer serves only the current track's cover and
+        // answers 400 (or 500) for any earlier one. Expected in the ordinary
+        // course of a session (the first frame of a new AirPlay track names the
+        // previous cover), so not a warning; the row keeps its icon and a later
+        // frame's URL gets its own capture.
         return;
       }
       const buf = Buffer.from(await res.arrayBuffer());
