@@ -82,7 +82,10 @@ export function ScrollOnce({
 
   return (
     <div
-      className={cx("relative min-w-0", className)}
+      // the placement classes live HERE, on the element that carries data-tip: the
+      // tooltip's CSS reads them from that element (on the clip inside, they did
+      // nothing and the tip fell to the default place, off to the right)
+      className={cx("relative min-w-0", overflow > 0 && `${tipClass} tip-wide`, className)}
       data-tip={overflow > 0 ? text : undefined}
       data-scroll-once={overflow > 0 ? "overflows" : "fits"}
       onMouseEnter={pass}
@@ -94,7 +97,6 @@ export function ScrollOnce({
           wrap
             ? "[display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical]"
             : "whitespace-nowrap",
-          overflow > 0 && `${tipClass} tip-wide`,
         )}
       >
         <span ref={inner} className={wrap ? undefined : "inline-block will-change-transform"}>

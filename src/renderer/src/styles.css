@@ -551,6 +551,14 @@ img {
     0 0 0 1px var(--color-edge2),
     0 8px 24px rgb(0 0 0 / 0.35);
   font-size: 11px;
+  /* one tooltip face everywhere: a tip is a pseudo-element of its element and
+     would otherwise inherit that element's font (the tray panel's song line
+     is set in the display serif, tight-tracked; its tip must not be) */
+  font-family: var(--font-sans);
+  font-weight: 400;
+  font-style: normal;
+  letter-spacing: normal;
+  text-transform: none;
   padding: 4px 8px;
   border-radius: 6px;
   white-space: nowrap;
