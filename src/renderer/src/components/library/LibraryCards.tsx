@@ -11,6 +11,7 @@ import { DrBadge } from "@/components/media/Waveform";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { DurationCell } from "@/components/media/DurationCell";
 import { Eqbars } from "@/components/media/Eqbars";
+import { NameLine, NameLink } from "@/components/media/NameLine";
 import { artUrlAt } from "@shared/artUrl";
 
 // The Library's four listing renderers — cards and rows for containers and
@@ -324,17 +325,12 @@ export function ContainerRow({
           <div className="flex items-center gap-1.5 min-w-0">
             {node.artist &&
               (onArtistLink ? (
-                <button
-                  data-tip="Go to artist"
-                  aria-label={`Go to artist ${node.artist}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onArtistLink();
-                  }}
-                  className="tip-bottom text-[12px] text-faint truncate hover:text-dim hover:underline underline-offset-2 transition-colors"
-                >
-                  {node.artist}
-                </button>
+                <NameLink
+                  kind="artist"
+                  name={node.artist}
+                  onGo={onArtistLink}
+                  className="text-[12px] text-faint truncate hover:text-dim hover:underline underline-offset-2"
+                />
               ) : (
                 <div className="text-[12px] text-faint truncate">{node.artist}</div>
               ))}
@@ -565,38 +561,18 @@ export function TrackRow({
         </div>
         {(node.artist || (onAlbumLink && node.album)) && (
           <div className="text-[12px] text-faint truncate">
-            {node.artist &&
-              (onArtistLink ? (
-                <button
-                  data-tip="Go to artist"
-                  aria-label={`Go to artist ${node.artist}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onArtistLink();
-                  }}
-                  className="tip-bottom hover:text-dim hover:underline underline-offset-2 transition-colors"
-                >
-                  {artistLabel ?? node.artist}
-                </button>
-              ) : (
-                (artistLabel ?? node.artist)
-              ))}
-            {onAlbumLink && node.album && (
-              <>
-                {node.artist ? FACT_SEP : ""}
-                <button
-                  data-tip="Go to album"
-                  aria-label={`Go to album ${node.album}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onAlbumLink();
-                  }}
-                  className="tip-bottom hover:text-dim hover:underline underline-offset-2 transition-colors"
-                >
-                  {node.album}
-                </button>
-              </>
-            )}
+            {/* NameLine owns the link markup; the resolve stays the Library's
+                (same-library pools, not a content resolve), and a name with no
+                callback reads as text. The album shows only where it links. */}
+            <NameLine
+              artist={node.artist}
+              artistText={artistLabel}
+              album={onAlbumLink ? node.album : null}
+              onArtist={onArtistLink ?? null}
+              onAlbum={onAlbumLink ?? null}
+              tone="faint"
+              sep={FACT_SEP}
+            />
           </div>
         )}
       </div>

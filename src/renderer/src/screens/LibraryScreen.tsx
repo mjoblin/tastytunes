@@ -77,6 +77,15 @@ import {
   focusArtistsLens,
   type LensActions,
 } from "@/components/library/LibraryLenses";
+import {
+  LENS_ARTIST_CRUMB_ID,
+  LENS_CRUMB_ID,
+  LENS_LABEL,
+  lensNavigation,
+  setLensReturn,
+  type Lens,
+} from "@/components/library/lensNavigation";
+import { NameLink } from "@/components/media/NameLine";
 import { AddToPlaylistPanel, itemFromNode } from "@/components/overlays/AddToPlaylistPanel";
 import { ItemMenu, PresetPicker } from "@/components/library/LibraryMenus";
 import { RowMenu } from "@/components/media/RowMenu";
@@ -97,7 +106,7 @@ import { artUrlAt } from "@shared/artUrl";
 
 // Crumbs keep the entered node so an album level can render its header
 // (art, artist, year) without re-fetching metadata.
-type Crumb = { id: string; title: string; node?: MediaNode };
+export type Crumb = { id: string; title: string; node?: MediaNode };
 
 // Returning to the Library RESTORES where the last visit left off
 // (positionMemory below) — the T3 "always the front door" rule was reversed
@@ -146,22 +155,14 @@ const nodeKey = (serverUdn: string | null, path: Crumb[]): string =>
 // stale-id rewalks can't recover search-entered branches either way).
 const SEARCH_CRUMB_ID = "__search-results__";
 
-// Synthetic crumb planted when a LENS result is opened: the trail reads
-// Library › server › Albums › <album>, and the lens crumb (or Backspace)
-// restores the lens exactly as it was left. Same contract as the search
-// crumb; titlePaths strip it the same way.
-const LENS_CRUMB_ID = "__lens__";
-/** The artist between the Artists lens crumb and an album opened from it —
- *  the trail says the path you took; clicking it returns to the lens focused
- *  on that artist (2026-09-01: "minitunes > Artists > <album>" read as a
- *  hierarchy that doesn't exist and lost the one node connecting them). */
-const LENS_ARTIST_CRUMB_ID = "__lens-artist__";
+// The lens crumbs (LENS_CRUMB_ID, LENS_ARTIST_CRUMB_ID) live with the lens
+// navigation in components/library/lensNavigation.
 /**
  * Planted when a UNIFIED SEARCH result opens here: the trail reads
  * Search › <server> › <album>, and that crumb — or Backspace, or ⌘← — returns
  * to the Search screen with its query intact (the screen remembers it).
  *
- * Same idiom as the two above, with one difference worth stating: this crumb
+ * Same idiom as the search and lens crumbs, with one difference worth stating: this crumb
  * leads OFF this screen. Without it, arriving from search left you in a browse
  * tree you never navigated into, and back went to the source list — reported
  * as "⌘← takes me to the top of the library".
@@ -170,14 +171,6 @@ const UNIFIED_SEARCH_CRUMB_ID = "__from-search__";
 
 /** One wording for a queue write that didn't land, whichever verb sent it. */
 const QUEUE_FAILED = "Couldn't reach the streamer. Nothing was queued.";
-// Which lens the crumb leads back to (module scope — survives the scoped
-// album detour, like the lens components' own selection memories).
-/** The three lenses over the union of ready indexes, and their crumb/door
- *  labels — one home for the label (the crumb and the album leaf's way-back
- *  crumb both read it). */
-type Lens = "albums" | "artists" | "tracks";
-const LENS_LABEL: Record<Lens, string> = { albums: "Albums", artists: "Artists", tracks: "Tracks" };
-let lensReturnTo: Lens | null = null;
 // The Albums lens scrolls the page scroller — its spot is remembered apart
 // from the source list's (they share the root path key otherwise).
 let albumsLensScroll = 0;
@@ -597,11 +590,32 @@ export function LibraryScreen(): React.JSX.Element {
     setPath(newPath);
   };
 
-  const openLens = (which: Lens): void => {
+  /** Record the spot being left; arrivals and history restores never do. */
+  const pushSpot = (): void => {
     if (!restoring.current) navPush({ screen: "library", library: snapshot() });
-    lensReturnTo = which;
-    setLens(which);
   };
+  // The lens navigation and THE ONE LANDING (components/library/lensNavigation).
+  const {
+    openLens,
+    landOn,
+    openAlbumFromLens,
+    returnToLens,
+    goToAlbumFromLens,
+    goToArtistFromLens,
+  } = lensNavigation({
+    lens,
+    setLens,
+    atRoot,
+    searchMode,
+    serverUdn,
+    lensPools,
+    restoring,
+    pendingTrack,
+    pushSpot,
+    moveTo,
+    setPath,
+    showNotice,
+  });
 
   /** Entering search is a NAVIGATION: record the spot being left (lens
    *  included) so Back returns exactly there — found 2026-08-31 when Back
@@ -612,58 +626,6 @@ export function LibraryScreen(): React.JSX.Element {
   const enterSearch = (): void => {
     if (!restoring.current) navPush({ screen: "library", library: snapshot() });
     setSearchMode(true);
-  };
-
-  /** A lens result opens the SHARED native album leaf, scoped to its server;
-   *  the lens crumb offers the way back with the lens state intact. */
-  const openAlbumFromLens = (node: MediaNode, track?: string): void => {
-    if (!node.serverUdn || !lens) return;
-    lensReturnTo = lens;
-    // a track's album (the Tracks lens's link or Go to album): land on THE
-    // TRACK, scrolled to and washed, exactly as the Queue's link does through
-    // openRefInLibrary — one gesture, one landing (user, 2026-09-02)
-    pendingTrack.current = track ?? null;
-    // from the Artists lens the artist rides between the lens crumb and the
-    // album — the trail says the path you took, and the crumb is the way
-    // back to the lens focused on them
-    const via =
-      lens === "artists" && node.artist ? [{ id: LENS_ARTIST_CRUMB_ID, title: node.artist }] : [];
-    moveTo(node.serverUdn, [
-      { id: LENS_CRUMB_ID, title: LENS_LABEL[lens] },
-      ...via,
-      { id: node.id, title: node.title, node },
-    ]);
-  };
-
-  const returnToLens = (): void => {
-    moveTo(null, []);
-    setLens(lensReturnTo);
-  };
-
-  /** The Tracks lens's links (and its menu's Go-to verbs): the album by
-   *  content identity in the same server's pool — no network — entered
-   *  through the lens crumb so Back returns to the lens; the artist as the
-   *  Artists lens, focused on them (a lens switch, so Back returns too). */
-  const goToAlbumFromLens = (track: MediaNode): void => {
-    const pool = lensPools?.find((g) => g.udn === (track.serverUdn ?? serverUdn));
-    const album = pool ? albumOfTrack(track, pool) : null;
-    if (!album) {
-      showNotice(`Couldn't find "${track.album ?? "that album"}" in this library.`);
-      return;
-    }
-    openAlbumFromLens(album, track.title);
-  };
-  const goToArtistFromLens = (node: MediaNode): void => {
-    if (!node.artist) return;
-    focusArtistsLens(node.artist);
-    if (atRoot && !searchMode) {
-      openLens("artists");
-      return;
-    }
-    // from a folder or search: one history entry (moveTo's), then the lens
-    moveTo(null, []);
-    lensReturnTo = "artists";
-    setLens("artists");
   };
 
   // Three ways to arrive, and this effect picks between them.
@@ -710,16 +672,13 @@ export function LibraryScreen(): React.JSX.Element {
         if ("artist" in target) {
           // a NAME from another screen's row: the Artists lens at the root,
           // focused and revealed on it (the Tracks lens's link, app-wide)
-          focusArtistsLens(target.artist);
-          moveTo(null, []);
-          lensReturnTo = "artists";
-          setLens("artists");
+          landOn({ artist: target.artist });
           return;
         }
         const last = target.titlePath.length - 1;
-        moveTo(
-          target.serverUdn,
-          target.titlePath.map((title, i) =>
+        landOn({
+          udn: target.serverUdn,
+          path: target.titlePath.map((title, i) =>
             i === last
               ? {
                   id: target.objectId,
@@ -742,11 +701,9 @@ export function LibraryScreen(): React.JSX.Element {
                 }
               : { id: `__fav-crumb-${i}__`, title },
           ),
-        );
-        if (target.fromSearch) {
-          setPath((p) => [{ id: UNIFIED_SEARCH_CRUMB_ID, title: "Search" }, ...p]);
-        }
-        pendingTrack.current = target.track ?? null;
+          track: target.track ?? null,
+          ...(target.fromSearch ? { lead: { id: UNIFIED_SEARCH_CRUMB_ID, title: "Search" } } : {}),
+        });
         return;
       }
       if (cameBack && positionMemory) {
@@ -1012,7 +969,7 @@ export function LibraryScreen(): React.JSX.Element {
         setCrossState(snap.crossNow);
       }
       if (snap.lens) {
-        lensReturnTo = snap.lens;
+        setLensReturn(snap.lens);
         setLens(snap.lens);
       }
     } finally {
@@ -2718,14 +2675,15 @@ export function LibraryScreen(): React.JSX.Element {
                 </div>
                 {albumArtist &&
                   (albumNode.artist ? (
-                    <button
+                    <NameLink
+                      kind="artist"
+                      name={albumNode.artist}
+                      onGo={() => goToArtistFromLens(albumNode)}
                       data-album-artist-link
-                      data-tip="Go to artist"
-                      onClick={() => goToArtistFromLens(albumNode)}
-                      className="tip-bottom block max-w-full text-left text-[14px] text-dim truncate hover:text-ink hover:underline underline-offset-2 transition-colors"
+                      className="block max-w-full text-left text-[14px] text-dim truncate hover:text-ink hover:underline underline-offset-2"
                     >
                       {albumArtist}
-                    </button>
+                    </NameLink>
                   ) : (
                     <div className="text-[14px] text-dim truncate">{albumArtist}</div>
                   ))}
