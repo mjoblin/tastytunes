@@ -210,7 +210,7 @@ tools the Home Assistant automation needs, and keep TastyTunes running.
 - Artists, Albums and Tracks views pooling all sources into one collection, with genre, decade, format (codec, lossless, hi-res), dynamic range and albums ⇄ compilations filters and sorting; the Albums view as cards or rows
 - The Artists view shows your artists, the selected artist's albums, and the selected album's tracks
 - The Tracks view lists every track in every library; narrow it with the filters and play the whole narrowed list
-- Artist and album names link to the Library from every track row: the Library, Queue, Playlists, Favorites, Recently Played, Search and Now Playing
+- Artist and album names link to the Library from every track row: the Library, Queue, Playlists, Favorites, History, Search and Now Playing
 - Albums stay intact: featured guests stay in the album, compilations sit under Various Artists, multi-disc sets show disc dividers, and multi-volume box sets collapse to one album with a volume selector; format and size in every album header
 - Info on any album, track or artist: performers, album artist, composers, disc and track numbers, format, size, and source ids, as the media server reports them; copy as JSON
 - Play now, play next, append, or replace
@@ -218,7 +218,7 @@ tools the Home Assistant automation needs, and keep TastyTunes running.
 - Drag tracks, or an album, onto Queue, Playlists or Favorites in the navigation panel
 - Albums with no artwork on the local media server get a cover from the Cover Art Archive (can be disabled in Settings)
 - Save an album, a track, or the whole queue to one of the streamer's preset slots
-- Open in Library from the queue, favorites, playlists, Recently Played and the Info panel: lands on the track's album with the track highlighted
+- Open in Library from the queue, favorites, playlists, History and the Info panel: lands on the track's album with the track highlighted
 - <kbd>Backspace</kbd> goes up a level; filters are remembered per folder
 - The library index is checked for changes when the app connects, and a notice appears when indexing finishes while you are on another screen
 
@@ -287,7 +287,12 @@ tools the Home Assistant automation needs, and keep TastyTunes running.
 
 ### History
 
-- Recently played: a capped local log (200 entries, clearable) of tracks and stations; station tracks are also logged when announced by the station
+- One screen (<kbd>H</kbd>) with five views on a rail: Recent, Timeline, Stats, Rediscover and Elsewhere; when the record holds more than one streamer, every view can be narrowed to one
+- Recent: a capped local log (200 entries, clearable) of tracks and stations; station tracks are also logged when announced by the station
+- Timeline: every play in the listening record, grouped into listening sessions by day with a month rail, or shown play by play; filters for source, period and listens only
+- Stats for a week, a month, a year or all time: plays and listening time, a listening calendar, most played albums, artists, tracks and stations, hours by source and by quality, a weekday by hour grid, and what was started from a preset or a playlist
+- Rediscover: albums worth coming back to, from the record and your library: started and never finished, more from the artists you play, not heard in a while, and never played; each section grows a few rows at a time, and its heading stays at the top while you scroll and takes you back to its start
+- Elsewhere: the artists you met away from the library, through AirPlay, a cast or a streaming service, or on internet radio, with whether your library holds them; a row opens to the tracks heard and, with artist context on, the artist's summary
 - Listening record: a local log of what plays and for how long (local media, radio, AirPlay and other sources), kept in plain JSON Lines files on your computer, one per year; a play is recorded once it ends, if it played for at least 30 seconds. Export or clear it in Settings › History; can be disabled (on by default). The file format is documented at [tastytunes.app/listening-record](https://tastytunes.app/listening-record/)
 - AI agents can read the listening record through the MCP server's history tools: what played, when, and for how long, including "on this day"
 
@@ -300,7 +305,7 @@ tools the Home Assistant automation needs, and keep TastyTunes running.
 ### Menu bar / system tray
 
 - An optional icon in the menu bar (macOS) or system tray (Windows, Linux), on by default, can be disabled in Settings
-- On macOS and Windows, clicking the icon opens a compact panel: now playing with transport and volume, plus queue, presets, playlists and Recently Played; picking something while the streamer sleeps wakes it first
+- On macOS and Windows, clicking the icon opens a compact panel: now playing with transport and volume, plus queue, presets, playlists and Recent; picking something while the streamer sleeps wakes it first
 - On Windows and Linux, closing the main window keeps TastyTunes running in the tray; Quit is in the icon's menu
 - On Linux there's no panel, just the icon and its menu
 
