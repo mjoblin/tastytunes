@@ -1,8 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowDownLeft, ArrowUpRight, Pause, Play } from "lucide-react";
+import { DEFAULT_SETTINGS } from "@shared/model";
 import { useStore } from "@/store";
+import { useDragExtent } from "@/hooks/useDragExtent";
 import { cx } from "@/lib/format";
 import { CloseButton } from "@/components/controls/CloseButton";
+import { PanelResizeHandle } from "@/components/controls/PanelResizeHandle";
+
+/** The persisted default IS the detent, as the Now Playing drawers' width. */
+const DRAWER_DEFAULT_HEIGHT = DEFAULT_SETTINGS.diagnosticsHeight;
+const MIN_HEIGHT = 120;
 
 type Filter = "all" | "in" | "out" | "logs";
 
@@ -25,6 +32,23 @@ export function DiagnosticsDrawer(): React.JSX.Element {
   };
   const [filter, setFilter] = useState<Filter>("all");
   const [paused, setPaused] = useState(false);
+  // drag-resizable from the top edge (user, 2026-09-12): the Now Playing
+  // drawers' grip and hook, turned on their side; bottom-anchored, so up grows
+  const {
+    size: height,
+    dragging,
+    snapped,
+    handleProps,
+  } = useDragExtent({
+    saved: settings.diagnosticsHeight,
+    save: (diagnosticsHeight) => saveSettings({ diagnosticsHeight }),
+    detent: DRAWER_DEFAULT_HEIGHT,
+    min: MIN_HEIGHT,
+    // never the whole window: the screen above must stay usable
+    max: () => Math.floor(window.innerHeight * 0.8),
+    axis: "y",
+    grow: -1,
+  });
   const [expanded, setExpanded] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -48,7 +72,17 @@ export function DiagnosticsDrawer(): React.JSX.Element {
           .map((f, i) => ({ key: `f-${f.at}-${i}`, at: f.at, log: null, frame: f }));
 
   return (
-    <div className="absolute inset-x-0 bottom-0 h-72 bg-panel border-t border-edge2 flex flex-col z-20 shadow-[0_-16px_50px_rgb(0_0_0_/_0.5)]">
+    <div
+      style={{ height }}
+      className="absolute inset-x-0 bottom-0 max-h-[80vh] bg-panel border-t border-edge2 flex flex-col z-20 shadow-[0_-16px_50px_rgb(0_0_0_/_0.5)]"
+    >
+      <PanelResizeHandle
+        orientation="horizontal"
+        label="Resize console"
+        dragging={dragging}
+        snapped={snapped}
+        handleProps={handleProps}
+      />
       <div className="flex items-center gap-2 px-4 py-2 border-b border-edge">
         {(
           [
@@ -61,7 +95,7 @@ export function DiagnosticsDrawer(): React.JSX.Element {
             onClick={() => selectTab(id)}
             className={cx(
               "microlabel px-2 py-0.5 rounded transition-colors",
-              tab === id ? "bg-amberdim text-amber" : "text-faint hover:text-dim",
+              tab === id ? "bg-amberdim text-amber" : "text-faint hover:text-ink hover:bg-veil",
             )}
           >
             {label}
@@ -75,7 +109,7 @@ export function DiagnosticsDrawer(): React.JSX.Element {
               onClick={() => setFilter(f)}
               className={cx(
                 "font-mono text-[10px] uppercase px-2 py-0.5 rounded transition-colors",
-                filter === f ? "bg-amberdim text-amber" : "text-faint hover:text-dim",
+                filter === f ? "bg-amberdim text-amber" : "text-faint hover:text-ink hover:bg-veil",
               )}
             >
               {f}
@@ -83,12 +117,18 @@ export function DiagnosticsDrawer(): React.JSX.Element {
           ))}
         <button
           onClick={() => setPaused((p) => !p)}
-          className="p-1.5 text-faint hover:text-dim"
-          title={paused ? "Resume auto-scroll" : "Pause auto-scroll"}
+          aria-label={paused ? "Resume auto-scroll" : "Pause auto-scroll"}
+          data-tip={paused ? "Resume auto-scroll" : "Pause auto-scroll"}
+          className="tip-bottom tip-end p-1.5 rounded-full text-dim hover:text-ink hover:bg-veil2 motion-safe:active:scale-90"
         >
           {paused ? <Play size={13} /> : <Pause size={13} />}
         </button>
-        <CloseButton onClick={() => setDiagnosticsOpen(false)} size={14} />
+        <CloseButton
+          onClick={() => setDiagnosticsOpen(false)}
+          size={14}
+          tip="Close"
+          className="tip-bottom tip-end"
+        />
       </div>
 
       <div

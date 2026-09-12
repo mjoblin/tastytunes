@@ -9,8 +9,13 @@ export const MB = process.env["TASTYTUNES_MB_URL"] ?? "https://musicbrainz.org";
 export const WD = process.env["TASTYTUNES_WD_URL"] ?? "https://www.wikidata.org";
 export const WIKI = process.env["TASTYTUNES_WIKI_URL"] ?? "https://en.wikipedia.org";
 
-/** ok = an answer; missing = authoritative 404; error = we never really asked. */
-export type Fetched = { kind: "ok"; body: unknown } | { kind: "missing" } | { kind: "error" };
+/** ok = an answer; missing = authoritative 404; error = we never really asked
+ *  (status when the server said so — 503 is MusicBrainz refusing the pace;
+ *  dropped when the gate discarded a speculative request unsent). */
+export type Fetched =
+  | { kind: "ok"; body: unknown }
+  | { kind: "missing" }
+  | { kind: "error"; status?: number; dropped?: boolean };
 
 export async function getJson(service: string, url: string): Promise<Fetched> {
   try {
@@ -19,7 +24,7 @@ export async function getJson(service: string, url: string): Promise<Fetched> {
       signal: AbortSignal.timeout(10_000),
     });
     if (res.status === 404) return { kind: "missing" };
-    if (!res.ok) return { kind: "error" };
+    if (!res.ok) return { kind: "error", status: res.status };
     return { kind: "ok", body: await res.json() };
   } catch {
     return { kind: "error" };
@@ -29,35 +34,73 @@ export async function getJson(service: string, url: string): Promise<Fetched> {
 // The MusicBrainz 1 rps gate: calls queue behind each other, spaced >= 1.1s.
 // TWO LANES (2026-09-12): a lookup the user asked for — the context panel's
 // tab, an opened row on History's Elsewhere, an agent's question — goes ahead
-// of every speculative one still waiting (cover art for rows scrolling past,
-// which can queue a minute of requests), behind only the urgent ones already
-// there. The pace is the same either way; MusicBrainz sees nothing different.
+// of every speculative one still waiting (cover art for rows on screen),
+// behind only the urgent ones already there. The pace is the same either way.
+// GENTLE (same day, after a log showing four refusals in ten at the published
+// pace — user: "i don't want the app to be too demanding on musicbrainz"):
+// a 503 pauses the gate, two seconds doubling to thirty, the refused request
+// is retried ONCE after the pause, and a success forgets the pause; and the
+// speculative lane holds at most MB_SPECULATIVE_MAX waiting requests — beyond
+// that the oldest are discarded unsent, since their rows have scrolled away,
+// and answer as an error so nothing caches. Urgent requests are never dropped.
 interface MbJob {
   url: string;
   urgent: boolean;
   resolve(got: Fetched): void;
 }
+const MB_SPACING_MS = 1100;
+const MB_BACKOFF_MIN_MS = 2000;
+const MB_BACKOFF_MAX_MS = 30_000;
+const MB_SPECULATIVE_MAX = 8;
 const mbQueue: MbJob[] = [];
 let mbPumping = false;
 let mbLastAt = 0;
+let mbBackoff = 0;
+let mbNotBefore = 0;
 export function mbFetch(url: string, urgent = false): Promise<Fetched> {
   return new Promise((resolve) => {
     const job: MbJob = { url, urgent, resolve };
-    const firstWaiting = urgent ? mbQueue.findIndex((j) => !j.urgent) : -1;
-    if (firstWaiting < 0) mbQueue.push(job);
-    else mbQueue.splice(firstWaiting, 0, job);
+    if (urgent) {
+      const firstWaiting = mbQueue.findIndex((j) => !j.urgent);
+      if (firstWaiting < 0) mbQueue.push(job);
+      else mbQueue.splice(firstWaiting, 0, job);
+    } else {
+      mbQueue.push(job);
+      const waiting = mbQueue.filter((j) => !j.urgent);
+      while (waiting.length > MB_SPECULATIVE_MAX) {
+        const stale = waiting.shift() as MbJob;
+        mbQueue.splice(mbQueue.indexOf(stale), 1);
+        stale.resolve({ kind: "error", dropped: true });
+      }
+    }
     void pumpMb();
   });
+}
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+/** One request at the gate's pace, honouring a pause a 503 imposed. */
+async function paced(url: string): Promise<Fetched> {
+  const wait = Math.max(mbLastAt + MB_SPACING_MS, mbNotBefore) - Date.now();
+  if (wait > 0) await sleep(wait);
+  mbLastAt = Date.now();
+  const got = await getJson("musicbrainz", url);
+  if (got.kind === "error" && got.status === 503) {
+    mbBackoff = mbBackoff === 0 ? MB_BACKOFF_MIN_MS : Math.min(mbBackoff * 2, MB_BACKOFF_MAX_MS);
+    mbNotBefore = Date.now() + mbBackoff;
+  } else if (got.kind !== "error") {
+    mbBackoff = 0;
+    mbNotBefore = 0;
+  }
+  return got;
 }
 async function pumpMb(): Promise<void> {
   if (mbPumping) return;
   mbPumping = true;
   try {
     for (let job = mbQueue.shift(); job; job = mbQueue.shift()) {
-      const wait = mbLastAt + 1100 - Date.now();
-      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-      mbLastAt = Date.now();
-      job.resolve(await getJson("musicbrainz", job.url)); // getJson never throws
+      let got = await paced(job.url);
+      // one retry after the pause; a second refusal is the answer for now
+      if (got.kind === "error" && got.status === 503) got = await paced(job.url);
+      job.resolve(got);
     }
   } finally {
     mbPumping = false;

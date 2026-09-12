@@ -103,10 +103,16 @@ async function artistArt(tracks: readonly HeardTrack[]): Promise<string | null> 
   }
   return null;
 }
-/** Asked only once the row is on screen: a list of hundreds must not fire
- *  hundreds of lookups. A picture found is kept for the session; a miss is
- *  asked again on the next mount, and main answers a definitive one from its
- *  own cache at once. */
+/** How long a row must stay on screen before it asks for its picture: a flick
+ *  through a hundred rows then asks for nothing, and stopping on ten asks for
+ *  ten. Every row that merely passed through the viewport used to queue a
+ *  MusicBrainz search, one a second for as long as the scroll had been (user,
+ *  2026-09-12: "i don't want the app to be too demanding on musicbrainz"). */
+const DWELL_MS = 500;
+/** Asked only once the row has DWELLED on screen: a list of hundreds must not
+ *  fire hundreds of lookups. A picture found is kept for the session; a miss
+ *  is asked again on the next mount, and main answers a definitive one from
+ *  its own cache at once. */
 const rowArtCache = new Map<string, Promise<string | null>>();
 function useLazyArt(
   ref: React.RefObject<HTMLElement | null>,
@@ -120,22 +126,33 @@ function useLazyArt(
     const el = ref.current;
     if (!el) return;
     let live = true;
+    let dwell = 0;
     const io = new IntersectionObserver((entries) => {
-      if (!entries.some((x) => x.isIntersecting)) return;
-      io.disconnect();
-      let p = rowArtCache.get(key);
-      if (!p) {
-        p = loadRef.current();
-        rowArtCache.set(key, p);
+      if (!entries.some((x) => x.isIntersecting)) {
+        // gone before it dwelled: nothing asked
+        if (dwell) clearTimeout(dwell);
+        dwell = 0;
+        return;
       }
-      void p.then((u) => {
-        if (u == null) rowArtCache.delete(key); // a miss is main's to remember, not ours
-        if (live) setUrl(u);
-      });
+      if (dwell) return;
+      dwell = window.setTimeout(() => {
+        dwell = 0;
+        io.disconnect();
+        let p = rowArtCache.get(key);
+        if (!p) {
+          p = loadRef.current();
+          rowArtCache.set(key, p);
+        }
+        void p.then((u) => {
+          if (u == null) rowArtCache.delete(key); // a miss is main's to remember, not ours
+          if (live) setUrl(u);
+        });
+      }, DWELL_MS);
     });
     io.observe(el);
     return () => {
       live = false;
+      if (dwell) clearTimeout(dwell);
       io.disconnect();
     };
   }, [ref, key]);

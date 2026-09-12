@@ -1360,6 +1360,8 @@ export interface AppSettings {
   trayPresetsLayout: ScreenLayout;
   /** Last-selected diagnostics-drawer tab (smoip | requests). */
   diagnosticsTab: string;
+  /** Height (px) of the diagnostics drawer, drag-resizable from its top edge. */
+  diagnosticsHeight: number;
   /** Last-selected Device-screen tab (tabs appear only on tone-capable streamers). */
   deviceTab: "streamer" | "sources" | "tone";
   /** Width (px) of the Now Playing drawers (lyrics/artist), drag-resizable. */
@@ -1479,6 +1481,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   trayRowDensity: "compressed",
   trayPresetsLayout: "cards",
   diagnosticsTab: "smoip",
+  diagnosticsHeight: 288,
   deviceTab: "streamer",
   panelWidth: 400,
   miniBounds: null,
