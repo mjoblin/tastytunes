@@ -51,7 +51,7 @@ import { usePlayStats } from "@/lib/playStats";
 import { useBestArt } from "@/lib/bestArt";
 import { DrChip, LufsChip } from "@/components/media/Waveform";
 import type { QueueListItem } from "@shared/smoip";
-import { isDeclined, tt } from "@/api";
+import { queueWrite, tt } from "@/api";
 import { useStore } from "@/store";
 import { activeSourceId, cx, matchesFilter, fmtCount, fmtAgo } from "@/lib/format";
 import {
@@ -1111,12 +1111,9 @@ export function LibraryScreen(): React.JSX.Element {
   ): Promise<void> => {
     const udn = nodeUdn(node);
     if (!udn) return;
-    try {
-      await tt.mediaQueueAdd(udn, node.id, action, playFromId);
-      if (el) flashTarget(el);
-    } catch (e) {
-      if (!isDeclined(e)) showNotice(QUEUE_FAILED);
-    }
+    const outcome = await queueWrite(() => tt.mediaQueueAdd(udn, node.id, action, playFromId));
+    if (outcome === "failed") showNotice(QUEUE_FAILED);
+    else if (outcome === "ok" && el) flashTarget(el);
   };
 
   // Title-keyed queue index: the content-match used to scan the whole queue
@@ -1377,21 +1374,17 @@ export function LibraryScreen(): React.JSX.Element {
   const playContainer = async (node: MediaNode, el: HTMLElement | null): Promise<void> => {
     const udn = nodeUdn(node);
     if (!udn) return;
-    try {
+    const outcome = await queueWrite(async () => {
       const children = await tt.mediaBrowse(udn, node.id, [
         ...path.map((c) => c.title),
         node.title,
       ]);
       const firstTrack = children.find((c) => !c.isContainer);
-      if (firstTrack) {
-        await tt.mediaQueueAdd(udn, node.id, "PLAY_FROM_HERE", firstTrack.id);
-      } else {
-        await tt.mediaQueueAdd(udn, node.id, "REPLACE");
-      }
-      if (el) flashTarget(el);
-    } catch (e) {
-      if (!isDeclined(e)) showNotice(QUEUE_FAILED);
-    }
+      if (firstTrack) await tt.mediaQueueAdd(udn, node.id, "PLAY_FROM_HERE", firstTrack.id);
+      else await tt.mediaQueueAdd(udn, node.id, "REPLACE");
+    });
+    if (outcome === "failed") showNotice(QUEUE_FAILED);
+    else if (outcome === "ok" && el) flashTarget(el);
   };
 
   /** "Play album from here" on a track: the album's OWN browse supplies both

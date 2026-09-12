@@ -33,7 +33,8 @@ const WRITE_FAILURES: Partial<Record<StreamerCommand["type"], string>> = {
 /**
  * The user said no at the large-queue ask. Nothing was queued and nothing
  * failed, so a caller that heals a stale id by trying again stops on it, and
- * a caller with a failure notice stays quiet (isDeclined).
+ * a caller with a failure notice stays quiet — queueWrite reads it as the
+ * outcome "declined", the one place that distinction is made.
  */
 export class QueueDeclined extends Error {
   constructor() {
@@ -41,7 +42,24 @@ export class QueueDeclined extends Error {
     this.name = "QueueDeclined";
   }
 }
-export const isDeclined = (e: unknown): boolean => e instanceof QueueDeclined;
+/**
+ * What a queue write came to. ONE home for the rule that a decline at the
+ * large-queue ask is neither success nor failure: not a notice, not a stale id
+ * to heal by trying again. Callers run their write through here and branch on
+ * the outcome instead of catching — a catch was where the rule had to be
+ * remembered, nine times over by 2026-09-12 (filed 2026-09-10 with the guard
+ * as a caller-remembered step; a caller that healed by retrying would have
+ * asked twice, one with a notice would have reported a failure after Cancel).
+ */
+export type QueueOutcome = "ok" | "declined" | "failed";
+export async function queueWrite(write: () => Promise<unknown>): Promise<QueueOutcome> {
+  try {
+    await write();
+    return "ok";
+  } catch (e) {
+    return e instanceof QueueDeclined ? "declined" : "failed";
+  }
+}
 
 export const tt: TastyTunesApi = {
   ...raw,
