@@ -630,10 +630,26 @@ img {
 
 /* a scroller whose content dissolves over its top strip — under the History
    Timeline's held day header, so the label sits on the plain ground with no
-   veil or blur behind it (a blur read as distraction, a tint as a band). */
+   veil or blur behind it (a blur read as distraction, a tint as a band).
+   The clear band has to CLEAR THE LABEL: a label sitting in the ramp reads on
+   half-dissolved artwork, which is the one thing this mask exists to prevent.
+   --fade-top-clear / --fade-top-solid are the two stops, for a scroller whose
+   label or whose content under it sits differently from the Timeline's
+   (Rediscover: a lower label, and a detail line right under it, so a shorter
+   ramp). Unset they are the Timeline's — the mask it has always had. */
 .fade-top {
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, transparent 26px, #000 50px);
-  mask-image: linear-gradient(to bottom, transparent 0, transparent 26px, #000 50px);
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent var(--fade-top-clear, 26px),
+    #000 var(--fade-top-solid, 50px)
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent var(--fade-top-clear, 26px),
+    #000 var(--fade-top-solid, 50px)
+  );
 }
 
 /* display mode hides the cursor after idle */

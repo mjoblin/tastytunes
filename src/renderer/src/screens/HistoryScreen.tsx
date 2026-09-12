@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BarChart3,
   CalendarDays,
   ChevronRight,
+  Compass,
+  Globe,
   History,
   ListMusic,
   MoreHorizontal,
@@ -41,6 +43,8 @@ import { FilterInput } from "@/components/controls/FilterInput";
 import { ScreenTitle, GAP_BETWEEN } from "@/components/chrome/Chrome";
 import { HistoryTimeline, filterEvents } from "@/components/history/HistoryTimeline";
 import { HistoryStats } from "@/components/history/HistoryStats";
+import { HistoryRediscover } from "@/components/history/HistoryRediscover";
+import { HistoryElsewhere } from "@/components/history/HistoryElsewhere";
 import { FACT_SEP } from "@/lib/mediaFacts";
 
 interface Block {
@@ -75,10 +79,16 @@ const songText = (e: RecentTrack): string | null =>
  *  pattern: Recent is the device log as it always was (the screen's first
  *  view); Timeline reads the listening record. Same slot, same R key, same
  *  screen id (recently-played), so saved nav orders survive the rename. */
-const VIEWS: Array<{ id: "recent" | "timeline" | "stats"; label: string; icon: typeof History }> = [
+const VIEWS: Array<{
+  id: "recent" | "timeline" | "stats" | "rediscover" | "elsewhere";
+  label: string;
+  icon: typeof History;
+}> = [
   { id: "recent", label: "Recent", icon: ListMusic },
   { id: "timeline", label: "Timeline", icon: CalendarDays },
   { id: "stats", label: "Stats", icon: BarChart3 },
+  { id: "rediscover", label: "Rediscover", icon: Compass },
+  { id: "elsewhere", label: "Elsewhere", icon: Globe },
 ];
 
 /** The streamer choice lives for the session, like the Stats period: All streamers on launch. */
@@ -119,6 +129,13 @@ export function HistoryScreen(): React.JSX.Element {
     if (streamer != null && !streamerChoices.some((o) => o.value === streamer)) setStreamer(null);
   }, [streamer, streamerChoices]);
   const recents = useMemo(() => narrowToStreamer(allRecents, streamer), [allRecents, streamer]);
+  // Elsewhere groups the whole record itself; it reports its counts for the header's filter
+  const [elsewhereCounts, setElsewhereCounts] = useState({ shown: 0, total: 0 });
+  const onElsewhereCounts = useCallback(
+    (shown: number, total: number) =>
+      setElsewhereCounts((c) => (c.shown === shown && c.total === total ? c : { shown, total })),
+    [],
+  );
   const timelineCounts = useMemo(() => {
     const all = narrowToStreamer(Object.values(historyLoaded).flat(), streamer);
     return { total: all.length, shown: filter ? filterEvents(all, filter).length : all.length };
@@ -233,6 +250,14 @@ export function HistoryScreen(): React.JSX.Element {
             total={timelineCounts.total}
           />
         )}
+        {view === "elsewhere" && elsewhereCounts.total > 0 && (
+          <FilterInput
+            value={filter}
+            onChange={(t) => setScreenFilter("recently-played", t)}
+            shown={elsewhereCounts.shown}
+            total={elsewhereCounts.total}
+          />
+        )}
         {view === "recent" && recents.length > 0 && (
           <>
             <FilterInput
@@ -325,6 +350,10 @@ export function HistoryScreen(): React.JSX.Element {
             <HistoryTimeline filter={filter} streamer={streamer} />
           ) : view === "stats" ? (
             <HistoryStats streamer={streamer} />
+          ) : view === "rediscover" ? (
+            <HistoryRediscover streamer={streamer} />
+          ) : view === "elsewhere" ? (
+            <HistoryElsewhere filter={filter} streamer={streamer} onCounts={onElsewhereCounts} />
           ) : recents.length === 0 ? (
             <EmptyState
               icon={History}

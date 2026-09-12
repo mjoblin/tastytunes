@@ -153,6 +153,37 @@ export async function queueRef(
   }
 }
 
+/** Play an index album from its first track, for surfaces outside the Library
+ *  (History's Rediscover shelves): the album's own browse supplies the
+ *  container and the track id (the album view's contract), a failure toasts,
+ *  a declined large-queue ask stays quiet. */
+export async function playAlbumNode(album: MediaNode): Promise<boolean> {
+  const udn = album.serverUdn;
+  if (!udn) return false;
+  try {
+    const kids = await tt.mediaBrowse(udn, album.id, [album.title]);
+    const first = kids.find((k) => !k.isContainer);
+    if (first) await tt.mediaQueueAdd(udn, album.id, "PLAY_FROM_HERE", first.id);
+    else await tt.mediaQueueAdd(udn, album.id, "REPLACE");
+    return true;
+  } catch (e) {
+    if (!isDeclined(e))
+      useStore.getState().showToast({ kind: "error", text: `Couldn't play “${album.title}”` });
+    return false;
+  }
+}
+
+/** Open an index album in the Library (its header, its tracks). */
+export function openAlbumNode(album: MediaNode): void {
+  if (!album.serverUdn) return;
+  useStore.getState().openInLibrary({
+    serverUdn: album.serverUdn,
+    objectId: album.id,
+    titlePath: [album.title],
+    title: album.title,
+  });
+}
+
 /**
  * The bookkeeping every preset save shares once the device write landed:
  * optional rename, the local artist record (settings.presetArtists —

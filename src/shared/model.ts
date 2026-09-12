@@ -378,6 +378,98 @@ export interface PlayStats {
 }
 /** The most recent plays kept in `recent` — enough for any album run. */
 export const PLAY_STATS_RECENT = 300;
+/** An empty fold, for a reader that builds its own (a streamer's slice of the record). */
+export function emptyPlayStats(): PlayStats {
+  return { tracks: {}, recent: [], since: null, albumRuns: {} };
+}
+
+/** "Not heard in a while": an album played, then left this long (the History
+ *  screen's Rediscover shelf and the MCP's history_rediscover default). */
+export const REDISCOVER_QUIET_DAYS = 90;
+
+/**
+ * An album's tallies in the record: its tracks' plays summed, the latest of
+ * them, and how many tracks it has, by content (playKey over albumTracksOf).
+ * ONE home for "has this album been played, and when": the History screen's
+ * Rediscover shelves and the MCP's history_unplayed and history_rediscover all
+ * read it.
+ */
+export function albumTally(
+  album: MediaNode,
+  pool: {
+    albums: ReadonlyArray<Pick<MediaNode, "title" | "artist">>;
+    tracks: ReadonlyArray<MediaNode>;
+  },
+  stats: Pick<PlayStats, "tracks">,
+): { plays: number; lastAt: number; tracks: number } {
+  const tracks = albumTracksOf(album, pool);
+  let plays = 0;
+  let lastAt = 0;
+  for (const t of tracks) {
+    const st = stats.tracks[playKey(t.title, t.artist, t.album)];
+    if (!st) continue;
+    plays += st.plays;
+    lastAt = Math.max(lastAt, st.lastAt);
+  }
+  return { plays, lastAt, tracks: tracks.length };
+}
+
+/** A title as a heard-elsewhere line meets the library by: lowercased, its
+ *  edition suffix gone ("(Remastered 2011)", "[Deluxe Edition]", "- Live"),
+ *  since a streaming service and a file rarely agree on those. */
+export function editionless(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(
+      /\s*[([][^)\]]*\b(?:remaster(?:ed)?|deluxe|edition|version|mono|stereo|live|bonus|expanded|anniversary)\b[^)\]]*[)\]]/g,
+      "",
+    )
+    .replace(/\s+-\s+(?:\d{4}\s+)?(?:remaster(?:ed)?|live|mono|stereo|radio edit)\b.*$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Library tracks keyed by editionless title: the index "is this in the library" asks. */
+export function titleIndexOf(
+  pools: ReadonlyArray<{ tracks: ReadonlyArray<MediaNode> }>,
+): Map<string, MediaNode[]> {
+  const index = new Map<string, MediaNode[]>();
+  for (const pool of pools)
+    for (const n of pool.tracks) {
+      const k = editionless(n.title);
+      const list = index.get(k);
+      if (list) list.push(n);
+      else index.set(k, [n]);
+    }
+  return index;
+}
+
+/**
+ * Does the library hold this track? The editionless title, and, when the line
+ * names one, an artist: any of the track's performers or its album artist
+ * against the credit or one of the names a streaming credit packs ("A & B",
+ * "A feat. B"). Content identity, the record's rule; never a server id.
+ */
+export function inLibraryIndex(
+  index: Map<string, MediaNode[]>,
+  title: string,
+  artist: string | null,
+): boolean {
+  const candidates = index.get(editionless(title));
+  if (!candidates || candidates.length === 0) return false;
+  if (!artist) return true;
+  const names = new Set(
+    artist
+      .toLowerCase()
+      .split(/\s*(?:,|;|&|\band\b|\bfeat\.?|\bft\.?|\bwith\b)\s*/)
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
+  names.add(artist.trim().toLowerCase());
+  return candidates.some((n) =>
+    [...trackArtists(n), n.albumArtist].some((a) => a != null && names.has(a.trim().toLowerCase())),
+  );
+}
 /** Fold one record line into the stats. Library plays only: an "external"
  *  line (AirPlay, casting) never counts, even on a content match — a count
  *  means "played from the library". Main builds with it, the renderer folds
@@ -1154,7 +1246,7 @@ export interface AppSettings {
   /** Recently Played: collapse continuous sessions (radio/AirPlay/…) to one row, vs a row per song. */
   recentsGrouped: boolean;
   /** The History screen's section (0.8.0): the device log, or the record's Timeline. */
-  historyView: "recent" | "timeline" | "stats";
+  historyView: "recent" | "timeline" | "stats" | "rediscover" | "elsewhere";
   /** The Timeline's unit (0.8.0): sessions collapsed to a line each, or every play. */
   historyTimelineMode: "sessions" | "plays";
   /** Motion effects (hover growth, eqbars, smooth scrolling). */

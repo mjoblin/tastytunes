@@ -46,6 +46,8 @@ import {
   LOSSLESS_CODECS,
   isHiRes,
   LARGE_QUEUE_TRACKS,
+  albumTally,
+  REDISCOVER_QUIET_DAYS,
 } from "@shared/model";
 import { audioAnalysisGet, albumDrMap } from "../lookups/audioAnalysis";
 import { playStatsFromRecord } from "../data/playStats";
@@ -1260,8 +1262,7 @@ export class McpBridge {
             )
             .filter((n) => {
               const pool = n.serverUdn ? poolOf.get(n.serverUdn) : undefined;
-              const tracks = pool ? albumTracksOf(n, pool) : [];
-              return !tracks.some((t) => stats.tracks[playKey(t.title, t.artist, t.album)] != null);
+              return pool ? albumTally(n, pool, stats).plays === 0 : true;
             })
             .sort(
               (x, y) =>
@@ -1307,7 +1308,7 @@ export class McpBridge {
           const cutoff =
             a.not_since != null
               ? Date.parse(`${a.not_since as string}T00:00:00`)
-              : Date.now() - 90 * 86_400_000;
+              : Date.now() - REDISCOVER_QUIET_DAYS * 86_400_000;
           if (Number.isNaN(cutoff)) return err("not_since must be YYYY-MM-DD.");
           const minPlays = (a.min_plays as number | undefined) ?? 1;
           const poolOf = new Map(groups.map((p) => [p.udn, p]));
@@ -1315,15 +1316,7 @@ export class McpBridge {
             .flatMap((p) => p.albums)
             .flatMap((n) => {
               const pool = n.serverUdn ? poolOf.get(n.serverUdn) : undefined;
-              const tracks = pool ? albumTracksOf(n, pool) : [];
-              let plays = 0,
-                lastAt = 0;
-              for (const t of tracks) {
-                const st = stats.tracks[playKey(t.title, t.artist, t.album)];
-                if (!st) continue;
-                plays += st.plays;
-                lastAt = Math.max(lastAt, st.lastAt);
-              }
+              const { plays, lastAt } = pool ? albumTally(n, pool, stats) : { plays: 0, lastAt: 0 };
               return plays >= minPlays && lastAt > 0 && lastAt < cutoff
                 ? [{ n, plays, lastAt }]
                 : [];

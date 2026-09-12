@@ -66,6 +66,7 @@ export function ContainerCard({
   selected = false,
   favorited,
   badge,
+  note,
   onHeart,
   onEnter,
   onPlay,
@@ -84,6 +85,10 @@ export function ContainerCard({
   favorited?: boolean;
   /** Provenance chip on the subtitle line (lens grids pooling several servers). */
   badge?: string;
+  /** A quiet fact this surface knows about the album, under its names — how far
+   *  a listen got, when it last played (History's Rediscover). Inside the card
+   *  so it lifts with it; a line outside is covered by the hover glow. */
+  note?: string;
   onHeart?(): void;
   /** The body click, with its event: a caller with a selection model reads the
    *  chord (⌘/ctrl, shift) and decides whether this click opens or picks. */
@@ -214,6 +219,15 @@ export function ContainerCard({
                 {badge}
               </span>
             )}
+          </div>
+        )}
+        {note && (
+          // LAST, under the names: the card's own artist and year are what it
+          // says about itself, and a surface's fact goes after them, never
+          // between them (user, 2026-09-11). Inside the card, so it lifts with
+          // it — a line outside is covered the moment the card glows.
+          <div data-card-note className="text-[11px] text-faint/80 tabular-nums truncate text-left">
+            {note}
           </div>
         )}
       </button>
