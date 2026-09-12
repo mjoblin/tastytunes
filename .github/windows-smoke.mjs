@@ -57,7 +57,8 @@ try {
 
   // No streamer on the runner, so the app opens on the connect gate; the demo
   // door is the whole point of that screen.
-  const demoBtn = page.locator('text=Try without a streamer')
+  // the door's words follow the app's copy (the 2026-09-10 sweep reworded it)
+  const demoBtn = page.locator('text=Try the built-in demo')
   await demoBtn.waitFor({ timeout: 30000 })
   ok('the connect gate offers the demo', true)
   await demoBtn.click()
