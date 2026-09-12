@@ -960,9 +960,16 @@ export function ArtistsLens({
       .sort((a, b) => nameSortKey(a.name).localeCompare(nameSortKey(b.name)));
   }, [pools]);
 
+  // THE ARTIST YOU ASKED FOR IS ALWAYS IN THE COLUMN. Albums only is the
+  // standing preference for browsing; a landing (Elsewhere's Go to artist, a
+  // track's name link, the Queue) names one artist, and a credit-only name
+  // hidden by the filter left the lens open on nothing (user, 2026-09-12:
+  // Ellie Goulding, "credited on 1 track"). The selection is the exception,
+  // so the setting is untouched and the row leaves with the next selection.
   const baseArtists = useMemo(
-    () => (albumsOnly ? artists.filter((a) => a.albums.length > 0) : artists),
-    [artists, albumsOnly],
+    () =>
+      albumsOnly ? artists.filter((a) => a.albums.length > 0 || a.key === mem.artist) : artists,
+    [artists, albumsOnly, mem.artist],
   );
   const shownArtists = useMemo(
     () =>

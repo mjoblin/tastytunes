@@ -30,6 +30,11 @@ export function RowAction({
   destructive,
   /** Keep it visible regardless of hover — e.g. while its own menu is open. */
   pinned,
+  /** This action's own menu or popover is open: shown, and LIT, as a picker
+   *  pill or a header chip is while theirs is open — the pressed look belongs
+   *  to the control that owns the menu, not to whichever button the pointer
+   *  happened to be over (user, 2026-09-12). */
+  open,
   size = 14,
 }: {
   icon: React.ComponentType<{ size?: number; className?: string }>;
@@ -38,6 +43,7 @@ export function RowAction({
   onClick(e: React.MouseEvent): void;
   destructive?: boolean;
   pinned?: boolean;
+  open?: boolean;
   size?: number;
 }): React.JSX.Element {
   const [quietFrom, setQuietFrom] = useState<{ x: number; y: number } | null>(null);
@@ -57,8 +63,9 @@ export function RowAction({
       className={cx(
         "tip-bottom p-1.5 rounded-lg text-dim hover:bg-veil2 transition-all",
         destructive ? "hover:text-alert" : "hover:text-ink",
+        open && "bg-veil2 text-ink",
         // shown on hover, while pinned, or while the row holds its menu (MediaRow's held)
-        pinned
+        pinned || open
           ? "opacity-100"
           : "opacity-0 group-hover:opacity-100 group-data-[held]:opacity-100 focus-visible:opacity-100",
       )}

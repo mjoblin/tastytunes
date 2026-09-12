@@ -2,6 +2,7 @@ import {
   editionless,
   inLibraryIndex,
   titleIndexOf,
+  trackArtists,
   type ListeningEvent,
   type MediaIndexPools,
 } from "@shared/model";
@@ -44,7 +45,15 @@ export interface HeardArtist {
   where: string[];
   /** Albums by this artist in the library (the album-artist credit). */
   albums: number;
-  /** The library knows the name: albums of their own, or a credit on a track. */
+  /** Tracks in the library that credit them as a performer — a guest spot on
+   *  someone else's album, a loose single. */
+  credits: number;
+  /** THE LIBRARY'S OWN RULE FOR AN ARTIST PAGE, nothing looser: albums as the
+   *  album artist, or a performer credit on a track. The server's bare artist
+   *  index used to count too, and it lists names its tags mention that no
+   *  album or track in the index credits — "in your library" with a Go to
+   *  artist that landed on an empty lens (user, 2026-09-12: Ellie Goulding,
+   *  John Legend). */
   inLibrary: boolean;
   /** Of the tracks heard, how many the library holds. */
   ownedTracks: number;
@@ -95,19 +104,22 @@ export function heardElsewhere(
   pools: readonly MediaIndexPools[] | null,
 ): Heard {
   const index = titleIndexOf(pools ?? []);
-  // the library's artists by NAME: album-artist credits with a count, and the
-  // names the index lists (a featured singer with no albums has a page too)
+  // the library's artists by NAME, as the Artists lens counts them: album-artist
+  // credits, and performer credits on tracks (a featured singer has a page with
+  // their one track). Not the server's artist containers: those are tag-derived
+  // and can name someone nothing in the index credits.
   const albumsBy = new Map<string, number>();
-  const known = new Set<string>();
+  const creditsBy = new Map<string, number>();
   for (const pool of pools ?? []) {
     for (const a of pool.albums) {
       const k = lc(a.artist);
       if (k) albumsBy.set(k, (albumsBy.get(k) ?? 0) + 1);
     }
-    for (const n of pool.artists) {
-      const k = lc(n.title);
-      if (k) known.add(k);
-    }
+    for (const t of pool.tracks)
+      for (const name of trackArtists(t)) {
+        const k = lc(name);
+        if (k) creditsBy.set(k, (creditsBy.get(k) ?? 0) + 1);
+      }
   }
 
   const tracks = new Map<string, HeardTrack & { places: Tally }>();
@@ -181,6 +193,7 @@ export function heardElsewhere(
     const where = new Tally();
     for (const t of list) for (const [place, n] of t.places.entries()) where.add(place, n);
     const albums = albumsBy.get(key) ?? 0;
+    const credits = creditsBy.get(key) ?? 0;
     return {
       key,
       name: list[0].artist ?? "Unknown artist",
@@ -189,7 +202,8 @@ export function heardElsewhere(
       lastAt: Math.max(...list.map((t) => t.lastAt)),
       where: where.list(),
       albums,
-      inLibrary: albums > 0 || known.has(key),
+      credits,
+      inLibrary: albums > 0 || credits > 0,
       ownedTracks: list.filter((t) => t.owned).length,
     };
   });

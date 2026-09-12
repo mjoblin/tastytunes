@@ -445,15 +445,25 @@ function Meta({
   now: number;
 }): React.JSX.Element {
   return (
-    <div className="shrink-0 text-right">
+    // ONE WIDTH for every row: the time reads "Sep 4" on one and "23 hr ago" on
+    // the next, and a column that shrank to its text moved the actions beside
+    // it from row to row (user, 2026-09-12). w-20 holds the longest, "59 min ago".
+    <div className="shrink-0 w-20 text-right">
       <div className="text-[11.5px] tabular-nums text-faint">{fmtRelative(lastAt, now)}</div>
       <div className="text-[10.5px] mt-0.5 text-faint/70 tabular-nums">{count}</div>
     </div>
   );
 }
 
-function More({ onMenu }: { onMenu(e: React.MouseEvent): void }): React.JSX.Element {
-  return <RowAction icon={MoreHorizontal} label="More actions" onClick={onMenu} />;
+function More({
+  onMenu,
+  open,
+}: {
+  onMenu(e: React.MouseEvent): void;
+  /** This row's menu is the one open. */
+  open: boolean;
+}): React.JSX.Element {
+  return <RowAction icon={MoreHorizontal} label="More actions" onClick={onMenu} open={open} />;
 }
 
 function ArtistRow({
@@ -478,9 +488,14 @@ function ArtistRow({
   // the count is in the key: the record loads a year at a time, and a row that
   // resolved on a partial track list looks again when more of them arrive
   const art = useLazyArt(ref, `artist:${a.key}:${a.tracks.length}`, () => artistArt(a.tracks));
-  const relation = a.inLibrary
-    ? `in your library${a.albums > 0 ? `, ${times(a.albums, "album", "albums")}` : ""}`
-    : null;
+  // which kind of page the Library has for them: their albums, or the tracks
+  // that credit them — the second is what a Go to artist will show
+  const relation =
+    a.albums > 0
+      ? `in your library, ${times(a.albums, "album", "albums")}`
+      : a.credits > 0
+        ? `credited on ${times(a.credits, "track", "tracks")} in your library`
+        : null;
   const line = [`${times(a.tracks.length, "track", "tracks")} heard`, listOf(a.where), relation]
     .filter(Boolean)
     .join(FACT_SEP);
@@ -522,7 +537,7 @@ function ArtistRow({
                 onClick={() => openArtistInLibrary(a.name)}
               />
             )}
-            <More onMenu={onMenu} />
+            <More onMenu={onMenu} open={menuFor === a.key} />
           </>
         }
       />
@@ -643,7 +658,7 @@ function TrackRow({
           t.owned ? () => void openRefInLibrary(refOf(t.title, t.artist, t.album)) : undefined
         }
         onContextMenu={onMenu}
-        actions={<More onMenu={onMenu} />}
+        actions={<More onMenu={onMenu} open={held} />}
       />
     </div>
   );
