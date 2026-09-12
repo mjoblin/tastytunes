@@ -27,17 +27,41 @@ export async function getJson(service: string, url: string): Promise<Fetched> {
 }
 
 // The MusicBrainz 1 rps gate: calls queue behind each other, spaced >= 1.1s.
-let mbChain: Promise<unknown> = Promise.resolve();
+// TWO LANES (2026-09-12): a lookup the user asked for — the context panel's
+// tab, an opened row on History's Elsewhere, an agent's question — goes ahead
+// of every speculative one still waiting (cover art for rows scrolling past,
+// which can queue a minute of requests), behind only the urgent ones already
+// there. The pace is the same either way; MusicBrainz sees nothing different.
+interface MbJob {
+  url: string;
+  urgent: boolean;
+  resolve(got: Fetched): void;
+}
+const mbQueue: MbJob[] = [];
+let mbPumping = false;
 let mbLastAt = 0;
-export function mbFetch(url: string): Promise<Fetched> {
-  const next = mbChain.then(async () => {
-    const wait = mbLastAt + 1100 - Date.now();
-    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-    mbLastAt = Date.now();
-    return getJson("musicbrainz", url);
+export function mbFetch(url: string, urgent = false): Promise<Fetched> {
+  return new Promise((resolve) => {
+    const job: MbJob = { url, urgent, resolve };
+    const firstWaiting = urgent ? mbQueue.findIndex((j) => !j.urgent) : -1;
+    if (firstWaiting < 0) mbQueue.push(job);
+    else mbQueue.splice(firstWaiting, 0, job);
+    void pumpMb();
   });
-  mbChain = next.catch(() => null);
-  return next;
+}
+async function pumpMb(): Promise<void> {
+  if (mbPumping) return;
+  mbPumping = true;
+  try {
+    for (let job = mbQueue.shift(); job; job = mbQueue.shift()) {
+      const wait = mbLastAt + 1100 - Date.now();
+      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+      mbLastAt = Date.now();
+      job.resolve(await getJson("musicbrainz", job.url)); // getJson never throws
+    }
+  } finally {
+    mbPumping = false;
+  }
 }
 
 export interface MbRelation {

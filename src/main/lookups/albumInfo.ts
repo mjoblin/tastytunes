@@ -7,10 +7,33 @@
 // the cache read for the panel's refresh.
 import type { AlbumInfo } from "@shared/model";
 import { DiskCache } from "./diskCache";
-import { MB, mbFetch, wikipediaFromRels, type MbRelation } from "./mb";
+import { MB, mbFetch, wikipediaFromRels, type Fetched, type MbRelation } from "./mb";
 
 const CACHE_MAX = 500;
 const MIN_MATCH_SCORE = 75;
+
+/** The album as MusicBrainz names its release group: Apple's catalogue (and
+ *  so AirPlay's metadata) suffixes singles and EPs — "White Keys - Single",
+ *  "Don't Forget About Me, Demos - EP" — while MB titles the release group
+ *  "White Keys" and types it. Searched with the suffix, nothing scored high
+ *  enough and the miss was cached (found 2026-09-12 on the History screen's
+ *  Elsewhere art). The key uses the same form, so a suffixed and a bare
+ *  spelling are one entry, and the old suffixed misses are simply unread. */
+export function albumSearchTitle(album: string): string {
+  return album
+    .trim()
+    .replace(/\s+-\s+(?:single|ep)\s*$/i, "")
+    .trim();
+}
+export function albumKey(artist: string, album: string): string {
+  return `${artist.trim()}|${albumSearchTitle(album)}`.toLowerCase();
+}
+/** Whether the cache holds a verdict for this album, hit or definitive miss —
+ *  for a reader that gets null from fetchAlbumInfo and must know whether that
+ *  was an answer or a search that never happened (coverArt). */
+export function albumInfoKnown(artist: string, album: string): boolean {
+  return cache.has(albumKey(artist, album));
+}
 const MAX_GENRES = 4;
 const MAX_CREDITS = 6;
 
@@ -72,17 +95,21 @@ export async function fetchAlbumInfo(
   artist: string,
   album: string,
   force = false,
+  /** Someone asked (the panel's Album tab, an agent): the gate's urgent lane.
+   *  Cover art for a list scrolling past is not urgent and waits its turn. */
+  urgent = false,
 ): Promise<AlbumInfo | null> {
-  const key = `${artist.trim()}|${album.trim()}`.toLowerCase();
-  if (!artist.trim() || !album.trim()) return null;
+  const ask = (url: string): Promise<Fetched> => mbFetch(url, urgent);
+  const key = albumKey(artist, album);
+  if (!artist.trim() || !albumSearchTitle(album)) return null;
   if (!force && cache.has(key)) return cache.get(key) ?? null;
 
   let result: AlbumInfo | null = null;
   // Only a conclusion built purely from real answers goes into the cache.
   let definitive = true;
 
-  const query = `releasegroup:${JSON.stringify(album)} AND artist:${JSON.stringify(artist)}`;
-  const searchGot = await mbFetch(
+  const query = `releasegroup:${JSON.stringify(albumSearchTitle(album))} AND artist:${JSON.stringify(artist)}`;
+  const searchGot = await ask(
     `${MB}/ws/2/release-group?query=${encodeURIComponent(query)}&fmt=json&limit=5`,
   );
   if (searchGot.kind !== "ok") {
@@ -107,7 +134,7 @@ export async function fetchAlbumInfo(
       musicbrainzUrl: `https://musicbrainz.org/release-group/${match.id}`,
     };
 
-    const lookupGot = await mbFetch(
+    const lookupGot = await ask(
       `${MB}/ws/2/release-group/${match.id}?inc=url-rels+tags+releases&fmt=json`,
     );
     if (lookupGot.kind !== "ok") {
@@ -137,9 +164,7 @@ export async function fetchAlbumInfo(
       releases.sort((a, b) => ((a.date || "9999") < (b.date || "9999") ? -1 : 1));
       const first = releases[0];
       if (first?.id) {
-        const relGot = await mbFetch(
-          `${MB}/ws/2/release/${first.id}?inc=labels+artist-rels&fmt=json`,
-        );
+        const relGot = await ask(`${MB}/ws/2/release/${first.id}?inc=labels+artist-rels&fmt=json`);
         if (relGot.kind !== "ok") {
           definitive = false;
         } else {

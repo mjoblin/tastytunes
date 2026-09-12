@@ -39,6 +39,7 @@ export function MediaRow({
   dense,
   parked,
   slot,
+  held,
 }: {
   title: string;
   subtitle?: React.ReactNode;
@@ -104,11 +105,21 @@ export function MediaRow({
    * flat skin's rule — instead of stacking beside it in the title row.
    */
   slot?: number;
+  /**
+   * This row's menu is open: the pointer has left for the menu (its
+   * click-catcher covers the window), but the row is still what is being
+   * acted on, so it keeps its hover fill and its actions stay shown — the
+   * cards' menuOpen, for rows (user, 2026-09-11: the fill and the other
+   * icons vanishing on the ⋯ click was "a little unexpected"). RowAction
+   * reads it as `group-data-[held]`, so no action needs pinning by hand.
+   */
+  held?: boolean;
 }): React.JSX.Element {
   return (
     <div
       {...attrs}
       data-media-row={title}
+      data-held={held ? "" : undefined}
       role={onClick ? "button" : undefined}
       tabIndex={onClick && !dimmed ? 0 : undefined}
       onClick={(e) => !dimmed && onClick?.(e.currentTarget)}
@@ -138,7 +149,9 @@ export function MediaRow({
             ? "ring-1 ring-gold/40 bg-golddim/40" // half-lit: on its way to playing
             : parked
               ? "ring-1 ring-edge2 bg-veil/60 hover:bg-veil"
-              : "ring-1 ring-edge bg-panel/60 hover:bg-raised/70 hover:ring-edge2",
+              : held
+                ? "ring-1 ring-edge2 bg-raised/70"
+                : "ring-1 ring-edge bg-panel/60 hover:bg-raised/70 hover:ring-edge2",
         dimmed && "opacity-50 cursor-default",
       )}
     >

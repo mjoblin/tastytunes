@@ -8,7 +8,11 @@
 // user-driven refresh.
 import type { ArtistInfo } from "@shared/model";
 import { DiskCache } from "./diskCache";
-import { MB, mbFetch, wikipediaFromRels, type MbRelation } from "./mb";
+import { MB, mbFetch, wikipediaFromRels, type Fetched, type MbRelation } from "./mb";
+
+/** An artist is only ever looked up because someone asked — the panel's tab,
+ *  an opened row, an agent — so it takes the gate's urgent lane. */
+const ask = (url: string): Promise<Fetched> => mbFetch(url, true);
 
 const CACHE_MAX = 500;
 const MIN_MATCH_SCORE = 75;
@@ -30,7 +34,7 @@ export async function fetchArtistInfo(artist: string, force = false): Promise<Ar
   // Only a conclusion built purely from real answers goes into the cache.
   let definitive = true;
 
-  const searchGot = await mbFetch(
+  const searchGot = await ask(
     `${MB}/ws/2/artist?query=artist:${encodeURIComponent(JSON.stringify(artist))}&fmt=json&limit=3`,
   );
   if (searchGot.kind !== "ok") {
@@ -43,7 +47,7 @@ export async function fetchArtistInfo(artist: string, force = false): Promise<Ar
     const musicbrainzUrl = `https://musicbrainz.org/artist/${match.id}`;
     result = { name: match.name, summary: null, wikipediaUrl: null, musicbrainzUrl };
 
-    const lookupGot = await mbFetch(`${MB}/ws/2/artist/${match.id}?inc=url-rels&fmt=json`);
+    const lookupGot = await ask(`${MB}/ws/2/artist/${match.id}?inc=url-rels&fmt=json`);
     if (lookupGot.kind !== "ok") {
       definitive = false; // summary state unknown — show the partial, retry later
     } else {

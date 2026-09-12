@@ -486,7 +486,7 @@ function registerIpc(): void {
     getSettings().artistInfo ? fetchArtistInfo(artist, !!force) : null,
   );
   ipcMain.handle(IPC.fetchAlbumInfo, (_e, artist: string, album: string, force?: boolean) =>
-    getSettings().artistInfo ? fetchAlbumInfo(artist, album, !!force) : null,
+    getSettings().artistInfo ? fetchAlbumInfo(artist, album, !!force, true) : null,
   );
   // EXPERIMENT (0.7 exploration): fetch one track's audio bytes for the
   // renderer's waveform decode. Read-only ranged-capable GET against the

@@ -1,59 +1,59 @@
 import {
   editionless,
   inLibraryIndex,
-  isListen,
   titleIndexOf,
   type ListeningEvent,
   type MediaIndexPools,
 } from "@shared/model";
 
 /**
- * HEARD ELSEWHERE (0.8.0, the History screen's Elsewhere section): the music the
- * record heard outside the library. External sources (AirPlay, casts, the
- * streamer's own services) by their tracks and their artists; internet radio
- * by the songs its stations announced. Each is marked with whether the library
- * holds it (inLibraryIndex, content identity). Pure; the view sorts and filters.
+ * HEARD ELSEWHERE (0.8.0, the History screen's Elsewhere tab): the artists the
+ * record met away from the library — through AirPlay, a cast, the streamer's
+ * own services, or on internet radio — and how each relates to what the
+ * library holds. ONE list, of artists (user, 2026-09-11, on his own record:
+ * the tracks and radio songs were "largely unknown to me; artists I
+ * recognize", and what he wants of a row is "does it relate to something I
+ * own; get more information on it"). Pure; the view sorts and filters.
  *
- * Counts are honest about what each kind of line knows: an external track was
- * PLAYED (heard, and listens among those by the house predicate); a radio song
- * was only ANNOUNCED, so its count is sightings, never listens.
+ * A track heard through a source and a song a station announced are the same
+ * item here, music met away from the library, keyed by content, so one song
+ * heard on AirPlay and on a station is one line with both places on it. A
+ * station's announcement is a sighting, not a measured play; "heard" counts
+ * both, which is honest enough at this altitude.
  */
 export interface HeardTrack {
   key: string;
   title: string;
   artist: string | null;
   album: string | null;
-  source: string;
+  /** Where it was heard — sources (AirPlay, a service) and stations, most first. */
+  where: string[];
   heard: number;
-  listens: number;
   lastAt: number;
+  /** The library holds this track (content identity). */
   owned: boolean;
 }
 export interface HeardArtist {
   key: string;
   name: string;
-  tracks: number;
+  /** Most heard first. */
+  tracks: HeardTrack[];
+  heard: number;
+  lastAt: number;
+  /** Sources and stations across the tracks, most heard first. */
+  where: string[];
+  /** Albums by this artist in the library (the album-artist credit). */
   albums: number;
-  heard: number;
-  lastAt: number;
-  /** Of its tracks, how many the library holds. */
-  owned: number;
-  /** The most-heard track, for the row's picture. */
-  top: HeardTrack;
-}
-export interface HeardRadioSong {
-  key: string;
-  song: string;
-  artist: string | null;
-  stations: string[];
-  heard: number;
-  lastAt: number;
-  owned: boolean;
+  /** The library knows the name: albums of their own, or a credit on a track. */
+  inLibrary: boolean;
+  /** Of the tracks heard, how many the library holds. */
+  ownedTracks: number;
 }
 export interface Heard {
-  tracks: HeardTrack[];
   artists: HeardArtist[];
-  radio: HeardRadioSong[];
+  /** The sources seen (AirPlay, a service…), most heard first. */
+  sources: string[];
+  /** Distinct stations that announced something. */
   stations: number;
 }
 
@@ -73,66 +73,103 @@ export function splitRadioTitle(
 
 const lc = (s: string | null | undefined): string => (s ?? "").trim().toLowerCase();
 
+/** A tally of names, read back most-counted first. */
+class Tally {
+  private counts = new Map<string, number>();
+  add(name: string, n = 1): void {
+    this.counts.set(name, (this.counts.get(name) ?? 0) + n);
+  }
+  get size(): number {
+    return this.counts.size;
+  }
+  entries(): Array<[string, number]> {
+    return [...this.counts.entries()].sort((a, b) => b[1] - a[1]);
+  }
+  list(): string[] {
+    return this.entries().map(([name]) => name);
+  }
+}
+
 export function heardElsewhere(
   events: readonly ListeningEvent[],
   pools: readonly MediaIndexPools[] | null,
 ): Heard {
   const index = titleIndexOf(pools ?? []);
-  const tracks = new Map<string, HeardTrack>();
-  const radio = new Map<string, HeardRadioSong>();
-  const stations = new Set<string>();
-  for (const e of events) {
-    if (e.kind === "external" && e.title) {
-      const key = `${editionless(e.title)}|${lc(e.artist)}`;
-      let t = tracks.get(key);
-      if (!t) {
-        t = {
-          key,
-          title: e.title,
-          artist: e.artist,
-          album: e.album,
-          source: e.source ?? "Another source",
-          heard: 0,
-          listens: 0,
-          lastAt: 0,
-          owned: inLibraryIndex(index, e.title, e.artist),
-        };
-        tracks.set(key, t);
-      }
-      t.heard += 1;
-      if (isListen(e.playedSeconds, e.duration)) t.listens += 1;
-      if (e.at >= t.lastAt) {
-        t.lastAt = e.at;
-        t.album = e.album ?? t.album;
-        t.source = e.source ?? t.source;
-      }
-    } else if (e.kind === "radio-track" && e.title) {
-      const { artist, song } = splitRadioTitle(e.title, e.artist);
-      const key = `${lc(song)}|${lc(artist)}`;
-      let r = radio.get(key);
-      if (!r) {
-        r = {
-          key,
-          song,
-          artist,
-          stations: [],
-          heard: 0,
-          lastAt: 0,
-          // a station that sends "Song - Artist" instead is matched the other way round
-          owned:
-            inLibraryIndex(index, song, artist) ||
-            (artist != null && inLibraryIndex(index, artist, song)),
-        };
-        radio.set(key, r);
-      }
-      r.heard += 1;
-      r.lastAt = Math.max(r.lastAt, e.at);
-      if (e.station && !r.stations.includes(e.station)) r.stations.push(e.station);
-      if (e.station) stations.add(e.station);
+  // the library's artists by NAME: album-artist credits with a count, and the
+  // names the index lists (a featured singer with no albums has a page too)
+  const albumsBy = new Map<string, number>();
+  const known = new Set<string>();
+  for (const pool of pools ?? []) {
+    for (const a of pool.albums) {
+      const k = lc(a.artist);
+      if (k) albumsBy.set(k, (albumsBy.get(k) ?? 0) + 1);
+    }
+    for (const n of pool.artists) {
+      const k = lc(n.title);
+      if (k) known.add(k);
     }
   }
 
-  const byArtist = new Map<string, HeardTrack[]>();
+  const tracks = new Map<string, HeardTrack & { places: Tally }>();
+  const sources = new Tally();
+  const stations = new Set<string>();
+  const note = (
+    title: string,
+    artist: string | null,
+    album: string | null,
+    place: string,
+    at: number,
+    owned: () => boolean,
+  ): void => {
+    const key = `${editionless(title)}|${lc(artist)}`;
+    let t = tracks.get(key);
+    if (!t) {
+      t = {
+        key,
+        title,
+        artist,
+        album,
+        where: [],
+        heard: 0,
+        lastAt: 0,
+        owned: owned(),
+        places: new Tally(),
+      };
+      tracks.set(key, t);
+    }
+    t.heard += 1;
+    t.places.add(place);
+    if (at >= t.lastAt) {
+      t.lastAt = at;
+      t.album = album ?? t.album;
+    }
+  };
+  for (const e of events) {
+    if (e.kind === "external" && e.title) {
+      const source = e.source ?? "Another source";
+      sources.add(source);
+      note(e.title, e.artist, e.album, source, e.at, () =>
+        inLibraryIndex(index, e.title ?? "", e.artist),
+      );
+    } else if (e.kind === "radio-track" && e.title) {
+      const { artist, song } = splitRadioTitle(e.title, e.artist);
+      const station = e.station ?? "Internet radio";
+      if (e.station) stations.add(e.station);
+      note(
+        song,
+        artist,
+        null,
+        station,
+        e.at,
+        () =>
+          // a station that sends "Song - Artist" instead is matched the other way round
+          inLibraryIndex(index, song, artist) ||
+          (artist != null && inLibraryIndex(index, artist, song)),
+      );
+    }
+  }
+
+  const byArtist = new Map<string, Array<HeardTrack & { places: Tally }>>();
   for (const t of tracks.values()) {
     const k = lc(t.artist) || "unknown";
     const list = byArtist.get(k);
@@ -140,23 +177,22 @@ export function heardElsewhere(
     else byArtist.set(k, [t]);
   }
   const artists: HeardArtist[] = [...byArtist.entries()].map(([key, list]) => {
-    const top = list.reduce((a, b) => (b.heard > a.heard ? b : a));
+    list.sort((a, b) => b.heard - a.heard || b.lastAt - a.lastAt);
+    const where = new Tally();
+    for (const t of list) for (const [place, n] of t.places.entries()) where.add(place, n);
+    const albums = albumsBy.get(key) ?? 0;
     return {
       key,
-      name: top.artist ?? "Unknown artist",
-      tracks: list.length,
-      albums: new Set(list.map((t) => lc(t.album)).filter(Boolean)).size,
+      name: list[0].artist ?? "Unknown artist",
+      tracks: list.map(({ places, ...t }) => ({ ...t, where: places.list() })),
       heard: list.reduce((n, t) => n + t.heard, 0),
       lastAt: Math.max(...list.map((t) => t.lastAt)),
-      owned: list.filter((t) => t.owned).length,
-      top,
+      where: where.list(),
+      albums,
+      inLibrary: albums > 0 || known.has(key),
+      ownedTracks: list.filter((t) => t.owned).length,
     };
   });
 
-  return {
-    tracks: [...tracks.values()],
-    artists,
-    radio: [...radio.values()],
-    stations: stations.size,
-  };
+  return { artists, sources: sources.list(), stations: stations.size };
 }

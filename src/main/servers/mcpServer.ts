@@ -2532,7 +2532,7 @@ export class McpBridge {
           const artist = (a.artist as string | undefined) ?? s.playState?.metadata?.artist ?? null;
           const album = (a.album as string | undefined) ?? s.playState?.metadata?.album ?? null;
           if (!artist || !album) return err("No album playing — pass artist and album explicitly.");
-          const info = await fetchAlbumInfo(artist, album);
+          const info = await fetchAlbumInfo(artist, album, false, true);
           if (!info) return ok(`No album match for "${album}" by ${artist}.`);
           return ok({
             title: info.title,
