@@ -345,7 +345,7 @@ function SyncRow({ host }: { host: PickerHost }): React.JSX.Element {
       )}
       <SettingLine
         label="Drops"
-        hint="How much of a lull a drop needs. Loose counts small ones, strict only a real breakdown."
+        hint="How much of a lull a drop needs. Loose counts small ones, strict requires a real breakdown."
       >
         <Segmented
           value={drops}

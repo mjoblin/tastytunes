@@ -1296,6 +1296,12 @@ export interface AppSettings {
    *  the app's own is the redundancy the tile avoids. A fact about the host, not a scene,
    *  so one switch of the tile's, the scenes' own Words settings staying the wall's. */
   nowPlayingSceneWords: boolean;
+  /** The Now Playing art's size, dragged from the box's corner, as a SHARE of the room it
+   *  has (the smaller of the hero's height less the waveform under it, and its width less
+   *  the text column's), so a size dragged on a large monitor still fits a small window.
+   *  Null is the automatic size: three tiers by window width, and the detent the drag
+   *  snaps back to. */
+  nowPlayingArtShare: number | null;
   /** EVIDENCE, not preference: flips true the first time an analysis is
    *  served (stored or read back) and never clears. The playback bar's
    *  taller geometry keys on the setting AND this — a household with no
@@ -1508,6 +1514,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   displayWaveform: true,
   nowPlayingScene: "sleeve",
   nowPlayingSceneWords: false,
+  nowPlayingArtShare: null,
   waveformSeen: false,
   lyrics: true,
   lyricsLine: true,

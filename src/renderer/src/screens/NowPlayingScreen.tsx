@@ -34,6 +34,8 @@ import { ScenePicker } from "@/components/display/ScenePicker";
 import { useSceneFeed } from "@/components/display/feed";
 import { isAbstract, sceneDef } from "@/components/display/scenes";
 import { useShuffledScene } from "@/components/display/useShuffledScene";
+import { useArtSize } from "@/hooks/useArtSize";
+import { CornerResizeHandle } from "@/components/controls/CornerResizeHandle";
 import type { SceneId } from "@/components/display/scenes/types";
 
 const ALIGN_H = { left: "justify-start", center: "justify-center", right: "justify-end" } as const;
@@ -159,6 +161,10 @@ export function NowPlayingScreen(): React.JSX.Element {
   }));
   // Right placement mirrors the pair: art anchors the right edge, text grows leftward.
   const mirrored = nowPlayingAlignH === "right";
+  // THE ART'S SIZE IS DRAGGED (2026-09-12): a grip in the box's outer bottom corner, the
+  // size a share of the room, remembered (hooks/useArtSize); the chips sit in the top
+  // corners so the grip has the bottom one to itself
+  const art = useArtSize(mirrored);
 
   // Lyrics need real track metadata — hidden for radio and title-only sources.
   const lyricsAvailable = lyricsEnabled && !meta.isRadio && !!meta.title && !!meta.subtitle;
@@ -409,6 +415,7 @@ export function NowPlayingScreen(): React.JSX.Element {
           (items-start), and right placement mirrors the pair so the art anchors the right
           edge while text grows leftward. */}
       <div
+        ref={art.attachHero}
         className={cx(
           "relative flex-1 min-h-0 flex px-8 pb-10",
           ALIGN_H[nowPlayingAlignH],
@@ -417,8 +424,8 @@ export function NowPlayingScreen(): React.JSX.Element {
       >
         <div className={cx("flex gap-8 items-start min-w-0", mirrored && "flex-row-reverse")}>
           <div className="shrink-0">
-            {/* three width tiers — compact windows get genuinely small art
-              (260) instead of the old two-step 340/400 (user pass) */}
+            {/* three width tiers by default — compact windows get genuinely small art
+              (260) instead of the old two-step 340/400 (user pass) — or the dragged size */}
             {/* Art swaps straight over on a track change — no crossfade here (user
               call 2026-07-24: the text settling and the art dissolving at the
               same time read as mushy). Display mode keeps its crossfade. The
@@ -430,10 +437,12 @@ export function NowPlayingScreen(): React.JSX.Element {
                 or the scene shows through them frosted */}
             <div
               data-now-playing-scene={sceneOn ? tileStage : undefined}
-              className="group relative w-[260px] h-[260px] lg:w-[340px] lg:h-[340px] xl:w-[400px] xl:h-[400px]"
+              data-now-playing-art-size={art.size}
+              className="group relative"
+              style={{ width: art.size, height: art.size }}
             >
               {sceneOn && tileStage ? (
-                <div className="absolute inset-0 rounded-2xl overflow-hidden bg-raised art-glow">
+                <div className="scene-float absolute inset-0 rounded-2xl overflow-hidden bg-raised art-glow">
                   <SceneCanvas
                     scene={tileStage}
                     feed={sceneFeed}
@@ -472,7 +481,7 @@ export function NowPlayingScreen(): React.JSX.Element {
                   }
                   data-now-playing-scene-words
                   className={cx(
-                    "tip-top tip-start absolute bottom-2 left-2 p-2 rounded-full bg-panel/60 backdrop-blur ring-1 ring-edge transition-all opacity-0 group-hover:opacity-100",
+                    "tip-bottom tip-start absolute top-2 left-2 p-2 rounded-full bg-panel/60 backdrop-blur ring-1 ring-edge transition-all opacity-0 group-hover:opacity-100",
                     tileWords ? "text-gold" : "text-dim",
                     wordsForced
                       ? "cursor-default disabled:opacity-60"
@@ -489,7 +498,7 @@ export function NowPlayingScreen(): React.JSX.Element {
                   data-tip="Scene"
                   data-now-playing-scene-chip
                   className={cx(
-                    "tip-top tip-end absolute bottom-2 right-2 p-2 rounded-full bg-panel/60 backdrop-blur ring-1 ring-edge transition-all motion-safe:active:scale-90",
+                    "tip-bottom tip-end absolute top-2 right-2 p-2 rounded-full bg-panel/60 backdrop-blur ring-1 ring-edge transition-all motion-safe:active:scale-90",
                     scenesOpen
                       ? "text-gold opacity-100"
                       : "text-dim hover:text-ink opacity-0 group-hover:opacity-100",
@@ -498,10 +507,17 @@ export function NowPlayingScreen(): React.JSX.Element {
                   <Sparkles size={16} />
                 </button>
               )}
+              <CornerResizeHandle
+                corner={mirrored ? "bottom-left" : "bottom-right"}
+                dragging={art.dragging}
+                snapped={art.snapped}
+                handleProps={art.handleProps}
+                label="Resize the album art"
+              />
             </div>
             {/* EXPERIMENT (0.7 exploration): the waveform as pure form under
                 the art — playhead, no controls, absent when no peaks. */}
-            <div className="w-[260px] lg:w-[340px] xl:w-[400px]">
+            <div ref={art.attachWave} style={{ width: art.size }}>
               <NowPlayingWaveform />
             </div>
           </div>

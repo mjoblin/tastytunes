@@ -74,7 +74,7 @@ export function DiagnosticsDrawer(): React.JSX.Element {
   return (
     <div
       style={{ height }}
-      className="absolute inset-x-0 bottom-0 max-h-[80vh] bg-panel border-t border-edge2 flex flex-col z-20 shadow-[0_-16px_50px_rgb(0_0_0_/_0.5)]"
+      className="absolute inset-x-0 bottom-0 max-h-[80vh] bg-panel/80 backdrop-blur-md border-t border-edge2 flex flex-col z-20 shadow-[0_-16px_50px_rgb(0_0_0_/_0.5)]"
     >
       <PanelResizeHandle
         orientation="horizontal"

@@ -687,3 +687,17 @@ img {
 :root.reduce-motion .toast-in {
   animation: toast-fade 0.18s ease-out;
 }
+
+/* THE SCENE TILE LETS THE PAGE THROUGH, A LITTLE (Now Playing, the dark theme): a slight
+   opacity, so the page and the ambient wash, when it is on, show through the whole tile
+   evenly, at a few percent. Not a blend: a lighten blend handed every pixel darker than the
+   panel to the panel, which is most of any scene, and the tile went transparent (the user,
+   2026-09-12: "i wanted it to be subtle"). One compositor layer at an alpha, nothing
+   measurable beside the scene's own render. On paper (the light theme) the tile stays
+   sealed. */
+.scene-float {
+  opacity: 0.92;
+}
+:root.light .scene-float {
+  opacity: 1;
+}

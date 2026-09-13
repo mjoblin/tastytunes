@@ -5,6 +5,7 @@ import { tt } from "@/api";
 import { useStore } from "@/store";
 import { cx, deriveNowPlaying, fmtTime } from "@/lib/format";
 import { PopoverChrome } from "@/hooks/usePopover";
+import { POPOVER_CARD } from "@/components/chrome/Overlay";
 import { Switch } from "@/components/controls/Switch";
 
 /** The sleep-timer menu, ONE list (2026-08-16): the bar popover and the command palette both offer exactly these. */
@@ -88,7 +89,7 @@ export function SleepTimer(): React.JSX.Element {
         <>
           <PopoverChrome onClose={() => setOpen(false)} />
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute bottom-11 right-0 z-40 w-64 rounded-xl bg-raised ring-1 ring-edge2 shadow-2xl p-3">
+          <div className={cx("absolute bottom-11 right-0 z-40 w-64 p-3", POPOVER_CARD)}>
             <div className="flex items-center justify-between mb-2.5">
               <span className="microlabel">sleep timer</span>
               <div className="flex rounded-md ring-1 ring-edge bg-bg p-0.5">

@@ -1,7 +1,7 @@
 import type { Rgb, Scene, SceneFrame, SceneKey, SceneSettingDef, SceneSettings } from "../types";
 import { PresenceTracker } from "../../presence";
 import { typePx, sceneFont } from "../../type";
-import { clamp, mix, rgb, rgba } from "../lib";
+import { clamp, fitText, mix, rgb, rgba } from "../lib";
 import { BallPit, EROSION_SECONDS, WORLD_W, dropSpread, dropX, erosionPressure } from "./balls";
 import {
   HIT_ONSET,
@@ -169,25 +169,53 @@ export class Pit implements Scene {
       this.foley = null;
     }
 
-    // the back wall: the current line, faint, and the floor line
+    // the back wall: the current line in the house gold at full presence (it was ink at a
+    // fifth, which the user found subdued beside the other scenes, 2026-09-12), wrapping to
+    // two lines as the sea's does, with a soft gold glow on the dark faceplate the way the
+    // terminal's phosphor glows; the next line waits below as a dim caption
     const groundY = h * (f.mini ? 0.92 : 0.86);
     if (f.lyric && this.settings.words !== false) {
-      const { lines, index, text } = f.lyric;
+      const { lines, index, text, next } = f.lyric;
       this.wall.step(text ? [String(index)] : [], f.dt);
-      sceneFont(ctx, f, "lead", 500);
       ctx.textAlign = "center";
       ctx.textBaseline = "alphabetic";
+      const lead = typePx(f, "lead");
+      const baseY = h * 0.3;
       for (const key of this.wall.keys()) {
         const ln = lines[Number(key)]?.text;
         if (!ln) continue;
-        ctx.fillStyle = rgba(P.ink, 0.22 * this.wall.get(key));
-        ctx.fillText(ln, w / 2, h * 0.3);
+        const g = this.wall.get(key);
+        sceneFont(ctx, f, "lead", 500);
+        const fit = fitText(ctx, ln, {
+          maxWidth: w * 0.86,
+          maxPx: lead,
+          minPx: lead * 0.7,
+          maxLines: 2,
+          weight: 500,
+          family: f.font,
+        });
+        ctx.fillStyle = rgba(mix(mix(P.ink, P.accent[1], 0.2), P.gold, 0.6), g);
+        if (!P.light) {
+          ctx.shadowColor = rgba(P.gold, 0.55 * g);
+          ctx.shadowBlur = fit.px * 0.5;
+        }
+        const y0 = baseY - (fit.lines.length - 1) * fit.px * 1.15;
+        fit.lines.forEach((l, k) => ctx.fillText(l, w / 2, y0 + k * fit.px * 1.15));
+        ctx.shadowBlur = 0;
       }
-      // the next line waits below, fainter
-      if (f.lyric.next) {
-        sceneFont(ctx, f, "body", 400);
-        ctx.fillStyle = rgba(P.ink, 0.1);
-        ctx.fillText(f.lyric.next, w / 2, h * 0.3 + typePx(f, "lead") * 1.5);
+      if (next) {
+        sceneFont(ctx, f, "caption", 400);
+        ctx.fillStyle = rgba(P.dim, 0.55);
+        const cpx = typePx(f, "caption");
+        const nf = fitText(ctx, next, {
+          maxWidth: w * 0.8,
+          maxPx: cpx,
+          minPx: cpx * 0.75,
+          maxLines: 2,
+          weight: 400,
+          family: f.font,
+        });
+        nf.lines.forEach((l, k) => ctx.fillText(l, w / 2, baseY + lead * 1.3 + k * nf.px * 1.2));
       }
       ctx.textAlign = "start";
     }

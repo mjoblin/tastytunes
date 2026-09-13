@@ -49,6 +49,7 @@ import { FilterInput } from "@/components/controls/FilterInput";
 import { Slider } from "@/components/controls/Slider";
 import { ArtImage } from "@/components/media/ArtImage";
 import { PopoverChrome } from "@/hooks/usePopover";
+import { POPOVER_CARD } from "@/components/chrome/Overlay";
 import { HeaderChip, ScreenTitle, GAP_BETWEEN, GAP_WITHIN } from "@/components/chrome/Chrome";
 import { useConfirmPopover } from "@/components/chrome/Confirm";
 import { artUrlAt } from "@shared/artUrl";
@@ -490,7 +491,7 @@ function usePresetVolumePopover(
             <span
               data-preset-volume-popover
               style={anchor}
-              className="fixed z-40 w-60 rounded-xl bg-raised ring-1 ring-edge2 shadow-2xl p-3 block cursor-default"
+              className={cx("fixed z-40 w-60 p-3 block cursor-default", POPOVER_CARD)}
               onClick={(e) => e.stopPropagation()}
               onPointerDown={(e) => e.stopPropagation()}
             >
@@ -948,7 +949,7 @@ function RepairChip({
             <span
               data-preset-repair-popover
               style={anchor}
-              className="fixed z-40 w-[268px] rounded-xl bg-raised ring-1 ring-edge2 shadow-2xl p-3 block cursor-default"
+              className={cx("fixed z-40 w-[268px] p-3 block cursor-default", POPOVER_CARD)}
               onClick={(e) => e.stopPropagation()}
               onPointerDown={(e) => e.stopPropagation()}
             >

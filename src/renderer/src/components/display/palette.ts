@@ -22,7 +22,18 @@ const parseColor = (v: string): Rgb | null => {
   return null;
 };
 
-export function readTokens(): Omit<ScenePalette, "accent"> {
+type Tokens = Omit<ScenePalette, "accent">;
+const sameRgb = (a: Rgb, b: Rgb): boolean => a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+/** The same tokens, field by field: a re-read that changed nothing must not be a new object. */
+export const sameTokens = (a: Tokens, b: Tokens): boolean =>
+  a.light === b.light &&
+  sameRgb(a.bg, b.bg) &&
+  sameRgb(a.ink, b.ink) &&
+  sameRgb(a.dim, b.dim) &&
+  sameRgb(a.faint, b.faint) &&
+  sameRgb(a.gold, b.gold);
+
+export function readTokens(): Tokens {
   const root = document.documentElement;
   const cs = getComputedStyle(root);
   const get = (name: string, fallback: Rgb): Rgb =>
@@ -142,9 +153,20 @@ const cache = new Map<string, ArtColors | null>();
 export function useScenePalette(artUrl: string | null): ScenePalette {
   const [tokens, setTokens] = useState(readTokens);
   const [accent, setAccent] = useState<ArtColors | null>(null);
+  // THE ROOT'S CLASSES CHANGE FOR MANY REASONS, the theme being one: a re-read that finds
+  // the same tokens keeps the same object, so nothing re-renders. It once set a fresh object
+  // on every mutation, and with a popover open on Now Playing (2026-09-12) that was a loop:
+  // the popover's chrome removed and re-added a root class on each render of its owner, the
+  // fresh tokens re-rendered the screen and so the owner, and round again, outside React's
+  // update-depth guard since a mutation observer is not an effect. The renderer hung
   useEffect(() => {
     const root = document.documentElement;
-    const mo = new MutationObserver(() => setTokens(readTokens()));
+    const mo = new MutationObserver(() =>
+      setTokens((prev) => {
+        const next = readTokens();
+        return sameTokens(prev, next) ? prev : next;
+      }),
+    );
     mo.observe(root, { attributes: true, attributeFilter: ["class", "style"] });
     return () => mo.disconnect();
   }, []);

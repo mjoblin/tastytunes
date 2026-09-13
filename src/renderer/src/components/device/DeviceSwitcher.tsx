@@ -5,6 +5,7 @@ import type { DiscoveredDevice } from "@shared/model";
 import { useStore } from "@/store";
 import { cx } from "@/lib/format";
 import { PopoverChrome } from "@/hooks/usePopover";
+import { POPOVER_CARD } from "@/components/chrome/Overlay";
 
 /**
  * Roon-zone-style device picker, right in the playback bar — rendered only
@@ -151,7 +152,7 @@ export function DeviceSwitcher(): React.JSX.Element | null {
         <>
           <PopoverChrome onClose={() => setOpen(false)} />
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute bottom-11 right-0 z-40 w-72 rounded-xl bg-raised ring-1 ring-edge2 shadow-2xl p-2">
+          <div className={cx("absolute bottom-11 right-0 z-40 w-72 p-2", POPOVER_CARD)}>
             <StreamerList onPick={() => setOpen(false)} />
           </div>
         </>

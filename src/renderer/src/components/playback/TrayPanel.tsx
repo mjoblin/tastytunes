@@ -50,6 +50,7 @@ import { ScrollOnce } from "@/components/playback/ScrollOnce";
 import { LargeQueueConfirm } from "@/components/overlays/LargeQueueConfirm";
 import { StreamerList, useStreamerList } from "@/components/device/DeviceSwitcher";
 import { PopoverChrome } from "@/hooks/usePopover";
+import { POPOVER_CARD } from "@/components/chrome/Overlay";
 import {
   PlaylistsTab,
   PresetsTab,
@@ -664,7 +665,7 @@ function TrayStreamers(): React.JSX.Element | null {
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
           <div
             data-tray-streamers-popover
-            className="absolute right-0 top-full mt-1.5 z-40 w-64 rounded-xl bg-raised ring-1 ring-edge2 shadow-2xl p-2"
+            className={cx("absolute right-0 top-full mt-1.5 z-40 w-64 p-2", POPOVER_CARD)}
           >
             <StreamerList onPick={() => setOpen(false)} />
           </div>
