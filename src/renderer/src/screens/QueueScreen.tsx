@@ -437,6 +437,34 @@ export function QueueScreen(): React.JSX.Element {
     });
   }, [queue]);
 
+  /** ONE wiring for what a card and a row share (they carried two copies of it,
+   *  2026-09-13): identity, the menu, the playing state, the selection, the drag's
+   *  stillness and line, the open menu. A row adds what only rows have (the DR
+   *  cell, the selection edges, the body drag). */
+  const rowProps = (item: QueueListItem) => ({
+    onMenu: (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setRowMenu({ item, x: e.clientX, y: e.clientY });
+    },
+    item,
+    isCurrent: item.id === playId,
+    sourceActive: queueSourceActive,
+    currentRef: item.id === playId ? currentRef : undefined,
+    selected: item.id != null && selected.has(item.id),
+    onRowClick: (e: React.MouseEvent) => rowClick(item, e),
+    staticDrag: dragBatch != null || navHover != null,
+    dragLive: dragBatch != null || dragSingle != null,
+    // the literals stay narrow (a bare literal in a mutable property widens to string)
+    insertLine:
+      insertAt?.id === item.id
+        ? insertAt.after
+          ? ("after" as const)
+          : ("before" as const)
+        : undefined,
+    menuOpen: rowMenu?.item.id === item.id,
+  });
+
   if (allItems.length === 0) {
     return (
       <EmptyState
@@ -745,26 +773,7 @@ export function QueueScreen(): React.JSX.Element {
                 }}
               >
                 {items.map((item) => (
-                  <QueueCard
-                    key={item.id}
-                    onMenu={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setRowMenu({ item, x: e.clientX, y: e.clientY });
-                    }}
-                    item={item}
-                    isCurrent={item.id === playId}
-                    sourceActive={queueSourceActive}
-                    currentRef={item.id === playId ? currentRef : undefined}
-                    selected={item.id != null && selected.has(item.id)}
-                    onRowClick={(e) => rowClick(item, e)}
-                    staticDrag={dragBatch != null || navHover != null}
-                    dragLive={dragBatch != null || dragSingle != null}
-                    insertLine={
-                      insertAt?.id === item.id ? (insertAt.after ? "after" : "before") : undefined
-                    }
-                    menuOpen={rowMenu?.item.id === item.id}
-                  />
+                  <QueueCard key={item.id} {...rowProps(item)} />
                 ))}
               </div>
             ) : (
@@ -779,27 +788,11 @@ export function QueueScreen(): React.JSX.Element {
                   return (
                     <QueueRow
                       key={item.id}
-                      onMenu={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setRowMenu({ item, x: e.clientX, y: e.clientY });
-                      }}
-                      item={item}
+                      {...rowProps(item)}
                       dr={drFor(item)}
-                      isCurrent={item.id === playId}
-                      sourceActive={queueSourceActive}
-                      currentRef={item.id === playId ? currentRef : undefined}
-                      selected={item.id != null && selected.has(item.id)}
-                      onRowClick={(e) => rowClick(item, e)}
-                      staticDrag={dragBatch != null || navHover != null}
-                      dragLive={dragBatch != null || dragSingle != null}
-                      insertLine={
-                        insertAt?.id === item.id ? (insertAt.after ? "after" : "before") : undefined
-                      }
                       selStart={!(prev?.id != null && selected.has(prev.id))}
                       selEnd={!(next?.id != null && selected.has(next.id))}
                       bodyDrag={selected.size > 0}
-                      menuOpen={rowMenu?.item.id === item.id}
                     />
                   );
                 })}
