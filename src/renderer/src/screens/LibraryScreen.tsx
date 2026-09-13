@@ -1331,6 +1331,48 @@ export function LibraryScreen(): React.JSX.Element {
     );
   }
 
+  /** ONE wiring for a track row, the listing's and the cross-server groups' alike (they
+   *  carried two copies of it, 2026-09-13): identity, the queue and selection state, the
+   *  actions and the drag, the links by the index. The caller says what only it knows:
+   *  the art, an album row's note and performer line, and whether the links are on (the
+   *  listing's only in search mode, a cross-server row's always). */
+  const trackRow = (
+    node: MediaNode,
+    siblings: MediaNode[],
+    ti: number,
+    opts: { showArt: boolean; note?: string | null; artistLabel?: string | null; links: boolean },
+  ): React.JSX.Element => (
+    <TrackRow
+      key={node.id}
+      node={node}
+      showArt={opts.showArt}
+      isCurrent={queueSourceActive && isCurrentTrack(node)}
+      queued={trackQueued(node)}
+      menuOpen={menuNodeId === node.id}
+      favorited={nodeFavorited(node)}
+      onHeart={() => heartNode(node)}
+      onPlayNow={(el) => playTrack(node, el)}
+      selected={selTracks.has(node.id)}
+      selStart={!(ti > 0 && selTracks.has(siblings[ti - 1].id))}
+      selEnd={!(ti < siblings.length - 1 && selTracks.has(siblings[ti + 1].id))}
+      onRowClick={(e) => trackRowClick(node, e)}
+      onNavDrag={(e) => startTrackDrag(node, e)}
+      onMenu={(e) => openMenu(node, e)}
+      note={opts.note}
+      artistLabel={opts.artistLabel}
+      onAlbumLink={
+        opts.links && node.album && linkable(node, "albums")
+          ? () => void goToAlbum(node)
+          : undefined
+      }
+      onArtistLink={
+        opts.links && node.artist && linkable(node, "artists")
+          ? () => void goToArtist(node)
+          : undefined
+      }
+    />
+  );
+
   return (
     <div
       className="relative h-full flex flex-col"
@@ -1994,39 +2036,16 @@ export function LibraryScreen(): React.JSX.Element {
                   </div>
                 )}
                 <div className="divide-y divide-edge/50">
-                  {g.tracks.map((node, ti) => (
-                    <TrackRow
-                      key={node.id}
-                      node={node}
-                      showArt={!albumNode}
-                      isCurrent={queueSourceActive && isCurrentTrack(node)}
-                      queued={trackQueued(node)}
-                      menuOpen={menuNodeId === node.id}
-                      favorited={nodeFavorited(node)}
-                      onHeart={() => heartNode(node)}
-                      onPlayNow={(el) => playTrack(node, el)}
-                      selected={selTracks.has(node.id)}
-                      selStart={!(ti > 0 && selTracks.has(g.tracks[ti - 1].id))}
-                      selEnd={!(ti < g.tracks.length - 1 && selTracks.has(g.tracks[ti + 1].id))}
-                      onRowClick={(e) => trackRowClick(node, e)}
-                      onNavDrag={(e) => startTrackDrag(node, e)}
-                      onMenu={(e) => openMenu(node, e)}
-                      note={albumNoteFor(node)}
-                      artistLabel={
-                        albumNode ? performerLine(node, albumArtist ?? albumNode.artist) : null
-                      }
-                      onAlbumLink={
-                        searchMode && node.album && linkable(node, "albums")
-                          ? () => void goToAlbum(node)
-                          : undefined
-                      }
-                      onArtistLink={
-                        searchMode && node.artist && linkable(node, "artists")
-                          ? () => void goToArtist(node)
-                          : undefined
-                      }
-                    />
-                  ))}
+                  {g.tracks.map((node, ti) =>
+                    trackRow(node, g.tracks, ti, {
+                      showArt: !albumNode,
+                      note: albumNoteFor(node),
+                      artistLabel: albumNode
+                        ? performerLine(node, albumArtist ?? albumNode.artist)
+                        : null,
+                      links: searchMode,
+                    }),
+                  )}
                 </div>
               </div>
             ))}
@@ -2079,35 +2098,9 @@ export function LibraryScreen(): React.JSX.Element {
                   <>
                     {kindLabel("Tracks")}
                     <div className="divide-y divide-edge/50 -mx-2">
-                      {g.tracks.map((node, ti) => (
-                        <TrackRow
-                          key={node.id}
-                          node={node}
-                          showArt
-                          isCurrent={queueSourceActive && isCurrentTrack(node)}
-                          queued={trackQueued(node)}
-                          menuOpen={menuNodeId === node.id}
-                          favorited={nodeFavorited(node)}
-                          onHeart={() => heartNode(node)}
-                          onPlayNow={(el) => playTrack(node, el)}
-                          selected={selTracks.has(node.id)}
-                          selStart={!(ti > 0 && selTracks.has(g.tracks[ti - 1].id))}
-                          selEnd={!(ti < g.tracks.length - 1 && selTracks.has(g.tracks[ti + 1].id))}
-                          onRowClick={(e) => trackRowClick(node, e)}
-                          onNavDrag={(e) => startTrackDrag(node, e)}
-                          onMenu={(e) => openMenu(node, e)}
-                          onAlbumLink={
-                            node.album && linkable(node, "albums")
-                              ? () => void goToAlbum(node)
-                              : undefined
-                          }
-                          onArtistLink={
-                            node.artist && linkable(node, "artists")
-                              ? () => void goToArtist(node)
-                              : undefined
-                          }
-                        />
-                      ))}
+                      {g.tracks.map((node, ti) =>
+                        trackRow(node, g.tracks, ti, { showArt: true, links: true }),
+                      )}
                     </div>
                   </>
                 )}
