@@ -28,6 +28,8 @@ export function useQueueDrag(d: {
   setSelected(next: ReadonlySet<number>): void;
   selAnchor: { current: number | null };
   scrollElRef: { current: HTMLDivElement | null };
+  /** The screen's: true through a drag and the event that ends it, read by the selection's Escape. */
+  dragLiveRef: { current: boolean };
   setQueueItems: Store["setQueueItems"];
   favorites: Store["favorites"];
   setPlaylistBatch(batch: { x: number; y: number; ids?: number[] } | null): void;
@@ -43,6 +45,7 @@ export function useQueueDrag(d: {
     setSelected,
     selAnchor,
     scrollElRef,
+    dragLiveRef,
     setQueueItems,
     favorites,
     setPlaylistBatch,
@@ -67,10 +70,6 @@ export function useQueueDrag(d: {
    *  real target does NOTHING — no line, no move (the line-is-the-promise
    *  rule; user, 2026-08-30: releasing on Radio performed the queue move). */
   const overRailRef = useRef(false);
-  /** True through a drag AND the event that ends it: the Esc that cancels a
-   *  drag must not also clear the selection, and both handlers hear the
-   *  same keydown — cleared a tick later so the guard outlives the event. */
-  const dragLiveRef = useRef(false);
   /** The pointer while over the rail — anchors the cursor-fixed ghost. */
   const [railPt, setRailPt] = useState<{ x: number; y: number } | null>(null);
   // THE INSERTION-LINE MODEL for batch drags (the Spotify/Music/Finder
@@ -439,7 +438,6 @@ export function useQueueDrag(d: {
     navHover,
     railPt,
     insertAt,
-    dragLiveRef,
     onDragStart,
     onDragMove,
     onDragEnd,
