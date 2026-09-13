@@ -49,6 +49,7 @@ export function ScenePicker({
   shuffled,
   art,
   host = "display",
+  className,
   onPick,
 }: {
   feed: SceneFeed;
@@ -56,6 +57,9 @@ export function ScenePicker({
   shuffled: Shuffleable;
   art: string | null;
   host?: PickerHost;
+  /** The host's presence classes (useFadePresence): the picker fades in and out at the
+   *  modals' and panels' beat rather than popping (the user, 2026-09-13). */
+  className?: string;
   onPick(id: DisplayScene): void;
 }): React.JSX.Element {
   const shuffle = current === "shuffle";
@@ -85,7 +89,10 @@ export function ScenePicker({
       // user's report); the panel is a little wider than the tiles to pay for it. Its face
       // is the app's glass over content, the playback bar's density (80 over a blur): the
       // stage or the art shows through it frosted, and the live tiles stay legible on it
-      className="@container absolute top-16 right-4 z-30 w-[800px] max-w-[calc(100%_-_2rem)] max-h-[calc(100%_-_5rem)] overflow-y-auto [scrollbar-gutter:stable] rounded-2xl bg-panel/80 p-2.5 shadow-2xl ring-1 ring-edge backdrop-blur-md"
+      className={cx(
+        "@container absolute top-16 right-4 z-30 w-[800px] max-w-[calc(100%_-_2rem)] max-h-[calc(100%_-_5rem)] overflow-y-auto [scrollbar-gutter:stable] rounded-2xl bg-panel/80 p-2.5 shadow-2xl ring-1 ring-edge backdrop-blur-md",
+        className,
+      )}
     >
       {/* the tiles alphabetical, Shuffle last, five to a row at the panel's full width, fewer
           as its host narrows: 146px is a tile plus its padding. In a panel narrower than its

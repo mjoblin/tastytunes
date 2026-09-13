@@ -5,6 +5,7 @@ import { useStore } from "@/store";
 import { CrossfadeArt } from "@/components/media/CrossfadeArt";
 import { usePlayhead } from "@/hooks/usePlayhead";
 import { useArtLoadable } from "@/hooks/useArtLoadable";
+import { useFadePresence } from "@/hooks/useFadePresence";
 import { useBestArt } from "@/lib/bestArt";
 import { useFadedText, useLyrics } from "@/hooks/useLyrics";
 import { useSettledSnapshot } from "@/hooks/useSettledSnapshot";
@@ -47,6 +48,10 @@ export function DisplayMode(): React.JSX.Element {
   // the scene: the setting, or the shuffle's draw for this track (never the
   // one before); the feed only fetches an analysis once a scene needs it
   const [scenesOpen, setScenesOpen] = useState(false);
+  // the picker opens at once and fades out at the house beat (useFadePresence, the
+  // modals' and the panels' 140 ms), taking no clicks while it is leaving; a fade IN hid
+  // its heavy mount behind zero opacity and read as a delay (the user, 2026-09-13)
+  const pickerFade = useFadePresence(scenesOpen, { enter: false });
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { shuffled, active } = useShuffledScene(settings.displayScene, meta);
@@ -201,8 +206,9 @@ export function DisplayMode(): React.JSX.Element {
       >
         <Sparkles size={18} />
       </button>
-      {scenesOpen && (
+      {pickerFade.mounted && (
         <ScenePicker
+          className={cx(pickerFade.faded, !scenesOpen && "pointer-events-none")}
           feed={feed}
           current={settings.displayScene}
           shuffled={shuffled}

@@ -16,14 +16,26 @@ import { cx } from "@/lib/format";
  * animated frame over a live blur re-runs it on software rendering (the
  * frost-law cost) — a short, bounded, once-per-open fade is fine where an
  * unbounded per-hover transition was not.
+ *
+ * `enter: false` opens at once and fades only on close: a surface whose mount
+ * is heavy (the scene picker's thirteen live thumbnails, each a GL context)
+ * did all of that work behind an opacity of zero, so its fade-in read as a
+ * delay before it appeared rather than as a fade (the user, 2026-09-13).
  */
-export function useFadePresence(open: boolean): { mounted: boolean; faded: string } {
+export function useFadePresence(
+  open: boolean,
+  { enter = true }: { enter?: boolean } = {},
+): { mounted: boolean; faded: string } {
   const [mounted, setMounted] = useState(open);
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(open && !enter);
 
   useEffect(() => {
     if (open) {
       setMounted(true);
+      if (!enter) {
+        setVisible(true);
+        return;
+      }
       // Two frames, not one: the mount renders at opacity-0 first, and the
       // class flip must land in a LATER frame or the browser coalesces them
       // and the fade-in never plays.
@@ -33,7 +45,7 @@ export function useFadePresence(open: boolean): { mounted: boolean; faded: strin
     setVisible(false);
     const t = setTimeout(() => setMounted(false), 140);
     return () => clearTimeout(t);
-  }, [open]);
+  }, [open, enter]);
 
   return {
     mounted,

@@ -76,6 +76,10 @@ export function NowPlayingScreen(): React.JSX.Element {
   // (pixel ratio 1, no cathode finish), the feed its own.
   const { shuffled: tileShuffled, active: tileActive } = useShuffledScene(nowPlayingScene, meta);
   const [scenesOpen, setScenesOpen] = useState(false);
+  // the picker opens at once and fades out at the house beat (useFadePresence, the
+  // modals' and the panels' 140 ms), taking no clicks while it is leaving; a fade IN hid
+  // its heavy mount behind zero opacity and read as a delay (the user, 2026-09-13)
+  const pickerFade = useFadePresence(scenesOpen, { enter: false });
   const chipOn = !meta.isRadio && meta.title != null;
   const tileStage: SceneId | null = chipOn && isAbstract(tileActive) ? tileActive : null;
   const sceneFeed = useSceneFeed(tileStage != null || scenesOpen);
@@ -369,8 +373,9 @@ export function NowPlayingScreen(): React.JSX.Element {
 
   return (
     <div className="relative h-full overflow-hidden flex flex-col">
-      {scenesOpen && (
+      {pickerFade.mounted && (
         <ScenePicker
+          className={cx(pickerFade.faded, !scenesOpen && "pointer-events-none")}
           feed={sceneFeed}
           current={nowPlayingScene}
           shuffled={tileShuffled}
