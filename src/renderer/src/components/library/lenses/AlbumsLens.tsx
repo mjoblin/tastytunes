@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   AudioLines,
   Heart,
@@ -41,6 +41,7 @@ import {
   RECORD_SORTS,
   PLAY_THESE_MAX,
 } from "./lensShared";
+import { useRowSelection } from "@/components/library/useRowSelection";
 
 // The Albums lens, split out of LibraryLenses.tsx (2026-09-13, the lenses round: three lenses of
 // 600 to 800 lines shared one file); what the lenses share lives in ./lensShared.
@@ -297,71 +298,16 @@ export function AlbumsLens({
   // a bare click in selection mode clears instead of opening, Esc clears, ⌘A
   // takes every tile shown, a click on the nav rail or the bar clears. The
   // selection prunes itself to the tiles still shown when the facets move.
-  const [selA, setSelA] = useState<ReadonlySet<string>>(() => new Set());
-  const selAAnchor = useRef<number | null>(null);
+  // the tiles' selection: the row grammar from useRowSelection (one home
+  // since 2026-09-13) over the tiles shown, keyed by nodeKey
   const tileKeys = useMemo(() => tiles.map((t) => nodeKey(t.node)), [tiles]);
-  useEffect(() => {
-    setSelA((prev) => {
-      if (prev.size === 0) return prev;
-      const keep = new Set(tileKeys);
-      const next = new Set([...prev].filter((k) => keep.has(k)));
-      return next.size === prev.size ? prev : next;
-    });
-  }, [tileKeys]);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent): void => {
-      const t = e.target;
-      if (t instanceof HTMLElement && t.matches("input, textarea, [contenteditable]")) return;
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "a") {
-        if (tileKeys.length === 0) return;
-        e.preventDefault();
-        setSelA(new Set(tileKeys));
-        return;
-      }
-      if (selA.size === 0) return;
-      if (e.key === "Escape") setSelA(new Set());
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [tileKeys, selA.size]);
-  useEffect(() => {
-    if (selA.size === 0) return;
-    const onWin = (e: MouseEvent): void => {
-      const t = e.target;
-      if (!(t instanceof HTMLElement)) return;
-      if (e.metaKey || e.ctrlKey || e.shiftKey) return;
-      if (!t.closest("[data-app-nav], [data-app-playbar]")) return;
-      if (t.closest("button, input, a, [aria-valuenow]")) return;
-      setSelA(new Set());
-    };
-    window.addEventListener("click", onWin);
-    return () => window.removeEventListener("click", onWin);
-  }, [selA.size]);
+  const {
+    selected: selA,
+    setSelected: setSelA,
+    rowClick: tileClick,
+  } = useRowSelection({ keys: tileKeys });
   /** True = the click was a selection chord; the caller must not open. */
-  const albumClick = (raw: MediaNode, e: React.MouseEvent): boolean => {
-    const key = nodeKey(raw);
-    const idx = tileKeys.indexOf(key);
-    if (e.metaKey || e.ctrlKey) {
-      setSelA((prev) => {
-        const next = new Set(prev);
-        if (next.has(key)) next.delete(key);
-        else next.add(key);
-        return next;
-      });
-      selAAnchor.current = idx;
-      return true;
-    }
-    if (e.shiftKey && selAAnchor.current != null && idx >= 0) {
-      const [a, b] = [Math.min(selAAnchor.current, idx), Math.max(selAAnchor.current, idx)];
-      setSelA(new Set(tileKeys.slice(a, b + 1)));
-      return true;
-    }
-    if (selA.size > 0) {
-      setSelA(new Set());
-      return true;
-    }
-    return false;
-  };
+  const albumClick = (raw: MediaNode, e: React.MouseEvent): boolean => tileClick(nodeKey(raw), e);
   /** The picked albums as containers, a set's volumes in order. */
   const chosenA = (): MediaNode[] =>
     tiles

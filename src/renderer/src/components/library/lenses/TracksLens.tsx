@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Heart, ListEnd, ListPlus, ListStart, Play } from "lucide-react";
+import { ChevronDown, Play } from "lucide-react";
 import {
   audioAnalysisKey,
   type MediaIndexPools,
@@ -20,9 +20,6 @@ import { SortChip } from "@/components/controls/SortChip";
 import { PickerPill } from "@/components/controls/PickerPill";
 import { TrackRow } from "@/components/library/LibraryCards";
 import { RowMenu } from "@/components/media/RowMenu";
-import { useNavDrag } from "@/hooks/useNavDrag";
-import { flashNavTarget } from "@/lib/navDrop";
-import { SelectionBar, SelectionVerb } from "@/components/controls/SelectionBar";
 import {
   type LensActions,
   lc,
@@ -36,6 +33,11 @@ import {
   RECORD_SORTS,
   PLAY_THESE_MAX,
 } from "./lensShared";
+import {
+  useLensTrackSelection,
+  LensTrackSelectionBar,
+  LensTrackMenu,
+} from "./useLensTrackSelection";
 
 // The Tracks lens, split out of LibraryLenses.tsx (2026-09-13, the lenses round: three lenses of
 // 600 to 800 lines shared one file); what the lenses share lives in ./lensShared.
@@ -256,93 +258,10 @@ export function TracksLens({
   const windowed = shown.slice(start, end);
 
   // ---- selection (the Artists lens's grammar, over the VISIBLE rows)
-  const [selT, setSelT] = useState<ReadonlySet<string>>(() => new Set());
-  const selTAnchor = useRef<number | null>(null);
-  useEffect(() => {
-    setSelT(new Set());
-    selTAnchor.current = null;
-  }, [mem.genre, mem.decade, mem.dr, mem.format, mem.filter, sort, reversed]);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent): void => {
-      const t = e.target;
-      if (t instanceof HTMLElement && t.matches("input, textarea, [contenteditable]")) return;
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "a") {
-        if (shown.length === 0) return;
-        e.preventDefault();
-        setSelT(new Set(shown.map(nodeKey)));
-        return;
-      }
-      if (selT.size === 0) return;
-      if (e.key === "Escape") setSelT(new Set());
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [shown, selT.size]);
-  const [lensMenu, setLensMenu] = useState<{ x: number; y: number } | null>(null);
-  /** True = the click was a selection chord; the caller must not play. */
-  const trackRowClick = (t: MediaNode, e: React.MouseEvent): boolean => {
-    const key = nodeKey(t);
-    const idx = shown.findIndex((x) => nodeKey(x) === key);
-    if (e.metaKey || e.ctrlKey) {
-      setSelT((prev) => {
-        const next = new Set(prev);
-        if (next.has(key)) next.delete(key);
-        else next.add(key);
-        return next;
-      });
-      selTAnchor.current = idx;
-      return true;
-    }
-    if (e.shiftKey && selTAnchor.current != null && idx >= 0) {
-      const [a, b] = [Math.min(selTAnchor.current, idx), Math.max(selTAnchor.current, idx)];
-      setSelT(new Set(shown.slice(a, b + 1).map(nodeKey)));
-      return true;
-    }
-    // selection mode suspends playback — a plain click releases it
-    if (selT.size > 0) {
-      setSelT(new Set());
-      return true;
-    }
-    return false;
-  };
-  const chosenT = (): MediaNode[] => shown.filter((t) => selT.has(nodeKey(t)));
-
-  // ---- drag-to-rail (the lens track grammar)
-  const dragCargo = useRef<{ nodes: MediaNode[]; fromSelection: boolean }>({
-    nodes: [],
-    fromSelection: false,
-  });
-  const navDrag = useNavDrag({
-    targets: ["queue", "playlists", "favorites"],
-    payload: () => {
-      const { nodes } = dragCargo.current;
-      if (nodes.length === 0) return null;
-      return { count: nodes.length, title: nodes[0].title };
-    },
-    onDrop: (target, at) => {
-      const { nodes, fromSelection } = dragCargo.current;
-      if (target === "queue") {
-        actions.queueTracks(nodes, "append", () => {
-          if (fromSelection) setSelT(new Set());
-          flashNavTarget("queue");
-        });
-      } else if (target === "favorites") {
-        actions.heartNodes(nodes, false);
-        flashNavTarget("favorites");
-      } else if (target === "playlists") {
-        actions.addTracksToPlaylist(
-          nodes,
-          at,
-          fromSelection ? () => setSelT(new Set()) : undefined,
-        );
-      }
-    },
-  });
-  const startTrackDrag = (t: MediaNode, e: React.PointerEvent): void => {
-    const fromSelection = selT.has(nodeKey(t));
-    dragCargo.current = { nodes: fromSelection ? chosenT() : [t], fromSelection };
-    navDrag.start(e);
-  };
+  // the tracks column's selection, its drag to the nav and its plural menu:
+  // useLensTrackSelection, shared with the other track lens (2026-09-13)
+  const sel = useLensTrackSelection({ tracks: shown, actions });
+  const { selT, setSelT, trackRowClick } = sel;
 
   // the list scrolls its own column; the spot survives a trip away
   useEffect(() => {
@@ -471,55 +390,7 @@ export function TracksLens({
         <div className="text-[15px] text-faint pt-4 px-1">Nothing matches those filters.</div>
       ) : (
         <div className="relative flex-1 min-w-0 min-h-0 flex flex-col">
-          {selT.size > 0 && (
-            <SelectionBar
-              count={selT.size}
-              onClear={() => setSelT(new Set())}
-              className="bottom-2 inset-x-0 z-20"
-              data-lens-selection-bar
-            >
-              <SelectionVerb
-                icon={<Play size={13} />}
-                onClick={() => actions.queueTracks(chosenT(), "now", () => setSelT(new Set()))}
-              >
-                Play now
-              </SelectionVerb>
-              <SelectionVerb
-                icon={<ListStart size={13} />}
-                onClick={() => actions.queueTracks(chosenT(), "next", () => setSelT(new Set()))}
-              >
-                Play next
-              </SelectionVerb>
-              <SelectionVerb
-                icon={<ListEnd size={13} />}
-                onClick={() => actions.queueTracks(chosenT(), "append", () => setSelT(new Set()))}
-              >
-                Add to end of queue
-              </SelectionVerb>
-              <SelectionVerb
-                icon={<ListPlus size={13} />}
-                onClick={(e) =>
-                  actions.addTracksToPlaylist(chosenT(), { x: e.clientX, y: e.clientY }, () =>
-                    setSelT(new Set()),
-                  )
-                }
-              >
-                Add to playlist…
-              </SelectionVerb>
-              {(() => {
-                const nodes = chosenT();
-                const allIn = nodes.length > 0 && nodes.every(actions.nodeFavorited);
-                return (
-                  <SelectionVerb
-                    icon={<Heart size={13} fill={allIn ? "currentColor" : "none"} />}
-                    onClick={() => actions.heartNodes(nodes, allIn)}
-                  >
-                    {allIn ? "Remove from favorites" : "Add to favorites"}
-                  </SelectionVerb>
-                );
-              })()}
-            </SelectionBar>
-          )}
+          <LensTrackSelectionBar sel={sel} className="bottom-2 inset-x-0 z-20" />
           <div
             ref={listRef}
             onScroll={(e) => {
@@ -563,16 +434,10 @@ export function TracksLens({
                           actions.goToArtist && t.artist ? () => actions.goToArtist?.(t) : undefined
                         }
                         onRowClick={(e) => trackRowClick(t, e)}
-                        onNavDrag={(e) => startTrackDrag(t, e)}
+                        onNavDrag={(e) => sel.startTrackDrag(t, e)}
                         onHeart={() => actions.heartNode(t)}
                         onPlayNow={(el) => actions.playTrack(t, el)}
-                        onMenu={(e) => {
-                          if (selT.size > 1 && selT.has(nodeKey(t))) {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setLensMenu({ x: e.clientX, y: e.clientY });
-                          } else actions.openMenu(t, e);
-                        }}
+                        onMenu={(e) => sel.rowMenu(t, e)}
                       />
                     </div>
                   );
@@ -583,40 +448,7 @@ export function TracksLens({
               )}
             </div>
           </div>
-          {lensMenu && (
-            <RowMenu
-              at={lensMenu}
-              title={`${selT.size} tracks`}
-              onClose={() => setLensMenu(null)}
-              items={[
-                {
-                  label: "Play now",
-                  run: () => actions.queueTracks(chosenT(), "now", () => setSelT(new Set())),
-                },
-                {
-                  label: "Play next",
-                  run: () => actions.queueTracks(chosenT(), "next", () => setSelT(new Set())),
-                },
-                {
-                  label: "Add to end of queue",
-                  run: () => actions.queueTracks(chosenT(), "append", () => setSelT(new Set())),
-                },
-                {
-                  label: "Add to playlist…",
-                  run: () =>
-                    actions.addTracksToPlaylist(chosenT(), lensMenu, () => setSelT(new Set())),
-                },
-                (() => {
-                  const nodes = chosenT();
-                  const allIn = nodes.length > 0 && nodes.every(actions.nodeFavorited);
-                  return {
-                    label: allIn ? "Remove from favorites" : "Add to favorites",
-                    run: () => actions.heartNodes(nodes, allIn),
-                  };
-                })(),
-              ]}
-            />
-          )}
+          <LensTrackMenu sel={sel} />
         </div>
       )}
       {theseMenu && (
@@ -661,7 +493,7 @@ export function TracksLens({
           ]}
         />
       )}
-      {navDrag.ghost}
+      {sel.dragGhost}
     </div>
   );
 }

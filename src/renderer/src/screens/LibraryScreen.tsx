@@ -815,40 +815,14 @@ export function LibraryScreen(): React.JSX.Element {
   // 2026-09-13, the third lift): the multi-select over the visible track rows,
   // the batch queue writes and their undo, and the drag to the nav with the
   // Finder payload rule; the screen keeps the rows, the bar and the actions,
-  // and takes the state back under the old names. What the selection reads
-  // that is derived below (the visible tracks, the hearts) reaches it
+  // and takes the state back under the old names. The hook is called after
+  // the listing memo (it reads the visible tracks directly since step two of
+  // the lenses round, 2026-09-13); the hearts, derived later, reach it
   // late-bound through selectionLate.
   const selectionLate = useRef<SelectionLate>({
-    tracks: [],
     heartNode: () => {},
     heartNodes: () => {},
     nodeFavorited: () => false,
-  });
-  const {
-    selTracks,
-    setSelTracks,
-    playlistMulti,
-    setPlaylistMulti,
-    trackRowClick,
-    selectedNodes,
-    queueNodes,
-    queueSelected,
-    navDrag,
-    startAlbumDrag,
-    startTrackDrag,
-  } = useLibrarySelection({
-    serverUdn,
-    path,
-    lens,
-    searchMode,
-    atRoot,
-    state,
-    nodeUdn,
-    showToast,
-    showNotice,
-    queueFailed: QUEUE_FAILED,
-    setPlaylistPicker,
-    late: selectionLate,
   });
 
   /** "Play" on a container: replace the queue with it and start at its first track. */
@@ -1044,6 +1018,36 @@ export function LibraryScreen(): React.JSX.Element {
     searchSort,
     searchSortReversed,
   ]);
+
+  // the selection and the drag to the nav (after the listing: the selection
+  // reads the visible tracks directly since step two of the lenses round)
+  const {
+    selTracks,
+    setSelTracks,
+    playlistMulti,
+    setPlaylistMulti,
+    trackRowClick,
+    selectedNodes,
+    queueNodes,
+    queueSelected,
+    navDrag,
+    startAlbumDrag,
+    startTrackDrag,
+  } = useLibrarySelection({
+    serverUdn,
+    path,
+    lens,
+    searchMode,
+    atRoot,
+    state,
+    tracks,
+    nodeUdn,
+    showToast,
+    showNotice,
+    queueFailed: QUEUE_FAILED,
+    setPlaylistPicker,
+    late: selectionLate,
+  });
   const server = servers?.find((s) => s.udn === serverUdn) ?? null;
   // Sort/layout affordances key off the UNFILTERED level: filtering down to
   // one match must not unmount them (the header controls would jump around).
@@ -1248,7 +1252,7 @@ export function LibraryScreen(): React.JSX.Element {
   // Search-result group headings: identical under-gap everywhere (mb-0.5 —
   // the lists below carry no extra top margin in search mode), identical
   // above-gap too (mt-2 for whichever group lands first, mt-5 after).
-  selectionLate.current = { tracks, heartNode, heartNodes, nodeFavorited };
+  selectionLate.current = { heartNode, heartNodes, nodeFavorited };
   const groupLabelClass = (first: boolean): string =>
     cx("microlabel mb-0.5 px-1", first ? "mt-2" : "mt-5");
 

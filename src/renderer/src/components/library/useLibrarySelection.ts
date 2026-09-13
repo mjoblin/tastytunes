@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRowSelection } from "@/components/library/useRowSelection";
 import type { MediaNode } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
@@ -15,10 +16,8 @@ import type { Crumb } from "@/screens/LibraryScreen";
 // actions, and takes the state back under the old names.
 
 /** What the selection reads that the screen derives after the hook runs (the
- *  visible tracks, the hearts): reached late-bound, read at event time, never
- *  captured. */
+ *  hearts): reached late-bound, read at event time, never captured. */
 export interface SelectionLate {
-  tracks: MediaNode[];
   heartNode(node: MediaNode): void;
   heartNodes(nodes: MediaNode[], allIn: boolean): void;
   nodeFavorited(node: MediaNode): boolean;
@@ -31,6 +30,10 @@ export function useLibrarySelection(d: {
   searchMode: boolean;
   atRoot: boolean;
   state: "loading" | "ready" | "error";
+  /** The visible track listing, in order (the screen derives it before the
+   *  hook since step two of the lenses round, so the selection's survivors
+   *  and its ⌘A read it directly). */
+  tracks: MediaNode[];
   nodeUdn(node: MediaNode): string | null;
   showToast: ReturnType<typeof useStore.getState>["showToast"];
   showNotice(msg: string): void;
@@ -39,13 +42,17 @@ export function useLibrarySelection(d: {
   setPlaylistPicker(picker: { node: MediaNode; x: number; y: number } | null): void;
   late: { current: SelectionLate };
 }) {
-  const { serverUdn, path, lens, searchMode, atRoot, state, nodeUdn, showToast, showNotice } = d;
-  const { queueFailed, late } = d;
-  // Multi-select over the visible track rows (2026-08-24): ⌘/Ctrl-click
-  // toggles, ⇧-click extends from the anchor, a bare click still plays, Esc
-  // clears. Keyed by node id; cleared whenever the listing changes under it.
-  const [selTracks, setSelTracks] = useState<ReadonlySet<string>>(() => new Set());
-  const selAnchor2 = useRef<string | null>(null);
+  const { serverUdn, path, lens, searchMode, atRoot, state, tracks, nodeUdn } = d;
+  const { showToast, showNotice, queueFailed, late } = d;
+  // Multi-select over the visible track rows (2026-08-24): the row grammar
+  // from useRowSelection (one home since 2026-09-13) over the listing's ids;
+  // ⌘A yields to an open lens, the root and a listing not ready.
+  const keys = useMemo(() => tracks.map((n) => n.id), [tracks]);
+  const {
+    selected: selTracks,
+    setSelected: setSelTracks,
+    rowClick,
+  } = useRowSelection({ keys, canSelectAll: lens == null && !atRoot && state === "ready" });
   const [playlistMulti, setPlaylistMulti] = useState<{
     nodes: MediaNode[];
     x: number;
@@ -58,42 +65,15 @@ export function useLibrarySelection(d: {
     keepSelection?: boolean;
   } | null>(null);
 
-  // cleared whenever the listing changes under it
+  // the batch playlist panel closes whenever the listing changes under it
+  // (the selection itself keeps its survivors, the core's rule)
   useEffect(() => {
-    setSelTracks((prev) => (prev.size ? new Set() : prev));
     setPlaylistMulti(null);
   }, [serverUdn, path, lens, searchMode]);
 
   /** True = the click was a selection chord; the caller must not play. */
-  const trackRowClick = (node: MediaNode, e: React.MouseEvent): boolean => {
-    if (e.metaKey || e.ctrlKey) {
-      setSelTracks((prev) => {
-        const next = new Set(prev);
-        if (next.has(node.id)) next.delete(node.id);
-        else next.add(node.id);
-        return next;
-      });
-      selAnchor2.current = node.id;
-      return true;
-    }
-    if (e.shiftKey && selAnchor2.current != null) {
-      const order = late.current.tracks.map((n) => n.id);
-      const a = order.indexOf(selAnchor2.current);
-      const b = order.indexOf(node.id);
-      if (a >= 0 && b >= 0) {
-        setSelTracks(new Set(order.slice(Math.min(a, b), Math.max(a, b) + 1)));
-        return true;
-      }
-    }
-    // selection mode suspends playback (the queue's rule, one grammar):
-    // the first bare click exits the selection, the next plays
-    if (selTracks.size > 0) {
-      setSelTracks(new Set());
-      return true;
-    }
-    return false;
-  };
-  const selectedNodes = (): MediaNode[] => late.current.tracks.filter((n) => selTracks.has(n.id));
+  const trackRowClick = (node: MediaNode, e: React.MouseEvent): boolean => rowClick(node.id, e);
+  const selectedNodes = (): MediaNode[] => tracks.filter((n) => selTracks.has(n.id));
   /** The selection bar's queue verbs, in the visible order. PLAY_NEXT inserts
    *  after the current track, so batches go in reversed to land in order. */
   /** Queue a batch of track nodes — the ONE implementation behind the main
@@ -273,43 +253,6 @@ export function useLibrarySelection(d: {
     };
     navDrag.start(e);
   };
-
-  // The selection's keyboard: ⌘A gathers the visible track listing (the open
-  // lens owns its own ⌘A); with a selection, Esc exits. Never in a text box.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent): void => {
-      const el = e.target;
-      if (el instanceof HTMLElement && el.matches("input, textarea, [contenteditable]")) return;
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "a") {
-        const tracks = late.current.tracks;
-        if (lens != null || atRoot || state !== "ready" || tracks.length === 0) return;
-        e.preventDefault();
-        setSelTracks(new Set(tracks.map((n) => n.id)));
-        return;
-      }
-      if (selTracks.size === 0) return;
-      if (e.key === "Escape") setSelTracks(new Set());
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-    // the visible tracks are read at the keystroke through the late bag (a ref, so a
-    // stable dependency)
-  }, [lens, atRoot, state, selTracks.size, late]);
-  // nav-rail blank clicks clear too (the queue's rule; top strips are
-  // drag-region and never deliver clicks)
-  useEffect(() => {
-    if (selTracks.size === 0) return;
-    const onWin = (e: MouseEvent): void => {
-      const t = e.target;
-      if (!(t instanceof HTMLElement)) return;
-      if (e.metaKey || e.ctrlKey || e.shiftKey) return;
-      if (!t.closest("[data-app-nav], [data-app-playbar]")) return;
-      if (t.closest("button, input, a, [aria-valuenow]")) return;
-      setSelTracks(new Set());
-    };
-    window.addEventListener("click", onWin);
-    return () => window.removeEventListener("click", onWin);
-  }, [selTracks.size]);
 
   return {
     selTracks,
