@@ -41,7 +41,6 @@ import {
   albumOfTrack,
   trackPosition,
 } from "@shared/model";
-import { favoriteKey, type Favorite, type FavoriteMedia } from "@shared/model";
 import { albumDrKey } from "@shared/model";
 import { useAlbumDr } from "@/lib/audioAnalysis";
 import { FACT_SEP, albumFactsLine, albumFormatChips } from "@/lib/mediaFacts";
@@ -62,7 +61,6 @@ import { useIndexPools } from "@/hooks/useIndexPools";
 import { MOD } from "@/lib/screens";
 import { flashTarget, scrollToCentered } from "@/lib/scroll";
 import { isAlbumClass, stripFurniture, isArtistClass } from "@/lib/media";
-import { toggleFavorite } from "@/lib/favorites";
 import { ArtImage } from "@/components/media/ArtImage";
 import { Segmented } from "@/components/controls/Segmented";
 import { FilterInput } from "@/components/controls/FilterInput";
@@ -98,6 +96,7 @@ import {
 } from "@/components/chrome/Chrome";
 import { useOneShotAsk } from "@/hooks/useOneShotAsk";
 import { useLibraryMenus, type MenusLate } from "@/components/library/useLibraryMenus";
+import { useLibraryFavorites } from "@/components/library/useLibraryFavorites";
 import { useLibrarySelection, type SelectionLate } from "@/components/library/useLibrarySelection";
 import {
   matchesKind,
@@ -1193,60 +1192,23 @@ export function LibraryScreen(): React.JSX.Element {
   const loading = atRoot ? servers == null : state === "loading";
 
   // ---------------------------------------------------------------- favorites
-  const favorites = useStore((s) => s.favorites);
-  const favKeys = useMemo(() => new Set(favorites.map(favoriteKey)), [favorites]);
+  // The favorite payload and the hearts live in components/library/useLibraryFavorites
+  // (lifted 2026-09-13, the fourth lift); the trail titles stay here, where the
+  // synthetic crumb ids are known
   const pathTitles = path
     .filter(
       (c) => c.id !== SEARCH_CRUMB_ID && c.id !== LENS_CRUMB_ID && c.id !== LENS_ARTIST_CRUMB_ID,
     )
     .map((c) => c.title);
-  /**
-   * A library node as a favorite payload. Content identity + resolution
-   * hints: the entered album's titlePath is the current trail (it already
-   * ends in the album); a listed node appends its own title. Search results
-   * carry no trustworthy trail (their true folder is unknown) — null.
-   */
-  const mediaFav = (node: MediaNode): Omit<FavoriteMedia, "addedAt"> => ({
-    kind: node.isContainer ? "album" : "track",
-    title: node.title,
-    artist: node === albumNode ? (albumArtist ?? node.artist) : node.artist,
-    album: node.isContainer ? null : node.album,
-    artUrl: node === albumNode ? (albumArt ?? node.artUrl) : node.artUrl,
-    serverUdn: node.serverUdn ?? serverUdn,
-    serverName: node.serverName ?? server?.name ?? null,
-    objectId: node.id,
-    titlePath: searchMode
-      ? null
-      : node === albumNode
-        ? pathTitles
-        : node.isContainer
-          ? [...pathTitles, node.title]
-          : pathTitles,
-    durationSecs: node.isContainer ? null : node.durationSecs,
+  const { nodeFavorited, heartNode, heartNodes } = useLibraryFavorites({
+    serverUdn,
+    serverName: server?.name ?? null,
+    searchMode,
+    pathTitles,
+    albumNode,
+    albumArtist,
+    albumArt,
   });
-  const nodeFavorited = (node: MediaNode): boolean =>
-    favKeys.has(favoriteKey(mediaFav(node) as Favorite));
-  const heartNode = (node: MediaNode, opts?: { silent?: boolean }): void => {
-    void toggleFavorite(mediaFav(node), opts);
-  };
-  /** The batch heart verbs: one aggregate undo entry for the lot (per-item
-   *  pushes would flood the stack), silent per-item toggles. */
-  const heartNodes = (nodes: MediaNode[], allIn: boolean): void => {
-    const touched = nodes.filter((n) => (allIn ? nodeFavorited(n) : !nodeFavorited(n)));
-    for (const n of touched) heartNode(n, { silent: true });
-    if (touched.length === 0) return;
-    const count = touched.length;
-    useStore
-      .getState()
-      .pushUndo(
-        allIn
-          ? `Remove ${count} ${count === 1 ? "Track" : "Tracks"} from Favorites`
-          : `Add ${count} ${count === 1 ? "Track" : "Tracks"} to Favorites`,
-        () => {
-          for (const n of touched) heartNode(n, { silent: true });
-        },
-      );
-  };
 
   // "Retrieving…" only appears when a browse actually takes a moment —
   // cached/fast responses swap in without a flash of loading copy.
