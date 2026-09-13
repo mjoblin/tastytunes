@@ -13,7 +13,6 @@ import {
   Loader2,
   ListPlus,
   ListStart,
-  MoreHorizontal,
   Play,
   RotateCw,
   Rows3,
@@ -42,14 +41,13 @@ import {
 } from "@shared/model";
 import { albumDrKey } from "@shared/model";
 import { useAlbumDr } from "@/lib/audioAnalysis";
-import { FACT_SEP, albumFactsLine, albumFormatChips } from "@/lib/mediaFacts";
+import { FACT_SEP, albumFactsLine } from "@/lib/mediaFacts";
 import { usePlayStats } from "@/lib/playStats";
 import { useBestArt } from "@/lib/bestArt";
-import { DrChip, LufsChip } from "@/components/media/Waveform";
 import type { QueueListItem } from "@shared/smoip";
 import { queueWrite, tt } from "@/api";
 import { useStore } from "@/store";
-import { activeSourceId, cx, matchesFilter, fmtCount, fmtAgo } from "@/lib/format";
+import { activeSourceId, cx, matchesFilter, fmtCount } from "@/lib/format";
 import {
   albumMatchesEntry,
   entryArtistMatches,
@@ -60,7 +58,6 @@ import { useIndexPools } from "@/hooks/useIndexPools";
 import { MOD } from "@/lib/screens";
 import { flashTarget, scrollToCentered } from "@/lib/scroll";
 import { isAlbumClass, stripFurniture } from "@/lib/media";
-import { ArtImage } from "@/components/media/ArtImage";
 import { Segmented } from "@/components/controls/Segmented";
 import { FilterInput } from "@/components/controls/FilterInput";
 import { ContainerCard, ContainerRow, TrackRow } from "@/components/library/LibraryCards";
@@ -80,7 +77,6 @@ import {
   setLensReturn,
   type Lens,
 } from "@/components/library/lensNavigation";
-import { NameLink } from "@/components/media/NameLine";
 import { SelectionBar, SelectionVerb } from "@/components/controls/SelectionBar";
 import { EmptyState } from "@/components/chrome/EmptyState";
 import {
@@ -94,6 +90,7 @@ import { useOneShotAsk } from "@/hooks/useOneShotAsk";
 import { useLibraryMenus, type MenusLate } from "@/components/library/useLibraryMenus";
 import { useLibraryFavorites } from "@/components/library/useLibraryFavorites";
 import { LibraryPopovers } from "@/components/library/LibraryPopovers";
+import { AlbumHeader } from "@/components/library/AlbumHeader";
 import { useLibrarySelection, type SelectionLate } from "@/components/library/useLibrarySelection";
 import {
   matchesKind,
@@ -101,7 +98,6 @@ import {
   useLibrarySearch,
   type SearchLate,
 } from "@/components/library/useLibrarySearch";
-import { artUrlAt } from "@shared/artUrl";
 
 // Crumbs keep the entered node so an album level can render its header
 // (art, artist, year) without re-fetching metadata.
@@ -1959,174 +1955,32 @@ export function LibraryScreen(): React.JSX.Element {
             </button>
           </div>
         )}
+        {/* the album header and its box-set pills (components/library/AlbumHeader,
+            lifted 2026-09-13, the fifth lift's second part) */}
         {!atRoot && state === "ready" && albumNode && (
-          <div className="flex items-start gap-6 pb-6 pt-2" data-album-header>
-            <div className="h-[160px] w-[160px] shrink-0 rounded-xl overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
-              <ArtImage
-                src={artUrlAt(albumArt, 160)}
-                fallbackArt={{ artist: albumArtist, album: albumNode.title }}
-                className="h-full w-full object-cover"
-                fallback={<Disc3 size={48} strokeWidth={1} className="text-faint" />}
-              />
-            </div>
-            {/* the text column is at least the art's height with the verb row
-                pinned to its bottom: a header without a composer line is
-                exactly the art's height on every album (the track list starts
-                at one place), the verbs sit on the art's bottom edge, and only
-                a composer line or a wrapped title grows the header (user call,
-                2026-09-05, measured: 153px of 160 without, ~180 with). */}
-            <div className="min-w-0 pt-1 flex min-h-[160px] flex-col gap-1.5">
-              {/* title + artist are one thought — set tight */}
-              <div className="space-y-0.5">
-                <div className="font-display font-bold text-[24px] tracking-tight leading-tight">
-                  {albumNode.title}
-                </div>
-                {albumArtist &&
-                  (albumNode.artist ? (
-                    <NameLink
-                      kind="artist"
-                      name={albumNode.artist}
-                      onGo={() => goToArtistFromLens(albumNode)}
-                      data-album-artist-link
-                      className="block max-w-full text-left text-[14px] text-dim truncate hover:text-ink hover:underline underline-offset-2"
-                    >
-                      {albumArtist}
-                    </NameLink>
-                  ) : (
-                    <div className="text-[14px] text-dim truncate">{albumArtist}</div>
-                  ))}
-              </div>
-              {/* facts + composers are one thought too, set tight (the
-                  composer line is only there when every track agrees) */}
-              <div className="space-y-0.5">
-                {(albumFacts || albumLastPlayed != null || albumInQueue) && (
-                  <div className="text-[12.5px] text-faint" data-album-facts>
-                    {albumFacts}
-                    {albumLastPlayed != null && (
-                      <>
-                        {albumFacts && FACT_SEP}
-                        <button
-                          data-album-last-played
-                          data-tip="Show in History"
-                          onClick={() => jumpToHistory(albumLastPlayed)}
-                          className="tip-bottom hover:text-ink hover:underline underline-offset-2 transition-colors"
-                        >
-                          {`last played ${fmtAgo(albumLastPlayed)}`}
-                        </button>
-                      </>
-                    )}
-                    {albumInQueue && (
-                      <>
-                        {(albumFacts || albumLastPlayed != null) && FACT_SEP}
-                        in the queue
-                      </>
-                    )}
-                  </div>
-                )}
-                {/* the format TOKENS as chips, the DR chip (or the sweep's
-                    pulse in its place) closing the row — two registers, one
-                    home (lib/mediaFacts; user call, 2026-09-01) */}
-                {(allTracks.length > 0 || albumDrShown != null || albumSweeping) && (
-                  <div className="flex flex-wrap items-center gap-1.5 pt-1" data-album-chips>
-                    {albumFormatChips(allTracks).map((b) => (
-                      <span key={b} className="badge">
-                        {b}
-                      </span>
-                    ))}
-                    {albumSweeping ? (
-                      // bare text beside padded badges: 6px of its own air on
-                      // the left matches a badge's inset, so the word sits as
-                      // far from the last chip as chip text sits from chip text
-                      <span
-                        className="ml-1.5 text-[11.5px] text-faint motion-safe:animate-pulse"
-                        data-album-analyzing
-                      >
-                        analyzing
-                        {analysisProgress != null &&
-                          analysisProgress.total > 0 &&
-                          ` ${analysisProgress.done}/${analysisProgress.total}`}
-                        …
-                      </span>
-                    ) : (
-                      <>
-                        {albumDrShown != null && <DrChip dr={albumDrShown} />}
-                        {albumLufsShown != null && <LufsChip lufs={albumLufsShown} />}
-                      </>
-                    )}
-                  </div>
-                )}
-                {/* the credit gets 8px of air above (6px here + the group's
-                    2px rhythm) so it reads as its own thought (user, 2026-09-05) */}
-                {albumComposerLine && (
-                  <div className="text-[12.5px] text-faint pt-1.5" data-album-composers>
-                    {albumComposerLine}
-                  </div>
-                )}
-              </div>
-              <div className="flex items-center gap-2 pt-2 mt-auto">
-                <button
-                  data-tip="Replaces the queue"
-                  // no queue-ack flash on the album screen: the whole-header
-                  // pulse read as a glitch and even the art square was ruled
-                  // extra (user, 2026-08-24) — the button's own press state and
-                  // the playing row lighting up are feedback enough here
-                  onClick={() => void playContainer(albumNode, null)}
-                  className="tip-bottom flex items-center gap-2 px-4 py-2 rounded-full bg-amber text-bg text-[13px] font-medium motion-safe:active:scale-95 transition-all"
-                >
-                  <Play size={14} fill="currentColor" /> Play
-                </button>
-                <button
-                  data-tip={nodeFavorited(albumNode) ? "Remove from favorites" : "Add to favorites"}
-                  aria-label={
-                    nodeFavorited(albumNode) ? "Remove from favorites" : "Add to favorites"
-                  }
-                  data-album-heart={nodeFavorited(albumNode) ? "on" : "off"}
-                  onClick={() => heartNode(albumNode)}
-                  className={cx(
-                    "tip-bottom p-2 rounded-full ring-1 ring-edge bg-panel/70 transition-all motion-safe:active:scale-90",
-                    nodeFavorited(albumNode)
-                      ? "text-gold hover:text-ink"
-                      : "text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70",
-                  )}
-                >
-                  <Heart size={16} fill={nodeFavorited(albumNode) ? "currentColor" : "none"} />
-                </button>
-                <HeaderChip
-                  aria-label="More actions"
-                  onClick={(e) => openMenu(albumNode, e)}
-                  shape="full"
-                  className="p-2"
-                >
-                  <MoreHorizontal size={16} />
-                </HeaderChip>
-              </div>
-            </div>
-          </div>
-        )}
-        {/* a box set's volumes as the app's own picker — one pill per volume,
-            the open one lit, on its own row above the tracks they switch (the
-            app's Segmented-above-its-listing idiom; moved out of the header
-            column, which is sized to sit beside the art — user placement,
-            2026-08-27). The old faint ‹ › facts line went unnoticed as
-            navigation. */}
-        {!atRoot && state === "ready" && albumNode && setSiblings && (
-          <div className="-mt-1.5 pb-5 flex" data-album-set>
-            {/* px-4 pills: a volume row is a few short labels with room to
-                spare, so they wear looser padding than the dense partition
-                controls (user, 2026-08-27) */}
-            <Segmented<string>
-              className="[&>button]:px-4"
-              value={albumNode.id}
-              options={setSiblings.map((a) => ({
-                value: a.id,
-                label: volumeMarker(a.title),
-              }))}
-              onChange={(id) => {
-                const next = setSiblings.find((a) => a.id === id);
-                if (next) openVolume(next);
-              }}
-            />
-          </div>
+          <AlbumHeader
+            albumNode={albumNode}
+            albumArt={albumArt}
+            albumArtist={albumArtist}
+            albumFacts={albumFacts}
+            albumLastPlayed={albumLastPlayed}
+            jumpToHistory={jumpToHistory}
+            albumInQueue={albumInQueue}
+            allTracks={allTracks}
+            albumDrShown={albumDrShown}
+            albumLufsShown={albumLufsShown}
+            albumSweeping={albumSweeping}
+            analysisProgress={analysisProgress}
+            albumComposerLine={albumComposerLine}
+            playContainer={playContainer}
+            nodeFavorited={nodeFavorited}
+            heartNode={heartNode}
+            openMenu={openMenu}
+            goToArtistFromLens={goToArtistFromLens}
+            setSiblings={setSiblings}
+            volumeMarker={volumeMarker}
+            openVolume={openVolume}
+          />
         )}
 
         {searchMode && !atRoot && !searchState && !searching && (
