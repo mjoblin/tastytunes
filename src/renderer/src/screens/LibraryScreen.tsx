@@ -35,7 +35,6 @@ import {
   albumFormat,
   albumComposers,
   performerLine,
-  artistSummary,
   nameSortKey,
   albumVolume,
   albumOfTrack,
@@ -60,7 +59,7 @@ import {
 import { useIndexPools } from "@/hooks/useIndexPools";
 import { MOD } from "@/lib/screens";
 import { flashTarget, scrollToCentered } from "@/lib/scroll";
-import { isAlbumClass, stripFurniture, isArtistClass } from "@/lib/media";
+import { isAlbumClass, stripFurniture } from "@/lib/media";
 import { ArtImage } from "@/components/media/ArtImage";
 import { Segmented } from "@/components/controls/Segmented";
 import { FilterInput } from "@/components/controls/FilterInput";
@@ -82,9 +81,6 @@ import {
   type Lens,
 } from "@/components/library/lensNavigation";
 import { NameLink } from "@/components/media/NameLine";
-import { AddToPlaylistPanel, itemFromNode } from "@/components/overlays/AddToPlaylistPanel";
-import { ItemMenu, PresetPicker } from "@/components/library/LibraryMenus";
-import { RowMenu } from "@/components/media/RowMenu";
 import { SelectionBar, SelectionVerb } from "@/components/controls/SelectionBar";
 import { EmptyState } from "@/components/chrome/EmptyState";
 import {
@@ -97,6 +93,7 @@ import {
 import { useOneShotAsk } from "@/hooks/useOneShotAsk";
 import { useLibraryMenus, type MenusLate } from "@/components/library/useLibraryMenus";
 import { useLibraryFavorites } from "@/components/library/useLibraryFavorites";
+import { LibraryPopovers } from "@/components/library/LibraryPopovers";
 import { useLibrarySelection, type SelectionLate } from "@/components/library/useLibrarySelection";
 import {
   matchesKind,
@@ -2397,170 +2394,47 @@ export function LibraryScreen(): React.JSX.Element {
           })}
       </div>
 
-      {/* a menu invoked ON a selected track speaks for the whole selection,
-          pluralized — the Finder/Spotify convention */}
-      {menu && !menu.node.isContainer && selTracks.has(menu.node.id) && selTracks.size > 1 && (
-        <RowMenu
-          title={`${selTracks.size} tracks`}
-          at={{ x: menu.x, y: menu.y }}
-          onClose={() => setMenu(null)}
-          items={[
-            { label: "Play now", run: () => void queueSelected("now") },
-            { label: "Play next", run: () => void queueSelected("next") },
-            { label: "Add to end of queue", run: () => void queueSelected("append") },
-            {
-              label: "Add to playlist…",
-              run: () => setPlaylistMulti({ nodes: selectedNodes(), x: menu.x, y: menu.y }),
-            },
-            (() => {
-              const nodes = selectedNodes();
-              const allIn = nodes.length > 0 && nodes.every(nodeFavorited);
-              return {
-                label: allIn ? "Remove from favorites" : "Add to favorites",
-                run: () => heartNodes(nodes, allIn),
-              };
-            })(),
-          ]}
-        />
-      )}
-      {menu && !(!menu.node.isContainer && selTracks.has(menu.node.id) && selTracks.size > 1) && (
-        <ItemMenu
-          menu={menu}
-          onClose={() => setMenu(null)}
-          navVerbs={volumeNavVerbs(menu.node)}
-          utilityVerbs={analyzeVerbs(menu.node)}
-          goToAlbum={
-            lens === "tracks" && !menu.node.isContainer && menu.node.album
-              ? () => {
-                  setMenu(null);
-                  goToAlbumFromLens(menu.node);
-                }
-              : searchMode &&
-                  !menu.node.isContainer &&
-                  menu.node.album &&
-                  linkable(menu.node, "albums")
-                ? () => {
-                    setMenu(null);
-                    void goToAlbum(menu.node);
-                  }
-                : undefined
-          }
-          goToArtist={
-            lens === "tracks" && !menu.node.isContainer && menu.node.artist
-              ? () => {
-                  setMenu(null);
-                  goToArtistFromLens(menu.node);
-                }
-              : searchMode &&
-                  !menu.node.isContainer &&
-                  menu.node.artist &&
-                  linkable(menu.node, "artists")
-                ? () => {
-                    setMenu(null);
-                    void goToArtist(menu.node);
-                  }
-                : undefined
-          }
-          onAction={(action, playFromId) => {
-            setMenu(null);
-            if (action === "PLAY") void playContainer(menu.node, null);
-            else if (action === "PLAY_FROM_HERE") void playAlbumFrom(menu.node);
-            else void act(menu.node, action, null, playFromId);
-          }}
-          onSavePreset={() => {
-            setPresetPicker({ node: menu.node, x: menu.x, y: menu.y });
-            setMenu(null);
-          }}
-          onInfo={() => {
-            setMenu(null);
-            const n = menu.node;
-            // an artist's page is summed by NAME from the index (albums,
-            // credits) — the lens's merged rows and the server's person
-            // entities alike; without a pool the modal shows what it has
-            const pool =
-              lensPools?.find((g) => g.udn === (n.serverUdn ?? server?.udn)) ?? lensPools?.[0];
-            const artist =
-              n.isContainer && isArtistClass(n.upnpClass) && pool
-                ? artistSummary(n.title, pool)
-                : undefined;
-            setMediaInfo({
-              node: artist && !n.artUrl && artist.artUrl ? { ...n, artUrl: artist.artUrl } : n,
-              tracks: artist ? undefined : tracksForInfo(n),
-              artist,
-              serverName: n.serverName ?? server?.name ?? null,
-              serverUdn: nodeUdn(n),
-              // what the index learned about this server (the modal's Indexed line + notes)
-              ...(pool?.profile ? { serverProfile: pool.profile } : {}),
-            });
-          }}
-          onAddToPlaylist={
-            !menu.node.isContainer || isAlbumClass(menu.node.upnpClass)
-              ? () => {
-                  setPlaylistPicker({ node: menu.node, x: menu.x, y: menu.y });
-                  setMenu(null);
-                }
-              : undefined
-          }
-          // Back-link for the builders' search pivot: a browse pivot returns
-          // via the position restore, a pivot out of SEARCH MODE returns via
-          // find-recall (its browse position is just the search's scope root).
-          // Albums and tracks are heartable; plain folders and artists aren't.
-          favorite={
-            !menu.node.isContainer || isAlbumClass(menu.node.upnpClass)
-              ? {
-                  active: nodeFavorited(menu.node),
-                  toggle: () => {
-                    heartNode(menu.node);
-                    setMenu(null);
-                  },
-                }
-              : undefined
-          }
-        />
-      )}
-      {navDrag.ghost}
-      {playlistMulti && (
-        <AddToPlaylistPanel
-          label={`${playlistMulti.nodes.length} tracks`}
-          at={{ x: playlistMulti.x, y: playlistMulti.y }}
-          onClose={() => setPlaylistMulti(null)}
-          resolve={() => {
-            const items = playlistMulti.nodes.map((node) => {
-              const udn = node.serverUdn ?? serverUdn;
-              const name = servers?.find((s) => s.udn === udn)?.name ?? null;
-              return itemFromNode(node, udn, name);
-            });
-            if (!playlistMulti.keepSelection) setSelTracks(new Set());
-            playlistMulti.clear?.();
-            return Promise.resolve(items);
-          }}
-        />
-      )}
-      {playlistPicker && (
-        <AddToPlaylistPanel
-          label={playlistPicker.node.title}
-          at={{ x: playlistPicker.x, y: playlistPicker.y }}
-          onClose={() => setPlaylistPicker(null)}
-          resolve={async () => {
-            const node = playlistPicker.node;
-            const udn = node.serverUdn ?? serverUdn;
-            const name = servers?.find((s) => s.udn === udn)?.name ?? null;
-            if (!node.isContainer) return [itemFromNode(node, udn, name)];
-            // An album expands to its TRACKS — a playlist stores tracks, not a
-            // reference that would drift as the server's album changes.
-            if (!udn) return [];
-            const children = await tt.mediaBrowse(udn, node.id, []);
-            return children.filter((c) => !c.isContainer).map((c) => itemFromNode(c, udn, name));
-          }}
-        />
-      )}
-      {presetPicker && (
-        <PresetPicker
-          picker={presetPicker}
-          onClose={() => setPresetPicker(null)}
-          onSave={(slot, name) => savePreset(presetPicker.node, slot, name)}
-        />
-      )}
+      {/* the popovers over the listing: the menus, the playlist panels, the preset
+          picker and the drag ghost (components/library/LibraryPopovers, lifted
+          2026-09-13, the fifth lift) */}
+      <LibraryPopovers
+        menu={menu}
+        setMenu={setMenu}
+        selTracks={selTracks}
+        setSelTracks={setSelTracks}
+        queueSelected={queueSelected}
+        playlistMulti={playlistMulti}
+        setPlaylistMulti={setPlaylistMulti}
+        selectedNodes={selectedNodes}
+        nodeFavorited={nodeFavorited}
+        heartNode={heartNode}
+        heartNodes={heartNodes}
+        volumeNavVerbs={volumeNavVerbs}
+        analyzeVerbs={analyzeVerbs}
+        linkable={linkable}
+        goToAlbum={goToAlbum}
+        goToArtist={goToArtist}
+        tracksForInfo={tracksForInfo}
+        presetPicker={presetPicker}
+        setPresetPicker={setPresetPicker}
+        savePreset={savePreset}
+        lens={lens}
+        searchMode={searchMode}
+        goToAlbumFromLens={goToAlbumFromLens}
+        goToArtistFromLens={goToArtistFromLens}
+        playContainer={playContainer}
+        playAlbumFrom={playAlbumFrom}
+        act={act}
+        lensPools={lensPools}
+        server={server}
+        setMediaInfo={setMediaInfo}
+        nodeUdn={nodeUdn}
+        playlistPicker={playlistPicker}
+        setPlaylistPicker={setPlaylistPicker}
+        serverUdn={serverUdn}
+        servers={servers}
+        ghost={navDrag.ghost}
+      />
     </div>
   );
 }
