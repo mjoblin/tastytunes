@@ -8,6 +8,7 @@ import {
   MicVocal,
   Info,
   RadioTower,
+  Sparkles,
 } from "lucide-react";
 import { useStore } from "@/store";
 import { activeSourceId, cx, deriveNowPlaying } from "@/lib/format";
@@ -27,9 +28,18 @@ import { LyricLine } from "@/components/playback/LyricLine";
 import { EmptyState } from "@/components/chrome/EmptyState";
 import { ResumeCard } from "@/components/playback/ResumeCard";
 import { ArtistPanel } from "@/components/overlays/ArtistPanel";
-import { NowPlayingWaveform, PlayingDrChip } from "@/components/media/Waveform";
+import { NowPlayingWaveform, PlayingDrChip, usePlayingAnalysis } from "@/components/media/Waveform";
+import { SceneCanvas } from "@/components/display/SceneCanvas";
+import { ScenePicker } from "@/components/display/ScenePicker";
+import { useSceneFeed } from "@/components/display/feed";
+import { isAbstract, sceneDef } from "@/components/display/scenes";
+import { useShuffledScene } from "@/components/display/useShuffledScene";
+import type { SceneId } from "@/components/display/scenes/types";
 
 const ALIGN_H = { left: "justify-start", center: "justify-center", right: "justify-end" } as const;
+/** How long the playing track's analysis must stay absent before the scene tile yields to
+ *  the art: longer than a skip's identity hand-off, shorter than a wait would feel. */
+const SCENE_ABSENT_MS = 1500;
 const ALIGN_V = { top: "items-start", center: "items-center", bottom: "items-end" } as const;
 
 export function NowPlayingScreen(): React.JSX.Element {
@@ -50,8 +60,68 @@ export function NowPlayingScreen(): React.JSX.Element {
     nowPlayingAlignV,
     lyrics: lyricsEnabled,
     lyricsLine,
+    nowPlayingScene,
+    nowPlayingSceneWords,
   } = useStore((s) => s.settings);
   const meta = deriveNowPlaying(playState, nowPlaying);
+  // THE TILE'S SCENE (2026-09-12): the hero's art box shows a display-mode
+  // scene, chosen from display mode's own picker off a chip on the tile, and
+  // remembered apart from the fullscreen view's choice (the user: "separate").
+  // Sleeve is the art and the default, so the screen looks as it always did
+  // until asked. A scene only runs while the playing track has an analysis to
+  // drive it (a scene fed nothing drifts on sines, which reads as fake beside
+  // real controls) and never for radio: the art stands in. The tile is `mini`
+  // (pixel ratio 1, no cathode finish), the feed its own.
+  const { shuffled: tileShuffled, active: tileActive } = useShuffledScene(nowPlayingScene, meta);
+  const [scenesOpen, setScenesOpen] = useState(false);
+  const chipOn = !meta.isRadio && meta.title != null;
+  const tileStage: SceneId | null = chipOn && isAbstract(tileActive) ? tileActive : null;
+  const sceneFeed = useSceneFeed(tileStage != null || scenesOpen);
+  const sceneAnalysis = usePlayingAnalysis(tileStage != null);
+  // THE GATE HOLDS ACROSS A TRACK CHANGE: on a skip the playing track's identity is resolved
+  // again and the analysis hook passes through absent, then loading, before the new record
+  // arrives; a gate that read those literally dropped the tile to the art for that moment
+  // on every skip (the user, 2026-09-12: "flashes the album art"). A record turns the scene
+  // on at once; absence turns it off only once it has stayed absent for a beat, longer than
+  // the hand-off, so the pass-through never shows and the canvas is never torn down for it
+  const [sceneReady, setSceneReady] = useState(false);
+  useEffect(() => {
+    if (sceneAnalysis === "loading") return;
+    if (sceneAnalysis != null) {
+      setSceneReady(true);
+      return;
+    }
+    const t = setTimeout(() => setSceneReady(false), SCENE_ABSENT_MS);
+    return () => clearTimeout(t);
+  }, [sceneAnalysis]);
+  const sceneOn = tileStage != null && sceneReady;
+  // THE WORDS ARE THE TILE'S OWN CALL (the user, 2026-09-12: a switch in the picker "feels a
+  // bit hidden... lyrics are important"): a toggle on the tile, bottom left, the mirror of
+  // the header's lyric-line toggle. A scene that is its words (Type, Terminal) draws them
+  // regardless and the toggle is disabled there
+  const tileDef = tileStage ? sceneDef(tileStage) : null;
+  const wordsForced = tileDef?.essentialWords === true;
+  const tileWords = wordsForced || nowPlayingSceneWords;
+  // Escape closes the picker, as does a press anywhere but the picker or its
+  // chip: the app's chrome included, which a catcher inside this screen
+  // could not reach (the user hit it on the nav and the controls)
+  useEffect(() => {
+    if (!scenesOpen) return;
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === "Escape") setScenesOpen(false);
+    };
+    const onDown = (e: PointerEvent): void => {
+      const el = e.target instanceof Element ? e.target : null;
+      if (el?.closest("[data-display-scenes],[data-now-playing-scene-chip]")) return;
+      setScenesOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("pointerdown", onDown);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("pointerdown", onDown);
+    };
+  }, [scenesOpen]);
   // NAMES NAVIGATE (2026-09-02, the rule reaches Now Playing): for a LIBRARY
   // track — the media player source, a queue entry resolving through the
   // settled playing id — the artist and album lines are links. Identity is
@@ -293,6 +363,18 @@ export function NowPlayingScreen(): React.JSX.Element {
 
   return (
     <div className="relative h-full overflow-hidden flex flex-col">
+      {scenesOpen && (
+        <ScenePicker
+          feed={sceneFeed}
+          current={nowPlayingScene}
+          shuffled={tileShuffled}
+          art={tileArt ?? null}
+          host="tile"
+          // the pick applies and the picker stays, as in display mode: the tile shows the
+          // scene live and the settings under the tiles switch to it, to tune while looking
+          onPick={(id) => void saveSettings({ nowPlayingScene: id })}
+        />
+      )}
       {/* ambient art backdrop is rendered app-wide by AmbientBackdrop in App */}
       {header}
 
@@ -342,19 +424,81 @@ export function NowPlayingScreen(): React.JSX.Element {
               same time read as mushy). Display mode keeps its crossfade. The
               swap is off the DECODED url, so the tile goes cover-to-cover
               rather than emptying while a slow remote fetch finishes. */}
-            <ArtImage
-              src={tileArt}
-              className="w-[260px] h-[260px] lg:w-[340px] lg:h-[340px] xl:w-[400px] xl:h-[400px] object-cover rounded-2xl art-glow"
-              fallback={
-                <div className="w-[260px] h-[260px] lg:w-[340px] lg:h-[340px] xl:w-[400px] xl:h-[400px] rounded-2xl bg-raised ring-1 ring-edge flex items-center justify-center">
-                  {meta.isRadio ? (
-                    <RadioTower size={72} strokeWidth={1} className="text-faint" />
-                  ) : (
-                    <Disc3 size={72} strokeWidth={1} className="text-faint" />
-                  )}
+            {/* the chips sit on the box, not in the scene's clipped corner box, so their
+                tips are not cut off; they are the app's glass over content (translucent
+                panel over a backdrop blur, as the toasts and the playback bar), so the art
+                or the scene shows through them frosted */}
+            <div
+              data-now-playing-scene={sceneOn ? tileStage : undefined}
+              className="group relative w-[260px] h-[260px] lg:w-[340px] lg:h-[340px] xl:w-[400px] xl:h-[400px]"
+            >
+              {sceneOn && tileStage ? (
+                <div className="absolute inset-0 rounded-2xl overflow-hidden bg-raised art-glow">
+                  <SceneCanvas
+                    scene={tileStage}
+                    feed={sceneFeed}
+                    mini
+                    words={tileWords}
+                    className="absolute inset-0"
+                  />
                 </div>
-              }
-            />
+              ) : (
+                <ArtImage
+                  src={tileArt}
+                  className="w-full h-full object-cover rounded-2xl art-glow"
+                  fallback={
+                    <div className="w-full h-full rounded-2xl bg-raised ring-1 ring-edge flex items-center justify-center">
+                      {meta.isRadio ? (
+                        <RadioTower size={72} strokeWidth={1} className="text-faint" />
+                      ) : (
+                        <Disc3 size={72} strokeWidth={1} className="text-faint" />
+                      )}
+                    </div>
+                  }
+                />
+              )}
+              {sceneOn && lyricsAvailable && tileDef && (
+                <button
+                  onClick={() => void saveSettings({ nowPlayingSceneWords: !nowPlayingSceneWords })}
+                  disabled={wordsForced}
+                  aria-label="Lyrics in the scene"
+                  aria-pressed={tileWords}
+                  data-tip={
+                    wordsForced
+                      ? `The ${tileDef.label.toLowerCase()} always shows the lyrics`
+                      : tileWords
+                        ? "Hide lyrics in the scene"
+                        : "Show lyrics in the scene"
+                  }
+                  data-now-playing-scene-words
+                  className={cx(
+                    "tip-top tip-start absolute bottom-2 left-2 p-2 rounded-full bg-panel/60 backdrop-blur ring-1 ring-edge transition-all opacity-0 group-hover:opacity-100",
+                    tileWords ? "text-gold" : "text-dim",
+                    wordsForced
+                      ? "cursor-default disabled:opacity-60"
+                      : "hover:text-ink motion-safe:active:scale-90",
+                  )}
+                >
+                  <Captions size={16} />
+                </button>
+              )}
+              {chipOn && (
+                <button
+                  onClick={() => setScenesOpen((o) => !o)}
+                  aria-label="Scene"
+                  data-tip="Scene"
+                  data-now-playing-scene-chip
+                  className={cx(
+                    "tip-top tip-end absolute bottom-2 right-2 p-2 rounded-full bg-panel/60 backdrop-blur ring-1 ring-edge transition-all motion-safe:active:scale-90",
+                    scenesOpen
+                      ? "text-gold opacity-100"
+                      : "text-dim hover:text-ink opacity-0 group-hover:opacity-100",
+                  )}
+                >
+                  <Sparkles size={16} />
+                </button>
+              )}
+            </div>
             {/* EXPERIMENT (0.7 exploration): the waveform as pure form under
                 the art — playhead, no controls, absent when no peaks. */}
             <div className="w-[260px] lg:w-[340px] xl:w-[400px]">

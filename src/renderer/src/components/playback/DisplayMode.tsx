@@ -15,13 +15,8 @@ import { FACT_SEP } from "@/lib/mediaFacts";
 import { useSceneFeed } from "@/components/display/feed";
 import { SceneCanvas } from "@/components/display/SceneCanvas";
 import { ScenePicker } from "@/components/display/ScenePicker";
-import {
-  SCENES,
-  SCENES_ORDERED,
-  isAbstract,
-  pickShuffled,
-  type Shuffleable,
-} from "@/components/display/scenes";
+import { SCENES, SCENES_ORDERED, isAbstract } from "@/components/display/scenes";
+import { useShuffledScene } from "@/components/display/useShuffledScene";
 import type { SceneId } from "@/components/display/scenes/types";
 
 /**
@@ -54,54 +49,7 @@ export function DisplayMode(): React.JSX.Element {
   const [scenesOpen, setScenesOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const trackSig = `${meta.title ?? ""}␟${meta.subtitle ?? ""}␟${meta.album ?? ""}`;
-  const albumSig = meta.album ?? "";
-  const shuffleOrder = settings.displayShuffleOrder ?? "random";
-  const shuffleEvery = settings.displayShuffleEvery ?? 1;
-  const shuffleExclude = settings.displayShuffleExclude ?? ["sleeve"];
-  const [shuffled, setShuffled] = useState<Shuffleable>(() =>
-    pickShuffled(null, shuffleOrder, shuffleExclude),
-  );
-  const shuffledRef = useRef(shuffled);
-  // how many tracks the shown scene has had, and the album it began on; the draw is due when
-  // the count reaches "every" (or the album changes), and at once when Shuffle is chosen
-  const sinceRef = useRef(0);
-  const albumRef = useRef(albumSig);
-  const wasShuffleRef = useRef(false);
-  useEffect(() => {
-    if (settings.displayScene !== "shuffle") {
-      wasShuffleRef.current = false;
-      return;
-    }
-    let due = !wasShuffleRef.current;
-    wasShuffleRef.current = true;
-    if (shuffleEvery === "album") {
-      if (albumSig !== albumRef.current) due = true;
-    } else {
-      sinceRef.current += 1;
-      if (sinceRef.current >= shuffleEvery) due = true;
-    }
-    if (!due) return;
-    sinceRef.current = 0;
-    albumRef.current = albumSig;
-    const next = pickShuffled(shuffledRef.current, shuffleOrder, shuffleExclude);
-    shuffledRef.current = next;
-    setShuffled(next);
-    // the order and the exclusions ride the refs' values at draw time; only a track or a mode
-    // change draws
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trackSig, settings.displayScene]);
-  // a scene left out while it is up gives way at once
-  useEffect(() => {
-    if (settings.displayScene !== "shuffle" || !shuffleExclude.includes(shuffledRef.current))
-      return;
-    const next = pickShuffled(shuffledRef.current, shuffleOrder, shuffleExclude);
-    shuffledRef.current = next;
-    setShuffled(next);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shuffleExclude.join(","), settings.displayScene]);
-  const active: DisplayScene =
-    settings.displayScene === "shuffle" ? shuffled : settings.displayScene;
+  const { shuffled, active } = useShuffledScene(settings.displayScene, meta);
   const stage: SceneId | null = isAbstract(active) ? active : null;
   const feed = useSceneFeed(stage != null || scenesOpen);
   const pickScene = (id: DisplayScene): void => {

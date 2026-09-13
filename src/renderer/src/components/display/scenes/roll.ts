@@ -32,24 +32,24 @@ export const ROLL_KEY: SceneKey = {
   reads: [
     {
       shows: "The page",
-      means: "the whole track in rows of time, read left to right and top to bottom",
+      means: "The whole track in rows of time, read left to right and top to bottom",
     },
     {
       shows: "Six lanes in each row",
-      means: "bass at the bottom to highs at the top. A cell's brightness is that band's level",
+      means: "Bass at the bottom to highs at the top. A cell's brightness is that band's level",
     },
     {
       shows: "The head",
-      means: "your position. It moves along the row, with beat marks ticked on the row ahead",
+      means: "Your position, moving along the row. The beats are marked on the row ahead",
     },
-    { shows: "Behind the head", means: "the part already played, dimmed" },
+    { shows: "Behind the head", means: "The part already played, dimmed" },
     {
       shows: "Sparks off the head",
-      means: "drum hits. Kicks spark from the low lanes and hi-hats from the high ones",
+      means: "Drum hits. Kicks spark from the low lanes and hi-hats from the high ones",
     },
-    { shows: "A warmer stretch", means: "a chorus" },
-    { shows: "A burst of sparks", means: "a drop" },
-    { shows: "The words under the row", means: "the current lyric" },
+    { shows: "A warmer stretch", means: "A chorus" },
+    { shows: "A burst of sparks", means: "A drop" },
+    { shows: "The lyrics under the row", means: "The line being sung" },
   ],
   honesty: [
     "A cell is a tenth of a second, so a single hit shows as one bright cell rather than a spike.",
@@ -57,8 +57,8 @@ export const ROLL_KEY: SceneKey = {
 };
 
 export const ROLL_SETTINGS: SceneSettingDef[] = [
-  { key: "sparks", label: "Sparks", kind: "toggle", default: true },
-  { key: "words", label: "Words", kind: "toggle", default: true },
+  { key: "sparks", label: "Sparks", kind: "toggle", default: true, full: true },
+  { key: "words", label: "Lyrics", kind: "toggle", default: true, full: true },
 ];
 
 interface Spark {
@@ -304,7 +304,7 @@ export class Roll implements Scene {
 
     // THE WORDS: the current line under the row being read (above it on the last row), starting
     // at the head and kept inside the margins, on a soft backing so the cells never fight it
-    if (f.lyric?.text && this.settings.words !== false && !f.mini) {
+    if (f.lyric?.text && this.settings.words !== false) {
       if (f.lyric.index !== this.lastLine) {
         this.lastLine = f.lyric.index;
         this.lineSince = f.now;

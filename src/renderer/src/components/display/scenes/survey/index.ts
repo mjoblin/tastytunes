@@ -46,33 +46,33 @@ import {
  */
 export const SURVEY_KEY: SceneKey = {
   reads: [
-    { shows: "The ground", means: "the whole track, from left to right" },
+    { shows: "The ground", means: "The whole track, from left to right" },
     {
       shows: "Six mountain ranges, front to back",
-      means: "bass at the front to highs at the back. A range's height is that band's level",
+      means: "Bass at the front to highs at the back. A range's height is that band's level",
     },
     {
       shows: "Contour lines",
-      means: "one for every eighth of the full height, heavier at every half",
+      means: "One for every eighth of the full height, heavier at every half",
     },
     {
       shows: "The gold line",
-      means: "your position. The land behind it is lit and the land ahead is waiting",
+      means: "Your position. The land behind it is lit and the land ahead is dark",
     },
     {
       shows: "Flags along the front edge",
       means:
-        "the lyrics already sung, planted where they were sung. The gold one is being sung now and older ones fade",
+        "The lyrics, each where it is sung. The gold one is the line being sung and older ones fade",
     },
-    { shows: "Shaded stretches of ground", means: "the song's sections, warmer for a chorus" },
+    { shows: "Shaded stretches of ground", means: "The track's sections, warmer for a chorus" },
     {
       shows: "The weather",
       means:
-        "the section you are in. A chorus warms the ground and brightens the sky and a quiet passage mists the far ranges",
+        "The section playing. The ground is warmer and the sky brighter in a chorus, and the far ranges misty in a quiet passage",
     },
   ],
   honesty: [
-    "Each band is scaled to its own loudest moment in the track, so a quiet album still has mountains.",
+    "Each band is scaled to its own loudest moment in the track, so a quiet track still has mountains.",
   ],
 };
 
@@ -187,11 +187,21 @@ void main() {
 const num = (v: unknown, fallback: number): number =>
   typeof v === "number" && Number.isFinite(v) ? v : fallback;
 
+/** THE MAP'S WIDTH IS THE PICTURE. The 38° field is the wall's, at 16:9, where the whole
+ *  range fits across; a squarer canvas (the Now Playing tile) keeps that horizontal field
+ *  and opens the vertical one to match, rather than cropping the ends of the range (the
+ *  user, 2026-09-12: "contour currently doesn't fit in the square tile"). */
+const FOV_WIDE = 38;
+const WIDE_ASPECT = 16 / 9;
+const HALF_WIDTH_TAN = Math.tan(((FOV_WIDE / 2) * Math.PI) / 180) * WIDE_ASPECT;
+const fovFor = (aspect: number): number =>
+  aspect >= WIDE_ASPECT ? FOV_WIDE : (2 * Math.atan(HALF_WIDTH_TAN / aspect) * 180) / Math.PI;
+
 export class Survey implements ThreeScene {
   readonly kind = "three" as const;
   settings: SceneSettings = {};
   private scene = new THREE.Scene();
-  private camera = new THREE.PerspectiveCamera(38, 1, 10, 6000);
+  private camera = new THREE.PerspectiveCamera(FOV_WIDE, 1, 10, 6000);
   private material: THREE.ShaderMaterial | null = null;
   private ground: THREE.Mesh | null = null;
   private tex: RecordTexture | null = null;
@@ -245,7 +255,9 @@ export class Survey implements ThreeScene {
   }
 
   resize(w: number, h: number): void {
-    this.camera.aspect = w / Math.max(1, h);
+    const aspect = w / Math.max(1, h);
+    this.camera.aspect = aspect;
+    this.camera.fov = fovFor(aspect);
     this.camera.updateProjectionMatrix();
   }
 
@@ -338,7 +350,7 @@ export class Survey implements ThreeScene {
     // the lines as FLAGS along the front edge: each planted at its time on a post, the one
     // being heard gold and larger, the past fading behind the now-line (no future flags); a
     // flag that would print through one already placed waits (the current never waits)
-    if (f.lyric && !f.mini) {
+    if (f.lyric) {
       const { lines, index, text } = f.lyric;
       this.names.step(text ? [String(index)] : [], f.dt);
       const drawn: Array<{ x: number; right: number; y: number }> = [];

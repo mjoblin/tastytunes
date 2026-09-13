@@ -26,13 +26,19 @@ export function SceneCanvas({
   scene,
   feed,
   mini = false,
+  words = !mini,
   className,
 }: {
   scene: SceneId;
   feed: SceneFeed;
   mini?: boolean;
+  /** Whether this canvas draws the lyric: the wall's default, never a thumbnail's, the Now
+   *  Playing tile's own switch. Read each frame, so a toggle never rebuilds the scene. */
+  words?: boolean;
   className?: string;
 }): React.JSX.Element {
+  const wordsRef = useRef(words);
+  wordsRef.current = words;
   const def = sceneDef(scene);
   const gl = def.kind === "gl" || def.kind === "three";
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -140,7 +146,7 @@ export function SceneCanvas({
       last = now;
       const dt = lastFrame ? frameDelta((now - lastFrame) / 1000) : 0;
       lastFrame = now;
-      const f = feed.frame(now, w, h, mini, dt);
+      const f = feed.frame(now, w, h, mini, dt, wordsRef.current);
       if (isThreeScene(inst) && renderer) {
         inst.draw(renderer, f);
         if (octx && inst.overlay) {
@@ -230,29 +236,8 @@ export function SceneCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scene, feed, mini, gl]);
 
-  const point = (e: React.PointerEvent<HTMLDivElement>, down?: boolean): void => {
-    const inst = instRef.current;
-    if (!inst || mini) return;
-    const r = e.currentTarget.getBoundingClientRect();
-    inst.pointer = {
-      x: e.clientX - r.left,
-      y: e.clientY - r.top,
-      down: down ?? inst.pointer?.down ?? false,
-      at: performance.now(),
-    };
-  };
   return (
-    <div
-      ref={wrapRef}
-      className={cx("relative block h-full w-full", className)}
-      data-scene={scene}
-      onPointerMove={(e) => point(e)}
-      onPointerDown={(e) => point(e, true)}
-      onPointerUp={(e) => point(e, false)}
-      onPointerLeave={() => {
-        if (instRef.current) instRef.current.pointer = null;
-      }}
-    >
+    <div ref={wrapRef} className={cx("relative block h-full w-full", className)} data-scene={scene}>
       {failed && (
         <div className="absolute inset-0 flex items-center justify-center bg-bg text-[12px] text-dim">
           {mini ? "Needs WebGL" : "This scene needs WebGL, which this machine could not provide."}

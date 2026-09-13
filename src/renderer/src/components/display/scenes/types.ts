@@ -168,36 +168,33 @@ export interface SceneRecord {
   loud: Float32Array;
 }
 
-/** The pointer over a scene's canvas, in CSS pixels; null once it leaves. */
-export interface ScenePointer {
-  x: number;
-  y: number;
-  down: boolean;
-  /** performance.now() of the last move. */
-  at: number;
-}
-
 /** A scene's declared settings, resolved over defaults (see ../useSceneSettings). */
 export type SceneSettings = Record<string, SceneSettingValue>;
-export type SceneSettingDef =
-  | {
-      key: string;
-      label: string;
-      kind: "slider";
-      min: number;
-      max: number;
-      step?: number;
-      default: number;
-      unit?: string;
-    }
-  | { key: string; label: string; kind: "toggle"; default: boolean }
-  | {
-      key: string;
-      label: string;
-      kind: "select";
-      options: { value: string; label: string }[];
-      default: string;
-    };
+/** Where a setting applies: everywhere by default, or the fullscreen view only (`full`),
+ *  when the tile draws none of what it governs (the words, a sound, a bloom) and so the
+ *  tile's picker leaves the control out (the user, 2026-09-12). */
+type SceneSettingScope = { full?: boolean };
+export type SceneSettingDef = SceneSettingScope &
+  (
+    | {
+        key: string;
+        label: string;
+        kind: "slider";
+        min: number;
+        max: number;
+        step?: number;
+        default: number;
+        unit?: string;
+      }
+    | { key: string; label: string; kind: "toggle"; default: boolean }
+    | {
+        key: string;
+        label: string;
+        kind: "select";
+        options: { value: string; label: string }[];
+        default: string;
+      }
+  );
 
 /** How to READ a scene: what you see, and what it means (packscape's SceneKey).
  *  Data rather than prose so it renders itself in the picker, and so a pin
@@ -211,7 +208,6 @@ export interface SceneKey {
 export interface Scene {
   kind?: "2d";
   settings?: SceneSettings;
-  pointer?: ScenePointer | null;
   draw(ctx: CanvasRenderingContext2D, f: SceneFrame): void;
 }
 
@@ -220,7 +216,6 @@ export interface Scene {
 export interface ThreeScene {
   kind: "three";
   settings?: SceneSettings;
-  pointer?: ScenePointer | null;
   init(renderer: THREE.WebGLRenderer, w: number, h: number): void;
   resize?(w: number, h: number): void;
   draw(renderer: THREE.WebGLRenderer, f: SceneFrame): void;
@@ -233,7 +228,6 @@ export interface ThreeScene {
 export interface GlScene {
   kind: "gl";
   settings?: SceneSettings;
-  pointer?: ScenePointer | null;
   init(gl: WebGL2RenderingContext): boolean;
   draw(gl: WebGL2RenderingContext, f: SceneFrame): void;
   overlay?(ctx: CanvasRenderingContext2D, f: SceneFrame): void;

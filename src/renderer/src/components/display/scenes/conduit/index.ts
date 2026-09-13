@@ -73,38 +73,38 @@ export const CONDUIT_KEY: SceneKey = {
     {
       shows: "The tunnel",
       means:
-        "the track's timeline. You are at the current position and the far end is half a minute ahead",
+        "The track's timeline. The near end is your position and the far end is half a minute ahead",
     },
     {
       shows: "Six ribbons, floor to ceiling",
       means:
-        "bass at the floor to highs at the ceiling. A ribbon bulges inward with its band's level",
+        "Bass at the floor to highs at the ceiling. A ribbon bulges inward with its band's level",
     },
     {
       shows: "The rings",
       means:
-        "the beats, with the first beat of each bar heavier. When the beat cannot be found, one ring a second",
+        "The beats, with the first beat of each bar heavier. When the beat cannot be found, one ring a second",
     },
     {
       shows: "The light at the end",
       means:
-        "the overall loudness, following slowly. It grows in a chorus, flickers on a hi-hat and dims in a silence",
+        "The overall loudness, following slowly. It grows in a chorus, flickers on a hi-hat and dims in a silence",
     },
     {
       shows: "A drop",
       means:
-        "the view leans in through the build-up and fades to black, then blooms back in from the light at the end with a shudder when the drop hits",
+        "The view narrows through the build-up and goes dark, then opens again from the light at the end when the drop lands",
     },
-    { shows: "The wall's warmth", means: "how intense the music is, following slowly" },
+    { shows: "The wall's warmth", means: "How intense the music is, following slowly" },
     {
       shows: "Signs painted on the wall",
-      means: "the lyrics coming toward you. Each is largest and gold while it is being sung",
+      means: "The lyrics, each where it is sung. The line being sung is gold and largest",
     },
-    { shows: "A ring of light down the tunnel", means: "a kick drum" },
-    { shows: "Speed lines", means: "a snare" },
+    { shows: "A ring of light down the tunnel", means: "A kick drum" },
+    { shows: "Speed lines", means: "A snare" },
     {
       shows: "The glow",
-      means: "the light, the rings and the speed lines bloom (the Glow switch turns this off)",
+      means: "A bloom on the light, the rings and the speed lines (the Glow switch turns it off)",
     },
   ],
   honesty: [
@@ -124,9 +124,9 @@ export const CONDUIT_SETTINGS: SceneSettingDef[] = [
     default: DEFAULT_AHEAD_SECONDS,
     unit: "s",
   },
-  { key: "signs", label: "Signs", kind: "toggle", default: true },
+  { key: "signs", label: "Signs", kind: "toggle", default: true, full: true },
   { key: "streaks", label: "Speed lines", kind: "toggle", default: true },
-  { key: "glow", label: "Glow", kind: "toggle", default: true },
+  { key: "glow", label: "Glow", kind: "toggle", default: true, full: true },
   {
     key: "hits",
     label: "Hits",
@@ -262,17 +262,29 @@ interface Pulse {
 // camera on a hit: gold at the head, nothing at the tail, additive so they read as light.
 // They used to be 2D strokes on the overlay from a guessed vanishing point; in the scene
 // they sit at a real depth, bloom with the rest of the light and pass behind the signs.
+// Each is a TAPERED RIBBON (two triangles), not a line segment: WebGL draws every line one
+// pixel wide whatever is asked, and at that width they were hairlines the eye slid past (the
+// user, 2026-09-12: "make the speed lines more obvious"). A ribbon has a width in world
+// units, so it grows in perspective as it nears, and it is wide at the head and a sliver at
+// the tail, a dart of light rather than a stroke.
 const STREAK_POOL = 240;
+/** A ribbon's width at its head, in world units, at a hit of no strength and of full. */
+const STREAK_WIDTH_MIN = 4;
+const STREAK_WIDTH_MAX = 10;
+/** Its width at the tail. */
+const STREAK_TAIL_WIDTH = 0.8;
 /** Soft additive discs of light in the air before the sun. */
 const HAZE_LAYERS = 3;
 interface StreakPool {
-  lines: THREE.LineSegments;
+  mesh: THREE.Mesh;
+  /** Four vertices a ribbon: head left, head right, tail left, tail right. */
   positions: Float32Array;
   colors: Float32Array;
   angle: Float32Array;
   radius: Float32Array;
   z: Float32Array;
   len: Float32Array;
+  width: Float32Array;
   speed: Float32Array;
   age: Float32Array;
   life: Float32Array;
@@ -584,32 +596,40 @@ export class Conduit implements ThreeScene {
         this.hazeSprites.push(sprite);
       }
     }
-    // the speed lines: a pool of segments, coloured per vertex so a dead one costs nothing
+    // the speed lines: a pool of ribbons, coloured per vertex so a dead one costs nothing
     {
-      const positions = new Float32Array(STREAK_POOL * 6);
-      const colors = new Float32Array(STREAK_POOL * 6);
+      const positions = new Float32Array(STREAK_POOL * 12);
+      const colors = new Float32Array(STREAK_POOL * 12);
+      const index = new Uint16Array(STREAK_POOL * 6);
+      for (let i = 0; i < STREAK_POOL; i++) {
+        const v = i * 4;
+        index.set([v, v + 2, v + 1, v + 1, v + 2, v + 3], i * 6);
+      }
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
       geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-      const lines = new THREE.LineSegments(
+      geometry.setIndex(new THREE.BufferAttribute(index, 1));
+      const mesh = new THREE.Mesh(
         geometry,
-        new THREE.LineBasicMaterial({
+        new THREE.MeshBasicMaterial({
           vertexColors: true,
           transparent: true,
           blending: THREE.AdditiveBlending,
           depthWrite: false,
+          side: THREE.DoubleSide,
         }),
       );
-      lines.frustumCulled = false;
-      this.scene.add(lines);
+      mesh.frustumCulled = false;
+      this.scene.add(mesh);
       this.streaks = {
-        lines,
+        mesh,
         positions,
         colors,
         angle: new Float32Array(STREAK_POOL),
         radius: new Float32Array(STREAK_POOL),
         z: new Float32Array(STREAK_POOL),
         len: new Float32Array(STREAK_POOL),
+        width: new Float32Array(STREAK_POOL),
         speed: new Float32Array(STREAK_POOL),
         age: new Float32Array(STREAK_POOL),
         life: new Float32Array(STREAK_POOL),
@@ -987,7 +1007,7 @@ void main() {
 
   private placeSigns(f: SceneFrame, seconds: number): void {
     const lyric = f.lyric;
-    const on = this.settings.signs !== false && !f.mini && lyric != null;
+    const on = this.settings.signs !== false && lyric != null;
     const lines = lyric?.lines ?? null;
     if (this.signsFor !== lines) {
       for (const s of this.signs.values()) this.dropSign(s);
@@ -1085,6 +1105,7 @@ void main() {
       s.radius[i] = RADIUS * (0.45 + 0.45 * Math.random());
       s.z[i] = Math.min(this.aheadUnits * 0.8, 500 + Math.random() * 900);
       s.len[i] = 70 + 90 * Math.random() + 60 * strength;
+      s.width[i] = STREAK_WIDTH_MIN + (STREAK_WIDTH_MAX - STREAK_WIDTH_MIN) * strength;
       s.speed[i] = 1000 + 600 * Math.random() + 300 * strength;
       s.age[i] = 0;
       s.life[i] = 0.55 + 0.35 * Math.random();
@@ -1092,42 +1113,62 @@ void main() {
     }
   }
 
-  // fly the live streaks toward the camera and write their vertices; a dead slot is black
+  // fly the live streaks toward the camera and write their vertices; a dead slot is black.
+  // A ribbon's width runs along the wall's tangent at its angle, so on screen it lies across
+  // the line from the vanishing point, and it is brightest at the head: the head's colour
+  // sits a quarter over the gold, so the bloom pass takes it as light
   private updateStreaks(f: SceneFrame, gold: THREE.Color): void {
     const s = this.streaks;
     if (!s) return;
     const behind = this.camera.position.z + 20;
     const { positions: pos, colors: col } = s;
     for (let i = 0; i < STREAK_POOL; i++) {
-      const o = i * 6;
+      const o = i * 12;
       if (s.live[i]) {
         s.age[i] += f.dt;
         s.z[i] -= s.speed[i] * f.dt;
         const t = s.age[i] / s.life[i];
         if (t >= 1 || s.z[i] + s.len[i] < behind) s.live[i] = 0;
         else {
-          const a = s.strength[i] * (1 - t) * (1 - t);
+          const a = s.strength[i] * (1 - t) * (1 - t) * 1.25;
           const x = Math.cos(s.angle[i]) * s.radius[i];
           const y = Math.sin(s.angle[i]) * s.radius[i];
-          pos[o] = x;
-          pos[o + 1] = y;
-          pos[o + 2] = s.z[i];
-          pos[o + 3] = x;
-          pos[o + 4] = y;
-          pos[o + 5] = s.z[i] + s.len[i];
-          col[o] = gold.r * a;
-          col[o + 1] = gold.g * a;
-          col[o + 2] = gold.b * a;
-          col[o + 3] = gold.r * a * 0.08;
-          col[o + 4] = gold.g * a * 0.08;
-          col[o + 5] = gold.b * a * 0.08;
+          const tx = -Math.sin(s.angle[i]);
+          const ty = Math.cos(s.angle[i]);
+          const wh = s.width[i] * 0.5;
+          const wt = STREAK_TAIL_WIDTH * 0.5;
+          const z0 = s.z[i];
+          const z1 = s.z[i] + s.len[i];
+          // head left, head right, tail left, tail right
+          pos[o] = x - tx * wh;
+          pos[o + 1] = y - ty * wh;
+          pos[o + 2] = z0;
+          pos[o + 3] = x + tx * wh;
+          pos[o + 4] = y + ty * wh;
+          pos[o + 5] = z0;
+          pos[o + 6] = x - tx * wt;
+          pos[o + 7] = y - ty * wt;
+          pos[o + 8] = z1;
+          pos[o + 9] = x + tx * wt;
+          pos[o + 10] = y + ty * wt;
+          pos[o + 11] = z1;
+          for (let v = 0; v < 2; v++) {
+            col[o + v * 3] = gold.r * a;
+            col[o + v * 3 + 1] = gold.g * a;
+            col[o + v * 3 + 2] = gold.b * a;
+          }
+          for (let v = 2; v < 4; v++) {
+            col[o + v * 3] = gold.r * a * 0.08;
+            col[o + v * 3 + 1] = gold.g * a * 0.08;
+            col[o + v * 3 + 2] = gold.b * a * 0.08;
+          }
           continue;
         }
       }
-      col[o] = col[o + 1] = col[o + 2] = col[o + 3] = col[o + 4] = col[o + 5] = 0;
+      col.fill(0, o, o + 12);
     }
-    (s.lines.geometry.getAttribute("position") as THREE.BufferAttribute).needsUpdate = true;
-    (s.lines.geometry.getAttribute("color") as THREE.BufferAttribute).needsUpdate = true;
+    (s.mesh.geometry.getAttribute("position") as THREE.BufferAttribute).needsUpdate = true;
+    (s.mesh.geometry.getAttribute("color") as THREE.BufferAttribute).needsUpdate = true;
   }
 
   overlay(ctx: CanvasRenderingContext2D, f: SceneFrame): void {

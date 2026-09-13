@@ -132,7 +132,7 @@ export class Orbit implements Scene {
         ctx.fillStyle = rgba(P.gold, this.arc.get(key));
         arcText(ctx, ln, cx, cy, radii[3] + px * 0.9, -Math.PI / 2, Math.PI * 1.35);
       }
-      if (next && !f.mini) {
+      if (next) {
         const cpx = typePx(f, "caption");
         const fit = fitText(ctx, next, {
           maxWidth: w * 0.7,

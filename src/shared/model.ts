@@ -1286,6 +1286,16 @@ export interface AppSettings {
   waveformSeekBar: boolean;
   waveformNowPlaying: boolean;
   displayWaveform: boolean;
+  /** What the Now Playing hero's art box shows: Sleeve is the art (the
+   *  default), any other id a display-mode scene run small in its place
+   *  while an analyzed track plays. Chosen from the tile, never Settings;
+   *  remembered apart from the fullscreen view's displayScene. */
+  nowPlayingScene: DisplayScene;
+  /** The scenes' words in the Now Playing tile, as on the wall. Off by default: the lyric
+   *  line beside the art already carries them, and a third copy in a smaller face beside
+   *  the app's own is the redundancy the tile avoids. A fact about the host, not a scene,
+   *  so one switch of the tile's, the scenes' own Words settings staying the wall's. */
+  nowPlayingSceneWords: boolean;
   /** EVIDENCE, not preference: flips true the first time an analysis is
    *  served (stored or read back) and never clears. The playback bar's
    *  taller geometry keys on the setting AND this — a household with no
@@ -1496,6 +1506,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   waveformSeekBar: true,
   waveformNowPlaying: false,
   displayWaveform: true,
+  nowPlayingScene: "sleeve",
+  nowPlayingSceneWords: false,
   waveformSeen: false,
   lyrics: true,
   lyricsLine: true,

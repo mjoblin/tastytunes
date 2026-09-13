@@ -5,7 +5,7 @@
  * out gas in proportion to its band's level, and a gentle lift keeps what
  * they put out rising. A kick puffs the low vents, a hi-hat flickers the high
  * ones, a snare sends a gust across the frame, a drop bursts every vent; a
- * big kick spins a whirlpool; the pointer stirs. The words are not ink any
+ * big kick spins a whirlpool. The words are not ink any
  * more: they are a solid layer above the gas (see index.ts).
  *
  * The three-column model that came before (a low register rising to meet a

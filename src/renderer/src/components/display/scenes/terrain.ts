@@ -245,7 +245,7 @@ export class Terrain implements Scene {
     ctx.fillRect(nowX - 1.5, crestY - 6, 3, 10);
 
     // the signposts
-    if (f.lyric && !f.mini) {
+    if (f.lyric) {
       const { lines, index } = f.lyric;
       const lo = f.position - PAST;
       const hi = f.position + FUTURE;

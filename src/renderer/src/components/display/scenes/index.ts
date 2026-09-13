@@ -44,6 +44,9 @@ export interface SceneDef {
   kind: "face" | "2d" | "gl" | "three" | "shuffle";
   key?: SceneKey;
   settings?: SceneSettingDef[];
+  /** The scene IS its words (Type, Terminal): the Now Playing tile draws them whatever its
+   *  words toggle says, and the toggle is disabled there. */
+  essentialWords?: true;
 }
 
 export const SCENES: SceneDef[] = [
@@ -55,36 +58,36 @@ export const SCENES: SceneDef[] = [
     kind: "face",
     key: {
       reads: [
-        { shows: "The picture", means: "the album art" },
-        { shows: "The line beneath", means: "the current lyric, when the track has timed lyrics" },
+        { shows: "The picture", means: "The album art" },
+        { shows: "The line beneath", means: "The current lyric, when the track has timed lyrics" },
       ],
     },
   },
   {
     id: "tide",
     label: "Tide",
-    blurb: "A waterline that swells with the bass, with the lyrics riding the surface.",
+    blurb: "A waterline that rises with the bass, with the lyrics on the surface.",
     icon: Waves,
     kind: "2d",
     key: {
       reads: [
-        { shows: "How high the water sits", means: "the overall loudness, following slowly" },
-        { shows: "The size of the waves", means: "the bass" },
-        { shows: "Spray off the crests", means: "a snare or a hi-hat" },
-        { shows: "A heave of the water", means: "a kick drum. A drop heaves the whole sea" },
+        { shows: "How high the water sits", means: "The overall loudness, following slowly" },
+        { shows: "The size of the waves", means: "The bass" },
+        { shows: "Spray off the crests", means: "A snare or a hi-hat" },
+        { shows: "The water lifting", means: "A kick drum, or the whole sea on a drop" },
         {
           shows: "The faint line above the water",
-          means: "the loudness still to come, with the future on the right",
+          means: "The loudness still to come, read left to right",
         },
         {
           shows: "The moon and its reflection",
           means:
-            "the reflection brightens with the high frequencies. A hi-hat sets off glints and a drop flares the moon",
+            "The high frequencies. A hi-hat glints in the reflection and a drop brightens the moon",
         },
-        { shows: "Lit crests", means: "a snare" },
+        { shows: "Lit crests", means: "A snare" },
         {
-          shows: "Words on the water",
-          means: "the current lyric, with the next line waiting below",
+          shows: "Lyrics on the water",
+          means: "The line being sung, with the next below",
         },
       ],
       honesty: ["The waves are a picture, not the waveform."],
@@ -93,30 +96,30 @@ export const SCENES: SceneDef[] = [
   {
     id: "terrain",
     label: "Terrain",
-    blurb: "A flight over the track's loudness, with the next minute ahead of you.",
+    blurb: "A flight along the track's loudness, with the next minute ahead.",
     icon: Mountain,
     kind: "2d",
     key: {
       reads: [
         {
           shows: "The ridge",
-          means: "the track's loudness over time, drawn as three layers of hills",
+          means: "The track's loudness over time, as three layers of hills",
         },
         {
           shows: "The glow behind the ridge",
-          means: "your position and how loud the music is. It flashes on a kick drum",
+          means: "Your position and how loud the music is. It flashes on a kick drum",
         },
-        { shows: "Left of the glow", means: "the last half minute" },
-        { shows: "Right of the glow", means: "the next minute" },
+        { shows: "Left of the glow", means: "The last half minute" },
+        { shows: "Right of the glow", means: "The next minute" },
         {
           shows: "Signposts",
-          means: "the lyrics at the times they are sung, so you can see them coming",
+          means: "The lyrics, each at the point in the track where it is sung",
         },
-        { shows: "Bands across the sky", means: "the song's sections, warmer for a chorus" },
+        { shows: "Bands across the sky", means: "The track's sections, warmer for a chorus" },
         {
           shows: "The weather",
           means:
-            "the section you are in. A chorus warms and brightens the sky and a quiet passage brings out stars and mist",
+            "The section playing. The sky is warmer and brighter in a chorus, and starry and misty in a quiet passage",
         },
       ],
       honesty: [
@@ -127,30 +130,30 @@ export const SCENES: SceneDef[] = [
   {
     id: "orbit",
     label: "Orbit",
-    blurb: "Six rings breathing with the music, with a comet marking your position in the track.",
+    blurb: "Six rings, one per frequency band, and a comet marking your position in the track.",
     icon: OrbitIcon,
     kind: "2d",
     key: {
       reads: [
         {
           shows: "Six rings",
-          means: "six frequency bands, bass on the inside and highs on the outside",
+          means: "Six frequency bands, bass on the inside and highs on the outside",
         },
-        { shows: "A ring breathing", means: "that band's energy" },
+        { shows: "A ring widening", means: "That band's level" },
         {
           shows: "A ring jumping",
-          means: "a drum in that band. Kicks jump the inner rings and hi-hats the outer",
+          means: "A drum hit in that band. Kicks on the inner rings, hi-hats on the outer",
         },
         {
           shows: "The comet",
           means:
-            "your position in the track. It flares on each beat, more on the first beat of a bar",
+            "Your position in the track. It brightens on each beat, more on the first beat of a bar",
         },
         {
           shows: "The color at the center",
-          means: "the key the music is in, mapped around a color wheel",
+          means: "The key the music is in, each key a color on a wheel",
         },
-        { shows: "Words on a ring", means: "the current lyric, with the next line waiting below" },
+        { shows: "Lyrics on a ring", means: "The line being sung, with the next below" },
       ],
     },
   },
@@ -159,13 +162,14 @@ export const SCENES: SceneDef[] = [
     label: "Type",
     blurb: "The current lyric alone, large, in the display font.",
     icon: TypeIcon,
+    essentialWords: true,
     kind: "2d",
     key: {
       reads: [
-        { shows: "The words", means: "the current lyric, or the title when there are no lyrics" },
-        { shows: "Their arrival", means: "the start of the line" },
-        { shows: "The swell", means: "the bass. A kick drum punches it and a drop punches harder" },
-        { shows: "The hairline", means: "how far through the line you are" },
+        { shows: "The lyrics", means: "The line being sung, or the title when there are none" },
+        { shows: "Their arrival", means: "The start of the line" },
+        { shows: "The swell", means: "The bass. A kick drum adds a pulse and a drop a larger one" },
+        { shows: "The hairline", means: "How far through the line you are" },
       ],
     },
     settings: [{ key: "motion", label: "Motion", kind: "toggle", default: true }],
@@ -173,7 +177,7 @@ export const SCENES: SceneDef[] = [
   {
     id: "survey",
     label: "Contour",
-    blurb: "A map of the whole track as terrain, lit up to your current position.",
+    blurb: "The whole track as a contour map, lit up to your position.",
     icon: Map,
     kind: "three",
     key: SURVEY_KEY,
@@ -191,8 +195,7 @@ export const SCENES: SceneDef[] = [
   {
     id: "confluence",
     label: "Ink",
-    blurb:
-      "Ink in water. The frequency bands flow into each other, the lyrics dissolve and you can stir it with the pointer.",
+    blurb: "Ink in water, one color per frequency band, with the lyrics dissolving into it.",
     icon: Blend,
     kind: "three",
     key: CONFLUENCE_KEY,
@@ -201,7 +204,7 @@ export const SCENES: SceneDef[] = [
   {
     id: "pit",
     label: "Ball Pit",
-    blurb: "Every drum hit thrown in as a rubber ball, piling up over the last minute.",
+    blurb: "Each drum hit as a ball dropped into a pit, piling up over the last minute.",
     icon: CircleDot,
     kind: "2d",
     key: PIT_KEY,
@@ -210,8 +213,7 @@ export const SCENES: SceneDef[] = [
   {
     id: "roll",
     label: "Piano Roll",
-    blurb:
-      "The whole track as a punched roll, with a head reading along the row and sparks on the drum hits.",
+    blurb: "The whole track as a punched roll, read along by a head that sparks on drum hits.",
     icon: Rows3,
     kind: "2d",
     key: ROLL_KEY,
@@ -220,8 +222,7 @@ export const SCENES: SceneDef[] = [
   {
     id: "sea",
     label: "Sea",
-    blurb:
-      "An open sea that swells with the loudness, under a moon whose reflection glints on the hi-hats.",
+    blurb: "A sea that swells with the loudness, under a moon that glints on the hi-hats.",
     icon: Moon,
     kind: "three",
     key: SEA_KEY,
@@ -230,8 +231,9 @@ export const SCENES: SceneDef[] = [
   {
     id: "terminal",
     label: "Terminal",
-    blurb: "TASTYOS types the lyrics out on an amber screen, with the log scrolling up behind.",
+    blurb: "The lyrics typed onto an amber terminal, with a log scrolling up behind.",
     icon: TerminalIcon,
+    essentialWords: true,
     kind: "2d",
     key: TERMINAL_KEY,
     settings: TERMINAL_SETTINGS,

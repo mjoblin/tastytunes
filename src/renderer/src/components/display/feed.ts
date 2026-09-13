@@ -407,7 +407,18 @@ export class SceneFeed {
     };
   }
 
-  frame(now: number, w: number, h: number, mini: boolean, callerDt?: number): SceneFrame {
+  /** `words`: whether this canvas draws the lyric at all. The wall does; a picker
+   *  thumbnail never; the Now Playing tile on its own switch. A frame without words
+   *  carries no lyric, which every scene already takes for a track without any, so the
+   *  scenes need no gate of their own. */
+  frame(
+    now: number,
+    w: number,
+    h: number,
+    mini: boolean,
+    callerDt?: number,
+    words: boolean = !mini,
+  ): SceneFrame {
     const s = useStore.getState();
     const playing = s.playState?.state === "play";
     const radio = isRadioMetadata(s.playState?.metadata);
@@ -512,7 +523,7 @@ export class SceneFeed {
       real,
       loudAt: (secs) => this.rawLoudAt(secs, duration, now),
       record: this.record,
-      lyric: this.lyricAt(position, duration),
+      lyric: words ? this.lyricAt(position, duration) : null,
       title: this.title,
       subtitle: this.subtitle,
       palette: this.palette,

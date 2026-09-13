@@ -3,7 +3,6 @@ import type {
   Rgb,
   SceneFrame,
   SceneKey,
-  ScenePointer,
   SceneSettingDef,
   SceneSettings,
   ThreeScene,
@@ -80,25 +79,24 @@ void main() {
  * the front where they meet is that pair's balance. Ink lingers, so the
  * water carries the last little while as marbling. A hit pulses the loudest
  * register; a big hit spins a whirlpool. The current line is written into
- * the water as ink and drifts apart over its life. Drag the pointer and you
- * stir it.
+ * the water as ink and drifts apart over its life.
  */
 export const CONFLUENCE_KEY: SceneKey = {
   reads: [
     {
       shows: "Six vents along the bottom",
-      means: "one per frequency band, bass at the left. A vent's gas rises as loud as its band",
-    },
-    { shows: "A puff from the low vents", means: "a kick drum. A big one spins a whirlpool" },
-    { shows: "A gust across the frame", means: "a snare" },
-    { shows: "A flicker at the high vents", means: "a hi-hat" },
-    { shows: "Every vent bursting", means: "a drop" },
-    {
-      shows: "The words",
       means:
-        "the current lyric. The gas flows around the letters and lights them from the sides when the Solid switch is on; off, it passes through them",
+        "One per frequency band, bass at the left. A vent releases more gas the louder its band",
     },
-    { shows: "The pointer", means: "stirs the gas" },
+    { shows: "A puff from the low vents", means: "A kick drum. A hard one starts a whirlpool" },
+    { shows: "A gust across the frame", means: "A snare" },
+    { shows: "A flicker at the high vents", means: "A hi-hat" },
+    { shows: "Every vent bursting", means: "A drop" },
+    {
+      shows: "The lyrics",
+      means:
+        "The line being sung. With the Solid switch on, the gas flows around the letters and lights them from the sides. Off, it passes through them",
+    },
   ],
   honesty: [
     "The vents are frequency bands, not instruments, and the gas shows about the last fifteen seconds.",
@@ -106,7 +104,8 @@ export const CONFLUENCE_KEY: SceneKey = {
 };
 
 export const CONFLUENCE_SETTINGS: SceneSettingDef[] = [
-  { key: "vigor", label: "Vigor", kind: "slider", min: 0.1, max: 2, step: 0.1, default: 1 },
+  // 0.4 (the user's call 2026-09-12; 1 before): the tile and the wall both read calmer
+  { key: "vigor", label: "Vigor", kind: "slider", min: 0.1, max: 2, step: 0.1, default: 0.4 },
   {
     key: "memory",
     label: "Memory",
@@ -118,9 +117,8 @@ export const CONFLUENCE_SETTINGS: SceneSettingDef[] = [
     unit: "s",
   },
   { key: "whirlpools", label: "Whirlpools", kind: "toggle", default: false },
-  { key: "words", label: "Words", kind: "toggle", default: true },
-  { key: "solid", label: "Solid", kind: "toggle", default: false },
-  { key: "stir", label: "Stir", kind: "toggle", default: false },
+  { key: "words", label: "Lyrics", kind: "toggle", default: true, full: true },
+  { key: "solid", label: "Solid", kind: "toggle", default: false, full: true },
 ];
 
 const num = (v: unknown, fallback: number): number =>
@@ -138,7 +136,6 @@ function registerColor(P: SceneFrame["palette"], register: number): Rgb {
 export class Confluence implements ThreeScene {
   readonly kind = "three" as const;
   settings: SceneSettings = {};
-  pointer: ScenePointer | null = null;
   private fluid: Fluid | null = null;
   private scene = new THREE.Scene();
   private camera = new THREE.Camera();
@@ -149,7 +146,6 @@ export class Confluence implements ThreeScene {
   private lastPulse = 0;
   private lastWhirl = 0;
   private handed: 1 | -1 = 1;
-  private lastPointer: { x: number; y: number } | null = null;
   private shownLine = "";
   private lineSince = 0;
   /** When the last line ended: the words fade out over it (a hole in the gas with no words in
@@ -362,7 +358,7 @@ export class Confluence implements ThreeScene {
     }
     // THE WORDS, a solid layer over the gas (stamped as ink before, they dissolved into a mess).
     // A new line renders its texture once; each frame the layer reads the latest dye and flow
-    const line = this.settings.words !== false && !f.mini && f.lyric ? f.lyric.text : "";
+    const line = this.settings.words !== false && f.lyric ? f.lyric.text : "";
     if (line !== this.shownLine) {
       if (line) {
         this.shownLine = line;
@@ -410,27 +406,6 @@ export class Confluence implements ThreeScene {
       u.uLight.value = P.light ? 1 : 0;
       u.uAlpha.value = wordsAlpha;
     }
-    // the stir: the pointer's motion pushes the water where it passes
-    const p = this.pointer;
-    if (this.settings.stir !== false && p) {
-      if (this.lastPointer) {
-        const dx = p.x - this.lastPointer.x;
-        const dy = p.y - this.lastPointer.y;
-        if (Math.abs(dx) + Math.abs(dy) > 0.5) {
-          fluid.splat(
-            p.x / this.w,
-            1 - p.y / this.h,
-            dx * 5,
-            -dy * 5,
-            0.0035,
-            toColor(P.ink),
-            p.down ? 0.08 : 0,
-          );
-        }
-      }
-      this.lastPointer = { x: p.x, y: p.y };
-    } else this.lastPointer = null;
-
     fluid.setWater(toColor(P.bg), P.light);
     fluid.setExposure(P.light ? 1.7 : 2.3);
     fluid.step(renderer, Math.min(f.dt, 1 / 30), {

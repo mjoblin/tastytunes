@@ -25,24 +25,24 @@ export const TERMINAL_KEY: SceneKey = {
     {
       shows: "The typed line",
       means:
-        "the lyric being sung, typed at a natural pace. A line that arrives before the last has finished is completed at once",
+        "The line being sung, typed out at an even pace. A line that arrives before the last has finished is completed at once",
     },
     {
       shows: "The log above",
-      means: "the lyrics already sung, with their times, dimming as they age",
+      means: "The lyrics already sung, with their times, dimming as they age",
     },
-    { shows: "The cursor", means: "blinks on the beat, longer on the first beat of a bar" },
+    { shows: "The cursor", means: "Blinks on the beat, longer on the first beat of a bar" },
     {
       shows: "The status line",
       means:
-        "the track, your position, the tempo and key, the current section, a level meter for six frequency bands and the overall loudness",
+        "The track, your position, the tempo and key, the current section, a level meter for six frequency bands and the overall loudness",
     },
-    { shows: "A sag of the screen", means: "a kick drum" },
-    { shows: "A divider and a flash", means: "a drop" },
+    { shows: "A sag of the screen", means: "A kick drum" },
+    { shows: "A divider and a flash", means: "A drop" },
     {
       shows: "The boot log",
       means:
-        "for a track without lyrics, what was measured about the track, then each section and drop as it passes",
+        "For a track without lyrics, what was measured about the track, then each section and drop as it passes",
     },
   ],
   honesty: [
@@ -62,7 +62,7 @@ export const TERMINAL_SETTINGS: SceneSettingDef[] = [
     ],
     default: "amber",
   },
-  { key: "status", label: "Status", kind: "toggle", default: true },
+  { key: "status", label: "Status", kind: "toggle", default: true, full: true },
 ];
 
 const AMBER: Rgb = [255, 176, 0];

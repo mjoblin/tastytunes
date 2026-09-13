@@ -45,16 +45,17 @@ export const SEA_KEY: SceneKey = {
   reads: [
     {
       shows: "The swell",
-      means: "the overall loudness, following slowly. A kick heaves it and a drop heaves it more",
+      means:
+        "The overall loudness, following slowly. A kick drum lifts it and a drop lifts it more",
     },
-    { shows: "The chop", means: "how noisy the sound is" },
+    { shows: "The chop", means: "How noisy the sound is" },
     {
       shows: "The moon",
-      means: "low on the horizon, with its reflection running down the water toward you",
+      means: "Low on the horizon, with its reflection on the water below it",
     },
-    { shows: "Glints in the reflection", means: "hi-hats. A snare lights the wave crests" },
-    { shows: "The water's warmth", means: "a chorus" },
-    { shows: "Words over the water", means: "the current lyric, with the next line waiting below" },
+    { shows: "Glints in the reflection", means: "Hi-hats. A snare lights the wave crests" },
+    { shows: "The water's warmth", means: "A chorus" },
+    { shows: "Lyrics over the water", means: "The line being sung, with the next below" },
   ],
   honesty: [
     "The waves are a picture, not the waveform. Only the loudness and the noisiness move the water.",
@@ -62,7 +63,7 @@ export const SEA_KEY: SceneKey = {
 };
 
 export const SEA_SETTINGS: SceneSettingDef[] = [
-  { key: "words", label: "Words", kind: "toggle", default: true },
+  { key: "words", label: "Lyrics", kind: "toggle", default: true, full: true },
   { key: "sway", label: "Sway", kind: "toggle", default: true },
 ];
 
@@ -439,7 +440,7 @@ export class Sea implements ThreeScene {
   }
 
   overlay(ctx: CanvasRenderingContext2D, f: SceneFrame): void {
-    if (f.mini || !f.lyric || this.settings.words === false) return;
+    if (!f.lyric || this.settings.words === false) return;
     const { w, h, palette: P } = f;
     const { text, next, index, lines } = f.lyric;
     const pres = this.words.step(text ? [String(index)] : [], f.dt);

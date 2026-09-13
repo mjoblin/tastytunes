@@ -25,18 +25,18 @@ import {
  */
 export const PIT_KEY: SceneKey = {
   reads: [
-    { shows: "A ball", means: "a drum hit" },
-    { shows: "Its size", means: "how hard the hit was. A kick is a boulder and a hi-hat a marble" },
+    { shows: "A ball", means: "A drum hit" },
+    { shows: "Its size", means: "How hard the hit was. A kick is a boulder and a hi-hat a marble" },
     {
       shows: "Its color and side",
       means:
-        "which drum. Kicks come from the left, hi-hats from the right and snares from the middle",
+        "Which drum. Kicks come from the left, hi-hats from the right and snares from the middle",
     },
-    { shows: "The pile", means: "the last minute of hits. The oldest wash away" },
-    { shows: "The back wall", means: "the current lyric, with the next line waiting below" },
-    { shows: "A ring on the floor", means: "each beat, wider on the first beat of a bar" },
-    { shows: "The floor's glow", means: "the bass" },
-    { shows: "A rain of marbles", means: "a drop" },
+    { shows: "The pile", means: "The last minute of hits. The oldest are washed away" },
+    { shows: "The back wall", means: "The line being sung, with the next below" },
+    { shows: "A ring on the floor", means: "Each beat, wider on the first beat of a bar" },
+    { shows: "The floor's glow", means: "The bass" },
+    { shows: "A rain of marbles", means: "A drop" },
   ],
   honesty: [
     "A ball is a drum hit found in the audio (a hard-plucked bass can count as a kick), not a note, and where it rolls means nothing.",
@@ -44,8 +44,8 @@ export const PIT_KEY: SceneKey = {
 };
 
 export const PIT_SETTINGS: SceneSettingDef[] = [
-  { key: "sounds", label: "Sounds", kind: "toggle", default: false },
-  { key: "words", label: "Words", kind: "toggle", default: true },
+  { key: "sounds", label: "Sounds", kind: "toggle", default: false, full: true },
+  { key: "words", label: "Lyrics", kind: "toggle", default: true, full: true },
 ];
 
 function registerColor(P: SceneFrame["palette"], register: number): Rgb {
@@ -171,7 +171,7 @@ export class Pit implements Scene {
 
     // the back wall: the current line, faint, and the floor line
     const groundY = h * (f.mini ? 0.92 : 0.86);
-    if (f.lyric && this.settings.words !== false && !f.mini) {
+    if (f.lyric && this.settings.words !== false) {
       const { lines, index, text } = f.lyric;
       this.wall.step(text ? [String(index)] : [], f.dt);
       sceneFont(ctx, f, "lead", 500);

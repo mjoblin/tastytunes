@@ -16,7 +16,7 @@ import { ONSET_HOP_MS, type Onsets } from "./onsets";
  * Stored packed beside the analysis under one version: bump FEATURES_VERSION
  * and every cached track measures again once, on its next play.
  */
-export const FEATURES_VERSION = 10; // 9: drops read at frame resolution around the return, earliest return wins
+export const FEATURES_VERSION = 11; // 11: the breath and the cut read past a riser before the slam; 9: drops at frame resolution
 
 export interface Beats {
   bpm: number;
@@ -726,14 +726,58 @@ export function findDrops(strip: Strip, onsets: Onsets, beats: Beats | null): Dr
     if (chillMax === 0) continue;
     /** Where the lull ends: the return, or the pickup's first frame. */
     const end = r - pickup * W;
-    let breathMax = 0;
-    while (end - (breathMax + 1) * W >= 0 && breathMax < 120) {
-      const a = end - (breathMax + 1) * W;
-      const lv = meanLoud(a, a + W);
-      if (!(lv < afterLoud - 0.2 || (maxBass(a, a + W) < afterBass - 0.5 && lv < afterLoud - 0.03)))
-        break;
-      breathMax++;
-    }
+    /** Half-second windows of breath (near silence) back from `from`. */
+    const breathFrom = (from: number): number => {
+      let b = 0;
+      while (from - (b + 1) * W >= 0 && b < 120) {
+        const a = from - (b + 1) * W;
+        const lv = meanLoud(a, a + W);
+        if (!(
+          lv < afterLoud - 0.2 ||
+          (maxBass(a, a + W) < afterBass - 0.5 && lv < afterLoud - 0.03)
+        ))
+          break;
+        b++;
+      }
+      return b;
+    };
+    /** Frames of near-total silence back from `from`, stepping over up to three frames whose
+     *  level is already up (the slam's first frame can carry the level a tenth before the
+     *  bass reads). */
+    const cutFrom = (from: number): number => {
+      let f0 = from;
+      let stepped = 0;
+      while (f0 > 0 && stepped < 3 && onLevel(f0)) {
+        f0--;
+        stepped++;
+      }
+      let c = 0;
+      while (f0 - c >= 0 && loud[f0 - c] < afterLoud - 0.35 && c < fps * 3) c++;
+      return c;
+    };
+    // A RISER between the gasp and the slam is read past: up to eight tenths right before the
+    // return where the level is already up (a sweep, a snare roll, a vocal) but the bass is
+    // still out, WITH A GASP FRAME RIGHT BEHIND IT (the level 12 dB under the return's). The
+    // breath and the cut are then read from the gasp's last frame as well as from the return,
+    // and the better reading stands, so no drop reads less than it did. Forests, 1:21: six
+    // tenths of near silence, half a second with the level up and the bass gone, the slam at
+    // 1:21.7; read from the slam alone the breath was nil and the drop cleared Loose only
+    // (the user, 2026-09-12, paused in the middle of it: "we didn't detect it"). The riser's
+    // bass may sit 15 dB under the drop's rather than the chill rule's 21: a sweep has some
+    // low content. Without the gasp behind it a level-up stretch is the tail of an ordinary
+    // lull and is left alone (a first cut read past any such stretch and re-binned every
+    // candidate's windows, and eight marginal drops vanished across the corpus)
+    let riser = 0;
+    while (
+      riser < 8 &&
+      end - riser - 1 >= 0 &&
+      bass[end - riser - 1] < afterBass - 0.25 &&
+      loud[end - riser - 1] >= afterLoud - 0.2
+    )
+      riser++;
+    if (riser > 0 && !(end - riser - 1 >= 0 && loud[end - riser - 1] < afterLoud - 0.2)) riser = 0;
+    const gaspEnd = end - riser;
+    const breathMax = Math.max(breathFrom(end), riser > 0 ? breathFrom(gaspEnd) : 0);
     // the lull is the longest reduced stretch whose music BEFORE it was louder than it or
     // carried the beat: a passage reduced against a loud drop with nothing before it is an
     // intro, and the shortest such stretch (the last breath) would hide the real breakdown
@@ -751,18 +795,7 @@ export function findDrops(strip: Strip, onsets: Onsets, beats: Beats | null): Dr
     if (!lull) continue;
     const chill = (lull * W) / fps;
     const breath = (Math.min(breathMax, lull) * W) / fps;
-    // the cut: frames of near-total silence right before the return (stepping over up to
-    // three frames whose level is already up: the slam's first frame can carry the level a
-    // tenth before the bass reads)
-    let f0 = r - 1;
-    let stepped = 0;
-    while (f0 > 0 && stepped < 3 && onLevel(f0)) {
-      f0--;
-      stepped++;
-    }
-    let cutFrames = 0;
-    while (f0 - cutFrames >= 0 && loud[f0 - cutFrames] < afterLoud - 0.35 && cutFrames < fps * 3)
-      cutFrames++;
+    const cutFrames = Math.max(cutFrom(r - 1), riser > 0 ? cutFrom(gaspEnd - 1) : 0);
     const cut = cutFrames / fps;
     if (!clearsAny(chill, breath, cut)) continue;
     // how hard it hits: the level's return, or the bass's (a break where only the beat left

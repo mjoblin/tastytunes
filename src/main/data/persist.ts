@@ -35,6 +35,9 @@ export function getSettings(): AppSettings {
     if (!DISPLAY_SCENE_IDS.includes(loaded.displayScene)) {
       loaded.displayScene = DEFAULT_SETTINGS.displayScene;
     }
+    if (!DISPLAY_SCENE_IDS.includes(loaded.nowPlayingScene)) {
+      loaded.nowPlayingScene = DEFAULT_SETTINGS.nowPlayingScene;
+    }
   } catch {
     loaded = { ...DEFAULT_SETTINGS };
   }
