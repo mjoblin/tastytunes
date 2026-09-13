@@ -32,7 +32,6 @@ export interface ScreenDef {
   /** Keys that still reach the screen but are shown nowhere (the nav, the
    *  palette and the ? overlay name `key` alone): a retired key kept for
    *  the fingers that learned it, for one cycle. */
-  altKeys?: string[];
 }
 
 /**

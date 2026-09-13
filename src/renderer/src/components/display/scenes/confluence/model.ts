@@ -9,9 +9,9 @@
  * more: they are a solid layer above the gas (see index.ts).
  *
  * The three-column model that came before (a low register rising to meet a
- * high one falling, the front their balance) is kept below, unused by the
- * scene: the user found six nozzles top and bottom read as plumbing
- * (2026-09-08). Hygiene: delete it once the vents have settled.
+ * high one falling, the front their balance) was cut on 2026-09-08, when the
+ * user found six nozzles top and bottom read as plumbing, and deleted on
+ * 2026-09-13 once the vents had settled.
  */
 /** Where the vents sit: just above the bottom edge, spread across the middle 82% of the width. */
 export const VENT_INSET = 0.035;
@@ -47,10 +47,6 @@ export function ventFor(
   };
 }
 
-export const COLUMNS = 3;
-export const EDGE_INSET = 0.03;
-/** How far a plume may wander from its column, in width units. */
-export const LANE_HALF_WIDTH = 0.07;
 /** Field units per second a full-level register pushes. */
 export const PUSH = 130;
 export const SPLAT_RADIUS = 0.0026;
@@ -65,38 +61,6 @@ export interface Emission {
   radius: number;
   ink: number;
   register: number;
-}
-
-/** A register's column centre, 0..1: bass, low and low-mid across the bottom, their partners above. */
-export function columnX(register: number): number {
-  const span = 1 - 0.12 * 2;
-  return 0.12 + (span * ((register % COLUMNS) + 0.5)) / COLUMNS;
-}
-
-/** Whether a register enters from the bottom (rising) or the top (falling). */
-export const rises = (register: number): boolean => register < COLUMNS;
-
-/** One register's emission this tick from its level (0..1); null below the noise floor. */
-export function emissionFor(
-  register: number,
-  level: number,
-  vigour: number,
-  unit: () => number,
-): Emission | null {
-  if (level < 0.06) return null;
-  const up = rises(register);
-  const jitter = (unit() * 2 - 1) * LANE_HALF_WIDTH;
-  const x = Math.min(Math.max(columnX(register) + jitter, 0.01), 0.99);
-  return {
-    x,
-    y: up ? EDGE_INSET : 1 - EDGE_INSET,
-    // a little lean toward the middle, so the flows meet rather than stand in their columns
-    dx: (unit() * 2 - 1) * 10 + (0.5 - x) * 18,
-    dy: (up ? 1 : -1) * PUSH * (0.35 + 0.65 * level) * vigour,
-    radius: SPLAT_RADIUS * (0.6 + 1.1 * level),
-    ink: (0.05 + 0.1 * level * level) * vigour,
-    register,
-  };
 }
 
 /** A big hit's whirlpool: spun into the middle band where the flows meet, sides alternating. */
