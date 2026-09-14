@@ -51,7 +51,8 @@ export function ArtImage({
    * streamer's USB server takes most of a second). Opt-in for the cards, the
    * album header and the card-size art tiles, never the
    * display-mode crossfade; it starts only after SLOW_MS in view, so a cached
-   * or fast picture never shimmers, and the picture eases in when it lands.
+   * or fast picture never shimmers, and a picture the well waited for eases
+   * in when it lands (a quick one is simply there).
    * IN VIEW matters for the lazy cards: a card below the fold is not asked for
    * until it nears the viewport, and a wait counted from mount would have every
    * scrolled-to card flash the band before its cached picture landed.
@@ -60,6 +61,8 @@ export function ArtImage({
 }): React.JSX.Element {
   const [loaded, setLoaded] = useState<string | null>(null);
   const [slow, setSlow] = useState(false);
+  /** The src that landed after the wait: only that one eases in; a quick one is simply there. */
+  const [eased, setEased] = useState<string | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
   useEffect(() => {
     if (!shimmer || !src || loaded === src) {
@@ -116,9 +119,15 @@ export function ArtImage({
         src={shown}
         alt=""
         loading={lazy ? "lazy" : undefined}
-        className={cx(className, shimmer && loaded === src && "art-in")}
+        className={cx(className, shimmer && eased === src && "art-in")}
         onLoad={() => {
-          if (base === src) setLoaded(src);
+          if (base === src) {
+            // ease in only a picture the well waited for; one from the cache is
+            // just there, as it would be with no indicator at all (user, 2026-09-14:
+            // the header's picture looked as if it loaded again after its card)
+            if (slow) setEased(src);
+            setLoaded(src);
+          }
         }}
         onError={() => {
           if (base === src && retriable(base) && attempt < RETRY_DELAYS_MS.length) {

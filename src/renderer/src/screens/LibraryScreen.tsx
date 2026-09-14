@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useLayoutEffect } from "react";
+import { artKeyOf } from "@/lib/artSrc";
 import { setCurrentLibrarySpot } from "@/lib/navSpot";
 import type { LibrarySpot } from "@/store";
 import {
@@ -1129,6 +1130,8 @@ export function LibraryScreen(): React.JSX.Element {
     firstTrack && nodeUdn(firstTrack)
       ? { serverUdn: nodeUdn(firstTrack) ?? "", objectId: firstTrack.id }
       : null,
+    true,
+    albumNode ? artKeyOf(albumNode) : undefined,
   );
   const albumArtist = albumNode
     ? (albumNode.artist ??

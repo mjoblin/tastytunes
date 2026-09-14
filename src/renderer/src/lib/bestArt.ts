@@ -47,6 +47,8 @@ export function useBestArt(
   query: EmbeddedArtQuery | null,
   /** Whether the track may be a library file worth reading (false for AirPlay and casts: a UPnP search per cast track is not worth it). */
   fileLookup = true,
+  /** The picture's content key (artKeyOf) when the caller has the node: the measure then reads the thumbnail its card made instead of fetching the origin again under the URL. */
+  key?: string,
 ): string | null {
   const enabled = useStore((s) => s.settings.artFromFiles) && fileLookup;
   const [best, setBest] = useState<string | null>(serverUrl ?? null);
@@ -58,8 +60,9 @@ export function useBestArt(
     void (async () => {
       // the measure goes through the thumbnail cache's card tier (2026-09-14),
       // never the whole picture: a thumb at its 480 px cap means the original
-      // was at least that wide, big enough
-      const probe = serverUrl ? artSrc(serverUrl, 240) : null;
+      // was at least that wide, big enough. Keyed like the card when the caller
+      // has the key, so the album header measures the file its card's fetch made
+      const probe = serverUrl ? artSrc(serverUrl, 240, key) : null;
       const serverWidth = probe ? await naturalWidth(probe) : null;
       if (!live) return;
       // the server's art is big enough: keep it, ask nothing
