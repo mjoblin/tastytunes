@@ -46,9 +46,10 @@ export function ArtImage({
   className?: string;
   lazy?: boolean;
   /**
-   * A faint band sweeps the well while a slow picture is on its way (2026-09-14,
-   * with the thumbnail cache: a first draw from the streamer's USB server takes
-   * most of a second). Opt-in for the cards and the art tiles, never the
+   * A thin line glides along the well's bottom edge while a slow picture is on
+   * its way (2026-09-14, with the thumbnail cache: a first draw from the
+   * streamer's USB server takes most of a second). Opt-in for the cards, the
+   * album header and the card-size art tiles, never the
    * display-mode crossfade; it starts only after SLOW_MS in view, so a cached
    * or fast picture never shimmers, and the picture eases in when it lands.
    * IN VIEW matters for the lazy cards: a card below the fold is not asked for

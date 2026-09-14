@@ -68,33 +68,38 @@
 .art-fade-in {
   animation: art-fade-in 0.45s ease-out;
 }
-/* A picture on its way (ArtImage's shimmer, 2026-09-14): a faint band sweeps
-   the well after 300 ms, only while the image is pending; the picture eases in
-   when it lands (.art-in). Reduced motion shows the plain well. */
+/* A picture on its way (ArtImage's shimmer, 2026-09-14): a thin line glides
+   left to right along the well's bottom edge after 300 ms in view, only while
+   the image is pending; the picture eases in when it lands (.art-in). It began
+   as a faint band sweeping the whole well: too dramatic, and its angle looked
+   wrong (user, 2026-09-14). The line takes the theme's dim ink, so light and
+   dark need no rule of their own. Reduced motion shows the plain well. */
 @keyframes art-shimmer {
   from {
-    background-position: 200% 0;
+    transform: translateX(-100%);
   }
   to {
-    background-position: -200% 0;
+    transform: translateX(250%);
   }
 }
 .art-shimmer {
   position: absolute;
-  inset: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  overflow: hidden;
   pointer-events: none;
-  background: linear-gradient(
-    100deg,
-    transparent 35%,
-    rgb(255 255 255 / 0.07) 50%,
-    transparent 65%
-  );
-  background-size: 250% 100%;
-  animation: art-shimmer 1.6s linear infinite;
 }
-:root.light .art-shimmer {
-  background: linear-gradient(100deg, transparent 35%, rgb(0 0 0 / 0.05) 50%, transparent 65%);
-  background-size: 250% 100%;
+.art-shimmer::after {
+  content: "";
+  display: block;
+  width: 40%;
+  height: 100%;
+  border-radius: 1px;
+  background: var(--color-dim);
+  opacity: 0.55;
+  animation: art-shimmer 1.4s linear infinite;
 }
 @media (prefers-reduced-motion: reduce) {
   .art-shimmer {

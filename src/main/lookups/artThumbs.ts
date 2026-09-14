@@ -12,9 +12,15 @@ import { app, nativeImage } from "electron";
  * cache would empty on every standby). Asset resizes on request and keeps its
  * own path (shared/artUrl); everything else draws through here.
  *
- * Two tiers, made on first draw and never prefetched: a 320 px thumb for the
- * row and medium sites and a 480 px card for the 240 px sites, JPEG at 85
- * (the recentcover precedent); the Now Playing hero keeps the original. Keyed
+ * Two tiers, both made from the ONE origin fetch the first draw of either
+ * asks for, never prefetched: a 320 px thumb for the row and medium sites and
+ * a 480 px card for the 240 px sites, JPEG at 85 (the recentcover precedent);
+ * the Now Playing hero keeps the original. One fetch for every tier because
+ * the fetch is the cost (the stick's 0.8 s) and the resize is nothing: the
+ * album header's 160 px thumb is on disk by the time its card has drawn, so
+ * a click lands on the picture — it used to fetch the origin again, and the
+ * user saw the art pop in on the card and then a blank header (2026-09-14). A
+ * second asker while the fetch is in flight waits for it, whichever tier. Keyed
  * by CONTENT — server, album title, album artist — so a rotated id finds the
  * same file; a caller with only a URL keys by the URL. A picture the resizer
  * cannot read (SVG) is kept as it came, bounded. Files live under
@@ -47,7 +53,9 @@ interface Entry {
 
 let index: Map<string, Entry> | null = null;
 let timer: NodeJS.Timeout | null = null;
-const inflight = new Map<string, Promise<{ bytes: Buffer; type: string } | null>>();
+type Made = { bytes: Buffer; type: string };
+/** The origin fetches in flight, by content key: one fetch makes every tier. */
+const inflight = new Map<string, Promise<Record<ArtTier, Made> | null>>();
 let running = 0;
 const waiters: Array<() => void> = [];
 
@@ -142,15 +150,54 @@ async function fetchOrigin(url: string): Promise<{ raw: Buffer; type: string } |
   }
 }
 
+/** Every tier of one origin picture, made from one fetch and stored. */
+function makeAll(key: string, origin: string): Promise<Record<ArtTier, Made> | null> {
+  const pending = inflight.get(key);
+  if (pending) return pending;
+  const run = gate(async () => {
+    const got = await fetchOrigin(origin);
+    if (!got) return null;
+    const map = load();
+    const img = nativeImage.createFromBuffer(got.raw);
+    const made = {} as Record<ArtTier, Made>;
+    for (const tier of Object.keys(TIERS) as ArtTier[]) {
+      let bytes = got.raw;
+      let type = got.type;
+      if (!img.isEmpty()) {
+        const { width } = img.getSize();
+        const shown =
+          width > TIERS[tier] ? img.resize({ width: TIERS[tier], quality: "good" }) : img;
+        bytes = shown.toJPEG(JPEG_QUALITY);
+        type = "image/jpeg";
+      } else if (bytes.length > PASSTHROUGH_MAX) {
+        made[tier] = { bytes, type }; // too big to keep as it came; served once, not stored
+        continue;
+      }
+      const id = idFor(key, tier);
+      const entry: Entry = { bytes: bytes.length, at: Date.now(), type, tier, ext: extFor(type) };
+      try {
+        mkdirSync(join(dir(), tier), { recursive: true });
+        writeFileSync(fileFor(id, entry), bytes);
+        map.set(id, entry);
+      } catch {
+        // the disk said no; the picture still draws this once
+      }
+      made[tier] = { bytes, type };
+    }
+    evict(map);
+    save();
+    return made;
+  }).finally(() => inflight.delete(key));
+  inflight.set(key, run);
+  return run;
+}
+
 /**
- * The picture for `key` at `tier`: from the cache, else fetched from `origin`
- * once, resized, stored and served. Null when the origin does not answer.
+ * The picture for `key` at `tier`: from the cache, else made with every other
+ * tier from one fetch of `origin`, stored and served. Null when the origin
+ * does not answer.
  */
-export function artThumb(
-  key: string,
-  tier: ArtTier,
-  origin: string,
-): Promise<{ bytes: Buffer; type: string } | null> {
+export async function artThumb(key: string, tier: ArtTier, origin: string): Promise<Made | null> {
   const map = load();
   const id = idFor(key, tier);
   const hit = map.get(id);
@@ -159,41 +206,13 @@ export function artThumb(
       const bytes = readFileSync(fileFor(id, hit));
       hit.at = Date.now();
       save();
-      return Promise.resolve({ bytes, type: hit.type });
+      return { bytes, type: hit.type };
     } catch {
       map.delete(id); // the file went; make it again
     }
   }
-  const pending = inflight.get(id);
-  if (pending) return pending;
-  const run = gate(async () => {
-    const got = await fetchOrigin(origin);
-    if (!got) return null;
-    let bytes = got.raw;
-    let type = got.type;
-    const img = nativeImage.createFromBuffer(got.raw);
-    if (!img.isEmpty()) {
-      const { width } = img.getSize();
-      const shown = width > TIERS[tier] ? img.resize({ width: TIERS[tier], quality: "good" }) : img;
-      bytes = shown.toJPEG(JPEG_QUALITY);
-      type = "image/jpeg";
-    } else if (bytes.length > PASSTHROUGH_MAX) {
-      return { bytes, type }; // too big to keep as it came; served once, not stored
-    }
-    const entry: Entry = { bytes: bytes.length, at: Date.now(), type, tier, ext: extFor(type) };
-    try {
-      mkdirSync(join(dir(), tier), { recursive: true });
-      writeFileSync(fileFor(id, entry), bytes);
-      map.set(id, entry);
-      evict(map);
-      save();
-    } catch {
-      // the disk said no; the picture still draws this once
-    }
-    return { bytes, type };
-  }).finally(() => inflight.delete(id));
-  inflight.set(id, run);
-  return run;
+  const made = await makeAll(key, origin);
+  return made?.[tier] ?? null;
 }
 
 export function artThumbsStats(): { entries: number; bytes: number } {
