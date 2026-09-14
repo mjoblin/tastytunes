@@ -1,10 +1,11 @@
+import { useEffect, useState } from "react";
 import { Loader2, RefreshCw } from "lucide-react";
 import { type AppSettings } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { fmtCount } from "@/lib/format";
 import { HeaderChip } from "@/components/chrome/Chrome";
-import { Toggle } from "@/components/settings/SettingsKit";
+import { SettingRow, Toggle, fmtBytes } from "@/components/settings/SettingsKit";
 
 // The Libraries section, split out of SettingsScreen.tsx 2026-09-13 (the Settings split: the screen had held every
 // section and control at 2,142 lines); the shared rows and controls live in ./SettingsKit.
@@ -80,6 +81,7 @@ export function LibrariesSection({
           </div>
         ))}
       </div>
+      <ArtThumbsRow />
     </section>
   );
 }
@@ -92,3 +94,30 @@ export function LibrariesSection({
  * The truth row reads the files fresh; torn lines and write failures are
  * surfaced here, never hidden.
  */
+
+/** The album-art thumbnail cache's size and its Clear (main/lookups/artThumbs). */
+function ArtThumbsRow(): React.JSX.Element {
+  const [stats, setStats] = useState<{ entries: number; bytes: number } | null>(null);
+  useEffect(() => {
+    void tt.artThumbsStats().then(setStats);
+  }, []);
+  const empty = stats != null && stats.entries === 0;
+  return (
+    <SettingRow
+      label="Album art thumbnails"
+      hint="Covers from servers that can't resize them (the streamer's USB drive) are kept small on disk, up to 200 MB, the least recently drawn dropping first."
+    >
+      <button
+        onClick={() => void tt.clearArtThumbs().then(setStats)}
+        disabled={empty}
+        className="text-[12.5px] text-dim hover:text-ink disabled:opacity-40 transition-colors"
+      >
+        {stats == null
+          ? "…"
+          : empty
+            ? "Empty"
+            : `Clear ${fmtBytes(stats.bytes)} (${fmtCount(stats.entries)} ${stats.entries === 1 ? "picture" : "pictures"})`}
+      </button>
+    </SettingRow>
+  );
+}

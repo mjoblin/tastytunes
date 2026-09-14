@@ -7,6 +7,7 @@ import {
   powerMonitor,
   screen,
   shell,
+  protocol,
 } from "electron";
 import { basename, join } from "node:path";
 import { IPC, type MenuCommand, type StreamerCommand } from "@shared/ipc";
@@ -67,6 +68,7 @@ import {
 import { fetchCoverArt } from "./lookups/coverArt";
 import { radioByTags, radioSearch, radioTop } from "./lookups/radioBrowser";
 import { clearLookupCaches, flushLookupCaches, lookupCacheStats } from "./lookups/diskCache";
+import { artThumb, artThumbsStats, clearArtThumbs, flushArtThumbs } from "./lookups/artThumbs";
 import {
   audioResUrl,
   browse as mediaBrowse,
@@ -94,6 +96,12 @@ import { listeningRecord } from "./data/listeningRecord";
 import { playStatsFromRecord } from "./data/playStats";
 import { embeddedArtFor } from "./lookups/embeddedArt";
 import type { EmbeddedArtQuery } from "@shared/model";
+
+// tt-art: the app's own picture scheme (main/lookups/artThumbs). Registered
+// before ready, as Electron requires; served in whenReady.
+protocol.registerSchemesAsPrivileged([
+  { scheme: "tt-art", privileges: { standard: true, secure: true, supportFetchAPI: true } },
+]);
 
 // A dead log pipe must never crash the app: when a parent process that
 // spawned us (a script, a test harness) dies, our stdout/stderr writes
@@ -657,6 +665,8 @@ function registerIpc(): void {
   });
   ipcMain.handle(IPC.lookupCacheStats, () => lookupCacheStats());
   ipcMain.handle(IPC.clearLookupCaches, () => clearLookupCaches());
+  ipcMain.handle(IPC.artThumbsStats, () => artThumbsStats());
+  ipcMain.handle(IPC.clearArtThumbs, () => clearArtThumbs());
 
   // Media browser — every call needs the connected streamer's host.
   const streamerHost = (): string => {
@@ -778,6 +788,24 @@ if (!gotLock) {
   app
     .whenReady()
     .then(() => {
+      // tt-art://thumb/<tier>/<key>?u=<origin>: the cache answers, or makes the
+      // thumbnail from the origin once; our own responses carry a long lifetime
+      // so the browser cache answers re-draws without asking main
+      protocol.handle("tt-art", async (req) => {
+        const url = new URL(req.url);
+        const [, tier, key] = url.pathname.split("/");
+        const origin = url.searchParams.get("u");
+        if ((tier !== "thumb" && tier !== "card") || !key || !origin)
+          return new Response(null, { status: 400 });
+        const got = await artThumb(decodeURIComponent(key), tier, origin);
+        if (!got) return new Response(null, { status: 404 });
+        return new Response(new Uint8Array(got.bytes), {
+          headers: {
+            "content-type": got.type,
+            "cache-control": "public, max-age=31536000, immutable",
+          },
+        });
+      });
       registerIpc();
       installAppMenu(menuDeps);
       createWindow();
@@ -851,6 +879,7 @@ if (!gotLock) {
     deviceManager.shutdown();
     stopDemoStreamer();
     flushLookupCaches();
+    flushArtThumbs();
     // Quitting mid-track: the open play's accumulated time reaches the
     // record (synchronous append; see listeningRecord).
     listeningRecord.flush();

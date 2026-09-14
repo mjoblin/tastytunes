@@ -12,7 +12,7 @@ import { FACT_SEP } from "@/lib/mediaFacts";
 import { DurationCell } from "@/components/media/DurationCell";
 import { Eqbars } from "@/components/media/Eqbars";
 import { NameLine, NameLink } from "@/components/media/NameLine";
-import { artUrlAt } from "@shared/artUrl";
+import { artKeyOf, artSrc } from "@/lib/artSrc";
 
 // The Library's four listing renderers — cards and rows for containers and
 // tracks. Pure presentation: every action arrives as a callback.
@@ -148,7 +148,7 @@ export function ContainerCard({
             the faceplate, a plateau on paper) */}
         <div className="relative aspect-square w-full rounded-lg overflow-hidden bg-veil flex items-center justify-center">
           <ArtImage
-            src={artUrlAt(node.artUrl, 240)}
+            src={artSrc(node.artUrl, 240, artKeyOf(node))}
             fallbackArt={
               album ? { artist: node.albumArtist ?? node.artist, album: node.title } : undefined
             }
@@ -327,7 +327,7 @@ export function ContainerRow({
         />
       )}
       <MediaArt
-        src={artUrlAt(node.artUrl, 240)}
+        src={artSrc(node.artUrl, 240, artKeyOf(node))}
         kind={album ? "album" : isArtistClass(node.upnpClass) ? "artist" : "folder"}
         className={muted ? "opacity-60 saturate-[.6]" : undefined}
       />

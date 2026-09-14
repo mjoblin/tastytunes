@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { playKey, type EmbeddedArt, type EmbeddedArtQuery } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
+import { artSrc } from "@/lib/artSrc";
 
 /**
  * The best artwork for a BIG surface (the Now Playing hero, Display mode, the
@@ -55,10 +56,18 @@ export function useBestArt(
     if (!query) return;
     let live = true;
     void (async () => {
-      const serverWidth = serverUrl ? await naturalWidth(serverUrl) : null;
+      // the measure goes through the thumbnail cache's card tier (2026-09-14),
+      // never the whole picture: a thumb at its 480 px cap means the original
+      // was at least that wide, big enough
+      const probe = serverUrl ? artSrc(serverUrl, 240) : null;
+      const serverWidth = probe ? await naturalWidth(probe) : null;
       if (!live) return;
       // the server's art is big enough: keep it, ask nothing
-      if (serverWidth != null && serverWidth >= SMALL_PX) return;
+      if (
+        serverWidth != null &&
+        (serverWidth >= SMALL_PX || (probe !== serverUrl && serverWidth >= 480))
+      )
+        return;
       if (enabled) {
         const art = await embedded(query);
         if (!live) return;

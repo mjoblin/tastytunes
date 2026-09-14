@@ -78,7 +78,7 @@ import { clampChipPos } from "@/lib/navDrop";
 import { ModalShell } from "@/components/chrome/Overlay";
 import { PresetSavePanel, PresetPicker } from "@/components/library/LibraryMenus";
 import { HeaderChip, ScreenTitle, GAP_BETWEEN, GAP_WITHIN } from "@/components/chrome/Chrome";
-import { artUrlAt } from "@shared/artUrl";
+import { artSrc } from "@/lib/artSrc";
 import { useQueueDrag } from "@/components/queue/useQueueDrag";
 import { useQueueSelection, type SelectionLate } from "@/components/queue/useQueueSelection";
 
@@ -1540,7 +1540,7 @@ function QueueCard({
         {/* the art well is a veil lift, never a panel hole — see LibraryCards */}
         <div className="aspect-square w-full rounded-lg overflow-hidden bg-veil flex items-center justify-center">
           <ArtImage
-            src={artUrlAt(md?.art_url, 240)}
+            src={artSrc(md?.art_url, 240)}
             lazy
             fallback={<Disc3 size={34} strokeWidth={1.2} className="text-faint" />}
           />

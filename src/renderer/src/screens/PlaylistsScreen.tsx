@@ -65,7 +65,7 @@ import {
 } from "@/components/chrome/Chrome";
 import { useConfirmPopover } from "@/components/chrome/Confirm";
 import { useOneShotAsk } from "@/hooks/useOneShotAsk";
-import { artUrlAt } from "@shared/artUrl";
+import { artSrc } from "@/lib/artSrc";
 
 /**
  * Stored playlists: the collection on the left, the selected playlist's tracks
@@ -637,7 +637,7 @@ function ArtStack({ playlist }: { playlist: Playlist }): React.JSX.Element {
           className="absolute h-8 w-8 rounded overflow-hidden ring-1 ring-edge2 bg-raised"
           style={{ left: i * 4, top: i * 2, zIndex: covers.length - i }}
         >
-          <ArtImage src={artUrlAt(src, 32)} fallback={<span />} />
+          <ArtImage src={artSrc(src, 32)} fallback={<span />} />
         </div>
       ))}
     </div>

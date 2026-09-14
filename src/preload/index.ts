@@ -86,6 +86,8 @@ const api: TastyTunesApi = {
   undoLabelSet: (label) => ipcRenderer.invoke(IPC.undoLabelSet, label),
   lookupCacheStats: () => ipcRenderer.invoke(IPC.lookupCacheStats),
   clearLookupCaches: () => ipcRenderer.invoke(IPC.clearLookupCaches),
+  artThumbsStats: () => ipcRenderer.invoke(IPC.artThumbsStats),
+  clearArtThumbs: () => ipcRenderer.invoke(IPC.clearArtThumbs),
   mediaServers: () => ipcRenderer.invoke(IPC.mediaServers),
   mediaBrowse: (serverUdn: string, objectId: string | null, titlePath: string[]) =>
     ipcRenderer.invoke(IPC.mediaBrowse, serverUdn, objectId, titlePath),

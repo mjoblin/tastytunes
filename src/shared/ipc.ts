@@ -458,6 +458,9 @@ export interface TastyTunesApi {
   lookupCacheStats(): Promise<{ entries: number; bytes: number }>;
   /** Wipe the lookup caches (memory + disk); resolves to the fresh stats. */
   clearLookupCaches(): Promise<{ entries: number; bytes: number }>;
+  /** The album-art thumbnail cache (main/lookups/artThumbs): its size, and Clear. */
+  artThumbsStats(): Promise<{ entries: number; bytes: number }>;
+  clearArtThumbs(): Promise<{ entries: number; bytes: number }>;
   onPush(cb: (msg: PushMessage) => void): () => void;
 }
 
@@ -521,6 +524,8 @@ export const IPC = {
   undoLabelSet: "tt:undoLabelSet",
   lookupCacheStats: "tt:lookupCacheStats",
   clearLookupCaches: "tt:clearLookupCaches",
+  artThumbsStats: "tt:artThumbsStats",
+  clearArtThumbs: "tt:clearArtThumbs",
   mediaServers: "tt:mediaServers",
   mediaBrowse: "tt:mediaBrowse",
   mediaSearch: "tt:mediaSearch",

@@ -2,7 +2,7 @@ import { Disc3, Heart, MoreHorizontal, Play } from "lucide-react";
 import { albumFormatChips, FACT_SEP } from "@/lib/mediaFacts";
 import { cx, fmtAgo } from "@/lib/format";
 import { useStore } from "@/store";
-import { artUrlAt } from "@shared/artUrl";
+import { artSrc } from "@/lib/artSrc";
 import type { MediaNode } from "@shared/model";
 import { ArtImage } from "@/components/media/ArtImage";
 import { NameLink } from "@/components/media/NameLine";
@@ -76,7 +76,7 @@ export function AlbumHeader(
       <div className="flex items-start gap-6 pb-6 pt-2" data-album-header>
         <div className="h-[160px] w-[160px] shrink-0 rounded-xl overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
           <ArtImage
-            src={artUrlAt(albumArt, 160)}
+            src={artSrc(albumArt, 160)}
             fallbackArt={{ artist: albumArtist, album: albumNode.title }}
             className="h-full w-full object-cover"
             fallback={<Disc3 size={48} strokeWidth={1} className="text-faint" />}
