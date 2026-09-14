@@ -48,6 +48,7 @@ export function DiagnosticsDrawer(): React.JSX.Element {
     max: () => Math.floor(window.innerHeight * 0.8),
     axis: "y",
     grow: -1,
+    undoLabel: "Resize Diagnostics",
   });
   const [expanded, setExpanded] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);

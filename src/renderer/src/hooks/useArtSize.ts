@@ -94,6 +94,7 @@ export function useArtSize(mirrored: boolean): {
     axis: "x",
     // the box grows away from the text: rightward, or leftward when the art anchors the right
     grow: mirrored ? -1 : 1,
+    undoLabel: "Resize Album Art",
   });
   return { size, dragging, snapped, handleProps, attachHero, attachWave };
 }
