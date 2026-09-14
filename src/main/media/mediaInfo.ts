@@ -16,7 +16,7 @@ import {
   type MediaInfoTarget,
   type MediaNode,
 } from "@shared/model";
-import { pools } from "./mediaIndex";
+import { pools, revalidate } from "./mediaIndex";
 import { browseMetadataNode } from "./upnpBrowser";
 
 const lc = (v: string | null | undefined): string => (v ?? "").trim().toLowerCase();
@@ -67,8 +67,20 @@ function creditedArtistNode(
 export async function lookupMediaInfo(
   host: string | null,
   q: MediaInfoQuery,
+  confirmed = false,
 ): Promise<MediaInfoTarget | null> {
   const groups = pools();
+  // an answer from a Browse-built index (the streamer's USB) is confirmed
+  // against the device before it is handed out: ids rotate there, and a
+  // landing on a container that no longer answers is the user's "not found"
+  const confirm = async (
+    pool: (typeof groups)[number],
+    target: MediaInfoTarget,
+  ): Promise<MediaInfoTarget | null> => {
+    if (confirmed || !host || pool.profile?.strategy !== "browse") return target;
+    if (!(await revalidate(host, pool.udn, target.node.id))) return target;
+    return lookupMediaInfo(host, q, true);
+  };
   const withAlbum = (pool: (typeof groups)[number], node: MediaNode): MediaInfoTarget => {
     const profile = pool.profile ? { serverProfile: pool.profile } : {};
     if (node.isContainer && /person|Artist/.test(node.upnpClass)) {
@@ -95,7 +107,7 @@ export async function lookupMediaInfo(
         (q.kind === "track" ? pool.tracks : q.kind === "album" ? pool.albums : pool.artists).find(
           (n) => n.id === q.objectId,
         ) ?? [...pool.tracks, ...pool.albums, ...pool.artists].find((n) => n.id === q.objectId);
-      if (hit) return withAlbum(pool, hit);
+      if (hit) return confirm(pool, withAlbum(pool, hit));
     }
   }
   // 2. content, every ready index (the ref's own server first)
@@ -112,7 +124,7 @@ export async function lookupMediaInfo(
       (q.album && candidates.find((n) => lc(n.album) === lc(q.album))) ||
       candidates.find((n) => q.artist == null || lc(n.artist) === lc(q.artist)) ||
       candidates[0];
-    return withAlbum(pool, best);
+    return confirm(pool, withAlbum(pool, best));
   }
   // 2b. an artist the index knows only as a credit (guest, composer, or the
   //     album artist of a server without person entities) still gets a page
