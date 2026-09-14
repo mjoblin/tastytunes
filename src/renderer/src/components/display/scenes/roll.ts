@@ -10,7 +10,7 @@ import type {
 import { easeTowards } from "../clock";
 import { sceneFont } from "../type";
 import { clamp, fitText, mix, rgb, rgba } from "./lib";
-import { driftRecord } from "./survey/model";
+import { driftRecord } from "../three";
 
 /**
  * ROLL, shown as PIANO ROLL (renamed 2026-09-08; the id and the file keep the old name so

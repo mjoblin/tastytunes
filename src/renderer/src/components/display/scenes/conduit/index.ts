@@ -22,7 +22,7 @@ import {
 } from "../../three";
 import { clamp, mix, rgba, wrap } from "../lib";
 import { coverageToSdf } from "../sdf";
-import { driftRecord } from "../survey/model";
+import { driftRecord } from "../../three";
 import {
   BEHIND_SECONDS,
   BULGE,

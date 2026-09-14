@@ -15,6 +15,7 @@ import {
   recordTexture,
   toColor,
   type RecordTexture,
+  driftRecord,
 } from "../../three";
 import { typePx, sceneFont } from "../../type";
 import { clamp, fitText, mix, rgba } from "../lib";
@@ -26,7 +27,6 @@ import {
   MAP_DEPTH,
   MAP_WIDTH,
   RELIEF_HEIGHT,
-  driftRecord,
   xOfSeconds,
 } from "./model";
 

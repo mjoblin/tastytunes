@@ -1,5 +1,3 @@
-import type { SceneRecord } from "../types";
-
 /**
  * The Survey's decisions, with no three.js in them: the map of the song.
  * The whole track laid left to right, the six registers as ranges receding
@@ -36,30 +34,4 @@ export function minuteMarks(seconds: number): number[] {
   const out: number[] = [];
   for (let m = 60; m < seconds; m += 60) out.push(m);
   return out;
-}
-
-/**
- * A stand-in record for a track the app cannot read (radio, a cast, a library
- * it cannot reach): gentle hills from a few sines, so the map is a map and
- * not a plain. Deterministic, so it does not shimmer between frames.
- */
-export function driftRecord(): SceneRecord {
-  const frames = 600;
-  const bands = new Float32Array(frames * LANES);
-  const loud = new Float32Array(frames);
-  for (let i = 0; i < frames; i++) {
-    const t = i / frames;
-    let sum = 0;
-    for (let b = 0; b < LANES; b++) {
-      const v =
-        0.35 +
-        0.2 * Math.sin(t * 9.1 + b * 1.3) +
-        0.12 * Math.sin(t * 23.7 - b * 0.7) +
-        0.08 * Math.sin(t * 51.3 + b * 2.1);
-      bands[i * LANES + b] = Math.min(1, Math.max(0, v));
-      sum += v;
-    }
-    loud[i] = Math.min(1, Math.max(0, sum / LANES));
-  }
-  return { fps: 10, frames, bands, loud };
 }

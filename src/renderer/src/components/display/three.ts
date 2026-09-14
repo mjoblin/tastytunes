@@ -103,6 +103,36 @@ export interface RecordTexture {
   seconds: number;
 }
 
+/**
+ * A stand-in record for a track the app cannot read (radio, a cast, a library
+ * it cannot reach): gentle hills from a few sines, so the map is a map and
+ * not a plain. Deterministic, so it does not shimmer between frames. Lives
+ * beside recordTexture since 2026-09-13 (it was the Survey's, imported by
+ * Roll and Conduit): the record's shape is this module's, not one scene's.
+ */
+export function driftRecord(): SceneRecord {
+  // the record's six registers, as recordTexture packs them
+  const LANES = 6;
+  const frames = 600;
+  const bands = new Float32Array(frames * LANES);
+  const loud = new Float32Array(frames);
+  for (let i = 0; i < frames; i++) {
+    const t = i / frames;
+    let sum = 0;
+    for (let b = 0; b < LANES; b++) {
+      const v =
+        0.35 +
+        0.2 * Math.sin(t * 9.1 + b * 1.3) +
+        0.12 * Math.sin(t * 23.7 - b * 0.7) +
+        0.08 * Math.sin(t * 51.3 + b * 2.1);
+      bands[i * LANES + b] = Math.min(1, Math.max(0, v));
+      sum += v;
+    }
+    loud[i] = Math.min(1, Math.max(0, sum / LANES));
+  }
+  return { fps: 10, frames, bands, loud };
+}
+
 export function recordTexture(record: SceneRecord, columns: number): RecordTexture {
   const { frames, fps } = record;
   // never finer than two columns a second: the strip's ten frames would comb the beat into the ground
