@@ -5,6 +5,7 @@ import { tt } from "@/api";
 import { useStore } from "@/store";
 import { fmtCount } from "@/lib/format";
 import { HeaderChip } from "@/components/chrome/Chrome";
+import { useConfirmPopover } from "@/components/chrome/Confirm";
 import { SettingRow, Toggle, fmtBytes } from "@/components/settings/SettingsKit";
 
 // The Libraries section, split out of SettingsScreen.tsx 2026-09-13 (the Settings split: the screen had held every
@@ -108,13 +109,23 @@ function ArtThumbsRow(): React.JSX.Element {
     void tt.artThumbsStats().then(setStats);
   }, []);
   const empty = stats != null && stats.entries === 0;
+  // the record's confirm on a cache too (user, 2026-09-14): a USB drive's art takes a while to come back
+  const confirmClear = useConfirmPopover();
   return (
     <SettingRow
       label="Album art thumbnails"
       hint="Art from servers that can't resize it on request (e.g. the streamer's USB drive) is cached by TastyTunes, up to 200 MB, with the least recently used being automatically removed first."
     >
+      {confirmClear.popover}
       <button
-        onClick={() => void tt.clearArtThumbs().then(setStats)}
+        onClick={(e) =>
+          confirmClear.ask(e, {
+            question:
+              "Clear the album art thumbnails? Art is fetched and cached again as it is browsed.",
+            verb: "Clear",
+            onConfirm: () => void tt.clearArtThumbs().then(setStats),
+          })
+        }
         disabled={empty}
         className="shrink-0 text-[12.5px] px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-alert hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all disabled:opacity-40 disabled:hover:text-dim disabled:hover:ring-edge disabled:hover:bg-panel/70"
       >

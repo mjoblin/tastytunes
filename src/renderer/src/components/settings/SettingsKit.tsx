@@ -3,6 +3,7 @@ import { tt } from "@/api";
 import { cx } from "@/lib/format";
 import { Slider } from "@/components/controls/Slider";
 import { Switch } from "@/components/controls/Switch";
+import { useConfirmPopover } from "@/components/chrome/Confirm";
 
 // The Settings screen's rows and controls, shared by its sections (split out of
 // SettingsScreen.tsx 2026-09-13 with the sections): a setting row, the toggle, the
@@ -26,13 +27,24 @@ export function CacheRow(): React.JSX.Element {
     void tt.lookupCacheStats().then(setStats);
   }, []);
   const empty = stats != null && stats.entries === 0;
+  // a cache clears with the record's confirm (user, 2026-09-14): the copies come back
+  // on their own, but filling them again can take a while, and the ask is a quick one
+  const confirmClear = useConfirmPopover();
   return (
     <SettingRow
       label="Cached lookups"
       hint="Lyrics, artist, and album lookups are kept on disk (a fixed size; the entries you haven't used longest drop first) so repeat plays don't re-ask the services above. The panels' refresh buttons overwrite the stored copy."
     >
+      {confirmClear.popover}
       <button
-        onClick={() => void tt.clearLookupCaches().then(setStats)}
+        onClick={(e) =>
+          confirmClear.ask(e, {
+            question:
+              "Clear the cached lookups? Lyrics, artist and album details are fetched again as they are needed.",
+            verb: "Clear",
+            onConfirm: () => void tt.clearLookupCaches().then(setStats),
+          })
+        }
         disabled={empty}
         className="shrink-0 text-[12.5px] px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-alert hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all disabled:opacity-40 disabled:hover:text-dim disabled:hover:ring-edge disabled:hover:bg-panel/70"
       >
