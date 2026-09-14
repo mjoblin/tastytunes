@@ -1528,6 +1528,15 @@ export interface MediaNode {
   id: string;
   parentId: string | null;
   title: string;
+  /**
+   * The folder titles from the source's root to this node's container, the
+   * container's own title last (an album's path ends with the album folder; a
+   * track's is its album folder's), recorded when the media index WALKED a
+   * folder tree (the streamer's USB drive, a plain-folder server). Absent for
+   * search-built entities, whose views are virtual. Open in Library lands on
+   * it, and the Library's browse re-walks it when the stored id has rotted.
+   */
+  titlePath?: string[];
   upnpClass: string;
   isContainer: boolean;
   artUrl: string | null;

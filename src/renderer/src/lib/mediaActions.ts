@@ -46,10 +46,12 @@ export async function openRefInLibrary(ref: MediaRef): Promise<boolean> {
   const node = info?.node;
   if (!node?.serverUdn) return miss();
   if (ref.kind === "album") {
+    // a folder tree's album lands on its folder path (the walk recorded it);
+    // a virtual view's on the album alone
     s.openInLibrary({
       serverUdn: node.serverUdn,
       objectId: node.id,
-      titlePath: [node.title],
+      titlePath: node.titlePath ?? [node.title],
       title: node.title,
     });
     return true;
@@ -85,10 +87,14 @@ export async function openRefInLibrary(ref: MediaRef): Promise<boolean> {
       ? album.node.id
       : node.parentId;
   if (!albumId) return miss();
+  const viaAlbum = album?.node.isContainer && album.node.id === albumId;
   s.openInLibrary({
     serverUdn: node.serverUdn,
     objectId: albumId,
-    titlePath: [albumTitle],
+    // the album's folder path when the walk recorded one (the track's is its
+    // album folder's, for a folder-only library); the album title alone for a
+    // virtual view
+    titlePath: (viaAlbum ? album.node.titlePath : null) ?? node.titlePath ?? [albumTitle],
     title: albumTitle,
     track: node.title,
   });
