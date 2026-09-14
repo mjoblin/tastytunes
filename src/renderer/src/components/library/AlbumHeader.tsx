@@ -76,8 +76,10 @@ export function AlbumHeader(
       <div className="flex items-start gap-6 pb-6 pt-2" data-album-header>
         {/* keyed by the album's content like its card, so the thumb the card's fetch made
             is the one drawn here (a click used to fetch the origin again and show blank
-            while it did, 2026-09-14); the well is positioned for the pending line */}
-        <div className="relative h-[160px] w-[160px] shrink-0 rounded-xl overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
+            while it did, 2026-09-14); the well is positioned for the pending line, and
+            takes the cards' veil rather than the row thumbs' raised ground so the album's
+            well matches the card it was clicked from (user, 2026-09-14) */}
+        <div className="relative h-[160px] w-[160px] shrink-0 rounded-xl overflow-hidden ring-1 ring-edge bg-veil flex items-center justify-center">
           <ArtImage
             src={artSrc(albumArt, 160, artKeyOf(albumNode))}
             fallbackArt={{ artist: albumArtist, album: albumNode.title }}
