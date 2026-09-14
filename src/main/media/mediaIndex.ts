@@ -84,7 +84,7 @@ interface StoredIndex {
 // Asset tagging). v2 added upnp:genre. A bump discards stored indexes
 // wholesale; rebuildHints below keeps that from costing Browse-only
 // servers their Build click.
-const VERSION = 11;
+const VERSION = 12; // v12: nodes from a browse walk carry their folder titlePath
 const PAGE = 500;
 const MAX_TRACKS = 50_000;
 const MAX_CONTAINERS = 10_000;
@@ -319,7 +319,10 @@ async function crawlBrowse(
   const artists = new Map<string, MediaNode>();
   const tracks = new Map<string, MediaNode>(into ? into.tracks.map((t) => [t.id, t]) : []);
   const visited = new Set<string>();
-  const parents = new Map<string, { title: string; isArtist: boolean }>(); // container id → what it is, for the parent-as-artist and canonical-branch rules
+  // container id → what it is (the parent-as-artist and canonical-title rules)
+  // and its folder titles from the root, the container's own last (the
+  // titlePath its albums and tracks carry, v12)
+  const parents = new Map<string, { title: string; isArtist: boolean; path: string[] }>();
   const parentsOf = new Map<string, Set<string>>(); // album id → every container it was listed under (dedupe's sibling evidence)
   const queue: string[] = ["0"];
   const put = (m: Map<string, MediaNode>, n: MediaNode): void => {
@@ -333,19 +336,24 @@ async function crawlBrowse(
     const children = await browseChildrenOf(host, server.udn, id);
     if (!children) continue;
     const parent = parents.get(id) ?? null;
+    const path = parent?.path ?? [];
     for (const raw of children) {
       // an album under its ARTIST container is credited to that artist by
       // right; under any other container, a matching credit is the listing's
       const n = stripParentArtist(raw, parent && !parent.isArtist ? parent.title : null);
       if (!n.isContainer) {
-        if (n.upnpClass.includes("audioItem") && !into) put(tracks, n);
+        if (n.upnpClass.includes("audioItem") && !into) put(tracks, { ...n, titlePath: path });
         continue;
       }
-      parents.set(n.id, { title: n.title, isArtist: n.upnpClass.includes("person") });
+      const own = [...path, n.title];
+      parents.set(n.id, { title: n.title, isArtist: n.upnpClass.includes("person"), path: own });
       if (n.upnpClass.includes("musicAlbum")) {
         albums.set(
           n.id,
-          preferCopy(albums.get(n.id), { node: n, underArtist: parent?.isArtist === true }),
+          preferCopy(albums.get(n.id), {
+            node: { ...n, titlePath: own },
+            underArtist: parent?.isArtist === true,
+          }),
         );
         parentsOf.set(n.id, (parentsOf.get(n.id) ?? new Set()).add(id));
       } else if (n.upnpClass.includes("person")) put(artists, n);

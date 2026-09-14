@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, useLayoutEffect } fr
 import { setCurrentLibrarySpot } from "@/lib/navSpot";
 import type { LibrarySpot } from "@/store";
 import {
-  ChevronRight,
   Disc3,
   HardDrive,
   Heart,
@@ -58,6 +57,7 @@ import { flashTarget, scrollToCentered } from "@/lib/scroll";
 import { isAlbumClass, stripFurniture } from "@/lib/media";
 import { FilterInput } from "@/components/controls/FilterInput";
 import { ContainerCard, ContainerRow, TrackRow } from "@/components/library/LibraryCards";
+import { Crumbs } from "@/components/library/Crumbs";
 import { SortChip } from "@/components/controls/SortChip";
 import {
   AlbumsLens,
@@ -1534,73 +1534,47 @@ export function LibraryScreen(): React.JSX.Element {
         }}
       />
       {/* breadcrumbs: Library (source list) › source › folders… — hidden at
-          the bare root, where the screen title already says it */}
+          the bare root, where the screen title already says it; the trail
+          folds its middle when it would not fit (Crumbs) */}
       {!searchMode && (serverUdn != null || lens != null || path.length > 0) && (
-        <div
-          data-library-crumbs
-          className="no-drag flex items-center gap-1 flex-wrap px-8 pb-3 text-[12.5px]"
-        >
-          {/* Arriving from unified search, the trail LEADS with Search rather
-            than burying it mid-trail: you didn't come through the library root,
-            and the first crumb is the way back to where you did come from. */}
-          <button
-            onClick={() => jumpTo(0)}
-            className={cx(
-              "px-1.5 py-0.5 rounded transition-colors",
-              atRoot && !lens ? "text-ink" : "text-dim hover:text-ink hover:bg-veil",
-            )}
-          >
-            {path[0]?.id === UNIFIED_SEARCH_CRUMB_ID ? "Search" : "Library"}
-          </button>
-          {atRoot && lens && (
-            <span className="flex items-center gap-1">
-              <ChevronRight size={12} className="text-faint" />
-              <span className="px-1.5 py-0.5 text-ink">{LENS_LABEL[lens]}</span>
-            </span>
-          )}
-          {server && path[0]?.id !== LENS_CRUMB_ID && (
-            <span className="flex items-center gap-1">
-              <ChevronRight size={12} className="text-faint" />
-              <button
-                onClick={() => jumpTo(1)}
-                className={cx(
-                  "px-1.5 py-0.5 rounded transition-colors",
-                  path.length === 0 ? "text-ink" : "text-dim hover:text-ink hover:bg-veil",
-                )}
-              >
-                {server.name}
-              </button>
-            </span>
-          )}
-          {path.map((crumb, i) =>
-            crumb.id === UNIFIED_SEARCH_CRUMB_ID ? null : (
-              <span key={`${crumb.id}-${i}`} className="flex items-center gap-1">
-                <ChevronRight size={12} className="text-faint" />
-                {crumb.id === SEARCH_CRUMB_ID ? (
-                  // the way back to the results this branch was entered from —
-                  // gold, matching the search bar's identity
-                  <button
-                    data-library-search-crumb
-                    onClick={() => jumpTo(i + 2)}
-                    className="flex items-center gap-1 px-1.5 py-0.5 rounded text-gold/90 hover:text-gold hover:bg-golddim transition-colors"
-                  >
-                    <Search size={11} />
-                    {crumb.title}
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => jumpTo(i + 2)}
-                    className={cx(
-                      "px-1.5 py-0.5 rounded transition-colors",
-                      i === path.length - 1 ? "text-ink" : "text-dim hover:text-ink hover:bg-veil",
-                    )}
-                  >
-                    {crumb.title}
-                  </button>
-                )}
-              </span>
-            ),
-          )}
+        <div data-library-crumbs className="no-drag px-8 pb-3 text-[12.5px]">
+          <Crumbs
+            items={[
+              {
+                // Arriving from unified search, the trail LEADS with Search rather
+                // than burying it mid-trail: you didn't come through the library root,
+                // and the first crumb is the way back to where you did come from.
+                key: "root",
+                label: path[0]?.id === UNIFIED_SEARCH_CRUMB_ID ? "Search" : "Library",
+                onClick: () => jumpTo(0),
+                current: atRoot && !lens,
+              },
+              ...(atRoot && lens ? [{ key: "lens", label: LENS_LABEL[lens] }] : []),
+              ...(server && path[0]?.id !== LENS_CRUMB_ID
+                ? [
+                    {
+                      key: "server",
+                      label: server.name,
+                      onClick: () => jumpTo(1),
+                      current: path.length === 0,
+                    },
+                  ]
+                : []),
+              ...path.flatMap((crumb, i) =>
+                crumb.id === UNIFIED_SEARCH_CRUMB_ID
+                  ? []
+                  : [
+                      {
+                        key: `${crumb.id}-${i}`,
+                        label: crumb.title,
+                        onClick: () => jumpTo(i + 2),
+                        current: i === path.length - 1,
+                        search: crumb.id === SEARCH_CRUMB_ID,
+                      },
+                    ],
+              ),
+            ]}
+          />
         </div>
       )}
 
