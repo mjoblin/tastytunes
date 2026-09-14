@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo } from "react";
+import { useRowSelection } from "@/components/library/useRowSelection";
 import type { QueueListItem } from "@shared/smoip";
 import { favoriteKey, type ContentRef, type Favorite } from "@shared/model";
 import { tt } from "@/api";
@@ -7,12 +8,14 @@ import { toggleFavorite } from "@/lib/favorites";
 import { fromQueueItem, refToFavorite } from "@/lib/mediaRef";
 
 // The Queue's SELECTION, lifted out of QueueScreen (2026-09-13, the second lift
-// of the screen's hygiene round): the multi-select over the visible rows with
-// the Finder chords and the bare-click rule, its pruning as the queue changes,
-// the keyboard (⌘A, Escape, Delete), the blank-click clearing, remove with its
-// one undo, the batch heart, and the bar's block moves. The screen keeps the
-// rows and the bar and takes the state back under the old names; the block
-// move belongs to the drag hook and reaches the selection late-bound.
+// of the screen's hygiene round): the multi-select over the visible rows —
+// the Finder chords, the bare-click rule, the pruning as the queue changes,
+// ⌘A, Escape and the blank-click clearing are the one row grammar in
+// useRowSelection (folded onto it the same evening, over the queue ids) —
+// plus what is the Queue's own: the album header's chord, Delete as Remove
+// with its one undo, the batch heart, and the bar's block moves. The screen
+// keeps the rows and the bar and takes the state back under the old names;
+// the block move belongs to the drag hook and reaches the selection late-bound.
 
 /** What the selection reads that the screen declares after it (the drag hook's block move). */
 export interface SelectionLate {
@@ -43,47 +46,18 @@ export function useQueueSelection(d: {
     restoreToQueue,
     late,
   } = d;
-  const [selected, setSelected] = useState<ReadonlySet<number>>(() => new Set());
-  const selAnchor = useRef<number | null>(null);
-
-  useEffect(() => {
-    setSelected((prev) => {
-      if (prev.size === 0) return prev;
-      const ids = new Set(items.map((it) => it.id));
-      const next = new Set([...prev].filter((id) => ids.has(id)));
-      return next.size === prev.size ? prev : next;
-    });
-  }, [items]);
+  // the row grammar over the visible queue ids (a row without an id is not a
+  // row you can pick); the drag's live flag holds Escape for the drag
+  const keys = useMemo(() => items.flatMap((it) => (it.id != null ? [it.id] : [])), [items]);
+  const {
+    selected,
+    setSelected,
+    rowClick: keyClick,
+    anchor: selAnchor,
+  } = useRowSelection<number>({ keys, holdEscape: dragLiveRef });
   /** True = the click was a selection chord; the caller must not play. */
-  const rowClick = (item: QueueListItem, e: React.MouseEvent): boolean => {
-    const id = item.id;
-    if (id == null) return false;
-    const idx = items.findIndex((it) => it.id === id);
-    if (e.metaKey || e.ctrlKey) {
-      setSelected((prev) => {
-        const next = new Set(prev);
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
-        return next;
-      });
-      selAnchor.current = idx;
-      return true;
-    }
-    if (e.shiftKey && selAnchor.current != null && idx >= 0) {
-      const [a, b] = [Math.min(selAnchor.current, idx), Math.max(selAnchor.current, idx)];
-      setSelected(new Set(items.slice(a, b + 1).flatMap((it) => (it.id == null ? [] : [it.id]))));
-      return true;
-    }
-    // SELECTION MODE SUSPENDS PLAYBACK (user, 2026-08-27; the Photos/Files
-    // rule for single-click-play surfaces): the first bare click exits the
-    // selection and must not also fire a track — a mis-click otherwise
-    // blasts playback mid-curation. The next click plays as always.
-    if (selected.size > 0) {
-      setSelected(new Set());
-      return true;
-    }
-    return false;
-  };
+  const rowClick = (item: QueueListItem, e: React.MouseEvent): boolean =>
+    item.id == null ? false : keyClick(item.id, e);
   /** ⌘-click on an album header toggles its whole run. */
   const groupModClick = (ids: number[], e: React.MouseEvent): boolean => {
     if (!(e.metaKey || e.ctrlKey)) {
@@ -140,42 +114,20 @@ export function useQueueSelection(d: {
       action: { label: "Undo", undo: () => useStore.getState().runUndo(undoId) },
     });
     // the two helpers are the screen's module functions, stable, named for the linter
-  }, [items, selected, restoreToQueue, snapQueueRows]);
-  // The selection's keyboard: ⌘A gathers everything visible (respecting a
-  // filter); with a selection, Esc exits and Delete/Backspace is Remove from
-  // queue — the Finder/Spotify keys. Never inside a text box.
+  }, [items, selected, setSelected, restoreToQueue, snapQueueRows]);
+  // Delete/Backspace is Remove from queue while a selection stands — the
+  // Finder/Spotify key (⌘A and Escape are the grammar's, in useRowSelection).
+  // Never inside a text box.
   useEffect(() => {
+    if (selected.size === 0) return;
     const onKey = (e: KeyboardEvent): void => {
       const t = e.target;
       if (t instanceof HTMLElement && t.matches("input, textarea, [contenteditable]")) return;
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "a") {
-        e.preventDefault();
-        setSelected(new Set(items.flatMap((it) => (it.id != null ? [it.id] : []))));
-        return;
-      }
-      if (selected.size === 0) return;
-      if (e.key === "Escape" && !dragLiveRef.current) setSelected(new Set());
       if (e.key === "Delete" || e.key === "Backspace") removeSelected();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [items, selected.size, removeSelected, dragLiveRef]);
-  // Clicking the app shell OUTSIDE the screen — the nav rail's blank areas —
-  // clears too. (The top strips are drag-region: the window's own drag
-  // handle, so the OS swallows those clicks like any title bar.)
-  useEffect(() => {
-    if (selected.size === 0) return;
-    const onWin = (e: MouseEvent): void => {
-      const t = e.target;
-      if (!(t instanceof HTMLElement)) return;
-      if (e.metaKey || e.ctrlKey || e.shiftKey) return;
-      if (!t.closest("[data-app-nav], [data-app-playbar]")) return;
-      if (t.closest("button, input, a, [aria-valuenow]")) return;
-      setSelected(new Set());
-    };
-    window.addEventListener("click", onWin);
-    return () => window.removeEventListener("click", onWin);
-  }, [selected.size]);
+  }, [selected.size, removeSelected]);
 
   // The selection's favorites as ONE verb with the album-header rule: adds
   // what's missing, and only reads "Remove" when every member is already

@@ -9,19 +9,25 @@ import { useEffect, useRef, useState } from "react";
 // click on the nav rail or the play bar clears, and when the rows change under
 // a selection the picks still shown SURVIVE (the Albums lens's rule, now
 // everywhere: a narrowing filter keeps a pick that is still on screen; a new
-// listing has no survivors and so clears). Keyed by the caller's row keys —
-// the caller renders its rows and its bar.
-export function useRowSelection(d: {
+// listing has no survivors and so clears). Keyed by the caller's row keys
+// (strings, or the Queue's numeric ids) — the caller renders its rows and its
+// bar; the Queue folded onto it the same evening.
+export function useRowSelection<K extends string | number = string>(d: {
   /** The rows shown, in order — the anchor's range, ⌘A's gather and the
    *  survivors all read it (memoize it: the effects key on it). */
-  keys: readonly string[];
+  keys: readonly K[];
   /** ⌘A gathers only while this holds (the Library's listing yields to an
    *  open lens, the root and a listing not ready). */
   canSelectAll?: boolean;
+  /** While this flag is up, Escape is someone else's (the Queue's live drag:
+   *  an Escape that cancels a drag must not also clear the selection). */
+  holdEscape?: { current: boolean };
 }) {
-  const { keys, canSelectAll = true } = d;
-  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
-  const anchor = useRef<string | null>(null);
+  const { keys, canSelectAll = true, holdEscape } = d;
+  const [selected, setSelected] = useState<ReadonlySet<K>>(() => new Set());
+  /** The anchor row for ⇧-click ranges, a row key not a slot (a re-sort
+   *  between the clicks still ranges from the same row); a drag may set it. */
+  const anchor = useRef<K | null>(null);
 
   // the survivors: prune to the rows shown whenever they change
   useEffect(() => {
@@ -34,7 +40,7 @@ export function useRowSelection(d: {
   }, [keys]);
 
   /** True = the click was a selection chord; the caller must not play or open. */
-  const rowClick = (key: string, e: React.MouseEvent): boolean => {
+  const rowClick = (key: K, e: React.MouseEvent): boolean => {
     if (e.metaKey || e.ctrlKey) {
       setSelected((prev) => {
         const next = new Set(prev);
@@ -75,11 +81,11 @@ export function useRowSelection(d: {
         return;
       }
       if (selected.size === 0) return;
-      if (e.key === "Escape") setSelected(new Set());
+      if (e.key === "Escape" && !holdEscape?.current) setSelected(new Set());
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [keys, canSelectAll, selected.size]);
+  }, [keys, canSelectAll, selected.size, holdEscape]);
   // nav-rail and play-bar blank clicks clear too (the queue's rule; top
   // strips are drag-region and never deliver clicks)
   useEffect(() => {
@@ -96,5 +102,5 @@ export function useRowSelection(d: {
     return () => window.removeEventListener("click", onWin);
   }, [selected.size]);
 
-  return { selected, setSelected, rowClick };
+  return { selected, setSelected, rowClick, anchor };
 }

@@ -157,7 +157,7 @@ export function useQueueDrag(d: {
       const sel = adopt ? new Set([...selected, id]) : selected;
       if (adopt) {
         setSelected(sel);
-        selAnchor.current = items.findIndex((it) => it.id === id);
+        selAnchor.current = id; // the grammar's anchor is a row key (useRowSelection)
       }
       const ids = items.flatMap((it) => (it.id != null && sel.has(it.id) ? [it.id] : []));
       setDragBatch({ ids, active: id });
