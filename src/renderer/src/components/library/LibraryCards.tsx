@@ -153,6 +153,7 @@ export function ContainerCard({
               album ? { artist: node.albumArtist ?? node.artist, album: node.title } : undefined
             }
             lazy
+            shimmer
             className={cx("h-full w-full object-cover", muted && "opacity-60 saturate-[.6]")}
             fallback={
               album ? (

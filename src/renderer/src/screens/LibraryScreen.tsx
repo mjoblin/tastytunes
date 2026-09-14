@@ -1788,43 +1788,100 @@ export function LibraryScreen(): React.JSX.Element {
                       paddingTop: 8,
                     }}
                   >
-                    {group.map((s) => (
-                      <div
-                        key={s.udn}
-                        data-library-source
-                        onClick={() => enterServer(s.udn)}
-                        data-tip={
-                          s.isStreamer && inStandby
-                            ? "In standby. USB content appears once the streamer wakes."
-                            : undefined
-                        }
-                        className={cx(
-                          "group relative rounded-2xl p-2 pb-2.5 bg-raised/50 ring-1 ring-edge card-hover-glow cursor-pointer transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]",
-                          s.isStreamer && inStandby && "opacity-50 tip-bottom",
-                        )}
-                      >
-                        {/* one frame per card: the well is a veil lift with no ring of its own (see LibraryCards) */}
-                        <div className="aspect-square w-full rounded-lg bg-veil flex items-center justify-center">
-                          {s.isStreamer ? (
-                            <Usb
-                              size={40}
-                              strokeWidth={1.1}
-                              className="text-dim group-hover:text-ink transition-colors"
-                            />
-                          ) : (
-                            <HardDrive
-                              size={40}
-                              strokeWidth={1.1}
-                              className="text-dim group-hover:text-ink transition-colors"
-                            />
+                    {group.map((s) => {
+                      // the card carries ITS server's index state (2026-09-14): the
+                      // doors animate for any build, this says which one, and a
+                      // stick's first index is a Build ask the Library never offered
+                      const st = mediaIndexStatuses.find((x) => x.udn === s.udn) ?? null;
+                      const state = st?.state ?? "none";
+                      const building = state === "building";
+                      const failed = state === "failed";
+                      const unindexed = state === "none" && !s.searchable;
+                      const Icon = s.isStreamer ? Usb : HardDrive;
+                      return (
+                        <div
+                          key={s.udn}
+                          data-library-source
+                          data-library-source-state={state}
+                          onClick={() => {
+                            if (failed) {
+                              void tt.mediaIndexRebuild(s.udn);
+                              return;
+                            }
+                            enterServer(s.udn);
+                          }}
+                          data-tip={
+                            s.isStreamer && inStandby
+                              ? "In standby. USB content appears once the streamer wakes."
+                              : failed
+                                ? `Couldn't index (${st?.failure ?? "no index"}). Click to retry.`
+                                : undefined
+                          }
+                          className={cx(
+                            "group relative rounded-2xl p-2 pb-2.5 bg-raised/50 ring-1 ring-edge card-hover-glow cursor-pointer transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]",
+                            s.isStreamer && inStandby && "opacity-50 tip-bottom",
+                            building && "opacity-60",
+                            failed && "tip-bottom",
                           )}
+                        >
+                          {/* one frame per card: the well is a veil lift with no ring of its own (see LibraryCards) */}
+                          <div className="aspect-square w-full rounded-lg bg-veil flex items-center justify-center">
+                            {building ? (
+                              <>
+                                {/* the doors' loading glyph: a spinner reads as activity where a
+                                    pulsing icon read as styling; reduced motion keeps the icon */}
+                                <Loader2
+                                  size={40}
+                                  strokeWidth={1.1}
+                                  className="spin text-dim motion-reduce:hidden"
+                                />
+                                <Icon
+                                  size={40}
+                                  strokeWidth={1.1}
+                                  className="hidden motion-reduce:block text-dim"
+                                />
+                              </>
+                            ) : (
+                              <Icon
+                                size={40}
+                                strokeWidth={1.1}
+                                className="text-dim group-hover:text-ink transition-colors"
+                              />
+                            )}
+                          </div>
+                          <div className="pt-1.5 text-[12.5px] truncate">{s.name}</div>
+                          <div
+                            data-library-source-caption
+                            className={cx(
+                              "text-[11.5px] truncate",
+                              failed ? "text-alert" : "text-faint",
+                            )}
+                          >
+                            {building ? (
+                              <span className="motion-safe:animate-pulse">Indexing…</span>
+                            ) : failed ? (
+                              "Couldn't index · Retry"
+                            ) : state === "ready" && st ? (
+                              `Indexed · ${fmtCount(st.albums)} ${st.albums === 1 ? "album" : "albums"}`
+                            ) : unindexed ? (
+                              <button
+                                data-library-source-build
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void tt.mediaIndexRebuild(s.udn);
+                                }}
+                                className="text-gold/90 hover:text-gold transition-colors"
+                              >
+                                {s.isStreamer ? "Index this drive" : "Index this server"}
+                              </button>
+                            ) : (
+                              (s.model ??
+                              (s.isStreamer ? "Storage on the streamer" : "Media server"))
+                            )}
+                          </div>
                         </div>
-                        <div className="pt-1.5 text-[12.5px] truncate">{s.name}</div>
-                        <div className="text-[11.5px] text-faint truncate">
-                          {s.model ?? (s.isStreamer ? "Storage on the streamer" : "Media server")}
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               );

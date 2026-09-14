@@ -89,7 +89,7 @@ export function MediaArt({
       data-media-art
       data-art-size={size}
       className={cx(
-        "shrink-0 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center",
+        "relative shrink-0 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center",
         size === "card" ? "h-full w-full" : size === "dense" ? "h-8 w-8" : "h-10 w-10",
         className,
       )}
@@ -99,6 +99,7 @@ export function MediaArt({
         // 40px thumb otherwise (shared/artUrl); cards fill up to ~240px tiles
         src={artSrc(src, size === "card" ? 240 : size === "dense" ? 32 : 40)}
         lazy
+        shimmer={size === "card"}
         fallback={
           <Fallback size={GLYPH[size]} strokeWidth={GLYPH_STROKE[size]} className="text-faint" />
         }

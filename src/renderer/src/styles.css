@@ -68,6 +68,42 @@
 .art-fade-in {
   animation: art-fade-in 0.45s ease-out;
 }
+/* A picture on its way (ArtImage's shimmer, 2026-09-14): a faint band sweeps
+   the well after 300 ms, only while the image is pending; the picture eases in
+   when it lands (.art-in). Reduced motion shows the plain well. */
+@keyframes art-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+.art-shimmer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent 35%,
+    rgb(255 255 255 / 0.07) 50%,
+    transparent 65%
+  );
+  background-size: 250% 100%;
+  animation: art-shimmer 1.6s linear infinite;
+}
+:root.light .art-shimmer {
+  background: linear-gradient(100deg, transparent 35%, rgb(0 0 0 / 0.05) 50%, transparent 65%);
+  background-size: 250% 100%;
+}
+@media (prefers-reduced-motion: reduce) {
+  .art-shimmer {
+    display: none;
+  }
+}
+.art-in {
+  animation: art-fade-in 0.15s ease-out;
+}
 
 @theme {
   --font-display: "Fraunces Variable", Georgia, serif;
