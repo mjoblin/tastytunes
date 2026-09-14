@@ -80,8 +80,9 @@ export function LibrariesSection({
             </HeaderChip>
           </div>
         ))}
+
+        <ArtThumbsRow />
       </div>
-      <ArtThumbsRow />
     </section>
   );
 }
@@ -95,7 +96,12 @@ export function LibrariesSection({
  * surfaced here, never hidden.
  */
 
-/** The album-art thumbnail cache's size and its Clear (main/lookups/artThumbs). */
+/**
+ * The album-art thumbnail cache's size and its Clear (main/lookups/artThumbs):
+ * a row in the card like the others, its Clear the kit's cache button (the
+ * Cached lookups row and History's record row wear the same one; a bare text
+ * link read too weak — user, 2026-09-14).
+ */
 function ArtThumbsRow(): React.JSX.Element {
   const [stats, setStats] = useState<{ entries: number; bytes: number } | null>(null);
   useEffect(() => {
@@ -105,18 +111,18 @@ function ArtThumbsRow(): React.JSX.Element {
   return (
     <SettingRow
       label="Album art thumbnails"
-      hint="Covers from servers that can't resize them (the streamer's USB drive) are kept small on disk, up to 200 MB, the least recently drawn dropping first."
+      hint="Art from servers that can't resize it on request (e.g. the streamer's USB drive) is cached by TastyTunes, up to 200 MB, with the least recently used being automatically removed first."
     >
       <button
         onClick={() => void tt.clearArtThumbs().then(setStats)}
         disabled={empty}
-        className="text-[12.5px] text-dim hover:text-ink disabled:opacity-40 transition-colors"
+        className="shrink-0 text-[12.5px] px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-alert hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all disabled:opacity-40 disabled:hover:text-dim disabled:hover:ring-edge disabled:hover:bg-panel/70"
       >
         {stats == null
           ? "…"
           : empty
-            ? "Empty"
-            : `Clear ${fmtBytes(stats.bytes)} (${fmtCount(stats.entries)} ${stats.entries === 1 ? "picture" : "pictures"})`}
+            ? "Cache empty"
+            : `Clear (${fmtCount(stats.entries)} · ${fmtBytes(stats.bytes)})`}
       </button>
     </SettingRow>
   );
