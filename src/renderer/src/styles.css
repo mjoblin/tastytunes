@@ -72,8 +72,9 @@
    left to right along the well's bottom edge after 300 ms in view, only while
    the image is pending; the picture eases in when it lands (.art-in). It began
    as a faint band sweeping the whole well: too dramatic, and its angle looked
-   wrong (user, 2026-09-14). The line takes the theme's dim ink, so light and
-   dark need no rule of their own. Reduced motion shows the plain well. */
+   wrong (user, 2026-09-14). The line takes the theme's dim ink, fading in
+   and out at its ends, so light and dark need no rule of their own. Reduced
+   motion shows the plain well. */
 @keyframes art-shimmer {
   from {
     transform: translateX(-100%);
@@ -94,10 +95,10 @@
 .art-shimmer::after {
   content: "";
   display: block;
-  width: 40%;
+  width: 50%;
   height: 100%;
-  border-radius: 1px;
-  background: var(--color-dim);
+  /* soft at both ends, not a solid strip (user, 2026-09-14) */
+  background: linear-gradient(to right, transparent, var(--color-dim) 50%, transparent);
   opacity: 0.55;
   animation: art-shimmer 1.4s linear infinite;
 }
