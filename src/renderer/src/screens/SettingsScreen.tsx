@@ -43,11 +43,11 @@ import {
   SettingRow,
   Toggle,
   SliderSetting,
-  Segmented,
   NumberField,
   LegendRow,
   CacheRow,
 } from "@/components/settings/SettingsKit";
+import { Segmented } from "@/components/controls/Segmented";
 
 const TABS = [
   { id: "appearance", label: "Appearance", icon: Palette },

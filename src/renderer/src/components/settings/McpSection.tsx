@@ -7,7 +7,8 @@ import { tt } from "@/api";
 import { useStore } from "@/store";
 import { cx } from "@/lib/format";
 import { HeaderChip } from "@/components/chrome/Chrome";
-import { SettingRow, Toggle, Segmented, NumberField } from "@/components/settings/SettingsKit";
+import { SettingRow, Toggle, NumberField } from "@/components/settings/SettingsKit";
+import { Segmented } from "@/components/controls/Segmented";
 
 // The MCP section, split out of SettingsScreen.tsx 2026-09-13 (the Settings split: the screen had held every
 // section and control at 2,142 lines); the shared rows and controls live in ./SettingsKit.

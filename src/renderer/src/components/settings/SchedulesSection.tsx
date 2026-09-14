@@ -5,7 +5,8 @@ import { useStore } from "@/store";
 import { cx } from "@/lib/format";
 import { Switch } from "@/components/controls/Switch";
 import { HeaderChip, PrimaryButton } from "@/components/chrome/Chrome";
-import { Segmented, NumberField } from "@/components/settings/SettingsKit";
+import { NumberField } from "@/components/settings/SettingsKit";
+import { Segmented } from "@/components/controls/Segmented";
 
 // The Schedules section, split out of SettingsScreen.tsx 2026-09-13 (the Settings split: the screen had held every
 // section and control at 2,142 lines); the shared rows and controls live in ./SettingsKit.

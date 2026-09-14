@@ -7,7 +7,8 @@ import { Switch } from "@/components/controls/Switch";
 // The Settings screen's rows and controls, shared by its sections (split out of
 // SettingsScreen.tsx 2026-09-13 with the sections): a setting row, the toggle, the
 // slider, the segmented switch, the number field, the legend row, the cache row
-// and the byte formatter.
+// and the byte formatter. The segmented switch is the app's one Segmented
+// (components/controls) since 2026-09-13; the kit had carried a near-copy.
 
 export const fmtBytes = (b: number): string =>
   b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`;
@@ -215,33 +216,5 @@ export function SliderSetting({
         </span>
       </div>
     </SettingRow>
-  );
-}
-
-export function Segmented<T extends string>({
-  value,
-  options,
-  onChange,
-}: {
-  value: T;
-  options: Array<{ value: T; label: string; icon?: React.ReactNode }>;
-  onChange(next: T): void;
-}): React.JSX.Element {
-  return (
-    <div className="flex shrink-0 rounded-lg ring-1 ring-edge bg-bg p-0.5">
-      {options.map((opt) => (
-        <button
-          key={opt.value}
-          onClick={() => onChange(opt.value)}
-          className={cx(
-            "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] transition-colors",
-            value === opt.value ? "bg-golddim text-gold" : "text-dim hover:text-ink",
-          )}
-        >
-          {opt.icon}
-          {opt.label}
-        </button>
-      ))}
-    </div>
   );
 }
