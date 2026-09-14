@@ -5,9 +5,8 @@ import type { MediaNode, RadioStation } from "@shared/model";
 import type { Favorite, PlaylistItem } from "@shared/model";
 import { favoriteKey } from "@shared/model";
 import { mediaKind, type MediaKind } from "@/lib/media";
-import { sanitizeNavHidden, sanitizeNavOrder } from "@/lib/screens";
 import { tt } from "@/api";
-import { useStore, type Screen } from "@/store";
+import { useStore } from "@/store";
 import { EmptyState } from "@/components/chrome/EmptyState";
 import { SortChip } from "@/components/controls/SortChip";
 import { MediaRow } from "@/components/media/MediaRow";
@@ -39,20 +38,23 @@ import { useStationTuning } from "@/hooks/useStationTuning";
 import { useLitPresets } from "@/hooks/useLitPresets";
 import { cx, matchesFilter } from "@/lib/format";
 import { Chip, ScreenTitle, GAP_BETWEEN, GAP_WITHIN } from "@/components/chrome/Chrome";
+import {
+  SEARCH_CATEGORIES,
+  layoutGroups,
+  moreCount,
+  orderByNav,
+  orderRows,
+  seedHidden,
+  toggleHidden,
+  type SearchCategoryId,
+  type SearchGroup,
+} from "@/lib/searchGroups";
 
 /** Below this, a query matches half the library and every station on earth. */
 const MIN_RADIO_CHARS = 2;
-/** Per group while several are showing — five groups of everything is a wall. */
-const GROUP_CAP = 6;
-/** Narrowed to ONE category, it owns the screen and can show far more. */
-const ISOLATED_CAP = 50;
-
-type CategoryId = "library" | "favorites" | "playlists" | "presets" | "radio";
-/** Every category id is also a nav screen id — that 1:1 is what lets the nav
- *  seed this rail's default hidden set (see searchHidden) AND order it (navRank).
- *  MEMBERSHIP ONLY: this list's own order carries no meaning — the rendered
- *  order comes from the user's nav order, applied to `cats` below. */
-const CATEGORY_IDS: CategoryId[] = ["library", "favorites", "playlists", "presets", "radio"];
+/** A group's row as this screen builds it: the sort key the name sort reads,
+ *  the kind the library's sub-headings section by, and the rendered row. */
+type SearchRow = { key: string; sortKey: string; kind?: MediaKind; node: React.ReactNode };
 
 /**
  * Only two sorts GENERALIZE across five heterogeneous groups.
@@ -129,11 +131,9 @@ export function SearchScreen(): React.JSX.Element {
   const navOrder = useStore((s) => s.settings.navOrder);
   const storedHidden = useStore((s) => s.settings.searchHidden);
   const saveSettings = useStore((s) => s.saveSettings);
-  const [hidden, setHidden] = useState<Set<CategoryId>>(() => {
-    const ids = new Set<string>(CATEGORY_IDS);
-    const src = storedHidden ?? sanitizeNavHidden(navHidden);
-    return new Set(src.filter((id): id is CategoryId => ids.has(id)));
-  });
+  const [hidden, setHidden] = useState<Set<SearchCategoryId>>(() =>
+    seedHidden(storedHidden, navHidden),
+  );
   const sort = useStore((s) => s.settings.searchSort);
   const sortReversed = useStore((s) => s.settings.searchSortReversed);
   const [libKind, setLibKind] = useState<"all" | "artists" | "albums" | "tracks">(lastLibKind);
@@ -546,24 +546,10 @@ export function SearchScreen(): React.JSX.Element {
   // ---- arrives late". It isn't a rule: if the user puts Radio first, Radio
   // ---- goes first, and its own pending state already handles arriving late.)
 
-  const byName = (a: { sortKey: string }, b: { sortKey: string }): number =>
-    a.sortKey.localeCompare(b.sortKey);
-
-  const cats: Array<{
-    id: CategoryId;
-    label: string;
-    /** What the count MEANS: matches found, which may exceed what's listed. */
-    total: number;
-    pending?: boolean;
-    /** Not asked (a hidden lookup) — show no count rather than a false zero. */
-    unknown?: boolean;
-    rows: Array<{ key: string; sortKey: string; kind?: MediaKind; node: React.ReactNode }>;
-    /** Where the whole set lives, once this screen can't show more of it. */
-    owner?: { screen: Screen; filterKey: "favorites" | "playlists" | "presets" };
-  }> = [
+  const built: Array<SearchGroup<SearchRow>> = [
     {
       id: "library",
-      label: "Library",
+      ...SEARCH_CATEGORIES.library,
       total: libTotal,
       rows: libShown.map((node) => {
         const ref = fromNode(node);
@@ -617,9 +603,8 @@ export function SearchScreen(): React.JSX.Element {
     },
     {
       id: "presets",
-      label: "Presets",
+      ...SEARCH_CATEGORIES.presets,
       total: presetResults.length,
-      owner: { screen: "presets", filterKey: "presets" },
       rows: presetResults.map((p) => ({
         key: String(p.id ?? p.name),
         sortKey: p.name ?? "",
@@ -644,9 +629,8 @@ export function SearchScreen(): React.JSX.Element {
     },
     {
       id: "playlists",
-      label: "Playlists",
+      ...SEARCH_CATEGORIES.playlists,
       total: playlistResults.length,
-      owner: { screen: "playlists", filterKey: "playlists" },
       rows: playlistResults.map((p) => ({
         key: p.id,
         sortKey: p.name,
@@ -673,9 +657,8 @@ export function SearchScreen(): React.JSX.Element {
     },
     {
       id: "favorites",
-      label: "Favorites",
+      ...SEARCH_CATEGORIES.favorites,
       total: favResults.length,
-      owner: { screen: "favorites", filterKey: "favorites" },
       rows: favResults.map((f) => ({
         key: favoriteKey(f),
         sortKey: f.kind === "station" ? f.name : f.title,
@@ -720,9 +703,9 @@ export function SearchScreen(): React.JSX.Element {
   // the literal rather than filtered out of it, so "off" leaves no chip, no
   // count and no way to reach radio-browser from this screen at all.
   if (radioDirectory) {
-    cats.push({
+    built.push({
       id: "radio",
-      label: "Internet radio",
+      ...SEARCH_CATEGORIES.radio,
       total: radio?.length ?? 0,
       pending: radioPending,
       // Hidden and never asked: we don't KNOW the count, and printing 0 would
@@ -761,29 +744,15 @@ export function SearchScreen(): React.JSX.Element {
 
   // THE USER'S NAV ORDER, applied live (not seeded once like `hidden` — a
   // reorder should land on this screen immediately, whereas a hide is a
-  // starting point the chips then own for the session). Sorting the built list
-  // rather than reordering its construction keeps every count, cap and row
-  // exactly where it was; only the sequence moves.
-  const navRank = new Map(sanitizeNavOrder(navOrder).map((id, i) => [id as string, i]));
-  cats.sort((a, b) => (navRank.get(a.id) ?? 99) - (navRank.get(b.id) ?? 99));
+  // starting point the chips then own for the session), then what shows and
+  // how much of it — the rules in lib/searchGroups, a sorted copy so every
+  // count, cap and row stays exactly where it was built.
+  const cats = orderByNav(built, navOrder);
+  const { shown: shownCats, isolated, cap, anyResults, anyPending } = layoutGroups(cats, hidden);
 
-  // An empty category is never "shown" — it has nothing to show, and counting
-  // it would make the isolation arithmetic wrong (chips vs one result set).
-  const shownCats = cats.filter((c) => !hidden.has(c.id) && (c.total > 0 || c.pending));
-  // ISOLATED = you've narrowed to one category, so it owns the screen and can
-  // show far more of itself than it could as one group among five.
-  const isolated = shownCats.length === 1;
-  const cap = isolated ? ISOLATED_CAP : GROUP_CAP;
-  const anyResults = shownCats.some((c) => c.rows.length > 0);
-  const anyPending = shownCats.some((c) => c.pending);
-
-  const toggleCat = (id: CategoryId): void => {
-    const next = new Set(hidden);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    // Hiding the last visible category would leave a blank screen saying
-    // nothing — treat that as "show everything again".
-    const final = next.size >= cats.length ? new Set<CategoryId>() : next;
+  const toggleCat = (id: SearchCategoryId): void => {
+    // hiding the last visible category shows everything again (the rule in lib/searchGroups)
+    const final = toggleHidden(hidden, id, cats.length);
     setHidden(final);
     void saveSettings({ searchHidden: [...final] });
   };
@@ -975,9 +944,8 @@ export function SearchScreen(): React.JSX.Element {
             {shownCats.map((c) => {
               if (c.rows.length === 0 && !c.pending && !(c.id === "radio" && radioFailed))
                 return null;
-              const rows = sort === "name" ? [...c.rows].sort(byName) : c.rows;
-              const ordered = sortReversed ? [...rows].reverse() : rows;
-              const more = c.total - Math.min(ordered.length, cap);
+              const ordered = orderRows(c.rows, sort, sortReversed);
+              const more = moreCount(c.total, ordered.length, cap);
               return (
                 <section key={c.id} className="space-y-1.5">
                   <div className="flex items-baseline gap-2 px-1">
