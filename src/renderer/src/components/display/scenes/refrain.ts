@@ -100,6 +100,32 @@ const STEP = 0.4;
  *  two thirds there in a tenth of a second and reads as a pop; a smoothstep over half a second
  *  reads as a fade). */
 const FADE = 0.5;
+/** A stroke's time (s) for a step to the next row; a reach back adds to it, up to double. */
+const STROKE = 0.45;
+/** A hand's stroke: the minimum-jerk profile (slow off the mark, decisive through the middle,
+ *  settling at the end), the shape a reach or a pen stroke follows. */
+const handStroke = (t: number): number => {
+  const u = clamp(t, 0, 1);
+  return u * u * u * (u * (u * 6 - 15) + 10);
+};
+/** A line's own tempo, 0..1, the same every time it is sung: no two strokes quite alike. */
+const tempo = (line: number): number => (Math.imul(line + 1, 2654435761) >>> 16) / 65536;
+/** A cubic Bézier's head up to t (de Casteljau) in one dimension: the two control values of
+ *  the part drawn so far, and where the pen is. */
+const cubicHead = (
+  p0: number,
+  p1: number,
+  p2: number,
+  p3: number,
+  t: number,
+): [number, number, number] => {
+  const q0 = p0 + (p1 - p0) * t;
+  const q1 = p1 + (p2 - p1) * t;
+  const q2 = p2 + (p3 - p2) * t;
+  const r0 = q0 + (q1 - q0) * t;
+  const r1 = q1 + (q2 - q1) * t;
+  return [q0, r0, r0 + (r1 - r0) * t];
+};
 /** Without lyrics the title waits this long before it shows, so a track change (a moment
  *  with no words while the new track's lyrics load) never flashes the title full screen. */
 const TITLE_WAIT = 1.5;
@@ -230,14 +256,22 @@ export class Refrain implements Scene {
       if (head >= 0) this.stepLeftAt[head] = NaN;
       this.headLine = head;
     }
-    // a step's fade-in from the moment it first drew, and its glow: full at the head, easing
-    // down after the head moves on
-    const fadeOf = (k: number): number =>
-      f.reduced ? 1 : smoothstep(0, 1, (f.now - this.stepAt[stepLine[k]]) / 1000 / FADE);
+    // a step is DRAWN from the moment it first draws, the way a hand draws a line (user,
+    // 2026-09-15: "like a human hand might draw it"): how far the pen has got, on the
+    // minimum-jerk profile, over the stroke's own time — a step is quick, a reach back takes
+    // longer, and every line has its own tempo. Its glow: full at the head, easing down after
+    // the head moves on. Neither is the rows' motion: only reduce-motion makes them instant.
+    const drawnOf = (k: number): number => {
+      if (f.reduced) return 1;
+      const line = stepLine[k];
+      const reach = k > 0 ? Math.abs(path[k] - path[k - 1]) : 0;
+      const secs = (STROKE + Math.min(STROKE, 0.04 * reach)) * (0.85 + 0.3 * tempo(line));
+      return handStroke((f.now - this.stepAt[line]) / 1000 / secs);
+    };
     const glowOf = (k: number): number => {
       if (f.reduced) return k === stepLine.length - 1 ? 1 : 0;
       const left = this.stepLeftAt[stepLine[k]];
-      if (Number.isNaN(left)) return k === stepLine.length - 1 ? fadeOf(k) : 0;
+      if (Number.isNaN(left)) return k === stepLine.length - 1 ? 1 : 0;
       return 1 - smoothstep(0, 1, (f.now - left) / 1000 / FADE);
     };
 
@@ -276,10 +310,13 @@ export class Refrain implements Scene {
     // THE PATH, down the left: a step for the next row, an arc for a return; on the wall and
     // the tile alike, its switch the only gate
     const showPath = this.settings.path !== false;
-    if (showPath && path.length > 1) {
+    if (showPath && path.length > 0) {
       const x = left - Math.max(12, w * 0.03);
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
+      // the pen: on the row being sung once its stroke is drawn, on the way there meanwhile
+      let penX = x;
+      let penY = current >= 0 ? yOf(current) : NaN;
       for (let k = 1; k < path.length; k++) {
         const a = path[k - 1];
         const b = path[k];
@@ -287,26 +324,39 @@ export class Refrain implements Scene {
         const ya = yOf(a);
         const yb = yOf(b);
         if (Math.max(ya, yb) < -pitch || Math.min(ya, yb) > h + pitch) continue;
+        // (a stroke just begun is a dot at its start: the pen's touch, under the head)
+        const drawn = drawnOf(k);
         const glow = glowOf(k);
-        const strength = (0.3 + 0.6 * glow) * fadeOf(k);
-        ctx.strokeStyle = rgba(P.gold, strength);
+        ctx.strokeStyle = rgba(P.gold, 0.3 + 0.6 * glow);
         ctx.lineWidth = Math.max(1, h * 0.0015) + glow * Math.max(0.5, h * 0.001);
         ctx.beginPath();
         ctx.moveTo(x, ya);
-        if (b === a + 1) ctx.lineTo(x, yb);
-        else {
-          // a return reaches back with an arc, wider the further it goes
+        let ex = x;
+        let ey = yb;
+        if (b === a + 1) {
+          ey = ya + (yb - ya) * drawn;
+          ctx.lineTo(ex, ey);
+        } else {
+          // a return reaches back with an arc, wider the further it goes; drawn as far as the
+          // pen has got, the curve split there
           const reach = Math.min(x * 0.85, Math.max(14, Math.abs(b - a) * pitch * 0.28));
-          ctx.bezierCurveTo(x - reach, ya, x - reach, yb, x, yb);
+          const [c1x, c2x, hx] = cubicHead(x, x - reach, x - reach, x, drawn);
+          const [c1y, c2y, hy] = cubicHead(ya, ya, yb, yb, drawn);
+          ex = hx;
+          ey = hy;
+          ctx.bezierCurveTo(c1x, c1y, c2x, c2y, ex, ey);
         }
         ctx.stroke();
+        if (k === path.length - 1) {
+          penX = ex;
+          penY = ey;
+        }
       }
-      // the head of the path: a dot on the row being sung
-      if (current >= 0) {
-        const y = yOf(current);
-        ctx.fillStyle = rgba(P.gold, 0.9 * fadeOf(path.length - 1));
+      // the head of the path: a dot at the pen, which touches down on the first row
+      if (!Number.isNaN(penY)) {
+        ctx.fillStyle = rgba(P.gold, 0.9 * (path.length > 1 ? 1 : drawnOf(0)));
         ctx.beginPath();
-        ctx.arc(x, y, Math.max(2.5, h * 0.004) * (0.7 + 0.3 * arrive), 0, Math.PI * 2);
+        ctx.arc(penX, penY, Math.max(2.5, h * 0.004) * (0.7 + 0.3 * arrive), 0, Math.PI * 2);
         ctx.fill();
       }
     }
