@@ -118,6 +118,9 @@ export function ArtImage({
         ref={imgRef}
         src={shown}
         alt=""
+        // pending from the first frame until the picture lands: a well can read it
+        // (the album header's ring steps up on it, without the line's 300 ms wait)
+        data-art-pending={loaded === src ? undefined : ""}
         loading={lazy ? "lazy" : undefined}
         className={cx(className, shimmer && eased === src && "art-in")}
         onLoad={() => {
