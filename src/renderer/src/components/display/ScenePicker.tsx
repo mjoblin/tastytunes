@@ -179,7 +179,7 @@ export function ScenePicker({
               active={section === id}
               aria-expanded={section === id}
               onClick={() => toggle(id)}
-              className="flex items-center gap-1.5 px-2 py-0.5 text-[11.5px] motion-safe:active:scale-90"
+              className="flex items-center gap-1.5 px-2 py-1 text-[11.5px] motion-safe:active:scale-90"
             >
               <Icon size={12} />
               {label}
@@ -419,31 +419,34 @@ function SceneReading({ def, shuffle }: { def: SceneDef; shuffle: boolean }): Re
     <div data-display-scene-reading={def.id}>
       {key ? (
         <div className="min-w-0 text-[11.5px] leading-snug">
-          <div className="microlabel mb-0.5">
+          <div className="microlabel mb-2">
             {shuffle
               ? `Now showing the ${def.label.toLowerCase()}`
               : `Reading the ${def.label.toLowerCase()}`}
           </div>
-          {/* entries share a row when they fit and an entry wraps within its own words when
-              it does not, the measure being the panel's width: at full width every entry is
-              one line, in a narrow panel the long ones fold rather than run off the edge.
-              What never breaks is the name from its dot */}
-          <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+          {/* one entry a row (user, 2026-09-14: entries had shared a row when they fit, and
+              the short ones ran together); an entry wraps within its own words in a narrow
+              panel rather than run off the edge. What never breaks is the name from its dot */}
+          <div className="flex flex-col gap-y-1">
             {key.reads.map((r) => (
-              <span key={r.shows}>
+              <div key={r.shows}>
                 <span className="whitespace-nowrap">
                   <span className="text-ink">{r.shows}</span>
                   <span className="text-faint">{" · "}</span>
                 </span>
                 <span className="text-dim">{r.means}</span>
-              </span>
+              </div>
             ))}
           </div>
-          {key.honesty?.map((h) => (
-            <div key={h} className="mt-0.5 text-faint italic">
-              {h}
+          {key.honesty && key.honesty.length > 0 && (
+            <div className="mt-2.5">
+              {key.honesty.map((h) => (
+                <div key={h} className="mt-0.5 text-faint italic">
+                  {h}
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
       ) : (
         <SectionQuiet>This scene has nothing to read.</SectionQuiet>
