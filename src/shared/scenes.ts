@@ -16,11 +16,7 @@ export interface SceneText {
 }
 
 export const SCENE_TEXT: readonly SceneText[] = [
-  {
-    id: "sleeve",
-    label: "Sleeve",
-    blurb: "The album art and title, with the current lyric beneath.",
-  },
+  { id: "sleeve", label: "Sleeve", blurb: "The album art and title." },
   {
     id: "tide",
     label: "Tide",
@@ -34,24 +30,20 @@ export const SCENE_TEXT: readonly SceneText[] = [
   {
     id: "orbit",
     label: "Orbit",
-    blurb: "Six rings, one per frequency band, and a comet marking your position in the track.",
+    blurb: "Six rings, one per frequency band, and a comet marking the current track position.",
   },
-  { id: "type", label: "Type", blurb: "The current lyric alone, large, in the display font." },
+  { id: "type", label: "Type", blurb: "The current lyric." },
   {
     id: "survey",
     label: "Contour",
-    blurb: "The whole track as a contour map, lit up to your position.",
+    blurb: "The whole track as a contour map, lit up to the track position.",
   },
   {
     id: "conduit",
     label: "Tunnel",
     blurb: "A flight down a tunnel made of the next half minute of the track.",
   },
-  {
-    id: "confluence",
-    label: "Ink",
-    blurb: "Ink in water, one color per frequency band, with the lyrics dissolving into it.",
-  },
+  { id: "confluence", label: "Ink", blurb: "Ink in water, one color per frequency band." },
   {
     id: "pit",
     label: "Ball Pit",
@@ -60,17 +52,17 @@ export const SCENE_TEXT: readonly SceneText[] = [
   {
     id: "roll",
     label: "Piano Roll",
-    blurb: "The whole track as a punched roll, read along by a head that sparks on drum hits.",
+    blurb: "The whole track as a punched roll, read by a head that sparks on drum hits.",
   },
   {
     id: "sea",
     label: "Sea",
-    blurb: "A sea that swells with the loudness, under a moon that glints on the hi-hats.",
+    blurb: "A sea that swells with loudness, under a moon that glints on the hi-hats.",
   },
   {
     id: "terminal",
     label: "Terminal",
-    blurb: "The lyrics typed onto an amber terminal, with a log scrolling up behind.",
+    blurb: "The lyrics typed onto a terminal, with a log scrolling up behind.",
   },
   { id: "shuffle", label: "Shuffle", blurb: "A different scene for every track." },
 ];

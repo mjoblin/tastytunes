@@ -25,18 +25,20 @@ import {
  */
 export const PIT_KEY: SceneKey = {
   reads: [
-    { shows: "A ball", means: "A drum hit" },
-    { shows: "Its size", means: "How hard the hit was. A kick is a boulder and a hi-hat a marble" },
+    { shows: "A ball", means: "A drum hit." },
+    {
+      shows: "Its size",
+      means: "How hard the hit was. A kick is a boulder and a hi-hat a marble.",
+    },
     {
       shows: "Its color and side",
       means:
-        "Which drum. Kicks come from the left, hi-hats from the right and snares from the middle",
+        "Which drum. Kicks come from the left, hi-hats from the right and snares from the middle.",
     },
-    { shows: "The pile", means: "The last minute of hits. The oldest are washed away" },
-    { shows: "The back wall", means: "The line being sung, with the next below" },
-    { shows: "A ring on the floor", means: "Each beat, wider on the first beat of a bar" },
-    { shows: "The floor's glow", means: "The bass" },
-    { shows: "A rain of marbles", means: "A drop" },
+    { shows: "The pile", means: "The last minute of hits." },
+    { shows: "A ring on the floor", means: "Each beat, wider on the first beat of a bar." },
+    { shows: "The floor's glow", means: "The bass." },
+    { shows: "A rain of marbles", means: "A drop." },
   ],
   honesty: [
     "A ball is a drum hit found in the audio (a hard-plucked bass can count as a kick), not a note, and where it rolls means nothing.",

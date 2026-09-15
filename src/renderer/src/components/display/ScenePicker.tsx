@@ -316,10 +316,7 @@ function SyncRow({ host }: { host: PickerHost }): React.JSX.Element {
       {/* the glass is the fullscreen view's alone: the tile draws no cathode finish, so its
           picker shows the drops and the sync, which shape what the tile draws through the feed */}
       {host === "display" && (
-        <SettingLine
-          label="Finish"
-          hint="A cathode tube's glass over every scene. Curve is how much it bows the picture and Fill lets the picture reach the frame."
-        >
+        <SettingLine label="Finish" hint="A simulated cathode tube's glass over every scene.">
           <Segmented
             value={finish}
             options={[
@@ -352,7 +349,7 @@ function SyncRow({ host }: { host: PickerHost }): React.JSX.Element {
       )}
       <SettingLine
         label="Drops"
-        hint="How much of a lull a drop needs. Loose counts small ones, strict requires a real breakdown."
+        hint="How much of a lull a drop needs. Loose counts small lulls, strict requires a real breakdown."
       >
         <Segmented
           value={drops}
@@ -366,7 +363,7 @@ function SyncRow({ host }: { host: PickerHost }): React.JSX.Element {
       </SettingLine>
       <SettingLine
         label="Sync"
-        hint="Slide toward early if the flashes and lyrics land after the sound, toward late if before."
+        hint="Slide toward early if the flashes and lyrics appear after the sound, toward late if before."
       >
         <RangeSlider
           value={sync}

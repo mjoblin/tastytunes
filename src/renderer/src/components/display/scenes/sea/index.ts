@@ -45,20 +45,14 @@ export const SEA_KEY: SceneKey = {
   reads: [
     {
       shows: "The swell",
-      means:
-        "The overall loudness, following slowly. A kick drum lifts it and a drop lifts it more",
+      means: "The overall loudness. A kick drum lifts it and a drop lifts it more.",
     },
-    { shows: "The chop", means: "How noisy the sound is" },
-    {
-      shows: "The moon",
-      means: "Low on the horizon, with its reflection on the water below it",
-    },
-    { shows: "Glints in the reflection", means: "Hi-hats. A snare lights the wave crests" },
-    { shows: "The water's warmth", means: "A chorus" },
-    { shows: "Lyrics over the water", means: "The line being sung, with the next below" },
+    { shows: "The chop", means: "How noisy the sound is." },
+    { shows: "Glints in the moon reflection", means: "Hi-hats. A snare lights the wave crests." },
+    { shows: "The water's warmth", means: "A chorus." },
   ],
   honesty: [
-    "The waves are a picture, not the waveform. Only the loudness and the noisiness move the water.",
+    "The waves do not represent the waveform. Only the loudness and the noisiness move the water.",
   ],
 };
 

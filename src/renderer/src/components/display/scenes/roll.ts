@@ -30,26 +30,18 @@ import { driftRecord } from "../three";
  */
 export const ROLL_KEY: SceneKey = {
   reads: [
-    {
-      shows: "The page",
-      means: "The whole track in rows of time, read left to right and top to bottom",
-    },
+    { shows: "The page", means: "The whole track in rows, read left to right and top to bottom." },
     {
       shows: "Six lanes in each row",
-      means: "Bass at the bottom to highs at the top. A cell's brightness is that band's level",
+      means: "Bass at the bottom to highs at the top. A cell's brightness is that band's level.",
     },
-    {
-      shows: "The head",
-      means: "Your position, moving along the row. The beats are marked on the row ahead",
-    },
-    { shows: "Behind the head", means: "The part already played, dimmed" },
+    { shows: "The head", means: "Track position. The beats are marked on the row ahead." },
     {
       shows: "Sparks off the head",
-      means: "Drum hits. Kicks spark from the low lanes and hi-hats from the high ones",
+      means: "Drum hits. Kicks spark from the low lanes and hi-hats from the high ones.",
     },
-    { shows: "A warmer stretch", means: "A chorus" },
-    { shows: "A burst of sparks", means: "A drop" },
-    { shows: "The lyrics under the row", means: "The line being sung" },
+    { shows: "A warmer stretch", means: "A chorus." },
+    { shows: "A burst of sparks", means: "A drop." },
   ],
   honesty: [
     "A cell is a tenth of a second, so a single hit shows as one bright cell rather than a spike.",

@@ -85,17 +85,16 @@ export const CONFLUENCE_KEY: SceneKey = {
   reads: [
     {
       shows: "Six vents along the bottom",
-      means:
-        "One per frequency band, bass at the left. A vent releases more gas the louder its band",
+      means: "One per frequency band, bass at the left. A louder band releases more ink.",
     },
-    { shows: "A puff from the low vents", means: "A kick drum. A hard one starts a whirlpool" },
-    { shows: "A gust across the frame", means: "A snare" },
-    { shows: "A flicker at the high vents", means: "A hi-hat" },
-    { shows: "Every vent bursting", means: "A drop" },
+    { shows: "A puff from the low vents", means: "A kick drum. A hard hit starts a whirlpool." },
+    { shows: "A gust across the frame", means: "A snare." },
+    { shows: "A flicker at the high vents", means: "A hi-hat." },
+    { shows: "Every vent bursting", means: "A drop." },
     {
       shows: "The lyrics",
       means:
-        "The line being sung. With the Solid switch on, the gas flows around the letters and lights them from the sides. Off, it passes through them",
+        "With the Solid switch on, the gas flows around the lyrics and lights them from the sides.",
     },
   ],
   honesty: [

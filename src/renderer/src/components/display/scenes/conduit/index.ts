@@ -72,40 +72,30 @@ export const CONDUIT_KEY: SceneKey = {
   reads: [
     {
       shows: "The tunnel",
-      means:
-        "The track's timeline. The near end is your position and the far end is half a minute ahead",
+      means: "The near end is the track position and the far end is half a minute ahead.",
     },
     {
       shows: "Six ribbons, floor to ceiling",
-      means:
-        "Bass at the floor to highs at the ceiling. A ribbon bulges inward with its band's level",
+      means: "Bass at the floor to highs at the ceiling. A ribbon bulges inward with its level.",
     },
     {
       shows: "The rings",
       means:
-        "The beats, with the first beat of each bar heavier. When the beat cannot be found, one ring a second",
+        "The beats, with the first beat of each bar heavier. When the beat cannot be found, one ring a second.",
     },
     {
       shows: "The light at the end",
       means:
-        "The overall loudness, following slowly. It grows in a chorus, flickers on a hi-hat and dims in a silence",
+        "Overall loudness. It grows in a chorus, flickers on a hi-hat and dims during a silence.",
     },
     {
       shows: "A drop",
       means:
-        "The view narrows through the build-up and goes dark, then opens again from the light at the end when the drop lands",
+        "The view narrows through the build-up and goes dark, then opens again from the light at the end when the drop lands.",
     },
-    { shows: "The wall's warmth", means: "How intense the music is, following slowly" },
-    {
-      shows: "Signs painted on the wall",
-      means: "The lyrics, each where it is sung. The line being sung is gold and largest",
-    },
-    { shows: "A ring of light down the tunnel", means: "A kick drum" },
-    { shows: "Speed lines", means: "A snare" },
-    {
-      shows: "The glow",
-      means: "A bloom on the light, the rings and the speed lines (the Glow switch turns it off)",
-    },
+    { shows: "The wall's warmth", means: "How intense the music is." },
+    { shows: "A ring of light down the tunnel", means: "A kick drum." },
+    { shows: "Speed lines", means: "A snare." },
   ],
   honesty: [
     "The tunnel ahead is the track's real loudness, smoothed to half a second.",

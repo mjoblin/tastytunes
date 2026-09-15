@@ -46,29 +46,21 @@ import {
  */
 export const SURVEY_KEY: SceneKey = {
   reads: [
-    { shows: "The ground", means: "The whole track, from left to right" },
+    { shows: "The ground", means: "The whole track, from left to right." },
     {
       shows: "Six mountain ranges, front to back",
-      means: "Bass at the front to highs at the back. A range's height is that band's level",
+      means: "Bass at the front to highs at the back. A range's height is that band's level.",
     },
+    { shows: "The gold line", means: "Track position." },
     {
-      shows: "Contour lines",
-      means: "One for every eighth of the full height, heavier at every half",
+      shows: "Flags",
+      means: "The lyrics. The gold one is the line being sung, while older ones fade.",
     },
-    {
-      shows: "The gold line",
-      means: "Your position. The land behind it is lit and the land ahead is dark",
-    },
-    {
-      shows: "Flags along the front edge",
-      means:
-        "The lyrics, each where it is sung. The gold one is the line being sung and older ones fade",
-    },
-    { shows: "Shaded stretches of ground", means: "The track's sections, warmer for a chorus" },
+    { shows: "Shaded stretches of ground", means: "The track's sections, warmer for a chorus." },
     {
       shows: "The weather",
       means:
-        "The section playing. The ground is warmer and the sky brighter in a chorus, and the far ranges misty in a quiet passage",
+        "The ground is warmer and the sky brighter in a chorus, and the far ranges are misty during a quiet passage.",
     },
   ],
   honesty: [

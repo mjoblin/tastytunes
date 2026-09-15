@@ -22,27 +22,18 @@ import { version } from "../../../../../../package.json";
  */
 export const TERMINAL_KEY: SceneKey = {
   reads: [
-    {
-      shows: "The typed line",
-      means:
-        "The line being sung, typed out at an even pace. A line that arrives before the last has finished is completed at once",
-    },
-    {
-      shows: "The log above",
-      means: "The lyrics already sung, with their times, dimming as they age",
-    },
-    { shows: "The cursor", means: "Blinks on the beat, longer on the first beat of a bar" },
+    { shows: "The typed line", means: "The lyrics, typed out at an even pace." },
+    { shows: "The cursor", means: "Blinks on the beat, longer on the first beat of a bar." },
     {
       shows: "The status line",
       means:
-        "The track, your position, the tempo and key, the current section, a level meter for six frequency bands and the overall loudness",
+        "Track details, track position, tempo and key, current section, a level meter, loudness.",
     },
-    { shows: "A sag of the screen", means: "A kick drum" },
-    { shows: "A divider and a flash", means: "A drop" },
+    { shows: "A sag of the screen", means: "A kick drum." },
+    { shows: "A divider and a flash", means: "A drop." },
     {
       shows: "The boot log",
-      means:
-        "For a track without lyrics, what was measured about the track, then each section and drop as it passes",
+      means: "For a track without lyrics, what was measured about the track.",
     },
   ],
   honesty: [

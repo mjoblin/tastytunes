@@ -64,10 +64,7 @@ export const SCENES: SceneDef[] = [
     icon: Disc3,
     kind: "face",
     key: {
-      reads: [
-        { shows: "The picture", means: "The album art" },
-        { shows: "The line beneath", means: "The current lyric, when the track has timed lyrics" },
-      ],
+      reads: [{ shows: "The picture", means: "The album art." }],
     },
   },
   {
@@ -77,26 +74,22 @@ export const SCENES: SceneDef[] = [
     kind: "2d",
     key: {
       reads: [
-        { shows: "How high the water sits", means: "The overall loudness, following slowly" },
-        { shows: "The size of the waves", means: "The bass" },
-        { shows: "Spray off the crests", means: "A snare or a hi-hat" },
-        { shows: "The water lifting", means: "A kick drum, or the whole sea on a drop" },
+        { shows: "Water height", means: "The overall loudness." },
+        { shows: "Wave size", means: "The bass." },
+        { shows: "Spray off the crests", means: "A snare or a hi-hat." },
+        { shows: "The water lifting", means: "A kick drum, or the whole sea on a drop." },
         {
-          shows: "The faint line above the water",
-          means: "The loudness still to come, read left to right",
+          shows: "Faint line above the water",
+          means: "The loudness still to come, read left to right.",
         },
         {
-          shows: "The moon and its reflection",
+          shows: "The moon",
           means:
-            "The high frequencies. A hi-hat glints in the reflection and a drop brightens the moon",
+            "The high frequencies. A hi-hat glints in the reflection and a drop brightens the moon.",
         },
-        { shows: "Lit crests", means: "A snare" },
-        {
-          shows: "Lyrics on the water",
-          means: "The line being sung, with the next below",
-        },
+        { shows: "Lit crests", means: "A snare." },
       ],
-      honesty: ["The waves are a picture, not the waveform."],
+      honesty: ["The waves represent the bass, not the waveform."],
     },
   },
   {
@@ -106,25 +99,19 @@ export const SCENES: SceneDef[] = [
     kind: "2d",
     key: {
       reads: [
-        {
-          shows: "The ridge",
-          means: "The track's loudness over time, as three layers of hills",
-        },
+        { shows: "The ridge", means: "The track's loudness over time, as three layers of hills." },
         {
           shows: "The glow behind the ridge",
-          means: "Your position and how loud the music is. It flashes on a kick drum",
+          means: "Track position and how loud the music is. Flashes on a kick drum.",
         },
-        { shows: "Left of the glow", means: "The last half minute" },
-        { shows: "Right of the glow", means: "The next minute" },
-        {
-          shows: "Signposts",
-          means: "The lyrics, each at the point in the track where it is sung",
-        },
-        { shows: "Bands across the sky", means: "The track's sections, warmer for a chorus" },
+        { shows: "Left of the glow", means: "The last half minute." },
+        { shows: "Right of the glow", means: "The next minute." },
+        { shows: "Signposts", means: "The lyrics." },
+        { shows: "Bands across the sky", means: "The track's sections, warmer for a chorus." },
         {
           shows: "The weather",
           means:
-            "The section playing. The sky is warmer and brighter in a chorus, and starry and misty in a quiet passage",
+            "The sky is warmer and brighter in a chorus, and starry and misty in a quiet passage.",
         },
       ],
       honesty: [
@@ -141,23 +128,21 @@ export const SCENES: SceneDef[] = [
       reads: [
         {
           shows: "Six rings",
-          means: "Six frequency bands, bass on the inside and highs on the outside",
+          means: "Six frequency bands, bass on the inside and highs on the outside.",
         },
-        { shows: "A ring widening", means: "That band's level" },
+        { shows: "A ring widening", means: "That band's level." },
         {
           shows: "A ring jumping",
-          means: "A drum hit in that band. Kicks on the inner rings, hi-hats on the outer",
+          means: "A drum hit in that band. Kicks on the inner rings, hi-hats on the outer.",
         },
         {
           shows: "The comet",
-          means:
-            "Your position in the track. It brightens on each beat, more on the first beat of a bar",
+          means: "Track position. It brightens on each beat, more on the first beat of a bar.",
         },
         {
           shows: "The color at the center",
-          means: "The key the music is in, each key a color on a wheel",
+          means: "The key the music is in, each key a color on a wheel.",
         },
-        { shows: "Lyrics on a ring", means: "The line being sung, with the next below" },
       ],
     },
   },
@@ -169,10 +154,9 @@ export const SCENES: SceneDef[] = [
     kind: "2d",
     key: {
       reads: [
-        { shows: "The lyrics", means: "The line being sung, or the title when there are none" },
-        { shows: "Their arrival", means: "The start of the line" },
-        { shows: "The swell", means: "The bass. A kick drum adds a pulse and a drop a larger one" },
-        { shows: "The hairline", means: "How far through the line you are" },
+        { shows: "The lyrics", means: "The line being sung, or the title when there are none." },
+        { shows: "The swell", means: "The bass. Pulses represent kick drums and drops." },
+        { shows: "The hairline", means: "Progress through the lyric." },
       ],
     },
     settings: [{ key: "motion", label: "Motion", kind: "toggle", default: true }],
