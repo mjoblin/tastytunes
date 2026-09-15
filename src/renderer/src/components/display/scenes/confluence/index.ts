@@ -118,7 +118,9 @@ export const CONFLUENCE_SETTINGS: SceneSettingDef[] = [
   },
   { key: "whirlpools", label: "Whirlpools", kind: "toggle", default: false },
   { key: "words", label: "Lyrics", kind: "toggle", default: true, full: true },
-  { key: "solid", label: "Solid", kind: "toggle", default: false, full: true },
+  // on both hosts (2026-09-14): the tile honours it whenever its own Lyrics switch is on, so the
+  // control belongs in its picker too; with the tile's words off it saves for the wall
+  { key: "solid", label: "Solid", kind: "toggle", default: false },
 ];
 
 const num = (v: unknown, fallback: number): number =>
