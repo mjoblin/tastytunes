@@ -42,7 +42,10 @@ export const REFRAIN_SETTINGS: SceneSettingDef[] = [
   { key: "path", label: "Path", kind: "toggle", default: true },
   { key: "marks", label: "Marks", kind: "toggle", default: true },
   // the Motion switch holds the rows still (user, 2026-09-15): no slide on arrival, no swell
-  // on a kick, no easing of the light or the window; the map still changes as lines are sung
+  // on a kick, no easing of the light or the window; the map still changes as lines are sung.
+  // The path's fade-in is NOT motion and rides whatever the switch says (the user runs with
+  // Motion off, and the fade gated on it read as the pop it was meant to cure); only the OS's
+  // reduce-motion preference makes the steps instant
   { key: "motion", label: "Motion", kind: "toggle", default: true },
 ];
 
@@ -230,9 +233,9 @@ export class Refrain implements Scene {
     // a step's fade-in from the moment it first drew, and its glow: full at the head, easing
     // down after the head moves on
     const fadeOf = (k: number): number =>
-      still ? 1 : smoothstep(0, 1, (f.now - this.stepAt[stepLine[k]]) / 1000 / FADE);
+      f.reduced ? 1 : smoothstep(0, 1, (f.now - this.stepAt[stepLine[k]]) / 1000 / FADE);
     const glowOf = (k: number): number => {
-      if (still) return k === stepLine.length - 1 ? 1 : 0;
+      if (f.reduced) return k === stepLine.length - 1 ? 1 : 0;
       const left = this.stepLeftAt[stepLine[k]];
       if (Number.isNaN(left)) return k === stepLine.length - 1 ? fadeOf(k) : 0;
       return 1 - smoothstep(0, 1, (f.now - left) / 1000 / FADE);
