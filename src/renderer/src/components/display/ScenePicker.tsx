@@ -96,13 +96,13 @@ export function ScenePicker({
     >
       {/* THE TWO CHOICES THAT ARE NOT SCENES HEAD THE GRID (user, 2026-09-14): Sleeve, the
           default people expect, at the top left, and Shuffle at the top right, the row's middle
-          left empty; the scenes alphabetical in rows of four beneath (a fifth column read as
-          one long run). The grid is capped at four 146px tracks, fewer as its host narrows;
+          left empty; the scenes alphabetical in rows of five beneath (four was tried and put
+          back at his word). The grid is capped at five 146px tracks, fewer as its host narrows;
           Shuffle takes the last column whatever the count. In a panel narrower than its full
           width (only ever the Now Playing tile's, in a small window) the tiles are
           three-quarter size, so the smallest window shows a grid rather than a column. Tab
           keeps the shared order (Sleeve, the scenes, Shuffle) */}
-      <div className="mx-auto grid max-w-[602px] @max-[740px]:max-w-[506px] grid-cols-[repeat(auto-fit,146px)] @max-[740px]:grid-cols-[repeat(auto-fit,122px)] justify-center justify-items-center gap-1.5">
+      <div className="mx-auto grid max-w-[754px] @max-[740px]:max-w-[634px] grid-cols-[repeat(auto-fit,146px)] @max-[740px]:grid-cols-[repeat(auto-fit,122px)] justify-center justify-items-center gap-1.5">
         {[
           ...SCENES_ORDERED.filter((s) => s.id === "sleeve"),
           ...SCENES_ORDERED.filter((s) => s.id === "shuffle"),
