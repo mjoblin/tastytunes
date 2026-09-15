@@ -58,8 +58,12 @@ export function DisplayMode(): React.JSX.Element {
   const { shuffled, active } = useShuffledScene(settings.displayScene, meta);
   const stage: SceneId | null = isAbstract(active) ? active : null;
   const feed = useSceneFeed(stage != null || scenesOpen);
-  // the wall says why a scene is not drawing (2026-09-15): a line above the corner title
+  // THE ART STANDS IN (2026-09-15, the user: "match the tile. show the art during radio
+  // and other sources with no local media data"): with nothing real to draw the wall shows
+  // the Sleeve's face, as the Now Playing tile does, and says why in a line above the corner
+  // — the scene used to keep drawing on the feed's sines whatever played
   const { live: sceneLive, idle: sceneIdle } = useSceneLive(stage != null);
+  const standIn = stage != null && !sceneLive;
   const stageDef = stage ? SCENES.find((sc) => sc.id === stage) : null;
   const idleLine =
     stage && stageDef && !sceneLive && sceneIdle ? sceneIdleLine(stageDef.label, sceneIdle) : null;
@@ -151,12 +155,12 @@ export function DisplayMode(): React.JSX.Element {
       onMouseMove={onMouseMove}
       onClick={() => scenesOpen && setScenesOpen(false)}
     >
-      {stage && (
+      {stage && !standIn && (
         <div data-display-stage={stage} className="absolute inset-0">
           <SceneCanvas scene={stage} feed={feed} className="absolute inset-0" />
         </div>
       )}
-      {!stage && art && artLoadable && (
+      {(!stage || standIn) && art && artLoadable && (
         <div
           aria-hidden
           className="absolute inset-0 bg-center bg-cover scale-125 blur-[110px] opacity-25 saturate-150"
@@ -190,17 +194,20 @@ export function DisplayMode(): React.JSX.Element {
           {idleLine}
         </div>
       )}
-      {stage && (settings.displayCornerTitle ?? true) && (meta.title || meta.subtitle) && (
-        <div
-          data-display-caption
-          className={cx(
-            "absolute bottom-16 left-7 max-w-[44vw] truncate font-mono text-[13px] text-dim transition-opacity",
-            cursorIdle && "opacity-60",
-          )}
-        >
-          {[meta.title, meta.subtitle].filter(Boolean).join(FACT_SEP)}
-        </div>
-      )}
+      {stage &&
+        !standIn &&
+        (settings.displayCornerTitle ?? true) &&
+        (meta.title || meta.subtitle) && (
+          <div
+            data-display-caption
+            className={cx(
+              "absolute bottom-16 left-7 max-w-[44vw] truncate font-mono text-[13px] text-dim transition-opacity",
+              cursorIdle && "opacity-60",
+            )}
+          >
+            {[meta.title, meta.subtitle].filter(Boolean).join(FACT_SEP)}
+          </div>
+        )}
       {toast && (
         <div
           data-display-scene-toast
@@ -274,9 +281,9 @@ export function DisplayMode(): React.JSX.Element {
         <X size={18} />
       </button>
 
-      {!stage && lyricsToggleable && settings.displayLyrics && <DisplayLyric />}
+      {(!stage || standIn) && lyricsToggleable && settings.displayLyrics && <DisplayLyric />}
 
-      {!stage && (
+      {(!stage || standIn) && (
         <div className="relative h-full flex flex-col items-center justify-center px-16">
           {/* Lock the art in place across track changes: it's a fixed size, so
             we center it (nudged up to leave room for the text) and hang the

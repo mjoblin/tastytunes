@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { isRadioMetadata } from "@shared/smoip";
 import { useStore } from "@/store";
 import { usePlayingAnalysis } from "@/components/media/Waveform";
@@ -23,16 +24,47 @@ import { nowPlayingInfoTarget } from "@/lib/mediaInfo";
  */
 export type SceneIdle = "radio" | "elsewhere" | "analyzing" | "unanalyzed";
 
-export function useSceneLive(enabled: boolean): { live: boolean; idle: SceneIdle | null } {
-  const playState = useStore((s) => s.playState);
-  const nowPlaying = useStore((s) => s.nowPlaying);
-  const analysis = usePlayingAnalysis(enabled);
+/** How long a library track's analysis must stay absent before the scenes yield: on a skip
+ *  the playing file is resolved again and the analysis passes through absent, then loading,
+ *  before the next record arrives — read literally, that dropped the wall to the art for a
+ *  moment on every skip. A record turns the scenes on at once; a station or another source
+ *  turns them off at once (those are definite); absence turns them off only after this. The
+ *  Now Playing tile's own gate reads the same number. */
+export const SCENE_ABSENT_MS = 1500;
+
+function readLive(
+  playState: ReturnType<typeof useStore.getState>["playState"],
+  nowPlaying: ReturnType<typeof useStore.getState>["nowPlaying"],
+  analysis: ReturnType<typeof usePlayingAnalysis>,
+): { live: boolean; idle: SceneIdle | null } {
   if (isRadioMetadata(playState?.metadata)) return { live: false, idle: "radio" };
   if (nowPlayingInfoTarget(playState, nowPlaying)?.localQuery == null)
     return { live: false, idle: "elsewhere" };
   if (analysis === "loading") return { live: false, idle: "analyzing" };
   if (analysis == null) return { live: false, idle: "unanalyzed" };
   return { live: true, idle: null };
+}
+
+export function useSceneLive(enabled: boolean): { live: boolean; idle: SceneIdle | null } {
+  const playState = useStore((s) => s.playState);
+  const nowPlaying = useStore((s) => s.nowPlaying);
+  const analysis = usePlayingAnalysis(enabled);
+  const raw = readLive(playState, nowPlaying, analysis);
+  const definite = raw.idle === "radio" || raw.idle === "elsewhere";
+  // the settled truth: live at once on a record, off at once for a station or another
+  // source, off after the grace when a library track's analysis is merely absent
+  const [held, setHeld] = useState(raw.live);
+  useEffect(() => {
+    if (raw.live || definite) {
+      setHeld(raw.live);
+      return;
+    }
+    const t = setTimeout(() => setHeld(false), SCENE_ABSENT_MS);
+    return () => clearTimeout(t);
+  }, [raw.live, definite]);
+  if (raw.live) return raw;
+  if (definite) return raw;
+  return held ? { live: true, idle: null } : raw;
 }
 
 /** The picker's notice, in the row between the Sleeve and Shuffle tiles (the user, 2026-09-15:

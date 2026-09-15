@@ -33,16 +33,13 @@ import { SceneCanvas } from "@/components/display/SceneCanvas";
 import { ScenePicker } from "@/components/display/ScenePicker";
 import { useSceneFeed } from "@/components/display/feed";
 import { isAbstract, sceneDef } from "@/components/display/scenes";
-import { sceneIdleLine, useSceneLive } from "@/components/display/useSceneLive";
+import { SCENE_ABSENT_MS, sceneIdleLine, useSceneLive } from "@/components/display/useSceneLive";
 import { useShuffledScene } from "@/components/display/useShuffledScene";
 import { useArtSize } from "@/hooks/useArtSize";
 import { CornerResizeHandle } from "@/components/controls/CornerResizeHandle";
 import type { SceneId } from "@/components/display/scenes/types";
 
 const ALIGN_H = { left: "justify-start", center: "justify-center", right: "justify-end" } as const;
-/** How long the playing track's analysis must stay absent before the scene tile yields to
- *  the art: longer than a skip's identity hand-off, shorter than a wait would feel. */
-const SCENE_ABSENT_MS = 1500;
 const ALIGN_V = { top: "items-start", center: "items-center", bottom: "items-end" } as const;
 
 export function NowPlayingScreen(): React.JSX.Element {
