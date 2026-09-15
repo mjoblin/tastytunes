@@ -429,7 +429,7 @@ function SettingLine({
   children: React.ReactNode;
 }): React.JSX.Element {
   return (
-    <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] items-center gap-x-3 gap-y-1">
+    <div className="grid grid-cols-[2.5rem_minmax(0,1fr)] items-center gap-x-2 gap-y-1">
       <span>{label}</span>
       <div className="flex min-h-8 flex-wrap items-center gap-2">{children}</div>
       <span className="col-start-2 leading-snug text-faint">{hint}</span>
