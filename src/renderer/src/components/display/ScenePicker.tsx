@@ -95,12 +95,13 @@ export function ScenePicker({
       )}
     >
       {/* Sleeve first — the default, what people expect to see — set apart by a hairline in
-          the gap after it (user, 2026-09-14), then the scenes alphabetical, Shuffle last; five
-          to a row at the panel's full width, fewer as its host narrows: 146px is a tile plus
-          its padding. In a panel narrower than its full width (only ever the Now Playing
+          the gap after it (user, 2026-09-14; the gap itself stays 6px: widening it for the
+          line cost the fifth tile once the scrollbar gutter took its share), then the scenes
+          alphabetical, Shuffle last; five to a row at the panel's full width, fewer as its
+          host narrows: 146px is a tile plus its padding. In a panel narrower than its full width (only ever the Now Playing
           tile's, in a small window) the tiles are three-quarter size, so the smallest window
           shows a grid rather than a column */}
-      <div className="grid grid-cols-[repeat(auto-fit,146px)] @max-[740px]:grid-cols-[repeat(auto-fit,122px)] justify-center justify-items-center gap-x-3 gap-y-1.5">
+      <div className="grid grid-cols-[repeat(auto-fit,146px)] @max-[740px]:grid-cols-[repeat(auto-fit,122px)] justify-center justify-items-center gap-1.5">
         {SCENES_ORDERED.map((s) => {
           const active = current === s.id;
           const Icon = s.icon;
@@ -120,7 +121,7 @@ export function ScenePicker({
                 active && "bg-veil2",
                 // the default's mark: a hairline standing in the gap to its right
                 s.id === "sleeve" &&
-                  "relative after:absolute after:top-2 after:bottom-2 after:-right-[7px] after:w-px after:bg-edge2",
+                  "relative after:absolute after:top-2 after:bottom-2 after:-right-[3.5px] after:w-px after:bg-edge2",
               )}
             >
               <div
