@@ -74,7 +74,7 @@ void main() {
  * saved settings still resolve).
  *
  * CONFLUENCE: ink in water (after packscape's Confluence, in this app's
- * voice). A real fluid. Six vents along the bottom, one per band (a low register rose from the bottom
+ * voice). A real fluid. Six inkwells along the bottom, one per band (a low register rose from the bottom
  * and a high one falls from the top, each in its own color from the art, and
  * the front where they meet is that pair's balance. Ink lingers, so the
  * water carries the last little while as marbling. A hit pulses the loudest
@@ -84,22 +84,22 @@ void main() {
 export const CONFLUENCE_KEY: SceneKey = {
   reads: [
     {
-      shows: "Six vents along the bottom",
+      shows: "Six inkwells along the bottom",
       means:
         "One per frequency band, bass at the left. A louder band releases more ink. Colors are based on the album art.",
     },
-    { shows: "A puff from the low vents", means: "A kick drum. A hard hit starts a whirlpool." },
+    { shows: "A plume from the low wells", means: "A kick drum. A hard hit starts a whirlpool." },
     { shows: "A gust across the frame", means: "A snare." },
-    { shows: "A flicker at the high vents", means: "A hi-hat." },
-    { shows: "Every vent bursting", means: "A drop." },
+    { shows: "A flicker at the high wells", means: "A hi-hat." },
+    { shows: "Every well spilling over", means: "A drop." },
     {
       shows: "The lyrics",
       means:
-        "With the Solid switch on, the gas flows around the lyrics and lights them from the sides.",
+        "With the Solid switch on, the ink flows around the lyrics and lights them from the sides.",
     },
   ],
   honesty: [
-    "The vents are frequency bands, not instruments, and the gas shows about the last fifteen seconds.",
+    "The wells are frequency bands, not instruments, and the ink shows about the last fifteen seconds.",
   ],
 };
 
