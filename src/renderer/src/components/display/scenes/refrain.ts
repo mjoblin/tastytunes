@@ -141,12 +141,6 @@ export class Refrain implements Scene {
   private since = 0;
   private punch = 0;
   private punchAim = 0;
-  /** When each line's step of the path first drew (ms), NaN until it does; cleared past a
-   *  seek back so a step re-arrives with its fade. */
-  private stepAt = new Float64Array(0);
-  /** When each line's step stopped being the path's head (ms), NaN while it is or never was. */
-  private stepLeftAt = new Float64Array(0);
-  private headLine = -1;
   private titleFor: string | null = null;
   private titleSince = 0;
 
@@ -159,9 +153,6 @@ export class Refrain implements Scene {
     if (!this.built || this.built.lines !== lines) {
       this.built = build(lines);
       this.lit = new Float32Array(this.built.rows.length);
-      this.stepAt = new Float64Array(lines.length).fill(NaN);
-      this.stepLeftAt = new Float64Array(lines.length).fill(NaN);
-      this.headLine = -1;
       this.lastLine = -1;
       this.top = 0;
     }
@@ -223,12 +214,6 @@ export class Refrain implements Scene {
     const still = f.reduced || this.settings.motion === false;
     const lineIndex = f.lyric?.index ?? -1;
     if (lineIndex !== this.lastLine) {
-      // a seek back clears the steps past the new line, so they fade in again when re-sung
-      if (lineIndex < this.lastLine)
-        for (let i = lineIndex + 1; i < this.stepAt.length; i++) {
-          this.stepAt[i] = NaN;
-          this.stepLeftAt[i] = NaN;
-        }
       this.lastLine = lineIndex;
       this.since = f.now;
     }
@@ -246,33 +231,41 @@ export class Refrain implements Scene {
       sungSoFar[r]++;
       path.push(r);
       stepLine.push(i);
-      if (Number.isNaN(this.stepAt[i])) this.stepAt[i] = f.now;
     }
-    // the head moved on: the step it left starts easing down to a settled segment
-    const head = stepLine.length ? stepLine[stepLine.length - 1] : -1;
-    if (head !== this.headLine) {
-      if (this.headLine >= 0 && this.headLine < this.stepLeftAt.length && this.headLine < head)
-        this.stepLeftAt[this.headLine] = f.now;
-      if (head >= 0) this.stepLeftAt[head] = NaN;
-      this.headLine = head;
-    }
-    // a step is DRAWN from the moment it first draws, the way a hand draws a line (user,
-    // 2026-09-15: "like a human hand might draw it"): how far the pen has got, on the
-    // minimum-jerk profile, over the stroke's own time — a step is quick, a reach back takes
-    // longer, and every line has its own tempo. Its glow: full at the head, easing down after
-    // the head moves on. Neither is the rows' motion: only reduce-motion makes them instant.
-    const drawnOf = (k: number): number => {
-      if (f.reduced) return 1;
+    // a step is DRAWN the way a hand draws a line (user, 2026-09-15: "like a human hand might
+    // draw it"): the pen's way on the minimum-jerk profile over the stroke's own time — a step
+    // is quick, a reach back takes longer, and every line has its own tempo — and the stroke
+    // LANDS AS THE LINE STARTS (user: "the end of the draw lands at the time the line
+    // starts"), so it runs on the lyric's clock, beginning its own time before the line and
+    // never earlier than the line before it. The step to the NEXT line with words joins the
+    // path once its stroke is due. Its glow: full while the pen is on it, easing down once
+    // the pen leaves for the next. Neither is the rows' motion: only reduce-motion draws the
+    // path whole, and then only to the line being sung.
+    const pos = f.position;
+    const secsOf = (k: number): number => {
       const line = stepLine[k];
       const reach = k > 0 ? Math.abs(path[k] - path[k - 1]) : 0;
-      const secs = (STROKE + Math.min(STROKE, 0.04 * reach)) * (0.85 + 0.3 * tempo(line));
-      return handStroke((f.now - this.stepAt[line]) / 1000 / secs);
+      const own = (STROKE + Math.min(STROKE, 0.04 * reach)) * (0.85 + 0.3 * tempo(line));
+      const gap = built.lines[line].t - (k > 0 ? built.lines[stepLine[k - 1]].t : 0);
+      return Math.min(own, Math.max(0.15, gap));
     };
+    const startOf = (k: number): number => built.lines[stepLine[k]].t - secsOf(k);
+    if (!f.reduced)
+      for (let j = lineIndex + 1; j < built.rowOf.length; j++)
+        if (built.rowOf[j] >= 0) {
+          path.push(built.rowOf[j]);
+          stepLine.push(j);
+          if (pos < startOf(path.length - 1)) {
+            path.pop();
+            stepLine.pop();
+          }
+          break;
+        }
+    const drawnOf = (k: number): number =>
+      f.reduced ? 1 : handStroke((pos - startOf(k)) / secsOf(k));
     const glowOf = (k: number): number => {
-      if (f.reduced) return k === stepLine.length - 1 ? 1 : 0;
-      const left = this.stepLeftAt[stepLine[k]];
-      if (Number.isNaN(left)) return k === stepLine.length - 1 ? 1 : 0;
-      return 1 - smoothstep(0, 1, (f.now - left) / 1000 / FADE);
+      if (k === stepLine.length - 1) return 1;
+      return f.reduced ? 0 : 1 - smoothstep(0, 1, (pos - startOf(k + 1)) / FADE);
     };
 
     // the lit state eases: the current row up to 1, a sung row back to a rest level that
@@ -314,9 +307,9 @@ export class Refrain implements Scene {
       const x = left - Math.max(12, w * 0.03);
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
-      // the pen: on the row being sung once its stroke is drawn, on the way there meanwhile
+      // the pen: on the last row of the path once its stroke is drawn, on the way meanwhile
       let penX = x;
-      let penY = current >= 0 ? yOf(current) : NaN;
+      let penY = path.length ? yOf(path[path.length - 1]) : NaN;
       for (let k = 1; k < path.length; k++) {
         const a = path[k - 1];
         const b = path[k];
