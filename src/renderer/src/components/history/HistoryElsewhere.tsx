@@ -12,7 +12,7 @@ import { RowMenu } from "@/components/media/RowMenu";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { useIndexPools } from "@/hooks/useIndexPools";
 import { useWholeRecord } from "@/hooks/useWholeRecord";
-import { heardElsewhere, type HeardArtist, type HeardTrack } from "@/lib/elsewhere";
+import { heardElsewhere, type HeardArtist, type HeardTrack } from "@shared/elsewhere";
 import { openArtistInLibrary, openRefInLibrary } from "@/lib/mediaActions";
 import type { MediaRef } from "@/lib/mediaRef";
 import { cx, fmtCount, fmtRelative, matchesFilter } from "@/lib/format";

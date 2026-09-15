@@ -253,7 +253,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         name: "list_albums",
         title: "List albums",
         description:
-          "Browse albums from the local library index — filter by artist, genre, decade, kind (albums vs compilations), hires, format (e.g. '24/96', 'MP3') or composer; sort by title, artist, or year; page with limit/offset. Each album comes with what its tracks add up to: track count, discs, runtime, size, format headline (and how many tracks differ), hires, composers (when every track agrees), is_compilation. Returns object ids for play_media / get_media_info. Needs a ready index (see list_media_servers).",
+          "Browse albums from the local library index — filter by artist, genre, decade, kind (albums vs compilations), hires, format (e.g. '24/96', 'MP3') or composer; sort by title, artist, year, dynamic range, loudness, last played or most played; played=true/false keeps the albums the listening record has or has not seen; page with limit/offset. Each album comes with what its tracks add up to: track count, discs, runtime, size, format headline (and how many tracks differ), hires, composers (when every track agrees), is_compilation. Returns object ids for play_media / get_media_info. Needs a ready index (see list_media_servers).",
       },
       {
         name: "list_artists",
@@ -283,7 +283,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         name: "get_album_art",
         title: "Get album art",
         description:
-          "An album's picture as an image, resized by TastyTunes to 480 px ('card', the default) or 320 px ('thumb'); a track answers with its album's picture. Errors when the server has no art for it.",
+          "An album's picture as an image, resized by TastyTunes to 480 px ('card', the default) or 320 px ('thumb'); a track answers with its album's picture. When the server has no art, the picture inside the audio file is used (off with Album art from audio files in Settings). Errors when neither has one.",
       },
       {
         name: "play_media",
@@ -380,13 +380,31 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         name: "list_history",
         title: "List history",
         description:
-          "Events from the listening record, newest first, filtered by date range and kind. A play's listen flag is derived: half the track or four minutes of real play time.",
+          "Events from the listening record, newest first, filtered by date range, kind and listens only. A play's listen flag is derived: half the track or four minutes of real play time.",
       },
       {
         name: "history_top",
         title: "Top played",
         description:
-          "Most-listened artists, albums or tracks over a date range, counting library plays that reached half the track or four minutes of real play time.",
+          "Most-listened artists, albums or tracks over a date range, counting library plays that reached half the track or four minutes of real play time; or the stations most tuned, and the presets and playlists most started from.",
+      },
+      {
+        name: "history_summary",
+        title: "History summary",
+        description:
+          "The listening record's figures for a period, as History's Stats view shows them: plays, listens, time heard, by source and by quality, distinct albums, artists and tracks, days with listening, the top albums, artists, tracks, stations, presets and playlists, listening by weekday and hour, and seconds per day for a calendar.",
+      },
+      {
+        name: "history_elsewhere",
+        title: "Heard elsewhere",
+        description:
+          "Artists heard through AirPlay, a cast, a streaming service or internet radio, with whether the library has them (the Library's own rule for an artist page), how often and where they were heard, and the tracks heard, as History's Elsewhere view shows them.",
+      },
+      {
+        name: "history_shelves",
+        title: "Rediscover shelves",
+        description:
+          "History's Rediscover view in one answer, four shelves: albums started and not finished, more from the artists played most, albums not heard in a while, and albums never played, each with its plays and last played.",
       },
       {
         name: "history_on_this_day",

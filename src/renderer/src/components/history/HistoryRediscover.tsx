@@ -13,7 +13,7 @@ import { RowMenu } from "@/components/media/RowMenu";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { useIndexPools } from "@/hooks/useIndexPools";
 import { useWholeRecord } from "@/hooks/useWholeRecord";
-import { shelvesFor, UNFINISHED_QUIET_DAYS, type ShelfAlbum } from "@/lib/rediscover";
+import { shelvesFor, UNFINISHED_QUIET_DAYS, type ShelfAlbum } from "@shared/rediscover";
 import { albumMenuItems, type MediaMenuItem } from "@/lib/mediaMenus";
 import { fromNode } from "@/lib/mediaRef";
 import { openAlbumNode, playAlbumNode } from "@/lib/mediaActions";

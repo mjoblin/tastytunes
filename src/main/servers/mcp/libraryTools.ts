@@ -1,8 +1,11 @@
 import { z } from "zod";
 import { artKeyOf, artUrlAt, artUrlResizable } from "@shared/artUrl";
-import { artThumb, fetchOrigin, TIERS } from "../../lookups/artThumbs";
+import { nativeImage } from "electron";
+import { artThumb, fetchOrigin, JPEG_QUALITY, TIERS } from "../../lookups/artThumbs";
+import { embeddedArtFor } from "../../lookups/embeddedArt";
 import {
   type MediaNode,
+  albumTally,
   trackArtists,
   formatLabel,
   albumTracksOf,
@@ -302,18 +305,24 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
           .describe(
             "Only albums whose recorded dynamic range (DR, whole album analyzed) is at least this; albums without one are excluded.",
           ),
-        sort: z
-          .enum(["title", "artist", "year", "dr", "loudness"])
+        played: z
+          .boolean()
           .optional()
           .describe(
-            "Default 'title'; 'year' sorts newest first; 'dr' most dynamic first, unanalyzed last; 'loudness' loudest first (integrated LUFS), unmeasured last.",
+            "true: only albums the listening record has a play for; false: only albums never played (the Library's Played filter).",
+          ),
+        sort: z
+          .enum(["title", "artist", "year", "dr", "loudness", "last_played", "most_played"])
+          .optional()
+          .describe(
+            "Default 'title'; 'year' sorts newest first; 'dr' most dynamic first, unanalyzed last; 'last_played' most recently played first and 'most_played' most plays first, from the listening record, unplayed last; 'loudness' loudest first (integrated LUFS), unmeasured last.",
           ),
         limit: z.number().int().min(1).max(100).optional().describe("Default 40."),
         offset: z.number().int().min(0).optional().describe("For paging; default 0."),
       },
       // Purely index-backed (the lenses' feedstock) — works even while the
       // streamer itself is off, so no connected() gate.
-      handler: (a) => {
+      handler: async (a) => {
         const groups = indexPools().filter((p) => a.server_udn == null || p.udn === a.server_udn);
         if (groups.length === 0) {
           return err(
@@ -394,7 +403,27 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
             ),
           );
         const sort = (a.sort as string | undefined) ?? "title";
+        // the record's facets (2026-09-14): the Library's Played filter and its last played /
+        // most played sorts, from the same album tally the Albums lens reads
+        const wantsPlays = a.played != null || sort === "last_played" || sort === "most_played";
+        const stats = wantsPlays ? await playStatsFromRecord() : null;
+        const tallies = new Map<MediaNode, { plays: number; lastAt: number }>();
+        const tallyOf = (n: MediaNode): { plays: number; lastAt: number } => {
+          let hit = tallies.get(n);
+          if (!hit) {
+            const pool = n.serverUdn ? poolOf.get(n.serverUdn) : undefined;
+            hit = pool && stats ? albumTally(n, pool, stats) : { plays: 0, lastAt: 0 };
+            tallies.set(n, hit);
+          }
+          return hit;
+        };
+        if (a.played === true) albums = albums.filter((n) => tallyOf(n).plays > 0);
+        if (a.played === false) albums = albums.filter((n) => tallyOf(n).plays === 0);
         albums.sort((x, y) => {
+          if (sort === "last_played")
+            return tallyOf(y).lastAt - tallyOf(x).lastAt || x.title.localeCompare(y.title);
+          if (sort === "most_played")
+            return tallyOf(y).plays - tallyOf(x).plays || x.title.localeCompare(y.title);
           if (sort === "artist")
             return (
               nameSortKey(x.artist ?? "￿").localeCompare(nameSortKey(y.artist ?? "￿")) ||
@@ -440,6 +469,13 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
               ...(albumDr(n) != null ? { dr: albumDr(n) } : {}),
               ...(sum.composers.length > 0 ? { composers: sum.composers } : {}),
               is_compilation: sum.isCompilation,
+              ...(stats
+                ? {
+                    plays: tallyOf(n).plays,
+                    last_played:
+                      tallyOf(n).lastAt > 0 ? new Date(tallyOf(n).lastAt).toISOString() : null,
+                  }
+                : {}),
             };
           }),
         });
@@ -770,14 +806,46 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
           return err(
             `Object '${id}' is not an album or a track in the index for '${pool.serverName}' — list_albums and search_library give indexed ids.`,
           );
-        if (!node.artUrl) return err(`The server has no art for '${node.title}'.`);
         const tier = (a.size as "card" | "thumb" | undefined) ?? "card";
-        const got = artUrlResizable(node.artUrl)
-          ? await fetchOrigin(artUrlAt(node.artUrl, TIERS[tier]) ?? node.artUrl).then((r) =>
-              r ? { bytes: r.raw, type: r.type } : null,
-            )
-          : await artThumb(artKeyOf(node), tier, node.artUrl);
-        if (!got) return err(`The server did not answer for the art of '${node.title}'.`);
+        let got: { bytes: Buffer; type: string } | null = null;
+        let from: "server" | "file" = "server";
+        if (node.artUrl)
+          got = artUrlResizable(node.artUrl)
+            ? await fetchOrigin(artUrlAt(node.artUrl, TIERS[tier]) ?? node.artUrl).then((r) =>
+                r ? { bytes: r.raw, type: r.type } : null,
+              )
+            : await artThumb(artKeyOf(node), tier, node.artUrl);
+        if (!got) {
+          // the app's own fall-through (lib/bestArt): the picture inside the audio file when
+          // the server has none, read through main's embedded-art lookup (its Settings switch
+          // applies) and resized to the tier here
+          const conn = ctx.dm.snapshot().connection;
+          const trackId = node.isContainer ? albumTracksOf(node, pool)[0]?.id : node.id;
+          const emb =
+            conn.phase === "connected" && trackId
+              ? await embeddedArtFor(conn.host, { serverUdn: pool.udn, objectId: trackId })
+              : null;
+          const m = emb ? /^data:([^;]+);base64,(.*)$/.exec(emb.dataUrl) : null;
+          if (m) {
+            const raw = Buffer.from(m[2], "base64");
+            const img = nativeImage.createFromBuffer(raw);
+            const shown = img.isEmpty()
+              ? null
+              : img.getSize().width > TIERS[tier]
+                ? img.resize({ width: TIERS[tier], quality: "good" })
+                : img;
+            got = shown
+              ? { bytes: shown.toJPEG(JPEG_QUALITY), type: "image/jpeg" }
+              : { bytes: raw, type: m[1] };
+            from = "file";
+          }
+        }
+        if (!got)
+          return err(
+            node.artUrl
+              ? `The server did not answer for the art of '${node.title}', and its audio file carries no picture.`
+              : `The server has no art for '${node.title}' and its audio file carries none (or Album art from audio files is off in Settings › Appearance).`,
+          );
         return {
           content: [
             { type: "image", data: got.bytes.toString("base64"), mimeType: got.type },
@@ -791,6 +859,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
                 max_px: TIERS[tier],
                 bytes: got.bytes.length,
                 type: got.type,
+                from,
               }),
             },
           ],

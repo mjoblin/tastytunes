@@ -10,6 +10,9 @@ import {
 import { playStatsFromRecord } from "../../data/playStats";
 import { listeningRecord } from "../../data/listeningRecord";
 import { pools as indexPools } from "../../media/mediaIndex";
+import { statsFor, type TopEntry } from "@shared/historyStats";
+import { heardElsewhere } from "@shared/elsewhere";
+import { shelvesFor, UNFINISHED_QUIET_DAYS } from "@shared/rediscover";
 import { type ToolContext, type ToolImpl, ok, err, STREAMER_ARG, streamerKeep } from "./toolkit";
 
 // The MCP bridge's history tools (the listening record: recents, stats, the unplayed and the
@@ -28,6 +31,12 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
           .enum(["play", "radio-session", "radio-track", "external"])
           .optional()
           .describe("One kind only; default all."),
+        listens_only: z
+          .boolean()
+          .optional()
+          .describe(
+            "Only library plays that reached a listen (half the track or four minutes of real play time), as the Timeline's filter.",
+          ),
         limit: z.number().int().min(1).max(200).optional().describe("Default 50."),
         offset: z.number().int().min(0).optional().describe("For paging; default 0."),
       },
@@ -43,7 +52,9 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
             (e) =>
               (fromMs == null || e.at >= fromMs) &&
               (toMs == null || e.at <= toMs) &&
-              (a.kind == null || e.kind === a.kind),
+              (a.kind == null || e.kind === a.kind) &&
+              (a.listens_only !== true ||
+                (e.kind === "play" && isListen(e.playedSeconds, e.duration))),
           )
           .sort((x, y) => y.at - x.at);
         const offset = (a.offset as number | undefined) ?? 0;
@@ -65,7 +76,11 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
     history_top: {
       inputSchema: {
         streamer: STREAMER_ARG,
-        by: z.enum(["artists", "albums", "tracks"]).describe("What to rank."),
+        by: z
+          .enum(["artists", "albums", "tracks", "stations", "presets", "playlists"])
+          .describe(
+            "What to rank: library artists, albums or tracks by listens; or the stations most tuned, and the presets and playlists most started from (the Stats view's lists).",
+          ),
         from: z.string().optional().describe("Earliest local date, YYYY-MM-DD."),
         to: z.string().optional().describe("Latest local date, YYYY-MM-DD, inclusive."),
         limit: z.number().int().min(1).max(100).optional().describe("Default 20."),
@@ -76,6 +91,32 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
         const events = keep ? everyLine.filter(keep) : everyLine;
         const fromMs = a.from != null ? Date.parse(`${a.from as string}T00:00:00`) : null;
         const toMs = a.to != null ? Date.parse(`${a.to as string}T23:59:59.999`) : null;
+        const limit = (a.limit as number | undefined) ?? 20;
+        if (a.by === "stations" || a.by === "presets" || a.by === "playlists") {
+          // the Stats view's own ranks (shared/historyStats), over the range
+          const st = statsFor(events, {
+            from: fromMs ?? 0,
+            to: toMs != null ? toMs + 1 : Number.POSITIVE_INFINITY,
+          });
+          const rows: TopEntry[] =
+            a.by === "stations"
+              ? st.topStations
+              : a.by === "presets"
+                ? st.topPresets
+                : st.topPlaylists;
+          return ok({
+            by: a.by,
+            note:
+              a.by === "stations"
+                ? "plays are tuning sessions, seconds the time tuned"
+                : "plays are library plays started from it, seconds their play time",
+            results: rows.slice(0, limit).map((r) => ({
+              label: `${r.name}${r.sub ? ` · ${r.sub}` : ""}`,
+              plays: r.plays,
+              seconds: r.seconds,
+            })),
+          });
+        }
         const counts = new Map<string, { label: string; plays: number; listens: number }>();
         for (const e of events) {
           // Library plays only: a count means "played from the library".
@@ -93,7 +134,6 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
           if (isListen(e.playedSeconds, e.duration)) row.listens += 1;
           counts.set(key, row);
         }
-        const limit = (a.limit as number | undefined) ?? 20;
         const results = [...counts.values()]
           .sort((x, y) => y.listens - x.listens || y.plays - x.plays)
           .slice(0, limit);
@@ -101,6 +141,179 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
           by: a.by,
           listen_definition: "half the track or four minutes of real play time",
           results,
+        });
+      },
+    },
+    history_summary: {
+      inputSchema: {
+        streamer: STREAMER_ARG,
+        from: z.string().optional().describe("Earliest local date, YYYY-MM-DD."),
+        to: z.string().optional().describe("Latest local date, YYYY-MM-DD, inclusive."),
+        top: z
+          .number()
+          .int()
+          .min(1)
+          .max(50)
+          .optional()
+          .describe("How many of each top list (default 10)."),
+      },
+      // History's Stats view as a tool (2026-09-14, the MCP round three): the same
+      // statsFor the screen draws from (shared/historyStats), so the figures agree.
+      handler: async (a) => {
+        const { events: everyLine } = await listeningRecord.readAll();
+        const keep = streamerKeep(a.streamer, dm.snapshot().devices);
+        const events = keep ? everyLine.filter(keep) : everyLine;
+        const fromMs = a.from != null ? Date.parse(`${a.from as string}T00:00:00`) : null;
+        const toMs = a.to != null ? Date.parse(`${a.to as string}T23:59:59.999`) : null;
+        if ((fromMs != null && Number.isNaN(fromMs)) || (toMs != null && Number.isNaN(toMs)))
+          return err("from and to must be YYYY-MM-DD.");
+        const st = statsFor(events, {
+          from: fromMs ?? 0,
+          to: toMs != null ? toMs + 1 : Number.POSITIVE_INFINITY,
+        });
+        const top = (a.top as number | undefined) ?? 10;
+        const list = (rows: TopEntry[]): unknown[] =>
+          rows.slice(0, top).map((r) => ({
+            name: r.name,
+            ...(r.sub ? { sub: r.sub } : {}),
+            ...(r.album ? { album: r.album } : {}),
+            plays: r.plays,
+            seconds: r.seconds,
+          }));
+        const localDay = (ms: number): string => {
+          const d = new Date(ms);
+          const p = (n: number): string => String(n).padStart(2, "0");
+          return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+        };
+        const grid: number[][] = [];
+        for (let day = 0; day < 7; day++)
+          grid.push(st.byWeekdayHour.slice(day * 24, day * 24 + 24));
+        return ok({
+          period: { from: a.from ?? null, to: a.to ?? null },
+          listen_definition: "half the track or four minutes of real play time",
+          plays: st.plays,
+          listens: st.listens,
+          time_heard_seconds: st.seconds,
+          radio_seconds: st.radioSeconds,
+          external_seconds: st.externalSeconds,
+          radio_songs: st.radioSongs,
+          distinct: { albums: st.albums, artists: st.artists, tracks: st.tracks },
+          days_with_listening: st.days,
+          top_albums: list(st.topAlbums),
+          top_artists: list(st.topArtists),
+          top_tracks: list(st.topTracks),
+          top_stations: list(st.topStations),
+          ...(st.viaSeen
+            ? {
+                top_presets: list(st.topPresets),
+                top_playlists: list(st.topPlaylists),
+                started_from: st.startedFrom,
+              }
+            : {}),
+          by_source: st.bySource,
+          quality: st.quality,
+          weekday_hour_seconds: {
+            note: "rows Monday to Sunday, columns hour 0 to 23, seconds of library play",
+            rows: grid,
+          },
+          seconds_by_day: [...st.byDay.entries()]
+            .sort((x, y) => x[0] - y[0])
+            .map(([day, seconds]) => ({ day: localDay(day), seconds })),
+        });
+      },
+    },
+    history_elsewhere: {
+      inputSchema: {
+        streamer: STREAMER_ARG,
+        in_library: z
+          .enum(["all", "yes", "no"])
+          .optional()
+          .describe("Default all; 'no' is the artists the library does not have."),
+        limit: z.number().int().min(1).max(200).optional().describe("Artists, default 40."),
+        tracks_per_artist: z.number().int().min(0).max(50).optional().describe("Default 5."),
+      },
+      // History's Elsewhere view as a tool: the same heardElsewhere (shared/elsewhere)
+      // over the record and the library index, so "in your library" is the Library's
+      // own rule for an artist page.
+      handler: async (a) => {
+        const { events: everyLine } = await listeningRecord.readAll();
+        const keep = streamerKeep(a.streamer, dm.snapshot().devices);
+        const events = keep ? everyLine.filter(keep) : everyLine;
+        const heard = heardElsewhere(events, indexPools());
+        const want = (a.in_library as string | undefined) ?? "all";
+        const artists = heard.artists.filter((x) =>
+          want === "yes" ? x.inLibrary : want === "no" ? !x.inLibrary : true,
+        );
+        const limit = (a.limit as number | undefined) ?? 40;
+        const perArtist = (a.tracks_per_artist as number | undefined) ?? 5;
+        return ok({
+          sources: heard.sources,
+          stations: heard.stations,
+          total: artists.length,
+          returned: Math.min(limit, artists.length),
+          artists: artists.slice(0, limit).map((x) => ({
+            name: x.name,
+            heard: x.heard,
+            last_heard: new Date(x.lastAt).toISOString(),
+            where: x.where,
+            in_library: x.inLibrary,
+            library_albums: x.albums,
+            library_credits: x.credits,
+            owned_tracks: x.ownedTracks,
+            tracks: x.tracks.slice(0, perArtist).map((tr) => ({
+              title: tr.title,
+              ...(tr.artist ? { artist: tr.artist } : {}),
+              ...(tr.album ? { album: tr.album } : {}),
+              where: tr.where,
+              heard: tr.heard,
+              last_heard: new Date(tr.lastAt).toISOString(),
+              in_library: tr.owned,
+            })),
+          })),
+        });
+      },
+    },
+    history_shelves: {
+      inputSchema: {
+        streamer: STREAMER_ARG,
+        limit: z.number().int().min(1).max(100).optional().describe("Per shelf, default 12."),
+      },
+      // History's Rediscover view as a tool: the four shelves from the one
+      // shelvesFor (shared/rediscover) the screen reads.
+      handler: async (a) => {
+        const groups = indexPools();
+        if (groups.length === 0) return err(ctx.kickIndex());
+        const stats = await playStatsFromRecord(streamerKeep(a.streamer, dm.snapshot().devices));
+        const shelves = shelvesFor(groups, stats, Date.now());
+        const limit = (a.limit as number | undefined) ?? 12;
+        const row = (s: (typeof shelves.quiet)[number]): unknown => ({
+          server_udn: s.album.serverUdn,
+          object_id: s.album.id,
+          title: s.album.title,
+          artist: s.album.artist,
+          year: s.album.year,
+          plays: s.plays,
+          last_played: s.lastAt > 0 ? new Date(s.lastAt).toISOString() : null,
+          tracks: s.tracks,
+          tracks_reached: s.reached,
+        });
+        return ok({
+          shelves: {
+            unfinished: `started and not finished, nothing since for ${UNFINISHED_QUIET_DAYS} days`,
+            more_from: "unplayed albums by the artists played most",
+            quiet: `played, but not in ${REDISCOVER_QUIET_DAYS} days, longest ago first`,
+            never_played: "no recorded play since the record began",
+          },
+          unfinished: shelves.unfinished.slice(0, limit).map(row),
+          more_from: shelves.moreFrom.slice(0, limit).map(row),
+          quiet: shelves.quiet.slice(0, limit).map(row),
+          never_played: shelves.neverPlayed.slice(0, limit).map(row),
+          counts: {
+            unfinished: shelves.unfinished.length,
+            more_from: shelves.moreFrom.length,
+            quiet: shelves.quiet.length,
+            never_played: shelves.neverPlayed.length,
+          },
         });
       },
     },

@@ -39,7 +39,7 @@ const BUDGET_BYTES = 200 * 1024 * 1024;
 const PASSTHROUGH_MAX = 2 * 1024 * 1024;
 const MAX_PARALLEL = 3;
 const WRITE_DELAY_MS = 2000;
-const JPEG_QUALITY = 85;
+export const JPEG_QUALITY = 85;
 
 interface Entry {
   bytes: number;

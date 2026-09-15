@@ -6,7 +6,7 @@ import {
   type MediaIndexPools,
   type MediaNode,
   type PlayStats,
-} from "@shared/model";
+} from "./model";
 
 /**
  * The History screen's REDISCOVER sections (0.8.0): albums worth coming back to,
