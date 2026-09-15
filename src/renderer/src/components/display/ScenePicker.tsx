@@ -324,6 +324,8 @@ function SyncRow({ host }: { host: PickerHost }): React.JSX.Element {
   const fill = useStore((s) => s.settings.displayCathodeFill ?? false);
   const saveSettings = useStore((s) => s.saveSettings);
   const cathode = finish === "cathode";
+  const cornerTitle = useStore((s) => s.settings.displayCornerTitle ?? true);
+  const cornerClock = useStore((s) => s.settings.displayCornerClock ?? true);
   // the slider is answered locally: a save is an IPC round trip to disk, and a controlled value
   // that waits for it drags behind the thumb (the user: "very sluggish")
   const [sync, setSync] = useState(value);
@@ -368,6 +370,29 @@ function SyncRow({ host }: { host: PickerHost }): React.JSX.Element {
               onChange={(v) => void saveSettings({ displayCathodeFill: v })}
             />
             Fill
+          </label>
+        </SettingLine>
+      )}
+      {host === "display" && (
+        <SettingLine
+          label="Corners"
+          hint="The track's name at the bottom left and the time at the bottom right."
+        >
+          <label className="flex items-center gap-1.5">
+            <Switch
+              size="sm"
+              checked={cornerTitle}
+              onChange={(v) => void saveSettings({ displayCornerTitle: v })}
+            />
+            Title
+          </label>
+          <label className="flex items-center gap-1.5">
+            <Switch
+              size="sm"
+              checked={cornerClock}
+              onChange={(v) => void saveSettings({ displayCornerClock: v })}
+            />
+            Clock
           </label>
         </SettingLine>
       )}

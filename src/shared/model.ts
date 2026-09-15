@@ -1334,6 +1334,12 @@ export interface AppSettings {
    *  only the corners fall behind the glass. In-mode, beside Finish. */
   displayCathodeCurve: "gentle" | "deep";
   displayCathodeFill: boolean;
+  /** The wall's corners (2026-09-15, user: they can "kill the mood of a fullscreen display"):
+   *  the track's name at the bottom left and the time at the bottom right, each its own
+   *  switch, on by default; a shelf display often wants the clock without the title. In-mode,
+   *  beside Finish. The tile has no corners. */
+  displayCornerTitle: boolean;
+  displayCornerClock: boolean;
   /** Shuffle: the order it walks the scenes (sequential is the picker's alphabetical order,
    *  random, the default, never repeats the one before), how many tracks each scene stays for ("album"
    *  changes when the album does), and the scenes left out of the rotation, by id (the sleeve
@@ -1526,6 +1532,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   displayFinish: "cathode",
   displayCathodeCurve: "deep",
   displayCathodeFill: false,
+  displayCornerTitle: true,
+  displayCornerClock: true,
   displayShuffleOrder: "random",
   displayShuffleEvery: 1,
   displayShuffleExclude: ["sleeve"],

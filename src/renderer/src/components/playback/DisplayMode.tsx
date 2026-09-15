@@ -158,18 +158,22 @@ export function DisplayMode(): React.JSX.Element {
         />
       )}
 
-      <div
-        className={cx(
-          // The clock shares the lyric line's vertical band (bottom-16), clear of
-          // the waveform strip below — one bottom edge for everything that
-          // floats above the strip (user call, 2026-08-30).
-          "absolute bottom-16 right-7 font-mono text-[13px] text-dim transition-opacity",
-          cursorIdle && "opacity-60",
-        )}
-      >
-        <span title="The time of day">{clock}</span>
-      </div>
-      {stage && (meta.title || meta.subtitle) && (
+      {/* the corners are each a switch in All scenes (2026-09-15): a shelf display wants the
+          clock without the title, a mood wants neither */}
+      {(settings.displayCornerClock ?? true) && (
+        <div
+          className={cx(
+            // The clock shares the lyric line's vertical band (bottom-16), clear of
+            // the waveform strip below — one bottom edge for everything that
+            // floats above the strip (user call, 2026-08-30).
+            "absolute bottom-16 right-7 font-mono text-[13px] text-dim transition-opacity",
+            cursorIdle && "opacity-60",
+          )}
+        >
+          <span title="The time of day">{clock}</span>
+        </div>
+      )}
+      {stage && (settings.displayCornerTitle ?? true) && (meta.title || meta.subtitle) && (
         <div
           data-display-caption
           className={cx(
