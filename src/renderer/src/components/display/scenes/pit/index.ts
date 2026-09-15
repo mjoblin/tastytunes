@@ -33,7 +33,7 @@ export const PIT_KEY: SceneKey = {
     {
       shows: "Its color and side",
       means:
-        "Which drum. Kicks come from the left, hi-hats from the right and snares from the middle.",
+        "Which drum. Kicks come from the left, hi-hats from the right and snares from the middle. Colors are based on the album art.",
     },
     { shows: "The pile", means: "The last minute of hits." },
     { shows: "A ring on the floor", means: "Each beat, wider on the first beat of a bar." },

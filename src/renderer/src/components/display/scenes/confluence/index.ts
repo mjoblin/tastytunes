@@ -85,7 +85,8 @@ export const CONFLUENCE_KEY: SceneKey = {
   reads: [
     {
       shows: "Six vents along the bottom",
-      means: "One per frequency band, bass at the left. A louder band releases more ink.",
+      means:
+        "One per frequency band, bass at the left. A louder band releases more ink. Colors are based on the album art.",
     },
     { shows: "A puff from the low vents", means: "A kick drum. A hard hit starts a whirlpool." },
     { shows: "A gust across the frame", means: "A snare." },
