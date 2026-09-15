@@ -167,6 +167,7 @@ listeningRecord.setEventNotifier((event) => {
 
 // MCP tools can mutate settings (schedules) — the renderer must hear about it
 mcpBridge.onSettingsMutated = (settings) => broadcastSettings(settings);
+mcpBridge.sendCommand = (command) => sendMenuCommand(command);
 
 // The Edit menu's Undo item names the undo stack's top; the renderer keeps
 // this in sync and a change rebuilds the menu (labels are baked at build).
@@ -686,6 +687,8 @@ function registerIpc(): void {
     mediaIndex.ensureFresh(streamerHost(), servers);
     return servers;
   });
+  // the renderer's display mode, for the MCP bridge (2026-09-14)
+  ipcMain.on(IPC.displayModeReport, (_e, on: boolean) => mcpBridge.reportDisplayMode(on === true));
   ipcMain.handle(IPC.mediaIndexRebuild, async (_e, serverUdn: string) => {
     const servers = await refreshServers(streamerHost());
     const server = servers.find((x) => x.udn === serverUdn);

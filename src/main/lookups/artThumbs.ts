@@ -137,7 +137,7 @@ async function gate<T>(work: () => Promise<T>): Promise<T> {
   }
 }
 
-async function fetchOrigin(url: string): Promise<{ raw: Buffer; type: string } | null> {
+export async function fetchOrigin(url: string): Promise<{ raw: Buffer; type: string } | null> {
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(20_000) });
     if (!res.ok) return null;

@@ -96,6 +96,12 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         description:
           "The user's wake/standby schedules (alarms): time, days, action, enabled. Note: schedules fire only while TastyTunes is running and connected.",
       },
+      {
+        name: "list_scenes",
+        title: "List scenes",
+        description:
+          "Display mode's scenes in the picker's order: id, name, a one-line description, and which is chosen for display mode ('display') and the Now Playing tile ('tile'). 'sleeve' is the album art; 'shuffle' draws a different scene each track. Also whether display mode is on.",
+      },
     ],
   },
   {
@@ -272,6 +278,12 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         title: "Get media info",
         description:
           "Everything the local index knows about one album, track or artist by server_udn + object id — the app's Info panel as a tool: performers, album artist, composers, year, genres, track/disc numbers, duration, format (codec, bit depth, sample rate, bitrate, size), server and object ids, art URL. An album also gets its tracks summed (count, discs, runtime, size, format, composers, compilation) and its full track list; an artist gets their library page (albums with year/format, track count, guest appearances, composer credits, genres, active years). Read-only, index-backed.",
+      },
+      {
+        name: "get_album_art",
+        title: "Get album art",
+        description:
+          "An album's picture as an image, resized by TastyTunes to 480 px ('card', the default) or 320 px ('thumb'); a track answers with its album's picture. Errors when the server has no art for it.",
       },
       {
         name: "play_media",
@@ -495,6 +507,27 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         title: "Set display brightness",
         description:
           "Front-panel brightness: 'off', 'dim', or 'bright'. Errors on headless models.",
+      },
+    ],
+  },
+  {
+    id: "scenes",
+    title: "Scenes",
+    group: "control",
+    description:
+      "Display mode's scenes: which scene shows in display mode and in the Now Playing tile, and display mode on or off.",
+    tools: [
+      {
+        name: "set_scene",
+        title: "Set scene",
+        description:
+          "Choose the scene for display mode (host 'display') or the Now Playing tile (host 'tile'): a scene id from list_scenes, 'sleeve' for the album art, or 'shuffle'. Takes effect at once; an abstract scene draws once the playing track has been analyzed, and shows the album art until then.",
+      },
+      {
+        name: "set_display_mode",
+        title: "Set display mode",
+        description:
+          "Turn display mode, the full-screen scene view of the TastyTunes window, on or off.",
       },
     ],
   },

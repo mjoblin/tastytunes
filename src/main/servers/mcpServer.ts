@@ -23,6 +23,7 @@ import { resumeRun, resumeTarget } from "@shared/model";
 import { playStatsFromRecord } from "../data/playStats";
 import { MCP_CLUSTERS, mcpClusterEnabled } from "@shared/mcpCatalog";
 import { app } from "electron";
+import type { MenuCommand } from "@shared/ipc";
 import type { DeviceManager } from "../device/deviceManager";
 import { getSettings, updateSettings } from "../data/persist";
 
@@ -41,6 +42,7 @@ import { historyTools } from "./mcp/historyTools";
 import { collectionTools } from "./mcp/collectionTools";
 import { audioTools } from "./mcp/audioTools";
 import { editTools } from "./mcp/editTools";
+import { sceneTools } from "./mcp/sceneTools";
 
 function lanAddress(): string | null {
   for (const addrs of Object.values(networkInterfaces())) {
@@ -57,8 +59,18 @@ export class McpBridge {
   /** Fired when an MCP tool mutates settings (schedules) — the renderer
    *  learns via a {kind:'settings'} push; index.ts wires this to the window. */
   onSettingsMutated: ((next: AppSettings) => void) | null = null;
+  /** A menu command to the main window (set_display_mode); index.ts wires this to
+   *  sendMenuCommand, which raises the window if there is none. */
+  sendCommand: ((command: MenuCommand) => void) | null = null;
+  /** Display mode as the renderer last reported it (store.setDisplayMode → IPC.displayModeReport):
+   *  renderer state main would not otherwise know. */
+  private displayModeOn = false;
 
   constructor(private dm: DeviceManager) {}
+
+  reportDisplayMode(on: boolean): void {
+    this.displayModeOn = on;
+  }
 
   /** Bring the server in line with settings: start, stop, or move host/port. */
   sync(settings: { mcp: McpSettings }): void {
@@ -284,6 +296,13 @@ export class McpBridge {
       kickIndex: () => this.kickIndex(),
       resumeOffer: () => this.resumeOffer(),
       mutateSchedules: (fn) => this.mutateSchedules(fn),
+      saveSettings: (patch) => {
+        const next = updateSettings(patch);
+        this.onSettingsMutated?.(next);
+        return next;
+      },
+      sendCommand: (command) => this.sendCommand?.(command),
+      displayModeOn: () => this.displayModeOn,
     };
     return {
       ...deviceTools(ctx),
@@ -292,6 +311,7 @@ export class McpBridge {
       ...collectionTools(ctx),
       ...audioTools(ctx),
       ...editTools(ctx),
+      ...sceneTools(ctx),
     };
   }
 

@@ -108,6 +108,8 @@ export type MenuCommand =
   | { id: "palette" }
   | { id: "shortcuts" }
   | { id: "displayMode" }
+  | { id: "displayModeOn" }
+  | { id: "displayModeOff" }
   | { id: "toggleNav" }
   | { id: "navBack" }
   | { id: "navForward" }
@@ -428,6 +430,9 @@ export interface TastyTunesApi {
   /** Force a media-index (re)build for one server (also the only way to
    *  build one for a Browse-only server). */
   mediaIndexRebuild(serverUdn: string): Promise<void>;
+  /** The renderer tells main whether display mode is on (2026-09-14): the MCP bridge reports it
+   *  in get_status and list_scenes, and set_display_mode asks the window through a menu command. */
+  reportDisplayMode(on: boolean): void;
   radioSearch(query: string): Promise<RadioStation[]>;
   /** The directory's most-listened stations — the Radio screen's default rail. */
   radioTop(): Promise<RadioStation[]>;
@@ -536,6 +541,7 @@ export const IPC = {
   contentResolve: "tt:contentResolve",
   mediaNodeInfo: "tt:mediaNodeInfo",
   mediaIndexRebuild: "tt:mediaIndexRebuild",
+  displayModeReport: "tt:displayModeReport",
   radioSearch: "tt:radioSearch",
   radioTop: "tt:radioTop",
   radioByTags: "tt:radioByTags",

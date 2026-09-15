@@ -1,6 +1,7 @@
 import { z, type ZodRawShape } from "zod";
-import { type Snapshot } from "@shared/ipc";
+import { type MenuCommand, type Snapshot } from "@shared/ipc";
 import {
+  type AppSettings,
   type ConnectionState,
   type MediaNode,
   type MediaQueueAction,
@@ -19,7 +20,11 @@ import { getSettings } from "../../data/persist";
 // the bridge's toolImpls.
 
 export interface ToolResult {
-  content: Array<{ type: "text"; text: string }>;
+  /** Text, or an image (get_album_art, 2026-09-14: base64 bytes and their type, the MCP
+   *  image content block, which clients that render pictures show). */
+  content: Array<
+    { type: "text"; text: string } | { type: "image"; data: string; mimeType: string }
+  >;
   isError?: boolean;
 }
 
@@ -68,7 +73,28 @@ export interface ToolContext {
   kickIndex(): string;
   resumeOffer(): Promise<ResumeOffer>;
   mutateSchedules(fn: (list: Schedule[]) => Schedule[]): void;
+  /** Persist a settings patch and push it to every window (the scene tools, 2026-09-14). */
+  saveSettings(patch: Partial<AppSettings>): AppSettings;
+  /** A menu command to the main window (display mode on or off). */
+  sendCommand(command: MenuCommand): void;
+  /** Whether display mode is on, as the renderer last reported. */
+  displayModeOn(): boolean;
 }
+
+/** The app's own state an agent can ask about beside the streamer's (2026-09-14): display
+ *  mode on or off and the scene chosen for it, and the Now Playing tile's scene. */
+export const appState = (
+  ctx: ToolContext,
+): {
+  display_mode: { on: boolean; scene: AppSettings["displayScene"] };
+  now_playing_tile: { scene: AppSettings["nowPlayingScene"] };
+} => {
+  const st = getSettings();
+  return {
+    display_mode: { on: ctx.displayModeOn(), scene: st.displayScene },
+    now_playing_tile: { scene: st.nowPlayingScene },
+  };
+};
 
 /** The history tools' optional streamer: a name from the device book or a live
  *  device, or a udn; "before-0.8.0" for the lines written before the field. */
@@ -141,6 +167,7 @@ export const status = (ctx: ToolContext): unknown => {
     return {
       connection: s.connection.phase,
       hint: "Not connected. Use list_devices and connect_device.",
+      ...appState(ctx),
     };
   }
   const md = s.playState?.metadata;
@@ -158,6 +185,7 @@ export const status = (ctx: ToolContext): unknown => {
     },
     power: s.systemPower?.power ?? null,
     source: activeSourceId ? { id: activeSourceId, name: sourceName } : null,
+    ...appState(ctx),
     playback: {
       state: s.playState?.state ?? null,
       title: md?.title ?? null,

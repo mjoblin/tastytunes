@@ -14,6 +14,7 @@ import {
   Waves,
 } from "lucide-react";
 import type { DisplayScene, SceneSettingValue } from "@shared/model";
+import { orderScenes, sceneText } from "@shared/scenes";
 import type { AnyScene, SceneId, SceneKey, SceneSettingDef, SceneSettings } from "./types";
 import { Tide } from "./tide";
 import { Terrain } from "./terrain";
@@ -49,11 +50,17 @@ export interface SceneDef {
   essentialWords?: true;
 }
 
+/** A scene's name and description come from the shared text (shared/scenes.ts, 2026-09-14),
+ *  the one home the MCP bridge's list_scenes reads too. */
+const text = (id: DisplayScene): { label: string; blurb: string } => {
+  const { label, blurb } = sceneText(id);
+  return { label, blurb };
+};
+
 export const SCENES: SceneDef[] = [
   {
     id: "sleeve",
-    label: "Sleeve",
-    blurb: "The album art and title, with the current lyric beneath.",
+    ...text("sleeve"),
     icon: Disc3,
     kind: "face",
     key: {
@@ -65,8 +72,7 @@ export const SCENES: SceneDef[] = [
   },
   {
     id: "tide",
-    label: "Tide",
-    blurb: "A waterline that rises with the bass, with the lyrics on the surface.",
+    ...text("tide"),
     icon: Waves,
     kind: "2d",
     key: {
@@ -95,8 +101,7 @@ export const SCENES: SceneDef[] = [
   },
   {
     id: "terrain",
-    label: "Terrain",
-    blurb: "A flight along the track's loudness, with the next minute ahead.",
+    ...text("terrain"),
     icon: Mountain,
     kind: "2d",
     key: {
@@ -129,8 +134,7 @@ export const SCENES: SceneDef[] = [
   },
   {
     id: "orbit",
-    label: "Orbit",
-    blurb: "Six rings, one per frequency band, and a comet marking your position in the track.",
+    ...text("orbit"),
     icon: OrbitIcon,
     kind: "2d",
     key: {
@@ -159,8 +163,7 @@ export const SCENES: SceneDef[] = [
   },
   {
     id: "type",
-    label: "Type",
-    blurb: "The current lyric alone, large, in the display font.",
+    ...text("type"),
     icon: TypeIcon,
     essentialWords: true,
     kind: "2d",
@@ -176,8 +179,7 @@ export const SCENES: SceneDef[] = [
   },
   {
     id: "survey",
-    label: "Contour",
-    blurb: "The whole track as a contour map, lit up to your position.",
+    ...text("survey"),
     icon: Map,
     kind: "three",
     key: SURVEY_KEY,
@@ -185,8 +187,7 @@ export const SCENES: SceneDef[] = [
   },
   {
     id: "conduit",
-    label: "Tunnel",
-    blurb: "A flight down a tunnel made of the next half minute of the track.",
+    ...text("conduit"),
     icon: Radar,
     kind: "three",
     key: CONDUIT_KEY,
@@ -194,8 +195,7 @@ export const SCENES: SceneDef[] = [
   },
   {
     id: "confluence",
-    label: "Ink",
-    blurb: "Ink in water, one color per frequency band, with the lyrics dissolving into it.",
+    ...text("confluence"),
     icon: Blend,
     kind: "three",
     key: CONFLUENCE_KEY,
@@ -203,8 +203,7 @@ export const SCENES: SceneDef[] = [
   },
   {
     id: "pit",
-    label: "Ball Pit",
-    blurb: "Each drum hit as a ball dropped into a pit, piling up over the last minute.",
+    ...text("pit"),
     icon: CircleDot,
     kind: "2d",
     key: PIT_KEY,
@@ -212,8 +211,7 @@ export const SCENES: SceneDef[] = [
   },
   {
     id: "roll",
-    label: "Piano Roll",
-    blurb: "The whole track as a punched roll, read along by a head that sparks on drum hits.",
+    ...text("roll"),
     icon: Rows3,
     kind: "2d",
     key: ROLL_KEY,
@@ -221,8 +219,7 @@ export const SCENES: SceneDef[] = [
   },
   {
     id: "sea",
-    label: "Sea",
-    blurb: "A sea that swells with the loudness, under a moon that glints on the hi-hats.",
+    ...text("sea"),
     icon: Moon,
     kind: "three",
     key: SEA_KEY,
@@ -230,8 +227,7 @@ export const SCENES: SceneDef[] = [
   },
   {
     id: "terminal",
-    label: "Terminal",
-    blurb: "The lyrics typed onto an amber terminal, with a log scrolling up behind.",
+    ...text("terminal"),
     icon: TerminalIcon,
     essentialWords: true,
     kind: "2d",
@@ -240,8 +236,7 @@ export const SCENES: SceneDef[] = [
   },
   {
     id: "shuffle",
-    label: "Shuffle",
-    blurb: "A different scene for every track.",
+    ...text("shuffle"),
     icon: Shuffle,
     kind: "shuffle",
   },
@@ -264,10 +259,7 @@ export const isAbstract = (id: DisplayScene): id is SceneId => id !== "sleeve" &
 
 /** The scenes as the picker shows them: alphabetical by label, Shuffle last (the user's word);
  *  Tab and Shuffle walk the same order, so the keyboard, the picker and the shuffle agree. */
-export const SCENES_ORDERED: SceneDef[] = [
-  ...SCENES.filter((s) => s.id !== "shuffle").sort((a, b) => a.label.localeCompare(b.label)),
-  ...SCENES.filter((s) => s.id === "shuffle"),
-];
+export const SCENES_ORDERED: SceneDef[] = orderScenes(SCENES);
 /** The abstract scenes in that order, for Shuffle to cycle through. */
 export const ABSTRACT_ORDERED: SceneId[] = SCENES_ORDERED.map((s) => s.id).filter(isAbstract);
 

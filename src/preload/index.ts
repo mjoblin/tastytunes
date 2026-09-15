@@ -107,6 +107,7 @@ const api: TastyTunesApi = {
   contentResolve: (ref: ContentRef) => ipcRenderer.invoke(IPC.contentResolve, ref),
   mediaNodeInfo: (query: MediaInfoQuery) => ipcRenderer.invoke(IPC.mediaNodeInfo, query),
   mediaIndexRebuild: (serverUdn: string) => ipcRenderer.invoke(IPC.mediaIndexRebuild, serverUdn),
+  reportDisplayMode: (on: boolean) => ipcRenderer.send(IPC.displayModeReport, on),
   radioSearch: (query: string) => ipcRenderer.invoke(IPC.radioSearch, query),
   radioTop: () => ipcRenderer.invoke(IPC.radioTop),
   radioByTags: (tags: string[]) => ipcRenderer.invoke(IPC.radioByTags, tags),

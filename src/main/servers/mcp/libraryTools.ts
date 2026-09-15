@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { artKeyOf, artUrlAt, artUrlResizable } from "@shared/artUrl";
+import { artThumb, fetchOrigin, TIERS } from "../../lookups/artThumbs";
 import {
   type MediaNode,
   trackArtists,
@@ -222,6 +224,8 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
               object_id: n.id,
               kind,
               title: n.title,
+              // a folder server's path to it, from the root (2026-09-14; the index records it)
+              ...(n.titlePath?.length ? { folder: n.titlePath } : {}),
               artist: n.artist,
               album: n.album,
               year: n.year,
@@ -419,6 +423,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
               server: n.serverName,
               object_id: n.id,
               title: n.title,
+              ...(n.titlePath?.length ? { folder: n.titlePath } : {}),
               artist: n.artist,
               year: n.year,
               genres: n.genre ?? [],
@@ -734,6 +739,63 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
         });
       },
     },
+    get_album_art: {
+      inputSchema: {
+        server_udn: z.string().describe("From search_library / list_albums / list_media_servers."),
+        object_id: z
+          .string()
+          .describe("The album or track object id (a track answers with its album's picture)."),
+        size: z
+          .enum(["card", "thumb"])
+          .optional()
+          .describe("'card' (480 px, the default) or 'thumb' (320 px)."),
+      },
+      // The picture as an MCP image block (2026-09-14), through the app's own
+      // thumbnail cache (main/lookups/artThumbs): the streamer's USB server
+      // hands out the whole file (827 KB, under a rotating id) and Asset resizes
+      // on request, and an agent should see neither — one call, one small JPEG,
+      // the same file the Library's card drew.
+      handler: async (a) => {
+        const pool = indexPools().find((p) => p.udn === a.server_udn);
+        if (!pool)
+          return err(
+            indexPools().length === 0
+              ? ctx.kickIndex()
+              : `No ready index for server '${String(a.server_udn)}'. Use list_media_servers.`,
+          );
+        const id = a.object_id as string;
+        const node = pool.albums.find((n) => n.id === id) ?? pool.tracks.find((n) => n.id === id);
+        if (!node)
+          return err(
+            `Object '${id}' is not an album or a track in the index for '${pool.serverName}' — list_albums and search_library give indexed ids.`,
+          );
+        if (!node.artUrl) return err(`The server has no art for '${node.title}'.`);
+        const tier = (a.size as "card" | "thumb" | undefined) ?? "card";
+        const got = artUrlResizable(node.artUrl)
+          ? await fetchOrigin(artUrlAt(node.artUrl, TIERS[tier]) ?? node.artUrl).then((r) =>
+              r ? { bytes: r.raw, type: r.type } : null,
+            )
+          : await artThumb(artKeyOf(node), tier, node.artUrl);
+        if (!got) return err(`The server did not answer for the art of '${node.title}'.`);
+        return {
+          content: [
+            { type: "image", data: got.bytes.toString("base64"), mimeType: got.type },
+            {
+              type: "text",
+              text: JSON.stringify({
+                object_id: node.id,
+                album: node.isContainer ? node.title : (node.album ?? node.title),
+                artist: node.albumArtist ?? node.artist ?? null,
+                size: tier,
+                max_px: TIERS[tier],
+                bytes: got.bytes.length,
+                type: got.type,
+              }),
+            },
+          ],
+        };
+      },
+    },
     get_media_info: {
       inputSchema: {
         server_udn: z.string().describe("From search_library / list_albums / list_media_servers."),
@@ -773,6 +835,8 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
           parent_id: node.parentId,
           upnp_class: node.upnpClass,
           title: node.title,
+          // where it sits on a folder server (a USB drive): the folder titles from the root
+          ...(node.titlePath?.length ? { folder: node.titlePath } : {}),
           ...(node.artist ? { artist: node.artist } : {}),
           ...(node.year ? { year: node.year } : {}),
           genres: node.genre ?? [],

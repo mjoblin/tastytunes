@@ -1,5 +1,7 @@
-import type { MediaNode } from "@shared/model";
 import { artUrlAt, artUrlResizable } from "@shared/artUrl";
+
+/** The cache key, shared with main (the MCP bridge's get_album_art) since 2026-09-14. */
+export { artKeyOf } from "@shared/artUrl";
 
 /**
  * The src to draw art from, at the size it is drawn (2026-09-14). A server that
@@ -19,13 +21,4 @@ export function artSrc(url: string | null | undefined, px: number, key?: string)
   if (want > 480) return url;
   const tier = want <= 320 ? "thumb" : "card";
   return `tt-art://thumb/${tier}/${encodeURIComponent(key ?? url)}?u=${encodeURIComponent(url)}`;
-}
-
-/** A node's art identity: the server and the album it belongs to (its own title for an album). */
-export function artKeyOf(
-  node: Pick<MediaNode, "serverUdn" | "title" | "album" | "artist" | "albumArtist" | "isContainer">,
-): string {
-  const album = node.isContainer ? node.title : (node.album ?? node.title);
-  const artist = node.albumArtist ?? node.artist ?? "";
-  return `${node.serverUdn ?? ""}|${album.trim().toLowerCase()}|${artist.trim().toLowerCase()}`;
 }

@@ -744,7 +744,11 @@ export const useStore = create<TTState>((set, get) => ({
   analysisProgress: null,
   setAnalysisProgress: (analysisProgress) => set({ analysisProgress }),
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
-  setDisplayMode: (displayMode) => set({ displayMode }),
+  setDisplayMode: (displayMode) => {
+    set({ displayMode });
+    // main hears every change (the MCP bridge reports it and acts on it, 2026-09-14)
+    tt.reportDisplayMode(displayMode);
+  },
   // The two Now Playing drawers are mutually exclusive — opening one closes
   // the other here, so every opener (header buttons, future palette entries)
   // inherits the rule.
@@ -1032,6 +1036,13 @@ export const useStore = create<TTState>((set, get) => ({
         break;
       case "displayMode":
         s.setDisplayMode(!s.displayMode);
+        break;
+      // an agent asks for a state, not a toggle (set_display_mode)
+      case "displayModeOn":
+        s.setDisplayMode(true);
+        break;
+      case "displayModeOff":
+        s.setDisplayMode(false);
         break;
       case "toggleNav":
         // Same round-trip as Nav's collapse button: persist, then adopt.
