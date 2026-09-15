@@ -199,12 +199,13 @@ export function ScenePicker({
           ))}
         </div>
       </div>
-      {/* A SECTION IS AS TALL AS ITS TALLEST SCENE: every scene's reading (or controls) sits
-          in the same grid cell, the chosen one visible and the rest laid out unseen, so the
-          cell is the height of the tallest at whatever width the panel has and the panel's
-          bottom edge never moves as scenes are chosen (the user's word; a guessed reserve
-          held for most scenes and grew for the tunnel). Unseen rows are visibility-hidden,
-          so nothing in them takes a click or a Tab */}
+      {/* A SECTION IS AS TALL AS THE CHOSEN SCENE'S SLICE (user, 2026-09-14: "have the bottom
+          part of the modal grow vertically to match the content"): every scene's reading (or
+          controls) sits in the same grid cell, the chosen one shown and the rest display-none,
+          so the panel's bottom edge follows the content as scenes are chosen. It had been as
+          tall as the tallest scene's slice so the edge never moved, which left most scenes
+          over a well of empty space once the reading went one entry a row. Unseen rows take
+          no click and no Tab */}
       {section && (
         <div data-display-section={section} className="mt-2 border-t border-edge px-1.5 pt-2">
           {section === "reading" && (
@@ -242,14 +243,11 @@ export function ScenePicker({
   );
 }
 
-/** One scene's slice of a section, in the cell every scene's slice shares: seen when it is the
- *  chosen scene's, laid out unseen otherwise. */
+/** One scene's slice of a section, in the cell every scene's slice shares: shown when it is the
+ *  chosen scene's, display-none otherwise (mounted still, so a control keeps its state). */
 function Stacked({ on, children }: { on: boolean; children: React.ReactNode }): React.JSX.Element {
   return (
-    <div
-      aria-hidden={!on}
-      className={cx("[grid-area:1/1]", !on && "invisible pointer-events-none")}
-    >
+    <div aria-hidden={!on} className={cx("[grid-area:1/1]", !on && "hidden")}>
       {children}
     </div>
   );
