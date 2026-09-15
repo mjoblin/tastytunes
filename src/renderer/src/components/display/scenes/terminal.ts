@@ -16,9 +16,10 @@ import { version } from "../../../../../../package.json";
  * status line at the top is the data: the track, the position, the tempo and key,
  * the section as the running process, a six-band meter and LEVEL, the loudness
  * (not LOAD: a user would read that as their machine's CPU). A kick sags the raster a
- * pixel (with a rise, never a pop); a drop prints a divider and flashes the
+ * pixel (with a rise, never a pop); a drop flashes the
  * phosphor. A track with no words gets a boot log instead: what the analysis
- * found, then the sections and drops ticked off as they pass.
+ * found. (The sections and drops used to be ticked off in the log as they passed; both
+ * read as noise beside the words — user, 2026-09-15 — so the status line alone names the section.)
  */
 export const TERMINAL_KEY: SceneKey = {
   reads: [
@@ -30,7 +31,6 @@ export const TERMINAL_KEY: SceneKey = {
         "Track details, track position, tempo and key, current section, a level meter, loudness.",
     },
     { shows: "A sag of the screen", means: "A kick drum." },
-    { shows: "A divider and a flash", means: "A drop." },
     {
       shows: "The boot log",
       means: "For a track without lyrics, what was measured about the track.",
@@ -105,7 +105,6 @@ export class Terminal implements Scene {
   /** The log rebuilt from the track's own times at mount (and after a seek back), once. */
   private backfilled = false;
   private measured = false;
-  private lastSection: number | null = null;
   /** System messages that arrived while a line was still typing; they follow it. */
   private pending: Entry[] = [];
 
@@ -119,7 +118,6 @@ export class Terminal implements Scene {
     this.booted = false;
     this.backfilled = false;
     this.measured = false;
-    this.lastSection = null;
   }
 
   private push(text: string, stampAt: number | null, sys: boolean): void {
@@ -203,19 +201,11 @@ export class Terminal implements Scene {
     }
     // THE BACKFILL. The scene is rebuilt whenever the view remounts, so the log is rebuilt
     // too, from what the track itself says happened before now: every line already sung, at
-    // its time, and every section boundary passed, in time order. One pass, once. Leaving and
-    // returning, or seeking back, no longer starts the screen over (the user's ask)
+    // its time, in time order. One pass, once. Leaving and returning, or seeking back, no
+    // longer starts the screen over (the user's ask)
     if (!this.backfilled && lines) {
       this.backfilled = true;
       const events: Array<{ t: number; text: string; sys: boolean }> = [];
-      f.sections.forEach((sec, i) => {
-        if (i > 0 && sec.start < f.position)
-          events.push({
-            t: sec.start,
-            text: `section ${i + 1}${sec.kind === "chorus" ? "  chorus" : ""}`,
-            sys: true,
-          });
-      });
       lines.forEach((ln, i) => {
         if (ln.text && (index >= 0 ? i < index : ln.t < f.position))
           events.push({ t: ln.t, text: ln.text, sys: false });
@@ -223,7 +213,6 @@ export class Terminal implements Scene {
       events.sort((a, b) => a.t - b.t);
       for (const e of events) this.log.push({ text: e.text, stamp: stamp(e.t), sys: e.sys });
       if (this.log.length > LOG_MAX) this.log.splice(0, this.log.length - LOG_MAX);
-      this.lastSection = f.section ? f.section.index : null;
     }
     if (!this.measured && f.real) {
       const parts: string[] = [];
@@ -240,21 +229,8 @@ export class Terminal implements Scene {
         else this.log.splice(at, 0, entry);
       }
     }
-    // the sections and the drops, ticked off as they pass
-    const secIndex = f.section ? f.section.index : -1;
-    if (secIndex >= 0 && secIndex !== this.lastSection) {
-      if (this.lastSection !== null || secIndex > 0)
-        this.push(
-          `section ${secIndex + 1}${f.section?.kind === "chorus" ? "  chorus" : ""}`,
-          f.sections[secIndex]?.start ?? f.position,
-          true,
-        );
-      this.lastSection = secIndex;
-    }
-    if (f.drop?.onDrop) {
-      this.flash = 1;
-      this.push("──────────────  drop  ──────────────", f.position, true);
-    }
+    // a drop flashes the screen; it no longer prints a divider (user, 2026-09-15)
+    if (f.drop?.onDrop) this.flash = 1;
 
     // THE TYPING. A new line: the unfinished one is completed into the log at once
     if (lines && index >= 0 && index !== this.typedIndex && lines[index]?.text) {
@@ -317,6 +293,7 @@ export class Terminal implements Scene {
       if (f.beat && f.beat.confidence >= 0.35) bits.push(`${Math.round(f.beat.bpm)} BPM`);
       if (f.key && f.key.confidence >= 0.3)
         bits.push(`${NOTES[f.key.tonic]}${f.key.mode === "minor" ? "m" : ""}`);
+      const secIndex = f.section ? f.section.index : -1;
       if (secIndex >= 0)
         bits.push(f.section?.kind === "chorus" ? "CHORUS" : `SECTION ${secIndex + 1}`);
       let meter = "";
