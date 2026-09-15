@@ -73,13 +73,17 @@ export function sceneText(id: DisplayScene): SceneText {
   return t;
 }
 
-/** The picker's order: alphabetical by label, Shuffle last (the user's word); Tab, Shuffle
- *  and an agent's list walk the same order, so the keyboard, the picker and the tools agree. */
+/** The picker's order: SLEEVE FIRST (the default, what people expect to see; the user's word,
+ *  2026-09-14), then the scenes alphabetical by label, Shuffle last; Tab, Shuffle and an
+ *  agent's list walk the same order, so the keyboard, the picker and the tools agree. */
 export function orderScenes<T extends { id: DisplayScene; label: string }>(
   list: readonly T[],
 ): T[] {
   return [
-    ...list.filter((s) => s.id !== "shuffle").sort((a, b) => a.label.localeCompare(b.label)),
+    ...list.filter((s) => s.id === "sleeve"),
+    ...list
+      .filter((s) => s.id !== "sleeve" && s.id !== "shuffle")
+      .sort((a, b) => a.label.localeCompare(b.label)),
     ...list.filter((s) => s.id === "shuffle"),
   ];
 }
