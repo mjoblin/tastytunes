@@ -1,7 +1,7 @@
 import type { Scene, SceneFrame, SceneKey, SceneSettingDef, SceneSettings } from "./types";
 import { easeTowards } from "../clock";
 import { typePx } from "../type";
-import { clamp, easeOutCubic, ellipsize, rgb, rgba, setFont } from "./lib";
+import { clamp, easeOutCubic, ellipsize, rgb, rgba, setFont, smoothstep } from "./lib";
 
 /**
  * REFRAIN. The song's lines as rows, and the path the singing takes through
@@ -92,8 +92,11 @@ function build(lines: readonly { t: number; text: string }[]): Built {
 
 const ARRIVE = 0.45;
 const STEP = 0.4;
-/** A path segment fades in over this long (user, 2026-09-15: they popped). */
-const FADE = 0.35;
+/** A path segment fades in over this long, and the head's glow hands over to the next step
+ *  over the same (user, 2026-09-15: they popped — a first cut eased out over 0.35 s, which is
+ *  two thirds there in a tenth of a second and reads as a pop; a smoothstep over half a second
+ *  reads as a fade). */
+const FADE = 0.5;
 /** Without lyrics the title waits this long before it shows, so a track change (a moment
  *  with no words while the new track's lyrics load) never flashes the title full screen. */
 const TITLE_WAIT = 1.5;
@@ -112,6 +115,9 @@ export class Refrain implements Scene {
   /** When each line's step of the path first drew (ms), NaN until it does; cleared past a
    *  seek back so a step re-arrives with its fade. */
   private stepAt = new Float64Array(0);
+  /** When each line's step stopped being the path's head (ms), NaN while it is or never was. */
+  private stepLeftAt = new Float64Array(0);
+  private headLine = -1;
   private titleFor: string | null = null;
   private titleSince = 0;
 
@@ -125,6 +131,8 @@ export class Refrain implements Scene {
       this.built = build(lines);
       this.lit = new Float32Array(this.built.rows.length);
       this.stepAt = new Float64Array(lines.length).fill(NaN);
+      this.stepLeftAt = new Float64Array(lines.length).fill(NaN);
+      this.headLine = -1;
       this.lastLine = -1;
       this.top = 0;
     }
@@ -188,7 +196,10 @@ export class Refrain implements Scene {
     if (lineIndex !== this.lastLine) {
       // a seek back clears the steps past the new line, so they fade in again when re-sung
       if (lineIndex < this.lastLine)
-        for (let i = lineIndex + 1; i < this.stepAt.length; i++) this.stepAt[i] = NaN;
+        for (let i = lineIndex + 1; i < this.stepAt.length; i++) {
+          this.stepAt[i] = NaN;
+          this.stepLeftAt[i] = NaN;
+        }
       this.lastLine = lineIndex;
       this.since = f.now;
     }
@@ -208,9 +219,24 @@ export class Refrain implements Scene {
       stepLine.push(i);
       if (Number.isNaN(this.stepAt[i])) this.stepAt[i] = f.now;
     }
-    // a step's fade-in, from the moment it first drew
+    // the head moved on: the step it left starts easing down to a settled segment
+    const head = stepLine.length ? stepLine[stepLine.length - 1] : -1;
+    if (head !== this.headLine) {
+      if (this.headLine >= 0 && this.headLine < this.stepLeftAt.length && this.headLine < head)
+        this.stepLeftAt[this.headLine] = f.now;
+      if (head >= 0) this.stepLeftAt[head] = NaN;
+      this.headLine = head;
+    }
+    // a step's fade-in from the moment it first drew, and its glow: full at the head, easing
+    // down after the head moves on
     const fadeOf = (k: number): number =>
-      still ? 1 : easeOutCubic((f.now - this.stepAt[stepLine[k]]) / 1000 / FADE);
+      still ? 1 : smoothstep(0, 1, (f.now - this.stepAt[stepLine[k]]) / 1000 / FADE);
+    const glowOf = (k: number): number => {
+      if (still) return k === stepLine.length - 1 ? 1 : 0;
+      const left = this.stepLeftAt[stepLine[k]];
+      if (Number.isNaN(left)) return k === stepLine.length - 1 ? fadeOf(k) : 0;
+      return 1 - smoothstep(0, 1, (f.now - left) / 1000 / FADE);
+    };
 
     // the lit state eases: the current row up to 1, a sung row back to a rest level that
     // rises a little with every singing (user, 2026-09-15: a line sung often ends up brighter
@@ -258,10 +284,10 @@ export class Refrain implements Scene {
         const ya = yOf(a);
         const yb = yOf(b);
         if (Math.max(ya, yb) < -pitch || Math.min(ya, yb) > h + pitch) continue;
-        const last = k === path.length - 1;
-        const strength = (last ? 0.35 + 0.55 * arrive : 0.3) * fadeOf(k);
+        const glow = glowOf(k);
+        const strength = (0.3 + 0.6 * glow) * fadeOf(k);
         ctx.strokeStyle = rgba(P.gold, strength);
-        ctx.lineWidth = last ? Math.max(1.5, h * 0.0025) : Math.max(1, h * 0.0015);
+        ctx.lineWidth = Math.max(1, h * 0.0015) + glow * Math.max(0.5, h * 0.001);
         ctx.beginPath();
         ctx.moveTo(x, ya);
         if (b === a + 1) ctx.lineTo(x, yb);
