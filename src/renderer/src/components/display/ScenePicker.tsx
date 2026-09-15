@@ -27,8 +27,9 @@ export type PickerHost = "display" | "tile";
 /** A scene's settings this host shows. */
 const settingsFor = (def: SceneDef, host: PickerHost): SceneSettingDef[] =>
   (def.settings ?? []).filter((s) => host === "display" || !s.full);
-/** The section left open last, kept for the session, so the panel reopens where it was left. */
-let lastSection: Section | null = null;
+/** The section left open last, kept for the session, so the panel reopens where it was left;
+ *  All scenes open on the first opening (user, 2026-09-14). */
+let lastSection: Section | null = "display";
 
 /**
  * The scene picker: a strip of live tiles, each running its scene small on
