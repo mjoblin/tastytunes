@@ -17,6 +17,7 @@ import { useSceneFeed } from "@/components/display/feed";
 import { SceneCanvas } from "@/components/display/SceneCanvas";
 import { ScenePicker } from "@/components/display/ScenePicker";
 import { SCENES, SCENES_ORDERED, isAbstract } from "@/components/display/scenes";
+import { sceneIdleLine, useSceneLive } from "@/components/display/useSceneLive";
 import { useShuffledScene } from "@/components/display/useShuffledScene";
 import type { SceneId } from "@/components/display/scenes/types";
 
@@ -57,6 +58,11 @@ export function DisplayMode(): React.JSX.Element {
   const { shuffled, active } = useShuffledScene(settings.displayScene, meta);
   const stage: SceneId | null = isAbstract(active) ? active : null;
   const feed = useSceneFeed(stage != null || scenesOpen);
+  // the wall says why a scene is not drawing (2026-09-15): a line above the corner title
+  const { live: sceneLive, idle: sceneIdle } = useSceneLive(stage != null);
+  const stageDef = stage ? SCENES.find((sc) => sc.id === stage) : null;
+  const idleLine =
+    stage && stageDef && !sceneLive && sceneIdle ? sceneIdleLine(stageDef.label, sceneIdle) : null;
   const pickScene = (id: DisplayScene): void => {
     void saveSettings({ displayScene: id });
     const def = SCENES.find((sc) => sc.id === id);
@@ -171,6 +177,17 @@ export function DisplayMode(): React.JSX.Element {
           )}
         >
           <span title="The time of day">{clock}</span>
+        </div>
+      )}
+      {idleLine && (
+        <div
+          data-display-idle
+          className={cx(
+            "absolute bottom-[5.5rem] left-7 max-w-[44vw] truncate font-mono text-[13px] text-dim transition-opacity",
+            cursorIdle && "opacity-60",
+          )}
+        >
+          {idleLine}
         </div>
       )}
       {stage && (settings.displayCornerTitle ?? true) && (meta.title || meta.subtitle) && (

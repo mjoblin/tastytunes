@@ -9,6 +9,7 @@ import { Switch } from "@/components/controls/Switch";
 import { HeaderChip } from "@/components/chrome/Chrome";
 import type { SceneFeed } from "./feed";
 import { SceneCanvas } from "./SceneCanvas";
+import { sceneIdleNotice, useSceneLive } from "./useSceneLive";
 import {
   SCENES_ORDERED,
   SHUFFLE_POOL,
@@ -66,6 +67,13 @@ export function ScenePicker({
   const shuffle = current === "shuffle";
   const chosenDef = sceneDef(current);
   const shownDef = sceneDef(shuffle ? shuffled : current);
+  // HONEST TILES (2026-09-15): with nothing real to draw — a station, a cast, a track still
+  // being analyzed — the abstract tiles stand still as their icons on the plain well, dimmed,
+  // and a notice in the top row's gap between Sleeve and Shuffle says what the scenes need and
+  // what is playing instead (the user: a line in the footer was "too hidden"); the thumbnails
+  // used to drift on the feed's sines whatever played, promising a scene the wall could not keep
+  const { live, idle } = useSceneLive(true);
+  const notice = !live && idle ? sceneIdleNotice(idle) : null;
   const [section, setSection] = useState<Section | null>(lastSection);
   const toggle = (id: Section): void => {
     const next = section === id ? null : id;
@@ -104,6 +112,15 @@ export function ScenePicker({
           three-quarter size, so the smallest window shows a grid rather than a column. Tab
           keeps the shared order (Sleeve, the scenes, Shuffle) */}
       <div className="mx-auto grid max-w-[754px] @max-[740px]:max-w-[634px] grid-cols-[repeat(auto-fit,146px)] @max-[740px]:grid-cols-[repeat(auto-fit,122px)] justify-center justify-items-center gap-1.5">
+        {notice && (
+          <div
+            data-display-notice
+            className="row-start-1 col-start-2 col-end-[-2] flex min-w-0 flex-col justify-center self-center rounded-lg bg-veil px-3 py-2 text-[11.5px] leading-snug ring-1 ring-edge"
+          >
+            <span className="text-ink">{notice.head}</span>
+            <span className="text-dim">{notice.body}</span>
+          </div>
+        )}
         {[
           ...SCENES_ORDERED.filter((s) => s.id === "sleeve"),
           ...SCENES_ORDERED.filter((s) => s.id === "shuffle"),
@@ -142,7 +159,16 @@ export function ScenePicker({
                     <Icon size={28} strokeWidth={1.2} />
                   </div>
                 ) : isAbstract(tileScene) ? (
-                  <SceneCanvas scene={tileScene} feed={feed} mini />
+                  live ? (
+                    <SceneCanvas scene={tileScene} feed={feed} mini />
+                  ) : (
+                    <div
+                      data-display-scene-still
+                      className="flex h-full w-full items-center justify-center text-faint"
+                    >
+                      <Icon size={28} strokeWidth={1.2} />
+                    </div>
+                  )
                 ) : art ? (
                   <img src={art} alt="" className="h-full w-full object-cover" />
                 ) : (

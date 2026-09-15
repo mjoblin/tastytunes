@@ -33,6 +33,7 @@ import { SceneCanvas } from "@/components/display/SceneCanvas";
 import { ScenePicker } from "@/components/display/ScenePicker";
 import { useSceneFeed } from "@/components/display/feed";
 import { isAbstract, sceneDef } from "@/components/display/scenes";
+import { sceneIdleLine, useSceneLive } from "@/components/display/useSceneLive";
 import { useShuffledScene } from "@/components/display/useShuffledScene";
 import { useArtSize } from "@/hooks/useArtSize";
 import { CornerResizeHandle } from "@/components/controls/CornerResizeHandle";
@@ -107,6 +108,10 @@ export function NowPlayingScreen(): React.JSX.Element {
   // regardless and the toggle is disabled there
   const tileDef = tileStage ? sceneDef(tileStage) : null;
   const wordsForced = tileDef?.essentialWords === true;
+  // the chip's tip says why the art stands in for the chosen scene (2026-09-15)
+  const { live: tileLive, idle: tileIdle } = useSceneLive(tileStage != null);
+  const tileIdleLine =
+    tileDef && !tileLive && tileIdle ? sceneIdleLine(tileDef.label, tileIdle) : null;
   const tileWords = wordsForced || nowPlayingSceneWords;
   // Escape closes the picker, as does a press anywhere but the picker or its
   // chip: the app's chrome included, which a catcher inside this screen
@@ -500,7 +505,7 @@ export function NowPlayingScreen(): React.JSX.Element {
                 <button
                   onClick={() => setScenesOpen((o) => !o)}
                   aria-label="Scene"
-                  data-tip="Scene"
+                  data-tip={tileIdleLine ?? "Scene"}
                   data-now-playing-scene-chip
                   className={cx(
                     "tip-bottom tip-end absolute top-2 right-2 p-2 rounded-full bg-panel/60 backdrop-blur ring-1 ring-edge transition-all motion-safe:active:scale-90",
