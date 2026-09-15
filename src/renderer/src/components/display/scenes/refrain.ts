@@ -240,11 +240,13 @@ export class Refrain implements Scene {
     } else this.top = 0;
     const y0 = h * 0.5 - ((Math.min(visible, n) - 1) * pitch) / 2;
     const yOf = (r: number): number => y0 + (r - this.top) * pitch;
-    const left = w * (f.mini ? 0.12 : 0.17);
+    // the tile keeps the same margin on the left: the path draws there too (user, 2026-09-15)
+    const left = w * 0.17;
     const maxText = w - left - w * 0.06;
 
-    // THE PATH, down the left: a step for the next row, an arc for a return
-    const showPath = this.settings.path !== false && !f.mini;
+    // THE PATH, down the left: a step for the next row, an arc for a return; on the wall and
+    // the tile alike, its switch the only gate
+    const showPath = this.settings.path !== false;
     if (showPath && path.length > 1) {
       const x = left - Math.max(12, w * 0.03);
       ctx.lineCap = "round";
@@ -282,7 +284,7 @@ export class Refrain implements Scene {
 
     // THE ROWS
     ctx.textAlign = "start";
-    const showMarks = this.settings.marks !== false && !f.mini;
+    const showMarks = this.settings.marks !== false;
     for (let r = 0; r < n; r++) {
       const y = yOf(r);
       if (y < -pitch || y > h + pitch) continue;
