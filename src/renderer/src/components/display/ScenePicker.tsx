@@ -94,14 +94,20 @@ export function ScenePicker({
         className,
       )}
     >
-      {/* Sleeve first — the default, what people expect to see (user, 2026-09-14; a hairline
-          after it was tried and removed at his word: first is mark enough), then the scenes
-          alphabetical, Shuffle last; five to a row at the panel's full width, fewer as its
-          host narrows: 146px is a tile plus its padding. In a panel narrower than its full width (only ever the Now Playing
-          tile's, in a small window) the tiles are three-quarter size, so the smallest window
-          shows a grid rather than a column */}
-      <div className="grid grid-cols-[repeat(auto-fit,146px)] @max-[740px]:grid-cols-[repeat(auto-fit,122px)] justify-center justify-items-center gap-1.5">
-        {SCENES_ORDERED.map((s) => {
+      {/* THE TWO CHOICES THAT ARE NOT SCENES HEAD THE GRID (user, 2026-09-14): Sleeve, the
+          default people expect, at the top left, and Shuffle at the top right, the row's middle
+          left empty; the scenes alphabetical in rows of four beneath (a fifth column read as
+          one long run). The grid is capped at four 146px tracks, fewer as its host narrows;
+          Shuffle takes the last column whatever the count. In a panel narrower than its full
+          width (only ever the Now Playing tile's, in a small window) the tiles are
+          three-quarter size, so the smallest window shows a grid rather than a column. Tab
+          keeps the shared order (Sleeve, the scenes, Shuffle) */}
+      <div className="mx-auto grid max-w-[602px] @max-[740px]:max-w-[506px] grid-cols-[repeat(auto-fit,146px)] @max-[740px]:grid-cols-[repeat(auto-fit,122px)] justify-center justify-items-center gap-1.5">
+        {[
+          ...SCENES_ORDERED.filter((s) => s.id === "sleeve"),
+          ...SCENES_ORDERED.filter((s) => s.id === "shuffle"),
+          ...SCENES_ORDERED.filter((s) => s.id !== "sleeve" && s.id !== "shuffle"),
+        ].map((s) => {
           const active = current === s.id;
           const Icon = s.icon;
           // the shuffle tile shows whatever the shuffle is showing (the sleeve's tile is the art)
@@ -118,6 +124,8 @@ export function ScenePicker({
               className={cx(
                 "group flex flex-col items-center gap-1.5 rounded-xl p-1.5 transition-colors hover:bg-veil",
                 active && "bg-veil2",
+                // the last column of the first row, whatever the column count
+                s.id === "shuffle" && "col-end-[-1]",
               )}
             >
               <div
