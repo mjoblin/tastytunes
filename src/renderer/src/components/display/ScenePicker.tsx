@@ -208,35 +208,48 @@ export function ScenePicker({
           no click and no Tab */}
       {section && (
         <div data-display-section={section} className="mt-2 border-t border-edge px-1.5 pt-2">
-          {section === "reading" && (
-            <div className="grid">
-              {SCENES_ORDERED.filter((s) => s.id !== "shuffle").map((s) => (
-                <Stacked key={s.id} on={s.id === shownDef.id}>
-                  <SceneReading def={s} shuffle={shuffle && s.id === shownDef.id} />
-                </Stacked>
-              ))}
+          {/* THE ALL SCENES ROWS ARE THE FLOOR (user, 2026-09-14): they are always laid out in
+              the cell, unseen under Reading and This scene, so the section is never shorter
+              than them and the panel's edge does not jump up on a one-line reading */}
+          <div className="grid">
+            <div
+              className={cx(
+                "[grid-area:1/1]",
+                section !== "display" && "invisible pointer-events-none",
+              )}
+              aria-hidden={section !== "display" || undefined}
+            >
+              <SyncRow host={host} />
             </div>
-          )}
-          {section === "scene" && (
-            <div className="grid">
-              {SCENES_ORDERED.map((s) => (
-                <Stacked key={s.id} on={s.id === current}>
-                  {s.id === "shuffle" ? (
-                    <ShuffleRow />
-                  ) : settingsFor(s, host).length > 0 ? (
-                    <SceneSettingsRow def={s} host={host} />
-                  ) : (s.settings?.length ?? 0) > 0 ? (
-                    <SectionQuiet>
-                      This scene&apos;s settings are for the fullscreen view.
-                    </SectionQuiet>
-                  ) : (
-                    <SectionQuiet>This scene has no settings.</SectionQuiet>
-                  )}
-                </Stacked>
-              ))}
-            </div>
-          )}
-          {section === "display" && <SyncRow host={host} />}
+            {section === "reading" && (
+              <div className="grid [grid-area:1/1]">
+                {SCENES_ORDERED.filter((s) => s.id !== "shuffle").map((s) => (
+                  <Stacked key={s.id} on={s.id === shownDef.id}>
+                    <SceneReading def={s} shuffle={shuffle && s.id === shownDef.id} />
+                  </Stacked>
+                ))}
+              </div>
+            )}
+            {section === "scene" && (
+              <div className="grid [grid-area:1/1]">
+                {SCENES_ORDERED.map((s) => (
+                  <Stacked key={s.id} on={s.id === current}>
+                    {s.id === "shuffle" ? (
+                      <ShuffleRow />
+                    ) : settingsFor(s, host).length > 0 ? (
+                      <SceneSettingsRow def={s} host={host} />
+                    ) : (s.settings?.length ?? 0) > 0 ? (
+                      <SectionQuiet>
+                        This scene&apos;s settings are for the fullscreen view.
+                      </SectionQuiet>
+                    ) : (
+                      <SectionQuiet>This scene has no settings.</SectionQuiet>
+                    )}
+                  </Stacked>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -402,8 +415,10 @@ function SyncRow({ host }: { host: PickerHost }): React.JSX.Element {
 
 /** One of the All scenes rows, in the Settings idiom: the plain noun, the control, and a faint
  *  sentence saying what it does, in view rather than in a tooltip (the user, 2026-09-12: the
- *  words alone "don't read as clear enough"). The sentence takes the rest of the row and
- *  wraps under the control in a narrow panel. */
+ *  words alone "don't read as clear enough"). The sentence sits UNDER the control (user,
+ *  2026-09-14: beside it, the controls' differing widths left the sentences starting at
+ *  different places with a run of whitespace before each; under, every row reads the same
+ *  way, label, control, then what it does). The label is centred on the control's row. */
 function SettingLine({
   label,
   hint,
@@ -414,10 +429,10 @@ function SettingLine({
   children: React.ReactNode;
 }): React.JSX.Element {
   return (
-    <div className="flex min-h-8 flex-wrap items-center gap-x-3 gap-y-1">
-      <span className="w-11 shrink-0">{label}</span>
-      <div className="flex items-center gap-2">{children}</div>
-      <span className="min-w-0 flex-1 basis-40 leading-snug text-faint">{hint}</span>
+    <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] items-center gap-x-3 gap-y-1">
+      <span>{label}</span>
+      <div className="flex min-h-8 flex-wrap items-center gap-2">{children}</div>
+      <span className="col-start-2 leading-snug text-faint">{hint}</span>
     </div>
   );
 }
