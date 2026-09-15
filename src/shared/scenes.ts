@@ -67,7 +67,7 @@ export const SCENE_TEXT: readonly SceneText[] = [
   {
     id: "refrain",
     label: "Refrain",
-    blurb: "The song's lines as rows, the path through them looping back to the ones that return.",
+    blurb: "The song's lines as rows, and a path that loops back to lines sung more than once.",
   },
   { id: "shuffle", label: "Shuffle", blurb: "A different scene for every track." },
 ];
