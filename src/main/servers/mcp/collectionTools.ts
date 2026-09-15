@@ -5,7 +5,16 @@ import { getSettings } from "../../data/persist";
 import { radioSearch, radioByTags } from "../../lookups/radioBrowser";
 import { LargeQueueError, queueAdd, refreshServers } from "../../media/upnpBrowser";
 import { searchServer as librarySearch } from "../../media/mediaIndex";
-import { type ToolContext, type ToolImpl, ok, err, lc, kindOf, largeQueueAsk } from "./toolkit";
+import {
+  type ToolContext,
+  type ToolImpl,
+  ok,
+  err,
+  lc,
+  kindOf,
+  largeQueueAsk,
+  freshObjectId,
+} from "./toolkit";
 
 // The MCP bridge's collection tools (the collections: radio, playlists and their edits,
 // favorites), one of six tool modules split out of mcpServer.ts 2026-09-13; the shapes and helpers
@@ -240,8 +249,18 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
         const confirm = { confirmLarge: a.confirm_large === true };
         await dm.ensureAwake(); // favorites are wake intents too
         if (fav.serverUdn && fav.objectId) {
+          // a USB favorite's stored id may have rotted: the index revalidates first, and a
+          // Browse-only server has no search to heal by below
+          const fresh = await freshObjectId(host, fav.serverUdn, fav.objectId);
           try {
-            await queueAdd(host, fav.serverUdn, fav.objectId, "PLAY_NOW", undefined, confirm);
+            await queueAdd(
+              host,
+              fav.serverUdn,
+              "id" in fresh ? fresh.id : fav.objectId,
+              "PLAY_NOW",
+              undefined,
+              confirm,
+            );
             return ok(`Playing ${fav.title}.`);
           } catch (e) {
             if (e instanceof LargeQueueError) return err(largeQueueAsk(e.tracks, "play_favorite"));

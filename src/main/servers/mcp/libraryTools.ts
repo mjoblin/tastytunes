@@ -40,6 +40,7 @@ import {
   kindOf,
   QUEUE_MODES,
   largeQueueAsk,
+  freshObjectId,
 } from "./toolkit";
 
 // The MCP bridge's library tools (the library: servers, browsing, the lenses' lists, search and
@@ -942,12 +943,19 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
       handler: async (a) => {
         const s = ctx.connected();
         const mode = (a.mode as string | undefined) ?? "play_now";
+        // a Browse-built (USB) index is revalidated first: the id in hand may have rotted
+        const fresh = await freshObjectId(
+          s.connection.host,
+          a.server_udn as string,
+          a.object_id as string,
+        );
+        if ("error" in fresh) return err(fresh.error);
         try {
           await ctx.dm.ensureAwake(); // agents get wake-on-intent too
           await queueAdd(
             s.connection.host,
             a.server_udn as string,
-            a.object_id as string,
+            fresh.id,
             QUEUE_MODES[mode],
             undefined,
             { confirmLarge: a.confirm_large === true },

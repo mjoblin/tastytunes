@@ -3,6 +3,7 @@ import { type MenuCommand, type Snapshot } from "@shared/ipc";
 import {
   type AppSettings,
   type ConnectionState,
+  type MediaIndexPools,
   type MediaNode,
   type MediaQueueAction,
   type Schedule,
@@ -11,6 +12,7 @@ import { favoriteKey, resumeRun } from "@shared/model";
 import { audioCaps } from "@shared/smoip";
 import type { DeviceManager } from "../../device/deviceManager";
 import { getSettings } from "../../data/persist";
+import { pools as indexPools, revalidate } from "../../media/mediaIndex";
 
 // The MCP bridge's TOOLKIT (2026-09-13, the bridge split: 74 tool implementations
 // had sat in one 2,400-line member): the tool result and implementation shapes,
@@ -119,6 +121,47 @@ export function streamerKeep(
 }
 
 export const lc = (x: string | null | undefined): string => (x ?? "").trim().toLowerCase();
+
+const nodeIn = (pool: MediaIndexPools, id: string): MediaNode | null =>
+  pool.albums.find((n) => n.id === id) ??
+  pool.tracks.find((n) => n.id === id) ??
+  pool.artists.find((n) => n.id === id) ??
+  null;
+
+/**
+ * THE ID AN AGENT HOLDS MAY HAVE ROTTED (2026-09-14, the USB report: the
+ * streamer's own USB server re-mints every object id across standby and a
+ * replug). The app's playlist activation revalidates a Browse-built index
+ * before trusting an id; the tools queued the id as it came, so a listing
+ * from before the standby played nothing. Now: revalidate first (a
+ * search-built or unindexed server answers at once), and when the index was
+ * rebuilt, find the same thing again by content and answer its new id — or say
+ * plainly that it was not found again.
+ */
+export async function freshObjectId(
+  host: string,
+  udn: string,
+  id: string,
+): Promise<{ id: string } | { error: string }> {
+  const before = indexPools().find((p) => p.udn === udn);
+  const node = before ? nodeIn(before, id) : null;
+  if (!(await revalidate(host, udn, id))) return { id };
+  const after = indexPools().find((p) => p.udn === udn);
+  const again =
+    node && after
+      ? (node.isContainer ? [...after.albums, ...after.artists] : after.tracks).find(
+          (n) =>
+            lc(n.title) === lc(node.title) &&
+            lc(n.artist) === lc(node.artist) &&
+            (node.isContainer || lc(n.album) === lc(node.album)),
+        )
+      : null;
+  if (!again)
+    return {
+      error: `The server's object ids changed (the drive re-mounted) and '${node?.title ?? id}' was not found again — run search_library or list_albums for fresh ids.`,
+    };
+  return { id: again.id };
+}
 
 export const kindOf = (n: MediaNode): "album" | "artist" | "track" | "folder" =>
   n.upnpClass.includes("musicAlbum")

@@ -5,7 +5,15 @@ import { getSettings } from "../../data/persist";
 import { randomUUID } from "node:crypto";
 import { browseChildrenOf, presetSave, queueAdd } from "../../media/upnpBrowser";
 import { pools as indexPools } from "../../media/mediaIndex";
-import { type ToolContext, type ToolImpl, ok, err, guardSlot, scheduleOut } from "./toolkit";
+import {
+  type ToolContext,
+  type ToolImpl,
+  ok,
+  err,
+  guardSlot,
+  scheduleOut,
+  freshObjectId,
+} from "./toolkit";
 
 // The MCP bridge's edit tools (the writes with a contract: queue edits, preset saves, schedules),
 // one of six tool modules split out of mcpServer.ts 2026-09-13; the shapes and helpers they share
@@ -43,7 +51,10 @@ export function editTools(ctx: ToolContext): Record<string, ToolImpl> {
         // (Play from here on that container once queued 2,528 tracks)
         const udn = offer.node.serverUdn;
         if (!udn) return err("The album's server is unknown.");
-        const kids = (await browseChildrenOf(s.connection.host, udn, offer.node.id)) ?? [];
+        // the album's id came from the index: a USB server's may have rotted since
+        const fresh = await freshObjectId(s.connection.host, udn, offer.node.id);
+        if ("error" in fresh) return err(fresh.error);
+        const kids = (await browseChildrenOf(s.connection.host, udn, fresh.id)) ?? [];
         const tracks = kids
           .filter((k) => !k.isContainer)
           .sort((x, y) => (trackPosition(x) ?? 0) - (trackPosition(y) ?? 0));
@@ -51,7 +62,7 @@ export function editTools(ctx: ToolContext): Record<string, ToolImpl> {
           return err("The album could not be browsed as an album-sized container.");
         const target = resumeTarget(offer.run, tracks);
         if (!target) return err("The run reached the album's end; nothing to resume.");
-        await queueAdd(s.connection.host, udn, offer.node.id, "PLAY_FROM_HERE", target.id);
+        await queueAdd(s.connection.host, udn, fresh.id, "PLAY_FROM_HERE", target.id);
         return ok(
           `Resuming "${offer.node.title}" from track ${tracks.indexOf(target) + 1}, "${target.title}".`,
         );
