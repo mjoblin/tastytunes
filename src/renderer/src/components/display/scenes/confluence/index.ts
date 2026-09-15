@@ -105,7 +105,11 @@ export const CONFLUENCE_KEY: SceneKey = {
 
 export const CONFLUENCE_SETTINGS: SceneSettingDef[] = [
   // 0.4 (the user's call 2026-09-12; 1 before): the tile and the wall both read calmer
-  { key: "vigor", label: "Vigor", kind: "slider", min: 0.1, max: 1, step: 0.1, default: 0.4 },
+  // the slider is squared before it reaches the ink (2026-09-14, the user: his 0.2 on the
+  // linear scale "should represent 0.5"): 0.8 × v², so the midpoint drives the ink as the old
+  // 0.2 did and the low end, where the useful settings are, spreads out; a new key so a saved
+  // value from the linear scale is not read as nearly still
+  { key: "vigorLevel", label: "Vigor", kind: "slider", min: 0.1, max: 1, step: 0.1, default: 0.5 },
   {
     key: "memory",
     label: "Memory",
@@ -272,8 +276,8 @@ export class Confluence implements ThreeScene {
     const fluid = this.fluid;
     const P = f.palette;
     // a drop's build quickens everything up to the release
-    const vigor =
-      num(this.settings.vigor, 1) * (f.reduced ? 0.6 : 1) * (1 + 0.8 * (f.drop?.build ?? 0));
+    const level = num(this.settings.vigorLevel, 0.5);
+    const vigor = 0.8 * level * level * (f.reduced ? 0.6 : 1) * (1 + 0.8 * (f.drop?.build ?? 0));
     const memory = num(this.settings.memory, 15);
     const aspect = this.w / Math.max(1, this.h);
 
