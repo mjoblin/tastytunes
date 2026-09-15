@@ -1094,6 +1094,7 @@ export const DISPLAY_SCENE_IDS = [
   "roll",
   "sea",
   "terminal",
+  "refrain",
   "shuffle",
 ] as const;
 export type DisplayScene = (typeof DISPLAY_SCENE_IDS)[number];

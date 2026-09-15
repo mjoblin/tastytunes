@@ -3,6 +3,7 @@ import {
   Map,
   Moon,
   Radar,
+  Repeat,
   Blend,
   CircleDot,
   Mountain,
@@ -27,6 +28,7 @@ import { Pit, PIT_KEY, PIT_SETTINGS } from "./pit";
 import { Roll, ROLL_KEY, ROLL_SETTINGS } from "./roll";
 import { Sea, SEA_KEY, SEA_SETTINGS } from "./sea";
 import { Terminal, TERMINAL_KEY, TERMINAL_SETTINGS } from "./terminal";
+import { Refrain, REFRAIN_KEY, REFRAIN_SETTINGS } from "./refrain";
 
 /**
  * THE SCENES registry: the picker, the palette, Tab and the shuffle all
@@ -219,6 +221,15 @@ export const SCENES: SceneDef[] = [
     settings: TERMINAL_SETTINGS,
   },
   {
+    id: "refrain",
+    ...text("refrain"),
+    icon: Repeat,
+    essentialWords: true,
+    kind: "2d",
+    key: REFRAIN_KEY,
+    settings: REFRAIN_SETTINGS,
+  },
+  {
     id: "shuffle",
     ...text("shuffle"),
     icon: Shuffle,
@@ -238,6 +249,7 @@ export const ABSTRACT_SCENES: SceneId[] = [
   "roll",
   "sea",
   "terminal",
+  "refrain",
 ];
 export const isAbstract = (id: DisplayScene): id is SceneId => id !== "sleeve" && id !== "shuffle";
 
@@ -277,6 +289,8 @@ export function makeScene(id: SceneId): AnyScene {
       return new Sea();
     case "terminal":
       return new Terminal();
+    case "refrain":
+      return new Refrain();
   }
 }
 

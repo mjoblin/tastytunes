@@ -64,6 +64,11 @@ export const SCENE_TEXT: readonly SceneText[] = [
     label: "Terminal",
     blurb: "The lyrics typed onto a terminal, with a log scrolling up behind.",
   },
+  {
+    id: "refrain",
+    label: "Refrain",
+    blurb: "The song's lines as rows, the path through them looping back to the ones that return.",
+  },
   { id: "shuffle", label: "Shuffle", blurb: "A different scene for every track." },
 ];
 
