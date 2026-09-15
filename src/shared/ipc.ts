@@ -146,8 +146,10 @@ export type PushMessage =
   | { kind: "playEvent"; event: ListeningEvent }
   /** Settings changed OUTSIDE the renderer (e.g. an MCP tool created a schedule). */
   | { kind: "settings"; settings: AppSettings }
-  /** Wake-on-intent in flight: a play-shaped command is waking the streamer. */
-  | { kind: "waking"; waking: boolean }
+  /** Wake-on-intent in flight: a play-shaped command is waking the streamer. `asked` names
+   *  what the command asked for when the verb carries a name (a preset's, a station's), so a
+   *  standby face can tell its arrival from the retained state's re-announcement (2026-09-15). */
+  | { kind: "waking"; waking: boolean; asked?: string | null }
   /** Cursor is over the mini window (CSS :hover can't fire over drag regions). */
   | { kind: "miniHover"; hovered: boolean }
   /**

@@ -79,19 +79,30 @@ function buildDemo(host: string): {
 
   let wssRef: WebSocketServer | null = null;
   /**
-   * FIRMWARE TRUTH (live-probed 2026-07-23, mirrored from mock-streamer.mjs):
-   * in NETWORK standby /zone/play_state reads `state: 'not_ready'` with NO
-   * art_url — the streamer stops announcing the pre-standby track as playing,
-   * though it retains the state and brings it back on wake. A WIRE-SHAPE
+   * FIRMWARE TRUTH (live-probed 2026-07-23, re-probed 2026-09-15, mirrored
+   * from mock-streamer.mjs): in NETWORK standby /zone/play_state reads
+   * `state: 'not_ready'` and nothing else — no queue id, no metadata, no art —
+   * the streamer stops announcing the pre-standby track at all, though it
+   * retains the state and brings it back on wake. A WIRE-SHAPE
    * override, not a mutation: DATA keeps the real thing and every send point
    * passes through here.
    */
   const wireData = (path: string): unknown => {
     const power = (DATA["/system/power"] as Dict | undefined)?.power;
-    if (path === "/zone/play_state" && power !== "ON") {
-      const ps = DATA["/zone/play_state"];
-      const { art_url: _dropped, ...metadata } = (ps.metadata ?? {}) as Dict;
-      return { ...ps, state: "not_ready", metadata };
+    if (power !== "ON") {
+      // RE-PROBED 2026-09-15 (mirrored from the mock): standby's play_state carries NO
+      // metadata at all, now_playing is an idle prompt on the IDLE source, zone/state reads
+      // IDLE with power false
+      if (path === "/zone/play_state") return { state: "not_ready" };
+      if (path === "/zone/now_playing")
+        return {
+          ...DATA["/zone/now_playing"],
+          state: "PROMPT",
+          source: { id: "IDLE", name: "Idle" },
+          display: { line1: null, line2: null, line3: null, art_url: null, progress: null },
+          controls: [],
+        };
+      if (path === "/zone/state") return { ...DATA["/zone/state"], source: "IDLE", power: false };
     }
     return DATA[path];
   };
@@ -980,6 +991,8 @@ function buildDemo(host: string): {
     wss.on("connection", (ws) => {
       const push = (path: string): void =>
         ws.send(JSON.stringify({ path, params: { data: wireData(path) } }));
+      const pushRaw = (path: string, data: unknown): void =>
+        ws.send(JSON.stringify({ path, params: { data } }));
       ws.on("message", (raw) => {
         let frame: { path?: string; params?: Dict };
         try {
@@ -1160,6 +1173,59 @@ function buildDemo(host: string): {
             next.auto_power_down = params.auto_power_down;
           DATA["/system/power"] = next;
           setTimeout(() => push("/system/power"), 120);
+          // WAKING RE-ANNOUNCES what the device held through standby (live-probed
+          // 2026-09-15, mirrored from the mock): a track as `stop` with the queue id
+          // and no words, then `pause` with the title and the art; a station as
+          // `ready`, then `connecting` with the station, then `play` once it
+          // reconnects on its own. Standby is the mirror: the blank shapes go out.
+          if (cur.power !== next.power && next.power !== "ON") {
+            // the device's order: power, zone/state, then the blank frames
+            setTimeout(() => push("/zone/state"), 150);
+            setTimeout(() => {
+              push("/zone/play_state");
+              push("/zone/now_playing");
+            }, 250);
+          } else if (cur.power !== next.power) {
+            const md = (DATA["/zone/play_state"].metadata ?? {}) as Dict;
+            const blank = { line1: null, line2: null, line3: null, art_url: null, progress: null };
+            if (/radio/i.test(String(md.class ?? "")) || md.station != null) {
+              setTimeout(() => {
+                pushRaw("/zone/play_state", { state: "ready", metadata: { class: "md.radio" } });
+                pushRaw("/zone/now_playing", {
+                  ...DATA["/zone/now_playing"],
+                  state: "PROMPT",
+                  display: blank,
+                  controls: ["play", "play_pause"],
+                });
+              }, 70);
+              setTimeout(() => {
+                DATA["/zone/play_state"] = { ...DATA["/zone/play_state"], state: "connecting" };
+                push("/zone/play_state");
+                push("/zone/now_playing");
+              }, 150);
+              setTimeout(() => {
+                if (DATA["/zone/play_state"].state !== "connecting") return;
+                DATA["/zone/play_state"] = { ...DATA["/zone/play_state"], state: "play" };
+                push("/zone/play_state");
+                push("/zone/now_playing");
+              }, 1650);
+            } else {
+              setTimeout(() => {
+                const { metadata: _words, ...bare } = DATA["/zone/play_state"];
+                pushRaw("/zone/play_state", { ...bare, state: "stop" });
+                pushRaw("/zone/now_playing", {
+                  ...DATA["/zone/now_playing"],
+                  state: "STOPPED",
+                  display: blank,
+                });
+              }, 50);
+              setTimeout(() => {
+                DATA["/zone/play_state"] = { ...DATA["/zone/play_state"], state: "pause" };
+                push("/zone/play_state");
+                push("/zone/now_playing");
+              }, 110);
+            }
+          }
         } else if (frame.path === "/system/display" && typeof params.brightness === "string") {
           DATA["/system/display"] = { ...DATA["/system/display"], brightness: params.brightness };
           setTimeout(() => push("/system/display"), 120);

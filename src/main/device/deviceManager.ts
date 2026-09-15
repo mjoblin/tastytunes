@@ -530,6 +530,16 @@ export class DeviceManager {
   ]);
   private wakePromise: Promise<void> | null = null;
 
+  /** What a wake-on-intent asks for, by name, when its verb names it: the preset's name (from
+   *  the cached list) or the station's. The renderer's wake hold reads it to tell the asked
+   *  thing's arrival from the device re-announcing what it held through standby. */
+  private askedBy(cmd: StreamerCommand): string | null {
+    if (cmd.type === "recallPreset")
+      return this.cache.presets?.presets?.find((p) => p.id === cmd.presetId)?.name ?? null;
+    if (cmd.type === "streamRadio") return cmd.name || null;
+    return null;
+  }
+
   /**
    * Wake-on-intent: bring a NETWORK-standby streamer to ON and wait for the
    * zone to be usable. Single-flight — concurrent intents share one wake.
@@ -537,11 +547,11 @@ export class DeviceManager {
    * standby refuses them with code 114, so the app must sequence ON → act.
    * The 2.5s settle is the scheduler's proven runway before recalls.
    */
-  async ensureAwake(): Promise<void> {
+  async ensureAwake(asked: string | null = null): Promise<void> {
     if (this.cache.systemPower == null || this.cache.systemPower.power === "ON") return;
     if (this.wakePromise) return this.wakePromise;
     this.wakePromise = (async () => {
-      this.push({ kind: "waking", waking: true });
+      this.push({ kind: "waking", waking: true, asked });
       try {
         await this.command({ type: "power", power: "ON" });
         // Event-driven readiness: the power push flips the cache; the timed
@@ -594,7 +604,7 @@ export class DeviceManager {
       this.cache.systemPower != null &&
       this.cache.systemPower.power !== "ON"
     ) {
-      await this.ensureAwake();
+      await this.ensureAwake(this.askedBy(cmd));
     }
 
     // PASSIVE-ONLY firmware policy (explicit user decision): there is NO command

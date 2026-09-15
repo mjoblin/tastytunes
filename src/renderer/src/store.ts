@@ -251,6 +251,9 @@ interface TTState {
   systemPowerFresh: boolean;
   /** A wake-on-intent is in flight (playing something from standby). */
   waking: boolean;
+  /** What that wake asked for, by name, when its verb named it (a preset, a station); null
+   *  otherwise and once the wake ends — the wake hold takes its own copy when it arms. */
+  wakingFor: string | null;
   /** Last standby_mode seen from ANY device this session — survives the
    *  disconnect blanking so the ConnectGate can suggest eco standby. */
   lastStandbyMode: SystemPower["standby_mode"] | null;
@@ -550,6 +553,7 @@ export const useStore = create<TTState>((set, get) => ({
   systemPower: null,
   systemPowerFresh: false,
   waking: false,
+  wakingFor: null,
   lastStandbyMode: null,
   firmwareUpdate: null,
   sources: null,
@@ -908,7 +912,7 @@ export const useStore = create<TTState>((set, get) => ({
             lastStandbyMode: msg.data?.standby_mode ?? s.lastStandbyMode,
           };
         case "waking":
-          return { waking: msg.waking };
+          return { waking: msg.waking, wakingFor: msg.waking ? (msg.asked ?? null) : null };
         case "firmwareUpdate":
           return { firmwareUpdate: msg.data };
         case "sources":
