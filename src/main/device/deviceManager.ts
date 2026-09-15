@@ -53,7 +53,7 @@ import { SmoipSocket } from "./smoipSocket";
 import * as smoipHttp from "./smoipHttp";
 import { getSettings, updateSettings } from "../data/persist";
 import { clearRecents, getRecents, recentKey, recordRecent, restoreRecents } from "../data/recents";
-import { captureRecentArt, decorateRecents } from "../lookups/recentArt";
+import { CAPTURE_DELAY_MS, captureRecentArt, decorateRecents } from "../lookups/recentArt";
 import { listeningRecord } from "../data/listeningRecord";
 import { addFavorite, getFavorites, removeFavorite, updateFavorite } from "../data/favorites";
 import {
@@ -1088,9 +1088,13 @@ export class DeviceManager {
     };
     const { list, changed } = recordRecent(entry);
     // a transient picture (AirPlay, casting) is captured while its URL lives,
-    // a few seconds on: the log can wait, and the streamer's small HTTP
-    // server should not be asked for the same picture by the capture, the
-    // accent and the hero at once (the startup burst, 2026-09-06)
+    // a beat on: the log can wait, and the streamer's small HTTP server
+    // should not be asked for the same picture by the capture, the accent
+    // and the hero at once (the startup burst, 2026-09-06). ONE second, not
+    // three (2026-09-15): the URL dies with the app's session, and a restart
+    // five seconds after a track change lost the capture to this wait plus
+    // the cache's write delay — the user's AirPlay cover gone after a dev
+    // restart while the streamer showed it. A second still clears the burst.
     if (changed) {
       // capture the head AS IT IS when the timer fires, not as it was: a second
       // frame for the same track may have replaced the cover URL meanwhile
@@ -1099,7 +1103,7 @@ export class DeviceManager {
       setTimeout(() => {
         const head = getRecents()[0];
         if (head && recentKey(head) === key) captureRecentArt(head);
-      }, 3000);
+      }, CAPTURE_DELAY_MS);
     }
     if (changed) this.push({ kind: "recents", data: decorateRecents(list) });
   }

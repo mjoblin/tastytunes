@@ -912,4 +912,14 @@ if (!gotLock) {
     // record (synchronous append; see listeningRecord).
     listeningRecord.flush();
   });
+  // A TERMINATION SIGNAL IS A QUIT (2026-09-15): a dev restart or a kill ends the process
+  // without will-quit, and whatever the caches had not yet written was lost — an AirPlay
+  // cover captured seconds before the restart among it. Turn the signal into the ordinary
+  // quit so the same flushes run; a second signal while quitting is left to the OS.
+  for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"] as const) {
+    process.on(signal, () => {
+      if (isQuitting) return;
+      app.quit();
+    });
+  }
 }

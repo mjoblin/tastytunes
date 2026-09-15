@@ -25,6 +25,10 @@ const THUMB = 160;
 const covers = new DiskCache<string>("recentcover", 48);
 const COVER = 640;
 const FETCH_MS = 8000;
+/** How long after a track is logged its cover is fetched: past the startup burst, well inside
+ *  the time a restart can take the URL away (2026-09-15: three seconds plus the cache's write
+ *  delay lost a cover to a restart five seconds after the track began). */
+export const CAPTURE_DELAY_MS = 1000;
 const inflight = new Set<string>();
 let onCaptured: ((key: string) => void) | null = null;
 
@@ -79,6 +83,10 @@ export function captureRecentArt(e: RecentTrack): void {
       cache.set(key, `data:image/jpeg;base64,${shown.toJPEG(82).toString("base64")}`);
       const cover = width > COVER ? img.resize({ width: COVER, quality: "good" }) : img;
       covers.set(key, `data:image/jpeg;base64,${cover.toJPEG(85).toString("base64")}`);
+      // to disk NOW, not on the cache's write delay: a copy exists to outlive the session
+      // that could fetch it, so it must not wait on a process that may be about to end
+      cache.flush();
+      covers.flush();
       onCaptured?.(key);
     } catch (err) {
       // a dead or slow URL: the row keeps its icon
