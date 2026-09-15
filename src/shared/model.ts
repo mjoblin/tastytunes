@@ -1607,6 +1607,12 @@ export interface MediaIndexStatus {
   /** 'failed': the last build produced nothing (the server refused Search AND Browse — offline, or mid-scan); `failure` says why. */
   state: "none" | "building" | "ready" | "failed";
   failure?: string;
+  /** While building: the app started this build on its own to keep an index it already
+   *  had honest (the server's counter moved, the TTL passed, the schema changed, a stale id
+   *  was revalidated before an answer was trusted). The doors show it as any build; the
+   *  indexing toast never announces it (user, 2026-09-15: the streamer's USB ids rotate
+   *  across every standby, and each revalidation toasted "streamer indexed · 0 tracks"). */
+  quiet?: boolean;
   strategy: "search" | "browse" | null;
   tracks: number;
   albums: number;

@@ -161,6 +161,7 @@ export function status(): MediaIndexStatus[] {
       udn: idx.udn,
       serverName: idx.serverName,
       state: building.has(idx.udn) ? "building" : "ready",
+      ...(buildingWhy.get(idx.udn) === "refresh" ? { quiet: true } : {}),
       strategy: idx.strategy,
       tracks: idx.tracks.length,
       albums: idx.albums.length,
@@ -204,6 +205,13 @@ export function status(): MediaIndexStatus[] {
   return out;
 }
 const buildingNames = new Map<string, string>();
+/** Why a build runs: a server's FIRST index, one the user ASKED for (the rebuild button, the
+ *  Browse-only first build), or a REFRESH the app started on its own to keep an index it
+ *  already had honest — the counter moved, the TTL passed, the schema changed, a stale id
+ *  was revalidated. A refresh is marked quiet on its status, so the indexing toast leaves
+ *  it alone (user, 2026-09-15). */
+type BuildWhy = "first" | "asked" | "refresh";
+const buildingWhy = new Map<string, BuildWhy>();
 
 // ---------------------------------------------------------------- the crawl
 //
@@ -449,10 +457,11 @@ async function build(
   host: string,
   server: MediaServerInfo,
   strategy: "search" | "browse",
+  why: BuildWhy,
 ): Promise<void> {
   const running = inflight.get(server.udn);
   if (running) return running;
-  const run = buildNow(host, server, strategy).finally(() => inflight.delete(server.udn));
+  const run = buildNow(host, server, strategy, why).finally(() => inflight.delete(server.udn));
   inflight.set(server.udn, run);
   return run;
 }
@@ -461,9 +470,11 @@ async function buildNow(
   host: string,
   server: MediaServerInfo,
   strategy: "search" | "browse",
+  why: BuildWhy,
 ): Promise<void> {
   building.add(server.udn);
   buildingNames.set(server.udn, server.name);
+  buildingWhy.set(server.udn, why);
   announce(status());
   try {
     const built = await crawl(host, server, strategy);
@@ -488,6 +499,7 @@ async function buildNow(
     console.log(`[mediaIndex] ${server.name}: build failed — ${failed.get(server.udn)}`);
   } finally {
     building.delete(server.udn);
+    buildingWhy.delete(server.udn);
     announce(status());
   }
 }
@@ -525,7 +537,7 @@ export async function revalidate(
   console.log(
     `[mediaIndex] ${server.name}: ids rotated (counter ${existing.updateId} → ${id}), rebuilding`,
   );
-  await build(host, server, "browse");
+  await build(host, server, "browse", "refresh");
   return indexes.get(udn)?.builtAt !== existing.builtAt;
 }
 
@@ -556,13 +568,15 @@ export function ensureFresh(host: string, servers: MediaServerInfo[]): void {
           (id != null && existing.updateId != null && id !== existing.updateId) ||
           Date.now() - existing.builtAt > TTL_MS;
         if (!stale) return;
-        await build(host, server, existing.strategy);
+        await build(host, server, existing.strategy, "refresh");
         return;
       }
+      // a schema bump's salvage is a refresh of an index the app had; a server's first index is not
       await build(
         host,
         server,
         server.searchable ? "search" : (rebuildHints.get(server.udn) ?? "browse"),
+        rebuildHints.has(server.udn) ? "refresh" : "first",
       );
     })();
   }
@@ -571,7 +585,7 @@ export function ensureFresh(host: string, servers: MediaServerInfo[]): void {
 /** The manual rebuild — and the only way to first-build a Browse-only server. */
 export async function rebuild(host: string, server: MediaServerInfo): Promise<void> {
   load();
-  await build(host, server, server.searchable ? "search" : "browse");
+  await build(host, server, server.searchable ? "search" : "browse", "asked");
 }
 
 /** Fresh-index tokenized search; null = no usable index (caller goes live). */

@@ -20,11 +20,23 @@ const BURST_MS = 2500;
  * Only TRANSITIONS toast. The map of last-seen states is seeded from the
  * store at subscribe time, so an index that was already ready when the app
  * (or this effect, under StrictMode's re-run) came up says nothing.
+ *
+ * And only builds someone MEANT: a server's first index, or a rebuild the
+ * user asked for. A build the app started on its own to keep an index it
+ * already had honest arrives marked `quiet` (the streamer's counter moved,
+ * the TTL passed, the schema changed, a stale id was revalidated before an
+ * answer was trusted) and says nothing when it lands (user, 2026-09-15: the
+ * Evo's USB ids rotate across every standby, so every playlist play and
+ * Open in Library after a sleep toasted "streamer indexed · 0 tracks").
  */
 export function useIndexingToast(): void {
   useEffect(() => {
-    const last = new Map<string, MediaIndexStatus["state"]>();
-    for (const s of useStore.getState().mediaIndex) last.set(s.udn, s.state);
+    const last = new Map<string, { state: MediaIndexStatus["state"]; quiet: boolean }>();
+    const seen = (s: MediaIndexStatus): { state: MediaIndexStatus["state"]; quiet: boolean } => ({
+      state: s.state,
+      quiet: s.quiet === true,
+    });
+    for (const s of useStore.getState().mediaIndex) last.set(s.udn, seen(s));
     let pending: MediaIndexStatus[] = [];
     let timer: ReturnType<typeof setTimeout> | null = null;
     const flush = (): void => {
@@ -45,8 +57,13 @@ export function useIndexingToast(): void {
     const unsubscribe = useStore.subscribe((state) => {
       for (const s of state.mediaIndex) {
         const was = last.get(s.udn);
-        last.set(s.udn, s.state);
-        if (was === "building" && s.state === "ready" && state.screen !== "library") {
+        last.set(s.udn, seen(s));
+        if (
+          was?.state === "building" &&
+          !was.quiet &&
+          s.state === "ready" &&
+          state.screen !== "library"
+        ) {
           pending.push(s);
           if (timer) clearTimeout(timer);
           timer = setTimeout(flush, BURST_MS);
