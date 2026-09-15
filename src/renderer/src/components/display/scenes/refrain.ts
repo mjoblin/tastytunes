@@ -32,6 +32,7 @@ export const REFRAIN_KEY: SceneKey = {
         "Where the song has been: a step down for a new line, an arc back up for one that returns.",
     },
     { shows: "Dots after a row", means: "How many times it has been sung so far." },
+    { shows: "A brighter row", means: "A line sung more often. Each singing adds a little." },
   ],
   honesty: [
     "Lines are matched by their words, so a line sung again with one word changed counts as a new line.",
@@ -40,6 +41,9 @@ export const REFRAIN_KEY: SceneKey = {
 export const REFRAIN_SETTINGS: SceneSettingDef[] = [
   { key: "path", label: "Path", kind: "toggle", default: true },
   { key: "marks", label: "Marks", kind: "toggle", default: true },
+  // the Motion switch holds the rows still (user, 2026-09-15): no slide on arrival, no swell
+  // on a kick, no easing of the light or the window; the map still changes as lines are sung
+  { key: "motion", label: "Motion", kind: "toggle", default: true },
 ];
 
 /** The lyric's shape: each distinct line once, in first-sung order, and every line's row. */
@@ -158,6 +162,7 @@ export class Refrain implements Scene {
         if (hit.type === "kick") this.punchAim = Math.max(this.punchAim, hit.strength);
     this.punch = easeTowards(this.punch, this.punchAim, f.dt, 0.06);
 
+    const still = f.reduced || this.settings.motion === false;
     const lineIndex = f.lyric?.index ?? -1;
     if (lineIndex !== this.lastLine) {
       this.lastLine = lineIndex;
@@ -165,7 +170,7 @@ export class Refrain implements Scene {
     }
     const current = lineIndex >= 0 && lineIndex < built.rowOf.length ? built.rowOf[lineIndex] : -1;
     const age = (f.now - this.since) / 1000;
-    const arrive = f.reduced ? 1 : easeOutCubic(age / ARRIVE);
+    const arrive = still ? 1 : easeOutCubic(age / ARRIVE);
 
     // how many times each row has been sung SO FAR, and the path so far
     const sungSoFar = new Uint16Array(built.rows.length);
@@ -177,13 +182,13 @@ export class Refrain implements Scene {
       path.push(r);
     }
 
-    // the lit state eases: the current row up to 1, a sung row back to a rest level, an
-    // unsung row stays dark
+    // the lit state eases: the current row up to 1, a sung row back to a rest level that
+    // rises a little with every singing (user, 2026-09-15: a line sung often ends up brighter
+    // than one sung once), an unsung row stays dark
     for (let r = 0; r < built.rows.length; r++) {
-      const aim = r === current ? 1 : sungSoFar[r] > 0 ? 0.55 : 0;
-      this.lit[r] = f.reduced
-        ? aim
-        : easeTowards(this.lit[r], aim, f.dt, r === current ? 0.08 : 0.25);
+      const sung = sungSoFar[r];
+      const aim = r === current ? 1 : sung > 0 ? Math.min(0.92, 0.42 + 0.1 * sung) : 0;
+      this.lit[r] = still ? aim : easeTowards(this.lit[r], aim, f.dt, r === current ? 0.08 : 0.25);
     }
 
     // the rows' measure: they fill the height when they fit, and a window follows the singing
@@ -201,7 +206,7 @@ export class Refrain implements Scene {
     const px = clamp(pitch * 0.62, 8, bodyPx);
     if (visible < n) {
       const want = clamp(current - visible / 2, 0, n - visible);
-      this.top = f.reduced ? want : easeTowards(this.top, want, f.dt, 0.3);
+      this.top = still ? want : easeTowards(this.top, want, f.dt, 0.3);
     } else this.top = 0;
     const y0 = h * 0.5 - ((Math.min(visible, n) - 1) * pitch) / 2;
     const yOf = (r: number): number => y0 + (r - this.top) * pitch;
@@ -254,12 +259,12 @@ export class Refrain implements Scene {
       const lit = this.lit[r];
       const isHook = r === built.hook;
       const isCurrent = r === current;
-      const size = px * (isHook ? 1.3 : 1) * (isCurrent ? 1 + 0.03 * this.punch : 1);
+      const size = px * (isHook ? 1.3 : 1) * (isCurrent && !still ? 1 + 0.03 * this.punch : 1);
       setFont(ctx, isHook || isCurrent ? 600 : 500, size, f.font);
       const alpha = 0.28 + 0.62 * lit;
       ctx.fillStyle = isHook ? rgba(P.gold, 0.55 + 0.45 * lit) : rgba(P.ink, alpha);
       const text = ellipsize(ctx, built.rows[r].text, maxText);
-      const slide = isCurrent && !f.reduced ? (1 - arrive) * pitch * 0.15 : 0;
+      const slide = isCurrent && !still ? (1 - arrive) * pitch * 0.15 : 0;
       ctx.fillText(text, left, y + slide);
       // the marks: a dot per time sung so far, after the words
       if (showMarks && sungSoFar[r] > 1) {
