@@ -78,8 +78,10 @@ export function AlbumHeader(
             is the one drawn here (a click used to fetch the origin again and show blank
             while it did, 2026-09-14); the well is positioned for the pending line, and
             takes the cards' veil rather than the row thumbs' raised ground so the album's
-            well matches the card it was clicked from (user, 2026-09-14) */}
-        <div className="relative h-[160px] w-[160px] shrink-0 rounded-xl overflow-hidden ring-1 ring-edge bg-veil flex items-center justify-center">
+            well matches the card it was clicked from, its ring stepping up to the stronger
+            edge while the pending line shows (the ring is a shadow, so the size never
+            moves) and settling back when the picture lands (user, 2026-09-14) */}
+        <div className="relative h-[160px] w-[160px] shrink-0 rounded-xl overflow-hidden ring-1 ring-edge has-[.art-shimmer]:ring-edge2 transition-shadow duration-300 bg-veil flex items-center justify-center">
           <ArtImage
             src={artSrc(albumArt, 160, artKeyOf(albumNode))}
             fallbackArt={{ artist: albumArtist, album: albumNode.title }}
