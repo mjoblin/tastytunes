@@ -79,6 +79,7 @@ const api: TastyTunesApi = {
   listeningStats: () => ipcRenderer.invoke(IPC.listeningStats),
   listeningClear: () => ipcRenderer.invoke(IPC.listeningClear),
   listeningExport: () => ipcRenderer.invoke(IPC.listeningExport),
+  yearCardSave: (png: Uint8Array, name: string) => ipcRenderer.invoke(IPC.yearCardSave, png, name),
   playStats: () => ipcRenderer.invoke(IPC.playStats),
   listeningYears: () => ipcRenderer.invoke(IPC.listeningYears),
   listeningStreamers: () => ipcRenderer.invoke(IPC.listeningStreamers),

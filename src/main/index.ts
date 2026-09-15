@@ -9,6 +9,7 @@ import {
   shell,
   protocol,
 } from "electron";
+import { writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { IPC, type MenuCommand, type StreamerCommand } from "@shared/ipc";
 import {
@@ -663,6 +664,30 @@ function registerIpc(): void {
     if (picked.canceled || !picked.filePath) return null;
     const events = await listeningRecord.exportToFile(picked.filePath);
     return { file: basename(picked.filePath), events };
+  });
+  // THE YEAR CARD (0.9.0): the renderer draws it, main writes the PNG where the user says —
+  // the Downloads folder by default, no dialog under the harness (TASTYTUNES_TEST_SAVE_DIR)
+  ipcMain.handle(IPC.yearCardSave, async (_e, png: unknown, name: unknown) => {
+    if (!(png instanceof Uint8Array) || typeof name !== "string") throw new Error("bad card");
+    const safeName = basename(name).replace(/[^\w.-]/g, "_") || "tastytunes-year.png";
+    const testDir = process.env.TASTYTUNES_TEST_SAVE_DIR;
+    let filePath: string;
+    if (testDir) filePath = join(testDir, safeName);
+    else {
+      const opts = {
+        title: "Save your year",
+        defaultPath: join(app.getPath("downloads"), safeName),
+        filters: [{ name: "PNG image", extensions: ["png"] }],
+      };
+      const win = BrowserWindow.getFocusedWindow() ?? mainWindow;
+      const picked = win
+        ? await dialog.showSaveDialog(win, opts)
+        : await dialog.showSaveDialog(opts);
+      if (picked.canceled || !picked.filePath) return null;
+      filePath = picked.filePath;
+    }
+    await writeFile(filePath, Buffer.from(png));
+    return { file: basename(filePath) };
   });
   ipcMain.handle(IPC.lookupCacheStats, () => lookupCacheStats());
   ipcMain.handle(IPC.clearLookupCaches, () => clearLookupCaches());
