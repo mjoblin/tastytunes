@@ -2,24 +2,30 @@ import { fmtCount, fmtDuration } from "@/lib/format";
 import { dayStartOf, type ListeningStats, type TopEntry } from "@/lib/historyStats";
 
 /**
- * THE YEAR CARD (0.9.0, the listening record's last reading surface, built
- * 2026-09-15 at the user's word): the Stats view's figures for a calendar
- * year drawn to a canvas and handed back as a PNG — "Your year". ONE HOME for
- * the numbers: everything here is a ListeningStats from lib/historyStats,
- * the same object the Stats view renders, so the card can never disagree
- * with the screen. The picture is the screen's grammar at poster size —
- * the four headline tiles, the year as a calendar, the most played, where
- * it played, the files, when you listen — in the app's own tokens read from
- * the document at render time (the theme the user is looking at) and its
- * own faces (the display serif for the figures, the sans for the words).
- *
- * The record began on 2026-08-29, so a card needs no year of listening: it
- * draws what the record holds for the year, and the footer says the span.
+ * THE STATS CARD (0.9.0, the listening record's last reading surface, built
+ * 2026-09-15 at the user's word as "Your year" and widened the same day at
+ * his call to the period the Stats view shows — past week, past month,
+ * past year, all time): the view's figures drawn to a canvas and handed
+ * back as a PNG. ONE HOME for the numbers: everything here is a
+ * ListeningStats from lib/historyStats, the very objects the Stats view
+ * renders (the period's figures, and the trailing year for the calendar),
+ * so the card can never disagree with the screen. The picture is the
+ * screen's grammar at poster size — the four headline tiles, the year at a
+ * glance, the most played, where it played, the files, when you listen —
+ * in the app's own tokens read from the document at render time (the theme
+ * the user is looking at) and its own faces (the display serif for the
+ * figures, the sans for the words).
  */
-export interface YearCardInput {
-  year: number;
+export interface StatsCardInput {
+  /** The period's name, as the toggle says it: "Past month", "All time". */
+  title: string;
+  /** The period's figures (the tiles, the lists, the bars, the week grid). */
   stats: ListeningStats;
-  /** The first and last day (dayStart ms) the record has in the year, for the footer. */
+  /** The trailing year's figures, for the calendar — the screen's own lens. */
+  calendar: ListeningStats;
+  /** The clock the calendar ends on. */
+  now: number;
+  /** The first and last day (dayStart ms) the period covers, for the head. */
   span: { from: number; to: number } | null;
 }
 
@@ -117,7 +123,7 @@ const dayLabel = (ms: number): string =>
   new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 
 /** Draws the card and resolves to its PNG. */
-export async function renderYearCard(input: YearCardInput): Promise<Blob> {
+export async function renderStatsCard(input: StatsCardInput): Promise<Blob> {
   const t = readTokens();
   // the faces must be in before the text is measured, or the fallback serif draws
   await Promise.all([
@@ -131,7 +137,7 @@ export async function renderYearCard(input: YearCardInput): Promise<Blob> {
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("no 2d context");
   ctx.scale(SCALE, SCALE);
-  const { stats, year } = input;
+  const { stats, calendar, now } = input;
   const micro = (text: string, x: number, y: number): void => {
     ctx.font = `600 11px ${t.sans}`;
     ctx.fillStyle = t.faint;
@@ -148,11 +154,11 @@ export async function renderYearCard(input: YearCardInput): Promise<Blob> {
   ctx.fillStyle = wash;
   ctx.fillRect(0, 0, W, H);
 
-  // THE HEAD: the year, and what it is
-  micro("Your year in TastyTunes", M, 104);
-  ctx.font = `600 116px ${t.display}`;
+  // THE HEAD: the period, and what it is
+  micro("Your listening in TastyTunes", M, 104);
+  ctx.font = `600 92px ${t.display}`;
   ctx.fillStyle = t.ink;
-  ctx.fillText(String(year), M - 4, 214);
+  ctx.fillText(fit(ctx, input.title, W - 2 * M - 260), M - 3, 210);
   if (input.span) {
     ctx.font = `400 15px ${t.sans}`;
     ctx.fillStyle = t.dim;
@@ -202,17 +208,18 @@ export async function renderYearCard(input: YearCardInput): Promise<Blob> {
     ctx.fillText(fit(ctx, tile.sub, tw - 40), x + 20, ty + 102);
   });
 
-  // THE YEAR AT A GLANCE: the calendar year, Monday at the top, a column a week
+  // THE YEAR AT A GLANCE: the trailing year as the screen draws it, whatever the period —
+  // Monday at the top, a column a week
   const calY = 440;
   micro("The year at a glance", M, calY);
-  const yearStart = new Date(year, 0, 1).getTime();
-  const yearEnd = new Date(year, 11, 31).getTime();
+  const yearEnd = dayStartOf(now);
+  const yearStart = yearEnd - 364 * 86_400_000;
   const firstDow = (new Date(yearStart).getDay() + 6) % 7;
   const gridStart = yearStart - firstDow * 86_400_000;
   const days: Array<{ day: number; seconds: number; inYear: boolean }> = [];
   for (let d = gridStart; d <= yearEnd; d += 86_400_000) {
     const day = dayStartOf(d);
-    days.push({ day, seconds: stats.byDay.get(day) ?? 0, inYear: day >= yearStart });
+    days.push({ day, seconds: calendar.byDay.get(day) ?? 0, inYear: day >= yearStart });
   }
   const weeks = Math.ceil(days.length / 7);
   const cgap = 4;
@@ -385,7 +392,11 @@ export async function renderYearCard(input: YearCardInput): Promise<Blob> {
   ctx.font = `400 11px ${t.sans}`;
   ctx.fillStyle = t.faint;
   ctx.textAlign = "right";
-  ctx.fillText("Library plays are plays. Radio and other sources count as time.", W - M, H - 56);
+  ctx.fillText(
+    "Library tracks count as plays. Radio and other sources count as time.",
+    W - M,
+    H - 56,
+  );
   ctx.textAlign = "left";
 
   return new Promise((resolve, reject) => {

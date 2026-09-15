@@ -665,17 +665,17 @@ function registerIpc(): void {
     const events = await listeningRecord.exportToFile(picked.filePath);
     return { file: basename(picked.filePath), events };
   });
-  // THE YEAR CARD (0.9.0): the renderer draws it, main writes the PNG where the user says —
+  // THE STATS CARD (0.9.0): the renderer draws it, main writes the PNG where the user says —
   // the Downloads folder by default, no dialog under the harness (TASTYTUNES_TEST_SAVE_DIR)
-  ipcMain.handle(IPC.yearCardSave, async (_e, png: unknown, name: unknown) => {
+  ipcMain.handle(IPC.statsCardSave, async (_e, png: unknown, name: unknown) => {
     if (!(png instanceof Uint8Array) || typeof name !== "string") throw new Error("bad card");
-    const safeName = basename(name).replace(/[^\w.-]/g, "_") || "tastytunes-year.png";
+    const safeName = basename(name).replace(/[^\w.-]/g, "_") || "tastytunes-listening.png";
     const testDir = process.env.TASTYTUNES_TEST_SAVE_DIR;
     let filePath: string;
     if (testDir) filePath = join(testDir, safeName);
     else {
       const opts = {
-        title: "Save your year",
+        title: "Save the picture",
         defaultPath: join(app.getPath("downloads"), safeName),
         filters: [{ name: "PNG image", extensions: ["png"] }],
       };

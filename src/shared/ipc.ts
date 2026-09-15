@@ -448,9 +448,9 @@ export interface TastyTunesApi {
    *  per-line envelope makes that safe). Resolves to the written file's name
    *  and event count, or null if the save dialog was cancelled. */
   listeningExport(): Promise<{ file: string; events: number } | null>;
-  /** The year card's PNG to a file of the user's choosing (a save dialog; the harness's
+  /** The stats card's PNG to a file of the user's choosing (a save dialog; the harness's
    *  TASTYTUNES_TEST_SAVE_DIR writes without one); null when they cancel. */
-  yearCardSave(png: Uint8Array, name: string): Promise<{ file: string } | null>;
+  statsCardSave(png: Uint8Array, name: string): Promise<{ file: string } | null>;
   /** The record aggregated for the reading surfaces: per-track plays and last
    *  played, the most recent plays, when the record began. */
   playStats(): Promise<PlayStats>;
@@ -527,7 +527,7 @@ export const IPC = {
   listeningStats: "tt:listeningStats",
   listeningClear: "tt:listeningClear",
   listeningExport: "tt:listeningExport",
-  yearCardSave: "tt:yearCardSave",
+  statsCardSave: "tt:statsCardSave",
   playStats: "tt:playStats",
   listeningYears: "tt:listeningYears",
   listeningStreamers: "tt:listeningStreamers",

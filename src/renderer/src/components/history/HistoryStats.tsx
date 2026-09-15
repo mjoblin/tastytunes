@@ -7,7 +7,7 @@ import { Segmented } from "@/components/controls/Segmented";
 import { Chip } from "@/components/chrome/Chrome";
 import { tt } from "@/api";
 import { errorMessage } from "@shared/guards";
-import { renderYearCard } from "@/lib/yearCard";
+import { renderStatsCard } from "@/lib/statsCard";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { TruncatedPair } from "@/components/media/TruncatedPair";
 import { NameLink } from "@/components/media/NameLine";
@@ -124,41 +124,35 @@ export function HistoryStats({
     () => statsFor(all, { from: dayStartOf(now) - 364 * 86_400_000, to: now + 1 }),
     [all, now],
   );
-  // YOUR YEAR (0.9.0): the calendar year's figures drawn to a canvas and saved as a PNG —
-  // lib/yearCard, the same ListeningStats the tiles read, so the card and the screen agree.
-  // The button stands whenever the year has anything in it (the record is young: no
-  // waiting for December).
+  // THE PICTURE (0.9.0): the period shown, drawn to a canvas and saved as a PNG — lib/statsCard,
+  // the same ListeningStats the tiles read and the same trailing year the calendar draws, so
+  // the card and the screen agree; built as "Your year" (the calendar year) and widened at
+  // the user's call to whatever the toggle shows (2026-09-15)
   const showToast = useStore((s) => s.showToast);
   const [cardBusy, setCardBusy] = useState(false);
-  const cardYear = new Date(now).getFullYear();
-  const cardRange = useMemo(
-    () => ({
-      from: new Date(cardYear, 0, 1).getTime(),
-      to: new Date(cardYear + 1, 0, 1).getTime(),
-    }),
-    [cardYear],
-  );
-  const cardStats = useMemo(() => statsFor(all, cardRange), [all, cardRange]);
-  const cardHas =
-    cardStats.plays > 0 ||
-    cardStats.seconds + cardStats.radioSeconds + cardStats.externalSeconds > 0;
   const saveCard = async (): Promise<void> => {
     setCardBusy(true);
     try {
-      const inYear = all.filter((e) => e.at >= cardRange.from && e.at < cardRange.to);
+      const first = all.length > 0 ? Math.min(...all.map((e) => e.at)) : null;
       const span =
-        inYear.length > 0
-          ? {
-              from: dayStartOf(Math.min(...inYear.map((e) => e.at))),
-              to: dayStartOf(Math.max(...inYear.map((e) => e.at))),
-            }
-          : null;
-      const png = await renderYearCard({ year: cardYear, stats: cardStats, span });
+        period === "all"
+          ? first != null
+            ? { from: dayStartOf(first), to: dayStartOf(now) }
+            : null
+          : { from: dayStartOf(now - PERIOD_MS[period]), to: dayStartOf(now) };
+      const png = await renderStatsCard({
+        title: PERIOD_LABEL[period],
+        stats,
+        calendar: yearStats,
+        now,
+        span,
+      });
       const bytes = new Uint8Array(await png.arrayBuffer());
-      const saved = await tt.yearCardSave(bytes, `tastytunes-${cardYear}.png`);
-      if (saved) showToast({ kind: "success", text: `Your year saved as ${saved.file}` });
+      const name = `tastytunes-${PERIOD_LABEL[period].toLowerCase().replace(/\s+/g, "-")}.png`;
+      const saved = await tt.statsCardSave(bytes, name);
+      if (saved) showToast({ kind: "success", text: `Saved as ${saved.file}` });
     } catch (e) {
-      showToast({ kind: "error", text: `Couldn't save your year: ${errorMessage(e)}` });
+      showToast({ kind: "error", text: `Couldn't save the picture: ${errorMessage(e)}` });
     } finally {
       setCardBusy(false);
     }
@@ -194,15 +188,15 @@ export function HistoryStats({
         />
         {!allLoaded && <span className="microlabel motion-safe:animate-pulse">reading…</span>}
         <Chip
-          data-stats-year-card
-          state={cardHas && !cardBusy ? "idle" : "disabled"}
-          disabled={!cardHas || cardBusy}
+          data-stats-card
+          state={!empty && !cardBusy ? "idle" : "disabled"}
+          disabled={empty || cardBusy}
           onClick={() => void saveCard()}
           className="ml-auto gap-1.5"
-          title={`Save ${cardYear} as a picture`}
+          title="Save this period as a picture"
         >
           <ImageDown size={14} />
-          {cardBusy ? "Drawing…" : "Your year"}
+          {cardBusy ? "Drawing…" : "Save picture"}
         </Chip>
       </div>
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-1 pb-8" data-history-stats>
