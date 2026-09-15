@@ -53,8 +53,9 @@ export function SceneCanvas({
   const finish = useStore((s) => s.settings.displayFinish ?? "cathode");
   const curve = useStore((s) => s.settings.displayCathodeCurve ?? "deep");
   const fill = useStore((s) => s.settings.displayCathodeFill ?? false);
-  const finishRef = useRef({ finish, curve, fill });
-  finishRef.current = { finish, curve, fill };
+  const flicker = useStore((s) => s.settings.displayCathodeFlicker ?? true);
+  const finishRef = useRef({ finish, curve, fill, flicker });
+  finishRef.current = { finish, curve, fill, flicker };
 
   useEffect(() => {
     const wrap = wrapRef.current;
@@ -174,7 +175,8 @@ export function SceneCanvas({
             canvas,
             overlay,
             now / 1000,
-            reduced,
+            // the hum is off under reduced motion, and off by its own switch (2026-09-15)
+            reduced || !finishRef.current.flicker,
             CATHODE_CURVES[finishRef.current.curve] ?? CATHODE_CURVES.deep,
             finishRef.current.fill,
           );

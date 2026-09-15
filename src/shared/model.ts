@@ -1340,6 +1340,11 @@ export interface AppSettings {
    *  beside Finish. The tile has no corners. */
   displayCornerTitle: boolean;
   displayCornerClock: boolean;
+  /** The glass's flicker (2026-09-15, user: an accessibility concern): the cathode finish
+   *  breathes a mains hum into the brightness at ten hertz, three percent either way, which
+   *  sits in the band photosensitive people are warned about; its own switch, on by default,
+   *  off already under the system's reduced-motion setting. In-mode, in the Finish row. */
+  displayCathodeFlicker: boolean;
   /** Shuffle: the order it walks the scenes (sequential is the picker's alphabetical order,
    *  random, the default, never repeats the one before), how many tracks each scene stays for ("album"
    *  changes when the album does), and the scenes left out of the rotation, by id (the sleeve
@@ -1534,6 +1539,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   displayCathodeFill: false,
   displayCornerTitle: true,
   displayCornerClock: true,
+  displayCathodeFlicker: true,
   displayShuffleOrder: "random",
   displayShuffleEvery: 1,
   displayShuffleExclude: ["sleeve"],

@@ -324,6 +324,7 @@ function SyncRow({ host }: { host: PickerHost }): React.JSX.Element {
   const fill = useStore((s) => s.settings.displayCathodeFill ?? false);
   const saveSettings = useStore((s) => s.saveSettings);
   const cathode = finish === "cathode";
+  const flicker = useStore((s) => s.settings.displayCathodeFlicker ?? true);
   const cornerTitle = useStore((s) => s.settings.displayCornerTitle ?? true);
   const cornerClock = useStore((s) => s.settings.displayCornerClock ?? true);
   // the slider is answered locally: a save is an IPC round trip to disk, and a controlled value
@@ -370,6 +371,17 @@ function SyncRow({ host }: { host: PickerHost }): React.JSX.Element {
               onChange={(v) => void saveSettings({ displayCathodeFill: v })}
             />
             Fill
+          </label>
+          {/* the mains hum in the brightness, ten hertz: its own switch (2026-09-15, an
+              accessibility concern); off already under reduced motion */}
+          <label className={cx("flex items-center gap-1.5", !cathode && "opacity-40")}>
+            <Switch
+              size="sm"
+              checked={flicker}
+              disabled={!cathode}
+              onChange={(v) => void saveSettings({ displayCathodeFlicker: v })}
+            />
+            Flicker
           </label>
         </SettingLine>
       )}
