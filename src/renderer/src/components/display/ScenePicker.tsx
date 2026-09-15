@@ -110,8 +110,10 @@ export function ScenePicker({
         ].map((s) => {
           const active = current === s.id;
           const Icon = s.icon;
-          // the shuffle tile shows whatever the shuffle is showing (the sleeve's tile is the art)
-          const tileScene: DisplayScene = s.id === "shuffle" ? shuffled : s.id;
+          // the shuffle tile is its icon alone on the plain well (user, 2026-09-14: it had
+          // shown whatever the shuffle was showing, a second copy of another tile, which
+          // distracted); the sleeve's tile is the art
+          const tileScene: DisplayScene = s.id;
           return (
             <button
               key={s.id}
@@ -134,18 +136,17 @@ export function ScenePicker({
                   active ? "ring-gold" : "ring-edge",
                 )}
               >
-                {isAbstract(tileScene) ? (
+                {s.id === "shuffle" ? (
+                  <div className="flex h-full w-full items-center justify-center text-dim">
+                    <Icon size={28} strokeWidth={1.2} />
+                  </div>
+                ) : isAbstract(tileScene) ? (
                   <SceneCanvas scene={tileScene} feed={feed} mini />
                 ) : art ? (
                   <img src={art} alt="" className="h-full w-full object-cover" />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center text-faint">
                     <Disc3 size={28} strokeWidth={1.2} />
-                  </div>
-                )}
-                {s.id === "shuffle" && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-bg/40">
-                    <Icon size={22} className="text-ink drop-shadow" />
                   </div>
                 )}
               </div>
