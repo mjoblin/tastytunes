@@ -105,7 +105,7 @@ export const CONFLUENCE_KEY: SceneKey = {
 
 export const CONFLUENCE_SETTINGS: SceneSettingDef[] = [
   // 0.4 (the user's call 2026-09-12; 1 before): the tile and the wall both read calmer
-  { key: "vigor", label: "Vigor", kind: "slider", min: 0.1, max: 2, step: 0.1, default: 0.4 },
+  { key: "vigor", label: "Vigor", kind: "slider", min: 0.1, max: 1, step: 0.1, default: 0.4 },
   {
     key: "memory",
     label: "Memory",
