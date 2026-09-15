@@ -92,6 +92,11 @@ function build(lines: readonly { t: number; text: string }[]): Built {
 
 const ARRIVE = 0.45;
 const STEP = 0.4;
+/** A path segment fades in over this long (user, 2026-09-15: they popped). */
+const FADE = 0.35;
+/** Without lyrics the title waits this long before it shows, so a track change (a moment
+ *  with no words while the new track's lyrics load) never flashes the title full screen. */
+const TITLE_WAIT = 1.5;
 
 export class Refrain implements Scene {
   settings: SceneSettings = {};
@@ -104,6 +109,11 @@ export class Refrain implements Scene {
   private since = 0;
   private punch = 0;
   private punchAim = 0;
+  /** When each line's step of the path first drew (ms), NaN until it does; cleared past a
+   *  seek back so a step re-arrives with its fade. */
+  private stepAt = new Float64Array(0);
+  private titleFor: string | null = null;
+  private titleSince = 0;
 
   private shape(f: SceneFrame): Built | null {
     const lines = f.lyric?.lines ?? null;
@@ -114,6 +124,7 @@ export class Refrain implements Scene {
     if (!this.built || this.built.lines !== lines) {
       this.built = build(lines);
       this.lit = new Float32Array(this.built.rows.length);
+      this.stepAt = new Float64Array(lines.length).fill(NaN);
       this.lastLine = -1;
       this.top = 0;
     }
@@ -140,18 +151,28 @@ export class Refrain implements Scene {
     const built = this.shape(f);
     ctx.textBaseline = "middle";
     if (!built || built.rows.length === 0) {
-      // no words: the title, and the artist beneath
-      const px = typePx(f, "display") * 0.8;
-      setFont(ctx, 600, px, f.font);
-      ctx.fillStyle = rgba(P.ink, 0.9);
-      ctx.textAlign = "center";
-      ctx.fillText(ellipsize(ctx, f.title ?? "", w * 0.8), w / 2, h * 0.47);
-      if (f.subtitle) {
-        setFont(ctx, 400, px * 0.42, f.font);
-        ctx.fillStyle = rgba(P.dim, 0.9);
-        ctx.fillText(ellipsize(ctx, f.subtitle, w * 0.8), w / 2, h * 0.47 + px * 0.9);
+      // no words: the title, modest and dim with the artist beneath, and only after a wait —
+      // a track change has a wordless moment while the new lyrics load, and a full-screen
+      // title flashing there distracted (user, 2026-09-15)
+      if (f.title !== this.titleFor) {
+        this.titleFor = f.title;
+        this.titleSince = f.now;
       }
-      ctx.textAlign = "start";
+      const waited = (f.now - this.titleSince) / 1000;
+      if (f.title && waited >= TITLE_WAIT) {
+        const px = typePx(f, "body") * 1.2;
+        const k = f.reduced ? 1 : easeOutCubic((waited - TITLE_WAIT) / 0.6);
+        setFont(ctx, 600, px, f.font);
+        ctx.fillStyle = rgba(P.dim, 0.9 * k);
+        ctx.textAlign = "center";
+        ctx.fillText(ellipsize(ctx, f.title, w * 0.8), w / 2, h * 0.47);
+        if (f.subtitle) {
+          setFont(ctx, 400, px * 0.7, f.font);
+          ctx.fillStyle = rgba(P.faint, 0.9 * k);
+          ctx.fillText(ellipsize(ctx, f.subtitle, w * 0.8), w / 2, h * 0.47 + px * 1.3);
+        }
+        ctx.textAlign = "start";
+      }
       return;
     }
 
@@ -165,6 +186,9 @@ export class Refrain implements Scene {
     const still = f.reduced || this.settings.motion === false;
     const lineIndex = f.lyric?.index ?? -1;
     if (lineIndex !== this.lastLine) {
+      // a seek back clears the steps past the new line, so they fade in again when re-sung
+      if (lineIndex < this.lastLine)
+        for (let i = lineIndex + 1; i < this.stepAt.length; i++) this.stepAt[i] = NaN;
       this.lastLine = lineIndex;
       this.since = f.now;
     }
@@ -175,12 +199,18 @@ export class Refrain implements Scene {
     // how many times each row has been sung SO FAR, and the path so far
     const sungSoFar = new Uint16Array(built.rows.length);
     const path: number[] = [];
+    const stepLine: number[] = [];
     for (let i = 0; i <= lineIndex && i < built.rowOf.length; i++) {
       const r = built.rowOf[i];
       if (r < 0) continue;
       sungSoFar[r]++;
       path.push(r);
+      stepLine.push(i);
+      if (Number.isNaN(this.stepAt[i])) this.stepAt[i] = f.now;
     }
+    // a step's fade-in, from the moment it first drew
+    const fadeOf = (k: number): number =>
+      still ? 1 : easeOutCubic((f.now - this.stepAt[stepLine[k]]) / 1000 / FADE);
 
     // the lit state eases: the current row up to 1, a sung row back to a rest level that
     // rises a little with every singing (user, 2026-09-15: a line sung often ends up brighter
@@ -227,7 +257,7 @@ export class Refrain implements Scene {
         const yb = yOf(b);
         if (Math.max(ya, yb) < -pitch || Math.min(ya, yb) > h + pitch) continue;
         const last = k === path.length - 1;
-        const strength = last ? 0.35 + 0.55 * arrive : 0.3;
+        const strength = (last ? 0.35 + 0.55 * arrive : 0.3) * fadeOf(k);
         ctx.strokeStyle = rgba(P.gold, strength);
         ctx.lineWidth = last ? Math.max(1.5, h * 0.0025) : Math.max(1, h * 0.0015);
         ctx.beginPath();
@@ -243,7 +273,7 @@ export class Refrain implements Scene {
       // the head of the path: a dot on the row being sung
       if (current >= 0) {
         const y = yOf(current);
-        ctx.fillStyle = rgba(P.gold, 0.9);
+        ctx.fillStyle = rgba(P.gold, 0.9 * fadeOf(path.length - 1));
         ctx.beginPath();
         ctx.arc(x, y, Math.max(2.5, h * 0.004) * (0.7 + 0.3 * arrive), 0, Math.PI * 2);
         ctx.fill();
