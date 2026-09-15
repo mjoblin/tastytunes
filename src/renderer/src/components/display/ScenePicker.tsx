@@ -359,7 +359,7 @@ function SyncRow({ host }: { host: PickerHost }): React.JSX.Element {
       )}
       <SettingLine
         label="Drops"
-        hint="How much of a lull a drop needs. Loose counts small lulls, strict requires a real breakdown."
+        hint='"Loose" counts small lulls as a drop, "Strict" requires a real breakdown.'
       >
         <Segmented
           value={drops}
@@ -373,7 +373,7 @@ function SyncRow({ host }: { host: PickerHost }): React.JSX.Element {
       </SettingLine>
       <SettingLine
         label="Sync"
-        hint="Slide toward early if the flashes and lyrics appear after the sound, toward late if before."
+        hint='Choose "early" if the flashes and lyrics appear after the sound.'
       >
         <RangeSlider
           value={sync}
