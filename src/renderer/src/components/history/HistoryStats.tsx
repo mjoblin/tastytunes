@@ -193,10 +193,10 @@ export function HistoryStats({
           disabled={empty || cardBusy}
           onClick={() => void saveCard()}
           className="ml-auto gap-1.5"
-          title="Save this period as a picture"
+          title="Save this period as an image"
         >
           <ImageDown size={14} />
-          {cardBusy ? "Drawing…" : "Save picture"}
+          {cardBusy ? "Drawing…" : "Save image"}
         </Chip>
       </div>
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-1 pb-8" data-history-stats>

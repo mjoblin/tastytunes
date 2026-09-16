@@ -119,8 +119,16 @@ function roundRect(
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const hourLabel = (h: number): string =>
   new Date(2000, 0, 1, h).toLocaleTimeString(undefined, { hour: "numeric" });
-const dayLabel = (ms: number): string =>
-  new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+const dayLabel = (ms: number, year: boolean): string =>
+  new Date(ms).toLocaleDateString(
+    undefined,
+    year ? { month: "short", day: "numeric", year: "numeric" } : { month: "short", day: "numeric" },
+  );
+/** The span with its year: once at the end when both days share it, on each day otherwise. */
+const spanLabel = (from: number, to: number): string =>
+  new Date(from).getFullYear() === new Date(to).getFullYear()
+    ? `${dayLabel(from, false)} to ${dayLabel(to, true)}`
+    : `${dayLabel(from, true)} to ${dayLabel(to, true)}`;
 
 /** Draws the card and resolves to its PNG. */
 export async function renderStatsCard(input: StatsCardInput): Promise<Blob> {
@@ -163,7 +171,7 @@ export async function renderStatsCard(input: StatsCardInput): Promise<Blob> {
     ctx.font = `400 15px ${t.sans}`;
     ctx.fillStyle = t.dim;
     ctx.textAlign = "right";
-    ctx.fillText(`${dayLabel(input.span.from)} to ${dayLabel(input.span.to)}`, W - M, 210);
+    ctx.fillText(spanLabel(input.span.from, input.span.to), W - M, 210);
     ctx.textAlign = "left";
   }
 
