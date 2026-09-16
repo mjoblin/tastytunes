@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { BarChart3, ImageDown } from "lucide-react";
+import { BarChart3, ChevronLeft, ChevronRight, ImageDown } from "lucide-react";
 import { LISTEN_DEFINITION, type ListeningEvent } from "@shared/model";
 import { useStore } from "@/store";
 import { EmptyState } from "@/components/chrome/EmptyState";
@@ -28,21 +28,77 @@ import { narrowToStreamer } from "@/lib/historyStreamers";
  * wears text tokens, bars are thin and directly labeled, every cell has a tip.
  */
 
-type Period = "week" | "month" | "year" | "all";
-const PERIOD_LABEL: Record<Period, string> = {
-  week: "Past week",
-  month: "Past month",
-  year: "Past year",
+/** THE PERIOD IS A CALENDAR INSTANCE (2026-09-15, the user: people expect "the previous
+ *  full instance of whatever period they asked for"): a unit — a week from Monday, a month
+ *  from the first, a year from January — and how many instances back from the one holding
+ *  now. Zero is the current instance so far; one is the last full week or month; the arrows
+ *  beside the toggle step. All time has no instances. The rolling windows this replaced (the
+ *  last seven days as of this minute) promised a week and never had a Monday. */
+type Unit = "week" | "month" | "year" | "all";
+type Span = { from: number; to: number };
+const UNIT_LABEL: Record<Unit, string> = {
+  week: "Week",
+  month: "Month",
+  year: "Year",
   all: "All time",
 };
-const PERIOD_MS: Record<Exclude<Period, "all">, number> = {
-  week: 7 * 86_400_000,
-  month: 30 * 86_400_000,
-  year: 365 * 86_400_000,
-};
+const DAY_MS = 86_400_000;
 
-/** Session memory: the period comes back as it was left. */
-let statsMem: { period: Period } = { period: "month" };
+/** The instance `back` steps before the one holding `now`: its start, and the next one's.
+ *  By the calendar's own setters, so a week across a clock change still starts at midnight. */
+function instanceOf(unit: Exclude<Unit, "all">, now: number, back: number): Span {
+  const s = new Date(now);
+  s.setHours(0, 0, 0, 0);
+  if (unit === "week") s.setDate(s.getDate() - ((s.getDay() + 6) % 7) - back * 7);
+  else if (unit === "month") {
+    s.setDate(1);
+    s.setMonth(s.getMonth() - back);
+  } else {
+    s.setMonth(0, 1);
+    s.setFullYear(s.getFullYear() - back);
+  }
+  const e = new Date(s);
+  if (unit === "week") e.setDate(e.getDate() + 7);
+  else if (unit === "month") e.setMonth(e.getMonth() + 1);
+  else e.setFullYear(e.getFullYear() + 1);
+  return { from: s.getTime(), to: e.getTime() };
+}
+
+/** What an instance is called: "This week" for the one holding now, else its own name — a
+ *  week by its Monday ("Week of Sep 7", the card's span saying the rest), a month by name, a
+ *  year by number; the year spelled out once a week is not this year's. */
+function instanceLabel(unit: Exclude<Unit, "all">, inst: Span, back: number, now: number): string {
+  if (back === 0)
+    return unit === "week" ? "This week" : unit === "month" ? "This month" : "This year";
+  const from = new Date(inst.from);
+  if (unit === "year") return String(from.getFullYear());
+  if (unit === "month")
+    return from.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  const thisYear = from.getFullYear() === new Date(now).getFullYear();
+  return `Week of ${from.toLocaleDateString(
+    undefined,
+    thisYear
+      ? { month: "short", day: "numeric" }
+      : { month: "short", day: "numeric", year: "numeric" },
+  )}`;
+}
+
+/** The file a saved image takes: the instance by its calendar name. */
+function instanceFile(unit: Unit, inst: Span | null): string {
+  if (unit === "all" || !inst) return "tastytunes-all-time.png";
+  const d = new Date(inst.from);
+  const y = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return unit === "year"
+    ? `tastytunes-${y}.png`
+    : unit === "month"
+      ? `tastytunes-${y}-${mm}.png`
+      : `tastytunes-week-${y}-${mm}-${dd}.png`;
+}
+
+/** Session memory: the unit and the instance come back as they were left. */
+let statsMem: { unit: Unit; back: number } = { unit: "month", back: 0 };
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -70,10 +126,16 @@ export function HistoryStats({
   const loadYear = useStore((s) => s.loadHistoryYear);
   const recordOn = useStore((s) => s.settings.listeningRecord);
   const scrollRef = useScrollMemory("history:stats");
-  const [period, setPeriodState] = useState<Period>(statsMem.period);
-  const setPeriod = (p: Period): void => {
-    statsMem = { period: p };
-    setPeriodState(p);
+  const [unit, setUnitState] = useState<Unit>(statsMem.unit);
+  const [back, setBackState] = useState(statsMem.back);
+  const setUnit = (u: Unit): void => {
+    statsMem = { unit: u, back: 0 };
+    setUnitState(u);
+    setBackState(0);
+  };
+  const setBack = (b: number): void => {
+    statsMem = { unit, back: b };
+    setBackState(b);
   };
   // figures want the whole record: every year, loaded once
   useEffect(() => {
@@ -96,11 +158,19 @@ export function HistoryStats({
       out.push(...(loaded[y] ?? []));
     return narrowToStreamer(out, streamer);
   }, [loaded, streamer]);
-  const range = useMemo(
-    () => (period === "all" ? null : { from: now - PERIOD_MS[period], to: now + 1 }),
-    [period, now],
+  const inst = useMemo(
+    () => (unit === "all" ? null : instanceOf(unit, now, back)),
+    [unit, now, back],
   );
-  const stats = useMemo(() => statsFor(all, range), [all, range]);
+  const stats = useMemo(() => statsFor(all, inst), [all, inst]);
+  // the record's first moment: the arrows stop where the record does
+  const first = useMemo(() => {
+    let f: number | null = null;
+    for (const e of all) if (f == null || e.at < f) f = e.at;
+    return f;
+  }, [all]);
+  const canBack = inst != null && first != null && inst.from > first;
+  const canForward = back > 0;
   // two streamers' slots can share a name: only then does a preset row name its streamer,
   // from the device book first (remembered streamers) and live discovery second
   const knownDevices = useStore((st) => st.settings.knownDevices);
@@ -133,22 +203,17 @@ export function HistoryStats({
   const saveCard = async (): Promise<void> => {
     setCardBusy(true);
     try {
-      const first = all.length > 0 ? Math.min(...all.map((e) => e.at)) : null;
+      const today = dayStartOf(now);
+      const label = unit === "all" || !inst ? "All time" : instanceLabel(unit, inst, back, now);
       const span =
-        period === "all"
+        unit === "all" || !inst
           ? first != null
-            ? { from: dayStartOf(first), to: dayStartOf(now) }
+            ? { from: dayStartOf(first), to: today }
             : null
-          : { from: dayStartOf(now - PERIOD_MS[period]), to: dayStartOf(now) };
-      const png = await renderStatsCard({
-        title: PERIOD_LABEL[period],
-        stats,
-        calendar: yearStats,
-        now,
-        span,
-      });
+          : { from: inst.from, to: Math.min(inst.to - DAY_MS, today) };
+      const png = await renderStatsCard({ title: label, stats, calendar: yearStats, now, span });
       const bytes = new Uint8Array(await png.arrayBuffer());
-      const name = `tastytunes-${PERIOD_LABEL[period].toLowerCase().replace(/\s+/g, "-")}.png`;
+      const name = instanceFile(unit, inst);
       const saved = await tt.statsCardSave(bytes, name);
       if (saved) showToast({ kind: "success", text: `Saved as ${saved.file}` });
     } catch (e) {
@@ -178,14 +243,44 @@ export function HistoryStats({
   return (
     <div className="h-full flex flex-col">
       <div className="flex items-center gap-2 pb-3 px-1 flex-wrap" data-history-stats-toolbar>
-        <Segmented<Period>
-          value={period}
-          onChange={setPeriod}
-          options={(["week", "month", "year", "all"] as Period[]).map((p) => ({
-            value: p,
-            label: PERIOD_LABEL[p],
+        <Segmented<Unit>
+          value={unit}
+          onChange={setUnit}
+          options={(["week", "month", "year", "all"] as Unit[]).map((u) => ({
+            value: u,
+            label: UNIT_LABEL[u],
           }))}
         />
+        {unit !== "all" && inst && (
+          <div className="flex items-center gap-0.5" data-stats-stepper>
+            <button
+              type="button"
+              data-stats-step="back"
+              aria-label={`The previous ${unit}`}
+              disabled={!canBack}
+              onClick={() => setBack(back + 1)}
+              className="h-8 w-8 rounded-full flex items-center justify-center text-dim hover:text-ink hover:bg-veil disabled:opacity-40 disabled:pointer-events-none"
+            >
+              <ChevronLeft size={14} />
+            </button>
+            <span
+              data-stats-instance
+              className="min-w-[7.5rem] text-center text-[12.5px] text-dim tabular-nums"
+            >
+              {instanceLabel(unit, inst, back, now)}
+            </span>
+            <button
+              type="button"
+              data-stats-step="forward"
+              aria-label={`The next ${unit}`}
+              disabled={!canForward}
+              onClick={() => setBack(back - 1)}
+              className="h-8 w-8 rounded-full flex items-center justify-center text-dim hover:text-ink hover:bg-veil disabled:opacity-40 disabled:pointer-events-none"
+            >
+              <ChevronRight size={14} />
+            </button>
+          </div>
+        )}
         {!allLoaded && <span className="microlabel motion-safe:animate-pulse">reading…</span>}
         <Chip
           data-stats-card
