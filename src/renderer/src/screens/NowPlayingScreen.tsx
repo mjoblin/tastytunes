@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  Airplay,
   Captions,
   Disc3,
   Heart,
+  Info,
   ListOrdered,
   Maximize2,
   MicVocal,
-  Info,
   RadioTower,
   Sparkles,
 } from "lucide-react";
@@ -358,6 +359,30 @@ export function NowPlayingScreen(): React.JSX.Element {
   );
 
   if (empty) {
+    // A SOURCE PLAYING BLIND (2026-09-16, live): the streamer can report an AirPlay session
+    // as playing with no title, artist, art or position for its whole length (a session
+    // restarted from the source app). "Nothing playing" and an offer to resume something
+    // else would be wrong under a transport that shows play: the face names the source and
+    // says the streamer is not reporting the track (and no more: a pause and resume from
+    // the source app did not bring the details back on 2026-09-16; a power cycle of the
+    // unit did). A stopped or paused blank is still nothing playing.
+    const sourceId = activeSourceId(zoneState, nowPlaying);
+    const busy = state === "play" || state === "buffering" || state === "connecting";
+    const blind = busy && sourceId != null && sourceId !== "MEDIA_PLAYER";
+    if (blind) {
+      return (
+        <div className="h-full flex flex-col">
+          {header}
+          <div data-source-blind={sourceId}>
+            <EmptyState
+              icon={sourceId === "AIRPLAY" ? Airplay : Disc3}
+              title={nowPlaying?.source?.name ?? "Playing"}
+              caption="The streamer isn't reporting the current track."
+            />
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="h-full flex flex-col">
         {header}

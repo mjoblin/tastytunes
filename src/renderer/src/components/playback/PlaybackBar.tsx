@@ -29,7 +29,7 @@ export function PlaybackBar(): React.JSX.Element {
   const nowPlaying = useStore((s) => s.nowPlaying);
   const setScreen = useStore((s) => s.setScreen);
   const screen = useStore((s) => s.screen);
-  const { position, duration } = usePlayhead();
+  const { position, duration, known: elapsedKnown } = usePlayhead();
   const t = useTransport(duration);
   const { shownPosition, slider } = useSeekScrub(position, duration, t.seek);
   const seekWaveform = useSeekWaveform();
@@ -167,8 +167,11 @@ export function PlaybackBar(): React.JSX.Element {
         </div>
 
         <div className="flex items-center gap-3 w-full max-w-[520px]">
-          <span className="font-mono text-[10.5px] text-faint w-11 text-right tabular-nums">
-            {active ? fmtTime(shownPosition) : "–:––"}
+          <span
+            data-bar-elapsed
+            className="font-mono text-[10.5px] text-faint w-11 text-right tabular-nums"
+          >
+            {active && elapsedKnown ? fmtTime(shownPosition) : "–:––"}
           </span>
           <div className="flex-1">
             <Slider

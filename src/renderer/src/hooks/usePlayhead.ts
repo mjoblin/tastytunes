@@ -6,7 +6,9 @@ import { useStore } from "@/store";
  * The streamer reports position at ~1 Hz; interpolate between syncs at 4 Hz for a
  * smooth playhead (vibinui's PlayheadManager pattern).
  */
-export function usePlayhead(): { position: number; duration: number | null } {
+/** `known`: the elapsed is a real figure — the tuned-at stamp for radio, a playhead the
+ *  streamer reported for a track — and not the zero a source reporting nothing leaves. */
+export function usePlayhead(): { position: number; duration: number | null; known: boolean } {
   const playhead = useStore((s) => s.playhead);
   const playState = useStore((s) => s.playState);
   const nowPlaying = useStore((s) => s.nowPlaying);
@@ -29,7 +31,7 @@ export function usePlayhead(): { position: number; duration: number | null } {
   // how long this station has been playing.
   if (isRadioMetadata(playState?.metadata)) {
     const position = playing && stationTunedAt != null ? (Date.now() - stationTunedAt) / 1000 : 0;
-    return { position, duration: null };
+    return { position, duration: null, known: stationTunedAt != null };
   }
 
   const duration = playState?.metadata?.duration ?? nowPlaying?.display?.progress?.duration ?? null;
@@ -40,5 +42,5 @@ export function usePlayhead(): { position: number; duration: number | null } {
   }
   if (duration != null && duration > 0) position = Math.min(position, duration);
 
-  return { position, duration };
+  return { position, duration, known: playhead != null };
 }

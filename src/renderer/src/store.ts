@@ -482,6 +482,14 @@ let navRestoreSeq = 0;
 // field it feeds; the timer re-derives once the window has passed.
 let disagree: { key: string; since: number } | null = null;
 let settleTimer: ReturnType<typeof setTimeout> | null = null;
+/** What a play state is playing, for the playhead's sake: the queue entry, else the
+ *  station or the title, else the source alone (a cast reporting nothing). */
+function trackIdentity(ps: ZonePlayState | null | undefined): string {
+  if (!ps) return "";
+  const md = ps.metadata;
+  return `${ps.queue_id ?? ""}|${md?.station ?? ""}|${md?.title ?? ""}|${md?.source ?? ""}`;
+}
+
 function settledPlayId(queue: QueueList | null, playState: ZonePlayState | null): number | null {
   const { raw, content } = contentPlayId(queue, playState);
   if (content == null) {
@@ -830,7 +838,9 @@ export const useStore = create<TTState>((set, get) => ({
       mcpStatus: snap.mcpStatus,
       missedSchedule: snap.missedSchedule,
       mediaIndex: snap.mediaIndex,
-      playhead: snap.position ? { secs: snap.position.position, at: Date.now() } : null,
+      // a position the streamer answers empty (radio, a blind cast) is no playhead
+      playhead:
+        snap.position?.position != null ? { secs: snap.position.position, at: Date.now() } : null,
       frames: snap.frames,
       logs: snap.logs,
       netRequests: snap.netRequests,
@@ -889,12 +899,24 @@ export const useStore = create<TTState>((set, get) => ({
               : stationChanged
                 ? Date.now()
                 : (s.stationTunedAt ?? Date.now()),
+            // a push without a position keeps the playhead only while the track is the
+            // same: a new track (or a source that reports no position at all, AirPlay
+            // with no details) starts from nothing rather than counting on from the
+            // last track's clock (2026-09-16: the bar read 1:15:42 under an AirPlay
+            // session the streamer reported blank)
             playhead:
-              msg.data.position != null ? { secs: msg.data.position, at: Date.now() } : s.playhead,
+              msg.data.position != null
+                ? { secs: msg.data.position, at: Date.now() }
+                : trackIdentity(msg.data) === trackIdentity(s.playState)
+                  ? s.playhead
+                  : null,
           };
         }
         case "position":
-          return { playhead: { secs: msg.data.position, at: Date.now() } };
+          return {
+            playhead:
+              msg.data.position != null ? { secs: msg.data.position, at: Date.now() } : null,
+          };
         case "nowPlaying":
           return { nowPlaying: msg.data };
         case "zoneState":
