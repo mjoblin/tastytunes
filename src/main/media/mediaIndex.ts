@@ -41,7 +41,9 @@ import {
 } from "./reconcile";
 import {
   browseChildrenOf,
+  browseMetadataNode,
   getSystemUpdateID,
+  refreshServers,
   search as liveSearch,
   searchPage,
 } from "./upnpBrowser";
@@ -82,7 +84,7 @@ interface StoredIndex {
 // Asset tagging). v2 added upnp:genre. A bump discards stored indexes
 // wholesale; rebuildHints below keeps that from costing Browse-only
 // servers their Build click.
-const VERSION = 11;
+const VERSION = 12; // v12: nodes from a browse walk carry their folder titlePath
 const PAGE = 500;
 const MAX_TRACKS = 50_000;
 const MAX_CONTAINERS = 10_000;
@@ -99,6 +101,8 @@ const rebuildHints = new Map<string, "search" | "browse">();
 // un-indexed ones too (a USB stick deserves its Build button).
 const known = new Map<string, MediaServerInfo>();
 const building = new Set<string>();
+/** The build under way per server, so a second asker waits for the same walk. */
+const inflight = new Map<string, Promise<void>>();
 // The last build that produced NOTHING, per server, with a one-line reason —
 // so the Library's doors and Settings can say "couldn't index · Retry" instead
 // of quietly reverting to "not indexed" (2026-08-17). Cleared by any build.
@@ -315,7 +319,10 @@ async function crawlBrowse(
   const artists = new Map<string, MediaNode>();
   const tracks = new Map<string, MediaNode>(into ? into.tracks.map((t) => [t.id, t]) : []);
   const visited = new Set<string>();
-  const parents = new Map<string, { title: string; isArtist: boolean }>(); // container id → what it is, for the parent-as-artist and canonical-branch rules
+  // container id → what it is (the parent-as-artist and canonical-title rules)
+  // and its folder titles from the root, the container's own last (the
+  // titlePath its albums and tracks carry, v12)
+  const parents = new Map<string, { title: string; isArtist: boolean; path: string[] }>();
   const parentsOf = new Map<string, Set<string>>(); // album id → every container it was listed under (dedupe's sibling evidence)
   const queue: string[] = ["0"];
   const put = (m: Map<string, MediaNode>, n: MediaNode): void => {
@@ -329,19 +336,24 @@ async function crawlBrowse(
     const children = await browseChildrenOf(host, server.udn, id);
     if (!children) continue;
     const parent = parents.get(id) ?? null;
+    const path = parent?.path ?? [];
     for (const raw of children) {
       // an album under its ARTIST container is credited to that artist by
       // right; under any other container, a matching credit is the listing's
       const n = stripParentArtist(raw, parent && !parent.isArtist ? parent.title : null);
       if (!n.isContainer) {
-        if (n.upnpClass.includes("audioItem") && !into) put(tracks, n);
+        if (n.upnpClass.includes("audioItem") && !into) put(tracks, { ...n, titlePath: path });
         continue;
       }
-      parents.set(n.id, { title: n.title, isArtist: n.upnpClass.includes("person") });
+      const own = [...path, n.title];
+      parents.set(n.id, { title: n.title, isArtist: n.upnpClass.includes("person"), path: own });
       if (n.upnpClass.includes("musicAlbum")) {
         albums.set(
           n.id,
-          preferCopy(albums.get(n.id), { node: n, underArtist: parent?.isArtist === true }),
+          preferCopy(albums.get(n.id), {
+            node: { ...n, titlePath: own },
+            underArtist: parent?.isArtist === true,
+          }),
         );
         parentsOf.set(n.id, (parentsOf.get(n.id) ?? new Set()).add(id));
       } else if (n.upnpClass.includes("person")) put(artists, n);
@@ -438,7 +450,18 @@ async function build(
   server: MediaServerInfo,
   strategy: "search" | "browse",
 ): Promise<void> {
-  if (building.has(server.udn)) return;
+  const running = inflight.get(server.udn);
+  if (running) return running;
+  const run = buildNow(host, server, strategy).finally(() => inflight.delete(server.udn));
+  inflight.set(server.udn, run);
+  return run;
+}
+
+async function buildNow(
+  host: string,
+  server: MediaServerInfo,
+  strategy: "search" | "browse",
+): Promise<void> {
   building.add(server.udn);
   buildingNames.set(server.udn, server.name);
   announce(status());
@@ -467,6 +490,43 @@ async function build(
     building.delete(server.udn);
     announce(status());
   }
+}
+
+/**
+ * A Browse-built index answers with the ids the server minted at crawl time,
+ * and the streamer's own USB server re-mints them across standby and a
+ * replug (the Evo, 2026-09-14: 26:0_0_0_0 became 28:0_0_0_0 overnight, its
+ * SystemUpdateID 54 → 58). The Library re-walks its crumb titles on a miss;
+ * the content resolvers trusted the index outright, so a stored playlist
+ * entry healed to a stale id and was counted as not found, and Open in
+ * Library landed on a container that no longer answered (a user's report,
+ * 2026-09-14). Before an answer from such an index is trusted: rebuild when
+ * the counter moved, or when the id in hand no longer answers (a counter
+ * that lies), and WAIT for the walk. True when rebuilt, so the caller asks
+ * again; false when the index stood. Search-built indexes keep stable ids
+ * and are not touched.
+ */
+export async function revalidate(
+  host: string,
+  udn: string,
+  probeId: string | null,
+): Promise<boolean> {
+  load();
+  const existing = indexes.get(udn);
+  if (!existing || existing.strategy !== "browse") return false;
+  const server =
+    known.get(udn) ?? (await refreshServers(host).catch(() => [])).find((s) => s.udn === udn);
+  if (!server) return false;
+  known.set(udn, server);
+  const id = await getSystemUpdateID(host, udn);
+  let stale = id != null && existing.updateId != null && id !== existing.updateId;
+  if (!stale && probeId) stale = (await browseMetadataNode(host, udn, probeId)) == null;
+  if (!stale) return false;
+  console.log(
+    `[mediaIndex] ${server.name}: ids rotated (counter ${existing.updateId} → ${id}), rebuilding`,
+  );
+  await build(host, server, "browse");
+  return indexes.get(udn)?.builtAt !== existing.builtAt;
 }
 
 /**

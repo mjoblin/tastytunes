@@ -17,6 +17,7 @@ import {
   type SleepTimer,
   type MediaInfoQuery,
   type TrackInfoQuery,
+  playKey,
 } from "@shared/model";
 import {
   type ContentRef,
@@ -61,6 +62,7 @@ import {
   audioAnalysisGet,
   audioAnalysisPut,
   audioDrMany,
+  audioStatsMany,
 } from "./lookups/audioAnalysis";
 import { fetchCoverArt } from "./lookups/coverArt";
 import { radioByTags, radioSearch, radioTop } from "./lookups/radioBrowser";
@@ -82,7 +84,16 @@ import {
 import { loggedFetch } from "./netlog";
 import { getSettings, updateSettings } from "./data/persist";
 import { getRecents } from "./data/recents";
+import {
+  decorateRecents,
+  recentArtGet,
+  recentCoverGet,
+  setRecentArtNotifier,
+} from "./lookups/recentArt";
 import { listeningRecord } from "./data/listeningRecord";
+import { playStatsFromRecord } from "./data/playStats";
+import { embeddedArtFor } from "./lookups/embeddedArt";
+import type { EmbeddedArtQuery } from "@shared/model";
 
 // A dead log pipe must never crash the app: when a parent process that
 // spawned us (a script, a test harness) dies, our stdout/stderr writes
@@ -138,6 +149,13 @@ function broadcastListening(): void {
   });
 }
 listeningRecord.setNotifier(broadcastListening);
+// Each appended line reaches the renderer's play stats as ONE event (the fold
+// is shared with main's builder), so counts and last-played stay live at
+// track boundaries without re-reading the files.
+listeningRecord.setEventNotifier((event) => {
+  for (const w of BrowserWindow.getAllWindows())
+    w.webContents.send(IPC.push, { kind: "playEvent", event });
+});
 
 // MCP tools can mutate settings (schedules) — the renderer must hear about it
 mcpBridge.onSettingsMutated = (settings) => broadcastSettings(settings);
@@ -468,7 +486,7 @@ function registerIpc(): void {
     getSettings().artistInfo ? fetchArtistInfo(artist, !!force) : null,
   );
   ipcMain.handle(IPC.fetchAlbumInfo, (_e, artist: string, album: string, force?: boolean) =>
-    getSettings().artistInfo ? fetchAlbumInfo(artist, album, !!force) : null,
+    getSettings().artistInfo ? fetchAlbumInfo(artist, album, !!force, true) : null,
   );
   // EXPERIMENT (0.7 exploration): fetch one track's audio bytes for the
   // renderer's waveform decode. Read-only ranged-capable GET against the
@@ -515,6 +533,11 @@ function registerIpc(): void {
   ipcMain.handle(IPC.audioDrMany, (_e, keys: unknown) =>
     Array.isArray(keys) ? audioDrMany(keys.filter((k): k is string => typeof k === "string")) : {},
   );
+  ipcMain.handle(IPC.audioStatsMany, (_e, keys: unknown) =>
+    Array.isArray(keys)
+      ? audioStatsMany(keys.filter((k): k is string => typeof k === "string"))
+      : {},
+  );
   ipcMain.handle(IPC.albumDrPut, (_e, key: unknown, entry: unknown) => {
     if (typeof key === "string") albumDrPut(key, entry);
   });
@@ -530,7 +553,11 @@ function registerIpc(): void {
       ? fetchCoverArt(artist, album)
       : null,
   );
-  ipcMain.handle(IPC.getRecents, () => getRecents());
+  ipcMain.handle(IPC.getRecents, () => decorateRecents(getRecents()));
+  ipcMain.handle(IPC.recentCover, (_e, key: string) =>
+    typeof key === "string" ? recentCoverGet(key) : null,
+  );
+  setRecentArtNotifier(() => deviceManager.repushRecents());
   ipcMain.handle(IPC.clearRecents, () => deviceManager.clearRecents());
   ipcMain.handle(IPC.recentsRestore, (_e, list: RecentTrack[]) =>
     deviceManager.recentsRestore(list),
@@ -584,8 +611,35 @@ function registerIpc(): void {
     }
   });
   ipcMain.handle(IPC.listeningStats, () => listeningRecord.stats());
+  ipcMain.handle(IPC.playStats, () => playStatsFromRecord());
+  // the Timeline's art: the record stores none, the index knows the track
+  ipcMain.handle(IPC.libraryArtByKeys, (_e, keys: unknown) => {
+    const want = new Set(
+      Array.isArray(keys) ? keys.filter((k): k is string => typeof k === "string") : [],
+    );
+    const out: Record<string, string | null> = {};
+    if (want.size === 0) return out;
+    for (const g of mediaIndex.pools())
+      for (const t of g.tracks) {
+        const k = playKey(t.title, t.artist, t.album);
+        if (want.has(k) && out[k] == null) out[k] = t.artUrl ?? null;
+      }
+    // not in the library: the device log's captured picture, if any
+    for (const k of want) if (out[k] == null) out[k] = recentArtGet(k) ?? out[k] ?? null;
+    return out;
+  });
+  ipcMain.handle(IPC.listeningYears, () => listeningRecord.years());
+  ipcMain.handle(IPC.listeningStreamers, () => listeningRecord.streamers());
+  ipcMain.handle(IPC.listeningYear, (_e, year: unknown) =>
+    typeof year === "number" ? listeningRecord.readYear(year) : { events: [], unreadable: 0 },
+  );
   ipcMain.handle(IPC.listeningClear, async () => {
     await listeningRecord.clear();
+    // the reading surfaces re-seed from the (now empty) record
+    void playStatsFromRecord().then((data) => {
+      for (const w of BrowserWindow.getAllWindows())
+        w.webContents.send(IPC.push, { kind: "playStats", data });
+    });
     broadcastListening();
     return listeningRecord.stats();
   });
@@ -609,6 +663,11 @@ function registerIpc(): void {
     const conn = deviceManager.snapshot().connection;
     if (conn.phase !== "connected") throw new Error("not connected to a streamer");
     return conn.host;
+  };
+  // best-effort lookups answer null while the socket recycles rather than throw
+  const connectedHost = (): string | null => {
+    const conn = deviceManager.snapshot().connection;
+    return conn.phase === "connected" ? conn.host : null;
   };
   ipcMain.handle(IPC.mediaServers, async () => {
     const servers = await refreshServers(streamerHost());
@@ -642,11 +701,14 @@ function registerIpc(): void {
       objectId: string,
       action: MediaQueueAction,
       playFromId?: string,
+      confirmLarge?: boolean,
     ) => {
       // Library plays are wake intents too — queue writes to a standby
       // streamer would otherwise land on deaf ears (probed 2026-07-23).
       await deviceManager.ensureAwake();
-      return queueAdd(streamerHost(), serverUdn, objectId, action, playFromId);
+      return queueAdd(streamerHost(), serverUdn, objectId, action, playFromId, {
+        confirmLarge: confirmLarge === true,
+      });
     },
   );
   ipcMain.handle(IPC.radioSearch, (_e, query: string) => radioSearch(query));
@@ -666,6 +728,9 @@ function registerIpc(): void {
   // navigates — the exact sequence the tray menu's own items rely on.
   ipcMain.handle(IPC.showMain, (_e, screen?: string) =>
     screen ? sendMenuCommand({ id: "screen", screen }) : showMainWindow(),
+  );
+  ipcMain.handle(IPC.embeddedArt, (_e, query: EmbeddedArtQuery) =>
+    embeddedArtFor(connectedHost(), query),
   );
   ipcMain.handle(IPC.fetchArt, async (_e, url: string) => {
     if (!/^https?:/i.test(url)) return null;

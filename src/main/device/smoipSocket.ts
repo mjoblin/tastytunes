@@ -35,6 +35,8 @@ const RECONNECT_BASE_DELAY_MS = 500;
 const RECONNECT_MAX_DELAY_MS = 8000;
 const KEEPALIVE_INTERVAL_MS = 30_000;
 const PONG_TIMEOUT_MS = 5000;
+/** A frame this recent answers a health check without a ping. */
+const RECENT_FRAME_MS = 10_000;
 
 export interface SmoipSocketEvents {
   onFrame(frame: SmoipFrame): void;
@@ -54,6 +56,8 @@ export class SmoipSocket {
   private reconnectTimer: NodeJS.Timeout | null = null;
   private keepaliveTimer: NodeJS.Timeout | null = null;
   private pongTimer: NodeJS.Timeout | null = null;
+  /** When the device last pushed a frame: a socket that spoke seconds ago is alive. */
+  private lastFrameAt = 0;
 
   constructor(host: string, events: SmoipSocketEvents) {
     this.host = host;
@@ -87,6 +91,7 @@ export class SmoipSocket {
     });
 
     ws.on("message", (raw) => {
+      this.lastFrameAt = Date.now();
       let frame: SmoipFrame;
       try {
         // the wire's shape is the streamer's; readers guard each field they use
@@ -139,16 +144,23 @@ export class SmoipSocket {
 
   /**
    * Actively verify the socket (used after sleep/focus). A dead socket is
-   * terminated, which triggers the normal reconnect path.
+   * terminated, which triggers the normal reconnect path. A socket the device
+   * pushed a frame through in the last few seconds is alive by definition and
+   * is not asked; one that is asked gets the keepalive's pong budget, not a
+   * shorter one: with 1.5 s a pong that arrived late while the app was busy
+   * (leaving display mode's fullscreen, a whole file fetched for analysis)
+   * tore down a live connection and every lookup in flight failed with "not
+   * connected" (seen live 2026-09-06).
    */
   async healthCheck(): Promise<boolean> {
     const ws = this.ws;
     if (ws?.readyState !== WebSocket.OPEN) return false;
+    if (Date.now() - this.lastFrameAt < RECENT_FRAME_MS) return true;
     const alive = await new Promise<boolean>((resolve) => {
       const timer = setTimeout(() => {
         ws.removeListener("pong", onPong);
         resolve(false);
-      }, 1500);
+      }, PONG_TIMEOUT_MS);
       const onPong = (): void => {
         clearTimeout(timer);
         resolve(true);

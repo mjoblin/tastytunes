@@ -11,6 +11,7 @@
 import { fetchAlbumInfo } from "./albumInfo";
 import { DiskCache } from "./diskCache";
 import { loggedFetch } from "../netlog";
+import { albumInfoKnown, albumKey } from "./albumInfo";
 
 const CAA = process.env["TASTYTUNES_CAA_URL"] ?? "https://coverartarchive.org";
 /** Bounded low: entries are whole images as data URLs (~100 KB each). */
@@ -18,13 +19,24 @@ const CACHE_MAX = 120;
 const cache = new DiskCache<string | null>("coverart", CACHE_MAX);
 
 export async function fetchCoverArt(artist: string, album: string): Promise<string | null> {
-  const key = `${artist.toLowerCase()}|${album.toLowerCase()}`;
-  if (cache.has(key)) return cache.get(key) ?? null;
+  const key = albumKey(artist, album);
+  if (cache.has(key)) {
+    const hit = cache.get(key) ?? null;
+    // A MISS HERE IS ONLY A VERDICT IF THE ALBUM CACHE HAS ONE TOO. Until
+    // 2026-09-12 a null from fetchAlbumInfo was mirrored as a definitive miss
+    // whether it was "MB knows no such album" or "the search never got an
+    // answer" (a 503, a timeout), so one bad second became a permanent blank
+    // (found on the History screen's Elsewhere art: albums absent from the
+    // album cache, null here). A null without an album verdict is that
+    // residue, and is asked again.
+    if (hit != null || albumInfoKnown(artist, album)) return hit;
+  }
   const info = await fetchAlbumInfo(artist, album, false);
   const mbid = info?.musicbrainzUrl?.split("/").at(-1) ?? null;
   if (mbid == null) {
-    // fetchAlbumInfo caches its own definitive misses; mirror its verdict.
-    cache.set(key, null);
+    // fetchAlbumInfo caches its own definitive misses: mirror its verdict only
+    // when it reached one, a search that failed is nobody's verdict
+    if (albumInfoKnown(artist, album)) cache.set(key, null);
     return null;
   }
   try {

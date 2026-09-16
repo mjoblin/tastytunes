@@ -29,9 +29,9 @@ export async function activatePlaylist(p: { id: string; name: string }): Promise
   showToast({
     kind: res.added > 0 ? "success" : "error",
     text: res.cancelled
-      ? `Stopped — ${res.added} of ${res.total} loaded`
+      ? `Stopped. ${res.added} of ${res.total} tracks loaded.`
       : missed > 0
-        ? `Loaded ${res.added} of ${res.total} — ${missed} not found`
+        ? `Loaded ${res.added} of ${res.total} tracks. ${missed} ${missed === 1 ? "wasn't" : "weren't"} found.`
         : `Loaded ${res.added} ${res.added === 1 ? "track" : "tracks"} from “${p.name}”`,
     action: { label: "Open Queue", screen: "queue" },
   });

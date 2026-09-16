@@ -5,7 +5,7 @@
 // map, written only for albums whose every track measured. Envelope
 // quantization keeps a full track cache around 25MB; the 0.7 analysis pass
 // may re-home envelopes if the library-scale sweep wants more headroom.
-import type { AlbumDr, AudioAnalysis } from "@shared/model";
+import type { AlbumDr, AudioAnalysis, KnownStats } from "@shared/model";
 import { isRecord } from "@shared/guards";
 import { DiskCache } from "./diskCache";
 
@@ -44,6 +44,19 @@ export function audioDrMany(keys: string[]): Record<string, number> {
   for (const k of keys) {
     const a = tracks.get(k);
     if (a && a.dr > 0) out[k] = a.dr;
+  }
+  return out;
+}
+
+/** Cache-only DR + loudness per key (the rows' cells and the DR tooltip). */
+export function audioStatsMany(keys: string[]): Record<string, KnownStats> {
+  const out: Record<string, KnownStats> = {};
+  for (const k of keys) {
+    const a = tracks.get(k);
+    if (!a) continue;
+    const dr = a.dr > 0 ? a.dr : null;
+    const lufs = a.lufs ?? null;
+    if (dr != null || lufs != null) out[k] = { dr, lufs };
   }
   return out;
 }

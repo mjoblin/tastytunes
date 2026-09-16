@@ -52,7 +52,8 @@ import { discoverStreamers } from "./discovery";
 import { SmoipSocket } from "./smoipSocket";
 import * as smoipHttp from "./smoipHttp";
 import { getSettings, updateSettings } from "../data/persist";
-import { clearRecents, getRecents, recordRecent, restoreRecents } from "../data/recents";
+import { clearRecents, getRecents, recentKey, recordRecent, restoreRecents } from "../data/recents";
+import { captureRecentArt, decorateRecents } from "../lookups/recentArt";
 import { listeningRecord } from "../data/listeningRecord";
 import { addFavorite, getFavorites, removeFavorite, updateFavorite } from "../data/favorites";
 import {
@@ -645,6 +646,12 @@ export class DeviceManager {
         return socket.send("/zone/play_control", { mode_shuffle: cmd.mode });
       case "recallPreset": {
         this.setRecalledPreset(cmd.presetId);
+        listeningRecord.openContext({
+          kind: "preset",
+          id: cmd.presetId,
+          name: this.cache.presets?.presets?.find((p) => p.id === cmd.presetId)?.name ?? null,
+          streamer: this.cache.systemInfo?.udn ?? null,
+        });
         socket.send("/zone/recall_preset", { preset: cmd.presetId });
         // Feature 10: the preset's local volume override rides along on every
         // recall through the app — after a beat for the source switch — unless
@@ -686,6 +693,7 @@ export class DeviceManager {
       case "queueDelete":
         return smoipHttp.queueDelete(host, cmd.id);
       case "queueClear":
+        listeningRecord.endContext();
         return smoipHttp.queueClear(host);
       case "queueMove":
         return smoipHttp.queueMove(host, cmd.id, cmd.from, cmd.to);
@@ -828,6 +836,7 @@ export class DeviceManager {
         listeningRecord.onPlayState(
           this.cache.playState,
           this.cache.nowPlaying?.source?.name ?? this.cache.playState.metadata?.source ?? null,
+          this.cache.systemInfo?.udn ?? null,
         );
         return this.push({ kind: "playState", data: this.cache.playState });
       case "/zone/play_state/position":
@@ -843,6 +852,9 @@ export class DeviceManager {
         return this.push({ kind: "zoneState", data: this.cache.zoneState });
       case "/queue/list":
         this.cache.queue = data as QueueList;
+        listeningRecord.onQueue(
+          (this.cache.queue.items ?? []).map((i) => i.id).filter((id): id is number => id != null),
+        );
         // Mid-batch (playlist activation) the cache stays current but the
         // renderer hears nothing — one authoritative push lands at the end.
         if (this.queueOps.batching) return;
@@ -1062,9 +1074,29 @@ export class DeviceManager {
       isRadio,
       radioId: md.radio_id ?? null,
       session,
+      streamer: this.cache.systemInfo?.udn ?? null,
     };
     const { list, changed } = recordRecent(entry);
-    if (changed) this.push({ kind: "recents", data: list });
+    // a transient picture (AirPlay, casting) is captured while its URL lives,
+    // a few seconds on: the log can wait, and the streamer's small HTTP
+    // server should not be asked for the same picture by the capture, the
+    // accent and the hero at once (the startup burst, 2026-09-06)
+    if (changed) {
+      // capture the head AS IT IS when the timer fires, not as it was: a second
+      // frame for the same track may have replaced the cover URL meanwhile
+      // (the AirPlay first-frame case), and the merge now takes the newer one
+      const key = recentKey(list[0]);
+      setTimeout(() => {
+        const head = getRecents()[0];
+        if (head && recentKey(head) === key) captureRecentArt(head);
+      }, 3000);
+    }
+    if (changed) this.push({ kind: "recents", data: decorateRecents(list) });
+  }
+
+  /** The log again, with any picture captured since (the art cache's notifier). */
+  repushRecents(): void {
+    this.push({ kind: "recents", data: decorateRecents(getRecents()) });
   }
 
   clearRecents(): void {
@@ -1072,7 +1104,7 @@ export class DeviceManager {
   }
 
   recentsRestore(list: Parameters<typeof restoreRecents>[0]): void {
-    this.push({ kind: "recents", data: restoreRecents(list) });
+    this.push({ kind: "recents", data: decorateRecents(restoreRecents(list)) });
   }
 
   // ------------------------------------------------------------------ favorites
@@ -1251,7 +1283,9 @@ export class DeviceManager {
       ...this.cache,
       sleep: this.sleep,
       lastRecalledPresetId: this.lastRecalledPresetId,
-      recents: getRecents(),
+      // the snapshot carries the captured pictures too (a capture that landed
+      // before the window existed would otherwise show the dead URL)
+      recents: decorateRecents(getRecents()),
       favorites: getFavorites(),
       playlists: getPlaylists(),
       playlistActivation: this.queueOps.activation,

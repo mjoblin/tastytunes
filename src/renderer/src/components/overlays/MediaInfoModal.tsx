@@ -21,7 +21,7 @@ import { useStore } from "@/store";
 import { ModalShell } from "@/components/chrome/Overlay";
 import { CloseButton } from "@/components/controls/CloseButton";
 import { ArtImage } from "@/components/media/ArtImage";
-import { DrChip, InfoWaveform, useKnownAnalysis } from "@/components/media/Waveform";
+import { DrChip, InfoWaveform, useKnownAnalysis, LufsChip } from "@/components/media/Waveform";
 import {
   FACT_SEP,
   albumFactsLine,
@@ -35,6 +35,7 @@ import {
   streamRows,
   trackFormatRows,
   type Row,
+  loudnessLine,
 } from "@/components/media/InfoRows";
 import { fmtTime } from "@/lib/format";
 import { openRefInLibrary } from "@/lib/mediaActions";
@@ -108,6 +109,10 @@ function MediaInfoBody({
     known.state != null && known.state !== "loading" && known.state !== "unknown"
       ? known.state.dr
       : null;
+  const trackLoud =
+    known.state != null && known.state !== "loading" && known.state !== "unknown"
+      ? { lufs: known.state.lufs ?? null, truePeakDb: known.state.truePeakDb ?? null }
+      : null;
   const waveformsOn = useStore((s) => s.settings.waveforms);
   const albumDrMap = useAlbumDr();
   const albumEntry = kind === "album" ? (albumDrMap[albumDrKey(node)] ?? null) : null;
@@ -144,6 +149,13 @@ function MediaInfoBody({
     void analyzeAlbum(node, udn, []).then(() => setCoverageNonce((n) => n + 1));
   };
   const headerDr = kind === "track" ? trackDr : kind === "album" ? albumDr : null;
+  // the loudness chip beside DR: a track's own, or the album's integrated value
+  const headerLufs =
+    kind === "track"
+      ? (trackLoud?.lufs ?? null)
+      : kind === "album"
+        ? (albumEntry?.lufs ?? null)
+        : null;
   // the catalog facts line — the Library album header's exact string (one
   // home, lib/mediaFacts); a track gets its own in the same register
   const factsLine =
@@ -191,7 +203,7 @@ function MediaInfoBody({
         : [["Name", node.title], ...(node.artist ? ([["Artist", node.artist]] as Row[]) : [])];
 
   // ---- format (a track's own; an album's summed from its tracks)
-  const trackFormat: Row[] = kind === "track" ? trackFormatRows(node, trackDr) : [];
+  const trackFormat: Row[] = kind === "track" ? trackFormatRows(node, trackDr, trackLoud) : [];
   const albumRows: Row[] = (() => {
     if (kind !== "album" || !tracks || tracks.length === 0) return [];
     const secs = tracks.reduce((a, t) => a + (t.durationSecs ?? 0), 0);
@@ -212,6 +224,8 @@ function MediaInfoBody({
           : null,
       ],
       ["Composers", composers.length > 0 ? composers.join(", ") : null],
+      // the album's integrated loudness (R128, gated across every track)
+      ["Loudness", loudnessLine({ lufs: albumEntry?.lufs ?? null, truePeakDb: null })],
     ];
   })();
 
@@ -327,7 +341,7 @@ function MediaInfoBody({
               {factsLine}
             </div>
           )}
-          {(chips.length > 0 || headerDr != null) && (
+          {(chips.length > 0 || headerDr != null || headerLufs != null) && (
             <div className="mt-2 flex flex-wrap items-center gap-1.5" data-info-chips>
               {chips.map((b) => (
                 <span key={b} className="badge">
@@ -335,6 +349,7 @@ function MediaInfoBody({
                 </span>
               ))}
               {headerDr != null && <DrChip dr={headerDr} />}
+              {headerLufs != null && <LufsChip lufs={headerLufs} />}
             </div>
           )}
         </div>

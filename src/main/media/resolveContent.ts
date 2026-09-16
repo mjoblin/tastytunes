@@ -1,4 +1,9 @@
-import { searchAllIndexes, searchServer as librarySearch } from "./mediaIndex";
+import {
+  revalidate,
+  searchAllIndexes,
+  searchIndex,
+  searchServer as librarySearch,
+} from "./mediaIndex";
 import { refreshServers } from "./upnpBrowser";
 import { trackArtists } from "@shared/model";
 import type { MediaNode } from "@shared/model";
@@ -78,8 +83,15 @@ export async function resolveContent(
   // 1. Every ready index at once — including the Browse-only servers a live
   //    search can't reach (their ContentDirectory Search 500s).
   for (const group of searchAllIndexes(ref.title)) {
-    const hit = best(ref, group.items);
-    if (hit) return { serverUdn: group.udn, serverName: group.serverName, objectId: hit.id };
+    let hit = best(ref, group.items);
+    if (!hit) continue;
+    // a Browse-built index (the streamer's USB) may hold ids the device has
+    // since re-minted: confirm before trusting, rebuild and ask once more
+    if (await revalidate(host, group.udn, hit.id)) {
+      hit = best(ref, searchIndex(group.udn, ref.title)?.items ?? []);
+      if (!hit) continue;
+    }
+    return { serverUdn: group.udn, serverName: group.serverName, objectId: hit.id };
   }
 
   // 2. Live search for anything not indexed yet. searchServer is itself

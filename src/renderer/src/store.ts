@@ -17,6 +17,7 @@ import type {
   MediaSearchAllGroup,
   MediaNode,
   AlbumDr,
+  ListeningEvent,
 } from "@shared/model";
 import type {
   Favorite,
@@ -47,6 +48,8 @@ import {
   FRAME_RING_SIZE,
   LOG_RING_SIZE,
   NET_RING_SIZE,
+  type PlayStats,
+  foldPlayEvent,
 } from "@shared/model";
 import { isRadioMetadata } from "@shared/smoip";
 import { currentLibrarySpot } from "@/lib/navSpot";
@@ -177,6 +180,7 @@ export type ToastAction =
   | { label: string; screen: Screen; undo?: never }
   | { label: string; undo: () => void; screen?: never };
 let toastNonce = 0;
+let playStatsLoading = false;
 let undoNonce = 0;
 /** Monotonic id for search asks — see librarySearchTarget. */
 let librarySearchSeq = 0;
@@ -320,6 +324,23 @@ interface TTState {
   /** The listening record's truth row, pushed after every append. Null until
    *  the History tab's first fetch or the first push. */
   listeningStats: ListeningRecordStats | null;
+  /** The record aggregated for the reading surfaces (0.8.0): null until the
+   *  first surface asks (loadPlayStats), then kept live by folding each pushed
+   *  play event with the shared fold. */
+  playStats: PlayStats | null;
+  loadPlayStats(): Promise<void>;
+  /** The History Timeline's feedstock (0.8.0 round two): the record's years,
+   *  and the years read so far — a year at a time, the newest on first visit.
+   *  A pushed event lands in its year when that year is loaded. */
+  history: {
+    years: number[] | null;
+    loaded: Record<number, ListeningEvent[]>;
+    /** The record's streamers with line counts (lib/historyStreamers reads it); null until asked. */
+    streamers: Array<{ streamer: string | null; count: number }> | null;
+  };
+  loadHistoryYears(): Promise<void>;
+  loadHistoryStreamers(): Promise<void>;
+  loadHistoryYear(year: number): Promise<void>;
   /** Local favorites, newest-hearted first (mirrored from the main process). */
   favorites: Favorite[];
   playlists: Playlist[];
@@ -343,6 +364,11 @@ interface TTState {
   settingsJump: string | null;
   jumpToSettingsTab: (tab: string) => void;
   clearSettingsJump: () => void;
+  /** One-shot deep link into History's Timeline at a moment (the album
+   *  header's "last played" fact); the Timeline consumes and clears it. */
+  historyJump: { at: number; nonce: number } | null;
+  jumpToHistory: (at: number) => void;
+  clearHistoryJump: () => void;
   /**
    * One-shot ask: open the Library ready to search (palette / ⌘F).
    *
@@ -562,6 +588,8 @@ export const useStore = create<TTState>((set, get) => ({
   sleep: null,
   recents: [],
   listeningStats: null,
+  playStats: null,
+  history: { years: null, loaded: {}, streamers: null },
   undoStack: [],
   navDropTarget: null,
   navDragActive: false,
@@ -580,6 +608,14 @@ export const useStore = create<TTState>((set, get) => ({
     set({ settingsJump: tab });
   },
   clearSettingsJump: () => set({ settingsJump: null }),
+  historyJump: null,
+  jumpToHistory: (at) => {
+    get().setScreen("recently-played");
+    if (get().settings.historyView !== "timeline")
+      void get().saveSettings({ historyView: "timeline" });
+    set((s) => ({ historyJump: { at, nonce: (s.historyJump?.nonce ?? 0) + 1 } }));
+  },
+  clearHistoryJump: () => set({ historyJump: null }),
   librarySearchTarget: null,
   requestLibrarySearch: (query) =>
     // Deliberately NOT setScreen('library'): from inside the Library that's the
@@ -609,6 +645,45 @@ export const useStore = create<TTState>((set, get) => ({
 
   toast: null,
   showToast: (toast) => set({ toast: { ...toast, id: ++toastNonce } }),
+  loadPlayStats: async () => {
+    if (get().playStats != null || playStatsLoading) return;
+    playStatsLoading = true;
+    try {
+      const data = await tt.playStats();
+      set({ playStats: data });
+    } catch {
+      // the record is unreadable or absent: the surfaces simply show no counts
+    } finally {
+      playStatsLoading = false;
+    }
+  },
+  loadHistoryYears: async () => {
+    try {
+      const years = await tt.listeningYears();
+      set((s) => ({ history: { ...s.history, years } }));
+    } catch {
+      set((s) => ({ history: { ...s.history, years: [] } }));
+    }
+  },
+  loadHistoryStreamers: async () => {
+    try {
+      const streamers = await tt.listeningStreamers();
+      set((s) => ({ history: { ...s.history, streamers } }));
+    } catch {
+      set((s) => ({ history: { ...s.history, streamers: [] } }));
+    }
+  },
+  loadHistoryYear: async (year) => {
+    if (get().history.loaded[year] != null) return;
+    try {
+      const r = await tt.listeningYear(year);
+      set((s) => ({
+        history: { ...s.history, loaded: { ...s.history.loaded, [year]: r.events } },
+      }));
+    } catch {
+      // an unreadable year: the Timeline shows the years it has
+    }
+  },
   setNavDropTarget: (target) => {
     if (get().navDropTarget !== target) set({ navDropTarget: target });
   },
@@ -869,6 +944,35 @@ export const useStore = create<TTState>((set, get) => ({
           return { recents: msg.data };
         case "listening":
           return { listeningStats: msg.data };
+        case "playStats":
+          // a re-seed (the record was cleared): the Timeline re-reads too
+          return { playStats: msg.data, history: { years: null, loaded: {}, streamers: null } };
+        case "playEvent": {
+          // the Timeline: a new line lands in its year when that year is loaded
+          const y = new Date(msg.event.at).getFullYear();
+          const loadedYear = s.history.loaded[y];
+          const history = loadedYear
+            ? {
+                years: s.history.years?.includes(y)
+                  ? s.history.years
+                  : [...(s.history.years ?? []), y].sort((a, b) => a - b),
+                loaded: { ...s.history.loaded, [y]: [...loadedYear, msg.event] },
+                // the census re-reads on the listening push that follows every append
+                streamers: s.history.streamers,
+              }
+            : s.history;
+          const cur = s.playStats;
+          if (!cur) return { history };
+          // fold into a copy: the surfaces select by reference
+          const next: PlayStats = {
+            tracks: { ...cur.tracks },
+            recent: [...cur.recent],
+            since: cur.since,
+            albumRuns: { ...cur.albumRuns },
+          };
+          foldPlayEvent(next, msg.event);
+          return { playStats: next, history };
+        }
         case "favorites":
           return { favorites: msg.data };
         case "mcpStatus":

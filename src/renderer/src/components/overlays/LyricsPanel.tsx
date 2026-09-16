@@ -72,7 +72,7 @@ export function LyricsPanel({ className }: { className?: string }): React.JSX.El
         {status === "none" && (
           <div className="text-[13px] text-faint pt-2">
             {isRadio || !hasQuery
-              ? "Lyrics need track metadata — not available for this source."
+              ? "Lyrics need track metadata, which this source doesn't provide."
               : "No lyrics found for this track."}
           </div>
         )}
@@ -106,7 +106,7 @@ export function LyricsPanel({ className }: { className?: string }): React.JSX.El
           <>
             {/* say WHY there's no follow-along, or plain text reads as broken sync */}
             <div className="text-[11px] text-faint pt-2" data-no-timing-note>
-              No timing data for this track — lines won&apos;t follow along.
+              No timing data for this track, so the lines won&apos;t follow along.
             </div>
             <div className="whitespace-pre-wrap text-[14px] leading-relaxed text-dim py-2">
               {result.plain}

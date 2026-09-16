@@ -207,7 +207,7 @@ export function PlaybackBar(): React.JSX.Element {
             ) : (
               <>
                 <Moon size={12} strokeWidth={2} />
-                <span>In standby — play anything to wake</span>
+                <span>In standby. Play anything to wake.</span>
               </>
             )}
           </div>

@@ -11,6 +11,7 @@ import { DrBadge } from "@/components/media/Waveform";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { DurationCell } from "@/components/media/DurationCell";
 import { Eqbars } from "@/components/media/Eqbars";
+import { NameLine, NameLink } from "@/components/media/NameLine";
 import { artUrlAt } from "@shared/artUrl";
 
 // The Library's four listing renderers — cards and rows for containers and
@@ -62,8 +63,10 @@ export function ContainerCard({
   node,
   playing,
   menuOpen,
+  selected = false,
   favorited,
   badge,
+  note,
   onHeart,
   onEnter,
   onPlay,
@@ -75,12 +78,21 @@ export function ContainerCard({
   playing: boolean;
   /** This card's ⋯ menu or preset picker is open — hold the hover treatment. */
   menuOpen: boolean;
+  /** Part of a multi-selection (album multi-select, 0.8.0): the tracks' own
+   *  raised veil and edge ring, so a picked card reads as picked, not playing. */
+  selected?: boolean;
   /** With onHeart: the art-corner heart chip (albums only make sense). */
   favorited?: boolean;
   /** Provenance chip on the subtitle line (lens grids pooling several servers). */
   badge?: string;
+  /** A quiet fact this surface knows about the album, under its names — how far
+   *  a listen got, when it last played (History's Rediscover). Inside the card
+   *  so it lifts with it; a line outside is covered by the hover glow. */
+  note?: string;
   onHeart?(): void;
-  onEnter(): void;
+  /** The body click, with its event: a caller with a selection model reads the
+   *  chord (⌘/ctrl, shift) and decides whether this click opens or picks. */
+  onEnter(e: React.MouseEvent): void;
   onPlay(el: HTMLElement | null): void;
   onMenu(e: React.MouseEvent): void;
   /** Albums drag to the nav rail (2026-09-02): a press on the card BODY arms
@@ -103,9 +115,14 @@ export function ContainerCard({
       ref={ref}
       onContextMenu={menuable ? onMenu : undefined}
       data-library-card
+      data-selected={selected || undefined}
       className={cx(
         "group relative text-left rounded-2xl p-2 pb-2.5 transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]",
-        playing ? "bg-goldtile/70 tile-playing" : "bg-raised/50 ring-1 ring-edge card-hover-glow",
+        playing
+          ? "bg-goldtile/70 tile-playing"
+          : selected
+            ? "bg-veil2 ring-2 ring-edge2"
+            : "bg-raised/50 ring-1 ring-edge card-hover-glow",
         // held while this card's ⋯ menu / preset picker is open — the pointer
         // has left, but the card is still what's being acted on: keep the
         // full hover treatment (grow + glow), not just a ring
@@ -159,7 +176,7 @@ export function ContainerCard({
                 e.stopPropagation();
                 onPlay(ref.current);
               }}
-              data-tip="Play — replaces the queue"
+              data-tip="Play, replacing the queue"
               className={cx(
                 "tip-bottom absolute bottom-1.5 left-1.5 h-11 w-11 rounded-full bg-amber text-bg flex items-center justify-center transition-all duration-150 motion-safe:hover:scale-110 hover:shadow-[0_0_24px_rgb(var(--amber-rgb)_/_0.6)]",
                 menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100",
@@ -204,6 +221,15 @@ export function ContainerCard({
             )}
           </div>
         )}
+        {note && (
+          // LAST, under the names: the card's own artist and year are what it
+          // says about itself, and a surface's fact goes after them, never
+          // between them (user, 2026-09-11). Inside the card, so it lifts with
+          // it — a line outside is covered the moment the card glows.
+          <div data-card-note className="text-[11px] text-faint/80 tabular-nums truncate text-left">
+            {note}
+          </div>
+        )}
       </button>
       {album && onHeart && (
         <HeartChip favorited={favorited === true} held={menuOpen} onHeart={onHeart} />
@@ -218,6 +244,9 @@ export function ContainerRow({
   node,
   playing,
   menuOpen,
+  selected = false,
+  selStart = true,
+  selEnd = true,
   favorited,
   badge,
   dr,
@@ -230,6 +259,11 @@ export function ContainerRow({
   node: MediaNode;
   playing: boolean;
   menuOpen: boolean;
+  /** Part of a multi-selection (album multi-select, 0.8.0): the tracks' own
+   *  treatment, a raised veil with an edge outline that runs over neighbours. */
+  selected?: boolean;
+  selStart?: boolean;
+  selEnd?: boolean;
   /** With onHeart: the heart button in the row's action cluster (albums). */
   favorited?: boolean;
   /** Provenance chip beside the subline (lens listings pooling several servers). */
@@ -243,7 +277,8 @@ export function ContainerRow({
   /** Albums drag to the nav rail: a press on the row body arms the shared drag. */
   onNavDrag?(e: React.PointerEvent): void;
   onHeart?(): void;
-  onEnter(): void;
+  /** The row click, with its event (see ContainerCard.onEnter). */
+  onEnter(e: React.MouseEvent): void;
   onMenu(e: React.MouseEvent): void;
 }): React.JSX.Element {
   // Same rule as cards: albums carry the full ⋯ menu; ARTISTS carry it too now
@@ -255,8 +290,16 @@ export function ContainerRow({
   return (
     <div
       className={cx(
-        "group grid grid-cols-[44px_1fr_auto_auto_auto_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
-        playing ? "row-playing bg-gold/10" : menuOpen ? "bg-veil" : "hover:bg-veil",
+        "group relative grid grid-cols-[44px_1fr_auto_auto_auto_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
+        playing
+          ? "row-playing bg-gold/10"
+          : selected
+            ? "bg-veil2"
+            : menuOpen
+              ? "bg-veil"
+              : "hover:bg-veil",
+        !playing && selected && !selStart && "rounded-t-none",
+        !playing && selected && !selEnd && "rounded-b-none",
       )}
       onClick={onEnter}
       onPointerDown={(e) => {
@@ -265,7 +308,24 @@ export function ContainerRow({
       }}
       onContextMenu={menuable ? onMenu : undefined}
       data-library-row
+      data-selected={selected || undefined}
     >
+      {!playing && selected && (
+        <span
+          aria-hidden
+          data-sel-run
+          className={cx(
+            "pointer-events-none absolute inset-0 rounded-[inherit] border-edge2",
+            selStart && selEnd
+              ? "border"
+              : selStart
+                ? "border-x border-t"
+                : selEnd
+                  ? "border-x border-b"
+                  : "border-x",
+          )}
+        />
+      )}
       <MediaArt
         src={artUrlAt(node.artUrl, 240)}
         kind={album ? "album" : isArtistClass(node.upnpClass) ? "artist" : "folder"}
@@ -279,17 +339,12 @@ export function ContainerRow({
           <div className="flex items-center gap-1.5 min-w-0">
             {node.artist &&
               (onArtistLink ? (
-                <button
-                  data-tip="Go to artist"
-                  aria-label={`Go to artist ${node.artist}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onArtistLink();
-                  }}
-                  className="tip-bottom text-[12px] text-faint truncate hover:text-dim hover:underline underline-offset-2 transition-colors"
-                >
-                  {node.artist}
-                </button>
+                <NameLink
+                  kind="artist"
+                  name={node.artist}
+                  onGo={onArtistLink}
+                  className="text-[12px] text-faint truncate hover:text-dim hover:underline underline-offset-2"
+                />
               ) : (
                 <div className="text-[12px] text-faint truncate">{node.artist}</div>
               ))}
@@ -352,6 +407,14 @@ const TRACK_GRID: Record<string, string> = {
   art: "grid-cols-[44px_1fr_auto_auto]",
   dr: "grid-cols-[1fr_auto_auto_auto]",
   "": "grid-cols-[1fr_auto_auto]",
+  // …and with the META cell (the Tracks lens's plays / last-played column,
+  // present only while the list is sorted by it)
+  "pos-art-dr-meta": "grid-cols-[26px_44px_1fr_auto_auto_auto_auto]",
+  "pos-art-meta": "grid-cols-[26px_44px_1fr_auto_auto_auto]",
+  "art-dr-meta": "grid-cols-[44px_1fr_auto_auto_auto_auto]",
+  "art-meta": "grid-cols-[44px_1fr_auto_auto_auto]",
+  "dr-meta": "grid-cols-[1fr_auto_auto_auto_auto]",
+  meta: "grid-cols-[1fr_auto_auto_auto]",
 };
 
 export function TrackRow({
@@ -372,11 +435,17 @@ export function TrackRow({
   note,
   artistLabel,
   dr,
+  lufs = null,
+  meta,
   showPosition = true,
   selStart = true,
   selEnd = true,
 }: {
   node: MediaNode;
+  /** The listening record's cell (0.8.0): "12 plays" or "3 weeks ago" while
+   *  the Tracks lens is sorted by plays / last played; undefined = no cell,
+   *  null = the cell reserved but empty (never played). */
+  meta?: string | null;
   /** Loose tracks in mixed folders get a thumb; album views carry the art in the header. */
   showArt: boolean;
   /** This is what's playing right now (queue source live) — queue-row treatment. */
@@ -421,6 +490,9 @@ export function TrackRow({
    *  pass it (null included) to reserve the cell; leave it undefined and
    *  the row has no DR column (album listings, search results). */
   dr?: number | null;
+  /** The track's integrated loudness (0.8.0), when known — the DR badge's
+   *  tooltip carries it; the cell itself stays the DR number. */
+  lufs?: number | null;
   /** The Tracks lens turns the number off: a track's position within ITS
    *  album reads as noise in a flat list across albums. The cell stays —
    *  the playing eqbars still live there (the flat-row rule). */
@@ -433,7 +505,12 @@ export function TrackRow({
       className={cx(
         "group relative grid items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
         TRACK_GRID[
-          [showPosition && "pos", showArt && "art", dr !== undefined && "dr"]
+          [
+            showPosition && "pos",
+            showArt && "art",
+            dr !== undefined && "dr",
+            meta !== undefined && "meta",
+          ]
             .filter(Boolean)
             .join("-")
         ],
@@ -498,38 +575,18 @@ export function TrackRow({
         </div>
         {(node.artist || (onAlbumLink && node.album)) && (
           <div className="text-[12px] text-faint truncate">
-            {node.artist &&
-              (onArtistLink ? (
-                <button
-                  data-tip="Go to artist"
-                  aria-label={`Go to artist ${node.artist}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onArtistLink();
-                  }}
-                  className="tip-bottom hover:text-dim hover:underline underline-offset-2 transition-colors"
-                >
-                  {artistLabel ?? node.artist}
-                </button>
-              ) : (
-                (artistLabel ?? node.artist)
-              ))}
-            {onAlbumLink && node.album && (
-              <>
-                {node.artist ? FACT_SEP : ""}
-                <button
-                  data-tip="Go to album"
-                  aria-label={`Go to album ${node.album}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onAlbumLink();
-                  }}
-                  className="tip-bottom hover:text-dim hover:underline underline-offset-2 transition-colors"
-                >
-                  {node.album}
-                </button>
-              </>
-            )}
+            {/* NameLine owns the link markup; the resolve stays the Library's
+                (same-library pools, not a content resolve), and a name with no
+                callback reads as text. The album shows only where it links. */}
+            <NameLine
+              artist={node.artist}
+              artistText={artistLabel}
+              album={onAlbumLink ? node.album : null}
+              onArtist={onArtistLink ?? null}
+              onAlbum={onAlbumLink ?? null}
+              tone="faint"
+              sep={FACT_SEP}
+            />
           </div>
         )}
       </div>
@@ -540,7 +597,7 @@ export function TrackRow({
           icon={Play}
           label="Play"
           tip={
-            queued ? "Play — already in the queue" : "Play now — slots in after the current track"
+            queued ? "Play, already in the queue" : "Play now, slotted in after the current track"
           }
           pinned={menuOpen}
           onClick={() => onPlayNow(ref.current)}
@@ -554,7 +611,15 @@ export function TrackRow({
           principle) — alignment holds whether or not a value exists */}
       {dr !== undefined && (
         <div className="flex w-12 justify-end font-mono text-[10.5px]" data-track-dr>
-          {dr != null && <DrBadge dr={dr} className="" />}
+          {dr != null && <DrBadge dr={dr} lufs={lufs} className="" />}
+        </div>
+      )}
+      {meta !== undefined && (
+        <div
+          className="flex w-24 justify-end font-mono text-[10.5px] text-faint tabular-nums whitespace-nowrap"
+          data-track-meta
+        >
+          {meta}
         </div>
       )}
       <DurationCell secs={node.durationSecs} />

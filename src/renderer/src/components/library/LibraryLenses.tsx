@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUpRight,
+  AudioLines,
   ChevronDown,
   Heart,
   ListEnd,
@@ -12,35 +13,37 @@ import {
   Rows3,
 } from "lucide-react";
 import {
-  albumVolume,
+  albumDrKey,
   albumFormat,
-  orderTracks,
+  albumTracksOf,
+  albumVolume,
+  audioAnalysisKey,
   discGroups,
   isCompilation,
+  isHiRes,
+  LOSSLESS_CODECS,
+  type MediaFormat,
+  type MediaIndexPools,
+  type MediaNode,
+  nameSortKey,
+  orderTracks,
   performerLine,
   sameArt,
   trackArtists,
   trackInAlbumOf,
-  type MediaIndexPools,
-  type MediaNode,
-  nameSortKey,
-  albumDrKey,
-  audioAnalysisKey,
   trackPosition,
-  LOSSLESS_CODECS,
-  isHiRes,
-  type MediaFormat,
 } from "@shared/model";
-import { cx, fmtTime, matchesFilter, fmtCount } from "@/lib/format";
+import { cx, fmtTime, matchesFilter, fmtCount, fmtAgo } from "@/lib/format";
+import { usePlayStats, playedBucket, playedOptionsOf } from "@/lib/playStats";
 import { useStore } from "@/store";
 import { FACT_SEP } from "@/lib/mediaFacts";
-import { useAlbumDr, useKnownDrs } from "@/lib/audioAnalysis";
+import { useAlbumDr, useKnownStats } from "@/lib/audioAnalysis";
+import { useWindowedList } from "@/hooks/useWindowedList";
+import { fmtLufs } from "@/components/media/Waveform";
 import { scrollToVisible } from "@/lib/scroll";
 import { isAlbumClass } from "@/lib/media";
 import { MediaArt } from "@/components/media/MediaArt";
 import { FilterInput } from "@/components/controls/FilterInput";
-import { PopoverChrome } from "@/hooks/usePopover";
-import { POPOVER_CARD } from "@/components/chrome/Overlay";
 import {
   Chip,
   HeaderChip,
@@ -49,6 +52,7 @@ import {
   GAP_WITHIN,
 } from "@/components/chrome/Chrome";
 import { SortChip } from "@/components/controls/SortChip";
+import { PickerPill } from "@/components/controls/PickerPill";
 import { Segmented } from "@/components/controls/Segmented";
 import { ContainerCard, ContainerRow, TrackRow } from "@/components/library/LibraryCards";
 import { RowMenu } from "@/components/media/RowMenu";
@@ -78,8 +82,13 @@ export interface LensActions {
   /** Batch hearts: silent per-item toggles behind ONE aggregate undo entry. */
   heartNodes(nodes: MediaNode[], allIn: boolean): void;
   /** Albums drag to the nav rail (2026-09-02): the ordered containers (a box
-   *  set's volumes) and the title the chip shows. */
-  dragAlbum(nodes: MediaNode[], e: React.PointerEvent, title: string): void;
+   *  set's volumes) and the title the chip shows; `noun` names a multi-album
+   *  selection's cargo ("albums", 0.8.0) where the chip would otherwise say
+   *  volumes. */
+  dragAlbum(nodes: MediaNode[], e: React.PointerEvent, title: string, noun?: string): void;
+  /** The album selection bar's Analyze audio: each album's own sweep, in order
+   *  (album DRs need every track of the album, so a track sweep will not do). */
+  analyzeAlbums(nodes: MediaNode[]): void;
   nodeFavorited(node: MediaNode): boolean;
   trackQueued(node: MediaNode): boolean;
   isCurrentTrack(node: MediaNode): boolean;
@@ -120,91 +129,6 @@ const nodeKey = (n: MediaNode): string => `${n.serverUdn ?? ""}|${n.id}`;
  *  toggle chip; an active pick renders gold like any active chip. Clicking the
  *  active option still toggles it off, but a picker popover reads as
  *  "choose one" — the explicit clear row is the discoverable way back out. */
-function PickerPill({
-  id,
-  neutral,
-  clearLabel,
-  options,
-  value,
-  onChange,
-  min,
-}: {
-  id: string;
-  neutral: string;
-  clearLabel: string;
-  options: Array<{ value: string; label: string; count: number }>;
-  value: string | null;
-  onChange(value: string | null): void;
-  /** Options needed before the pill shows (default 2 — a facet that can't
-   *  distinguish is furniture; DR passes 1: one known value still filters
-   *  the analyzed from the rest). */
-  min?: number;
-}): React.JSX.Element | null {
-  const [open, setOpen] = useState(false);
-  if (options.length < (min ?? 2)) return null;
-  const active = value ? options.find((o) => o.value === value) : null;
-  return (
-    <div className="relative">
-      <Chip
-        state={active ? "active" : open ? "open" : "idle"}
-        data-lens-picker={id}
-        onClick={() => setOpen((o) => !o)}
-        className="no-drag gap-1 motion-safe:active:scale-95"
-      >
-        {active ? active.label : neutral}
-        <ChevronDown size={12} className={active ? "text-gold/70" : "text-faint"} />
-      </Chip>
-      {open && (
-        <>
-          <PopoverChrome onClose={() => setOpen(false)} />
-          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
-          <div
-            data-lens-picker-popover={id}
-            className={cx(
-              "absolute left-0 top-full mt-1.5 z-30 w-56 max-h-72 overflow-y-auto",
-              POPOVER_CARD,
-              "p-1.5 space-y-0.5",
-            )}
-          >
-            <button
-              data-lens-chip={clearLabel}
-              onClick={() => {
-                onChange(null);
-                setOpen(false);
-              }}
-              className={cx(
-                "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-[13px] transition-colors",
-                value === null ? "text-gold bg-golddim" : "text-dim hover:text-ink hover:bg-veil",
-              )}
-            >
-              <span className="min-w-0 flex-1 truncate">{clearLabel}</span>
-            </button>
-            {options.map((o) => (
-              <button
-                key={o.value}
-                data-lens-chip={o.label}
-                onClick={() => {
-                  onChange(value === o.value ? null : o.value);
-                  setOpen(false);
-                }}
-                className={cx(
-                  "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-[13px] transition-colors",
-                  value === o.value
-                    ? "text-gold bg-golddim"
-                    : "text-dim hover:text-ink hover:bg-veil",
-                )}
-              >
-                <span className="min-w-0 flex-1 truncate">{o.label}</span>
-                <span className="font-mono text-[10.5px] text-faint tabular-nums">{o.count}</span>
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
 // ------------------------------------------------------------------- facets
 
 /** Genres by count (raw tagger strings, case-normalized by key). No cap:
@@ -293,11 +217,20 @@ const decadeOf = (year: string | null | undefined): string | null =>
 
 // ------------------------------------------------------------------- albums
 
-const ALBUM_SORTS: Array<{ value: "title" | "artist" | "year" | "dr"; label: string }> = [
+/** The sorts that read the listening record — offered only while it has stats. */
+const RECORD_SORTS = new Set<string>(["lastPlayed", "plays", "wholeListens"]);
+const ALBUM_SORTS: Array<{
+  value: "title" | "artist" | "year" | "dr" | "loudness" | "lastPlayed" | "plays" | "wholeListens";
+  label: string;
+}> = [
   { value: "title", label: "Title" },
   { value: "artist", label: "Artist" },
   { value: "year", label: "Year (newest first)" },
   { value: "dr", label: "Dynamic range" },
+  { value: "loudness", label: "Loudness" },
+  { value: "lastPlayed", label: "Last played" },
+  { value: "plays", label: "Most played" },
+  { value: "wholeListens", label: "Whole listens" },
 ];
 
 // Sort + direction live in settings (view defaults persist, 2026-08-06);
@@ -308,8 +241,15 @@ let albumsMem: {
   decade: string | null;
   dr: string | null;
   format: string | null;
+  /** The Played facet (0.8.0): a playedBucket, or null for any. */
+  played: string | null;
   filter: string;
-} = { genre: null, decade: null, dr: null, format: null, filter: "" };
+} = { genre: null, decade: null, dr: null, format: null, played: null, filter: "" };
+
+/** The queue write's cap, shared by Play these and the album selection bar (user
+ *  call, 2026-09-01 / 2026-09-02): queue writes are one call per track with no
+ *  progress affordance, so no gesture may hand the queue fifty albums. */
+const PLAY_THESE_MAX = 50;
 
 export function AlbumsLens({
   pools,
@@ -335,8 +275,17 @@ export function AlbumsLens({
     albumsMem = { ...albumsMem, ...patch };
     setMemState(albumsMem);
   };
-  const sort = useStore((s) => s.settings.lensAlbumsSort);
+  const sortSetting = useStore((s) => s.settings.lensAlbumsSort);
   const reversed = useStore((s) => s.settings.lensAlbumsSortReversed);
+  // the listening record's reading surfaces (0.8.0): an album's plays are the
+  // fold of its tracks' plays (so a compilation's land on the compilation)
+  const play = usePlayStats();
+  // the record's sorts exist only while stats do; a persisted one falls back
+  // to title until they return (the setting itself is left alone)
+  const albumSorts = play.ready
+    ? ALBUM_SORTS
+    : ALBUM_SORTS.filter((o) => !RECORD_SORTS.has(o.value));
+  const sort = !play.ready && RECORD_SORTS.has(sortSetting) ? "title" : sortSetting;
   const saveSettings = useStore((s) => s.saveSettings);
   const albumDr = useAlbumDr();
 
@@ -375,6 +324,35 @@ export function AlbumsLens({
       ),
     [all, albumCodecs],
   );
+  const albumPlay = useMemo(() => {
+    const m = new Map<string, { plays: number; lastAt: number | null; whole: number }>();
+    if (!play.ready) return m;
+    // an album's tracks together: plays and last played fold per track, and
+    // the WHOLE listens are the record's runs against this track set
+    const groups = new Map<string, MediaNode[]>();
+    for (const g of pools)
+      for (const t of g.tracks) {
+        if (!t.album) continue;
+        const k = `${g.udn}|${lc(t.album)}`;
+        const list = groups.get(k);
+        if (list) list.push(t);
+        else groups.set(k, [t]);
+      }
+    for (const [k, tracks] of groups) {
+      const a = play.album(tracks);
+      if (a.plays > 0 || a.whole > 0)
+        m.set(k, { plays: a.plays, lastAt: a.lastAt, whole: a.whole });
+    }
+    return m;
+  }, [pools, play]);
+  const playOf = (a: MediaNode): { plays: number; lastAt: number | null; whole: number } =>
+    albumPlay.get(`${a.serverUdn}|${lc(a.title)}`) ?? { plays: 0, lastAt: null, whole: 0 };
+  const playedOptions = useMemo(
+    () => (play.ready ? playedOptionsOf(all.map((a) => playOf(a).lastAt)) : []),
+    // playOf reads albumPlay; listing it keeps the memo honest
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [all, albumPlay, play.ready],
+  );
 
   // Compilation = named so by its album artist, or (tracks known) credited to
   // an album artist none of its performers is; "Daft Punk feat. …" is not.
@@ -405,6 +383,7 @@ export function AlbumsLens({
         (a) => a.year != null && `${Math.floor(Number(a.year) / 10) * 10}s` === mem.decade,
       );
     if (mem.dr) list = list.filter((a) => String(albumDr[albumDrKey(a)]?.dr ?? "") === mem.dr);
+    if (mem.played) list = list.filter((a) => playedBucket(playOf(a).lastAt) === mem.played);
     const fmt = mem.format;
     if (fmt)
       list = list.filter(
@@ -425,12 +404,30 @@ export function AlbumsLens({
         const d = (n: MediaNode): number => albumDr[albumDrKey(n)]?.dr ?? -1;
         return d(b) - d(a) || a.title.localeCompare(b.title);
       }
+      if (sort === "loudness") {
+        // measured albums first, loudest leading; unmeasured alphabetical after
+        const l = (n: MediaNode): number => albumDr[albumDrKey(n)]?.lufs ?? -1000;
+        return l(b) - l(a) || a.title.localeCompare(b.title);
+      }
+      // the record's sorts: most recent / most played first, unplayed last
+      if (sort === "lastPlayed")
+        return (playOf(b).lastAt ?? 0) - (playOf(a).lastAt ?? 0) || a.title.localeCompare(b.title);
+      if (sort === "plays")
+        return playOf(b).plays - playOf(a).plays || a.title.localeCompare(b.title);
+      if (sort === "wholeListens")
+        return (
+          playOf(b).whole - playOf(a).whole ||
+          playOf(b).plays - playOf(a).plays ||
+          a.title.localeCompare(b.title)
+        );
       return (
         a.title.localeCompare(b.title) || (a.serverName ?? "").localeCompare(b.serverName ?? "")
       );
     });
     return reversed ? sorted.reverse() : sorted;
-  }, [all, mem, sort, reversed, kind, compilationKeys, albumDr, albumCodecs]);
+    // playOf reads albumPlay; listing it keeps the memo honest
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [all, mem, sort, reversed, kind, compilationKeys, albumDr, albumCodecs, albumPlay]);
 
   /**
    * Box sets (2026-08-24): volume siblings — same parsed base + artist, ≥2
@@ -469,6 +466,110 @@ export function AlbumsLens({
     return out;
   }, [shown]);
 
+  // ALBUM MULTI-SELECT (0.8.0): the tracks' grammar on the album tiles. Keyed by
+  // nodeKey over the TILES (a box set is one tile, one pick, every volume of it
+  // in the batch); ⌘/ctrl-click toggles, shift-click ranges from the anchor,
+  // a bare click in selection mode clears instead of opening, Esc clears, ⌘A
+  // takes every tile shown, a click on the nav rail or the bar clears. The
+  // selection prunes itself to the tiles still shown when the facets move.
+  const [selA, setSelA] = useState<ReadonlySet<string>>(() => new Set());
+  const selAAnchor = useRef<number | null>(null);
+  const tileKeys = useMemo(() => tiles.map((t) => nodeKey(t.node)), [tiles]);
+  useEffect(() => {
+    setSelA((prev) => {
+      if (prev.size === 0) return prev;
+      const keep = new Set(tileKeys);
+      const next = new Set([...prev].filter((k) => keep.has(k)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [tileKeys]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      const t = e.target;
+      if (t instanceof HTMLElement && t.matches("input, textarea, [contenteditable]")) return;
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "a") {
+        if (tileKeys.length === 0) return;
+        e.preventDefault();
+        setSelA(new Set(tileKeys));
+        return;
+      }
+      if (selA.size === 0) return;
+      if (e.key === "Escape") setSelA(new Set());
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [tileKeys, selA.size]);
+  useEffect(() => {
+    if (selA.size === 0) return;
+    const onWin = (e: MouseEvent): void => {
+      const t = e.target;
+      if (!(t instanceof HTMLElement)) return;
+      if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+      if (!t.closest("[data-app-nav], [data-app-playbar]")) return;
+      if (t.closest("button, input, a, [aria-valuenow]")) return;
+      setSelA(new Set());
+    };
+    window.addEventListener("click", onWin);
+    return () => window.removeEventListener("click", onWin);
+  }, [selA.size]);
+  /** True = the click was a selection chord; the caller must not open. */
+  const albumClick = (raw: MediaNode, e: React.MouseEvent): boolean => {
+    const key = nodeKey(raw);
+    const idx = tileKeys.indexOf(key);
+    if (e.metaKey || e.ctrlKey) {
+      setSelA((prev) => {
+        const next = new Set(prev);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        return next;
+      });
+      selAAnchor.current = idx;
+      return true;
+    }
+    if (e.shiftKey && selAAnchor.current != null && idx >= 0) {
+      const [a, b] = [Math.min(selAAnchor.current, idx), Math.max(selAAnchor.current, idx)];
+      setSelA(new Set(tileKeys.slice(a, b + 1)));
+      return true;
+    }
+    if (selA.size > 0) {
+      setSelA(new Set());
+      return true;
+    }
+    return false;
+  };
+  /** The picked albums as containers, a set's volumes in order. */
+  const chosenA = (): MediaNode[] =>
+    tiles
+      .filter((t) => selA.has(nodeKey(t.node)))
+      .flatMap((t) => (t.set ? t.set.volumes : [t.node]));
+  /** The same, expanded to tracks from the index (the queue and playlist verbs
+   *  want tracks, and the cap counts them). */
+  const chosenATracks = (): MediaNode[] =>
+    chosenA().flatMap((alb) => {
+      const pool = pools.find((g) => g.udn === alb.serverUdn);
+      return pool ? albumTracksOf(alb, pool) : [];
+    });
+  const selATrackCount = useMemo(
+    () => (selA.size === 0 ? 0 : chosenATracks().length),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chosenATracks reads selA and tiles, both listed
+    [selA, tiles, pools],
+  );
+  const selAOverCap = selATrackCount > PLAY_THESE_MAX;
+  const capTip = `Choose albums that come to ${fmtCount(PLAY_THESE_MAX)} tracks or fewer`;
+  /** A drag from a picked tile carries the whole selection (under the cap; over
+   *  it, the pressed album alone, so the queue is never handed too much). */
+  const startAlbumTileDrag = (
+    raw: MediaNode,
+    set: { volumes: MediaNode[] } | null | undefined,
+    title: string,
+    e: React.PointerEvent,
+  ): void => {
+    if (selA.has(nodeKey(raw)) && selA.size > 1 && !selAOverCap) {
+      actions.dragAlbum(chosenA(), e, `${fmtCount(selA.size)} albums`, "albums");
+      return;
+    }
+    actions.dragAlbum(set ? set.volumes : [raw], e, title);
+  };
   return (
     <div data-lens-albums>
       <div className="flex items-start gap-3 pb-3">
@@ -538,6 +639,15 @@ export function AlbumsLens({
                 onChange={(dr) => setMem({ dr })}
                 min={1}
               />
+              <PickerPill
+                id="played"
+                neutral="Played"
+                clearLabel="Any time"
+                options={playedOptions}
+                value={mem.played}
+                onChange={(played) => setMem({ played })}
+                min={1}
+              />
             </div>
           </div>
         </div>
@@ -556,7 +666,7 @@ export function AlbumsLens({
             </HeaderChip>
           )}
           <SortChip
-            sorts={ALBUM_SORTS}
+            sorts={albumSorts}
             neutral="title"
             value={sort}
             reversed={reversed}
@@ -571,7 +681,11 @@ export function AlbumsLens({
         <div className="text-[15px] text-faint pt-4 px-1">Nothing matches those filters.</div>
       ) : (
         <div
-          className={cx(!cards && "divide-y divide-edge/50 -mx-2")}
+          className={cx(
+            !cards && "divide-y divide-edge/50 -mx-2",
+            // selection mode adds scroll-room under the floating bar (the S45 rule)
+            selA.size > 0 && "pb-24",
+          )}
           style={
             cards
               ? {
@@ -585,7 +699,7 @@ export function AlbumsLens({
               : undefined
           }
         >
-          {tiles.map(({ node: rawNode, set }) => {
+          {tiles.map(({ node: rawNode, set }, ti) => {
             // a set tile is volume 1 wearing the base title and a count badge
             const node = set ? { ...rawNode, title: set.base, year: null } : rawNode;
             return cards ? (
@@ -602,16 +716,23 @@ export function AlbumsLens({
                 badge={
                   set ? `${set.volumes.length} volumes` : multiServer ? node.serverName : undefined
                 }
+                selected={selA.has(nodeKey(rawNode))}
                 onHeart={() => actions.heartNode(rawNode)}
-                onEnter={() => actions.openAlbum(rawNode)}
+                onEnter={(e) => {
+                  if (albumClick(rawNode, e)) return;
+                  actions.openAlbum(rawNode);
+                }}
                 onPlay={(el) => void actions.playContainer(rawNode, el)}
                 onMenu={(e) => actions.openMenu(rawNode, e)}
-                onNavDrag={(e) => actions.dragAlbum(set ? set.volumes : [rawNode], e, node.title)}
+                onNavDrag={(e) => startAlbumTileDrag(rawNode, set, node.title, e)}
               />
             ) : (
               <ContainerRow
                 key={nodeKey(rawNode)}
                 node={node}
+                selected={selA.has(nodeKey(rawNode))}
+                selStart={!(ti > 0 && selA.has(tileKeys[ti - 1]))}
+                selEnd={!(ti < tileKeys.length - 1 && selA.has(tileKeys[ti + 1]))}
                 playing={
                   set
                     ? set.volumes.some((v) => actions.isPlayingAlbum(v))
@@ -627,13 +748,88 @@ export function AlbumsLens({
                   actions.goToArtist && node.artist ? () => actions.goToArtist?.(node) : undefined
                 }
                 onHeart={() => actions.heartNode(rawNode)}
-                onEnter={() => actions.openAlbum(rawNode)}
+                onEnter={(e) => {
+                  if (albumClick(rawNode, e)) return;
+                  actions.openAlbum(rawNode);
+                }}
                 onMenu={(e) => actions.openMenu(rawNode, e)}
-                onNavDrag={(e) => actions.dragAlbum(set ? set.volumes : [rawNode], e, node.title)}
+                onNavDrag={(e) => startAlbumTileDrag(rawNode, set, node.title, e)}
               />
             );
           })}
         </div>
+      )}
+      {selA.size > 0 && (
+        <SelectionBar
+          count={selA.size}
+          onClear={() => setSelA(new Set())}
+          className="bottom-2 inset-x-0 z-20"
+          data-albums-selection-bar
+        >
+          <SelectionVerb
+            icon={<Play size={13} />}
+            disabled={selAOverCap}
+            data-tip={selAOverCap ? capTip : undefined}
+            className={cx(selAOverCap && "tip-top opacity-50")}
+            onClick={() =>
+              actions.queueTracks(chosenATracks(), "replace", () => setSelA(new Set()))
+            }
+          >
+            Play
+          </SelectionVerb>
+          <SelectionVerb
+            icon={<ListStart size={13} />}
+            disabled={selAOverCap}
+            data-tip={selAOverCap ? capTip : undefined}
+            className={cx(selAOverCap && "tip-top opacity-50")}
+            onClick={() => actions.queueTracks(chosenATracks(), "next", () => setSelA(new Set()))}
+          >
+            Play next
+          </SelectionVerb>
+          <SelectionVerb
+            icon={<ListEnd size={13} />}
+            disabled={selAOverCap}
+            data-tip={selAOverCap ? capTip : undefined}
+            className={cx(selAOverCap && "tip-top opacity-50")}
+            onClick={() => actions.queueTracks(chosenATracks(), "append", () => setSelA(new Set()))}
+          >
+            Add to end of queue
+          </SelectionVerb>
+          <SelectionVerb
+            icon={<ListPlus size={13} />}
+            onClick={(e) =>
+              actions.addTracksToPlaylist(chosenATracks(), { x: e.clientX, y: e.clientY }, () =>
+                setSelA(new Set()),
+              )
+            }
+          >
+            Add to playlist…
+          </SelectionVerb>
+          {(() => {
+            const nodes = chosenA();
+            const allIn = nodes.length > 0 && nodes.every(actions.nodeFavorited);
+            return (
+              <SelectionVerb
+                icon={<Heart size={13} fill={allIn ? "currentColor" : "none"} />}
+                onClick={() => actions.heartNodes(nodes, allIn)}
+              >
+                {allIn ? "Remove from favorites" : "Add to favorites"}
+              </SelectionVerb>
+            );
+          })()}
+          <SelectionVerb
+            icon={<AudioLines size={13} />}
+            onClick={() => {
+              actions.analyzeAlbums(chosenA());
+              setSelA(new Set());
+            }}
+          >
+            Analyze audio
+          </SelectionVerb>
+          <span className="shrink-0 py-px text-faint tabular-nums mt-[3px] text-[11.5px]">
+            {fmtCount(selATrackCount)} {selATrackCount === 1 ? "track" : "tracks"}
+          </span>
+        </SelectionBar>
       )}
     </div>
   );
@@ -764,9 +960,16 @@ export function ArtistsLens({
       .sort((a, b) => nameSortKey(a.name).localeCompare(nameSortKey(b.name)));
   }, [pools]);
 
+  // THE ARTIST YOU ASKED FOR IS ALWAYS IN THE COLUMN. Albums only is the
+  // standing preference for browsing; a landing (Elsewhere's Go to artist, a
+  // track's name link, the Queue) names one artist, and a credit-only name
+  // hidden by the filter left the lens open on nothing (user, 2026-09-12:
+  // Ellie Goulding, "credited on 1 track"). The selection is the exception,
+  // so the setting is untouched and the row leaves with the next selection.
   const baseArtists = useMemo(
-    () => (albumsOnly ? artists.filter((a) => a.albums.length > 0) : artists),
-    [artists, albumsOnly],
+    () =>
+      albumsOnly ? artists.filter((a) => a.albums.length > 0 || a.key === mem.artist) : artists,
+    [artists, albumsOnly, mem.artist],
   );
   const shownArtists = useMemo(
     () =>
@@ -1455,7 +1658,8 @@ export function ArtistsLens({
 // ------------------------------------------------------------------- tracks
 
 const TRACK_SORTS: Array<{
-  value: "title" | "artist" | "album" | "year" | "duration" | "dr";
+  value:
+    "title" | "artist" | "album" | "year" | "duration" | "dr" | "loudness" | "lastPlayed" | "plays";
   label: string;
 }> = [
   { value: "title", label: "Title" },
@@ -1464,6 +1668,9 @@ const TRACK_SORTS: Array<{
   { value: "year", label: "Year (newest first)" },
   { value: "duration", label: "Duration (longest first)" },
   { value: "dr", label: "Dynamic range" },
+  { value: "loudness", label: "Loudness" },
+  { value: "lastPlayed", label: "Last played" },
+  { value: "plays", label: "Plays" },
 ];
 
 /** "Play these N" appears once the list is NARROWED (a filter or a facet) —
@@ -1473,8 +1680,6 @@ const TRACK_SORTS: Array<{
  *  queue writes are one call per track with no progress affordance, so
  *  fifty stays a few seconds where two hundred was a silent quarter minute
  *  (user call, 2026-09-01). */
-const PLAY_THESE_MAX = 50;
-
 // Sort + direction persist (view defaults); this is the session workspace —
 // the filter, the facets and the scroll come back as they were left.
 let tracksMem: {
@@ -1482,9 +1687,11 @@ let tracksMem: {
   decade: string | null;
   dr: string | null;
   format: string | null;
+  /** The Played facet (0.8.0): a playedBucket, or null for any. */
+  played: string | null;
   filter: string;
   scroll: number;
-} = { genre: null, decade: null, dr: null, format: null, filter: "", scroll: 0 };
+} = { genre: null, decade: null, dr: null, format: null, played: null, filter: "", scroll: 0 };
 
 /**
  * THE TRACKS LENS (2026-09-01, user: "it feels like an obvious gap"): every
@@ -1511,8 +1718,13 @@ export function TracksLens({
     tracksMem = { ...tracksMem, ...patch };
     setMemState(tracksMem);
   };
-  const sort = useStore((s) => s.settings.lensTracksSort);
+  const sortSetting = useStore((s) => s.settings.lensTracksSort);
   const reversed = useStore((s) => s.settings.lensTracksSortReversed);
+  const play = usePlayStats();
+  const trackSorts = play.ready
+    ? TRACK_SORTS
+    : TRACK_SORTS.filter((o) => !RECORD_SORTS.has(o.value));
+  const sort = !play.ready && RECORD_SORTS.has(sortSetting) ? "title" : sortSetting;
   const saveSettings = useStore((s) => s.saveSettings);
 
   const all = useMemo(() => pools.flatMap((g) => g.tracks), [pools]);
@@ -1523,11 +1735,14 @@ export function TracksLens({
   // time a sweep finishes — the DR sort has its numbers without asking the
   // server for anything.
   const drKeys = useMemo(() => all.map((t) => audioAnalysisKey(t)), [all]);
-  const drByKey = useKnownDrs(drKeys); // one home for known DRs (lib/audioAnalysis)
-  const drOf = (t: MediaNode): number | null => drByKey[audioAnalysisKey(t)] ?? null;
+  const statsByKey = useKnownStats(drKeys); // one home for known DR + loudness (lib/audioAnalysis)
+  const drOf = (t: MediaNode): number | null => statsByKey[audioAnalysisKey(t)]?.dr ?? null;
+  const lufsOf = (t: MediaNode): number | null => statsByKey[audioAnalysisKey(t)]?.lufs ?? null;
   const drOptions = useMemo(
-    () => drOptionsOf(all.map((t) => drByKey[audioAnalysisKey(t)] ?? null)),
-    [all, drByKey],
+    () => drOptionsOf(all.map((t) => drOf(t))),
+    // drOf reads statsByKey; listing it keeps the memo honest
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [all, statsByKey],
   );
   const formatOptions = useMemo(
     () =>
@@ -1543,6 +1758,8 @@ export function TracksLens({
     if (mem.genre) list = list.filter((t) => (t.genre ?? []).some((g) => lc(g) === mem.genre));
     if (mem.decade) list = list.filter((t) => decadeOf(t.year) === mem.decade);
     if (mem.dr) list = list.filter((t) => String(drOf(t) ?? "") === mem.dr);
+    if (mem.played)
+      list = list.filter((t) => playedBucket(play.track(t)?.lastAt ?? null) === mem.played);
     const fmt = mem.format;
     if (fmt) list = list.filter((t) => formatTags(t.format).includes(fmt));
     if (mem.filter)
@@ -1566,12 +1783,38 @@ export function TracksLens({
       if (sort === "duration")
         return (b.durationSecs ?? 0) - (a.durationSecs ?? 0) || byTitle(a, b);
       if (sort === "dr") return (drOf(b) ?? -1) - (drOf(a) ?? -1) || byTitle(a, b);
+      if (sort === "loudness") return (lufsOf(b) ?? -1000) - (lufsOf(a) ?? -1000) || byTitle(a, b);
+      // the record's sorts: most recent / most played first, unplayed last
+      if (sort === "lastPlayed")
+        return (play.track(b)?.lastAt ?? 0) - (play.track(a)?.lastAt ?? 0) || byTitle(a, b);
+      if (sort === "plays")
+        return (play.track(b)?.plays ?? 0) - (play.track(a)?.plays ?? 0) || byTitle(a, b);
       return byTitle(a, b);
     });
     return reversed ? sorted.reverse() : sorted;
-    // drOf reads drByKey; listing it keeps the memo honest
+    // drOf and lufsOf read statsByKey; listing it keeps the memo honest
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [all, mem, sort, reversed, drByKey]);
+  }, [all, mem, sort, reversed, statsByKey, play]);
+  const playedOptions = useMemo(
+    () => (play.ready ? playedOptionsOf(all.map((t) => play.track(t)?.lastAt ?? null)) : []),
+    [all, play],
+  );
+  /** The record's cell while sorted by it: plays, or how long ago. */
+  const metaOf = (t: MediaNode): string | null | undefined => {
+    if (sort === "plays") {
+      const n = play.track(t)?.plays ?? 0;
+      return n > 0 ? `${n} ${n === 1 ? "play" : "plays"}` : null;
+    }
+    if (sort === "lastPlayed") {
+      const at = play.track(t)?.lastAt;
+      return at != null ? fmtAgo(at) : null;
+    }
+    if (sort === "loudness") {
+      const l = lufsOf(t);
+      return l != null ? fmtLufs(l) : null;
+    }
+    return undefined;
+  };
 
   // WINDOWED LIST (2026-09-01, user: the cap read as a wall): render only
   // the rows near the viewport, so every sort over thousands of tracks stays
@@ -1579,23 +1822,22 @@ export function TracksLens({
   // rendered one is measured, so the math never assumes a pixel. Selection,
   // ⌘A, shift-runs and drag operate on `shown` (the sorted list), never on
   // the rendered slice.
-  const OVERSCAN = 8;
-  const [rowH, setRowH] = useState(57);
-  const [view, setView] = useState({ top: 0, height: 600 });
   const listRef = useRef<HTMLDivElement | null>(null);
-  const probeRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    const el = listRef.current;
-    if (!el) return;
-    const measure = (): void =>
-      setView((v) => (v.height === el.clientHeight ? v : { ...v, height: el.clientHeight }));
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
   const total = shown.length;
-  const narrowed = Boolean(mem.filter || mem.genre || mem.decade || mem.dr || mem.format);
+  // the shared hook (hooks/useWindowedList, 2026-09-05): one kind of row,
+  // always on — the lens has no cap, so the window is its only guarantee
+  const win = useWindowedList({
+    scrollRef: listRef,
+    count: total,
+    itemSelector: "[data-win-item]",
+    estimate: 57,
+    overscan: 8,
+  });
+  const start = win.first;
+  const end = total === 0 ? 0 : win.last + 1;
+  const narrowed = Boolean(
+    mem.filter || mem.genre || mem.decade || mem.dr || mem.format || mem.played,
+  );
   const overCap = shown.length > PLAY_THESE_MAX;
   // CONSTANT GEOMETRY for the split button (user call, 2026-09-01: popping
   // on and off read as distraction; a standing slot invites the gesture):
@@ -1628,13 +1870,6 @@ export function TracksLens({
     .filter(Boolean)
     .join(FACT_SEP);
   const [theseMenu, setTheseMenu] = useState<{ x: number; y: number } | null>(null);
-  // measure once rows exist (and again if the list empties and refills)
-  useEffect(() => {
-    const h = probeRef.current?.offsetHeight ?? 0;
-    if (h > 0 && h !== rowH) setRowH(h);
-  }, [total, rowH]);
-  const start = Math.max(0, Math.floor(view.top / rowH) - OVERSCAN);
-  const end = Math.min(total, Math.ceil((view.top + view.height) / rowH) + OVERSCAN);
   const windowed = shown.slice(start, end);
 
   // ---- selection (the Artists lens's grammar, over the VISIBLE rows)
@@ -1789,6 +2024,15 @@ export function TracksLens({
                 onChange={(dr) => setMem({ dr })}
                 min={1}
               />
+              <PickerPill
+                id="played"
+                neutral="Played"
+                clearLabel="Any time"
+                options={playedOptions}
+                value={mem.played}
+                onChange={(played) => setMem({ played })}
+                min={1}
+              />
             </div>
             {/* the narrowed list as the queue, in one gesture — the album
                 Play button's semantics (replaces the queue) for what's shown */}
@@ -1829,7 +2073,7 @@ export function TracksLens({
         <div className={`flex items-center ${GAP_WITHIN} shrink-0`}>
           {/* the sort chip keeps its lone right spot */}
           <SortChip
-            sorts={TRACK_SORTS}
+            sorts={trackSorts}
             neutral="title"
             value={sort}
             reversed={reversed}
@@ -1896,11 +2140,7 @@ export function TracksLens({
           <div
             ref={listRef}
             onScroll={(e) => {
-              const top = e.currentTarget.scrollTop;
-              tracksMem.scroll = top;
-              // snap to a row so a pixel of scroll never re-renders the slice
-              const snapped = Math.floor(top / rowH) * rowH;
-              setView((v) => (v.top === snapped ? v : { ...v, top: snapped }));
+              tracksMem.scroll = e.currentTarget.scrollTop;
             }}
             className={cx(
               "min-h-0 flex-1 overflow-y-auto px-1.5 -mx-1.5 -my-1",
@@ -1908,16 +2148,13 @@ export function TracksLens({
             )}
             data-lens-tracks-list
           >
-            <div style={{ height: total * rowH, position: "relative" }}>
-              <div style={{ position: "absolute", top: start * rowH, left: 0, right: 0 }}>
+            <div>
+              {win.padTop > 0 && <div data-win-spacer="top" style={{ height: win.padTop }} />}
+              <div>
                 {windowed.map((t, i) => {
                   const idx = start + i;
                   return (
-                    <div
-                      key={nodeKey(t)}
-                      ref={i === 0 ? probeRef : undefined}
-                      className="border-b border-edge/50"
-                    >
+                    <div key={nodeKey(t)} data-win-item className="border-b border-edge/50">
                       <TrackRow
                         node={t}
                         // art, not a running-order number: a track's position
@@ -1932,6 +2169,8 @@ export function TracksLens({
                         selStart={!(idx > 0 && selT.has(nodeKey(shown[idx - 1])))}
                         selEnd={!(idx < total - 1 && selT.has(nodeKey(shown[idx + 1])))}
                         dr={drOf(t)}
+                        lufs={lufsOf(t)}
+                        meta={metaOf(t)}
                         // the second line's links — the search-results
                         // treatment: the row plays, the names navigate
                         onAlbumLink={
@@ -1956,6 +2195,9 @@ export function TracksLens({
                   );
                 })}
               </div>
+              {win.padBottom > 0 && (
+                <div data-win-spacer="bottom" style={{ height: win.padBottom }} />
+              )}
             </div>
           </div>
           {lensMenu && (

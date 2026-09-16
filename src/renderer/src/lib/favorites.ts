@@ -1,6 +1,6 @@
 import { type MediaNode, type MediaServerInfo } from "@shared/model";
 import { favoriteKey, type Favorite, type FavoriteMedia } from "@shared/model";
-import { tt } from "@/api";
+import { queueWrite, tt } from "@/api";
 import { useStore } from "@/store";
 import { isAlbumClass } from "@/lib/media";
 
@@ -64,7 +64,7 @@ export function favoriteMatchesNode(fav: FavoriteMedia, n: MediaNode): boolean {
 export const favoriteHasRoute = (fav: FavoriteMedia, servers: MediaServerInfo[]): boolean =>
   servers.some((s) => s.udn === fav.serverUdn) || servers.some((s) => s.searchable);
 
-export type FavoriteActResult = "ok" | "healed" | "missing" | "no-server";
+export type FavoriteActResult = "ok" | "healed" | "missing" | "no-server" | "declined";
 
 /**
  * Run a library action against a media favorite. The stored objectId on its
@@ -83,13 +83,12 @@ export async function favoriteAct(
     return "no-server";
   }
   const own = fav.serverUdn != null ? servers.find((s) => s.udn === fav.serverUdn) : undefined;
-  if (own && fav.objectId) {
-    try {
-      await run(own.udn, fav.objectId);
-      return "ok";
-    } catch {
-      // stale id (or standby-rotted USB) — fall through to the search path
-    }
+  const hint = fav.objectId;
+  if (own && hint) {
+    // the hint first: a failure is a stale id (or a standby-rotted USB) and
+    // falls through to the search path; a decline is the user's answer
+    const outcome = await queueWrite(() => run(own.udn, hint));
+    if (outcome !== "failed") return outcome;
   }
   const candidates = [
     ...(own && own.searchable ? [own] : []),
@@ -100,7 +99,9 @@ export async function favoriteAct(
       const { items } = await tt.mediaSearch(server.udn, fav.title);
       const found = items.find((n) => favoriteMatchesNode(fav, n));
       if (!found) continue;
-      await run(server.udn, found.id);
+      const outcome = await queueWrite(() => run(server.udn, found.id));
+      if (outcome === "declined") return "declined";
+      if (outcome === "failed") continue;
       void tt.favoriteUpdate(favoriteKey(fav), {
         serverUdn: server.udn,
         serverName: server.name,
@@ -113,7 +114,7 @@ export async function favoriteAct(
       });
       return "healed";
     } catch {
-      continue;
+      continue; // the search itself failed on this server
     }
   }
   return servers.length === 0 ? "no-server" : "missing";

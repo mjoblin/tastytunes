@@ -10,7 +10,7 @@
 // tools change saved things gets `optIn: true` and stays off until the user
 // says otherwise.
 
-import type { McpSettings } from "./model";
+import { LARGE_QUEUE_TRACKS, type McpSettings } from "./model";
 
 export interface McpToolInfo {
   name: string;
@@ -204,7 +204,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
     id: "sleep",
     group: "control",
     title: "Sleep timer",
-    description: "Arm or cancel the sleep timer.",
+    description: "Enable or cancel the sleep timer.",
     tools: [
       {
         name: "set_sleep_timer",
@@ -276,8 +276,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
       {
         name: "play_media",
         title: "Play media",
-        description:
-          "Play an album or track by server_udn + object id (from search_library). mode 'play_now' (default) keeps the queue, 'play_next'/'append' insert into it; 'replace' CLEARS the queue first — only use replace when asked to.",
+        description: `Play an album or track by server_udn + object id (from search_library). mode 'play_now' (default) keeps the queue, 'play_next'/'append' insert into it; 'replace' CLEARS the queue first — only use replace when asked to. A container over ${LARGE_QUEUE_TRACKS} tracks is refused until the user agrees: ask, then call again with confirm_large: true.`,
       },
     ],
   },
@@ -317,8 +316,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
       {
         name: "play_favorite",
         title: "Play favorite",
-        description:
-          "Play a favorite by its key (see list_favorites). Albums and tracks are found by content — a stale library id heals via search.",
+        description: `Play a favorite by its key (see list_favorites). Albums and tracks are found by content — a stale library id heals via search. An album over ${LARGE_QUEUE_TRACKS} tracks is refused until the user agrees: ask, then call again with confirm_large: true.`,
       },
       {
         name: "add_favorite",
@@ -407,6 +405,12 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         description:
           "Albums that HAVE been played but not since a date (default: 90 days ago), longest-unheard first, with their play counts — the 'not heard since spring' list.",
       },
+      {
+        name: "history_resume",
+        title: "Where you left off",
+        description:
+          "The album most recently left unfinished (a run of plays within the past week that stopped before the album's end) and the track to resume from. Read-only; resume_playback acts on it.",
+      },
     ],
   },
   {
@@ -415,7 +419,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
     group: "write",
     optIn: true,
     description:
-      "Create playlists, add the playing track to one, and delete them. These write the user's own stored collection.",
+      "Create playlists, add the playing track to one, and delete them. These change the playlists TastyTunes stores on your computer.",
     tools: [
       {
         name: "create_playlist",
@@ -544,6 +548,12 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         name: "clear_queue",
         title: "Clear queue",
         description: "Remove every item from the play queue (the streamer's clear-all).",
+      },
+      {
+        name: "resume_playback",
+        title: "Resume where you left off",
+        description:
+          "Play the album history_resume names from the track it names: the queue is replaced with that album from that track on (the app's Play from here). Refuses when nothing is left unfinished.",
       },
     ],
   },

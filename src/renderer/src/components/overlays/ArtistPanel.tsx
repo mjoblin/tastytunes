@@ -20,7 +20,7 @@ import { PanelResizeHandle } from "@/components/controls/PanelResizeHandle";
 import { Segmented } from "@/components/controls/Segmented";
 import { HeaderChip } from "@/components/chrome/Chrome";
 import { Section, sourceRows, streamRows, trackFormatRows } from "@/components/media/InfoRows";
-import { Waveform, usePlayingDr } from "@/components/media/Waveform";
+import { Waveform, usePlayingDr, usePlayingLoudness } from "@/components/media/Waveform";
 import { audioAnalysisKey } from "@shared/model";
 
 type Status = "loading" | "ready" | "none";
@@ -51,6 +51,7 @@ const TRACK_SETTLE_MS = 2000;
  */
 export function ArtistPanel({ className }: { className?: string }): React.JSX.Element {
   const playingDr = usePlayingDr();
+  const playingLoud = usePlayingLoudness();
   const playState = useStore((s) => s.playState);
   const nowPlaying = useStore((s) => s.nowPlaying);
   const setArtistOpen = useStore((s) => s.setArtistOpen);
@@ -325,15 +326,15 @@ export function ArtistPanel({ className }: { className?: string }): React.JSX.El
             {tab === "artist"
               ? artist
                 ? `Nothing found for ${artist}.`
-                : "Artist info needs track metadata — not available for this source."
+                : "Artist info needs track metadata, which this source doesn't provide."
               : tab === "album"
                 ? album
                   ? `Nothing found for ${album}.`
-                  : "Album info needs track metadata — not available for this source."
+                  : "Album info needs track metadata, which this source doesn't provide."
                 : tab === "track"
                   ? title
                     ? `Nothing found for ${title}.`
-                    : "Track info needs track metadata — not available for this source."
+                    : "Track info needs track metadata, which this source doesn't provide."
                   : "Nothing is playing."}
           </div>
         )}
@@ -416,7 +417,10 @@ export function ArtistPanel({ className }: { className?: string }): React.JSX.El
               title="Stream"
               rows={streamTarget.stream ? streamRows(streamTarget.stream) : []}
             />
-            <Section title="Format" rows={trackFormatRows(streamTarget.node, playingDr)} />
+            <Section
+              title="Format"
+              rows={trackFormatRows(streamTarget.node, playingDr, playingLoud)}
+            />
             <Section
               title="Source"
               rows={sourceRows(

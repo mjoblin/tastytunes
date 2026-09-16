@@ -48,6 +48,8 @@ export interface RecentTrack {
    * discrete queued track, which never groups. Optional so pre-upgrade logs still load.
    */
   session: string | null;
+  /** The streamer that played it, by udn (0.8.0 on, additive; older entries carry none). */
+  streamer?: string | null;
 }
 
 /**
@@ -238,6 +240,17 @@ export interface ContentRef {
   album?: string | null;
 }
 
+/** A picture read from an audio file's own tags (FLAC PICTURE, ID3 APIC),
+ *  resized for display; width/height are the ORIGINAL picture's, so a surface
+ *  can tell whether it beats the server's artwork. */
+export interface EmbeddedArt {
+  dataUrl: string;
+  width: number;
+  height: number;
+}
+/** What to read the picture from: a resolved library object, or a track by content. */
+export type EmbeddedArtQuery = { serverUdn: string; objectId: string } | ContentRef;
+
 /**
  * Queue undo is a re-resolve, not a rollback, so it reports which happened:
  * 'not-found' = the track couldn't be found on any server (say so — the user
@@ -316,6 +329,10 @@ export const LISTEN_CAP_SECS = 240;
 export function listenThresholdSecs(durationSecs: number | null): number {
   return durationSecs != null ? Math.min(durationSecs / 2, LISTEN_CAP_SECS) : LISTEN_CAP_SECS;
 }
+/** The house definition in words — the Listens only chip, the Plays tile,
+ *  anywhere a "listen" needs explaining, so no two surfaces phrase it apart. */
+export const LISTEN_DEFINITION = `A listen is a play that ran for at least half its track, or ${LISTEN_CAP_SECS / 60} minutes, whichever is shorter.`;
+
 export function isListen(playedSecs: number, durationSecs: number | null): boolean {
   if (durationSecs != null && durationSecs < LISTEN_FLOOR_SECS) return false;
   return playedSecs >= listenThresholdSecs(durationSecs);
@@ -355,9 +372,104 @@ export interface PlayStats {
   tracks: Record<string, PlayStat>;
   recent: ListeningPlayEvent[];
   since: number | null;
+  /** Every RUN of plays per album (keyed playKey(null, null, album)), oldest
+   *  first — the album header's "played whole N times" (0.8.0 round two). */
+  albumRuns: Record<string, AlbumRun[]>;
 }
 /** The most recent plays kept in `recent` — enough for any album run. */
 export const PLAY_STATS_RECENT = 300;
+/** An empty fold, for a reader that builds its own (a streamer's slice of the record). */
+export function emptyPlayStats(): PlayStats {
+  return { tracks: {}, recent: [], since: null, albumRuns: {} };
+}
+
+/** "Not heard in a while": an album played, then left this long (the History
+ *  screen's Rediscover shelf and the MCP's history_rediscover default). */
+export const REDISCOVER_QUIET_DAYS = 90;
+
+/**
+ * An album's tallies in the record: its tracks' plays summed, the latest of
+ * them, and how many tracks it has, by content (playKey over albumTracksOf).
+ * ONE home for "has this album been played, and when": the History screen's
+ * Rediscover shelves and the MCP's history_unplayed and history_rediscover all
+ * read it.
+ */
+export function albumTally(
+  album: MediaNode,
+  pool: {
+    albums: ReadonlyArray<Pick<MediaNode, "title" | "artist">>;
+    tracks: ReadonlyArray<MediaNode>;
+  },
+  stats: Pick<PlayStats, "tracks">,
+): { plays: number; lastAt: number; tracks: number } {
+  const tracks = albumTracksOf(album, pool);
+  let plays = 0;
+  let lastAt = 0;
+  for (const t of tracks) {
+    const st = stats.tracks[playKey(t.title, t.artist, t.album)];
+    if (!st) continue;
+    plays += st.plays;
+    lastAt = Math.max(lastAt, st.lastAt);
+  }
+  return { plays, lastAt, tracks: tracks.length };
+}
+
+/** A title as a heard-elsewhere line meets the library by: lowercased, its
+ *  edition suffix gone ("(Remastered 2011)", "[Deluxe Edition]", "- Live"),
+ *  since a streaming service and a file rarely agree on those. */
+export function editionless(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(
+      /\s*[([][^)\]]*\b(?:remaster(?:ed)?|deluxe|edition|version|mono|stereo|live|bonus|expanded|anniversary)\b[^)\]]*[)\]]/g,
+      "",
+    )
+    .replace(/\s+-\s+(?:\d{4}\s+)?(?:remaster(?:ed)?|live|mono|stereo|radio edit)\b.*$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Library tracks keyed by editionless title: the index "is this in the library" asks. */
+export function titleIndexOf(
+  pools: ReadonlyArray<{ tracks: ReadonlyArray<MediaNode> }>,
+): Map<string, MediaNode[]> {
+  const index = new Map<string, MediaNode[]>();
+  for (const pool of pools)
+    for (const n of pool.tracks) {
+      const k = editionless(n.title);
+      const list = index.get(k);
+      if (list) list.push(n);
+      else index.set(k, [n]);
+    }
+  return index;
+}
+
+/**
+ * Does the library hold this track? The editionless title, and, when the line
+ * names one, an artist: any of the track's performers or its album artist
+ * against the credit or one of the names a streaming credit packs ("A & B",
+ * "A feat. B"). Content identity, the record's rule; never a server id.
+ */
+export function inLibraryIndex(
+  index: Map<string, MediaNode[]>,
+  title: string,
+  artist: string | null,
+): boolean {
+  const candidates = index.get(editionless(title));
+  if (!candidates || candidates.length === 0) return false;
+  if (!artist) return true;
+  const names = new Set(
+    artist
+      .toLowerCase()
+      .split(/\s*(?:,|;|&|\band\b|\bfeat\.?|\bft\.?|\bwith\b)\s*/)
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
+  names.add(artist.trim().toLowerCase());
+  return candidates.some((n) =>
+    [...trackArtists(n), n.albumArtist].some((a) => a != null && names.has(a.trim().toLowerCase())),
+  );
+}
 /** Fold one record line into the stats. Library plays only: an "external"
  *  line (AirPlay, casting) never counts, even on a content match — a count
  *  means "played from the library". Main builds with it, the renderer folds
@@ -372,10 +484,82 @@ export function foldPlayEvent(stats: PlayStats, e: ListeningEvent): void {
   if (ev.at > row.lastAt) row.lastAt = ev.at;
   row.seconds += ev.playedSeconds;
   stats.tracks[k] = row;
+  // the album's runs: this play extends the last run when the previous
+  // library play was the same album within the session gap, else opens one
+  if (ev.album) {
+    const ak = playKey(null, null, ev.album);
+    const runs = stats.albumRuns[ak] ?? (stats.albumRuns[ak] = []);
+    const prev = stats.recent[stats.recent.length - 1];
+    const last = runs[runs.length - 1];
+    const continues =
+      prev != null &&
+      last != null &&
+      playKey(null, null, prev.album) === ak &&
+      ev.at >= prev.at &&
+      ev.at - last.endAt <= SESSION_GAP_MS;
+    if (!continues) runs.push({ startAt: ev.at, endAt: ev.at, plays: 0, listened: [] });
+    const run = runs[runs.length - 1];
+    run.plays += 1;
+    run.endAt = Math.max(run.endAt, ev.at + ev.playedSeconds * 1000);
+    if (isListen(ev.playedSeconds, ev.duration) && !run.listened.includes(k)) run.listened.push(k);
+  }
   stats.recent.push(ev);
   if (stats.recent.length > PLAY_STATS_RECENT)
     stats.recent.splice(0, stats.recent.length - PLAY_STATS_RECENT);
   if (stats.since == null || ev.at < stats.since) stats.since = ev.at;
+}
+
+/** "Pick up where you left off": the most recent RUN of plays from one album
+ *  (consecutive plays of the same album with at most `gapMs` between one
+ *  play's end and the next's start), if it ended within `withinMs`. Shared
+ *  by the resume card and the MCP history_resume / resume_playback tools. */
+export interface ResumeRun {
+  album: string;
+  artist: string | null;
+  /** The run's plays, in order. */
+  plays: ListeningPlayEvent[];
+  /** The last play in the run, and whether it counted as a listen. */
+  last: ListeningPlayEvent;
+  lastListened: boolean;
+}
+export function resumeRun(
+  recent: ReadonlyArray<ListeningPlayEvent>,
+  now: number = Date.now(),
+  { withinMs = 7 * 86_400_000, gapMs = 30 * 60_000 } = {},
+): ResumeRun | null {
+  if (recent.length === 0) return null;
+  const last = recent[recent.length - 1];
+  if (!last.album) return null;
+  const endOf = (e: ListeningPlayEvent): number => e.at + e.playedSeconds * 1000;
+  if (now - endOf(last) > withinMs) return null;
+  const key = (e: ListeningPlayEvent): string => playKey(null, null, e.album);
+  const plays: ListeningPlayEvent[] = [last];
+  for (let i = recent.length - 2; i >= 0; i--) {
+    const e = recent[i];
+    if (key(e) !== key(last)) break;
+    if (plays[0].at - endOf(e) > gapMs) break;
+    plays.unshift(e);
+  }
+  return {
+    album: last.album,
+    artist: last.artist,
+    plays,
+    last,
+    lastListened: isListen(last.playedSeconds, last.duration),
+  };
+}
+
+/** Given the album's tracks in running order, the track to resume from: the
+ *  one after the last listened track, or the interrupted track itself when
+ *  the last play never became a listen. Null when the run reached the end. */
+export function resumeTarget(run: ResumeRun, tracks: ReadonlyArray<MediaNode>): MediaNode | null {
+  if (tracks.length < 2) return null;
+  const idx = tracks.findIndex(
+    (t) => playKey(t.title, null, null) === playKey(run.last.title, null, null),
+  );
+  if (idx < 0) return null;
+  if (!run.lastListened) return tracks[idx];
+  return idx + 1 < tracks.length ? tracks[idx + 1] : null;
 }
 
 /**
@@ -395,7 +579,22 @@ export interface ListeningEventBase {
   at: number;
   tzOffsetMin: number;
   kind: string;
+  /** The streamer that played it, by udn (0.8.0 on, additive): the record is one
+   *  listening life across every streamer the app has driven, and this is what
+   *  lets a reader narrow it to one. Lines written before it carry none. */
+  streamer?: string | null;
 }
+/** How a play was STARTED, when one of TastyTunes' own verbs started it (0.8.0,
+ *  additive): a preset recall or a playlist activation. It rides on play and
+ *  radio-session lines only while what the verb loaded is what is playing (its
+ *  queue entries, or its station); a preset pressed on the streamer or a queue
+ *  another app built never carries it, so a reader must say "started from
+ *  TastyTunes", never "played from a preset". */
+export type ListeningVia =
+  /** A preset is a slot on one streamer, so the streamer's udn is part of its identity
+   *  (slot 3 on two streamers are two presets); null only when the device never said. */
+  | { kind: "preset"; id: number; name: string | null; streamer: string | null }
+  | { kind: "playlist"; id: string; name: string };
 /** A library play (MEDIA_PLAYER, USB included) — the only kind that feeds
  *  play counts. Format facts are captured at play time; provenance fields
  *  ride along where known but are never identity. */
@@ -412,6 +611,7 @@ export interface ListeningPlayEvent extends ListeningEventBase {
   lossless: boolean | null;
   source: string | null;
   sourceId: string | null;
+  via?: ListeningVia;
 }
 /** A stretch of internet radio on one station — "heard", never a listen. */
 export interface ListeningRadioSessionEvent extends ListeningEventBase {
@@ -419,6 +619,7 @@ export interface ListeningRadioSessionEvent extends ListeningEventBase {
   station: string | null;
   radioId: number | null;
   playedSeconds: number;
+  via?: ListeningVia;
 }
 /** A track a station announced during a session (keyed station:title, the
  *  recents convention) — a sighting, with no played-time semantics. */
@@ -446,6 +647,56 @@ export type ListeningEvent =
   | ListeningRadioSessionEvent
   | ListeningRadioTrackEvent
   | ListeningExternalEvent;
+
+/** A LISTENING SESSION (0.8.0, History round two): consecutive record lines
+ *  with at most SESSION_GAP_MS between one line's end and the next's start,
+ *  over every kind — a library run, a radio stretch, an AirPlay evening, or
+ *  one evening spanning them. The Timeline's unit; whole-album listens
+ *  (albumRuns) use the same gap. */
+export const SESSION_GAP_MS = 30 * 60_000;
+
+export interface ListeningSession {
+  startAt: number;
+  endAt: number;
+  /** In time order. */
+  events: ListeningEvent[];
+}
+
+/** When a line's play ended: its start plus the seconds it played (a radio
+ *  sighting has no played time and ends where it starts). */
+export function eventEnd(e: ListeningEvent): number {
+  return (
+    e.at +
+    ("playedSeconds" in e && typeof e.playedSeconds === "number" ? e.playedSeconds * 1000 : 0)
+  );
+}
+
+export function groupSessions(
+  events: readonly ListeningEvent[],
+  gapMs: number = SESSION_GAP_MS,
+): ListeningSession[] {
+  const sorted = [...events].sort((a, b) => a.at - b.at);
+  const out: ListeningSession[] = [];
+  for (const e of sorted) {
+    const cur = out[out.length - 1];
+    if (cur && e.at - cur.endAt <= gapMs) {
+      cur.events.push(e);
+      cur.endAt = Math.max(cur.endAt, eventEnd(e));
+    } else out.push({ startAt: e.at, endAt: eventEnd(e), events: [e] });
+  }
+  return out;
+}
+
+/** One RUN of plays from one album (consecutive library plays of the same
+ *  album, SESSION_GAP_MS apart at most), with the distinct tracks heard as
+ *  LISTENS — the renderer decides "whole" against the album's indexed tracks,
+ *  since the record carries no track counts. */
+export interface AlbumRun {
+  startAt: number;
+  endAt: number;
+  plays: number;
+  listened: string[];
+}
 
 /** The Settings truth row: what the record holds and whether writes work. */
 export interface ListeningRecordStats {
@@ -965,7 +1216,8 @@ export interface AppSettings {
    * later belongs here too.
    */
   /** Albums lens sort (the native album grid above keeps librarySort). */
-  lensAlbumsSort: "title" | "artist" | "year" | "dr";
+  lensAlbumsSort:
+    "title" | "artist" | "year" | "dr" | "loudness" | "lastPlayed" | "plays" | "wholeListens";
   lensAlbumsSortReversed: boolean;
   /** Artists lens: hide artists that only have loose tracks. */
   lensArtistsAlbumsOnly: boolean;
@@ -973,7 +1225,8 @@ export interface AppSettings {
   lensAlbumsKind: "all" | "albums" | "compilations";
   /** Tracks lens sort — the third lens (2026-09-01), every track across the
    *  ready indexes; DR sorts newest-analysis-first once the sweep has run. */
-  lensTracksSort: "title" | "artist" | "album" | "year" | "duration" | "dr";
+  lensTracksSort:
+    "title" | "artist" | "album" | "year" | "duration" | "dr" | "loudness" | "lastPlayed" | "plays";
   lensTracksSortReversed: boolean;
   playlistsSort: "updated" | "created" | "played" | "name" | "length";
   playlistsSortReversed: boolean;
@@ -992,6 +1245,10 @@ export interface AppSettings {
   sleepAction: SleepAction;
   /** Recently Played: collapse continuous sessions (radio/AirPlay/…) to one row, vs a row per song. */
   recentsGrouped: boolean;
+  /** The History screen's section (0.8.0): the device log, or the record's Timeline. */
+  historyView: "recent" | "timeline" | "stats" | "rediscover" | "elsewhere";
+  /** The Timeline's unit (0.8.0): sessions collapsed to a line each, or every play. */
+  historyTimelineMode: "sessions" | "plays";
   /** Motion effects (hover growth, eqbars, smooth scrolling). */
   motion: MotionMode;
   /** Check GitHub releases for a newer version on launch and every few hours. */
@@ -1023,6 +1280,14 @@ export interface AppSettings {
   /** The listening record: a local, append-only play log (history/<year>.jsonl
    *  in userData). On by default — a diary can't be backfilled. */
   listeningRecord: boolean;
+  /** The record's READING surfaces (0.8.0): last played in album headers, play
+   *  counts and the Played filter in the Library, the resume offer on Now
+   *  Playing. Off hides them all; the record itself keeps logging. */
+  showListeningHistory: boolean;
+  /** Album art from the audio files themselves (0.8.0): when a media server
+   *  sends small artwork, the full picture is read from the file's own tags for
+   *  the big surfaces. Reads from the media server over the local network. */
+  artFromFiles: boolean;
   /** Scrobble listens to ListenBrainz (needs a user token; radio is never scrobbled). */
   lbEnabled: boolean;
   /** ListenBrainz user token, from listenbrainz.org/settings. Stored locally. */
@@ -1095,6 +1360,8 @@ export interface AppSettings {
   trayPresetsLayout: ScreenLayout;
   /** Last-selected diagnostics-drawer tab (smoip | requests). */
   diagnosticsTab: string;
+  /** Height (px) of the diagnostics drawer, drag-resizable from its top edge. */
+  diagnosticsHeight: number;
   /** Last-selected Device-screen tab (tabs appear only on tone-capable streamers). */
   deviceTab: "streamer" | "sources" | "tone";
   /** Width (px) of the Now Playing drawers (lyrics/artist), drag-resizable. */
@@ -1173,6 +1440,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   searchHidden: null,
   sleepAction: "standby",
   recentsGrouped: true,
+  historyView: "recent",
+  historyTimelineMode: "sessions",
   motion: "system",
   updateCheck: true,
   waveforms: true,
@@ -1184,6 +1453,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   lyricsLine: true,
   displayLyrics: true,
   listeningRecord: true,
+  showListeningHistory: true,
+  artFromFiles: true,
   lbEnabled: false,
   lbToken: "",
   artistInfo: true,
@@ -1210,6 +1481,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   trayRowDensity: "compressed",
   trayPresetsLayout: "cards",
   diagnosticsTab: "smoip",
+  diagnosticsHeight: 288,
   deviceTab: "streamer",
   panelWidth: 400,
   miniBounds: null,
@@ -1256,6 +1528,15 @@ export interface MediaNode {
   id: string;
   parentId: string | null;
   title: string;
+  /**
+   * The folder titles from the source's root to this node's container, the
+   * container's own title last (an album's path ends with the album folder; a
+   * track's is its album folder's), recorded when the media index WALKED a
+   * folder tree (the streamer's USB drive, a plain-folder server). Absent for
+   * search-built entities, whose views are virtual. Open in Library lands on
+   * it, and the Library's browse re-walks it when the stored id has rotted.
+   */
+  titlePath?: string[];
   upnpClass: string;
   isContainer: boolean;
   artUrl: string | null;
@@ -1608,6 +1889,61 @@ export interface AudioAnalysis {
   /** Peak/RMS envelopes at capture resolution, amplitude x1000 (0..1000). */
   peakQ: number[];
   rmsQ: number[];
+  /** EBU R128 (0.8.0): integrated loudness in LUFS (null = gated to
+   *  nothing, or measured before this field existed), loudness range in LU,
+   *  true peak in dBTP (4× oversampled), and the gated block-loudness
+   *  histogram (LOUD_HIST_BINS bins of LOUD_HIST_STEP LU from LOUD_HIST_MIN)
+   *  so an ALBUM's loudness integrates across its tracks the way the
+   *  standard says, not as an average of track values. */
+  lufs?: number | null;
+  lra?: number | null;
+  truePeakDb?: number | null;
+  loudHist?: number[] | null;
+}
+
+/** What a row can know without decoding: the cached DR and loudness. */
+export interface KnownStats {
+  dr: number | null;
+  lufs: number | null;
+}
+
+/** The block-loudness histogram: 0.1 LU bins from −70 LUFS (the absolute
+ *  gate) to +10. */
+export const LOUD_HIST_MIN = -70;
+export const LOUD_HIST_STEP = 0.1;
+export const LOUD_HIST_BINS = 800;
+/** BS.1770's offset: loudness = −0.691 + 10·log10(mean square energy). */
+export const LOUD_OFFSET = -0.691;
+
+/** Integrate several tracks' block histograms into ONE loudness (the album
+ *  value): the relative gate is applied over the combined distribution.
+ *  Null when the histograms hold no gated blocks. */
+export function integrateLoudnessHistograms(
+  hists: ReadonlyArray<ReadonlyArray<number>>,
+): number | null {
+  const counts = new Float64Array(LOUD_HIST_BINS);
+  for (const h of hists) for (let i = 0; i < LOUD_HIST_BINS && i < h.length; i++) counts[i] += h[i];
+  const energyAt = (bin: number): number =>
+    10 ** ((LOUD_HIST_MIN + (bin + 0.5) * LOUD_HIST_STEP - LOUD_OFFSET) / 10);
+  let n = 0;
+  let sum = 0;
+  for (let i = 0; i < LOUD_HIST_BINS; i++) {
+    if (counts[i] === 0) continue;
+    n += counts[i];
+    sum += counts[i] * energyAt(i);
+  }
+  if (n === 0) return null;
+  const threshold = LOUD_OFFSET + 10 * Math.log10(sum / n) - 10;
+  let n2 = 0;
+  let sum2 = 0;
+  for (let i = 0; i < LOUD_HIST_BINS; i++) {
+    if (counts[i] === 0) continue;
+    const l = LOUD_HIST_MIN + (i + 0.5) * LOUD_HIST_STEP;
+    if (l <= threshold) continue;
+    n2 += counts[i];
+    sum2 += counts[i] * energyAt(i);
+  }
+  return n2 === 0 ? null : LOUD_OFFSET + 10 * Math.log10(sum2 / n2);
 }
 
 /** An album's recorded DR — written ONLY when every track measured (the TT
@@ -1618,6 +1954,9 @@ export interface AlbumDr {
   dr: number;
   tracks: number;
   analyzedAt: number;
+  /** The album's integrated loudness (R128, gated across all tracks), when
+   *  every track carried a histogram. */
+  lufs?: number | null;
 }
 
 /** Content identity for stored audio analysis — the trackInfo key precedent
@@ -1946,21 +2285,21 @@ export function describeProfileNote(note: ProfileNote): string {
           ? `${n(note.count, "navigation entry", "navigation entries")} left out of the artists`
           : `${n(note.count, "entry", "entries")} that ${note.count === 1 ? "was" : "were"} not a track left out of the tracks`;
     case "albums-found-by-browsing":
-      return `the server's album search returned nothing — ${n(note.count, "album was", "albums were")} found by browsing instead`;
+      return `the server's album search returned nothing, so ${n(note.count, "album was", "albums were")} found by browsing instead`;
     case "albums-assembled-from-tracks":
-      return `this server doesn't list albums — TastyTunes assembled them from its ${n(note.count, "track", "tracks")}`;
+      return `this server doesn't list albums, so TastyTunes assembled them from its ${n(note.count, "track", "tracks")}`;
     case "duplicate-albums-merged":
-      return `${n(note.count, "duplicate album entry", "duplicate album entries")} merged — the server lists some albums more than once`;
+      return `${n(note.count, "duplicate album entry", "duplicate album entries")} merged, because the server lists some albums more than once`;
     case "years-from-tracks":
       return note.count === 1
         ? "1 album with no year took the year from its tracks"
         : `${note.count} albums with no year took the year from their tracks`;
     case "search-failed-browsed-instead":
-      return "the server's search failed — the library was indexed by browsing instead";
+      return "the server's search failed, so the library was indexed by browsing instead";
     case "search-paged-smaller":
-      return "the server's search failed on large pages — read in smaller pages instead";
+      return "the server's search failed on large pages, so it was read in smaller pages instead";
     case "browse-capped":
-      return `browsing stopped after ${note.count} folders — a very large library may be only partly indexed`;
+      return `browsing stopped after ${note.count} folders, so a very large library may be only partly indexed`;
   }
 }
 
@@ -1976,6 +2315,14 @@ export interface MediaIndexPools {
 
 /** Queue-write verbs of /smoip/queue/add (semantics per vibin's reverse-engineering). */
 export type MediaQueueAction = "REPLACE" | "APPEND" | "PLAY_NEXT" | "PLAY_NOW" | "PLAY_FROM_HERE";
+
+/**
+ * A container verb over this many tracks asks first, from every surface (the
+ * guard lives in main's queueAdd). Filed after Play from here on a search
+ * scope queued 2,528 tracks on the user's Evo (2026-09-04): a box set
+ * queues without a prompt, a library-sized container never does.
+ */
+export const LARGE_QUEUE_TRACKS = 200;
 
 // ------------------------------------------------------------------ internet radio
 

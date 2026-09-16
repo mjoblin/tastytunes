@@ -1,6 +1,6 @@
 import { app, Menu, shell, type MenuItemConstructorOptions } from "electron";
 import type { MenuCommand, StreamerCommand } from "@shared/ipc";
-import { REPO_URL } from "@shared/ipc";
+import { AGENTS_GUIDE_URL, REPO_URL } from "@shared/ipc";
 
 export interface MenuDeps {
   /** Streamer commands go straight to the DeviceManager (safe no-op offline). */
@@ -205,6 +205,11 @@ export function installAppMenu(deps: MenuDeps): void {
         id: "menu-shortcuts",
         label: "Keyboard Shortcuts",
         click: () => deps.sendToMain({ id: "shortcuts" }),
+      },
+      {
+        id: "menu-agents-guide",
+        label: "AI Agents Setup Guide",
+        click: () => void shell.openExternal(AGENTS_GUIDE_URL),
       },
       { type: "separator" },
       {

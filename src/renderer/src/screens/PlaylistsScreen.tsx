@@ -471,7 +471,7 @@ export function PlaylistsScreen(): React.JSX.Element {
                     disabled={(!!running && !mine) || selected.items.length === 0}
                     data-tip={
                       mine
-                        ? `Loading ${activation.done} of ${activation.total} — click to stop`
+                        ? `Loading ${activation.done} of ${activation.total}. Click to stop.`
                         : "Replace the queue with this playlist"
                     }
                     aria-label={mine ? "Stop loading playlist" : "Play playlist"}

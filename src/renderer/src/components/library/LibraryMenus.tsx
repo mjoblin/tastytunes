@@ -63,9 +63,12 @@ export function ItemMenu({
     playNext: () => onAction("PLAY_NEXT"),
     append: () => onAction("APPEND"),
     replaceQueue: () => onAction("REPLACE"),
+    // The Library resolves the album and the track id from the album's OWN
+    // browse (playAlbumFrom): a pooled or searched track's parentId is the
+    // search scope, so the verb needs an album to name, not a parent id.
     extraQueueVerbs:
-      !node.isContainer && node.parentId
-        ? [{ label: "Play album from here", run: () => onAction("PLAY_FROM_HERE", node.id) }]
+      !node.isContainer && (node.album || node.parentId)
+        ? [{ label: "Play album from here", run: () => onAction("PLAY_FROM_HERE") }]
         : undefined,
     goToAlbum,
     goToArtist,

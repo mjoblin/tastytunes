@@ -12,7 +12,10 @@
 // request burst against the same budget; one playing track is not.
 import type { TrackCredit, TrackInfo, TrackInfoQuery } from "@shared/model";
 import { DiskCache } from "./diskCache";
-import { MB, mbFetch } from "./mb";
+import { MB, mbFetch, type Fetched } from "./mb";
+
+/** The playing track's credits are asked for by the panel's tab: the urgent lane. */
+const ask = (url: string): Promise<Fetched> => mbFetch(url, true);
 
 const CACHE_MAX = 1000;
 const MIN_MATCH_SCORE = 75;
@@ -144,7 +147,7 @@ export async function fetchTrackInfo(
 
   const clauses = [`recording:${JSON.stringify(title)}`, `artist:${JSON.stringify(artist)}`];
   if (album) clauses.push(`release:${JSON.stringify(album)}`);
-  const searchGot = await mbFetch(
+  const searchGot = await ask(
     `${MB}/ws/2/recording?query=${encodeURIComponent(clauses.join(" AND "))}&fmt=json&limit=5`,
   );
   if (searchGot.kind !== "ok") {
@@ -166,9 +169,7 @@ export async function fetchTrackInfo(
     };
     const seen = new Set<string>();
 
-    const recGot = await mbFetch(
-      `${MB}/ws/2/recording/${match.id}?inc=artist-rels+work-rels&fmt=json`,
-    );
+    const recGot = await ask(`${MB}/ws/2/recording/${match.id}?inc=artist-rels+work-rels&fmt=json`);
     if (recGot.kind !== "ok") {
       definitive = false; // credit state unknown — show the match, retry later
     } else {
@@ -184,7 +185,7 @@ export async function fetchTrackInfo(
       // the budget this tab has.
       const workId = rels.find((r) => r.work?.id)?.work?.id;
       if (workId) {
-        const workGot = await mbFetch(`${MB}/ws/2/work/${workId}?inc=artist-rels&fmt=json`);
+        const workGot = await ask(`${MB}/ws/2/work/${workId}?inc=artist-rels&fmt=json`);
         if (workGot.kind !== "ok") {
           definitive = false;
         } else {

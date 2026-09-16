@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { Command, EyeOff, PanelLeftClose, PanelLeftOpen, PictureInPicture2 } from "lucide-react";
 import { tt } from "@/api";
 import { useStore, type Screen } from "@/store";
-import { cx } from "@/lib/format";
+import { cx, fmtCount } from "@/lib/format";
 import {
   MOD,
   orderedNavScreens,
@@ -134,7 +134,7 @@ export function Nav(): React.JSX.Element {
         <span className="flex-1 min-w-0 flex items-center gap-3 overflow-hidden whitespace-nowrap">
           <span className="flex-1 text-left">{label}</span>
           {id === "queue" && queueTotal != null && queueTotal > 0 && (
-            <span className="font-mono text-[10px] text-faint">{queueTotal}</span>
+            <span className="font-mono text-[10px] text-faint">{fmtCount(queueTotal)}</span>
           )}
           <span className="font-mono text-[9px] text-faint/60">{key}</span>
         </span>
@@ -157,8 +157,12 @@ export function Nav(): React.JSX.Element {
           // the dot's promise: with an update pending, the wordmark lands on
           // Settings → Updates (the panel's home); otherwise it opens About
           onClick={() => (update ? jumpToSettingsTab("updates") : setInfoOpen(true))}
-          data-tip={update ? `v${update.version} available — open Updates` : "About TastyTunes"}
-          aria-label={update ? `v${update.version} available — open Updates` : "About TastyTunes"}
+          data-tip={
+            update ? `v${update.version} available. Click for Updates.` : "About TastyTunes"
+          }
+          aria-label={
+            update ? `v${update.version} available. Click for Updates.` : "About TastyTunes"
+          }
           className="no-drag relative inline-block align-top font-wordmark font-bold text-[21px] leading-none tracking-tight cursor-pointer"
         >
           {collapsed ? (
@@ -189,7 +193,7 @@ export function Nav(): React.JSX.Element {
           // main area's screen title (and loses the paint-order fight there)
           <button
             onClick={() => void tt.disconnect()}
-            data-tip="You're in the demo — click to exit"
+            data-tip="You're in the demo. Click to exit."
             aria-label="Exit demo"
             className="no-drag tip-bottom z-[70] ml-2 align-[3px] px-1.5 py-0.5 rounded-md ring-1 ring-gold/40 bg-golddim font-mono text-[9px] uppercase tracking-widest text-gold hover:brightness-110 motion-safe:active:scale-95 transition-all"
           >

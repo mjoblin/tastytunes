@@ -112,7 +112,24 @@ export function streamRows(stream: StreamInfo): Row[] {
 }
 
 /** A track's own file format facts, from the library index. */
-export function trackFormatRows(node: MediaNode, dr: number | null = null): Row[] {
+/** What the Loudness row reads: the track's integrated loudness and true peak. */
+export interface LoudnessFacts {
+  lufs: number | null;
+  truePeakDb: number | null;
+}
+
+/** "−9.8 LUFS · true peak −0.3 dBTP" — the standard's own units, one decimal. */
+export function loudnessLine(l: LoudnessFacts | null | undefined): string | null {
+  if (l?.lufs == null) return null;
+  const tp = l.truePeakDb != null ? ` · true peak ${l.truePeakDb.toFixed(1)} dBTP` : "";
+  return `${l.lufs.toFixed(1)} LUFS${tp}`;
+}
+
+export function trackFormatRows(
+  node: MediaNode,
+  dr: number | null = null,
+  loud: LoudnessFacts | null = null,
+): Row[] {
   const f = node.format;
   if (node.isContainer || !f) return [];
   return [
@@ -133,6 +150,10 @@ export function trackFormatRows(node: MediaNode, dr: number | null = null): Row[
         </span>
       ) : null,
     ],
+    // Loudness (0.8.0) is the other fact about the master: EBU R128
+    // integrated, with the true peak beside it. Neutral text — a number, not
+    // a verdict; the DR row above carries the judgement.
+    ["Loudness", loudnessLine(loud)],
   ];
 }
 

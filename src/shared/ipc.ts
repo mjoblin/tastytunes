@@ -62,6 +62,11 @@ import type {
   QueueRestoreResult,
   RadioStation,
   ListeningRecordStats,
+  ListeningEvent,
+  PlayStats,
+  EmbeddedArt,
+  EmbeddedArtQuery,
+  KnownStats,
   RecentTrack,
   SleepTimer,
   TrackInfo,
@@ -76,6 +81,20 @@ import type {
 
 /** The one copy of the project URL — user agents, Help menu, release pages. */
 export const REPO_URL = "https://github.com/mjoblin/tastytunes";
+/** The connection recipes per client and what an agent can and cannot do, one page on the website. */
+export const AGENTS_GUIDE_URL = "https://tastytunes.app/agents/";
+
+/**
+ * How main's large-queue refusal crosses IPC: an invoke rejection arrives as
+ * a plain Error whose message wraps the original, so the count rides in the
+ * message behind this token. Main throws it (LargeQueueError), the renderer's
+ * tt wrapper reads it back with largeQueueCount and asks.
+ */
+export const LARGE_QUEUE_TOKEN = "TT_LARGE_QUEUE";
+export function largeQueueCount(e: unknown): number | null {
+  const m = new RegExp(`${LARGE_QUEUE_TOKEN}:(\\d+)`).exec(e instanceof Error ? e.message : "");
+  return m ? Number(m[1]) : null;
+}
 
 // -------------------------------------------------------- main -> renderer push
 
@@ -119,6 +138,10 @@ export type PushMessage =
   | { kind: "log"; entry: LogEntry }
   | { kind: "recents"; data: RecentTrack[] }
   | { kind: "listening"; data: ListeningRecordStats }
+  /** The record's aggregate, whole (after a clear) — the reading surfaces' seed. */
+  | { kind: "playStats"; data: PlayStats }
+  /** One line appended to the record — the renderer folds it into its stats. */
+  | { kind: "playEvent"; event: ListeningEvent }
   /** Settings changed OUTSIDE the renderer (e.g. an MCP tool created a schedule). */
   | { kind: "settings"; settings: AppSettings }
   /** Wake-on-intent in flight: a play-shaped command is waking the streamer. */
@@ -268,6 +291,9 @@ export interface TastyTunesApi {
   setSettings(patch: Partial<AppSettings>): Promise<AppSettings>;
   /** Fetch album art via the main process (bypasses CORS) as a data URL. */
   fetchArt(url: string): Promise<{ dataUrl: string } | null>;
+  /** The picture embedded in a track's audio file, for surfaces the server's
+   *  small artwork can't fill. Null when off, unresolvable, or untagged. */
+  embeddedArt(query: EmbeddedArtQuery): Promise<EmbeddedArt | null>;
   /** Look up lyrics via LRCLIB (main process, in-memory cached; null = not found).
    *  `force` bypasses the cache read — the user-driven refresh. */
   fetchLyrics(query: LyricsQuery, force?: boolean): Promise<LyricsResult | null>;
@@ -302,6 +328,11 @@ export interface TastyTunesApi {
   /** EXPERIMENT: the KNOWN DR per content key (cache-only, never a fetch) —
    *  the album modal's coverage line in one round trip. */
   audioDrMany(keys: string[]): Promise<Record<string, number>>;
+  /** Cache-only DR and loudness for many content keys (the rows' cells and tooltips). */
+  audioStatsMany(keys: string[]): Promise<Record<string, KnownStats>>;
+  /** Art URLs from the library index for content keys (playKey) — the History
+   *  Timeline's rows, which the record itself stores no art for. */
+  libraryArtByKeys(keys: string[]): Promise<Record<string, string | null>>;
   /** Open/close the mini player window. */
   toggleMini(): Promise<void>;
   /** Show and focus the main window. */
@@ -320,6 +351,8 @@ export interface TastyTunesApi {
   scheduleDismissMissed(): Promise<void>;
   /** The local recently-played log, newest first. */
   getRecents(): Promise<RecentTrack[]>;
+  /** The device log's hero-size copy of a transient cover (AirPlay, casts), by playKey; null when never captured. */
+  recentCover(key: string): Promise<string | null>;
   /** Wipe the recently-played log. */
   clearRecents(): Promise<void>;
   /** Undo a clear: merges the snapshot back under anything logged since. */
@@ -368,12 +401,15 @@ export interface TastyTunesApi {
   mediaSearchAll(query: string): Promise<MediaSearchAllGroup[]>;
   /** Every ready index's full pools — feeds the Artists/Albums lenses. */
   mediaIndexPools(): Promise<MediaIndexPools[]>;
-  /** Queue a browsed item on the streamer (DIDL stays in the main process). */
+  /** Queue a browsed item on the streamer (DIDL stays in the main process). A
+   *  container over LARGE_QUEUE_TRACKS rejects with LARGE_QUEUE_TOKEN unless
+   *  `confirmLarge`; the renderer's tt wrapper asks and calls again. */
   mediaQueueAdd(
     serverUdn: string,
     objectId: string,
     action: MediaQueueAction,
     playFromId?: string,
+    confirmLarge?: boolean,
   ): Promise<void>;
   /** Save a browsed item to a preset slot (1-99). */
   mediaPresetSave(serverUdn: string, objectId: string, slot: number): Promise<void>;
@@ -405,6 +441,16 @@ export interface TastyTunesApi {
    *  per-line envelope makes that safe). Resolves to the written file's name
    *  and event count, or null if the save dialog was cancelled. */
   listeningExport(): Promise<{ file: string; events: number } | null>;
+  /** The record aggregated for the reading surfaces: per-track plays and last
+   *  played, the most recent plays, when the record began. */
+  playStats(): Promise<PlayStats>;
+  /** The record's years (one file each), ascending — the Timeline loads a year at a time. */
+  listeningYears(): Promise<number[]>;
+  /** The streamers the record holds, by udn, with how many lines each played; null is the
+   *  lines written before 0.8.0 named one. One walk over the files, no events crossing. */
+  listeningStreamers(): Promise<Array<{ streamer: string | null; count: number }>>;
+  /** One year's lines, in file order, with the unreadable-line count. */
+  listeningYear(year: number): Promise<{ events: ListeningEvent[]; unreadable: number }>;
   /** Combined size of the on-disk lookup caches (lyrics, artist context). */
   /** The undo stack's top label (or null when empty) — the Edit menu's
    *  Undo item names its target from this, the Music.app pattern. */
@@ -427,6 +473,7 @@ export const IPC = {
   getSettings: "tt:getSettings",
   setSettings: "tt:setSettings",
   fetchArt: "tt:fetchArt",
+  embeddedArt: "tt:embeddedArt",
   fetchLyrics: "tt:fetchLyrics",
   lbValidate: "tt:lbValidate",
   updateDownload: "tt:updateDownload",
@@ -441,12 +488,15 @@ export const IPC = {
   albumDrMap: "tt:albumDrMap",
   albumDrPut: "tt:albumDrPut",
   audioDrMany: "tt:audioDrMany",
+  audioStatsMany: "tt:audioStatsMany",
+  libraryArtByKeys: "tt:libraryArtByKeys",
   toggleMini: "tt:toggleMini",
   showMain: "tt:showMain",
   setSleep: "tt:setSleep",
   scheduleRunMissed: "tt:scheduleRunMissed",
   scheduleDismissMissed: "tt:scheduleDismissMissed",
   getRecents: "tt:getRecents",
+  recentCover: "tt:recentCover",
   clearRecents: "tt:clearRecents",
   recentsRestore: "tt:recentsRestore",
   favoriteAdd: "tt:favoriteAdd",
@@ -464,6 +514,10 @@ export const IPC = {
   listeningStats: "tt:listeningStats",
   listeningClear: "tt:listeningClear",
   listeningExport: "tt:listeningExport",
+  playStats: "tt:playStats",
+  listeningYears: "tt:listeningYears",
+  listeningStreamers: "tt:listeningStreamers",
+  listeningYear: "tt:listeningYear",
   undoLabelSet: "tt:undoLabelSet",
   lookupCacheStats: "tt:lookupCacheStats",
   clearLookupCaches: "tt:clearLookupCaches",

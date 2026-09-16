@@ -394,7 +394,7 @@ export function ToneEq({ label = true }: { label?: boolean } = {}): React.JSX.El
 
         <div className="text-[11.5px] text-faint">
           Applied inside the streamer&rsquo;s DSP. Changes made in the Cambridge Audio app show up
-          here too. Presets are TastyTunes&rsquo;s own — the Cambridge app keeps its presets to
+          here too. Presets are TastyTunes&rsquo;s own. The Cambridge app keeps its presets to
           itself.
         </div>
       </div>

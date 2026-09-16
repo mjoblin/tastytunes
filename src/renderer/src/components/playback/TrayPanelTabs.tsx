@@ -8,6 +8,7 @@ import { MediaRow } from "@/components/media/MediaRow";
 import { MediaArt } from "@/components/media/MediaArt";
 import { DurationCell } from "@/components/media/DurationCell";
 import { Eqbars } from "@/components/media/Eqbars";
+import { TruncatedPair } from "@/components/media/TruncatedPair";
 import { EmptyState } from "@/components/chrome/EmptyState";
 import { fromRecent } from "@/lib/mediaRef";
 import { playRefNow } from "@/lib/mediaActions";
@@ -118,12 +119,13 @@ function CompressedRow({
       ) : (
         playing && <Eqbars />
       )}
-      <span
-        className={cx("flex-1 min-w-0 truncate text-[12.5px]", playing ? "text-gold" : "text-ink")}
-      >
-        {title}
-        {subtitle && <span className="text-faint"> · {subtitle}</span>}
-      </span>
+      <TruncatedPair
+        className="flex-1 text-[12.5px]"
+        lead={title}
+        leadClass={playing ? "text-gold" : "text-ink"}
+        sub={subtitle}
+        subClass="text-faint"
+      />
       {meta && (
         <span className="shrink-0 font-mono text-[10.5px] text-faint tabular-nums">{meta}</span>
       )}

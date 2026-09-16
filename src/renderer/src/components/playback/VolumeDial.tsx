@@ -38,7 +38,7 @@ export function VolumeDial({
           hidden inside the dial. Every other surface spells mute this way, and
           a control you can only find by clicking the number isn't a control. */}
       <button
-        data-tip={muted ? "Unmute — scroll for volume" : "Mute — scroll for volume"}
+        data-tip={muted ? "Unmute (scroll for volume)" : "Mute (scroll for volume)"}
         aria-label={muted ? "Unmute" : "Mute"}
         disabled={!enabled}
         onClick={() => void tt.command({ type: "setMute", mute: !muted })}

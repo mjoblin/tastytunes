@@ -7,7 +7,7 @@ import { listeningRecord } from "./listeningRecord";
  * renderer applies the identical rule to each pushed event.
  */
 export function buildPlayStats(events: ListeningEvent[]): PlayStats {
-  const stats: PlayStats = { tracks: {}, recent: [], since: null };
+  const stats: PlayStats = { tracks: {}, recent: [], since: null, albumRuns: {} };
   // files are appended in time order, but a re-sort keeps `recent` honest
   // if a line ever lands late (a clock change, a concatenated export)
   for (const e of [...events].sort((a, b) => a.at - b.at)) foldPlayEvent(stats, e);
@@ -17,7 +17,11 @@ export function buildPlayStats(events: ListeningEvent[]): PlayStats {
   return stats;
 }
 
-export async function playStatsFromRecord(): Promise<PlayStats> {
-  const { events } = await listeningRecord.readAll();
+export async function playStatsFromRecord(
+  /** Narrow the record first (the history tools' streamer argument); null is every line. */
+  keep: ((e: ListeningEvent) => boolean) | null = null,
+): Promise<PlayStats> {
+  const { events: everyLine } = await listeningRecord.readAll();
+  const events = keep ? everyLine.filter(keep) : everyLine;
   return buildPlayStats(events);
 }

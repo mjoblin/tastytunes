@@ -16,18 +16,20 @@ import { forgetDevice, lastSeenLabel } from "@/lib/devices";
 import { useConfirmPopover } from "@/components/chrome/Confirm";
 import { Nav } from "@/components/Nav";
 import { PlaybackBar } from "@/components/playback/PlaybackBar";
+import { ResumeCard } from "@/components/playback/ResumeCard";
 import { DiagnosticsDrawer } from "@/components/overlays/DiagnosticsDrawer";
 import { ShortcutsOverlay } from "@/components/overlays/ShortcutsOverlay";
 import { CommandPalette } from "@/components/overlays/CommandPalette";
 import { InfoModal } from "@/components/overlays/InfoModal";
 import { MediaInfoModal } from "@/components/overlays/MediaInfoModal";
+import { LargeQueueConfirm } from "@/components/overlays/LargeQueueConfirm";
 import { DisplayMode } from "@/components/playback/DisplayMode";
 import { NowPlayingScreen } from "@/screens/NowPlayingScreen";
 import { QueueScreen } from "@/screens/QueueScreen";
 import { PresetsScreen } from "@/screens/PresetsScreen";
 import { LibraryScreen } from "@/screens/LibraryScreen";
 import { RadioScreen } from "@/screens/RadioScreen";
-import { RecentlyPlayedScreen } from "@/screens/RecentlyPlayedScreen";
+import { HistoryScreen } from "@/screens/HistoryScreen";
 import { FavoritesScreen } from "@/screens/FavoritesScreen";
 import { PlaylistsScreen } from "@/screens/PlaylistsScreen";
 import { DeviceScreen } from "@/screens/DeviceScreen";
@@ -35,6 +37,7 @@ import { SearchScreen } from "@/screens/SearchScreen";
 import { SettingsScreen } from "@/screens/SettingsScreen";
 import { AmbientArt } from "@/components/media/AmbientArt";
 import { useDecodedArt } from "@/hooks/useDecodedArt";
+import { useBestArt } from "@/lib/bestArt";
 import { usePrefetchNextArt } from "@/hooks/usePrefetchNextArt";
 import { useFontScaleGuard } from "@/hooks/useFontScaleGuard";
 import { HeaderChip } from "@/components/chrome/Chrome";
@@ -78,7 +81,14 @@ export default function App(): React.JSX.Element {
   const artLoadable = useArtLoadable(artActive);
   // The wash renders the last DECODED art, so a slow remote cover can't blank
   // the window while it downloads (see useDecodedArt).
-  const { art: ambientArtUrl } = useDecodedArt(artActive);
+  // the wash reads the same best-art rule as the hero (lib/bestArt)
+  const ambientBest = useBestArt(
+    artActive,
+    !meta.isRadio && meta.title
+      ? { title: meta.title, artist: meta.subtitle ?? null, album: meta.album ?? null }
+      : null,
+  );
+  const { art: ambientArtUrl } = useDecodedArt(ambientBest);
   useArtAccent(settings.accentFollowsArt ? artActive : null, theme);
   useMotionPreference(settings.motion);
   // Queue playback knows the next track's art before it's needed — warm it so
@@ -108,7 +118,7 @@ export default function App(): React.JSX.Element {
     if (screen === "device") return <DeviceScreen />;
     if (screen === "settings") return <SettingsScreen />;
     // Recently played is local history — viewable even while disconnected/standby.
-    if (screen === "recently-played") return <RecentlyPlayedScreen />;
+    if (screen === "recently-played") return <HistoryScreen />;
     // Favorites is a local collection too — browsable offline; play verbs
     // surface their own failures through the central toast.
     if (screen === "favorites") return <FavoritesScreen />;
@@ -174,6 +184,7 @@ export default function App(): React.JSX.Element {
         {paletteOpen && <CommandPalette />}
         <InfoModal />
         <MediaInfoModal target={mediaInfo} />
+        <LargeQueueConfirm />
       </div>
     </div>
   );
@@ -360,7 +371,7 @@ function ConnectGate(): React.JSX.Element {
           className="flex items-center gap-2 text-[12.5px] text-amber/90 border border-amber/20 bg-amberdim/40 rounded-full px-4 py-1.5"
         >
           <Moon size={12} strokeWidth={2} />
-          The streamer may be in eco standby — eco turns its network off, so wake it at the device.
+          The streamer may be in eco standby, which turns its network off. Wake it at the device.
         </div>
       )}
       {busy && !stuck ? (
@@ -393,8 +404,7 @@ function ConnectGate(): React.JSX.Element {
           {busy && stuck && (
             <div data-still-trying className="flex items-center gap-2 text-[12.5px] text-faint">
               <Loader2 size={12} className="spin" />
-              Still trying {(connection as { host: string }).host} — it may be off or in eco
-              standby.
+              Still trying {(connection as { host: string }).host}. It may be off or in eco standby.
             </div>
           )}
           {gateRows.length > 0 ? (
@@ -455,7 +465,7 @@ function ConnectGate(): React.JSX.Element {
           )}
           {stillLooking && (
             <div className="text-[12.5px] text-faint max-w-sm leading-relaxed">
-              Still looking — the search repeats on its own. If the streamer sits on a different
+              Still looking. The search repeats on its own. If the streamer sits on a different
               subnet or Wi-Fi band, enter its IP manually below.
             </div>
           )}
@@ -481,7 +491,7 @@ function ConnectGate(): React.JSX.Element {
             className="mt-4 flex items-center gap-2 text-[13px] text-faint hover:text-dim transition-colors"
           >
             <Sparkles size={14} className="text-gold/70" />
-            Try without a streamer — explore with the built-in demo →
+            Try the built-in demo, no streamer needed →
           </button>
         </>
       )}
@@ -530,18 +540,25 @@ function StandbyGate({ busy }: { busy: boolean }): React.JSX.Element {
           {systemInfo?.name ?? "Streamer"} is asleep
         </div>
         <div className="text-[13px] text-faint mt-1.5 min-h-[19px]">
-          {busy ? "Waking…" : "Press the lamp — or just play something, from any screen."}
+          {busy ? "Waking…" : "Press the lamp, or play something from any screen."}
         </div>
-        <div className="text-[12px] text-faint mt-4 min-h-[17px]">
-          {last != null && (
-            <>
-              Last played:{" "}
-              <span className="text-dim">
-                {last.title ?? last.station}
-                {last.artist ? ` — ${last.artist}` : ""}
-              </span>
-            </>
-          )}
+        <div className="text-[12px] text-faint mt-4 min-h-[17px] flex justify-center">
+          {/* the listening record's offer stands in for the last-played line
+              when it has one (a play verb wakes the streamer); the line holds
+              the height otherwise */}
+          <ResumeCard
+            fallback={
+              last != null && (
+                <span>
+                  Last played:{" "}
+                  <span className="text-dim">
+                    {last.title ?? last.station}
+                    {last.artist ? ` — ${last.artist}` : ""}
+                  </span>
+                </span>
+              )
+            }
+          />
         </div>
       </div>
     </div>

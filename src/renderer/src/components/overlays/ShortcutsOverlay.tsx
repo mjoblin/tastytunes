@@ -27,10 +27,10 @@ const GROUPS: Array<{ title: string; rows: Array<[string, string]> }> = [
     // Three tiers, one line each: filter narrows what's on screen, Search
     // spans everything you own, the Library's own search digs one collection.
     rows: [
-      ["/", "Filter the current list — narrows what’s already on screen"],
-      ["S", "Search everything — library, playlists, presets, favorites, radio"],
+      ["/", "Filter the current list, narrowing what’s already on screen"],
+      ["S", "Search everything: library, playlists, presets, favorites, radio"],
       [`${MOD}F`, "Find here: the Library’s own search on the Library, Search everywhere else"],
-      [`⇧${MOD}F`, "Search everything, from anywhere — including inside the Library"],
+      [`⇧${MOD}F`, "Search everything from anywhere, even inside the Library"],
     ],
   },
   {
@@ -40,7 +40,7 @@ const GROUPS: Array<{ title: string; rows: Array<[string, string]> }> = [
       // letters derive from the shared registry; the prose stays hand-written
       [
         SCREENS.map((s) => s.key).join(" "),
-        "Now Playing · Queue · Search · lIbrary · Presets · plAylists · faVorites · Tuner · Recently Played · Device · sEttings",
+        "Now Playing · Queue · Search · lIbrary · Presets · plAylists · faVorites · Radio · History · Device · sEttings",
       ],
       ["F", "Full-screen display mode"],
       [

@@ -14,12 +14,59 @@ permissions:
   id-token: write # GitHub OIDC token for Azure Artifact Signing (no stored secret)
 
 jobs:
+  # THE DRAFT IS CREATED ONCE, BEFORE ANY BUILD JOB. Every build job publishes
+  # with electron-builder, which creates the GitHub draft for the tag when it
+  # finds none, and two jobs publishing at the same moment each created one:
+  # v0.8.0-rc.1 arrived as two drafts (2026-09-12), the mac assets in the one
+  # the flag step reached, windows and linux in the other, merged by hand. It
+  # had never bitten because the linux and windows publishes used to finish
+  # minutes apart from the mac one; a 28-minute runner queue closed that gap.
+  # With the draft already there every leg finds it and only uploads. The
+  # pre-release flag is decided here from the tag's suffix (electron-builder
+  # never sets it, checked on the first live rc, 2026-08-19; a draft published
+  # without it becomes "latest"), so no per-leg edit step is needed. The job
+  # runs on manual dispatches too, doing nothing, so the legs' `needs` holds.
+  draft:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+        if: startsWith(github.ref, 'refs/tags/v')
+
+      - name: Verify tag matches package.json version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          PKG="v$(node -p "require('./package.json').version")"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::Tag $TAG does not match package.json $PKG — bump package.json on develop, then re-tag (dev/tag-release.sh derives the tag for you)."
+            exit 1
+          fi
+          echo "Version check OK: $TAG"
+
+      - name: Create the release draft
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "A release for $TAG already exists; the legs will upload to it."
+            exit 0
+          fi
+          FLAG=""
+          case "$TAG" in *-*) FLAG="--prerelease" ;; esac
+          gh release create "$TAG" --draft $FLAG --verify-tag --title "${TAG#v}" --notes ""
+          echo "Draft created for $TAG${FLAG:+ (pre-release)}"
+
   # mac + linux. DELIBERATELY NO `environment:` here — when all three legs
   # shared the `release` environment, GitHub's deployment model treated the
   # concurrent jobs as supersedable deployments and reaped the mac/linux legs
   # mid-run (~15 minutes in, twice, 2026-08-06). Only Windows needs the
   # environment, because only Windows exchanges an OIDC token.
   build:
+    needs: draft
     strategy:
       fail-fast: false
       matrix:
@@ -103,18 +150,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # A pre-release version (v0.3.0-rc.1) must land as a PRE-RELEASE draft:
-      # electron-builder does not set the flag on the draft it creates (checked
-      # on the first live rc, 2026-08-19), and a draft published without it
-      # becomes "latest" — the website's latest/download links and every stable
-      # updater would take the rc. Idempotent; each leg may run it.
-      - name: Mark a pre-release version's draft as pre-release
-        if: startsWith(github.ref, 'refs/tags/v') && contains(github.ref_name, '-')
-        shell: bash
-        run: gh release edit "${GITHUB_REF_NAME}" --draft --prerelease
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Package only
         if: "!startsWith(github.ref, 'refs/tags/v')"
         run: npx electron-builder ${{ matrix.args }} --publish never
@@ -143,6 +178,7 @@ jobs:
   # OIDC exchange is rejected. Kept off the matrix so the environment's
   # deployment semantics can't touch the other legs (see the note above).
   build-windows:
+    needs: draft
     runs-on: windows-latest
     environment: release
     # A signed dual-arch build is slower than unsigned (per-file service
@@ -204,13 +240,6 @@ jobs:
       - name: Package and publish
         if: startsWith(github.ref, 'refs/tags/v')
         run: npm run dist:win -- --publish always
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Mark a pre-release version's draft as pre-release
-        if: startsWith(github.ref, 'refs/tags/v') && contains(github.ref_name, '-')
-        shell: bash
-        run: gh release edit "${GITHUB_REF_NAME}" --draft --prerelease
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

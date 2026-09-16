@@ -41,8 +41,13 @@ import {
   audioAnalysisKey,
   albumDrKey,
   playKey,
+  resumeRun,
+  resumeTarget,
   LOSSLESS_CODECS,
   isHiRes,
+  LARGE_QUEUE_TRACKS,
+  albumTally,
+  REDISCOVER_QUIET_DAYS,
 } from "@shared/model";
 import { audioAnalysisGet, albumDrMap } from "../lookups/audioAnalysis";
 import { playStatsFromRecord } from "../data/playStats";
@@ -58,12 +63,40 @@ import {
 import { app } from "electron";
 import type { DeviceManager } from "../device/deviceManager";
 import { getSettings, updateSettings } from "../data/persist";
+
+/** The history tools' optional streamer: a name from the device book or a live
+ *  device, or a udn; "before-0.8.0" for the lines written before the field. */
+const STREAMER_ARG = z
+  .string()
+  .optional()
+  .describe(
+    "Only what one streamer played: its name or udn (list_devices). 'before-0.8.0' for lines written before the record named streamers.",
+  );
+function streamerKeep(
+  arg: unknown,
+  devices: ReadonlyArray<{ udn: string; friendlyName: string }>,
+): ((e: { streamer?: string | null }) => boolean) | null {
+  if (typeof arg !== "string" || arg.trim() === "") return null;
+  const needle = arg.trim().toLowerCase();
+  if (needle === "before-0.8.0") return (e) => e.streamer == null;
+  const byName = [...getSettings().knownDevices, ...devices].find(
+    (d) => d.friendlyName.trim().toLowerCase() === needle,
+  );
+  const udn = byName?.udn ?? arg.trim();
+  return (e) => e.streamer === udn;
+}
 import { randomUUID } from "node:crypto";
 import { fetchArtistInfo } from "../lookups/artistInfo";
 import { fetchAlbumInfo } from "../lookups/albumInfo";
 import { fetchLyrics } from "../lookups/lyrics";
 import { radioSearch, radioByTags } from "../lookups/radioBrowser";
-import { presetSave, queueAdd, refreshServers } from "../media/upnpBrowser";
+import {
+  browseChildrenOf,
+  LargeQueueError,
+  presetSave,
+  queueAdd,
+  refreshServers,
+} from "../media/upnpBrowser";
 import {
   searchServer as librarySearch,
   status as indexStatus,
@@ -276,6 +309,38 @@ export class McpBridge {
   // --------------------------------------------------------------- tool handlers
 
   /** Snapshot when connected, or a throw that becomes a clean tool error. */
+  /** The resume card's offer, resolved in main: the record's most recent
+   *  unfinished album run (shared resumeRun) against the index's albums. */
+  private async resumeOffer(): Promise<
+    | {
+        run: ReturnType<typeof resumeRun> & object;
+        node: MediaNode;
+        target: MediaNode;
+        position: number;
+        total: number;
+      }
+    | { reason: string }
+  > {
+    const stats = await playStatsFromRecord();
+    const run = resumeRun(stats.recent);
+    if (!run) return { reason: "No album was left unfinished in the past week." };
+    const lc = (v: string | null | undefined): string => (v ?? "").trim().toLowerCase();
+    const groups = indexPools();
+    const albums = groups.flatMap((p) => p.albums);
+    const node =
+      albums.find(
+        (n) => lc(n.title) === lc(run.album) && (!run.artist || lc(n.artist) === lc(run.artist)),
+      ) ?? albums.find((n) => lc(n.title) === lc(run.album));
+    if (!node) return { reason: `"${run.album}" is not in any library index.` };
+    const pool = groups.find((p) => p.udn === node.serverUdn);
+    const tracks = (pool ? albumTracksOf(node, pool) : []).sort(
+      (x, y) => (trackPosition(x) ?? 0) - (trackPosition(y) ?? 0),
+    );
+    const target = resumeTarget(run, tracks);
+    if (!target) return { reason: `"${run.album}" was played to the end.` };
+    return { run, node, target, position: tracks.indexOf(target) + 1, total: tracks.length };
+  }
+
   private connected(): Snapshot & { connection: Extract<ConnectionState, { phase: "connected" }> } {
     const snap = this.dm.snapshot();
     if (snap.connection.phase !== "connected") {
@@ -324,6 +389,10 @@ export class McpBridge {
       append: "APPEND",
       replace: "REPLACE",
     };
+    /** The agent's side of the large-queue guard: the app asks the user in a
+     *  dialog; an agent is told to ask, and how to say yes. */
+    const largeQueueAsk = (tracks: number, tool: string): string =>
+      `That item holds ${tracks.toLocaleString()} tracks. Ask the user before queueing that many, then call ${tool} again with confirm_large: true.`;
 
     /** Tone/EQ gate: caps when the streamer has them, a clean error otherwise. */
     const toneCaps = (): { s: Snapshot; caps: NonNullable<ReturnType<typeof audioCaps>> } => {
@@ -928,6 +997,7 @@ export class McpBridge {
       },
       list_history: {
         inputSchema: {
+          streamer: STREAMER_ARG,
           from: z.string().optional().describe("Earliest local date, YYYY-MM-DD."),
           to: z.string().optional().describe("Latest local date, YYYY-MM-DD, inclusive."),
           kind: z
@@ -939,7 +1009,9 @@ export class McpBridge {
         },
         // Local files only — works with the streamer off, so no connected() gate.
         handler: async (a) => {
-          const { events, unreadable } = await listeningRecord.readAll();
+          const { events: everyLine, unreadable } = await listeningRecord.readAll();
+          const keep = streamerKeep(a.streamer, dm.snapshot().devices);
+          const events = keep ? everyLine.filter(keep) : everyLine;
           const fromMs = a.from != null ? Date.parse(`${a.from as string}T00:00:00`) : null;
           const toMs = a.to != null ? Date.parse(`${a.to as string}T23:59:59.999`) : null;
           const filtered = events
@@ -968,13 +1040,16 @@ export class McpBridge {
       },
       history_top: {
         inputSchema: {
+          streamer: STREAMER_ARG,
           by: z.enum(["artists", "albums", "tracks"]).describe("What to rank."),
           from: z.string().optional().describe("Earliest local date, YYYY-MM-DD."),
           to: z.string().optional().describe("Latest local date, YYYY-MM-DD, inclusive."),
           limit: z.number().int().min(1).max(100).optional().describe("Default 20."),
         },
         handler: async (a) => {
-          const { events } = await listeningRecord.readAll();
+          const { events: everyLine } = await listeningRecord.readAll();
+          const keep = streamerKeep(a.streamer, dm.snapshot().devices);
+          const events = keep ? everyLine.filter(keep) : everyLine;
           const fromMs = a.from != null ? Date.parse(`${a.from as string}T00:00:00`) : null;
           const toMs = a.to != null ? Date.parse(`${a.to as string}T23:59:59.999`) : null;
           const counts = new Map<string, { label: string; plays: number; listens: number }>();
@@ -1007,6 +1082,7 @@ export class McpBridge {
       },
       history_on_this_day: {
         inputSchema: {
+          streamer: STREAMER_ARG,
           month: z.number().int().min(1).max(12).optional().describe("Default: today's month."),
           day: z.number().int().min(1).max(31).optional().describe("Default: today's day."),
         },
@@ -1014,7 +1090,9 @@ export class McpBridge {
           const now = new Date();
           const month = (a.month as number | undefined) ?? now.getMonth() + 1;
           const day = (a.day as number | undefined) ?? now.getDate();
-          const { events } = await listeningRecord.readAll();
+          const { events: everyLine } = await listeningRecord.readAll();
+          const keep = streamerKeep(a.streamer, dm.snapshot().devices);
+          const events = keep ? everyLine.filter(keep) : everyLine;
           const hits = events
             .filter((e) => {
               // The local day AS IT WAS RECORDED: shift by the stored tz
@@ -1033,6 +1111,7 @@ export class McpBridge {
       },
       history_first_listen: {
         inputSchema: {
+          streamer: STREAMER_ARG,
           title: z.string().describe("Track title, case-insensitive exact match."),
           artist: z
             .string()
@@ -1041,7 +1120,9 @@ export class McpBridge {
         },
         handler: async (a) => {
           const lc = (v: string): string => v.trim().toLowerCase();
-          const { events } = await listeningRecord.readAll();
+          const { events: everyLine } = await listeningRecord.readAll();
+          const keep = streamerKeep(a.streamer, dm.snapshot().devices);
+          const events = keep ? everyLine.filter(keep) : everyLine;
           const plays = events
             .filter(
               (e): e is ListeningPlayEvent =>
@@ -1065,6 +1146,7 @@ export class McpBridge {
       // ---- the record's reading surfaces as tools (0.8.0)
       history_stats: {
         inputSchema: {
+          streamer: STREAMER_ARG,
           title: z
             .string()
             .optional()
@@ -1075,7 +1157,7 @@ export class McpBridge {
           album: z.string().optional().describe("With no title: the whole album's tally."),
         },
         handler: async (a) => {
-          const stats = await playStatsFromRecord();
+          const stats = await playStatsFromRecord(streamerKeep(a.streamer, dm.snapshot().devices));
           const md = dm.snapshot().playState?.metadata;
           const title =
             (a.title as string | undefined) ?? (a.album ? undefined : (md?.title ?? undefined));
@@ -1149,6 +1231,7 @@ export class McpBridge {
       },
       history_unplayed: {
         inputSchema: {
+          streamer: STREAMER_ARG,
           artist: z.string().optional().describe("Case-insensitive substring on the album artist."),
           genre: z.string().optional(),
           decade: z.string().optional().describe("e.g. '1990s'."),
@@ -1158,7 +1241,7 @@ export class McpBridge {
         handler: async (a) => {
           const groups = indexPools();
           if (groups.length === 0) return err(this.kickIndex());
-          const stats = await playStatsFromRecord();
+          const stats = await playStatsFromRecord(streamerKeep(a.streamer, dm.snapshot().devices));
           const poolOf = new Map(groups.map((p) => [p.udn, p]));
           const artistNeedle = (a.artist as string | undefined)?.toLowerCase();
           const genreNeedle = (a.genre as string | undefined)?.toLowerCase();
@@ -1179,8 +1262,7 @@ export class McpBridge {
             )
             .filter((n) => {
               const pool = n.serverUdn ? poolOf.get(n.serverUdn) : undefined;
-              const tracks = pool ? albumTracksOf(n, pool) : [];
-              return !tracks.some((t) => stats.tracks[playKey(t.title, t.artist, t.album)] != null);
+              return pool ? albumTally(n, pool, stats).plays === 0 : true;
             })
             .sort(
               (x, y) =>
@@ -1209,6 +1291,7 @@ export class McpBridge {
       },
       history_rediscover: {
         inputSchema: {
+          streamer: STREAMER_ARG,
           not_since: z
             .string()
             .optional()
@@ -1221,11 +1304,11 @@ export class McpBridge {
         handler: async (a) => {
           const groups = indexPools();
           if (groups.length === 0) return err(this.kickIndex());
-          const stats = await playStatsFromRecord();
+          const stats = await playStatsFromRecord(streamerKeep(a.streamer, dm.snapshot().devices));
           const cutoff =
             a.not_since != null
               ? Date.parse(`${a.not_since as string}T00:00:00`)
-              : Date.now() - 90 * 86_400_000;
+              : Date.now() - REDISCOVER_QUIET_DAYS * 86_400_000;
           if (Number.isNaN(cutoff)) return err("not_since must be YYYY-MM-DD.");
           const minPlays = (a.min_plays as number | undefined) ?? 1;
           const poolOf = new Map(groups.map((p) => [p.udn, p]));
@@ -1233,15 +1316,7 @@ export class McpBridge {
             .flatMap((p) => p.albums)
             .flatMap((n) => {
               const pool = n.serverUdn ? poolOf.get(n.serverUdn) : undefined;
-              const tracks = pool ? albumTracksOf(n, pool) : [];
-              let plays = 0,
-                lastAt = 0;
-              for (const t of tracks) {
-                const st = stats.tracks[playKey(t.title, t.artist, t.album)];
-                if (!st) continue;
-                plays += st.plays;
-                lastAt = Math.max(lastAt, st.lastAt);
-              }
+              const { plays, lastAt } = pool ? albumTally(n, pool, stats) : { plays: 0, lastAt: 0 };
               return plays >= minPlays && lastAt > 0 && lastAt < cutoff
                 ? [{ n, plays, lastAt }]
                 : [];
@@ -1261,6 +1336,24 @@ export class McpBridge {
               plays,
               last_played: new Date(lastAt).toISOString(),
             })),
+          });
+        },
+      },
+      history_resume: {
+        handler: async () => {
+          const offer = await this.resumeOffer();
+          if ("reason" in offer) return ok({ offer: null, reason: offer.reason });
+          return ok({
+            offer: {
+              album: offer.node.title,
+              artist: offer.node.artist,
+              server_udn: offer.node.serverUdn,
+              object_id: offer.node.id,
+              resume_from: { title: offer.target.title, track: offer.position, of: offer.total },
+              last_played: new Date(offer.run.last.at).toISOString(),
+              plays_in_run: offer.run.plays.length,
+              how: "resume_playback plays it from that track (opt-in queue editing).",
+            },
           });
         },
       },
@@ -1315,10 +1408,10 @@ export class McpBridge {
               "Only albums whose recorded dynamic range (DR, whole album analyzed) is at least this; albums without one are excluded.",
             ),
           sort: z
-            .enum(["title", "artist", "year", "dr"])
+            .enum(["title", "artist", "year", "dr", "loudness"])
             .optional()
             .describe(
-              "Default 'title'; 'year' sorts newest first; 'dr' most dynamic first, unanalyzed last.",
+              "Default 'title'; 'year' sorts newest first; 'dr' most dynamic first, unanalyzed last; 'loudness' loudest first (integrated LUFS), unmeasured last.",
             ),
           limit: z.number().int().min(1).max(100).optional().describe("Default 40."),
           offset: z.number().int().min(0).optional().describe("For paging; default 0."),
@@ -1378,6 +1471,7 @@ export class McpBridge {
           // the analysis round's facets (0.7.0): the album's recorded DR, all-lossless
           const drMap = albumDrMap();
           const albumDr = (n: MediaNode): number | null => drMap[albumDrKey(n)]?.dr ?? null;
+          const albumLufs = (n: MediaNode): number | null => drMap[albumDrKey(n)]?.lufs ?? null;
           if (a.lossless === true)
             albums = albums.filter((n) => {
               const { tracks } = summaryFor(n);
@@ -1419,6 +1513,10 @@ export class McpBridge {
               return (y.year ?? "").localeCompare(x.year ?? "") || x.title.localeCompare(y.title);
             if (sort === "dr")
               return (albumDr(y) ?? -1) - (albumDr(x) ?? -1) || x.title.localeCompare(y.title);
+            if (sort === "loudness")
+              return (
+                (albumLufs(y) ?? -1000) - (albumLufs(x) ?? -1000) || x.title.localeCompare(y.title)
+              );
             return x.title.localeCompare(y.title);
           });
           const offset = (a.offset as number | undefined) ?? 0;
@@ -1565,7 +1663,17 @@ export class McpBridge {
               "Only tracks with a recorded DR at least this; unanalyzed tracks are excluded.",
             ),
           sort: z
-            .enum(["title", "artist", "album", "year", "duration", "dr", "plays", "last_played"])
+            .enum([
+              "title",
+              "artist",
+              "album",
+              "year",
+              "duration",
+              "dr",
+              "loudness",
+              "plays",
+              "last_played",
+            ])
             .optional()
             .describe(
               "Default 'title'. 'plays' most played first; 'last_played' most recent first; 'dr' most dynamic first; 'duration' longest first.",
@@ -1595,6 +1703,8 @@ export class McpBridge {
             const an = audioAnalysisGet(audioAnalysisKey(t));
             return an && an.dr > 0 ? an.dr : null;
           };
+          const lufsOf = (t: MediaNode): number | null =>
+            audioAnalysisGet(audioAnalysisKey(t))?.lufs ?? null;
           let tracks = groups.flatMap((p) => p.tracks);
           if (artistNeedle != null)
             tracks = tracks.filter(
@@ -1648,6 +1758,8 @@ export class McpBridge {
             if (sort === "duration")
               return (y.durationSecs ?? 0) - (x.durationSecs ?? 0) || byTitle(x, y);
             if (sort === "dr") return (drOf(y) ?? -1) - (drOf(x) ?? -1) || byTitle(x, y);
+            if (sort === "loudness")
+              return (lufsOf(y) ?? -1000) - (lufsOf(x) ?? -1000) || byTitle(x, y);
             if (sort === "plays")
               return (statOf(y)?.plays ?? 0) - (statOf(x)?.plays ?? 0) || byTitle(x, y);
             if (sort === "last_played")
@@ -1719,10 +1831,11 @@ export class McpBridge {
             t = { title: md.title, artist: md.artist, album: md.album, durationSecs: md.duration };
           }
           const an = audioAnalysisGet(audioAnalysisKey(t));
-          const albumDr = t.album
-            ? (albumDrMap()[albumDrKey({ title: t.album, artist: t.albumArtist ?? t.artist })]
-                ?.dr ?? null)
+          const albumEntry = t.album
+            ? (albumDrMap()[albumDrKey({ title: t.album, artist: t.albumArtist ?? t.artist })] ??
+              null)
             : null;
+          const albumDr = albumEntry?.dr ?? null;
           return ok({
             track: { title: t.title, artist: t.artist, album: t.album },
             analyzed: an != null,
@@ -1732,13 +1845,19 @@ export class McpBridge {
                   peak_db: an.peakDb,
                   rms_db: an.rmsDb,
                   crest_db: an.crestDb,
+                  lufs: an.lufs ?? null,
+                  loudness_range_lu: an.lra ?? null,
+                  true_peak_dbtp: an.truePeakDb ?? null,
                 }
               : {
                   note: "Not analyzed yet. It is analyzed the first time it plays in TastyTunes, or with Analyze audio on its album.",
                 }),
             album_dr: albumDr,
+            album_lufs: albumEntry?.lufs ?? null,
             dr_definition:
               "TT-DR, the DR database's procedure; the album value needs every track analyzed.",
+            loudness_definition:
+              "EBU R128 integrated loudness (LUFS) with true peak (dBTP); the album value integrates across every track, gated as one programme.",
           });
         },
       },
@@ -1878,6 +1997,12 @@ export class McpBridge {
             .describe(
               "Default play_now (keeps the queue). 'replace' clears the queue — only when asked to.",
             ),
+          confirm_large: z
+            .boolean()
+            .optional()
+            .describe(
+              `Only after the user agreed: queue a container over ${LARGE_QUEUE_TRACKS} tracks anyway.`,
+            ),
         },
         handler: async (a) => {
           const s = this.connected();
@@ -1889,8 +2014,11 @@ export class McpBridge {
               a.server_udn as string,
               a.object_id as string,
               QUEUE_MODES[mode],
+              undefined,
+              { confirmLarge: a.confirm_large === true },
             );
           } catch (e) {
+            if (e instanceof LargeQueueError) return err(largeQueueAsk(e.tracks, "play_media"));
             return err(
               `Couldn't queue that item — its object id may be stale; run search_library again. (${(e as Error).message})`,
             );
@@ -2114,7 +2242,15 @@ export class McpBridge {
         },
       },
       play_favorite: {
-        inputSchema: { key: z.string().describe("Favorite key from list_favorites.") },
+        inputSchema: {
+          key: z.string().describe("Favorite key from list_favorites."),
+          confirm_large: z
+            .boolean()
+            .optional()
+            .describe(
+              `Only after the user agreed: play an album favorite over ${LARGE_QUEUE_TRACKS} tracks anyway.`,
+            ),
+        },
         handler: async (a) => {
           const s = this.connected();
           const fav = s.favorites.find((f) => favoriteKey(f) === a.key);
@@ -2124,12 +2260,15 @@ export class McpBridge {
             return ok(`Tuning to ${fav.name}.`);
           }
           const host = s.connection.host;
+          const confirm = { confirmLarge: a.confirm_large === true };
           await dm.ensureAwake(); // favorites are wake intents too
           if (fav.serverUdn && fav.objectId) {
             try {
-              await queueAdd(host, fav.serverUdn, fav.objectId, "PLAY_NOW");
+              await queueAdd(host, fav.serverUdn, fav.objectId, "PLAY_NOW", undefined, confirm);
               return ok(`Playing ${fav.title}.`);
-            } catch {
+            } catch (e) {
+              if (e instanceof LargeQueueError)
+                return err(largeQueueAsk(e.tracks, "play_favorite"));
               // stored id went stale — heal by content below (the app's model:
               // object ids are hints, title/artist identity is the truth)
             }
@@ -2143,7 +2282,13 @@ export class McpBridge {
                 (fav.artist == null || n.artist == null || lc(n.artist) === lc(fav.artist)),
             );
             if (match) {
-              await queueAdd(host, server.udn, match.id, "PLAY_NOW");
+              try {
+                await queueAdd(host, server.udn, match.id, "PLAY_NOW", undefined, confirm);
+              } catch (e) {
+                if (e instanceof LargeQueueError)
+                  return err(largeQueueAsk(e.tracks, "play_favorite"));
+                throw e;
+              }
               dm.favoriteUpdate(a.key as string, {
                 serverUdn: server.udn,
                 serverName: server.name,
@@ -2387,7 +2532,7 @@ export class McpBridge {
           const artist = (a.artist as string | undefined) ?? s.playState?.metadata?.artist ?? null;
           const album = (a.album as string | undefined) ?? s.playState?.metadata?.album ?? null;
           if (!artist || !album) return err("No album playing — pass artist and album explicitly.");
-          const info = await fetchAlbumInfo(artist, album);
+          const info = await fetchAlbumInfo(artist, album, false, true);
           if (!info) return ok(`No album match for "${album}" by ${artist}.`);
           return ok({
             title: info.title,
@@ -2420,6 +2565,30 @@ export class McpBridge {
           const n = s.queue?.total ?? s.queue?.items?.length ?? 0;
           await dm.command({ type: "queueClear" });
           return ok(`Queue cleared (${n} items removed).`);
+        },
+      },
+      resume_playback: {
+        handler: async () => {
+          const s = this.connected();
+          const offer = await this.resumeOffer();
+          if ("reason" in offer) return err(offer.reason);
+          // the album's OWN browse listing supplies the container and track ids —
+          // a pooled track's id and parentId belong to the index's search scope
+          // (Play from here on that container once queued 2,528 tracks)
+          const udn = offer.node.serverUdn;
+          if (!udn) return err("The album's server is unknown.");
+          const kids = (await browseChildrenOf(s.connection.host, udn, offer.node.id)) ?? [];
+          const tracks = kids
+            .filter((k) => !k.isContainer)
+            .sort((x, y) => (trackPosition(x) ?? 0) - (trackPosition(y) ?? 0));
+          if (tracks.length === 0 || tracks.length > 100)
+            return err("The album could not be browsed as an album-sized container.");
+          const target = resumeTarget(offer.run, tracks);
+          if (!target) return err("The run reached the album's end; nothing to resume.");
+          await queueAdd(s.connection.host, udn, offer.node.id, "PLAY_FROM_HERE", target.id);
+          return ok(
+            `Resuming "${offer.node.title}" from track ${tracks.indexOf(target) + 1}, "${target.title}".`,
+          );
         },
       },
       move_queue_item: {

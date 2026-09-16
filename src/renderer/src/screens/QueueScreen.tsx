@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useMemo } from "react";
 import { useKnownDrs } from "@/lib/audioAnalysis";
+import { useWindowedList } from "@/hooks/useWindowedList";
 import { DrBadge } from "@/components/media/Waveform";
 import { createPortal } from "react-dom";
 import { useQueuePerformer } from "@/hooks/useQueuePerformer";
@@ -129,7 +130,7 @@ function SaveQueueDialog({
       </div>
       <PresetSavePanel
         title="Current queue"
-        subtitle={`${fmtCount(trackCount)} tracks — stored on the streamer`}
+        subtitle={`${fmtCount(trackCount)} tracks, stored on the streamer`}
         nameAutoFocus
         onSave={onSave}
       />
@@ -269,6 +270,27 @@ export function QueueScreen(): React.JSX.Element {
       album: i.metadata?.album ?? null,
       durationSecs: i.metadata?.duration ?? null,
     });
+  // A LARGE queue renders only the rows near the viewport (2026-09-04, the
+  // 2,528-track queue: 83k DOM nodes took ~7s to commit and every hover
+  // re-laid-out the lot). Rows keep their ABSOLUTE index — selection edges,
+  // the insert line and dnd-kit's SortableContext ids are untouched — and two
+  // spacers hold the scroll height, so useScrollMemory and the current-row
+  // follow keep working. Only above LEAN_QUEUE: an ordinary queue renders
+  // every row exactly as before.
+  const leanRows = !cards && !albums && items.length > LEAN_QUEUE;
+  // the shared hook (hooks/useWindowedList, 2026-09-05): the pitch from the
+  // rendered rows, the offset of row 0 below the header inside the scroller
+  const scrollElRef = useRef<HTMLDivElement | null>(null);
+  const leanWin = useWindowedList({
+    scrollRef: scrollElRef,
+    count: items.length,
+    itemSelector: "[data-queue-id]",
+    estimate: 57,
+    overscan: LEAN_OVERSCAN,
+    enabled: leanRows,
+  });
+  const leanRange: [number, number] = [leanWin.first, leanWin.last];
+
   const drKeys = useMemo(() => allItems.map(keyOf), [allItems]);
   const drByKey = useKnownDrs(drKeys);
   const anyDr = Object.keys(drByKey).length > 0;
@@ -433,8 +455,15 @@ export function QueueScreen(): React.JSX.Element {
         cards ? 0.5 : 1,
         firstFollow.current ? "auto" : undefined,
       );
+    } else if (followQueue && !filter && leanRows) {
+      // the current row is outside the rendered window: land it by index
+      const idx = items.findIndex((i) => i.id === playId);
+      const sc = scrollElRef.current;
+      if (idx >= 0 && sc) sc.scrollTop = Math.max(0, leanWin.offsetOf(idx) - sc.clientHeight / 2);
     }
     firstFollow.current = false;
+    // leanRows/items/leanWin are read for the windowed landing only; the effect stays keyed on the pointer
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playId, followQueue, cards, presetGap, filter]);
 
   // A drag that starts on a SELECTED row moves the whole selection as a block
@@ -481,7 +510,6 @@ export function QueueScreen(): React.JSX.Element {
   // drop re-derives the line at the instant of release — so the landing IS
   // the line, by construction (the first cut trusted over.rect and landed
   // wrong after scrolls and over members; user, 2026-08-27).
-  const scrollElRef = useRef<HTMLDivElement | null>(null);
   const dragGeom = useRef<{
     bands: Array<{ id: number; x: number; y: number; w: number; h: number }>;
     scrollerTop: number;
@@ -1249,36 +1277,45 @@ export function QueueScreen(): React.JSX.Element {
                 ))}
               </div>
             ) : (
-              items.map((item, idx) => {
-                const prev = items[idx - 1];
-                const next = items[idx + 1];
-                return (
-                  <QueueRow
-                    key={item.id}
-                    onMenu={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setRowMenu({ item, x: e.clientX, y: e.clientY });
-                    }}
-                    item={item}
-                    dr={drFor(item)}
-                    isCurrent={item.id === playId}
-                    sourceActive={queueSourceActive}
-                    currentRef={item.id === playId ? currentRef : undefined}
-                    selected={item.id != null && selected.has(item.id)}
-                    onRowClick={(e) => rowClick(item, e)}
-                    staticDrag={dragBatch != null || navHover != null}
-                    dragLive={dragBatch != null || dragSingle != null}
-                    insertLine={
-                      insertAt?.id === item.id ? (insertAt.after ? "after" : "before") : undefined
-                    }
-                    selStart={!(prev?.id != null && selected.has(prev.id))}
-                    selEnd={!(next?.id != null && selected.has(next.id))}
-                    bodyDrag={selected.size > 0}
-                    menuOpen={rowMenu?.item.id === item.id}
-                  />
-                );
-              })
+              <>
+                {leanRows && leanRange[0] > 0 && (
+                  <div data-lean-spacer="top" style={{ height: leanWin.padTop }} />
+                )}
+                {items.slice(leanRange[0], leanRange[1] + 1).map((item, k) => {
+                  const idx = leanRange[0] + k;
+                  const prev = items[idx - 1];
+                  const next = items[idx + 1];
+                  return (
+                    <QueueRow
+                      key={item.id}
+                      onMenu={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setRowMenu({ item, x: e.clientX, y: e.clientY });
+                      }}
+                      item={item}
+                      dr={drFor(item)}
+                      isCurrent={item.id === playId}
+                      sourceActive={queueSourceActive}
+                      currentRef={item.id === playId ? currentRef : undefined}
+                      selected={item.id != null && selected.has(item.id)}
+                      onRowClick={(e) => rowClick(item, e)}
+                      staticDrag={dragBatch != null || navHover != null}
+                      dragLive={dragBatch != null || dragSingle != null}
+                      insertLine={
+                        insertAt?.id === item.id ? (insertAt.after ? "after" : "before") : undefined
+                      }
+                      selStart={!(prev?.id != null && selected.has(prev.id))}
+                      selEnd={!(next?.id != null && selected.has(next.id))}
+                      bodyDrag={selected.size > 0}
+                      menuOpen={rowMenu?.item.id === item.id}
+                    />
+                  );
+                })}
+                {leanRows && leanRange[1] < items.length - 1 && (
+                  <div data-lean-spacer="bottom" style={{ height: leanWin.padBottom }} />
+                )}
+              </>
             )}
           </SortableContext>
           {/* the batch drag's cursor chip: the active track as a stacked card
@@ -1406,7 +1443,7 @@ function QueueAlbumGroups({
       );
     useStore.getState().showToast({
       kind: "success",
-      text: `Removed “${g.album}” — ${g.items.length} tracks`,
+      text: `Removed ${g.items.length} ${g.items.length === 1 ? "track" : "tracks"} from “${g.album}”`,
       action: { label: "Undo", undo: () => useStore.getState().runUndo(undoId) },
     });
   };
@@ -1753,6 +1790,25 @@ interface QueueItemProps {
   dragLive?: boolean;
 }
 
+/**
+ * A LARGE queue (2026-09-04: a mis-aimed Play from here queued 2,528 tracks
+ * and the screen crawled — 83k DOM nodes, ~100ms of layout and paint per
+ * hover, 8s before the rows appeared). Above this size every row and card
+ * off-screen skips style, layout and paint (content-visibility: auto) while
+ * staying in the DOM, so refs, drag geometry and the current-row scroll keep
+ * working unchanged. Ordinary queues render exactly as before.
+ */
+const LEAN_QUEUE = 200;
+/** Rows rendered beyond each edge of the viewport (rows layout, lean mode). */
+const LEAN_OVERSCAN = 12;
+/** The row's settled height, so skipped rows keep the scroll height honest. */
+// the placeholder is the CONTENT box: a row is 53px with 12px of padding and a
+// 1px ring, so 40px here makes a skipped row measure the same as a laid-out one
+// (56 made it 69, and the windowing hook read that as the pitch — 2026-09-05)
+const LEAN_ROW = "[content-visibility:auto] [contain-intrinsic-size:auto_40px]";
+const LEAN_CARD = "[content-visibility:auto] [contain-intrinsic-size:auto_220px]";
+const useLeanQueue = (): boolean => useStore((s) => (s.queue?.total ?? 0) > LEAN_QUEUE);
+
 function QueueRow({
   item,
   isCurrent,
@@ -1770,6 +1826,7 @@ function QueueRow({
   dragLive = false,
   dr,
 }: QueueItemProps): React.JSX.Element {
+  const lean = useLeanQueue();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id as number,
   });
@@ -1794,9 +1851,12 @@ function QueueRow({
           : { transform: CSS.Transform.toString(lockVertical(transform)), transition }
       }
       data-queue-id={item.id}
+      data-queue-current={isCurrent || undefined}
+      data-selected={selected || undefined}
       {...(bodyDrag ? listeners : {})}
       className={cx(
         "group relative grid items-center gap-3 rounded-lg px-2 py-1.5",
+        lean && LEAN_ROW,
         // the DR cell is a sixth column only while it renders: an empty auto
         // column would still cost a gap and inset the duration
         dr !== undefined
@@ -1936,6 +1996,7 @@ function QueueCard({
   menuOpen = false,
   dragLive = false,
 }: QueueItemProps): React.JSX.Element {
+  const leanCard = useLeanQueue();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id as number,
   });
@@ -1949,6 +2010,8 @@ function QueueCard({
         if (currentRef) currentRef.current = node;
       }}
       data-queue-id={item.id}
+      data-queue-current={isCurrent || undefined}
+      data-selected={selected || undefined}
       style={staticDrag ? undefined : { transform: CSS.Transform.toString(transform), transition }}
       {...attributes}
       {...listeners}
@@ -1960,6 +2023,7 @@ function QueueCard({
         // Hover grow matches PresetCard; scale is layout-free so edge-clipped
         // cards simply clip at the scrollport seam.
         "group relative text-left rounded-2xl p-2 pb-2.5 transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]",
+        leanCard && LEAN_CARD,
         dragLive && "pointer-events-none",
         isDragging && !staticDrag && "z-10 opacity-90",
         menuOpen && "z-10 motion-safe:scale-[1.04]",

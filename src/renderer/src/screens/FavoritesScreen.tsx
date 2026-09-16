@@ -378,7 +378,7 @@ export function FavoritesScreen(): React.JSX.Element {
         <EmptyState
           icon={Heart}
           title="Nothing favorited yet"
-          caption="Heart albums and tracks in the Library, stations on the Radio screen, or whatever's playing on Now Playing — they all gather here."
+          caption="Heart albums and tracks in the Library, stations on the Radio screen, or whatever's playing on Now Playing, and they all gather here."
         />
       ) : (
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-8 pb-8 pt-1">
@@ -519,8 +519,8 @@ export function FavoritesScreen(): React.JSX.Element {
                                 label="Play"
                                 tip={
                                   favQueueMatches(f).length > 0
-                                    ? "Play — already in the queue"
-                                    : "Play now — slots in after the current track"
+                                    ? "Play, already in the queue"
+                                    : "Play now, slotted in after the current track"
                                 }
                                 pinned={menu?.fav === f}
                                 onClick={(e: React.MouseEvent) =>

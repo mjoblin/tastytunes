@@ -9,6 +9,7 @@ import {
   Rows2,
   Rows4,
   Maximize2,
+  MonitorSpeaker,
   Moon,
   Power,
   RadioTower,
@@ -45,6 +46,10 @@ import { ArtImage } from "@/components/media/ArtImage";
 import { AmbientArt } from "@/components/media/AmbientArt";
 import { SignalLamp } from "@/components/device/SignalLamp";
 import { Segmented } from "@/components/controls/Segmented";
+import { ScrollOnce } from "@/components/playback/ScrollOnce";
+import { LargeQueueConfirm } from "@/components/overlays/LargeQueueConfirm";
+import { StreamerList, useStreamerList } from "@/components/device/DeviceSwitcher";
+import { PopoverChrome } from "@/hooks/usePopover";
 import {
   PlaylistsTab,
   PresetsTab,
@@ -174,6 +179,12 @@ export function TrayPanel(): React.JSX.Element {
   // — nothing here needs to tell it. This local flag is only for the cue.
 
   const meta = deriveNowPlaying(playState, nowPlaying);
+  // the three lines keep the app's order everywhere: title, then artist (the
+  // song, on radio), then album. The user tried the song on top for radio and
+  // preferred the station there (2026-09-10): the station is what the panel is
+  // tuned to, and a song that did not need two lines left a gap. The song line
+  // is the one that wraps.
+  const lines = { title: meta.title, second: meta.subtitle, third: meta.album };
   useArtAccent(settings.accentFollowsArt && active ? meta.artUrl : null, theme);
   const { art } = useDecodedArt(meta.artUrl);
 
@@ -263,138 +274,167 @@ export function TrayPanel(): React.JSX.Element {
             TABS STAY — picking a preset or a recent track wakes the streamer
             and plays it, which is the fastest thing you can do from here, and
             hiding them would make standby a dead end. */}
-        {offline ? (
-          <TrayOffline phase={connection.phase} host={deviceName} />
-        ) : standby ? (
-          <TrayStandby busy={waking || wakeHolding} />
-        ) : (
-          <>
-            {/* ---- identity + volume ----
+        {/* THE TOP PART IS ONE FIXED BOX, whatever fills it. The live header
+            with its status row, standby, no streamer and connecting all render
+            inside the same 138px, so the tabs row and the list under it never
+            move when the state changes. The faces used to carry their own
+            min-height mirroring the header, but the live header grew with its
+            content (a wrapped radio song), so switching streamers lifted the
+            tabs row a few pixels while the connect attempt showed (user,
+            2026-09-10). One number here, not a height per face; S8 and S75
+            measure it. */}
+        <div data-tray-top className="relative shrink-0 h-[138px] flex flex-col">
+          {offline ? (
+            <TrayOffline phase={connection.phase} host={deviceName} />
+          ) : standby ? (
+            <TrayStandby busy={waking || wakeHolding} />
+          ) : (
+            <>
+              {/* ---- identity + volume ----
             Wheel-to-volume is scoped to the HEADER, not the whole surface as
             in the mini player. The mini has nothing that scrolls, so
             wheel-anywhere is unambiguous there; here the tab body is a list,
             and a wheel bubbling out of it changed the volume while you were
             only trying to read the queue. */}
-            <div className="relative shrink-0 px-3 pt-3 pb-1.5" onWheel={onWheel}>
-              <div className="flex items-start gap-2.5">
-                <div className="relative h-14 w-14 shrink-0 rounded-lg overflow-hidden bg-raised flex items-center justify-center">
-                  <ArtImage
-                    src={active ? art : null}
-                    fallback={
-                      meta.isRadio && active ? (
-                        <RadioTower size={22} className="text-faint" />
-                      ) : (
-                        <Disc3 size={22} className="text-faint" />
-                      )
-                    }
-                  />
-                </div>
-                <div className="flex-1 min-w-0 pt-0.5">
-                  {/* min-heights keep the lines occupying space through the brief
-                  metadata gap on a track change, so nothing shifts. */}
-                  <div className="flex items-center gap-1.5 min-h-[17px]">
-                    <span className="font-display no-optical font-bold tracking-tight text-[14px] text-ink truncate leading-tight">
-                      {active ? (meta.title ?? " ") : "Nothing playing"}
-                    </span>
-                    {/* THE HEART SITS WITH THE TITLE, not in the corner. It acts on
+              <div className="relative shrink-0 px-3 pt-3 pb-1.5" onWheel={onWheel}>
+                <div className="flex items-start gap-2.5">
+                  <div className="relative h-14 w-14 shrink-0 rounded-lg overflow-hidden bg-raised flex items-center justify-center">
+                    <ArtImage
+                      src={active ? art : null}
+                      fallback={
+                        meta.isRadio && active ? (
+                          <RadioTower size={22} className="text-faint" />
+                        ) : (
+                          <Disc3 size={22} className="text-faint" />
+                        )
+                      }
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0 pt-0.5">
+                    {/* min-heights keep the lines occupying space through the brief
+                  metadata gap on a track change, so nothing shifts. Every line
+                  shows its start, scrolls once when it changes, and carries its
+                  full text as a tip when it overflows (0.8.0, a user whose
+                  station's artist and song "very often" did not fit); on radio
+                  the song line may wrap to two, an ellipsis and the tip past that. */}
+                    {/* The title sizes to its TEXT (no flex-1) and shrinks only when
+                  it overflows, so the heart follows the title rather than the
+                  column's far edge (user, 2026-09-10: flex-1 had parked it there). */}
+                    <div className="flex items-center gap-1.5 min-h-[17px]">
+                      <ScrollOnce
+                        text={active ? (lines.title ?? " ") : "Nothing playing"}
+                        className="font-display no-optical font-bold tracking-tight text-[14px] text-ink leading-tight"
+                        tipClass="tip-bottom"
+                      />
+                      {/* THE HEART SITS WITH THE TITLE, not in the corner. It acts on
                     the TRACK, so belonging to the track's name is if anything
                     more honest than the corner was — and the corner is worth
                     more to volume, which is what gets reached for without
                     opening the app. */}
-                    {heart.available && active && (
-                      <button
-                        aria-label={heart.active ? "Remove from favorites" : "Add to favorites"}
-                        data-tip={heart.active ? "Remove from favorites" : "Add to favorites"}
-                        onClick={heart.toggle}
-                        className={cx(
-                          "tip-bottom shrink-0 p-0.5 rounded transition-colors",
-                          heart.active ? "text-gold" : "text-faint hover:text-ink",
-                        )}
-                      >
-                        <Heart size={12} fill={heart.active ? "currentColor" : "none"} />
-                      </button>
+                      {heart.available && active && (
+                        <button
+                          aria-label={heart.active ? "Remove from favorites" : "Add to favorites"}
+                          data-tip={heart.active ? "Remove from favorites" : "Add to favorites"}
+                          onClick={heart.toggle}
+                          className={cx(
+                            "tip-bottom shrink-0 p-0.5 rounded transition-colors",
+                            heart.active ? "text-gold" : "text-faint hover:text-ink",
+                          )}
+                        >
+                          <Heart size={12} fill={heart.active ? "currentColor" : "none"} />
+                        </button>
+                      )}
+                    </div>
+                    <ScrollOnce
+                      text={(active && lines.second) || " "}
+                      wrap={active && meta.isRadio}
+                      className="font-display no-optical tracking-tight text-[12px] text-dim leading-tight min-h-[14px]"
+                    />
+                    {/* Radio has no third line (no album), and the song above may
+                  wrap to two: it takes this slot, so the art row, and with it
+                  the panel's fixed top box, never has to grow. */}
+                    {!(active && meta.isRadio) && (
+                      <ScrollOnce
+                        text={(active && lines.third) || " "}
+                        className="text-[11px] text-faint leading-tight min-h-[13px]"
+                      />
                     )}
                   </div>
-                  <div className="font-display no-optical tracking-tight text-[12px] text-dim truncate leading-tight min-h-[14px]">
-                    {(active && meta.subtitle) || " "}
-                  </div>
-                  <div className="text-[11px] text-faint truncate leading-tight min-h-[13px]">
-                    {(active && meta.album) || " "}
-                  </div>
-                </div>
-                {/* VOLUME OWNS THE TOP-RIGHT CORNER — the squarest space the panel
+                  {/* VOLUME OWNS THE TOP-RIGHT CORNER — the squarest space the panel
                 has, which is the shape an arc wants and a slider doesn't. */}
-                {hasVolume && (
-                  <VolumeDial level={preAmp ? vol.levelNow : null} muted={muted} enabled={active} />
-                )}
-              </div>
+                  {hasVolume && (
+                    <VolumeDial
+                      level={preAmp ? vol.levelNow : null}
+                      muted={muted}
+                      enabled={active}
+                    />
+                  )}
+                </div>
 
-              {/* ---- transport + modes + playhead, on one line ---- */}
-              <div data-transport className="flex items-center gap-1 mt-2">
-                {/* ORDER MATCHES THE PLAYBACK BAR: shuffle · prev · play · next ·
+                {/* ---- transport + modes + playhead, on one line ---- */}
+                <div data-transport className="flex items-center gap-1 mt-2">
+                  {/* ORDER MATCHES THE PLAYBACK BAR: shuffle · prev · play · next ·
                 repeat. The two mode toggles bracket the transport there, and a
                 second surface that reshuffles them makes you look twice. */}
-                <TransportIconButton
-                  size="compact"
-                  enabled={active && t.canShuffle}
-                  tip="Shuffle"
-                  accent={t.shuffleOn}
-                  onClick={t.toggleShuffle}
-                >
-                  <Shuffle size={10} />
-                </TransportIconButton>
-                <TransportIconButton
-                  size="compact"
-                  enabled={active && t.canPrev}
-                  tip="Previous"
-                  onClick={t.prev}
-                >
-                  <SkipBack size={14} />
-                </TransportIconButton>
-                <PlayPauseButton size="compact" />
-                <TransportIconButton
-                  size="compact"
-                  enabled={active && t.canNext}
-                  tip="Next"
-                  onClick={t.next}
-                >
-                  <SkipForward size={14} />
-                </TransportIconButton>
-                <TransportIconButton
-                  size="compact"
-                  enabled={active && t.canRepeat}
-                  tip="Repeat"
-                  accent={t.repeatOn}
-                  onClick={t.toggleRepeat}
-                >
-                  <Repeat size={10} />
-                </TransportIconButton>
+                  <TransportIconButton
+                    size="compact"
+                    enabled={active && t.canShuffle}
+                    tip="Shuffle"
+                    accent={t.shuffleOn}
+                    onClick={t.toggleShuffle}
+                  >
+                    <Shuffle size={10} />
+                  </TransportIconButton>
+                  <TransportIconButton
+                    size="compact"
+                    enabled={active && t.canPrev}
+                    tip="Previous"
+                    onClick={t.prev}
+                  >
+                    <SkipBack size={14} />
+                  </TransportIconButton>
+                  <PlayPauseButton size="compact" />
+                  <TransportIconButton
+                    size="compact"
+                    enabled={active && t.canNext}
+                    tip="Next"
+                    onClick={t.next}
+                  >
+                    <SkipForward size={14} />
+                  </TransportIconButton>
+                  <TransportIconButton
+                    size="compact"
+                    enabled={active && t.canRepeat}
+                    tip="Repeat"
+                    accent={t.repeatOn}
+                    onClick={t.toggleRepeat}
+                  >
+                    <Repeat size={10} />
+                  </TransportIconButton>
 
-                <span className="font-mono text-[10px] text-faint tabular-nums shrink-0 ml-1 w-8 text-right">
-                  {active ? fmtTime(shownPosition) : ""}
-                </span>
-                <div className="flex-1 min-w-0">
-                  {/* The position tooltip comes free: Slider's scrubLabel renders a
+                  <span className="font-mono text-[10px] text-faint tabular-nums shrink-0 ml-1 w-8 text-right">
+                    {active ? fmtTime(shownPosition) : ""}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    {/* The position tooltip comes free: Slider's scrubLabel renders a
                   portaled, clamped bubble on hover as well as drag — the seek
                   bar is usually clicked rather than dragged, so a click needs
                   to know where it will land. */}
-                  <Slider
-                    value={duration ? shownPosition / duration : 0}
-                    disabled={!active || !t.canSeek}
-                    ariaLabel="Playhead"
-                    scrubLabel={duration ? (v) => fmtTime(v * duration) : undefined}
-                    {...slider}
-                  />
+                    <Slider
+                      value={duration ? shownPosition / duration : 0}
+                      disabled={!active || !t.canSeek}
+                      ariaLabel="Playhead"
+                      scrubLabel={duration ? (v) => fmtTime(v * duration) : undefined}
+                      {...slider}
+                    />
+                  </div>
+                  <span className="font-mono text-[10px] text-faint tabular-nums shrink-0 w-8">
+                    {active && duration != null ? fmtTime(duration) : ""}
+                  </span>
                 </div>
-                <span className="font-mono text-[10px] text-faint tabular-nums shrink-0 w-8">
-                  {active && duration != null ? fmtTime(duration) : ""}
-                </span>
               </div>
-            </div>
-          </>
-        )}
 
-        {/* ---- status: signal, source, format, power ----
+              {/* ---- status: signal, source, format, power ----
             One line doing what a 36px footer used to. Power sits at the RIGHT,
             mirroring the playback bar's right cluster: a widget of a given type
             belongs in the same place on every surface that has one.
@@ -405,45 +445,48 @@ export function TrayPanel(): React.JSX.Element {
             is worse than meaningless there: it takes its colour from the
             RETAINED pre-standby play_state, so it sat glowing green over a
             sleeping streamer. */}
-        {!standby && !offline && (
-          /* leading-none on the row: the three things here are a dot, a
-             proportional label and a mono readout, and each font's default
-             line box centres its glyphs differently — collapsing them to their
-             glyph boxes lets `items-center` line up what you can see. */
-          <div
-            data-status-row
-            className="relative shrink-0 flex items-center px-3 h-6 text-[11px] leading-none"
-          >
-            {/* ORDER MATCHES NOW PLAYING: source, then the format badges, then
+              {/* leading-none on the row: the three things here are a dot, a
+            proportional label and a mono readout, and each font's default
+            line box centres its glyphs differently — collapsing them to their
+            glyph boxes lets `items-center` line up what you can see. mt-auto
+            pins it to the bottom of the fixed top box. */}
+              <div
+                data-status-row
+                className="relative shrink-0 mt-auto flex items-center px-3 h-6 text-[11px] leading-none"
+              >
+                {/* ORDER MATCHES NOW PLAYING: source, then the format badges, then
               the lamp. There the lamp trails the chips it summarises, and a
               second surface that leads with it makes you re-learn the row.
               The BADGE is the status row's left anchor now, and it is a box,
               so it sits on the 16px content gutter rather than the 20px the
               lamp used to take as a button glyph. */}
-            {sourceBadge ? (
-              <span className="badge badge-sm truncate shrink-0 max-w-[46%]" title={sourceBadge}>
-                {sourceBadge}
-              </span>
-            ) : (
-              <span
-                className="text-dim truncate shrink-0 max-w-[46%] leading-none"
-                title={statusText}
-              >
-                {statusText}
-              </span>
-            )}
-            {formatText && (
-              <span className="text-faint truncate font-mono text-[10px] ml-3 leading-none">
-                {formatText}
-              </span>
-            )}
-            {/* The lamp SUMMARISES the format beside it, so it sits tight to it
+                {sourceBadge ? (
+                  <span
+                    className="badge badge-sm truncate shrink-0 max-w-[46%]"
+                    title={sourceBadge}
+                  >
+                    {sourceBadge}
+                  </span>
+                ) : (
+                  <span
+                    className="text-dim truncate shrink-0 max-w-[46%] leading-none"
+                    title={statusText}
+                  >
+                    {statusText}
+                  </span>
+                )}
+                {formatText && (
+                  <span className="text-faint truncate font-mono text-[10px] ml-3 leading-none">
+                    {formatText}
+                  </span>
+                )}
+                {/* The lamp SUMMARISES the format beside it, so it sits tight to it
               — the same relationship it has on Now Playing. */}
-            <div className="shrink-0 ml-1">
-              <SignalLamp tipClass="tip-bottom tip-end" />
-            </div>
-            <div className="flex-1" />
-            {/* THE PLAYBACK BAR'S POWER CONTROL, at panel scale — filled gold
+                <div className="shrink-0 ml-1">
+                  <SignalLamp tipClass="tip-bottom tip-end" />
+                </div>
+                <div className="flex-1" />
+                {/* THE PLAYBACK BAR'S POWER CONTROL, at panel scale — filled gold
               with the same glow and hover-grow, rather than a bare icon that
               happened to be gold. It is the one control here that commits the
               streamer to a state change, and in the main window it reads that
@@ -455,24 +498,28 @@ export function TrayPanel(): React.JSX.Element {
               move anything beside it — it simply overhangs into the padding
               above and below, which is empty. Asserted, so a future change to
               the row can't quietly start pushing things around. */}
-            <button
-              data-tip={powered ? "Standby" : "Wake"}
-              aria-label={powered ? "Standby" : "Wake"}
-              disabled={!connected}
-              onClick={() => void tt.command({ type: "power", power: powered ? "NETWORK" : "ON" })}
-              className={cx(
-                "tip-top tip-end shrink-0 p-1.5 rounded-full flex items-center justify-center transition-all",
-                powered
-                  ? "bg-gold text-bg shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.35)] motion-safe:hover:scale-110 hover:shadow-[0_0_20px_rgb(var(--gold-rgb)_/_0.5)]"
-                  : connected
-                    ? "bg-veil2 text-faint hover:bg-golddim hover:text-gold motion-safe:hover:scale-110"
-                    : "bg-veil2 text-faint/40",
-              )}
-            >
-              <Power size={14} strokeWidth={2.2} />
-            </button>
-          </div>
-        )}
+                <button
+                  data-tip={powered ? "Standby" : "Wake"}
+                  aria-label={powered ? "Standby" : "Wake"}
+                  disabled={!connected}
+                  onClick={() =>
+                    void tt.command({ type: "power", power: powered ? "NETWORK" : "ON" })
+                  }
+                  className={cx(
+                    "tip-top tip-end shrink-0 p-1.5 rounded-full flex items-center justify-center transition-all",
+                    powered
+                      ? "bg-gold text-bg shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.35)] motion-safe:hover:scale-110 hover:shadow-[0_0_20px_rgb(var(--gold-rgb)_/_0.5)]"
+                      : connected
+                        ? "bg-veil2 text-faint hover:bg-golddim hover:text-gold motion-safe:hover:scale-110"
+                        : "bg-veil2 text-faint/40",
+                  )}
+                >
+                  <Power size={14} strokeWidth={2.2} />
+                </button>
+              </div>
+            </>
+          )}
+        </div>
 
         {/* ---- tabs + view controls ----
             Four is the practical ceiling: at this width a TEXT Segmented fits
@@ -534,6 +581,13 @@ export function TrayPanel(): React.JSX.Element {
                 13px they collapse into something that looks like a ✕. */}
             {density === "detailed" ? <Rows4 size={13} /> : <Rows2 size={13} />}
           </ViewChip>
+          {/* THE STREAMER (0.8.0, a two-streamer household's ask): the bar's
+              switcher at panel scale, the same glyph and the same list, shown
+              only when there is more than one streamer to choose from. Here in
+              the tabs row with the other square controls: switching is a
+              one-shot act, not a list to browse (so not a fifth tab), and the
+              status row has no room for it. */}
+          <TrayStreamers />
           {/* Same glyph the mini player uses for the same job — one icon means
               "take me to the app" wherever you meet it. */}
           <ViewChip tip="Open TastyTunes" onClick={() => void tt.showMain()}>
@@ -575,6 +629,7 @@ export function TrayPanel(): React.JSX.Element {
           {tab === "recent" && <RecentTab density={density} />}
         </div>
       </div>
+      <LargeQueueConfirm />
     </div>
   );
 }
@@ -585,6 +640,40 @@ export function TrayPanel(): React.JSX.Element {
  * is precisely the drift the chrome kit exists to prevent; only the panel-
  * scale padding and the tooltip placement live here.
  */
+/** The tabs row's streamer chip: MonitorSpeaker like the playback bar's switcher,
+ *  the tip naming the streamer the panel controls, the shared list in a popover
+ *  that opens DOWN into the panel. Nothing with one streamer. */
+function TrayStreamers(): React.JSX.Element | null {
+  const { listed, connectedHost } = useStreamerList({ includeKnown: true });
+  const [open, setOpen] = useState(false);
+  if (listed.length <= 1) return null;
+  const current = listed.find((d) => d.host === connectedHost)?.friendlyName;
+  return (
+    <div className="relative shrink-0" data-tray-streamers>
+      <ViewChip
+        tip={current ? `Streamer: ${current}` : "Streamers"}
+        active={open}
+        attrs={{ "data-tray-streamer": current ?? "" }}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <MonitorSpeaker size={13} />
+      </ViewChip>
+      {open && (
+        <>
+          <PopoverChrome onClose={() => setOpen(false)} />
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div
+            data-tray-streamers-popover
+            className="absolute right-0 top-full mt-1.5 z-40 w-64 rounded-xl bg-raised ring-1 ring-edge2 shadow-2xl p-2"
+          >
+            <StreamerList onPick={() => setOpen(false)} />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function ViewChip({
   children,
   tip,
@@ -651,9 +740,9 @@ function TrayOffline({ phase, host }: { phase: string; host: string | null }): R
   return (
     <div
       data-tray-offline={busy ? "connecting" : "disconnected"}
-      // Height-locked to the header it replaces, like the standby face. S8
-      // measures both, so changing the header fails loudly here too.
-      className="relative shrink-0 min-h-[138px] flex items-center gap-3.5 px-4"
+      // Fills the panel's one fixed top box (data-tray-top), so it cannot
+      // disagree with the header it replaces. S8 and S75 measure it.
+      className="relative flex-1 min-h-0 flex items-center gap-3.5 px-4"
     >
       <div
         className={cx(
@@ -701,15 +790,13 @@ function TrayStandby({
   return (
     <div
       data-tray-standby
-      // THE SAME HEIGHT AS THE HEADER IT REPLACES (art row + transport row +
-      // status row = 138px of content), so nothing below it moves when it wakes
-      // or sleeps. A panel that resizes its own body on a state change makes
-      // the list under it jump, which is the thing you notice and can't
-      // unnotice. Content is centred in the space rather than padded to fill
-      // it — that keeps the lines tight, which is the other half of the ask.
-      // Coupled by an invariant, not by hope: S8 measures both states and
-      // requires them equal, so changing the header fails loudly here.
-      className="relative shrink-0 min-h-[138px] flex items-center gap-3.5 px-4"
+      // THE SAME HEIGHT AS THE HEADER IT REPLACES, by construction: it fills
+      // the panel's one fixed top box (data-tray-top), so nothing below it
+      // moves when it wakes or sleeps. A panel that resizes its own body on a
+      // state change makes the list under it jump, which is the thing you
+      // notice and can't unnotice. Content is centred in the space rather than
+      // padded to fill it, which keeps the lines tight. S8 measures it.
+      className="relative flex-1 min-h-0 flex items-center gap-3.5 px-4"
     >
       <button
         onClick={() => void tt.command({ type: "power", power: "ON" })}
@@ -732,7 +819,7 @@ function TrayStandby({
           <span className="truncate">{systemInfo?.name ?? "Streamer"} is asleep</span>
         </div>
         <div className="text-[11.5px] text-faint truncate min-h-[15px]">
-          {busy ? "Waking…" : "Press to wake — or start something below."}
+          {busy ? "Waking…" : "Press to wake, or start something below."}
         </div>
         <div className="text-[11px] text-faint mt-0.5 truncate min-h-[14px]">
           {last != null && (

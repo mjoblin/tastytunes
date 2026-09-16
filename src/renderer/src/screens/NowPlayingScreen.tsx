@@ -20,10 +20,12 @@ import { useDecodedArt } from "@/hooks/useDecodedArt";
 import { AddToPlaylistPanel } from "@/components/overlays/AddToPlaylistPanel";
 import { SignalLamp } from "@/components/device/SignalLamp";
 import { ArtImage } from "@/components/media/ArtImage";
+import { useBestArt } from "@/lib/bestArt";
 import { useFadePresence } from "@/hooks/useFadePresence";
 import { LyricsPanel } from "@/components/overlays/LyricsPanel";
 import { LyricLine } from "@/components/playback/LyricLine";
 import { EmptyState } from "@/components/chrome/EmptyState";
+import { ResumeCard } from "@/components/playback/ResumeCard";
 import { ArtistPanel } from "@/components/overlays/ArtistPanel";
 import { NowPlayingWaveform, PlayingDrChip } from "@/components/media/Waveform";
 
@@ -115,7 +117,20 @@ export function NowPlayingScreen(): React.JSX.Element {
   const state = playState?.state;
   // The tile renders the last DECODED cover (see useDecodedArt) — a hard swap
   // between two real images, never a swap to an empty box mid-download.
-  const { art: tileArt } = useDecodedArt(meta.artUrl);
+  // the best art for the hero: the server's unless it is small and the file
+  // carries a bigger picture (lib/bestArt), read for local media only; every
+  // titled track keeps its query so a DEAD streamer URL (an AirPlay cover's,
+  // 2026-09-06) can fall back to the log's own copy
+  const heroQuery =
+    !meta.isRadio && meta.title
+      ? { title: meta.title, artist: meta.subtitle ?? null, album: meta.album ?? null }
+      : null;
+  const heroArt = useBestArt(
+    meta.artUrl,
+    heroQuery,
+    activeSourceId(zoneState, nowPlaying) === "MEDIA_PLAYER",
+  );
+  const { art: tileArt } = useDecodedArt(heroArt);
   // Live, not snapshotted — the queue moves independently of the track.
   const queueIndex = playState?.queue_index;
   const queueLength = playState?.queue_length;
@@ -268,7 +283,10 @@ export function NowPlayingScreen(): React.JSX.Element {
           icon={Disc3}
           title="Nothing playing"
           caption="Start playback from a queue, recall a preset, or stream to the device from another app."
-        />
+        >
+          {/* the listening record's offer (0.8.0): an album left unfinished */}
+          <ResumeCard />
+        </EmptyState>
       </div>
     );
   }

@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { presetVolumeKey } from "@shared/model";
-import { queueContentHash, type PresetItem } from "@shared/smoip";
+import { isRadioMetadata, queueContentHash, type PresetItem } from "@shared/smoip";
 import { useStore } from "@/store";
 import { activeSourceId } from "@/lib/format";
 
@@ -165,8 +165,18 @@ export function useLitPresets(
         continue;
       }
       // Radio/input presets with nothing to match: trust the flag except while
-      // local media is the active source.
-      if (p.is_playing === true && activeSource !== "MEDIA_PLAYER") lit.add(p.id);
+      // local media is the active source. NEVER for a radio preset while a
+      // station is playing: the firmware leaves a recalled station's flag on
+      // when another station is streamed by URL (a raw stream carries no
+      // radio_id, so the id check above never runs), and the old preset stayed
+      // lit through the whole new station (user, 2026-09-09). A radio preset
+      // lights by id or by name, or not at all, once radio metadata is present.
+      if (
+        p.is_playing === true &&
+        activeSource !== "MEDIA_PLAYER" &&
+        !(isRadioPreset(p) && md != null && isRadioMetadata(md))
+      )
+        lit.add(p.id);
     }
     // A recall made from standby owns the lamp until it lands.
     if (wakeRecallId != null) {

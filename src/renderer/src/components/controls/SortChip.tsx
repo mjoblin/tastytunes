@@ -64,7 +64,7 @@ export function SortChip<T extends string>({
                       onChange(s.value);
                     }
                   }}
-                  aria-label={active && !s.noReverse ? `${s.label} — click to reverse` : s.label}
+                  aria-label={active && !s.noReverse ? `${s.label}, click to reverse` : s.label}
                   className={cx(
                     "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-[13px] transition-colors",
                     active ? "text-gold bg-golddim" : "text-dim hover:text-ink hover:bg-veil",

@@ -1,5 +1,11 @@
 import type { MediaNode } from "@shared/model";
-import type { ContentRef, Favorite, PlaylistItem, RecentTrack } from "@shared/model";
+import type {
+  ContentRef,
+  Favorite,
+  ListeningPlayEvent,
+  PlaylistItem,
+  RecentTrack,
+} from "@shared/model";
 import type { QueueListItem } from "@shared/smoip";
 import type { NewFavorite } from "@/lib/favorites";
 import { mediaKind } from "@/lib/media";
@@ -127,6 +133,19 @@ export function fromRecent(e: RecentTrack): MediaRef | null {
     artist: e.artist,
     album: e.album,
     artUrl: e.artUrl,
+  };
+}
+
+/** A listening-record line as a ref: content identity only (the record
+ *  stores no ids; the Library resolves it, the favorites rule). */
+export function fromPlayEvent(e: ListeningPlayEvent): MediaRef {
+  return {
+    ...base,
+    kind: "track",
+    title: e.title,
+    artist: e.artist,
+    album: e.album,
+    durationSecs: e.duration,
   };
 }
 

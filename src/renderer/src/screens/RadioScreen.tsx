@@ -297,7 +297,7 @@ export function RadioScreen(): React.JSX.Element {
         <EmptyState
           icon={RadioTower}
           title="Station lookups are off"
-          caption="TastyTunes isn't contacting the radio directory. Your favorited stations still play — turn lookups back on in Settings to search for new ones."
+          caption="TastyTunes isn't contacting the radio directory. Your favorited stations still play. Turn lookups back on in Settings to search for new ones."
         >
           <button
             onClick={() => jumpToSettingsTab("behavior")}
@@ -311,7 +311,7 @@ export function RadioScreen(): React.JSX.Element {
           <EmptyState
             icon={RadioTower}
             title="Station directory unreachable"
-            caption="radio-browser.info didn't answer — check the connection and retry."
+            caption="radio-browser.info didn't answer. Check the connection and try again."
           >
             <button
               onClick={() => void loadTop()}

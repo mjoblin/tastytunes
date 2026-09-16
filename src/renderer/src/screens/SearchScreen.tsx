@@ -955,7 +955,7 @@ export function SearchScreen(): React.JSX.Element {
             <EmptyState
               icon={Search}
               title="Search everything"
-              caption="Your library, favorites, playlists, presets and internet radio — all at once. Press S from anywhere, or ⇧⌘F even inside the Library (whose own ⌘F search digs deeper there)."
+              caption="Your library, favorites, playlists, presets and internet radio, all at once. Press S from anywhere, or ⇧⌘F even inside the Library (whose own ⌘F search digs deeper there)."
             />
           </div>
         ) : (
@@ -966,7 +966,7 @@ export function SearchScreen(): React.JSX.Element {
                 title={`Nothing found for “${q}”`}
                 caption={
                   hidden.size > 0
-                    ? "Some categories are hidden — try showing them again."
+                    ? "Some categories are hidden. Try showing them again."
                     : "Try fewer words."
                 }
               />
@@ -1026,7 +1026,7 @@ export function SearchScreen(): React.JSX.Element {
                           </button>
                         ) : (
                           <span className="text-[11.5px] text-faint">
-                            +{more} more — narrow the search
+                            +{more} more. Narrow the search to see them.
                           </span>
                         )
                       ) : (
@@ -1090,7 +1090,7 @@ export function SearchScreen(): React.JSX.Element {
                   {libUnindexed.length === 1
                     ? `${libUnindexed[0].serverName} isn't in the search index`
                     : `${libUnindexed.length} media servers aren't in the search index`}
-                  {" — the Library’s own search reaches unindexed servers live."}
+                  {". The Library’s own search reaches unindexed servers live."}
                 </span>
                 <button
                   onClick={() => requestLibrarySearch(q)}

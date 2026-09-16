@@ -22,11 +22,16 @@ function recentsPath(): string {
  * only the title, then the full metadata — and keying on artist would treat those
  * as two different tracks. Artist/album/art are treated as fields to merge in.
  */
-function recentKey(e: RecentTrack): string {
+export function recentKey(e: RecentTrack): string {
   return e.isRadio ? `r:${e.station ?? ""}:${e.title ?? ""}` : `t:${e.title ?? ""}`;
 }
 
-/** Fill any field missing on `base` from `other`; `base` keeps its identity/time. */
+/** Fill any field missing on `base` from `other`; `base` keeps its identity/time.
+ *  THE ART URL IS THE EXCEPTION: the newer frame wins. The streamer's first
+ *  frame for a new AirPlay track carries the PREVIOUS track's cover URL and the
+ *  corrected one follows about 50ms later (wire-captured 2026-09-10); the
+ *  cover endpoint serves only the current track's picture, so the first URL
+ *  is dead within the track and an entry that kept it never showed a cover. */
 function mergeEntries(base: RecentTrack, other: RecentTrack): RecentTrack {
   return {
     at: base.at,
@@ -34,7 +39,7 @@ function mergeEntries(base: RecentTrack, other: RecentTrack): RecentTrack {
     artist: base.artist ?? other.artist,
     album: base.album ?? other.album,
     station: base.station ?? other.station,
-    artUrl: base.artUrl ?? other.artUrl,
+    artUrl: other.artUrl ?? base.artUrl,
     source: base.source ?? other.source,
     sourceId: base.sourceId ?? other.sourceId,
     queueId: base.queueId ?? other.queueId,

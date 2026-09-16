@@ -1,5 +1,5 @@
 import { presetVolumeKey, type MediaNode } from "@shared/model";
-import { tt } from "@/api";
+import { queueWrite, tt } from "@/api";
 import { useStore } from "@/store";
 import { refToContentRef, type MediaRef } from "@/lib/mediaRef";
 
@@ -46,10 +46,12 @@ export async function openRefInLibrary(ref: MediaRef): Promise<boolean> {
   const node = info?.node;
   if (!node?.serverUdn) return miss();
   if (ref.kind === "album") {
+    // a folder tree's album lands on its folder path (the walk recorded it);
+    // a virtual view's on the album alone
     s.openInLibrary({
       serverUdn: node.serverUdn,
       objectId: node.id,
-      titlePath: [node.title],
+      titlePath: node.titlePath ?? [node.title],
       title: node.title,
     });
     return true;
@@ -85,10 +87,14 @@ export async function openRefInLibrary(ref: MediaRef): Promise<boolean> {
       ? album.node.id
       : node.parentId;
   if (!albumId) return miss();
+  const viaAlbum = album?.node.isContainer && album.node.id === albumId;
   s.openInLibrary({
     serverUdn: node.serverUdn,
     objectId: albumId,
-    titlePath: [albumTitle],
+    // the album's folder path when the walk recorded one (the track's is its
+    // album folder's, for a folder-only library); the album title alone for a
+    // virtual view
+    titlePath: (viaAlbum ? album.node.titlePath : null) ?? node.titlePath ?? [albumTitle],
     title: albumTitle,
     track: node.title,
   });
@@ -98,26 +104,23 @@ export async function openRefInLibrary(ref: MediaRef): Promise<boolean> {
 /** Play a track now. True if the command landed; failures are toasted. */
 export async function playRefNow(ref: MediaRef): Promise<boolean> {
   const showToast = useStore.getState().showToast;
-  if (ref.serverUdn && ref.objectId) {
-    try {
-      await tt.mediaQueueAdd(ref.serverUdn, ref.objectId, "PLAY_NOW");
-      return true;
-    } catch {
-      // rotted hint — fall through to the content resolve
-    }
+  const { serverUdn: hintUdn, objectId: hintId } = ref;
+  if (hintUdn && hintId) {
+    // the hint first: a failure is a rotted hint and the content resolve
+    // follows; a decline at the large-queue ask is the user's answer
+    const outcome = await queueWrite(() => tt.mediaQueueAdd(hintUdn, hintId, "PLAY_NOW"));
+    if (outcome !== "failed") return outcome === "ok";
   }
   const found = await tt.contentResolve(refToContentRef(ref)).catch(() => null);
   if (!found) {
     showToast({ kind: "error", text: `Couldn't find “${ref.title}” on any server` });
     return false;
   }
-  try {
-    await tt.mediaQueueAdd(found.serverUdn, found.objectId, "PLAY_NOW");
-    return true;
-  } catch {
-    showToast({ kind: "error", text: `Couldn't play “${ref.title}”` });
-    return false;
-  }
+  const outcome = await queueWrite(() =>
+    tt.mediaQueueAdd(found.serverUdn, found.objectId, "PLAY_NOW"),
+  );
+  if (outcome === "failed") showToast({ kind: "error", text: `Couldn't play “${ref.title}”` });
+  return outcome === "ok";
 }
 
 /** Queue a track by ref — play next, append, or replace — hints first, then
@@ -127,26 +130,49 @@ export async function queueRef(
   action: "PLAY_NEXT" | "APPEND" | "REPLACE",
 ): Promise<boolean> {
   const showToast = useStore.getState().showToast;
-  if (ref.serverUdn && ref.objectId) {
-    try {
-      await tt.mediaQueueAdd(ref.serverUdn, ref.objectId, action);
-      return true;
-    } catch {
-      // rotted hint — fall through to the content resolve
-    }
+  const { serverUdn: hintUdn, objectId: hintId } = ref;
+  if (hintUdn && hintId) {
+    // the hint first, as playRefNow
+    const outcome = await queueWrite(() => tt.mediaQueueAdd(hintUdn, hintId, action));
+    if (outcome !== "failed") return outcome === "ok";
   }
   const found = await tt.contentResolve(refToContentRef(ref)).catch(() => null);
   if (!found) {
     showToast({ kind: "error", text: `Couldn't find “${ref.title}” on any server` });
     return false;
   }
-  try {
-    await tt.mediaQueueAdd(found.serverUdn, found.objectId, action);
-    return true;
-  } catch {
-    showToast({ kind: "error", text: `Couldn't queue “${ref.title}”` });
-    return false;
-  }
+  const outcome = await queueWrite(() => tt.mediaQueueAdd(found.serverUdn, found.objectId, action));
+  if (outcome === "failed") showToast({ kind: "error", text: `Couldn't queue “${ref.title}”` });
+  return outcome === "ok";
+}
+
+/** Play an index album from its first track, for surfaces outside the Library
+ *  (History's Rediscover shelves): the album's own browse supplies the
+ *  container and the track id (the album view's contract), a failure toasts,
+ *  a declined large-queue ask stays quiet. */
+export async function playAlbumNode(album: MediaNode): Promise<boolean> {
+  const udn = album.serverUdn;
+  if (!udn) return false;
+  const outcome = await queueWrite(async () => {
+    const kids = await tt.mediaBrowse(udn, album.id, [album.title]);
+    const first = kids.find((k) => !k.isContainer);
+    if (first) await tt.mediaQueueAdd(udn, album.id, "PLAY_FROM_HERE", first.id);
+    else await tt.mediaQueueAdd(udn, album.id, "REPLACE");
+  });
+  if (outcome === "failed")
+    useStore.getState().showToast({ kind: "error", text: `Couldn't play “${album.title}”` });
+  return outcome === "ok";
+}
+
+/** Open an index album in the Library (its header, its tracks). */
+export function openAlbumNode(album: MediaNode): void {
+  if (!album.serverUdn) return;
+  useStore.getState().openInLibrary({
+    serverUdn: album.serverUdn,
+    objectId: album.id,
+    titlePath: [album.title],
+    title: album.title,
+  });
 }
 
 /**

@@ -61,7 +61,7 @@ import {
   type UpdateCheckResult,
 } from "@shared/model";
 import { MCP_CLUSTERS, mcpClusterEnabled, type McpClusterInfo } from "@shared/mcpCatalog";
-import { REPO_URL } from "@shared/ipc";
+import { AGENTS_GUIDE_URL, REPO_URL } from "@shared/ipc";
 import { tt } from "@/api";
 import { useConfirmPopover } from "@/components/chrome/Confirm";
 import { useStore, type Screen } from "@/store";
@@ -153,7 +153,7 @@ export function SettingsScreen(): React.JSX.Element {
 
       {/* pinned header + tab rail; only the per-tab panel scrolls */}
       <div className="flex-1 min-h-0 flex gap-5 px-8 pb-8 pt-1">
-        <nav className="w-44 shrink-0 space-y-0.5">
+        <nav className="w-44 shrink-0 space-y-0.5" data-settings-rail>
           {TABS.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
@@ -340,6 +340,13 @@ export function SettingsScreen(): React.JSX.Element {
                     onChange={(waveformNowPlaying) => void save({ waveformNowPlaying })}
                   />
                 </div>
+
+                <Toggle
+                  label="Album art from audio files"
+                  hint="When a media server sends small artwork, the full picture is read from the audio file itself, for the Now Playing screen, Display mode and album headers. Reads from your media server over your local network."
+                  checked={settings.artFromFiles}
+                  onChange={(artFromFiles) => void save({ artFromFiles })}
+                />
               </section>
             )}
 
@@ -424,7 +431,7 @@ export function SettingsScreen(): React.JSX.Element {
 
                   <SettingRow
                     label="Recently played"
-                    hint="A local log of tracks and stations you've played, shown on the Recently Played screen (R). Kept only on this computer."
+                    hint="A local log of tracks and stations you've played, shown under Recent on the History screen (R). Kept only on this computer."
                   >
                     <button
                       onClick={() => void clearRecentsWithUndo()}
@@ -648,6 +655,22 @@ function McpSection({
           onChange={(enabled) => saveMcp({ enabled })}
         />
 
+        {/* the guide is the way in for anyone who has not connected a client yet, so it is
+            its own row under the switch, live whether the server is on or off */}
+        <SettingRow
+          label="Setup guide"
+          hint="How to connect Claude Code, Cursor, VS Code, Claude Desktop and other clients, and what an agent can and cannot do."
+        >
+          <HeaderChip
+            active
+            onClick={() => void tt.openExternal(AGENTS_GUIDE_URL)}
+            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-[12.5px] motion-safe:active:scale-90"
+          >
+            <ExternalLink size={13} />
+            Open the guide
+          </HeaderChip>
+        </SettingRow>
+
         {/* live status + ways to connect a client */}
         {mcp.enabled && (
           <div className="rounded-lg bg-bg ring-1 ring-edge px-3 py-2.5 space-y-2">
@@ -683,7 +706,7 @@ function McpSection({
                   text={`"tastytunes": { "type": "http", "url": "${status.url}" }`}
                   copied={copied === "json"}
                   onCopy={() => copy("json", mcpJsonSnippet(status.url!))}
-                  hint='For clients configured via an "mcpServers" JSON block; copies the full block.'
+                  hint='For Cursor and other clients that take an "mcpServers" block with a url; copies the full block.'
                 />
               </div>
             )}
@@ -820,7 +843,9 @@ const MCP_GROUPS: Array<{ id: McpClusterInfo["group"]; label: string; note: stri
   },
 ];
 
-/** The near-universal "mcpServers" JSON block (Claude Desktop, Cursor, VS Code, …). */
+/** The "mcpServers" JSON block with a url, the shape Cursor-style clients take. Claude Desktop
+ *  is stdio-only and reaches the server through a bridge, and VS Code wants a "servers" root:
+ *  the Setup guide covers each one. */
 function mcpJsonSnippet(url: string): string {
   return JSON.stringify({ mcpServers: { tastytunes: { type: "http", url } } }, null, 2);
 }
@@ -1269,10 +1294,10 @@ function HistorySection({
   return (
     <section className="space-y-3">
       <p className="text-[11.5px] text-faint px-1">
-        The record is a local-only, long-term history of your listening. AI agents can read it today
-        (Settings › AI agents), and future versions of TastyTunes will build on it: play counts and
-        a year-end review are the kind of thing it makes possible. It records from today so the
-        history exists when those features arrive.
+        The record is a local-only, long-term history of your listening. TastyTunes reads it for
+        play counts and last-played facts in the Library and for the resume offer on Now Playing,
+        and AI agents can read it (Settings › AI agents). More will build on it: a year-end review
+        is the kind of thing it makes possible.
       </p>
       <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
         <Toggle
@@ -1280,6 +1305,13 @@ function HistorySection({
           hint={`Keeps a local log of what plays and for how long (local media, radio, AirPlay and other sources) in plain files. A play is recorded when its track changes or stops, if it played for at least ${LISTEN_FLOOR_SECS} seconds by then. The record stays on this computer.`}
           checked={settings.listeningRecord}
           onChange={(listeningRecord) => void save({ listeningRecord })}
+        />
+
+        <Toggle
+          label="Show listening history in the app"
+          hint="Last played in album headers, play counts and the Played filter in the Library, and the resume offer on Now Playing. The record itself keeps logging."
+          checked={settings.showListeningHistory}
+          onChange={(showListeningHistory) => void save({ showListeningHistory })}
         />
 
         <SettingRow

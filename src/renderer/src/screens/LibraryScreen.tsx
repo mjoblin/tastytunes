@@ -3,7 +3,6 @@ import { setCurrentLibrarySpot } from "@/lib/navSpot";
 import type { LibrarySpot } from "@/store";
 import {
   ArrowLeft,
-  ChevronRight,
   Disc3,
   HardDrive,
   Heart,
@@ -41,16 +40,19 @@ import {
   nameSortKey,
   albumVolume,
   albumOfTrack,
+  trackPosition,
 } from "@shared/model";
 import { favoriteKey, type Favorite, type FavoriteMedia } from "@shared/model";
 import { albumDrKey } from "@shared/model";
 import { analyzeAlbum, analyzeTracks, useAlbumDr } from "@/lib/audioAnalysis";
 import { FACT_SEP, albumFactsLine, albumFormatChips } from "@/lib/mediaFacts";
-import { DrChip } from "@/components/media/Waveform";
+import { usePlayStats } from "@/lib/playStats";
+import { useBestArt } from "@/lib/bestArt";
+import { DrChip, LufsChip } from "@/components/media/Waveform";
 import type { QueueListItem } from "@shared/smoip";
-import { tt } from "@/api";
+import { queueWrite, tt } from "@/api";
 import { useStore } from "@/store";
-import { activeSourceId, cx, matchesFilter, fmtCount } from "@/lib/format";
+import { activeSourceId, cx, matchesFilter, fmtCount, fmtAgo } from "@/lib/format";
 import {
   albumMatchesEntry,
   entryArtistMatches,
@@ -66,6 +68,7 @@ import { ArtImage } from "@/components/media/ArtImage";
 import { Segmented } from "@/components/controls/Segmented";
 import { FilterInput } from "@/components/controls/FilterInput";
 import { ContainerCard, ContainerRow, TrackRow } from "@/components/library/LibraryCards";
+import { Crumbs } from "@/components/library/Crumbs";
 import { SortChip } from "@/components/controls/SortChip";
 import {
   AlbumsLens,
@@ -74,6 +77,15 @@ import {
   focusArtistsLens,
   type LensActions,
 } from "@/components/library/LibraryLenses";
+import {
+  LENS_ARTIST_CRUMB_ID,
+  LENS_CRUMB_ID,
+  LENS_LABEL,
+  lensNavigation,
+  setLensReturn,
+  type Lens,
+} from "@/components/library/lensNavigation";
+import { NameLink } from "@/components/media/NameLine";
 import { AddToPlaylistPanel, itemFromNode } from "@/components/overlays/AddToPlaylistPanel";
 import { ItemMenu, PresetPicker } from "@/components/library/LibraryMenus";
 import { RowMenu } from "@/components/media/RowMenu";
@@ -94,7 +106,7 @@ import { artUrlAt } from "@shared/artUrl";
 
 // Crumbs keep the entered node so an album level can render its header
 // (art, artist, year) without re-fetching metadata.
-type Crumb = { id: string; title: string; node?: MediaNode };
+export type Crumb = { id: string; title: string; node?: MediaNode };
 
 // Returning to the Library RESTORES where the last visit left off
 // (positionMemory below) — the T3 "always the front door" rule was reversed
@@ -143,35 +155,22 @@ const nodeKey = (serverUdn: string | null, path: Crumb[]): string =>
 // stale-id rewalks can't recover search-entered branches either way).
 const SEARCH_CRUMB_ID = "__search-results__";
 
-// Synthetic crumb planted when a LENS result is opened: the trail reads
-// Library › server › Albums › <album>, and the lens crumb (or Backspace)
-// restores the lens exactly as it was left. Same contract as the search
-// crumb; titlePaths strip it the same way.
-const LENS_CRUMB_ID = "__lens__";
-/** The artist between the Artists lens crumb and an album opened from it —
- *  the trail says the path you took; clicking it returns to the lens focused
- *  on that artist (2026-09-01: "minitunes > Artists > <album>" read as a
- *  hierarchy that doesn't exist and lost the one node connecting them). */
-const LENS_ARTIST_CRUMB_ID = "__lens-artist__";
+// The lens crumbs (LENS_CRUMB_ID, LENS_ARTIST_CRUMB_ID) live with the lens
+// navigation in components/library/lensNavigation.
 /**
  * Planted when a UNIFIED SEARCH result opens here: the trail reads
  * Search › <server> › <album>, and that crumb — or Backspace, or ⌘← — returns
  * to the Search screen with its query intact (the screen remembers it).
  *
- * Same idiom as the two above, with one difference worth stating: this crumb
+ * Same idiom as the search and lens crumbs, with one difference worth stating: this crumb
  * leads OFF this screen. Without it, arriving from search left you in a browse
  * tree you never navigated into, and back went to the source list — reported
  * as "⌘← takes me to the top of the library".
  */
 const UNIFIED_SEARCH_CRUMB_ID = "__from-search__";
-// Which lens the crumb leads back to (module scope — survives the scoped
-// album detour, like the lens components' own selection memories).
-/** The three lenses over the union of ready indexes, and their crumb/door
- *  labels — one home for the label (the crumb and the album leaf's way-back
- *  crumb both read it). */
-type Lens = "albums" | "artists" | "tracks";
-const LENS_LABEL: Record<Lens, string> = { albums: "Albums", artists: "Artists", tracks: "Tracks" };
-let lensReturnTo: Lens | null = null;
+
+/** One wording for a queue write that didn't land, whichever verb sent it. */
+const QUEUE_FAILED = "Couldn't reach the streamer. Nothing was queued.";
 // The Albums lens scrolls the page scroller — its spot is remembered apart
 // from the source list's (they share the root path key otherwise).
 let albumsLensScroll = 0;
@@ -486,6 +485,7 @@ export function LibraryScreen(): React.JSX.Element {
   // Action feedback: the app-wide toast for failures, a gold pulse for wins.
   // (The screen's original local notice banner graduated into the toast.)
   const showToast = useStore((s) => s.showToast);
+  const playStats = usePlayStats();
   const showNotice = (msg: string): void => showToast({ kind: "error", text: msg });
 
   const loadServers = useCallback((): void => {
@@ -590,11 +590,32 @@ export function LibraryScreen(): React.JSX.Element {
     setPath(newPath);
   };
 
-  const openLens = (which: Lens): void => {
+  /** Record the spot being left; arrivals and history restores never do. */
+  const pushSpot = (): void => {
     if (!restoring.current) navPush({ screen: "library", library: snapshot() });
-    lensReturnTo = which;
-    setLens(which);
   };
+  // The lens navigation and THE ONE LANDING (components/library/lensNavigation).
+  const {
+    openLens,
+    landOn,
+    openAlbumFromLens,
+    returnToLens,
+    goToAlbumFromLens,
+    goToArtistFromLens,
+  } = lensNavigation({
+    lens,
+    setLens,
+    atRoot,
+    searchMode,
+    serverUdn,
+    lensPools,
+    restoring,
+    pendingTrack,
+    pushSpot,
+    moveTo,
+    setPath,
+    showNotice,
+  });
 
   /** Entering search is a NAVIGATION: record the spot being left (lens
    *  included) so Back returns exactly there — found 2026-08-31 when Back
@@ -605,58 +626,6 @@ export function LibraryScreen(): React.JSX.Element {
   const enterSearch = (): void => {
     if (!restoring.current) navPush({ screen: "library", library: snapshot() });
     setSearchMode(true);
-  };
-
-  /** A lens result opens the SHARED native album leaf, scoped to its server;
-   *  the lens crumb offers the way back with the lens state intact. */
-  const openAlbumFromLens = (node: MediaNode, track?: string): void => {
-    if (!node.serverUdn || !lens) return;
-    lensReturnTo = lens;
-    // a track's album (the Tracks lens's link or Go to album): land on THE
-    // TRACK, scrolled to and washed, exactly as the Queue's link does through
-    // openRefInLibrary — one gesture, one landing (user, 2026-09-02)
-    pendingTrack.current = track ?? null;
-    // from the Artists lens the artist rides between the lens crumb and the
-    // album — the trail says the path you took, and the crumb is the way
-    // back to the lens focused on them
-    const via =
-      lens === "artists" && node.artist ? [{ id: LENS_ARTIST_CRUMB_ID, title: node.artist }] : [];
-    moveTo(node.serverUdn, [
-      { id: LENS_CRUMB_ID, title: LENS_LABEL[lens] },
-      ...via,
-      { id: node.id, title: node.title, node },
-    ]);
-  };
-
-  const returnToLens = (): void => {
-    moveTo(null, []);
-    setLens(lensReturnTo);
-  };
-
-  /** The Tracks lens's links (and its menu's Go-to verbs): the album by
-   *  content identity in the same server's pool — no network — entered
-   *  through the lens crumb so Back returns to the lens; the artist as the
-   *  Artists lens, focused on them (a lens switch, so Back returns too). */
-  const goToAlbumFromLens = (track: MediaNode): void => {
-    const pool = lensPools?.find((g) => g.udn === (track.serverUdn ?? serverUdn));
-    const album = pool ? albumOfTrack(track, pool) : null;
-    if (!album) {
-      showNotice(`Couldn't find "${track.album ?? "that album"}" in this library.`);
-      return;
-    }
-    openAlbumFromLens(album, track.title);
-  };
-  const goToArtistFromLens = (node: MediaNode): void => {
-    if (!node.artist) return;
-    focusArtistsLens(node.artist);
-    if (atRoot && !searchMode) {
-      openLens("artists");
-      return;
-    }
-    // from a folder or search: one history entry (moveTo's), then the lens
-    moveTo(null, []);
-    lensReturnTo = "artists";
-    setLens("artists");
   };
 
   // Three ways to arrive, and this effect picks between them.
@@ -703,16 +672,13 @@ export function LibraryScreen(): React.JSX.Element {
         if ("artist" in target) {
           // a NAME from another screen's row: the Artists lens at the root,
           // focused and revealed on it (the Tracks lens's link, app-wide)
-          focusArtistsLens(target.artist);
-          moveTo(null, []);
-          lensReturnTo = "artists";
-          setLens("artists");
+          landOn({ artist: target.artist });
           return;
         }
         const last = target.titlePath.length - 1;
-        moveTo(
-          target.serverUdn,
-          target.titlePath.map((title, i) =>
+        landOn({
+          udn: target.serverUdn,
+          path: target.titlePath.map((title, i) =>
             i === last
               ? {
                   id: target.objectId,
@@ -735,11 +701,9 @@ export function LibraryScreen(): React.JSX.Element {
                 }
               : { id: `__fav-crumb-${i}__`, title },
           ),
-        );
-        if (target.fromSearch) {
-          setPath((p) => [{ id: UNIFIED_SEARCH_CRUMB_ID, title: "Search" }, ...p]);
-        }
-        pendingTrack.current = target.track ?? null;
+          track: target.track ?? null,
+          ...(target.fromSearch ? { lead: { id: UNIFIED_SEARCH_CRUMB_ID, title: "Search" } } : {}),
+        });
         return;
       }
       if (cameBack && positionMemory) {
@@ -1005,7 +969,7 @@ export function LibraryScreen(): React.JSX.Element {
         setCrossState(snap.crossNow);
       }
       if (snap.lens) {
-        lensReturnTo = snap.lens;
+        setLensReturn(snap.lens);
         setLens(snap.lens);
       }
     } finally {
@@ -1078,7 +1042,7 @@ export function LibraryScreen(): React.JSX.Element {
     void tt
       .mediaSearch(serverUdn, query)
       .then((res) => setSearchState({ query, ...res }))
-      .catch(() => showNotice("Search failed — the server didn't answer."))
+      .catch(() => showNotice("Search failed. The server didn't answer."))
       .finally(() => setSearching(false));
   };
 
@@ -1147,12 +1111,9 @@ export function LibraryScreen(): React.JSX.Element {
   ): Promise<void> => {
     const udn = nodeUdn(node);
     if (!udn) return;
-    try {
-      await tt.mediaQueueAdd(udn, node.id, action, playFromId);
-      if (el) flashTarget(el);
-    } catch {
-      showNotice("Couldn't reach the streamer — nothing was queued.");
-    }
+    const outcome = await queueWrite(() => tt.mediaQueueAdd(udn, node.id, action, playFromId));
+    if (outcome === "failed") showNotice(QUEUE_FAILED);
+    else if (outcome === "ok" && el) flashTarget(el);
   };
 
   // Title-keyed queue index: the content-match used to scan the whole queue
@@ -1270,7 +1231,7 @@ export function LibraryScreen(): React.JSX.Element {
       }
       return true;
     } catch {
-      showNotice("Couldn't reach the streamer — nothing was queued.");
+      showNotice(QUEUE_FAILED);
       return false;
     }
   };
@@ -1316,7 +1277,7 @@ export function LibraryScreen(): React.JSX.Element {
     nodes: MediaNode[];
     fromSelection: boolean;
     /** Album cargo (2026-09-02): the ordered containers and the chip's title. */
-    albums?: { title: string };
+    albums?: { title: string; noun?: string };
   }>({
     nodes: [],
     fromSelection: false,
@@ -1331,7 +1292,7 @@ export function LibraryScreen(): React.JSX.Element {
           count: nodes.length,
           title: albums.title,
           artUrl: nodes[0].artUrl,
-          noun: nodes.length === 1 ? "album" : "volumes",
+          noun: albums.noun ?? (nodes.length === 1 ? "album" : "volumes"),
           artKind: "album" as const,
         };
       return { count: nodes.length, title: nodes[0].title };
@@ -1349,7 +1310,8 @@ export function LibraryScreen(): React.JSX.Element {
             if (ok) flashNavTarget("queue");
           });
         } else if (target === "favorites") {
-          if (!nodeFavorited(nodes[0])) heartNode(nodes[0]);
+          if (fromSelection) heartNodes(nodes, false);
+          else if (!nodeFavorited(nodes[0])) heartNode(nodes[0]);
           flashNavTarget("favorites");
         } else if (target === "playlists") {
           if (nodes.length === 1) setPlaylistPicker({ node: nodes[0], x: at.x, y: at.y });
@@ -1387,8 +1349,15 @@ export function LibraryScreen(): React.JSX.Element {
     }
     return out;
   };
-  const startAlbumDrag = (nodes: MediaNode[], e: React.PointerEvent, title: string): void => {
-    dragCargo.current = { nodes, fromSelection: false, albums: { title } };
+  const startAlbumDrag = (
+    nodes: MediaNode[],
+    e: React.PointerEvent,
+    title: string,
+    noun?: string,
+  ): void => {
+    // a multi-album selection (0.8.0) is a selection: every album hearts on the
+    // Favorites drop, where a box set hearts volume 1 alone
+    dragCargo.current = { nodes, fromSelection: noun === "albums", albums: { title, noun } };
     navDrag.start(e);
   };
   const startTrackDrag = (node: MediaNode, e: React.PointerEvent): void => {
@@ -1405,21 +1374,50 @@ export function LibraryScreen(): React.JSX.Element {
   const playContainer = async (node: MediaNode, el: HTMLElement | null): Promise<void> => {
     const udn = nodeUdn(node);
     if (!udn) return;
-    try {
+    const outcome = await queueWrite(async () => {
       const children = await tt.mediaBrowse(udn, node.id, [
         ...path.map((c) => c.title),
         node.title,
       ]);
       const firstTrack = children.find((c) => !c.isContainer);
-      if (firstTrack) {
-        await tt.mediaQueueAdd(udn, node.id, "PLAY_FROM_HERE", firstTrack.id);
-      } else {
-        await tt.mediaQueueAdd(udn, node.id, "REPLACE");
-      }
-      if (el) flashTarget(el);
-    } catch {
-      showNotice("Couldn't reach the streamer — nothing was queued.");
+      if (firstTrack) await tt.mediaQueueAdd(udn, node.id, "PLAY_FROM_HERE", firstTrack.id);
+      else await tt.mediaQueueAdd(udn, node.id, "REPLACE");
+    });
+    if (outcome === "failed") showNotice(QUEUE_FAILED);
+    else if (outcome === "ok" && el) flashTarget(el);
+  };
+
+  /** "Play album from here" on a track: the album's OWN browse supplies both
+   *  ids, the album view's contract (and the resume card's). A pooled or
+   *  searched track's parentId is the search scope, the whole library on
+   *  Asset, and its id belongs to that path: Play from here on it queued
+   *  2,528 tracks (2026-09-04). A row of the album leaf on screen came from
+   *  that browse and is used as it is. */
+  const playAlbumFrom = async (track: MediaNode): Promise<void> => {
+    const udn = nodeUdn(track);
+    if (!udn) return;
+    const leaf = path[path.length - 1];
+    if (leaf && track.parentId === leaf.id && nodes.some((n) => n.id === track.id)) {
+      await act({ ...track, id: leaf.id }, "PLAY_FROM_HERE", null, track.id);
+      return;
     }
+    const pools = lensPools ?? (await tt.mediaIndexPools().catch(() => null));
+    const pool = pools?.find((g) => g.udn === udn);
+    const album = pool ? albumOfTrack(track, pool) : null;
+    const kids = album
+      ? await tt.mediaBrowse(udn, album.id, [album.title]).catch(() => null)
+      : null;
+    const title = track.title.trim().toLowerCase();
+    const same = (kids ?? []).filter(
+      (k) => !k.isContainer && k.title.trim().toLowerCase() === title,
+    );
+    // twin titles on one album are real (a reprise): the position tells them apart
+    const start = same.find((k) => trackPosition(k) === trackPosition(track)) ?? same[0];
+    if (!album || !start) {
+      showNotice(`Couldn't find "${track.album ?? "that album"}" in this library.`);
+      return;
+    }
+    await act({ ...album, serverUdn: udn }, "PLAY_FROM_HERE", null, start.id);
   };
 
   // Throws on failure so the shared panel stays open; closes the picker itself
@@ -1561,6 +1559,14 @@ export function LibraryScreen(): React.JSX.Element {
     else if (r.dr == null)
       showNotice(`Read ${r.analyzed} of ${r.tracks} tracks. An album DR needs all of them.`);
     else showToast({ kind: "success", text: `“${node.title}” analyzed: DR${r.dr}` });
+  };
+  /** The album selection bar's Analyze audio (0.8.0): each album's own sweep in
+   *  turn, so every one lands its album DR; the sweep queue serializes them. */
+  const runAnalyzeAlbums = async (nodes: MediaNode[]): Promise<void> => {
+    for (const node of nodes) {
+      const udn = nodeUdn(node);
+      if (udn) await runAnalyzeAlbum(node, udn);
+    }
   };
   /** The Tracks lens's sweep over what's shown — the album sweep's toasts,
    *  minus the album DR (a filter is not an album). */
@@ -1765,7 +1771,16 @@ export function LibraryScreen(): React.JSX.Element {
       : md != null && md.album === node.title && entryArtistMatches(md.artist, node);
 
   const allTracks = useMemo(() => nodes.filter((n) => !n.isContainer), [nodes]);
-  const albumArt = albumNode ? (albumNode.artUrl ?? allTracks[0]?.artUrl ?? null) : null;
+  const albumArtServer = albumNode ? (albumNode.artUrl ?? allTracks[0]?.artUrl ?? null) : null;
+  // the header's 160px tile (320 on retina) asks the first track's file when
+  // the server's art is small (lib/bestArt)
+  const firstTrack = allTracks[0];
+  const albumArt = useBestArt(
+    albumArtServer,
+    firstTrack && nodeUdn(firstTrack)
+      ? { serverUdn: nodeUdn(firstTrack) ?? "", objectId: firstTrack.id }
+      : null,
+  );
   const albumArtist = albumNode
     ? (albumNode.artist ??
       (allTracks.length > 0 && allTracks.every((t) => t.artist === allTracks[0].artist)
@@ -1780,11 +1795,22 @@ export function LibraryScreen(): React.JSX.Element {
   const albumFmt = albumFormat(allTracks);
   // the catalog facts line has ONE home (lib/mediaFacts) — the album Info
   // modal reads the identical string; only the queue note is this screen's
+  const albumPlay = playStats.album(allTracks);
+  const albumLastPlayed = albumPlay.lastAt;
+  // the catalog facts, then the listening record's whole-listen count; the
+  // "last played" fact renders apart as a LINK into History's Timeline
+  // (0.8.0 round 2b) and the queue note closes the line
   const albumFacts = albumNode
-    ? [albumFactsLine(albumNode, allTracks), albumInQueue ? "in the queue" : null]
+    ? [
+        albumFactsLine(albumNode, allTracks),
+        albumPlay.whole > 0
+          ? `played whole ${albumPlay.whole === 1 ? "once" : albumPlay.whole === 2 ? "twice" : `${albumPlay.whole} times`}`
+          : null,
+      ]
         .filter(Boolean)
         .join(FACT_SEP)
     : "";
+  const jumpToHistory = useStore((s) => s.jumpToHistory);
   // one composer credit for the whole album, when every track agrees (the
   // classical case, and a band that writes its own); silent otherwise
   const composers = albumNode ? albumComposers(allTracks) : [];
@@ -1799,6 +1825,8 @@ export function LibraryScreen(): React.JSX.Element {
     albumDrEntry && (allTracks.length === 0 || albumDrEntry.tracks === allTracks.length)
       ? albumDrEntry.dr
       : null;
+  // the album's integrated loudness (0.8.0) rides the same freshness rule
+  const albumLufsShown = albumDrShown != null ? (albumDrEntry?.lufs ?? null) : null;
   const albumSweeping = albumNode != null && analysisProgress?.key === albumDrKey(albumNode);
   // the note a row carries when its format differs from the album headline
   const albumNoteFor = (node: MediaNode): string | null => {
@@ -1901,6 +1929,7 @@ export function LibraryScreen(): React.JSX.Element {
       setPlaylistMulti({ nodes: chosen, x: at.x, y: at.y, clear: onAdded }),
     goToAlbum: goToAlbumFromLens,
     dragAlbum: startAlbumDrag,
+    analyzeAlbums: (nodes) => void runAnalyzeAlbums(nodes),
     goToArtist: goToArtistFromLens,
     saveAsPlaylist: (chosen, name) => void saveNodesAsPlaylist(chosen, name),
     analyzeTracks: (chosen, label) => void runAnalyzeTracks(chosen, label),
@@ -2280,73 +2309,47 @@ export function LibraryScreen(): React.JSX.Element {
       )}
 
       {/* breadcrumbs: Library (source list) › source › folders… — hidden at
-          the bare root, where the screen title already says it */}
+          the bare root, where the screen title already says it; the trail
+          folds its middle when it would not fit (Crumbs) */}
       {!searchMode && (serverUdn != null || lens != null || path.length > 0) && (
-        <div
-          data-library-crumbs
-          className="no-drag flex items-center gap-1 flex-wrap px-8 pb-3 text-[12.5px]"
-        >
-          {/* Arriving from unified search, the trail LEADS with Search rather
-            than burying it mid-trail: you didn't come through the library root,
-            and the first crumb is the way back to where you did come from. */}
-          <button
-            onClick={() => jumpTo(0)}
-            className={cx(
-              "px-1.5 py-0.5 rounded transition-colors",
-              atRoot && !lens ? "text-ink" : "text-dim hover:text-ink hover:bg-veil",
-            )}
-          >
-            {path[0]?.id === UNIFIED_SEARCH_CRUMB_ID ? "Search" : "Library"}
-          </button>
-          {atRoot && lens && (
-            <span className="flex items-center gap-1">
-              <ChevronRight size={12} className="text-faint" />
-              <span className="px-1.5 py-0.5 text-ink">{LENS_LABEL[lens]}</span>
-            </span>
-          )}
-          {server && path[0]?.id !== LENS_CRUMB_ID && (
-            <span className="flex items-center gap-1">
-              <ChevronRight size={12} className="text-faint" />
-              <button
-                onClick={() => jumpTo(1)}
-                className={cx(
-                  "px-1.5 py-0.5 rounded transition-colors",
-                  path.length === 0 ? "text-ink" : "text-dim hover:text-ink hover:bg-veil",
-                )}
-              >
-                {server.name}
-              </button>
-            </span>
-          )}
-          {path.map((crumb, i) =>
-            crumb.id === UNIFIED_SEARCH_CRUMB_ID ? null : (
-              <span key={`${crumb.id}-${i}`} className="flex items-center gap-1">
-                <ChevronRight size={12} className="text-faint" />
-                {crumb.id === SEARCH_CRUMB_ID ? (
-                  // the way back to the results this branch was entered from —
-                  // gold, matching the search bar's identity
-                  <button
-                    data-library-search-crumb
-                    onClick={() => jumpTo(i + 2)}
-                    className="flex items-center gap-1 px-1.5 py-0.5 rounded text-gold/90 hover:text-gold hover:bg-golddim transition-colors"
-                  >
-                    <Search size={11} />
-                    {crumb.title}
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => jumpTo(i + 2)}
-                    className={cx(
-                      "px-1.5 py-0.5 rounded transition-colors",
-                      i === path.length - 1 ? "text-ink" : "text-dim hover:text-ink hover:bg-veil",
-                    )}
-                  >
-                    {crumb.title}
-                  </button>
-                )}
-              </span>
-            ),
-          )}
+        <div data-library-crumbs className="no-drag px-8 pb-3 text-[12.5px]">
+          <Crumbs
+            items={[
+              {
+                // Arriving from unified search, the trail LEADS with Search rather
+                // than burying it mid-trail: you didn't come through the library root,
+                // and the first crumb is the way back to where you did come from.
+                key: "root",
+                label: path[0]?.id === UNIFIED_SEARCH_CRUMB_ID ? "Search" : "Library",
+                onClick: () => jumpTo(0),
+                current: atRoot && !lens,
+              },
+              ...(atRoot && lens ? [{ key: "lens", label: LENS_LABEL[lens] }] : []),
+              ...(server && path[0]?.id !== LENS_CRUMB_ID
+                ? [
+                    {
+                      key: "server",
+                      label: server.name,
+                      onClick: () => jumpTo(1),
+                      current: path.length === 0,
+                    },
+                  ]
+                : []),
+              ...path.flatMap((crumb, i) =>
+                crumb.id === UNIFIED_SEARCH_CRUMB_ID
+                  ? []
+                  : [
+                      {
+                        key: `${crumb.id}-${i}`,
+                        label: crumb.title,
+                        onClick: () => jumpTo(i + 2),
+                        current: i === path.length - 1,
+                        search: crumb.id === SEARCH_CRUMB_ID,
+                      },
+                    ],
+              ),
+            ]}
+          />
         </div>
       )}
 
@@ -2468,7 +2471,7 @@ export function LibraryScreen(): React.JSX.Element {
                         buildingCount > 0 && doorsState !== "failed"
                           ? `Indexing ${buildingCount === 1 ? "a library" : `${buildingCount} libraries`}…${doorsState === "ready" ? " What is already indexed is browsable now." : ""}`
                           : doorsState === "failed"
-                            ? `Couldn't index: ${failedIndexes.map((x) => `${x.serverName} — ${x.failure ?? "no index"}`).join("; ")}. Click to retry.`
+                            ? `Couldn't index ${failedIndexes.map((x) => `${x.serverName} (${x.failure ?? "no index"})`).join(", ")}. Click to retry.`
                             : undefined
                       }
                       onClick={() => {
@@ -2567,7 +2570,7 @@ export function LibraryScreen(): React.JSX.Element {
                         onClick={() => enterServer(s.udn)}
                         data-tip={
                           s.isStreamer && inStandby
-                            ? "In standby — USB content appears once the streamer wakes"
+                            ? "In standby. USB content appears once the streamer wakes."
                             : undefined
                         }
                         className={cx(
@@ -2625,23 +2628,29 @@ export function LibraryScreen(): React.JSX.Element {
                 fallback={<Disc3 size={48} strokeWidth={1} className="text-faint" />}
               />
             </div>
-            <div className="min-w-0 pt-1 space-y-1.5">
-              {/* title + artist are one thought — set tight; the facts keep
-                  the block's own rhythm below them */}
+            {/* the text column is at least the art's height with the verb row
+                pinned to its bottom: a header without a composer line is
+                exactly the art's height on every album (the track list starts
+                at one place), the verbs sit on the art's bottom edge, and only
+                a composer line or a wrapped title grows the header (user call,
+                2026-09-05, measured: 153px of 160 without, ~180 with). */}
+            <div className="min-w-0 pt-1 flex min-h-[160px] flex-col gap-1.5">
+              {/* title + artist are one thought — set tight */}
               <div className="space-y-0.5">
                 <div className="font-display font-bold text-[24px] tracking-tight leading-tight">
                   {albumNode.title}
                 </div>
                 {albumArtist &&
                   (albumNode.artist ? (
-                    <button
+                    <NameLink
+                      kind="artist"
+                      name={albumNode.artist}
+                      onGo={() => goToArtistFromLens(albumNode)}
                       data-album-artist-link
-                      data-tip="Go to artist"
-                      onClick={() => goToArtistFromLens(albumNode)}
-                      className="tip-bottom block max-w-full text-left text-[14px] text-dim truncate hover:text-ink hover:underline underline-offset-2 transition-colors"
+                      className="block max-w-full text-left text-[14px] text-dim truncate hover:text-ink hover:underline underline-offset-2"
                     >
                       {albumArtist}
-                    </button>
+                    </NameLink>
                   ) : (
                     <div className="text-[14px] text-dim truncate">{albumArtist}</div>
                   ))}
@@ -2649,7 +2658,30 @@ export function LibraryScreen(): React.JSX.Element {
               {/* facts + composers are one thought too, set tight (the
                   composer line is only there when every track agrees) */}
               <div className="space-y-0.5">
-                {albumFacts && <div className="text-[12.5px] text-faint">{albumFacts}</div>}
+                {(albumFacts || albumLastPlayed != null || albumInQueue) && (
+                  <div className="text-[12.5px] text-faint" data-album-facts>
+                    {albumFacts}
+                    {albumLastPlayed != null && (
+                      <>
+                        {albumFacts && FACT_SEP}
+                        <button
+                          data-album-last-played
+                          data-tip="Show in History"
+                          onClick={() => jumpToHistory(albumLastPlayed)}
+                          className="tip-bottom hover:text-ink hover:underline underline-offset-2 transition-colors"
+                        >
+                          {`last played ${fmtAgo(albumLastPlayed)}`}
+                        </button>
+                      </>
+                    )}
+                    {albumInQueue && (
+                      <>
+                        {(albumFacts || albumLastPlayed != null) && FACT_SEP}
+                        in the queue
+                      </>
+                    )}
+                  </div>
+                )}
                 {/* the format TOKENS as chips, the DR chip (or the sweep's
                     pulse in its place) closing the row — two registers, one
                     home (lib/mediaFacts; user call, 2026-09-01) */}
@@ -2661,8 +2693,11 @@ export function LibraryScreen(): React.JSX.Element {
                       </span>
                     ))}
                     {albumSweeping ? (
+                      // bare text beside padded badges: 6px of its own air on
+                      // the left matches a badge's inset, so the word sits as
+                      // far from the last chip as chip text sits from chip text
                       <span
-                        className="text-[11.5px] text-faint motion-safe:animate-pulse"
+                        className="ml-1.5 text-[11.5px] text-faint motion-safe:animate-pulse"
                         data-album-analyzing
                       >
                         analyzing
@@ -2672,17 +2707,22 @@ export function LibraryScreen(): React.JSX.Element {
                         …
                       </span>
                     ) : (
-                      albumDrShown != null && <DrChip dr={albumDrShown} />
+                      <>
+                        {albumDrShown != null && <DrChip dr={albumDrShown} />}
+                        {albumLufsShown != null && <LufsChip lufs={albumLufsShown} />}
+                      </>
                     )}
                   </div>
                 )}
+                {/* the credit gets 8px of air above (6px here + the group's
+                    2px rhythm) so it reads as its own thought (user, 2026-09-05) */}
                 {albumComposerLine && (
-                  <div className="text-[12.5px] text-faint" data-album-composers>
+                  <div className="text-[12.5px] text-faint pt-1.5" data-album-composers>
                     {albumComposerLine}
                   </div>
                 )}
               </div>
-              <div className="flex items-center gap-2 pt-2">
+              <div className="flex items-center gap-2 pt-2 mt-auto">
                 <button
                   data-tip="Replaces the queue"
                   // no queue-ack flash on the album screen: the whole-header
@@ -2760,7 +2800,7 @@ export function LibraryScreen(): React.JSX.Element {
         )}
         {crossMode && !crossState && !searching && (
           <div className="text-[15px] text-faint pt-4 px-1">
-            Search every built library index at once —{" "}
+            Search every built library index at once:{" "}
             {readyIndexes.map((x) => x.serverName).join(", ")}.
           </div>
         )}
@@ -3080,14 +3120,7 @@ export function LibraryScreen(): React.JSX.Element {
           onAction={(action, playFromId) => {
             setMenu(null);
             if (action === "PLAY") void playContainer(menu.node, null);
-            else if (action === "PLAY_FROM_HERE" && menu.node.parentId != null)
-              // needs the parent ALBUM's DIDL, starting from this track
-              void act(
-                { ...menu.node, id: menu.node.parentId },
-                "PLAY_FROM_HERE",
-                null,
-                playFromId,
-              );
+            else if (action === "PLAY_FROM_HERE") void playAlbumFrom(menu.node);
             else void act(menu.node, action, null, playFromId);
           }}
           onSavePreset={() => {

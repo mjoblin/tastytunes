@@ -3,6 +3,7 @@ import { tt } from "@/api";
 import { useStore } from "@/store";
 import { nowPlayingInfoTarget } from "@/lib/mediaInfo";
 import { computeDr14 } from "@/lib/dr14";
+import { computeR128 } from "@/lib/r128";
 import { sniffSampleRate } from "@/lib/audioHeader";
 import { audioAnalysisKey, type AudioAnalysis } from "@shared/model";
 import { AudioLines } from "lucide-react";
@@ -43,6 +44,13 @@ interface Analysis {
   peakDb: number;
   rmsDb: number;
   crestDb: number;
+  /** EBU R128 (0.8.0): integrated loudness, loudness range, true peak, and the
+   *  gated block histogram for album integration. Null when the file's rate
+   *  could not be read honestly (the same rule as DR). */
+  lufs: number | null;
+  lra: number | null;
+  truePeakDb: number | null;
+  loudHist: number[] | null;
   /** TT dynamic range integer; <= 0 means "no honest number" and hides. */
   dr: number;
 }
@@ -75,8 +83,16 @@ function toStored(a: Analysis): AudioAnalysis {
     crestDb: num(a.crestDb),
     peakQ: Array.from(a.peak, (v) => Math.round(v * QUANT)),
     rmsQ: Array.from(a.rms, (v) => Math.round(v * QUANT)),
+    lufs: a.lufs,
+    lra: a.lra,
+    truePeakDb: a.truePeakDb,
+    loudHist: a.loudHist,
   };
 }
+/** True for a stored analysis written before the loudness fields existed
+ *  (the field is absent; a measured-but-null loudness is stored as null). */
+const predatesLoudness = (st: AudioAnalysis): boolean => st.loudHist === undefined;
+
 function fromStored(st: AudioAnalysis): Analysis {
   return {
     dr: st.dr,
@@ -85,6 +101,10 @@ function fromStored(st: AudioAnalysis): Analysis {
     crestDb: st.crestDb ?? -Infinity,
     peak: Float32Array.from(st.peakQ, (v) => v / QUANT),
     rms: Float32Array.from(st.rmsQ, (v) => v / QUANT),
+    lufs: st.lufs ?? null,
+    lra: st.lra ?? null,
+    truePeakDb: st.truePeakDb ?? null,
+    loudHist: st.loudHist ?? null,
   };
 }
 
@@ -102,7 +122,10 @@ export function analyzeTrack(
   const p = (async (): Promise<Analysis | null> => {
     if (contentKey) {
       const stored = await tt.audioAnalysisGet(contentKey);
-      if (stored) return fromStored(stored);
+      // an entry from before loudness (0.7.0's cache shape) is incomplete:
+      // measure it again ONCE, on the next play or Analyze audio, rather than
+      // carry the gap forever (user, 2026-09-05: re-analysis showed only DR)
+      if (stored && !predatesLoudness(stored)) return fromStored(stored);
     }
     const bytes = await tt.expTrackAudio(serverUdn, objectId);
     if (!bytes) return null;
@@ -176,7 +199,20 @@ export function analyzeTrack(
       const peakDb = db(globalPeak);
       const rmsDb = db(globalN > 0 ? Math.sqrt(globalSumSq / globalN) : 0);
       const dr = native ? computeDr14(chans, audio.sampleRate) : 0;
-      const analysis: Analysis = { peak, rms, peakDb, rmsDb, crestDb: peakDb - rmsDb, dr };
+      // loudness rides the same honesty rule as DR: only at the file's own rate
+      const r128 = native ? computeR128(chans, audio.sampleRate) : null;
+      const analysis: Analysis = {
+        peak,
+        rms,
+        peakDb,
+        rmsDb,
+        crestDb: peakDb - rmsDb,
+        dr,
+        lufs: r128?.lufs ?? null,
+        lra: r128?.lra ?? null,
+        truePeakDb: r128?.truePeakDb ?? null,
+        loudHist: r128?.hist ?? null,
+      };
       if (contentKey) void tt.audioAnalysisPut(contentKey, toStored(analysis));
       return analysis;
     } catch {
@@ -383,6 +419,11 @@ function draw(
   }
 }
 
+/** Integrated loudness as the standard writes it: one decimal, LUFS. */
+export function fmtLufs(v: number): string {
+  return `${v.toFixed(1)} LUFS`;
+}
+
 function fmtDb(v: number): string {
   return Number.isFinite(v) ? `${v.toFixed(1)} dB` : "–";
 }
@@ -403,8 +444,11 @@ export function drTone(dr: number): { tone: string; word: string } {
 export function DrBadge({
   dr,
   className,
+  lufs = null,
 }: {
   dr: number;
+  /** Integrated loudness, when known — the tooltip carries it beside the band word. */
+  lufs?: number | null;
   /** Overrides the default ml-2.5 (row cells manage their own spacing). */
   className?: string;
 }): React.JSX.Element | null {
@@ -412,7 +456,7 @@ export function DrBadge({
   const { tone, word } = drTone(dr);
   return (
     <span
-      title={`Dynamic range (the TT DR procedure, as in the DR database): ${word}`}
+      title={`Dynamic range (the TT DR procedure, as in the DR database): ${word}${lufs != null ? ` · loudness ${fmtLufs(lufs)}` : ""}`}
       className={`rounded px-1 py-px ${className ?? "ml-2.5"}`}
       style={{
         color: tone,
@@ -483,6 +527,7 @@ export function Waveform({
           <div className="mt-1.5 font-mono text-[10.5px] text-faint">
             peak {fmtDb(analysis.peakDb)} · rms {fmtDb(analysis.rmsDb)} · crest{" "}
             {fmtDb(analysis.crestDb)}
+            {analysis.lufs != null && ` · ${fmtLufs(analysis.lufs)}`}
           </div>
         </>
       )}
@@ -564,6 +609,7 @@ export function NowPlayingWaveform(): React.JSX.Element | null {
       <div className="mt-2 text-center font-mono text-[10.5px] text-faint">
         peak {fmtDb(analysis.peakDb)} · rms {fmtDb(analysis.rmsDb)} · crest{" "}
         {fmtDb(analysis.crestDb)}
+        {analysis.lufs != null && ` · ${fmtLufs(analysis.lufs)}`}
       </div>
     </div>
   );
@@ -666,6 +712,7 @@ export function InfoWaveform({
           <canvas ref={canvasRef} className="w-full h-16 block" />
           <div className="mt-1.5 font-mono text-[10.5px] text-faint">
             peak {fmtDb(state.peakDb)} · rms {fmtDb(state.rmsDb)} · crest {fmtDb(state.crestDb)}
+            {state.lufs != null && ` · ${fmtLufs(state.lufs)}`}
           </div>
         </>
       )}
@@ -680,6 +727,20 @@ export function InfoWaveform({
  * Format sections' Dynamic range row. Never a second time beside a waveform
  * (user call, 2026-09-01: one home per fact).
  */
+/** The album's (or track's) integrated loudness as a chip beside DR — neutral
+ *  tone: a loudness is a fact about a master, not a verdict. */
+export function LufsChip({ lufs }: { lufs: number }): React.JSX.Element {
+  return (
+    <span
+      className="badge"
+      data-lufs-chip
+      title="Integrated loudness (EBU R128 / ITU-R BS.1770), gated across the whole album"
+    >
+      {fmtLufs(lufs)}
+    </span>
+  );
+}
+
 export function DrChip({ dr }: { dr: number }): React.JSX.Element | null {
   if (dr <= 0) return null;
   const { tone, word } = drTone(dr);
@@ -710,6 +771,20 @@ export function usePlayingDr(): number | null {
     ref?.contentKey ?? null,
   );
   return analysis != null && analysis !== "loading" && analysis.dr > 0 ? analysis.dr : null;
+}
+
+/** The playing track's loudness facts for the Info surfaces (null until measured). */
+export function usePlayingLoudness(): { lufs: number | null; truePeakDb: number | null } | null {
+  const enabled = useStore((s) => s.settings.waveforms);
+  const ref = usePlayingFileRef();
+  const analysis = usePeaks(
+    enabled ? (ref?.serverUdn ?? null) : null,
+    ref?.objectId ?? null,
+    ref?.contentKey ?? null,
+  );
+  return analysis != null && analysis !== "loading" && analysis.lufs != null
+    ? { lufs: analysis.lufs, truePeakDb: analysis.truePeakDb }
+    : null;
 }
 
 /** Now Playing's format row wears the playing track's DR — at the END of the

@@ -4,6 +4,7 @@ import { useStore } from "@/store";
 import { CrossfadeArt } from "@/components/media/CrossfadeArt";
 import { usePlayhead } from "@/hooks/usePlayhead";
 import { useArtLoadable } from "@/hooks/useArtLoadable";
+import { useBestArt } from "@/lib/bestArt";
 import { useFadedText, useLyrics } from "@/hooks/useLyrics";
 import { useSettledSnapshot } from "@/hooks/useSettledSnapshot";
 import { cx, deriveNowPlaying } from "@/lib/format";
@@ -25,6 +26,14 @@ export function DisplayMode(): React.JSX.Element {
   const [clock, setClock] = useState(() => timeNow());
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const meta = deriveNowPlaying(playState, nowPlaying);
+  // Display mode's 46vmin tile is the biggest art in the app: the file's own
+  // picture when the server's is small (lib/bestArt)
+  const art = useBestArt(
+    meta.artUrl,
+    !meta.isRadio && meta.title
+      ? { title: meta.title, artist: meta.subtitle ?? null, album: meta.album ?? null }
+      : null,
+  );
 
   // Title/artist/badges render from a SETTLED snapshot and fade as one group:
   // on track change the group fades out, and only once the metadata settles
@@ -65,7 +74,7 @@ export function DisplayMode(): React.JSX.Element {
     idleTimer.current = setTimeout(() => setCursorIdle(true), 3000);
   };
 
-  const artLoadable = useArtLoadable(meta.artUrl);
+  const artLoadable = useArtLoadable(art);
   const lyricsToggleable = settings.lyrics && !meta.isRadio && !!meta.subtitle;
   const toggleLyrics = async (): Promise<void> => {
     await saveSettings({ displayLyrics: !settings.displayLyrics });
@@ -76,11 +85,11 @@ export function DisplayMode(): React.JSX.Element {
       className={cx("fixed inset-0 z-40 bg-bg overflow-hidden", cursorIdle && "cursor-hidden")}
       onMouseMove={onMouseMove}
     >
-      {meta.artUrl && artLoadable && (
+      {art && artLoadable && (
         <div
           aria-hidden
           className="absolute inset-0 bg-center bg-cover scale-125 blur-[110px] opacity-25 saturate-150"
-          style={{ backgroundImage: `url(${meta.artUrl})` }}
+          style={{ backgroundImage: `url(${art})` }}
         />
       )}
 
@@ -148,7 +157,7 @@ export function DisplayMode(): React.JSX.Element {
             re-centering the whole group and shifting the art. */}
         <div className="relative -translate-y-[7vmin]">
           <CrossfadeArt
-            src={meta.artUrl}
+            src={art}
             className="w-[46vmin] h-[46vmin] object-cover rounded-2xl art-glow"
             fallback={
               <div className="w-[46vmin] h-[46vmin] rounded-2xl bg-raised ring-1 ring-edge flex items-center justify-center">
