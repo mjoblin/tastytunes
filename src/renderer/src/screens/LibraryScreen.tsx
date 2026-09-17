@@ -1802,6 +1802,8 @@ export function LibraryScreen(): React.JSX.Element {
                       const building = state === "building";
                       const failed = state === "failed";
                       const unindexed = state === "none" && !s.searchable;
+                      // the stick's contents changed and the app will not walk it unasked
+                      const stale = st?.stale === true;
                       const Icon = s.isStreamer ? Usb : HardDrive;
                       return (
                         <div
@@ -1820,7 +1822,9 @@ export function LibraryScreen(): React.JSX.Element {
                               ? "In standby. USB content appears once the streamer wakes."
                               : failed
                                 ? `Couldn't index (${st?.failure ?? "no index"}). Click to retry.`
-                                : undefined
+                                : stale
+                                  ? "The drive's contents changed since it was indexed."
+                                  : undefined
                           }
                           className={cx(
                             "group relative rounded-2xl p-2 pb-2.5 bg-raised/50 ring-1 ring-edge card-hover-glow cursor-pointer transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]",
@@ -1866,6 +1870,18 @@ export function LibraryScreen(): React.JSX.Element {
                               <span className="motion-safe:animate-pulse">Indexing…</span>
                             ) : failed ? (
                               "Couldn't index · Retry"
+                            ) : state === "ready" && st && stale ? (
+                              <button
+                                data-library-source-build
+                                data-library-source-stale
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void tt.mediaIndexRebuild(s.udn);
+                                }}
+                                className="text-gold/90 hover:text-gold transition-colors"
+                              >
+                                Changed · Re-index
+                              </button>
                             ) : state === "ready" && st ? (
                               `Indexed · ${fmtCount(st.albums)} ${st.albums === 1 ? "album" : "albums"}`
                             ) : unindexed ? (

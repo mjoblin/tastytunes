@@ -38,6 +38,10 @@ const VERSION = 1; // salted into every id: a format change misses cleanly
 const BUDGET_BYTES = 200 * 1024 * 1024;
 const PASSTHROUGH_MAX = 2 * 1024 * 1024;
 const MAX_PARALLEL = 3;
+// the streamer's own art server hands out the ORIGINAL embedded pictures, unresized
+// (9 MB for one, 9 s, 2026-09-16), from the one application that is also its control
+// socket: one at a time from it
+const MAX_PARALLEL_DEVICE = 1;
 const WRITE_DELAY_MS = 2000;
 export const JPEG_QUALITY = 85;
 
@@ -58,6 +62,8 @@ type Made = { bytes: Buffer; type: string };
 const inflight = new Map<string, Promise<Record<ArtTier, Made> | null>>();
 let running = 0;
 const waiters: Array<() => void> = [];
+let deviceRunning = 0;
+const deviceWaiters: Array<() => void> = [];
 
 const dir = (): string => join(app.getPath("userData"), "cache", "art");
 const indexFile = (): string => join(dir(), "index.json");
@@ -126,7 +132,12 @@ function evict(map: Map<string, Entry>): void {
   }
 }
 
-async function gate<T>(work: () => Promise<T>): Promise<T> {
+async function gate<T>(work: () => Promise<T>, device: boolean): Promise<T> {
+  if (device) {
+    while (deviceRunning >= MAX_PARALLEL_DEVICE)
+      await new Promise<void>((r) => deviceWaiters.push(r));
+    deviceRunning++;
+  }
   if (running >= MAX_PARALLEL) await new Promise<void>((r) => waiters.push(r));
   running++;
   try {
@@ -134,6 +145,10 @@ async function gate<T>(work: () => Promise<T>): Promise<T> {
   } finally {
     running--;
     waiters.shift()?.();
+    if (device) {
+      deviceRunning--;
+      deviceWaiters.shift()?.();
+    }
   }
 }
 
@@ -151,7 +166,11 @@ export async function fetchOrigin(url: string): Promise<{ raw: Buffer; type: str
 }
 
 /** Every tier of one origin picture, made from one fetch and stored. */
-function makeAll(key: string, origin: string): Promise<Record<ArtTier, Made> | null> {
+function makeAll(
+  key: string,
+  origin: string,
+  device: boolean,
+): Promise<Record<ArtTier, Made> | null> {
   const pending = inflight.get(key);
   if (pending) return pending;
   const run = gate(async () => {
@@ -187,7 +206,7 @@ function makeAll(key: string, origin: string): Promise<Record<ArtTier, Made> | n
     evict(map);
     save();
     return made;
-  }).finally(() => inflight.delete(key));
+  }, device).finally(() => inflight.delete(key));
   inflight.set(key, run);
   return run;
 }
@@ -197,7 +216,13 @@ function makeAll(key: string, origin: string): Promise<Record<ArtTier, Made> | n
  * tier from one fetch of `origin`, stored and served. Null when the origin
  * does not answer.
  */
-export async function artThumb(key: string, tier: ArtTier, origin: string): Promise<Made | null> {
+export async function artThumb(
+  key: string,
+  tier: ArtTier,
+  origin: string,
+  /** The origin is the streamer's own art server: fetched one at a time. */
+  device = false,
+): Promise<Made | null> {
   const map = load();
   const id = idFor(key, tier);
   const hit = map.get(id);
@@ -211,7 +236,7 @@ export async function artThumb(key: string, tier: ArtTier, origin: string): Prom
       map.delete(id); // the file went; make it again
     }
   }
-  const made = await makeAll(key, origin);
+  const made = await makeAll(key, origin, device);
   return made?.[tier] ?? null;
 }
 
