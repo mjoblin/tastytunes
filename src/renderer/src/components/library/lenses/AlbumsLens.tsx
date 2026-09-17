@@ -21,7 +21,7 @@ import {
 import { cx, matchesFilter, fmtCount } from "@/lib/format";
 import { usePlayStats, playedBucket, playedOptionsOf } from "@/lib/playStats";
 import { useStore } from "@/store";
-import { useAlbumDr } from "@/lib/audioAnalysis";
+import { useAlbumDr, USB_ANALYSIS_HINT } from "@/lib/audioAnalysis";
 import { FilterInput } from "@/components/controls/FilterInput";
 import { HeaderChip, GAP_BETWEEN, GAP_WITHIN } from "@/components/chrome/Chrome";
 import { SortChip } from "@/components/controls/SortChip";
@@ -590,6 +590,9 @@ export function AlbumsLens({
           })()}
           <SelectionVerb
             icon={<AudioLines size={13} />}
+            disabled={chosenA().every((n) => actions.unreadable(n))}
+            title={chosenA().every((n) => actions.unreadable(n)) ? USB_ANALYSIS_HINT : undefined}
+            data-analyze-albums
             onClick={() => {
               actions.analyzeAlbums(chosenA());
               setSelA(new Set());

@@ -54,7 +54,8 @@ export function editTools(ctx: ToolContext): Record<string, ToolImpl> {
         // the album's id came from the index: a USB server's may have rotted since
         const fresh = await freshObjectId(s.connection.host, udn, offer.node.id);
         if ("error" in fresh) return err(fresh.error);
-        const kids = (await browseChildrenOf(s.connection.host, udn, fresh.id)) ?? [];
+        const listed = await browseChildrenOf(s.connection.host, udn, fresh.id);
+        const kids = typeof listed === "string" ? [] : listed;
         const tracks = kids
           .filter((k) => !k.isContainer)
           .sort((x, y) => (trackPosition(x) ?? 0) - (trackPosition(y) ?? 0));

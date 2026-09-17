@@ -5,9 +5,10 @@ import {
   type MediaNode,
   type MediaServerInfo,
 } from "@shared/model";
+import { usbServer } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
-import { analyzeAlbum, analyzeTracks } from "@/lib/audioAnalysis";
+import { analyzeAlbum, analyzeTracks, USB_ANALYSIS_HINT } from "@/lib/audioAnalysis";
 import { fmtCount } from "@/lib/format";
 import { isAlbumClass } from "@/lib/media";
 import type { MediaMenuItem } from "@/lib/mediaMenus";
@@ -170,8 +171,20 @@ export function useLibraryMenus(d: {
   };
   /** The album selection bar's Analyze audio (0.8.0): each album's own sweep in
    *  turn, so every one lands its album DR; the sweep queue serializes them. */
+  /** True for a node on the streamer's own server, whose audio the app cannot
+   *  read (USB_ANALYSIS_HINT says why); the verbs below refuse it up front. */
+  const unreadable = (node: MediaNode): boolean => {
+    const udn = nodeUdn(node);
+    const server = udn != null ? servers?.find((s) => s.udn === udn) : undefined;
+    return server != null && usbServer(server);
+  };
   const runAnalyzeAlbums = async (nodes: MediaNode[]): Promise<void> => {
-    for (const node of nodes) {
+    const readable = nodes.filter((n) => !unreadable(n));
+    if (readable.length === 0 && nodes.length > 0) {
+      showNotice(USB_ANALYSIS_HINT);
+      return;
+    }
+    for (const node of readable) {
       const udn = nodeUdn(node);
       if (udn) await runAnalyzeAlbum(node, udn);
     }
@@ -179,8 +192,13 @@ export function useLibraryMenus(d: {
   /** The Tracks lens's sweep over what's shown — the album sweep's toasts,
    *  minus the album DR (a filter is not an album). */
   const runAnalyzeTracks = async (chosen: MediaNode[], label: string): Promise<void> => {
+    const readable = chosen.filter((n) => !unreadable(n));
+    if (readable.length === 0 && chosen.length > 0) {
+      showNotice(USB_ANALYSIS_HINT);
+      return;
+    }
     showToast({ kind: "success", text: `Analyzing ${label}…` });
-    const r = await analyzeTracks(label, chosen);
+    const r = await analyzeTracks(label, readable);
     if (r === "busy" || r == null) return;
     if (r.analyzed === r.tracks)
       showToast({ kind: "success", text: `Analyzed ${fmtCount(r.tracks)} tracks` });
@@ -213,6 +231,10 @@ export function useLibraryMenus(d: {
     if (!waveformsOn || !node.isContainer || !isAlbumClass(node.upnpClass)) return undefined;
     const udn = nodeUdn(node);
     if (!udn) return undefined;
+    // the streamer's own server: the verb stays, disabled, saying why — the
+    // outcome is known before the click, and a vanished item teaches nothing
+    if (unreadable(node))
+      return [{ label: "Analyze audio", disabled: true, hint: USB_ANALYSIS_HINT, run: () => {} }];
     return [{ label: "Analyze audio", run: () => void runAnalyzeAlbum(node, udn) }];
   };
 
@@ -232,5 +254,6 @@ export function useLibraryMenus(d: {
     runAnalyzeAlbums,
     runAnalyzeTracks,
     saveNodesAsPlaylist,
+    unreadable,
   };
 }

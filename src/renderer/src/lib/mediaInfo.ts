@@ -129,7 +129,8 @@ export function nowPlayingInfoTarget(
     );
   return {
     target: { node: stub, stream, serverName: null },
-    localQuery: local && title ? { kind: "track", title, artist, album } : null,
+    localQuery:
+      local && title ? { kind: "track", title, artist, album, artUrl: stub.artUrl } : null,
   };
 }
 

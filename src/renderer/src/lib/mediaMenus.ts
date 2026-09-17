@@ -25,6 +25,10 @@ import { openInfoForRef } from "@/lib/mediaInfo";
 export interface MediaMenuItem {
   label: string;
   run(): void;
+  /** Shown but inert, with the reason as a hint line under the label (never
+   *  a hover tooltip: a disabled control swallows the pointer). */
+  disabled?: boolean;
+  hint?: string;
 }
 
 export interface MediaMenuCaps {

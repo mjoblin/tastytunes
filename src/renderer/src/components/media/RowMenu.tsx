@@ -17,7 +17,9 @@ export function RowMenu({
   /** What the menu is about — a track or favorite title, shown truncated. */
   title: string;
   at: { x: number; y: number };
-  items: Array<{ label: string; run: () => void }>;
+  /** A disabled item stays visible with its reason as a hint line (the
+   *  library menus' shape): a vanished verb teaches nothing. */
+  items: Array<{ label: string; run: () => void; disabled?: boolean; hint?: string }>;
   onClose(): void;
 }): React.JSX.Element {
   return (
@@ -32,13 +34,26 @@ export function RowMenu({
       {items.map((it) => (
         <button
           key={it.label}
+          disabled={it.disabled}
+          aria-disabled={it.disabled || undefined}
+          data-menu-disabled={it.disabled ? it.label : undefined}
           onClick={() => {
+            if (it.disabled) return;
             onClose();
             it.run();
           }}
-          className="w-full px-2.5 py-1.5 rounded-lg text-left text-[13px] text-dim hover:text-ink hover:bg-veil transition-colors"
+          className={
+            it.disabled
+              ? "w-full px-2.5 py-1.5 rounded-lg text-left text-[13px] text-faint cursor-default"
+              : "w-full px-2.5 py-1.5 rounded-lg text-left text-[13px] text-dim hover:text-ink hover:bg-veil transition-colors"
+          }
         >
           {it.label}
+          {it.hint ? (
+            <span data-menu-hint className="block text-[11px] leading-snug text-faint/80">
+              {it.hint}
+            </span>
+          ) : null}
         </button>
       ))}
     </PopoverCard>

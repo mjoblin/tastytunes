@@ -4,7 +4,7 @@ import {
   searchIndex,
   searchServer as librarySearch,
 } from "./mediaIndex";
-import { refreshServers } from "./upnpBrowser";
+import { refreshServers, serverUdnForArt } from "./upnpBrowser";
 import { trackArtists } from "@shared/model";
 import type { MediaNode } from "@shared/model";
 import type { ContentRef } from "@shared/model";
@@ -82,7 +82,12 @@ export async function resolveContent(
 
   // 1. Every ready index at once — including the Browse-only servers a live
   //    search can't reach (their ContentDirectory Search 500s).
-  for (const group of searchAllIndexes(ref.title)) {
+  // the server the ref's art names (the one playing it) answers first
+  const preferred = serverUdnForArt(ref.artUrl);
+  const groups = [...searchAllIndexes(ref.title)].sort((a, b) =>
+    a.udn === preferred ? -1 : b.udn === preferred ? 1 : 0,
+  );
+  for (const group of groups) {
     let hit = best(ref, group.items);
     if (!hit) continue;
     // a Browse-built index (the streamer's USB) may hold ids the device has

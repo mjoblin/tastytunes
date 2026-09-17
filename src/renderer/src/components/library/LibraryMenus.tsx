@@ -107,16 +107,29 @@ export function ItemMenu({
       {items.map((item) => (
         <button
           key={item.label}
+          disabled={item.disabled}
+          aria-disabled={item.disabled || undefined}
+          data-menu-disabled={item.disabled ? item.label : undefined}
           onClick={() => {
+            if (item.disabled) return;
             // close-then-run, the RowMenu contract — builder items (pivot,
             // heart) don't know about this menu's state, and callers that
             // also close themselves just close twice, harmlessly
             onClose();
             item.run();
           }}
-          className="w-full px-2.5 py-1.5 rounded-lg text-left text-[13px] text-dim hover:text-ink hover:bg-veil transition-colors"
+          className={
+            item.disabled
+              ? "w-full px-2.5 py-1.5 rounded-lg text-left text-[13px] text-faint cursor-default"
+              : "w-full px-2.5 py-1.5 rounded-lg text-left text-[13px] text-dim hover:text-ink hover:bg-veil transition-colors"
+          }
         >
           {item.label}
+          {item.hint ? (
+            <span data-menu-hint className="block text-[11px] leading-snug text-faint/80">
+              {item.hint}
+            </span>
+          ) : null}
         </button>
       ))}
     </PopoverCard>
