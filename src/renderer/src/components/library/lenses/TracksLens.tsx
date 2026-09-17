@@ -11,7 +11,7 @@ import { cx, matchesFilter, fmtCount, fmtAgo } from "@/lib/format";
 import { usePlayStats, playedBucket, playedOptionsOf } from "@/lib/playStats";
 import { useStore } from "@/store";
 import { FACT_SEP } from "@/lib/mediaFacts";
-import { useKnownStats } from "@/lib/audioAnalysis";
+import { useKnownStats, USB_ANALYSIS_HINT } from "@/lib/audioAnalysis";
 import { useWindowedList } from "@/hooks/useWindowedList";
 import { fmtLufs } from "@/components/media/Waveform";
 import { FilterInput } from "@/components/controls/FilterInput";
@@ -486,6 +486,12 @@ export function TracksLens({
               ? [
                   {
                     label: "Analyze audio",
+                    // every shown track on the streamer's own server: the verb
+                    // stays, disabled, with the reason (a mixed set runs for
+                    // the readable ones)
+                    ...(shown.every((n) => actions.unreadable(n))
+                      ? { disabled: true, hint: USB_ANALYSIS_HINT }
+                      : {}),
                     run: () => actions.analyzeTracks?.(shown, `${fmtCount(shown.length)} tracks`),
                   },
                 ]

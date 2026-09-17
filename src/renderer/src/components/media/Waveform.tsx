@@ -46,6 +46,13 @@ const CAPTURE_BUCKETS = 1200;
 export type Analysis = Measured;
 
 const cache = new Map<string, Promise<Analysis | null>>();
+// A read that came back empty is NOT kept as the answer for the session: the
+// disk is asked by content on every call (an Analyze audio sweep may have
+// written this track's analysis under its content key since — the user's
+// "no DR, no scene until a restart", 2026-09-16, a track that had resolved
+// to the unreadable USB copy), and the network is held off for a minute.
+const failedAt = new Map<string, number>();
+const FAILED_MEMO_MS = 60_000;
 
 /**
  * Optimistic seek hold, shared by every waveform surface: between a click
@@ -137,6 +144,8 @@ export function analyzeTrack(
       )
         return fromStored(stored);
     }
+    const failed = failedAt.get(key);
+    if (failed != null && Date.now() - failed < FAILED_MEMO_MS) return null;
     const bytes = await tt.expTrackAudio(serverUdn, objectId);
     if (!bytes) return null;
     const u8 = new Uint8Array(bytes);
@@ -177,6 +186,14 @@ export function analyzeTrack(
     }
   })();
   cache.set(key, p);
+  void p.then(
+    (a) => {
+      if (a != null) return;
+      cache.delete(key);
+      failedAt.set(key, Date.now());
+    },
+    () => cache.delete(key),
+  );
   return p;
 }
 

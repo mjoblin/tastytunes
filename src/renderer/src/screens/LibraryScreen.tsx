@@ -743,6 +743,7 @@ export function LibraryScreen(): React.JSX.Element {
     runAnalyzeAlbums,
     runAnalyzeTracks,
     saveNodesAsPlaylist,
+    unreadable,
   } = useLibraryMenus({
     serverUdn,
     servers,
@@ -1245,6 +1246,7 @@ export function LibraryScreen(): React.JSX.Element {
     goToAlbum: goToAlbumFromLens,
     dragAlbum: startAlbumDrag,
     analyzeAlbums: (nodes) => void runAnalyzeAlbums(nodes),
+    unreadable,
     goToArtist: goToArtistFromLens,
     saveAsPlaylist: (chosen, name) => void saveNodesAsPlaylist(chosen, name),
     analyzeTracks: (chosen, label) => void runAnalyzeTracks(chosen, label),

@@ -28,6 +28,9 @@ export interface LensActions {
   /** The album selection bar's Analyze audio: each album's own sweep, in order
    *  (album DRs need every track of the album, so a track sweep will not do). */
   analyzeAlbums(nodes: MediaNode[]): void;
+  /** A node whose audio the app cannot read (the streamer's own server): the
+   *  analysis verbs show disabled with USB_ANALYSIS_HINT instead of failing. */
+  unreadable(node: MediaNode): boolean;
   nodeFavorited(node: MediaNode): boolean;
   trackQueued(node: MediaNode): boolean;
   isCurrentTrack(node: MediaNode): boolean;

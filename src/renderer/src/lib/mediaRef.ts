@@ -194,5 +194,5 @@ export function refToPlaylistItem(ref: MediaRef): PlaylistItem {
 }
 
 export function refToContentRef(ref: MediaRef): ContentRef {
-  return { title: ref.title, artist: ref.artist, album: ref.album };
+  return { title: ref.title, artist: ref.artist, album: ref.album, artUrl: ref.artUrl };
 }

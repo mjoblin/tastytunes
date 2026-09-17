@@ -41,7 +41,7 @@ import {
 } from "./reconcile";
 import {
   browseChildrenOf,
-  browseMetadataNode,
+  probeObject,
   getSystemUpdateID,
   refreshServers,
   search as liveSearch,
@@ -342,7 +342,15 @@ async function crawlBrowse(
     if (visited.has(id)) continue;
     visited.add(id);
     const children = await browseChildrenOf(host, server.udn, id);
-    if (!children) continue;
+    if (children === "missing") continue;
+    if (children === "unreachable") {
+      // the server stopped answering mid-walk: a partial tree must not replace
+      // the index it has (the albums it did not reach would read as gone)
+      console.log(
+        `[mediaIndex] ${server.name}: the server stopped answering; the walk is abandoned`,
+      );
+      return null;
+    }
     const parent = parents.get(id) ?? null;
     const path = parent?.path ?? [];
     for (const raw of children) {
@@ -532,7 +540,10 @@ export async function revalidate(
   known.set(udn, server);
   const id = await getSystemUpdateID(host, udn);
   let stale = id != null && existing.updateId != null && id !== existing.updateId;
-  if (!stale && probeId) stale = (await browseMetadataNode(host, udn, probeId)) == null;
+  // the id in hand is stale only when the server REFUSES it; a server that is
+  // not answering (a null counter, an unreachable probe) says nothing about
+  // the id, and a walk into its silence was what took the Evo down (2026-09-16)
+  if (!stale && probeId) stale = (await probeObject(host, udn, probeId)) === "missing";
   if (!stale) return false;
   console.log(
     `[mediaIndex] ${server.name}: ids rotated (counter ${existing.updateId} → ${id}), rebuilding`,
@@ -564,8 +575,10 @@ export function ensureFresh(host: string, servers: MediaServerInfo[]): void {
     void (async () => {
       if (existing) {
         const id = await getSystemUpdateID(host, server.udn);
+        // a counter the server did not answer is no reason to walk it, TTL or not
+        if (id == null) return;
         const stale =
-          (id != null && existing.updateId != null && id !== existing.updateId) ||
+          (existing.updateId != null && id !== existing.updateId) ||
           Date.now() - existing.builtAt > TTL_MS;
         if (!stale) return;
         await build(host, server, existing.strategy, "refresh");

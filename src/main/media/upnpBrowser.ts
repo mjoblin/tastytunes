@@ -22,6 +22,9 @@ interface ServerEntry extends MediaServerInfo {
   controlUrl: string;
   /** Raw SearchCaps: "*" (anything), a CSV of properties, or "" (no search). */
   searchCaps: string;
+  /** The description URL's hostname and origin — what an art URL names. */
+  host: string;
+  origin: string;
 }
 
 let servers = new Map<string, ServerEntry>();
@@ -29,9 +32,128 @@ let servers = new Map<string, ServerEntry>();
 // a failed browse falls back to re-walking the breadcrumb titles from root.
 const nodeCache = new Map<string, MediaNode[]>();
 
+/**
+ * NOT ANSWERING IS NOT NOT FOUND (2026-09-16, the user's Evo). A server that
+ * refuses an object ("no such object", a SOAP 701 fault, a 4xx) is answering:
+ * the id is gone and a heal is right. A server that times out, resets the
+ * connection or refuses it is NOT answering, and every heal the app used to
+ * run on that silence — the breadcrumb re-walk, the index revalidation's
+ * rebuild — was more traffic into a server already down. The streamer's own
+ * media server took the whole device with it: its ContentDirectory and the
+ * control socket are one application, and a re-walk of the stick beside a
+ * reconnect's burst restarted it, four times in a row. So every SOAP answer
+ * is one of three things, and only "missing" heals.
+ */
+export type Miss = "missing" | "unreachable";
+const MISSING_RE = /no such object|<errorCode>\s*701\s*<\/errorCode>/i;
+
+// ---------------------------------------------------- the device's own lane
+//
+// The streamer's own ContentDirectory (USB storage) gets ONE lane: requests to
+// it run one at a time with a small gap, and a request it does not answer
+// opens a cool-off in which nothing asks it anything (the callers see
+// "unreachable" at once, no network). A reconnect's burst — the connect
+// hook's listing, the Library's remount, the presets, the playing track's
+// lookup — collapses into whatever the lane lets through, and a device that
+// just restarted is left alone long enough to finish coming up.
+const DEVICE_GAP_MS = 40;
+// the cool-off, shortened by the harness (TASTYTUNES_DEVICE_COOL_MS) so a suite
+// can watch it open and close
+const DEVICE_COOL_MS = Number(process.env["TASTYTUNES_DEVICE_COOL_MS"] ?? 30_000);
+let deviceTail: Promise<void> = Promise.resolve();
+let deviceCoolUntil = 0;
+
+/** True while the device's own media server is being left alone after a silence. */
+export function deviceCooling(): boolean {
+  return Date.now() < deviceCoolUntil;
+}
+
+class DeviceCoolingError extends Error {
+  constructor() {
+    super("the streamer's media server is not answering; holding off");
+  }
+}
+
+const pause = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/** A ContentDirectory fetch: straight through for other servers, through the
+ *  lane for the device's own. Rethrows as fetch does; a throw from the device
+ *  opens the cool-off. */
+async function cdFetch(url: string, init: RequestInit, device: boolean): Promise<Response> {
+  if (!device) return loggedFetch("upnp", url, init);
+  if (Date.now() < deviceCoolUntil) throw new DeviceCoolingError();
+  const turn = deviceTail.then(async () => {
+    if (Date.now() < deviceCoolUntil) throw new DeviceCoolingError();
+    try {
+      return await loggedFetch("upnp", url, init);
+    } catch (e) {
+      deviceCoolUntil = Date.now() + DEVICE_COOL_MS;
+      console.log(
+        `[upnp] the streamer's media server is not answering; holding off for ${DEVICE_COOL_MS / 1000} s`,
+      );
+      throw e;
+    } finally {
+      await pause(DEVICE_GAP_MS);
+    }
+  });
+  deviceTail = turn.then(
+    () => undefined,
+    () => undefined,
+  );
+  return turn;
+}
+
+/** How a non-ok answer reads. The device's own server refuses a rotted id in
+ *  words (the mock says "no such object"; a 4xx is a refusal too), and a bare
+ *  5xx from it is a server under strain, not a verdict on the object. Any
+ *  other server's error answer is the answer. */
+function classify(status: number, body: string, device: boolean): Miss {
+  if (MISSING_RE.test(body) || (status >= 400 && status < 500)) return "missing";
+  return device ? "unreachable" : "missing";
+}
+
 // ------------------------------------------------------------ server registry
 
+// One listing per burst: the connect hook, the Library's mount and a
+// reconnect's remount all ask within the same second, and each listing is a
+// description fetch plus a capability call per server — into the device's own
+// server among them. A listing in hand this recent is the answer.
+const LISTING_MEMO_MS = 5000;
+let listing: { host: string; at: number; run: Promise<MediaServerInfo[]> } | null = null;
+
 export async function refreshServers(host: string): Promise<MediaServerInfo[]> {
+  if (listing && listing.host === host && Date.now() - listing.at < LISTING_MEMO_MS)
+    return listing.run;
+  const run = listServers(host);
+  listing = { host, at: Date.now(), run };
+  run.catch(() => {
+    if (listing?.run === run) listing = null;
+  });
+  return run;
+}
+
+/** The server whose description lives where this art URL does: the queue's
+ *  and play state's art names the server that is playing (Asset's own port,
+ *  the device's own address), so the same content on two servers resolves to
+ *  the one that is audible. Exact origin first, then the host alone (the
+ *  device serves art on :80 and its ContentDirectory on another port). */
+export function serverUdnForArt(artUrl: string | null | undefined): string | null {
+  if (!artUrl) return null;
+  let u: URL;
+  try {
+    u = new URL(artUrl);
+  } catch {
+    return null;
+  }
+  const all = [...servers.values()];
+  return (
+    all.find((s) => s.origin === u.origin)?.udn ??
+    all.find((s) => s.host === u.hostname)?.udn ??
+    null
+  );
+}
+
+async function listServers(host: string): Promise<MediaServerInfo[]> {
   const res = await fetch(`http://${host}/smoip/system/upnp`, {
     signal: AbortSignal.timeout(8000),
   });
@@ -52,17 +174,26 @@ export async function refreshServers(host: string): Promise<MediaServerInfo[]> {
   const next = new Map<string, ServerEntry>();
   for (const dev of body.data?.devices ?? []) {
     if (!dev.udn || !dev.description_url) continue;
-    const controlUrl = await contentDirectoryControlUrl(dev.description_url);
+    let where: URL;
+    try {
+      where = new URL(dev.description_url);
+    } catch {
+      continue;
+    }
+    const device = where.hostname === streamerIp;
+    const controlUrl = await contentDirectoryControlUrl(dev.description_url, device);
     if (!controlUrl) continue; // no ContentDirectory — a renderer-only device
-    const searchCaps = await getSearchCaps(controlUrl);
+    const searchCaps = await getSearchCaps(controlUrl, device);
     next.set(dev.udn, {
       udn: dev.udn,
       name: dev.name ?? dev.model ?? "Media server",
       model: dev.model ?? null,
-      isStreamer: new URL(dev.description_url).hostname === streamerIp,
+      isStreamer: device,
       searchable: searchCaps.length > 0,
       searchCaps,
       controlUrl,
+      host: where.hostname,
+      origin: where.origin,
     });
   }
   servers = next;
@@ -77,20 +208,24 @@ export async function refreshServers(host: string): Promise<MediaServerInfo[]> {
 }
 
 /** GetSearchCapabilities: "*" = anything, CSV = specific properties, "" = none. */
-async function getSearchCaps(controlUrl: string): Promise<string> {
+async function getSearchCaps(controlUrl: string, device: boolean): Promise<string> {
   try {
-    const res = await loggedFetch("upnp", controlUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": 'text/xml; charset="utf-8"',
-        SOAPAction: '"urn:schemas-upnp-org:service:ContentDirectory:1#GetSearchCapabilities"',
-      },
-      body: `<?xml version="1.0" encoding="utf-8"?>
+    const res = await cdFetch(
+      controlUrl,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": 'text/xml; charset="utf-8"',
+          SOAPAction: '"urn:schemas-upnp-org:service:ContentDirectory:1#GetSearchCapabilities"',
+        },
+        body: `<?xml version="1.0" encoding="utf-8"?>
 <s:Envelope s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/" xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
   <s:Body><u:GetSearchCapabilities xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"></u:GetSearchCapabilities></s:Body>
 </s:Envelope>`,
-      signal: AbortSignal.timeout(8000),
-    });
+        signal: AbortSignal.timeout(8000),
+      },
+      device,
+    );
     if (!res.ok) return "";
     const doc = parser.parse(await res.text()) as {
       Envelope?: { Body?: { GetSearchCapabilitiesResponse?: { SearchCaps?: unknown } } };
@@ -101,9 +236,12 @@ async function getSearchCaps(controlUrl: string): Promise<string> {
   }
 }
 
-async function contentDirectoryControlUrl(descriptionUrl: string): Promise<string | null> {
+async function contentDirectoryControlUrl(
+  descriptionUrl: string,
+  own: boolean,
+): Promise<string | null> {
   try {
-    const res = await loggedFetch("upnp", descriptionUrl, { signal: AbortSignal.timeout(8000) });
+    const res = await cdFetch(descriptionUrl, { signal: AbortSignal.timeout(8000) }, own);
     if (!res.ok) return null;
     const doc = parser.parse(await res.text()) as Record<string, never>;
     const device = (doc as { root?: { device?: unknown } }).root?.device as
@@ -149,53 +287,60 @@ function soapEnvelope(objectId: string, flag: string, start: number, count: numb
 </s:Envelope>`;
 }
 
+/** One Browse: the answer, or which kind of miss it was (see Miss). */
 async function soapBrowse(
   entry: ServerEntry,
   objectId: string,
   flag: "BrowseDirectChildren" | "BrowseMetadata",
   start = 0,
   count = PAGE_SIZE,
-): Promise<{ didl: string; returned: number; total: number } | null> {
+): Promise<{ didl: string; returned: number; total: number } | Miss> {
+  let res: Response;
+  let body: string;
   try {
-    const res = await loggedFetch("upnp", entry.controlUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": 'text/xml; charset="utf-8"',
-        SOAPAction: '"urn:schemas-upnp-org:service:ContentDirectory:1#Browse"',
+    res = await cdFetch(
+      entry.controlUrl,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": 'text/xml; charset="utf-8"',
+          SOAPAction: '"urn:schemas-upnp-org:service:ContentDirectory:1#Browse"',
+        },
+        body: soapEnvelope(objectId, flag, start, count),
+        signal: AbortSignal.timeout(15_000),
       },
-      body: soapEnvelope(objectId, flag, start, count),
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (!res.ok) return null;
-    const doc = parser.parse(await res.text()) as {
-      Envelope?: {
-        Body?: {
-          BrowseResponse?: { Result?: unknown; NumberReturned?: number; TotalMatches?: number };
-        };
+      entry.isStreamer,
+    );
+    body = await res.text();
+  } catch {
+    return "unreachable";
+  }
+  if (!res.ok) return classify(res.status, body, entry.isStreamer);
+  const doc = parser.parse(body) as {
+    Envelope?: {
+      Body?: {
+        BrowseResponse?: { Result?: unknown; NumberReturned?: number; TotalMatches?: number };
       };
     };
-    const br = doc.Envelope?.Body?.BrowseResponse;
-    const didl = text(br?.Result);
-    if (didl == null) return null;
-    return {
-      didl,
-      returned: Number(br?.NumberReturned ?? 0),
-      total: Number(br?.TotalMatches ?? 0),
-    };
-  } catch {
-    return null;
-  }
+  };
+  const br = doc.Envelope?.Body?.BrowseResponse;
+  const didl = text(br?.Result);
+  if (didl == null) return classify(res.status, body, entry.isStreamer);
+  return {
+    didl,
+    returned: Number(br?.NumberReturned ?? 0),
+    total: Number(br?.TotalMatches ?? 0),
+  };
 }
 
-// "0:06:58.000" -> seconds
-async function browseChildren(entry: ServerEntry, objectId: string): Promise<MediaNode[] | null> {
+async function browseChildren(entry: ServerEntry, objectId: string): Promise<MediaNode[] | Miss> {
   const first = await soapBrowse(entry, objectId, "BrowseDirectChildren");
-  if (!first) return null;
+  if (typeof first === "string") return first;
   let nodes = didlToNodes(first.didl);
   // Page through folders bigger than one response (and servers that cap it).
   while (nodes.length < first.total) {
     const more = await soapBrowse(entry, objectId, "BrowseDirectChildren", nodes.length);
-    if (!more) break;
+    if (typeof more === "string") break;
     const add = didlToNodes(more.didl);
     if (add.length === 0) break;
     nodes = nodes.concat(add);
@@ -216,23 +361,25 @@ export async function browse(
   if (cached) return cached;
 
   let nodes = await browseChildren(entry, id);
-  if (nodes == null && objectId != null) {
+  if (nodes === "missing" && objectId != null) {
     // Stale id (streamer-USB ids rot across standby) — drop this server's
-    // cache and re-walk the breadcrumb titles from the root.
+    // cache and re-walk the breadcrumb titles from the root. Only for an id
+    // the server REFUSED: a server that is not answering gets no re-walk.
     for (const k of [...nodeCache.keys()]) if (k.startsWith(`${serverUdn}|`)) nodeCache.delete(k);
     nodes = await rewalk(entry, titlePath);
   }
-  if (nodes == null) throw new Error("browse failed");
+  if (typeof nodes === "string") throw new Error("browse failed");
   nodeCache.set(key, nodes);
   return nodes;
 }
 
-async function rewalk(entry: ServerEntry, titlePath: string[]): Promise<MediaNode[] | null> {
+async function rewalk(entry: ServerEntry, titlePath: string[]): Promise<MediaNode[] | Miss> {
   let id = "0";
   for (const title of titlePath) {
     const kids = await browseChildren(entry, id);
-    const next = kids?.find((k) => k.isContainer && k.title === title);
-    if (!next) return null;
+    if (typeof kids === "string") return kids;
+    const next = kids.find((k) => k.isContainer && k.title === title);
+    if (!next) return "missing";
     id = next.id;
   }
   return browseChildren(entry, id);
@@ -269,15 +416,19 @@ async function searchPageRaw(
   </s:Body>
 </s:Envelope>`;
   try {
-    const res = await loggedFetch("upnp", entry.controlUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": 'text/xml; charset="utf-8"',
-        SOAPAction: '"urn:schemas-upnp-org:service:ContentDirectory:1#Search"',
+    const res = await cdFetch(
+      entry.controlUrl,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": 'text/xml; charset="utf-8"',
+          SOAPAction: '"urn:schemas-upnp-org:service:ContentDirectory:1#Search"',
+        },
+        body,
+        signal: AbortSignal.timeout(20_000),
       },
-      body,
-      signal: AbortSignal.timeout(20_000),
-    });
+      entry.isStreamer,
+    );
     if (!res.ok) return null;
     const doc = parser.parse(await res.text()) as {
       Envelope?: {
@@ -386,14 +537,35 @@ export async function searchPage(
   return searchPageRaw(entry, criteria, start, count);
 }
 
-/** Direct children of one container (paged internally) — the browse-crawl path. */
+/** Direct children of one container (paged internally) — the browse-crawl
+ *  path. A walk stops on "unreachable" (the server is not answering; the index
+ *  it has stands) and skips a "missing" container. */
 export async function browseChildrenOf(
   host: string,
   serverUdn: string,
   objectId: string,
-): Promise<MediaNode[] | null> {
+): Promise<MediaNode[] | Miss> {
   const entry = await entryFor(host, serverUdn);
   return browseChildren(entry, objectId);
+}
+
+/** Whether ONE object still answers: "present", "missing" (the server refused
+ *  the id — a rotted one) or "unreachable" (the server is not answering, which
+ *  says nothing about the id). The index revalidation's probe. */
+export async function probeObject(
+  host: string,
+  serverUdn: string,
+  objectId: string,
+): Promise<"present" | Miss> {
+  let entry: ServerEntry;
+  try {
+    entry = await entryFor(host, serverUdn);
+  } catch {
+    return "unreachable";
+  }
+  const r = await soapBrowse(entry, objectId, "BrowseMetadata", 0, 1);
+  if (typeof r === "string") return r;
+  return didlToNodes(r.didl)[0] ? "present" : "missing";
 }
 
 /**
@@ -409,7 +581,7 @@ export async function browseMetadataNode(
   try {
     const entry = await entryFor(host, serverUdn);
     const r = await soapBrowse(entry, objectId, "BrowseMetadata", 0, 1);
-    if (!r) return null;
+    if (typeof r === "string") return null;
     return didlToNodes(r.didl)[0] ?? null;
   } catch {
     return null;
@@ -430,7 +602,7 @@ export async function audioResUrl(
   try {
     const entry = await entryFor(host, serverUdn);
     const r = await soapBrowse(entry, objectId, "BrowseMetadata", 0, 1);
-    if (!r) return null;
+    if (typeof r === "string") return null;
     const m = /<res\b[^>]*audio[^>]*>\s*(http[^<\s]+)\s*<\/res>/i.exec(r.didl);
     return m ? m[1].replace(/&amp;/g, "&") : null;
   } catch {
@@ -446,18 +618,22 @@ export async function audioResUrl(
 export async function getSystemUpdateID(host: string, serverUdn: string): Promise<number | null> {
   try {
     const entry = await entryFor(host, serverUdn);
-    const res = await loggedFetch("upnp", entry.controlUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": 'text/xml; charset="utf-8"',
-        SOAPAction: '"urn:schemas-upnp-org:service:ContentDirectory:1#GetSystemUpdateID"',
-      },
-      body: `<?xml version="1.0" encoding="utf-8"?>
+    const res = await cdFetch(
+      entry.controlUrl,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": 'text/xml; charset="utf-8"',
+          SOAPAction: '"urn:schemas-upnp-org:service:ContentDirectory:1#GetSystemUpdateID"',
+        },
+        body: `<?xml version="1.0" encoding="utf-8"?>
 <s:Envelope s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/" xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
   <s:Body><u:GetSystemUpdateID xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"></u:GetSystemUpdateID></s:Body>
 </s:Envelope>`,
-      signal: AbortSignal.timeout(10_000),
-    });
+        signal: AbortSignal.timeout(10_000),
+      },
+      entry.isStreamer,
+    );
     if (!res.ok) return null;
     const doc = parser.parse(await res.text()) as {
       Envelope?: { Body?: { GetSystemUpdateIDResponse?: { Id?: unknown } } };
@@ -473,7 +649,7 @@ export async function getSystemUpdateID(host: string, serverUdn: string): Promis
 
 async function metadataDidl(entry: ServerEntry, objectId: string): Promise<string> {
   const r = await soapBrowse(entry, objectId, "BrowseMetadata", 0, 200);
-  if (!r) throw new Error("could not fetch item metadata");
+  if (typeof r === "string") throw new Error("could not fetch item metadata");
   return r.didl;
 }
 
@@ -505,7 +681,8 @@ export async function queueAdd(
   const didl = await metadataDidl(entry, objectId);
   if (!opts.confirmLarge && /<container[\s>]/.test(didl)) {
     const probe = await soapBrowse(entry, objectId, "BrowseDirectChildren", 0, 1);
-    if (probe && probe.total > LARGE_QUEUE_TRACKS) throw new LargeQueueError(probe.total);
+    if (typeof probe !== "string" && probe.total > LARGE_QUEUE_TRACKS)
+      throw new LargeQueueError(probe.total);
   }
   const udn = serverUdn.replace(/^uuid:/, "");
   // The endpoint is encoding-sensitive: EVERY special character in the DIDL

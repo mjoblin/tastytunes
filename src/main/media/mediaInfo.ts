@@ -17,7 +17,7 @@ import {
   type MediaNode,
 } from "@shared/model";
 import { pools, revalidate } from "./mediaIndex";
-import { browseMetadataNode } from "./upnpBrowser";
+import { browseMetadataNode, serverUdnForArt } from "./upnpBrowser";
 
 const lc = (v: string | null | undefined): string => (v ?? "").trim().toLowerCase();
 
@@ -110,9 +110,13 @@ export async function lookupMediaInfo(
       if (hit) return confirm(pool, withAlbum(pool, hit));
     }
   }
-  // 2. content, every ready index (the ref's own server first)
+  // 2. content, every ready index: the ref's own server first, else the server
+  //    its art names (the one PLAYING it — the same album on the streamer's
+  //    stick and on the media server used to land on whichever index came
+  //    first, the stick's, while the media server played; 2026-09-16)
+  const preferred = q.serverUdn ?? serverUdnForArt(q.artUrl);
   const ordered = [...groups].sort((a, b) =>
-    a.udn === q.serverUdn ? -1 : b.udn === q.serverUdn ? 1 : 0,
+    a.udn === preferred ? -1 : b.udn === preferred ? 1 : 0,
   );
   for (const pool of ordered) {
     const candidates = (

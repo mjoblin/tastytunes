@@ -238,6 +238,10 @@ export interface ContentRef {
   title: string;
   artist?: string | null;
   album?: string | null;
+  /** The item's art URL as the streamer reports it: its host names the server
+   *  that is playing it, preferred over index order when the same content sits
+   *  on several servers (a copy on the streamer's USB stick, 2026-09-16). */
+  artUrl?: string | null;
 }
 
 /** A picture read from an audio file's own tags (FLAC PICTURE, ID3 APIC),
@@ -1594,6 +1598,13 @@ export interface MediaServerInfo {
   searchable: boolean;
 }
 
+/** The streamer's own USB server, by its shape: on the device's address and
+ *  Browse-only (the Evo's answers no Search). Its audio is out of reach by
+ *  design, its ContentDirectory hands out device-internal file paths, so the
+ *  analysis verbs refuse it up front (USB_ANALYSIS_HINT says why). */
+export const usbServer = (s: Pick<MediaServerInfo, "isStreamer" | "searchable">): boolean =>
+  s.isStreamer && !s.searchable;
+
 /**
  * Per-server state of the local media index — a REBUILDABLE CACHE of server
  * metadata (never user data): built by crawling ContentDirectory, invalidated
@@ -2376,6 +2387,8 @@ export interface MediaInfoQuery {
   album?: string | null;
   serverUdn?: string | null;
   objectId?: string | null;
+  /** See ContentRef.artUrl — the playing server, when the query has no hint. */
+  artUrl?: string | null;
 }
 
 /** One server's slice of a cross-server (all ready indexes) search. */
