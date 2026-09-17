@@ -73,6 +73,7 @@ import { artThumb, artThumbsStats, clearArtThumbs, flushArtThumbs } from "./look
 import {
   audioResUrl,
   browse as mediaBrowse,
+  deviceLaneReset,
   presetSave,
   queueAdd,
   refreshServers,
@@ -853,6 +854,9 @@ if (!gotLock) {
         // it. Completion off-screen is what the indexing toast reports.
         if (msg.kind === "connection" && msg.state.phase === "connected") {
           const host = msg.state.host;
+          // the device announced itself: its media server's cool-off ends and the
+          // listing memo drops, so this session's first listing is a fresh one
+          deviceLaneReset();
           void refreshServers(host)
             .then((servers) => mediaIndex.ensureFresh(host, servers))
             .catch(() => {});
