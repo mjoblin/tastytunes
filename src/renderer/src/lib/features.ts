@@ -16,7 +16,7 @@ import { ONSET_HOP_MS, type Onsets } from "./onsets";
  * Stored packed beside the analysis under one version: bump FEATURES_VERSION
  * and every cached track measures again once, on its next play.
  */
-export const FEATURES_VERSION = 11; // 11: the breath and the cut read past a riser before the slam; 9: drops at frame resolution
+export const FEATURES_VERSION = 12; // 12: the tempo's octave check; 11: the breath and the cut read past a riser before the slam; 9: drops at frame resolution
 
 export interface Beats {
   bpm: number;
@@ -116,7 +116,7 @@ export function computeFeatures(
  *  envelope is built from the TYPED onsets (a kick 1, a snare 0.8, a hat 0.3, each a
  *  short bump), not the raw flux: hats are broadband and out-flux the kicks, and a grid
  *  locked to the hats sits half a beat off everything the listener taps. */
-function trackBeats(flux: Float32Array, onsets: Onsets): Beats | null {
+export function trackBeats(flux: Float32Array, onsets: Onsets): Beats | null {
   const fps = 1000 / ONSET_HOP_MS;
   const n = flux.length;
   if (n < fps * 8 || onsets.at.length < 8) return null;
@@ -191,7 +191,28 @@ function trackBeats(flux: Float32Array, onsets: Onsets): Beats | null {
     beatsRev.push(t);
     if (back[t] < 0) break;
   }
-  const times = Float32Array.from(beatsRev.reverse(), (t) => t / fps);
+  const fast = Float32Array.from(beatsRev.reverse(), (t) => t / fps);
+  // THE OCTAVE CHECK (2026-09-17: a strummed ballad read 162 where its listener taps 81).
+  // The autocorrelation cannot tell a beat from its subdivision, a steady pulse repeats as
+  // well at twice its period as at once (the ratio sat near 1.0 across a whole library),
+  // and the prior leans fast. What tells them apart is what sits BETWEEN the grid's beats:
+  // under a real fast beat the hats and strums fill the gaps (0.65 to 0.95 of the on-beat
+  // onset strength across that library's fast tracks), and when the grid is itself the
+  // subdivision almost nothing does (0.29 to 0.43 on its ballads). So a fast winner with
+  // empty gaps, or with nearly empty gaps and a strong-weak alternation along the grid,
+  // is read at half, on the phase that carries the accents.
+  let times = fast;
+  let tempo = bpm;
+  if (bpm > OCTAVE_FAST_BPM && fast.length >= 16) {
+    const ev = gridEvidence(fast, onsets, env, fps, period / fps);
+    if (
+      ev.between < OCTAVE_EMPTY ||
+      (ev.between < OCTAVE_NEARLY_EMPTY && ev.alternation >= OCTAVE_ALTERNATION)
+    ) {
+      times = fast.filter((_, i) => i % 2 === ev.strongPhase);
+      tempo = bpm / 2;
+    }
+  }
   // the downbeat: which phase mod 4 the kicks favour
   const phaseStrength = [0, 0, 0, 0];
   let k = 0;
@@ -205,7 +226,62 @@ function trackBeats(flux: Float32Array, onsets: Onsets): Beats | null {
   for (let p = 0; p < 4; p++) if (phaseStrength[p] > phaseStrength[top]) top = p;
   const others = (phaseStrength.reduce((a, b) => a + b, 0) - phaseStrength[top]) / 3;
   if (phaseStrength[top] > 0 && phaseStrength[top] >= 1.25 * others) downbeat = top;
-  return { bpm, confidence, downbeat, times };
+  return { bpm: tempo, confidence, downbeat, times };
+}
+
+// the octave check's measures (see trackBeats), calibrated on a 106-track library
+const OCTAVE_FAST_BPM = 130;
+const OCTAVE_EMPTY = 0.45;
+const OCTAVE_NEARLY_EMPTY = 0.55;
+const OCTAVE_ALTERNATION = 1.3;
+
+/** What a beat grid's gaps and accents say about its metrical level: `between` is the onset
+ *  strength (untyped, a hat counts as a hat) at the midpoints between beats over the strength
+ *  on them; `alternation` is the stronger of the even and odd beats' envelope over the weaker,
+ *  and `strongPhase` says which. */
+function gridEvidence(
+  times: Float32Array,
+  onsets: Onsets,
+  env: Float32Array,
+  fps: number,
+  periodSecs: number,
+): { between: number; alternation: number; strongPhase: 0 | 1 } {
+  const tol = Math.min(0.05, periodSecs * 0.2);
+  let on = 0;
+  let mid = 0;
+  let b = 0;
+  for (let i = 0; i < onsets.at.length; i++) {
+    const a = onsets.at[i];
+    while (b + 1 < times.length && times[b + 1] <= a) b++;
+    const prev = times[b];
+    const next = b + 1 < times.length ? times[b + 1] : Infinity;
+    if (Math.min(Math.abs(a - prev), Math.abs(next - a)) <= tol) on += onsets.strength[i];
+    else if (next !== Infinity && a > prev && Math.abs(a - (prev + next) / 2) <= tol)
+      mid += onsets.strength[i];
+  }
+  const near = (t: number): number => {
+    const c = Math.round(t * fps);
+    let sum = 0;
+    for (let k = -4; k <= 4; k++) {
+      const x = c + k;
+      if (x >= 0 && x < env.length) sum += env[x];
+    }
+    return sum;
+  };
+  let even = 0;
+  let odd = 0;
+  for (let i = 0; i < times.length; i++) {
+    if (i % 2 === 0) even += near(times[i]);
+    else odd += near(times[i]);
+  }
+  even /= Math.ceil(times.length / 2);
+  odd /= Math.max(1, Math.floor(times.length / 2));
+  const weaker = Math.min(even, odd);
+  return {
+    between: on > 0 ? mid / on : 1,
+    alternation: weaker > 0 ? Math.max(even, odd) / weaker : 1,
+    strongPhase: even >= odd ? 0 : 1,
+  };
 }
 
 // ---------------------------------------------------------------- chroma and key
