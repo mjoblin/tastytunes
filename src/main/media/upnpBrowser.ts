@@ -11,6 +11,7 @@ import {
   type MediaNode,
   type MediaQueueAction,
   type MediaServerInfo,
+  usbServer,
 } from "@shared/model";
 import { LARGE_QUEUE_TOKEN } from "@shared/ipc";
 import { asArray, didlToNodes, parser, text } from "./didl";
@@ -56,16 +57,35 @@ const MISSING_RE = /no such object|<errorCode>\s*701\s*<\/errorCode>/i;
 // hook's listing, the Library's remount, the presets, the playing track's
 // lookup — collapses into whatever the lane lets through, and a device that
 // just restarted is left alone long enough to finish coming up.
-const DEVICE_GAP_MS = 40;
+const DEVICE_GAP_MS = 10;
 // the cool-off, shortened by the harness (TASTYTUNES_DEVICE_COOL_MS) so a suite
 // can watch it open and close
 const DEVICE_COOL_MS = Number(process.env["TASTYTUNES_DEVICE_COOL_MS"] ?? 30_000);
-let deviceTail: Promise<void> = Promise.resolve();
 let deviceCoolUntil = 0;
+// The lane's two queues: the Library's and the lookups' requests first, an
+// index walk's behind them, so a walk of a big stick never leaves the screen
+// waiting on it (found by S85: the card's own requests behind a 450-container
+// walk timed out while queued, and that read as the device's silence).
+const laneFront: Array<() => Promise<void>> = [];
+const laneBack: Array<() => Promise<void>> = [];
+let lanePumping = false;
+
+/** Whether a server rides the lane: the device's USB server, by its shape
+ *  (usbServer in shared/model). In the harness every mock server sits on the
+ *  streamer's address, so the address alone would have laned them all. */
+const laned = (entry: ServerEntry): boolean => usbServer(entry);
 
 /** True while the device's own media server is being left alone after a silence. */
 export function deviceCooling(): boolean {
   return Date.now() < deviceCoolUntil;
+}
+
+/** A reconnect: the device announced itself, so the cool-off ends and the
+ *  listing memo is dropped; the fresh session starts on facts, through the
+ *  lane one request at a time. */
+export function deviceLaneReset(): void {
+  deviceCoolUntil = 0;
+  listing = null;
 }
 
 class DeviceCoolingError extends Error {
@@ -76,31 +96,61 @@ class DeviceCoolingError extends Error {
 
 const pause = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
-/** A ContentDirectory fetch: straight through for other servers, through the
- *  lane for the device's own. Rethrows as fetch does; a throw from the device
- *  opens the cool-off. */
-async function cdFetch(url: string, init: RequestInit, device: boolean): Promise<Response> {
-  if (!device) return loggedFetch("upnp", url, init);
-  if (Date.now() < deviceCoolUntil) throw new DeviceCoolingError();
-  const turn = deviceTail.then(async () => {
-    if (Date.now() < deviceCoolUntil) throw new DeviceCoolingError();
-    try {
-      return await loggedFetch("upnp", url, init);
-    } catch (e) {
-      deviceCoolUntil = Date.now() + DEVICE_COOL_MS;
-      console.log(
-        `[upnp] the streamer's media server is not answering; holding off for ${DEVICE_COOL_MS / 1000} s`,
-      );
-      throw e;
-    } finally {
+async function pumpLane(): Promise<void> {
+  if (lanePumping) return;
+  lanePumping = true;
+  try {
+    for (;;) {
+      const job = laneFront.shift() ?? laneBack.shift();
+      if (!job) break;
+      await job();
       await pause(DEVICE_GAP_MS);
     }
+  } finally {
+    lanePumping = false;
+  }
+}
+
+interface CdInit {
+  method?: string;
+  headers?: Record<string, string>;
+  body?: string;
+  timeoutMs: number;
+}
+
+/** A ContentDirectory fetch. Other servers: straight through, with the
+ *  timeout. The device's USB server: through the lane, the timeout starting
+ *  when the request actually goes out (a wait in the lane is not the device's
+ *  silence), and a throw on the wire opens the cool-off. */
+function cdFetch(
+  url: string,
+  init: CdInit,
+  lane: { on: boolean; background?: boolean },
+): Promise<Response> {
+  const { timeoutMs, ...rest } = init;
+  const send = (): Promise<Response> =>
+    loggedFetch("upnp", url, { ...rest, signal: AbortSignal.timeout(timeoutMs) });
+  if (!lane.on) return send();
+  if (Date.now() < deviceCoolUntil) return Promise.reject(new DeviceCoolingError());
+  return new Promise<Response>((resolve, reject) => {
+    const job = async (): Promise<void> => {
+      if (Date.now() < deviceCoolUntil) {
+        reject(new DeviceCoolingError());
+        return;
+      }
+      try {
+        resolve(await send());
+      } catch (e) {
+        deviceCoolUntil = Date.now() + DEVICE_COOL_MS;
+        console.log(
+          `[upnp] the streamer's media server is not answering; holding off for ${DEVICE_COOL_MS / 1000} s`,
+        );
+        reject(e instanceof Error ? e : new Error(String(e)));
+      }
+    };
+    (lane.background ? laneBack : laneFront).push(job);
+    void pumpLane();
   });
-  deviceTail = turn.then(
-    () => undefined,
-    () => undefined,
-  );
-  return turn;
 }
 
 /** How a non-ok answer reads. The device's own server refuses a rotted id in
@@ -181,9 +231,9 @@ async function listServers(host: string): Promise<MediaServerInfo[]> {
       continue;
     }
     const device = where.hostname === streamerIp;
-    const controlUrl = await contentDirectoryControlUrl(dev.description_url, device);
+    const controlUrl = await contentDirectoryControlUrl(dev.description_url);
     if (!controlUrl) continue; // no ContentDirectory — a renderer-only device
-    const searchCaps = await getSearchCaps(controlUrl, device);
+    const searchCaps = await getSearchCaps(controlUrl);
     next.set(dev.udn, {
       udn: dev.udn,
       name: dev.name ?? dev.model ?? "Media server",
@@ -208,24 +258,20 @@ async function listServers(host: string): Promise<MediaServerInfo[]> {
 }
 
 /** GetSearchCapabilities: "*" = anything, CSV = specific properties, "" = none. */
-async function getSearchCaps(controlUrl: string, device: boolean): Promise<string> {
+async function getSearchCaps(controlUrl: string): Promise<string> {
   try {
-    const res = await cdFetch(
-      controlUrl,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": 'text/xml; charset="utf-8"',
-          SOAPAction: '"urn:schemas-upnp-org:service:ContentDirectory:1#GetSearchCapabilities"',
-        },
-        body: `<?xml version="1.0" encoding="utf-8"?>
+    const res = await loggedFetch("upnp", controlUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": 'text/xml; charset="utf-8"',
+        SOAPAction: '"urn:schemas-upnp-org:service:ContentDirectory:1#GetSearchCapabilities"',
+      },
+      body: `<?xml version="1.0" encoding="utf-8"?>
 <s:Envelope s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/" xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
   <s:Body><u:GetSearchCapabilities xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"></u:GetSearchCapabilities></s:Body>
 </s:Envelope>`,
-        signal: AbortSignal.timeout(8000),
-      },
-      device,
-    );
+      signal: AbortSignal.timeout(8000),
+    });
     if (!res.ok) return "";
     const doc = parser.parse(await res.text()) as {
       Envelope?: { Body?: { GetSearchCapabilitiesResponse?: { SearchCaps?: unknown } } };
@@ -236,12 +282,9 @@ async function getSearchCaps(controlUrl: string, device: boolean): Promise<strin
   }
 }
 
-async function contentDirectoryControlUrl(
-  descriptionUrl: string,
-  own: boolean,
-): Promise<string | null> {
+async function contentDirectoryControlUrl(descriptionUrl: string): Promise<string | null> {
   try {
-    const res = await cdFetch(descriptionUrl, { signal: AbortSignal.timeout(8000) }, own);
+    const res = await loggedFetch("upnp", descriptionUrl, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) return null;
     const doc = parser.parse(await res.text()) as Record<string, never>;
     const device = (doc as { root?: { device?: unknown } }).root?.device as
@@ -294,6 +337,7 @@ async function soapBrowse(
   flag: "BrowseDirectChildren" | "BrowseMetadata",
   start = 0,
   count = PAGE_SIZE,
+  background = false,
 ): Promise<{ didl: string; returned: number; total: number } | Miss> {
   let res: Response;
   let body: string;
@@ -307,9 +351,9 @@ async function soapBrowse(
           SOAPAction: '"urn:schemas-upnp-org:service:ContentDirectory:1#Browse"',
         },
         body: soapEnvelope(objectId, flag, start, count),
-        signal: AbortSignal.timeout(15_000),
+        timeoutMs: 15_000,
       },
-      entry.isStreamer,
+      { on: laned(entry), background },
     );
     body = await res.text();
   } catch {
@@ -333,13 +377,24 @@ async function soapBrowse(
   };
 }
 
-async function browseChildren(entry: ServerEntry, objectId: string): Promise<MediaNode[] | Miss> {
-  const first = await soapBrowse(entry, objectId, "BrowseDirectChildren");
+async function browseChildren(
+  entry: ServerEntry,
+  objectId: string,
+  background = false,
+): Promise<MediaNode[] | Miss> {
+  const first = await soapBrowse(entry, objectId, "BrowseDirectChildren", 0, PAGE_SIZE, background);
   if (typeof first === "string") return first;
   let nodes = didlToNodes(first.didl);
   // Page through folders bigger than one response (and servers that cap it).
   while (nodes.length < first.total) {
-    const more = await soapBrowse(entry, objectId, "BrowseDirectChildren", nodes.length);
+    const more = await soapBrowse(
+      entry,
+      objectId,
+      "BrowseDirectChildren",
+      nodes.length,
+      PAGE_SIZE,
+      background,
+    );
     if (typeof more === "string") break;
     const add = didlToNodes(more.didl);
     if (add.length === 0) break;
@@ -425,9 +480,9 @@ async function searchPageRaw(
           SOAPAction: '"urn:schemas-upnp-org:service:ContentDirectory:1#Search"',
         },
         body,
-        signal: AbortSignal.timeout(20_000),
+        timeoutMs: 20_000,
       },
-      entry.isStreamer,
+      { on: laned(entry) },
     );
     if (!res.ok) return null;
     const doc = parser.parse(await res.text()) as {
@@ -544,9 +599,10 @@ export async function browseChildrenOf(
   host: string,
   serverUdn: string,
   objectId: string,
+  opts: { background?: boolean } = {},
 ): Promise<MediaNode[] | Miss> {
   const entry = await entryFor(host, serverUdn);
-  return browseChildren(entry, objectId);
+  return browseChildren(entry, objectId, opts.background === true);
 }
 
 /** Whether ONE object still answers: "present", "missing" (the server refused
@@ -630,9 +686,9 @@ export async function getSystemUpdateID(host: string, serverUdn: string): Promis
 <s:Envelope s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/" xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
   <s:Body><u:GetSystemUpdateID xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"></u:GetSystemUpdateID></s:Body>
 </s:Envelope>`,
-        signal: AbortSignal.timeout(10_000),
+        timeoutMs: 10_000,
       },
-      entry.isStreamer,
+      { on: laned(entry) },
     );
     if (!res.ok) return null;
     const doc = parser.parse(await res.text()) as {

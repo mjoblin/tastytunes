@@ -341,7 +341,8 @@ async function crawlBrowse(
     const id = queue.shift() as string;
     if (visited.has(id)) continue;
     visited.add(id);
-    const children = await browseChildrenOf(host, server.udn, id);
+    // a walk rides behind the Library's own requests on the device's lane
+    const children = await browseChildrenOf(host, server.udn, id, { background: true });
     if (children === "missing") continue;
     if (children === "unreachable") {
       // the server stopped answering mid-walk: a partial tree must not replace
