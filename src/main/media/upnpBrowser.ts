@@ -51,41 +51,83 @@ const MISSING_RE = /no such object|<errorCode>\s*701\s*<\/errorCode>/i;
 // ---------------------------------------------------- the device's own lane
 //
 // The streamer's own ContentDirectory (USB storage) gets ONE lane: requests to
-// it run one at a time with a small gap, and a request it does not answer
-// opens a cool-off in which nothing asks it anything (the callers see
-// "unreachable" at once, no network). A reconnect's burst — the connect
-// hook's listing, the Library's remount, the presets, the playing track's
-// lookup — collapses into whatever the lane lets through, and a device that
-// just restarted is left alone long enough to finish coming up.
+// it run one at a time, the screen's ahead of a walk's, and a walk paced a
+// little wider. A request that dies on the wire is the device's SILENCE: the
+// lane pauses, the request that died waits for the device and goes again
+// once, the callers behind it wait too, and a CANARY (one counter read) asks
+// after two seconds, then four, then eight, up to the cap, whether the device
+// answers again — so a replug, whose silence lasts a second or two, reads as a
+// slow load and not as an error page (the hard 30 s wall it replaces turned a
+// routine replug into "Couldn't browse this library", 2026-09-16). Past the
+// cap the waiting callers are failed and newcomers fail at once, while the
+// canary keeps asking; a reconnect ends the pause outright.
 const DEVICE_GAP_MS = 10;
-// the cool-off, shortened by the harness (TASTYTUNES_DEVICE_COOL_MS) so a suite
-// can watch it open and close
+// a walk sits BEHIND the screen's requests, and that ordering is its pacing: the
+// evening's probes showed pace itself does not trouble the device, and a stick of a
+// few thousand folders must still index within minutes (25 ms cost the harness's
+// 450-container walk its 30 s window)
+const DEVICE_WALK_GAP_MS = 10;
+const DEVICE_CANARY_MS = 2000;
+// the cap, shortened by the harness (TASTYTUNES_DEVICE_COOL_MS) so a suite can
+// watch a silence open and close
 const DEVICE_COOL_MS = Number(process.env["TASTYTUNES_DEVICE_COOL_MS"] ?? 30_000);
-let deviceCoolUntil = 0;
-// The lane's two queues: the Library's and the lookups' requests first, an
-// index walk's behind them, so a walk of a big stick never leaves the screen
-// waiting on it (found by S85: the card's own requests behind a 450-container
-// walk timed out while queued, and that read as the device's silence).
-const laneFront: Array<() => Promise<void>> = [];
-const laneBack: Array<() => Promise<void>> = [];
+
+interface LaneJob {
+  run: () => Promise<void>;
+  background: boolean;
+  /** How many times the request has died on the wire: once is a pooled connection the
+   *  device had dropped (a fresh one goes at once), twice is the device's silence
+   *  (it waits for the canary and goes again), three times is the answer. */
+  attempts: number;
+  fail: (e: Error) => void;
+}
+const laneFront: LaneJob[] = [];
+const laneBack: LaneJob[] = [];
 let lanePumping = false;
+/** When the device stopped answering; 0 while it answers. */
+let deviceDownSince = 0;
+let deviceControlUrl: string | null = null;
+let canaryTimer: NodeJS.Timeout | null = null;
+let canaryWait = DEVICE_CANARY_MS;
 
 /** Whether a server rides the lane: the device's USB server, by its shape
  *  (usbServer in shared/model). In the harness every mock server sits on the
  *  streamer's address, so the address alone would have laned them all. */
 const laned = (entry: ServerEntry): boolean => usbServer(entry);
 
-/** True while the device's own media server is being left alone after a silence. */
+/** True while the device's own media server is silent and the lane waits on the canary. */
 export function deviceCooling(): boolean {
-  return Date.now() < deviceCoolUntil;
+  return deviceDownSince !== 0;
 }
 
-/** A reconnect: the device announced itself, so the cool-off ends and the
- *  listing memo is dropped; the fresh session starts on facts, through the
- *  lane one request at a time. */
+/** The lane's state, for the harness and the diagnostics: whether the device is
+ *  silent, what waits, whether the canary is armed. */
+export function deviceLaneState(): {
+  down: boolean;
+  front: number;
+  back: number;
+  pumping: boolean;
+  canary: boolean;
+} {
+  return {
+    down: deviceDownSince !== 0,
+    front: laneFront.length,
+    back: laneBack.length,
+    pumping: lanePumping,
+    canary: canaryTimer != null,
+  };
+}
+
+/** A reconnect: the device announced itself, so the pause ends and the listing
+ *  memo is dropped; the fresh session starts on facts, through the lane. */
 export function deviceLaneReset(): void {
-  deviceCoolUntil = 0;
+  deviceDownSince = 0;
+  if (canaryTimer) {
+    clearTimeout(canaryTimer);
+    canaryTimer = null;
+  }
   listing = null;
+  void pumpLane();
 }
 
 class DeviceCoolingError extends Error {
@@ -95,16 +137,81 @@ class DeviceCoolingError extends Error {
 }
 
 const pause = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+const laneLog = (msg: string): void => {
+  if (process.env["TASTYTUNES_LANE_DEBUG"]) console.log(`[lane] ${msg}`);
+};
+
+function laneSilence(): void {
+  if (deviceDownSince === 0) {
+    deviceDownSince = Date.now();
+    canaryWait = DEVICE_CANARY_MS;
+    console.log(
+      `[upnp] the streamer's media server is not answering; asking again in ${canaryWait / 1000} s`,
+    );
+  }
+  scheduleCanary();
+}
+
+function scheduleCanary(): void {
+  if (canaryTimer) return;
+  canaryTimer = setTimeout(() => {
+    canaryTimer = null;
+    void canary();
+  }, canaryWait);
+}
+
+/** One counter read, straight to the device: answered, the lane resumes; not, the
+ *  wait doubles, and past the cap the callers waiting are failed. */
+async function canary(): Promise<void> {
+  if (deviceDownSince === 0) return;
+  let ok = false;
+  if (deviceControlUrl) {
+    try {
+      const res = await loggedFetch("upnp", deviceControlUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": 'text/xml; charset="utf-8"',
+          SOAPAction: '"urn:schemas-upnp-org:service:ContentDirectory:1#GetSystemUpdateID"',
+        },
+        body: `<?xml version="1.0" encoding="utf-8"?>
+<s:Envelope s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/" xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+  <s:Body><u:GetSystemUpdateID xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"></u:GetSystemUpdateID></s:Body>
+</s:Envelope>`,
+        signal: AbortSignal.timeout(4000),
+      });
+      ok = res.ok;
+    } catch {
+      ok = false;
+    }
+  }
+  if (deviceDownSince === 0) return; // a reconnect ended the pause meanwhile
+  if (ok) {
+    console.log("[upnp] the streamer's media server answers again");
+    deviceDownSince = 0;
+    void pumpLane();
+    return;
+  }
+  if (Date.now() - deviceDownSince > DEVICE_COOL_MS) {
+    for (const job of laneFront.splice(0)) job.fail(new DeviceCoolingError());
+    for (const job of laneBack.splice(0)) job.fail(new DeviceCoolingError());
+  }
+  canaryWait = Math.min(canaryWait * 2, DEVICE_COOL_MS);
+  scheduleCanary();
+}
 
 async function pumpLane(): Promise<void> {
   if (lanePumping) return;
   lanePumping = true;
   try {
-    for (;;) {
+    while (deviceDownSince === 0) {
       const job = laneFront.shift() ?? laneBack.shift();
       if (!job) break;
-      await job();
-      await pause(DEVICE_GAP_MS);
+      laneLog(
+        `run ${job.background ? "back" : "front"} (front ${laneFront.length}, back ${laneBack.length})`,
+      );
+      await job.run();
+      laneLog("ran");
+      await pause(job.background ? DEVICE_WALK_GAP_MS : DEVICE_GAP_MS);
     }
   } finally {
     lanePumping = false;
@@ -121,7 +228,7 @@ interface CdInit {
 /** A ContentDirectory fetch. Other servers: straight through, with the
  *  timeout. The device's USB server: through the lane, the timeout starting
  *  when the request actually goes out (a wait in the lane is not the device's
- *  silence), and a throw on the wire opens the cool-off. */
+ *  silence); a throw on the wire pauses the lane for the canary. */
 function cdFetch(
   url: string,
   init: CdInit,
@@ -131,24 +238,46 @@ function cdFetch(
   const send = (): Promise<Response> =>
     loggedFetch("upnp", url, { ...rest, signal: AbortSignal.timeout(timeoutMs) });
   if (!lane.on) return send();
-  if (Date.now() < deviceCoolUntil) return Promise.reject(new DeviceCoolingError());
+  deviceControlUrl = url;
+  if (deviceDownSince !== 0 && Date.now() - deviceDownSince > DEVICE_COOL_MS)
+    return Promise.reject(new DeviceCoolingError());
   return new Promise<Response>((resolve, reject) => {
-    const job = async (): Promise<void> => {
-      if (Date.now() < deviceCoolUntil) {
-        reject(new DeviceCoolingError());
-        return;
-      }
-      try {
-        resolve(await send());
-      } catch (e) {
-        deviceCoolUntil = Date.now() + DEVICE_COOL_MS;
-        console.log(
-          `[upnp] the streamer's media server is not answering; holding off for ${DEVICE_COOL_MS / 1000} s`,
-        );
-        reject(e instanceof Error ? e : new Error(String(e)));
-      }
+    const job: LaneJob = {
+      background: lane.background === true,
+      attempts: 0,
+      fail: reject,
+      run: async () => {
+        for (;;) {
+          try {
+            laneLog("send");
+            resolve(await send());
+            laneLog("sent");
+            return;
+          } catch (e) {
+            job.attempts++;
+            laneLog(`died ${String(e)} (attempt ${job.attempts})`);
+            // the app's first request after a replug or a restart lands on a pooled
+            // connection the device had dropped and dies at once (the dev log of
+            // 2026-09-16: every reconnect's first request "not answering" while the
+            // device answered every probe): one more go on a fresh connection before
+            // this counts as silence
+            if (job.attempts === 1) continue;
+            if (job.attempts === 2) {
+              // the device is silent: the request waits at the front for the canary
+              // to hear it and goes again once
+              laneFront.unshift(job);
+              laneSilence();
+              return;
+            }
+            laneSilence();
+            reject(e instanceof Error ? e : new Error(String(e)));
+            return;
+          }
+        }
+      },
     };
-    (lane.background ? laneBack : laneFront).push(job);
+    (job.background ? laneBack : laneFront).push(job);
+    laneLog(`queued ${job.background ? "back" : "front"}; pumping ${lanePumping}`);
     void pumpLane();
   });
 }

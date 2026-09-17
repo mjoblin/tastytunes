@@ -14,6 +14,7 @@
 //     replug, which bumps SystemUpdateID and invalidates anyway).
 //   Tier C (pathological): no index; the Library stays fully live.
 import { readFileSync } from "node:fs";
+import { usbServer } from "@shared/model";
 import { join } from "node:path";
 import { app } from "electron";
 import { getSettings } from "../data/persist";
@@ -107,6 +108,12 @@ const inflight = new Map<string, Promise<void>>();
 // so the Library's doors and Settings can say "couldn't index · Retry" instead
 // of quietly reverting to "not indexed" (2026-08-17). Cleared by any build.
 const failed = new Map<string, string>();
+/** udn → the counter the server now reports, for an index the app will not walk on
+ *  its own: the streamer's USB server (2026-09-16), whose counter moves on every
+ *  replug and whose application restarted under the app's traffic three times in
+ *  a day. The Library's card offers the re-index; a content answer the user asks
+ *  for still heals a rotted id through revalidate, paced. */
+const staleIds = new Map<string, number>();
 let announce: (statuses: MediaIndexStatus[]) => void = () => {};
 let loaded = false;
 
@@ -162,6 +169,7 @@ export function status(): MediaIndexStatus[] {
       serverName: idx.serverName,
       state: building.has(idx.udn) ? "building" : "ready",
       ...(buildingWhy.get(idx.udn) === "refresh" ? { quiet: true } : {}),
+      ...(staleIds.has(idx.udn) && !building.has(idx.udn) ? { stale: true } : {}),
       strategy: idx.strategy,
       tracks: idx.tracks.length,
       albums: idx.albums.length,
@@ -491,6 +499,7 @@ async function buildNow(
       indexes.set(server.udn, built);
       rebuildHints.delete(server.udn);
       failed.delete(server.udn);
+      staleIds.delete(server.udn);
       save();
     } else {
       failed.set(
@@ -547,7 +556,7 @@ export async function revalidate(
   if (!stale && probeId) stale = (await probeObject(host, udn, probeId)) === "missing";
   if (!stale) return false;
   console.log(
-    `[mediaIndex] ${server.name}: ids rotated (counter ${existing.updateId} → ${id}), rebuilding`,
+    `[mediaIndex] ${server.name}: ${id != null && existing.updateId != null && id !== existing.updateId ? `ids rotated (counter ${existing.updateId} → ${id})` : `the id in hand no longer answers (counter ${id ?? "unread"})`}, rebuilding`,
   );
   await build(host, server, "browse", "refresh");
   return indexes.get(udn)?.builtAt !== existing.builtAt;
@@ -578,6 +587,18 @@ export function ensureFresh(host: string, servers: MediaServerInfo[]): void {
         const id = await getSystemUpdateID(host, server.udn);
         // a counter the server did not answer is no reason to walk it, TTL or not
         if (id == null) return;
+        // the streamer's USB server is never walked unasked: a moved counter marks
+        // the index stale for the card's re-index and nothing else happens
+        if (usbServer(server)) {
+          if (existing.updateId != null && id !== existing.updateId && !staleIds.has(server.udn)) {
+            staleIds.set(server.udn, id);
+            console.log(
+              `[mediaIndex] ${server.name}: contents changed (counter ${existing.updateId} → ${id}); the re-index waits for the user`,
+            );
+            announce(status());
+          }
+          return;
+        }
         const stale =
           (existing.updateId != null && id !== existing.updateId) ||
           Date.now() - existing.builtAt > TTL_MS;

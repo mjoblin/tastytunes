@@ -826,7 +826,16 @@ if (!gotLock) {
         const origin = url.searchParams.get("u");
         if ((tier !== "thumb" && tier !== "card") || !key || !origin)
           return new Response(null, { status: 400 });
-        const got = await artThumb(decodeURIComponent(key), tier, origin);
+        // the streamer's own art server is fetched one picture at a time
+        let device = false;
+        try {
+          const conn = deviceManager.snapshot().connection;
+          device =
+            conn.phase === "connected" && new URL(origin).hostname === conn.host.split(":")[0];
+        } catch {
+          device = false;
+        }
+        const got = await artThumb(decodeURIComponent(key), tier, origin, device);
         if (!got) return new Response(null, { status: 404 });
         return new Response(new Uint8Array(got.bytes), {
           headers: {

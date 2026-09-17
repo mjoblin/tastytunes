@@ -1624,6 +1624,9 @@ export interface MediaIndexStatus {
    *  indexing toast never announces it (user, 2026-09-15: the streamer's USB ids rotate
    *  across every standby, and each revalidation toasted "streamer indexed · 0 tracks"). */
   quiet?: boolean;
+  /** The server's counter moved since this index was built and the app will not walk
+   *  it on its own (the streamer's USB server, 2026-09-16): the card offers the re-index. */
+  stale?: boolean;
   strategy: "search" | "browse" | null;
   tracks: number;
   albums: number;
