@@ -440,8 +440,8 @@ export function SettingsScreen(): React.JSX.Element {
                   />
 
                   <Toggle
-                    label="About the music panel"
-                    hint="Adds Artist, Album and Track tabs to the About the music panel on Now Playing: Wikipedia summaries, release details and track credits matched via MusicBrainz, fetched when you open them. Sends the current artist, album and track names; off means no requests will be sent. The panel's Stream tab stays either way."
+                    label="Liner notes"
+                    hint="The panel on Now Playing with Artist, Album and Track tabs: Wikipedia summaries, release details and track credits matched via MusicBrainz, fetched when you open them. Sends the current artist, album and track names; off means no requests will be sent. The panel's Stream tab stays either way."
                     checked={settings.artistInfo}
                     onChange={(artistInfo) => void save({ artistInfo })}
                   />

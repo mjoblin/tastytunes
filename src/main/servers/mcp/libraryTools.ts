@@ -765,7 +765,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
                 true_peak_dbtp: an.truePeakDb ?? null,
               }
             : {
-                note: "Not analyzed yet. It is analyzed the first time it plays in TastyTunes, or with Analyze audio on its album.",
+                note: "Not analyzed yet. It is analyzed the first time it plays in TastyTunes, or with “Analyze audio” on its album.",
               }),
           album_dr: albumDr,
           album_lufs: albumEntry?.lufs ?? null,

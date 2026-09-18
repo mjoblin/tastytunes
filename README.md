@@ -95,7 +95,7 @@ The current line is highlighted and kept in view. Click a line to seek there.
 
 View a short biography of the artist, the album's year, label and genres with a summary, and the track's performers, writers and production credits. The notes come from MusicBrainz and Wikipedia, with a link to each source.
 
-<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/context-panel.webp" alt="The About the music panel showing the album's year, genres, summary and source links" width="380">
+<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/context-panel.webp" alt="The Liner notes panel showing the album's year, genres, summary and source links" width="380">
 
 ### Presets
 

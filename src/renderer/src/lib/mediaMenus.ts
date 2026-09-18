@@ -83,7 +83,7 @@ function pivotItem(ref: MediaRef): MediaMenuItem[] {
   if (!entity) return [];
   return [
     {
-      label: `Search everywhere for “${entity}”`,
+      label: `Search everything for “${entity}”`,
       run: () => useStore.getState().requestSearch(entity),
     },
   ];
