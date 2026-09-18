@@ -144,7 +144,7 @@ export function audioTools(ctx: ToolContext): Record<string, ToolImpl> {
       handler: async (a) => {
         if (!getSettings().artistInfo) {
           return err(
-            "Artist context is switched off in Settings › Connections (off means no requests, ever).",
+            "Liner notes are switched off in Settings › Connections (off means no requests, ever).",
           );
         }
         const s = ctx.connected();
@@ -169,7 +169,7 @@ export function audioTools(ctx: ToolContext): Record<string, ToolImpl> {
         // one toggle governs both context tabs in the app — same here
         if (!getSettings().artistInfo) {
           return err(
-            "Artist & album context is switched off in Settings › Connections (off means no requests, ever).",
+            "Liner notes are switched off in Settings › Connections (off means no requests, ever).",
           );
         }
         const s = ctx.connected();

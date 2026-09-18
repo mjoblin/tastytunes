@@ -321,8 +321,8 @@ export function NowPlayingScreen(): React.JSX.Element {
           {aboutAvailable && (
             <button
               onClick={() => setArtistOpen(true)}
-              data-tip="About the music"
-              aria-label="About the music"
+              data-tip="Liner notes"
+              aria-label="Liner notes"
               className="no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-full text-faint hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
             >
               <Info size={16} />

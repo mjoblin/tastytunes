@@ -751,7 +751,7 @@ export function buildCommands(ctx: CommandContext): Command[] {
     group: "View",
     icon: Globe,
     keywords:
-      "settings internet online privacy lyrics about the music artist album context radio directory listenbrainz scrobble",
+      "settings internet online privacy lyrics liner notes artist album credits radio directory listenbrainz scrobble",
     run: () => jumpToSettingsTab("connections"),
   });
   cmds.push({
