@@ -22,7 +22,7 @@ import { nowPlayingInfoTarget } from "@/lib/mediaInfo";
  *  - `unanalyzed`: a library track the app could not read (the server refused
  *    the file, or the decode failed).
  */
-export type SceneIdle = "radio" | "elsewhere" | "analyzing" | "unanalyzed";
+export type SceneIdle = "radio" | "elsewhere" | "off" | "analyzing" | "unanalyzed";
 
 /** How long a library track's analysis must stay absent before the scenes yield: on a skip
  *  the playing file is resolved again and the analysis passes through absent, then loading,
@@ -36,10 +36,14 @@ function readLive(
   playState: ReturnType<typeof useStore.getState>["playState"],
   nowPlaying: ReturnType<typeof useStore.getState>["nowPlaying"],
   analysis: ReturnType<typeof usePlayingAnalysis>,
+  analysisOn: boolean,
 ): { live: boolean; idle: SceneIdle | null } {
   if (isRadioMetadata(playState?.metadata)) return { live: false, idle: "radio" };
   if (nowPlayingInfoTarget(playState, nowPlaying)?.localQuery == null)
     return { live: false, idle: "elsewhere" };
+  // the Audio analysis switch (Settings › Appearance) is the scenes' switch too: off
+  // reads nothing, and the scenes used to analyze regardless (2026-09-17)
+  if (!analysisOn) return { live: false, idle: "off" };
   if (analysis === "loading") return { live: false, idle: "analyzing" };
   if (analysis == null) return { live: false, idle: "unanalyzed" };
   return { live: true, idle: null };
@@ -48,9 +52,10 @@ function readLive(
 export function useSceneLive(enabled: boolean): { live: boolean; idle: SceneIdle | null } {
   const playState = useStore((s) => s.playState);
   const nowPlaying = useStore((s) => s.nowPlaying);
-  const analysis = usePlayingAnalysis(enabled);
-  const raw = readLive(playState, nowPlaying, analysis);
-  const definite = raw.idle === "radio" || raw.idle === "elsewhere";
+  const analysisOn = useStore((s) => s.settings.waveforms);
+  const analysis = usePlayingAnalysis(enabled && analysisOn);
+  const raw = readLive(playState, nowPlaying, analysis, analysisOn);
+  const definite = raw.idle === "radio" || raw.idle === "elsewhere" || raw.idle === "off";
   // the settled truth: live at once on a record, off at once for a station or another
   // source, off after the grace when a library track's analysis is merely absent
   const [held, setHeld] = useState(raw.live);
@@ -78,6 +83,11 @@ export function sceneIdleNotice(idle: SceneIdle): { head: string; body: string }
         head: "This track couldn't be analyzed.",
         body: "The scenes need a local library track the app can read.",
       };
+    case "off":
+      return {
+        head: "Audio analysis is off.",
+        body: "Turn it on in Settings › Appearance and the scenes will draw.",
+      };
     case "radio":
       return { head: "Scenes need a local library track.", body: "A station is playing." };
     default:
@@ -97,6 +107,8 @@ export function sceneIdleLine(label: string, idle: SceneIdle): string {
       return "Analyzing the track…";
     case "unanalyzed":
       return `${label} couldn't analyze this track.`;
+    case "off":
+      return "Audio analysis is off (Settings › Appearance).";
     default:
       return `${label} needs a local library track.`;
   }

@@ -278,7 +278,7 @@ export class McpBridge {
   private kickIndex(): string {
     const snap = this.dm.snapshot();
     if (snap.connection.phase !== "connected") {
-      return "No library index is ready yet, and the streamer is not connected (the server list comes from it) — connect, or the user can build one in Settings → Libraries.";
+      return "No library index is ready yet, and the streamer is not connected (the server list comes from it) — connect, or the user can build one in Settings › Libraries.";
     }
     const host = snap.connection.host;
     void refreshServers(host)

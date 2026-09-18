@@ -561,19 +561,19 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         name: "get_lyrics",
         title: "Get lyrics",
         description:
-          "Lyrics for the currently playing track via LRCLIB. Refuses when the user has lyrics disabled in Settings → Connections.",
+          "Lyrics for the currently playing track via LRCLIB. Refuses when the user has lyrics disabled in Settings › Connections.",
       },
       {
         name: "get_artist_info",
         title: "Get artist info",
         description:
-          "Artist bio via MusicBrainz + Wikipedia — the current artist by default, or a named one. Refuses when the user has artist context disabled in Settings → Connections.",
+          "Artist bio via MusicBrainz + Wikipedia — the current artist by default, or a named one. Refuses when the user has artist context disabled in Settings › Connections.",
       },
       {
         name: "get_album_info",
         title: "Get album info",
         description:
-          "Album facts via MusicBrainz + Wikipedia — year, label, genres, credits, summary. The playing album by default, or a named artist + album. Refuses when the user has artist & album context disabled in Settings → Connections.",
+          "Album facts via MusicBrainz + Wikipedia — year, label, genres, credits, summary. The playing album by default, or a named artist + album. Refuses when the user has artist & album context disabled in Settings › Connections.",
       },
     ],
   },

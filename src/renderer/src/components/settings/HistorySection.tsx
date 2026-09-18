@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { clearRecentsWithUndo } from "@/lib/recents";
 import { LISTEN_FLOOR_SECS, type AppSettings, type ListeningRecordStats } from "@shared/model";
 import { tt } from "@/api";
 import { useConfirmPopover } from "@/components/chrome/Confirm";
@@ -25,6 +26,7 @@ export function HistorySection({
   // the moment an event lands — the rule demonstrating itself.
   const pushed = useStore((s) => s.listeningStats);
   const stats = pushed ?? fetched;
+  const recentsCount = useStore((s) => s.recents.length);
   const confirmClear = useConfirmPopover();
   const showToast = useStore((s) => s.showToast);
   const sinceLabel =
@@ -38,7 +40,8 @@ export function HistorySection({
         The record is a local-only, long-term history of your listening. TastyTunes reads it for
         play counts and last-played facts in the Library and for the resume offer on Now Playing,
         and AI agents can read it (Settings › AI agents). More will build on it: a year-end review
-        is the kind of thing it makes possible.
+        is the kind of thing it makes possible. The Recent list, below, is a separate and shorter
+        log with a switch of its own.
       </p>
       <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
         <Toggle
@@ -122,6 +125,33 @@ export function HistorySection({
             Couldn&apos;t write to the record: {stats.writeError}
           </div>
         )}
+      </div>
+      {/* THE RECENT LIST (moved here from Behavior, 2026-09-17): the other local log,
+          named for the view it fills, beside the record so both switches are found together */}
+      <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
+        <Toggle
+          label="Recent list"
+          hint="The Recent view on the History screen (H) and the tray panel's Recent tab: the last tracks and stations played, kept only on this computer. Separate from the listening record above; off stops adding to it."
+          checked={settings.recents}
+          onChange={(recents) => void save({ recents })}
+        />
+        <SettingRow
+          label="The list"
+          hint={
+            recentsCount > 0
+              ? `${fmtCount(recentsCount)} ${recentsCount === 1 ? "entry" : "entries"}.`
+              : "Empty."
+          }
+        >
+          <button
+            data-recents-clear
+            onClick={() => void clearRecentsWithUndo()}
+            disabled={recentsCount === 0}
+            className="shrink-0 text-[12.5px] px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-alert hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all disabled:opacity-40 disabled:hover:text-dim disabled:hover:ring-edge disabled:hover:bg-panel/70"
+          >
+            Clear
+          </button>
+        </SettingRow>
       </div>
       {confirmClear.popover}
     </section>

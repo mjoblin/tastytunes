@@ -1364,6 +1364,11 @@ export interface AppSettings {
    *  counts and the Played filter in the Library, the resume offer on Now
    *  Playing. Off hides them all; the record itself keeps logging. */
   showListeningHistory: boolean;
+  /** The Recent list (the History screen's Recent view, the tray panel's Recent tab): the
+   *  last tracks and stations played, a local log SEPARATE from the listening record. It had
+   *  no switch of its own and its only control sat under Behavior as "Recently played"
+   *  (the terminology pass, 2026-09-17); now it lives beside the record and can be stopped. */
+  recents: boolean;
   /** Album art from the audio files themselves (0.8.0): when a media server
    *  sends small artwork, the full picture is read from the file's own tags for
    *  the big surfaces. Reads from the media server over the local network. */
@@ -1550,6 +1555,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   displayShuffleExclude: ["sleeve"],
   listeningRecord: true,
   showListeningHistory: true,
+  recents: true,
   artFromFiles: true,
   lbEnabled: false,
   lbToken: "",
