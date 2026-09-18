@@ -312,8 +312,8 @@ export function DeviceScreen(): React.JSX.Element {
                     // this state actually has is "where do I find that?", and
                     // answering it beats another line of reassurance.
                     <p className="text-[11.5px] text-faint leading-snug mb-2">
-                      Your streamer shows its IP under Settings › Network on its own display, and
-                      your router lists it among connected devices.
+                      Your streamer's display shows its IP under Settings › Network, and your router
+                      lists it among connected devices.
                     </p>
                   )}
                   <div className="flex gap-2">
@@ -394,7 +394,7 @@ export function DeviceScreen(): React.JSX.Element {
                     // The line that used to sit under the button becomes its tip:
                     // the row has no room for a caption, and the app tips
                     // everything else that needs a "why".
-                    data-tip="Renaming and firmware updates live in the streamer's own web interface"
+                    data-tip="Renaming and firmware updates live in the streamer's web interface"
                     className="tip-bottom tip-end shrink-0 flex items-center gap-1.5 text-[12.5px] px-3 h-8 rounded-lg ring-1 ring-edge bg-panel/70 text-amber hover:brightness-110 hover:ring-edge2 motion-safe:active:scale-95 transition-all"
                   >
                     Open web admin <ExternalLink size={12} />

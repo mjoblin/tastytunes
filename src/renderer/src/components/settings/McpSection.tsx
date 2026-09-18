@@ -126,7 +126,7 @@ export function McpSection({
                   text={`"tastytunes": { "type": "http", "url": "${status.url}" }`}
                   copied={copied === "json"}
                   onCopy={() => copy("json", mcpJsonSnippet(status.url!))}
-                  hint='For Cursor and other clients that take an "mcpServers" block with a url; copies the full block.'
+                  hint='For Cursor and other clients that take an "mcpServers" block with a url. Copies the full block.'
                 />
               </div>
             )}
@@ -250,11 +250,11 @@ export function McpSection({
 
 /** The Settings-side grouping of MCP clusters by what they can affect. */
 const MCP_GROUPS: Array<{ id: McpClusterInfo["group"]; label: string; note: string }> = [
-  { id: "read", label: "Read-only", note: "Seeing and looking things up; nothing changes." },
+  { id: "read", label: "Read-only", note: "Seeing and looking things up. Nothing changes." },
   {
     id: "control",
     label: "Control",
-    note: "Playing, tuning, and adjusting; transient, like pressing the buttons yourself.",
+    note: "Playing, tuning, and adjusting. Transient, like pressing the buttons yourself.",
   },
   {
     id: "write",

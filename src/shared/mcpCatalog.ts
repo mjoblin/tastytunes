@@ -398,7 +398,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         name: "history_elsewhere",
         title: "Heard elsewhere",
         description:
-          "Artists heard through AirPlay, a cast, a streaming service or internet radio, with whether the library has them (the Library's own rule for an artist page), how often and where they were heard, and the tracks heard, as History's Elsewhere view shows them.",
+          "Artists heard through AirPlay, a cast, a streaming service or internet radio, with whether the library has them (the Library's rule for an artist page), how often and where they were heard, and the tracks heard, as History's Elsewhere view shows them.",
       },
       {
         name: "history_shelves",
@@ -555,7 +555,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
     group: "read",
     readOnly: true,
     description:
-      "Lyrics and artist/album context for what's playing. These call the same services as the app's own panels and obey the Connections toggles; while a toggle is off, the matching tool refuses (off means no requests will be sent).",
+      "Lyrics and artist/album context for what's playing. These call the same services as the app's panels and obey the Connections toggles; while a toggle is off, the matching tool refuses (off means no requests will be sent).",
     tools: [
       {
         name: "get_lyrics",

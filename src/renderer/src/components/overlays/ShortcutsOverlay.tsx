@@ -29,7 +29,7 @@ const GROUPS: Array<{ title: string; rows: Array<[string, string]> }> = [
     rows: [
       ["/", "Filter the current list, narrowing what’s already on screen"],
       ["S", "Search everything: library, playlists, presets, favorites, radio"],
-      [`${MOD}F`, "In the Library, the Library’s own search; elsewhere, Search everything"],
+      [`${MOD}F`, "In the Library, search just the Library. Anywhere else, Search everything"],
       [`⇧${MOD}F`, "Search everything from anywhere, even inside the Library"],
     ],
   },

@@ -33,7 +33,7 @@ export function CacheRow(): React.JSX.Element {
   return (
     <SettingRow
       label="Cached lookups"
-      hint="Lyrics, artist, and album lookups are kept on disk (a fixed size; the entries you haven't used longest drop first) so repeat plays don't re-ask the services above. The panels' refresh buttons overwrite the stored copy."
+      hint="Lyrics, artist, and album lookups are kept on disk (a fixed size, and the entries you haven't used longest drop first) so repeat plays don't re-ask the services above. The panels' refresh buttons overwrite the stored copy."
     >
       {confirmClear.popover}
       <button

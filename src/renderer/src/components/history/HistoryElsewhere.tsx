@@ -381,7 +381,7 @@ export function HistoryElsewhere({
             setOwnedOnly(!ownedOnly);
           }}
           data-elsewhere-owned-only={ownedOnly ? "on" : "off"}
-          data-tip="Only the artists your library holds, by an album of their own or a credit on a track."
+          data-tip="Only the artists your library holds, with an album or a credit on a track."
           className="no-drag tip-bottom tip-wide motion-safe:active:scale-95"
         >
           In your library{owned > 0 ? `${FACT_SEP}${fmtCount(owned)}` : ""}

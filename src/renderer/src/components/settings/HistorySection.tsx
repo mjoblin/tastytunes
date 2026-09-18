@@ -40,8 +40,8 @@ export function HistorySection({
         The record is a local-only, long-term history of your listening. TastyTunes reads it for
         play counts and last-played facts in the Library and for the resume offer on Now Playing,
         and AI agents can read it (Settings › AI agents). More will build on it: a year-end review
-        is the kind of thing it makes possible. The Recent list, below, is a separate and shorter
-        log with a switch of its own.
+        is the kind of thing it makes possible. The Recent list, below, is a shorter log, kept and
+        switched separately.
       </p>
       <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
         <Toggle
@@ -116,8 +116,8 @@ export function HistorySection({
         {stats != null && stats.unreadableLines > 0 && (
           <div className="rounded-lg bg-bg ring-1 ring-edge px-3 py-2.5 text-[12px] text-dim">
             {stats.unreadableLines} unreadable line{stats.unreadableLines === 1 ? "" : "s"} skipped
-            while reading the record (an interrupted write leaves a partial last line; the rest of
-            the record is unaffected).
+            while reading the record (an interrupted write leaves a partial last line, and the rest
+            of the record is unaffected).
           </div>
         )}
         {stats?.writeError != null && (
@@ -131,7 +131,7 @@ export function HistorySection({
       <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
         <Toggle
           label="Recent list"
-          hint="The Recent view on the History screen (H) and the tray panel's Recent tab: the last tracks and stations played, kept only on this computer. Separate from the listening record above; off stops adding to it."
+          hint="The Recent view on the History screen (H) and the tray panel's Recent tab: the last tracks and stations played, kept only on this computer. Separate from the listening record above. Off stops adding to it."
           checked={settings.recents}
           onChange={(recents) => void save({ recents })}
         />
