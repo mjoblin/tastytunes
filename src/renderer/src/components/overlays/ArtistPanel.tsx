@@ -290,7 +290,7 @@ export function ArtistPanel({ className }: { className?: string }): React.JSX.El
           </button>
           <button
             onClick={() => setArtistOpen(false)}
-            aria-label="Close context panel"
+            aria-label="Close About the music"
             className="p-1.5 rounded-full text-dim hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
           >
             <X size={15} />

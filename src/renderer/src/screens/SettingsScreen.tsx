@@ -29,7 +29,6 @@ import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { DISPLAY_FONTS } from "@/hooks/useDisplayFont";
 import { cx } from "@/lib/format";
 import { SignalDot } from "@/components/device/SignalLamp";
-import { clearRecentsWithUndo } from "@/lib/recents";
 import { HeaderChip, PrimaryButton, ScreenTitle } from "@/components/chrome/Chrome";
 import { useOneShotAsk } from "@/hooks/useOneShotAsk";
 import { McpSection } from "@/components/settings/McpSection";
@@ -67,7 +66,6 @@ export function SettingsScreen(): React.JSX.Element {
   const settings = useStore((s) => s.settings);
   const setShortcutsOpen = useStore((s) => s.setShortcutsOpen);
   const setInfoOpen = useStore((s) => s.setInfoOpen);
-  const recentsCount = useStore((s) => s.recents.length);
 
   const save = useStore((s) => s.saveSettings);
 
@@ -269,15 +267,18 @@ export function SettingsScreen(): React.JSX.Element {
                   />
 
                   <Toggle
-                    label="Waveforms"
-                    // The second sentence exists only until the first waveform
+                    // "Waveforms" undersold it (the terminology pass, 2026-09-17): this is the
+                    // switch for every measurement made from the audio file — Analyze audio,
+                    // the dynamic range and loudness readouts, the tempo, the scenes' pulse
+                    label="Audio analysis"
+                    // The second sentence exists only until the first measurement
                     // proves the feature real here (settings.waveformSeen) —
                     // an honest answer for the household whose toggles would
                     // otherwise never visibly do anything.
                     hint={
                       settings.waveformSeen
-                        ? "Generate waveforms from audio files on your local media server."
-                        : "Generate waveforms from audio files on your local media server. None yet. They appear once a track from a local media server has played."
+                        ? "Reads audio files from your local media server to measure each track: its waveform, dynamic range, loudness and tempo, and the pulse the scenes draw to. Off reads nothing."
+                        : "Reads audio files from your local media server to measure each track: its waveform, dynamic range, loudness and tempo, and the pulse the scenes draw to. Off reads nothing. Nothing measured yet; a track from a local media server is measured the first time it plays."
                     }
                     checked={settings.waveforms}
                     onChange={(waveforms) => void save({ waveforms })}
@@ -302,7 +303,7 @@ export function SettingsScreen(): React.JSX.Element {
 
                 <Toggle
                   label="Album art from audio files"
-                  hint="When a media server sends small artwork, the full picture is read from the audio file itself, for the Now Playing screen, Display mode and album headers. Reads from your media server over your local network."
+                  hint="When a media server sends small artwork, the full picture is read from the audio file itself, for the Now Playing screen, Full-screen display mode and album headers. Reads from your media server over your local network."
                   checked={settings.artFromFiles}
                   onChange={(artFromFiles) => void save({ artFromFiles })}
                 />
@@ -389,19 +390,6 @@ export function SettingsScreen(): React.JSX.Element {
                   />
 
                   <SettingRow
-                    label="Recently played"
-                    hint="A local log of tracks and stations you've played, shown under Recent on the History screen (R). Kept only on this computer."
-                  >
-                    <button
-                      onClick={() => void clearRecentsWithUndo()}
-                      disabled={recentsCount === 0}
-                      className="shrink-0 text-[12.5px] px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-alert hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all disabled:opacity-40 disabled:hover:text-dim disabled:hover:ring-edge disabled:hover:bg-panel/70"
-                    >
-                      {recentsCount > 0 ? `Clear history (${recentsCount})` : "History empty"}
-                    </button>
-                  </SettingRow>
-
-                  <SettingRow
                     label="Keyboard shortcuts"
                     hint="Press ? anywhere in the app for the full list. Key hints also appear in menu items and control tooltips."
                   >
@@ -452,8 +440,8 @@ export function SettingsScreen(): React.JSX.Element {
                   />
 
                   <Toggle
-                    label="Artist, album & track context"
-                    hint="Adds Artist, Album and Track tabs to the context panel on Now Playing: Wikipedia summaries, release details and track credits matched via MusicBrainz, fetched when you open them. Sends the current artist, album and track names; off means no requests will be sent. The panel's Stream tab stays either way."
+                    label="About the music panel"
+                    hint="Adds Artist, Album and Track tabs to the About the music panel on Now Playing: Wikipedia summaries, release details and track credits matched via MusicBrainz, fetched when you open them. Sends the current artist, album and track names; off means no requests will be sent. The panel's Stream tab stays either way."
                     checked={settings.artistInfo}
                     onChange={(artistInfo) => void save({ artistInfo })}
                   />

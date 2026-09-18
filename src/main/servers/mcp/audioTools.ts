@@ -122,7 +122,7 @@ export function audioTools(ctx: ToolContext): Record<string, ToolImpl> {
       handler: async () => {
         if (!getSettings().lyrics) {
           return err(
-            "Lyrics lookups are switched off in Settings → Connections (off means no requests, ever).",
+            "Lyrics lookups are switched off in Settings › Connections (off means no requests, ever).",
           );
         }
         const s = ctx.connected();
@@ -144,7 +144,7 @@ export function audioTools(ctx: ToolContext): Record<string, ToolImpl> {
       handler: async (a) => {
         if (!getSettings().artistInfo) {
           return err(
-            "Artist context is switched off in Settings → Connections (off means no requests, ever).",
+            "Artist context is switched off in Settings › Connections (off means no requests, ever).",
           );
         }
         const s = ctx.connected();
@@ -169,7 +169,7 @@ export function audioTools(ctx: ToolContext): Record<string, ToolImpl> {
         // one toggle governs both context tabs in the app — same here
         if (!getSettings().artistInfo) {
           return err(
-            "Artist & album context is switched off in Settings → Connections (off means no requests, ever).",
+            "Artist & album context is switched off in Settings › Connections (off means no requests, ever).",
           );
         }
         const s = ctx.connected();

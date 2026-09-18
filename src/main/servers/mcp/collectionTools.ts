@@ -44,7 +44,7 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
         // Humans get a disabled chip for this state; the agent gets told.
         if (getSettings().radioDirectory === false) {
           return err(
-            "The internet-radio directory is turned off in Settings (Behavior → Internet radio directory), so station lookups are unavailable. Favorited stations still play.",
+            "The internet-radio directory is turned off in Settings › Connections (Internet radio directory), so station lookups are unavailable. Favorited stations still play.",
           );
         }
         const q = (a.query as string | undefined)?.trim();

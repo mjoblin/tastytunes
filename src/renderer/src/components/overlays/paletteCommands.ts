@@ -5,17 +5,22 @@ import {
   Bluetooth,
   Bot,
   Cable,
+  CircleDot,
   Disc3,
+  Globe,
   HardDrive,
   Heart,
+  History,
   Info,
   Keyboard,
+  LayoutGrid,
   Library,
   ListOrdered,
   Maximize2,
   MicVocal,
   Monitor,
   Moon,
+  Palette,
   PictureInPicture2,
   Play,
   Power,
@@ -26,11 +31,12 @@ import {
   Shuffle,
   SkipBack,
   SkipForward,
+  SlidersHorizontal,
+  Sparkles,
   Square,
   Sun,
   Terminal,
   Usb,
-  Sparkles,
   UserRound,
   Volume2,
   VolumeX,
@@ -712,6 +718,57 @@ export function buildCommands(ctx: CommandContext): Command[] {
     icon: Bot,
     keywords: "settings mcp tools model context protocol",
     run: () => jumpToSettingsTab("agents"),
+  });
+  // the other six tabs, so a setting is findable by what it governs (the terminology
+  // pass, 2026-09-17: "privacy", "tracking" and "lyrics" found nothing here)
+  cmds.push({
+    id: "settings:appearance",
+    label: "Open Appearance",
+    group: "View",
+    icon: Palette,
+    keywords: "settings theme font ambient art accent audio analysis waveform",
+    run: () => jumpToSettingsTab("appearance"),
+  });
+  cmds.push({
+    id: "settings:layout",
+    label: "Open Layout",
+    group: "View",
+    icon: LayoutGrid,
+    keywords: "settings cards left nav hide reorder",
+    run: () => jumpToSettingsTab("layout"),
+  });
+  cmds.push({
+    id: "settings:behavior",
+    label: "Open Behavior",
+    group: "View",
+    icon: SlidersHorizontal,
+    keywords: "settings menu bar tray animations media keys notifications volume limit",
+    run: () => jumpToSettingsTab("behavior"),
+  });
+  cmds.push({
+    id: "settings:connections",
+    label: "Open Connections",
+    group: "View",
+    icon: Globe,
+    keywords:
+      "settings internet online privacy lyrics about the music artist album context radio directory listenbrainz scrobble",
+    run: () => jumpToSettingsTab("connections"),
+  });
+  cmds.push({
+    id: "settings:history",
+    label: "Open History settings",
+    group: "View",
+    icon: History,
+    keywords: "settings listening record recent list tracking privacy clear",
+    run: () => jumpToSettingsTab("history"),
+  });
+  cmds.push({
+    id: "settings:lamps",
+    label: "Open Status lamps",
+    group: "View",
+    icon: CircleDot,
+    keywords: "settings lamps led legend lossless hi-res",
+    run: () => jumpToSettingsTab("lamps"),
   });
   cmds.push({
     id: "update:check",

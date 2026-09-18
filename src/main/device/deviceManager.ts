@@ -1049,6 +1049,8 @@ export class DeviceManager {
    * merges in late-arriving art, so this can fire on every play_state push.
    */
   private recordRecentlyPlayed(ps: ZonePlayState): void {
+    // the Recent list can be switched off (Settings › History); what it holds stays until cleared
+    if (!getSettings().recents) return;
     // Only log active playback: on connect (or wake) the device re-announces a
     // paused/stopped track's metadata, which must not become a phantom row.
     if (ps.state !== "play" && ps.state !== "buffering") return;
