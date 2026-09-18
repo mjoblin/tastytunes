@@ -250,7 +250,7 @@ export function SchedulesSection({
               </label>
               <label
                 className="flex items-center gap-2.5 text-[12.5px] text-dim"
-                title="Overrides the preset's own saved volume, if it has one."
+                title="Overrides the volume saved with the preset, if it has one."
               >
                 Volume
                 <NumberField

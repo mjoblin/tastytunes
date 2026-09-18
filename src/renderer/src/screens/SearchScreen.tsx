@@ -1058,7 +1058,7 @@ export function SearchScreen(): React.JSX.Element {
                   {libUnindexed.length === 1
                     ? `${libUnindexed[0].serverName} isn't in the search index`
                     : `${libUnindexed.length} media servers aren't in the search index`}
-                  {". The Library’s own search reaches unindexed servers live."}
+                  {". Search in the Library reaches unindexed servers live."}
                 </span>
                 <button
                   onClick={() => requestLibrarySearch(q)}

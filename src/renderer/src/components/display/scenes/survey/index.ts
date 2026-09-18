@@ -64,7 +64,7 @@ export const SURVEY_KEY: SceneKey = {
     },
   ],
   honesty: [
-    "Each band is scaled to its own loudest moment in the track, so a quiet track still has mountains.",
+    "Each band is scaled to its loudest moment in the track, so a quiet track still has mountains.",
   ],
 };
 

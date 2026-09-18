@@ -34,7 +34,7 @@ export function ListenBrainzSection({
     : tokenStatus === "checking" || tokenStatus === "idle"
       ? "Checking token…"
       : tokenStatus === null
-        ? "Can't reach listenbrainz.org; it will be retried when scrobbling."
+        ? "Can't reach listenbrainz.org. It will be retried when scrobbling."
         : tokenStatus.valid
           ? `Token valid, scrobbling as ${tokenStatus.userName ?? "you"}.`
           : "Token rejected by ListenBrainz.";
@@ -56,8 +56,8 @@ export function ListenBrainzSection({
         label="Scrobble to ListenBrainz"
         hint={
           hasToken
-            ? "Log what you listen to at listenbrainz.org: artist, title, and album are sent as tracks play. Queue and streamed tracks with real metadata only; radio is never scrobbled."
-            : "Add your user token above first; the switch is enabled once a token is saved."
+            ? "Log what you listen to at listenbrainz.org: artist, title, and album are sent as tracks play. Queue and streamed tracks with real metadata only. Radio is never scrobbled."
+            : "Add your user token above first. The switch is enabled once a token is saved."
         }
         disabled={!hasToken}
         checked={settings.lbEnabled}

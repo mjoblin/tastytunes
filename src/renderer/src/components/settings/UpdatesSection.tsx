@@ -66,7 +66,7 @@ export function UpdatesSection({
             {manual === "checking" ? (
               "Checking…"
             ) : manual?.status === "none" ? (
-              `Nothing newer; v${version} is the latest release.`
+              `You're on the latest release, v${version}.`
             ) : manual?.status === "error" ? (
               <span className="text-alert break-all">Couldn&apos;t check: {manual.error}</span>
             ) : settings.updateCheck ? (

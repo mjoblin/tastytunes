@@ -278,7 +278,7 @@ export function SettingsScreen(): React.JSX.Element {
                     hint={
                       settings.waveformSeen
                         ? "Reads audio files from your local media server to measure each track: its waveform, dynamic range, loudness and tempo, and the pulse the scenes draw to. Off reads nothing."
-                        : "Reads audio files from your local media server to measure each track: its waveform, dynamic range, loudness and tempo, and the pulse the scenes draw to. Off reads nothing. Nothing measured yet; a track from a local media server is measured the first time it plays."
+                        : "Reads audio files from your local media server to measure each track: its waveform, dynamic range, loudness and tempo, and the pulse the scenes draw to. Off reads nothing. Nothing measured yet. A track from a local media server is measured the first time it plays."
                     }
                     checked={settings.waveforms}
                     onChange={(waveforms) => void save({ waveforms })}
@@ -403,7 +403,7 @@ export function SettingsScreen(): React.JSX.Element {
 
                   <SettingRow
                     label="Volume limit (%)"
-                    hint="Caps the volume TastyTunes will set. The streamer's own remote and other apps aren't affected; leave empty for no limit."
+                    hint="Caps the volume TastyTunes will set. The streamer's remote and other apps aren't affected. Leave empty for no limit."
                   >
                     <NumberField
                       value={settings.volumeLimitPercent}
@@ -441,7 +441,7 @@ export function SettingsScreen(): React.JSX.Element {
 
                   <Toggle
                     label="Liner notes"
-                    hint="The panel on Now Playing with Artist, Album and Track tabs: Wikipedia summaries, release details and track credits matched via MusicBrainz, fetched when you open them. Sends the current artist, album and track names; off means no requests will be sent. The panel's Stream tab stays either way."
+                    hint="The panel on Now Playing with Artist, Album and Track tabs: Wikipedia summaries, release details and track credits matched via MusicBrainz, fetched when you open them. Sends the current artist, album and track names. Off means no requests will be sent. The panel's Stream tab stays either way."
                     checked={settings.artistInfo}
                     onChange={(artistInfo) => void save({ artistInfo })}
                   />
@@ -455,7 +455,7 @@ export function SettingsScreen(): React.JSX.Element {
 
                   <Toggle
                     label="Internet radio directory"
-                    hint="Finds stations through radio-browser.info: the Radio screen's search and top lists, and the radio results in unified search. Sends what you type; off means no requests will be sent. Favorited stations still play either way: a favorite keeps its own stream URL."
+                    hint="Finds stations through radio-browser.info: the Radio screen's search and top lists, and the radio results in unified search. Sends what you type. Off means no requests will be sent. Favorited stations still play either way: a favorite keeps its own stream URL."
                     checked={settings.radioDirectory}
                     onChange={(radioDirectory) => void save({ radioDirectory })}
                   />
