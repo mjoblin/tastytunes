@@ -164,10 +164,12 @@ export function status(): MediaIndexStatus[] {
   load();
   const out: MediaIndexStatus[] = [];
   for (const idx of indexes.values()) {
+    const k = known.get(idx.udn);
     out.push({
       udn: idx.udn,
       serverName: idx.serverName,
       state: building.has(idx.udn) ? "building" : "ready",
+      ...(k ? { searchable: k.searchable } : {}),
       ...(buildingWhy.get(idx.udn) === "refresh" ? { quiet: true } : {}),
       ...(staleIds.has(idx.udn) && !building.has(idx.udn) ? { stale: true } : {}),
       strategy: idx.strategy,
@@ -187,6 +189,7 @@ export function status(): MediaIndexStatus[] {
       serverName: server.name,
       state: why ? "failed" : "none",
       ...(why ? { failure: why } : {}),
+      searchable: server.searchable,
       strategy: null,
       tracks: 0,
       albums: 0,
@@ -197,10 +200,12 @@ export function status(): MediaIndexStatus[] {
   }
   for (const udn of building) {
     if (!indexes.has(udn)) {
+      const k = known.get(udn);
       out.push({
         udn,
         serverName: buildingNames.get(udn) ?? udn,
         state: "building",
+        ...(k ? { searchable: k.searchable } : {}),
         strategy: null,
         tracks: 0,
         albums: 0,

@@ -49,7 +49,7 @@ export function LibrariesSection({
 
         {statuses.length === 0 && (
           <div className="rounded-lg bg-bg ring-1 ring-edge px-3 py-2.5 text-[12px] text-dim">
-            No media servers seen yet. They appear here once the streamer lists them. Open the
+            No media servers seen yet. They appear here once the streamer finds them. Open the
             Library (I), or attach USB storage to the streamer.
           </div>
         )}

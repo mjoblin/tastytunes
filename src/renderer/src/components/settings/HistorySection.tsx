@@ -40,8 +40,8 @@ export function HistorySection({
         The record is a local-only, long-term history of your listening. TastyTunes reads it for
         play counts and last-played facts in the Library and for the resume offer on Now Playing,
         and AI agents can read it (Settings › AI agents). More will build on it: a year-end review
-        is the kind of thing it makes possible. The Recent list, below, is a shorter log, kept and
-        switched separately.
+        is the kind of thing it makes possible. The Recent list, below, is a shorter log with a
+        separate switch.
       </p>
       <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
         <Toggle
