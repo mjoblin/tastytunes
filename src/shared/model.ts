@@ -1633,6 +1633,10 @@ export interface MediaIndexStatus {
   /** The server's counter moved since this index was built and the app will not walk
    *  it on its own (the streamer's USB server, 2026-09-16): the card offers the re-index. */
   stale?: boolean;
+  /** The server answers UPnP Search itself, so the Library's search box reaches it with
+   *  no index; a Browse-only server (the streamer's USB stick) has no search until its
+   *  index is built. The Search screen's unindexed line says which (user, 2026-09-17). */
+  searchable?: boolean;
   strategy: "search" | "browse" | null;
   tracks: number;
   albums: number;

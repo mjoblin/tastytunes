@@ -521,10 +521,18 @@ export function SearchScreen(): React.JSX.Element {
   );
 
   // The library group answers from the INDEXES only; a server that isn't
-  // indexed (yet, or ever) is invisible here while the Library's own search
-  // still reaches it live. Silent disagreement between the two searches is
-  // what erodes trust — so when that gap exists, this screen says so.
+  // indexed (yet, or ever) is invisible here. What the Library can do about it
+  // depends on the server: one that answers UPnP Search itself is asked directly
+  // by the Library's search box; a Browse-only one (the streamer's USB stick)
+  // has no search until its index is built, from its card in the Library.
+  // Silent disagreement between the two searches is what erodes trust — so when
+  // that gap exists, this screen says so, and says which (user, 2026-09-17).
   const libUnindexed = useMemo(() => mediaIndex.filter((x) => x.state !== "ready"), [mediaIndex]);
+  const libLive = useMemo(() => libUnindexed.filter((x) => x.searchable !== false), [libUnindexed]);
+  const libBrowseOnly = useMemo(
+    () => libUnindexed.filter((x) => x.searchable === false),
+    [libUnindexed],
+  );
 
   // Station rows light up like the Radio screen's — same audible-name match,
   // same tuning-in window, from the same shared helpers, so the row for a
@@ -1049,22 +1057,39 @@ export function SearchScreen(): React.JSX.Element {
             {/* The coverage confession — deliberately OUTSIDE the sections, so
                 it still shows when the library group found nothing precisely
                 BECAUSE the content lives on an unindexed server. */}
-            {libUnindexed.length > 0 && !hidden.has("library") && (
+            {libLive.length > 0 && !hidden.has("library") && (
               <div
-                data-search-unindexed
+                data-search-unindexed="live"
                 className="flex items-baseline gap-2 text-[12px] text-faint"
               >
                 <span className="min-w-0">
-                  {libUnindexed.length === 1
-                    ? `${libUnindexed[0].serverName} isn't in the search index`
-                    : `${libUnindexed.length} media servers aren't in the search index`}
-                  {". Search in the Library reaches unindexed servers live."}
+                  {libLive.length === 1
+                    ? `${libLive[0].serverName} isn't in the search index. Search in the Library asks it directly.`
+                    : `${libLive.length} media servers aren't in the search index. Search in the Library asks them directly.`}
                 </span>
                 <button
                   onClick={() => requestLibrarySearch(q)}
                   className="shrink-0 text-amber hover:brightness-110 transition-all"
                 >
                   Search the Library →
+                </button>
+              </div>
+            )}
+            {libBrowseOnly.length > 0 && !hidden.has("library") && (
+              <div
+                data-search-unindexed="browse"
+                className="flex items-baseline gap-2 text-[12px] text-faint"
+              >
+                <span className="min-w-0">
+                  {libBrowseOnly.length === 1
+                    ? `${libBrowseOnly[0].serverName} can't be searched until its index is built, from its card in the Library.`
+                    : `${libBrowseOnly.length} media servers can't be searched until their indexes are built, from their cards in the Library.`}
+                </span>
+                <button
+                  onClick={() => setScreen("library")}
+                  className="shrink-0 text-amber hover:brightness-110 transition-all"
+                >
+                  Open the Library →
                 </button>
               </div>
             )}
