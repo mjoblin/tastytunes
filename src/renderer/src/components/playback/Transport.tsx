@@ -1,4 +1,4 @@
-import { Loader2, Pause, Play, Repeat, Repeat1 } from "lucide-react";
+import { Loader2, Pause, Play, Repeat } from "lucide-react";
 import { type RepeatMode, nextRepeatMode, repeatModeOf } from "@shared/smoip";
 import { tt } from "@/api";
 import { useStore } from "@/store";
@@ -159,12 +159,36 @@ export const REPEAT_TIP: Record<RepeatMode, string> = {
   one: "Repeat one",
 };
 
-/** The repeat button's glyph: the loop, with its 1 when the streamer repeats one track. */
+/**
+ * The repeat button's glyph: the loop, and for repeat one a "1" set as a BADGE at its
+ * upper right. The icon set's own repeat-one draws its numeral inside the loop, four units
+ * tall on a 24 unit grid, which at the 12px these secondary buttons keep is a 2px mark
+ * (user, 2026-09-19: "the 1 in the icon is very small"). Outside the loop the numeral can
+ * be the app's own mono face at a size a person can read, and it is a cue that is not
+ * color. The badge is absolute and the wrapper is a block like the bare icon it replaces
+ * (the base styles make an svg block-level; an inline wrapper grew the button by a line's
+ * strut, 40px against shuffle's 28), so the button's box is the plain glyph's in every mode.
+ */
 export function RepeatGlyph({ size, mode }: { size: number; mode: RepeatMode }): React.JSX.Element {
-  return mode === "one" ? (
-    <Repeat1 size={size} data-repeat-glyph="one" />
-  ) : (
-    <Repeat size={size} data-repeat-glyph={mode} />
+  const compact = size < 12;
+  return (
+    <span className="relative block" data-repeat-glyph={mode}>
+      <Repeat size={size} />
+      {mode === "one" && (
+        <span
+          aria-hidden
+          data-repeat-badge
+          className="absolute font-mono font-bold leading-none pointer-events-none select-none"
+          style={{
+            fontSize: compact ? 8 : 9,
+            left: size - (compact ? 1 : 1.5),
+            top: compact ? -4 : -5,
+          }}
+        >
+          1
+        </span>
+      )}
+    </span>
   );
 }
 
