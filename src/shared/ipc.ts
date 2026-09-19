@@ -180,7 +180,7 @@ export type StreamerCommand =
   | { type: "previousTrack" }
   | { type: "seek"; positionSecs: number }
   | { type: "playQueueId"; queueId: number }
-  | { type: "setRepeat"; mode: "all" | "off" }
+  | { type: "setRepeat"; mode: "all" | "off" | "one" }
   | { type: "setShuffle"; mode: "all" | "off" }
   /** skipVolume: a schedule bringing its own volume mutes the preset's override. */
   | { type: "recallPreset"; presetId: number; skipVolume?: boolean }

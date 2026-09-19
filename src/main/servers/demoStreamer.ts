@@ -1154,6 +1154,27 @@ function buildDemo(host: string): {
             mode_shuffle: params.mode_shuffle,
           };
           setTimeout(() => push("/zone/play_state"), 120);
+        } else if (frame.path === "/zone/play_control" && typeof params.mode_repeat === "string") {
+          // FIRMWARE (live-probed 2026-09-18): three states; off and all set by name, "toggle"
+          // steps all → one → off → all, and "one" by name lands on all
+          const cur = DATA["/zone/play_state"].mode_repeat;
+          const asked = params.mode_repeat;
+          const next =
+            asked === "toggle"
+              ? cur === "all"
+                ? "one"
+                : cur === "one"
+                  ? "off"
+                  : "all"
+              : asked === "off"
+                ? "off"
+                : asked === "all" || asked === "one"
+                  ? "all"
+                  : null;
+          if (next) {
+            DATA["/zone/play_state"] = { ...DATA["/zone/play_state"], mode_repeat: next };
+            setTimeout(() => push("/zone/play_state"), 120);
+          }
         } else if (frame.path === "/zone/play_control" && typeof params.action === "string") {
           // echo transport state: play / pause / stop / toggle
           const state = DATA["/zone/play_state"].state;

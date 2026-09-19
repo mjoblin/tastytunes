@@ -158,11 +158,24 @@ export function deviceTools(ctx: ToolContext): Record<string, ToolImpl> {
       },
     },
     set_repeat: {
-      inputSchema: { on: z.boolean() },
+      inputSchema: {
+        mode: z
+          .enum(["off", "all", "one"])
+          .optional()
+          .describe("off, all (the whole queue) or one (the current track)."),
+        on: z
+          .boolean()
+          .optional()
+          .describe("Older form: true is all, false is off. mode wins when both are given."),
+      },
       handler: async (a) => {
         ctx.connected();
-        await dm.command({ type: "setRepeat", mode: a.on ? "all" : "off" });
-        return ok(`Repeat ${a.on ? "on" : "off"}.`);
+        const mode =
+          (a.mode as "off" | "all" | "one" | undefined) ??
+          (a.on === true ? "all" : a.on === false ? "off" : null);
+        if (!mode) return err("Say which: mode off, all or one.");
+        await dm.command({ type: "setRepeat", mode });
+        return ok(`Repeat ${mode}.`);
       },
     },
     // ---- volume

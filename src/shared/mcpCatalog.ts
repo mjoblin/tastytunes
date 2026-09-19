@@ -130,7 +130,11 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         description: "Jump to a specific track in the queue by its id (see list_queue).",
       },
       { name: "set_shuffle", title: "Set shuffle", description: "Turn shuffle on or off." },
-      { name: "set_repeat", title: "Set repeat", description: "Turn repeat-all on or off." },
+      {
+        name: "set_repeat",
+        title: "Set repeat",
+        description: "Set repeat: off, all (the whole queue) or one (the current track).",
+      },
     ],
   },
   {

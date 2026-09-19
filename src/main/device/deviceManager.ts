@@ -651,7 +651,15 @@ export class DeviceManager {
       case "playQueueId":
         return socket.send("/zone/play_control", { queue_id: cmd.queueId });
       case "setRepeat":
-        return socket.send("/zone/play_control", { mode_repeat: cmd.mode });
+        // FIRMWARE (live-probed 2026-09-18, the socket and HTTP alike): off and all set by
+        // name, but "one" by name answers 200 and lands on "all". Only the toggle reaches
+        // it, stepping all → one → off → all, so the way to one is an absolute "all" and
+        // then one toggle, two frames the streamer takes in order (from off they land on
+        // one). Already there: nothing to send, since the pair would flash through all.
+        if (cmd.mode !== "one") return socket.send("/zone/play_control", { mode_repeat: cmd.mode });
+        if (this.cache.playState?.mode_repeat === "one") return;
+        socket.send("/zone/play_control", { mode_repeat: "all" });
+        return socket.send("/zone/play_control", { mode_repeat: "toggle" });
       case "setShuffle":
         return socket.send("/zone/play_control", { mode_shuffle: cmd.mode });
       case "recallPreset": {

@@ -13,7 +13,6 @@ import {
   Moon,
   Power,
   RadioTower,
-  Repeat,
   Shuffle,
   SkipBack,
   SkipForward,
@@ -36,6 +35,8 @@ import { useVolumeSlider, useWheelVolume } from "@/components/playback/VolumeClu
 import { VolumeDial } from "@/components/playback/VolumeDial";
 import {
   PlayPauseButton,
+  REPEAT_TIP,
+  RepeatGlyph,
   TransportIconButton,
   useTransport,
 } from "@/components/playback/Transport";
@@ -406,11 +407,11 @@ export function TrayPanel(): React.JSX.Element {
                   <TransportIconButton
                     size="compact"
                     enabled={active && t.canRepeat}
-                    tip="Repeat"
+                    tip={REPEAT_TIP[t.repeatMode]}
                     accent={t.repeatOn}
-                    onClick={t.toggleRepeat}
+                    onClick={t.cycleRepeat}
                   >
-                    <Repeat size={10} />
+                    <RepeatGlyph size={10} mode={t.repeatMode} />
                   </TransportIconButton>
 
                   <span className="font-mono text-[10px] text-faint tabular-nums shrink-0 ml-1 w-8 text-right">
