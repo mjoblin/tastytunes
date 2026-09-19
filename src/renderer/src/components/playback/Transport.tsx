@@ -1,4 +1,5 @@
-import { Loader2, Pause, Play } from "lucide-react";
+import { Loader2, Pause, Play, Repeat, Repeat1 } from "lucide-react";
+import { type RepeatMode, nextRepeatMode, repeatModeOf } from "@shared/smoip";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { controlSet, cx } from "@/lib/format";
@@ -37,13 +38,16 @@ export interface Transport {
   canRepeat: boolean;
   canStop: boolean;
   shuffleOn: boolean;
+  /** Repeat all or repeat one: the button wears the accent for either. */
   repeatOn: boolean;
+  repeatMode: RepeatMode;
   toggle(): void;
   prev(): void;
   next(): void;
   stop(): void;
   toggleShuffle(): void;
-  toggleRepeat(): void;
+  /** Off, all, one, off: the streamer's own order. */
+  cycleRepeat(): void;
   seek(positionSecs: number): void;
 }
 
@@ -71,7 +75,8 @@ export function useTransport(
   const playing = active && state === "play";
   const busy = active && (state === "buffering" || state === "connecting");
   const shuffleOn = playState?.mode_shuffle === "all";
-  const repeatOn = playState?.mode_repeat === "all";
+  const repeatMode = repeatModeOf(playState);
+  const repeatOn = repeatMode !== "off";
 
   return {
     connected,
@@ -88,12 +93,13 @@ export function useTransport(
     canStop: controls.has("stop"),
     shuffleOn,
     repeatOn,
+    repeatMode,
     toggle: () => void tt.command({ type: "togglePlayback" }),
     prev: () => void tt.command({ type: "previousTrack" }),
     next: () => void tt.command({ type: "nextTrack" }),
     stop: () => void tt.command({ type: "stop" }),
     toggleShuffle: () => void tt.command({ type: "setShuffle", mode: shuffleOn ? "off" : "all" }),
-    toggleRepeat: () => void tt.command({ type: "setRepeat", mode: repeatOn ? "off" : "all" }),
+    cycleRepeat: () => void tt.command({ type: "setRepeat", mode: nextRepeatMode(repeatMode) }),
     seek: (positionSecs: number) => void tt.command({ type: "seek", positionSecs }),
   };
 }
@@ -143,6 +149,22 @@ export function PlayPauseButton({
         <Play size={icon} fill="currentColor" strokeWidth={0} className="translate-x-[1px]" />
       )}
     </button>
+  );
+}
+
+/** The repeat button's tip names the mode that is on; off, it names the control. */
+export const REPEAT_TIP: Record<RepeatMode, string> = {
+  off: "Repeat",
+  all: "Repeat all",
+  one: "Repeat one",
+};
+
+/** The repeat button's glyph: the loop, with its 1 when the streamer repeats one track. */
+export function RepeatGlyph({ size, mode }: { size: number; mode: RepeatMode }): React.JSX.Element {
+  return mode === "one" ? (
+    <Repeat1 size={size} data-repeat-glyph="one" />
+  ) : (
+    <Repeat size={size} data-repeat-glyph={mode} />
   );
 }
 

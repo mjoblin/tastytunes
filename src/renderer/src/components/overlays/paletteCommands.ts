@@ -27,6 +27,7 @@ import {
   Radio,
   RefreshCw,
   Repeat,
+  Repeat1,
   Search,
   Shuffle,
   SkipBack,
@@ -45,7 +46,7 @@ import { SCENES } from "@/components/display/scenes";
 import { sleepTrackKey, type SleepAction } from "@shared/model";
 import { favoriteKey, type Favorite } from "@shared/model";
 import { activatePlaylist } from "@/lib/playlists";
-import { audioCaps, brightnessOptions } from "@shared/smoip";
+import { audioCaps, brightnessOptions, nextRepeatMode, repeatModeOf } from "@shared/smoip";
 import { toggleFavorite } from "@/lib/favorites";
 import { tt } from "@/api";
 import { useStore } from "@/store";
@@ -270,13 +271,14 @@ export function buildCommands(ctx: CommandContext): Command[] {
       });
     }
     if (allow("toggle_repeat")) {
-      const on = playState?.mode_repeat === "all";
+      // the label names where a press goes, the way the button steps: off, all, one, off
+      const next = nextRepeatMode(repeatModeOf(playState));
       cmds.push({
         id: "repeat",
-        label: on ? "Repeat off" : "Repeat all",
+        label: next === "all" ? "Repeat all" : next === "one" ? "Repeat one" : "Repeat off",
         group: "Playback",
-        icon: Repeat,
-        run: () => void tt.command({ type: "setRepeat", mode: on ? "off" : "all" }),
+        icon: next === "one" ? Repeat1 : Repeat,
+        run: () => void tt.command({ type: "setRepeat", mode: next }),
       });
     }
   }

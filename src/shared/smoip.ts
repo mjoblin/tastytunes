@@ -76,10 +76,25 @@ export interface ZonePlayState {
   queue_index: number | null;
   queue_length: number | null;
   queue_id: number | null;
+  /** "off", "all" or "one" (see RepeatMode). */
   mode_repeat: string | null;
   mode_shuffle: string | null;
   metadata: ZonePlayStateMetadata | null;
 }
+
+/** The streamer's repeat has three states (live-probed 2026-09-18, Evo 150, ARC 2.03): off,
+ *  all (the queue) and one (the current track). FIRMWARE: "one" cannot be set by name, a
+ *  mode_repeat of "one" answers 200 and lands on "all", over HTTP and the socket alike; only
+ *  the toggle reaches it, stepping all → one → off → all. The device manager's setRepeat
+ *  knows the way (dev/FIRMWARE-REPORTS.md). */
+export type RepeatMode = "off" | "all" | "one";
+/** What the streamer reports, anything unknown reading as off. */
+export const repeatModeOf = (
+  ps: Pick<ZonePlayState, "mode_repeat"> | null | undefined,
+): RepeatMode => (ps?.mode_repeat === "all" ? "all" : ps?.mode_repeat === "one" ? "one" : "off");
+/** A press steps the way the streamer's own toggle does: off, all, one, off. */
+export const nextRepeatMode = (mode: RepeatMode): RepeatMode =>
+  mode === "off" ? "all" : mode === "all" ? "one" : "off";
 
 // ------------------------------------------------------- /zone/play_state/position
 

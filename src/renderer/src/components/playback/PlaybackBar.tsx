@@ -4,7 +4,6 @@ import {
   Moon,
   Power,
   RadioTower,
-  Repeat,
   Shuffle,
   SkipBack,
   SkipForward,
@@ -19,7 +18,13 @@ import { cx, deriveNowPlaying, fmtTime } from "@/lib/format";
 import { Slider } from "../controls/Slider";
 import { ArtImage } from "../media/ArtImage";
 import { VolumeCluster } from "./VolumeCluster";
-import { PlayPauseButton, TransportIconButton, useTransport } from "./Transport";
+import {
+  PlayPauseButton,
+  REPEAT_TIP,
+  RepeatGlyph,
+  TransportIconButton,
+  useTransport,
+} from "./Transport";
 import { SignalLamp } from "../device/SignalLamp";
 import { SleepTimer } from "./SleepTimer";
 import { DeviceSwitcher } from "../device/DeviceSwitcher";
@@ -152,12 +157,12 @@ export function PlaybackBar(): React.JSX.Element {
           </TransportIconButton>
           <TransportIconButton
             size="bar"
-            tip="Repeat"
+            tip={REPEAT_TIP[t.repeatMode]}
             enabled={active && t.canRepeat}
             accent={t.repeatOn}
-            onClick={t.toggleRepeat}
+            onClick={t.cycleRepeat}
           >
-            <Repeat size={12} />
+            <RepeatGlyph size={12} mode={t.repeatMode} />
           </TransportIconButton>
           {t.canStop && meta.isRadio && (
             <TransportIconButton size="bar" tip="Stop" enabled={active} onClick={t.stop}>
