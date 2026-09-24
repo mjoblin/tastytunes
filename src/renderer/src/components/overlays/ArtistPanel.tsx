@@ -203,7 +203,7 @@ export function ArtistPanel({ className }: { className?: string }): React.JSX.El
     if (!built.localQuery) return;
     let stale = false;
     void tt
-      .mediaNodeInfo(built.localQuery)
+      .mediaNodeInfo(built.localQuery, "show")
       .then((found) => {
         if (stale || !found) return;
         setStreamTarget({

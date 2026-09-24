@@ -49,7 +49,7 @@ export async function openInfoForRef(ref: MediaRef): Promise<void> {
   set({ node: stub, serverName: ref.serverName ?? null, note: "Looking it up in the library…" });
   let found = null;
   try {
-    found = await tt.mediaNodeInfo(query);
+    found = await tt.mediaNodeInfo(query, "show");
   } catch {
     found = null;
   }
@@ -154,7 +154,7 @@ export async function openInfoForNowPlaying(
   if (!localQuery) return;
   let found = null;
   try {
-    found = await tt.mediaNodeInfo(localQuery);
+    found = await tt.mediaNodeInfo(localQuery, "show");
   } catch {
     found = null;
   }

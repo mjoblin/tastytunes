@@ -1,5 +1,11 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
-import type { AlbumDr, AudioAnalysis, MediaInfoQuery, TrackInfoQuery } from "@shared/model";
+import type {
+  AlbumDr,
+  AudioAnalysis,
+  MediaInfoQuery,
+  LookupPurpose,
+  TrackInfoQuery,
+} from "@shared/model";
 import { IPC, type PushMessage, type StreamerCommand, type TastyTunesApi } from "@shared/ipc";
 import {
   type AppSettings,
@@ -107,7 +113,8 @@ const api: TastyTunesApi = {
   mediaPresetSave: (serverUdn: string, objectId: string, slot: number) =>
     ipcRenderer.invoke(IPC.mediaPresetSave, serverUdn, objectId, slot),
   contentResolve: (ref: ContentRef) => ipcRenderer.invoke(IPC.contentResolve, ref),
-  mediaNodeInfo: (query: MediaInfoQuery) => ipcRenderer.invoke(IPC.mediaNodeInfo, query),
+  mediaNodeInfo: (query: MediaInfoQuery, purpose: LookupPurpose) =>
+    ipcRenderer.invoke(IPC.mediaNodeInfo, query, purpose),
   mediaIndexRebuild: (serverUdn: string) => ipcRenderer.invoke(IPC.mediaIndexRebuild, serverUdn),
   reportDisplayMode: (on: boolean) => ipcRenderer.send(IPC.displayModeReport, on),
   radioSearch: (query: string) => ipcRenderer.invoke(IPC.radioSearch, query),

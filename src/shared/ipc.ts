@@ -74,6 +74,7 @@ import type {
   UpdateCheckResult,
   UpdateState,
   MediaInfoQuery,
+  LookupPurpose,
   MediaInfoTarget,
   AudioAnalysis,
   AlbumDr,
@@ -427,7 +428,7 @@ export interface TastyTunesApi {
    *  (queue row, favorite, playlist item…): the index by id, then by content,
    *  then a live BrowseMetadata when the server and id are known. Null when
    *  nothing is found — the caller shows what it has. */
-  mediaNodeInfo(query: MediaInfoQuery): Promise<MediaInfoTarget | null>;
+  mediaNodeInfo(query: MediaInfoQuery, purpose: LookupPurpose): Promise<MediaInfoTarget | null>;
   /** Station search against radio-browser.info (main process; name contains, by popularity). */
   /** Force a media-index (re)build for one server (also the only way to
    *  build one for a Browse-only server). */

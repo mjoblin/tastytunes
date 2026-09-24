@@ -757,9 +757,14 @@ function registerIpc(): void {
     presetSave(streamerHost(), serverUdn, objectId, slot),
   );
   ipcMain.handle(IPC.contentResolve, (_e, ref: ContentRef) => deviceManager.contentResolve(ref));
-  ipcMain.handle(IPC.mediaNodeInfo, (_e, query: MediaInfoQuery) => {
+  ipcMain.handle(IPC.mediaNodeInfo, (_e, query: MediaInfoQuery, purpose: unknown) => {
     const conn = deviceManager.snapshot().connection;
-    return lookupMediaInfo(conn.phase === "connected" ? conn.host : null, query);
+    // anything but an explicit act is a show: a show never rebuilds an index
+    return lookupMediaInfo(
+      conn.phase === "connected" ? conn.host : null,
+      query,
+      purpose === "act" ? "act" : "show",
+    );
   });
   ipcMain.handle(IPC.toggleMini, () => toggleMiniPlayer());
   // A named screen goes through sendMenuCommand, which already creates the
