@@ -2393,6 +2393,17 @@ export interface StreamInfo {
  * can say about a thing when asking main to find its node: identity hints
  * first (server + object id), then content (title / artist / album).
  */
+/**
+ * Why a library lookup asks. "show": for an item's details (the waveform, Liner notes, the
+ * Info modal, the resume offer), where an answer from a stale index is still right by
+ * content. "act": for its id (Open in Library), which must answer on the server now. Only
+ * an act confirms a Browse-built index against the device, and confirming can rebuild it:
+ * the streamer's USB ids are all new after a standby, and a rebuild the user never asked
+ * for was the "building…" a CXN V2 owner saw on the first track after the streamer woke
+ * (user report, 2026-09-25). Required at every call, so a new caller has to choose.
+ */
+export type LookupPurpose = "show" | "act";
+
 export interface MediaInfoQuery {
   kind: "track" | "album" | "artist";
   title: string;

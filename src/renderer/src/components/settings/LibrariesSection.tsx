@@ -34,7 +34,7 @@ export function LibrariesSection({
       <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
         <Toggle
           label="Build indexes automatically"
-          hint="Automatically index each searchable media server when the streamer connects, and rebuild when the server reports changes. Off means indexes only build from the buttons below."
+          hint="Automatically index each searchable media server when the streamer connects, and rebuild when the server reports changes. Off means indexes only build from the buttons below. Either way, a playlist or “Open in Library” rebuilds an index that has gone out of date, as the streamer's USB drive does after standby."
           checked={settings.mediaIndexAuto}
           onChange={(mediaIndexAuto) => void save({ mediaIndexAuto })}
         />

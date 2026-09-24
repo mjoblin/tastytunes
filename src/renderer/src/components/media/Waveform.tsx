@@ -245,8 +245,9 @@ export function usePlayingFileRef(): {
     setRef(null);
     const built = nowPlayingInfoTarget(psRef.current, npRef.current);
     if (!built?.localQuery) return;
+    // a show: this runs on every track change, and must never rebuild the index
     void tt
-      .mediaNodeInfo(built.localQuery)
+      .mediaNodeInfo(built.localQuery, "show")
       .then((found) => {
         if (stale || !found?.node.serverUdn || !found.node.id) return;
         setRef({

@@ -53,9 +53,14 @@ export function ResumeCard({
       const q = { kind: "album" as const, title: run.album, artist: run.artist };
       // the album's own artist first; a compilation's tracks carry performers,
       // so fall back to the title alone
+      // a show: the offer appears on its own, so it never rebuilds an index. After the
+      // streamer's standby a USB album's stored id no longer browses, and there is
+      // simply no offer until something the user asks for re-indexes the drive
       const info =
-        (await tt.mediaNodeInfo(q).catch(() => null)) ??
-        (run.artist ? await tt.mediaNodeInfo({ ...q, artist: null }).catch(() => null) : null);
+        (await tt.mediaNodeInfo(q, "show").catch(() => null)) ??
+        (run.artist
+          ? await tt.mediaNodeInfo({ ...q, artist: null }, "show").catch(() => null)
+          : null);
       const node = info?.node;
       const udn = node?.serverUdn ?? info?.serverUdn ?? null;
       if (!node || !udn) return;
