@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import type { DisplayScene } from "@shared/model";
 import { useStore } from "@/store";
 import type { NowPlayingMeta } from "@/lib/format";
-import { pickShuffled, type Shuffleable } from "./scenes";
+import { pickShuffled, sceneNeeds, type Shuffleable } from "./scenes";
+import { useAnalyzable } from "./useSceneLive";
 
 const DEFAULT_EXCLUDE: readonly string[] = ["sleeve"];
 
@@ -27,6 +28,11 @@ export function useShuffledScene(
     pickShuffled(null, shuffleOrder, shuffleExclude),
   );
   const shuffledRef = useRef(shuffled);
+  // whether what plays can drive the analysis scenes: when it cannot, the draw is from the
+  // scenes that draw anyway, so Shuffle never lands on one that would only stand the art in
+  const analyzable = useAnalyzable(chosen === "shuffle");
+  const analyzableRef = useRef(analyzable);
+  analyzableRef.current = analyzable;
   // how many tracks the shown scene has had, and the album it began on; the draw is due when
   // the count reaches "every" (or the album changes), and at once when Shuffle is chosen
   const sinceRef = useRef(0);
@@ -48,7 +54,12 @@ export function useShuffledScene(
     if (!due) return;
     sinceRef.current = 0;
     albumRef.current = albumSig;
-    const next = pickShuffled(shuffledRef.current, shuffleOrder, shuffleExclude);
+    const next = pickShuffled(
+      shuffledRef.current,
+      shuffleOrder,
+      shuffleExclude,
+      analyzableRef.current,
+    );
     shuffledRef.current = next;
     setShuffled(next);
     // the order and the exclusions ride the refs' values at draw time; only a track or a mode
@@ -63,5 +74,13 @@ export function useShuffledScene(
     setShuffled(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shuffleExclude.join(","), chosen]);
+  // a scene that needs the analysis gives way once it is definite there will be none (the
+  // track turned out unreadable, or a station came on without a track change)
+  useEffect(() => {
+    if (chosen !== "shuffle" || analyzable || sceneNeeds(shuffledRef.current) === "any") return;
+    const next = pickShuffled(shuffledRef.current, shuffleOrder, shuffleExclude, false);
+    shuffledRef.current = next;
+    setShuffled(next);
+  }, [analyzable, chosen, shuffleOrder, shuffleExclude]);
   return { shuffled, active: chosen === "shuffle" ? shuffled : chosen };
 }

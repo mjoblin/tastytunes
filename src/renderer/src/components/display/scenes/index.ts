@@ -1,5 +1,7 @@
 import {
+  Disc,
   Disc3,
+  Gauge,
   Map,
   Moon,
   Radar,
@@ -16,7 +18,14 @@ import {
 } from "lucide-react";
 import type { DisplayScene, SceneSettingValue } from "@shared/model";
 import { orderScenes, sceneText } from "@shared/scenes";
-import type { AnyScene, SceneId, SceneKey, SceneSettingDef, SceneSettings } from "./types";
+import type {
+  AnyScene,
+  SceneId,
+  SceneKey,
+  SceneNeeds,
+  SceneSettingDef,
+  SceneSettings,
+} from "./types";
 import { Tide } from "./tide";
 import { Terrain } from "./terrain";
 import { Orbit } from "./orbit";
@@ -29,6 +38,8 @@ import { Roll, ROLL_KEY, ROLL_SETTINGS } from "./roll";
 import { Sea, SEA_KEY, SEA_SETTINGS } from "./sea";
 import { Terminal, TERMINAL_KEY, TERMINAL_SETTINGS } from "./terminal";
 import { Refrain, REFRAIN_KEY, REFRAIN_SETTINGS } from "./refrain";
+import { Panel, PANEL_KEY, PANEL_SETTINGS } from "./panel";
+import { Turntable, TURNTABLE_KEY, TURNTABLE_SETTINGS } from "./turntable";
 
 /**
  * THE SCENES registry: the picker, the palette, Tab and the shuffle all
@@ -50,6 +61,9 @@ export interface SceneDef {
   /** The scene IS its words (Type, Terminal): the Now Playing tile draws them whatever its
    *  words toggle says, and the toggle is disabled there. */
   essentialWords?: true;
+  /** What the scene needs to draw (types SceneNeeds): the analysis by default; the deck
+   *  scenes draw for anything loaded. */
+  needs?: SceneNeeds;
 }
 
 /** A scene's name and description come from the shared text (shared/scenes.ts, 2026-09-14),
@@ -230,6 +244,25 @@ export const SCENES: SceneDef[] = [
     settings: REFRAIN_SETTINGS,
   },
   {
+    id: "panel",
+    ...text("panel"),
+    icon: Gauge,
+    essentialWords: true,
+    needs: "any",
+    kind: "2d",
+    key: PANEL_KEY,
+    settings: PANEL_SETTINGS,
+  },
+  {
+    id: "turntable",
+    ...text("turntable"),
+    icon: Disc,
+    needs: "any",
+    kind: "2d",
+    key: TURNTABLE_KEY,
+    settings: TURNTABLE_SETTINGS,
+  },
+  {
     id: "shuffle",
     ...text("shuffle"),
     icon: Shuffle,
@@ -250,6 +283,8 @@ export const ABSTRACT_SCENES: SceneId[] = [
   "sea",
   "terminal",
   "refrain",
+  "panel",
+  "turntable",
 ];
 export const isAbstract = (id: DisplayScene): id is SceneId => id !== "sleeve" && id !== "shuffle";
 
@@ -291,7 +326,16 @@ export function makeScene(id: SceneId): AnyScene {
       return new Terminal();
     case "refrain":
       return new Refrain();
+    case "panel":
+      return new Panel();
+    case "turntable":
+      return new Turntable();
   }
+}
+
+/** What a scene needs to draw; the Sleeve's face and Shuffle need nothing of their own. */
+export function sceneNeeds(id: DisplayScene): SceneNeeds {
+  return SCENES.find((s) => s.id === id)?.needs ?? (isAbstract(id) ? "analysis" : "any");
 }
 
 /** Anything Shuffle may show: every scene but Shuffle itself (the sleeve included, if asked in). */
@@ -303,15 +347,23 @@ export const SHUFFLE_POOL: Shuffleable[] = SCENES_ORDERED.map((s) => s.id).filte
 /**
  * Shuffle's next scene: the one after the last in the picker's alphabetical order, or a random
  * one that is never the one before, from the pool less the scenes the user has left out (an
- * empty pool falls back to every scene rather than nothing).
+ * empty pool falls back to every scene rather than nothing). When what plays can't be
+ * analyzed (a station, a cast, a track the app can't read), the pool is the scenes that draw
+ * anyway, so Shuffle never lands on one that would only stand the art in; when every one of
+ * those is left out, the Sleeve is the draw.
  */
 export function pickShuffled(
   previous: Shuffleable | null,
   order: "sequential" | "random" = "random",
   exclude: readonly string[] = ["sleeve"],
+  analyzable = true,
 ): Shuffleable {
   let pool = SHUFFLE_POOL.filter((id) => !exclude.includes(id));
   if (pool.length === 0) pool = SHUFFLE_POOL;
+  if (!analyzable) {
+    const drawable = pool.filter((id) => sceneNeeds(id) === "any");
+    pool = drawable.length ? drawable : ["sleeve"];
+  }
   if (order === "random") {
     const others = pool.filter((id) => id !== previous);
     const from = others.length ? others : pool;

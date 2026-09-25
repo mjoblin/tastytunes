@@ -16,7 +16,7 @@ import { FACT_SEP } from "@/lib/mediaFacts";
 import { useSceneFeed } from "@/components/display/feed";
 import { SceneCanvas } from "@/components/display/SceneCanvas";
 import { ScenePicker } from "@/components/display/ScenePicker";
-import { SCENES, SCENES_ORDERED, isAbstract } from "@/components/display/scenes";
+import { SCENES, SCENES_ORDERED, isAbstract, sceneNeeds } from "@/components/display/scenes";
 import { sceneIdleLine, useSceneLive } from "@/components/display/useSceneLive";
 import { useShuffledScene } from "@/components/display/useShuffledScene";
 import type { SceneId } from "@/components/display/scenes/types";
@@ -62,7 +62,10 @@ export function DisplayMode(): React.JSX.Element {
   // and other sources with no local media data"): with nothing real to draw the wall shows
   // the Sleeve's face, as the Now Playing tile does, and says why in a line above the corner
   // — the scene used to keep drawing on the feed's sines whatever played
-  const { live: sceneLive, idle: sceneIdle } = useSceneLive(stage != null);
+  const { live: sceneLive, idle: sceneIdle } = useSceneLive(
+    stage != null,
+    stage ? sceneNeeds(stage) : "analysis",
+  );
   const standIn = stage != null && !sceneLive;
   const stageDef = stage ? SCENES.find((sc) => sc.id === stage) : null;
   const idleLine =

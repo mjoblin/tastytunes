@@ -3,6 +3,8 @@ import { isRadioMetadata } from "@shared/smoip";
 import { useStore } from "@/store";
 import { usePlayingAnalysis } from "@/components/media/Waveform";
 import { nowPlayingInfoTarget } from "@/lib/mediaInfo";
+import { deriveNowPlaying } from "@/lib/format";
+import type { SceneNeeds } from "./scenes/types";
 
 /**
  * WHETHER THE SCENES HAVE SOMETHING REAL TO DRAW (2026-09-15, the user: the
@@ -22,7 +24,7 @@ import { nowPlayingInfoTarget } from "@/lib/mediaInfo";
  *  - `unanalyzed`: a library track the app could not read (the server refused
  *    the file, or the decode failed).
  */
-export type SceneIdle = "radio" | "elsewhere" | "off" | "analyzing" | "unanalyzed";
+export type SceneIdle = "radio" | "elsewhere" | "off" | "analyzing" | "unanalyzed" | "empty";
 
 /** How long a library track's analysis must stay absent before the scenes yield: on a skip
  *  the playing file is resolved again and the analysis passes through absent, then loading,
@@ -49,13 +51,25 @@ function readLive(
   return { live: true, idle: null };
 }
 
-export function useSceneLive(enabled: boolean): { live: boolean; idle: SceneIdle | null } {
+/** `needs`: a scene that draws the deck (SceneNeeds "any") is live whenever something is
+ *  loaded, a station or a cast included; the rest need the analysis. */
+export function useSceneLive(
+  enabled: boolean,
+  needs: SceneNeeds = "analysis",
+): { live: boolean; idle: SceneIdle | null } {
   const playState = useStore((s) => s.playState);
   const nowPlaying = useStore((s) => s.nowPlaying);
   const analysisOn = useStore((s) => s.settings.waveforms);
-  const analysis = usePlayingAnalysis(enabled && analysisOn);
-  const raw = readLive(playState, nowPlaying, analysis, analysisOn);
-  const definite = raw.idle === "radio" || raw.idle === "elsewhere" || raw.idle === "off";
+  const analysis = usePlayingAnalysis(enabled && analysisOn && needs === "analysis");
+  const loaded = deriveNowPlaying(playState, nowPlaying).title != null;
+  const raw =
+    needs === "any"
+      ? loaded
+        ? { live: true, idle: null }
+        : { live: false, idle: "empty" as const }
+      : readLive(playState, nowPlaying, analysis, analysisOn);
+  const definite =
+    raw.idle === "radio" || raw.idle === "elsewhere" || raw.idle === "off" || raw.idle === "empty";
   // the settled truth: live at once on a record, off at once for a station or another
   // source, off after the grace when a library track's analysis is merely absent
   const [held, setHeld] = useState(raw.live);
@@ -72,10 +86,21 @@ export function useSceneLive(enabled: boolean): { live: boolean; idle: SceneIdle
   return held ? { live: true, idle: null } : raw;
 }
 
+/** Whether the playing track can drive the scenes that need an analysis: true while one
+ *  is being made, false once it is definite that none will come (a station, another
+ *  source, the switch off, a track the app could not read). Shuffle draws from it. */
+export function useAnalyzable(enabled: boolean): boolean {
+  const { live, idle } = useSceneLive(enabled, "analysis");
+  return live || idle === "analyzing";
+}
+
 /** The picker's notice, in the row between the Sleeve and Shuffle tiles (the user, 2026-09-15:
- *  a line in the footer was "too hidden"): what the scenes need, and what is playing instead. */
+ *  a line in the footer was "too hidden"): what the scenes need, and what is playing instead.
+ *  Front Panel and Turntable draw for anything, so the notice names them. */
 export function sceneIdleNotice(idle: SceneIdle): { head: string; body: string } {
   switch (idle) {
+    case "empty":
+      return { head: "Nothing is playing.", body: "The scenes draw once something plays." };
     case "analyzing":
       return { head: "Analyzing the track…", body: "The scenes draw once it's done." };
     case "unanalyzed":
@@ -89,11 +114,14 @@ export function sceneIdleNotice(idle: SceneIdle): { head: string; body: string }
         body: "Turn it on in Settings › Appearance and the scenes will draw.",
       };
     case "radio":
-      return { head: "Scenes need a local library track.", body: "A station is playing." };
+      return {
+        head: "Most scenes need a local library track.",
+        body: "A station is playing. Front Panel and Turntable draw anything.",
+      };
     default:
       return {
-        head: "Scenes need a local library track.",
-        body: "This track isn't from your library.",
+        head: "Most scenes need a local library track.",
+        body: "This track isn't from your library. Front Panel and Turntable draw anything.",
       };
   }
 }
@@ -109,6 +137,8 @@ export function sceneIdleLine(label: string, idle: SceneIdle): string {
       return `${label} couldn't analyze this track.`;
     case "off":
       return "Audio analysis is off (Settings › Appearance).";
+    case "empty":
+      return "Nothing is playing.";
     default:
       return `${label} needs a local library track.`;
   }

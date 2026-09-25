@@ -15,6 +15,7 @@ import {
   SHUFFLE_POOL,
   isAbstract,
   sceneDef,
+  sceneNeeds,
   type SceneDef,
   type Shuffleable,
 } from "./scenes";
@@ -73,6 +74,9 @@ export function ScenePicker({
   // what is playing instead (the user: a line in the footer was "too hidden"); the thumbnails
   // used to drift on the feed's sines whatever played, promising a scene the wall could not keep
   const { live, idle } = useSceneLive(true);
+  // the deck scenes (Front Panel, Turntable) draw whatever is loaded, so their tiles run
+  // when the rest stand still
+  const { live: anyLive } = useSceneLive(true, "any");
   const notice = !live && idle ? sceneIdleNotice(idle) : null;
   const [section, setSection] = useState<Section | null>(lastSection);
   const toggle = (id: Section): void => {
@@ -159,7 +163,7 @@ export function ScenePicker({
                     <Icon size={28} strokeWidth={1.2} />
                   </div>
                 ) : isAbstract(tileScene) ? (
-                  live ? (
+                  (sceneNeeds(tileScene) === "any" ? anyLive : live) ? (
                     <SceneCanvas scene={tileScene} feed={feed} mini />
                   ) : (
                     <div

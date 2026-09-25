@@ -1083,8 +1083,10 @@ export const DISPLAY_FONT_IDS = [
 ] as const;
 export type DisplayFont = (typeof DISPLAY_FONT_IDS)[number];
 /** Display mode's SCENE: what fills the screen (0.8.0). Sleeve is the art
- *  face; the rest are abstract scenes drawn from the track's feature strip
- *  and its timed lyrics; shuffle draws a fresh abstract scene each track. */
+ *  face; most of the rest are abstract scenes drawn from the track's feature
+ *  strip and its timed lyrics; Front Panel and Turntable draw the player itself
+ *  and need no analysis, so they draw for any source (0.10.0); shuffle draws a
+ *  fresh scene each track. */
 export const DISPLAY_SCENE_IDS = [
   "sleeve",
   "tide",
@@ -1099,6 +1101,8 @@ export const DISPLAY_SCENE_IDS = [
   "sea",
   "terminal",
   "refrain",
+  "panel",
+  "turntable",
   "shuffle",
 ] as const;
 export type DisplayScene = (typeof DISPLAY_SCENE_IDS)[number];

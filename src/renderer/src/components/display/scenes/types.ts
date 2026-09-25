@@ -91,6 +91,27 @@ export interface SceneDrop {
   onDrop: boolean;
 }
 
+/** The player's own readouts, for the scenes that draw the deck rather than the music
+ *  (Front Panel, Turntable): what the streamer reports, never a guess, so these scenes
+ *  draw for every source, a station and a cast included. */
+export interface SceneDeck {
+  /** The source's name as the streamer reports it ("Media Player", "AirPlay", …). */
+  source: string | null;
+  album: string | null;
+  /** 1-based place in the queue, when the streamer reports one. */
+  track: { index: number; count: number } | null;
+  repeat: "off" | "all" | "one";
+  shuffle: boolean;
+  radio: boolean;
+  /** Whether anything is loaded at all. */
+  loaded: boolean;
+  /** The album art, decoded from a data URL (never a tainted canvas); null while it loads
+   *  or when there is none. `artKey` changes with the picture, so a scene can build from
+   *  it once. */
+  art: HTMLImageElement | null;
+  artKey: string | null;
+}
+
 export interface SceneFrame {
   /** performance.now() ms, and the seconds since the last frame (clamped). */
   now: number;
@@ -153,6 +174,7 @@ export interface SceneFrame {
   lyric: SceneLyric | null;
   title: string | null;
   subtitle: string | null;
+  deck: SceneDeck;
   palette: ScenePalette;
   /** The display font's family stack. */
   font: string;
@@ -239,3 +261,7 @@ export const isGlScene = (s: AnyScene): s is GlScene => s.kind === "gl";
 export const isThreeScene = (s: AnyScene): s is ThreeScene => s.kind === "three";
 
 export type SceneId = Exclude<DisplayScene, "sleeve" | "shuffle">;
+
+/** What a scene needs before it can draw: most need the playing track's analysis (a local
+ *  library track the app has read); the deck scenes need only that something is loaded. */
+export type SceneNeeds = "analysis" | "any";

@@ -33,7 +33,7 @@ import { NowPlayingWaveform, PlayingDrChip, usePlayingAnalysis } from "@/compone
 import { SceneCanvas } from "@/components/display/SceneCanvas";
 import { ScenePicker } from "@/components/display/ScenePicker";
 import { useSceneFeed } from "@/components/display/feed";
-import { isAbstract, sceneDef } from "@/components/display/scenes";
+import { isAbstract, sceneDef, sceneNeeds } from "@/components/display/scenes";
 import { SCENE_ABSENT_MS, sceneIdleLine, useSceneLive } from "@/components/display/useSceneLive";
 import { useShuffledScene } from "@/components/display/useShuffledScene";
 import { useArtSize } from "@/hooks/useArtSize";
@@ -79,10 +79,12 @@ export function NowPlayingScreen(): React.JSX.Element {
   // modals' and the panels' 140 ms), taking no clicks while it is leaving; a fade IN hid
   // its heavy mount behind zero opacity and read as a delay (the user, 2026-09-13)
   const pickerFade = useFadePresence(scenesOpen, { enter: false });
-  const chipOn = !meta.isRadio && meta.title != null;
+  // a station too since 0.10.0: Front Panel and Turntable draw for any source
+  const chipOn = meta.title != null;
   const tileStage: SceneId | null = chipOn && isAbstract(tileActive) ? tileActive : null;
+  const tileNeeds = tileStage ? sceneNeeds(tileStage) : "analysis";
   const sceneFeed = useSceneFeed(tileStage != null || scenesOpen);
-  const sceneAnalysis = usePlayingAnalysis(tileStage != null);
+  const sceneAnalysis = usePlayingAnalysis(tileStage != null && tileNeeds === "analysis");
   // THE GATE HOLDS ACROSS A TRACK CHANGE: on a skip the playing track's identity is resolved
   // again and the analysis hook passes through absent, then loading, before the new record
   // arrives; a gate that read those literally dropped the tile to the art for that moment
@@ -99,15 +101,16 @@ export function NowPlayingScreen(): React.JSX.Element {
     const t = setTimeout(() => setSceneReady(false), SCENE_ABSENT_MS);
     return () => clearTimeout(t);
   }, [sceneAnalysis]);
-  const sceneOn = tileStage != null && sceneReady;
+  // the chip's tip says why the art stands in for the chosen scene (2026-09-15)
+  const { live: tileLive, idle: tileIdle } = useSceneLive(tileStage != null, tileNeeds);
+  // a deck scene needs only that something is loaded; the rest hold across a skip (above)
+  const sceneOn = tileStage != null && (tileNeeds === "any" ? tileLive : sceneReady);
   // THE WORDS ARE THE TILE'S OWN CALL (the user, 2026-09-12: a switch in the picker "feels a
   // bit hidden... lyrics are important"): a toggle on the tile, bottom left, the mirror of
   // the header's lyric-line toggle. A scene that is its words (Type, Terminal) draws them
   // regardless and the toggle is disabled there
   const tileDef = tileStage ? sceneDef(tileStage) : null;
   const wordsForced = tileDef?.essentialWords === true;
-  // the chip's tip says why the art stands in for the chosen scene (2026-09-15)
-  const { live: tileLive, idle: tileIdle } = useSceneLive(tileStage != null);
   const tileIdleLine =
     tileDef && !tileLive && tileIdle ? sceneIdleLine(tileDef.label, tileIdle) : null;
   const tileWords = wordsForced || nowPlayingSceneWords;

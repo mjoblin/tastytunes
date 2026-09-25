@@ -69,6 +69,16 @@ export const SCENE_TEXT: readonly SceneText[] = [
     label: "Refrain",
     blurb: "The song's lines as rows, and a path that loops back to lines sung more than once.",
   },
+  {
+    id: "panel",
+    label: "Front Panel",
+    blurb: "The lyrics on a glowing hi-fi display, with the time, the track and the source.",
+  },
+  {
+    id: "turntable",
+    label: "Turntable",
+    blurb: "The album on a turntable, its tonearm following the track.",
+  },
   { id: "shuffle", label: "Shuffle", blurb: "A different scene for every track." },
 ];
 
