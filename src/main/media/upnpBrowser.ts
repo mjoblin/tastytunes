@@ -327,6 +327,13 @@ export async function refreshServers(host: string): Promise<MediaServerInfo[]> {
   return run;
 }
 
+/** Whether a hostname is one of the media servers the streamer has listed: their art is
+ *  on the local network and is the app's to fetch (lookups/artFetch). */
+export function knownServerHost(hostname: string): boolean {
+  for (const s of servers.values()) if (s.host === hostname) return true;
+  return false;
+}
+
 /** The server whose description lives where this art URL does: the queue's
  *  and play state's art names the server that is playing (Asset's own port,
  *  the device's own address), so the same content on two servers resolves to

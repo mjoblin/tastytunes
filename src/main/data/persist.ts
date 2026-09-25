@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { isRecord } from "@shared/guards";
 import { join } from "node:path";
@@ -11,6 +12,9 @@ import {
 import { atomicWriteFileSync } from "./jsonStore";
 
 let cached: AppSettings | null = null;
+
+/** The MCP server's bearer token (McpSettings.token): minted here and nowhere else. */
+const mintToken = (): string => randomBytes(24).toString("base64url");
 
 function settingsPath(): string {
   return join(app.getPath("userData"), "settings.json");
@@ -42,11 +46,16 @@ export function getSettings(): AppSettings {
     loaded = { ...DEFAULT_SETTINGS };
   }
   cached = loaded;
-  return loaded;
+  // every install has its own token from its first launch, written at once so it is the
+  // same token on the next launch
+  if (!loaded.mcp.token) updateSettings({ mcp: { ...loaded.mcp, token: mintToken() } });
+  return cached;
 }
 
 export function updateSettings(patch: Partial<AppSettings>): AppSettings {
   const next = { ...getSettings(), ...patch };
+  // an emptied token asks for a new one
+  if (patch.mcp && !patch.mcp.token) next.mcp = { ...patch.mcp, token: mintToken() };
   cached = next;
   try {
     // atomic (temp + rename) — a crash mid-write must not truncate settings.

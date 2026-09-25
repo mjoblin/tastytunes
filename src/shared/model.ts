@@ -1012,6 +1012,10 @@ export interface McpSettings {
   enabledClusters: string[];
   /** Individual tool names switched off. */
   disabledTools: string[];
+  /** The bearer token an agent on another machine sends with each request while the server
+   *  is reachable from the local network (0.10.0). Minted by main when empty, so every install
+   *  has its own; set it empty to have a new one minted, which stops the old one working. */
+  token: string;
 }
 
 export interface McpStatus {
@@ -1577,6 +1581,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     disabledClusters: [],
     enabledClusters: [],
     disabledTools: [],
+    token: "",
   },
   mediaIndexAuto: true,
   settingsTab: "appearance",

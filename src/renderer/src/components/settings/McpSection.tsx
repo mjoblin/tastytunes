@@ -21,6 +21,7 @@ export function McpSection({
   save(patch: Partial<AppSettings>): Promise<void>;
 }): React.JSX.Element {
   const mcp = settings.mcp;
+  const lan = mcp.bind === "lan";
   const status = useStore((s) => s.mcpStatus);
   const [copied, setCopied] = useState<string | null>(null);
 
@@ -113,19 +114,40 @@ export function McpSection({
                   copied={copied === "endpoint"}
                   onCopy={() => copy("endpoint", status.url!)}
                 />
+                {/* on the local network an agent on another computer sends the token
+                    (0.10.0); the snippets carry it so a copied setup works as pasted */}
+                {lan && (
+                  <div className="flex items-center gap-2" data-mcp-token>
+                    <div className="min-w-0 flex-1">
+                      <CopyRow
+                        label="Token"
+                        text={mcp.token}
+                        copied={copied === "token"}
+                        onCopy={() => copy("token", mcp.token)}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      data-mcp-token-new
+                      onClick={() => saveMcp({ token: "" })}
+                      data-tip="Agents using the old token stop working."
+                      className="tip-top shrink-0 rounded px-1.5 py-1 text-[11.5px] text-dim hover:text-ink transition-colors"
+                    >
+                      New token
+                    </button>
+                  </div>
+                )}
                 <CopyRow
                   label="Claude Code"
-                  text={`claude mcp add --transport http tastytunes ${status.url}`}
+                  text={claudeCommand(status.url, lan ? mcp.token : null)}
                   copied={copied === "claude"}
-                  onCopy={() =>
-                    copy("claude", `claude mcp add --transport http tastytunes ${status.url}`)
-                  }
+                  onCopy={() => copy("claude", claudeCommand(status.url!, lan ? mcp.token : null))}
                 />
                 <CopyRow
                   label="JSON config"
-                  text={`"tastytunes": { "type": "http", "url": "${status.url}" }`}
+                  text={`"tastytunes": { "type": "http", "url": "${status.url}"${lan ? ', "headers": { … }' : ""} }`}
                   copied={copied === "json"}
-                  onCopy={() => copy("json", mcpJsonSnippet(status.url!))}
+                  onCopy={() => copy("json", mcpJsonSnippet(status.url!, lan ? mcp.token : null))}
                   hint='For Cursor and other clients that take an "mcpServers" block with a url. Copies the full block.'
                 />
               </div>
@@ -136,7 +158,7 @@ export function McpSection({
         <div className={cx("space-y-5", !mcp.enabled && "opacity-40 pointer-events-none")}>
           <SettingRow
             label="Reachable from"
-            hint="Your streamer already accepts commands from anything on your local network, so allowing that here is no wider. This computer is the cautious default."
+            hint="Your streamer already accepts commands from anything on your local network, so allowing that here is no wider. On the local network, an agent on another computer needs the token. This computer is the cautious default."
           >
             <Segmented<McpBind>
               value={mcp.bind}
@@ -266,8 +288,17 @@ const MCP_GROUPS: Array<{ id: McpClusterInfo["group"]; label: string; note: stri
 /** The "mcpServers" JSON block with a url, the shape Cursor-style clients take. Claude Desktop
  *  is stdio-only and reaches the server through a bridge, and VS Code wants a "servers" root:
  *  the Setup guide covers each one. */
-function mcpJsonSnippet(url: string): string {
-  return JSON.stringify({ mcpServers: { tastytunes: { type: "http", url } } }, null, 2);
+function mcpJsonSnippet(url: string, token: string | null): string {
+  const server = token
+    ? { type: "http", url, headers: { Authorization: `Bearer ${token}` } }
+    : { type: "http", url };
+  return JSON.stringify({ mcpServers: { tastytunes: server } }, null, 2);
+}
+
+/** Claude Code's one line, with the token's header when the server is on the local network. */
+function claudeCommand(url: string, token: string | null): string {
+  const base = `claude mcp add --transport http tastytunes ${url}`;
+  return token ? `${base} --header "Authorization: Bearer ${token}"` : base;
 }
 
 function CopyRow({

@@ -517,8 +517,8 @@ function ensurePanel(): BrowserWindow {
     // No traffic lights, no shadow gap — the panel draws its own card.
     backgroundColor: "#00000000",
     webPreferences: {
-      preload: join(__dirname, "../preload/index.mjs"),
-      sandbox: false,
+      preload: join(__dirname, "../preload/index.cjs"),
+      sandbox: true,
       // THE PANEL MUST NOT BE THROTTLED WHILE HIDDEN. Chromium suspends
       // timers and coalesces work in background windows, and this window
       // spends nearly all its life hidden — so on reopen it painted the last
