@@ -69,6 +69,7 @@ import { QueueOps } from "./queueOps";
 import type { ResolvedContent } from "../media/resolveContent";
 import { scrobbler } from "../lookups/scrobbler";
 import { getNetRequests, loggedFetch } from "../netlog";
+import { errorMessage } from "@shared/guards";
 
 /**
  * The user_eq_bands write string: "<idx>,<freq>,<filter>,<gain>,<q>", blank
@@ -569,6 +570,23 @@ export class DeviceManager {
     return this.wakePromise;
   }
 
+  /**
+   * A command nobody waits for: a menu item, a media key, a timer. command()
+   * throws when the socket is not open (a media key pressed while
+   * disconnected), and a rejection with nobody to catch it is lost, so the
+   * failure goes to the log instead.
+   */
+  fire(cmd: StreamerCommand): void {
+    this.command(cmd).catch((e: unknown) =>
+      this.log("warn", "command", `${cmd.type} did not go out: ${errorMessage(e)}`),
+    );
+  }
+
+  /** A rejection main never caught, kept in the log where the diagnostics show it. */
+  logUnhandled(reason: unknown): void {
+    this.log("error", "main", `unhandled rejection: ${errorMessage(reason)}`);
+  }
+
   async command(cmd: StreamerCommand): Promise<void> {
     // A user touching volume, power or transport takes over from a running
     // fade — cancel it without restoring (their level wins). The fade engine's
@@ -678,7 +696,11 @@ export class DeviceManager {
           const level =
             getSettings().presetVolumes[presetVolumeKey(this.cache.systemInfo?.udn, cmd.presetId)];
           if (level != null) {
-            setTimeout(() => void this.command({ type: "setVolumePercent", percent: level }), 1200);
+            // the streamer may have changed in the second since, and a timer armed
+            // for one device never acts on another
+            setTimeout(() => {
+              if (this.socket === socket) this.fire({ type: "setVolumePercent", percent: level });
+            }, 1200);
           }
         }
         // The device updates is_playing internally but doesn't reliably push
@@ -792,7 +814,7 @@ export class DeviceManager {
     const limit = getSettings().volumeLimitPercent;
     const current = this.cache.zoneState?.volume_percent;
     if (limit != null && current != null && current > limit) {
-      void this.command({ type: "setVolumePercent", percent: limit });
+      this.fire({ type: "setVolumePercent", percent: limit });
     }
   }
 

@@ -126,6 +126,9 @@ app.setPath(
 );
 
 const deviceManager = new DeviceManager();
+// A promise that rejects with nobody to catch it would otherwise vanish from
+// main; the log keeps it where the diagnostics drawer shows it.
+process.on("unhandledRejection", (reason) => deviceManager.logUnhandled(reason));
 const mcpBridge = new McpBridge(deviceManager);
 let mainWindow: BrowserWindow | null = null;
 let miniWindow: BrowserWindow | null = null;
@@ -175,7 +178,7 @@ mcpBridge.sendCommand = (command) => sendMenuCommand(command);
 // this in sync and a change rebuilds the menu (labels are baked at build).
 let undoMenuLabel: string | null = null;
 const menuDeps = {
-  command: (cmd: StreamerCommand) => void deviceManager.command(cmd),
+  command: (cmd: StreamerCommand) => deviceManager.fire(cmd),
   toggleMini: () => toggleMiniPlayer(),
   sendToMain: (c: MenuCommand) => sendMenuCommand(c),
   undoLabel: () => undoMenuLabel,
@@ -400,7 +403,7 @@ function showMainWindow(): void {
 }
 
 const trayDeps = {
-  command: (cmd: StreamerCommand) => void deviceManager.command(cmd),
+  command: (cmd: StreamerCommand) => deviceManager.fire(cmd),
   snapshot: () => deviceManager.snapshot(),
   showMain: showMainWindow,
   sendToMain: (command: MenuCommand) => sendMenuCommand(command),
@@ -796,7 +799,7 @@ function syncMediaKeys(): void {
   if (!getSettings().mediaKeys) return;
   const bind = (accelerator: string, cmd: StreamerCommand): void => {
     try {
-      globalShortcut.register(accelerator, () => void deviceManager.command(cmd));
+      globalShortcut.register(accelerator, () => deviceManager.fire(cmd));
     } catch {
       // Media keys can be unavailable on some platforms; not fatal.
     }
