@@ -42,6 +42,7 @@ import {
 } from "./reconcile";
 import {
   browseChildrenOf,
+  browseMetadataNode,
   probeObject,
   getSystemUpdateID,
   refreshServers,
@@ -59,6 +60,11 @@ interface StoredIndex {
   albums: MediaNode[];
   artists: MediaNode[];
   tracks: MediaNode[];
+  /** The counter the streamer's USB server reported when this index was last moved onto
+   *  its current mount without a walk (heal): the index answers for that counter, while
+   *  updateId stays the one its walk saw, so the Library's card still offers a re-index for
+   *  files added since. */
+  healedFor?: number;
 }
 
 // v11: profile notes are structured facts (ProfileNote), worded at display
@@ -556,17 +562,124 @@ export async function revalidate(
   if (!server) return false;
   known.set(udn, server);
   const id = await getSystemUpdateID(host, udn);
-  let stale = id != null && existing.updateId != null && id !== existing.updateId;
+  let stale =
+    id != null &&
+    existing.updateId != null &&
+    id !== existing.updateId &&
+    id !== existing.healedFor;
   // the id in hand is stale only when the server REFUSES it; a server that is
   // not answering (a null counter, an unreachable probe) says nothing about
   // the id, and a walk into its silence was what took the Evo down (2026-09-16)
   if (!stale && probeId) stale = (await probeObject(host, udn, probeId)) === "missing";
   if (!stale) return false;
+  // the streamer's USB server re-mints its ids by the mount alone: move the index onto the
+  // new mount and confirm it by content before paying for a walk of the whole drive
+  if (usbServer(server) && (await heal(host, server, existing, id, probeId))) return true;
   console.log(
     `[mediaIndex] ${server.name}: ${id != null && existing.updateId != null && id !== existing.updateId ? `ids rotated (counter ${existing.updateId} → ${id})` : `the id in hand no longer answers (counter ${id ?? "unread"})`}, rebuilding`,
   );
   await build(host, server, "browse", "refresh");
   return indexes.get(udn)?.builtAt !== existing.builtAt;
+}
+
+/** A USB server's id: its mount number, a colon, and the path naming the object on the drive
+ *  (the Evo, 2026-09-14: 26:0_0_1_0 became 28:0_0_1_0 across a standby, the path the same). */
+const MOUNTED = /^(\d+):(.+)$/;
+/** How many objects a heal confirms by content: spread across the drive, tracks and albums. */
+const HEAL_TRACKS = 8;
+const HEAL_ALBUMS = 4;
+
+/**
+ * THE HEAL WITHOUT A WALK (0.10.0, filed 2026-09-25 from a CXN V2 owner's report: "sometimes
+ * it still loses the link to the library, and starts building again from scratch"). After a
+ * standby or a replug the streamer's USB server re-mints every id, and the first act that
+ * needs a fresh one (a playlist, Open in Library, an agent's id) walked the whole drive. The
+ * ids change by their mount number alone, so the index is moved onto the mount the root now
+ * answers with, and then CONFIRMED by content: a spread of tracks and albums must answer
+ * under their new ids with the title the index holds, and a track with its parent and its
+ * number too (an album can sit under more than one container, so its parent says little). Any
+ * miss, or any id that does not have the mount's shape, and the walk runs as before, so a
+ * device that does not follow the pattern loses nothing. An index already on the current
+ * mount is confirmed the same way (an old id in hand is then simply old, and the caller asks
+ * again by content). A sample cannot see files ADDED since the walk, so the heal lets the
+ * acts work and leaves the Library's card offering the re-index, which still walks.
+ */
+async function heal(
+  host: string,
+  server: MediaServerInfo,
+  existing: StoredIndex,
+  counter: number | null,
+  held: string | null,
+): Promise<boolean> {
+  let from: string | null = null;
+  for (const pool of [existing.albums, existing.tracks])
+    for (const n of pool) {
+      const m = MOUNTED.exec(n.id);
+      if (!m) return false;
+      if (from == null) from = m[1];
+      else if (m[1] !== from) return false;
+    }
+  if (from == null) return false;
+  const top = await browseChildrenOf(host, server.udn, "0");
+  if (typeof top === "string") return false;
+  const to = top.map((n) => MOUNTED.exec(n.id)?.[1]).find((p) => p != null);
+  if (!to) return false;
+  const move = (id: string | null): string | null => {
+    const m = id == null ? null : MOUNTED.exec(id);
+    return m && m[1] === from ? `${to}:${m[2]}` : id;
+  };
+  const moved = (n: MediaNode): MediaNode => ({
+    ...n,
+    id: move(n.id) ?? n.id,
+    parentId: move(n.parentId),
+  });
+  const candidate: StoredIndex = {
+    ...existing,
+    albums: existing.albums.map(moved),
+    artists: existing.artists.map(moved),
+    tracks: existing.tracks.map(moved),
+  };
+  const spread = <T>(xs: T[], k: number): T[] =>
+    xs.length <= k
+      ? xs
+      : Array.from({ length: k }, (_, i) => xs[Math.floor(((i + 0.5) * xs.length) / k)]);
+  const probes = [
+    ...spread(candidate.tracks, HEAL_TRACKS),
+    ...spread(candidate.albums, HEAL_ALBUMS),
+  ];
+  if (probes.length === 0) return false;
+  // the id a caller holds (a playlist's, an agent's) must be on the drive under the current
+  // mount and in the healed index, whatever mount it was minted under, or the file is gone
+  // and only the walk can say what is there now
+  if (held) {
+    const m = MOUNTED.exec(held);
+    if (!m) return false;
+    const now = `${to}:${m[2]}`;
+    const want =
+      candidate.tracks.find((n) => n.id === now) ?? candidate.albums.find((n) => n.id === now);
+    if (!want) return false;
+    probes.push(want);
+  }
+  for (const want of probes) {
+    const got = await browseMetadataNode(host, server.udn, want.id);
+    if (!got || got.title !== want.title) return false;
+    // an album can sit under more than one container (its artist's folder, the library's
+    // own list), so its parent is not evidence; a track's parent and number are
+    const track = !want.upnpClass.startsWith("object.container");
+    if (track && want.parentId != null && got.parentId !== want.parentId) return false;
+    if (track && want.trackNumber != null && got.trackNumber !== want.trackNumber) return false;
+  }
+  indexes.set(server.udn, {
+    ...candidate,
+    builtAt: Date.now(),
+    ...(counter != null ? { healedFor: counter } : {}),
+  });
+  save();
+  console.log(
+    `[mediaIndex] ${server.name}: ${from === to ? "the index is on the current mount" : `ids moved from mount ${from} to ${to}`}; ${probes.length} objects confirmed by content, no walk`,
+  );
+  announce(status());
+  return true;
 }
 
 /**
