@@ -82,6 +82,8 @@ import { PresetSavePanel, PresetPicker } from "@/components/library/LibraryMenus
 import { HeaderChip, ScreenTitle, GAP_BETWEEN, GAP_WITHIN } from "@/components/chrome/Chrome";
 import { artSrc } from "@/lib/artSrc";
 import { useQueueDrag } from "@/components/queue/useQueueDrag";
+import { DiscQueue } from "@/components/queue/DiscQueue";
+import { useDisc } from "@/hooks/useDisc";
 import { useQueueSelection, type SelectionLate } from "@/components/queue/useQueueSelection";
 
 /**
@@ -144,7 +146,44 @@ function SaveQueueDialog({
   );
 }
 
+/** Which view the Queue screen shows while the CD is the source, for the session: the disc,
+ *  until the parked Media Library queue is asked for. */
+let discView: "disc" | "media" = "disc";
+
+/**
+ * The Queue screen: the streamer's Media Library queue, or, while the CD is the source, the
+ * disc's tracks (0.10.0), with the parked queue a click away in either direction.
+ */
 export function QueueScreen(): React.JSX.Element {
+  const disc = useDisc();
+  const parkedCount = useStore((s) => (s.queue?.items ?? []).filter((i) => i.id != null).length);
+  const [view, setView] = useState(discView);
+  const show = (next: "disc" | "media"): void => {
+    discView = next;
+    setView(next);
+  };
+  if (disc && view === "disc") {
+    return <DiscQueue disc={disc} parkedCount={parkedCount} onShowQueue={() => show("media")} />;
+  }
+  return (
+    <MediaQueue
+      discChip={
+        disc && (
+          <HeaderChip
+            data-disc-show-disc
+            onClick={() => show("disc")}
+            className="no-drag flex items-center gap-1.5 px-2.5 py-1.5 text-[12px]"
+          >
+            <Disc3 size={14} />
+            Disc
+          </HeaderChip>
+        )
+      }
+    />
+  );
+}
+
+function MediaQueue({ discChip }: { discChip: React.ReactNode }): React.JSX.Element {
   const queue = useStore((s) => s.queue);
   const saveSettings = useStore((s) => s.saveSettings);
   const nowPlaying = useStore((s) => s.nowPlaying);
@@ -488,6 +527,7 @@ export function QueueScreen(): React.JSX.Element {
             { label: "Search", icon: Search, keyHint: "S", onClick: () => setScreen("search") },
           ]}
         />
+        {discChip}
       </EmptyState>
     );
   }
@@ -516,6 +556,7 @@ export function QueueScreen(): React.JSX.Element {
         <span className="font-mono text-[11px] text-faint">
           {allItems.length} tracks · {fmtTime(totalSecs)}
         </span>
+        {discChip}
         <div className="flex-1" />
         {/* Same split as the Now Playing header: the two SAVE verbs create
             stored things, the three after them only change what you're looking

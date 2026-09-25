@@ -58,6 +58,7 @@ import { fetchLyrics } from "./lookups/lyrics";
 import { scrobbler } from "./lookups/scrobbler";
 import { fetchArtistInfo } from "./lookups/artistInfo";
 import { fetchAlbumInfo } from "./lookups/albumInfo";
+import { fetchDiscTracks } from "./lookups/discTracks";
 import { fetchTrackInfo } from "./lookups/trackInfo";
 import {
   albumDrMap,
@@ -501,6 +502,13 @@ function registerIpc(): void {
   );
   handle(IPC.fetchAlbumInfo, (_e, artist: string, album: string, force?: boolean) =>
     getSettings().artistInfo ? fetchAlbumInfo(artist, album, !!force, true) : null,
+  );
+  // a disc's track names ride the same switch as the other MusicBrainz lookups: off, the
+  // Queue screen's disc view names tracks by number
+  ipcMain.handle(
+    IPC.fetchDiscTracks,
+    (_e, releaseId: string, count: number | null, secs: number | null) =>
+      getSettings().artistInfo ? fetchDiscTracks(releaseId, count, secs) : null,
   );
   // EXPERIMENT (0.7 exploration): fetch one track's audio bytes for the
   // renderer's waveform decode. Read-only ranged-capable GET against the

@@ -65,7 +65,8 @@ export function ArtistPanel({ className }: { className?: string }): React.JSX.El
   const meta = deriveNowPlaying(playState, nowPlaying);
   const artist = meta.isRadio || !mbEnabled ? null : meta.subtitle;
   const album = meta.isRadio || !mbEnabled ? null : meta.album;
-  const title = meta.isRadio || !mbEnabled ? null : meta.title;
+  // a stopped disc's title is its album's, no track's
+  const title = meta.isRadio || meta.disc || !mbEnabled ? null : meta.title;
   const duration = meta.isRadio ? null : (playState?.metadata?.duration ?? null);
   const trackable = Boolean(artist && title);
   const fallback: Tab = artist ? "artist" : "stream";

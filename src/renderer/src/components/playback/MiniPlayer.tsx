@@ -32,6 +32,7 @@ import { ArtImage } from "@/components/media/ArtImage";
 import { AmbientArt } from "@/components/media/AmbientArt";
 import { useDecodedArt } from "@/hooks/useDecodedArt";
 import { cx, deriveNowPlaying, fmtTime } from "@/lib/format";
+import { useDisc } from "@/hooks/useDisc";
 
 /**
  * The mini player window (?mini=1): a frameless always-on-top strip with art,
@@ -87,10 +88,17 @@ export function MiniPlayer(): React.JSX.Element {
       : fmtTime(shownPosition)
     : "";
 
-  // what's next in the queue
+  // what's next in the queue, or on the disc while the CD plays (its next track once named)
   const items = queue?.items ?? [];
   const currentIdx = items.findIndex((i) => i.id === effectivePlayId);
-  const next = currentIdx >= 0 ? (items[currentIdx + 1] ?? null) : null;
+  const disc = useDisc();
+  const next = disc
+    ? disc.head != null
+      ? (disc.rows[disc.head + 1]?.title ?? null)
+      : null
+    : currentIdx >= 0
+      ? (items[currentIdx + 1]?.metadata?.title ?? items[currentIdx + 1]?.metadata?.name ?? null)
+      : null;
 
   // Shared mute toggle: same as before (gold when muted). Tooltip also teaches
   // the invisible wheel-anywhere volume.
@@ -255,9 +263,7 @@ export function MiniPlayer(): React.JSX.Element {
               it than the evenly-split gaps would give (mt-1 was imperceptible
               against the line box's own descender space). */}
           <div className="microlabel microlabel-sm truncate min-h-[12px] mt-2">
-            {active && next?.metadata
-              ? `next · ${next.metadata.title ?? next.metadata.name ?? ""}`
-              : ""}
+            {active && next ? `next · ${next}` : ""}
           </div>
         </div>
       </div>

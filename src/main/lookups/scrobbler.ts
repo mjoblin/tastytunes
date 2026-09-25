@@ -5,7 +5,7 @@
 // and seeks can't cheat. Radio and metadata-less sources are never scrobbled.
 // Failed listens queue in memory (bounded) and flush with the next success.
 import { version } from "../../../package.json";
-import { isRadioMetadata, type ZonePlayState } from "@shared/smoip";
+import { isRadioMetadata, trackTitle, type ZonePlayState } from "@shared/smoip";
 import { isListen } from "@shared/model";
 import { getSettings } from "../data/persist";
 import { loggedFetch } from "../netlog";
@@ -122,7 +122,7 @@ export const scrobbler = {
     const md = ps.metadata;
     const isRadio = isRadioMetadata(md);
     const artist = md?.artist ?? null;
-    const title = md?.title ?? null;
+    const title = trackTitle(md);
 
     // Nothing scrobblable: close out any accumulation and wait.
     if (isRadio || !artist || !title) {

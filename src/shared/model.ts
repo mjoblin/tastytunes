@@ -1020,6 +1020,21 @@ export interface McpSettings {
   token: string;
 }
 
+/** One track of a disc as MusicBrainz lists it (0.10.0, the CD): its number, its title and
+ *  its length when the release gives one. */
+export interface DiscTrack {
+  n: number;
+  title: string;
+  secs: number | null;
+}
+
+/** A disc's track list from the MusicBrainz release its cover came from: the medium whose
+ *  track count (and, among equals, whose length) matches the disc in the player. */
+export interface DiscTracks {
+  releaseId: string;
+  tracks: DiscTrack[];
+}
+
 export interface McpStatus {
   running: boolean;
   /** Reachable endpoint while running, e.g. http://192.168.1.20:8555/mcp. */

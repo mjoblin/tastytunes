@@ -41,6 +41,7 @@ import type {
   ConnectionState,
   ContentRef,
   DiscoveredDevice,
+  DiscTracks,
   Favorite,
   FirmwareStatus,
   FrameEntry,
@@ -319,6 +320,14 @@ export interface TastyTunesApi {
   /** Recording-level credits for the playing track via MusicBrainz (main
    *  process, cached; null = no match). `force` bypasses the cache read. */
   fetchTrackInfo(query: TrackInfoQuery, force?: boolean): Promise<TrackInfo | null>;
+  /** A disc's track list via MusicBrainz, by the release its cover came from (main process,
+   *  cached; null = no match, or the disc's count fits none of the release's media). `count`
+   *  and `secs` are the disc's own track count and length when the streamer has said. */
+  fetchDiscTracks(
+    releaseId: string,
+    count: number | null,
+    secs: number | null,
+  ): Promise<DiscTracks | null>;
   /** EXPERIMENT (0.7 exploration): the playing track's raw audio bytes from
    *  its local media server, for renderer-side decode. Null on any miss. */
   expTrackAudio(serverUdn: string, objectId: string): Promise<ArrayBuffer | null>;
@@ -496,6 +505,7 @@ export const IPC = {
   fetchArtistInfo: "tt:fetchArtistInfo",
   fetchAlbumInfo: "tt:fetchAlbumInfo",
   fetchTrackInfo: "tt:fetchTrackInfo",
+  fetchDiscTracks: "tt:fetchDiscTracks",
   expTrackAudio: "tt:expTrackAudio",
   audioAnalysisGet: "tt:audioAnalysisGet",
   audioAnalysisPut: "tt:audioAnalysisPut",

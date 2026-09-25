@@ -47,7 +47,13 @@ import type {
   ZonePosition,
   ZoneState,
 } from "@shared/smoip";
-import { EQ_GAIN_MAX, EQ_GAIN_MIN, isRadioMetadata, radioTrackTitle } from "@shared/smoip";
+import {
+  EQ_GAIN_MAX,
+  EQ_GAIN_MIN,
+  isRadioMetadata,
+  radioTrackTitle,
+  trackTitle,
+} from "@shared/smoip";
 import { discoverStreamers } from "./discovery";
 import { SmoipSocket } from "./smoipSocket";
 import * as smoipHttp from "./smoipHttp";
@@ -1013,7 +1019,7 @@ export class DeviceManager {
    */
   private trackChangeNotification(playState: ZonePlayState): void {
     const md = playState.metadata;
-    const title = md?.title ?? md?.station ?? null;
+    const title = trackTitle(md) ?? md?.station ?? null;
     if (!title) return;
     const key = `${title}|${md?.artist ?? ""}`;
     if (key === this.currentTrackKey) return;
@@ -1090,7 +1096,7 @@ export class DeviceManager {
     const station = md.station ?? null;
     // Radio titles normalize through the shared helper (absent / station-echo
     // "songs" become null) so recording and matching can never drift.
-    const title = isRadio ? radioTrackTitle(md) : (md.title ?? null);
+    const title = isRadio ? radioTrackTitle(md) : trackTitle(md);
     if (!title && !station) return; // nothing identifiable to log
 
     const sourceId = md.source ?? this.cache.nowPlaying?.source?.id ?? null;

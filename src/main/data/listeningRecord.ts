@@ -18,7 +18,7 @@ import {
   type ListeningRecordStats,
   type ListeningVia,
 } from "@shared/model";
-import { isRadioMetadata, radioTrackTitle, type ZonePlayState } from "@shared/smoip";
+import { isRadioMetadata, radioTrackTitle, trackTitle, type ZonePlayState } from "@shared/smoip";
 import { getSettings } from "./persist";
 
 /**
@@ -288,6 +288,8 @@ export const listeningRecord = {
     const md = ps.metadata;
     const isRadio = md != null && isRadioMetadata(md);
     const sourceId = md?.source ?? null;
+    // a disc's table of contents is no track (a stopped CD's title)
+    const title = trackTitle(md);
     // Library plays come from the streamer's own queue (a queue_id is the
     // tell, USB included); radio is its own pair of kinds; anything else
     // with metadata is an external source. Metadata-less inputs (Bluetooth,
@@ -303,11 +305,11 @@ export const listeningRecord = {
         radioId: md.radio_id ?? null,
         streamer,
       };
-    } else if (md?.title && ps.queue_id != null) {
+    } else if (md && title && ps.queue_id != null) {
       kind = "play";
-      key = `play|${md.title}|${md.artist ?? ""}|${md.album ?? ""}|${ps.queue_id}`;
+      key = `play|${title}|${md.artist ?? ""}|${md.album ?? ""}|${ps.queue_id}`;
       payload = {
-        title: md.title,
+        title,
         artist: md.artist ?? null,
         album: md.album ?? null,
         duration: md.duration ?? null,
@@ -319,13 +321,13 @@ export const listeningRecord = {
         sourceId,
         streamer,
       };
-    } else if (md?.title) {
+    } else if (md && title) {
       kind = "external";
-      key = `ext|${sourceId ?? ""}|${md.title}|${md.artist ?? ""}`;
+      key = `ext|${sourceId ?? ""}|${title}|${md.artist ?? ""}`;
       payload = {
         source: sourceName,
         sourceId,
-        title: md.title,
+        title,
         artist: md.artist ?? null,
         album: md.album ?? null,
         duration: md.duration ?? null,

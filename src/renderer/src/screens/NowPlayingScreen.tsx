@@ -16,7 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { useStore } from "@/store";
-import { activeSourceId, cx, deriveNowPlaying } from "@/lib/format";
+import { activeSourceId, cx, deriveNowPlaying, fmtTime, queuePlace } from "@/lib/format";
 import { playingQueueEntry } from "@/lib/playingEntry";
 import { fromQueueItem } from "@/lib/mediaRef";
 import { NameLink } from "@/components/media/NameLine";
@@ -192,7 +192,8 @@ export function NowPlayingScreen(): React.JSX.Element {
   const art = useArtSize(mirrored);
 
   // Lyrics need real track metadata — hidden for radio and title-only sources.
-  const lyricsAvailable = lyricsEnabled && !meta.isRadio && !!meta.title && !!meta.subtitle;
+  const lyricsAvailable =
+    lyricsEnabled && !meta.isRadio && !meta.disc && !!meta.title && !!meta.subtitle;
   // The About drawer opens for EVERY source — its Stream tab is device truth
   // and needs only something loaded; the MB tabs gate themselves inside.
   const aboutAvailable =
@@ -233,8 +234,7 @@ export function NowPlayingScreen(): React.JSX.Element {
   );
   const { art: tileArt } = useDecodedArt(heroArt);
   // Live, not snapshotted — the queue moves independently of the track.
-  const queueIndex = playState?.queue_index;
-  const queueLength = playState?.queue_length;
+  const place = queuePlace(playState, nowPlaying);
 
   // Only surface "buffering" once it has persisted a beat — brief buffers on a
   // seek or track change shouldn't flash a label. Other states show at once.
@@ -260,7 +260,7 @@ export function NowPlayingScreen(): React.JSX.Element {
   // list, so the button simply isn't offered for one.
   const playlistBtn = useRef<HTMLButtonElement | null>(null);
   const [playlistAt, setPlaylistAt] = useState<{ x: number; y: number } | null>(null);
-  const playlistAvailable = !meta.isRadio && !!meta.title;
+  const playlistAvailable = !meta.isRadio && !meta.disc && !!meta.title;
 
   const empty = !meta.title && !meta.subtitle;
   /** Every header button hides on this pair; naming it once also stopped the two
@@ -634,7 +634,7 @@ export function NowPlayingScreen(): React.JSX.Element {
                   )}
                 </div>
               )}
-              {shownTrack.album && (
+              {shownTrack.album && !meta.disc && (
                 <div className="text-[14px] text-dim truncate">
                   {entryRef ? (
                     <NameLink
@@ -677,14 +677,18 @@ export function NowPlayingScreen(): React.JSX.Element {
               <div className="text-[13px] text-dim">{nowPlaying.display.line3}</div>
             )}
 
-            {queueIndex != null && queueLength != null && queueLength > 0 && (
+            {/* a stopped disc names its size where a track names its place */}
+            {(meta.disc || place) && (
               <div
+                data-np-place
                 className={cx(
                   "microlabel transition-opacity duration-300",
                   trackVisible ? "opacity-100" : "opacity-0",
                 )}
               >
-                track {queueIndex + 1} of {queueLength}
+                {meta.disc
+                  ? `${meta.disc.tracks} ${meta.disc.tracks === 1 ? "track" : "tracks"} · ${fmtTime(meta.disc.secs)}`
+                  : place && `track ${place.index + 1} of ${place.length}`}
               </div>
             )}
 
