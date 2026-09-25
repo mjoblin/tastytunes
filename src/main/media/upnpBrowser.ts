@@ -225,23 +225,39 @@ interface CdInit {
   timeoutMs: number;
 }
 
-/** A ContentDirectory fetch. Other servers: straight through, with the
- *  timeout. The device's USB server: through the lane, the timeout starting
- *  when the request actually goes out (a wait in the lane is not the device's
- *  silence); a throw on the wire pauses the lane for the canary. */
+/** A ContentDirectory answer, read to its end. */
+interface CdAnswer {
+  ok: boolean;
+  status: number;
+  body: string;
+}
+
+/** A ContentDirectory fetch, answered with the whole body. Other servers:
+ *  straight through, with the timeout. The device's USB server: through the
+ *  lane, the timeout starting when the request actually goes out (a wait in
+ *  the lane is not the device's silence). The lane holds its slot until the
+ *  body has arrived, so the next request never goes out beside a large page
+ *  still streaming, and a body that dies partway is the device's silence like
+ *  a request that dies before its headers: the lane pauses for the canary. */
 function cdFetch(
   url: string,
   init: CdInit,
   lane: { on: boolean; background?: boolean },
-): Promise<Response> {
+): Promise<CdAnswer> {
   const { timeoutMs, ...rest } = init;
-  const send = (): Promise<Response> =>
-    loggedFetch("upnp", url, { ...rest, signal: AbortSignal.timeout(timeoutMs) });
+  // the timeout's signal covers the body as well as the headers
+  const send = async (): Promise<CdAnswer> => {
+    const res = await loggedFetch("upnp", url, {
+      ...rest,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    return { ok: res.ok, status: res.status, body: await res.text() };
+  };
   if (!lane.on) return send();
   deviceControlUrl = url;
   if (deviceDownSince !== 0 && Date.now() - deviceDownSince > DEVICE_COOL_MS)
     return Promise.reject(new DeviceCoolingError());
-  return new Promise<Response>((resolve, reject) => {
+  return new Promise<CdAnswer>((resolve, reject) => {
     const job: LaneJob = {
       background: lane.background === true,
       attempts: 0,
@@ -468,8 +484,7 @@ async function soapBrowse(
   count = PAGE_SIZE,
   background = false,
 ): Promise<{ didl: string; returned: number; total: number } | Miss> {
-  let res: Response;
-  let body: string;
+  let res: CdAnswer;
   try {
     res = await cdFetch(
       entry.controlUrl,
@@ -484,10 +499,10 @@ async function soapBrowse(
       },
       { on: laned(entry), background },
     );
-    body = await res.text();
   } catch {
     return "unreachable";
   }
+  const body = res.body;
   if (!res.ok) return classify(res.status, body, entry.isStreamer);
   const doc = parser.parse(body) as {
     Envelope?: {
@@ -614,7 +629,7 @@ async function searchPageRaw(
       { on: laned(entry) },
     );
     if (!res.ok) return null;
-    const doc = parser.parse(await res.text()) as {
+    const doc = parser.parse(res.body) as {
       Envelope?: {
         Body?: { SearchResponse?: { Result?: unknown; TotalMatches?: number } };
       };
@@ -820,7 +835,7 @@ export async function getSystemUpdateID(host: string, serverUdn: string): Promis
       { on: laned(entry) },
     );
     if (!res.ok) return null;
-    const doc = parser.parse(await res.text()) as {
+    const doc = parser.parse(res.body) as {
       Envelope?: { Body?: { GetSystemUpdateIDResponse?: { Id?: unknown } } };
     };
     const id = text(doc.Envelope?.Body?.GetSystemUpdateIDResponse?.Id);
