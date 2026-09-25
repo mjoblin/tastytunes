@@ -31,7 +31,7 @@ import { Slider } from "@/components/controls/Slider";
 import { ArtImage } from "@/components/media/ArtImage";
 import { AmbientArt } from "@/components/media/AmbientArt";
 import { useDecodedArt } from "@/hooks/useDecodedArt";
-import { cx, deriveNowPlaying, fmtTime } from "@/lib/format";
+import { activeSourceId, cx, deriveNowPlaying, fmtTime } from "@/lib/format";
 import { useDisc } from "@/hooks/useDisc";
 
 /**
@@ -88,15 +88,19 @@ export function MiniPlayer(): React.JSX.Element {
       : fmtTime(shownPosition)
     : "";
 
-  // what's next in the queue, or on the disc while the CD plays (its next track once named)
+  // what's next in the queue, or on the disc while the CD plays (its next track once named).
+  // THE QUEUE BELONGS TO MEDIA_PLAYER (the tray's rule, 2026-09-26): while radio, AirPlay or
+  // any other source plays, the queue is only parked, and its next entry is not what plays
+  // next, so the line stays empty
   const items = queue?.items ?? [];
   const currentIdx = items.findIndex((i) => i.id === effectivePlayId);
+  const queueAudible = activeSourceId(zoneState, nowPlaying) === "MEDIA_PLAYER";
   const disc = useDisc();
   const next = disc
     ? disc.head != null
       ? (disc.rows[disc.head + 1]?.title ?? null)
       : null
-    : currentIdx >= 0
+    : queueAudible && currentIdx >= 0
       ? (items[currentIdx + 1]?.metadata?.title ?? items[currentIdx + 1]?.metadata?.name ?? null)
       : null;
 

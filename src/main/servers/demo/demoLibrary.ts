@@ -6,6 +6,7 @@ import {
   durFmt,
   didlContainer,
 } from "./demoShared";
+import { DISC_ART_PATH } from "./demoDisc";
 
 // The built-in demo's LIBRARY (split out of demoStreamer.ts 2026-09-13; the
 // streamer's builder had held it beside the sockets in one 1,921-line function):
@@ -27,6 +28,7 @@ export function buildDemoLibrary(host: string) {
   const ARTS: Record<string, string> = {};
   for (let i = 1; i <= 30; i++) ARTS[`/art/q${i}.svg`] = art((i * 47) % 360);
   for (let i = 1; i <= 24; i++) ARTS[`/art/p${i}.svg`] = art((i * 61 + 20) % 360);
+  ARTS[DISC_ART_PATH] = art(205);
   const artUrl = (n: number): string => `${host}/art/q${n}.svg`;
 
   const trackMeta = (n: number): Dict => ({
@@ -67,6 +69,18 @@ export function buildDemoLibrary(host: string) {
     "/system/update": { early_update: false, update_available: false, updating: false },
     "/system/sources": {
       sources: [
+        // the CD transport's source, as the Evo CD owner's /system/sources lists it
+        {
+          id: "CD",
+          name: "CD",
+          default_name: "CD",
+          class: "digital.cd",
+          nameable: true,
+          ui_selectable: true,
+          description: "CD",
+          description_locale: "CD",
+          preferred_order: 0,
+        },
         {
           id: "MEDIA_PLAYER",
           name: "Media Player",

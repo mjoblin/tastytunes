@@ -504,11 +504,17 @@ function registerIpc(): void {
     getSettings().artistInfo ? fetchAlbumInfo(artist, album, !!force, true) : null,
   );
   // a disc's track names ride the same switch as the other MusicBrainz lookups: off, the
-  // Queue screen's disc view names tracks by number
+  // Queue screen's disc view names tracks by number. The demo streamer's disc is fictional,
+  // so while the demo is the streamer it answers for its own release
   ipcMain.handle(
     IPC.fetchDiscTracks,
-    (_e, releaseId: string, count: number | null, secs: number | null) =>
-      getSettings().artistInfo ? fetchDiscTracks(releaseId, count, secs) : null,
+    (_e, releaseId: string, count: number | null, secs: number | null) => {
+      if (!getSettings().artistInfo) return null;
+      const demo = demoHost();
+      const conn = deviceManager.snapshot().connection;
+      const fromDemo = demo != null && conn.phase === "connected" && conn.host === demo;
+      return fetchDiscTracks(releaseId, count, secs, fromDemo ? `http://${demo}` : undefined);
+    },
   );
   // EXPERIMENT (0.7 exploration): fetch one track's audio bytes for the
   // renderer's waveform decode. Read-only ranged-capable GET against the

@@ -14,6 +14,7 @@ import type { AddressInfo } from "node:net";
 import { WebSocketServer } from "ws";
 import { buildDemoLibrary } from "./demo/demoLibrary";
 import { PLAYING_QUEUE_ID, type Dict, xmlEsc, didlContainer } from "./demo/demoShared";
+import { DISC, discPlaying, discRelease, discStopped } from "./demo/demoDisc";
 
 // StreamMagic's query parser decodes %-escapes but takes '+' LITERALLY
 // (probed live 2026-07-19). Mirror it for name/url params so a
@@ -78,6 +79,28 @@ function buildDemo(host: string): {
   } = buildDemoLibrary(host);
 
   let wssRef: WebSocketServer | null = null;
+
+  // THE DISC (demo/demoDisc): while the CD is the source, play_state and now_playing are the
+  // disc's, and the Media Library's are parked, to come back when the source does (the mock's
+  // MOCK_SCENE=cd, mirrored). The disc steps by next and previous, starts at track 1 on play
+  // and returns to its table of contents on stop; the demo has no playhead ticker, so a track
+  // never ends on its own here.
+  let discAt = 0;
+  let parkedMedia: { ps: Dict; np: Dict } | null = null;
+  const onDisc = (): boolean => DATA["/zone/state"].source === "CD";
+  const showDisc = (feeds: { playState: Dict; nowPlaying: Dict }): void => {
+    DATA["/zone/play_state"] = feeds.playState;
+    DATA["/zone/play_state/position"] = { position: feeds.playState.position ?? 0 };
+    DATA["/zone/now_playing"] = feeds.nowPlaying;
+  };
+  const discModes = (): { mode_repeat: unknown; mode_shuffle: unknown } => ({
+    mode_repeat: DATA["/zone/play_state"].mode_repeat ?? "off",
+    mode_shuffle: DATA["/zone/play_state"].mode_shuffle ?? "off",
+  });
+  const playDisc = (at: number, state: "play" | "pause", position = 0): void => {
+    discAt = Math.max(0, Math.min(DISC.tracks.length - 1, at));
+    showDisc(discPlaying(host, discAt, state, position, discModes()));
+  };
   /**
    * FIRMWARE TRUTH (live-probed 2026-07-23, re-probed 2026-09-15, mirrored
    * from mock-streamer.mjs): in NETWORK standby /zone/play_state reads
@@ -399,6 +422,12 @@ function buildDemo(host: string): {
       if (u.pathname === "/description.xml") {
         res.writeHead(200, { "content-type": "text/xml" });
         return res.end(DESCRIPTION_XML);
+      }
+      // the disc's release, answered here because it is on no MusicBrainz (discTracks asks the
+      // demo in its place while the demo is the streamer)
+      if (u.pathname === `/ws/2/release/${DISC.release}`) {
+        res.writeHead(200, { "content-type": "application/json" });
+        return res.end(JSON.stringify(discRelease()));
       }
       if (u.pathname === "/description2.xml") {
         res.writeHead(200, { "content-type": "text/xml" });
@@ -1127,6 +1156,21 @@ function buildDemo(host: string): {
           // FIRMWARE TRUTH (live-probed 2026-07-23, mirrored from the mock):
           // standby refuses every play_control verb (code 114) — nothing
           // plays, nothing wakes. Wake-on-intent sends power ON first.
+        } else if (
+          frame.path === "/zone/play_control" &&
+          typeof params.skip_track === "number" &&
+          onDisc()
+        ) {
+          // the disc steps by one either way, a stopped disc starting where the step lands
+          playDisc(
+            discAt + (params.skip_track > 0 ? 1 : -1),
+            DATA["/zone/play_state"].state === "pause" ? "pause" : "play",
+          );
+          setTimeout(() => {
+            push("/zone/play_state");
+            push("/zone/play_state/position");
+            push("/zone/now_playing");
+          }, 120);
         } else if (frame.path === "/zone/play_control" && typeof params.skip_track === "number") {
           advanceTrack(params.skip_track, push);
         } else if (frame.path === "/zone/state" && typeof params.volume_percent === "number") {
@@ -1164,6 +1208,18 @@ function buildDemo(host: string): {
           const id = params.source;
           const sources = DATA["/system/sources"].sources as Dict[] | undefined;
           const known = (sources ?? []).find((s) => s.id === id);
+          // the disc and the parked Media Library trade places
+          const toDisc = id === "CD" && !onDisc();
+          const fromDisc = id !== "CD" && onDisc();
+          if (toDisc) {
+            parkedMedia = { ps: DATA["/zone/play_state"], np: DATA["/zone/now_playing"] };
+            discAt = 0;
+            showDisc(discStopped(host));
+          } else if (fromDisc && parkedMedia) {
+            DATA["/zone/play_state"] = { ...parkedMedia.ps, state: "pause" };
+            DATA["/zone/now_playing"] = parkedMedia.np;
+            parkedMedia = null;
+          }
           DATA["/zone/state"] = { ...DATA["/zone/state"], source: id };
           DATA["/zone/now_playing"] = {
             ...DATA["/zone/now_playing"],
@@ -1172,6 +1228,7 @@ function buildDemo(host: string): {
           setTimeout(() => {
             push("/zone/state");
             push("/zone/now_playing");
+            if (toDisc || fromDisc) push("/zone/play_state");
           }, 120);
         } else if (frame.path === "/zone/play_control" && typeof params.queue_id === "number") {
           // play a specific queue entry (Library click-jump, queue-row click)
@@ -1210,6 +1267,27 @@ function buildDemo(host: string): {
             DATA["/zone/play_state"] = { ...DATA["/zone/play_state"], mode_repeat: next };
             setTimeout(() => push("/zone/play_state"), 120);
           }
+        } else if (
+          frame.path === "/zone/play_control" &&
+          typeof params.action === "string" &&
+          onDisc()
+        ) {
+          // the disc: play (or toggle) from stopped starts track 1, stop returns to the table of
+          // contents, play and pause hold the place
+          const state = DATA["/zone/play_state"].state;
+          const position = (DATA["/zone/play_state/position"].position as number | undefined) ?? 0;
+          const action =
+            params.action === "toggle" ? (state === "play" ? "pause" : "play") : params.action;
+          if (action === "stop") {
+            discAt = 0;
+            showDisc(discStopped(host));
+          } else if (state === "stop" && action === "play") playDisc(0, "play");
+          else if (state !== "stop" && (action === "play" || action === "pause"))
+            playDisc(discAt, action, position);
+          setTimeout(() => {
+            push("/zone/play_state");
+            push("/zone/now_playing");
+          }, 120);
         } else if (frame.path === "/zone/play_control" && typeof params.action === "string") {
           // echo transport state: play / pause / stop / toggle
           const state = DATA["/zone/play_state"].state;

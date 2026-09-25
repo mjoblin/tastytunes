@@ -7,7 +7,7 @@
 // two-disc release answers for both discs.
 import type { DiscTrack, DiscTracks } from "@shared/model";
 import { DiskCache } from "./diskCache";
-import { MB, mbFetch } from "./mb";
+import { getJson, MB, mbFetch } from "./mb";
 
 const CACHE_MAX = 200;
 
@@ -67,17 +67,22 @@ export function pickMedium(
 
 /** The disc's tracks, or null when the release is unknown, the lookup failed or no medium of
  *  the release matches the disc. `count` is the disc's track count and `secs` its length when
- *  the streamer has said. */
+ *  the streamer has said. `demo` is the demo streamer's address while it is the streamer: its
+ *  disc's release is on no MusicBrainz, so the demo answers in its place, outside the gate. */
 export async function fetchDiscTracks(
   releaseId: string,
   count: number | null,
   secs: number | null,
+  demo?: string,
 ): Promise<DiscTracks | null> {
   const id = releaseId.toLowerCase();
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id)) return null;
   let media = cache.get(id);
   if (media === undefined) {
-    const got = await mbFetch(`${MB}/ws/2/release/${id}?inc=recordings&fmt=json`, true);
+    const path = `/ws/2/release/${id}?inc=recordings&fmt=json`;
+    const got = demo
+      ? await getJson("demo", `${demo}${path}`)
+      : await mbFetch(`${MB}${path}`, true);
     if (got.kind === "missing") {
       cache.set(id, null);
       return null;
