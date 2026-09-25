@@ -212,60 +212,70 @@ function ToastHost(): React.JSX.Element | null {
     return () => clearTimeout(t);
   }, [toast, dismissToast]);
 
-  if (!toast) return null;
-  return (
-    <div key={toast.id} className="toast-in absolute bottom-4 left-1/2 -translate-x-1/2 z-40">
-      <div
-        onClick={dismissToast}
-        style={
-          {
-            "--toast-accent": toast.kind === "error" ? "var(--alert-rgb)" : "var(--gold-rgb)",
-          } as React.CSSProperties
-        }
-        className={cx(
-          // Translucent + blurred rather than an opaque slab: the toast floats
-          // over content and the ambient art wash, and a solid bg-raised panel
-          // read as pasted ON the app rather than part of it. Letting the warm
-          // near-black bg through is what makes it feel lit from the same
-          // source as everything else. Roomier too — px-5/py-3, and gap-3 with
-          // the action pushed further out so it stops crowding the sentence.
-          "toast-surface flex items-center gap-3 rounded-xl px-5 py-3 ring-1 backdrop-blur-md",
-          "bg-panel/70 shadow-[0_10px_40px_rgb(0_0_0_/_0.55)] text-[12.5px] cursor-pointer max-w-[520px]",
-          toast.kind === "error"
-            ? "ring-alert/45"
-            : "ring-gold/35 shadow-[0_10px_40px_rgb(0_0_0_/_0.55),0_0_24px_rgb(var(--gold-rgb)_/_0.10)]",
-        )}
-      >
-        {toast.kind === "error" ? (
-          <CircleAlert size={14} className="text-alert shrink-0" />
-        ) : (
-          <CircleCheck size={14} className="text-gold shrink-0" />
-        )}
-        <span className="flex-1 min-w-0">{toast.text}</span>
-        {toast.action && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              const action = toast.action!;
-              if (action.undo) action.undo();
-              else setScreen(action.screen);
-              dismissToast();
-            }}
-            // Tinted to the toast's own accent so it reads as the thing to
-            // click. Neutral ring + text-dim over a translucent surface came
-            // out looking like a disabled field.
-            className={cx(
-              "ml-2 shrink-0 text-[12px] px-3 py-1.5 rounded-md ring-1 font-medium transition-all",
-              toast.kind === "error"
-                ? "ring-alert/40 text-alert hover:bg-alert/10 hover:ring-alert/60"
-                : "ring-gold/35 text-gold hover:bg-golddim hover:ring-gold/55",
-            )}
-          >
-            {toast.action.label}
-          </button>
-        )}
-      </div>
+  // the toast is read out as well as shown (0.10.0, the accessibility floor): one polite
+  // region that is always in the page, so a screen reader hears each notice as it arrives
+  const spoken = (
+    <div role="status" aria-live="polite" className="sr-only" data-toast-live>
+      {toast?.text ?? ""}
     </div>
+  );
+  if (!toast) return spoken;
+  return (
+    <>
+      {spoken}
+      <div key={toast.id} className="toast-in absolute bottom-4 left-1/2 -translate-x-1/2 z-40">
+        <div
+          onClick={dismissToast}
+          style={
+            {
+              "--toast-accent": toast.kind === "error" ? "var(--alert-rgb)" : "var(--gold-rgb)",
+            } as React.CSSProperties
+          }
+          className={cx(
+            // Translucent + blurred rather than an opaque slab: the toast floats
+            // over content and the ambient art wash, and a solid bg-raised panel
+            // read as pasted ON the app rather than part of it. Letting the warm
+            // near-black bg through is what makes it feel lit from the same
+            // source as everything else. Roomier too — px-5/py-3, and gap-3 with
+            // the action pushed further out so it stops crowding the sentence.
+            "toast-surface flex items-center gap-3 rounded-xl px-5 py-3 ring-1 backdrop-blur-md",
+            "bg-panel/70 shadow-[0_10px_40px_rgb(0_0_0_/_0.55)] text-[12.5px] cursor-pointer max-w-[520px]",
+            toast.kind === "error"
+              ? "ring-alert/45"
+              : "ring-gold/35 shadow-[0_10px_40px_rgb(0_0_0_/_0.55),0_0_24px_rgb(var(--gold-rgb)_/_0.10)]",
+          )}
+        >
+          {toast.kind === "error" ? (
+            <CircleAlert size={14} className="text-alert shrink-0" />
+          ) : (
+            <CircleCheck size={14} className="text-gold shrink-0" />
+          )}
+          <span className="flex-1 min-w-0">{toast.text}</span>
+          {toast.action && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                const action = toast.action!;
+                if (action.undo) action.undo();
+                else setScreen(action.screen);
+                dismissToast();
+              }}
+              // Tinted to the toast's own accent so it reads as the thing to
+              // click. Neutral ring + text-dim over a translucent surface came
+              // out looking like a disabled field.
+              className={cx(
+                "ml-2 shrink-0 text-[12px] px-3 py-1.5 rounded-md ring-1 font-medium transition-all",
+                toast.kind === "error"
+                  ? "ring-alert/40 text-alert hover:bg-alert/10 hover:ring-alert/60"
+                  : "ring-gold/35 text-gold hover:bg-golddim hover:ring-gold/55",
+              )}
+            >
+              {toast.action.label}
+            </button>
+          )}
+        </div>
+      </div>
+    </>
   );
 }
 

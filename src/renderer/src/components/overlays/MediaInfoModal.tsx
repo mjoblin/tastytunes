@@ -313,6 +313,7 @@ function MediaInfoBody({
     <ModalShell
       open={open}
       onClose={close}
+      label="Info"
       className="w-[640px] max-w-[92vw] max-h-[86vh] flex flex-col p-6"
     >
       <div className="flex items-start gap-5" data-media-info>

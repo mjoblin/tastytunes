@@ -122,7 +122,13 @@ function SaveQueueDialog({
   };
 
   return (
-    <ModalShell open={open} onClose={onClose} escapeCloses className="w-[360px] p-5">
+    <ModalShell
+      open={open}
+      onClose={onClose}
+      escapeCloses
+      label="Save queue as preset"
+      className="w-[360px] p-5"
+    >
       <div className="font-display font-bold text-[17px] tracking-tight mb-3">
         Save queue as preset
       </div>

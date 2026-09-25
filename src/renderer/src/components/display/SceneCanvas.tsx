@@ -14,8 +14,8 @@ import type * as THREE from "three";
  * a WebGL2 canvas and a 2D overlay above it for text and marks. Sizes to
  * its box, caps the pixel ratio (1.5 full-screen, 1 for the picker's tiles:
  * a 5K display would otherwise paint fourteen million pixels a frame), sits
- * still while the window is hidden, and halves its frame rate under reduced
- * motion. The scene's settings are resolved here from the store and handed
+ * still while the window is hidden, and draws one picture a second under
+ * reduced motion. The scene's settings are resolved here from the store and handed
  * to the instance, so a change lands on the next frame. The canvases are
  * the effect's own children, never React's: a canvas that has ever held a
  * WebGL context cannot hand out a 2D one, nor a fresh GL one after
@@ -143,7 +143,10 @@ export function SceneCanvas({
       }
       raf = requestAnimationFrame(loop);
       const reduced = document.documentElement.classList.contains("reduce-motion");
-      if (reduced && now - last < 30) return;
+      // REDUCED MOTION IS NEAR STILL (0.10.0, the accessibility floor): one picture a
+      // second, each moving the scene on by at most a frame's worth, so a flight or a
+      // swell never runs across the screen; it had only halved the frame rate
+      if (reduced && now - last < 1000) return;
       last = now;
       const dt = lastFrame ? frameDelta((now - lastFrame) / 1000) : 0;
       lastFrame = now;

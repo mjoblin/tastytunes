@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { cx } from "@/lib/format";
 import { PopoverChrome, usePopoverChrome, useClampedPosition } from "@/hooks/usePopover";
 import { useFadePresence } from "@/hooks/useFadePresence";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 
 /**
  * The two overlay shells. Every transient surface in the app is one of these:
@@ -73,6 +74,7 @@ export function PopoverCard({
   usePopoverChrome(onClose);
   const boxRef = useRef<HTMLDivElement | null>(null);
   const pos = useClampedPosition(boxRef, at.x, at.y);
+  useDialogFocus(true, boxRef);
 
   return createPortal(
     <>
@@ -83,7 +85,9 @@ export function PopoverCard({
       />
       <div
         ref={boxRef}
-        className={cx("fixed z-50", width, POPOVER_CARD, className)}
+        role="dialog"
+        tabIndex={-1}
+        className={cx("fixed z-50 outline-none", width, POPOVER_CARD, className)}
         style={pos}
         {...rest}
       >
@@ -119,18 +123,24 @@ export function ModalShell({
   onClose,
   escapeCloses = false,
   className,
+  label,
   children,
 }: {
   /** Keep the shell mounted and flip this — the exit fade needs the DOM. */
   open?: boolean;
   onClose(): void;
   escapeCloses?: boolean;
+  /** The dialog's name for assistive technology, when its heading does not say it. */
+  label?: string;
   /** Panel geometry — width, max-*, flex, padding. The surface is the shell's. */
   className?: string;
   children: React.ReactNode;
 }): React.JSX.Element | null {
   const { mounted, faded } = useFadePresence(open);
   const shown = useRef(children);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  // a modal holds keyboard focus while it is open and hands it back when it closes
+  useDialogFocus(open && mounted, panelRef, { trap: true });
   if (open) shown.current = children;
   if (!mounted) return null;
   return (
@@ -166,7 +176,15 @@ export function ModalShell({
       >
         {escapeCloses && open && <PopoverChrome onClose={onClose} />}
         <div
-          className={cx("rounded-2xl bg-panel ring-1 ring-edge2 shadow-2xl", className)}
+          ref={panelRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label={label}
+          tabIndex={-1}
+          className={cx(
+            "rounded-2xl bg-panel ring-1 ring-edge2 shadow-2xl outline-none",
+            className,
+          )}
           onClick={(e) => e.stopPropagation()}
         >
           {open ? children : shown.current}

@@ -117,6 +117,7 @@ export function Nav(): React.JSX.Element {
       }
       {...navTipHandlers(`${label} (${key})`)}
       aria-label={`${label} (${key})`}
+      aria-current={screen === id ? "page" : undefined}
       className={cx(
         "w-full flex items-center rounded-lg h-9 text-[13.5px] transition-colors",
         collapsed ? "justify-center px-0" : "gap-3 px-3",

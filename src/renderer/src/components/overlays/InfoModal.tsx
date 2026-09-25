@@ -14,7 +14,12 @@ export function InfoModal(): React.JSX.Element | null {
   const setInfoOpen = useStore((s) => s.setInfoOpen);
 
   return (
-    <ModalShell open={open} onClose={() => setInfoOpen(false)} className="w-[420px] p-6">
+    <ModalShell
+      open={open}
+      onClose={() => setInfoOpen(false)}
+      label="About TastyTunes"
+      className="w-[420px] p-6"
+    >
       <div className="flex items-start">
         <div className="flex-1">
           <div className="font-wordmark font-bold text-[24px] leading-none tracking-tight">

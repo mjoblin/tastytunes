@@ -107,6 +107,10 @@
     display: none;
   }
 }
+/* and the app's own Reduced motion setting, which can be on while the system's is off */
+:root.reduce-motion .art-shimmer {
+  display: none;
+}
 .art-in {
   animation: art-fade-in 0.15s ease-out;
 }
@@ -191,11 +195,22 @@ body {
   @apply bg-bg text-ink font-sans antialiased overflow-hidden select-none;
 }
 
-/* Desktop-app feel: keyboard input is the shortcut system, not tab-navigation,
-   so suppress the browser's focus rings app-wide. Text inputs keep their own
-   styled focus (Tailwind ring classes are box-shadows, unaffected by this). */
-:focus,
+/* KEYBOARD FOCUS SHOWS (0.10.0, the accessibility floor; the app had suppressed every focus
+   ring as a desktop-app feel, which left anyone on Tab navigating blind). A ring on
+   :focus-visible alone, so a click never draws one; text boxes keep their own styled focus
+   (Tailwind ring classes are box-shadows); the ring is the ink, not the gold, since gold
+   already means the brand and what is playing. */
+:focus:not(:focus-visible) {
+  outline: none;
+}
 :focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-ink) 70%, transparent);
+  outline-offset: 2px;
+}
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[contenteditable]:focus-visible {
   outline: none;
 }
 
@@ -320,16 +335,22 @@ img {
   /* glow follows the themed led color (it used to hardcode the dark green) */
   box-shadow: 0 0 6px color-mix(in srgb, var(--color-led) 80%, transparent);
 }
+/* Each state has its own SHAPE as well as its color (0.10.0, the accessibility floor, after the
+   signal lamps' rule): connected is a lit dot, connecting a ring, off a hollow hairline ring,
+   so the state reads without color vision and in greyscale. */
 .led-busy {
-  background: var(--color-amber);
-  box-shadow: 0 0 6px rgb(var(--amber-rgb) / 0.8);
+  background: transparent;
+  box-shadow:
+    inset 0 0 0 2px var(--color-amber),
+    0 0 6px rgb(var(--amber-rgb) / 0.8);
   animation: led-pulse 1.1s ease-in-out infinite;
 }
 .led-off {
-  background: #4a453d;
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px #6b6457;
 }
 :root.light .led-off {
-  background: #cdc5b3;
+  box-shadow: inset 0 0 0 1.5px #a89f8b;
 }
 @keyframes led-pulse {
   0%,

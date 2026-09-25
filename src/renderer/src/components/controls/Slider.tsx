@@ -30,6 +30,8 @@ interface SliderProps {
    *  the centerline never moves as coverage comes and goes — the plain line
    *  simply rests on the same center. */
   tall?: boolean;
+  /** One arrow key's step, 0..1 (Page Up and Page Down take five). */
+  step?: number;
 }
 
 /** A pointer-driven slider styled as a thin faceplate track with an amber fill. */
@@ -44,6 +46,7 @@ export function Slider({
   scrubLabel,
   track,
   tall,
+  step = 0.02,
 }: SliderProps): React.JSX.Element {
   const trackRef = useRef<HTMLDivElement>(null);
   const [dragValue, setDragValue] = useState<number | null>(null);
@@ -134,6 +137,31 @@ export function Slider({
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={Math.round(shown * 100)}
+      aria-valuetext={scrubLabel ? scrubLabel(shown) : undefined}
+      aria-disabled={disabled || undefined}
+      // THE KEYBOARD MOVES IT (0.10.0, the accessibility floor): a Tab stop, arrows by a
+      // step, Page Up and Page Down by five, Home and End to the ends, each committed at
+      // once; the key goes no further, so the app's own arrow shortcuts (seek, volume)
+      // never act on it twice
+      tabIndex={disabled ? -1 : 0}
+      onKeyDown={(e) => {
+        const by: Record<string, number> = {
+          ArrowRight: step,
+          ArrowUp: step,
+          ArrowLeft: -step,
+          ArrowDown: -step,
+          PageUp: step * 5,
+          PageDown: -step * 5,
+        };
+        let next: number | null = null;
+        if (e.key in by) next = shown + by[e.key];
+        else if (e.key === "Home") next = 0;
+        else if (e.key === "End") next = 1;
+        if (next == null || disabled) return;
+        e.preventDefault();
+        e.stopPropagation();
+        onCommit(Math.max(0, Math.min(1, next)));
+      }}
       className={cx(
         "group relative flex items-center no-drag",
         track || tall ? "h-8" : "h-4",
