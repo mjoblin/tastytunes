@@ -213,6 +213,15 @@ select:focus-visible,
 [contenteditable]:focus-visible {
   outline: none;
 }
+/* a name link sits in a line that truncates, which clips an outline to a sliver at its end:
+   the link underlines instead, thick and in the ink, where the clip cannot reach */
+[data-name-link]:focus-visible {
+  outline: none;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+  text-decoration-color: color-mix(in srgb, var(--color-ink) 70%, transparent);
+}
 
 img {
   -webkit-user-drag: none;
