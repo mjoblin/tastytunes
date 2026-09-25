@@ -1,0 +1,35 @@
+name: CI
+
+# The gate on every push and pull request: typecheck, lint, format check and
+# the unit tests, via the same npm run check the Release workflow runs before
+# it builds. Linux only and no packaging: the release legs already prove the
+# build on each OS, and this is the check that should answer in a minute or
+# two, not the one that ships anything.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+# read-only: this job only checks out and runs the gate
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+
+      # the gate never launches Electron, so its ~100 MB binary is dead weight
+      - run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+
+      # typecheck + lint + format:check + unit tests, as npm run check locally
+      - run: npm run check
