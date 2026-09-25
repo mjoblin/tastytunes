@@ -175,9 +175,11 @@ export function albumVolume(title: string): { base: string; volume: number } | n
   // The value can be digits, a spelled-out word (one–twenty) or a Roman
   // numeral (I–XX) — real servers produce all three. The keyword is still
   // required, so "Rocky IV" and "Formula One" never parse; a candidate that
-  // is not a real word or numeral (e.g. "Part Time") resolves to null.
+  // is not a real word or numeral (e.g. "Part Time") resolves to null. The keyword starts a
+  // word, after a space, a dash, a colon, a comma or a bracket, so "Concept 2", "Script Two"
+  // and "Counterpart 3" are titles, not volumes (found by the unit tests, 2026-09-25).
   const m =
-    /^(.*?)[\s\-–—:,]*[[(]?\s*(?:disc|disk|cd|vol(?:ume)?\.?|part|pt\.?)\s*(\d+|[a-z]+)\s*[\])]?\s*$/i.exec(
+    /^(.*?)(?:[\s\-–—:,]+|[\s\-–—:,]*[[(])\s*(?:disc|disk|cd|vol(?:ume)?\.?|part|pt\.?)\s*(\d+|[a-z]+)\s*[\])]?\s*$/i.exec(
       title.trim(),
     );
   if (!m || !m[1].trim()) return null;
@@ -2195,7 +2197,9 @@ export function trackInAlbumOf(
 export function trackPosition(n: Pick<MediaNode, "trackNumber" | "discNumber">): number | null {
   const t = n.trackNumber;
   if (t == null) return null;
-  if (n.discNumber != null && t >= 100 && Math.floor(t / 100) === n.discNumber) return t % 100;
+  // a packed number is never a multiple of 100 (no track 0): track 100 of a long disc 1 is 100
+  if (n.discNumber != null && t >= 100 && t % 100 !== 0 && Math.floor(t / 100) === n.discNumber)
+    return t % 100;
   return t;
 }
 

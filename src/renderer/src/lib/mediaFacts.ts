@@ -32,7 +32,7 @@ export function albumFactsLine(
   const bytes = tracks.reduce((a, t) => a + (t.format?.sizeBytes ?? 0), 0);
   return [
     album.year ?? tracks[0]?.year ?? null,
-    tracks.length > 0 ? `${tracks.length} tracks` : null,
+    tracks.length > 0 ? `${tracks.length} ${tracks.length === 1 ? "track" : "tracks"}` : null,
     secs > 0 ? fmtTime(secs) : null,
     bytes > 0 ? fmtBytes(bytes) : null,
   ]

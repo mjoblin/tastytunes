@@ -34,6 +34,10 @@ import { LOSSLESS_CODECS, type MediaFormat, type MediaNode } from "@shared/model
 export const parser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: "@_",
+  // text as the server sent it: the parser's default reads a numeric-looking value as a
+  // number, which turned a title "3.10" into "3.1" and "007" into "7" (found by the unit
+  // tests, 2026-09-25); every reader takes text() and converts where it means a number
+  parseTagValue: false,
   // dc:x and upnp:x fold into x — convenient, and the reason `date` (and any
   // future dual-namespace field) must be read array-safe: see NODE RULE dates.
   removeNSPrefix: true,
@@ -137,7 +141,8 @@ const commaCount = (v: string): number =>
 function formatOf(res: Record<string, unknown> | undefined): MediaFormat | null {
   if (!res) return null;
   const proto = text(res["@_protocolInfo"]) ?? "";
-  const mime = (proto.split(":")[2] ?? "").toLowerCase();
+  // the mime's own parameters are not the codec (DLNA's LPCM is "audio/L16;rate=44100;channels=2")
+  const mime = (proto.split(":")[2] ?? "").toLowerCase().split(";")[0].trim();
   if (!mime.startsWith("audio/")) return null;
   const sub = mime.slice("audio/".length).replace(/^x-/, "");
   const pn = /DLNA\.ORG_PN=([A-Z0-9_]+)/i.exec(proto)?.[1]?.toUpperCase() ?? "";
@@ -182,7 +187,8 @@ function formatOf(res: Record<string, unknown> | undefined): MediaFormat | null 
   const resolvedCodec = isMp4 && (pn.startsWith("ALAC") || (fileKbps ?? 0) > 600) ? "ALAC" : codec;
   const out: MediaFormat = { codec: resolvedCodec };
   const lossless = LOSSLESS_CODECS.has(resolvedCodec);
-  const bits = num("bitsPerSample");
+  // LPCM names its depth in the mime (L16, L24) when the server sends no bitsPerSample
+  const bits = num("bitsPerSample") ?? (sub === "l16" ? 16 : sub === "l24" ? 24 : undefined);
   if (bits && lossless) out.bits = bits;
   const rate = num("sampleFrequency");
   if (rate) out.rate = rate;

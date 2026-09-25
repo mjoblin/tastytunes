@@ -115,5 +115,15 @@ export function workAreaFor(rect: Rect, displays: Rect[]): Rect {
     (w) => cx >= w.x && cx < w.x + w.width && cy >= w.y && cy < w.y + w.height,
   );
   if (contains) return contains;
-  return displays.find((w) => cx >= w.x && cx < w.x + w.width) ?? displays[0];
+  // displays stacked in one column: the one nearest the icon vertically, never whichever the
+  // list happens to name first (found by the unit tests, 2026-09-25)
+  const column = displays.filter((w) => cx >= w.x && cx < w.x + w.width);
+  const gap = (w: Rect): number =>
+    cy < w.y ? w.y - cy : cy >= w.y + w.height ? cy - (w.y + w.height) : 0;
+  return (
+    column.reduce<Rect | undefined>(
+      (best, w) => (!best || gap(w) < gap(best) ? w : best),
+      undefined,
+    ) ?? displays[0]
+  );
 }

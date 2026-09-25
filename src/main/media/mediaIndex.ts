@@ -85,7 +85,9 @@ interface StoredIndex {
 // Asset tagging). v2 added upnp:genre. A bump discards stored indexes
 // wholesale; rebuildHints below keeps that from costing Browse-only
 // servers their Build click.
-const VERSION = 12; // v12: nodes from a browse walk carry their folder titlePath
+const VERSION = 13; // v12: nodes from a browse walk carry their folder titlePath
+// v13: the DIDL parser keeps text as the server sent it ("007" stays "007"), and LPCM
+// (audio/L16;rate=…) reads as PCM with its depth
 const PAGE = 500;
 const MAX_TRACKS = 50_000;
 const MAX_CONTAINERS = 10_000;
