@@ -30,15 +30,17 @@ import {
   Crosshair,
   Disc3,
   Footprints,
+  Heart,
   LayoutGrid,
+  Library,
   ListMusic,
   ListOrdered,
   ListPlus,
   ListX,
-  Heart,
   MoreHorizontal,
   Play,
   Rows3,
+  Search,
   X,
 } from "lucide-react";
 import { queueContentHash, type QueueListItem } from "@shared/smoip";
@@ -53,7 +55,7 @@ import { tt } from "@/api";
 import { useConfirmPopover } from "@/components/chrome/Confirm";
 import { useStore } from "@/store";
 import { Eqbars } from "@/components/media/Eqbars";
-import { EmptyState } from "@/components/chrome/EmptyState";
+import { EmptyActions, EmptyState } from "@/components/chrome/EmptyState";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { flashTarget, scrollToWithContext } from "@/lib/scroll";
 import { lockVertical } from "@/lib/dnd";
@@ -153,6 +155,7 @@ export function QueueScreen(): React.JSX.Element {
   const setQueueItems = useStore((s) => s.setQueueItems);
   const filter = useStore((s) => s.screenFilters.queue);
   const setScreenFilter = useStore((s) => s.setScreenFilter);
+  const setScreen = useStore((s) => s.setScreen);
   const cards = queueLayout === "cards";
   const albums = queueLayout === "albums";
   const [saveOpen, setSaveOpen] = useState(false);
@@ -478,7 +481,14 @@ export function QueueScreen(): React.JSX.Element {
         icon={ListMusic}
         title="Queue is empty"
         caption="Queue tracks from the Library, Search or Playlists and they'll show up here."
-      />
+      >
+        <EmptyActions
+          actions={[
+            { label: "Library", icon: Library, keyHint: "I", onClick: () => setScreen("library") },
+            { label: "Search", icon: Search, keyHint: "S", onClick: () => setScreen("search") },
+          ]}
+        />
+      </EmptyState>
     );
   }
 

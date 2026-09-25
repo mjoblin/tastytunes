@@ -19,7 +19,17 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ListOrdered, Loader2, MoreHorizontal, Pencil, Play, Trash2, X } from "lucide-react";
+import {
+  Library,
+  ListMusic,
+  ListOrdered,
+  Loader2,
+  MoreHorizontal,
+  Pencil,
+  Play,
+  Trash2,
+  X,
+} from "lucide-react";
 import { queueContentHash } from "@shared/smoip";
 import {
   favoriteKey,
@@ -34,7 +44,7 @@ import {
 } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
-import { EmptyState } from "@/components/chrome/EmptyState";
+import { EmptyActions, EmptyState } from "@/components/chrome/EmptyState";
 import { SortChip } from "@/components/controls/SortChip";
 import { FilterInput } from "@/components/controls/FilterInput";
 import { RowAction } from "@/components/media/RowAction";
@@ -94,6 +104,7 @@ export function PlaylistsScreen(): React.JSX.Element {
   const liveHash = useMemo(() => queueContentHash(queue?.items ?? []), [queue]);
   const filter = useStore((s) => s.screenFilters.playlists);
   const setScreenFilter = useStore((s) => s.setScreenFilter);
+  const setScreen = useStore((s) => s.setScreen);
   // Session memory: which playlist was open (component state died with the
   // screen and every return showed the FIRST playlist, 2026-08-22)
   const [selectedId, setSelectedId] = useState<string | null>(lastSelectedId);
@@ -361,8 +372,20 @@ export function PlaylistsScreen(): React.JSX.Element {
         <EmptyState
           icon={ListOrdered}
           title="No playlists yet"
-          caption="Save the queue as a playlist from the Queue screen."
-        />
+          caption="Add tracks to a playlist from their menus anywhere in the app, or save the queue as one."
+        >
+          <EmptyActions
+            actions={[
+              {
+                label: "Library",
+                icon: Library,
+                keyHint: "I",
+                onClick: () => setScreen("library"),
+              },
+              { label: "Queue", icon: ListMusic, keyHint: "Q", onClick: () => setScreen("queue") },
+            ]}
+          />
+        </EmptyState>
       ) : (
         <div className="flex-1 min-h-0 flex gap-6 px-8 pb-8">
           {/* the collection */}

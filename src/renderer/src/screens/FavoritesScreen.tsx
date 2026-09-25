@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useKnownDrs } from "@/lib/audioAnalysis";
 import { useSavedPerformer } from "@/hooks/useQueuePerformer";
-import { Heart, Loader2, MoreHorizontal, Play } from "lucide-react";
+import { Heart, Library, Loader2, MoreHorizontal, Play, RadioTower } from "lucide-react";
 import {
   type MediaNode,
   type MediaQueueAction,
@@ -28,7 +28,7 @@ import { fromFavorite, fromNode, refToPlaylistItem } from "@/lib/mediaRef";
 import { recordPresetSaved, openRefInLibrary } from "@/lib/mediaActions";
 import { NameLine } from "@/components/media/NameLine";
 import { albumMenuItems, trackMenuItems } from "@/lib/mediaMenus";
-import { EmptyState } from "@/components/chrome/EmptyState";
+import { EmptyActions, EmptyState } from "@/components/chrome/EmptyState";
 import { FilterInput } from "@/components/controls/FilterInput";
 import { Segmented } from "@/components/controls/Segmented";
 import { RowMenu } from "@/components/media/RowMenu";
@@ -88,6 +88,7 @@ export function FavoritesScreen(): React.JSX.Element {
       : undefined;
   const filter = useStore((s) => s.screenFilters.favorites);
   const setScreenFilter = useStore((s) => s.setScreenFilter);
+  const setScreen = useStore((s) => s.setScreen);
   const playState = useStore((s) => s.playState);
   const effectivePlayId = useStore((s) => s.effectivePlayId);
   const nowPlaying = useStore((s) => s.nowPlaying);
@@ -379,7 +380,19 @@ export function FavoritesScreen(): React.JSX.Element {
           icon={Heart}
           title="Nothing favorited yet"
           caption="Heart albums and tracks in the Library, stations on the Radio screen, or whatever's playing on Now Playing, and they all gather here."
-        />
+        >
+          <EmptyActions
+            actions={[
+              {
+                label: "Library",
+                icon: Library,
+                keyHint: "I",
+                onClick: () => setScreen("library"),
+              },
+              { label: "Radio", icon: RadioTower, keyHint: "R", onClick: () => setScreen("radio") },
+            ]}
+          />
+        </EmptyState>
       ) : (
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-8 pb-8 pt-1">
           {shownCount === 0 && (

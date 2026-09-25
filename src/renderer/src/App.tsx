@@ -284,7 +284,6 @@ function ConnectGate(): React.JSX.Element {
   const connection = useStore((s) => s.connection);
   const devices = useStore((s) => s.devices);
   const discovering = useStore((s) => s.discovering);
-  const setScreen = useStore((s) => s.setScreen);
   // Forgetting is the one unreconstructible act on this screen — an eco
   // streamer that's off can't re-teach itself until it next wakes — and a
   // tester lost one to a stray click (rc.1, 2026-08-31). The anchored
@@ -335,6 +334,10 @@ function ConnectGate(): React.JSX.Element {
     prevDiscovering.current = discovering;
   }, [discovering]);
   const stillLooking = !busy && devices.length === 0 && sweeps >= 3;
+  // THE ADDRESS IN PLACE (0.10.0, the first five minutes): typing a streamer's IP opens a
+  // field here rather than sending a new owner off to the Device screen
+  const [ipOpen, setIpOpen] = useState(false);
+  const [ip, setIp] = useState("");
 
   // The device book: remembered streamers the sweep has NOT confirmed render
   // dimmed under the live results, connectable on faith (the address usually
@@ -470,7 +473,7 @@ function ConnectGate(): React.JSX.Element {
             </div>
           ) : (
             <div className="text-[13px] text-faint max-w-sm">
-              {discovering ? "Searching the network…" : "No StreamMagic devices found yet."}
+              {discovering ? "Searching the network…" : "No streamers found yet."}
             </div>
           )}
           {stillLooking && (
@@ -487,22 +490,71 @@ function ConnectGate(): React.JSX.Element {
               // and the row must not breathe with it (user, 2026-08-30).
               className="min-w-[128px] text-center text-[13px] px-4 py-2 rounded-lg bg-amber text-bg font-medium hover:brightness-110 transition-all disabled:opacity-50"
             >
-              {discovering ? "Searching…" : "Find devices"}
+              {discovering ? "Searching…" : "Find streamers"}
             </button>
             <HeaderChip
-              onClick={() => setScreen("device")}
+              onClick={() => setIpOpen((o) => !o)}
+              data-gate-ip-toggle
               className="text-[13px] px-4 py-2 motion-safe:active:scale-95"
             >
-              Enter IP manually →
+              Enter an IP
             </HeaderChip>
+            {/* THE DEMO IS A PEER ON THE WELCOME SCREEN (0.10.0, the first five minutes): for
+                anyone without a streamer at hand it is the whole pitch, and it had been the
+                faintest line on the screen */}
+            {firstRun && (
+              <HeaderChip
+                onClick={() => void tt.demoStart()}
+                data-gate-demo
+                data-tip="The whole app against a built-in streamer with sample libraries."
+                className="tip-bottom flex items-center gap-1.5 text-[13px] px-4 py-2 motion-safe:active:scale-95"
+              >
+                <Sparkles size={14} className="text-gold/80" />
+                Try the demo
+              </HeaderChip>
+            )}
           </div>
-          <button
-            onClick={() => void tt.demoStart()}
-            className="mt-4 flex items-center gap-2 text-[13px] text-faint hover:text-dim transition-colors"
-          >
-            <Sparkles size={14} className="text-gold/70" />
-            Try the built-in demo, no streamer needed →
-          </button>
+          {ipOpen && (
+            <form
+              data-gate-ip
+              className="flex items-center gap-1.5"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (ip.trim()) void tt.connect(ip.trim());
+              }}
+            >
+              <input
+                autoFocus
+                value={ip}
+                onChange={(e) => setIp(e.target.value)}
+                placeholder="Hostname or IP (e.g. 192.168.1.42)"
+                aria-label="Streamer hostname or IP address"
+                className="w-64 bg-bg rounded-lg ring-1 ring-edge focus:ring-edge2 outline-none px-3 py-2 text-[13px] placeholder:text-faint"
+              />
+              <button
+                type="submit"
+                disabled={!ip.trim()}
+                className="rounded-lg bg-amber text-bg font-medium text-[13px] px-4 py-2 disabled:opacity-40 hover:brightness-110 motion-safe:active:scale-95 transition-all"
+              >
+                Connect
+              </button>
+            </form>
+          )}
+          {ipOpen && (
+            <div className="text-[11.5px] text-faint max-w-sm leading-snug">
+              Your streamer's display shows its IP under Settings › Network, and your router lists
+              it among connected devices.
+            </div>
+          )}
+          {!firstRun && (
+            <button
+              onClick={() => void tt.demoStart()}
+              className="mt-4 flex items-center gap-2 text-[13px] text-faint hover:text-dim transition-colors"
+            >
+              <Sparkles size={14} className="text-gold/70" />
+              Try the built-in demo, no streamer needed →
+            </button>
+          )}
         </>
       )}
     </div>

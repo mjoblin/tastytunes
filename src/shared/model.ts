@@ -1181,6 +1181,10 @@ export interface AppSettings {
    * surviving a close is how apps earn a reputation for being un-quittable.
    */
   trayCloseNoticeShown: boolean;
+  /** The one-time line on Now Playing pointing to Fullscreen Display mode has been dismissed,
+   *  or Display mode opened (0.10.0, the first five minutes). Internal one-shot state, not a
+   *  preference: there is no row for it. */
+  displayHintSeen: boolean;
   theme: ThemePreference;
   displayFont: DisplayFont;
   /** Blurred album-art backdrop. */
@@ -1499,6 +1503,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   // files without the key pick up the new default.
   tray: true,
   trayCloseNoticeShown: false,
+  displayHintSeen: false,
   theme: "dark",
   displayFont: "fraunces",
   ambientArt: "all",

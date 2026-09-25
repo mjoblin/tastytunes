@@ -5,11 +5,15 @@ import {
   Disc3,
   Heart,
   Info,
+  Library,
+  ListMusic,
   ListOrdered,
   Maximize2,
   MicVocal,
+  Radio,
   RadioTower,
   Sparkles,
+  X,
 } from "lucide-react";
 import { useStore } from "@/store";
 import { activeSourceId, cx, deriveNowPlaying } from "@/lib/format";
@@ -26,7 +30,7 @@ import { useBestArt } from "@/lib/bestArt";
 import { useFadePresence } from "@/hooks/useFadePresence";
 import { LyricsPanel } from "@/components/overlays/LyricsPanel";
 import { LyricLine } from "@/components/playback/LyricLine";
-import { EmptyState } from "@/components/chrome/EmptyState";
+import { EmptyActions, EmptyState } from "@/components/chrome/EmptyState";
 import { ResumeCard } from "@/components/playback/ResumeCard";
 import { ArtistPanel } from "@/components/overlays/ArtistPanel";
 import { NowPlayingWaveform, PlayingDrChip, usePlayingAnalysis } from "@/components/media/Waveform";
@@ -51,6 +55,17 @@ export function NowPlayingScreen(): React.JSX.Element {
   const zoneState = useStore((s) => s.zoneState);
   const effectivePlayId = useStore((s) => s.effectivePlayId);
   const displayMode = useStore((s) => s.displayMode);
+  const setScreen = useStore((s) => s.setScreen);
+  // THE WAY TO DISPLAY MODE, SAID ONCE (0.10.0, the first five minutes): once a track the
+  // scenes can draw is playing, a line under the details names the key, until it is
+  // dismissed or Display mode is opened
+  const displayHintSeen = useStore((s) => s.settings.displayHintSeen);
+  const hintAnalysis = usePlayingAnalysis(!displayHintSeen);
+  const showDisplayHint =
+    !displayHintSeen && !displayMode && hintAnalysis != null && hintAnalysis !== "loading";
+  useEffect(() => {
+    if (displayMode && !displayHintSeen) void saveSettings({ displayHintSeen: true });
+  }, [displayMode, displayHintSeen, saveSettings]);
   const setDisplayMode = useStore((s) => s.setDisplayMode);
   const lyricsOpen = useStore((s) => s.lyricsOpen);
   const setLyricsOpen = useStore((s) => s.setLyricsOpen);
@@ -394,8 +409,31 @@ export function NowPlayingScreen(): React.JSX.Element {
         <EmptyState
           icon={Disc3}
           title="Nothing playing"
-          caption="Start playback from a queue, recall a preset, or stream to the device from another app."
+          caption="Play something from the Library, a preset or the radio, or cast to the streamer from another app."
         >
+          {/* the way on from here (0.10.0, the first five minutes) */}
+          <EmptyActions
+            actions={[
+              {
+                label: "Library",
+                icon: Library,
+                keyHint: "I",
+                onClick: () => setScreen("library"),
+              },
+              { label: "Presets", icon: Radio, keyHint: "P", onClick: () => setScreen("presets") },
+              { label: "Radio", icon: RadioTower, keyHint: "R", onClick: () => setScreen("radio") },
+              ...((queue?.items?.length ?? 0) > 0
+                ? [
+                    {
+                      label: "Queue",
+                      icon: ListMusic,
+                      keyHint: "Q",
+                      onClick: () => setScreen("queue"),
+                    },
+                  ]
+                : []),
+            ]}
+          />
           {/* the listening record's offer (0.8.0): an album left unfinished */}
           <ResumeCard />
         </EmptyState>
@@ -660,6 +698,27 @@ export function NowPlayingScreen(): React.JSX.Element {
                 )}
               >
                 <LyricLine />
+              </div>
+            )}
+            {showDisplayHint && (
+              <div
+                data-display-hint
+                className="mt-3 flex items-center gap-2 text-[12px] text-faint"
+              >
+                <Maximize2 size={12} className="shrink-0" />
+                <span>
+                  Press <kbd className="font-mono text-dim">F</kbd> for Fullscreen Display mode,
+                  where the scenes can fill the screen.
+                </span>
+                <button
+                  type="button"
+                  aria-label="Dismiss"
+                  data-display-hint-dismiss
+                  onClick={() => void saveSettings({ displayHintSeen: true })}
+                  className="shrink-0 rounded p-1 text-faint hover:text-ink transition-colors"
+                >
+                  <X size={12} />
+                </button>
               </div>
             )}
           </div>
