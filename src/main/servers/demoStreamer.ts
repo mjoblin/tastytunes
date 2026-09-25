@@ -746,6 +746,41 @@ function buildDemo(host: string): {
         res.writeHead(200, { "content-type": "application/json" });
         return res.end('{"zone": "ZONE1"}');
       }
+      // Reorder: a POST with {from, to} as PRESET IDS. The entry moves to the
+      // target's position and the slot numbers stay put, the presets re-seating
+      // into the existing slots, which is how /presets/list reads back after a
+      // real move (the mock does the same).
+      if (u.pathname === "/smoip/presets/move" && req.method === "POST") {
+        const body = JSON.parse((await readBody(req)) || "{}") as Dict;
+        const from = Number(body["from"]);
+        const to = Number(body["to"]);
+        const list = (DATA["/presets/list"] as { presets: Array<Dict & { id: number }> }).presets;
+        const fromIdx = list.findIndex((x) => x.id === from);
+        const toIdx = list.findIndex((x) => x.id === to);
+        if (fromIdx >= 0 && toIdx >= 0 && fromIdx !== toIdx) {
+          const slots = list.map((x) => x.id);
+          const [moved] = list.splice(fromIdx, 1);
+          list.splice(toIdx, 0, moved);
+          list.forEach((x, i) => {
+            x.id = slots[i];
+          });
+          broadcast("/presets/list");
+        }
+        res.writeHead(200, { "content-type": "application/json" });
+        return res.end('{"zone": "ZONE1"}');
+      }
+      // Delete: a POST with {preset: id}; the slot empties and leaves the list.
+      if (u.pathname === "/smoip/presets/delete" && req.method === "POST") {
+        const body = JSON.parse((await readBody(req)) || "{}") as Dict;
+        const slot = Number(body["preset"]);
+        const list = DATA["/presets/list"] as { presets: Array<Dict & { id: number }> };
+        if (list.presets.some((x) => x.id === slot)) {
+          DATA["/presets/list"] = { ...list, presets: list.presets.filter((x) => x.id !== slot) };
+          broadcast("/presets/list");
+        }
+        res.writeHead(200, { "content-type": "application/json" });
+        return res.end('{"zone": "ZONE1"}');
+      }
       // Play an internet-radio stream by URL (mirrors the real Evo's GET
       // verb: url+name both required, AND an explicit zone — firmware 400s
       // without it).
