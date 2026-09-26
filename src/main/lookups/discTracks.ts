@@ -17,6 +17,9 @@ interface Medium {
 }
 
 const cache = new DiskCache<Medium[]>("disc", CACHE_MAX);
+// the Queue screen, the tray panel and the mini player each ask when a disc first appears,
+// from three windows at once: one request per release while it is on its way
+const asking = new Map<string, Promise<Medium[] | null | undefined>>();
 
 interface MbTrack {
   position?: number;
@@ -65,6 +68,21 @@ export function pickMedium(
   return [...fits].sort((a, b) => off(a) - off(b) || cd(a) - cd(b))[0] ?? null;
 }
 
+/** The release's media from MusicBrainz (or the demo), cached; null for a definitive miss,
+ *  undefined when the lookup failed. */
+async function lookUp(id: string, demo?: string): Promise<Medium[] | null | undefined> {
+  const path = `/ws/2/release/${id}?inc=recordings&fmt=json`;
+  const got = demo ? await getJson("demo", `${demo}${path}`) : await mbFetch(`${MB}${path}`, true);
+  if (got.kind === "missing") {
+    cache.set(id, null);
+    return null;
+  }
+  if (got.kind !== "ok") return undefined;
+  const media = toMedia(got.body);
+  cache.set(id, media);
+  return media;
+}
+
 /** The disc's tracks, or null when the release is unknown, the lookup failed or no medium of
  *  the release matches the disc. `count` is the disc's track count and `secs` its length when
  *  the streamer has said. `demo` is the demo streamer's address while it is the streamer: its
@@ -79,17 +97,14 @@ export async function fetchDiscTracks(
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id)) return null;
   let media = cache.get(id);
   if (media === undefined) {
-    const path = `/ws/2/release/${id}?inc=recordings&fmt=json`;
-    const got = demo
-      ? await getJson("demo", `${demo}${path}`)
-      : await mbFetch(`${MB}${path}`, true);
-    if (got.kind === "missing") {
-      cache.set(id, null);
-      return null;
+    let ask = asking.get(id);
+    if (!ask) {
+      ask = lookUp(id, demo).finally(() => asking.delete(id));
+      asking.set(id, ask);
     }
-    if (got.kind !== "ok") return null;
-    media = toMedia(got.body);
-    cache.set(id, media);
+    media = await ask;
+    // undefined: the lookup failed and was not cached, so the next ask tries again
+    if (media === undefined) return null;
   }
   const medium = media ? pickMedium(media, count, secs) : null;
   return medium ? { releaseId: id, tracks: medium.tracks } : null;

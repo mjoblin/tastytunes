@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
 import type { DiscTracks } from "@shared/model";
-import { cdReleaseId, cdToc, isCdPlayback } from "@shared/smoip";
+import {
+  cdReleaseId,
+  cdToc,
+  isCdPlayback,
+  type ZoneNowPlaying,
+  type ZonePlayState,
+  type ZoneState,
+} from "@shared/smoip";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { activeSourceId, queuePlace } from "@/lib/format";
@@ -43,6 +50,39 @@ const found = new Map<string, DiscTracks>();
 const discKey = (releaseId: string | null, artist: string | null, album: string | null) =>
   releaseId ?? (album ? `${artist ?? ""}|${album}`.toLowerCase() : null);
 
+type Feeds = {
+  playState: ZonePlayState | null;
+  nowPlaying: ZoneNowPlaying | null;
+  zoneState: ZoneState | null;
+};
+
+/** What the feeds say about the disc, its remembered table of contents included: the one
+ *  reading useDisc and the navigation panel's count share. Null while the CD is not the
+ *  source. */
+function readDisc({ playState, nowPlaying, zoneState }: Feeds) {
+  const md = playState?.metadata ?? null;
+  const display = nowPlaying?.display ?? null;
+  if (!isCdPlayback(md, display) && activeSourceId(zoneState, nowPlaying) !== "CD") return null;
+  const album = md?.album ?? display?.line3 ?? null;
+  const artist = md?.artist ?? display?.line2 ?? null;
+  const artUrl = md?.art_url ?? display?.art_url ?? null;
+  const releaseId = cdReleaseId(artUrl);
+  const key = discKey(releaseId, artist, album);
+  const tocNow = cdToc(md?.title);
+  const toc = tocNow ?? (key ? tocs.get(key) : undefined) ?? null;
+  const place = queuePlace(playState, nowPlaying);
+  const count = toc?.tracks ?? place?.length ?? null;
+  return { md, display, album, artist, artUrl, releaseId, key, tocNow, toc, place, count };
+}
+
+/** The disc's track count for the navigation panel's "CD 10": undefined while the CD is not
+ *  the source, null while it is and the streamer has not said how many. */
+export const useDiscCount = (): number | null | undefined =>
+  useStore((s) => {
+    const disc = readDisc(s);
+    return disc ? disc.count : undefined;
+  });
+
 /**
  * The disc in the player (0.10.0, the CD), or null when the CD is not the source. The streamer
  * never lists a disc's tracks: it says how many there are (the table of contents while stopped,
@@ -57,18 +97,15 @@ export function useDisc(): Disc | null {
   const lookups = useStore((s) => s.settings.artistInfo);
   const [settled, setSettled] = useState<string | null>(null);
 
-  const md = playState?.metadata ?? null;
-  const display = nowPlaying?.display ?? null;
-  const isCd = isCdPlayback(md, display) || activeSourceId(zoneState, nowPlaying) === "CD";
-  const album = md?.album ?? display?.line3 ?? null;
-  const artist = md?.artist ?? display?.line2 ?? null;
-  const artUrl = md?.art_url ?? display?.art_url ?? null;
-  const releaseId = cdReleaseId(artUrl);
-  const key = isCd ? discKey(releaseId, artist, album) : null;
-  const tocNow = isCd ? cdToc(md?.title) : null;
-  const toc = tocNow ?? (key ? tocs.get(key) : undefined) ?? null;
-  const place = isCd ? queuePlace(playState, nowPlaying) : null;
-  const count = toc?.tracks ?? place?.length ?? null;
+  const disc = readDisc({ playState, nowPlaying, zoneState });
+  const md = disc?.md ?? null;
+  const display = disc?.display ?? null;
+  const releaseId = disc?.releaseId ?? null;
+  const key = disc?.key ?? null;
+  const tocNow = disc?.tocNow ?? null;
+  const toc = disc?.toc ?? null;
+  const place = disc?.place ?? null;
+  const count = disc?.count ?? null;
   const current = place && playState?.state !== "stop" ? place.index : null;
   const line1 = display?.line1 && !cdToc(display.line1) ? display.line1 : null;
   const lineSecs = display?.progress?.duration ?? md?.duration ?? null;
@@ -103,7 +140,7 @@ export function useDisc(): Disc | null {
     };
   }, [lookupKey, releaseId, count, tocSecs]);
 
-  if (!isCd) return null;
+  if (!disc) return null;
   const mb = lookupKey ? found.get(lookupKey) : undefined;
   const learned = key ? heard.get(key) : undefined;
   const rows: DiscRow[] = Array.from({ length: count ?? mb?.tracks.length ?? 0 }, (_, i) => {
@@ -118,9 +155,9 @@ export function useDisc(): Disc | null {
   });
   const sum = rows.length > 0 && rows.every((r) => r.secs != null);
   return {
-    album,
-    artist,
-    artUrl,
+    album: disc.album,
+    artist: disc.artist,
+    artUrl: disc.artUrl,
     rows,
     secs: toc?.secs ?? (sum ? rows.reduce((s, r) => s + (r.secs ?? 0), 0) : null),
     head: current,
