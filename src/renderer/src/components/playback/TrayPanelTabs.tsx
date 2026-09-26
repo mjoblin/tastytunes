@@ -284,8 +284,8 @@ function DiscTab({
     return (
       <TabEmpty
         icon={Disc3}
-        title="No disc details yet"
-        hint="The CD player hasn't said what's on the disc."
+        title="No track list yet"
+        hint="Insert a disc, and its tracks appear here once the CD player has read it."
       />
     );
   }

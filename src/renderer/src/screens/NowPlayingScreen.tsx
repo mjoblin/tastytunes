@@ -16,7 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { useStore } from "@/store";
-import { activeSourceId, cx, deriveNowPlaying, fmtTime, queuePlace } from "@/lib/format";
+import { activeSourceId, cx, deriveNowPlaying, fmtDuration, queuePlace } from "@/lib/format";
 import { playingQueueEntry } from "@/lib/playingEntry";
 import { fromQueueItem } from "@/lib/mediaRef";
 import { NameLink } from "@/components/media/NameLine";
@@ -687,7 +687,7 @@ export function NowPlayingScreen(): React.JSX.Element {
                 )}
               >
                 {meta.disc
-                  ? `${meta.disc.tracks} ${meta.disc.tracks === 1 ? "track" : "tracks"} · ${fmtTime(meta.disc.secs)}`
+                  ? `${meta.disc.tracks} ${meta.disc.tracks === 1 ? "track" : "tracks"} · ${fmtDuration(meta.disc.secs)}`
                   : place && `track ${place.index + 1} of ${place.length}`}
               </div>
             )}

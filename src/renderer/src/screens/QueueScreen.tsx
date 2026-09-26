@@ -59,7 +59,7 @@ import { EmptyActions, EmptyState } from "@/components/chrome/EmptyState";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { flashTarget, scrollToWithContext } from "@/lib/scroll";
 import { lockVertical } from "@/lib/dnd";
-import { activeSourceId, cx, fmtTime, matchesFilter, fmtCount } from "@/lib/format";
+import { activeSourceId, cx, fmtDuration, fmtTime, matchesFilter, fmtCount } from "@/lib/format";
 import { toggleFavorite } from "@/lib/favorites";
 import { fromQueueItem, refToFavorite, refToPlaylistItem } from "@/lib/mediaRef";
 import { saveRefToPreset, openRefInLibrary } from "@/lib/mediaActions";
@@ -83,6 +83,7 @@ import { HeaderChip, ScreenTitle, GAP_BETWEEN, GAP_WITHIN } from "@/components/c
 import { artSrc } from "@/lib/artSrc";
 import { useQueueDrag } from "@/components/queue/useQueueDrag";
 import { DiscQueue } from "@/components/queue/DiscQueue";
+import { Segmented } from "@/components/controls/Segmented";
 import { useDisc } from "@/hooks/useDisc";
 import { useQueueSelection, type SelectionLate } from "@/components/queue/useQueueSelection";
 
@@ -153,6 +154,17 @@ let discView: "disc" | "media" = "disc";
 /**
  * The Queue screen: the streamer's Media Library queue, or, while the CD is the source, the
  * disc's tracks (0.10.0), with the parked queue a click away in either direction.
+ *
+ * ONE SWITCH IN ONE PLACE (user, 2026-09-26: two buttons in two places were "jarring" to click
+ * between): both views put the same segmented control in the header as its second row,
+ * left-aligned with the title, the Device screen's tabs' place. The headers are one height, so
+ * neither the switch nor the list below moves between the views, and the Media Library
+ * header's toolbar, already full at the default window width, gives up nothing. The header
+ * owns the rhythm (user, 2026-09-26: the switch sat too far under the title as a row after
+ * the header, its padding stacked on the title's): a small gap between the rows, the header's
+ * own bottom padding under the switch. With no CD the header is its one row, as it always was.
+ * An empty Media Library queue leaves nothing to switch to: its option is dimmed and the disc
+ * stays.
  */
 export function QueueScreen(): React.JSX.Element {
   const disc = useDisc();
@@ -162,28 +174,32 @@ export function QueueScreen(): React.JSX.Element {
     discView = next;
     setView(next);
   };
-  if (disc && view === "disc") {
-    return <DiscQueue disc={disc} parkedCount={parkedCount} onShowQueue={() => show("media")} />;
-  }
-  return (
-    <MediaQueue
-      discChip={
-        disc && (
-          <HeaderChip
-            data-disc-show-disc
-            onClick={() => show("disc")}
-            className="no-drag flex items-center gap-1.5 px-2.5 py-1.5 text-[12px]"
-          >
-            <Disc3 size={14} />
-            Disc
-          </HeaderChip>
-        )
-      }
-    />
+  const shown = disc && (view === "disc" || parkedCount === 0) ? "disc" : "media";
+  const viewSwitch = disc && (
+    <div data-queue-switch>
+      <Segmented
+        className="w-fit"
+        value={shown}
+        onChange={show}
+        options={[
+          { value: "disc" as const, label: "CD" },
+          {
+            value: "media" as const,
+            label: "Media Library",
+            disabled: parkedCount === 0,
+            tip: parkedCount === 0 ? "The Media Library queue is empty" : undefined,
+          },
+        ]}
+      />
+    </div>
   );
+  if (disc && shown === "disc") {
+    return <DiscQueue disc={disc} viewSwitch={viewSwitch} />;
+  }
+  return <MediaQueue viewSwitch={viewSwitch} />;
 }
 
-function MediaQueue({ discChip }: { discChip: React.ReactNode }): React.JSX.Element {
+function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.Element {
   const queue = useStore((s) => s.queue);
   const saveSettings = useStore((s) => s.saveSettings);
   const nowPlaying = useStore((s) => s.nowPlaying);
@@ -527,7 +543,6 @@ function MediaQueue({ discChip }: { discChip: React.ReactNode }): React.JSX.Elem
             { label: "Search", icon: Search, keyHint: "S", onClick: () => setScreen("search") },
           ]}
         />
-        {discChip}
       </EmptyState>
     );
   }
@@ -551,98 +566,107 @@ function MediaQueue({ discChip }: { discChip: React.ReactNode }): React.JSX.Elem
         setSelected(new Set());
       }}
     >
-      <header className="drag-region flex items-center gap-4 px-8 pt-8 pb-4">
-        <ScreenTitle>Queue</ScreenTitle>
-        <span className="font-mono text-[11px] text-faint">
-          {allItems.length} tracks · {fmtTime(totalSecs)}
-        </span>
-        {discChip}
-        <div className="flex-1" />
-        {/* Same split as the Now Playing header: the two SAVE verbs create
+      <header className="drag-region flex flex-col gap-2 px-8 pt-8 pb-4">
+        <div className="flex items-center gap-4">
+          <ScreenTitle>Queue</ScreenTitle>
+          {/* a collection's runtime reads in words, "2 hr 24 min" (the register); one line that
+            shortens rather than wraps, so a narrow window never grows the header (and moves the
+            CD | Media Library switch under it) */}
+          <span
+            data-queue-facts
+            className="min-w-0 truncate whitespace-nowrap font-mono text-[11px] text-faint"
+          >
+            {fmtCount(allItems.length)} {allItems.length === 1 ? "track" : "tracks"} ·{" "}
+            {fmtDuration(totalSecs)}
+          </span>
+          <div className="flex-1" />
+          {/* Same split as the Now Playing header: the two SAVE verbs create
             stored things, the three after them only change what you're looking
             at. Told apart by the wider tier BETWEEN groups against the tier
             within one — the app-wide toolbar tiers, one home in Chrome
             (GAP_BETWEEN / GAP_WITHIN). The filter stands alone: typing is its
             own kind of act, so the between tier separates it from the verbs. */}
-        <div className={`flex items-center ${GAP_BETWEEN}`}>
-          <FilterInput
-            value={filter}
-            onChange={(t) => setScreenFilter("queue", t)}
-            shown={items.length}
-            total={allItems.length}
-          />
-          <div className={`flex items-center ${GAP_WITHIN}`}>
-            <HeaderChip
-              data-tip="Save queue as a playlist"
-              aria-label="Save queue as a playlist"
-              onClick={() => void saveAsPlaylist()}
-              disabled={allItems.length === 0}
-              className="no-drag tip-bottom p-2 disabled:opacity-40 motion-safe:active:scale-90"
-            >
-              <ListOrdered size={16} />
-            </HeaderChip>
-            <HeaderChip
-              data-tip="Save queue as preset"
-              aria-label="Save queue as preset"
-              onClick={() => setSaveOpen(true)}
-              className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
-            >
-              <BookmarkPlus size={16} />
-            </HeaderChip>
-            {/* Destructive and not undoable (device state) → the confirm-popover
+          <div className={`flex items-center ${GAP_BETWEEN}`}>
+            <FilterInput
+              value={filter}
+              onChange={(t) => setScreenFilter("queue", t)}
+              shown={items.length}
+              total={allItems.length}
+            />
+            <div className={`flex items-center ${GAP_WITHIN}`}>
+              <HeaderChip
+                data-tip="Save queue as a playlist"
+                aria-label="Save queue as a playlist"
+                onClick={() => void saveAsPlaylist()}
+                disabled={allItems.length === 0}
+                className="no-drag tip-bottom p-2 disabled:opacity-40 motion-safe:active:scale-90"
+              >
+                <ListOrdered size={16} />
+              </HeaderChip>
+              <HeaderChip
+                data-tip="Save queue as preset"
+                aria-label="Save queue as preset"
+                onClick={() => setSaveOpen(true)}
+                className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
+              >
+                <BookmarkPlus size={16} />
+              </HeaderChip>
+              {/* Destructive and not undoable (device state) → the confirm-popover
                 law. Clearing empties the visible list, so no toast (feedback
                 keys on invocation context; the effect is its own feedback). */}
-            <HeaderChip
-              data-tip="Clear queue"
-              aria-label="Clear queue"
-              disabled={allItems.length === 0}
-              onClick={(e) =>
-                clearConfirm.ask(e, {
-                  question: "Clear the queue?",
-                  verb: "Clear",
-                  onConfirm: () => void tt.command({ type: "queueClear" }),
-                })
-              }
-              className="no-drag tip-bottom p-2 disabled:opacity-40 motion-safe:active:scale-90"
-            >
-              <ListX size={16} />
-            </HeaderChip>
-            {clearConfirm.popover}
-          </div>
-          <div className={`flex items-center ${GAP_WITHIN}`}>
-            <HeaderChip
-              data-tip={cards ? "View as rows" : albums ? "View as cards" : "View as albums"}
-              aria-label={cards ? "View as rows" : albums ? "View as cards" : "View as albums"}
-              onClick={() => void setLayout(cards ? "rows" : albums ? "cards" : "albums")}
-              className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
-            >
-              {cards ? (
-                <Rows3 size={16} />
-              ) : albums ? (
-                <LayoutGrid size={16} />
-              ) : (
-                <ListMusic size={16} />
-              )}
-            </HeaderChip>
-            <HeaderChip
-              data-tip="Scroll to the current track"
-              aria-label="Scroll to the current track"
-              onClick={scrollToCurrent}
-              className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
-            >
-              <Crosshair size={16} />
-            </HeaderChip>
-            <HeaderChip
-              active={followQueue}
-              data-tip={followQueue ? "Auto-follow: on" : "Auto-follow: off"}
-              aria-label={followQueue ? "Auto-follow: on" : "Auto-follow: off"}
-              onClick={() => void setFollowQueue(!followQueue)}
-              className="no-drag tip-bottom p-2"
-            >
-              <Footprints size={16} />
-            </HeaderChip>
+              <HeaderChip
+                data-tip="Clear queue"
+                aria-label="Clear queue"
+                disabled={allItems.length === 0}
+                onClick={(e) =>
+                  clearConfirm.ask(e, {
+                    question: "Clear the queue?",
+                    verb: "Clear",
+                    onConfirm: () => void tt.command({ type: "queueClear" }),
+                  })
+                }
+                className="no-drag tip-bottom p-2 disabled:opacity-40 motion-safe:active:scale-90"
+              >
+                <ListX size={16} />
+              </HeaderChip>
+              {clearConfirm.popover}
+            </div>
+            <div className={`flex items-center ${GAP_WITHIN}`}>
+              <HeaderChip
+                data-tip={cards ? "View as rows" : albums ? "View as cards" : "View as albums"}
+                aria-label={cards ? "View as rows" : albums ? "View as cards" : "View as albums"}
+                onClick={() => void setLayout(cards ? "rows" : albums ? "cards" : "albums")}
+                className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
+              >
+                {cards ? (
+                  <Rows3 size={16} />
+                ) : albums ? (
+                  <LayoutGrid size={16} />
+                ) : (
+                  <ListMusic size={16} />
+                )}
+              </HeaderChip>
+              <HeaderChip
+                data-tip="Scroll to the current track"
+                aria-label="Scroll to the current track"
+                onClick={scrollToCurrent}
+                className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
+              >
+                <Crosshair size={16} />
+              </HeaderChip>
+              <HeaderChip
+                active={followQueue}
+                data-tip={followQueue ? "Auto-follow: on" : "Auto-follow: off"}
+                aria-label={followQueue ? "Auto-follow: on" : "Auto-follow: off"}
+                onClick={() => void setFollowQueue(!followQueue)}
+                className="no-drag tip-bottom p-2"
+              >
+                <Footprints size={16} />
+              </HeaderChip>
+            </div>
           </div>
         </div>
+        {viewSwitch}
       </header>
 
       {/* a menu invoked ON a selected row speaks for the whole selection,
@@ -1041,8 +1065,8 @@ function QueueAlbumGroups({
                 <div className="text-[12px] text-dim truncate">
                   {[
                     performerFor(g.items[0]?.metadata) ?? g.items[0]?.metadata?.artist,
-                    `${g.items.length} tracks`,
-                    fmtTime(g.items.reduce((s, i) => s + (i.metadata?.duration ?? 0), 0)),
+                    `${g.items.length} ${g.items.length === 1 ? "track" : "tracks"}`,
+                    fmtDuration(g.items.reduce((s, i) => s + (i.metadata?.duration ?? 0), 0)),
                   ]
                     .filter(Boolean)
                     .join(" · ")}

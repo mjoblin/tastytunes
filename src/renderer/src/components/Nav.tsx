@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Command, EyeOff, PanelLeftClose, PanelLeftOpen, PictureInPicture2 } from "lucide-react";
 import { tt } from "@/api";
 import { useStore, type Screen } from "@/store";
+import { useDiscCount } from "@/hooks/useDisc";
 import { cx, fmtCount } from "@/lib/format";
 import {
   MOD,
@@ -33,6 +34,9 @@ export function Nav(): React.JSX.Element {
   const jumpToSettingsTab = useStore((s) => s.jumpToSettingsTab);
   const setPaletteOpen = useStore((s) => s.setPaletteOpen);
   const queueTotal = useStore((s) => s.queue?.total ?? null);
+  // while the CD is the source the Queue screen opens on the disc, so its count is the disc's
+  // ("CD 10", user, 2026-09-26), and none until the streamer says how many
+  const discCount = useDiscCount();
   const ambientWindow = useStore((s) => s.ambientWindowActive);
   const settings = useStore((s) => s.settings);
   const update = useStore((s) => s.update);
@@ -134,9 +138,19 @@ export function Nav(): React.JSX.Element {
         // inner wrapper clips so labels never re-wrap mid collapse/expand
         <span className="flex-1 min-w-0 flex items-center gap-3 overflow-hidden whitespace-nowrap">
           <span className="flex-1 text-left">{label}</span>
-          {id === "queue" && queueTotal != null && queueTotal > 0 && (
-            <span className="font-mono text-[10px] text-faint">{fmtCount(queueTotal)}</span>
-          )}
+          {id === "queue" &&
+            (discCount !== undefined
+              ? discCount != null && (
+                  <span data-nav-count="disc" className="font-mono text-[10px] text-faint">
+                    CD {fmtCount(discCount)}
+                  </span>
+                )
+              : queueTotal != null &&
+                queueTotal > 0 && (
+                  <span data-nav-count="queue" className="font-mono text-[10px] text-faint">
+                    {fmtCount(queueTotal)}
+                  </span>
+                ))}
           <span className="font-mono text-[9px] text-faint/60">{key}</span>
         </span>
       )}
