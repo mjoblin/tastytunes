@@ -116,12 +116,12 @@ export function sceneIdleNotice(idle: SceneIdle): { head: string; body: string }
     case "radio":
       return {
         head: "Most scenes need a local library track.",
-        body: "A station is playing. Hi-Fi and Turntable draw anything.",
+        body: "A station is playing. Hi-Fi and Turntable always render.",
       };
     default:
       return {
         head: "Most scenes need a local library track.",
-        body: "This track isn't from your library. Hi-Fi and Turntable draw anything.",
+        body: "This track isn't from your library. Hi-Fi and Turntable always render.",
       };
   }
 }
