@@ -271,15 +271,21 @@ export function buildCommands(ctx: CommandContext): Command[] {
       });
     }
     if (allow("toggle_repeat")) {
-      // the label names where a press goes, the way the button steps: off, all, one, off
+      // every mode but the one that is on, so any can be chosen directly (user, 2026-10-05:
+      // "can/should it show all 3 allowing me to choose?"), as Sources lists every source but
+      // the active one; the first is where the button's press goes (off, all, one, off)
       const next = nextRepeatMode(repeatModeOf(playState));
-      cmds.push({
-        id: "repeat",
-        label: next === "all" ? "Repeat all" : next === "one" ? "Repeat one" : "Repeat off",
-        group: "Playback",
-        icon: next === "one" ? Repeat1 : Repeat,
-        run: () => void tt.command({ type: "setRepeat", mode: next }),
-      });
+      const LABEL = { off: "Repeat off", all: "Repeat all", one: "Repeat one" } as const;
+      for (const mode of [next, nextRepeatMode(next)]) {
+        cmds.push({
+          id: `repeat:${mode}`,
+          label: LABEL[mode],
+          group: "Playback",
+          icon: mode === "one" ? Repeat1 : Repeat,
+          keywords: "repeat loop mode",
+          run: () => void tt.command({ type: "setRepeat", mode }),
+        });
+      }
     }
   }
 
