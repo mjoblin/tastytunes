@@ -646,6 +646,15 @@ img {
   right: auto;
   translate: 0 0;
 }
+/* variant: beside the element as the default is, but level with its BOTTOM rather than its
+   middle — a tall card whose tip explains its last line (the Library's USB card, its "Check
+   for changes" caption): the default put the tip beside the card's middle, far from the
+   cursor on the caption, and below the card it ran under the playback bar on a low card */
+[data-tip].tip-low::after {
+  top: auto;
+  bottom: 0;
+  translate: 0 0;
+}
 /* modifier: prose tooltips (tool descriptions) wrap at a readable measure.
    Anchored to the element's LEFT edge, not centered: these live inside
    scrollports whose overflow-x is hidden (see the phantom-scrollbar rule

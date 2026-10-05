@@ -1802,7 +1802,8 @@ export function LibraryScreen(): React.JSX.Element {
                       const building = state === "building";
                       const failed = state === "failed";
                       const unindexed = state === "none" && !s.searchable;
-                      // the stick's contents changed and the app will not walk it unasked
+                      // the stick's counter moved (a standby renumbers it, so its music may be
+                      // just as it was) and the app will not walk it unasked
                       const stale = st?.stale === true;
                       const Icon = s.isStreamer ? Usb : HardDrive;
                       return (
@@ -1823,7 +1824,7 @@ export function LibraryScreen(): React.JSX.Element {
                               : failed
                                 ? `Couldn't index (${st?.failure ?? "no index"}). Click to retry.`
                                 : stale
-                                  ? "The drive's contents changed since it was indexed."
+                                  ? "The drive may have changed since it was last indexed."
                                   : undefined
                           }
                           className={cx(
@@ -1831,6 +1832,11 @@ export function LibraryScreen(): React.JSX.Element {
                             s.isStreamer && inStandby && "opacity-50 tip-bottom",
                             building && "opacity-60",
                             failed && "tip-bottom",
+                            // the tip explains the caption, so it sits beside the card level
+                            // with the caption (user, 2026-10-05: the default put it beside the
+                            // card's middle, far from the cursor; under the card a low card's
+                            // tip ran into the playback bar)
+                            stale && "tip-low",
                           )}
                         >
                           {/* one frame per card: the well is a veil lift with no ring of its own (see LibraryCards) */}
@@ -1878,9 +1884,13 @@ export function LibraryScreen(): React.JSX.Element {
                                   e.stopPropagation();
                                   void tt.mediaIndexRebuild(s.udn);
                                 }}
-                                className="text-gold/90 hover:text-gold transition-colors"
+                                // the caption's own color, gold only under the cursor: after
+                                // a standby the streamer renumbers the drive and this shows
+                                // whether or not anything changed, so it offers, never alarms
+                                // (user, 2026-10-05)
+                                className="hover:text-gold transition-colors"
                               >
-                                Changed · Re-index
+                                Check for changes
                               </button>
                             ) : state === "ready" && st ? (
                               `Indexed · ${fmtCount(st.albums)} ${st.albums === 1 ? "album" : "albums"}`
