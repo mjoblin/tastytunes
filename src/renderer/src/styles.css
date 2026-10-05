@@ -207,6 +207,20 @@ body {
   outline: 2px solid color-mix(in srgb, var(--color-ink) 70%, transparent);
   outline-offset: 2px;
 }
+/* THE RING IS ALWAYS ROUNDED (user, 2026-10-06): an outline follows its element's radius, so a
+   square element (the wordmark, the volume slider, the time) drew a square ring. A focused
+   element with no radius of its own takes one; in the base layer, so every rounded-*
+   utility (a pill, a circle) keeps its own shape */
+@layer base {
+  :focus-visible {
+    border-radius: 6px;
+  }
+}
+/* the navigation panel's rows sit flush in a scroller that clips anything drawn outside
+   them (the first row lost its ring's top edge): the ring is drawn just inside the row */
+[data-nav-rows] :focus-visible {
+  outline-offset: -2px;
+}
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible,

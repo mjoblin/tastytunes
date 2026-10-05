@@ -208,7 +208,7 @@ export function Nav(): React.JSX.Element {
           read as pinned to the bottom, as ever); once the two groups would
           meet, the margin is zero and the whole column scrolls as a single
           block — no measurement, the auto-margin does all the work. */}
-      <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
+      <div data-nav-rows className="flex-1 min-h-0 overflow-y-auto flex flex-col">
         <div className={cx("space-y-0.5 pb-2", collapsed ? "px-2" : "px-3")}>
           {visibleScreens.map(navItem)}
         </div>
