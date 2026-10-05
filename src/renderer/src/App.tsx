@@ -542,8 +542,7 @@ function ConnectGate(): React.JSX.Element {
           )}
           {ipOpen && (
             <div className="text-[11.5px] text-faint max-w-sm leading-snug">
-              Your streamer's display shows its IP under Settings › Network, and your router lists
-              it among connected devices.
+              Your streamer's display shows its IP under Settings › Network.
             </div>
           )}
           {!firstRun && (

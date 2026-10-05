@@ -372,7 +372,7 @@ export function PlaylistsScreen(): React.JSX.Element {
         <EmptyState
           icon={ListOrdered}
           title="No playlists yet"
-          caption="Add tracks to a playlist from their menus anywhere in the app, or save the queue as one."
+          caption="Add tracks to a playlist from their menus anywhere in the app, or save the queue as a playlist."
         >
           <EmptyActions
             actions={[
