@@ -373,7 +373,9 @@ export function NowPlayingScreen(): React.JSX.Element {
       return (
         <div className="h-full flex flex-col">
           {header}
-          <div data-source-blind={sourceId}>
+          {/* the marker fills the pane as Nothing playing's column does, or the face sits at
+              the top with no height to center in (user, 2026-10-06) */}
+          <div data-source-blind={sourceId} className="flex-1 flex flex-col">
             <EmptyState
               icon={sourceId === "AIRPLAY" ? Airplay : Disc3}
               title={nowPlaying?.source?.name ?? "Playing"}
