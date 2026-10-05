@@ -79,7 +79,7 @@ export function NowPlayingScreen(): React.JSX.Element {
   // modals' and the panels' 140 ms), taking no clicks while it is leaving; a fade IN hid
   // its heavy mount behind zero opacity and read as a delay (the user, 2026-09-13)
   const pickerFade = useFadePresence(scenesOpen, { enter: false });
-  // a station too since 0.10.0: Front Panel and Turntable draw for any source
+  // a station too since 0.10.0: Hi-Fi and Turntable draw for any source
   const chipOn = meta.title != null;
   const tileStage: SceneId | null = chipOn && isAbstract(tileActive) ? tileActive : null;
   const tileNeeds = tileStage ? sceneNeeds(tileStage) : "analysis";

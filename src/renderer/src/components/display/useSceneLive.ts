@@ -96,7 +96,7 @@ export function useAnalyzable(enabled: boolean): boolean {
 
 /** The picker's notice, in the row between the Sleeve and Shuffle tiles (the user, 2026-09-15:
  *  a line in the footer was "too hidden"): what the scenes need, and what is playing instead.
- *  Front Panel and Turntable draw for anything, so the notice names them. */
+ *  Hi-Fi and Turntable draw for anything, so the notice names them. */
 export function sceneIdleNotice(idle: SceneIdle): { head: string; body: string } {
   switch (idle) {
     case "empty":
@@ -116,12 +116,12 @@ export function sceneIdleNotice(idle: SceneIdle): { head: string; body: string }
     case "radio":
       return {
         head: "Most scenes need a local library track.",
-        body: "A station is playing. Front Panel and Turntable draw anything.",
+        body: "A station is playing. Hi-Fi and Turntable draw anything.",
       };
     default:
       return {
         head: "Most scenes need a local library track.",
-        body: "This track isn't from your library. Front Panel and Turntable draw anything.",
+        body: "This track isn't from your library. Hi-Fi and Turntable draw anything.",
       };
   }
 }

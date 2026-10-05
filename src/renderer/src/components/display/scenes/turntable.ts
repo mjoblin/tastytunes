@@ -40,6 +40,9 @@ const SPEED = (TAU * (100 / 3)) / 60;
 const GROOVE_OUT = 0.955;
 const GROOVE_IN = 0.37;
 const LABEL = 0.33;
+/** The record's radius against the deck's scale: a size up from the arm and the plinth, so it
+ *  fills more of the deck (user, 2026-10-06). */
+const RECORD = 1.1;
 /** Where the stylus rests for a station, which has no position. */
 const RADIO_SHARE = 0.18;
 
@@ -150,12 +153,21 @@ export class Turntable implements Scene {
     // the deck on the right and the sleeve on the left, never touching; with the sleeve off
     // the deck comes to the middle
     const sleeve = wide && this.settings.sleeve !== false;
-    const R = wide ? Math.min(h * 0.35, w * 0.2) : Math.min(w, h) * 0.37;
-    const cx = !wide ? w * 0.46 : sleeve ? w * 0.64 : w * 0.47;
-    const cy = wide ? h * 0.47 : h * 0.52;
+    // R is the deck's scale; the record is a size larger (RECORD) so it fills more of the
+    // plinth (user, 2026-10-06). Out of the wide frame the whole deck is fitted and centered,
+    // the arm's counterweight and cue lever on the right included (they ran off a tile's
+    // edge): from the platter's left edge to the lever is about 2.69 R, from the
+    // counterweight's top to the platter's bottom about 2.29 R
+    const R = wide ? Math.min(h * 0.35, w * 0.2) : Math.min((w * 0.92) / 2.69, (h * 0.88) / 2.29);
+    const Rr = R * RECORD;
+    const cx = !wide ? w / 2 - R * 0.2 : sleeve ? w * 0.64 : w * 0.47;
+    const cy = wide ? h * 0.47 : h * 0.48;
     if (sleeve) {
-      const S = Math.min(h * 0.56, w * 0.27);
-      this.drawSleeve(ctx, f, w * 0.215, h * 0.47, S);
+      // the sleeve the record came out of, a 12" sleeve being a touch larger than its
+      // record (user, 2026-10-06: the art read too small beside it), set beside the plinth
+      // and off the frame's left edge when it must be
+      const S = Rr * 2.06;
+      this.drawSleeve(ctx, f, cx - R * 1.36 - S / 2, cy, S);
     }
 
     // the plinth: the deck itself, a shade off the room
@@ -187,23 +199,23 @@ export class Turntable implements Scene {
     this.angle = (this.angle + this.omega * f.dt) % TAU;
     ctx.fillStyle = light ? "rgb(150,150,156)" : "rgb(34,34,37)";
     ctx.beginPath();
-    ctx.arc(cx, cy, R * 1.035, 0, TAU);
+    ctx.arc(cx, cy, Rr * 1.035, 0, TAU);
     ctx.fill();
     ctx.fillStyle = light ? "rgba(40,40,44,0.45)" : "rgba(210,210,215,0.35)";
     const dots = 90;
     for (let i = 0; i < dots; i++) {
       const a = this.angle + (i / dots) * TAU;
       ctx.beginPath();
-      ctx.arc(cx + Math.cos(a) * R * 1.018, cy + Math.sin(a) * R * 1.018, R * 0.004, 0, TAU);
+      ctx.arc(cx + Math.cos(a) * Rr * 1.018, cy + Math.sin(a) * Rr * 1.018, Rr * 0.004, 0, TAU);
       ctx.fill();
     }
 
     // the record, then its label turning on it
-    ctx.drawImage(this.discFor(f, R, scale), cx - R, cy - R, R * 2, R * 2);
-    this.drawLabel(ctx, f, cx, cy, R * (wide ? LABEL : 0.36));
+    ctx.drawImage(this.discFor(f, Rr, scale), cx - Rr, cy - Rr, Rr * 2, Rr * 2);
+    this.drawLabel(ctx, f, cx, cy, Rr * (wide ? LABEL : 0.36));
     ctx.fillStyle = "rgb(190,190,196)";
     ctx.beginPath();
-    ctx.arc(cx, cy, R * 0.018, 0, TAU);
+    ctx.arc(cx, cy, Rr * 0.018, 0, TAU);
     ctx.fill();
 
     // the tonearm
@@ -215,7 +227,7 @@ export class Turntable implements Scene {
           : 0;
     this.armShare = easeTowards(this.armShare, share, f.dt, 0.3);
     this.armRest = easeTowards(this.armRest, deck.loaded ? 0 : 1, f.dt, 0.45);
-    this.drawArm(ctx, cx, cy, R, light);
+    this.drawArm(ctx, cx, cy, R, Rr, light);
 
     // the words, beneath the deck, when there are some to show
     const words = f.lyric?.text;
@@ -340,6 +352,8 @@ export class Turntable implements Scene {
     cx: number,
     cy: number,
     R: number,
+    /** The record's radius, the grooves' scale. */
+    Rr: number,
     light: boolean,
   ): void {
     const px = cx + R * 1.22;
@@ -354,14 +368,15 @@ export class Turntable implements Scene {
     // the perpendicular toward the lower right, where the stylus meets the record
     const vx = -uy;
     const vy = ux;
-    const r = R * (GROOVE_OUT - (GROOVE_OUT - GROOVE_IN) * this.armShare);
+    const r = Rr * (GROOVE_OUT - (GROOVE_OUT - GROOVE_IN) * this.armShare);
     const a = (r * r - L * L + d * d) / (2 * d);
     const hh = Math.sqrt(Math.max(0, r * r - a * a));
     const gxp = cx + a * ux + hh * vx;
     const gyp = cy + a * uy + hh * vy;
     const grooveAngle = Math.atan2(gyp - py, gxp - px);
-    // the rest: straight down from the pivot, beside the record's edge
-    const restAngle = Math.atan2(1, -0.16);
+    // the rest: down from the pivot, a touch outward so the lifted arm and its post clear the
+    // record's edge
+    const restAngle = Math.atan2(1, 0.04);
     const ang = grooveAngle + (restAngle - grooveAngle) * this.armRest;
     // DRAWN AS MACHINED PARTS, NOT PANELS (user, 2026-10-06: "the turntable arm/etc especially
     // looks a little too much like flat svg boxes"): every part is shaded as the solid it is,

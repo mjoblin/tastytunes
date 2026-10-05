@@ -92,7 +92,7 @@ export interface SceneDrop {
 }
 
 /** The player's own readouts, for the scenes that draw the deck rather than the music
- *  (Front Panel, Turntable): what the streamer reports, never a guess, so these scenes
+ *  (Hi-Fi, Turntable): what the streamer reports, never a guess, so these scenes
  *  draw for every source, a station and a cast included. */
 export interface SceneDeck {
   /** The source's name as the streamer reports it ("Media Player", "AirPlay", …). */

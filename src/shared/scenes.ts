@@ -71,8 +71,8 @@ export const SCENE_TEXT: readonly SceneText[] = [
   },
   {
     id: "panel",
-    label: "Front Panel",
-    blurb: "The lyrics on a glowing hi-fi display, with the time, the track and the source.",
+    label: "Hi-Fi",
+    blurb: "The lyrics on a glowing stereo display, with the time, the track and the source.",
   },
   {
     id: "turntable",
