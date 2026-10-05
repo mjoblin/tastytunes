@@ -3,7 +3,7 @@ import { STRIP_BANDS } from "@shared/model";
 import { isRadioMetadata, repeatModeOf } from "@shared/smoip";
 import { useStore } from "@/store";
 import { tt } from "@/api";
-import { deriveNowPlaying } from "@/lib/format";
+import { deriveNowPlaying, queuePlace } from "@/lib/format";
 import { useLyrics, type SyncedLine } from "@/hooks/useLyrics";
 import { DISPLAY_FONTS } from "@/hooks/useDisplayFont";
 import { usePlayingAnalysis, type Analysis } from "@/components/media/Waveform";
@@ -508,6 +508,8 @@ export class SceneFeed {
     const kick = clamp((target[0] * gate - this.slowBands[0]) * 2.6);
     const real = this.analysis != null && !radio;
     const music = this.musicAt(position, playing && !radio, fresh, dt);
+    // the place in what is playing, the one home's (a disc's from now_playing)
+    const place = radio ? null : queuePlace(s.playState, s.nowPlaying);
     return {
       now,
       dt: callerDt ?? dt,
@@ -534,10 +536,7 @@ export class SceneFeed {
       deck: {
         source: s.nowPlaying?.source?.name ?? null,
         album: this.album,
-        track:
-          !radio && s.playState?.queue_index != null && s.playState.queue_length
-            ? { index: s.playState.queue_index + 1, count: s.playState.queue_length }
-            : null,
+        track: place ? { index: place.index + 1, count: place.length } : null,
         repeat: repeatModeOf(s.playState),
         shuffle: s.playState?.mode_shuffle === "all",
         radio,

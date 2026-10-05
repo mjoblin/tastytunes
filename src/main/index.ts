@@ -506,7 +506,7 @@ function registerIpc(): void {
   // a disc's track names ride the same switch as the other MusicBrainz lookups: off, the
   // Queue screen's disc view names tracks by number. The demo streamer's disc is fictional,
   // so while the demo is the streamer it answers for its own release
-  ipcMain.handle(
+  handle(
     IPC.fetchDiscTracks,
     (_e, releaseId: string, count: number | null, secs: number | null) => {
       if (!getSettings().artistInfo) return null;
