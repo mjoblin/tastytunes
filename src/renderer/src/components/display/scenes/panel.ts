@@ -410,7 +410,9 @@ export class Panel implements Scene {
       const barW = (analyzerW - barGap * 5) / 6;
       const segH = digitH / segsN;
       for (let b = 0; b < 6; b++) {
-        const level = f.real ? f.bands[b] : 0;
+        // under reduced motion the bars follow the music's slow average, drifting where they
+        // would bounce, as the other scenes soften themselves (user, 2026-10-06)
+        const level = f.real ? (f.reduced ? f.slowBands[b] : f.bands[b]) : 0;
         this.bars[b] = easeTowards(this.bars[b], level, f.dt, level > this.bars[b] ? 0.04 : 0.22);
         this.peaks[b] =
           level >= this.peaks[b] ? level : Math.max(this.bars[b], this.peaks[b] - f.dt * 0.35);
