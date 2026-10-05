@@ -131,7 +131,6 @@ export function SceneCanvas({
     const ro = new ResizeObserver(size);
     ro.observe(wrap);
     let raf = 0;
-    let last = 0;
     let lastFrame = 0;
     const loop = (now: number): void => {
       if (document.hidden) {
@@ -142,12 +141,13 @@ export function SceneCanvas({
         return;
       }
       raf = requestAnimationFrame(loop);
+      // REDUCED MOTION SOFTENS A SCENE, IT DOES NOT STOP ONE (user, 2026-10-06): a scene runs
+      // only because someone picked it by name (both surfaces default to the album art), so
+      // it runs at its full rate and each scene softens itself through the frame's reduced
+      // flag (slower, no sprays, no entrances); what nobody picked stays still: the picker's
+      // tiles (ScenePicker) and the finish's hum (below). One picture a second was tried
+      // and read as choppy, neither still nor smooth.
       const reduced = document.documentElement.classList.contains("reduce-motion");
-      // REDUCED MOTION IS NEAR STILL (0.10.0, the accessibility floor): one picture a
-      // second, each moving the scene on by at most a frame's worth, so a flight or a
-      // swell never runs across the screen; it had only halved the frame rate
-      if (reduced && now - last < 1000) return;
-      last = now;
       const dt = lastFrame ? frameDelta((now - lastFrame) / 1000) : 0;
       lastFrame = now;
       const f = feed.frame(now, w, h, mini, dt, wordsRef.current);
@@ -199,7 +199,6 @@ export function SceneCanvas({
         raf = 0;
         return;
       }
-      last = 0;
       lastFrame = 0;
       if (!raf) raf = requestAnimationFrame(loop);
     };

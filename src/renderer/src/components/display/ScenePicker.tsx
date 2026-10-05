@@ -10,6 +10,7 @@ import { HeaderChip } from "@/components/chrome/Chrome";
 import type { SceneFeed } from "./feed";
 import { SceneCanvas } from "./SceneCanvas";
 import { sceneIdleNotice, useSceneLive } from "./useSceneLive";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import {
   SCENES_ORDERED,
   SHUFFLE_POOL,
@@ -77,6 +78,9 @@ export function ScenePicker({
   // the deck scenes (Hi-Fi, Turntable) draw whatever is loaded, so their tiles run
   // when the rest stand still
   const { live: anyLive } = useSceneLive(true, "any");
+  // under reduced motion the tiles stand still as their icons: motion only once a scene
+  // is picked (user, 2026-10-06)
+  const reduced = useReducedMotion();
   const notice = !live && idle ? sceneIdleNotice(idle) : null;
   const [section, setSection] = useState<Section | null>(lastSection);
   const toggle = (id: Section): void => {
@@ -163,7 +167,7 @@ export function ScenePicker({
                     <Icon size={28} strokeWidth={1.2} />
                   </div>
                 ) : isAbstract(tileScene) ? (
-                  (sceneNeeds(tileScene) === "any" ? anyLive : live) ? (
+                  (sceneNeeds(tileScene) === "any" ? anyLive : live) && !reduced ? (
                     <SceneCanvas scene={tileScene} feed={feed} mini />
                   ) : (
                     <div
