@@ -343,7 +343,8 @@ export class Turntable implements Scene {
     light: boolean,
   ): void {
     const px = cx + R * 1.22;
-    const py = cy - R * 0.88;
+    // low enough that the counterweight stays on the plinth
+    const py = cy - R * 0.8;
     const L = R * 1.3;
     const dx = px - cx;
     const dy = py - cy;
@@ -362,60 +363,217 @@ export class Turntable implements Scene {
     // the rest: straight down from the pivot, beside the record's edge
     const restAngle = Math.atan2(1, -0.16);
     const ang = grooveAngle + (restAngle - grooveAngle) * this.armRest;
-    // the arm's rest, a post the lifted arm sits on
-    ctx.fillStyle = "rgb(60,60,66)";
-    ctx.beginPath();
-    ctx.arc(
-      px + Math.cos(restAngle) * L * 0.72,
-      py + Math.sin(restAngle) * L * 0.72,
-      R * 0.03,
-      0,
-      TAU,
-    );
-    ctx.fill();
+    // DRAWN AS MACHINED PARTS, NOT PANELS (user, 2026-10-06: "the turntable arm/etc especially
+    // looks a little too much like flat svg boxes"): every part is shaded as the solid it is,
+    // lit from the room's lamp at the upper left: the tube a cylinder with its highlight on
+    // the lamp's side, the counterweight a knurled drum, the bearing a domed cap on a bevelled
+    // base, the headshell a tapered plate carrying a cartridge, with a finger lift. The shadow
+    // falls further as the arm lifts to its rest.
+    const lampX = -0.62;
+    const lampY = -0.78;
+    // which side of the tube (its local -y or +y) faces the lamp at this angle
+    const lit = Math.sin(ang) * lampX - Math.cos(ang) * lampY > 0 ? -1 : 1;
+    const steel = (lum: number, a = 1): string =>
+      `rgba(${lum},${lum},${Math.min(255, lum + 6)},${a})`;
 
-    const drawIt = (shadow: boolean): void => {
-      const tube = R * 0.028;
-      ctx.save();
-      if (shadow) {
-        ctx.translate(R * 0.035, R * 0.06);
-        ctx.filter = `blur(${Math.max(1, R * 0.02).toFixed(1)}px)`;
-      }
-      const metal = shadow ? `rgba(0,0,0,${light ? 0.25 : 0.55})` : "rgb(206,206,212)";
-      // the counterweight behind the pivot
-      ctx.save();
-      ctx.translate(px, py);
-      ctx.rotate(ang);
-      ctx.fillStyle = shadow ? metal : "rgb(70,70,76)";
+    // the cue lever and the arm rest's cradle, fixed to the plinth beside the pivot
+    const rx = px + Math.cos(restAngle) * L * 0.72;
+    const ry = py + Math.sin(restAngle) * L * 0.72;
+    ctx.save();
+    ctx.shadowColor = `rgba(0,0,0,${light ? 0.25 : 0.5})`;
+    ctx.shadowBlur = R * 0.02;
+    ctx.shadowOffsetX = R * 0.008;
+    ctx.shadowOffsetY = R * 0.012;
+    const post = ctx.createRadialGradient(rx - R * 0.01, ry - R * 0.012, 0, rx, ry, R * 0.032);
+    post.addColorStop(0, steel(170));
+    post.addColorStop(1, steel(60));
+    ctx.fillStyle = post;
+    ctx.beginPath();
+    ctx.arc(rx, ry, R * 0.032, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+    // the rubber pad the lifted arm sits on
+    ctx.fillStyle = "rgb(30,30,33)";
+    ctx.beginPath();
+    ctx.arc(rx, ry, R * 0.017, 0, TAU);
+    ctx.fill();
+    const lx = px + R * 0.2;
+    const ly = py + R * 0.16;
+    ctx.save();
+    ctx.translate(lx, ly);
+    ctx.rotate(0.5);
+    ctx.fillStyle = steel(40);
+    ctx.beginPath();
+    ctx.roundRect(-R * 0.03, -R * 0.03, R * 0.06, R * 0.06, R * 0.012);
+    ctx.fill();
+    const lever = ctx.createLinearGradient(0, -R * 0.012, 0, R * 0.012);
+    lever.addColorStop(0, steel(200));
+    lever.addColorStop(0.5, steel(130));
+    lever.addColorStop(1, steel(70));
+    ctx.fillStyle = lever;
+    ctx.beginPath();
+    ctx.roundRect(-R * 0.01, -R * 0.011, R * 0.13, R * 0.022, R * 0.011);
+    ctx.fill();
+    ctx.restore();
+
+    // the pivot's base plate, bevelled: lit along its upper left edge, shaded along the lower
+    // right
+    const baseR = R * 0.14;
+    ctx.save();
+    ctx.shadowColor = `rgba(0,0,0,${light ? 0.25 : 0.55})`;
+    ctx.shadowBlur = R * 0.03;
+    ctx.shadowOffsetX = R * 0.01;
+    ctx.shadowOffsetY = R * 0.018;
+    const plate = ctx.createRadialGradient(px - baseR * 0.3, py - baseR * 0.3, 0, px, py, baseR);
+    plate.addColorStop(0, steel(70));
+    plate.addColorStop(1, steel(38));
+    ctx.fillStyle = plate;
+    ctx.beginPath();
+    ctx.arc(px, py, baseR, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+    const bevel = ctx.createLinearGradient(px - baseR, py - baseR, px + baseR, py + baseR);
+    bevel.addColorStop(0, "rgba(255,255,255,0.35)");
+    bevel.addColorStop(0.5, "rgba(255,255,255,0.04)");
+    bevel.addColorStop(1, "rgba(0,0,0,0.45)");
+    ctx.strokeStyle = bevel;
+    ctx.lineWidth = Math.max(1, R * 0.008);
+    ctx.beginPath();
+    ctx.arc(px, py, baseR - R * 0.004, 0, TAU);
+    ctx.stroke();
+
+    // the arm, its shadow first, then the parts along it in the arm's own frame
+    const tube = R * 0.032;
+    const tubeStart = -R * 0.2;
+    const tubeEnd = L * 0.9;
+    const silhouette = (): void => {
       ctx.beginPath();
-      ctx.roundRect(-R * 0.36, -R * 0.075, R * 0.17, R * 0.15, R * 0.02);
+      ctx.roundRect(-R * 0.37, -R * 0.065, R * 0.17, R * 0.13, R * 0.03);
+      ctx.roundRect(tubeStart, -tube / 2, tubeEnd - tubeStart, tube, tube / 2);
       ctx.fill();
-      // the tube, then the headshell turned to follow the groove
-      ctx.fillStyle = metal;
-      ctx.beginPath();
-      ctx.roundRect(-R * 0.2, -tube / 2, L * 0.9 + R * 0.2, tube, tube / 2);
-      ctx.fill();
-      ctx.translate(L * 0.9, 0);
+      ctx.save();
+      ctx.translate(tubeEnd, 0);
       ctx.rotate(-0.38);
-      ctx.fillStyle = shadow ? metal : "rgb(40,40,44)";
       ctx.beginPath();
-      ctx.roundRect(-R * 0.02, -R * 0.045, R * 0.16, R * 0.09, R * 0.015);
+      ctx.roundRect(-R * 0.03, -R * 0.05, R * 0.2, R * 0.1, R * 0.02);
       ctx.fill();
-      ctx.restore();
-      // the pivot's bearing
-      ctx.fillStyle = shadow ? metal : "rgb(52,52,58)";
-      ctx.beginPath();
-      ctx.arc(px, py, R * 0.1, 0, TAU);
-      ctx.fill();
-      if (!shadow) {
-        ctx.fillStyle = "rgb(150,150,158)";
-        ctx.beginPath();
-        ctx.arc(px, py, R * 0.045, 0, TAU);
-        ctx.fill();
-      }
       ctx.restore();
     };
-    drawIt(true);
-    drawIt(false);
+    const lift = R * (0.035 + 0.04 * this.armRest);
+    ctx.save();
+    ctx.translate(px + lift * 0.6, py + lift);
+    ctx.rotate(ang);
+    ctx.filter = `blur(${Math.max(1, R * 0.022).toFixed(1)}px)`;
+    ctx.fillStyle = `rgba(0,0,0,${light ? 0.22 : 0.5})`;
+    silhouette();
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(ang);
+
+    // the counterweight: a drum behind the pivot, rounded across its width, knurled
+    const cw0 = -R * 0.37;
+    const cwW = R * 0.17;
+    const cwH = R * 0.13;
+    const drum = ctx.createLinearGradient(0, (-lit * cwH) / 2, 0, (lit * cwH) / 2);
+    drum.addColorStop(0, steel(150));
+    drum.addColorStop(0.35, steel(95));
+    drum.addColorStop(1, steel(32));
+    ctx.fillStyle = drum;
+    ctx.beginPath();
+    ctx.roundRect(cw0, -cwH / 2, cwW, cwH, R * 0.03);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,0.35)";
+    ctx.lineWidth = Math.max(0.5, R * 0.004);
+    for (let i = 1; i < 7; i++) {
+      const x = cw0 + (cwW * i) / 7;
+      ctx.beginPath();
+      ctx.moveTo(x, -cwH / 2 + R * 0.01);
+      ctx.lineTo(x, cwH / 2 - R * 0.01);
+      ctx.stroke();
+    }
+    // the stub the weight rides on, between it and the bearing
+    ctx.fillStyle = steel(90);
+    ctx.fillRect(cw0 + cwW, -tube * 0.35, R * 0.04, tube * 0.7);
+
+    // the tube: a cylinder in layers, the dark body, the lit face, and the highlight's line
+    // on the lamp's side, with the shade along the far side
+    const line = (width: number, color: string, offset: number): void => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(tubeStart, offset);
+      ctx.lineTo(tubeEnd, offset);
+      ctx.stroke();
+    };
+    line(tube, steel(96), 0);
+    line(tube * 0.62, steel(176), lit * tube * 0.1);
+    line(tube * 0.2, "rgba(255,255,255,0.9)", lit * tube * 0.22);
+    line(tube * 0.18, "rgba(0,0,0,0.3)", -lit * tube * 0.36);
+
+    // the headshell, turned by the arm's offset to follow the groove: a tapered plate, the
+    // cartridge under it with its stylus at the front, and the finger lift to the side
+    ctx.translate(tubeEnd, 0);
+    ctx.rotate(-0.38);
+    const shell = ctx.createLinearGradient(0, -R * 0.05, 0, R * 0.05);
+    shell.addColorStop(lit < 0 ? 0 : 1, steel(190));
+    shell.addColorStop(0.5, steel(120));
+    shell.addColorStop(lit < 0 ? 1 : 0, steel(62));
+    ctx.fillStyle = shell;
+    ctx.beginPath();
+    ctx.moveTo(-R * 0.03, -R * 0.03);
+    ctx.lineTo(R * 0.16, -R * 0.05);
+    ctx.quadraticCurveTo(R * 0.18, 0, R * 0.16, R * 0.05);
+    ctx.lineTo(-R * 0.03, R * 0.03);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,0.35)";
+    ctx.lineWidth = Math.max(0.5, R * 0.004);
+    ctx.stroke();
+    // the cartridge: a dark body with a thin bright edge and two screws
+    ctx.fillStyle = "rgb(22,22,25)";
+    ctx.beginPath();
+    ctx.roundRect(R * 0.035, -R * 0.03, R * 0.1, R * 0.06, R * 0.008);
+    ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.18)";
+    ctx.fillRect(R * 0.035, -R * 0.03, R * 0.1, Math.max(0.5, R * 0.005));
+    ctx.fillStyle = steel(170);
+    for (const sx of [R * 0.06, R * 0.11]) {
+      ctx.beginPath();
+      ctx.arc(sx, 0, R * 0.007, 0, TAU);
+      ctx.fill();
+    }
+    // the finger lift, a thin curl off the plate's side
+    ctx.strokeStyle = steel(175);
+    ctx.lineWidth = Math.max(1, R * 0.011);
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(R * 0.13, -R * 0.045);
+    ctx.quadraticCurveTo(R * 0.16, -R * 0.1, R * 0.21, -R * 0.105);
+    ctx.stroke();
+    ctx.restore();
+
+    // the bearing on top of it all: a domed cap, its highlight toward the lamp
+    const capR = R * 0.075;
+    const dome = ctx.createRadialGradient(
+      px - capR * 0.35,
+      py - capR * 0.4,
+      capR * 0.05,
+      px,
+      py,
+      capR,
+    );
+    dome.addColorStop(0, steel(225));
+    dome.addColorStop(0.45, steel(140));
+    dome.addColorStop(1, steel(48));
+    ctx.fillStyle = dome;
+    ctx.beginPath();
+    ctx.arc(px, py, capR, 0, TAU);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,0.4)";
+    ctx.lineWidth = Math.max(0.5, R * 0.004);
+    ctx.stroke();
   }
 }
