@@ -53,7 +53,7 @@ import { MediaArt } from "@/components/media/MediaArt";
 import { DurationCell } from "@/components/media/DurationCell";
 import { PresetPicker } from "@/components/library/LibraryMenus";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
-import { lockVertical } from "@/lib/dnd";
+import { DND_ACCESSIBILITY, lockVertical } from "@/lib/dnd";
 import { activeSourceId, cx, fmtDuration, fmtRelative, matchesFilter } from "@/lib/format";
 import { Eqbars } from "@/components/media/Eqbars";
 import {
@@ -562,6 +562,7 @@ export function PlaylistsScreen(): React.JSX.Element {
                 className="flex-1 min-h-0 overflow-y-auto px-1.5 -mx-1.5 py-1 -my-1 divide-y divide-edge/50"
               >
                 <DndContext
+                  accessibility={DND_ACCESSIBILITY}
                   sensors={sensors}
                   collisionDetection={closestCenter}
                   onDragEnd={onDragEnd}
