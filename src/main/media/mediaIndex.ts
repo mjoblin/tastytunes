@@ -43,6 +43,7 @@ import {
 import {
   browseChildrenOf,
   browseMetadataNode,
+  MOUNTED,
   probeObject,
   getSystemUpdateID,
   refreshServers,
@@ -582,9 +583,6 @@ export async function revalidate(
   return indexes.get(udn)?.builtAt !== existing.builtAt;
 }
 
-/** A USB server's id: its mount number, a colon, and the path naming the object on the drive
- *  (the Evo, 2026-09-14: 26:0_0_1_0 became 28:0_0_1_0 across a standby, the path the same). */
-const MOUNTED = /^(\d+):(.+)$/;
 /** How many objects a heal confirms by content: spread across the drive, tracks and albums. */
 const HEAL_TRACKS = 8;
 const HEAL_ALBUMS = 4;
@@ -602,7 +600,9 @@ const HEAL_ALBUMS = 4;
  * device that does not follow the pattern loses nothing. An index already on the current
  * mount is confirmed the same way (an old id in hand is then simply old, and the caller asks
  * again by content). A sample cannot see files ADDED since the walk, so the heal lets the
- * acts work and leaves the Library's card offering the re-index, which still walks.
+ * acts work and leaves the Library's card offering the re-index, which still walks. Straight
+ * after a wake the device knows none of the new ids until their folders are listed again; the
+ * browse layer lists them on a miss (upnpBrowser's forgottenFolders), so the checks ask by id.
  */
 async function heal(
   host: string,

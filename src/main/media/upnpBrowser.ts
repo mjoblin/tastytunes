@@ -482,8 +482,58 @@ function soapEnvelope(objectId: string, flag: string, start: number, count: numb
 </s:Envelope>`;
 }
 
-/** One Browse: the answer, or which kind of miss it was (see Miss). */
+/** A USB server's id: its mount number, a colon, and the path naming the object on the drive
+ *  (the Evo, 2026-09-14: 26:0_0_1_0 became 28:0_0_1_0 across a standby, the path the same). */
+export const MOUNTED = /^(\d+):(.+)$/;
+
+/**
+ * THE DEVICE FORGETS ITS FOLDERS IN STANDBY (the user's Evo, probed live after a wake,
+ * 2026-10-06). Its USB server knows an object only once the folder holding it has been
+ * listed since the drive was mounted: straight after a wake every id under the new mount
+ * answered 702 "No such object", still so 45 s on, a folder could not be listed before the
+ * folders above it, and one listing of a folder, of a single item even, made everything in
+ * it known (about a second cold, 20 ms after). A walk lists from the top and never noticed;
+ * a lookup by id after a wake (the heal's checks, a playlist's queue add, Info) failed on a
+ * file that was there. The id names its folders (the mount, then the child positions down
+ * the drive, joined by "_"), so a miss on the device's USB server lists them from the top,
+ * one item each, and asks once more. A folder that is missing too means the id is gone and
+ * the miss stands; silence never lists anything; an id of any other shape, or any other
+ * server, is left as it was.
+ */
+function forgottenFolders(entry: ServerEntry, objectId: string): string[] {
+  const m = laned(entry) ? MOUNTED.exec(objectId) : null;
+  if (!m || !/^\d+(?:_\d+)*$/.test(m[2])) return [];
+  const steps = m[2].split("_");
+  return steps.slice(0, -1).map((_, i) => `${m[1]}:${steps.slice(0, i + 1).join("_")}`);
+}
+
+/** One Browse: the answer, or which kind of miss it was (see Miss). On the device's USB
+ *  server a miss asks once more after listing the folders above the object (see
+ *  forgottenFolders). */
 async function soapBrowse(
+  entry: ServerEntry,
+  objectId: string,
+  flag: "BrowseDirectChildren" | "BrowseMetadata",
+  start = 0,
+  count = PAGE_SIZE,
+  background = false,
+): Promise<{ didl: string; returned: number; total: number } | Miss> {
+  const first = await soapBrowseOnce(entry, objectId, flag, start, count, background);
+  const folders = first === "missing" ? forgottenFolders(entry, objectId) : [];
+  if (folders.length === 0) return first;
+  for (const folder of folders) {
+    const listed = await soapBrowseOnce(entry, folder, "BrowseDirectChildren", 0, 1, background);
+    if (typeof listed === "string") return first;
+  }
+  const again = await soapBrowseOnce(entry, objectId, flag, start, count, background);
+  if (typeof again !== "string")
+    console.log(
+      `[upnp] ${objectId} answers once the ${folders.length} folders above it are listed again`,
+    );
+  return again;
+}
+
+async function soapBrowseOnce(
   entry: ServerEntry,
   objectId: string,
   flag: "BrowseDirectChildren" | "BrowseMetadata",
