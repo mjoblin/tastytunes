@@ -594,8 +594,8 @@ const HEAL_ALBUMS = 4;
  * it still loses the link to the library, and starts building again from scratch"). After a
  * standby or a replug the streamer's USB server re-mints every id, and the first act that
  * needs a fresh one (a playlist, Open in Library, an agent's id) walked the whole drive. The
- * ids change by their mount number alone, so the index is moved onto the mount the root now
- * answers with, and then CONFIRMED by content: a spread of tracks and albums must answer
+ * ids change by their mount number alone, so the index is moved onto a mount the root now
+ * lists (each in turn, a drive having more than one partition), and then CONFIRMED by content: a spread of tracks and albums must answer
  * under their new ids with the title the index holds, and a track with its parent and its
  * number too (an album can sit under more than one container, so its parent says little). Any
  * miss, or any id that does not have the mount's shape, and the walk runs as before, so a
@@ -611,75 +611,104 @@ async function heal(
   counter: number | null,
   held: string | null,
 ): Promise<boolean> {
+  // every reason the heal gives up is logged, so a walk that follows says why (the user's
+  // Evo, 2026-10-06: a silent decline looked like the heal had never run)
+  const declined = (why: string): false => {
+    console.log(`[mediaIndex] ${server.name}: no heal, ${why}`);
+    return false;
+  };
   let from: string | null = null;
   for (const pool of [existing.albums, existing.tracks])
     for (const n of pool) {
       const m = MOUNTED.exec(n.id);
-      if (!m) return false;
+      if (!m) return declined(`an id without a mount's shape (${n.id})`);
       if (from == null) from = m[1];
-      else if (m[1] !== from) return false;
+      else if (m[1] !== from) return declined(`the index spans mounts ${from} and ${m[1]}`);
     }
-  if (from == null) return false;
+  if (from == null) return declined("the index is empty");
   const top = await browseChildrenOf(host, server.udn, "0");
-  if (typeof top === "string") return false;
-  const to = top.map((n) => MOUNTED.exec(n.id)?.[1]).find((p) => p != null);
-  if (!to) return false;
-  const move = (id: string | null): string | null => {
-    const m = id == null ? null : MOUNTED.exec(id);
-    return m && m[1] === from ? `${to}:${m[2]}` : id;
-  };
-  const moved = (n: MediaNode): MediaNode => ({
-    ...n,
-    id: move(n.id) ?? n.id,
-    parentId: move(n.parentId),
-  });
-  const candidate: StoredIndex = {
-    ...existing,
-    albums: existing.albums.map(moved),
-    artists: existing.artists.map(moved),
-    tracks: existing.tracks.map(moved),
-  };
+  if (typeof top === "string") return declined(`the drive's top level did not answer (${top})`);
+  // A DRIVE CAN HOLD MORE THAN ONE PARTITION (the user's Evo, 2026-10-06: a stick with an EFI
+  // partition beside the music lists both at its top, "34:0" and "35:0", each renumbered on
+  // every wake and in either order; taking the first sent the heal to the empty partition
+  // half the time). Every mount the top lists is a candidate, the index's own first (a
+  // counter that moved without a renumber), and the first to confirm by content wins.
+  const mounts = [
+    ...new Set(top.map((n) => MOUNTED.exec(n.id)?.[1]).filter((p): p is string => p != null)),
+  ].sort((a, b) => (a === from ? -1 : b === from ? 1 : 0));
+  if (mounts.length === 0) return declined("the drive's top level lists no mount");
   const spread = <T>(xs: T[], k: number): T[] =>
     xs.length <= k
       ? xs
       : Array.from({ length: k }, (_, i) => xs[Math.floor(((i + 0.5) * xs.length) / k)]);
-  const probes = [
-    ...spread(candidate.tracks, HEAL_TRACKS),
-    ...spread(candidate.albums, HEAL_ALBUMS),
-  ];
-  if (probes.length === 0) return false;
-  // the id a caller holds (a playlist's, an agent's) must be on the drive under the current
-  // mount and in the healed index, whatever mount it was minted under, or the file is gone
-  // and only the walk can say what is there now
-  if (held) {
-    const m = MOUNTED.exec(held);
-    if (!m) return false;
-    const now = `${to}:${m[2]}`;
-    const want =
-      candidate.tracks.find((n) => n.id === now) ?? candidate.albums.find((n) => n.id === now);
-    if (!want) return false;
-    probes.push(want);
+  /** The index moved onto one mount and confirmed there, or why it is not that mount. */
+  const tryMount = async (to: string): Promise<StoredIndex | string> => {
+    const move = (id: string | null): string | null => {
+      const m = id == null ? null : MOUNTED.exec(id);
+      return m && m[1] === from ? `${to}:${m[2]}` : id;
+    };
+    const moved = (n: MediaNode): MediaNode => ({
+      ...n,
+      id: move(n.id) ?? n.id,
+      parentId: move(n.parentId),
+    });
+    const candidate: StoredIndex = {
+      ...existing,
+      albums: existing.albums.map(moved),
+      artists: existing.artists.map(moved),
+      tracks: existing.tracks.map(moved),
+    };
+    const probes = [
+      ...spread(candidate.tracks, HEAL_TRACKS),
+      ...spread(candidate.albums, HEAL_ALBUMS),
+    ];
+    if (probes.length === 0) return "nothing to confirm";
+    // the id a caller holds (a playlist's, an agent's) must be on the drive under this mount
+    // and in the healed index, whatever mount it was minted under, or the file is gone and
+    // only the walk can say what is there now
+    if (held) {
+      const m = MOUNTED.exec(held);
+      if (!m) return `the id in hand has no mount (${held})`;
+      const now = `${to}:${m[2]}`;
+      const want =
+        candidate.tracks.find((n) => n.id === now) ?? candidate.albums.find((n) => n.id === now);
+      if (!want) return `the id in hand is not in the index (${now})`;
+      probes.push(want);
+    }
+    for (const want of probes) {
+      const got = await browseMetadataNode(host, server.udn, want.id);
+      if (!got) return `${want.id} does not answer`;
+      if (got.title !== want.title) return `${want.id} is titled differently`;
+      // an album can sit under more than one container (its artist's folder, the library's
+      // own list), so its parent is not evidence; a track's parent and number are
+      const track = !want.upnpClass.startsWith("object.container");
+      if (track && want.parentId != null && got.parentId !== want.parentId)
+        return `${want.id} sits under another folder`;
+      if (track && want.trackNumber != null && got.trackNumber !== want.trackNumber)
+        return `${want.id} has another track number`;
+    }
+    return candidate;
+  };
+  const misses: string[] = [];
+  for (const to of mounts) {
+    const healed = await tryMount(to);
+    if (typeof healed === "string") {
+      misses.push(`mount ${to}: ${healed}`);
+      continue;
+    }
+    indexes.set(server.udn, {
+      ...healed,
+      builtAt: Date.now(),
+      ...(counter != null ? { healedFor: counter } : {}),
+    });
+    save();
+    console.log(
+      `[mediaIndex] ${server.name}: ${from === to ? "the index is on the current mount" : `ids moved from mount ${from} to ${to}`}; confirmed by content, no walk${misses.length ? ` (passed over ${misses.join("; ")})` : ""}`,
+    );
+    announce(status());
+    return true;
   }
-  for (const want of probes) {
-    const got = await browseMetadataNode(host, server.udn, want.id);
-    if (!got || got.title !== want.title) return false;
-    // an album can sit under more than one container (its artist's folder, the library's
-    // own list), so its parent is not evidence; a track's parent and number are
-    const track = !want.upnpClass.startsWith("object.container");
-    if (track && want.parentId != null && got.parentId !== want.parentId) return false;
-    if (track && want.trackNumber != null && got.trackNumber !== want.trackNumber) return false;
-  }
-  indexes.set(server.udn, {
-    ...candidate,
-    builtAt: Date.now(),
-    ...(counter != null ? { healedFor: counter } : {}),
-  });
-  save();
-  console.log(
-    `[mediaIndex] ${server.name}: ${from === to ? "the index is on the current mount" : `ids moved from mount ${from} to ${to}`}; ${probes.length} objects confirmed by content, no walk`,
-  );
-  announce(status());
-  return true;
+  return declined(`no mount confirmed (${misses.join("; ")})`);
 }
 
 /**
