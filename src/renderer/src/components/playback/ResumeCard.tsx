@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Cable, Cast, Play } from "lucide-react";
+import { Cable, Cast, Play, X } from "lucide-react";
 import type { HeldState } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
@@ -15,10 +15,12 @@ import { fmtRelative, fmtTime } from "@/lib/format";
  * queue), the station, or the source a streaming service or an input played on. It replaced
  * the listening record's album offer (0.8.0), which read history rather than the streamer
  * and offered an album the user had since moved on from when the plays after it were too
- * short to record; agents keep that reading (history_resume). "Not now" hides this offer for
- * the session.
+ * short to record; agents keep that reading (history_resume). The ✕ dismisses this standby's
+ * offer for good (it survives a restart; the next standby brings a new one), and the face
+ * then shows nothing in its place: the old "Not now" fell back to a Last played line naming
+ * the same track (user, 2026-10-06). The Last played line is for a streamer with nothing
+ * held at all.
  */
-let dismissedAt: number | null = null;
 
 /** The line under the title: where the track came from and how far in, or what to expect. */
 function detail(held: HeldState): string | null {
@@ -47,9 +49,11 @@ export function ResumeCard({
   fallback?: React.ReactNode;
 }): React.JSX.Element | null {
   const held = useStore((s) => s.held);
-  const [, setDismissed] = useState(dismissedAt);
+  const dismissedAt = useStore((s) => s.settings.resumeDismissedAt);
+  const saveSettings = useStore((s) => s.saveSettings);
   const [busy, setBusy] = useState(false);
-  if (!held || held.at === dismissedAt) return <>{fallback}</>;
+  if (!held) return <>{fallback}</>;
+  if (held.at === dismissedAt) return null;
 
   const resume = async (): Promise<void> => {
     setBusy(true);
@@ -77,7 +81,7 @@ export function ResumeCard({
         icon={held.kind === "service" ? Cast : held.kind === "input" ? Cable : undefined}
       />
       <div className="min-w-0 flex-1">
-        <div className="microlabel text-gold">Pick up where you left off</div>
+        <div className="microlabel text-gold mb-[3px]">Pick up where you left off</div>
         <div className="truncate text-[13.5px] text-ink" data-resume-title>
           {title}
           {held.kind === "queue" && held.artist ? (
@@ -95,16 +99,6 @@ export function ResumeCard({
       <div className="flex shrink-0 items-center gap-1.5">
         <button
           type="button"
-          onClick={() => {
-            dismissedAt = held.at;
-            setDismissed(held.at);
-          }}
-          className="rounded-full h-8 px-3 text-[12px] text-faint hover:text-ink hover:bg-veil2 transition-colors"
-        >
-          Not now
-        </button>
-        <button
-          type="button"
           data-resume-play
           disabled={busy}
           onClick={() => void resume()}
@@ -112,6 +106,15 @@ export function ResumeCard({
         >
           <Play size={13} />
           Resume
+        </button>
+        <button
+          type="button"
+          aria-label="Dismiss"
+          data-resume-dismiss
+          onClick={() => void saveSettings({ resumeDismissedAt: held.at })}
+          className="shrink-0 rounded p-1 text-faint hover:text-ink transition-colors"
+        >
+          <X size={12} />
         </button>
       </div>
     </div>

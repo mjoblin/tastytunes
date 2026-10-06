@@ -1233,6 +1233,10 @@ export interface AppSettings {
    *  or Display mode opened (0.10.0, the first five minutes). Internal one-shot state, not a
    *  preference: there is no row for it. */
   displayHintSeen: boolean;
+  /** The held state (HeldState.at) whose offer on the standby face was dismissed: that
+   *  standby's offer stays away across restarts, and the next standby brings a new one.
+   *  Internal state, not a preference: there is no row for it. */
+  resumeDismissedAt: number | null;
   theme: ThemePreference;
   displayFont: DisplayFont;
   /** Blurred album-art backdrop. */
@@ -1552,6 +1556,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   tray: true,
   trayCloseNoticeShown: false,
   displayHintSeen: false,
+  resumeDismissedAt: null,
   theme: "dark",
   displayFont: "fraunces",
   ambientArt: "all",
