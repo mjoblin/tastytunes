@@ -125,6 +125,12 @@ const failed = new Map<string, string>();
 const staleIds = new Map<string, number>();
 let announce: (statuses: MediaIndexStatus[]) => void = () => {};
 let loaded = false;
+/** udn → how many acts have waited past WAIT_SHOWN_MS on its revalidation (the status's
+ *  `waiting`). */
+const waiters = new Map<string, number>();
+/** How long an act waits on a USB revalidation before the status says so: a heal on a drive
+ *  whose folders are warm is over in a tenth of a second and must not flash a toast. */
+const WAIT_SHOWN_MS = 1000;
 
 const file = (): string => join(app.getPath("userData"), "cache", "media-index.json");
 
@@ -181,6 +187,7 @@ export function status(): MediaIndexStatus[] {
       ...(k ? { searchable: k.searchable } : {}),
       ...(buildingWhy.get(idx.udn) === "refresh" ? { quiet: true } : {}),
       ...(staleIds.has(idx.udn) && !building.has(idx.udn) ? { stale: true } : {}),
+      ...(waiters.has(idx.udn) ? { waiting: true } : {}),
       strategy: idx.strategy,
       tracks: idx.tracks.length,
       albums: idx.albums.length,
@@ -573,14 +580,39 @@ export async function revalidate(
   // the id, and a walk into its silence was what took the Evo down (2026-09-16)
   if (!stale && probeId) stale = (await probeObject(host, udn, probeId)) === "missing";
   if (!stale) return false;
-  // the streamer's USB server re-mints its ids by the mount alone: move the index onto the
-  // new mount and confirm it by content before paying for a walk of the whole drive
-  if (usbServer(server) && (await heal(host, server, existing, id, probeId))) return true;
-  console.log(
-    `[mediaIndex] ${server.name}: ${id != null && existing.updateId != null && id !== existing.updateId ? `ids rotated (counter ${existing.updateId} → ${id})` : `the id in hand no longer answers (counter ${id ?? "unread"})`}, rebuilding`,
-  );
-  await build(host, server, "browse", "refresh");
-  return indexes.get(udn)?.builtAt !== existing.builtAt;
+  // the act that asked waits from here; past a second the status says so
+  const done = usbServer(server) ? waitOn(udn) : null;
+  try {
+    // the streamer's USB server re-mints its ids by the mount alone: move the index onto the
+    // new mount and confirm it by content before paying for a walk of the whole drive
+    if (usbServer(server) && (await heal(host, server, existing, id, probeId))) return true;
+    console.log(
+      `[mediaIndex] ${server.name}: ${id != null && existing.updateId != null && id !== existing.updateId ? `ids rotated (counter ${existing.updateId} → ${id})` : `the id in hand no longer answers (counter ${id ?? "unread"})`}, rebuilding`,
+    );
+    await build(host, server, "browse", "refresh");
+    return indexes.get(udn)?.builtAt !== existing.builtAt;
+  } finally {
+    done?.();
+  }
+}
+
+/** One act waiting on a server's revalidation: counted in the status (`waiting`) once it
+ *  has waited WAIT_SHOWN_MS, and the function returned ends the wait. */
+function waitOn(udn: string): () => void {
+  let counted = false;
+  const timer = setTimeout(() => {
+    counted = true;
+    waiters.set(udn, (waiters.get(udn) ?? 0) + 1);
+    announce(status());
+  }, WAIT_SHOWN_MS);
+  return () => {
+    clearTimeout(timer);
+    if (!counted) return;
+    const left = (waiters.get(udn) ?? 1) - 1;
+    if (left > 0) waiters.set(udn, left);
+    else waiters.delete(udn);
+    announce(status());
+  };
 }
 
 /** How many objects a heal confirms by content: spread across the drive, tracks and albums. */

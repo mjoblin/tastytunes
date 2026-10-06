@@ -159,7 +159,9 @@ export interface AnalysisProgress {
 export interface ToastData {
   /** Monotonic nonce so an identical replacement still restarts the timer. */
   id: number;
-  kind: "success" | "error";
+  /** "working": a wait the user is in the middle of (useDriveWaitToast). It has no timer;
+   *  whoever showed it takes it down, or a newer toast replaces it. */
+  kind: "success" | "error" | "working";
   text: string;
   action?: ToastAction;
 }

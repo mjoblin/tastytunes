@@ -1664,6 +1664,12 @@ export interface MediaIndexStatus {
   /** The server's counter moved since this index was built and the app will not walk
    *  it on its own (the streamer's USB server, 2026-09-16): the card offers the re-index. */
   stale?: boolean;
+  /** Something someone asked for (a playlist, a favorite, Open in Library, Info, an
+   *  agent's play) has waited over a second while this index is moved and checked, or
+   *  walked, after the server's ids moved: the streamer's USB server after a standby or a
+   *  replug (the user's Evo, 2026-10-06: about 20 s while a cold drive's folders are
+   *  listed). The working toast says so. */
+  waiting?: boolean;
   /** The server answers UPnP Search itself, so the Library's search box reaches it with
    *  no index; a Browse-only server (the streamer's USB stick) has no search until its
    *  index is built. The Search screen's unindexed line says which (user, 2026-09-17). */

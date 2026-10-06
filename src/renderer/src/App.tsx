@@ -5,6 +5,7 @@ import { tt } from "@/api";
 import { useStore } from "@/store";
 import { useShortcuts } from "@/hooks/useShortcuts";
 import { useIndexingToast } from "@/hooks/useIndexingToast";
+import { useDriveWaitToast } from "@/hooks/useDriveWaitToast";
 import { useWakeHold } from "@/hooks/useWakeHold";
 import { useArtAccent } from "@/hooks/useArtAccent";
 import { useArtLoadable } from "@/hooks/useArtLoadable";
@@ -45,6 +46,7 @@ import { HeaderChip } from "@/components/chrome/Chrome";
 export default function App(): React.JSX.Element {
   useShortcuts();
   useIndexingToast();
+  useDriveWaitToast();
 
   const screen = useStore((s) => s.screen);
   const connection = useStore((s) => s.connection);
@@ -203,7 +205,8 @@ function ToastHost(): React.JSX.Element | null {
   const setScreen = useStore((s) => s.setScreen);
 
   useEffect(() => {
-    if (!toast) return;
+    // a working toast stays until its wait ends (useDriveWaitToast takes it down)
+    if (!toast || toast.kind === "working") return;
     // Errors linger a little longer than confirmations; an UNDO offer longer
     // still (half again), because it isn't there to be read — it's there to be
     // decided on, and noticing "wait, I didn't mean that" takes a beat.
@@ -247,6 +250,8 @@ function ToastHost(): React.JSX.Element | null {
         >
           {toast.kind === "error" ? (
             <CircleAlert size={14} className="text-alert shrink-0" />
+          ) : toast.kind === "working" ? (
+            <Loader2 size={14} className="text-gold shrink-0 motion-safe:animate-spin" />
           ) : (
             <CircleCheck size={14} className="text-gold shrink-0" />
           )}
