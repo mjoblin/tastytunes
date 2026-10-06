@@ -32,7 +32,7 @@ import {
   type ScreenDef,
 } from "@/lib/screens";
 import { OrderHandle } from "@/components/controls/OrderHandle";
-import { lockVertical } from "@/lib/dnd";
+import { DND_ACCESSIBILITY, lockVertical } from "@/lib/dnd";
 import { HeaderChip } from "@/components/chrome/Chrome";
 
 // The Sidebar section, split out of SettingsScreen.tsx 2026-09-13 (the Settings split: the screen had held every
@@ -103,7 +103,12 @@ export function SidebarSection(): React.JSX.Element {
           )}
         </div>
         <div className="space-y-0.5">
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+          <DndContext
+            accessibility={DND_ACCESSIBILITY}
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={onDragEnd}
+          >
             <SortableContext items={ids} strategy={verticalListSortingStrategy}>
               {ordered.map((sc) => (
                 <SidebarRow

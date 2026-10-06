@@ -58,7 +58,7 @@ import { Eqbars } from "@/components/media/Eqbars";
 import { EmptyActions, EmptyState } from "@/components/chrome/EmptyState";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { flashTarget, scrollToWithContext } from "@/lib/scroll";
-import { lockVertical } from "@/lib/dnd";
+import { DND_ACCESSIBILITY, lockVertical } from "@/lib/dnd";
 import { activeSourceId, cx, fmtDuration, fmtTime, matchesFilter, fmtCount } from "@/lib/format";
 import { toggleFavorite } from "@/lib/favorites";
 import { fromQueueItem, refToFavorite, refToPlaylistItem } from "@/lib/mediaRef";
@@ -815,6 +815,7 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
         )}
         {/* Reordering a partial list is ambiguous — drags are inert while filtered. */}
         <DndContext
+          accessibility={DND_ACCESSIBILITY}
           sensors={filter || albums ? [] : sensors}
           collisionDetection={closestCenter}
           onDragStart={onDragStart}

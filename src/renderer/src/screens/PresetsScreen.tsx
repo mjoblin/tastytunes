@@ -40,7 +40,7 @@ import { Eqbars } from "@/components/media/Eqbars";
 import { EmptyActions, EmptyState } from "@/components/chrome/EmptyState";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { flashTarget, scrollToWithContext } from "@/lib/scroll";
-import { lockVertical } from "@/lib/dnd";
+import { DND_ACCESSIBILITY, lockVertical } from "@/lib/dnd";
 import { CARD_GLYPH_STROKE, MEDIA_ART_FALLBACK } from "@/components/media/MediaArt";
 import { OrderHandle } from "@/components/controls/OrderHandle";
 
@@ -382,6 +382,7 @@ export function PresetsScreen(): React.JSX.Element {
         )}
         {/* Reordering a partial list is ambiguous — drags are inert while filtered. */}
         <DndContext
+          accessibility={DND_ACCESSIBILITY}
           sensors={filter ? [] : sensors}
           collisionDetection={closestCenter}
           onDragEnd={onDragEnd}
