@@ -596,6 +596,39 @@ export interface ListeningEventBase {
  *  queue entries, or its station); a preset pressed on the streamer or a queue
  *  another app built never carries it, so a reader must say "started from
  *  TastyTunes", never "played from a preset". */
+/**
+ * WHAT THE STREAMER WAS DOING WHEN IT WENT TO SLEEP (0.10.0, user ask 2026-10-06: "the state i
+ * was in when i put the streamer in standby is being resumed"). The streamer reports nothing
+ * while it sleeps, so the app keeps this itself, per streamer, saved across restarts: the
+ * standby face offers it and Resume puts it back. Four kinds, from what the Evo keeps through
+ * network standby (live-probed 2026-10-06): a queue track (the same entry comes back paused,
+ * but at 0:00, so the position is the app's to remember), a station (it comes back and
+ * reconnects by itself), a streaming service (AirPlay comes back on its input with no track:
+ * the session lived on the phone), an input (it comes back on the same input, unless a TV on
+ * HDMI pulls it onto ARC).
+ */
+export interface HeldState {
+  /** The streamer's udn. */
+  streamer: string;
+  /** When the app last saw this state live. */
+  at: number;
+  kind: "queue" | "radio" | "service" | "input";
+  /** The source to come back on: MEDIA_PLAYER, IR, AIRPLAY, SPDIF_TOSLINK… */
+  sourceId: string;
+  sourceName: string | null;
+  /** The track's title, or the station's name. */
+  title: string | null;
+  artist: string | null;
+  album: string | null;
+  artUrl: string | null;
+  /** A queue track: its queue entry, how far into it, and its length (seconds). */
+  queueId: number | null;
+  position: number | null;
+  duration: number | null;
+  /** The preset or playlist that started it, when one did. */
+  via: ListeningVia | null;
+}
+
 export type ListeningVia =
   /** A preset is a slot on one streamer, so the streamer's udn is part of its identity
    *  (slot 3 on two streamers are two presets); null only when the device never said. */

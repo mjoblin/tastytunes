@@ -59,6 +59,7 @@ import type {
   NetRequestEntry,
   Playlist,
   PlaylistActivation,
+  HeldState,
   PlaylistItem,
   QueueRestoreResult,
   RadioStation,
@@ -138,6 +139,7 @@ export type PushMessage =
   | { kind: "favorites"; data: Favorite[] }
   | { kind: "playlists"; data: Playlist[] }
   | { kind: "playlistActivation"; state: PlaylistActivation | null }
+  | { kind: "held"; held: HeldState | null }
   | { kind: "frame"; entry: FrameEntry }
   | { kind: "log"; entry: LogEntry }
   | { kind: "recents"; data: RecentTrack[] }
@@ -187,6 +189,8 @@ export type StreamerCommand =
   /** skipVolume: a schedule bringing its own volume mutes the preset's override. */
   | { type: "recallPreset"; presetId: number; skipVolume?: boolean }
   | { type: "power"; power: "ON" | "NETWORK" | "toggle" }
+  /** Put the streamer back as it was when it went to sleep (see HeldState). */
+  | { type: "resumeHeld" }
   | { type: "setMute"; mute: boolean }
   | { type: "setSource"; sourceId: string }
   | { type: "setVolumeStep"; step: number }
@@ -270,6 +274,8 @@ export interface Snapshot {
   /** An activation in flight, so a window opened or reloaded mid-run shows it
    *  rather than a stale idle button (the did-finish-load rule). */
   playlistActivation: PlaylistActivation | null;
+  /** What the connected streamer was doing when it last went to sleep. */
+  held: HeldState | null;
   mcpStatus: McpStatus;
   /** A wake missed while the machine slept, still worth offering. */
   missedSchedule: MissedSchedule | null;

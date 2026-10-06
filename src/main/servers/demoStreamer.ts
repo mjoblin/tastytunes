@@ -1309,7 +1309,8 @@ function buildDemo(host: string): {
           setTimeout(() => push("/system/power"), 120);
           // WAKING RE-ANNOUNCES what the device held through standby (live-probed
           // 2026-09-15, mirrored from the mock): a track as `stop` with the queue id
-          // and no words, then `pause` with the title and the art; a station as
+          // and no words, then `pause` with the title and the art, its position
+          // dropping to 0:00 a moment later (2026-10-06); a station as
           // `ready`, then `connecting` with the station, then `play` once it
           // reconnects on its own. Standby is the mirror: the blank shapes go out.
           if (cur.power !== next.power && next.power !== "ON") {
@@ -1358,7 +1359,18 @@ function buildDemo(host: string): {
                 push("/zone/play_state");
                 push("/zone/now_playing");
               }, 110);
+              // the position does not survive (live 2026-10-06, mirrored from the mock: the
+              // old position for a moment, then 0:00, and play starts from the top)
+              setTimeout(() => {
+                if (DATA["/zone/play_state"].state !== "pause") return;
+                DATA["/zone/play_state"] = { ...DATA["/zone/play_state"], position: 0 };
+                DATA["/zone/play_state/position"] = { position: 0 };
+                push("/zone/play_state");
+                push("/zone/play_state/position");
+              }, 910);
             }
+            // the source comes back with the wake (live 2026-10-06)
+            setTimeout(() => push("/zone/state"), 50);
           }
         } else if (frame.path === "/system/display" && typeof params.brightness === "string") {
           DATA["/system/display"] = { ...DATA["/system/display"], brightness: params.brightness };

@@ -31,7 +31,6 @@ import { useFadePresence } from "@/hooks/useFadePresence";
 import { LyricsPanel } from "@/components/overlays/LyricsPanel";
 import { LyricLine } from "@/components/playback/LyricLine";
 import { EmptyActions, EmptyState } from "@/components/chrome/EmptyState";
-import { ResumeCard } from "@/components/playback/ResumeCard";
 import { ArtistPanel } from "@/components/overlays/ArtistPanel";
 import { NowPlayingWaveform, PlayingDrChip, usePlayingAnalysis } from "@/components/media/Waveform";
 import { SceneCanvas } from "@/components/display/SceneCanvas";
@@ -434,8 +433,6 @@ export function NowPlayingScreen(): React.JSX.Element {
                 : []),
             ]}
           />
-          {/* the listening record's offer (0.8.0): an album left unfinished */}
-          <ResumeCard />
         </EmptyState>
       </div>
     );

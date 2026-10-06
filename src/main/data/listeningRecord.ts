@@ -268,6 +268,11 @@ export const listeningRecord = {
       .map(([streamer, count]) => ({ streamer, count }))
       .sort((a, b) => b.count - a.count);
   },
+  /** The preset or playlist the open play came from, when one did. */
+  currentVia(): ListeningVia | null {
+    const via = current?.payload.via;
+    return via != null && typeof via === "object" ? (via as ListeningVia) : null;
+  },
   setEventNotifier(fn: (event: ListeningEvent) => void): void {
     notifyEvent = fn;
   },
