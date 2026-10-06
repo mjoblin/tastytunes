@@ -69,11 +69,11 @@ export function startUpdater(onState: (s: UpdateState) => void): void {
   autoUpdater.logger = null;
   // Pre-releases (2026-08-17): a stable build never sees a GitHub pre-release;
   // a build whose OWN version carries a pre-release suffix (0.3.0-rc.1, cut
-  // from develop by dev/tag-release.sh) is offered the next rc AND the final
-  // stable that supersedes it, so a tester rejoins the normal train on their
-  // own. This is electron-updater's default, made explicit so it cannot
-  // drift, and never for store builds (they have no updater at all).
-  autoUpdater.allowPrerelease = /-/.test(appVersion);
+  // from a release branch by dev/tag-release.sh) is offered the next rc AND
+  // the final stable that supersedes it, so a tester rejoins the normal train
+  // on their own. The second half is NOT electron-updater's default for an
+  // "rc" (see checkForUpdates); never for store builds (they have no updater).
+  autoUpdater.allowPrerelease = PRERELEASE;
   if (FEED) {
     // The download path re-reads the dev update config from disk (setFeedURL
     // alone ENOENTs there) — write a real config file and point at it.
@@ -121,16 +121,48 @@ export function startUpdater(onState: (s: UpdateState) => void): void {
 
   const check = (): void => {
     if (!getSettings().updateCheck) return;
-    void autoUpdater.checkForUpdates().catch(() => {});
+    void checkForUpdates().catch(() => {});
   };
   setTimeout(check, 5_000);
   setInterval(check, CHECK_EVERY_MS);
 }
 
+/** This build is a pre-release (0.9.0-rc.2): it may be offered pre-releases, and it asks the
+ *  stable line first (checkForUpdates). */
+const PRERELEASE = /-/.test(appVersion);
+let checking: ReturnType<typeof autoUpdater.checkForUpdates> | null = null;
+
+/**
+ * A PRE-RELEASE BUILD REJOINS THE STABLE TRAIN (2026-10-06, the user: 0.9.0-rc.2 did not
+ * consider the published 0.9.0 an update). electron-updater (6.8.9) moves a pre-release up
+ * to a stable release only when its channel is "alpha" or "beta"; to it "rc" is a custom
+ * channel, offered the next release on that channel alone, so 0.9.0-rc.2 picked itself
+ * from the feed (replayed against the real one: rc.1 picks rc.2, rc.2 picks rc.2, a beta
+ * would pick 0.9.0) and 0.8.0's rc testers were never offered 0.8.0 either. So a
+ * pre-release build asks the stable line first (allowPrerelease off: GitHub's latest
+ * release, the request every stable build makes) and the next pre-release only when the
+ * stable line has nothing newer. One check at a time, since the two share the flag; the
+ * download takes whichever check answered last.
+ */
+function checkForUpdates(): ReturnType<typeof autoUpdater.checkForUpdates> {
+  if (!PRERELEASE) return autoUpdater.checkForUpdates();
+  if (checking) return checking;
+  checking = (async () => {
+    autoUpdater.allowPrerelease = false;
+    const stable = await autoUpdater.checkForUpdates();
+    if (stable?.isUpdateAvailable) return stable;
+    autoUpdater.allowPrerelease = true;
+    return autoUpdater.checkForUpdates();
+  })().finally(() => {
+    checking = null;
+  });
+  return checking;
+}
+
 /** Immediate re-check — used when the settings toggle turns on. */
 export function checkUpdatesNow(): void {
   if (!getSettings().updateCheck) return;
-  if (updaterUsable()) void autoUpdater.checkForUpdates().catch(() => {});
+  if (updaterUsable()) void checkForUpdates().catch(() => {});
   else void legacyCheckNow();
 }
 
@@ -141,7 +173,7 @@ export function checkUpdatesNow(): void {
 export async function checkUpdatesOnDemand(): Promise<UpdateCheckResult> {
   if (!updaterUsable()) return legacyCheckOnDemand();
   try {
-    const r = await autoUpdater.checkForUpdates();
+    const r = await checkForUpdates();
     const v = r?.updateInfo?.version;
     // The update-available/-not-available handlers above still drive the
     // pushed UpdateState; this return only feeds the button's feedback line.
