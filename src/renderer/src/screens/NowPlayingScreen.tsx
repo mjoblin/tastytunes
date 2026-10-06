@@ -704,10 +704,13 @@ export function NowPlayingScreen(): React.JSX.Element {
                 <LyricLine />
               </div>
             )}
+            {/* a note about the app, not a line of the track: twice the column's rhythm
+              above it (space-y-5's 20px collapses any smaller margin, so mt-3 read as
+              one more track line; user, 2026-10-06) */}
             {showDisplayHint && (
               <div
                 data-display-hint
-                className="mt-3 flex items-center gap-2 text-[12px] text-faint"
+                className="mt-10 flex items-center gap-2 text-[12px] text-faint"
               >
                 <Maximize2 size={12} className="shrink-0" />
                 <span>
