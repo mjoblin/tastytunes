@@ -1,0 +1,262 @@
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { app, nativeImage } from "electron";
+
+/**
+ * ALBUM ART THUMBNAILS for servers that cannot be asked for a size (2026-09-14,
+ * from a user's USB report: the streamer's own USB server ignores every size
+ * hint and serves the embedded picture whole — 1400 × 1400, 827 KB, ~0.8 s a
+ * request, no cache headers — and its art URL carries the stick's mount
+ * counter, so Chromium re-fetched every card on every visit and a URL-keyed
+ * cache would empty on every standby). Asset resizes on request and keeps its
+ * own path (shared/artUrl); everything else draws through here.
+ *
+ * Two tiers, both made from the ONE origin fetch the first draw of either
+ * asks for, never prefetched: a 320 px thumb for the row and medium sites and
+ * a 480 px card for the 240 px sites, JPEG at 85 (the recentcover precedent);
+ * the Now Playing hero keeps the original. One fetch for every tier because
+ * the fetch is the cost (the stick's 0.8 s) and the resize is nothing: the
+ * album header's 160 px thumb is on disk by the time its card has drawn, so
+ * a click lands on the picture — it used to fetch the origin again, and the
+ * user saw the art pop in on the card and then a blank header (2026-09-14). A
+ * second asker while the fetch is in flight waits for it, whichever tier. Keyed
+ * by CONTENT — server, album title, album artist — so a rotated id finds the
+ * same file; a caller with only a URL keys by the URL. A picture the resizer
+ * cannot read (SVG) is kept as it came, bounded. Files live under
+ * userData/cache/art/<tier>/<sha1 of version|tier|key>.<jpg|origin ext>
+ * beside a small index.json; least-recently-drawn entries go when the budget
+ * is passed; Settings shows the size and clears it. Served through
+ * the tt-art: protocol (main/index.ts) with a long cache lifetime, so the
+ * browser cache answers re-draws without asking main.
+ */
+
+export const TIERS = { thumb: 320, card: 480 } as const;
+export type ArtTier = keyof typeof TIERS;
+
+const VERSION = 1; // salted into every id: a format change misses cleanly
+const BUDGET_BYTES = 200 * 1024 * 1024;
+const PASSTHROUGH_MAX = 2 * 1024 * 1024;
+const MAX_PARALLEL = 3;
+// the streamer's own art server hands out the ORIGINAL embedded pictures, unresized
+// (9 MB for one, 9 s, 2026-09-16), from the one application that is also its control
+// socket: one at a time from it
+const MAX_PARALLEL_DEVICE = 1;
+const WRITE_DELAY_MS = 2000;
+export const JPEG_QUALITY = 85;
+
+interface Entry {
+  bytes: number;
+  /** Last drawn (ms epoch) — the eviction key. */
+  at: number;
+  type: string;
+  tier: ArtTier;
+  /** The file's extension: jpg for a resized picture, the origin's own for one kept as it came. */
+  ext: string;
+}
+
+let index: Map<string, Entry> | null = null;
+let timer: NodeJS.Timeout | null = null;
+type Made = { bytes: Buffer; type: string };
+/** The origin fetches in flight, by content key: one fetch makes every tier. */
+const inflight = new Map<string, Promise<Record<ArtTier, Made> | null>>();
+let running = 0;
+const waiters: Array<() => void> = [];
+let deviceRunning = 0;
+const deviceWaiters: Array<() => void> = [];
+
+const dir = (): string => join(app.getPath("userData"), "cache", "art");
+const indexFile = (): string => join(dir(), "index.json");
+const fileFor = (id: string, e: Pick<Entry, "tier" | "ext">): string =>
+  join(dir(), e.tier, `${id}.${e.ext}`);
+const EXT: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/svg+xml": "svg",
+  "image/webp": "webp",
+  "image/gif": "gif",
+};
+const extFor = (type: string): string => EXT[type.split(";")[0].trim().toLowerCase()] ?? "bin";
+const idFor = (key: string, tier: ArtTier): string =>
+  createHash("sha1").update(`${VERSION}|${tier}|${key}`).digest("hex");
+
+function load(): Map<string, Entry> {
+  if (index) return index;
+  index = new Map();
+  try {
+    const raw = JSON.parse(readFileSync(indexFile(), "utf8")) as {
+      version?: number;
+      entries?: [string, Entry][];
+    };
+    if (raw.version === VERSION && Array.isArray(raw.entries)) index = new Map(raw.entries);
+  } catch {
+    // first run, or unreadable — start empty
+  }
+  return index;
+}
+
+function save(): void {
+  if (timer) clearTimeout(timer);
+  timer = setTimeout(flushArtThumbs, WRITE_DELAY_MS);
+}
+
+/** Write the index now (quit, and the debounced write). */
+export function flushArtThumbs(): void {
+  if (timer) clearTimeout(timer);
+  timer = null;
+  if (!index) return;
+  try {
+    mkdirSync(dir(), { recursive: true });
+    const tmp = `${indexFile()}.tmp`;
+    writeFileSync(tmp, JSON.stringify({ version: VERSION, entries: [...index] }));
+    renameSync(tmp, indexFile());
+  } catch {
+    // a lost index only costs the thumbnails a re-make
+  }
+}
+
+function evict(map: Map<string, Entry>): void {
+  let total = 0;
+  for (const e of map.values()) total += e.bytes;
+  if (total <= BUDGET_BYTES) return;
+  const oldest = [...map.entries()].sort((a, b) => a[1].at - b[1].at);
+  for (const [id, e] of oldest) {
+    if (total <= BUDGET_BYTES) break;
+    map.delete(id);
+    total -= e.bytes;
+    try {
+      rmSync(fileFor(id, e), { force: true });
+    } catch {
+      // gone already
+    }
+  }
+}
+
+async function gate<T>(work: () => Promise<T>, device: boolean): Promise<T> {
+  if (device) {
+    while (deviceRunning >= MAX_PARALLEL_DEVICE)
+      await new Promise<void>((r) => deviceWaiters.push(r));
+    deviceRunning++;
+  }
+  if (running >= MAX_PARALLEL) await new Promise<void>((r) => waiters.push(r));
+  running++;
+  try {
+    return await work();
+  } finally {
+    running--;
+    waiters.shift()?.();
+    if (device) {
+      deviceRunning--;
+      deviceWaiters.shift()?.();
+    }
+  }
+}
+
+export async function fetchOrigin(url: string): Promise<{ raw: Buffer; type: string } | null> {
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+    if (!res.ok) return null;
+    return {
+      raw: Buffer.from(await res.arrayBuffer()),
+      type: res.headers.get("content-type") ?? "application/octet-stream",
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Every tier of one origin picture, made from one fetch and stored. */
+function makeAll(
+  key: string,
+  origin: string,
+  device: boolean,
+): Promise<Record<ArtTier, Made> | null> {
+  const pending = inflight.get(key);
+  if (pending) return pending;
+  const run = gate(async () => {
+    const got = await fetchOrigin(origin);
+    if (!got) return null;
+    const map = load();
+    const img = nativeImage.createFromBuffer(got.raw);
+    const made = {} as Record<ArtTier, Made>;
+    for (const tier of Object.keys(TIERS) as ArtTier[]) {
+      let bytes = got.raw;
+      let type = got.type;
+      if (!img.isEmpty()) {
+        const { width } = img.getSize();
+        const shown =
+          width > TIERS[tier] ? img.resize({ width: TIERS[tier], quality: "good" }) : img;
+        bytes = shown.toJPEG(JPEG_QUALITY);
+        type = "image/jpeg";
+      } else if (bytes.length > PASSTHROUGH_MAX) {
+        made[tier] = { bytes, type }; // too big to keep as it came; served once, not stored
+        continue;
+      }
+      const id = idFor(key, tier);
+      const entry: Entry = { bytes: bytes.length, at: Date.now(), type, tier, ext: extFor(type) };
+      try {
+        mkdirSync(join(dir(), tier), { recursive: true });
+        writeFileSync(fileFor(id, entry), bytes);
+        map.set(id, entry);
+      } catch {
+        // the disk said no; the picture still draws this once
+      }
+      made[tier] = { bytes, type };
+    }
+    evict(map);
+    save();
+    return made;
+  }, device).finally(() => inflight.delete(key));
+  inflight.set(key, run);
+  return run;
+}
+
+/**
+ * The picture for `key` at `tier`: from the cache, else made with every other
+ * tier from one fetch of `origin`, stored and served. Null when the origin
+ * does not answer.
+ */
+export async function artThumb(
+  key: string,
+  tier: ArtTier,
+  origin: string,
+  /** The origin is the streamer's own art server: fetched one at a time. */
+  device = false,
+): Promise<Made | null> {
+  const map = load();
+  const id = idFor(key, tier);
+  const hit = map.get(id);
+  if (hit) {
+    try {
+      const bytes = readFileSync(fileFor(id, hit));
+      hit.at = Date.now();
+      save();
+      return { bytes, type: hit.type };
+    } catch {
+      map.delete(id); // the file went; make it again
+    }
+  }
+  const made = await makeAll(key, origin, device);
+  return made?.[tier] ?? null;
+}
+
+export function artThumbsStats(): { entries: number; bytes: number } {
+  const map = load();
+  let bytes = 0;
+  for (const e of map.values()) bytes += e.bytes;
+  return { entries: map.size, bytes };
+}
+
+export function clearArtThumbs(): { entries: number; bytes: number } {
+  const map = load();
+  for (const [id, e] of map) {
+    try {
+      rmSync(fileFor(id, e), { force: true });
+    } catch {
+      // gone already
+    }
+  }
+  map.clear();
+  if (existsSync(indexFile())) rmSync(indexFile(), { force: true });
+  return { entries: 0, bytes: 0 };
+}

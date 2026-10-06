@@ -31,6 +31,7 @@ export function usePanelWidth(): {
     max: () => Math.min(MAX_WIDTH, Math.floor(window.innerWidth * 0.6)),
     axis: "x",
     grow: -1,
+    undoLabel: "Resize Panel",
   });
   return { width: size, dragging, snapped, handleProps };
 }

@@ -238,6 +238,10 @@ export interface ContentRef {
   title: string;
   artist?: string | null;
   album?: string | null;
+  /** The item's art URL as the streamer reports it: its host names the server
+   *  that is playing it, preferred over index order when the same content sits
+   *  on several servers (a copy on the streamer's USB stick, 2026-09-16). */
+  artUrl?: string | null;
 }
 
 /** A picture read from an audio file's own tags (FLAC PICTURE, ID3 APIC),
@@ -1078,6 +1082,28 @@ export const DISPLAY_FONT_IDS = [
   "instrument-sans",
 ] as const;
 export type DisplayFont = (typeof DISPLAY_FONT_IDS)[number];
+/** Display mode's SCENE: what fills the screen (0.8.0). Sleeve is the art
+ *  face; the rest are abstract scenes drawn from the track's feature strip
+ *  and its timed lyrics; shuffle draws a fresh abstract scene each track. */
+export const DISPLAY_SCENE_IDS = [
+  "sleeve",
+  "tide",
+  "terrain",
+  "orbit",
+  "type",
+  "survey",
+  "conduit",
+  "confluence",
+  "pit",
+  "roll",
+  "sea",
+  "terminal",
+  "refrain",
+  "shuffle",
+] as const;
+export type DisplayScene = (typeof DISPLAY_SCENE_IDS)[number];
+/** A scene's declared setting value (slider, toggle or select). */
+export type SceneSettingValue = number | boolean | string;
 /** How a collection screen lays out its items. */
 export type ScreenLayout = "rows" | "cards";
 /** The queue alone adds an album-grouped reading view (cover once, tracks beneath). */
@@ -1265,6 +1291,22 @@ export interface AppSettings {
   waveformSeekBar: boolean;
   waveformNowPlaying: boolean;
   displayWaveform: boolean;
+  /** What the Now Playing hero's art box shows: Sleeve is the art (the
+   *  default), any other id a display-mode scene run small in its place
+   *  while an analyzed track plays. Chosen from the tile, never Settings;
+   *  remembered apart from the fullscreen view's displayScene. */
+  nowPlayingScene: DisplayScene;
+  /** The scenes' words in the Now Playing tile, as on the wall. Off by default: the lyric
+   *  line beside the art already carries them, and a third copy in a smaller face beside
+   *  the app's own is the redundancy the tile avoids. A fact about the host, not a scene,
+   *  so one switch of the tile's, the scenes' own Words settings staying the wall's. */
+  nowPlayingSceneWords: boolean;
+  /** The Now Playing art's size, dragged from the box's corner, as a SHARE of the room it
+   *  has (the smaller of the hero's height less the waveform under it, and its width less
+   *  the text column's), so a size dragged on a large monitor still fits a small window.
+   *  Null is the automatic size: three tiers by window width, and the detent the drag
+   *  snaps back to. */
+  nowPlayingArtShare: number | null;
   /** EVIDENCE, not preference: flips true the first time an analysis is
    *  served (stored or read back) and never clears. The playback bar's
    *  taller geometry keys on the setting AND this — a household with no
@@ -1277,6 +1319,44 @@ export interface AppSettings {
   lyricsLine: boolean;
   /** Current synced line in full-screen display mode (toggled from its chrome). */
   displayLyrics: boolean;
+  /** Display mode's scene (its in-mode picker, Tab cycles). */
+  displayScene: DisplayScene;
+  /** Each scene's own settings, by scene id, over the scene's declared defaults. */
+  displaySceneSettings: Record<string, Record<string, SceneSettingValue>>;
+  /** Display mode's sync nudge in ms, added to the shown clock: the streamer reports its
+   *  position about once a second and the pipeline has its own latency, so the scenes'
+   *  hits and words may sit a constant offset from what is heard. In-mode, remembered. */
+  displaySyncMs: number;
+  /** How much lull a DROP needs (lib/features DROP_TIERS): loose, normal (three seconds of
+   *  chill or one of near silence), strict. Taste and genre, so it is in-mode. */
+  displayDrops: "loose" | "normal" | "strict";
+  /** A finish over every display-mode scene: plain, or a cathode glass (scanlines, a slight
+   *  curve, phosphor glow, a vignette). Taste, so it is in-mode; never on the picker's tiles.
+   *  Cathode by default (user, 2026-09-07). */
+  displayFinish: "plain" | "cathode";
+  /** The Cathode glass: how much the picture bows (deep is about twice a real tube, gentle
+   *  about life), and whether it overscans so the picture meets the frame at the edges and
+   *  only the corners fall behind the glass. In-mode, beside Finish. */
+  displayCathodeCurve: "gentle" | "deep";
+  displayCathodeFill: boolean;
+  /** The wall's corners (2026-09-15, user: they can "kill the mood of a fullscreen display"):
+   *  the track's name at the bottom left and the time at the bottom right, each its own
+   *  switch, on by default; a shelf display often wants the clock without the title. In-mode,
+   *  beside Finish. The tile has no corners. */
+  displayCornerTitle: boolean;
+  displayCornerClock: boolean;
+  /** The glass's flicker (2026-09-15, user: an accessibility concern): the cathode finish
+   *  breathes a mains hum into the brightness at ten hertz, three percent either way, which
+   *  sits in the band photosensitive people are warned about; its own switch, on by default,
+   *  off already under the system's reduced-motion setting. In-mode, in the Finish row. */
+  displayCathodeFlicker: boolean;
+  /** Shuffle: the order it walks the scenes (sequential is the picker's alphabetical order,
+   *  random, the default, never repeats the one before), how many tracks each scene stays for ("album"
+   *  changes when the album does), and the scenes left out of the rotation, by id (the sleeve
+   *  is out unless asked in). In-mode, on the Shuffle tile. */
+  displayShuffleOrder: "sequential" | "random";
+  displayShuffleEvery: 1 | 2 | 3 | "album";
+  displayShuffleExclude: string[];
   /** The listening record: a local, append-only play log (history/<year>.jsonl
    *  in userData). On by default — a diary can't be backfilled. */
   listeningRecord: boolean;
@@ -1284,6 +1364,11 @@ export interface AppSettings {
    *  counts and the Played filter in the Library, the resume offer on Now
    *  Playing. Off hides them all; the record itself keeps logging. */
   showListeningHistory: boolean;
+  /** The Recent list (the History screen's Recent view, the tray panel's Recent tab): the
+   *  last tracks and stations played, a local log SEPARATE from the listening record. It had
+   *  no switch of its own and its only control sat under Behavior as "Recently played"
+   *  (the terminology pass, 2026-09-17); now it lives beside the record and can be stopped. */
+  recents: boolean;
   /** Album art from the audio files themselves (0.8.0): when a media server
    *  sends small artwork, the full picture is read from the file's own tags for
    *  the big surfaces. Reads from the media server over the local network. */
@@ -1448,12 +1533,29 @@ export const DEFAULT_SETTINGS: AppSettings = {
   waveformSeekBar: true,
   waveformNowPlaying: false,
   displayWaveform: true,
+  nowPlayingScene: "sleeve",
+  nowPlayingSceneWords: false,
+  nowPlayingArtShare: null,
   waveformSeen: false,
   lyrics: true,
   lyricsLine: true,
   displayLyrics: true,
+  displayScene: "sleeve",
+  displaySceneSettings: {},
+  displaySyncMs: 0,
+  displayDrops: "normal",
+  displayFinish: "cathode",
+  displayCathodeCurve: "deep",
+  displayCathodeFill: false,
+  displayCornerTitle: true,
+  displayCornerClock: true,
+  displayCathodeFlicker: true,
+  displayShuffleOrder: "random",
+  displayShuffleEvery: 1,
+  displayShuffleExclude: ["sleeve"],
   listeningRecord: true,
   showListeningHistory: true,
+  recents: true,
   artFromFiles: true,
   lbEnabled: false,
   lbToken: "",
@@ -1502,6 +1604,13 @@ export interface MediaServerInfo {
   searchable: boolean;
 }
 
+/** The streamer's own USB server, by its shape: on the device's address and
+ *  Browse-only (the Evo's answers no Search). Its audio is out of reach by
+ *  design, its ContentDirectory hands out device-internal file paths, so the
+ *  analysis verbs refuse it up front (USB_ANALYSIS_HINT says why). */
+export const usbServer = (s: Pick<MediaServerInfo, "isStreamer" | "searchable">): boolean =>
+  s.isStreamer && !s.searchable;
+
 /**
  * Per-server state of the local media index — a REBUILDABLE CACHE of server
  * metadata (never user data): built by crawling ContentDirectory, invalidated
@@ -1515,6 +1624,19 @@ export interface MediaIndexStatus {
   /** 'failed': the last build produced nothing (the server refused Search AND Browse — offline, or mid-scan); `failure` says why. */
   state: "none" | "building" | "ready" | "failed";
   failure?: string;
+  /** While building: the app started this build on its own to keep an index it already
+   *  had honest (the server's counter moved, the TTL passed, the schema changed, a stale id
+   *  was revalidated before an answer was trusted). The doors show it as any build; the
+   *  indexing toast never announces it (user, 2026-09-15: the streamer's USB ids rotate
+   *  across every standby, and each revalidation toasted "streamer indexed · 0 tracks"). */
+  quiet?: boolean;
+  /** The server's counter moved since this index was built and the app will not walk
+   *  it on its own (the streamer's USB server, 2026-09-16): the card offers the re-index. */
+  stale?: boolean;
+  /** The server answers UPnP Search itself, so the Library's search box reaches it with
+   *  no index; a Browse-only server (the streamer's USB stick) has no search until its
+   *  index is built. The Search screen's unindexed line says which (user, 2026-09-17). */
+  searchable?: boolean;
   strategy: "search" | "browse" | null;
   tracks: number;
   albums: number;
@@ -1899,6 +2021,57 @@ export interface AudioAnalysis {
   lra?: number | null;
   truePeakDb?: number | null;
   loudHist?: number[] | null;
+  /** The FEATURE STRIP (0.8.0, display mode's scenes): STRIP_BANDS band
+   *  energies and one loudness per frame at `fps`, a byte each (0 = −60 dBFS,
+   *  255 = 0 dBFS), base64. Absent = measured before the strip existed (the
+   *  next play or Analyze audio measures again, the loudness precedent);
+   *  null = the file's rate could not be read honestly (the DR rule). */
+  strip?: AnalysisStrip | null;
+  /** DRUM ONSETS (0.8.0, display mode's hits): every percussive onset the
+   *  file's own decode found (lib/onsets: spectral flux on 10 ms steps),
+   *  packed four bytes each (u16 gap in 10 ms steps, u8 strength, u8 type:
+   *  0 kick, 1 snare, 2 hat), base64. Absent = measured before onsets
+   *  existed (the next play or Analyze audio measures again, the strip's
+   *  precedent); null = the file's rate could not be read honestly. */
+  onsets?: AnalysisOnsets | null;
+  /** MUSIC FEATURES (0.8.0, display mode): beat grid, sections, chroma and
+   *  key, chord changes, stereo image, timbre, silences and drops, packed
+   *  (lib/features). Absent or an older `version` = measure again once on
+   *  the next play; null = the file's rate could not be read honestly. */
+  features?: AnalysisFeatures | null;
+}
+
+export interface AnalysisOnsets {
+  count: number;
+  data: string;
+}
+
+export interface AnalysisFeatures {
+  version: number;
+  beats: { bpm: number; confidence: number; downbeat: number; count: number; times: string } | null;
+  sections: { count: number; bounds: string; kinds: string; energy: string } | null;
+  chroma: { fps: number; data: string } | null;
+  key: { tonic: number; mode: "major" | "minor"; confidence: number } | null;
+  changes: string;
+  stereo: { fps: number; pan: string; width: string } | null;
+  timbre: { fps: number; brightness: string; noisiness: string } | null;
+  silences: string;
+  drops: {
+    count: number;
+    buildFrom: string;
+    at: string;
+    strength: string;
+    chill: string;
+    breath: string;
+    cut: string;
+  };
+}
+
+export const STRIP_BANDS = 6;
+export interface AnalysisStrip {
+  fps: number;
+  bands: string;
+  loud: string;
 }
 
 /** What a row can know without decoding: the cached DR and loudness. */
@@ -2220,6 +2393,17 @@ export interface StreamInfo {
  * can say about a thing when asking main to find its node: identity hints
  * first (server + object id), then content (title / artist / album).
  */
+/**
+ * Why a library lookup asks. "show": for an item's details (the waveform, Liner notes, the
+ * Info modal, the resume offer), where an answer from a stale index is still right by
+ * content. "act": for its id (Open in Library), which must answer on the server now. Only
+ * an act confirms a Browse-built index against the device, and confirming can rebuild it:
+ * the streamer's USB ids are all new after a standby, and a rebuild the user never asked
+ * for was the "building…" a CXN V2 owner saw on the first track after the streamer woke
+ * (user report, 2026-09-25). Required at every call, so a new caller has to choose.
+ */
+export type LookupPurpose = "show" | "act";
+
 export interface MediaInfoQuery {
   kind: "track" | "album" | "artist";
   title: string;
@@ -2227,6 +2411,8 @@ export interface MediaInfoQuery {
   album?: string | null;
   serverUdn?: string | null;
   objectId?: string | null;
+  /** See ContentRef.artUrl — the playing server, when the query has no hint. */
+  artUrl?: string | null;
 }
 
 /** One server's slice of a cross-server (all ready indexes) search. */

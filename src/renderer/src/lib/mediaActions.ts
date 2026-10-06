@@ -40,8 +40,18 @@ export async function openRefInLibrary(ref: MediaRef): Promise<boolean> {
     return false;
   };
   if (ref.kind !== "track" && ref.kind !== "album") return miss();
+  // an act: the Library navigates to the id, so it must answer on the server now
   const info = await tt
-    .mediaNodeInfo({ kind: ref.kind, title: ref.title, artist: ref.artist, album: ref.album })
+    .mediaNodeInfo(
+      {
+        kind: ref.kind,
+        title: ref.title,
+        artist: ref.artist,
+        album: ref.album,
+        artUrl: ref.artUrl,
+      },
+      "act",
+    )
     .catch(() => null);
   const node = info?.node;
   if (!node?.serverUdn) return miss();
@@ -65,7 +75,15 @@ export async function openRefInLibrary(ref: MediaRef): Promise<boolean> {
   // 2026-08-23). The parent is only the fallback for a server whose index has
   // no album entity for this track (folder-only libraries).
   const album = await tt
-    .mediaNodeInfo({ kind: "album", title: albumTitle, artist: node.albumArtist ?? ref.artist })
+    .mediaNodeInfo(
+      {
+        kind: "album",
+        title: albumTitle,
+        artist: node.albumArtist ?? ref.artist,
+        artUrl: ref.artUrl,
+      },
+      "act",
+    )
     .catch(() => null);
   // …and it must actually HOLD the track: a title shared by two albums
   // ("Greatest Hits") with the album artist unknown could resolve to the

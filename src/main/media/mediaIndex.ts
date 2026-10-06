@@ -14,6 +14,7 @@
 //     replug, which bumps SystemUpdateID and invalidates anyway).
 //   Tier C (pathological): no index; the Library stays fully live.
 import { readFileSync } from "node:fs";
+import { usbServer } from "@shared/model";
 import { join } from "node:path";
 import { app } from "electron";
 import { getSettings } from "../data/persist";
@@ -41,7 +42,7 @@ import {
 } from "./reconcile";
 import {
   browseChildrenOf,
-  browseMetadataNode,
+  probeObject,
   getSystemUpdateID,
   refreshServers,
   search as liveSearch,
@@ -107,6 +108,12 @@ const inflight = new Map<string, Promise<void>>();
 // so the Library's doors and Settings can say "couldn't index · Retry" instead
 // of quietly reverting to "not indexed" (2026-08-17). Cleared by any build.
 const failed = new Map<string, string>();
+/** udn → the counter the server now reports, for an index the app will not walk on
+ *  its own: the streamer's USB server (2026-09-16), whose counter moves on every
+ *  replug and whose application restarted under the app's traffic three times in
+ *  a day. The Library's card offers the re-index; a content answer the user asks
+ *  for still heals a rotted id through revalidate, paced. */
+const staleIds = new Map<string, number>();
 let announce: (statuses: MediaIndexStatus[]) => void = () => {};
 let loaded = false;
 
@@ -157,10 +164,14 @@ export function status(): MediaIndexStatus[] {
   load();
   const out: MediaIndexStatus[] = [];
   for (const idx of indexes.values()) {
+    const k = known.get(idx.udn);
     out.push({
       udn: idx.udn,
       serverName: idx.serverName,
       state: building.has(idx.udn) ? "building" : "ready",
+      ...(k ? { searchable: k.searchable } : {}),
+      ...(buildingWhy.get(idx.udn) === "refresh" ? { quiet: true } : {}),
+      ...(staleIds.has(idx.udn) && !building.has(idx.udn) ? { stale: true } : {}),
       strategy: idx.strategy,
       tracks: idx.tracks.length,
       albums: idx.albums.length,
@@ -178,6 +189,7 @@ export function status(): MediaIndexStatus[] {
       serverName: server.name,
       state: why ? "failed" : "none",
       ...(why ? { failure: why } : {}),
+      searchable: server.searchable,
       strategy: null,
       tracks: 0,
       albums: 0,
@@ -188,10 +200,12 @@ export function status(): MediaIndexStatus[] {
   }
   for (const udn of building) {
     if (!indexes.has(udn)) {
+      const k = known.get(udn);
       out.push({
         udn,
         serverName: buildingNames.get(udn) ?? udn,
         state: "building",
+        ...(k ? { searchable: k.searchable } : {}),
         strategy: null,
         tracks: 0,
         albums: 0,
@@ -204,6 +218,13 @@ export function status(): MediaIndexStatus[] {
   return out;
 }
 const buildingNames = new Map<string, string>();
+/** Why a build runs: a server's FIRST index, one the user ASKED for (the rebuild button, the
+ *  Browse-only first build), or a REFRESH the app started on its own to keep an index it
+ *  already had honest — the counter moved, the TTL passed, the schema changed, a stale id
+ *  was revalidated. A refresh is marked quiet on its status, so the indexing toast leaves
+ *  it alone (user, 2026-09-15). */
+type BuildWhy = "first" | "asked" | "refresh";
+const buildingWhy = new Map<string, BuildWhy>();
 
 // ---------------------------------------------------------------- the crawl
 //
@@ -333,8 +354,17 @@ async function crawlBrowse(
     const id = queue.shift() as string;
     if (visited.has(id)) continue;
     visited.add(id);
-    const children = await browseChildrenOf(host, server.udn, id);
-    if (!children) continue;
+    // a walk rides behind the Library's own requests on the device's lane
+    const children = await browseChildrenOf(host, server.udn, id, { background: true });
+    if (children === "missing") continue;
+    if (children === "unreachable") {
+      // the server stopped answering mid-walk: a partial tree must not replace
+      // the index it has (the albums it did not reach would read as gone)
+      console.log(
+        `[mediaIndex] ${server.name}: the server stopped answering; the walk is abandoned`,
+      );
+      return null;
+    }
     const parent = parents.get(id) ?? null;
     const path = parent?.path ?? [];
     for (const raw of children) {
@@ -449,10 +479,11 @@ async function build(
   host: string,
   server: MediaServerInfo,
   strategy: "search" | "browse",
+  why: BuildWhy,
 ): Promise<void> {
   const running = inflight.get(server.udn);
   if (running) return running;
-  const run = buildNow(host, server, strategy).finally(() => inflight.delete(server.udn));
+  const run = buildNow(host, server, strategy, why).finally(() => inflight.delete(server.udn));
   inflight.set(server.udn, run);
   return run;
 }
@@ -461,9 +492,11 @@ async function buildNow(
   host: string,
   server: MediaServerInfo,
   strategy: "search" | "browse",
+  why: BuildWhy,
 ): Promise<void> {
   building.add(server.udn);
   buildingNames.set(server.udn, server.name);
+  buildingWhy.set(server.udn, why);
   announce(status());
   try {
     const built = await crawl(host, server, strategy);
@@ -471,6 +504,7 @@ async function buildNow(
       indexes.set(server.udn, built);
       rebuildHints.delete(server.udn);
       failed.delete(server.udn);
+      staleIds.delete(server.udn);
       save();
     } else {
       failed.set(
@@ -488,6 +522,7 @@ async function buildNow(
     console.log(`[mediaIndex] ${server.name}: build failed — ${failed.get(server.udn)}`);
   } finally {
     building.delete(server.udn);
+    buildingWhy.delete(server.udn);
     announce(status());
   }
 }
@@ -520,12 +555,15 @@ export async function revalidate(
   known.set(udn, server);
   const id = await getSystemUpdateID(host, udn);
   let stale = id != null && existing.updateId != null && id !== existing.updateId;
-  if (!stale && probeId) stale = (await browseMetadataNode(host, udn, probeId)) == null;
+  // the id in hand is stale only when the server REFUSES it; a server that is
+  // not answering (a null counter, an unreachable probe) says nothing about
+  // the id, and a walk into its silence was what took the Evo down (2026-09-16)
+  if (!stale && probeId) stale = (await probeObject(host, udn, probeId)) === "missing";
   if (!stale) return false;
   console.log(
-    `[mediaIndex] ${server.name}: ids rotated (counter ${existing.updateId} → ${id}), rebuilding`,
+    `[mediaIndex] ${server.name}: ${id != null && existing.updateId != null && id !== existing.updateId ? `ids rotated (counter ${existing.updateId} → ${id})` : `the id in hand no longer answers (counter ${id ?? "unread"})`}, rebuilding`,
   );
-  await build(host, server, "browse");
+  await build(host, server, "browse", "refresh");
   return indexes.get(udn)?.builtAt !== existing.builtAt;
 }
 
@@ -552,17 +590,33 @@ export function ensureFresh(host: string, servers: MediaServerInfo[]): void {
     void (async () => {
       if (existing) {
         const id = await getSystemUpdateID(host, server.udn);
+        // a counter the server did not answer is no reason to walk it, TTL or not
+        if (id == null) return;
+        // the streamer's USB server is never walked unasked: a moved counter marks
+        // the index stale for the card's re-index and nothing else happens
+        if (usbServer(server)) {
+          if (existing.updateId != null && id !== existing.updateId && !staleIds.has(server.udn)) {
+            staleIds.set(server.udn, id);
+            console.log(
+              `[mediaIndex] ${server.name}: contents changed (counter ${existing.updateId} → ${id}); the re-index waits for the user`,
+            );
+            announce(status());
+          }
+          return;
+        }
         const stale =
-          (id != null && existing.updateId != null && id !== existing.updateId) ||
+          (existing.updateId != null && id !== existing.updateId) ||
           Date.now() - existing.builtAt > TTL_MS;
         if (!stale) return;
-        await build(host, server, existing.strategy);
+        await build(host, server, existing.strategy, "refresh");
         return;
       }
+      // a schema bump's salvage is a refresh of an index the app had; a server's first index is not
       await build(
         host,
         server,
         server.searchable ? "search" : (rebuildHints.get(server.udn) ?? "browse"),
+        rebuildHints.has(server.udn) ? "refresh" : "first",
       );
     })();
   }
@@ -571,7 +625,7 @@ export function ensureFresh(host: string, servers: MediaServerInfo[]): void {
 /** The manual rebuild — and the only way to first-build a Browse-only server. */
 export async function rebuild(host: string, server: MediaServerInfo): Promise<void> {
   load();
-  await build(host, server, server.searchable ? "search" : "browse");
+  await build(host, server, server.searchable ? "search" : "browse", "asked");
 }
 
 /** Fresh-index tokenized search; null = no usable index (caller goes live). */

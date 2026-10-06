@@ -171,13 +171,19 @@ export function installAppMenu(deps: MenuDeps): void {
   }
   const viewMenu: MenuItemConstructorOptions = { label: "View", submenu: viewSubmenu };
 
+  // every screen, in the nav's order and with the nav's names (Recently Played became History
+  // in 0.8.0 and Playlists, Favorites and Radio had never been listed; the terminology pass,
+  // 2026-09-17)
   const screens: Array<[string, string]> = [
     ["now-playing", "Now Playing"],
     ["queue", "Queue"],
     ["search", "Search"],
-    ["presets", "Presets"],
     ["library", "Library"],
-    ["recently-played", "Recently Played"],
+    ["presets", "Presets"],
+    ["playlists", "Playlists"],
+    ["favorites", "Favorites"],
+    ["radio", "Radio"],
+    ["recently-played", "History"],
     ["device", "Device"],
   ];
   const goMenu: MenuItemConstructorOptions = {

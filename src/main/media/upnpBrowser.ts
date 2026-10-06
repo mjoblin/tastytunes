@@ -11,6 +11,7 @@ import {
   type MediaNode,
   type MediaQueueAction,
   type MediaServerInfo,
+  usbServer,
 } from "@shared/model";
 import { LARGE_QUEUE_TOKEN } from "@shared/ipc";
 import { asArray, didlToNodes, parser, text } from "./didl";
@@ -22,6 +23,9 @@ interface ServerEntry extends MediaServerInfo {
   controlUrl: string;
   /** Raw SearchCaps: "*" (anything), a CSV of properties, or "" (no search). */
   searchCaps: string;
+  /** The description URL's hostname and origin — what an art URL names. */
+  host: string;
+  origin: string;
 }
 
 let servers = new Map<string, ServerEntry>();
@@ -29,9 +33,322 @@ let servers = new Map<string, ServerEntry>();
 // a failed browse falls back to re-walking the breadcrumb titles from root.
 const nodeCache = new Map<string, MediaNode[]>();
 
+/**
+ * NOT ANSWERING IS NOT NOT FOUND (2026-09-16, the user's Evo). A server that
+ * refuses an object ("no such object", a SOAP 701 fault, a 4xx) is answering:
+ * the id is gone and a heal is right. A server that times out, resets the
+ * connection or refuses it is NOT answering, and every heal the app used to
+ * run on that silence — the breadcrumb re-walk, the index revalidation's
+ * rebuild — was more traffic into a server already down. The streamer's own
+ * media server took the whole device with it: its ContentDirectory and the
+ * control socket are one application, and a re-walk of the stick beside a
+ * reconnect's burst restarted it, four times in a row. So every SOAP answer
+ * is one of three things, and only "missing" heals.
+ */
+export type Miss = "missing" | "unreachable";
+const MISSING_RE = /no such object|<errorCode>\s*701\s*<\/errorCode>/i;
+
+// ---------------------------------------------------- the device's own lane
+//
+// The streamer's own ContentDirectory (USB storage) gets ONE lane: requests to
+// it run one at a time, the screen's ahead of a walk's, and a walk paced a
+// little wider. A request that dies on the wire is the device's SILENCE: the
+// lane pauses, the request that died waits for the device and goes again
+// once, the callers behind it wait too, and a CANARY (one counter read) asks
+// after two seconds, then four, then eight, up to the cap, whether the device
+// answers again — so a replug, whose silence lasts a second or two, reads as a
+// slow load and not as an error page (the hard 30 s wall it replaces turned a
+// routine replug into "Couldn't browse this library", 2026-09-16). Past the
+// cap the waiting callers are failed and newcomers fail at once, while the
+// canary keeps asking; a reconnect ends the pause outright.
+const DEVICE_GAP_MS = 10;
+// a walk sits BEHIND the screen's requests, and that ordering is its pacing: the
+// evening's probes showed pace itself does not trouble the device, and a stick of a
+// few thousand folders must still index within minutes (25 ms cost the harness's
+// 450-container walk its 30 s window)
+const DEVICE_WALK_GAP_MS = 10;
+const DEVICE_CANARY_MS = 2000;
+// the cap, shortened by the harness (TASTYTUNES_DEVICE_COOL_MS) so a suite can
+// watch a silence open and close
+const DEVICE_COOL_MS = Number(process.env["TASTYTUNES_DEVICE_COOL_MS"] ?? 30_000);
+
+interface LaneJob {
+  run: () => Promise<void>;
+  background: boolean;
+  /** How many times the request has died on the wire: once is a pooled connection the
+   *  device had dropped (a fresh one goes at once), twice is the device's silence
+   *  (it waits for the canary and goes again), three times is the answer. */
+  attempts: number;
+  fail: (e: Error) => void;
+}
+const laneFront: LaneJob[] = [];
+const laneBack: LaneJob[] = [];
+let lanePumping = false;
+/** When the device stopped answering; 0 while it answers. */
+let deviceDownSince = 0;
+let deviceControlUrl: string | null = null;
+let canaryTimer: NodeJS.Timeout | null = null;
+let canaryWait = DEVICE_CANARY_MS;
+
+/** Whether a server rides the lane: the device's USB server, by its shape
+ *  (usbServer in shared/model). In the harness every mock server sits on the
+ *  streamer's address, so the address alone would have laned them all. */
+const laned = (entry: ServerEntry): boolean => usbServer(entry);
+
+/** True while the device's own media server is silent and the lane waits on the canary. */
+export function deviceCooling(): boolean {
+  return deviceDownSince !== 0;
+}
+
+/** The lane's state, for the harness and the diagnostics: whether the device is
+ *  silent, what waits, whether the canary is armed. */
+export function deviceLaneState(): {
+  down: boolean;
+  front: number;
+  back: number;
+  pumping: boolean;
+  canary: boolean;
+} {
+  return {
+    down: deviceDownSince !== 0,
+    front: laneFront.length,
+    back: laneBack.length,
+    pumping: lanePumping,
+    canary: canaryTimer != null,
+  };
+}
+
+/** A reconnect: the device announced itself, so the pause ends and the listing
+ *  memo is dropped; the fresh session starts on facts, through the lane. */
+export function deviceLaneReset(): void {
+  deviceDownSince = 0;
+  if (canaryTimer) {
+    clearTimeout(canaryTimer);
+    canaryTimer = null;
+  }
+  listing = null;
+  void pumpLane();
+}
+
+class DeviceCoolingError extends Error {
+  constructor() {
+    super("the streamer's media server is not answering; holding off");
+  }
+}
+
+const pause = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+const laneLog = (msg: string): void => {
+  if (process.env["TASTYTUNES_LANE_DEBUG"]) console.log(`[lane] ${msg}`);
+};
+
+function laneSilence(): void {
+  if (deviceDownSince === 0) {
+    deviceDownSince = Date.now();
+    canaryWait = DEVICE_CANARY_MS;
+    console.log(
+      `[upnp] the streamer's media server is not answering; asking again in ${canaryWait / 1000} s`,
+    );
+  }
+  scheduleCanary();
+}
+
+function scheduleCanary(): void {
+  if (canaryTimer) return;
+  canaryTimer = setTimeout(() => {
+    canaryTimer = null;
+    void canary();
+  }, canaryWait);
+}
+
+/** One counter read, straight to the device: answered, the lane resumes; not, the
+ *  wait doubles, and past the cap the callers waiting are failed. */
+async function canary(): Promise<void> {
+  if (deviceDownSince === 0) return;
+  let ok = false;
+  if (deviceControlUrl) {
+    try {
+      const res = await loggedFetch("upnp", deviceControlUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": 'text/xml; charset="utf-8"',
+          SOAPAction: '"urn:schemas-upnp-org:service:ContentDirectory:1#GetSystemUpdateID"',
+        },
+        body: `<?xml version="1.0" encoding="utf-8"?>
+<s:Envelope s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/" xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+  <s:Body><u:GetSystemUpdateID xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"></u:GetSystemUpdateID></s:Body>
+</s:Envelope>`,
+        signal: AbortSignal.timeout(4000),
+      });
+      ok = res.ok;
+    } catch {
+      ok = false;
+    }
+  }
+  if (deviceDownSince === 0) return; // a reconnect ended the pause meanwhile
+  if (ok) {
+    console.log("[upnp] the streamer's media server answers again");
+    deviceDownSince = 0;
+    void pumpLane();
+    return;
+  }
+  if (Date.now() - deviceDownSince > DEVICE_COOL_MS) {
+    for (const job of laneFront.splice(0)) job.fail(new DeviceCoolingError());
+    for (const job of laneBack.splice(0)) job.fail(new DeviceCoolingError());
+  }
+  canaryWait = Math.min(canaryWait * 2, DEVICE_COOL_MS);
+  scheduleCanary();
+}
+
+async function pumpLane(): Promise<void> {
+  if (lanePumping) return;
+  lanePumping = true;
+  try {
+    while (deviceDownSince === 0) {
+      const job = laneFront.shift() ?? laneBack.shift();
+      if (!job) break;
+      laneLog(
+        `run ${job.background ? "back" : "front"} (front ${laneFront.length}, back ${laneBack.length})`,
+      );
+      await job.run();
+      laneLog("ran");
+      await pause(job.background ? DEVICE_WALK_GAP_MS : DEVICE_GAP_MS);
+    }
+  } finally {
+    lanePumping = false;
+  }
+}
+
+interface CdInit {
+  method?: string;
+  headers?: Record<string, string>;
+  body?: string;
+  timeoutMs: number;
+}
+
+/** A ContentDirectory answer, read to its end. */
+interface CdAnswer {
+  ok: boolean;
+  status: number;
+  body: string;
+}
+
+/** A ContentDirectory fetch, answered with the whole body. Other servers:
+ *  straight through, with the timeout. The device's USB server: through the
+ *  lane, the timeout starting when the request actually goes out (a wait in
+ *  the lane is not the device's silence). The lane holds its slot until the
+ *  body has arrived, so the next request never goes out beside a large page
+ *  still streaming, and a body that dies partway is the device's silence like
+ *  a request that dies before its headers: the lane pauses for the canary. */
+function cdFetch(
+  url: string,
+  init: CdInit,
+  lane: { on: boolean; background?: boolean },
+): Promise<CdAnswer> {
+  const { timeoutMs, ...rest } = init;
+  // the timeout's signal covers the body as well as the headers
+  const send = async (): Promise<CdAnswer> => {
+    const res = await loggedFetch("upnp", url, {
+      ...rest,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    return { ok: res.ok, status: res.status, body: await res.text() };
+  };
+  if (!lane.on) return send();
+  deviceControlUrl = url;
+  if (deviceDownSince !== 0 && Date.now() - deviceDownSince > DEVICE_COOL_MS)
+    return Promise.reject(new DeviceCoolingError());
+  return new Promise<CdAnswer>((resolve, reject) => {
+    const job: LaneJob = {
+      background: lane.background === true,
+      attempts: 0,
+      fail: reject,
+      run: async () => {
+        for (;;) {
+          try {
+            laneLog("send");
+            resolve(await send());
+            laneLog("sent");
+            return;
+          } catch (e) {
+            job.attempts++;
+            laneLog(`died ${String(e)} (attempt ${job.attempts})`);
+            // the app's first request after a replug or a restart lands on a pooled
+            // connection the device had dropped and dies at once (the dev log of
+            // 2026-09-16: every reconnect's first request "not answering" while the
+            // device answered every probe): one more go on a fresh connection before
+            // this counts as silence
+            if (job.attempts === 1) continue;
+            if (job.attempts === 2) {
+              // the device is silent: the request waits at the front for the canary
+              // to hear it and goes again once
+              laneFront.unshift(job);
+              laneSilence();
+              return;
+            }
+            laneSilence();
+            reject(e instanceof Error ? e : new Error(String(e)));
+            return;
+          }
+        }
+      },
+    };
+    (job.background ? laneBack : laneFront).push(job);
+    laneLog(`queued ${job.background ? "back" : "front"}; pumping ${lanePumping}`);
+    void pumpLane();
+  });
+}
+
+/** How a non-ok answer reads. The device's own server refuses a rotted id in
+ *  words (the mock says "no such object"; a 4xx is a refusal too), and a bare
+ *  5xx from it is a server under strain, not a verdict on the object. Any
+ *  other server's error answer is the answer. */
+function classify(status: number, body: string, device: boolean): Miss {
+  if (MISSING_RE.test(body) || (status >= 400 && status < 500)) return "missing";
+  return device ? "unreachable" : "missing";
+}
+
 // ------------------------------------------------------------ server registry
 
+// One listing per burst: the connect hook, the Library's mount and a
+// reconnect's remount all ask within the same second, and each listing is a
+// description fetch plus a capability call per server — into the device's own
+// server among them. A listing in hand this recent is the answer.
+const LISTING_MEMO_MS = 5000;
+let listing: { host: string; at: number; run: Promise<MediaServerInfo[]> } | null = null;
+
 export async function refreshServers(host: string): Promise<MediaServerInfo[]> {
+  if (listing && listing.host === host && Date.now() - listing.at < LISTING_MEMO_MS)
+    return listing.run;
+  const run = listServers(host);
+  listing = { host, at: Date.now(), run };
+  run.catch(() => {
+    if (listing?.run === run) listing = null;
+  });
+  return run;
+}
+
+/** The server whose description lives where this art URL does: the queue's
+ *  and play state's art names the server that is playing (Asset's own port,
+ *  the device's own address), so the same content on two servers resolves to
+ *  the one that is audible. Exact origin first, then the host alone (the
+ *  device serves art on :80 and its ContentDirectory on another port). */
+export function serverUdnForArt(artUrl: string | null | undefined): string | null {
+  if (!artUrl) return null;
+  let u: URL;
+  try {
+    u = new URL(artUrl);
+  } catch {
+    return null;
+  }
+  const all = [...servers.values()];
+  return (
+    all.find((s) => s.origin === u.origin)?.udn ??
+    all.find((s) => s.host === u.hostname)?.udn ??
+    null
+  );
+}
+
+async function listServers(host: string): Promise<MediaServerInfo[]> {
   const res = await fetch(`http://${host}/smoip/system/upnp`, {
     signal: AbortSignal.timeout(8000),
   });
@@ -52,6 +369,13 @@ export async function refreshServers(host: string): Promise<MediaServerInfo[]> {
   const next = new Map<string, ServerEntry>();
   for (const dev of body.data?.devices ?? []) {
     if (!dev.udn || !dev.description_url) continue;
+    let where: URL;
+    try {
+      where = new URL(dev.description_url);
+    } catch {
+      continue;
+    }
+    const device = where.hostname === streamerIp;
     const controlUrl = await contentDirectoryControlUrl(dev.description_url);
     if (!controlUrl) continue; // no ContentDirectory — a renderer-only device
     const searchCaps = await getSearchCaps(controlUrl);
@@ -59,10 +383,12 @@ export async function refreshServers(host: string): Promise<MediaServerInfo[]> {
       udn: dev.udn,
       name: dev.name ?? dev.model ?? "Media server",
       model: dev.model ?? null,
-      isStreamer: new URL(dev.description_url).hostname === streamerIp,
+      isStreamer: device,
       searchable: searchCaps.length > 0,
       searchCaps,
       controlUrl,
+      host: where.hostname,
+      origin: where.origin,
     });
   }
   servers = next;
@@ -149,53 +475,71 @@ function soapEnvelope(objectId: string, flag: string, start: number, count: numb
 </s:Envelope>`;
 }
 
+/** One Browse: the answer, or which kind of miss it was (see Miss). */
 async function soapBrowse(
   entry: ServerEntry,
   objectId: string,
   flag: "BrowseDirectChildren" | "BrowseMetadata",
   start = 0,
   count = PAGE_SIZE,
-): Promise<{ didl: string; returned: number; total: number } | null> {
+  background = false,
+): Promise<{ didl: string; returned: number; total: number } | Miss> {
+  let res: CdAnswer;
   try {
-    const res = await loggedFetch("upnp", entry.controlUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": 'text/xml; charset="utf-8"',
-        SOAPAction: '"urn:schemas-upnp-org:service:ContentDirectory:1#Browse"',
+    res = await cdFetch(
+      entry.controlUrl,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": 'text/xml; charset="utf-8"',
+          SOAPAction: '"urn:schemas-upnp-org:service:ContentDirectory:1#Browse"',
+        },
+        body: soapEnvelope(objectId, flag, start, count),
+        timeoutMs: 15_000,
       },
-      body: soapEnvelope(objectId, flag, start, count),
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (!res.ok) return null;
-    const doc = parser.parse(await res.text()) as {
-      Envelope?: {
-        Body?: {
-          BrowseResponse?: { Result?: unknown; NumberReturned?: number; TotalMatches?: number };
-        };
+      { on: laned(entry), background },
+    );
+  } catch {
+    return "unreachable";
+  }
+  const body = res.body;
+  if (!res.ok) return classify(res.status, body, entry.isStreamer);
+  const doc = parser.parse(body) as {
+    Envelope?: {
+      Body?: {
+        BrowseResponse?: { Result?: unknown; NumberReturned?: number; TotalMatches?: number };
       };
     };
-    const br = doc.Envelope?.Body?.BrowseResponse;
-    const didl = text(br?.Result);
-    if (didl == null) return null;
-    return {
-      didl,
-      returned: Number(br?.NumberReturned ?? 0),
-      total: Number(br?.TotalMatches ?? 0),
-    };
-  } catch {
-    return null;
-  }
+  };
+  const br = doc.Envelope?.Body?.BrowseResponse;
+  const didl = text(br?.Result);
+  if (didl == null) return classify(res.status, body, entry.isStreamer);
+  return {
+    didl,
+    returned: Number(br?.NumberReturned ?? 0),
+    total: Number(br?.TotalMatches ?? 0),
+  };
 }
 
-// "0:06:58.000" -> seconds
-async function browseChildren(entry: ServerEntry, objectId: string): Promise<MediaNode[] | null> {
-  const first = await soapBrowse(entry, objectId, "BrowseDirectChildren");
-  if (!first) return null;
+async function browseChildren(
+  entry: ServerEntry,
+  objectId: string,
+  background = false,
+): Promise<MediaNode[] | Miss> {
+  const first = await soapBrowse(entry, objectId, "BrowseDirectChildren", 0, PAGE_SIZE, background);
+  if (typeof first === "string") return first;
   let nodes = didlToNodes(first.didl);
   // Page through folders bigger than one response (and servers that cap it).
   while (nodes.length < first.total) {
-    const more = await soapBrowse(entry, objectId, "BrowseDirectChildren", nodes.length);
-    if (!more) break;
+    const more = await soapBrowse(
+      entry,
+      objectId,
+      "BrowseDirectChildren",
+      nodes.length,
+      PAGE_SIZE,
+      background,
+    );
+    if (typeof more === "string") break;
     const add = didlToNodes(more.didl);
     if (add.length === 0) break;
     nodes = nodes.concat(add);
@@ -216,23 +560,25 @@ export async function browse(
   if (cached) return cached;
 
   let nodes = await browseChildren(entry, id);
-  if (nodes == null && objectId != null) {
+  if (nodes === "missing" && objectId != null) {
     // Stale id (streamer-USB ids rot across standby) — drop this server's
-    // cache and re-walk the breadcrumb titles from the root.
+    // cache and re-walk the breadcrumb titles from the root. Only for an id
+    // the server REFUSED: a server that is not answering gets no re-walk.
     for (const k of [...nodeCache.keys()]) if (k.startsWith(`${serverUdn}|`)) nodeCache.delete(k);
     nodes = await rewalk(entry, titlePath);
   }
-  if (nodes == null) throw new Error("browse failed");
+  if (typeof nodes === "string") throw new Error("browse failed");
   nodeCache.set(key, nodes);
   return nodes;
 }
 
-async function rewalk(entry: ServerEntry, titlePath: string[]): Promise<MediaNode[] | null> {
+async function rewalk(entry: ServerEntry, titlePath: string[]): Promise<MediaNode[] | Miss> {
   let id = "0";
   for (const title of titlePath) {
     const kids = await browseChildren(entry, id);
-    const next = kids?.find((k) => k.isContainer && k.title === title);
-    if (!next) return null;
+    if (typeof kids === "string") return kids;
+    const next = kids.find((k) => k.isContainer && k.title === title);
+    if (!next) return "missing";
     id = next.id;
   }
   return browseChildren(entry, id);
@@ -269,17 +615,21 @@ async function searchPageRaw(
   </s:Body>
 </s:Envelope>`;
   try {
-    const res = await loggedFetch("upnp", entry.controlUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": 'text/xml; charset="utf-8"',
-        SOAPAction: '"urn:schemas-upnp-org:service:ContentDirectory:1#Search"',
+    const res = await cdFetch(
+      entry.controlUrl,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": 'text/xml; charset="utf-8"',
+          SOAPAction: '"urn:schemas-upnp-org:service:ContentDirectory:1#Search"',
+        },
+        body,
+        timeoutMs: 20_000,
       },
-      body,
-      signal: AbortSignal.timeout(20_000),
-    });
+      { on: laned(entry) },
+    );
     if (!res.ok) return null;
-    const doc = parser.parse(await res.text()) as {
+    const doc = parser.parse(res.body) as {
       Envelope?: {
         Body?: { SearchResponse?: { Result?: unknown; TotalMatches?: number } };
       };
@@ -386,14 +736,36 @@ export async function searchPage(
   return searchPageRaw(entry, criteria, start, count);
 }
 
-/** Direct children of one container (paged internally) — the browse-crawl path. */
+/** Direct children of one container (paged internally) — the browse-crawl
+ *  path. A walk stops on "unreachable" (the server is not answering; the index
+ *  it has stands) and skips a "missing" container. */
 export async function browseChildrenOf(
   host: string,
   serverUdn: string,
   objectId: string,
-): Promise<MediaNode[] | null> {
+  opts: { background?: boolean } = {},
+): Promise<MediaNode[] | Miss> {
   const entry = await entryFor(host, serverUdn);
-  return browseChildren(entry, objectId);
+  return browseChildren(entry, objectId, opts.background === true);
+}
+
+/** Whether ONE object still answers: "present", "missing" (the server refused
+ *  the id — a rotted one) or "unreachable" (the server is not answering, which
+ *  says nothing about the id). The index revalidation's probe. */
+export async function probeObject(
+  host: string,
+  serverUdn: string,
+  objectId: string,
+): Promise<"present" | Miss> {
+  let entry: ServerEntry;
+  try {
+    entry = await entryFor(host, serverUdn);
+  } catch {
+    return "unreachable";
+  }
+  const r = await soapBrowse(entry, objectId, "BrowseMetadata", 0, 1);
+  if (typeof r === "string") return r;
+  return didlToNodes(r.didl)[0] ? "present" : "missing";
 }
 
 /**
@@ -409,7 +781,7 @@ export async function browseMetadataNode(
   try {
     const entry = await entryFor(host, serverUdn);
     const r = await soapBrowse(entry, objectId, "BrowseMetadata", 0, 1);
-    if (!r) return null;
+    if (typeof r === "string") return null;
     return didlToNodes(r.didl)[0] ?? null;
   } catch {
     return null;
@@ -430,7 +802,7 @@ export async function audioResUrl(
   try {
     const entry = await entryFor(host, serverUdn);
     const r = await soapBrowse(entry, objectId, "BrowseMetadata", 0, 1);
-    if (!r) return null;
+    if (typeof r === "string") return null;
     const m = /<res\b[^>]*audio[^>]*>\s*(http[^<\s]+)\s*<\/res>/i.exec(r.didl);
     return m ? m[1].replace(/&amp;/g, "&") : null;
   } catch {
@@ -446,20 +818,24 @@ export async function audioResUrl(
 export async function getSystemUpdateID(host: string, serverUdn: string): Promise<number | null> {
   try {
     const entry = await entryFor(host, serverUdn);
-    const res = await loggedFetch("upnp", entry.controlUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": 'text/xml; charset="utf-8"',
-        SOAPAction: '"urn:schemas-upnp-org:service:ContentDirectory:1#GetSystemUpdateID"',
-      },
-      body: `<?xml version="1.0" encoding="utf-8"?>
+    const res = await cdFetch(
+      entry.controlUrl,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": 'text/xml; charset="utf-8"',
+          SOAPAction: '"urn:schemas-upnp-org:service:ContentDirectory:1#GetSystemUpdateID"',
+        },
+        body: `<?xml version="1.0" encoding="utf-8"?>
 <s:Envelope s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/" xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
   <s:Body><u:GetSystemUpdateID xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"></u:GetSystemUpdateID></s:Body>
 </s:Envelope>`,
-      signal: AbortSignal.timeout(10_000),
-    });
+        timeoutMs: 10_000,
+      },
+      { on: laned(entry) },
+    );
     if (!res.ok) return null;
-    const doc = parser.parse(await res.text()) as {
+    const doc = parser.parse(res.body) as {
       Envelope?: { Body?: { GetSystemUpdateIDResponse?: { Id?: unknown } } };
     };
     const id = text(doc.Envelope?.Body?.GetSystemUpdateIDResponse?.Id);
@@ -473,7 +849,7 @@ export async function getSystemUpdateID(host: string, serverUdn: string): Promis
 
 async function metadataDidl(entry: ServerEntry, objectId: string): Promise<string> {
   const r = await soapBrowse(entry, objectId, "BrowseMetadata", 0, 200);
-  if (!r) throw new Error("could not fetch item metadata");
+  if (typeof r === "string") throw new Error("could not fetch item metadata");
   return r.didl;
 }
 
@@ -505,7 +881,8 @@ export async function queueAdd(
   const didl = await metadataDidl(entry, objectId);
   if (!opts.confirmLarge && /<container[\s>]/.test(didl)) {
     const probe = await soapBrowse(entry, objectId, "BrowseDirectChildren", 0, 1);
-    if (probe && probe.total > LARGE_QUEUE_TRACKS) throw new LargeQueueError(probe.total);
+    if (typeof probe !== "string" && probe.total > LARGE_QUEUE_TRACKS)
+      throw new LargeQueueError(probe.total);
   }
   const udn = serverUdn.replace(/^uuid:/, "");
   // The endpoint is encoding-sensitive: EVERY special character in the DIDL

@@ -1,5 +1,11 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
-import type { AlbumDr, AudioAnalysis, MediaInfoQuery, TrackInfoQuery } from "@shared/model";
+import type {
+  AlbumDr,
+  AudioAnalysis,
+  MediaInfoQuery,
+  LookupPurpose,
+  TrackInfoQuery,
+} from "@shared/model";
 import { IPC, type PushMessage, type StreamerCommand, type TastyTunesApi } from "@shared/ipc";
 import {
   type AppSettings,
@@ -79,6 +85,8 @@ const api: TastyTunesApi = {
   listeningStats: () => ipcRenderer.invoke(IPC.listeningStats),
   listeningClear: () => ipcRenderer.invoke(IPC.listeningClear),
   listeningExport: () => ipcRenderer.invoke(IPC.listeningExport),
+  statsCardSave: (png: Uint8Array, name: string) =>
+    ipcRenderer.invoke(IPC.statsCardSave, png, name),
   playStats: () => ipcRenderer.invoke(IPC.playStats),
   listeningYears: () => ipcRenderer.invoke(IPC.listeningYears),
   listeningStreamers: () => ipcRenderer.invoke(IPC.listeningStreamers),
@@ -86,6 +94,8 @@ const api: TastyTunesApi = {
   undoLabelSet: (label) => ipcRenderer.invoke(IPC.undoLabelSet, label),
   lookupCacheStats: () => ipcRenderer.invoke(IPC.lookupCacheStats),
   clearLookupCaches: () => ipcRenderer.invoke(IPC.clearLookupCaches),
+  artThumbsStats: () => ipcRenderer.invoke(IPC.artThumbsStats),
+  clearArtThumbs: () => ipcRenderer.invoke(IPC.clearArtThumbs),
   mediaServers: () => ipcRenderer.invoke(IPC.mediaServers),
   mediaBrowse: (serverUdn: string, objectId: string | null, titlePath: string[]) =>
     ipcRenderer.invoke(IPC.mediaBrowse, serverUdn, objectId, titlePath),
@@ -103,8 +113,10 @@ const api: TastyTunesApi = {
   mediaPresetSave: (serverUdn: string, objectId: string, slot: number) =>
     ipcRenderer.invoke(IPC.mediaPresetSave, serverUdn, objectId, slot),
   contentResolve: (ref: ContentRef) => ipcRenderer.invoke(IPC.contentResolve, ref),
-  mediaNodeInfo: (query: MediaInfoQuery) => ipcRenderer.invoke(IPC.mediaNodeInfo, query),
+  mediaNodeInfo: (query: MediaInfoQuery, purpose: LookupPurpose) =>
+    ipcRenderer.invoke(IPC.mediaNodeInfo, query, purpose),
   mediaIndexRebuild: (serverUdn: string) => ipcRenderer.invoke(IPC.mediaIndexRebuild, serverUdn),
+  reportDisplayMode: (on: boolean) => ipcRenderer.send(IPC.displayModeReport, on),
   radioSearch: (query: string) => ipcRenderer.invoke(IPC.radioSearch, query),
   radioTop: () => ipcRenderer.invoke(IPC.radioTop),
   radioByTags: (tags: string[]) => ipcRenderer.invoke(IPC.radioByTags, tags),

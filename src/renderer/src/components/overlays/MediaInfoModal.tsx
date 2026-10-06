@@ -16,7 +16,7 @@ import {
 import { tt } from "@/api";
 import { albumDr14 } from "@/lib/dr14";
 import { analyzeAlbum, useAlbumDr } from "@/lib/audioAnalysis";
-import { artUrlAt } from "@shared/artUrl";
+import { artSrc } from "@/lib/artSrc";
 import { useStore } from "@/store";
 import { ModalShell } from "@/components/chrome/Overlay";
 import { CloseButton } from "@/components/controls/CloseButton";
@@ -318,7 +318,7 @@ function MediaInfoBody({
       <div className="flex items-start gap-5" data-media-info>
         <div className="h-[128px] w-[128px] shrink-0 rounded-xl overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
           <ArtImage
-            src={artUrlAt(node.artUrl, 128)}
+            src={artSrc(node.artUrl, 128)}
             className="h-full w-full object-cover"
             fallback={<Icon size={40} strokeWidth={1} className="text-faint" />}
           />

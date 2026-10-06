@@ -20,12 +20,20 @@ import { useFadePresence } from "@/hooks/useFadePresence";
  * for the portal or the click-point clamp — they take the surface and nothing
  * else, deliberately.
  *
- * NB the playback-bar dropdowns (sleep timer, device switcher, signal lamp) and
- * the preset-volume popover wear `shadow-2xl` rather than `shadow-xl`. That is
- * either drift or a deliberate lift over the bar; either way changing it is a
- * visible change, so they are left alone here.
+ * The playback-bar dropdowns (sleep timer, device switcher), the tray panel's
+ * streamer list and the preset volume and repair popovers keep their own
+ * anchoring (above the bar, under a button, at a row) but draw THIS card
+ * (2026-09-13, the glass pass): they once wore their own copy of it with a
+ * heavier shadow, which was drift.
  */
-export const POPOVER_CARD = "rounded-xl ring-1 ring-edge2 bg-raised shadow-xl";
+// GLASS, like the panels and the picker (the user, 2026-09-13: a popover floats over live
+// content, so it belongs with them): the raised surface at 85 over a blur, denser than the
+// picker's 80 since a menu is rows of text that must read over an album grid. Modals and
+// tooltips stay solid, a modal on its dimmed room and a tooltip too small and brief to be
+// anything but crisp. A blur the size of a menu costs nothing measurable; the one measured
+// problem was animating INSIDE a blurred surface on software compositing, which these
+// never do (they mount without a transition)
+export const POPOVER_CARD = "rounded-xl ring-1 ring-edge2 bg-raised/85 backdrop-blur-md shadow-xl";
 
 /**
  * A popover anchored at a click point: portaled to <body>, backed by a

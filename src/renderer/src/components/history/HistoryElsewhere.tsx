@@ -12,7 +12,7 @@ import { RowMenu } from "@/components/media/RowMenu";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { useIndexPools } from "@/hooks/useIndexPools";
 import { useWholeRecord } from "@/hooks/useWholeRecord";
-import { heardElsewhere, type HeardArtist, type HeardTrack } from "@/lib/elsewhere";
+import { heardElsewhere, type HeardArtist, type HeardTrack } from "@shared/elsewhere";
 import { openArtistInLibrary, openRefInLibrary } from "@/lib/mediaActions";
 import type { MediaRef } from "@/lib/mediaRef";
 import { cx, fmtCount, fmtRelative, matchesFilter } from "@/lib/format";
@@ -381,7 +381,7 @@ export function HistoryElsewhere({
             setOwnedOnly(!ownedOnly);
           }}
           data-elsewhere-owned-only={ownedOnly ? "on" : "off"}
-          data-tip="Only the artists your library holds, by an album of their own or a credit on a track."
+          data-tip="Only the artists in your library, with an album or a credit on a track."
           className="no-drag tip-bottom tip-wide motion-safe:active:scale-95"
         >
           In your library{owned > 0 ? `${FACT_SEP}${fmtCount(owned)}` : ""}

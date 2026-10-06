@@ -53,7 +53,7 @@ import { MediaArt } from "@/components/media/MediaArt";
 import { DurationCell } from "@/components/media/DurationCell";
 import { PresetPicker } from "@/components/library/LibraryMenus";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
-import { lockVertical } from "@/lib/dnd";
+import { DND_ACCESSIBILITY, lockVertical } from "@/lib/dnd";
 import { activeSourceId, cx, fmtDuration, fmtRelative, matchesFilter } from "@/lib/format";
 import { Eqbars } from "@/components/media/Eqbars";
 import {
@@ -65,7 +65,7 @@ import {
 } from "@/components/chrome/Chrome";
 import { useConfirmPopover } from "@/components/chrome/Confirm";
 import { useOneShotAsk } from "@/hooks/useOneShotAsk";
-import { artUrlAt } from "@shared/artUrl";
+import { artSrc } from "@/lib/artSrc";
 
 /**
  * Stored playlists: the collection on the left, the selected playlist's tracks
@@ -562,6 +562,7 @@ export function PlaylistsScreen(): React.JSX.Element {
                 className="flex-1 min-h-0 overflow-y-auto px-1.5 -mx-1.5 py-1 -my-1 divide-y divide-edge/50"
               >
                 <DndContext
+                  accessibility={DND_ACCESSIBILITY}
                   sensors={sensors}
                   collisionDetection={closestCenter}
                   onDragEnd={onDragEnd}
@@ -637,7 +638,7 @@ function ArtStack({ playlist }: { playlist: Playlist }): React.JSX.Element {
           className="absolute h-8 w-8 rounded overflow-hidden ring-1 ring-edge2 bg-raised"
           style={{ left: i * 4, top: i * 2, zIndex: covers.length - i }}
         >
-          <ArtImage src={artUrlAt(src, 32)} fallback={<span />} />
+          <ArtImage src={artSrc(src, 32)} fallback={<span />} />
         </div>
       ))}
     </div>

@@ -97,6 +97,7 @@ let historyMem: { streamer: string | null } = { streamer: null };
 /** History: the local device log (Recent) and the listening record (Timeline). */
 export function HistoryScreen(): React.JSX.Element {
   const allRecents = useStore((s) => s.recents);
+  const recentsOn = useStore((s) => s.settings.recents);
   const saveSettings = useStore((s) => s.saveSettings);
   const grouped = useStore((s) => s.settings.recentsGrouped);
   const view = useStore((s) => s.settings.historyView);
@@ -357,8 +358,12 @@ export function HistoryScreen(): React.JSX.Element {
           ) : recents.length === 0 ? (
             <EmptyState
               icon={History}
-              title="No history yet"
-              caption="Tracks and stations you play will collect here, in a local log kept only on this computer."
+              title={recentsOn ? "No history yet" : "The Recent list is off"}
+              caption={
+                recentsOn
+                  ? "Tracks and stations you play will collect here, in a local log kept only on this computer."
+                  : "Turn it on in Settings › History and tracks and stations you play will collect here."
+              }
             />
           ) : (
             <div

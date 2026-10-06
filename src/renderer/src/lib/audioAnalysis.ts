@@ -31,6 +31,12 @@ export interface AnalyzeAlbumResult {
   dr: number | null;
 }
 
+/** The reason Analyze audio is disabled on the streamer's own server: its
+ *  ContentDirectory hands out device-internal file paths for the audio, not
+ *  HTTP, so the bytes are out of reach by design (investigated 2026-08-29; a
+ *  user's "Read 0 of 13 tracks" on a stick, 2026-09-16). */
+export const USB_ANALYSIS_HINT = "Tracks on the streamer's USB drive can't be read.";
+
 export async function analyzeAlbum(
   album: MediaNode,
   serverUdn: string,

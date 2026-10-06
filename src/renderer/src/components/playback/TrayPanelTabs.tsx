@@ -525,12 +525,17 @@ export function PlaylistsTab({
  * thing, open the app.
  */
 export function RecentTab({ density }: { density: TrayDensity }): React.JSX.Element {
+  const recentsOn = useStore((s) => s.settings.recents);
   const recents = useStore((s) => s.recents);
   const items = recents.slice(0, RECENT_CAP);
 
   if (items.length === 0) {
     return (
-      <TabEmpty icon={Disc3} title="Nothing played yet" hint="Tracks you play show up here." />
+      <TabEmpty
+        icon={Disc3}
+        title={recentsOn ? "Nothing played yet" : "The Recent list is off"}
+        hint={recentsOn ? "Tracks you play show up here." : "Turn it on in Settings › History."}
+      />
     );
   }
 

@@ -53,7 +53,7 @@ import { SmoipSocket } from "./smoipSocket";
 import * as smoipHttp from "./smoipHttp";
 import { getSettings, updateSettings } from "../data/persist";
 import { clearRecents, getRecents, recentKey, recordRecent, restoreRecents } from "../data/recents";
-import { captureRecentArt, decorateRecents } from "../lookups/recentArt";
+import { CAPTURE_DELAY_MS, captureRecentArt, decorateRecents } from "../lookups/recentArt";
 import { listeningRecord } from "../data/listeningRecord";
 import { addFavorite, getFavorites, removeFavorite, updateFavorite } from "../data/favorites";
 import {
@@ -69,6 +69,7 @@ import { QueueOps } from "./queueOps";
 import type { ResolvedContent } from "../media/resolveContent";
 import { scrobbler } from "../lookups/scrobbler";
 import { getNetRequests, loggedFetch } from "../netlog";
+import { errorMessage } from "@shared/guards";
 
 /**
  * The user_eq_bands write string: "<idx>,<freq>,<filter>,<gain>,<q>", blank
@@ -530,6 +531,16 @@ export class DeviceManager {
   ]);
   private wakePromise: Promise<void> | null = null;
 
+  /** What a wake-on-intent asks for, by name, when its verb names it: the preset's name (from
+   *  the cached list) or the station's. The renderer's wake hold reads it to tell the asked
+   *  thing's arrival from the device re-announcing what it held through standby. */
+  private askedBy(cmd: StreamerCommand): string | null {
+    if (cmd.type === "recallPreset")
+      return this.cache.presets?.presets?.find((p) => p.id === cmd.presetId)?.name ?? null;
+    if (cmd.type === "streamRadio") return cmd.name || null;
+    return null;
+  }
+
   /**
    * Wake-on-intent: bring a NETWORK-standby streamer to ON and wait for the
    * zone to be usable. Single-flight — concurrent intents share one wake.
@@ -537,11 +548,11 @@ export class DeviceManager {
    * standby refuses them with code 114, so the app must sequence ON → act.
    * The 2.5s settle is the scheduler's proven runway before recalls.
    */
-  async ensureAwake(): Promise<void> {
+  async ensureAwake(asked: string | null = null): Promise<void> {
     if (this.cache.systemPower == null || this.cache.systemPower.power === "ON") return;
     if (this.wakePromise) return this.wakePromise;
     this.wakePromise = (async () => {
-      this.push({ kind: "waking", waking: true });
+      this.push({ kind: "waking", waking: true, asked });
       try {
         await this.command({ type: "power", power: "ON" });
         // Event-driven readiness: the power push flips the cache; the timed
@@ -557,6 +568,23 @@ export class DeviceManager {
       }
     })();
     return this.wakePromise;
+  }
+
+  /**
+   * A command nobody waits for: a menu item, a media key, a timer. command()
+   * throws when the socket is not open (a media key pressed while
+   * disconnected), and a rejection with nobody to catch it is lost, so the
+   * failure goes to the log instead.
+   */
+  fire(cmd: StreamerCommand): void {
+    this.command(cmd).catch((e: unknown) =>
+      this.log("warn", "command", `${cmd.type} did not go out: ${errorMessage(e)}`),
+    );
+  }
+
+  /** A rejection main never caught, kept in the log where the diagnostics show it. */
+  logUnhandled(reason: unknown): void {
+    this.log("error", "main", `unhandled rejection: ${errorMessage(reason)}`);
   }
 
   async command(cmd: StreamerCommand): Promise<void> {
@@ -594,7 +622,7 @@ export class DeviceManager {
       this.cache.systemPower != null &&
       this.cache.systemPower.power !== "ON"
     ) {
-      await this.ensureAwake();
+      await this.ensureAwake(this.askedBy(cmd));
     }
 
     // PASSIVE-ONLY firmware policy (explicit user decision): there is NO command
@@ -641,7 +669,15 @@ export class DeviceManager {
       case "playQueueId":
         return socket.send("/zone/play_control", { queue_id: cmd.queueId });
       case "setRepeat":
-        return socket.send("/zone/play_control", { mode_repeat: cmd.mode });
+        // FIRMWARE (live-probed 2026-09-18, the socket and HTTP alike): off and all set by
+        // name, but "one" by name answers 200 and lands on "all". Only the toggle reaches
+        // it, stepping all → one → off → all, so the way to one is an absolute "all" and
+        // then one toggle, two frames the streamer takes in order (from off they land on
+        // one). Already there: nothing to send, since the pair would flash through all.
+        if (cmd.mode !== "one") return socket.send("/zone/play_control", { mode_repeat: cmd.mode });
+        if (this.cache.playState?.mode_repeat === "one") return;
+        socket.send("/zone/play_control", { mode_repeat: "all" });
+        return socket.send("/zone/play_control", { mode_repeat: "toggle" });
       case "setShuffle":
         return socket.send("/zone/play_control", { mode_shuffle: cmd.mode });
       case "recallPreset": {
@@ -660,7 +696,11 @@ export class DeviceManager {
           const level =
             getSettings().presetVolumes[presetVolumeKey(this.cache.systemInfo?.udn, cmd.presetId)];
           if (level != null) {
-            setTimeout(() => void this.command({ type: "setVolumePercent", percent: level }), 1200);
+            // the streamer may have changed in the second since, and a timer armed
+            // for one device never acts on another
+            setTimeout(() => {
+              if (this.socket === socket) this.fire({ type: "setVolumePercent", percent: level });
+            }, 1200);
           }
         }
         // The device updates is_playing internally but doesn't reliably push
@@ -774,7 +814,7 @@ export class DeviceManager {
     const limit = getSettings().volumeLimitPercent;
     const current = this.cache.zoneState?.volume_percent;
     if (limit != null && current != null && current > limit) {
-      void this.command({ type: "setVolumePercent", percent: limit });
+      this.fire({ type: "setVolumePercent", percent: limit });
     }
   }
 
@@ -1039,6 +1079,8 @@ export class DeviceManager {
    * merges in late-arriving art, so this can fire on every play_state push.
    */
   private recordRecentlyPlayed(ps: ZonePlayState): void {
+    // the Recent list can be switched off (Settings › History); what it holds stays until cleared
+    if (!getSettings().recents) return;
     // Only log active playback: on connect (or wake) the device re-announces a
     // paused/stopped track's metadata, which must not become a phantom row.
     if (ps.state !== "play" && ps.state !== "buffering") return;
@@ -1078,9 +1120,13 @@ export class DeviceManager {
     };
     const { list, changed } = recordRecent(entry);
     // a transient picture (AirPlay, casting) is captured while its URL lives,
-    // a few seconds on: the log can wait, and the streamer's small HTTP
-    // server should not be asked for the same picture by the capture, the
-    // accent and the hero at once (the startup burst, 2026-09-06)
+    // a beat on: the log can wait, and the streamer's small HTTP server
+    // should not be asked for the same picture by the capture, the accent
+    // and the hero at once (the startup burst, 2026-09-06). ONE second, not
+    // three (2026-09-15): the URL dies with the app's session, and a restart
+    // five seconds after a track change lost the capture to this wait plus
+    // the cache's write delay — the user's AirPlay cover gone after a dev
+    // restart while the streamer showed it. A second still clears the burst.
     if (changed) {
       // capture the head AS IT IS when the timer fires, not as it was: a second
       // frame for the same track may have replaced the cover URL meanwhile
@@ -1089,7 +1135,7 @@ export class DeviceManager {
       setTimeout(() => {
         const head = getRecents()[0];
         if (head && recentKey(head) === key) captureRecentArt(head);
-      }, 3000);
+      }, CAPTURE_DELAY_MS);
     }
     if (changed) this.push({ kind: "recents", data: decorateRecents(list) });
   }

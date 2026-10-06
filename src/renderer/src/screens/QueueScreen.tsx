@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, useMemo } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useMemo } from "react";
 import { useKnownDrs } from "@/lib/audioAnalysis";
 import { useWindowedList } from "@/hooks/useWindowedList";
 import { DrBadge } from "@/components/media/Waveform";
@@ -12,13 +12,9 @@ import {
   closestCenter,
   useSensor,
   useSensors,
-  type DragEndEvent,
-  type DragMoveEvent,
-  type DragStartEvent,
 } from "@dnd-kit/core";
 import {
   SortableContext,
-  arrayMove,
   rectSortingStrategy,
   sortableKeyboardCoordinates,
   useSortable,
@@ -60,7 +56,7 @@ import { Eqbars } from "@/components/media/Eqbars";
 import { EmptyState } from "@/components/chrome/EmptyState";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { flashTarget, scrollToWithContext } from "@/lib/scroll";
-import { lockVertical } from "@/lib/dnd";
+import { DND_ACCESSIBILITY, lockVertical } from "@/lib/dnd";
 import { activeSourceId, cx, fmtTime, matchesFilter, fmtCount } from "@/lib/format";
 import { toggleFavorite } from "@/lib/favorites";
 import { fromQueueItem, refToFavorite, refToPlaylistItem } from "@/lib/mediaRef";
@@ -78,11 +74,13 @@ import { DurationCell } from "@/components/media/DurationCell";
 import { FilterInput } from "@/components/controls/FilterInput";
 import { SelectionBar, SelectionVerb } from "@/components/controls/SelectionBar";
 import { DragChip } from "@/components/controls/DragChip";
-import { clampChipPos, flashNavTarget, navDropTargetAt } from "@/lib/navDrop";
+import { clampChipPos } from "@/lib/navDrop";
 import { ModalShell } from "@/components/chrome/Overlay";
 import { PresetSavePanel, PresetPicker } from "@/components/library/LibraryMenus";
 import { HeaderChip, ScreenTitle, GAP_BETWEEN, GAP_WITHIN } from "@/components/chrome/Chrome";
-import { artUrlAt } from "@shared/artUrl";
+import { artSrc } from "@/lib/artSrc";
+import { useQueueDrag } from "@/components/queue/useQueueDrag";
+import { useQueueSelection, type SelectionLate } from "@/components/queue/useQueueSelection";
 
 /**
  * Queue → preset: the shared PresetSavePanel in a centered modal. The device
@@ -176,8 +174,6 @@ export function QueueScreen(): React.JSX.Element {
   // Multi-select (2026-08-24): ⌘/Ctrl-click toggles, ⇧-click extends from the
   // anchor, a bare click clears and PLAYS as it always has, Esc clears. Held
   // as ids so it survives reorders; pruned when entries leave the queue.
-  const [selected, setSelected] = useState<ReadonlySet<number>>(() => new Set());
-  const selAnchor = useRef<number | null>(null);
   const [rowMenu, setRowMenu] = useState<{ item: QueueListItem; x: number; y: number } | null>(
     null,
   );
@@ -281,6 +277,69 @@ export function QueueScreen(): React.JSX.Element {
   // the shared hook (hooks/useWindowedList, 2026-09-05): the pitch from the
   // rendered rows, the offset of row 0 below the header inside the scroller
   const scrollElRef = useRef<HTMLDivElement | null>(null);
+  /** True through a drag AND the event that ends it (the drag hook sets it; the
+   *  selection's Escape reads it, so a cancelled drag does not also clear the
+   *  selection): the screen's, so both hooks share one flag. */
+  const dragLiveRef = useRef(false);
+  // Selection lives in components/queue/useQueueSelection (lifted 2026-09-13, the
+  // second lift): the multi-select, its keyboard and clearing, remove with its
+  // undo, the batch heart and the bar's block moves; the block move itself is
+  // the drag hook's and reaches the selection late-bound through selectionLate
+  const selectionLate = useRef<SelectionLate>({ applyBlockMove: () => false });
+  const {
+    selected,
+    setSelected,
+    selAnchor,
+    rowClick,
+    groupModClick,
+    removeSelected,
+    selFavs,
+    selAllHearted,
+    heartSelected,
+    moveSelected,
+  } = useQueueSelection({
+    items,
+    allItems,
+    favorites,
+    scrollElRef,
+    dragLiveRef,
+    snapQueueRows,
+    restoreToQueue,
+    late: selectionLate,
+  });
+  // Drag and drop lives in components/queue/useQueueDrag (lifted 2026-09-13, the
+  // first lift of this screen's hygiene round, the Library's pattern): the batch
+  // and single drags, the insertion line from live geometry, the drag-to-rail
+  // handoff, the block move and its device commands, the drop and the cancel;
+  // the screen keeps the rows, the overlay and the FLIP landing, and takes the
+  // state back under the old names
+  const {
+    dragBatch,
+    dragSingle,
+    navHover,
+    railPt,
+    insertAt,
+    onDragStart,
+    onDragMove,
+    onDragEnd,
+    onDragCancel,
+    applyBlockMove,
+  } = useQueueDrag({
+    items,
+    allItems,
+    cards,
+    selected,
+    setSelected,
+    selAnchor,
+    scrollElRef,
+    dragLiveRef,
+    setQueueItems,
+    favorites,
+    setPlaylistBatch,
+    snapQueueRows,
+    restoreQueueOrder,
+  });
+  selectionLate.current = { applyBlockMove };
   const leanWin = useWindowedList({
     scrollRef: scrollElRef,
     count: items.length,
@@ -313,135 +372,6 @@ export function QueueScreen(): React.JSX.Element {
 
   const currentRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    setSelected((prev) => {
-      if (prev.size === 0) return prev;
-      const ids = new Set(items.map((it) => it.id));
-      const next = new Set([...prev].filter((id) => ids.has(id)));
-      return next.size === prev.size ? prev : next;
-    });
-  }, [items]);
-  /** True = the click was a selection chord; the caller must not play. */
-  const rowClick = (item: QueueListItem, e: React.MouseEvent): boolean => {
-    const id = item.id;
-    if (id == null) return false;
-    const idx = items.findIndex((it) => it.id === id);
-    if (e.metaKey || e.ctrlKey) {
-      setSelected((prev) => {
-        const next = new Set(prev);
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
-        return next;
-      });
-      selAnchor.current = idx;
-      return true;
-    }
-    if (e.shiftKey && selAnchor.current != null && idx >= 0) {
-      const [a, b] = [Math.min(selAnchor.current, idx), Math.max(selAnchor.current, idx)];
-      setSelected(new Set(items.slice(a, b + 1).flatMap((it) => (it.id == null ? [] : [it.id]))));
-      return true;
-    }
-    // SELECTION MODE SUSPENDS PLAYBACK (user, 2026-08-27; the Photos/Files
-    // rule for single-click-play surfaces): the first bare click exits the
-    // selection and must not also fire a track — a mis-click otherwise
-    // blasts playback mid-curation. The next click plays as always.
-    if (selected.size > 0) {
-      setSelected(new Set());
-      return true;
-    }
-    return false;
-  };
-  /** ⌘-click on an album header toggles its whole run. */
-  const groupModClick = (ids: number[], e: React.MouseEvent): boolean => {
-    if (!(e.metaKey || e.ctrlKey)) {
-      // a bare header click in selection mode exits it too (jump suspended)
-      if (selected.size > 0) {
-        setSelected(new Set());
-        return true;
-      }
-      return false;
-    }
-    setSelected((prev) => {
-      const next = new Set(prev);
-      const allIn = ids.every((id) => next.has(id));
-      for (const id of ids) if (allIn) next.delete(id);
-      if (!allIn) for (const id of ids) next.add(id);
-      return next;
-    });
-    return true;
-  };
-  const removeSelected = useCallback((): void => {
-    const chosen = items.filter((it) => it.id != null && selected.has(it.id));
-    const saved = chosen.flatMap((i) => {
-      const title = i.metadata?.title;
-      return title
-        ? [
-            {
-              content: {
-                title,
-                artist: i.metadata?.artist ?? null,
-                album: i.metadata?.album ?? null,
-              },
-              position: i.position ?? 0,
-            },
-          ]
-        : [];
-    });
-    snapQueueRows();
-    for (const i of chosen) void tt.command({ type: "queueDelete", id: i.id as number });
-    setSelected(new Set());
-    // ONE closure, two entry points (the toast button and Cmd-Z consume the
-    // same stack entry, so they can never double-restore). Sequential,
-    // ascending positions — parallel restores raced each other's inserts
-    // and resolves; each restore arms the FLIP so neighbors part with
-    // motion (user, 2026-08-28).
-    const undoId = useStore.getState().pushUndo(`Remove ${chosen.length} Tracks`, async () => {
-      for (const s of saved) {
-        snapQueueRows();
-        await restoreToQueue(s.content, s.position);
-      }
-    });
-    useStore.getState().showToast({
-      kind: "success",
-      text: `Removed ${chosen.length} tracks`,
-      action: { label: "Undo", undo: () => useStore.getState().runUndo(undoId) },
-    });
-  }, [items, selected]);
-  // The selection's keyboard: ⌘A gathers everything visible (respecting a
-  // filter); with a selection, Esc exits and Delete/Backspace is Remove from
-  // queue — the Finder/Spotify keys. Never inside a text box.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent): void => {
-      const t = e.target;
-      if (t instanceof HTMLElement && t.matches("input, textarea, [contenteditable]")) return;
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "a") {
-        e.preventDefault();
-        setSelected(new Set(items.flatMap((it) => (it.id != null ? [it.id] : []))));
-        return;
-      }
-      if (selected.size === 0) return;
-      if (e.key === "Escape" && !dragLiveRef.current) setSelected(new Set());
-      if (e.key === "Delete" || e.key === "Backspace") removeSelected();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [items, selected.size, removeSelected]);
-  // Clicking the app shell OUTSIDE the screen — the nav rail's blank areas —
-  // clears too. (The top strips are drag-region: the window's own drag
-  // handle, so the OS swallows those clicks like any title bar.)
-  useEffect(() => {
-    if (selected.size === 0) return;
-    const onWin = (e: MouseEvent): void => {
-      const t = e.target;
-      if (!(t instanceof HTMLElement)) return;
-      if (e.metaKey || e.ctrlKey || e.shiftKey) return;
-      if (!t.closest("[data-app-nav], [data-app-playbar]")) return;
-      if (t.closest("button, input, a, [aria-valuenow]")) return;
-      setSelected(new Set());
-    };
-    window.addEventListener("click", onWin);
-    return () => window.removeEventListener("click", onWin);
-  }, [selected.size]);
   // First follow after mount positions INSTANTLY — re-entering the screen
   // shouldn't replay a glide to a place you already were. The animation is
   // reserved for track changes while you're watching.
@@ -465,217 +395,6 @@ export function QueueScreen(): React.JSX.Element {
     // leanRows/items/leanWin are read for the windowed landing only; the effect stays keyed on the pointer
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playId, followQueue, cards, presetGap, filter]);
-
-  // A drag that starts on a SELECTED row moves the whole selection as a block
-  // (the Finder contract — the first thing reached for once selection exists);
-  // starting on an unselected row concerns that row alone and drops the
-  // selection. Captured at drag start so the drop knows which grammar it is.
-  // Drags only run unfiltered, so ids here are in full queue order.
-  const [dragBatch, setDragBatch] = useState<{ ids: number[]; active: number } | null>(null);
-  /** A single-row drag in flight (grip or body) — tracked so the rail
-   *  handoff can freeze the list and put the chip on the cursor. */
-  const [dragSingle, setDragSingle] = useState<{ id: number } | null>(null);
-  /** The rail target under the pointer mid-drag (drag-to-rail). While set,
-   *  the insertion line hides and a single drag hands off to the chip. */
-  const [navHover, setNavHover] = useState<ReturnType<typeof navDropTargetAt>>(null);
-  const navHoverRef = useRef<ReturnType<typeof navDropTargetAt>>(null);
-  const lastPtRef = useRef<{ x: number; y: number } | null>(null);
-  /** Pointer anywhere over the rail: the line hides and a release without a
-   *  real target does NOTHING — no line, no move (the line-is-the-promise
-   *  rule; user, 2026-08-30: releasing on Radio performed the queue move). */
-  const overRailRef = useRef(false);
-  /** True through a drag AND the event that ends it: the Esc that cancels a
-   *  drag must not also clear the selection, and both handlers hear the
-   *  same keydown — cleared a tick later so the guard outlives the event. */
-  const dragLiveRef = useRef(false);
-  /** The pointer while over the rail — anchors the cursor-fixed ghost. */
-  const [railPt, setRailPt] = useState<{ x: number; y: number } | null>(null);
-  // THE INSERTION-LINE MODEL for batch drags (the Spotify/Music/Finder
-  // contract, chosen with the user 2026-08-27 after the lift felt
-  // unpredictable with gapped selections): the rows hold still — no lift,
-  // no make-room — a stacked chip rides the cursor via DragOverlay, and a
-  // gold line between rows is the one truth about where the block lands.
-  // Single-row drags keep the make-room feel the app has always had.
-  const [insertAt, setInsertAt] = useState<{ id: number; after: boolean } | null>(null);
-  const insertRef = useRef<typeof insertAt>(null);
-  const updateInsert = useCallback((v: { id: number; after: boolean } | null): void => {
-    insertRef.current = v;
-    setInsertAt((prev) => (prev?.id === v?.id && prev?.after === v?.after ? prev : v));
-  }, []);
-  // The line is computed from LIVE geometry, never from dnd-kit's cached
-  // collision rects: row bands are measured once at drag start in
-  // scroll-content coordinates (the rows are planted, so they stay true for
-  // the whole drag), the overlay's centre is re-read on every move AND every
-  // scroll (auto-scroll moves the list under a stationary pointer), and the
-  // drop re-derives the line at the instant of release — so the landing IS
-  // the line, by construction (the first cut trusted over.rect and landed
-  // wrong after scrolls and over members; user, 2026-08-27).
-  const dragGeom = useRef<{
-    bands: Array<{ id: number; x: number; y: number; w: number; h: number }>;
-    scrollerTop: number;
-    scrollerLeft: number;
-    lastX: number | null;
-    lastY: number | null;
-    /** a real pointermove was seen — the delta fallback must stay out */
-    pointerSeen: boolean;
-  } | null>(null);
-  // The POINTER drives the line, not the drag chip: the chip is a 320px card
-  // anchored at the grab point, so its centre can sit far from the cursor
-  // (in the card grid it pushed the line a half-card right — user,
-  // 2026-08-28). Start position + dnd-kit's delta = the live pointer.
-  const dragStartPt = useRef<{ x: number; y: number } | null>(null);
-  // nearest NON-member band to the pointer, in scroll-content coordinates;
-  // the edge follows reading order (beyond a band's row decides vertically;
-  // within one, the card grid decides horizontally and list rows vertically)
-  const computeInsert = useCallback(
-    (
-      px: number | null,
-      py: number | null,
-      grid: boolean,
-    ): { id: number; after: boolean } | null => {
-      const g = dragGeom.current;
-      const sc = scrollElRef.current;
-      if (g == null || sc == null || px == null || py == null || g.bands.length === 0) return null;
-      const x = px - g.scrollerLeft + sc.scrollLeft;
-      const y = py - g.scrollerTop + sc.scrollTop;
-      let best = g.bands[0];
-      let bd = Infinity;
-      for (const b of g.bands) {
-        const d = (b.x - x) * (b.x - x) + (b.y - y) * (b.y - y);
-        if (d < bd) {
-          bd = d;
-          best = b;
-        }
-      }
-      const dy = y - best.y;
-      const dx = x - best.x;
-      const after = Math.abs(dy) > best.h / 2 ? dy > 0 : grid ? dx > 0 : dy > 0;
-      return { id: best.id, after };
-    },
-    [],
-  );
-  const onDragStart = (event: DragStartEvent): void => {
-    dragLiveRef.current = true;
-    useStore.getState().setNavDragActive(true);
-    updateInsert(null);
-    dragGeom.current = null;
-    const ae = event.activatorEvent;
-    dragStartPt.current = ae instanceof MouseEvent ? { x: ae.clientX, y: ae.clientY } : null;
-    const id = event.active.id as number;
-    // THE FLUENT GESTURE (live-reproduced, user 2026-08-28): the last ⌘-click
-    // often flows straight into the drag, and selection lands on mouse-UP —
-    // which the drag swallows — so at drag start the pressed row is not yet
-    // selected. A held chord on an unselected row therefore means "this one
-    // too", never "drop everything": the row is ADOPTED into the selection
-    // and the batch drags. A plain body-press on an unselected row keeps the
-    // Finder rule (drop the selection, drag that row alone).
-    const chord = ae instanceof MouseEvent && (ae.metaKey || ae.ctrlKey || ae.shiftKey);
-    const adopt = chord && selected.size > 0 && !selected.has(id);
-    if ((selected.has(id) && selected.size > 1) || adopt) {
-      const sel = adopt ? new Set([...selected, id]) : selected;
-      if (adopt) {
-        setSelected(sel);
-        selAnchor.current = items.findIndex((it) => it.id === id);
-      }
-      const ids = items.flatMap((it) => (it.id != null && sel.has(it.id) ? [it.id] : []));
-      setDragBatch({ ids, active: id });
-      const sc = scrollElRef.current;
-      if (sc) {
-        const scRect = sc.getBoundingClientRect();
-        const bset = new Set(ids);
-        const bands: Array<{ id: number; x: number; y: number; w: number; h: number }> = [];
-        sc.querySelectorAll<HTMLElement>("[data-queue-id]").forEach((el) => {
-          const bandId = Number(el.dataset.queueId);
-          if (bset.has(bandId)) return;
-          const r = el.getBoundingClientRect();
-          bands.push({
-            id: bandId,
-            x: r.left + r.width / 2 - scRect.left + sc.scrollLeft,
-            y: r.top + r.height / 2 - scRect.top + sc.scrollTop,
-            w: r.width,
-            h: r.height,
-          });
-        });
-        dragGeom.current = {
-          bands,
-          scrollerTop: scRect.top,
-          scrollerLeft: scRect.left,
-          lastX: dragStartPt.current?.x ?? null,
-          lastY: dragStartPt.current?.y ?? null,
-          pointerSeen: false,
-        };
-      }
-    } else {
-      // a chord-held drag never destroys a selection it did not consume —
-      // and neither does dragging the ONE selected row (a selection survives
-      // its own drop, single like plural); clearing is for a bare press on
-      // an UNSELECTED row, the Finder rule
-      if (selected.size > 0 && !chord && !selected.has(id)) setSelected(new Set());
-      setDragBatch(null);
-      setDragSingle({ id });
-    }
-  };
-  // The REAL pointer drives the line (a window pointermove listener while a
-  // batch drag runs — see the effect below): dnd-kit's delta compensates for
-  // container scroll, so start+delta drifts from the cursor by the
-  // auto-scrolled distance and pinned the line to the list top after an
-  // auto-scroll up (user, 2026-08-28). onDragMove remains only as the
-  // keyboard-sensor fallback, where the moving overlay IS the position.
-  const onDragMove = (event: DragMoveEvent): void => {
-    if (!dragBatch) return;
-    const g = dragGeom.current;
-    if (!g || g.pointerSeen) return;
-    const a = event.active.rect.current.translated;
-    if (!a) return;
-    const px = a.left + a.width / 2;
-    const py = a.top + a.height / 2;
-    g.lastX = px;
-    g.lastY = py;
-    updateInsert(computeInsert(px, py, cards));
-  };
-  // Auto-scroll moves the rows' viewport positions while the pointer (and so
-  // dnd-kit's move events) can stay still — the line follows the scroll too.
-  useEffect(() => {
-    if (!dragBatch && !dragSingle) return;
-    const sc = scrollElRef.current;
-    if (!sc) return;
-    const onPointerMove = (e: PointerEvent): void => {
-      lastPtRef.current = { x: e.clientX, y: e.clientY };
-      // drag-to-rail: the rail target under the pointer, batch or single.
-      // Over a target the insertion line hides — the drop leaves the list.
-      const nav = navDropTargetAt(e.clientX, e.clientY, ["playlists", "favorites"]);
-      const railRect = document.querySelector("[data-app-nav]")?.getBoundingClientRect();
-      overRailRef.current =
-        railRect != null &&
-        e.clientX >= railRect.left &&
-        e.clientX <= railRect.right &&
-        e.clientY >= railRect.top &&
-        e.clientY <= railRect.bottom;
-      if (nav !== navHoverRef.current) {
-        navHoverRef.current = nav;
-        setNavHover(nav);
-        useStore.getState().setNavDropTarget(nav);
-      }
-      if (nav != null) setRailPt({ x: e.clientX, y: e.clientY });
-      const g = dragGeom.current;
-      if (!g) return;
-      g.pointerSeen = true;
-      g.lastX = e.clientX;
-      g.lastY = e.clientY;
-      updateInsert(overRailRef.current ? null : computeInsert(e.clientX, e.clientY, cards));
-    };
-    const onScroll = (): void => {
-      const g = dragGeom.current;
-      if (g?.lastX != null && !overRailRef.current)
-        updateInsert(computeInsert(g.lastX, g.lastY, cards));
-    };
-    window.addEventListener("pointermove", onPointerMove);
-    sc.addEventListener("scroll", onScroll);
-    return () => {
-      window.removeEventListener("pointermove", onPointerMove);
-      sc.removeEventListener("scroll", onScroll);
-    };
-  }, [dragBatch, dragSingle, cards, computeInsert, updateInsert]);
 
   // THE LANDING ANIMATES (user, 2026-08-27 — an instant re-order after the
   // line model read as a teleport): a FLIP pass flies every displaced row
@@ -718,203 +437,33 @@ export function QueueScreen(): React.JSX.Element {
     });
   }, [queue]);
 
-  /** Move the BLOCK to `at` (its index in the queue WITHOUT the block):
-   *  optimistic locally, then ONE device command per member — each step
-   *  simulated with the firmware's remove-then-insert semantics and anchored
-   *  to live neighbor identity. The old whole-queue diff emitted up to N
-   *  moves (22 for a 3-track move-to-bottom of 25) and long command runs
-   *  scrambled on the real streamer; the mock swallowed them, which is why
-   *  the suite stayed green (user, 2026-08-28). */
-  const applyBlockMove = (blockIds: number[], at: number, undoLabel: string): boolean => {
-    const byId = new Map(allItems.map((it) => [it.id as number, it]));
-    const order = allItems.map((it) => it.id as number);
-    const bset = new Set(blockIds);
-    const rest = order.filter((id) => !bset.has(id));
-    const final = [...rest.slice(0, at), ...blockIds, ...rest.slice(at)];
-    if (final.join() === order.join()) return false;
-    snapQueueRows();
-    setQueueItems(final.flatMap((id) => (byId.has(id) ? [byId.get(id)!] : [])));
-    const work = [...order];
-    const moves: Array<{ id: number; from: number; to: number }> = [];
-    for (let k = 0; k < blockIds.length; k++) {
-      const id = blockIds[k];
-      const from = work.indexOf(id);
-      work.splice(from, 1);
-      const to =
-        k === 0
-          ? at === 0
-            ? 0
-            : work.indexOf(rest[at - 1]) + 1
-          : work.indexOf(blockIds[k - 1]) + 1;
-      work.splice(to, 0, id);
-      if (from !== to) moves.push({ id, from, to });
-    }
-    // SEQUENCED, never parallel: each move's positions assume the one before
-    // it has already applied, and the renderer's unawaited commands become
-    // concurrent HTTP posts in main — the device can apply them out of order
-    // and split the block (live-observed on a gapped drop into the block's
-    // own span; user, 2026-08-28)
-    void (async () => {
-      for (const m of moves)
-        await tt.command({ type: "queueMove", id: m.id, from: m.from, to: m.to });
-    })();
-    useStore.getState().pushUndo(undoLabel, () => restoreQueueOrder(order));
-    return true;
-  };
-
-  const onDragEnd = (event: DragEndEvent): void => {
-    const batch = dragBatch;
-    const single = dragSingle;
-    const nav = navHoverRef.current;
-    const overRail = overRailRef.current;
-    const releasePt = lastPtRef.current;
-    useStore.getState().setNavDragActive(false);
-    overRailRef.current = false;
-    setTimeout(() => {
-      dragLiveRef.current = false;
-    }, 0);
-    // the line one final time, from the release position itself — never a
-    // stale earlier value, on either layout
-    const gEnd = dragGeom.current;
-    const ins = computeInsert(gEnd?.lastX ?? null, gEnd?.lastY ?? null, cards) ?? insertRef.current;
-    setDragBatch(null);
-    setDragSingle(null);
-    dragGeom.current = null;
-    dragStartPt.current = null;
-    navHoverRef.current = null;
-    setNavHover(null);
-    setRailPt(null);
-    useStore.getState().setNavDropTarget(null);
-    updateInsert(null);
-    // Released on the rail: the drop leaves the list — route it and never
-    // reorder. The release point decides, single and batch alike.
-    if (nav != null) {
-      const ids = batch ? batch.ids : single ? [single.id] : [];
-      if (ids.length === 0) return;
-      if (nav === "favorites") {
-        heartQueueIds(ids);
-        flashNavTarget("favorites");
-      } else if (nav === "playlists") {
-        setPlaylistBatch({
-          x: releasePt?.x ?? window.innerWidth / 2,
-          y: releasePt?.y ?? window.innerHeight / 2,
-          ids,
-        });
-      }
-      return;
-    }
-    // Released over the rail but not on a target: the line was hidden, so
-    // nothing was promised — the drop is inert.
-    if (overRail) return;
-    const { active, over } = event;
-    if (batch && batch.ids.length > 1) {
-      // The block gathers AT THE LINE, in queue order — the line was the
-      // whole promise, so the drop reads it and nothing else (a release
-      // past the list edge or over the floating bar still lands: the line
-      // was visible, dnd-kit's over is irrelevant).
-      if (!ins) return;
-      const bset = new Set(batch.ids);
-      const rest = items.flatMap((it) => (it.id != null && !bset.has(it.id) ? [it.id] : []));
-      const k = rest.indexOf(ins.id);
-      if (k < 0) return;
-      applyBlockMove(batch.ids, k + (ins.after ? 1 : 0), `Move ${batch.ids.length} Tracks`);
-      return;
-    }
-    if (!over || active.id === over.id) return;
-    const oldIndex = items.findIndex((i) => i.id === active.id);
-    const newIndex = items.findIndex((i) => i.id === over.id);
-    if (oldIndex < 0 || newIndex < 0) return;
-    const from = items[oldIndex].position ?? oldIndex;
-    const to = items[newIndex].position ?? newIndex;
-    const prevOrder = allItems.flatMap((i) => (i.id != null ? [i.id] : []));
-    // Optimistic reorder; the streamer re-announces the authoritative queue.
-    setQueueItems(arrayMove(items, oldIndex, newIndex));
-    void tt.command({ type: "queueMove", id: active.id as number, from, to });
-    const movedTitle = items[oldIndex].metadata?.title;
-    useStore
-      .getState()
-      .pushUndo(movedTitle ? `Move “${movedTitle}”` : "Move Track", () =>
-        restoreQueueOrder(prevOrder),
-      );
-  };
-
-  // The selection's favorites as ONE verb with the album-header rule: adds
-  // what's missing, and only reads "Remove" when every member is already
-  // there. The hearts light up on the rows themselves, so no toast.
-  const selFavs = items.flatMap((it) => {
-    if (it.id == null || !selected.has(it.id)) return [];
-    const ref = fromQueueItem(it);
-    const fav = ref ? refToFavorite(ref) : null;
-    return fav ? [fav] : [];
+  /** ONE wiring for what a card and a row share (they carried two copies of it,
+   *  2026-09-13): identity, the menu, the playing state, the selection, the drag's
+   *  stillness and line, the open menu. A row adds what only rows have (the DR
+   *  cell, the selection edges, the body drag). */
+  const rowProps = (item: QueueListItem) => ({
+    onMenu: (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setRowMenu({ item, x: e.clientX, y: e.clientY });
+    },
+    item,
+    isCurrent: item.id === playId,
+    sourceActive: queueSourceActive,
+    currentRef: item.id === playId ? currentRef : undefined,
+    selected: item.id != null && selected.has(item.id),
+    onRowClick: (e: React.MouseEvent) => rowClick(item, e),
+    staticDrag: dragBatch != null || navHover != null,
+    dragLive: dragBatch != null || dragSingle != null,
+    // the literals stay narrow (a bare literal in a mutable property widens to string)
+    insertLine:
+      insertAt?.id === item.id
+        ? insertAt.after
+          ? ("after" as const)
+          : ("before" as const)
+        : undefined,
+    menuOpen: rowMenu?.item.id === item.id,
   });
-  const selAllHearted =
-    selFavs.length > 0 &&
-    selFavs.every((f) => favorites.some((x) => favoriteKey(x) === favoriteKey(f as Favorite)));
-  const heartSelected = (): void => {
-    const touched = selFavs.filter((f) => {
-      const has = favorites.some((x) => favoriteKey(x) === favoriteKey(f as Favorite));
-      return selAllHearted ? has : !has;
-    });
-    for (const f of touched) void toggleFavorite(f, { silent: true });
-    if (touched.length === 0) return;
-    // One aggregate undo entry for the batch (per-item pushes would flood
-    // the stack with entries no one asked for).
-    const n = touched.length;
-    useStore
-      .getState()
-      .pushUndo(
-        selAllHearted
-          ? `Remove ${n} ${n === 1 ? "Track" : "Tracks"} from Favorites`
-          : `Add ${n} ${n === 1 ? "Track" : "Tracks"} to Favorites`,
-        () => {
-          for (const f of touched) void toggleFavorite(f, { silent: true });
-        },
-      );
-  };
-
-  /** A rail drop on Favorites: ADD what's missing, never remove (a drop is
-   *  additive intent, unlike the toggle verb), as ONE aggregate undo entry. */
-  const heartQueueIds = (ids: number[]): void => {
-    const idSet = new Set(ids);
-    const favs = allItems.flatMap((it) => {
-      if (it.id == null || !idSet.has(it.id)) return [];
-      const ref = fromQueueItem(it);
-      const fav = ref ? refToFavorite(ref) : null;
-      return fav ? [fav] : [];
-    });
-    const missing = favs.filter(
-      (f) => !favorites.some((x) => favoriteKey(x) === favoriteKey(f as Favorite)),
-    );
-    for (const f of missing) void toggleFavorite(f, { silent: true });
-    if (missing.length === 0) return;
-    const n = missing.length;
-    useStore.getState().pushUndo(`Add ${n} ${n === 1 ? "Track" : "Tracks"} to Favorites`, () => {
-      for (const f of missing) void toggleFavorite(f, { silent: true });
-    });
-  };
-
-  /** The bar's block moves — unambiguous even under a filter (the visible
-   *  selection goes to the very top or bottom of the FULL queue, keeping its
-   *  relative order), so unlike drags these stay live while filtering. */
-  const moveSelected = (where: "top" | "bottom"): void => {
-    const ids = items.flatMap((it) => (it.id != null && selected.has(it.id) ? [it.id] : []));
-    if (ids.length === 0) return;
-    if (
-      !applyBlockMove(
-        ids,
-        where === "top" ? 0 : allItems.length - ids.length,
-        `Move ${ids.length} ${ids.length === 1 ? "Track" : "Tracks"} to ${where === "top" ? "Top" : "Bottom"}`,
-      )
-    )
-      return;
-    // the landing must be SEEN: follow the block to its end of the list, or
-    // "Move to bottom" reads as nothing happening (user, 2026-08-28). An
-    // INSTANT jump — a smooth scroll dies with the reorder's re-render —
-    // and the FLIP supplies the motion: the rows fly in from off-screen
-    // (under reduced motion both are skipped and it is a clean jump).
-    const sc = scrollElRef.current;
-    if (sc) sc.scrollTo({ top: where === "top" ? 0 : sc.scrollHeight });
-  };
 
   if (allItems.length === 0) {
     return (
@@ -1185,41 +734,12 @@ export function QueueScreen(): React.JSX.Element {
         )}
         {/* Reordering a partial list is ambiguous — drags are inert while filtered. */}
         <DndContext
+          accessibility={DND_ACCESSIBILITY}
           sensors={filter || albums ? [] : sensors}
           collisionDetection={closestCenter}
           onDragStart={onDragStart}
           onDragMove={onDragMove}
-          onDragCancel={() => {
-            setDragBatch(null);
-            setDragSingle(null);
-            dragGeom.current = null;
-            dragStartPt.current = null;
-            navHoverRef.current = null;
-            setNavHover(null);
-            setRailPt(null);
-            overRailRef.current = false;
-            setTimeout(() => {
-              dragLiveRef.current = false;
-            }, 0);
-            useStore.getState().setNavDropTarget(null);
-            useStore.getState().setNavDragActive(false);
-            updateInsert(null);
-            // An Esc-cancelled drag ends with the button still held, and the
-            // eventual RELEASE lands as a row click — which plays a track, or
-            // exits selection mode via the bare-click rule (user: Esc then
-            // release deselected). The abort's release is exactly the next
-            // pointerup, whenever it comes: swallow the click that follows
-            // it, and only that one.
-            const swallow = (ce: MouseEvent): void => {
-              ce.stopPropagation();
-              ce.preventDefault();
-            };
-            const onAbortRelease = (): void => {
-              window.addEventListener("click", swallow, { capture: true, once: true });
-              setTimeout(() => window.removeEventListener("click", swallow, true), 200);
-            };
-            window.addEventListener("pointerup", onAbortRelease, { capture: true, once: true });
-          }}
+          onDragCancel={onDragCancel}
           onDragEnd={onDragEnd}
         >
           <SortableContext
@@ -1254,26 +774,7 @@ export function QueueScreen(): React.JSX.Element {
                 }}
               >
                 {items.map((item) => (
-                  <QueueCard
-                    key={item.id}
-                    onMenu={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setRowMenu({ item, x: e.clientX, y: e.clientY });
-                    }}
-                    item={item}
-                    isCurrent={item.id === playId}
-                    sourceActive={queueSourceActive}
-                    currentRef={item.id === playId ? currentRef : undefined}
-                    selected={item.id != null && selected.has(item.id)}
-                    onRowClick={(e) => rowClick(item, e)}
-                    staticDrag={dragBatch != null || navHover != null}
-                    dragLive={dragBatch != null || dragSingle != null}
-                    insertLine={
-                      insertAt?.id === item.id ? (insertAt.after ? "after" : "before") : undefined
-                    }
-                    menuOpen={rowMenu?.item.id === item.id}
-                  />
+                  <QueueCard key={item.id} {...rowProps(item)} />
                 ))}
               </div>
             ) : (
@@ -1288,27 +789,11 @@ export function QueueScreen(): React.JSX.Element {
                   return (
                     <QueueRow
                       key={item.id}
-                      onMenu={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setRowMenu({ item, x: e.clientX, y: e.clientY });
-                      }}
-                      item={item}
+                      {...rowProps(item)}
                       dr={drFor(item)}
-                      isCurrent={item.id === playId}
-                      sourceActive={queueSourceActive}
-                      currentRef={item.id === playId ? currentRef : undefined}
-                      selected={item.id != null && selected.has(item.id)}
-                      onRowClick={(e) => rowClick(item, e)}
-                      staticDrag={dragBatch != null || navHover != null}
-                      dragLive={dragBatch != null || dragSingle != null}
-                      insertLine={
-                        insertAt?.id === item.id ? (insertAt.after ? "after" : "before") : undefined
-                      }
                       selStart={!(prev?.id != null && selected.has(prev.id))}
                       selEnd={!(next?.id != null && selected.has(next.id))}
                       bodyDrag={selected.size > 0}
-                      menuOpen={rowMenu?.item.id === item.id}
                     />
                   );
                 })}
@@ -2056,7 +1541,7 @@ function QueueCard({
         {/* the art well is a veil lift, never a panel hole — see LibraryCards */}
         <div className="aspect-square w-full rounded-lg overflow-hidden bg-veil flex items-center justify-center">
           <ArtImage
-            src={artUrlAt(md?.art_url, 240)}
+            src={artSrc(md?.art_url, 240)}
             lazy
             fallback={<Disc3 size={34} strokeWidth={1.2} className="text-faint" />}
           />

@@ -38,7 +38,7 @@ import { Eqbars } from "@/components/media/Eqbars";
 import { EmptyState } from "@/components/chrome/EmptyState";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { flashTarget, scrollToWithContext } from "@/lib/scroll";
-import { lockVertical } from "@/lib/dnd";
+import { DND_ACCESSIBILITY, lockVertical } from "@/lib/dnd";
 import { CARD_GLYPH_STROKE, MEDIA_ART_FALLBACK } from "@/components/media/MediaArt";
 import { OrderHandle } from "@/components/controls/OrderHandle";
 
@@ -49,9 +49,10 @@ import { FilterInput } from "@/components/controls/FilterInput";
 import { Slider } from "@/components/controls/Slider";
 import { ArtImage } from "@/components/media/ArtImage";
 import { PopoverChrome } from "@/hooks/usePopover";
+import { POPOVER_CARD } from "@/components/chrome/Overlay";
 import { HeaderChip, ScreenTitle, GAP_BETWEEN, GAP_WITHIN } from "@/components/chrome/Chrome";
 import { useConfirmPopover } from "@/components/chrome/Confirm";
-import { artUrlAt } from "@shared/artUrl";
+import { artSrc } from "@/lib/artSrc";
 import { TUNING_WINDOW_MS } from "@/hooks/useStationTuning";
 
 /** A recall that moved nothing after this long is treated as dead — well inside TUNING_WINDOW_MS. */
@@ -371,6 +372,7 @@ export function PresetsScreen(): React.JSX.Element {
         )}
         {/* Reordering a partial list is ambiguous — drags are inert while filtered. */}
         <DndContext
+          accessibility={DND_ACCESSIBILITY}
           sensors={filter ? [] : sensors}
           collisionDetection={closestCenter}
           onDragEnd={onDragEnd}
@@ -490,7 +492,7 @@ function usePresetVolumePopover(
             <span
               data-preset-volume-popover
               style={anchor}
-              className="fixed z-40 w-60 rounded-xl bg-raised ring-1 ring-edge2 shadow-2xl p-3 block cursor-default"
+              className={cx("fixed z-40 w-60 p-3 block cursor-default", POPOVER_CARD)}
               onClick={(e) => e.stopPropagation()}
               onPointerDown={(e) => e.stopPropagation()}
             >
@@ -605,7 +607,7 @@ function PresetRow({
 
       <div className="h-10 w-10 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
         <ArtImage
-          src={artUrlAt(preset.art_url, 40)}
+          src={artSrc(preset.art_url, 40)}
           lazy
           fallback={<PresetGlyph size={16} className="text-faint" />}
         />
@@ -735,7 +737,7 @@ function PresetCard({
                 {preset.art_urls.slice(0, 4).map((u) => (
                   <ArtImage
                     key={u}
-                    src={artUrlAt(u, 120)}
+                    src={artSrc(u, 120)}
                     lazy
                     fallback={<div className="bg-veil h-full w-full" />}
                   />
@@ -743,7 +745,7 @@ function PresetCard({
               </div>
             ) : (
               <ArtImage
-                src={artUrlAt(preset.art_url, 240)}
+                src={artSrc(preset.art_url, 240)}
                 lazy
                 fallback={
                   <PresetGlyph size={34} strokeWidth={CARD_GLYPH_STROKE} className="text-faint" />
@@ -948,7 +950,7 @@ function RepairChip({
             <span
               data-preset-repair-popover
               style={anchor}
-              className="fixed z-40 w-[268px] rounded-xl bg-raised ring-1 ring-edge2 shadow-2xl p-3 block cursor-default"
+              className={cx("fixed z-40 w-[268px] p-3 block cursor-default", POPOVER_CARD)}
               onClick={(e) => e.stopPropagation()}
               onPointerDown={(e) => e.stopPropagation()}
             >

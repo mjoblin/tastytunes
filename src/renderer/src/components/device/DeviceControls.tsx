@@ -14,8 +14,8 @@ const BRIGHTNESS_LABEL: Record<string, string> = { off: "Off", dim: "Dim", brigh
 // ECO_MODE = deep low-power standby; NETWORK = network standby (instant-on).
 const STANDBY_LABEL: Record<string, string> = { ECO_MODE: "Eco", NETWORK: "Network" };
 const STANDBY_TIP: Record<string, string> = {
-  ECO_MODE: "Lowest power; slower to wake",
-  NETWORK: "Stays network-reachable; instant-on",
+  ECO_MODE: "Lowest power, slower to wake",
+  NETWORK: "Stays network-reachable, instant-on",
 };
 const POWER_DOWN_PRESETS = [
   { seconds: 0, label: "Never" },

@@ -1,4 +1,5 @@
-import { Loader2, Pause, Play } from "lucide-react";
+import { Loader2, Pause, Play, Repeat } from "lucide-react";
+import { type RepeatMode, nextRepeatMode, repeatModeOf } from "@shared/smoip";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { controlSet, cx } from "@/lib/format";
@@ -37,13 +38,16 @@ export interface Transport {
   canRepeat: boolean;
   canStop: boolean;
   shuffleOn: boolean;
+  /** Repeat all or repeat one: the button wears the accent for either. */
   repeatOn: boolean;
+  repeatMode: RepeatMode;
   toggle(): void;
   prev(): void;
   next(): void;
   stop(): void;
   toggleShuffle(): void;
-  toggleRepeat(): void;
+  /** Off, all, one, off: the streamer's own order. */
+  cycleRepeat(): void;
   seek(positionSecs: number): void;
 }
 
@@ -71,7 +75,8 @@ export function useTransport(
   const playing = active && state === "play";
   const busy = active && (state === "buffering" || state === "connecting");
   const shuffleOn = playState?.mode_shuffle === "all";
-  const repeatOn = playState?.mode_repeat === "all";
+  const repeatMode = repeatModeOf(playState);
+  const repeatOn = repeatMode !== "off";
 
   return {
     connected,
@@ -88,12 +93,13 @@ export function useTransport(
     canStop: controls.has("stop"),
     shuffleOn,
     repeatOn,
+    repeatMode,
     toggle: () => void tt.command({ type: "togglePlayback" }),
     prev: () => void tt.command({ type: "previousTrack" }),
     next: () => void tt.command({ type: "nextTrack" }),
     stop: () => void tt.command({ type: "stop" }),
     toggleShuffle: () => void tt.command({ type: "setShuffle", mode: shuffleOn ? "off" : "all" }),
-    toggleRepeat: () => void tt.command({ type: "setRepeat", mode: repeatOn ? "off" : "all" }),
+    cycleRepeat: () => void tt.command({ type: "setRepeat", mode: nextRepeatMode(repeatMode) }),
     seek: (positionSecs: number) => void tt.command({ type: "seek", positionSecs }),
   };
 }
@@ -143,6 +149,48 @@ export function PlayPauseButton({
         <Play size={icon} fill="currentColor" strokeWidth={0} className="translate-x-[1px]" />
       )}
     </button>
+  );
+}
+
+/** The repeat button's tip names the mode that is on; off, it names the control. */
+export const REPEAT_TIP: Record<RepeatMode, string> = {
+  off: "Repeat",
+  all: "Repeat all",
+  one: "Repeat one",
+};
+
+/**
+ * The repeat button's glyph: the loop, and for repeat one a "1" set as a BADGE at its
+ * upper right. The icon set's own repeat-one draws its numeral inside the loop, four units
+ * tall on a 24 unit grid, which at the 12px these secondary buttons keep is a 2px mark
+ * (user, 2026-09-19: "the 1 in the icon is very small"). Outside the loop the numeral can
+ * be set at a size a person can read, in the UI sans at semibold (his pick from four: the
+ * mono face's 1 carries a foot bar that reads as fussy at 9px, the sans is a stem and a
+ * flag), and it is a cue that is not color. The badge is absolute and the wrapper is a
+ * block like the bare icon it replaces (the base styles make an svg block-level; an inline
+ * wrapper grew the button by a line's strut, 40px against shuffle's 28), so the button's
+ * box is the plain glyph's in every mode.
+ */
+export function RepeatGlyph({ size, mode }: { size: number; mode: RepeatMode }): React.JSX.Element {
+  const compact = size < 12;
+  return (
+    <span className="relative block" data-repeat-glyph={mode}>
+      <Repeat size={size} />
+      {mode === "one" && (
+        <span
+          aria-hidden
+          data-repeat-badge
+          className="absolute font-sans font-semibold leading-none pointer-events-none select-none"
+          style={{
+            fontSize: compact ? 8 : 9,
+            left: size - (compact ? 1 : 1.5),
+            top: compact ? -4 : -5,
+          }}
+        >
+          1
+        </span>
+      )}
+    </span>
   );
 }
 

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useLayoutEffect } from "react";
+import { artKeyOf } from "@/lib/artSrc";
 import { setCurrentLibrarySpot } from "@/lib/navSpot";
 import type { LibrarySpot } from "@/store";
 import {
-  ArrowLeft,
   Disc3,
   HardDrive,
   Heart,
@@ -12,14 +12,12 @@ import {
   Loader2,
   ListPlus,
   ListStart,
-  MoreHorizontal,
   Play,
   RotateCw,
   Rows3,
   Search,
   Usb,
   Users,
-  X,
   Music2,
 } from "lucide-react";
 import {
@@ -27,7 +25,6 @@ import {
   type AppSettings,
   type MediaNode,
   type MediaQueueAction,
-  type MediaSearchAllGroup,
   type MediaServerInfo,
   type ScreenLayout,
   orderTracks,
@@ -35,24 +32,20 @@ import {
   albumFormat,
   albumComposers,
   performerLine,
-  albumTracksOf,
-  artistSummary,
   nameSortKey,
   albumVolume,
   albumOfTrack,
   trackPosition,
 } from "@shared/model";
-import { favoriteKey, type Favorite, type FavoriteMedia } from "@shared/model";
 import { albumDrKey } from "@shared/model";
-import { analyzeAlbum, analyzeTracks, useAlbumDr } from "@/lib/audioAnalysis";
-import { FACT_SEP, albumFactsLine, albumFormatChips } from "@/lib/mediaFacts";
+import { useAlbumDr } from "@/lib/audioAnalysis";
+import { FACT_SEP, albumFactsLine } from "@/lib/mediaFacts";
 import { usePlayStats } from "@/lib/playStats";
 import { useBestArt } from "@/lib/bestArt";
-import { DrChip, LufsChip } from "@/components/media/Waveform";
 import type { QueueListItem } from "@shared/smoip";
 import { queueWrite, tt } from "@/api";
 import { useStore } from "@/store";
-import { activeSourceId, cx, matchesFilter, fmtCount, fmtAgo } from "@/lib/format";
+import { activeSourceId, cx, matchesFilter, fmtCount } from "@/lib/format";
 import {
   albumMatchesEntry,
   entryArtistMatches,
@@ -62,10 +55,7 @@ import {
 import { useIndexPools } from "@/hooks/useIndexPools";
 import { MOD } from "@/lib/screens";
 import { flashTarget, scrollToCentered } from "@/lib/scroll";
-import { mediaKind, isAlbumClass, stripFurniture, isArtistClass } from "@/lib/media";
-import { toggleFavorite } from "@/lib/favorites";
-import { ArtImage } from "@/components/media/ArtImage";
-import { Segmented } from "@/components/controls/Segmented";
+import { isAlbumClass, stripFurniture } from "@/lib/media";
 import { FilterInput } from "@/components/controls/FilterInput";
 import { ContainerCard, ContainerRow, TrackRow } from "@/components/library/LibraryCards";
 import { Crumbs } from "@/components/library/Crumbs";
@@ -85,14 +75,7 @@ import {
   setLensReturn,
   type Lens,
 } from "@/components/library/lensNavigation";
-import { NameLink } from "@/components/media/NameLine";
-import { AddToPlaylistPanel, itemFromNode } from "@/components/overlays/AddToPlaylistPanel";
-import { ItemMenu, PresetPicker } from "@/components/library/LibraryMenus";
-import { RowMenu } from "@/components/media/RowMenu";
-import { useNavDrag } from "@/hooks/useNavDrag";
-import { flashNavTarget } from "@/lib/navDrop";
 import { SelectionBar, SelectionVerb } from "@/components/controls/SelectionBar";
-import type { MediaMenuItem } from "@/lib/mediaMenus";
 import { EmptyState } from "@/components/chrome/EmptyState";
 import {
   HeaderChip,
@@ -102,7 +85,18 @@ import {
   GAP_WITHIN,
 } from "@/components/chrome/Chrome";
 import { useOneShotAsk } from "@/hooks/useOneShotAsk";
-import { artUrlAt } from "@shared/artUrl";
+import { useLibraryMenus, type MenusLate } from "@/components/library/useLibraryMenus";
+import { useLibraryFavorites } from "@/components/library/useLibraryFavorites";
+import { LibraryPopovers } from "@/components/library/LibraryPopovers";
+import { AlbumHeader } from "@/components/library/AlbumHeader";
+import { LibrarySearchBar } from "@/components/library/LibrarySearchBar";
+import { useLibrarySelection, type SelectionLate } from "@/components/library/useLibrarySelection";
+import {
+  matchesKind,
+  sortSearch,
+  useLibrarySearch,
+  type SearchLate,
+} from "@/components/library/useLibrarySearch";
 
 // Crumbs keep the entered node so an album level can render its header
 // (art, artist, year) without re-fetching metadata.
@@ -117,22 +111,6 @@ const scrollMemory = new Map<string, number>();
 // Per-LEVEL filter memory: each folder keeps its own filter for the session
 // (the store's screenFilters.library always holds the current level's).
 const filterMemory = new Map<string, string>();
-// Find-recall memory: the session's last search — scope, query, controls,
-// and a results snapshot for scopes that would cost a live round-trip to
-// re-run (index-backed scopes re-execute instead: free and always fresh).
-// ⌘F and the gold search buttons restore it with the query text selected,
-// browser-find style. Session-only, like the memories above — never a
-// setting. The nav's "Library" front door is unaffected.
-let searchMemory: {
-  udn: string | null; // null = the root cross-server search
-  query: string;
-  kind: SearchKind;
-  sort: SearchSort;
-  sortReversed: boolean;
-  serverFilter: string | null;
-  scoped: { query: string; items: MediaNode[]; total: number } | null;
-} | null = null;
-
 // Where the last visit left off — server, crumb trail, and which lens was open.
 // The screen UNMOUNTS on every navigation away (App renders only the active
 // screen), so component state can't survive the trip; this is the same
@@ -174,32 +152,6 @@ const QUEUE_FAILED = "Couldn't reach the streamer. Nothing was queued.";
 // The Albums lens scrolls the page scroller — its spot is remembered apart
 // from the source list's (they share the root path key otherwise).
 let albumsLensScroll = 0;
-
-type SearchKind = "all" | "albums" | "artists" | "tracks";
-type SearchSort = "relevance" | "title" | "artist" | "year";
-
-const matchesKind = (n: MediaNode, kind: SearchKind): boolean =>
-  kind === "all" ? true : `${mediaKind(n.upnpClass, n.isContainer)}s` === kind;
-
-// Shared result sort — single-server results and every cross-server group
-// order the same way. 'relevance' keeps the index's artists→albums→tracks
-// order (the hierarchy: artists make albums, albums contain tracks).
-const sortSearch = (list: MediaNode[], sort: SearchSort, reversed: boolean): MediaNode[] => {
-  let out = list;
-  if (sort !== "relevance") {
-    out = [...list].sort((a, b) => {
-      if (sort === "artist")
-        return (
-          nameSortKey(a.artist ?? "￿").localeCompare(nameSortKey(b.artist ?? "￿")) ||
-          a.title.localeCompare(b.title)
-        );
-      if (sort === "year")
-        return (b.year ?? "").localeCompare(a.year ?? "") || a.title.localeCompare(b.title);
-      return a.title.localeCompare(b.title);
-    });
-  }
-  return reversed ? [...out].reverse() : out;
-};
 
 /**
  * Library: browse UPnP media (LAN servers and the streamer's own USB storage)
@@ -244,68 +196,62 @@ export function LibraryScreen(): React.JSX.Element {
   const [nodes, setNodes] = useState<MediaNode[]>([]);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   // Whole-library search MODE (searchable servers): an explicit state with
-  // its own gold bar and input — visually distinct from folder filtering.
-  const [searchMode, setSearchMode] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchState, setSearchState] = useState<{
-    query: string;
-    items: MediaNode[];
-    total: number;
-  } | null>(null);
-  const [searching, setSearching] = useState(false);
-  // Where to come back to when a search result was entered: the results
-  // themselves plus the folder the search ran over. udn null + cross set =
-  // the root cross-server search.
-  const [searchReturn, setSearchReturn] = useState<{
-    udn: string | null;
-    query: string;
-    items: MediaNode[];
-    total: number;
-    cross: MediaSearchAllGroup[] | null;
-    prevPath: Crumb[];
-  } | null>(null);
-  const searchInputRef = useRef<HTMLInputElement | null>(null);
-  /** Set by restoreSpot: a search-results spot coming back through Back/Forward keeps its bar blurred (history restores, intent prepares — see SearchScreen). */
-  const restoredSearch = useRef(false);
-  useEffect(() => {
-    if (searchMode) {
-      if (restoredSearch.current) {
-        restoredSearch.current = false;
-        return;
-      }
-      searchInputRef.current?.focus();
-      // find idiom: a recalled query arrives selected, so typing replaces it
-      searchInputRef.current?.select();
-    }
-  }, [searchMode]);
-  // Result controls: kind filter (the Favorites Segmented idiom) + sort.
-  // Both reset when search exits — a fresh search starts neutral.
-  const [searchKind, setSearchKind] = useState<"all" | "albums" | "artists" | "tracks">("all");
-  const [searchSort, setSearchSort] = useState<"relevance" | "title" | "artist" | "year">(
-    "relevance",
-  );
-  const [searchSortReversed, setSearchSortReversed] = useState(false);
+  // its own gold bar and input — visually distinct from folder filtering. Its
+  // state, its memories, the ways in and out, the searches and the ⌘F ask live
+  // in components/library/useLibrarySearch (lifted 2026-09-13, the first lift
+  // of this screen's hygiene round); the screen takes the state back under
+  // the old names, so nothing downstream moved. The few things search MOVES
+  // are declared below the hook and reach it late-bound through searchLate.
+  const searchLate = useRef<SearchLate>({
+    pushSpot: () => {},
+    moveTo: () => {},
+    rememberScroll: () => {},
+    showNotice: () => {},
+  });
+  const {
+    searchMode,
+    setSearchMode,
+    searchQuery,
+    setSearchQuery,
+    searchState,
+    setSearchState,
+    searching,
+    searchReturn,
+    setSearchReturn,
+    searchKind,
+    setSearchKind,
+    searchSort,
+    setSearchSort,
+    searchSortReversed,
+    setSearchSortReversed,
+    crossState,
+    setCrossState,
+    setSearchServerUdn,
+    crossMode,
+    crossServerUdn,
+    searchInputRef,
+    restoredSearch,
+    exitSearch,
+    enterSearch,
+    returnToSearch,
+    runSearch,
+  } = useLibrarySearch({
+    serverUdn,
+    setServerUdn,
+    path,
+    setPath,
+    servers,
+    filter,
+    setScreenFilter,
+    filterMemory,
+    nodeKey,
+    late: searchLate,
+  });
   const [fetchNonce, setFetchNonce] = useState(0);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   // Which node the scroller currently shows, once its listing has landed —
   // scroll memory records only for that node, so a fresh mount (scroller at
   // 0, listing not yet fetched) can't clobber a remembered spot.
-  // Multi-select over the visible track rows (2026-08-24): ⌘/Ctrl-click
-  // toggles, ⇧-click extends from the anchor, a bare click still plays, Esc
-  // clears. Keyed by node id; cleared whenever the listing changes under it.
-  const [selTracks, setSelTracks] = useState<ReadonlySet<string>>(() => new Set());
-  const selAnchor2 = useRef<string | null>(null);
-  const [playlistMulti, setPlaylistMulti] = useState<{
-    nodes: MediaNode[];
-    x: number;
-    y: number;
-    /** The invoking surface's selection-clear, run only when a target was
-     *  picked (cancel keeps the selection — the bar rule). */
-    clear?(): void;
-    /** An unselected row dragged alone: its drop must not clear a selection
-     *  it never carried (the Finder rule). */
-    keepSelection?: boolean;
-  } | null>(null);
   const loadedKey = useRef<string | null>(null);
   const pendingScroll = useRef<number | null>(null);
   /** A track title a destination asked to land on (LibraryTarget.track). */
@@ -387,10 +333,6 @@ export function LibraryScreen(): React.JSX.Element {
         : "hidden";
   const [lens, setLens] = useState<Lens | null>(null);
 
-  useEffect(() => {
-    setSelTracks((prev) => (prev.size ? new Set() : prev));
-    setPlaylistMulti(null);
-  }, [serverUdn, path, lens, searchMode]);
   // (⌘A/Esc keyboard handling lives below the listing memo — its deps need
   // the visible tracks.)
   // the pools snapshot (cached on the ready indexes' signature) — fetched
@@ -403,84 +345,6 @@ export function LibraryScreen(): React.JSX.Element {
     if (lens !== "albums" || lensPools == null) return;
     requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: albumsLensScroll }));
   }, [lens, lensPools]);
-
-  const [crossState, setCrossState] = useState<{
-    query: string;
-    groups: MediaSearchAllGroup[];
-  } | null>(null);
-  const crossMode = searchMode && atRoot;
-  // Which server's slice to show (null = all) — the same transient-narrowing
-  // semantics as the kind filter beside it: dies when search exits, and a
-  // selection whose server has no results for the new query falls back to
-  // all rather than presenting an empty screen.
-  const [searchServerUdn, setSearchServerUdn] = useState<string | null>(null);
-  const crossServerUdn =
-    searchServerUdn && crossState?.groups.some((g) => g.udn === searchServerUdn)
-      ? searchServerUdn
-      : null;
-
-  // Keep the find-recall memory current while searching (a module var write
-  // per state change — the screen unmounts on any nav, so continuous saving
-  // is what makes recall survive a trip to another screen).
-  useEffect(() => {
-    if (!searchMode || !searchQuery.trim()) return;
-    searchMemory = {
-      udn: atRoot ? null : serverUdn,
-      query: searchQuery,
-      kind: searchKind,
-      sort: searchSort,
-      sortReversed: searchSortReversed,
-      serverFilter: searchServerUdn,
-      scoped: !atRoot ? searchState : null,
-    };
-  }, [
-    searchMode,
-    searchQuery,
-    searchKind,
-    searchSort,
-    searchSortReversed,
-    searchServerUdn,
-    searchState,
-    atRoot,
-    serverUdn,
-  ]);
-
-  /**
-   * Restore the remembered search into the CURRENT scope (call after the
-   * scope is set). Returns false when the memory belongs elsewhere or is
-   * empty — the caller's fresh-search behavior then stands. Index-backed
-   * scopes re-execute (instant + fresh); live-only scopes restore the
-   * snapshot rather than re-firing SOAP at the server.
-   */
-  const restoreSearchMemory = (scope: string | null): boolean => {
-    const mem = searchMemory;
-    if (!mem || mem.udn !== scope || !mem.query.trim()) return false;
-    setSearchQuery(mem.query);
-    setSearchKind(mem.kind);
-    setSearchSort(mem.sort);
-    setSearchSortReversed(mem.sortReversed);
-    if (scope === null) {
-      setSearchServerUdn(mem.serverFilter);
-      void tt
-        .mediaSearchAll(mem.query)
-        .then((groups) => setCrossState({ query: mem.query, groups }))
-        .catch(() => {});
-    } else if (useStore.getState().mediaIndex.some((x) => x.udn === scope && x.state === "ready")) {
-      void tt
-        .mediaSearch(scope, mem.query)
-        .then((res) => setSearchState({ query: mem.query, ...res }))
-        .catch(() => {});
-    } else if (mem.scoped) {
-      setSearchState(mem.scoped);
-    }
-    // the [searchMode] focus effect misses re-entry from within search mode
-    // (true → true across the commit) — select the recalled text explicitly
-    requestAnimationFrame(() => {
-      searchInputRef.current?.focus();
-      searchInputRef.current?.select();
-    });
-    return true;
-  };
 
   // Action feedback: the app-wide toast for failures, a gold pulse for wins.
   // (The screen's original local notice banner graduated into the toast.)
@@ -567,18 +431,6 @@ export function LibraryScreen(): React.JSX.Element {
     lens,
   });
 
-  const exitSearch = (): void => {
-    setSearchMode(false);
-    setSearchState(null);
-    setCrossState(null);
-    setSearchServerUdn(null);
-    setSearchQuery("");
-    setSearchKind("all");
-    setSearchSort("relevance");
-    setSearchSortReversed(false);
-    document.documentElement.classList.remove("filter-focused");
-  };
-
   const moveTo = (udn: string | null, newPath: Crumb[]): void => {
     if (!restoring.current) navPush({ screen: "library", library: snapshot() });
     rememberScroll();
@@ -594,6 +446,7 @@ export function LibraryScreen(): React.JSX.Element {
   const pushSpot = (): void => {
     if (!restoring.current) navPush({ screen: "library", library: snapshot() });
   };
+  searchLate.current = { pushSpot, moveTo, rememberScroll, showNotice };
   // The lens navigation and THE ONE LANDING (components/library/lensNavigation).
   const {
     openLens,
@@ -616,17 +469,6 @@ export function LibraryScreen(): React.JSX.Element {
     setPath,
     showNotice,
   });
-
-  /** Entering search is a NAVIGATION: record the spot being left (lens
-   *  included) so Back returns exactly there — found 2026-08-31 when Back
-   *  after "Search libraries" dumped the Albums lens at the top level.
-   *  The ⌘F flows that RELOCATE first go through moveTo, which already
-   *  pushed (a second push here would cost two Backs); history restores
-   *  (restoreSpot) call setSearchMode directly and must never push. */
-  const enterSearch = (): void => {
-    if (!restoring.current) navPush({ screen: "library", library: snapshot() });
-    setSearchMode(true);
-  };
 
   // Three ways to arrive, and this effect picks between them.
   //
@@ -731,77 +573,6 @@ export function LibraryScreen(): React.JSX.Element {
     positionMemory = { udn: serverUdn, path, lens };
   }, [serverUdn, path, lens]);
 
-  // Palette/global "search the library" ask, carrying its own id (it no longer
-  // rides the reset nonce — ⌘F must not reset the browse tree underneath the
-  // search, so it doesn't bump it, which left the nonce unable to tell two
-  // consecutive ⌘F presses apart).
-  //
-  // Claimed at most once per id — so exiting search manually isn't fought by a
-  // re-running effect — and CLEARED once claimed, which is what stops a stale
-  // ask re-firing on a later mount. `ready` parks the ask until the server
-  // listing lands rather than consuming it into nothing; see useOneShotAsk.
-  const librarySearchTarget = useStore((s) => s.librarySearchTarget);
-  const clearLibrarySearchTarget = useStore((s) => s.clearLibrarySearchTarget);
-  useOneShotAsk(
-    librarySearchTarget,
-    (ask) => {
-      if (!servers) return;
-      // A SEEDED ask (the Search→Library handoff: "See all N in the Library")
-      // brings the unified query along and skips find-recall below — restoring
-      // yesterday's search over an explicit ask would answer a question nobody
-      // asked.
-      const seeded = ask.query?.trim() || null;
-      const ready = new Set(
-        useStore
-          .getState()
-          .mediaIndex.filter((x) => x.state === "ready")
-          .map((x) => x.udn),
-      );
-      const eligible = (x: MediaServerInfo): boolean => x.searchable || ready.has(x.udn);
-      // Find-recall first: ⌘F brings back the session's last search wholesale
-      // (scope included) when that scope is still eligible; an ineligible or
-      // absent memory falls through to the fresh-search picks below.
-      const mem = seeded == null ? searchMemory : null;
-      if (mem?.query.trim()) {
-        const memServer = mem.udn ? servers.find((x) => x.udn === mem.udn) : undefined;
-        const memEligible =
-          mem.udn === null ? ready.size >= 2 : memServer != null && eligible(memServer);
-        if (memEligible) {
-          moveTo(mem.udn, []);
-          setSearchMode(true);
-          restoreSearchMemory(mem.udn);
-          return;
-        }
-      }
-      // Two or more ready indexes → the root cross-server search: no arbitrary
-      // server pick (the reason a default-search-server setting was rejected).
-      // With one, the scoped flow below keeps its live fallback.
-      if (ready.size >= 2) {
-        moveTo(null, []);
-        setSearchMode(true);
-        if (seeded != null) setSearchQuery(seeded);
-        return;
-      }
-      const current = servers.find((x) => x.udn === serverUdn);
-      if (current && eligible(current)) {
-        // no relocation on this path — enterSearch records the spot itself
-        enterSearch();
-        if (seeded != null) setSearchQuery(seeded);
-        return;
-      }
-      const target = servers.find(eligible);
-      if (!target) return;
-      moveTo(target.udn, []);
-      setSearchMode(true);
-      if (seeded != null) setSearchQuery(seeded);
-    },
-    {
-      claim: librarySearchTarget?.id,
-      clear: clearLibrarySearchTarget,
-      ready: servers != null, // listing still loading; runs when it lands
-    },
-  );
-
   const enter = (node: MediaNode): void => {
     if (crossMode && crossState) {
       // Entering a cross-server result SCOPES to its server; the query crumb
@@ -836,91 +607,7 @@ export function LibraryScreen(): React.JSX.Element {
   const enterServer = (udn: string): void => moveTo(udn, []);
 
   /** Bring the search back exactly as it was left (no refetch). */
-  const returnToSearch = (): void => {
-    if (!searchReturn) return;
-    rememberScroll();
-    filterMemory.set(nodeKey(serverUdn, path), filter);
-    if (searchReturn.cross) {
-      // the cross-server search lives at the root — leave the scoped server
-      setScreenFilter("library", "");
-      setServerUdn(null);
-      setPath([]);
-      setSearchMode(true);
-      setSearchQuery(searchReturn.query);
-      setCrossState({ query: searchReturn.query, groups: searchReturn.cross });
-      return;
-    }
-    setScreenFilter("library", filterMemory.get(nodeKey(serverUdn, searchReturn.prevPath)) ?? "");
-    setPath(searchReturn.prevPath);
-    setSearchMode(true);
-    setSearchQuery(searchReturn.query);
-    setSearchState({
-      query: searchReturn.query,
-      items: searchReturn.items,
-      total: searchReturn.total,
-    });
-  };
-
-  // The result links are INDEX-powered: only offer them when the ready index
-  // actually holds the target pool — a folder-only or artist-less server
-  // simply never shows them (graceful degradation to plain sublines).
-  // Per-NODE, so cross-server rows gate against their own server's index.
   const serverIndex = useStore((st) => st.mediaIndex.find((x) => x.udn === serverUdn));
-  const linkable = (node: MediaNode, pool: "albums" | "artists"): boolean => {
-    const idx = mediaIndexStatuses.find((x) => x.udn === nodeUdn(node));
-    return idx?.state === "ready" && idx[pool] > 0;
-  };
-
-  /** Album-as-link: resolve a track's album by content identity against the
-   *  (index-first) search and enter it — same crumb behavior as clicking an
-   *  album result, so the search trail stays returnable. */
-  const goToAlbum = async (track: MediaNode): Promise<void> => {
-    const udn = nodeUdn(track);
-    if (!udn || !track.album) return;
-    const lc = (x: string | null): string => (x ?? "").trim().toLowerCase();
-    try {
-      const { items } = await tt.mediaSearch(udn, track.album);
-      const albums = items.filter(
-        (n) => isAlbumClass(n.upnpClass) && lc(n.title) === lc(track.album),
-      );
-      const album =
-        albums.find(
-          (n) => track.artist == null || n.artist == null || lc(n.artist) === lc(track.artist),
-        ) ?? albums[0];
-      if (!album) {
-        showNotice(`Couldn't find "${track.album}" in this library.`);
-        return;
-      }
-      // carry the track's server stamp so entering from a cross view scopes right
-      enter(track.serverUdn ? { ...album, serverUdn: udn, serverName: track.serverName } : album);
-    } catch {
-      showNotice(`Couldn't find "${track.album}" in this library.`);
-    }
-  };
-
-  /** Artist-as-link: same content-identity resolution, aimed at the artist
-   *  entity. Failure degrades to a quiet toast, never a broken screen. */
-  const goToArtist = async (track: MediaNode): Promise<void> => {
-    const udn = nodeUdn(track);
-    if (!udn || !track.artist) return;
-    const lc = (x: string | null): string => (x ?? "").trim().toLowerCase();
-    try {
-      const { items } = await tt.mediaSearch(udn, track.artist);
-      const artist = items.find(
-        (n) =>
-          n.isContainer &&
-          (n.upnpClass.includes("person") || n.upnpClass.includes("Artist")) &&
-          lc(n.title) === lc(track.artist),
-      );
-      if (!artist) {
-        showNotice(`Couldn't find "${track.artist}" in this library.`);
-        return;
-      }
-      enter(track.serverUdn ? { ...artist, serverUdn: udn, serverName: track.serverName } : artist);
-    } catch {
-      showNotice(`Couldn't find "${track.artist}" in this library.`);
-    }
-  };
 
   // Crumb trail: Library (source list) › source › folders…
   const jumpTo = (index: number): void => {
@@ -1022,86 +709,52 @@ export function LibraryScreen(): React.JSX.Element {
     await saveSettings({ libraryLayout });
   };
 
-  const runSearch = (): void => {
-    const query = searchQuery.trim();
-    if (!query) return;
-    // hand the keyboard back to navigation (Backspace = exit search)
-    (document.activeElement as HTMLElement | null)?.blur?.();
-    if (atRoot) {
-      // cross-server: all ready indexes at once, answered in-memory
-      setSearching(true);
-      void tt
-        .mediaSearchAll(query)
-        .then((groups) => setCrossState({ query, groups }))
-        .catch(() => showNotice("Search failed."))
-        .finally(() => setSearching(false));
-      return;
-    }
-    if (!serverUdn) return;
-    setSearching(true);
-    void tt
-      .mediaSearch(serverUdn, query)
-      .then((res) => setSearchState({ query, ...res }))
-      .catch(() => showNotice("Search failed. The server didn't answer."))
-      .finally(() => setSearching(false));
-  };
-
-  // As-you-type search: with a READY local index the lookup is instant and
-  // free (no server round-trip), so results update live while typing. Enter
-  // still runs the full search everywhere — including index-less servers,
-  // where per-keystroke SOAP against the server would be rude.
-  const indexReady = useStore((s) =>
-    s.mediaIndex.some((x) => x.udn === serverUdn && x.state === "ready"),
-  );
-  useEffect(() => {
-    if (!searchMode || !indexReady || !serverUdn) return;
-    const query = searchQuery.trim();
-    if (query.length === 0) {
-      setSearchState(null);
-      return;
-    }
-    if (query.length < 2 || searchState?.query === query) return;
-    const t = setTimeout(() => {
-      void tt
-        .mediaSearch(serverUdn, query)
-        .then((res) => {
-          // only land results for what's still in the box (fast typing races)
-          if (searchInputRef.current?.value.trim() === query) setSearchState({ query, ...res });
-        })
-        .catch(() => {});
-    }, 100);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchQuery, searchMode, indexReady, serverUdn]);
-
-  // Cross-server as-you-type: always index-backed (that's the whole design),
-  // so live results while typing come for free.
-  useEffect(() => {
-    if (!searchMode || !atRoot) return;
-    const query = searchQuery.trim();
-    if (query.length === 0) {
-      setCrossState(null);
-      return;
-    }
-    if (query.length < 2 || crossState?.query === query) return;
-    const t = setTimeout(() => {
-      void tt
-        .mediaSearchAll(query)
-        .then((groups) => {
-          // only land results for what's still in the box (fast typing races)
-          if (searchInputRef.current?.value.trim() === query) setCrossState({ query, groups });
-        })
-        .catch(() => {});
-    }, 100);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchQuery, searchMode, atRoot]);
-
   // ----------------------------------------------------------------- actions
 
   // Cross-server results carry their own server stamp; everything else
   // belongs to the screen's current server.
   const nodeUdn = (node: MediaNode): string | null => node.serverUdn ?? serverUdn;
+
+  // The menus and their verb builders, the analysis sweeps and the link
+  // resolvers live in components/library/useLibraryMenus (lifted 2026-09-13,
+  // the second lift); the screen keeps the menus' rendering and takes the
+  // state and the builders back under the old names. What the builders read
+  // that is derived below (the open album, its volume siblings, the visible
+  // tracks) reaches them late-bound through menusLate.
+  const menusLate = useRef<MenusLate>({
+    albumNode: null,
+    setSiblings: null,
+    openVolume: () => {},
+    allTracks: [],
+  });
+  const {
+    menu,
+    setMenu,
+    presetPicker,
+    setPresetPicker,
+    menuNodeId,
+    openMenu,
+    tracksForInfo,
+    volumeNavVerbs,
+    analyzeVerbs,
+    linkable,
+    goToAlbum,
+    goToArtist,
+    runAnalyzeAlbums,
+    runAnalyzeTracks,
+    saveNodesAsPlaylist,
+    unreadable,
+  } = useLibraryMenus({
+    serverUdn,
+    servers,
+    path,
+    nodeUdn,
+    enter,
+    lensPools,
+    showToast,
+    showNotice,
+    late: menusLate,
+  });
 
   const act = async (
     node: MediaNode,
@@ -1160,215 +813,19 @@ export function LibraryScreen(): React.JSX.Element {
     void act(node, "PLAY_NOW", el);
   };
 
-  /** True = the click was a selection chord; the caller must not play. */
-  const trackRowClick = (node: MediaNode, e: React.MouseEvent): boolean => {
-    if (e.metaKey || e.ctrlKey) {
-      setSelTracks((prev) => {
-        const next = new Set(prev);
-        if (next.has(node.id)) next.delete(node.id);
-        else next.add(node.id);
-        return next;
-      });
-      selAnchor2.current = node.id;
-      return true;
-    }
-    if (e.shiftKey && selAnchor2.current != null) {
-      const order = tracks.map((n) => n.id);
-      const a = order.indexOf(selAnchor2.current);
-      const b = order.indexOf(node.id);
-      if (a >= 0 && b >= 0) {
-        setSelTracks(new Set(order.slice(Math.min(a, b), Math.max(a, b) + 1)));
-        return true;
-      }
-    }
-    // selection mode suspends playback (the queue's rule, one grammar):
-    // the first bare click exits the selection, the next plays
-    if (selTracks.size > 0) {
-      setSelTracks(new Set());
-      return true;
-    }
-    return false;
-  };
-  const selectedNodes = (): MediaNode[] => tracks.filter((n) => selTracks.has(n.id));
-  /** The selection bar's queue verbs, in the visible order. PLAY_NEXT inserts
-   *  after the current track, so batches go in reversed to land in order. */
-  /** Queue a batch of track nodes — the ONE implementation behind the main
-   *  listing's bar and the lens column's (chosen arrives in visible order;
-   *  PLAY_NEXT inserts reversed so the batch lands in order). Resolves true
-   *  when the writes landed, so callers clear their selection only then. */
-  const queueNodes = async (
-    chosen: MediaNode[],
-    mode: "now" | "next" | "append" | "replace",
-  ): Promise<boolean> => {
-    if (chosen.length === 0) return false;
-    // The undo identity: device-assigned queue ids snapshotted before the
-    // writes — after the re-announce, the added entries are exactly the ids
-    // that were not there. (Play now is deliberately not undoable: its
-    // inverse is not a removal, it would yank the playing track.)
-    const beforeIds = new Set(
-      ((await tt.getSnapshot()).queue?.items ?? []).flatMap((i) => (i.id != null ? [i.id] : [])),
-    );
-    try {
-      if (mode === "now") {
-        await tt.mediaQueueAdd(nodeUdn(chosen[0]) ?? "", chosen[0].id, "PLAY_NOW");
-        for (const n of [...chosen.slice(1)].reverse())
-          await tt.mediaQueueAdd(nodeUdn(n) ?? "", n.id, "PLAY_NEXT");
-      } else if (mode === "replace") {
-        // the album Play button's semantics for a chosen list: the first
-        // track replaces the queue and starts, the rest follow in order.
-        // Tier 2 like Replace queue — a whole-queue restore is not offered.
-        await tt.mediaQueueAdd(nodeUdn(chosen[0]) ?? "", chosen[0].id, "REPLACE");
-        for (const n of chosen.slice(1)) await tt.mediaQueueAdd(nodeUdn(n) ?? "", n.id, "APPEND");
-      } else if (mode === "next") {
-        for (const n of [...chosen].reverse())
-          await tt.mediaQueueAdd(nodeUdn(n) ?? "", n.id, "PLAY_NEXT");
-      } else {
-        for (const n of chosen) await tt.mediaQueueAdd(nodeUdn(n) ?? "", n.id, "APPEND");
-      }
-      if (mode === "next" || mode === "append") {
-        showToast({ kind: "success", text: `Added ${chosen.length} tracks to the queue` });
-        void armQueueAddUndo(beforeIds, chosen.length, mode);
-      }
-      return true;
-    } catch {
-      showNotice(QUEUE_FAILED);
-      return false;
-    }
-  };
-  /** Wait for the re-announce, identify the landed entries by id, and arm
-   *  the undo. Skipped honestly when the count is ambiguous (another
-   *  controller added in the same window). */
-  const armQueueAddUndo = async (
-    beforeIds: ReadonlySet<number>,
-    count: number,
-    mode: "next" | "append",
-  ): Promise<void> => {
-    for (let i = 0; i < 10; i++) {
-      await new Promise((r) => setTimeout(r, 500));
-      const items = (await tt.getSnapshot()).queue?.items ?? [];
-      const added = items.flatMap((it) => (it.id != null && !beforeIds.has(it.id) ? [it.id] : []));
-      if (added.length < count) continue;
-      if (added.length > count) return;
-      useStore
-        .getState()
-        .pushUndo(
-          mode === "append"
-            ? `Add ${count} ${count === 1 ? "Track" : "Tracks"} to Queue`
-            : `Play ${count} ${count === 1 ? "Track" : "Tracks"} Next`,
-          async () => {
-            for (const id of added) await tt.command({ type: "queueDelete", id });
-          },
-        );
-      return;
-    }
-  };
-
-  const queueSelected = async (mode: "now" | "next" | "append"): Promise<void> => {
-    if (await queueNodes(selectedNodes(), mode)) setSelTracks(new Set());
-  };
-
-  // Drag-to-rail: ANY track row drags onto Queue, Playlists or Favorites in
-  // the nav — the Finder rule decides the payload: a selected row carries
-  // the whole selection, an unselected row carries itself alone and leaves
-  // the selection untouched. Queue appends (the bar verb's semantics),
-  // Favorites ADDS what's missing (a drop is additive intent), Playlists
-  // opens the batch panel at the release point.
-  const dragCargo = useRef<{
-    nodes: MediaNode[];
-    fromSelection: boolean;
-    /** Album cargo (2026-09-02): the ordered containers and the chip's title. */
-    albums?: { title: string; noun?: string };
-  }>({
-    nodes: [],
-    fromSelection: false,
+  // Selection and drag live in components/library/useLibrarySelection (lifted
+  // 2026-09-13, the third lift): the multi-select over the visible track rows,
+  // the batch queue writes and their undo, and the drag to the nav with the
+  // Finder payload rule; the screen keeps the rows, the bar and the actions,
+  // and takes the state back under the old names. The hook is called after
+  // the listing memo (it reads the visible tracks directly since step two of
+  // the lenses round, 2026-09-13); the hearts, derived later, reach it
+  // late-bound through selectionLate.
+  const selectionLate = useRef<SelectionLate>({
+    heartNode: () => {},
+    heartNodes: () => {},
+    nodeFavorited: () => false,
   });
-  const navDrag = useNavDrag({
-    targets: ["queue", "playlists", "favorites"],
-    payload: () => {
-      const { nodes, albums } = dragCargo.current;
-      if (nodes.length === 0) return null;
-      if (albums)
-        return {
-          count: nodes.length,
-          title: albums.title,
-          artUrl: nodes[0].artUrl,
-          noun: albums.noun ?? (nodes.length === 1 ? "album" : "volumes"),
-          artKind: "album" as const,
-        };
-      return { count: nodes.length, title: nodes[0].title };
-    },
-    onDrop: (target, at) => {
-      const { nodes, fromSelection, albums } = dragCargo.current;
-      if (albums) {
-        // ALBUMS drop with the meanings of the album's own menu verbs: Queue =
-        // Add to end of queue (each volume of a set in order), Favorites = the
-        // tile's heart (volume 1 of a set, added not toggled), Playlists = Add
-        // to playlist… (the album expanded to tracks first; a set's volumes
-        // expanded in order). Single album per drag, by design.
-        if (target === "queue") {
-          void queueNodes(nodes, "append").then((ok) => {
-            if (ok) flashNavTarget("queue");
-          });
-        } else if (target === "favorites") {
-          if (fromSelection) heartNodes(nodes, false);
-          else if (!nodeFavorited(nodes[0])) heartNode(nodes[0]);
-          flashNavTarget("favorites");
-        } else if (target === "playlists") {
-          if (nodes.length === 1) setPlaylistPicker({ node: nodes[0], x: at.x, y: at.y });
-          else
-            void expandVolumes(nodes).then((tracks) =>
-              setPlaylistMulti({ nodes: tracks, x: at.x, y: at.y }),
-            );
-        }
-        return;
-      }
-      if (target === "queue") {
-        void queueNodes(nodes, "append").then((ok) => {
-          if (ok) {
-            if (fromSelection) setSelTracks(new Set());
-            flashNavTarget("queue");
-          }
-        });
-      } else if (target === "favorites") {
-        heartNodes(nodes, false);
-        flashNavTarget("favorites");
-      } else if (target === "playlists") {
-        setPlaylistMulti({ nodes, x: at.x, y: at.y, keepSelection: !fromSelection });
-      }
-    },
-  });
-  /** A box set's volumes, expanded to their tracks in volume order (the
-   *  playlist panel stores tracks, never container references). */
-  const expandVolumes = async (volumes: MediaNode[]): Promise<MediaNode[]> => {
-    const out: MediaNode[] = [];
-    for (const v of volumes) {
-      const udn = nodeUdn(v);
-      if (!udn) continue;
-      const kids = await tt.mediaBrowse(udn, v.id, []).catch(() => [] as MediaNode[]);
-      out.push(...kids.filter((c) => !c.isContainer));
-    }
-    return out;
-  };
-  const startAlbumDrag = (
-    nodes: MediaNode[],
-    e: React.PointerEvent,
-    title: string,
-    noun?: string,
-  ): void => {
-    // a multi-album selection (0.8.0) is a selection: every album hearts on the
-    // Favorites drop, where a box set hearts volume 1 alone
-    dragCargo.current = { nodes, fromSelection: noun === "albums", albums: { title, noun } };
-    navDrag.start(e);
-  };
-  const startTrackDrag = (node: MediaNode, e: React.PointerEvent): void => {
-    const fromSelection = selTracks.has(node.id);
-    dragCargo.current = {
-      nodes: fromSelection ? selectedNodes() : [node],
-      fromSelection,
-      albums: undefined,
-    };
-    navDrag.start(e);
-  };
 
   /** "Play" on a container: replace the queue with it and start at its first track. */
   const playContainer = async (node: MediaNode, el: HTMLElement | null): Promise<void> => {
@@ -1455,33 +912,7 @@ export function LibraryScreen(): React.JSX.Element {
     });
   };
 
-  // ------------------------------------------------------------------ menus
-
-  const [menu, setMenu] = useState<{ node: MediaNode; x: number; y: number } | null>(null);
   const setMediaInfo = useStore((s) => s.setMediaInfo);
-  // The Info modal wants an album's tracks summed: the browsed album's own
-  // listing when the node IS the open album; otherwise the lens's index
-  // (same server, same title, album artist / performers, and — when twin
-  // editions exist — the same art), i.e. exactly what the lens itself lists.
-  const tracksForInfo = (node: MediaNode): MediaNode[] | undefined => {
-    if (!node.isContainer) return undefined;
-    if (albumNode && node.id === albumNode.id) return allTracks;
-    if (!lensPools || !node.serverUdn) return undefined;
-    const pool = lensPools.find((g) => g.udn === node.serverUdn);
-    return pool ? albumTracksOf(node, pool) : undefined;
-  };
-  const [presetPicker, setPresetPicker] = useState<{
-    node: MediaNode;
-    x: number;
-    y: number;
-  } | null>(null);
-  // The card/row a popover belongs to holds its hover treatment while open.
-  const menuNodeId = menu?.node.id ?? presetPicker?.node.id ?? null;
-  const openMenu = (node: MediaNode, e: React.MouseEvent): void => {
-    e.preventDefault();
-    e.stopPropagation();
-    setMenu({ node, x: e.clientX, y: e.clientY });
-  };
 
   // -------------------------------------------------------------- derivation
 
@@ -1527,86 +958,8 @@ export function LibraryScreen(): React.JSX.Element {
   const openVolume = (a: MediaNode): void => {
     if (a.serverUdn) moveTo(a.serverUdn, [{ id: a.id, title: a.title, node: a }]);
   };
-  /** ⋯-menu garnish on a box set's open album: the volume walk as named
-   *  verbs, so menu-first users see the same navigation the pills offer. */
-  const volumeNavVerbs = (node: MediaNode): MediaMenuItem[] | undefined => {
-    if (!setSiblings || !albumNode || node.id !== albumNode.id) return undefined;
-    const i = setSiblings.findIndex((a) => a.id === albumNode.id);
-    if (i < 0) return undefined;
-    const verbs: MediaMenuItem[] = [];
-    const prev = setSiblings[i - 1];
-    const next = setSiblings[i + 1];
-    if (prev) verbs.push({ label: `Previous volume: ${prev.title}`, run: () => openVolume(prev) });
-    if (next) verbs.push({ label: `Next volume: ${next.title}`, run: () => openVolume(next) });
-    return verbs.length > 0 ? verbs : undefined;
-  };
-
-  // EXPERIMENT (0.7 exploration): the Analyze-audio sweep — every track of
-  // the album measured and cached, the album DR recorded when the set
-  // completes. Album menus only, gated on the waveforms master like all
-  // audio analysis.
-  const waveformsOn = useStore((s) => s.settings.waveforms);
+  // the sweep's progress (the header's pill and the album menu's state read it)
   const analysisProgress = useStore((s) => s.analysisProgress);
-  const runAnalyzeAlbum = async (node: MediaNode, udn: string): Promise<void> => {
-    showToast({ kind: "success", text: `Analyzing “${node.title}”…` });
-    const r = await analyzeAlbum(
-      node,
-      udn,
-      path.map((c) => c.title),
-    );
-    if (r === "busy") return; // the running sweep's own toast will land
-    if (r == null) showNotice(`Couldn't read “${node.title}” from the server.`);
-    else if (r.dr == null)
-      showNotice(`Read ${r.analyzed} of ${r.tracks} tracks. An album DR needs all of them.`);
-    else showToast({ kind: "success", text: `“${node.title}” analyzed: DR${r.dr}` });
-  };
-  /** The album selection bar's Analyze audio (0.8.0): each album's own sweep in
-   *  turn, so every one lands its album DR; the sweep queue serializes them. */
-  const runAnalyzeAlbums = async (nodes: MediaNode[]): Promise<void> => {
-    for (const node of nodes) {
-      const udn = nodeUdn(node);
-      if (udn) await runAnalyzeAlbum(node, udn);
-    }
-  };
-  /** The Tracks lens's sweep over what's shown — the album sweep's toasts,
-   *  minus the album DR (a filter is not an album). */
-  const runAnalyzeTracks = async (chosen: MediaNode[], label: string): Promise<void> => {
-    showToast({ kind: "success", text: `Analyzing ${label}…` });
-    const r = await analyzeTracks(label, chosen);
-    if (r === "busy" || r == null) return;
-    if (r.analyzed === r.tracks)
-      showToast({ kind: "success", text: `Analyzed ${fmtCount(r.tracks)} tracks` });
-    else showNotice(`Read ${r.analyzed} of ${r.tracks} tracks. The rest couldn't be read.`);
-  };
-  /** One-click save of a shown list as a playlist (the Queue's precedent:
-   *  auto-named, toasted with the STORED name, undoable as a create). */
-  const saveNodesAsPlaylist = async (chosen: MediaNode[], name: string): Promise<void> => {
-    const items = chosen.map((node) => {
-      const udn = node.serverUdn ?? serverUdn;
-      const sname = servers?.find((s) => s.udn === udn)?.name ?? null;
-      return itemFromNode(node, udn, sname);
-    });
-    if (items.length === 0) return;
-    try {
-      const created = await tt.playlistCreate(name, items);
-      useStore
-        .getState()
-        .pushUndo(`Create Playlist “${created.name}”`, () => void tt.playlistDelete(created.id));
-      showToast({
-        kind: "success",
-        text: `Saved ${fmtCount(items.length)} tracks as “${created.name}”`,
-        action: { label: "Open Playlists", screen: "playlists" },
-      });
-    } catch {
-      showNotice("Couldn't create the playlist.");
-    }
-  };
-  const analyzeVerbs = (node: MediaNode): MediaMenuItem[] | undefined => {
-    if (!waveformsOn || !node.isContainer || !isAlbumClass(node.upnpClass)) return undefined;
-    const udn = nodeUdn(node);
-    if (!udn) return undefined;
-    return [{ label: "Analyze audio", run: () => void runAnalyzeAlbum(node, udn) }];
-  };
 
   // Filtered + sorted listings are memoized: unmemoized they re-ran the
   // localeCompare sorts and filter scans on every store push — once a second
@@ -1667,39 +1020,36 @@ export function LibraryScreen(): React.JSX.Element {
     searchSort,
     searchSortReversed,
   ]);
-  // The selection's keyboard: ⌘A gathers the visible track listing (the open
-  // lens owns its own ⌘A); with a selection, Esc exits. Never in a text box.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent): void => {
-      const el = e.target;
-      if (el instanceof HTMLElement && el.matches("input, textarea, [contenteditable]")) return;
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "a") {
-        if (lens != null || atRoot || state !== "ready" || tracks.length === 0) return;
-        e.preventDefault();
-        setSelTracks(new Set(tracks.map((n) => n.id)));
-        return;
-      }
-      if (selTracks.size === 0) return;
-      if (e.key === "Escape") setSelTracks(new Set());
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [lens, atRoot, state, tracks, selTracks.size]);
-  // nav-rail blank clicks clear too (the queue's rule; top strips are
-  // drag-region and never deliver clicks)
-  useEffect(() => {
-    if (selTracks.size === 0) return;
-    const onWin = (e: MouseEvent): void => {
-      const t = e.target;
-      if (!(t instanceof HTMLElement)) return;
-      if (e.metaKey || e.ctrlKey || e.shiftKey) return;
-      if (!t.closest("[data-app-nav], [data-app-playbar]")) return;
-      if (t.closest("button, input, a, [aria-valuenow]")) return;
-      setSelTracks(new Set());
-    };
-    window.addEventListener("click", onWin);
-    return () => window.removeEventListener("click", onWin);
-  }, [selTracks.size]);
+
+  // the selection and the drag to the nav (after the listing: the selection
+  // reads the visible tracks directly since step two of the lenses round)
+  const {
+    selTracks,
+    setSelTracks,
+    playlistMulti,
+    setPlaylistMulti,
+    trackRowClick,
+    selectedNodes,
+    queueNodes,
+    queueSelected,
+    navDrag,
+    startAlbumDrag,
+    startTrackDrag,
+  } = useLibrarySelection({
+    serverUdn,
+    path,
+    lens,
+    searchMode,
+    atRoot,
+    state,
+    tracks,
+    nodeUdn,
+    showToast,
+    showNotice,
+    queueFailed: QUEUE_FAILED,
+    setPlaylistPicker,
+    late: selectionLate,
+  });
   const server = servers?.find((s) => s.udn === serverUdn) ?? null;
   // Sort/layout affordances key off the UNFILTERED level: filtering down to
   // one match must not unmount them (the header controls would jump around).
@@ -1771,6 +1121,7 @@ export function LibraryScreen(): React.JSX.Element {
       : md != null && md.album === node.title && entryArtistMatches(md.artist, node);
 
   const allTracks = useMemo(() => nodes.filter((n) => !n.isContainer), [nodes]);
+  menusLate.current = { albumNode, setSiblings, openVolume, allTracks };
   const albumArtServer = albumNode ? (albumNode.artUrl ?? allTracks[0]?.artUrl ?? null) : null;
   // the header's 160px tile (320 on retina) asks the first track's file when
   // the server's art is small (lib/bestArt)
@@ -1780,6 +1131,8 @@ export function LibraryScreen(): React.JSX.Element {
     firstTrack && nodeUdn(firstTrack)
       ? { serverUdn: nodeUdn(firstTrack) ?? "", objectId: firstTrack.id }
       : null,
+    true,
+    albumNode ? artKeyOf(albumNode) : undefined,
   );
   const albumArtist = albumNode
     ? (albumNode.artist ??
@@ -1838,60 +1191,23 @@ export function LibraryScreen(): React.JSX.Element {
   const loading = atRoot ? servers == null : state === "loading";
 
   // ---------------------------------------------------------------- favorites
-  const favorites = useStore((s) => s.favorites);
-  const favKeys = useMemo(() => new Set(favorites.map(favoriteKey)), [favorites]);
+  // The favorite payload and the hearts live in components/library/useLibraryFavorites
+  // (lifted 2026-09-13, the fourth lift); the trail titles stay here, where the
+  // synthetic crumb ids are known
   const pathTitles = path
     .filter(
       (c) => c.id !== SEARCH_CRUMB_ID && c.id !== LENS_CRUMB_ID && c.id !== LENS_ARTIST_CRUMB_ID,
     )
     .map((c) => c.title);
-  /**
-   * A library node as a favorite payload. Content identity + resolution
-   * hints: the entered album's titlePath is the current trail (it already
-   * ends in the album); a listed node appends its own title. Search results
-   * carry no trustworthy trail (their true folder is unknown) — null.
-   */
-  const mediaFav = (node: MediaNode): Omit<FavoriteMedia, "addedAt"> => ({
-    kind: node.isContainer ? "album" : "track",
-    title: node.title,
-    artist: node === albumNode ? (albumArtist ?? node.artist) : node.artist,
-    album: node.isContainer ? null : node.album,
-    artUrl: node === albumNode ? (albumArt ?? node.artUrl) : node.artUrl,
-    serverUdn: node.serverUdn ?? serverUdn,
-    serverName: node.serverName ?? server?.name ?? null,
-    objectId: node.id,
-    titlePath: searchMode
-      ? null
-      : node === albumNode
-        ? pathTitles
-        : node.isContainer
-          ? [...pathTitles, node.title]
-          : pathTitles,
-    durationSecs: node.isContainer ? null : node.durationSecs,
+  const { nodeFavorited, heartNode, heartNodes } = useLibraryFavorites({
+    serverUdn,
+    serverName: server?.name ?? null,
+    searchMode,
+    pathTitles,
+    albumNode,
+    albumArtist,
+    albumArt,
   });
-  const nodeFavorited = (node: MediaNode): boolean =>
-    favKeys.has(favoriteKey(mediaFav(node) as Favorite));
-  const heartNode = (node: MediaNode, opts?: { silent?: boolean }): void => {
-    void toggleFavorite(mediaFav(node), opts);
-  };
-  /** The batch heart verbs: one aggregate undo entry for the lot (per-item
-   *  pushes would flood the stack), silent per-item toggles. */
-  const heartNodes = (nodes: MediaNode[], allIn: boolean): void => {
-    const touched = nodes.filter((n) => (allIn ? nodeFavorited(n) : !nodeFavorited(n)));
-    for (const n of touched) heartNode(n, { silent: true });
-    if (touched.length === 0) return;
-    const count = touched.length;
-    useStore
-      .getState()
-      .pushUndo(
-        allIn
-          ? `Remove ${count} ${count === 1 ? "Track" : "Tracks"} from Favorites`
-          : `Add ${count} ${count === 1 ? "Track" : "Tracks"} to Favorites`,
-        () => {
-          for (const n of touched) heartNode(n, { silent: true });
-        },
-      );
-  };
 
   // "Retrieving…" only appears when a browse actually takes a moment —
   // cached/fast responses swap in without a flash of loading copy.
@@ -1930,6 +1246,7 @@ export function LibraryScreen(): React.JSX.Element {
     goToAlbum: goToAlbumFromLens,
     dragAlbum: startAlbumDrag,
     analyzeAlbums: (nodes) => void runAnalyzeAlbums(nodes),
+    unreadable,
     goToArtist: goToArtistFromLens,
     saveAsPlaylist: (chosen, name) => void saveNodesAsPlaylist(chosen, name),
     analyzeTracks: (chosen, label) => void runAnalyzeTracks(chosen, label),
@@ -1940,6 +1257,7 @@ export function LibraryScreen(): React.JSX.Element {
   // Search-result group headings: identical under-gap everywhere (mb-0.5 —
   // the lists below carry no extra top margin in search mode), identical
   // above-gap too (mt-2 for whichever group lands first, mt-5 after).
+  selectionLate.current = { heartNode, heartNodes, nodeFavorited };
   const groupLabelClass = (first: boolean): string =>
     cx("microlabel mb-0.5 px-1", first ? "mt-2" : "mt-5");
 
@@ -2021,6 +1339,48 @@ export function LibraryScreen(): React.JSX.Element {
       </EmptyState>
     );
   }
+
+  /** ONE wiring for a track row, the listing's and the cross-server groups' alike (they
+   *  carried two copies of it, 2026-09-13): identity, the queue and selection state, the
+   *  actions and the drag, the links by the index. The caller says what only it knows:
+   *  the art, an album row's note and performer line, and whether the links are on (the
+   *  listing's only in search mode, a cross-server row's always). */
+  const trackRow = (
+    node: MediaNode,
+    siblings: MediaNode[],
+    ti: number,
+    opts: { showArt: boolean; note?: string | null; artistLabel?: string | null; links: boolean },
+  ): React.JSX.Element => (
+    <TrackRow
+      key={node.id}
+      node={node}
+      showArt={opts.showArt}
+      isCurrent={queueSourceActive && isCurrentTrack(node)}
+      queued={trackQueued(node)}
+      menuOpen={menuNodeId === node.id}
+      favorited={nodeFavorited(node)}
+      onHeart={() => heartNode(node)}
+      onPlayNow={(el) => playTrack(node, el)}
+      selected={selTracks.has(node.id)}
+      selStart={!(ti > 0 && selTracks.has(siblings[ti - 1].id))}
+      selEnd={!(ti < siblings.length - 1 && selTracks.has(siblings[ti + 1].id))}
+      onRowClick={(e) => trackRowClick(node, e)}
+      onNavDrag={(e) => startTrackDrag(node, e)}
+      onMenu={(e) => openMenu(node, e)}
+      note={opts.note}
+      artistLabel={opts.artistLabel}
+      onAlbumLink={
+        opts.links && node.album && linkable(node, "albums")
+          ? () => void goToAlbum(node)
+          : undefined
+      }
+      onArtistLink={
+        opts.links && node.artist && linkable(node, "artists")
+          ? () => void goToArtist(node)
+          : undefined
+      }
+    />
+  );
 
   return (
     <div
@@ -2145,169 +1505,39 @@ export function LibraryScreen(): React.JSX.Element {
         </div>
       </header>
 
-      {/* search mode: an unmistakable gold bar replaces the breadcrumbs */}
-      {searchMode && (
-        <div
-          data-library-search-bar
-          className="no-drag mx-8 mb-3 flex items-center gap-3 px-4 py-2 rounded-xl ring-1 ring-gold/40 bg-golddim"
-        >
-          <Search size={15} className="text-gold shrink-0" />
-          <input
-            ref={searchInputRef}
-            data-filter-input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={(e) => {
-              // Just-landed state (⌘F recall selects the text): the history
-              // keys NAVIGATE — pressing ⌘← to leave is the reflex this
-              // serves. Once the selection collapses (typing, clicking),
-              // ⌘-arrows are ordinary text-editing keys again.
-              if (
-                (e.metaKey || e.altKey) &&
-                !e.ctrlKey &&
-                (e.key === "ArrowLeft" || e.key === "ArrowRight")
-              ) {
-                const el = e.currentTarget;
-                if (
-                  el.selectionStart === 0 &&
-                  el.selectionEnd === el.value.length &&
-                  el.value.length > 0
-                ) {
-                  e.preventDefault();
-                  if (e.key === "ArrowLeft") useStore.getState().goBack();
-                  else useStore.getState().goForward();
-                  return;
-                }
-              }
-              if (e.key === "Enter") {
-                e.preventDefault();
-                runSearch();
-              }
-              if (e.key === "Escape") {
-                // releases focus, keeps the query AND the results view (the
-                // app-wide rule, 2026-08-23); "Back to browsing" and ⌘← leave
-                // search mode
-                e.stopPropagation();
-                e.currentTarget.blur();
-              }
-            }}
-            onFocus={() => document.documentElement.classList.add("filter-focused")}
-            onBlur={() => document.documentElement.classList.remove("filter-focused")}
-            placeholder={
-              crossMode
-                ? `Search ${readyIndexes.map((x) => x.serverName).join(", ")}…`
-                : `Search all of ${server?.name ?? "this library"}…`
-            }
-            spellCheck={false}
-            className="flex-1 min-w-0 bg-transparent outline-none text-[13.5px] text-ink placeholder:text-gold/50"
-          />
-          {searching ? (
-            <span className="shrink-0 text-[12px] text-gold/80 motion-safe:animate-pulse">
-              searching…
-            </span>
-          ) : crossMode && crossState ? (
-            <span className="shrink-0 font-mono text-[11px] text-gold/80 tabular-nums">
-              {crossTotal} result{crossTotal === 1 ? "" : "s"}
-              {crossTotal > crossItemCount && ` · first ${crossItemCount}`}
-            </span>
-          ) : searchState ? (
-            <span className="shrink-0 font-mono text-[11px] text-gold/80 tabular-nums">
-              {searchState.total} result{searchState.total === 1 ? "" : "s"}
-              {searchState.total > searchState.items.length &&
-                ` · first ${searchState.items.length}`}
-            </span>
-          ) : null}
-          {/* right of the count: the count's width changes as results come in,
-              so the x anchors against the stable exit button instead */}
-          {searchQuery.length > 0 && (
-            <button
-              aria-label="Clear search"
-              onClick={() => {
-                setSearchQuery("");
-                setSearchState(null);
-                setCrossState(null);
-                searchInputRef.current?.focus();
-              }}
-              className="shrink-0 p-1 rounded-full text-dim hover:text-ink hover:bg-veil2 motion-safe:active:scale-90 transition-all"
-            >
-              <X size={13} />
-            </button>
-          )}
-          <button
-            data-library-search-exit
-            onClick={() => {
-              navPush({ screen: "library", library: snapshot() });
-              exitSearch();
-            }}
-            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber text-bg text-[12.5px] font-medium motion-safe:active:scale-95 transition-all"
-          >
-            <ArrowLeft size={13} /> Back to browsing
-          </button>
-        </div>
-      )}
-
-      {/* search result controls: kind filter + sort, the shared header idioms.
-          Kind options follow the hierarchy — artists make albums, albums
-          contain tracks — and the sections below render in the same order. */}
-      {searchMode && (atRoot ? crossState != null : searchState != null) && (
-        <div
-          data-library-search-controls
-          className={`no-drag mx-8 mb-3 flex items-center ${GAP_BETWEEN}`}
-        >
-          <Segmented<"all" | "albums" | "artists" | "tracks">
-            value={searchKind}
-            onChange={setSearchKind}
-            options={[
-              { value: "all", label: "All" },
-              { value: "artists", label: "Artists" },
-              { value: "albums", label: "Albums" },
-              { value: "tracks", label: "Tracks" },
-            ]}
-          />
-          {/* which server's slice — a filter like its neighbor, so it lives
-              in the left cluster; the sort chip keeps its lone right spot.
-              Options come from the search's COVERAGE (every ready index),
-              not from who matched: a server with no results stays visible
-              but inert, so the control never vanishes mid-session and
-              nobody wonders whether a server dropped off the network. */}
-          {crossMode && crossState && readyIndexes.length > 1 && (
-            <div data-library-server-filter>
-              <Segmented<string>
-                value={crossServerUdn ?? "__all__"}
-                onChange={(v) => setSearchServerUdn(v === "__all__" ? null : v)}
-                options={[
-                  { value: "__all__", label: "All libraries" },
-                  ...[...readyIndexes]
-                    .sort((a, b) => a.serverName.localeCompare(b.serverName))
-                    .map((x) => {
-                      const hasMatches = crossState.groups.some((g) => g.udn === x.udn);
-                      return {
-                        value: x.udn,
-                        label:
-                          x.serverName.length > 18 ? `${x.serverName.slice(0, 17)}…` : x.serverName,
-                        disabled: !hasMatches,
-                        tip: hasMatches ? undefined : `No matches on ${x.serverName}`,
-                      };
-                    }),
-                ]}
-              />
-            </div>
-          )}
-          <div className="flex-1" />
-          <SortChip
-            sorts={SEARCH_SORTS}
-            neutral="relevance"
-            value={searchSort}
-            reversed={searchSortReversed}
-            onChange={(v) => {
-              setSearchSort(v);
-              setSearchSortReversed(false);
-            }}
-            onToggleReverse={() => setSearchSortReversed((r) => !r)}
-          />
-        </div>
-      )}
-
+      {/* search mode's gold bar and the result controls (components/library/LibrarySearchBar,
+          lifted 2026-09-13, the fifth lift's third part); leaving search is a navigation,
+          so the spot being left is recorded here */}
+      <LibrarySearchBar
+        searchMode={searchMode}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        runSearch={runSearch}
+        searchInputRef={searchInputRef}
+        searching={searching}
+        crossMode={crossMode}
+        crossState={crossState}
+        setCrossState={setCrossState}
+        searchState={searchState}
+        setSearchState={setSearchState}
+        searchKind={searchKind}
+        setSearchKind={setSearchKind}
+        crossServerUdn={crossServerUdn}
+        setSearchServerUdn={setSearchServerUdn}
+        searchSort={searchSort}
+        setSearchSort={setSearchSort}
+        searchSortReversed={searchSortReversed}
+        setSearchSortReversed={setSearchSortReversed}
+        readyIndexes={readyIndexes}
+        serverName={server?.name ?? null}
+        crossTotal={crossTotal}
+        crossItemCount={crossItemCount}
+        atRoot={atRoot}
+        leaveSearch={() => {
+          navPush({ screen: "library", library: snapshot() });
+          exitSearch();
+        }}
+      />
       {/* breadcrumbs: Library (source list) › source › folders… — hidden at
           the bare root, where the screen title already says it; the trail
           folds its middle when it would not fit (Crumbs) */}
@@ -2563,43 +1793,126 @@ export function LibraryScreen(): React.JSX.Element {
                       paddingTop: 8,
                     }}
                   >
-                    {group.map((s) => (
-                      <div
-                        key={s.udn}
-                        data-library-source
-                        onClick={() => enterServer(s.udn)}
-                        data-tip={
-                          s.isStreamer && inStandby
-                            ? "In standby. USB content appears once the streamer wakes."
-                            : undefined
-                        }
-                        className={cx(
-                          "group relative rounded-2xl p-2 pb-2.5 bg-raised/50 ring-1 ring-edge card-hover-glow cursor-pointer transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]",
-                          s.isStreamer && inStandby && "opacity-50 tip-bottom",
-                        )}
-                      >
-                        {/* one frame per card: the well is a veil lift with no ring of its own (see LibraryCards) */}
-                        <div className="aspect-square w-full rounded-lg bg-veil flex items-center justify-center">
-                          {s.isStreamer ? (
-                            <Usb
-                              size={40}
-                              strokeWidth={1.1}
-                              className="text-dim group-hover:text-ink transition-colors"
-                            />
-                          ) : (
-                            <HardDrive
-                              size={40}
-                              strokeWidth={1.1}
-                              className="text-dim group-hover:text-ink transition-colors"
-                            />
+                    {group.map((s) => {
+                      // the card carries ITS server's index state (2026-09-14): the
+                      // doors animate for any build, this says which one, and a
+                      // stick's first index is a Build ask the Library never offered
+                      const st = mediaIndexStatuses.find((x) => x.udn === s.udn) ?? null;
+                      const state = st?.state ?? "none";
+                      const building = state === "building";
+                      const failed = state === "failed";
+                      const unindexed = state === "none" && !s.searchable;
+                      // the stick's counter moved (a standby renumbers it, so its music may be
+                      // just as it was) and the app will not walk it unasked
+                      const stale = st?.stale === true;
+                      const Icon = s.isStreamer ? Usb : HardDrive;
+                      return (
+                        <div
+                          key={s.udn}
+                          data-library-source
+                          data-library-source-state={state}
+                          onClick={() => {
+                            if (failed) {
+                              void tt.mediaIndexRebuild(s.udn);
+                              return;
+                            }
+                            enterServer(s.udn);
+                          }}
+                          data-tip={
+                            s.isStreamer && inStandby
+                              ? "In standby. USB content appears once the streamer wakes."
+                              : failed
+                                ? `Couldn't index (${st?.failure ?? "no index"}). Click to retry.`
+                                : stale
+                                  ? "The drive may have changed since it was last indexed."
+                                  : undefined
+                          }
+                          className={cx(
+                            "group relative rounded-2xl p-2 pb-2.5 bg-raised/50 ring-1 ring-edge card-hover-glow cursor-pointer transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]",
+                            s.isStreamer && inStandby && "opacity-50 tip-bottom",
+                            building && "opacity-60",
+                            failed && "tip-bottom",
+                            // the tip explains the caption, so it sits beside the card level
+                            // with the caption (user, 2026-10-05: the default put it beside the
+                            // card's middle, far from the cursor; under the card a low card's
+                            // tip ran into the playback bar)
+                            stale && "tip-low",
                           )}
+                        >
+                          {/* one frame per card: the well is a veil lift with no ring of its own (see LibraryCards) */}
+                          <div className="aspect-square w-full rounded-lg bg-veil flex items-center justify-center">
+                            {building ? (
+                              <>
+                                {/* the doors' loading glyph: a spinner reads as activity where a
+                                    pulsing icon read as styling; reduced motion keeps the icon */}
+                                <Loader2
+                                  size={40}
+                                  strokeWidth={1.1}
+                                  className="spin text-dim motion-reduce:hidden"
+                                />
+                                <Icon
+                                  size={40}
+                                  strokeWidth={1.1}
+                                  className="hidden motion-reduce:block text-dim"
+                                />
+                              </>
+                            ) : (
+                              <Icon
+                                size={40}
+                                strokeWidth={1.1}
+                                className="text-dim group-hover:text-ink transition-colors"
+                              />
+                            )}
+                          </div>
+                          <div className="pt-1.5 text-[12.5px] truncate">{s.name}</div>
+                          <div
+                            data-library-source-caption
+                            className={cx(
+                              "text-[11.5px] truncate",
+                              failed ? "text-alert" : "text-faint",
+                            )}
+                          >
+                            {building ? (
+                              <span className="motion-safe:animate-pulse">Indexing…</span>
+                            ) : failed ? (
+                              "Couldn't index · Retry"
+                            ) : state === "ready" && st && stale ? (
+                              <button
+                                data-library-source-build
+                                data-library-source-stale
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void tt.mediaIndexRebuild(s.udn);
+                                }}
+                                // the caption's own color, gold only under the cursor: after
+                                // a standby the streamer renumbers the drive and this shows
+                                // whether or not anything changed, so it offers, never alarms
+                                // (user, 2026-10-05)
+                                className="hover:text-gold transition-colors"
+                              >
+                                Check for changes
+                              </button>
+                            ) : state === "ready" && st ? (
+                              `Indexed · ${fmtCount(st.albums)} ${st.albums === 1 ? "album" : "albums"}`
+                            ) : unindexed ? (
+                              <button
+                                data-library-source-build
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void tt.mediaIndexRebuild(s.udn);
+                                }}
+                                className="text-gold/90 hover:text-gold transition-colors"
+                              >
+                                {s.isStreamer ? "Index this drive" : "Index this server"}
+                              </button>
+                            ) : (
+                              (s.model ??
+                              (s.isStreamer ? "Storage on the streamer" : "Media server"))
+                            )}
+                          </div>
                         </div>
-                        <div className="pt-1.5 text-[12.5px] truncate">{s.name}</div>
-                        <div className="text-[11.5px] text-faint truncate">
-                          {s.model ?? (s.isStreamer ? "Storage on the streamer" : "Media server")}
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               );
@@ -2618,174 +1931,32 @@ export function LibraryScreen(): React.JSX.Element {
             </button>
           </div>
         )}
+        {/* the album header and its box-set pills (components/library/AlbumHeader,
+            lifted 2026-09-13, the fifth lift's second part) */}
         {!atRoot && state === "ready" && albumNode && (
-          <div className="flex items-start gap-6 pb-6 pt-2" data-album-header>
-            <div className="h-[160px] w-[160px] shrink-0 rounded-xl overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
-              <ArtImage
-                src={artUrlAt(albumArt, 160)}
-                fallbackArt={{ artist: albumArtist, album: albumNode.title }}
-                className="h-full w-full object-cover"
-                fallback={<Disc3 size={48} strokeWidth={1} className="text-faint" />}
-              />
-            </div>
-            {/* the text column is at least the art's height with the verb row
-                pinned to its bottom: a header without a composer line is
-                exactly the art's height on every album (the track list starts
-                at one place), the verbs sit on the art's bottom edge, and only
-                a composer line or a wrapped title grows the header (user call,
-                2026-09-05, measured: 153px of 160 without, ~180 with). */}
-            <div className="min-w-0 pt-1 flex min-h-[160px] flex-col gap-1.5">
-              {/* title + artist are one thought — set tight */}
-              <div className="space-y-0.5">
-                <div className="font-display font-bold text-[24px] tracking-tight leading-tight">
-                  {albumNode.title}
-                </div>
-                {albumArtist &&
-                  (albumNode.artist ? (
-                    <NameLink
-                      kind="artist"
-                      name={albumNode.artist}
-                      onGo={() => goToArtistFromLens(albumNode)}
-                      data-album-artist-link
-                      className="block max-w-full text-left text-[14px] text-dim truncate hover:text-ink hover:underline underline-offset-2"
-                    >
-                      {albumArtist}
-                    </NameLink>
-                  ) : (
-                    <div className="text-[14px] text-dim truncate">{albumArtist}</div>
-                  ))}
-              </div>
-              {/* facts + composers are one thought too, set tight (the
-                  composer line is only there when every track agrees) */}
-              <div className="space-y-0.5">
-                {(albumFacts || albumLastPlayed != null || albumInQueue) && (
-                  <div className="text-[12.5px] text-faint" data-album-facts>
-                    {albumFacts}
-                    {albumLastPlayed != null && (
-                      <>
-                        {albumFacts && FACT_SEP}
-                        <button
-                          data-album-last-played
-                          data-tip="Show in History"
-                          onClick={() => jumpToHistory(albumLastPlayed)}
-                          className="tip-bottom hover:text-ink hover:underline underline-offset-2 transition-colors"
-                        >
-                          {`last played ${fmtAgo(albumLastPlayed)}`}
-                        </button>
-                      </>
-                    )}
-                    {albumInQueue && (
-                      <>
-                        {(albumFacts || albumLastPlayed != null) && FACT_SEP}
-                        in the queue
-                      </>
-                    )}
-                  </div>
-                )}
-                {/* the format TOKENS as chips, the DR chip (or the sweep's
-                    pulse in its place) closing the row — two registers, one
-                    home (lib/mediaFacts; user call, 2026-09-01) */}
-                {(allTracks.length > 0 || albumDrShown != null || albumSweeping) && (
-                  <div className="flex flex-wrap items-center gap-1.5 pt-1" data-album-chips>
-                    {albumFormatChips(allTracks).map((b) => (
-                      <span key={b} className="badge">
-                        {b}
-                      </span>
-                    ))}
-                    {albumSweeping ? (
-                      // bare text beside padded badges: 6px of its own air on
-                      // the left matches a badge's inset, so the word sits as
-                      // far from the last chip as chip text sits from chip text
-                      <span
-                        className="ml-1.5 text-[11.5px] text-faint motion-safe:animate-pulse"
-                        data-album-analyzing
-                      >
-                        analyzing
-                        {analysisProgress != null &&
-                          analysisProgress.total > 0 &&
-                          ` ${analysisProgress.done}/${analysisProgress.total}`}
-                        …
-                      </span>
-                    ) : (
-                      <>
-                        {albumDrShown != null && <DrChip dr={albumDrShown} />}
-                        {albumLufsShown != null && <LufsChip lufs={albumLufsShown} />}
-                      </>
-                    )}
-                  </div>
-                )}
-                {/* the credit gets 8px of air above (6px here + the group's
-                    2px rhythm) so it reads as its own thought (user, 2026-09-05) */}
-                {albumComposerLine && (
-                  <div className="text-[12.5px] text-faint pt-1.5" data-album-composers>
-                    {albumComposerLine}
-                  </div>
-                )}
-              </div>
-              <div className="flex items-center gap-2 pt-2 mt-auto">
-                <button
-                  data-tip="Replaces the queue"
-                  // no queue-ack flash on the album screen: the whole-header
-                  // pulse read as a glitch and even the art square was ruled
-                  // extra (user, 2026-08-24) — the button's own press state and
-                  // the playing row lighting up are feedback enough here
-                  onClick={() => void playContainer(albumNode, null)}
-                  className="tip-bottom flex items-center gap-2 px-4 py-2 rounded-full bg-amber text-bg text-[13px] font-medium motion-safe:active:scale-95 transition-all"
-                >
-                  <Play size={14} fill="currentColor" /> Play
-                </button>
-                <button
-                  data-tip={nodeFavorited(albumNode) ? "Remove from favorites" : "Add to favorites"}
-                  aria-label={
-                    nodeFavorited(albumNode) ? "Remove from favorites" : "Add to favorites"
-                  }
-                  data-album-heart={nodeFavorited(albumNode) ? "on" : "off"}
-                  onClick={() => heartNode(albumNode)}
-                  className={cx(
-                    "tip-bottom p-2 rounded-full ring-1 ring-edge bg-panel/70 transition-all motion-safe:active:scale-90",
-                    nodeFavorited(albumNode)
-                      ? "text-gold hover:text-ink"
-                      : "text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70",
-                  )}
-                >
-                  <Heart size={16} fill={nodeFavorited(albumNode) ? "currentColor" : "none"} />
-                </button>
-                <HeaderChip
-                  aria-label="More actions"
-                  onClick={(e) => openMenu(albumNode, e)}
-                  shape="full"
-                  className="p-2"
-                >
-                  <MoreHorizontal size={16} />
-                </HeaderChip>
-              </div>
-            </div>
-          </div>
-        )}
-        {/* a box set's volumes as the app's own picker — one pill per volume,
-            the open one lit, on its own row above the tracks they switch (the
-            app's Segmented-above-its-listing idiom; moved out of the header
-            column, which is sized to sit beside the art — user placement,
-            2026-08-27). The old faint ‹ › facts line went unnoticed as
-            navigation. */}
-        {!atRoot && state === "ready" && albumNode && setSiblings && (
-          <div className="-mt-1.5 pb-5 flex" data-album-set>
-            {/* px-4 pills: a volume row is a few short labels with room to
-                spare, so they wear looser padding than the dense partition
-                controls (user, 2026-08-27) */}
-            <Segmented<string>
-              className="[&>button]:px-4"
-              value={albumNode.id}
-              options={setSiblings.map((a) => ({
-                value: a.id,
-                label: volumeMarker(a.title),
-              }))}
-              onChange={(id) => {
-                const next = setSiblings.find((a) => a.id === id);
-                if (next) openVolume(next);
-              }}
-            />
-          </div>
+          <AlbumHeader
+            albumNode={albumNode}
+            albumArt={albumArt}
+            albumArtist={albumArtist}
+            albumFacts={albumFacts}
+            albumLastPlayed={albumLastPlayed}
+            jumpToHistory={jumpToHistory}
+            albumInQueue={albumInQueue}
+            allTracks={allTracks}
+            albumDrShown={albumDrShown}
+            albumLufsShown={albumLufsShown}
+            albumSweeping={albumSweeping}
+            analysisProgress={analysisProgress}
+            albumComposerLine={albumComposerLine}
+            playContainer={playContainer}
+            nodeFavorited={nodeFavorited}
+            heartNode={heartNode}
+            openMenu={openMenu}
+            goToArtistFromLens={goToArtistFromLens}
+            setSiblings={setSiblings}
+            volumeMarker={volumeMarker}
+            openVolume={openVolume}
+          />
         )}
 
         {searchMode && !atRoot && !searchState && !searching && (
@@ -2931,39 +2102,16 @@ export function LibraryScreen(): React.JSX.Element {
                   </div>
                 )}
                 <div className="divide-y divide-edge/50">
-                  {g.tracks.map((node, ti) => (
-                    <TrackRow
-                      key={node.id}
-                      node={node}
-                      showArt={!albumNode}
-                      isCurrent={queueSourceActive && isCurrentTrack(node)}
-                      queued={trackQueued(node)}
-                      menuOpen={menuNodeId === node.id}
-                      favorited={nodeFavorited(node)}
-                      onHeart={() => heartNode(node)}
-                      onPlayNow={(el) => playTrack(node, el)}
-                      selected={selTracks.has(node.id)}
-                      selStart={!(ti > 0 && selTracks.has(g.tracks[ti - 1].id))}
-                      selEnd={!(ti < g.tracks.length - 1 && selTracks.has(g.tracks[ti + 1].id))}
-                      onRowClick={(e) => trackRowClick(node, e)}
-                      onNavDrag={(e) => startTrackDrag(node, e)}
-                      onMenu={(e) => openMenu(node, e)}
-                      note={albumNoteFor(node)}
-                      artistLabel={
-                        albumNode ? performerLine(node, albumArtist ?? albumNode.artist) : null
-                      }
-                      onAlbumLink={
-                        searchMode && node.album && linkable(node, "albums")
-                          ? () => void goToAlbum(node)
-                          : undefined
-                      }
-                      onArtistLink={
-                        searchMode && node.artist && linkable(node, "artists")
-                          ? () => void goToArtist(node)
-                          : undefined
-                      }
-                    />
-                  ))}
+                  {g.tracks.map((node, ti) =>
+                    trackRow(node, g.tracks, ti, {
+                      showArt: !albumNode,
+                      note: albumNoteFor(node),
+                      artistLabel: albumNode
+                        ? performerLine(node, albumArtist ?? albumNode.artist)
+                        : null,
+                      links: searchMode,
+                    }),
+                  )}
                 </div>
               </div>
             ))}
@@ -3016,35 +2164,9 @@ export function LibraryScreen(): React.JSX.Element {
                   <>
                     {kindLabel("Tracks")}
                     <div className="divide-y divide-edge/50 -mx-2">
-                      {g.tracks.map((node, ti) => (
-                        <TrackRow
-                          key={node.id}
-                          node={node}
-                          showArt
-                          isCurrent={queueSourceActive && isCurrentTrack(node)}
-                          queued={trackQueued(node)}
-                          menuOpen={menuNodeId === node.id}
-                          favorited={nodeFavorited(node)}
-                          onHeart={() => heartNode(node)}
-                          onPlayNow={(el) => playTrack(node, el)}
-                          selected={selTracks.has(node.id)}
-                          selStart={!(ti > 0 && selTracks.has(g.tracks[ti - 1].id))}
-                          selEnd={!(ti < g.tracks.length - 1 && selTracks.has(g.tracks[ti + 1].id))}
-                          onRowClick={(e) => trackRowClick(node, e)}
-                          onNavDrag={(e) => startTrackDrag(node, e)}
-                          onMenu={(e) => openMenu(node, e)}
-                          onAlbumLink={
-                            node.album && linkable(node, "albums")
-                              ? () => void goToAlbum(node)
-                              : undefined
-                          }
-                          onArtistLink={
-                            node.artist && linkable(node, "artists")
-                              ? () => void goToArtist(node)
-                              : undefined
-                          }
-                        />
-                      ))}
+                      {g.tracks.map((node, ti) =>
+                        trackRow(node, g.tracks, ti, { showArt: true, links: true }),
+                      )}
                     </div>
                   </>
                 )}
@@ -3053,170 +2175,47 @@ export function LibraryScreen(): React.JSX.Element {
           })}
       </div>
 
-      {/* a menu invoked ON a selected track speaks for the whole selection,
-          pluralized — the Finder/Spotify convention */}
-      {menu && !menu.node.isContainer && selTracks.has(menu.node.id) && selTracks.size > 1 && (
-        <RowMenu
-          title={`${selTracks.size} tracks`}
-          at={{ x: menu.x, y: menu.y }}
-          onClose={() => setMenu(null)}
-          items={[
-            { label: "Play now", run: () => void queueSelected("now") },
-            { label: "Play next", run: () => void queueSelected("next") },
-            { label: "Add to end of queue", run: () => void queueSelected("append") },
-            {
-              label: "Add to playlist…",
-              run: () => setPlaylistMulti({ nodes: selectedNodes(), x: menu.x, y: menu.y }),
-            },
-            (() => {
-              const nodes = selectedNodes();
-              const allIn = nodes.length > 0 && nodes.every(nodeFavorited);
-              return {
-                label: allIn ? "Remove from favorites" : "Add to favorites",
-                run: () => heartNodes(nodes, allIn),
-              };
-            })(),
-          ]}
-        />
-      )}
-      {menu && !(!menu.node.isContainer && selTracks.has(menu.node.id) && selTracks.size > 1) && (
-        <ItemMenu
-          menu={menu}
-          onClose={() => setMenu(null)}
-          navVerbs={volumeNavVerbs(menu.node)}
-          utilityVerbs={analyzeVerbs(menu.node)}
-          goToAlbum={
-            lens === "tracks" && !menu.node.isContainer && menu.node.album
-              ? () => {
-                  setMenu(null);
-                  goToAlbumFromLens(menu.node);
-                }
-              : searchMode &&
-                  !menu.node.isContainer &&
-                  menu.node.album &&
-                  linkable(menu.node, "albums")
-                ? () => {
-                    setMenu(null);
-                    void goToAlbum(menu.node);
-                  }
-                : undefined
-          }
-          goToArtist={
-            lens === "tracks" && !menu.node.isContainer && menu.node.artist
-              ? () => {
-                  setMenu(null);
-                  goToArtistFromLens(menu.node);
-                }
-              : searchMode &&
-                  !menu.node.isContainer &&
-                  menu.node.artist &&
-                  linkable(menu.node, "artists")
-                ? () => {
-                    setMenu(null);
-                    void goToArtist(menu.node);
-                  }
-                : undefined
-          }
-          onAction={(action, playFromId) => {
-            setMenu(null);
-            if (action === "PLAY") void playContainer(menu.node, null);
-            else if (action === "PLAY_FROM_HERE") void playAlbumFrom(menu.node);
-            else void act(menu.node, action, null, playFromId);
-          }}
-          onSavePreset={() => {
-            setPresetPicker({ node: menu.node, x: menu.x, y: menu.y });
-            setMenu(null);
-          }}
-          onInfo={() => {
-            setMenu(null);
-            const n = menu.node;
-            // an artist's page is summed by NAME from the index (albums,
-            // credits) — the lens's merged rows and the server's person
-            // entities alike; without a pool the modal shows what it has
-            const pool =
-              lensPools?.find((g) => g.udn === (n.serverUdn ?? server?.udn)) ?? lensPools?.[0];
-            const artist =
-              n.isContainer && isArtistClass(n.upnpClass) && pool
-                ? artistSummary(n.title, pool)
-                : undefined;
-            setMediaInfo({
-              node: artist && !n.artUrl && artist.artUrl ? { ...n, artUrl: artist.artUrl } : n,
-              tracks: artist ? undefined : tracksForInfo(n),
-              artist,
-              serverName: n.serverName ?? server?.name ?? null,
-              serverUdn: nodeUdn(n),
-              // what the index learned about this server (the modal's Indexed line + notes)
-              ...(pool?.profile ? { serverProfile: pool.profile } : {}),
-            });
-          }}
-          onAddToPlaylist={
-            !menu.node.isContainer || isAlbumClass(menu.node.upnpClass)
-              ? () => {
-                  setPlaylistPicker({ node: menu.node, x: menu.x, y: menu.y });
-                  setMenu(null);
-                }
-              : undefined
-          }
-          // Back-link for the builders' search pivot: a browse pivot returns
-          // via the position restore, a pivot out of SEARCH MODE returns via
-          // find-recall (its browse position is just the search's scope root).
-          // Albums and tracks are heartable; plain folders and artists aren't.
-          favorite={
-            !menu.node.isContainer || isAlbumClass(menu.node.upnpClass)
-              ? {
-                  active: nodeFavorited(menu.node),
-                  toggle: () => {
-                    heartNode(menu.node);
-                    setMenu(null);
-                  },
-                }
-              : undefined
-          }
-        />
-      )}
-      {navDrag.ghost}
-      {playlistMulti && (
-        <AddToPlaylistPanel
-          label={`${playlistMulti.nodes.length} tracks`}
-          at={{ x: playlistMulti.x, y: playlistMulti.y }}
-          onClose={() => setPlaylistMulti(null)}
-          resolve={() => {
-            const items = playlistMulti.nodes.map((node) => {
-              const udn = node.serverUdn ?? serverUdn;
-              const name = servers?.find((s) => s.udn === udn)?.name ?? null;
-              return itemFromNode(node, udn, name);
-            });
-            if (!playlistMulti.keepSelection) setSelTracks(new Set());
-            playlistMulti.clear?.();
-            return Promise.resolve(items);
-          }}
-        />
-      )}
-      {playlistPicker && (
-        <AddToPlaylistPanel
-          label={playlistPicker.node.title}
-          at={{ x: playlistPicker.x, y: playlistPicker.y }}
-          onClose={() => setPlaylistPicker(null)}
-          resolve={async () => {
-            const node = playlistPicker.node;
-            const udn = node.serverUdn ?? serverUdn;
-            const name = servers?.find((s) => s.udn === udn)?.name ?? null;
-            if (!node.isContainer) return [itemFromNode(node, udn, name)];
-            // An album expands to its TRACKS — a playlist stores tracks, not a
-            // reference that would drift as the server's album changes.
-            if (!udn) return [];
-            const children = await tt.mediaBrowse(udn, node.id, []);
-            return children.filter((c) => !c.isContainer).map((c) => itemFromNode(c, udn, name));
-          }}
-        />
-      )}
-      {presetPicker && (
-        <PresetPicker
-          picker={presetPicker}
-          onClose={() => setPresetPicker(null)}
-          onSave={(slot, name) => savePreset(presetPicker.node, slot, name)}
-        />
-      )}
+      {/* the popovers over the listing: the menus, the playlist panels, the preset
+          picker and the drag ghost (components/library/LibraryPopovers, lifted
+          2026-09-13, the fifth lift) */}
+      <LibraryPopovers
+        menu={menu}
+        setMenu={setMenu}
+        selTracks={selTracks}
+        setSelTracks={setSelTracks}
+        queueSelected={queueSelected}
+        playlistMulti={playlistMulti}
+        setPlaylistMulti={setPlaylistMulti}
+        selectedNodes={selectedNodes}
+        nodeFavorited={nodeFavorited}
+        heartNode={heartNode}
+        heartNodes={heartNodes}
+        volumeNavVerbs={volumeNavVerbs}
+        analyzeVerbs={analyzeVerbs}
+        linkable={linkable}
+        goToAlbum={goToAlbum}
+        goToArtist={goToArtist}
+        tracksForInfo={tracksForInfo}
+        presetPicker={presetPicker}
+        setPresetPicker={setPresetPicker}
+        savePreset={savePreset}
+        lens={lens}
+        searchMode={searchMode}
+        goToAlbumFromLens={goToAlbumFromLens}
+        goToArtistFromLens={goToArtistFromLens}
+        playContainer={playContainer}
+        playAlbumFrom={playAlbumFrom}
+        act={act}
+        lensPools={lensPools}
+        server={server}
+        setMediaInfo={setMediaInfo}
+        nodeUdn={nodeUdn}
+        playlistPicker={playlistPicker}
+        setPlaylistPicker={setPlaylistPicker}
+        serverUdn={serverUdn}
+        servers={servers}
+        ghost={navDrag.ghost}
+      />
     </div>
   );
 }
@@ -3225,17 +2224,6 @@ export function LibraryScreen(): React.JSX.Element {
 
 const SORTS: Array<{ value: AppSettings["librarySort"]; label: string }> = [
   { value: "server", label: "Server order" },
-  { value: "title", label: "Title" },
-  { value: "artist", label: "Artist" },
-  { value: "year", label: "Year (newest first)" },
-];
-const SEARCH_SORTS: Array<{
-  value: "relevance" | "title" | "artist" | "year";
-  label: string;
-  noReverse?: boolean;
-}> = [
-  // reversing relevance is meaningless — "least relevant first" isn't a thing
-  { value: "relevance", label: "Relevance", noReverse: true },
   { value: "title", label: "Title" },
   { value: "artist", label: "Artist" },
   { value: "year", label: "Year (newest first)" },

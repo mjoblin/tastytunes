@@ -29,7 +29,7 @@ const GROUPS: Array<{ title: string; rows: Array<[string, string]> }> = [
     rows: [
       ["/", "Filter the current list, narrowing what’s already on screen"],
       ["S", "Search everything: library, playlists, presets, favorites, radio"],
-      [`${MOD}F`, "Find here: the Library’s own search on the Library, Search everywhere else"],
+      [`${MOD}F`, "In the Library, search just the Library. Anywhere else, Search everything"],
       [`⇧${MOD}F`, "Search everything from anywhere, even inside the Library"],
     ],
   },
@@ -43,6 +43,7 @@ const GROUPS: Array<{ title: string; rows: Array<[string, string]> }> = [
         "Now Playing · Queue · Search · lIbrary · Presets · plAylists · faVorites · Radio · History · Device · sEttings",
       ],
       ["F", "Full-screen display mode"],
+      ["Tab", "Next display scene, in display mode (⇧Tab steps back)"],
       [
         "⌘← / ⌘→",
         "Back / forward through everywhere you've been (mouse side buttons too; Backspace goes up a level in the Library)",

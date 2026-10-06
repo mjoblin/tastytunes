@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useStore } from "@/store";
 
 // The default extent acts as a magnetic detent while dragging.
 const SNAP_RANGE = 12;
@@ -9,7 +10,11 @@ const SNAP_RANGE = 12;
  * persisted on release; the draft is held until the settings round-trip lands
  * so there is no snap-back. Written once here (2026-09-12) when the drawer
  * needed the width hook's exact behaviour for its height — a second hook
- * would have been the same forty lines with x for y.
+ * would have been the same forty lines with x for y. A release that changed
+ * the extent puts one entry on the undo stack (2026-09-13, the user's ask
+ * after the art grip): Cmd-Z saves the size the drag started from, one home
+ * for the art, the panels and the drawer alike; no entry for a release that
+ * landed where it began.
  */
 export function useDragExtent({
   saved,
@@ -19,6 +24,7 @@ export function useDragExtent({
   max,
   axis,
   grow,
+  undoLabel,
 }: {
   /** The persisted value. */
   saved: number;
@@ -35,6 +41,8 @@ export function useDragExtent({
    *  (y, -1). */
   axis: "x" | "y";
   grow: 1 | -1;
+  /** The undo entry's label ("Resize Album Art"); none means no undo entry. */
+  undoLabel?: string;
 }): {
   size: number;
   dragging: boolean;
@@ -77,9 +85,12 @@ export function useDragExtent({
       },
       onPointerUp: () => {
         if (!start.current) return;
+        const from = start.current.size;
         start.current = null;
         setDragging(false);
         void save(latest.current).then(() => setDraft(null));
+        if (undoLabel && latest.current !== from)
+          useStore.getState().pushUndo(undoLabel, () => save(from));
       },
     },
   };

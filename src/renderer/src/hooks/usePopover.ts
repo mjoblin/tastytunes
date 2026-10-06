@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 /**
  * Popover plumbing shared by every transient popover in the app (⋯ menus,
@@ -10,12 +10,19 @@ import { useEffect, useLayoutEffect, useState } from "react";
  * popover without it leaks Escape to whatever sits underneath.
  */
 export function usePopoverChrome(onClose: () => void): void {
+  // the latest closer through a ref, so the chrome is installed ONCE per popover: callers
+  // pass a fresh arrow every render, and an effect keyed on it removed and re-added the
+  // root class on every render of the owner, which anything watching the root's classes
+  // saw as change after change (the scene palette's observer, 2026-09-12: a loop that
+  // hung the renderer when the signal lamp's popover opened on Now Playing)
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
     document.documentElement.classList.add("popover-open");
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === "Escape") {
         e.stopPropagation();
-        onClose();
+        closeRef.current();
       }
     };
     window.addEventListener("keydown", onKey, true);
@@ -23,7 +30,7 @@ export function usePopoverChrome(onClose: () => void): void {
       document.documentElement.classList.remove("popover-open");
       window.removeEventListener("keydown", onKey, true);
     };
-  }, [onClose]);
+  }, []);
 }
 
 /**

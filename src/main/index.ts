@@ -7,7 +7,9 @@ import {
   powerMonitor,
   screen,
   shell,
+  protocol,
 } from "electron";
+import { writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { IPC, type MenuCommand, type StreamerCommand } from "@shared/ipc";
 import {
@@ -67,9 +69,11 @@ import {
 import { fetchCoverArt } from "./lookups/coverArt";
 import { radioByTags, radioSearch, radioTop } from "./lookups/radioBrowser";
 import { clearLookupCaches, flushLookupCaches, lookupCacheStats } from "./lookups/diskCache";
+import { artThumb, artThumbsStats, clearArtThumbs, flushArtThumbs } from "./lookups/artThumbs";
 import {
   audioResUrl,
   browse as mediaBrowse,
+  deviceLaneReset,
   presetSave,
   queueAdd,
   refreshServers,
@@ -95,6 +99,12 @@ import { playStatsFromRecord } from "./data/playStats";
 import { embeddedArtFor } from "./lookups/embeddedArt";
 import type { EmbeddedArtQuery } from "@shared/model";
 
+// tt-art: the app's own picture scheme (main/lookups/artThumbs). Registered
+// before ready, as Electron requires; served in whenReady.
+protocol.registerSchemesAsPrivileged([
+  { scheme: "tt-art", privileges: { standard: true, secure: true, supportFetchAPI: true } },
+]);
+
 // A dead log pipe must never crash the app: when a parent process that
 // spawned us (a script, a test harness) dies, our stdout/stderr writes
 // eventually hit EPIPE once the kernel buffer fills — hours later — and an
@@ -116,6 +126,9 @@ app.setPath(
 );
 
 const deviceManager = new DeviceManager();
+// A promise that rejects with nobody to catch it would otherwise vanish from
+// main; the log keeps it where the diagnostics drawer shows it.
+process.on("unhandledRejection", (reason) => deviceManager.logUnhandled(reason));
 const mcpBridge = new McpBridge(deviceManager);
 let mainWindow: BrowserWindow | null = null;
 let miniWindow: BrowserWindow | null = null;
@@ -159,12 +172,13 @@ listeningRecord.setEventNotifier((event) => {
 
 // MCP tools can mutate settings (schedules) — the renderer must hear about it
 mcpBridge.onSettingsMutated = (settings) => broadcastSettings(settings);
+mcpBridge.sendCommand = (command) => sendMenuCommand(command);
 
 // The Edit menu's Undo item names the undo stack's top; the renderer keeps
 // this in sync and a change rebuilds the menu (labels are baked at build).
 let undoMenuLabel: string | null = null;
 const menuDeps = {
-  command: (cmd: StreamerCommand) => void deviceManager.command(cmd),
+  command: (cmd: StreamerCommand) => deviceManager.fire(cmd),
   toggleMini: () => toggleMiniPlayer(),
   sendToMain: (c: MenuCommand) => sendMenuCommand(c),
   undoLabel: () => undoMenuLabel,
@@ -389,7 +403,7 @@ function showMainWindow(): void {
 }
 
 const trayDeps = {
-  command: (cmd: StreamerCommand) => void deviceManager.command(cmd),
+  command: (cmd: StreamerCommand) => deviceManager.fire(cmd),
   snapshot: () => deviceManager.snapshot(),
   showMain: showMainWindow,
   sendToMain: (command: MenuCommand) => sendMenuCommand(command),
@@ -655,8 +669,34 @@ function registerIpc(): void {
     const events = await listeningRecord.exportToFile(picked.filePath);
     return { file: basename(picked.filePath), events };
   });
+  // THE STATS CARD (0.9.0): the renderer draws it, main writes the PNG where the user says —
+  // the Downloads folder by default, no dialog under the harness (TASTYTUNES_TEST_SAVE_DIR)
+  ipcMain.handle(IPC.statsCardSave, async (_e, png: unknown, name: unknown) => {
+    if (!(png instanceof Uint8Array) || typeof name !== "string") throw new Error("bad card");
+    const safeName = basename(name).replace(/[^\w.-]/g, "_") || "tastytunes-listening.png";
+    const testDir = process.env.TASTYTUNES_TEST_SAVE_DIR;
+    let filePath: string;
+    if (testDir) filePath = join(testDir, safeName);
+    else {
+      const opts = {
+        title: "Save the picture",
+        defaultPath: join(app.getPath("downloads"), safeName),
+        filters: [{ name: "PNG image", extensions: ["png"] }],
+      };
+      const win = BrowserWindow.getFocusedWindow() ?? mainWindow;
+      const picked = win
+        ? await dialog.showSaveDialog(win, opts)
+        : await dialog.showSaveDialog(opts);
+      if (picked.canceled || !picked.filePath) return null;
+      filePath = picked.filePath;
+    }
+    await writeFile(filePath, Buffer.from(png));
+    return { file: basename(filePath) };
+  });
   ipcMain.handle(IPC.lookupCacheStats, () => lookupCacheStats());
   ipcMain.handle(IPC.clearLookupCaches, () => clearLookupCaches());
+  ipcMain.handle(IPC.artThumbsStats, () => artThumbsStats());
+  ipcMain.handle(IPC.clearArtThumbs, () => clearArtThumbs());
 
   // Media browser — every call needs the connected streamer's host.
   const streamerHost = (): string => {
@@ -676,6 +716,8 @@ function registerIpc(): void {
     mediaIndex.ensureFresh(streamerHost(), servers);
     return servers;
   });
+  // the renderer's display mode, for the MCP bridge (2026-09-14)
+  ipcMain.on(IPC.displayModeReport, (_e, on: boolean) => mcpBridge.reportDisplayMode(on === true));
   ipcMain.handle(IPC.mediaIndexRebuild, async (_e, serverUdn: string) => {
     const servers = await refreshServers(streamerHost());
     const server = servers.find((x) => x.udn === serverUdn);
@@ -718,9 +760,14 @@ function registerIpc(): void {
     presetSave(streamerHost(), serverUdn, objectId, slot),
   );
   ipcMain.handle(IPC.contentResolve, (_e, ref: ContentRef) => deviceManager.contentResolve(ref));
-  ipcMain.handle(IPC.mediaNodeInfo, (_e, query: MediaInfoQuery) => {
+  ipcMain.handle(IPC.mediaNodeInfo, (_e, query: MediaInfoQuery, purpose: unknown) => {
     const conn = deviceManager.snapshot().connection;
-    return lookupMediaInfo(conn.phase === "connected" ? conn.host : null, query);
+    // anything but an explicit act is a show: a show never rebuilds an index
+    return lookupMediaInfo(
+      conn.phase === "connected" ? conn.host : null,
+      query,
+      purpose === "act" ? "act" : "show",
+    );
   });
   ipcMain.handle(IPC.toggleMini, () => toggleMiniPlayer());
   // A named screen goes through sendMenuCommand, which already creates the
@@ -752,7 +799,7 @@ function syncMediaKeys(): void {
   if (!getSettings().mediaKeys) return;
   const bind = (accelerator: string, cmd: StreamerCommand): void => {
     try {
-      globalShortcut.register(accelerator, () => void deviceManager.command(cmd));
+      globalShortcut.register(accelerator, () => deviceManager.fire(cmd));
     } catch {
       // Media keys can be unavailable on some platforms; not fatal.
     }
@@ -778,6 +825,33 @@ if (!gotLock) {
   app
     .whenReady()
     .then(() => {
+      // tt-art://thumb/<tier>/<key>?u=<origin>: the cache answers, or makes the
+      // thumbnail from the origin once; our own responses carry a long lifetime
+      // so the browser cache answers re-draws without asking main
+      protocol.handle("tt-art", async (req) => {
+        const url = new URL(req.url);
+        const [, tier, key] = url.pathname.split("/");
+        const origin = url.searchParams.get("u");
+        if ((tier !== "thumb" && tier !== "card") || !key || !origin)
+          return new Response(null, { status: 400 });
+        // the streamer's own art server is fetched one picture at a time
+        let device = false;
+        try {
+          const conn = deviceManager.snapshot().connection;
+          device =
+            conn.phase === "connected" && new URL(origin).hostname === conn.host.split(":")[0];
+        } catch {
+          device = false;
+        }
+        const got = await artThumb(decodeURIComponent(key), tier, origin, device);
+        if (!got) return new Response(null, { status: 404 });
+        return new Response(new Uint8Array(got.bytes), {
+          headers: {
+            "content-type": got.type,
+            "cache-control": "public, max-age=31536000, immutable",
+          },
+        });
+      });
       registerIpc();
       installAppMenu(menuDeps);
       createWindow();
@@ -797,6 +871,9 @@ if (!gotLock) {
         // it. Completion off-screen is what the indexing toast reports.
         if (msg.kind === "connection" && msg.state.phase === "connected") {
           const host = msg.state.host;
+          // the device announced itself: its media server's cool-off ends and the
+          // listing memo drops, so this session's first listing is a fresh one
+          deviceLaneReset();
           void refreshServers(host)
             .then((servers) => mediaIndex.ensureFresh(host, servers))
             .catch(() => {});
@@ -851,8 +928,19 @@ if (!gotLock) {
     deviceManager.shutdown();
     stopDemoStreamer();
     flushLookupCaches();
+    flushArtThumbs();
     // Quitting mid-track: the open play's accumulated time reaches the
     // record (synchronous append; see listeningRecord).
     listeningRecord.flush();
   });
+  // A TERMINATION SIGNAL IS A QUIT (2026-09-15): a dev restart or a kill ends the process
+  // without will-quit, and whatever the caches had not yet written was lost — an AirPlay
+  // cover captured seconds before the restart among it. Turn the signal into the ordinary
+  // quit so the same flushes run; a second signal while quitting is left to the OS.
+  for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"] as const) {
+    process.on(signal, () => {
+      if (isQuitting) return;
+      app.quit();
+    });
+  }
 }

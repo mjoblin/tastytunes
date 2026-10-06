@@ -74,6 +74,7 @@ import type {
   UpdateCheckResult,
   UpdateState,
   MediaInfoQuery,
+  LookupPurpose,
   MediaInfoTarget,
   AudioAnalysis,
   AlbumDr,
@@ -108,6 +109,8 @@ export type MenuCommand =
   | { id: "palette" }
   | { id: "shortcuts" }
   | { id: "displayMode" }
+  | { id: "displayModeOn" }
+  | { id: "displayModeOff" }
   | { id: "toggleNav" }
   | { id: "navBack" }
   | { id: "navForward" }
@@ -144,8 +147,10 @@ export type PushMessage =
   | { kind: "playEvent"; event: ListeningEvent }
   /** Settings changed OUTSIDE the renderer (e.g. an MCP tool created a schedule). */
   | { kind: "settings"; settings: AppSettings }
-  /** Wake-on-intent in flight: a play-shaped command is waking the streamer. */
-  | { kind: "waking"; waking: boolean }
+  /** Wake-on-intent in flight: a play-shaped command is waking the streamer. `asked` names
+   *  what the command asked for when the verb carries a name (a preset's, a station's), so a
+   *  standby face can tell its arrival from the retained state's re-announcement (2026-09-15). */
+  | { kind: "waking"; waking: boolean; asked?: string | null }
   /** Cursor is over the mini window (CSS :hover can't fire over drag regions). */
   | { kind: "miniHover"; hovered: boolean }
   /**
@@ -176,7 +181,7 @@ export type StreamerCommand =
   | { type: "previousTrack" }
   | { type: "seek"; positionSecs: number }
   | { type: "playQueueId"; queueId: number }
-  | { type: "setRepeat"; mode: "all" | "off" }
+  | { type: "setRepeat"; mode: "all" | "off" | "one" }
   | { type: "setShuffle"; mode: "all" | "off" }
   /** skipVolume: a schedule bringing its own volume mutes the preset's override. */
   | { type: "recallPreset"; presetId: number; skipVolume?: boolean }
@@ -423,11 +428,14 @@ export interface TastyTunesApi {
    *  (queue row, favorite, playlist item…): the index by id, then by content,
    *  then a live BrowseMetadata when the server and id are known. Null when
    *  nothing is found — the caller shows what it has. */
-  mediaNodeInfo(query: MediaInfoQuery): Promise<MediaInfoTarget | null>;
+  mediaNodeInfo(query: MediaInfoQuery, purpose: LookupPurpose): Promise<MediaInfoTarget | null>;
   /** Station search against radio-browser.info (main process; name contains, by popularity). */
   /** Force a media-index (re)build for one server (also the only way to
    *  build one for a Browse-only server). */
   mediaIndexRebuild(serverUdn: string): Promise<void>;
+  /** The renderer tells main whether display mode is on (2026-09-14): the MCP bridge reports it
+   *  in get_status and list_scenes, and set_display_mode asks the window through a menu command. */
+  reportDisplayMode(on: boolean): void;
   radioSearch(query: string): Promise<RadioStation[]>;
   /** The directory's most-listened stations — the Radio screen's default rail. */
   radioTop(): Promise<RadioStation[]>;
@@ -441,6 +449,9 @@ export interface TastyTunesApi {
    *  per-line envelope makes that safe). Resolves to the written file's name
    *  and event count, or null if the save dialog was cancelled. */
   listeningExport(): Promise<{ file: string; events: number } | null>;
+  /** The stats card's PNG to a file of the user's choosing (a save dialog; the harness's
+   *  TASTYTUNES_TEST_SAVE_DIR writes without one); null when they cancel. */
+  statsCardSave(png: Uint8Array, name: string): Promise<{ file: string } | null>;
   /** The record aggregated for the reading surfaces: per-track plays and last
    *  played, the most recent plays, when the record began. */
   playStats(): Promise<PlayStats>;
@@ -458,6 +469,9 @@ export interface TastyTunesApi {
   lookupCacheStats(): Promise<{ entries: number; bytes: number }>;
   /** Wipe the lookup caches (memory + disk); resolves to the fresh stats. */
   clearLookupCaches(): Promise<{ entries: number; bytes: number }>;
+  /** The album-art thumbnail cache (main/lookups/artThumbs): its size, and Clear. */
+  artThumbsStats(): Promise<{ entries: number; bytes: number }>;
+  clearArtThumbs(): Promise<{ entries: number; bytes: number }>;
   onPush(cb: (msg: PushMessage) => void): () => void;
 }
 
@@ -514,6 +528,7 @@ export const IPC = {
   listeningStats: "tt:listeningStats",
   listeningClear: "tt:listeningClear",
   listeningExport: "tt:listeningExport",
+  statsCardSave: "tt:statsCardSave",
   playStats: "tt:playStats",
   listeningYears: "tt:listeningYears",
   listeningStreamers: "tt:listeningStreamers",
@@ -521,6 +536,8 @@ export const IPC = {
   undoLabelSet: "tt:undoLabelSet",
   lookupCacheStats: "tt:lookupCacheStats",
   clearLookupCaches: "tt:clearLookupCaches",
+  artThumbsStats: "tt:artThumbsStats",
+  clearArtThumbs: "tt:clearArtThumbs",
   mediaServers: "tt:mediaServers",
   mediaBrowse: "tt:mediaBrowse",
   mediaSearch: "tt:mediaSearch",
@@ -531,6 +548,7 @@ export const IPC = {
   contentResolve: "tt:contentResolve",
   mediaNodeInfo: "tt:mediaNodeInfo",
   mediaIndexRebuild: "tt:mediaIndexRebuild",
+  displayModeReport: "tt:displayModeReport",
   radioSearch: "tt:radioSearch",
   radioTop: "tt:radioTop",
   radioByTags: "tt:radioByTags",

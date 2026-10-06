@@ -18,3 +18,16 @@ import type { Transform } from "@dnd-kit/utilities";
  * sideways movement is how you reach the next column.
  */
 export const lockVertical = (t: Transform | null): Transform | null => (t ? { ...t, x: 0 } : null);
+
+/**
+ * Where dnd-kit puts its screen-reader text: the page's body, never inside the list.
+ *
+ * Without a container DndContext renders two hidden elements (the instructions and the
+ * live region) as the list's LAST children, one render after it mounts. A list whose
+ * dividers are `divide-y` (or whose rhythm is `space-y`) styles every child but the last,
+ * so the last row turned into a middle one a frame after arriving: it gained a bottom
+ * border whose colour faded in from the default (the white text colour) through the row's
+ * transition-colors, a white line flashing under the last playlist track on every visit
+ * (user, 2026-10-06), and a hairline under it once settled. Every DndContext passes this.
+ */
+export const DND_ACCESSIBILITY = { container: document.body };

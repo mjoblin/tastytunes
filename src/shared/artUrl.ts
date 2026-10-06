@@ -1,3 +1,5 @@
+import type { MediaNode } from "./model";
+
 /**
  * Artwork URLs at the size we draw them.
  *
@@ -30,4 +32,15 @@ export function artUrlAt(url: string | null | undefined, px: number): string | n
 /** True when this URL is one artUrlAt() knows how to resize (for tests and callers that care). */
 export function artUrlResizable(url: string | null | undefined): boolean {
   return !!url && ASSET_ART.test(url);
+}
+
+/** A node's art identity: the server and the album it belongs to (its own title for an
+ *  album). The thumbnail cache's key (main/lookups/artThumbs), shared since 2026-09-14 so
+ *  the renderer's cards and the MCP bridge's get_album_art find the same file. */
+export function artKeyOf(
+  node: Pick<MediaNode, "serverUdn" | "title" | "album" | "artist" | "albumArtist" | "isContainer">,
+): string {
+  const album = node.isContainer ? node.title : (node.album ?? node.title);
+  const artist = node.albumArtist ?? node.artist ?? "";
+  return `${node.serverUdn ?? ""}|${album.trim().toLowerCase()}|${artist.trim().toLowerCase()}`;
 }

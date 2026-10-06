@@ -13,7 +13,6 @@ import {
   Moon,
   Power,
   RadioTower,
-  Repeat,
   Shuffle,
   SkipBack,
   SkipForward,
@@ -36,6 +35,8 @@ import { useVolumeSlider, useWheelVolume } from "@/components/playback/VolumeClu
 import { VolumeDial } from "@/components/playback/VolumeDial";
 import {
   PlayPauseButton,
+  REPEAT_TIP,
+  RepeatGlyph,
   TransportIconButton,
   useTransport,
 } from "@/components/playback/Transport";
@@ -50,6 +51,7 @@ import { ScrollOnce } from "@/components/playback/ScrollOnce";
 import { LargeQueueConfirm } from "@/components/overlays/LargeQueueConfirm";
 import { StreamerList, useStreamerList } from "@/components/device/DeviceSwitcher";
 import { PopoverChrome } from "@/hooks/usePopover";
+import { POPOVER_CARD } from "@/components/chrome/Overlay";
 import {
   PlaylistsTab,
   PresetsTab,
@@ -405,11 +407,11 @@ export function TrayPanel(): React.JSX.Element {
                   <TransportIconButton
                     size="compact"
                     enabled={active && t.canRepeat}
-                    tip="Repeat"
+                    tip={REPEAT_TIP[t.repeatMode]}
                     accent={t.repeatOn}
-                    onClick={t.toggleRepeat}
+                    onClick={t.cycleRepeat}
                   >
-                    <Repeat size={10} />
+                    <RepeatGlyph size={10} mode={t.repeatMode} />
                   </TransportIconButton>
 
                   <span className="font-mono text-[10px] text-faint tabular-nums shrink-0 ml-1 w-8 text-right">
@@ -664,7 +666,7 @@ function TrayStreamers(): React.JSX.Element | null {
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
           <div
             data-tray-streamers-popover
-            className="absolute right-0 top-full mt-1.5 z-40 w-64 rounded-xl bg-raised ring-1 ring-edge2 shadow-2xl p-2"
+            className={cx("absolute right-0 top-full mt-1.5 z-40 w-64 p-2", POPOVER_CARD)}
           >
             <StreamerList onPick={() => setOpen(false)} />
           </div>

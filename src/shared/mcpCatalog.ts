@@ -96,6 +96,12 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         description:
           "The user's wake/standby schedules (alarms): time, days, action, enabled. Note: schedules fire only while TastyTunes is running and connected.",
       },
+      {
+        name: "list_scenes",
+        title: "List scenes",
+        description:
+          "Display mode's scenes in the picker's order: id, name, a one-line description, and which is chosen for display mode ('display') and the Now Playing tile ('tile'). 'sleeve' is the album art; 'shuffle' draws a different scene each track. Also whether display mode is on.",
+      },
     ],
   },
   {
@@ -124,7 +130,11 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         description: "Jump to a specific track in the queue by its id (see list_queue).",
       },
       { name: "set_shuffle", title: "Set shuffle", description: "Turn shuffle on or off." },
-      { name: "set_repeat", title: "Set repeat", description: "Turn repeat-all on or off." },
+      {
+        name: "set_repeat",
+        title: "Set repeat",
+        description: "Set repeat: off, all (the whole queue) or one (the current track).",
+      },
     ],
   },
   {
@@ -247,7 +257,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         name: "list_albums",
         title: "List albums",
         description:
-          "Browse albums from the local library index — filter by artist, genre, decade, kind (albums vs compilations), hires, format (e.g. '24/96', 'MP3') or composer; sort by title, artist, or year; page with limit/offset. Each album comes with what its tracks add up to: track count, discs, runtime, size, format headline (and how many tracks differ), hires, composers (when every track agrees), is_compilation. Returns object ids for play_media / get_media_info. Needs a ready index (see list_media_servers).",
+          "Browse albums from the local library index — filter by artist, genre, decade, kind (albums vs compilations), hires, format (e.g. '24/96', 'MP3') or composer; sort by title, artist, year, dynamic range, loudness, last played or most played; played=true/false keeps the albums the listening record has or has not seen; page with limit/offset. Each album comes with what its tracks add up to: track count, discs, runtime, size, format headline (and how many tracks differ), hires, composers (when every track agrees), is_compilation. Returns object ids for play_media / get_media_info. Needs a ready index (see list_media_servers).",
       },
       {
         name: "list_artists",
@@ -272,6 +282,12 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         title: "Get media info",
         description:
           "Everything the local index knows about one album, track or artist by server_udn + object id — the app's Info panel as a tool: performers, album artist, composers, year, genres, track/disc numbers, duration, format (codec, bit depth, sample rate, bitrate, size), server and object ids, art URL. An album also gets its tracks summed (count, discs, runtime, size, format, composers, compilation) and its full track list; an artist gets their library page (albums with year/format, track count, guest appearances, composer credits, genres, active years). Read-only, index-backed.",
+      },
+      {
+        name: "get_album_art",
+        title: "Get album art",
+        description:
+          "An album's picture as an image, resized by TastyTunes to 480 px ('card', the default) or 320 px ('thumb'); a track answers with its album's picture. When the server has no art, the picture inside the audio file is used (off with Album art from audio files in Settings). Errors when neither has one.",
       },
       {
         name: "play_media",
@@ -368,13 +384,31 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         name: "list_history",
         title: "List history",
         description:
-          "Events from the listening record, newest first, filtered by date range and kind. A play's listen flag is derived: half the track or four minutes of real play time.",
+          "Events from the listening record, newest first, filtered by date range, kind and listens only. A play's listen flag is derived: half the track or four minutes of real play time.",
       },
       {
         name: "history_top",
         title: "Top played",
         description:
-          "Most-listened artists, albums or tracks over a date range, counting library plays that reached half the track or four minutes of real play time.",
+          "Most-listened artists, albums or tracks over a date range, counting library plays that reached half the track or four minutes of real play time; or the stations most tuned, and the presets and playlists most started from.",
+      },
+      {
+        name: "history_summary",
+        title: "History summary",
+        description:
+          "The listening record's figures for a period, as History's Stats view shows them: plays, listens, time heard, by source and by quality, distinct albums, artists and tracks, days with listening, the top albums, artists, tracks, stations, presets and playlists, listening by weekday and hour, and seconds per day for a calendar.",
+      },
+      {
+        name: "history_elsewhere",
+        title: "Heard elsewhere",
+        description:
+          "Artists heard through AirPlay, a cast, a streaming service or internet radio, with whether the library has them (the Library's rule for an artist page), how often and where they were heard, and the tracks heard, as History's Elsewhere view shows them.",
+      },
+      {
+        name: "history_shelves",
+        title: "Rediscover shelves",
+        description:
+          "History's Rediscover view in one answer, four shelves: albums started and not finished, more from the artists played most, albums not heard in a while, and albums never played, each with its plays and last played.",
       },
       {
         name: "history_on_this_day",
@@ -499,30 +533,51 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
     ],
   },
   {
+    id: "scenes",
+    title: "Scenes",
+    group: "control",
+    description:
+      "Display mode's scenes: which scene shows in display mode and in the Now Playing tile, and display mode on or off.",
+    tools: [
+      {
+        name: "set_scene",
+        title: "Set scene",
+        description:
+          "Choose the scene for display mode (host 'display') or the Now Playing tile (host 'tile'): a scene id from list_scenes, 'sleeve' for the album art, or 'shuffle'. Takes effect at once; an abstract scene draws once the playing track has been analyzed, and shows the album art until then.",
+      },
+      {
+        name: "set_display_mode",
+        title: "Set display mode",
+        description:
+          "Turn display mode, the full-screen scene view of the TastyTunes window, on or off.",
+      },
+    ],
+  },
+  {
     id: "lookups",
     title: "Lookups",
     group: "read",
     readOnly: true,
     description:
-      "Lyrics and artist/album context for what's playing. These call the same services as the app's own panels and obey the Connections toggles; while a toggle is off, the matching tool refuses (off means no requests will be sent).",
+      "Lyrics and artist/album context for what's playing. These call the same services as the app's panels and obey the Connections toggles; while a toggle is off, the matching tool refuses (off means no requests will be sent).",
     tools: [
       {
         name: "get_lyrics",
         title: "Get lyrics",
         description:
-          "Lyrics for the currently playing track via LRCLIB. Refuses when the user has lyrics disabled in Settings → Connections.",
+          "Lyrics for the currently playing track via LRCLIB. Refuses when the user has lyrics disabled in Settings › Connections.",
       },
       {
         name: "get_artist_info",
         title: "Get artist info",
         description:
-          "Artist bio via MusicBrainz + Wikipedia — the current artist by default, or a named one. Refuses when the user has artist context disabled in Settings → Connections.",
+          "Artist bio via MusicBrainz + Wikipedia — the current artist by default, or a named one. Refuses when the user has Liner notes disabled in Settings › Connections.",
       },
       {
         name: "get_album_info",
         title: "Get album info",
         description:
-          "Album facts via MusicBrainz + Wikipedia — year, label, genres, credits, summary. The playing album by default, or a named artist + album. Refuses when the user has artist & album context disabled in Settings → Connections.",
+          "Album facts via MusicBrainz + Wikipedia — year, label, genres, credits, summary. The playing album by default, or a named artist + album. Refuses when the user has Liner notes disabled in Settings › Connections.",
       },
     ],
   },

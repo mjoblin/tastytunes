@@ -5,7 +5,7 @@ import {
   trackArtists,
   type ListeningEvent,
   type MediaIndexPools,
-} from "@shared/model";
+} from "./model";
 
 /**
  * HEARD ELSEWHERE (0.8.0, the History screen's Elsewhere tab): the artists the

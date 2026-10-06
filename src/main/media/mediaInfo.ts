@@ -13,11 +13,12 @@ import {
   trackArtists,
   trackInAlbumOf,
   type MediaInfoQuery,
+  LookupPurpose,
   type MediaInfoTarget,
   type MediaNode,
 } from "@shared/model";
 import { pools, revalidate } from "./mediaIndex";
-import { browseMetadataNode } from "./upnpBrowser";
+import { browseMetadataNode, serverUdnForArt } from "./upnpBrowser";
 
 const lc = (v: string | null | undefined): string => (v ?? "").trim().toLowerCase();
 
@@ -67,19 +68,23 @@ function creditedArtistNode(
 export async function lookupMediaInfo(
   host: string | null,
   q: MediaInfoQuery,
+  purpose: LookupPurpose,
   confirmed = false,
 ): Promise<MediaInfoTarget | null> {
   const groups = pools();
   // an answer from a Browse-built index (the streamer's USB) is confirmed
-  // against the device before it is handed out: ids rotate there, and a
-  // landing on a container that no longer answers is the user's "not found"
+  // against the device before it is handed out for an ACT: ids rotate there, and
+  // a landing on a container that no longer answers is the user's "not found".
+  // A SHOW is right by content from the index as it stands, and confirming can
+  // rebuild, so a show never confirms (see LookupPurpose)
   const confirm = async (
     pool: (typeof groups)[number],
     target: MediaInfoTarget,
   ): Promise<MediaInfoTarget | null> => {
-    if (confirmed || !host || pool.profile?.strategy !== "browse") return target;
+    if (purpose !== "act" || confirmed || !host || pool.profile?.strategy !== "browse")
+      return target;
     if (!(await revalidate(host, pool.udn, target.node.id))) return target;
-    return lookupMediaInfo(host, q, true);
+    return lookupMediaInfo(host, q, purpose, true);
   };
   const withAlbum = (pool: (typeof groups)[number], node: MediaNode): MediaInfoTarget => {
     const profile = pool.profile ? { serverProfile: pool.profile } : {};
@@ -110,9 +115,13 @@ export async function lookupMediaInfo(
       if (hit) return confirm(pool, withAlbum(pool, hit));
     }
   }
-  // 2. content, every ready index (the ref's own server first)
+  // 2. content, every ready index: the ref's own server first, else the server
+  //    its art names (the one PLAYING it — the same album on the streamer's
+  //    stick and on the media server used to land on whichever index came
+  //    first, the stick's, while the media server played; 2026-09-16)
+  const preferred = q.serverUdn ?? serverUdnForArt(q.artUrl);
   const ordered = [...groups].sort((a, b) =>
-    a.udn === q.serverUdn ? -1 : b.udn === q.serverUdn ? 1 : 0,
+    a.udn === preferred ? -1 : b.udn === preferred ? 1 : 0,
   );
   for (const pool of ordered) {
     const candidates = (

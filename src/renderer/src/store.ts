@@ -251,6 +251,9 @@ interface TTState {
   systemPowerFresh: boolean;
   /** A wake-on-intent is in flight (playing something from standby). */
   waking: boolean;
+  /** What that wake asked for, by name, when its verb named it (a preset, a station); null
+   *  otherwise and once the wake ends — the wake hold takes its own copy when it arms. */
+  wakingFor: string | null;
   /** Last standby_mode seen from ANY device this session — survives the
    *  disconnect blanking so the ConnectGate can suggest eco standby. */
   lastStandbyMode: SystemPower["standby_mode"] | null;
@@ -479,6 +482,14 @@ let navRestoreSeq = 0;
 // field it feeds; the timer re-derives once the window has passed.
 let disagree: { key: string; since: number } | null = null;
 let settleTimer: ReturnType<typeof setTimeout> | null = null;
+/** What a play state is playing, for the playhead's sake: the queue entry, else the
+ *  station or the title, else the source alone (a cast reporting nothing). */
+function trackIdentity(ps: ZonePlayState | null | undefined): string {
+  if (!ps) return "";
+  const md = ps.metadata;
+  return `${ps.queue_id ?? ""}|${md?.station ?? ""}|${md?.title ?? ""}|${md?.source ?? ""}`;
+}
+
 function settledPlayId(queue: QueueList | null, playState: ZonePlayState | null): number | null {
   const { raw, content } = contentPlayId(queue, playState);
   if (content == null) {
@@ -550,6 +561,7 @@ export const useStore = create<TTState>((set, get) => ({
   systemPower: null,
   systemPowerFresh: false,
   waking: false,
+  wakingFor: null,
   lastStandbyMode: null,
   firmwareUpdate: null,
   sources: null,
@@ -744,7 +756,11 @@ export const useStore = create<TTState>((set, get) => ({
   analysisProgress: null,
   setAnalysisProgress: (analysisProgress) => set({ analysisProgress }),
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
-  setDisplayMode: (displayMode) => set({ displayMode }),
+  setDisplayMode: (displayMode) => {
+    set({ displayMode });
+    // main hears every change (the MCP bridge reports it and acts on it, 2026-09-14)
+    tt.reportDisplayMode(displayMode);
+  },
   // The two Now Playing drawers are mutually exclusive — opening one closes
   // the other here, so every opener (header buttons, future palette entries)
   // inherits the rule.
@@ -822,7 +838,9 @@ export const useStore = create<TTState>((set, get) => ({
       mcpStatus: snap.mcpStatus,
       missedSchedule: snap.missedSchedule,
       mediaIndex: snap.mediaIndex,
-      playhead: snap.position ? { secs: snap.position.position, at: Date.now() } : null,
+      // a position the streamer answers empty (radio, a blind cast) is no playhead
+      playhead:
+        snap.position?.position != null ? { secs: snap.position.position, at: Date.now() } : null,
       frames: snap.frames,
       logs: snap.logs,
       netRequests: snap.netRequests,
@@ -881,12 +899,24 @@ export const useStore = create<TTState>((set, get) => ({
               : stationChanged
                 ? Date.now()
                 : (s.stationTunedAt ?? Date.now()),
+            // a push without a position keeps the playhead only while the track is the
+            // same: a new track (or a source that reports no position at all, AirPlay
+            // with no details) starts from nothing rather than counting on from the
+            // last track's clock (2026-09-16: the bar read 1:15:42 under an AirPlay
+            // session the streamer reported blank)
             playhead:
-              msg.data.position != null ? { secs: msg.data.position, at: Date.now() } : s.playhead,
+              msg.data.position != null
+                ? { secs: msg.data.position, at: Date.now() }
+                : trackIdentity(msg.data) === trackIdentity(s.playState)
+                  ? s.playhead
+                  : null,
           };
         }
         case "position":
-          return { playhead: { secs: msg.data.position, at: Date.now() } };
+          return {
+            playhead:
+              msg.data.position != null ? { secs: msg.data.position, at: Date.now() } : null,
+          };
         case "nowPlaying":
           return { nowPlaying: msg.data };
         case "zoneState":
@@ -904,7 +934,7 @@ export const useStore = create<TTState>((set, get) => ({
             lastStandbyMode: msg.data?.standby_mode ?? s.lastStandbyMode,
           };
         case "waking":
-          return { waking: msg.waking };
+          return { waking: msg.waking, wakingFor: msg.waking ? (msg.asked ?? null) : null };
         case "firmwareUpdate":
           return { firmwareUpdate: msg.data };
         case "sources":
@@ -1032,6 +1062,13 @@ export const useStore = create<TTState>((set, get) => ({
         break;
       case "displayMode":
         s.setDisplayMode(!s.displayMode);
+        break;
+      // an agent asks for a state, not a toggle (set_display_mode)
+      case "displayModeOn":
+        s.setDisplayMode(true);
+        break;
+      case "displayModeOff":
+        s.setDisplayMode(false);
         break;
       case "toggleNav":
         // Same round-trip as Nav's collapse button: persist, then adopt.
