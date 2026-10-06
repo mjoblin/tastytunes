@@ -866,9 +866,29 @@ if (!gotLock) {
       createWindow();
       syncMediaKeys();
       syncTray(getSettings().tray, trayDeps);
+      // THE HEAL AHEAD (0.10.0): the USB index heals on its own a few seconds after the
+      // streamer wakes, or after connecting to one already awake (see
+      // mediaIndex.healAhead); a standby or a lost connection cancels what was scheduled.
+      // The connection and the first power push arrive in either order, so each checks the other.
+      let aheadHost: string | null = null;
+      let lastPower: string | null = null;
       // The tray's menu is a native snapshot the OS holds — it can't read state
       // on open the way the renderer does, so device movement has to push it.
       deviceManager.onPush = (msg) => {
+        if (msg.kind === "connection") {
+          const was = aheadHost;
+          aheadHost = msg.state.phase === "connected" ? msg.state.host : null;
+          if (!aheadHost) {
+            lastPower = null;
+            mediaIndex.cancelHealAhead();
+          } else if (!was && lastPower === "ON") mediaIndex.scheduleHealAhead(aheadHost);
+        }
+        if (msg.kind === "systemPower") {
+          const was = lastPower;
+          lastPower = msg.data.power ?? null;
+          if (lastPower !== "ON") mediaIndex.cancelHealAhead();
+          else if (was !== "ON" && aheadHost) mediaIndex.scheduleHealAhead(aheadHost);
+        }
         if (trayWantsRefresh(msg.kind)) refreshTrayMenu();
         // INDEX AT CONNECT (2026-09-02, user call): the media indexes used to
         // build only when the Library screen first listed servers, so on a

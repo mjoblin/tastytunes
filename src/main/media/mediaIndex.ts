@@ -43,6 +43,7 @@ import {
 import {
   browseChildrenOf,
   browseMetadataNode,
+  deviceCooling,
   MOUNTED,
   probeObject,
   getSystemUpdateID,
@@ -125,6 +126,9 @@ const failed = new Map<string, string>();
 const staleIds = new Map<string, number>();
 let announce: (statuses: MediaIndexStatus[]) => void = () => {};
 let loaded = false;
+/** udn → the heal running for it now, ahead of time or for an act: one at a time per
+ *  server, and an act that arrives meanwhile waits for it (healOnce). */
+const healing = new Map<string, Promise<boolean>>();
 /** udn → how many acts have waited past WAIT_SHOWN_MS on its revalidation (the status's
  *  `waiting`). */
 const waiters = new Map<string, number>();
@@ -563,6 +567,21 @@ export async function revalidate(
   probeId: string | null,
 ): Promise<boolean> {
   load();
+  // a heal already running for this server (ahead of time, after a wake): the act waits for
+  // it, under the waiting flag like any other; a heal that moved the index answers "ask
+  // again" (the caller's id is from before it), one that declined leaves the act to judge
+  const running = healing.get(udn);
+  if (running) {
+    const done = waitOn(udn);
+    let moved = false;
+    try {
+      moved = await running;
+    } finally {
+      done();
+    }
+    // the ids moved under the caller, who still holds an old one: it asks again
+    if (moved) return true;
+  }
   const existing = indexes.get(udn);
   if (!existing || existing.strategy !== "browse") return false;
   const server =
@@ -585,7 +604,7 @@ export async function revalidate(
   try {
     // the streamer's USB server re-mints its ids by the mount alone: move the index onto the
     // new mount and confirm it by content before paying for a walk of the whole drive
-    if (usbServer(server) && (await heal(host, server, existing, id, probeId))) return true;
+    if (usbServer(server) && (await healOnce(host, server, existing, id, probeId))) return true;
     console.log(
       `[mediaIndex] ${server.name}: ${id != null && existing.updateId != null && id !== existing.updateId ? `ids rotated (counter ${existing.updateId} → ${id})` : `the id in hand no longer answers (counter ${id ?? "unread"})`}, rebuilding`,
     );
@@ -594,6 +613,72 @@ export async function revalidate(
   } finally {
     done?.();
   }
+}
+
+/** The heal for a server, one at a time: a second asker shares the one running. */
+function healOnce(
+  host: string,
+  server: MediaServerInfo,
+  existing: StoredIndex,
+  counter: number | null,
+  held: string | null,
+): Promise<boolean> {
+  const running = healing.get(server.udn);
+  if (running) return running;
+  const run = heal(host, server, existing, counter, held).finally(() => healing.delete(server.udn));
+  healing.set(server.udn, run);
+  return run;
+}
+
+/** How long after a wake the heal ahead of time first looks, and its one second look (a
+ *  drive still mounting at the first has nothing to heal by). The harness shortens it. */
+const HEAL_AHEAD_MS = Number(process.env["TASTYTUNES_HEAL_AHEAD_MS"] ?? 8000);
+let aheadTimers: NodeJS.Timeout[] = [];
+
+/**
+ * THE HEAL AHEAD OF TIME (0.10.0; user, 2026-10-06: "broadly speaking, to me it's fine for
+ * the app to be doing that sort of thing for improved UX"). The streamer's USB ids move
+ * across every standby, and the first act that needs one used to wait for the heal while a
+ * cold drive's folders were listed (about 20 s on the user's stick). A few seconds after the
+ * streamer wakes, or after the app connects to one already awake, the heal runs on its own,
+ * one request at a time in the device's lane like any other, so the act finds the index
+ * already moved. Never a walk: a heal that declines leaves the index as it was and the act
+ * heals or walks as before. Nothing while the device's server is cooling or its counter has
+ * not moved (one counter read), nothing for a server with no index, and nothing when the
+ * user asked for indexing by the buttons only. A replug while awake sends the app no signal,
+ * so it still heals when an act asks.
+ */
+export async function healAhead(host: string): Promise<void> {
+  load();
+  if (getSettings().mediaIndexAuto === false || deviceCooling()) return;
+  const servers = await refreshServers(host).catch(() => [] as MediaServerInfo[]);
+  for (const server of servers) {
+    const existing = indexes.get(server.udn);
+    if (!usbServer(server) || !existing || existing.strategy !== "browse") continue;
+    if (healing.has(server.udn)) continue;
+    known.set(server.udn, server);
+    const id = await getSystemUpdateID(host, server.udn);
+    if (id == null || existing.updateId == null) continue;
+    if (id === existing.updateId || id === existing.healedFor) continue;
+    console.log(
+      `[mediaIndex] ${server.name}: the counter moved (${existing.updateId} → ${id}); healing ahead of time`,
+    );
+    await healOnce(host, server, existing, id, null);
+  }
+}
+
+/** A wake, or a connect to a streamer already awake: the heal ahead of time, twice. */
+export function scheduleHealAhead(host: string): void {
+  cancelHealAhead();
+  aheadTimers = [HEAL_AHEAD_MS, HEAL_AHEAD_MS * 4].map((ms) =>
+    setTimeout(() => void healAhead(host).catch(() => {}), ms),
+  );
+}
+
+/** The streamer went back to sleep or the connection went: nothing ahead to heal. */
+export function cancelHealAhead(): void {
+  for (const t of aheadTimers) clearTimeout(t);
+  aheadTimers = [];
 }
 
 /** One act waiting on a server's revalidation: counted in the status (`waiting`) once it
