@@ -57,8 +57,9 @@ try {
 
   // No streamer on the runner, so the app opens on the connect gate; the demo
   // door is the whole point of that screen.
-  // the door's words follow the app's copy (the 2026-09-10 sweep reworded it)
-  const demoBtn = page.locator('text=Try the built-in demo')
+  // a fresh install is a first run, where the demo is a button beside Find streamers
+  // (data-gate-demo, 0.10.0); a later visit keeps the "Try the built-in demo" line
+  const demoBtn = page.locator('[data-gate-demo]').or(page.locator('text=Try the built-in demo'))
   await demoBtn.waitFor({ timeout: 30000 })
   ok('the connect gate offers the demo', true)
   await demoBtn.click()
