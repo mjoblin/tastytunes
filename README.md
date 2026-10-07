@@ -421,6 +421,7 @@ The complete list:
 | Liner notes | musicbrainz.org · wikidata.org · wikipedia.org | on by default; toggleable |
 | Missing album art | musicbrainz.org · coverartarchive.org | on by default; toggleable |
 | Radio directory | radio-browser.info | when you search or browse Radio |
+| Station logos | each station's own website or image host | when a station is shown |
 | Update check | github.com | on by default; toggleable |
 | Scrobbles | listenbrainz.org | off until you add your token |
 
