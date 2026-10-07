@@ -91,7 +91,7 @@ The current line is highlighted and kept in view. Click a line to seek there.
 
 <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/lyrics.webp" alt="Lyrics panel with the current line highlighted">
 
-### Artist, album and track notes
+### Liner notes
 
 View a short biography of the artist, the album's year, label and genres with a summary, and the track's performers, writers and production credits. The notes come from MusicBrainz and Wikipedia, with a link to each source.
 
@@ -105,13 +105,13 @@ The streamer's preset slots as a card grid (or table rows), each recallable with
 
 ### Fullscreen Display mode
 
-Press <kbd>F</kbd> for the front-panel view: album art or a scene, track details, the current lyric line and a clock.
+Press <kbd>F</kbd> to fill the screen with the album art or a scene, track details, the current lyric line and a clock.
 
 <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/display.webp" alt="Fullscreen display mode showing album art and the current lyric line">
 
 ### Scenes
 
-Visualizer scenes created from the track's audio analysis and lyrics: its loudness, beats, drum hits, drops and lyrics. A scene takes the album art's place on Now Playing, or fills the screen in Fullscreen Display mode. Pick one, or choose Shuffle to select a different scene for every track. Local media only: AirPlay, internet radio and other sources show the album art.
+Visualizer scenes created from the track's audio analysis and lyrics: its loudness, beats, drum hits, drops and lyrics. A scene takes the album art's place on Now Playing, or fills the screen in Fullscreen Display mode. Pick one, or choose Shuffle to select a different scene for every track. Hi-Fi and Turntable show for every source; the other scenes need local media, and show the album art for AirPlay, internet radio and other sources.
 
 <table>
   <tr>
@@ -182,7 +182,8 @@ turn them on. Every tool has its own switch in Settings › AI agents, effective
 on the agent's next call. Agents inherit the same limits the UI has: the volume
 cap, the power safeguards, the Connections toggles. A call to a disabled tool is
 refused. Bind it to localhost, or to your network to reach the streamer from
-another machine. The setup for each client (Claude Code, Cursor, VS Code, Gemini CLI,
+another machine. Bound to your network, it requires the token from Settings ›
+AI agents. The setup for each client (Claude Code, Cursor, VS Code, Gemini CLI,
 Codex CLI, Claude Desktop, ChatGPT) is at [tastytunes.app/agents](https://tastytunes.app/agents/).
 
 ### Home Assistant
@@ -197,12 +198,15 @@ rest_command:
     url: "http://<machine-running-tastytunes>:8555/mcp"
     method: post
     content_type: application/json
+    headers:
+      Authorization: Bearer <token from Settings › AI agents>
     payload: '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"recall_preset","arguments":{"id":3}}}'
 ```
 
 Any enabled tool works the same way, such as `set_volume`, `set_power`, and
 `pause`. Bind the server to your network in Settings › AI agents, enable the
-tools the Home Assistant automation needs, and keep TastyTunes running.
+tools the Home Assistant automation needs, copy the token into the
+`Authorization` header, and keep TastyTunes running.
 
 ## Every feature
 
@@ -226,6 +230,7 @@ tools the Home Assistant automation needs, and keep TastyTunes running.
 - Fullscreen Display mode (<kbd>F</kbd>): chrome-free full screen for a desk or shelf display, with the album art or a scene
 - Info: what the streamer reports about the current stream (codec, sample rate, bit depth, bitrate, queue position), for any source: local media, radio, AirPlay
 - The artist and album names link to the Library (local media only)
+- While the streamer is in standby, Now Playing offers to pick up where you left off: the same track from the same point, the same station or the same source
 
 ### Audio analysis
 
@@ -236,12 +241,13 @@ tools the Home Assistant automation needs, and keep TastyTunes running.
 
 ### Scenes
 
-- Thirteen scenes drawn from the playing track's audio analysis and lyrics: Ball Pit, Contour, Ink, Orbit, Piano Roll, Refrain, Sea, Sleeve, Terminal, Terrain, Tide, Tunnel and Type, plus Shuffle, which chooses a different scene for every track (or album)
+- Fifteen scenes: Ball Pit, Contour, Hi-Fi, Ink, Orbit, Piano Roll, Refrain, Sea, Sleeve, Terminal, Terrain, Tide, Tunnel, Turntable, and Type, plus Shuffle, which selects a different scene for every track (or album)
+- Hi-Fi (the lyrics on a glowing stereo display) and Turntable (the album on a turntable) show for every source, including radio and AirPlay
 - Chosen from a picker on the Now Playing art box or in Fullscreen Display mode
 - Every scene comes with an explanation of what you see and what it means, and its own settings
 - The shared settings (across all scenes) include: a simulated cathode tube finish, toggling the corner title and clock display, drop sensitivity, and a sync nudge
 - Lyrics are optionally displayed in scenes that can show them
-- Local media only: a scene shows once the playing track has been analyzed; radio, AirPlay and other sources show the album art
+- The other scenes need local media: each shows once the playing track has been analyzed, and radio, AirPlay and other sources show the album art
 
 ### Library
 
@@ -309,13 +315,19 @@ tools the Home Assistant automation needs, and keep TastyTunes running.
 
 - One-click switching across every source the streamer exposes
 
+### CD
+
+- With a compatible CD transport, the disc's tracks are listed on the Queue screen, beside the Media Library queue
+- Track names come from MusicBrainz when Liner notes is on in Settings › Connections
+- Now Playing shows track *x* of *y* while a disc plays
+
 ### Lyrics
 
 - Fetched from LRCLIB; synced lyrics are highlighted and follow the current line, and clicking a line seeks there
 - Shown in three locations: a full panel showing all track lyrics in Now Playing, an inline line under the track details also in Now Playing, and in the Fullscreen Display mode
 - Falls back to plain text, says why when there's nothing to show (instrumentals, radio), and can be force-refreshed
 
-### Artist & album context
+### Liner notes
 
 - A short artist bio and album facts (year, label, genres, credits) in a side panel, from MusicBrainz and Wikipedia, with attribution links
 - Lookups cache to disk (with local storage caps, clearable in Settings)
@@ -333,7 +345,7 @@ tools the Home Assistant automation needs, and keep TastyTunes running.
 - Timeline: every play in the listening record, grouped into listening sessions by day with a month rail, or shown play by play; filters for source, period and listens only
 - Stats for this week, this month, this year or all time, stepping back to any earlier week, month or year: plays and listening time, a listening calendar, most played albums, artists, tracks and stations, hours by source and by quality, a weekday by hour grid, and what was started from a preset or a playlist; Save image draws the period shown as a picture
 - Rediscover: albums worth coming back to, from the record and your library: started and never finished, more from the artists you play, not heard in a while, and never played; each section grows a few rows at a time, and its heading stays at the top while you scroll and takes you back to its start
-- Elsewhere: the artists you met away from the library, through AirPlay, a cast or a streaming service, or on internet radio, with whether your library holds them; a row opens to the tracks heard and, with artist context on, the artist's summary
+- Elsewhere: the artists you heard away from the library, through AirPlay, a cast or a streaming service, or on internet radio, with whether your library includes them; a row opens to the tracks heard and, with Liner notes on, the artist's summary
 - Listening record: a local log of what plays and for how long (local media, radio, AirPlay and other sources), kept in plain JSON Lines files on your computer, one per year; a play is recorded once it ends, if it played for at least 30 seconds. Export or clear it in Settings › History; can be disabled (on by default). The file format is documented at [tastytunes.app/listening-record](https://tastytunes.app/listening-record/)
 - AI agents can read the listening record through the MCP server's history tools: what played, when, and for how long, including "on this day"
 
@@ -358,6 +370,8 @@ tools the Home Assistant automation needs, and keep TastyTunes running.
 - Back and forward through everywhere you've been, like a browser: <kbd>⌘←</kbd>/<kbd>⌘→</kbd> (Alt+arrows on Windows and Linux), the mouse side buttons, or View › Back/Forward, which also works from inside a text box (<kbd>⌘[</kbd>/<kbd>⌘]</kbd> on macOS)
 - Scroll position remembered in Library, Search and Playlists screens
 - Every reorderable list (queue, presets, playlists, the nav rail) reorders by keyboard as well as by drag
+- Keyboard focus is shown with a visible ring
+- Notices are announced to screen readers
 - Undo for queue edits, favorites, playlist additions and schedule deletions, from the notice that follows each change
 - OS media keys, and a track-change notification with artwork when the window isn't focused
 
@@ -387,7 +401,7 @@ The complete list:
 | Streamer control | your streamer, on your LAN | always (it's the app) |
 | Library browsing | your media servers, on your LAN | always (it's the app) |
 | Lyrics | lrclib.net | on by default; toggleable |
-| Artist & album context | musicbrainz.org · wikidata.org · wikipedia.org | on by default; toggleable |
+| Liner notes | musicbrainz.org · wikidata.org · wikipedia.org | on by default; toggleable |
 | Missing album art | musicbrainz.org · coverartarchive.org | on by default; toggleable |
 | Radio directory | radio-browser.info | when you search or browse Radio |
 | Update check | github.com | on by default; toggleable |
