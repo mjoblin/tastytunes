@@ -211,7 +211,7 @@ tools the Home Assistant automation needs, copy the token into the
 ### Connection & devices
 
 - Automatic discovery of streamers on the local network, with manual IP entry when discovery finds nothing
-- Device switcher in the playback bar
+- Device switcher in the transport bar
 - Reconnects automatically, including after the computer sleeps
 - Power and standby
 - Demo mode: runs the whole app against a built-in virtual streamer and two sample libraries
