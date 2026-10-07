@@ -117,21 +117,23 @@ Visualizer scenes created from the track's audio analysis and lyrics: its loudne
     <td align="center" width="25%"><img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/scenes/sleeve.webp" alt="The Sleeve scene"><br><sub>Sleeve</sub></td>
     <td align="center" width="25%"><img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/scenes/pit.webp" alt="The Ball Pit scene"><br><sub>Ball Pit</sub></td>
     <td align="center" width="25%"><img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/scenes/survey.webp" alt="The Contour scene"><br><sub>Contour</sub></td>
-    <td align="center" width="25%"><img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/scenes/confluence.webp" alt="The Ink scene"><br><sub>Ink</sub></td>
+    <td align="center" width="25%"><img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/scenes/panel.webp" alt="The Hi-Fi scene"><br><sub>Hi-Fi</sub></td>
   </tr>
   <tr>
+    <td align="center" width="25%"><img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/scenes/confluence.webp" alt="The Ink scene"><br><sub>Ink</sub></td>
     <td align="center" width="25%"><img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/scenes/orbit.webp" alt="The Orbit scene"><br><sub>Orbit</sub></td>
     <td align="center" width="25%"><img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/scenes/roll.webp" alt="The Piano Roll scene"><br><sub>Piano Roll</sub></td>
     <td align="center" width="25%"><img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/scenes/refrain.webp" alt="The Refrain scene"><br><sub>Refrain</sub></td>
-    <td align="center" width="25%"><img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/scenes/sea.webp" alt="The Sea scene"><br><sub>Sea</sub></td>
   </tr>
   <tr>
+    <td align="center" width="25%"><img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/scenes/sea.webp" alt="The Sea scene"><br><sub>Sea</sub></td>
     <td align="center" width="25%"><img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/scenes/terminal.webp" alt="The Terminal scene"><br><sub>Terminal</sub></td>
     <td align="center" width="25%"><img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/scenes/terrain.webp" alt="The Terrain scene"><br><sub>Terrain</sub></td>
     <td align="center" width="25%"><img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/scenes/tide.webp" alt="The Tide scene"><br><sub>Tide</sub></td>
-    <td align="center" width="25%"><img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/scenes/conduit.webp" alt="The Tunnel scene"><br><sub>Tunnel</sub></td>
   </tr>
   <tr>
+    <td align="center" width="25%"><img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/scenes/conduit.webp" alt="The Tunnel scene"><br><sub>Tunnel</sub></td>
+    <td align="center" width="25%"><img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/scenes/turntable.webp" alt="The Turntable scene"><br><sub>Turntable</sub></td>
     <td align="center" width="25%"><img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/scenes/type.webp" alt="The Type scene"><br><sub>Type</sub></td>
   </tr>
 </table>
