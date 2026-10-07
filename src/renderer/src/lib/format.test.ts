@@ -188,6 +188,7 @@ describe("deriveNowPlaying: the one merge of play_state and now_playing", () => 
       artUrl: "http://device/a.jpg",
       isRadio: false,
       badges: ["FLAC", "96 kHz", "24-bit", "4608 kbps", "lossless"],
+      disc: null,
     });
   });
 
@@ -235,6 +236,7 @@ describe("deriveNowPlaying: the one merge of play_state and now_playing", () => 
       artUrl: null,
       isRadio: false,
       badges: [],
+      disc: null,
     });
   });
 

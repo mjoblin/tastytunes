@@ -149,11 +149,10 @@ describe("extraction: a spec-clean track", () => {
     expect(node.year).toBe("1999");
   });
 
-  it.fails("KNOWN BUG: keeps a numeric-looking title as written", () => {
-    // The XML parser's number coercion reaches text content: "3.10" reads
-    // 3.1, "007" reads 7, "1.0" reads 1, "0x1F" reads 31, in titles, artists
-    // and albums alike. When the parser stops coercing (and the index
-    // VERSION bumps with it), this test fails: drop the .fails then.
+  it("keeps a numeric-looking title as written", () => {
+    // The XML parser once coerced text content to numbers: "3.10" read 3.1,
+    // "007" read 7, in titles, artists and albums alike (fixed with index
+    // VERSION 13, found by this test).
     const node = itemNode("<dc:title>3.10</dc:title>" + TRACK + "<upnp:album>007</upnp:album>");
     expect(node.title).toBe("3.10");
     expect(node.album).toBe("007");
@@ -247,11 +246,10 @@ describe("the format of the primary <res>", () => {
       expect(format({ protocolInfo: `http-get:*:${mime}:*` })?.codec, mime).toBe(codec);
   });
 
-  it.fails("KNOWN BUG: reads DLNA's LPCM mime, which carries parameters, as PCM", () => {
-    // DLNA spells LPCM "audio/L16;rate=44100;channels=2"; the subtype is
-    // compared with its parameters still attached, so the codec reads
-    // "L16;RATE=44100;CHANNELS=2" (and, not being lossless, loses its bit
-    // depth). When the parameters are stripped, this fails: drop the .fails.
+  it("reads DLNA's LPCM mime, which carries parameters, as PCM", () => {
+    // DLNA spells LPCM "audio/L16;rate=44100;channels=2"; the subtype was once
+    // compared with its parameters still attached, so the codec read
+    // "L16;RATE=44100;CHANNELS=2" and lost its bit depth (found by this test).
     const f = format({
       protocolInfo: "http-get:*:audio/L16;rate=44100;channels=2:DLNA.ORG_PN=LPCM",
       bitsPerSample: 16,

@@ -169,17 +169,18 @@ describe("workAreaFor: which display a tray icon is on", () => {
     expect(workAreaFor(rect(9000, 0, 24, 24), [primary, other])).toBe(primary);
   });
 
-  it("stacked displays sharing the icon's column: the first one listed wins", () => {
-    // A KNOWN LIMIT, pinned so a change to it is deliberate: the fallback is
-    // by column alone, because displays tile side by side far more often
-    // than they stack. In a stack, an icon in a strip BETWEEN the two work
-    // areas matches both columns and the list order decides; the caller
-    // lists every display in Electron's order.
+  it("stacked displays sharing the icon's column: the one nearest the icon, in any order", () => {
+    // In a stack, an icon in a strip BETWEEN the two work areas matches both
+    // columns; the nearer one vertically wins whatever order the list names
+    // them in (the list order decided until this test found it, 2026-09-25).
     const lower = rect(0, 25, 1440, 875); // 1440×900 laptop, menu bar at y 0–25
     const upper = rect(0, -1080, 1920, 1032); // 1920×1080 above, taskbar at y −48–0
     const onLowerMenuBar = rect(1300, 0, 24, 25);
     expect(workAreaFor(onLowerMenuBar, [lower, upper])).toBe(lower);
-    expect(workAreaFor(onLowerMenuBar, [upper, lower])).toBe(upper);
+    expect(workAreaFor(onLowerMenuBar, [upper, lower])).toBe(lower);
+    const onUpperTaskbar = rect(1300, -48, 24, 48);
+    expect(workAreaFor(onUpperTaskbar, [lower, upper])).toBe(upper);
+    expect(workAreaFor(onUpperTaskbar, [upper, lower])).toBe(upper);
   });
 });
 
