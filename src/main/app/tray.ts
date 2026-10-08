@@ -18,6 +18,7 @@ import { anchorToTray, workAreaFor, type Rect } from "./windowPlacement";
 import trayTemplateIcon from "../../../resources/trayTemplate.png?asset";
 import trayTemplateIcon2x from "../../../resources/trayTemplate@2x.png?asset";
 import trayTileIcon from "../../../resources/tray.png?asset";
+import { FACT_SEP } from "@shared/model";
 
 /**
  * The system-tray / menu-bar companion. Phase 1: an icon and a native context
@@ -121,7 +122,7 @@ function statusLabel(snap: Snapshot): string {
       // Anything other than ON is a standby of some kind; the app only ever
       // sees the device at all in NETWORK standby (eco drops off the network).
       const standby = systemPower != null && systemPower.power !== "ON";
-      return standby ? `${who} · Standby` : who;
+      return standby ? `${who}${FACT_SEP}Standby` : who;
     }
   }
 }

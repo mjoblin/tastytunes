@@ -6,6 +6,7 @@ import { useStore } from "@/store";
 import { cx } from "@/lib/format";
 import { PopoverChrome } from "@/hooks/usePopover";
 import { POPOVER_CARD } from "@/components/chrome/Overlay";
+import { FACT_SEP } from "@/lib/mediaFacts";
 
 /**
  * Roon-zone-style device picker, right in the playback bar — rendered only
@@ -117,7 +118,7 @@ export function StreamerList({ onPick }: { onPick(): void }): React.JSX.Element 
                   {device.friendlyName}
                 </span>
                 <span className="block font-mono text-[10px] text-faint truncate">
-                  {[device.model, device.host].filter(Boolean).join(" · ")}
+                  {[device.model, device.host].filter(Boolean).join(FACT_SEP)}
                 </span>
               </span>
             </button>

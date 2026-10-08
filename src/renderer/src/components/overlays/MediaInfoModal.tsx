@@ -188,7 +188,7 @@ function MediaInfoBody({
           [
             "Position",
             node.trackNumber != null
-              ? `${trackPosition(node)}${node.discNumber != null ? ` · disc ${node.discNumber}${node.discCount ? ` of ${node.discCount}` : ""}` : ""}`
+              ? `${trackPosition(node)}${node.discNumber != null ? `${FACT_SEP}disc ${node.discNumber}${node.discCount ? ` of ${node.discCount}` : ""}` : ""}`
               : null,
           ],
           ["Duration", node.durationSecs != null ? fmtTime(node.durationSecs) : null],
@@ -233,9 +233,11 @@ function MediaInfoBody({
   const list = (items: string[], max: number): React.ReactNode =>
     items.length === 0 ? null : (
       <span>
-        {items.slice(0, max).join(" · ")}
+        {items.slice(0, max).join(FACT_SEP)}
         {items.length > max ? (
-          <span className="text-faint"> · +{items.length - max} more</span>
+          <span className="text-faint">
+            {FACT_SEP}+{items.length - max} more
+          </span>
         ) : null}
       </span>
     );
@@ -261,7 +263,7 @@ function MediaInfoBody({
           rows(
             artist.albums.map((a) => ({
               name: a.title,
-              meta: [a.year, a.format].filter(Boolean).join(" · ") || null,
+              meta: [a.year, a.format].filter(Boolean).join(FACT_SEP) || null,
             })),
             20,
           ),

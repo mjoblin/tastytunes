@@ -76,6 +76,7 @@ import {
 import { useConfirmPopover } from "@/components/chrome/Confirm";
 import { useOneShotAsk } from "@/hooks/useOneShotAsk";
 import { artSrc } from "@/lib/artSrc";
+import { FACT_SEP } from "@/lib/mediaFacts";
 
 /**
  * Stored playlists: the collection on the left, the selected playlist's tracks
@@ -460,24 +461,26 @@ export function PlaylistsScreen(): React.JSX.Element {
                       Facts drop by the width the facts actually get, least
                       useful first: created, then artists. */}
                   <div data-playlist-meta className="microlabel truncate">
-                    {queuedId === selected.id && <span className="text-gold">in the queue · </span>}
+                    {queuedId === selected.id && (
+                      <span className="text-gold">in the queue{FACT_SEP}</span>
+                    )}
                     {selected.items.length} {selected.items.length === 1 ? "track" : "tracks"}
-                    {totalSecs(selected) > 0 && ` · ${fmtDuration(totalSecs(selected))}`}
+                    {totalSecs(selected) > 0 && `${FACT_SEP}${fmtDuration(totalSecs(selected))}`}
                     {artistCount(selected, performerOf) > 1 && (
                       <span className="hidden @md:inline">
-                        {" "}
-                        · {artistCount(selected, performerOf)} artists
+                        {FACT_SEP}
+                        {artistCount(selected, performerOf)} artists
                       </span>
                     )}
                     {selected.lastPlayedAt && (
                       <span className="hidden @xs:inline">
-                        {" "}
-                        · played {fmtRelative(selected.lastPlayedAt)}
+                        {FACT_SEP}
+                        played {fmtRelative(selected.lastPlayedAt)}
                       </span>
                     )}
                     <span className="hidden @xl:inline">
-                      {" "}
-                      · created {fmtRelative(selected.createdAt)}
+                      {FACT_SEP}
+                      created {fmtRelative(selected.createdAt)}
                     </span>
                   </div>
                 </div>

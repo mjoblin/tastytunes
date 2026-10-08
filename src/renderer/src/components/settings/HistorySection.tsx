@@ -7,6 +7,7 @@ import { useStore } from "@/store";
 import { fmtCount } from "@/lib/format";
 import { HeaderChip } from "@/components/chrome/Chrome";
 import { SettingRow, Toggle, fmtBytes } from "@/components/settings/SettingsKit";
+import { FACT_SEP } from "@/lib/mediaFacts";
 
 // The History section, split out of SettingsScreen.tsx 2026-09-13 (the Settings split: the screen had held every
 // section and control at 2,142 lines); the shared rows and controls live in ./SettingsKit.
@@ -65,7 +66,7 @@ export function HistorySection({
               ? "…"
               : stats.events === 0
                 ? `Empty. Plays are recorded after ${LISTEN_FLOOR_SECS} seconds of real play time.`
-                : `${fmtCount(stats.events)} events · ${fmtBytes(stats.bytes)}${sinceLabel ? ` · since ${sinceLabel}` : ""}`
+                : `${fmtCount(stats.events)} events${FACT_SEP}${fmtBytes(stats.bytes)}${sinceLabel ? `${FACT_SEP}since ${sinceLabel}` : ""}`
           }
         >
           <div className="flex items-center gap-2">

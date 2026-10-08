@@ -5,6 +5,7 @@ import { tt } from "@/api";
 import { useStore } from "@/store";
 import { MediaArt } from "@/components/media/MediaArt";
 import { fmtRelative, fmtTime } from "@/lib/format";
+import { FACT_SEP } from "@/lib/mediaFacts";
 
 /**
  * "Pick up where you left off" on the standby face (rebuilt in 0.10.0 from the user's ask,
@@ -35,7 +36,7 @@ function detail(held: HeldState): string | null {
       held.position != null && held.position >= 5
         ? `${fmtTime(held.position)}${held.duration ? ` of ${fmtTime(held.duration)}` : ""}`
         : null;
-    return [from, at].filter(Boolean).join(" · ") || null;
+    return [from, at].filter(Boolean).join(FACT_SEP) || null;
   }
   if (held.kind === "radio") return held.sourceName ?? "Internet Radio";
   if (held.kind === "service") return "Continue from your phone or computer";
@@ -91,7 +92,7 @@ export function ResumeCard({
         <div className="truncate text-[12px] text-dim" data-resume-detail>
           {line}
           <span className="text-faint">
-            {line ? " · " : ""}
+            {line ? FACT_SEP : ""}
             {fmtRelative(held.at)}
           </span>
         </div>

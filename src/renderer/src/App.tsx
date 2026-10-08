@@ -42,6 +42,7 @@ import { useBestArt } from "@/lib/bestArt";
 import { usePrefetchNextArt } from "@/hooks/usePrefetchNextArt";
 import { useFontScaleGuard } from "@/hooks/useFontScaleGuard";
 import { HeaderChip } from "@/components/chrome/Chrome";
+import { FACT_SEP } from "@/lib/mediaFacts";
 
 export default function App(): React.JSX.Element {
   useShortcuts();
@@ -447,7 +448,9 @@ function ConnectGate(): React.JSX.Element {
                         phrase as one line, and a deliberate stack reads
                         calmer than an accidental wrap (user, 2026-08-30). */}
                     <div className="font-mono text-[10.5px] text-faint truncate">
-                      {row.model} · {row.host}
+                      {row.model}
+                      {FACT_SEP}
+                      {row.host}
                     </div>
                     {row.book && (
                       <div className="font-mono text-[10.5px] text-faint">

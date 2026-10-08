@@ -12,6 +12,7 @@ export {
   type ListeningStats,
   type TopEntry,
 } from "@shared/historyStats";
+import { FACT_SEP } from "@/lib/mediaFacts";
 
 /** A month's one-line summary for the Timeline's divider: plays, time, the
  *  most-played album. Null when the month has no library plays. */
@@ -23,5 +24,5 @@ export function monthLine(stats: ListeningStats): string | null {
   const total = stats.seconds + stats.radioSeconds + stats.externalSeconds;
   if (total > 0) parts.push(fmtDuration(total));
   if (stats.topAlbums[0]) parts.push(`most: ${stats.topAlbums[0].name}`);
-  return parts.join(" · ");
+  return parts.join(FACT_SEP);
 }

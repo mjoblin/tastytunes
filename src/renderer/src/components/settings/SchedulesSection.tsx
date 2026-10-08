@@ -7,6 +7,7 @@ import { Switch } from "@/components/controls/Switch";
 import { HeaderChip, PrimaryButton } from "@/components/chrome/Chrome";
 import { NumberField } from "@/components/settings/SettingsKit";
 import { Segmented } from "@/components/controls/Segmented";
+import { FACT_SEP } from "@/lib/mediaFacts";
 
 // The Schedules section, split out of SettingsScreen.tsx 2026-09-13 (the Settings split: the screen had held every
 // section and control at 2,142 lines); the shared rows and controls live in ./SettingsKit.
@@ -239,7 +240,9 @@ export function SchedulesSection({
                     .filter((p) => p.id != null)
                     .map((p) => (
                       <option key={p.id} value={p.id!}>
-                        {p.id} · {p.name ?? "Preset"}
+                        {p.id}
+                        {FACT_SEP}
+                        {p.name ?? "Preset"}
                       </option>
                     ))}
                   {/* a saved preset that isn't in the current list stays selectable */}

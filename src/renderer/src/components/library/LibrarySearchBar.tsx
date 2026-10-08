@@ -4,6 +4,7 @@ import { GAP_BETWEEN } from "@/components/chrome/Chrome";
 import { Segmented } from "@/components/controls/Segmented";
 import { SortChip } from "@/components/controls/SortChip";
 import type { useLibrarySearch } from "@/components/library/useLibrarySearch";
+import { FACT_SEP } from "@/lib/mediaFacts";
 
 // The Library's SEARCH BAR and its result controls, lifted out of
 // LibraryScreen's render (2026-09-13, the fifth lift's third part): the gold
@@ -152,13 +153,13 @@ export function LibrarySearchBar(
           ) : crossMode && crossState ? (
             <span className="shrink-0 font-mono text-[11px] text-gold/80 tabular-nums">
               {crossTotal} result{crossTotal === 1 ? "" : "s"}
-              {crossTotal > crossItemCount && ` · first ${crossItemCount}`}
+              {crossTotal > crossItemCount && `${FACT_SEP}first ${crossItemCount}`}
             </span>
           ) : searchState ? (
             <span className="shrink-0 font-mono text-[11px] text-gold/80 tabular-nums">
               {searchState.total} result{searchState.total === 1 ? "" : "s"}
               {searchState.total > searchState.items.length &&
-                ` · first ${searchState.items.length}`}
+                `${FACT_SEP}first ${searchState.items.length}`}
             </span>
           ) : null}
           {/* right of the count: the count's width changes as results come in,

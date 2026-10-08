@@ -4,6 +4,7 @@ import { cx } from "@/lib/format";
 import { Slider } from "@/components/controls/Slider";
 import { Switch } from "@/components/controls/Switch";
 import { useConfirmPopover } from "@/components/chrome/Confirm";
+import { FACT_SEP } from "@/lib/mediaFacts";
 
 // The Settings screen's rows and controls, shared by its sections (split out of
 // SettingsScreen.tsx 2026-09-13 with the sections): a setting row, the toggle, the
@@ -52,7 +53,7 @@ export function CacheRow(): React.JSX.Element {
           ? "…"
           : empty
             ? "Cache empty"
-            : `Clear (${stats.entries} · ${fmtBytes(stats.bytes)})`}
+            : `Clear (${stats.entries}${FACT_SEP}${fmtBytes(stats.bytes)})`}
       </button>
     </SettingRow>
   );

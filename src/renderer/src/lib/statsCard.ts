@@ -1,5 +1,6 @@
 import { fmtCount, fmtDuration } from "@/lib/format";
 import { dayStartOf, type ListeningStats, type TopEntry } from "@/lib/historyStats";
+import { FACT_SEP } from "@/lib/mediaFacts";
 
 /**
  * THE STATS CARD (0.9.0, the listening record's last reading surface, built
@@ -290,8 +291,8 @@ export async function renderStatsCard(input: StatsCardInput): Promise<Blob> {
       ctx.fillText(fit(ctx, r.name, colW - 22), x + 22, y);
       ctx.font = `400 11.5px ${t.sans}`;
       ctx.fillStyle = t.faint;
-      const count = `${fmtCount(r.plays)} ${r.plays === 1 ? "play" : "plays"} · ${fmtDuration(r.seconds)}`;
-      const line = col.withSub && r.sub ? `${r.sub} · ${count}` : count;
+      const count = `${fmtCount(r.plays)} ${r.plays === 1 ? "play" : "plays"}${FACT_SEP}${fmtDuration(r.seconds)}`;
+      const line = col.withSub && r.sub ? `${r.sub}${FACT_SEP}${count}` : count;
       ctx.fillText(fit(ctx, line, colW - 22), x + 22, y + 18);
     });
   });
@@ -329,7 +330,7 @@ export async function renderStatsCard(input: StatsCardInput): Promise<Blob> {
       ctx.fillText(
         fit(
           ctx,
-          r.detail ? `${fmtDuration(r.seconds)} · ${r.detail}` : fmtDuration(r.seconds),
+          r.detail ? `${fmtDuration(r.seconds)}${FACT_SEP}${r.detail}` : fmtDuration(r.seconds),
           146,
         ),
         x + half,

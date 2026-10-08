@@ -86,6 +86,7 @@ import { DiscQueue } from "@/components/queue/DiscQueue";
 import { Segmented } from "@/components/controls/Segmented";
 import { useDisc } from "@/hooks/useDisc";
 import { useQueueSelection, type SelectionLate } from "@/components/queue/useQueueSelection";
+import { FACT_SEP } from "@/lib/mediaFacts";
 
 /**
  * Queue → preset: the shared PresetSavePanel in a centered modal. The device
@@ -576,7 +577,8 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
             data-queue-facts
             className="min-w-0 truncate whitespace-nowrap font-mono text-[11px] text-faint"
           >
-            {fmtCount(allItems.length)} {allItems.length === 1 ? "track" : "tracks"} ·{" "}
+            {fmtCount(allItems.length)} {allItems.length === 1 ? "track" : "tracks"}
+            {FACT_SEP}
             {fmtDuration(totalSecs)}
           </span>
           <div className="flex-1" />

@@ -8,6 +8,7 @@ import {
 } from "@shared/model";
 import { drTone } from "@/components/media/Waveform";
 import type { StreamInfo } from "@shared/model";
+import { FACT_SEP } from "@/lib/mediaFacts";
 
 /**
  * The Info surface's building blocks, shared between the Info modal (any
@@ -121,7 +122,7 @@ export interface LoudnessFacts {
 /** "−9.8 LUFS · true peak −0.3 dBTP" — the standard's own units, one decimal. */
 export function loudnessLine(l: LoudnessFacts | null | undefined): string | null {
   if (l?.lufs == null) return null;
-  const tp = l.truePeakDb != null ? ` · true peak ${l.truePeakDb.toFixed(1)} dBTP` : "";
+  const tp = l.truePeakDb != null ? `${FACT_SEP}true peak ${l.truePeakDb.toFixed(1)} dBTP` : "";
   return `${l.lufs.toFixed(1)} LUFS${tp}`;
 }
 
@@ -146,7 +147,7 @@ export function trackFormatRows(
       "Dynamic range",
       dr != null && dr > 0 ? (
         <span style={{ color: drTone(dr).tone }} data-info-dr>
-          {`DR${dr} · ${drTone(dr).word}`}
+          {`DR${dr}${FACT_SEP}${drTone(dr).word}`}
         </span>
       ) : null,
     ],

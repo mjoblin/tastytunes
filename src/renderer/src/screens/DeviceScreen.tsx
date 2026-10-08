@@ -23,6 +23,7 @@ import { SourcesPanel } from "@/components/device/SourcesPanel";
 import { ToneEq } from "@/components/device/ToneEq";
 import { DeviceControls } from "@/components/device/DeviceControls";
 import { HeaderChip, ScreenTitle } from "@/components/chrome/Chrome";
+import { FACT_SEP } from "@/lib/mediaFacts";
 
 export function DeviceScreen(): React.JSX.Element {
   const connection = useStore((s) => s.connection);
@@ -217,7 +218,9 @@ export function DeviceScreen(): React.JSX.Element {
                       <div className="flex-1 min-w-0">
                         <div className="text-[13px] truncate">{device.friendlyName}</div>
                         <div className="font-mono text-[10.5px] text-faint truncate">
-                          {device.model} · {device.host}
+                          {device.model}
+                          {FACT_SEP}
+                          {device.host}
                         </div>
                       </div>
                       {device.host === connectedHost ? (
@@ -248,7 +251,10 @@ export function DeviceScreen(): React.JSX.Element {
                         <div className="flex-1 min-w-0">
                           <div className="text-[13px] text-dim truncate">{d.friendlyName}</div>
                           <div className="font-mono text-[10.5px] text-faint truncate">
-                            {d.model} · {d.host} · last seen {lastSeenLabel(d.lastSeenAt)}
+                            {d.model}
+                            {FACT_SEP}
+                            {d.host}
+                            {FACT_SEP}last seen {lastSeenLabel(d.lastSeenAt)}
                           </div>
                         </div>
                         <button
@@ -414,7 +420,7 @@ export function DeviceScreen(): React.JSX.Element {
                 {(systemInfo.versions ?? []).map((v) => (
                   <InfoRow
                     key={v.component ?? ""}
-                    label={`Firmware · ${v.component ?? "?"}`}
+                    label={`Firmware${FACT_SEP}${v.component ?? "?"}`}
                     value={v.version}
                     mono
                   />

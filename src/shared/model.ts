@@ -1842,6 +1842,12 @@ export function isHiRes(f: {
   );
 }
 
+/** The separator between facts on one line: EN spaces around the dot, so the items breathe (user,
+ *  2026-09-01; app-wide for facts and status lines 2026-10-07) — plain double spaces would
+ *  collapse in HTML. Shared so the main process's menu reads the same. Not for formatLabel below:
+ *  albumFormatChips splits its " · " back into chips. */
+export const FACT_SEP = "\u2002·\u2002";
+
 /** "FLAC · 16/44.1" for lossless (bits/kHz), "MP3 · 320 kbps" for lossy; degrades to what is known. */
 export function formatLabel(f: MediaFormat | undefined | null): string | null {
   if (!f) return null;
