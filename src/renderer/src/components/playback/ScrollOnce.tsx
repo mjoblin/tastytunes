@@ -11,6 +11,10 @@ import { cx } from "@/lib/format";
  * overflows, the full text rides as a tooltip; under reduced motion the tooltip
  * is the whole answer. `wrap` trades the pass for a second line (the song on
  * radio, where the block can afford the height) and keeps the tooltip.
+ * AT REST THE LINE IS PLAIN TEXT, so the clip ends it in an ellipsis; only the
+ * pass makes it a box that can slide, for as long as the pass lasts (the 0.8.0
+ * cut kept the box at rest, and text-overflow cannot end a box, so a long title
+ * stopped mid-letter until 0.10.0).
  */
 export function ScrollOnce({
   text,
@@ -38,20 +42,34 @@ export function ScrollOnce({
     // inline span inside it does not, so the clip is what to read when wrapping
     return wrap
       ? Math.max(0, c.scrollHeight - c.clientHeight)
-      : Math.max(0, i.scrollWidth - c.clientWidth);
+      : Math.max(0, c.scrollWidth - c.clientWidth);
+  };
+  // back to plain text at the start: the ellipsis returns with it
+  const rest = (): void => {
+    const i = inner.current;
+    if (i) {
+      i.style.transition = "none";
+      i.style.transform = "";
+      i.style.display = "";
+    }
+    if (clip.current) clip.current.style.textOverflow = "";
   };
   const pass = (): void => {
     const i = inner.current;
     const by = measure();
     if (!i || wrap || by <= 0 || running.current) return;
     if (document.documentElement.classList.contains("reduce-motion")) return;
+    // the pass needs a box to slide: the span becomes one and the ellipsis steps
+    // aside, then both return when it rests
+    if (clip.current) clip.current.style.textOverflow = "clip";
+    i.style.display = "inline-block";
+    void i.offsetWidth; // the box is laid out before the transition starts
     // read at 25px per 100ms: a long title takes a few seconds, never a crawl
     const ms = Math.min(6000, Math.max(1200, by * 25));
     i.style.transition = `transform ${ms}ms linear`;
     i.style.transform = `translateX(${-by}px)`;
     running.current = setTimeout(() => {
-      i.style.transition = "none";
-      i.style.transform = "translateX(0)";
+      rest();
       running.current = null;
     }, ms + 900);
   };
@@ -60,11 +78,7 @@ export function ScrollOnce({
       clearTimeout(running.current);
       running.current = null;
     }
-    const i = inner.current;
-    if (i) {
-      i.style.transition = "none";
-      i.style.transform = "translateX(0)";
-    }
+    rest();
     // the text landed: measure after layout, then the one pass
     const raf = requestAnimationFrame(() => {
       setOverflow(measure());
@@ -96,12 +110,10 @@ export function ScrollOnce({
           "min-w-0 overflow-hidden",
           wrap
             ? "[display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical]"
-            : "whitespace-nowrap",
+            : "whitespace-nowrap text-ellipsis",
         )}
       >
-        <span ref={inner} className={wrap ? undefined : "inline-block will-change-transform"}>
-          {text}
-        </span>
+        <span ref={inner}>{text}</span>
       </div>
     </div>
   );
