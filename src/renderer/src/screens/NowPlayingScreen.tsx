@@ -42,6 +42,7 @@ import { useShuffledScene } from "@/components/display/useShuffledScene";
 import { useArtSize } from "@/hooks/useArtSize";
 import { CornerResizeHandle } from "@/components/controls/CornerResizeHandle";
 import type { SceneId } from "@/components/display/scenes/types";
+import { FACT_SEP } from "@/lib/mediaFacts";
 
 const ALIGN_H = { left: "justify-start", center: "justify-center", right: "justify-end" } as const;
 const ALIGN_V = { top: "items-start", center: "items-center", bottom: "items-end" } as const;
@@ -684,7 +685,7 @@ export function NowPlayingScreen(): React.JSX.Element {
                 )}
               >
                 {meta.disc
-                  ? `${meta.disc.tracks} ${meta.disc.tracks === 1 ? "track" : "tracks"} · ${fmtDuration(meta.disc.secs)}`
+                  ? `${meta.disc.tracks} ${meta.disc.tracks === 1 ? "track" : "tracks"}${FACT_SEP}${fmtDuration(meta.disc.secs)}`
                   : place && `track ${place.index + 1} of ${place.length}`}
               </div>
             )}

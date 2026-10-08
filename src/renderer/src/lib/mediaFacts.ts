@@ -18,9 +18,9 @@ import { fmtKHz, fmtTime } from "@/lib/format";
  * modal can never drift.
  */
 
-/** The facts line's separator: EN spaces around the dot, so the items
- *  breathe (user, 2026-09-01) — plain double spaces would collapse in HTML. */
-export const FACT_SEP = "\u2002·\u2002";
+/** The facts line's separator, defined in shared/model (the main process's menu uses it too). */
+import { FACT_SEP } from "@shared/model";
+export { FACT_SEP };
 
 /** "2023 · 10 tracks · 26:53 · 200 MB" — collection facts only; the format
  *  rides beside it as chips (albumFormatChips). */

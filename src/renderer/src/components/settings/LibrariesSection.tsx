@@ -7,6 +7,7 @@ import { fmtCount } from "@/lib/format";
 import { HeaderChip } from "@/components/chrome/Chrome";
 import { useConfirmPopover } from "@/components/chrome/Confirm";
 import { SettingRow, Toggle, fmtBytes } from "@/components/settings/SettingsKit";
+import { FACT_SEP } from "@/lib/mediaFacts";
 
 // The Libraries section, split out of SettingsScreen.tsx 2026-09-13 (the Settings split: the screen had held every
 // section and control at 2,142 lines); the shared rows and controls live in ./SettingsKit.
@@ -61,10 +62,10 @@ export function LibrariesSection({
                 {st.state === "building"
                   ? "building…"
                   : st.state === "failed"
-                    ? `couldn't index · ${st.failure ?? "no index"}`
+                    ? `couldn't index${FACT_SEP}${st.failure ?? "no index"}`
                     : st.state === "none"
-                      ? "not indexed · search asks the server live"
-                      : `${fmtCount(st.tracks)} tracks · ${fmtCount(st.albums)} albums · updated ${age(st.builtAt)}`}
+                      ? `not indexed${FACT_SEP}search asks the server live`
+                      : `${fmtCount(st.tracks)} tracks${FACT_SEP}${fmtCount(st.albums)} albums${FACT_SEP}updated ${age(st.builtAt)}`}
               </span>
             </span>
             <HeaderChip
@@ -133,7 +134,7 @@ function ArtThumbsRow(): React.JSX.Element {
           ? "…"
           : empty
             ? "Cache empty"
-            : `Clear (${fmtCount(stats.entries)} · ${fmtBytes(stats.bytes)})`}
+            : `Clear (${fmtCount(stats.entries)}${FACT_SEP}${fmtBytes(stats.bytes)})`}
       </button>
     </SettingRow>
   );

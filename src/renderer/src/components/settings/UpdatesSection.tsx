@@ -7,6 +7,7 @@ import { tt } from "@/api";
 import { useStore } from "@/store";
 import { HeaderChip, PrimaryButton } from "@/components/chrome/Chrome";
 import { SettingRow, Toggle } from "@/components/settings/SettingsKit";
+import { FACT_SEP } from "@/lib/mediaFacts";
 
 // The Updates section, split out of SettingsScreen.tsx 2026-09-13 (the Settings split: the screen had held every
 // section and control at 2,142 lines); the shared rows and controls live in ./SettingsKit.
@@ -111,7 +112,7 @@ function UpdatePanel(): React.JSX.Element | null {
                 : "open the release page to download"}
               {update.canDownload && (
                 <>
-                  {" · "}
+                  {FACT_SEP}
                   <button
                     onClick={() => void tt.openExternal(update.url)}
                     aria-label={`What's new in v${update.version}`}
@@ -161,7 +162,7 @@ function UpdatePanel(): React.JSX.Element | null {
           <span className="min-w-0">
             <span className="block text-[13.5px] text-gold">v{update.version} is ready</span>
             <span className="block font-mono text-[10.5px] text-faint mt-0.5">
-              installs when you quit, or restart now{" · "}
+              installs when you quit, or restart now{FACT_SEP}
               <button
                 onClick={() => void tt.openExternal(update.url)}
                 aria-label={`What's new in v${update.version}`}

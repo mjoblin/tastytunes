@@ -61,6 +61,7 @@ import {
   type TrayTab,
 } from "@/components/playback/TrayPanelTabs";
 import { cx, deriveNowPlaying, fmtTime } from "@/lib/format";
+import { FACT_SEP } from "@/lib/mediaFacts";
 
 const TABS: readonly TrayTab[] = ["queue", "presets", "playlists", "recent"];
 /** A stored tab from a future (or hand-edited) settings file must not blank the body. */
@@ -236,7 +237,7 @@ export function TrayPanel(): React.JSX.Element {
       ? "Connecting…"
       : "Not connected"
     : !powered
-      ? `${deviceName ?? "Streamer"} · Standby`
+      ? `${deviceName ?? "Streamer"}${FACT_SEP}Standby`
       : (sourceName ?? deviceName ?? "Connected");
   // Format detail is the badges the app already derives (codec / rate / depth).
   // Compressed to a single string: the panel has one line for this, and the

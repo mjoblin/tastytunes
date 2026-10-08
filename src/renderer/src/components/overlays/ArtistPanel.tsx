@@ -22,6 +22,7 @@ import { HeaderChip } from "@/components/chrome/Chrome";
 import { Section, sourceRows, streamRows, trackFormatRows } from "@/components/media/InfoRows";
 import { Waveform, usePlayingDr, usePlayingLoudness } from "@/components/media/Waveform";
 import { audioAnalysisKey } from "@shared/model";
+import { FACT_SEP } from "@/lib/mediaFacts";
 
 type Status = "loading" | "ready" | "none";
 type Tab = "artist" | "album" | "track" | "stream";
@@ -245,7 +246,7 @@ export function ArtistPanel({ className }: { className?: string }): React.JSX.El
   const facts =
     albumInfo == null
       ? ""
-      : [albumInfo.year, albumInfo.type, albumInfo.label].filter(Boolean).join(" · ");
+      : [albumInfo.year, albumInfo.type, albumInfo.label].filter(Boolean).join(FACT_SEP);
   const wikipediaUrl =
     tab === "artist" ? artistInfo?.wikipediaUrl : tab === "album" ? albumInfo?.wikipediaUrl : null;
   const musicbrainzUrl =

@@ -54,6 +54,7 @@ import { systemTheme } from "@/hooks/useTheme";
 import { activeSourceId, controlSet, deriveNowPlaying } from "@/lib/format";
 import { SCREENS, sanitizeNavHidden, sanitizeNavHiddenTools } from "@/lib/screens";
 import { SLEEP_DURATIONS } from "@/components/playback/SleepTimer";
+import { FACT_SEP } from "@/lib/mediaFacts";
 
 // The command palette's COMMANDS as one pure builder (2026-09-13, the size
 // survey's last round; the list had been a 602-line memo inside the component):
@@ -297,7 +298,7 @@ export function buildCommands(ctx: CommandContext): Command[] {
       id: `screen:${sc.id}`,
       label: sc.label,
       group: "Screens",
-      hint: `Screen · ${sc.key}`,
+      hint: `Screen${FACT_SEP}${sc.key}`,
       icon: sc.icon,
       keywords: navHidden.has(sc.id)
         ? "go to open view screen hidden sidebar nav"
