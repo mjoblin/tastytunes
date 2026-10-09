@@ -277,7 +277,24 @@ export function LibraryScreen(): React.JSX.Element {
   const lensPools = useIndexPools(lens != null || tailVol != null);
   useEffect(() => {
     if (lens !== "albums" || lensPools == null) return;
-    requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: albumsLensScroll }));
+    // RESTORE WHEN THE SPOT IS REACHABLE, not at the first frame: the windowed cards grid
+    // (0.11.0, for review) holds no rows until it has measured its width, and a scrollTo
+    // then clamped the remembered spot to 0 (the useScrollMemory rule); settle a few frames,
+    // and apply once more after the rows it lands on have been measured (their height was
+    // an estimate until then)
+    const target = albumsLensScroll;
+    let frames = 0;
+    let landed = 0;
+    let raf = requestAnimationFrame(function apply() {
+      const sc = scrollRef.current;
+      if (!sc) return;
+      if (landed > 0 || sc.scrollHeight - sc.clientHeight >= target || frames++ > 30) {
+        sc.scrollTo({ top: target });
+        if (++landed >= 3 || Math.abs(sc.scrollTop - target) < 1) return;
+      }
+      raf = requestAnimationFrame(apply);
+    });
+    return () => cancelAnimationFrame(raf);
   }, [lens, lensPools]);
 
   // Action feedback: the app-wide toast for failures, a gold pulse for wins.

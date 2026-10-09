@@ -507,7 +507,9 @@ export function AlbumsLens({
         <div
           data-albums-windowed
           className={cx(selA.size > 0 && "pb-24")}
-          style={{ paddingTop: 8 }}
+          // overflow-anchor off (the Queue's rule): Chromium's scroll anchoring moved the
+          // restored spot as the spacers' estimated heights became measured ones
+          style={{ paddingTop: 8, overflowAnchor: "none" }}
         >
           {win.padTop > 0 && <div style={{ height: win.padTop }} />}
           {Array.from({ length: win.last - win.first + 1 }, (_, i) => win.first + i).map((r) => (
