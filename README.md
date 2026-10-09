@@ -56,13 +56,11 @@ against an Evo 150.
 
 Album art, track details, format badges and the current lyric line. The transport bar is at the bottom of every screen.
 
-<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/now-playing.webp" alt="The Now Playing screen with album art, track details and the current lyric line">
-
 ### Audio analysis
 
 For music on your local media servers, TastyTunes reads the audio file and shows its waveform under the artwork and in the seek bar (both optional, in Settings › Appearance), with the track's dynamic range beside the format badges. Once analyzed, an album's dynamic range becomes a filter and is sortable in the Library.
 
-<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/audio-analysis.webp" alt="Now Playing with the waveform under the album art and the dynamic range beside the format badges">
+<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/audio-analysis-detail.webp" alt="Now Playing with the waveform under the album art and the dynamic range beside the format badges" width="640">
 
 ### The library as one collection
 
@@ -326,7 +324,9 @@ tools the Home Assistant automation needs, copy the token into the
 
 ### CD
 
-- With a compatible CD transport, the disc's tracks are listed on the Queue screen, beside the Media Library queue
+With Cambridge Audio's Evo CD transport (on an Evo 75 or Evo 150):
+
+- The disc's tracks are listed on the Queue screen, beside the Media Library queue
 - Track names come from MusicBrainz when Liner notes is on in Settings › Connections
 - Now Playing shows track *x* of *y* while a disc plays
 
