@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { tt } from "@/api";
+import { Lru } from "@/lib/lru";
 
 /**
  * The ambient wash's art, BLURRED ONCE INTO A SMALL BITMAP instead of blurred
@@ -30,7 +31,7 @@ import { tt } from "@/api";
  * all. One canvas pass per track change replaces a filter pass per frame,
  * and it helps EVERY machine rather than only the ones we could detect.
  */
-const cache = new Map<string, string | null>();
+const cache = new Lru<string, string | null>(60);
 
 export function useBlurredArt(src: string | null | undefined): string | null {
   const [out, setOut] = useState<string | null>(() => (src ? (cache.get(src) ?? null) : null));
@@ -56,7 +57,6 @@ export function useBlurredArt(src: string | null | undefined): string | null {
       cache.set(src, blurred);
       // Bounded like the accent cache — a long listening session must not
       // accumulate a bitmap per track forever.
-      if (cache.size > 60) cache.delete(cache.keys().next().value as string);
       if (!cancelled) setOut(blurred);
     })();
     return () => {

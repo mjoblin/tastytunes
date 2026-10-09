@@ -15,6 +15,7 @@ import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { cx } from "@/lib/format";
 import { Chip, ScreenTitle, GAP_WITHIN } from "@/components/chrome/Chrome";
 import { FACT_SEP } from "@/lib/mediaFacts";
+import { Lru } from "@/lib/lru";
 
 /**
  * Internet radio via the radio-browser.info community directory (keyless —
@@ -31,7 +32,8 @@ let lastQuery = "";
 let lastResults: RadioStation[] | null = null;
 let topCache: RadioStation[] | null = null;
 let lastCat: string | null = null;
-const catCache = new Map<string, RadioStation[]>();
+// a category's stations for the session, the last 50 categories (lib/lru)
+const catCache = new Lru<string, RadioStation[]>(50);
 
 /**
  * The curated category layer — the airable-style rails the official app gets

@@ -18,7 +18,11 @@ export const ONE_HOME = [
     was: "S9",
     selector: "CallExpression[callee.name='controlSet']",
     files: [`^${R}`],
-    allow: ["components/playback/Transport\\.tsx$", "lib/format\\.ts$", "overlays/paletteCommands\\.ts$"],
+    allow: [
+      "components/playback/Transport\\.tsx$",
+      "lib/format\\.ts$",
+      "overlays/paletteCommands\\.ts$",
+    ],
     message: "A surface takes its transport controls from useTransport, never from controlSet()",
     bad: { file: `${R}components/playback/MiniPlayer.tsx`, code: "const c = controlSet(np, ps);" },
   },
@@ -29,13 +33,15 @@ export const ONE_HOME = [
       ":matches(MemberExpression[property.name='is_playing'], ObjectPattern > Property[key.name='is_playing'])",
     files: [`^${R}`],
     allow: ["hooks/useLitPresets\\.ts$"],
-    message: "A preset's is_playing flag is read only by useLitPresets (it is unreliable both ways)",
+    message:
+      "A preset's is_playing flag is read only by useLitPresets (it is unreliable both ways)",
     bad: { file: `${R}screens/PresetsScreen.tsx`, code: "const lit = p.is_playing;" },
   },
   {
     id: "eqbars-props",
     was: "S9",
-    selector: "JSXOpeningElement[name.name='Eqbars'] > JSXAttribute[name.name=/^(playing|audible)$/]",
+    selector:
+      "JSXOpeningElement[name.name='Eqbars'] > JSXAttribute[name.name=/^(playing|audible)$/]",
     files: [`^${R}`],
     message: "Eqbars takes no playing or audible prop; the row's playing state decides",
     bad: { file: `${R}screens/QueueScreen.tsx`, code: "const x = <Eqbars playing />;" },
@@ -45,14 +51,21 @@ export const ONE_HOME = [
     was: "S11",
     selector: "JSXOpeningElement[name.name='ModalShell']:not(:has(JSXAttribute[name.name='open']))",
     message: "ModalShell stays mounted and takes open, or its exit fade pops",
-    bad: { file: `${R}components/overlays/InfoModal.tsx`, code: "const x = <ModalShell label='a'>{c}</ModalShell>;" },
+    bad: {
+      file: `${R}components/overlays/InfoModal.tsx`,
+      code: "const x = <ModalShell label='a'>{c}</ModalShell>;",
+    },
   },
   {
     id: "modal-label",
     was: "S100",
-    selector: "JSXOpeningElement[name.name='ModalShell']:not(:has(JSXAttribute[name.name='label']))",
+    selector:
+      "JSXOpeningElement[name.name='ModalShell']:not(:has(JSXAttribute[name.name='label']))",
     message: "Every modal is a named dialog: ModalShell takes label",
-    bad: { file: `${R}components/overlays/InfoModal.tsx`, code: "const x = <ModalShell open>{c}</ModalShell>;" },
+    bad: {
+      file: `${R}components/overlays/InfoModal.tsx`,
+      code: "const x = <ModalShell open>{c}</ModalShell>;",
+    },
   },
   {
     id: "frost-no-transition",
@@ -65,7 +78,10 @@ export const ONE_HOME = [
       "controls/CloseButton\\.tsx$",
     ],
     message: "No transition classes inside the frosted modal shell (they re-blur every frame)",
-    bad: { file: `${R}components/overlays/InfoModal.tsx`, code: "const x = <div className='p-2 transition-colors' />;" },
+    bad: {
+      file: `${R}components/overlays/InfoModal.tsx`,
+      code: "const x = <div className='p-2 transition-colors' />;",
+    },
   },
   {
     id: "frost-no-transition-preset-panel",
@@ -86,7 +102,10 @@ export const ONE_HOME = [
     files: [`^${R}`],
     allow: ["playback/SleepTimer\\.tsx$"],
     message: "The sleep durations are defined once, in SleepTimer (SLEEP_DURATIONS)",
-    bad: { file: `${R}components/device/DeviceControls.tsx`, code: "const d = [{ minutes: 15, label: '15 min' }];" },
+    bad: {
+      file: `${R}components/device/DeviceControls.tsx`,
+      code: "const d = [{ minutes: 15, label: '15 min' }];",
+    },
   },
   {
     id: "user-agent",
@@ -126,14 +145,20 @@ export const ONE_HOME = [
       "screens/PresetsScreen\\.tsx$",
       "screens/QueueScreen\\.tsx$",
     ],
-    message: "A media card's shell is bg-raised/50 and its well a veil lift, never /70 or a panel hole",
-    bad: { file: `${R}screens/QueueScreen.tsx`, code: "const x = <div className='bg-raised/70 ring-1 ring-edge' />;" },
+    message:
+      "A media card's shell is bg-raised/50 and its well a veil lift, never /70 or a panel hole",
+    bad: {
+      file: `${R}screens/QueueScreen.tsx`,
+      code: "const x = <div className='bg-raised/70 ring-1 ring-edge' />;",
+    },
   },
   {
     id: "retired-names",
     was: "S37, S71, S77",
-    selector: "Identifier[name=/^(searchBack|SearchBack|searchGoBack|searchFrom|fmtHours|fmtSpan|isDeclined)$/]",
-    message: "A retired name: the pivot is history now, durations go through fmtDuration, isDeclined became the lookup purpose",
+    selector:
+      "Identifier[name=/^(searchBack|SearchBack|searchGoBack|searchFrom|fmtHours|fmtSpan|isDeclined)$/]",
+    message:
+      "A retired name: the pivot is history now, durations go through fmtDuration, isDeclined became the lookup purpose",
     bad: { file: `${R}screens/SearchScreen.tsx`, code: "const searchBack = 1;" },
   },
   {
@@ -145,7 +170,10 @@ export const ONE_HOME = [
     files: [`^${R}`],
     allow: ["lib/playingEntry\\.ts$"],
     message: "The playing entry's pointer is effectivePlayId (lib/playingEntry), never re-derived",
-    bad: { file: `${R}screens/QueueScreen.tsx`, code: "const id = queue?.play_id ?? playState?.queue_id;" },
+    bad: {
+      file: `${R}screens/QueueScreen.tsx`,
+      code: "const id = queue?.play_id ?? playState?.queue_id;",
+    },
   },
   {
     id: "tt-wrapper",
@@ -154,7 +182,10 @@ export const ONE_HOME = [
     files: [`^${R}`],
     allow: ["/api\\.ts$"],
     message: "Queue writes go through the tt wrapper, and never queue a parentId",
-    bad: { file: `${R}screens/LibraryScreen.tsx`, code: "void window.tastytunes.mediaQueueAdd(x);" },
+    bad: {
+      file: `${R}screens/LibraryScreen.tsx`,
+      code: "void window.tastytunes.mediaQueueAdd(x);",
+    },
   },
   {
     id: "void-command",
@@ -180,8 +211,12 @@ export const ONE_HOME = [
     selector:
       "JSXOpeningElement[name.name='DndContext']:not(:has(JSXAttribute[name.name='accessibility'] Identifier[name='DND_ACCESSIBILITY']))",
     files: [`^${R}`],
-    message: "Every DndContext passes accessibility={DND_ACCESSIBILITY} (its screen-reader text in the body)",
-    bad: { file: `${R}screens/QueueScreen.tsx`, code: "const x = <DndContext sensors={s}>{c}</DndContext>;" },
+    message:
+      "Every DndContext passes accessibility={DND_ACCESSIBILITY} (its screen-reader text in the body)",
+    bad: {
+      file: `${R}screens/QueueScreen.tsx`,
+      code: "const x = <DndContext sensors={s}>{c}</DndContext>;",
+    },
   },
   {
     id: "no-vendor-key",
@@ -196,7 +231,8 @@ export const ONE_HOME = [
     was: "S13",
     selector: "CallExpression[callee.property.name='sort'][arguments.0.name='compareTrackOrder']",
     allow: ["^src/shared/model"],
-    message: "Album track order goes through orderTracks (it sorts only when disc and position are unique)",
+    message:
+      "Album track order goes through orderTracks (it sorts only when disc and position are unique)",
     bad: { file: `${R}screens/LibraryScreen.tsx`, code: "tracks.sort(compareTrackOrder);" },
   },
   {
@@ -216,7 +252,10 @@ export const ONE_HOME = [
     files: [`^${R}`],
     allow: ["library/useRowSelection\\.ts$"],
     message: "Select all (⌘A) has one home, useRowSelection",
-    bad: { file: `${R}components/queue/useQueueSelection.ts`, code: "if (e.key.toLowerCase() === 'a') selectAll();" },
+    bad: {
+      file: `${R}components/queue/useQueueSelection.ts`,
+      code: "if (e.key.toLowerCase() === 'a') selectAll();",
+    },
   },
   {
     id: "counts",
@@ -225,7 +264,10 @@ export const ONE_HOME = [
     files: [`^${R}`],
     allow: ["lib/format\\.ts$"],
     message: "Counts print through fmtCount, never a hand-rolled toLocaleString()",
-    bad: { file: `${R}components/settings/HistorySection.tsx`, code: "const s = n.toLocaleString();" },
+    bad: {
+      file: `${R}components/settings/HistorySection.tsx`,
+      code: "const s = n.toLocaleString();",
+    },
   },
   {
     id: "known-drs",
@@ -234,7 +276,8 @@ export const ONE_HOME = [
       ":matches(CallExpression[callee.property.name=/^audio(Dr|Stats)Many$/], CallExpression[callee.name=/^audio(Dr|Stats)Many$/])",
     files: [`^${R}`],
     allow: ["lib/audioAnalysis\\.ts$", "overlays/MediaInfoModal\\.tsx$"],
-    message: "Rows and lenses read dynamic range through useKnownDrs, not audioDrMany or audioStatsMany",
+    message:
+      "Rows and lenses read dynamic range through useKnownDrs, not audioDrMany or audioStatsMany",
     bad: { file: `${R}components/library/lenses/TracksLens.tsx`, code: "void audioDrMany(keys);" },
   },
   {
@@ -258,8 +301,12 @@ export const ONE_HOME = [
     was: "S7",
     selector: "Property[key.name='accelerator'] Literal[value=/^[^+]{1,5}$/]",
     files: ["^src/main/app/menu\\.ts$"],
-    message: "No bare-key accelerator on a menu item (macOS fires it as well as the renderer's handler)",
-    bad: { file: "src/main/app/menu.ts", code: "const item = { label: 'Display', accelerator: 'F' };" },
+    message:
+      "No bare-key accelerator on a menu item (macOS fires it as well as the renderer's handler)",
+    bad: {
+      file: "src/main/app/menu.ts",
+      code: "const item = { label: 'Display', accelerator: 'F' };",
+    },
   },
   {
     id: "notice-dash",
@@ -281,7 +328,24 @@ export const ONE_HOME = [
       "lib/historyStreamers\\.ts$",
     ],
     message: "No em dash in the History views' copy",
-    bad: { file: `${R}components/history/HistoryStats.tsx`, code: "const x = <p>Plays — this week</p>;" },
+    bad: {
+      file: `${R}components/history/HistoryStats.tsx`,
+      code: "const x = <p>Plays — this week</p>;",
+    },
+  },
+  {
+    id: "hand-rolled-cap",
+    was: "none (0.11.0 sweep: five module caches capped themselves by hand, first in first out)",
+    selector:
+      "MemberExpression[property.name='value'][object.callee.property.name='next'][object.callee.object.callee.property.name='keys']",
+    files: [`^${R}`],
+    allow: ["lib/lru\\.ts$"],
+    message:
+      "A bounded module cache is an Lru (lib/lru), never a Map that evicts its own oldest key",
+    bad: {
+      file: `${R}hooks/useArtAccent.ts`,
+      code: "if (cache.size > 80) cache.delete(cache.keys().next().value as string);",
+    },
   },
   {
     id: "settings-pointer",

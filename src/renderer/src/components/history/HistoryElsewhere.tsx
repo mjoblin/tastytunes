@@ -17,6 +17,7 @@ import { openArtistInLibrary, openRefInLibrary } from "@/lib/mediaActions";
 import type { MediaRef } from "@/lib/mediaRef";
 import { cx, fmtCount, fmtRelative, matchesFilter } from "@/lib/format";
 import { FACT_SEP } from "@/lib/mediaFacts";
+import { Lru } from "@/lib/lru";
 
 /**
  * The History screen's ELSEWHERE (0.8.0): the artists the record met away from
@@ -56,7 +57,7 @@ const ARCHIVE_TRIES = 1;
  *  lived), and the Cover Art Archive when album-art lookups are on (main gates
  *  it and caches its misses). Split so an artist's row can try every track's
  *  saved cover, then a bounded few at the archive. */
-const coverCache = new Map<string, Promise<string | null>>();
+const coverCache = new Lru<string, Promise<string | null>>(300);
 function savedCover(t: Pick<HeardTrack, "title" | "artist" | "album">): Promise<string | null> {
   const key = playKey(t.title, t.artist, t.album);
   let p = coverCache.get(key);
@@ -66,7 +67,7 @@ function savedCover(t: Pick<HeardTrack, "title" | "artist" | "album">): Promise<
   }
   return p;
 }
-const archiveCache = new Map<string, Promise<string | null>>();
+const archiveCache = new Lru<string, Promise<string | null>>(300);
 function archiveArt(t: Pick<HeardTrack, "artist" | "album">): Promise<string | null> {
   if (!t.artist || !t.album) return Promise.resolve(null);
   const key = `${t.artist.toLowerCase()}|${t.album.toLowerCase()}`;
@@ -113,7 +114,7 @@ const DWELL_MS = 500;
  *  fire hundreds of lookups. A picture found is kept for the session; a miss
  *  is asked again on the next mount, and main answers a definitive one from
  *  its own cache at once. */
-const rowArtCache = new Map<string, Promise<string | null>>();
+const rowArtCache = new Lru<string, Promise<string | null>>(300);
 function useLazyArt(
   ref: React.RefObject<HTMLElement | null>,
   key: string,
@@ -162,7 +163,7 @@ function useLazyArt(
 /** The artist's summary, asked when a row opens and the Artist info setting is
  *  on (the same gate and the same main-process chain as Now Playing's panel;
  *  main caches, this keeps the promise so a reopen is free). */
-const aboutCache = new Map<string, Promise<ArtistInfo | null>>();
+const aboutCache = new Lru<string, Promise<ArtistInfo | null>>(300);
 function useAbout(
   name: string,
   wanted: boolean,

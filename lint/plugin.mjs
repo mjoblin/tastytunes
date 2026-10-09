@@ -32,7 +32,11 @@ const oneHome = {
       if (entry.files && !matches(path, entry.files)) continue;
       if (matches(path, entry.allow)) continue;
       const report = (node) =>
-        context.report({ node, messageId: "broke", data: { id: entry.id, message: entry.message } });
+        context.report({
+          node,
+          messageId: "broke",
+          data: { id: entry.id, message: entry.message },
+        });
       const prev = listeners[entry.selector];
       listeners[entry.selector] = prev
         ? (node) => {

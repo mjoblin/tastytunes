@@ -22,6 +22,7 @@ import type {
 } from "./scenes/types";
 import { easeTowards, frameDelta } from "./clock";
 import { clamp, cubic, noise } from "./scenes/lib";
+import { Lru } from "@/lib/lru";
 
 /**
  * THE FEED: the one reader. Each animation frame it turns the store's
@@ -566,8 +567,8 @@ function firstAfter(at: Float32Array, secs: number): number {
 
 /** The deck scenes' pictures, decoded once per URL and kept for a few tracks, so a
  *  scene switch or a return to a track draws at once. */
-const artImages = new Map<string, Promise<HTMLImageElement | null>>();
 const ART_IMAGES_MAX = 8;
+const artImages = new Lru<string, Promise<HTMLImageElement | null>>(ART_IMAGES_MAX);
 function artImage(url: string): Promise<HTMLImageElement | null> {
   let p = artImages.get(url);
   if (!p) {
@@ -582,7 +583,6 @@ function artImage(url: string): Promise<HTMLImageElement | null> {
       return img;
     })().catch(() => null);
     artImages.set(url, p);
-    if (artImages.size > ART_IMAGES_MAX) artImages.delete(artImages.keys().next().value as string);
   }
   return p;
 }

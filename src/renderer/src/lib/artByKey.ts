@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { tt } from "@/api";
 import { useStore } from "@/store";
+import { Lru } from "@/lib/lru";
 
 /**
  * Art for content keys (playKey) from the library index, for surfaces whose
@@ -9,7 +10,7 @@ import { useStore } from "@/store";
  * once is never asked again (a miss caches as null), and a render passes only
  * the keys on screen, so a windowed list costs one small IPC per slice.
  */
-const cache = new Map<string, string | null>();
+const cache = new Lru<string, string | null>(5000);
 let inFlight: Set<string> = new Set();
 
 export function useArtByKeys(keys: readonly string[]): Record<string, string | null> {

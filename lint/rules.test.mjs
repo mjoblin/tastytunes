@@ -24,7 +24,11 @@ const options = ONE_HOME.map(({ bad: _bad, was: _was, ...entry }) => entry);
 const allowedFile = (entry) => {
   const pattern = entry.allow?.[0];
   if (!pattern) return null;
-  const path = pattern.replace(/^\^/, "").replace(/\$$/, "").replace(/\\\./g, ".").replace(/^\//, "");
+  const path = pattern
+    .replace(/^\^/, "")
+    .replace(/\$$/, "")
+    .replace(/\\\./g, ".")
+    .replace(/^\//, "");
   return path.startsWith("src/") ? path : `src/renderer/src/${path}`;
 };
 
@@ -46,13 +50,40 @@ tester.run("tastytunes/one-home", plugin.rules["one-home"], {
 
 tester.run("tastytunes/no-dash-aside", plugin.rules["no-dash-aside"], {
   valid: [
-    { name: "a lone dash placeholder", code: "const s = '—';", filename: at("src/renderer/src/a.tsx") },
-    { name: "a spaced dash between numbers", code: "const s = '3 — 4';", filename: at("src/renderer/src/a.tsx") },
-    { name: "commas in copy", code: "const x = <p>Saved, and done</p>;", filename: at("src/renderer/src/a.tsx") },
+    {
+      name: "a lone dash placeholder",
+      code: "const s = '—';",
+      filename: at("src/renderer/src/a.tsx"),
+    },
+    {
+      name: "a spaced dash between numbers",
+      code: "const s = '3 — 4';",
+      filename: at("src/renderer/src/a.tsx"),
+    },
+    {
+      name: "commas in copy",
+      code: "const x = <p>Saved, and done</p>;",
+      filename: at("src/renderer/src/a.tsx"),
+    },
   ],
   invalid: [
-    { name: "an aside in a string", code: "const s = 'Saved — done';", filename: at("src/renderer/src/a.tsx"), errors: [{ messageId: "aside" }] },
-    { name: "an aside in JSX text", code: "const x = <p>Saved — done</p>;", filename: at("src/renderer/src/a.tsx"), errors: [{ messageId: "aside" }] },
-    { name: "an aside in a template", code: "const s = `Saved — done, ${n} left`;", filename: at("src/renderer/src/a.tsx"), errors: [{ messageId: "aside" }] },
+    {
+      name: "an aside in a string",
+      code: "const s = 'Saved — done';",
+      filename: at("src/renderer/src/a.tsx"),
+      errors: [{ messageId: "aside" }],
+    },
+    {
+      name: "an aside in JSX text",
+      code: "const x = <p>Saved — done</p>;",
+      filename: at("src/renderer/src/a.tsx"),
+      errors: [{ messageId: "aside" }],
+    },
+    {
+      name: "an aside in a template",
+      code: "const s = `Saved — done, ${n} left`;",
+      filename: at("src/renderer/src/a.tsx"),
+      errors: [{ messageId: "aside" }],
+    },
   ],
 });

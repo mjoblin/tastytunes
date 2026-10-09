@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { tt } from "@/api";
+import { Lru } from "@/lib/lru";
 
 /**
  * Cover Art Archive fallback, renderer side: one in-flight promise per
@@ -7,7 +8,7 @@ import { tt } from "@/api";
  * and misses are remembered for the session (main's disk cache remembers
  * across sessions, including definitive misses).
  */
-const memo = new Map<string, Promise<string | null>>();
+const memo = new Lru<string, Promise<string | null>>(500);
 
 function lookup(artist: string, album: string): Promise<string | null> {
   const key = `${artist.toLowerCase()}|${album.toLowerCase()}`;
