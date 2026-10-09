@@ -84,12 +84,12 @@ export function DiscQueue({
     <div className="h-full flex flex-col" data-disc-queue>
       {header}
       <div className="flex-1 overflow-y-auto px-6 pt-1 pb-6">
-        <div className="flex items-center gap-4 px-2 pb-4">
+        <div className="flex items-start gap-4 px-2 pb-4">
           <div className="h-24 w-24 shrink-0">
             <MediaArt src={disc.artUrl} kind="album" size="card" />
           </div>
           {/* no "CD" label over the album: the switch right above already says it */}
-          <div className="min-w-0 space-y-1" data-disc-names={disc.names}>
+          <div className="min-w-0 space-y-1 pt-1" data-disc-names={disc.names}>
             <div className="text-[18px] font-semibold leading-tight text-ink truncate">
               {disc.album ?? "Disc"}
             </div>
