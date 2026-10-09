@@ -334,6 +334,20 @@ export const ONE_HOME = [
     },
   },
   {
+    id: "queue-source",
+    was: "none (0.11.0 sweep: eight surfaces derived it by hand from zoneState and nowPlaying)",
+    selector:
+      "BinaryExpression[operator='==='][left.callee.name='activeSourceId'][right.value='MEDIA_PLAYER']",
+    files: [`^${R}`],
+    allow: ["hooks/useQueueSourceActive\\.ts$"],
+    message:
+      "Whether the queue is the audible source is useQueueSourceActive (a boolean selector: no re-render on every zone push)",
+    bad: {
+      file: `${R}screens/QueueScreen.tsx`,
+      code: "const audible = activeSourceId(zoneState, nowPlaying) === 'MEDIA_PLAYER';",
+    },
+  },
+  {
     id: "hand-rolled-cap",
     was: "none (0.11.0 sweep: five module caches capped themselves by hand, first in first out)",
     selector:

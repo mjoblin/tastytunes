@@ -33,12 +33,13 @@ import { FilterInput } from "@/components/controls/FilterInput";
 import { Segmented } from "@/components/controls/Segmented";
 import { RowMenu } from "@/components/media/RowMenu";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
-import { activeSourceId, cx, matchesFilter } from "@/lib/format";
+import { cx, matchesFilter } from "@/lib/format";
 import { favoriteAct, favoriteHasRoute, type FavoriteActResult } from "@/lib/favorites";
 import { flashTarget } from "@/lib/scroll";
 import { playingStationName } from "@/lib/radio";
 import { useStationTuning } from "@/hooks/useStationTuning";
 import { ScreenTitle, GAP_BETWEEN } from "@/components/chrome/Chrome";
+import { useQueueSourceActive } from "@/hooks/useQueueSourceActive";
 
 /** Kind visibility — session memory, like the Radio screen's chip state. */
 type FavKind = "all" | "station" | "album" | "track";
@@ -91,8 +92,6 @@ export function FavoritesScreen(): React.JSX.Element {
   const setScreen = useStore((s) => s.setScreen);
   const playState = useStore((s) => s.playState);
   const effectivePlayId = useStore((s) => s.effectivePlayId);
-  const nowPlaying = useStore((s) => s.nowPlaying);
-  const zoneState = useStore((s) => s.zoneState);
   const queue = useStore((s) => s.queue);
   const connected = useStore((s) => s.connection.phase === "connected");
   const { presetCardSize, presetGap, presetFillRows } = useStore((s) => s.settings);
@@ -181,7 +180,7 @@ export function FavoritesScreen(): React.JSX.Element {
 
   // ------------------------------------------------------------------- media
 
-  const queueSourceActive = activeSourceId(zoneState, nowPlaying) === "MEDIA_PLAYER";
+  const queueSourceActive = useQueueSourceActive();
   const albumPlaying = (f: FavoriteMedia): boolean =>
     queueSourceActive &&
     md != null &&

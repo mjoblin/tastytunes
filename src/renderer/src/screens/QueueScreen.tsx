@@ -59,7 +59,7 @@ import { EmptyActions, EmptyState } from "@/components/chrome/EmptyState";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { flashTarget, scrollToWithContext } from "@/lib/scroll";
 import { DND_ACCESSIBILITY, lockVertical } from "@/lib/dnd";
-import { activeSourceId, cx, fmtDuration, fmtTime, matchesFilter, fmtCount } from "@/lib/format";
+import { cx, fmtDuration, fmtTime, matchesFilter, fmtCount } from "@/lib/format";
 import { toggleFavorite } from "@/lib/favorites";
 import { fromQueueItem, refToFavorite, refToPlaylistItem } from "@/lib/mediaRef";
 import { saveRefToPreset, openRefInLibrary } from "@/lib/mediaActions";
@@ -87,6 +87,7 @@ import { Segmented } from "@/components/controls/Segmented";
 import { useDisc } from "@/hooks/useDisc";
 import { useQueueSelection, type SelectionLate } from "@/components/queue/useQueueSelection";
 import { FACT_SEP } from "@/lib/mediaFacts";
+import { useQueueSourceActive } from "@/hooks/useQueueSourceActive";
 
 /**
  * Queue → preset: the shared PresetSavePanel in a centered modal. The device
@@ -203,8 +204,6 @@ export function QueueScreen(): React.JSX.Element {
 function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.Element {
   const queue = useStore((s) => s.queue);
   const saveSettings = useStore((s) => s.saveSettings);
-  const nowPlaying = useStore((s) => s.nowPlaying);
-  const zoneState = useStore((s) => s.zoneState);
   const { followQueue, queueLayout, presetCardSize, presetGap, presetFillRows } = useStore(
     (s) => s.settings,
   );
@@ -423,7 +422,7 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
   // The queue belongs to the MEDIA_PLAYER source. When another source is
   // active (AirPlay, radio, …) the device still reports a play_id — that row
   // is just where the queue is parked, and must not claim to be playing.
-  const queueSourceActive = activeSourceId(zoneState, nowPlaying) === "MEDIA_PLAYER";
+  const queueSourceActive = useQueueSourceActive();
 
   const totalSecs = allItems.reduce((acc, i) => acc + (i.metadata?.duration ?? 0), 0);
 
