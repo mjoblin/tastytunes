@@ -94,6 +94,7 @@ const api: TastyTunesApi = {
   listeningStreamers: () => ipcRenderer.invoke(IPC.listeningStreamers),
   listeningYear: (year: number) => ipcRenderer.invoke(IPC.listeningYear, year),
   undoLabelSet: (label) => ipcRenderer.invoke(IPC.undoLabelSet, label),
+  diagnosticsWatch: (on: boolean) => ipcRenderer.invoke(IPC.diagnosticsWatch, on),
   lookupCacheStats: () => ipcRenderer.invoke(IPC.lookupCacheStats),
   clearLookupCaches: () => ipcRenderer.invoke(IPC.clearLookupCaches),
   artThumbsStats: () => ipcRenderer.invoke(IPC.artThumbsStats),

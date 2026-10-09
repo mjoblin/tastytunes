@@ -26,6 +26,9 @@ export function registerDeviceIpc(): void {
     deviceManager.connect(host, { remember: false, demo: true });
   });
   handle(IPC.command, (_e, cmd: StreamerCommand) => deviceManager.command(cmd));
+  handle(IPC.diagnosticsWatch, (e, on: boolean) =>
+    deviceManager.watchFrames(e.sender, on === true),
+  );
   handle(IPC.setSleep, (_e, sleep: SleepTimer | null) => deviceManager.setSleep(sleep));
   handle(IPC.scheduleRunMissed, () => runMissedSchedule(deviceManager));
   handle(IPC.scheduleDismissMissed, () => dismissMissedSchedule(deviceManager));

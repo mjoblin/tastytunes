@@ -1,7 +1,7 @@
 // Orchestrates discovery, the SMOIP socket, command dispatch, and the push relay
 // to renderer windows. Mirrors PunyTunes' StreamMagicManager, translated to Node.
 
-import { webContents } from "electron";
+import { webContents, type WebContents } from "electron";
 import { type PushMessage, type Snapshot, type StreamerCommand } from "@shared/ipc";
 import {
   presetVolumeKey,
@@ -963,11 +963,31 @@ export class DeviceManager {
     this.push({ kind: "devices", devices: this.devices, discovering: this.discovering });
   }
 
+  /**
+   * The windows whose diagnostics drawer is open. A frame goes only to them: every frame
+   * used to reach every window (the main window, the mini player, the tray panel), each of
+   * which copied its ring on every one, the position tick once a second among them, for a
+   * drawer that is closed nearly always (0.11.0 sweep). The ring itself is always kept, and
+   * a drawer opening is answered with it (watchFrames).
+   */
+  private readonly frameWatchers = new Set<WebContents>();
+
+  /** A window's drawer opened or closed; answers the ring so far. */
+  watchFrames(wc: WebContents, on: boolean): FrameEntry[] {
+    if (!on) this.frameWatchers.delete(wc);
+    else if (!this.frameWatchers.has(wc)) {
+      this.frameWatchers.add(wc);
+      wc.once("destroyed", () => this.frameWatchers.delete(wc));
+    }
+    return this.frames;
+  }
+
   private recordFrame(dir: "in" | "out", frame: SmoipFrame): void {
     const entry: FrameEntry = { at: Date.now(), dir, frame };
     this.frames.push(entry);
     if (this.frames.length > FRAME_RING_SIZE) this.frames.shift();
-    this.push({ kind: "frame", entry });
+    const msg: PushMessage = { kind: "frame", entry };
+    for (const wc of this.frameWatchers) if (!wc.isDestroyed()) wc.send("tt:push", msg);
   }
 
   private log(level: LogEntry["level"], scope: string, text: string): void {

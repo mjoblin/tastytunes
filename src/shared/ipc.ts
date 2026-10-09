@@ -482,6 +482,10 @@ export interface TastyTunesApi {
   /** The undo stack's top label (or null when empty) — the Edit menu's
    *  Undo item names its target from this, the Music.app pattern. */
   undoLabelSet(label: string | null): Promise<void>;
+  /** The diagnostics drawer opened (true) or closed (false) in this window: the SMOIP frames
+   *  are pushed only to windows whose drawer is open (0.11.0 sweep; every frame used to reach
+   *  every window, the position tick once a second among them). Answers the ring so far. */
+  diagnosticsWatch(on: boolean): Promise<FrameEntry[]>;
   lookupCacheStats(): Promise<{ entries: number; bytes: number }>;
   /** Wipe the lookup caches (memory + disk); resolves to the fresh stats. */
   clearLookupCaches(): Promise<{ entries: number; bytes: number }>;
@@ -551,6 +555,7 @@ export const IPC = {
   listeningStreamers: "tt:listeningStreamers",
   listeningYear: "tt:listeningYear",
   undoLabelSet: "tt:undoLabelSet",
+  diagnosticsWatch: "tt:diagnosticsWatch",
   lookupCacheStats: "tt:lookupCacheStats",
   clearLookupCaches: "tt:clearLookupCaches",
   artThumbsStats: "tt:artThumbsStats",

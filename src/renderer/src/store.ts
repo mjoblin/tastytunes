@@ -437,6 +437,8 @@ interface TTState {
   lastRecalledPresetId: number | null;
   setScreen: (screen: Screen) => void;
   setDiagnosticsOpen: (open: boolean) => void;
+  /** The frame ring main answered when this window's drawer opened (diagnosticsWatch). */
+  adoptFrames: (frames: FrameEntry[]) => void;
   setShortcutsOpen: (open: boolean) => void;
   setInfoOpen: (open: boolean) => void;
   setMediaInfo: (target: MediaInfoTarget | null) => void;
@@ -763,6 +765,7 @@ export const useStore = create<TTState>((set, get) => ({
         : { screen }),
     })),
   setDiagnosticsOpen: (diagnosticsOpen) => set({ diagnosticsOpen }),
+  adoptFrames: (frames) => set({ frames: frames.slice(-FRAME_RING_SIZE) }),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   setInfoOpen: (infoOpen) => set({ infoOpen }),
   setMediaInfo: (mediaInfo) => set({ mediaInfo }),
