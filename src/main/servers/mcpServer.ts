@@ -8,6 +8,7 @@
 // power-ON reboot guard exactly like the UI. Tool/cluster identity lives in
 // MCP_CLUSTERS (shared with the Settings screen); this file supplies each
 // tool's input schema and handler.
+import { timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { networkInterfaces } from "node:os";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -51,6 +52,32 @@ function lanAddress(): string | null {
     }
   }
   return null;
+}
+
+/** A JSON-RPC request is a few kilobytes; a megabyte is room for any of them. */
+const MAX_BODY_BYTES = 1_000_000;
+
+const LOOPBACK = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+/** A page served from this machine (an MCP inspector on localhost, say). */
+function loopbackOrigin(origin: string): boolean {
+  try {
+    return LOOPBACK.has(new URL(origin).hostname);
+  } catch {
+    return false;
+  }
+}
+/** A connection from this machine. */
+function loopbackAddress(addr: string | undefined): boolean {
+  if (!addr) return false;
+  const a = addr.startsWith("::ffff:") ? addr.slice(7) : addr;
+  return a === "::1" || a.startsWith("127.");
+}
+/** The Authorization header against the token, in constant time. */
+function tokenMatches(header: string | undefined, token: string): boolean {
+  if (!token || !header) return false;
+  const want = Buffer.from(`Bearer ${token}`);
+  const got = Buffer.from(header.trim());
+  return want.length === got.length && timingSafeEqual(want, got);
 }
 
 export class McpBridge {
@@ -152,6 +179,22 @@ export class McpBridge {
         return;
       }
     }
+    // THE REQUEST CHECKS (0.10.0, the whole-app review). A web page can POST to this port
+    // without a preflight (a text/plain body naming application/json passed the SDK's own
+    // test), so a request that carries a browser's Origin is refused unless the page is on
+    // this machine; the body must be JSON by its exact type and no larger than a request
+    // needs; and while the server is reachable from the network, a request from another
+    // machine must carry the token from Settings › AI agents (one from this machine is
+    // held to the checks above, as on the localhost bind).
+    const reject = (status: number, message: string, extra: Record<string, string> = {}): void => {
+      res.writeHead(status, { "content-type": "application/json", ...extra });
+      res.end(JSON.stringify({ jsonrpc: "2.0", error: { code: -32000, message }, id: null }));
+    };
+    const origin = req.headers.origin;
+    if (origin && !loopbackOrigin(origin)) {
+      reject(403, "Requests from web pages are refused.");
+      return;
+    }
     if (req.method !== "POST") {
       // Stateless mode: no SSE stream to resume, no session to delete.
       res.writeHead(405, { "content-type": "application/json" });
@@ -165,9 +208,32 @@ export class McpBridge {
       return;
     }
 
+    const type = (req.headers["content-type"] ?? "").split(";")[0].trim().toLowerCase();
+    if (type !== "application/json") {
+      reject(415, "The body must be application/json.");
+      return;
+    }
+    if (bind === "lan" && !loopbackAddress(req.socket.remoteAddress)) {
+      if (!tokenMatches(req.headers.authorization, getSettings().mcp.token)) {
+        reject(401, "This server needs its token: Authorization: Bearer <token>.", {
+          "www-authenticate": 'Bearer realm="tastytunes"',
+        });
+        return;
+      }
+    }
+
     try {
       const chunks: Buffer[] = [];
-      for await (const chunk of req) chunks.push(chunk as Buffer);
+      let size = 0;
+      for await (const chunk of req) {
+        size += (chunk as Buffer).length;
+        if (size > MAX_BODY_BYTES) {
+          reject(413, "The request is too large.");
+          req.destroy();
+          return;
+        }
+        chunks.push(chunk as Buffer);
+      }
       const body: unknown = JSON.parse(Buffer.concat(chunks).toString("utf-8"));
 
       const mcpServer = this.buildServer();

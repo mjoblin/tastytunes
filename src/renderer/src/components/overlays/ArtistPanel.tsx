@@ -22,6 +22,7 @@ import { HeaderChip } from "@/components/chrome/Chrome";
 import { Section, sourceRows, streamRows, trackFormatRows } from "@/components/media/InfoRows";
 import { Waveform, usePlayingDr, usePlayingLoudness } from "@/components/media/Waveform";
 import { audioAnalysisKey } from "@shared/model";
+import { FACT_SEP } from "@/lib/mediaFacts";
 
 type Status = "loading" | "ready" | "none";
 type Tab = "artist" | "album" | "track" | "stream";
@@ -65,7 +66,8 @@ export function ArtistPanel({ className }: { className?: string }): React.JSX.El
   const meta = deriveNowPlaying(playState, nowPlaying);
   const artist = meta.isRadio || !mbEnabled ? null : meta.subtitle;
   const album = meta.isRadio || !mbEnabled ? null : meta.album;
-  const title = meta.isRadio || !mbEnabled ? null : meta.title;
+  // a stopped disc's title is its album's, no track's
+  const title = meta.isRadio || meta.disc || !mbEnabled ? null : meta.title;
   const duration = meta.isRadio ? null : (playState?.metadata?.duration ?? null);
   const trackable = Boolean(artist && title);
   const fallback: Tab = artist ? "artist" : "stream";
@@ -244,7 +246,7 @@ export function ArtistPanel({ className }: { className?: string }): React.JSX.El
   const facts =
     albumInfo == null
       ? ""
-      : [albumInfo.year, albumInfo.type, albumInfo.label].filter(Boolean).join(" · ");
+      : [albumInfo.year, albumInfo.type, albumInfo.label].filter(Boolean).join(FACT_SEP);
   const wikipediaUrl =
     tab === "artist" ? artistInfo?.wikipediaUrl : tab === "album" ? albumInfo?.wikipediaUrl : null;
   const musicbrainzUrl =

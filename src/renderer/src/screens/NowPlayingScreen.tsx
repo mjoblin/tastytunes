@@ -5,14 +5,18 @@ import {
   Disc3,
   Heart,
   Info,
+  Library,
+  ListMusic,
   ListOrdered,
   Maximize2,
   MicVocal,
+  Radio,
   RadioTower,
   Sparkles,
+  X,
 } from "lucide-react";
 import { useStore } from "@/store";
-import { activeSourceId, cx, deriveNowPlaying } from "@/lib/format";
+import { activeSourceId, cx, deriveNowPlaying, fmtDuration, queuePlace } from "@/lib/format";
 import { playingQueueEntry } from "@/lib/playingEntry";
 import { fromQueueItem } from "@/lib/mediaRef";
 import { NameLink } from "@/components/media/NameLine";
@@ -26,19 +30,19 @@ import { useBestArt } from "@/lib/bestArt";
 import { useFadePresence } from "@/hooks/useFadePresence";
 import { LyricsPanel } from "@/components/overlays/LyricsPanel";
 import { LyricLine } from "@/components/playback/LyricLine";
-import { EmptyState } from "@/components/chrome/EmptyState";
-import { ResumeCard } from "@/components/playback/ResumeCard";
+import { EmptyActions, EmptyState } from "@/components/chrome/EmptyState";
 import { ArtistPanel } from "@/components/overlays/ArtistPanel";
 import { NowPlayingWaveform, PlayingDrChip, usePlayingAnalysis } from "@/components/media/Waveform";
 import { SceneCanvas } from "@/components/display/SceneCanvas";
 import { ScenePicker } from "@/components/display/ScenePicker";
 import { useSceneFeed } from "@/components/display/feed";
-import { isAbstract, sceneDef } from "@/components/display/scenes";
+import { isAbstract, sceneDef, sceneNeeds } from "@/components/display/scenes";
 import { SCENE_ABSENT_MS, sceneIdleLine, useSceneLive } from "@/components/display/useSceneLive";
 import { useShuffledScene } from "@/components/display/useShuffledScene";
 import { useArtSize } from "@/hooks/useArtSize";
 import { CornerResizeHandle } from "@/components/controls/CornerResizeHandle";
 import type { SceneId } from "@/components/display/scenes/types";
+import { FACT_SEP } from "@/lib/mediaFacts";
 
 const ALIGN_H = { left: "justify-start", center: "justify-center", right: "justify-end" } as const;
 const ALIGN_V = { top: "items-start", center: "items-center", bottom: "items-end" } as const;
@@ -51,6 +55,17 @@ export function NowPlayingScreen(): React.JSX.Element {
   const zoneState = useStore((s) => s.zoneState);
   const effectivePlayId = useStore((s) => s.effectivePlayId);
   const displayMode = useStore((s) => s.displayMode);
+  const setScreen = useStore((s) => s.setScreen);
+  // THE WAY TO DISPLAY MODE, SAID ONCE (0.10.0, the first five minutes): once a track the
+  // scenes can draw is playing, a line under the details names the key, until it is
+  // dismissed or Display mode is opened
+  const displayHintSeen = useStore((s) => s.settings.displayHintSeen);
+  const hintAnalysis = usePlayingAnalysis(!displayHintSeen);
+  const showDisplayHint =
+    !displayHintSeen && !displayMode && hintAnalysis != null && hintAnalysis !== "loading";
+  useEffect(() => {
+    if (displayMode && !displayHintSeen) void saveSettings({ displayHintSeen: true });
+  }, [displayMode, displayHintSeen, saveSettings]);
   const setDisplayMode = useStore((s) => s.setDisplayMode);
   const lyricsOpen = useStore((s) => s.lyricsOpen);
   const setLyricsOpen = useStore((s) => s.setLyricsOpen);
@@ -79,10 +94,12 @@ export function NowPlayingScreen(): React.JSX.Element {
   // modals' and the panels' 140 ms), taking no clicks while it is leaving; a fade IN hid
   // its heavy mount behind zero opacity and read as a delay (the user, 2026-09-13)
   const pickerFade = useFadePresence(scenesOpen, { enter: false });
-  const chipOn = !meta.isRadio && meta.title != null;
+  // a station too since 0.10.0: Hi-Fi and Turntable draw for any source
+  const chipOn = meta.title != null;
   const tileStage: SceneId | null = chipOn && isAbstract(tileActive) ? tileActive : null;
+  const tileNeeds = tileStage ? sceneNeeds(tileStage) : "analysis";
   const sceneFeed = useSceneFeed(tileStage != null || scenesOpen);
-  const sceneAnalysis = usePlayingAnalysis(tileStage != null);
+  const sceneAnalysis = usePlayingAnalysis(tileStage != null && tileNeeds === "analysis");
   // THE GATE HOLDS ACROSS A TRACK CHANGE: on a skip the playing track's identity is resolved
   // again and the analysis hook passes through absent, then loading, before the new record
   // arrives; a gate that read those literally dropped the tile to the art for that moment
@@ -99,15 +116,16 @@ export function NowPlayingScreen(): React.JSX.Element {
     const t = setTimeout(() => setSceneReady(false), SCENE_ABSENT_MS);
     return () => clearTimeout(t);
   }, [sceneAnalysis]);
-  const sceneOn = tileStage != null && sceneReady;
+  // the chip's tip says why the art stands in for the chosen scene (2026-09-15)
+  const { live: tileLive, idle: tileIdle } = useSceneLive(tileStage != null, tileNeeds);
+  // a deck scene needs only that something is loaded; the rest hold across a skip (above)
+  const sceneOn = tileStage != null && (tileNeeds === "any" ? tileLive : sceneReady);
   // THE WORDS ARE THE TILE'S OWN CALL (the user, 2026-09-12: a switch in the picker "feels a
   // bit hidden... lyrics are important"): a toggle on the tile, bottom left, the mirror of
   // the header's lyric-line toggle. A scene that is its words (Type, Terminal) draws them
   // regardless and the toggle is disabled there
   const tileDef = tileStage ? sceneDef(tileStage) : null;
   const wordsForced = tileDef?.essentialWords === true;
-  // the chip's tip says why the art stands in for the chosen scene (2026-09-15)
-  const { live: tileLive, idle: tileIdle } = useSceneLive(tileStage != null);
   const tileIdleLine =
     tileDef && !tileLive && tileIdle ? sceneIdleLine(tileDef.label, tileIdle) : null;
   const tileWords = wordsForced || nowPlayingSceneWords;
@@ -174,7 +192,8 @@ export function NowPlayingScreen(): React.JSX.Element {
   const art = useArtSize(mirrored);
 
   // Lyrics need real track metadata — hidden for radio and title-only sources.
-  const lyricsAvailable = lyricsEnabled && !meta.isRadio && !!meta.title && !!meta.subtitle;
+  const lyricsAvailable =
+    lyricsEnabled && !meta.isRadio && !meta.disc && !!meta.title && !!meta.subtitle;
   // The About drawer opens for EVERY source — its Stream tab is device truth
   // and needs only something loaded; the MB tabs gate themselves inside.
   const aboutAvailable =
@@ -215,8 +234,7 @@ export function NowPlayingScreen(): React.JSX.Element {
   );
   const { art: tileArt } = useDecodedArt(heroArt);
   // Live, not snapshotted — the queue moves independently of the track.
-  const queueIndex = playState?.queue_index;
-  const queueLength = playState?.queue_length;
+  const place = queuePlace(playState, nowPlaying);
 
   // Only surface "buffering" once it has persisted a beat — brief buffers on a
   // seek or track change shouldn't flash a label. Other states show at once.
@@ -242,7 +260,7 @@ export function NowPlayingScreen(): React.JSX.Element {
   // list, so the button simply isn't offered for one.
   const playlistBtn = useRef<HTMLButtonElement | null>(null);
   const [playlistAt, setPlaylistAt] = useState<{ x: number; y: number } | null>(null);
-  const playlistAvailable = !meta.isRadio && !!meta.title;
+  const playlistAvailable = !meta.isRadio && !meta.disc && !!meta.title;
 
   const empty = !meta.title && !meta.subtitle;
   /** Every header button hides on this pair; naming it once also stopped the two
@@ -391,10 +409,31 @@ export function NowPlayingScreen(): React.JSX.Element {
         <EmptyState
           icon={Disc3}
           title="Nothing playing"
-          caption="Start playback from a queue, recall a preset, or stream to the device from another app."
+          caption="Play something from the Library, a preset or the radio, or cast to the streamer from another app."
         >
-          {/* the listening record's offer (0.8.0): an album left unfinished */}
-          <ResumeCard />
+          {/* the way on from here (0.10.0, the first five minutes) */}
+          <EmptyActions
+            actions={[
+              {
+                label: "Library",
+                icon: Library,
+                keyHint: "I",
+                onClick: () => setScreen("library"),
+              },
+              { label: "Presets", icon: Radio, keyHint: "P", onClick: () => setScreen("presets") },
+              { label: "Radio", icon: RadioTower, keyHint: "R", onClick: () => setScreen("radio") },
+              ...((queue?.items?.length ?? 0) > 0
+                ? [
+                    {
+                      label: "Queue",
+                      icon: ListMusic,
+                      keyHint: "Q",
+                      onClick: () => setScreen("queue"),
+                    },
+                  ]
+                : []),
+            ]}
+          />
         </EmptyState>
       </div>
     );
@@ -593,7 +632,7 @@ export function NowPlayingScreen(): React.JSX.Element {
                   )}
                 </div>
               )}
-              {shownTrack.album && (
+              {shownTrack.album && !meta.disc && (
                 <div className="text-[14px] text-dim truncate">
                   {entryRef ? (
                     <NameLink
@@ -636,14 +675,18 @@ export function NowPlayingScreen(): React.JSX.Element {
               <div className="text-[13px] text-dim">{nowPlaying.display.line3}</div>
             )}
 
-            {queueIndex != null && queueLength != null && queueLength > 0 && (
+            {/* a stopped disc names its size where a track names its place */}
+            {(meta.disc || place) && (
               <div
+                data-np-place
                 className={cx(
                   "microlabel transition-opacity duration-300",
                   trackVisible ? "opacity-100" : "opacity-0",
                 )}
               >
-                track {queueIndex + 1} of {queueLength}
+                {meta.disc
+                  ? `${meta.disc.tracks} ${meta.disc.tracks === 1 ? "track" : "tracks"}${FACT_SEP}${fmtDuration(meta.disc.secs)}`
+                  : place && `track ${place.index + 1} of ${place.length}`}
               </div>
             )}
 
@@ -657,6 +700,30 @@ export function NowPlayingScreen(): React.JSX.Element {
                 )}
               >
                 <LyricLine />
+              </div>
+            )}
+            {/* a note about the app, not a line of the track: twice the column's rhythm
+              above it (space-y-5's 20px collapses any smaller margin, so mt-3 read as
+              one more track line; user, 2026-10-06) */}
+            {showDisplayHint && (
+              <div
+                data-display-hint
+                className="mt-10 flex items-center gap-2 text-[12px] text-faint"
+              >
+                <Maximize2 size={12} className="shrink-0" />
+                <span>
+                  Press <kbd className="font-mono text-dim">F</kbd> for Fullscreen Display mode,
+                  where the scenes can fill the screen.
+                </span>
+                <button
+                  type="button"
+                  aria-label="Dismiss"
+                  data-display-hint-dismiss
+                  onClick={() => void saveSettings({ displayHintSeen: true })}
+                  className="shrink-0 rounded p-1 text-faint hover:text-ink transition-colors"
+                >
+                  <X size={12} />
+                </button>
               </div>
             )}
           </div>

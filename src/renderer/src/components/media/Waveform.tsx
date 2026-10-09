@@ -11,6 +11,7 @@ import { measureOffThread } from "@/lib/measureClient";
 import type { Measured } from "@/lib/measure";
 import { audioAnalysisKey, type AudioAnalysis } from "@shared/model";
 import { AudioLines } from "lucide-react";
+import { FACT_SEP } from "@/lib/mediaFacts";
 
 /**
  * EXPERIMENT (0.7 exploration, the audio-file-data GO): waveforms from the
@@ -513,9 +514,10 @@ export function Waveform({
             }}
           />
           <div className="mt-1.5 font-mono text-[10.5px] text-faint">
-            peak {fmtDb(analysis.peakDb)} · rms {fmtDb(analysis.rmsDb)} · crest{" "}
-            {fmtDb(analysis.crestDb)}
-            {analysis.lufs != null && ` · ${fmtLufs(analysis.lufs)}`}
+            peak {fmtDb(analysis.peakDb)}
+            {FACT_SEP}rms {fmtDb(analysis.rmsDb)}
+            {FACT_SEP}crest {fmtDb(analysis.crestDb)}
+            {analysis.lufs != null && `${FACT_SEP}${fmtLufs(analysis.lufs)}`}
           </div>
         </>
       )}
@@ -645,9 +647,10 @@ export function NowPlayingWaveform(): React.JSX.Element | null {
     <div data-np-waveform className="pt-5">
       <canvas ref={canvasRef} className="w-full h-16 block" />
       <div className="mt-2 text-center font-mono text-[10.5px] text-faint">
-        peak {fmtDb(analysis.peakDb)} · rms {fmtDb(analysis.rmsDb)} · crest{" "}
-        {fmtDb(analysis.crestDb)}
-        {analysis.lufs != null && ` · ${fmtLufs(analysis.lufs)}`}
+        peak {fmtDb(analysis.peakDb)}
+        {FACT_SEP}rms {fmtDb(analysis.rmsDb)}
+        {FACT_SEP}crest {fmtDb(analysis.crestDb)}
+        {analysis.lufs != null && `${FACT_SEP}${fmtLufs(analysis.lufs)}`}
       </div>
     </div>
   );
@@ -749,8 +752,10 @@ export function InfoWaveform({
         <>
           <canvas ref={canvasRef} className="w-full h-16 block" />
           <div className="mt-1.5 font-mono text-[10.5px] text-faint">
-            peak {fmtDb(state.peakDb)} · rms {fmtDb(state.rmsDb)} · crest {fmtDb(state.crestDb)}
-            {state.lufs != null && ` · ${fmtLufs(state.lufs)}`}
+            peak {fmtDb(state.peakDb)}
+            {FACT_SEP}rms {fmtDb(state.rmsDb)}
+            {FACT_SEP}crest {fmtDb(state.crestDb)}
+            {state.lufs != null && `${FACT_SEP}${fmtLufs(state.lufs)}`}
           </div>
         </>
       )}

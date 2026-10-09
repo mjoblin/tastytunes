@@ -175,9 +175,11 @@ export function albumVolume(title: string): { base: string; volume: number } | n
   // The value can be digits, a spelled-out word (one–twenty) or a Roman
   // numeral (I–XX) — real servers produce all three. The keyword is still
   // required, so "Rocky IV" and "Formula One" never parse; a candidate that
-  // is not a real word or numeral (e.g. "Part Time") resolves to null.
+  // is not a real word or numeral (e.g. "Part Time") resolves to null. The keyword starts a
+  // word, after a space, a dash, a colon, a comma or a bracket, so "Concept 2", "Script Two"
+  // and "Counterpart 3" are titles, not volumes (found by the unit tests, 2026-09-25).
   const m =
-    /^(.*?)[\s\-–—:,]*[[(]?\s*(?:disc|disk|cd|vol(?:ume)?\.?|part|pt\.?)\s*(\d+|[a-z]+)\s*[\])]?\s*$/i.exec(
+    /^(.*?)(?:[\s\-–—:,]+|[\s\-–—:,]*[[(])\s*(?:disc|disk|cd|vol(?:ume)?\.?|part|pt\.?)\s*(\d+|[a-z]+)\s*[\])]?\s*$/i.exec(
       title.trim(),
     );
   if (!m || !m[1].trim()) return null;
@@ -594,6 +596,39 @@ export interface ListeningEventBase {
  *  queue entries, or its station); a preset pressed on the streamer or a queue
  *  another app built never carries it, so a reader must say "started from
  *  TastyTunes", never "played from a preset". */
+/**
+ * WHAT THE STREAMER WAS DOING WHEN IT WENT TO SLEEP (0.10.0, user ask 2026-10-06: "the state i
+ * was in when i put the streamer in standby is being resumed"). The streamer reports nothing
+ * while it sleeps, so the app keeps this itself, per streamer, saved across restarts: the
+ * standby face offers it and Resume puts it back. Four kinds, from what the Evo keeps through
+ * network standby (live-probed 2026-10-06): a queue track (the same entry comes back paused,
+ * but at 0:00, so the position is the app's to remember), a station (it comes back and
+ * reconnects by itself), a streaming service (AirPlay comes back on its input with no track:
+ * the session lived on the phone), an input (it comes back on the same input, unless a TV on
+ * HDMI pulls it onto ARC).
+ */
+export interface HeldState {
+  /** The streamer's udn. */
+  streamer: string;
+  /** When the app last saw this state live. */
+  at: number;
+  kind: "queue" | "radio" | "service" | "input";
+  /** The source to come back on: MEDIA_PLAYER, IR, AIRPLAY, SPDIF_TOSLINK… */
+  sourceId: string;
+  sourceName: string | null;
+  /** The track's title, or the station's name. */
+  title: string | null;
+  artist: string | null;
+  album: string | null;
+  artUrl: string | null;
+  /** A queue track: its queue entry, how far into it, and its length (seconds). */
+  queueId: number | null;
+  position: number | null;
+  duration: number | null;
+  /** The preset or playlist that started it, when one did. */
+  via: ListeningVia | null;
+}
+
 export type ListeningVia =
   /** A preset is a slot on one streamer, so the streamer's udn is part of its identity
    *  (slot 3 on two streamers are two presets); null only when the device never said. */
@@ -1012,6 +1047,25 @@ export interface McpSettings {
   enabledClusters: string[];
   /** Individual tool names switched off. */
   disabledTools: string[];
+  /** The bearer token an agent on another machine sends with each request while the server
+   *  is reachable from the local network (0.10.0). Minted by main when empty, so every install
+   *  has its own; set it empty to have a new one minted, which stops the old one working. */
+  token: string;
+}
+
+/** One track of a disc as MusicBrainz lists it (0.10.0, the CD): its number, its title and
+ *  its length when the release gives one. */
+export interface DiscTrack {
+  n: number;
+  title: string;
+  secs: number | null;
+}
+
+/** A disc's track list from the MusicBrainz release its cover came from: the medium whose
+ *  track count (and, among equals, whose length) matches the disc in the player. */
+export interface DiscTracks {
+  releaseId: string;
+  tracks: DiscTrack[];
 }
 
 export interface McpStatus {
@@ -1083,8 +1137,10 @@ export const DISPLAY_FONT_IDS = [
 ] as const;
 export type DisplayFont = (typeof DISPLAY_FONT_IDS)[number];
 /** Display mode's SCENE: what fills the screen (0.8.0). Sleeve is the art
- *  face; the rest are abstract scenes drawn from the track's feature strip
- *  and its timed lyrics; shuffle draws a fresh abstract scene each track. */
+ *  face; most of the rest are abstract scenes drawn from the track's feature
+ *  strip and its timed lyrics; Hi-Fi and Turntable draw the player itself
+ *  and need no analysis, so they draw for any source (0.10.0); shuffle draws a
+ *  fresh scene each track. */
 export const DISPLAY_SCENE_IDS = [
   "sleeve",
   "tide",
@@ -1099,6 +1155,8 @@ export const DISPLAY_SCENE_IDS = [
   "sea",
   "terminal",
   "refrain",
+  "panel",
+  "turntable",
   "shuffle",
 ] as const;
 export type DisplayScene = (typeof DISPLAY_SCENE_IDS)[number];
@@ -1171,6 +1229,14 @@ export interface AppSettings {
    * surviving a close is how apps earn a reputation for being un-quittable.
    */
   trayCloseNoticeShown: boolean;
+  /** The one-time line on Now Playing pointing to Fullscreen Display mode has been dismissed,
+   *  or Display mode opened (0.10.0, the first five minutes). Internal one-shot state, not a
+   *  preference: there is no row for it. */
+  displayHintSeen: boolean;
+  /** The held state (HeldState.at) whose offer on the standby face was dismissed: that
+   *  standby's offer stays away across restarts, and the next standby brings a new one.
+   *  Internal state, not a preference: there is no row for it. */
+  resumeDismissedAt: number | null;
   theme: ThemePreference;
   displayFont: DisplayFont;
   /** Blurred album-art backdrop. */
@@ -1489,6 +1555,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   // files without the key pick up the new default.
   tray: true,
   trayCloseNoticeShown: false,
+  displayHintSeen: false,
+  resumeDismissedAt: null,
   theme: "dark",
   displayFont: "fraunces",
   ambientArt: "all",
@@ -1573,6 +1641,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     disabledClusters: [],
     enabledClusters: [],
     disabledTools: [],
+    token: "",
   },
   mediaIndexAuto: true,
   settingsTab: "appearance",
@@ -1633,6 +1702,12 @@ export interface MediaIndexStatus {
   /** The server's counter moved since this index was built and the app will not walk
    *  it on its own (the streamer's USB server, 2026-09-16): the card offers the re-index. */
   stale?: boolean;
+  /** Something someone asked for (a playlist, a favorite, Open in Library, Info, an
+   *  agent's play) has waited over a second while this index is moved and checked, or
+   *  walked, after the server's ids moved: the streamer's USB server after a standby or a
+   *  replug (the user's Evo, 2026-10-06: about 20 s while a cold drive's folders are
+   *  listed). The working toast says so. */
+  waiting?: boolean;
   /** The server answers UPnP Search itself, so the Library's search box reaches it with
    *  no index; a Browse-only server (the streamer's USB stick) has no search until its
    *  index is built. The Search screen's unindexed line says which (user, 2026-09-17). */
@@ -1766,6 +1841,12 @@ export function isHiRes(f: {
     (f.mqa != null && f.mqa !== "none")
   );
 }
+
+/** The separator between facts on one line: EN spaces around the dot, so the items breathe (user,
+ *  2026-09-01; app-wide for facts and status lines 2026-10-07) — plain double spaces would
+ *  collapse in HTML. Shared so the main process's menu reads the same. Not for formatLabel below:
+ *  albumFormatChips splits its " · " back into chips. */
+export const FACT_SEP = "\u2002·\u2002";
 
 /** "FLAC · 16/44.1" for lossless (bits/kHz), "MP3 · 320 kbps" for lossy; degrades to what is known. */
 export function formatLabel(f: MediaFormat | undefined | null): string | null {
@@ -2186,7 +2267,9 @@ export function trackInAlbumOf(
 export function trackPosition(n: Pick<MediaNode, "trackNumber" | "discNumber">): number | null {
   const t = n.trackNumber;
   if (t == null) return null;
-  if (n.discNumber != null && t >= 100 && Math.floor(t / 100) === n.discNumber) return t % 100;
+  // a packed number is never a multiple of 100 (no track 0): track 100 of a long disc 1 is 100
+  if (n.discNumber != null && t >= 100 && t % 100 !== 0 && Math.floor(t / 100) === n.discNumber)
+    return t % 100;
   return t;
 }
 

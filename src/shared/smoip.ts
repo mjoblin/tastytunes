@@ -55,6 +55,50 @@ export const isRadioMetadata = (
 ): boolean => md != null && (/radio/i.test(md.class ?? "") || md.station != null);
 
 /**
+ * THE CD (0.10.0, an Evo CD owner's readouts on GitHub issue #1, 2026-09-26). A streamer with
+ * the Evo CD transport reports a disc as the source CD: play_state's metadata class
+ * "md.track.cd", now_playing's display class "digital.cd". Stopped with a disc in, play_state's
+ * title is the disc's table of contents ("Tracks: 10 Length: 37:39") beside the album, the
+ * artist and a Cover Art Archive picture whose address carries the MusicBrainz release id;
+ * playing, now_playing names the track (line1), the artist (line2) and the album (line3),
+ * gives the place as "1/10" in display.context and {position: 0, length: 10} in its queue,
+ * and offers pause, play_pause, next, previous, seek, shuffle and repeat, never a track by
+ * number. play_state while a disc plays has not been seen: it may carry no queue fields, and
+ * its title may stay the table of contents, so readers take the place and the track's title
+ * from now_playing when play_state has none.
+ */
+export const isCdPlayback = (
+  md: Pick<ZonePlayStateMetadata, "class"> | null | undefined,
+  display: { class: string | null } | null | undefined,
+): boolean => md?.class === "md.track.cd" || display?.class === "digital.cd";
+
+/** A disc's table of contents as the streamer titles a stopped disc ("Tracks: 10 Length:
+ *  37:39", an hour's disc perhaps "1:12:30"); null for any other title. */
+export function cdToc(title: string | null | undefined): { tracks: number; secs: number } | null {
+  const m = /^\s*Tracks:\s*(\d+)\s+Length:\s*(?:(\d+):)?(\d+):(\d{2})\s*$/i.exec(title ?? "");
+  if (!m) return null;
+  const hours = m[2] ? Number(m[2]) : 0;
+  return { tracks: Number(m[1]), secs: hours * 3600 + Number(m[3]) * 60 + Number(m[4]) };
+}
+
+/** play_state's title as a track's name: null for a disc's table of contents, which names the
+ *  disc, never a track, so nothing records, scrobbles or announces it as one. */
+export const trackTitle = (
+  md: Pick<ZonePlayStateMetadata, "class" | "title"> | null | undefined,
+): string | null =>
+  md?.title != null && !(md.class === "md.track.cd" && cdToc(md.title)) ? md.title : null;
+
+/** The MusicBrainz release a disc was found as, from its Cover Art Archive address
+ *  (…/release/<id>/…); null for any other picture. */
+export function cdReleaseId(artUrl: string | null | undefined): string | null {
+  const m =
+    /\/release\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\/|$)/i.exec(
+      artUrl ?? "",
+    );
+  return m ? m[1].toLowerCase() : null;
+}
+
+/**
  * A radio "title" that's absent or merely echoes the station's own name back
  * carries no real track — normalize it to null (case/whitespace-insensitive,
  * matching how recents entries are recorded AND matched).

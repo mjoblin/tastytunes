@@ -5,6 +5,7 @@ import { tt } from "@/api";
 import { useStore } from "@/store";
 import { useShortcuts } from "@/hooks/useShortcuts";
 import { useIndexingToast } from "@/hooks/useIndexingToast";
+import { useDriveWaitToast } from "@/hooks/useDriveWaitToast";
 import { useWakeHold } from "@/hooks/useWakeHold";
 import { useArtAccent } from "@/hooks/useArtAccent";
 import { useArtLoadable } from "@/hooks/useArtLoadable";
@@ -41,10 +42,12 @@ import { useBestArt } from "@/lib/bestArt";
 import { usePrefetchNextArt } from "@/hooks/usePrefetchNextArt";
 import { useFontScaleGuard } from "@/hooks/useFontScaleGuard";
 import { HeaderChip } from "@/components/chrome/Chrome";
+import { FACT_SEP } from "@/lib/mediaFacts";
 
 export default function App(): React.JSX.Element {
   useShortcuts();
   useIndexingToast();
+  useDriveWaitToast();
 
   const screen = useStore((s) => s.screen);
   const connection = useStore((s) => s.connection);
@@ -203,7 +206,8 @@ function ToastHost(): React.JSX.Element | null {
   const setScreen = useStore((s) => s.setScreen);
 
   useEffect(() => {
-    if (!toast) return;
+    // a working toast stays until its wait ends (useDriveWaitToast takes it down)
+    if (!toast || toast.kind === "working") return;
     // Errors linger a little longer than confirmations; an UNDO offer longer
     // still (half again), because it isn't there to be read — it's there to be
     // decided on, and noticing "wait, I didn't mean that" takes a beat.
@@ -212,60 +216,72 @@ function ToastHost(): React.JSX.Element | null {
     return () => clearTimeout(t);
   }, [toast, dismissToast]);
 
-  if (!toast) return null;
-  return (
-    <div key={toast.id} className="toast-in absolute bottom-4 left-1/2 -translate-x-1/2 z-40">
-      <div
-        onClick={dismissToast}
-        style={
-          {
-            "--toast-accent": toast.kind === "error" ? "var(--alert-rgb)" : "var(--gold-rgb)",
-          } as React.CSSProperties
-        }
-        className={cx(
-          // Translucent + blurred rather than an opaque slab: the toast floats
-          // over content and the ambient art wash, and a solid bg-raised panel
-          // read as pasted ON the app rather than part of it. Letting the warm
-          // near-black bg through is what makes it feel lit from the same
-          // source as everything else. Roomier too — px-5/py-3, and gap-3 with
-          // the action pushed further out so it stops crowding the sentence.
-          "toast-surface flex items-center gap-3 rounded-xl px-5 py-3 ring-1 backdrop-blur-md",
-          "bg-panel/70 shadow-[0_10px_40px_rgb(0_0_0_/_0.55)] text-[12.5px] cursor-pointer max-w-[520px]",
-          toast.kind === "error"
-            ? "ring-alert/45"
-            : "ring-gold/35 shadow-[0_10px_40px_rgb(0_0_0_/_0.55),0_0_24px_rgb(var(--gold-rgb)_/_0.10)]",
-        )}
-      >
-        {toast.kind === "error" ? (
-          <CircleAlert size={14} className="text-alert shrink-0" />
-        ) : (
-          <CircleCheck size={14} className="text-gold shrink-0" />
-        )}
-        <span className="flex-1 min-w-0">{toast.text}</span>
-        {toast.action && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              const action = toast.action!;
-              if (action.undo) action.undo();
-              else setScreen(action.screen);
-              dismissToast();
-            }}
-            // Tinted to the toast's own accent so it reads as the thing to
-            // click. Neutral ring + text-dim over a translucent surface came
-            // out looking like a disabled field.
-            className={cx(
-              "ml-2 shrink-0 text-[12px] px-3 py-1.5 rounded-md ring-1 font-medium transition-all",
-              toast.kind === "error"
-                ? "ring-alert/40 text-alert hover:bg-alert/10 hover:ring-alert/60"
-                : "ring-gold/35 text-gold hover:bg-golddim hover:ring-gold/55",
-            )}
-          >
-            {toast.action.label}
-          </button>
-        )}
-      </div>
+  // the toast is read out as well as shown (0.10.0, the accessibility floor): one polite
+  // region that is always in the page, so a screen reader hears each notice as it arrives
+  const spoken = (
+    <div role="status" aria-live="polite" className="sr-only" data-toast-live>
+      {toast?.text ?? ""}
     </div>
+  );
+  if (!toast) return spoken;
+  return (
+    <>
+      {spoken}
+      <div key={toast.id} className="toast-in absolute bottom-4 left-1/2 -translate-x-1/2 z-40">
+        <div
+          onClick={dismissToast}
+          style={
+            {
+              "--toast-accent": toast.kind === "error" ? "var(--alert-rgb)" : "var(--gold-rgb)",
+            } as React.CSSProperties
+          }
+          className={cx(
+            // Translucent + blurred rather than an opaque slab: the toast floats
+            // over content and the ambient art wash, and a solid bg-raised panel
+            // read as pasted ON the app rather than part of it. Letting the warm
+            // near-black bg through is what makes it feel lit from the same
+            // source as everything else. Roomier too — px-5/py-3, and gap-3 with
+            // the action pushed further out so it stops crowding the sentence.
+            "toast-surface flex items-center gap-3 rounded-xl px-5 py-3 ring-1 backdrop-blur-md",
+            "bg-panel/70 shadow-[0_10px_40px_rgb(0_0_0_/_0.55)] text-[12.5px] cursor-pointer max-w-[520px]",
+            toast.kind === "error"
+              ? "ring-alert/45"
+              : "ring-gold/35 shadow-[0_10px_40px_rgb(0_0_0_/_0.55),0_0_24px_rgb(var(--gold-rgb)_/_0.10)]",
+          )}
+        >
+          {toast.kind === "error" ? (
+            <CircleAlert size={14} className="text-alert shrink-0" />
+          ) : toast.kind === "working" ? (
+            <Loader2 size={14} className="text-gold shrink-0 motion-safe:animate-spin" />
+          ) : (
+            <CircleCheck size={14} className="text-gold shrink-0" />
+          )}
+          <span className="flex-1 min-w-0">{toast.text}</span>
+          {toast.action && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                const action = toast.action!;
+                if (action.undo) action.undo();
+                else setScreen(action.screen);
+                dismissToast();
+              }}
+              // Tinted to the toast's own accent so it reads as the thing to
+              // click. Neutral ring + text-dim over a translucent surface came
+              // out looking like a disabled field.
+              className={cx(
+                "ml-2 shrink-0 text-[12px] px-3 py-1.5 rounded-md ring-1 font-medium transition-all",
+                toast.kind === "error"
+                  ? "ring-alert/40 text-alert hover:bg-alert/10 hover:ring-alert/60"
+                  : "ring-gold/35 text-gold hover:bg-golddim hover:ring-gold/55",
+              )}
+            >
+              {toast.action.label}
+            </button>
+          )}
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -274,7 +290,6 @@ function ConnectGate(): React.JSX.Element {
   const connection = useStore((s) => s.connection);
   const devices = useStore((s) => s.devices);
   const discovering = useStore((s) => s.discovering);
-  const setScreen = useStore((s) => s.setScreen);
   // Forgetting is the one unreconstructible act on this screen — an eco
   // streamer that's off can't re-teach itself until it next wakes — and a
   // tester lost one to a stray click (rc.1, 2026-08-31). The anchored
@@ -325,6 +340,10 @@ function ConnectGate(): React.JSX.Element {
     prevDiscovering.current = discovering;
   }, [discovering]);
   const stillLooking = !busy && devices.length === 0 && sweeps >= 3;
+  // THE ADDRESS IN PLACE (0.10.0, the first five minutes): typing a streamer's IP opens a
+  // field here rather than sending a new owner off to the Device screen
+  const [ipOpen, setIpOpen] = useState(false);
+  const [ip, setIp] = useState("");
 
   // The device book: remembered streamers the sweep has NOT confirmed render
   // dimmed under the live results, connectable on faith (the address usually
@@ -429,7 +448,9 @@ function ConnectGate(): React.JSX.Element {
                         phrase as one line, and a deliberate stack reads
                         calmer than an accidental wrap (user, 2026-08-30). */}
                     <div className="font-mono text-[10.5px] text-faint truncate">
-                      {row.model} · {row.host}
+                      {row.model}
+                      {FACT_SEP}
+                      {row.host}
                     </div>
                     {row.book && (
                       <div className="font-mono text-[10.5px] text-faint">
@@ -460,7 +481,7 @@ function ConnectGate(): React.JSX.Element {
             </div>
           ) : (
             <div className="text-[13px] text-faint max-w-sm">
-              {discovering ? "Searching the network…" : "No StreamMagic devices found yet."}
+              {discovering ? "Searching the network…" : "No streamers found yet."}
             </div>
           )}
           {stillLooking && (
@@ -477,22 +498,70 @@ function ConnectGate(): React.JSX.Element {
               // and the row must not breathe with it (user, 2026-08-30).
               className="min-w-[128px] text-center text-[13px] px-4 py-2 rounded-lg bg-amber text-bg font-medium hover:brightness-110 transition-all disabled:opacity-50"
             >
-              {discovering ? "Searching…" : "Find devices"}
+              {discovering ? "Searching…" : "Find streamers"}
             </button>
             <HeaderChip
-              onClick={() => setScreen("device")}
+              onClick={() => setIpOpen((o) => !o)}
+              data-gate-ip-toggle
               className="text-[13px] px-4 py-2 motion-safe:active:scale-95"
             >
-              Enter IP manually →
+              Enter an IP
             </HeaderChip>
+            {/* THE DEMO IS A PEER ON THE WELCOME SCREEN (0.10.0, the first five minutes): for
+                anyone without a streamer at hand it is the whole pitch, and it had been the
+                faintest line on the screen */}
+            {firstRun && (
+              <HeaderChip
+                onClick={() => void tt.demoStart()}
+                data-gate-demo
+                data-tip="The whole app against a built-in streamer with sample libraries."
+                className="tip-bottom flex items-center gap-1.5 text-[13px] px-4 py-2 motion-safe:active:scale-95"
+              >
+                <Sparkles size={14} className="text-gold/80" />
+                Try the demo
+              </HeaderChip>
+            )}
           </div>
-          <button
-            onClick={() => void tt.demoStart()}
-            className="mt-4 flex items-center gap-2 text-[13px] text-faint hover:text-dim transition-colors"
-          >
-            <Sparkles size={14} className="text-gold/70" />
-            Try the built-in demo, no streamer needed →
-          </button>
+          {ipOpen && (
+            <form
+              data-gate-ip
+              className="flex items-center gap-1.5"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (ip.trim()) void tt.connect(ip.trim());
+              }}
+            >
+              <input
+                autoFocus
+                value={ip}
+                onChange={(e) => setIp(e.target.value)}
+                placeholder="Hostname or IP (e.g. 192.168.1.42)"
+                aria-label="Streamer hostname or IP address"
+                className="w-64 bg-bg rounded-lg ring-1 ring-edge focus:ring-edge2 outline-none px-3 py-2 text-[13px] placeholder:text-faint"
+              />
+              <button
+                type="submit"
+                disabled={!ip.trim()}
+                className="rounded-lg bg-amber text-bg font-medium text-[13px] px-4 py-2 disabled:opacity-40 hover:brightness-110 motion-safe:active:scale-95 transition-all"
+              >
+                Connect
+              </button>
+            </form>
+          )}
+          {ipOpen && (
+            <div className="text-[11.5px] text-faint max-w-sm leading-snug">
+              Your streamer's display shows its IP under Settings › Network.
+            </div>
+          )}
+          {!firstRun && (
+            <button
+              onClick={() => void tt.demoStart()}
+              className="mt-4 flex items-center gap-2 text-[13px] text-faint hover:text-dim transition-colors"
+            >
+              <Sparkles size={14} className="text-gold/70" />
+              Try the built-in demo, no streamer needed →
+            </button>
+          )}
         </>
       )}
     </div>

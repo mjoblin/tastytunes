@@ -5,6 +5,7 @@ import { tt } from "@/api";
 import { useStore } from "@/store";
 import { CloseButton } from "@/components/controls/CloseButton";
 import { ModalShell } from "@/components/chrome/Overlay";
+import { FACT_SEP } from "@/lib/mediaFacts";
 
 const SUPPORT_URL = "https://tastytunes.app/#support";
 const CONTACT_URL = "https://tastytunes.app/contact";
@@ -14,14 +15,20 @@ export function InfoModal(): React.JSX.Element | null {
   const setInfoOpen = useStore((s) => s.setInfoOpen);
 
   return (
-    <ModalShell open={open} onClose={() => setInfoOpen(false)} className="w-[420px] p-6">
+    <ModalShell
+      open={open}
+      onClose={() => setInfoOpen(false)}
+      label="About TastyTunes"
+      className="w-[420px] p-6"
+    >
       <div className="flex items-start">
         <div className="flex-1">
           <div className="font-wordmark font-bold text-[24px] leading-none tracking-tight">
             tasty<span className="text-gold">tunes</span>
           </div>
           <div className="microlabel mt-2">
-            v{version} · GPLv3 · a controller for streammagic streamers
+            v{version}
+            {FACT_SEP}GPLv3{FACT_SEP}a controller for streammagic streamers
           </div>
         </div>
         <CloseButton onClick={() => setInfoOpen(false)} />

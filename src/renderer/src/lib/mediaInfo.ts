@@ -3,6 +3,7 @@ import type { ZoneNowPlaying, ZonePlayState } from "@shared/smoip";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import type { MediaRef } from "@/lib/mediaRef";
+import { deriveNowPlaying, queuePlace } from "@/lib/format";
 
 /**
  * Open the Info modal for something a LIST holds only a ref to (a queue row,
@@ -81,10 +82,13 @@ export function nowPlayingInfoTarget(
   const display = nowPlaying?.display ?? null;
   const klass = md?.class ?? display?.class ?? null;
   const isRadio = /radio/i.test(klass ?? "") || md?.station != null;
+  // a disc's table of contents is no track's title: the one reading of a track's is
+  // deriveNowPlaying's
   const title = isRadio
     ? (md?.title ?? display?.line2 ?? md?.station ?? display?.line1 ?? null)
-    : (md?.title ?? display?.line1 ?? null);
+    : deriveNowPlaying(playState, nowPlaying).title;
   if (!title && !md?.station) return null;
+  const place = queuePlace(playState, nowPlaying);
   const stream: StreamInfo = {
     source: nowPlaying?.source?.name ?? md?.source ?? null,
     playbackSource: md?.playback_source ?? display?.playback_source ?? null,
@@ -99,8 +103,8 @@ export function nowPlayingInfoTarget(
     mqa: md?.mqa && md.mqa !== "none" ? md.mqa : null,
     station: md?.station ?? (isRadio ? (display?.line1 ?? null) : null),
     radioId: md?.radio_id != null ? String(md.radio_id) : null,
-    queuePosition: playState?.queue_index != null ? playState.queue_index + 1 : null,
-    queueLength: playState?.queue_length ?? null,
+    queuePosition: place ? place.index + 1 : null,
+    queueLength: place?.length ?? null,
     presettable: playState?.presettable ?? null,
     controls: nowPlaying?.controls ?? [],
   };

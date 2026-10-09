@@ -131,6 +131,3 @@ export function playedOptionsOf(
     return c > 0 && c < total;
   }).map((b) => ({ value: b, label: PLAYED_LABELS[b], count: counts.get(b) ?? 0 }));
 }
-
-// the resume helpers live in shared/model (main's MCP tools use the same rule)
-export { resumeRun, resumeTarget, type ResumeRun } from "@shared/model";

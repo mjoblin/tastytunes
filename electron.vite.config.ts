@@ -12,6 +12,13 @@ export default defineConfig({
   },
   preload: {
     plugins: [externalizeDepsPlugin()],
+    // CommonJS: a sandboxed preload cannot be an ES module (the windows are sandboxed since
+    // 0.10.0), and .cjs because the package is "type": "module"
+    build: {
+      rollupOptions: {
+        output: { format: 'cjs', entryFileNames: '[name].cjs' }
+      }
+    },
     resolve: {
       alias: { '@shared': resolve('src/shared') }
     }

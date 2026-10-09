@@ -1,36 +1,47 @@
+import { useState } from "react";
+import { Cable, Cast, Play, X } from "lucide-react";
+import type { HeldState } from "@shared/model";
 import { tt } from "@/api";
-import { useEffect, useMemo, useState } from "react";
-import { Play } from "lucide-react";
-import { type MediaNode, trackPosition } from "@shared/model";
 import { useStore } from "@/store";
 import { MediaArt } from "@/components/media/MediaArt";
-import { usePlayStats, resumeRun, resumeTarget } from "@/lib/playStats";
-import { fmtAgo } from "@/lib/format";
+import { fmtRelative, fmtTime } from "@/lib/format";
+import { FACT_SEP } from "@/lib/mediaFacts";
 
 /**
- * "Pick up where you left off" (0.8.0, the listening record's first reading
- * surface on Now Playing). Shown only while nothing is playing: the most
- * recent run of plays from one album, within the last week, that stopped
- * before the album's end — resolved against the library for the track to
- * resume from. Resume = the album's Play from here, starting at that track.
- * "Not now" hides the offer for this run (session memory; a new run makes a
- * new offer). Two homes: the "Nothing playing" state and the STANDBY face
- * (2026-09-04, user: standby is how a streamer usually sits idle; a play verb
- * wakes it), where it stands in for the Last played line when it has an offer.
+ * "Pick up where you left off" on the standby face (rebuilt in 0.10.0 from the user's ask,
+ * 2026-10-06: "the state i was in when i put the streamer in standby is being resumed").
+ * It offers what the streamer was doing when it went to sleep (HeldState, kept by main,
+ * since the streamer says nothing while it sleeps), and Resume puts it back: the same queue
+ * entry from the same point (a preset's or a playlist's track included, nothing added to the
+ * queue), the station, or the source a streaming service or an input played on. It replaced
+ * the listening record's album offer (0.8.0), which read history rather than the streamer
+ * and offered an album the user had since moved on from when the plays after it were too
+ * short to record; agents keep that reading (history_resume). The ✕ dismisses this standby's
+ * offer for good (it survives a restart; the next standby brings a new one), and the face
+ * then shows nothing in its place: the old "Not now" fell back to a Last played line naming
+ * the same track (user, 2026-10-06). The Last played line is for a streamer with nothing
+ * held at all.
  */
-interface Offer {
-  key: string;
-  album: MediaNode;
-  udn: string;
-  next: MediaNode;
-  position: number;
-  total: number;
-  lastAt: number;
-}
 
-let dismissedKey: string | null = null;
-/** More tracks than any album has — a folder, a genre, a whole library. */
-const RESUME_MAX_TRACKS = 100;
+/** The line under the title: where the track came from and how far in, or what to expect. */
+function detail(held: HeldState): string | null {
+  if (held.kind === "queue") {
+    const from =
+      held.via?.kind === "preset"
+        ? held.via.name && `Preset “${held.via.name}”`
+        : held.via?.kind === "playlist"
+          ? `Playlist “${held.via.name}”`
+          : held.album;
+    const at =
+      held.position != null && held.position >= 5
+        ? `${fmtTime(held.position)}${held.duration ? ` of ${fmtTime(held.duration)}` : ""}`
+        : null;
+    return [from, at].filter(Boolean).join(FACT_SEP) || null;
+  }
+  if (held.kind === "radio") return held.sourceName ?? "Internet Radio";
+  if (held.kind === "service") return "Continue from your phone or computer";
+  return null;
+}
 
 export function ResumeCard({
   fallback = null,
@@ -38,101 +49,55 @@ export function ResumeCard({
   /** Rendered when there is no offer — the standby face keeps its Last played line. */
   fallback?: React.ReactNode;
 }): React.JSX.Element | null {
-  const play = usePlayStats();
-  const showToast = useStore((s) => s.showToast);
-  const run = useMemo(() => resumeRun(play.recent), [play.recent]);
-  const runKey = run ? `${run.album}|${run.last.at}` : null;
-  const [offer, setOffer] = useState<Offer | null>(null);
+  const held = useStore((s) => s.held);
+  const dismissedAt = useStore((s) => s.settings.resumeDismissedAt);
+  const saveSettings = useStore((s) => s.saveSettings);
   const [busy, setBusy] = useState(false);
+  if (!held) return <>{fallback}</>;
+  if (held.at === dismissedAt) return null;
 
-  useEffect(() => {
-    let cancelled = false;
-    setOffer(null);
-    if (!run || !runKey || runKey === dismissedKey) return;
-    void (async () => {
-      const q = { kind: "album" as const, title: run.album, artist: run.artist };
-      // the album's own artist first; a compilation's tracks carry performers,
-      // so fall back to the title alone
-      // a show: the offer appears on its own, so it never rebuilds an index. After the
-      // streamer's standby a USB album's stored id no longer browses, and there is
-      // simply no offer until something the user asks for re-indexes the drive
-      const info =
-        (await tt.mediaNodeInfo(q, "show").catch(() => null)) ??
-        (run.artist
-          ? await tt.mediaNodeInfo({ ...q, artist: null }, "show").catch(() => null)
-          : null);
-      const node = info?.node;
-      const udn = node?.serverUdn ?? info?.serverUdn ?? null;
-      if (!node || !udn) return;
-      // BROWSE the album's own container for the tracks, never the index's
-      // pooled copies: on servers whose ids embed the browse path (Asset) a
-      // pooled track's id and parentId belong to the search scope the index
-      // was crawled from — the WHOLE LIBRARY — and Play from here on that
-      // container queued 2,528 tracks (user, 2026-09-04). The container the
-      // card resumes is the one whose listing the target came from.
-      const kids = await tt.mediaBrowse(udn, node.id, []).catch(() => [] as MediaNode[]);
-      const tracks = [...kids.filter((t) => !t.isContainer)].sort(
-        (a, b) => (trackPosition(a) ?? 0) - (trackPosition(b) ?? 0),
-      );
-      // an "album" container the size of a library is not an album: no offer
-      if (tracks.length === 0 || tracks.length > RESUME_MAX_TRACKS) return;
-      const next = resumeTarget(run, tracks);
-      if (!next || cancelled) return;
-      setOffer({
-        key: runKey,
-        album: node,
-        udn,
-        next,
-        position: tracks.indexOf(next) + 1,
-        total: tracks.length,
-        lastAt: run.last.at,
-      });
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [run, runKey]);
-
-  if (!offer) return <>{fallback}</>;
   const resume = async (): Promise<void> => {
     setBusy(true);
     try {
-      // the container we browsed, and a track id FROM that browse
-      await tt.mediaQueueAdd(offer.udn, offer.album.id, "PLAY_FROM_HERE", offer.next.id);
+      // a failure toasts centrally (WRITE_FAILURES)
+      await tt.command({ type: "resumeHeld" });
     } catch {
-      showToast({ kind: "error", text: `Couldn't play “${offer.album.title}”` });
+      /* toasted */
     } finally {
       setBusy(false);
     }
   };
+  const title =
+    held.kind === "queue" || held.kind === "radio" ? held.title : (held.sourceName ?? held.title);
+  const line = detail(held);
   return (
     <div
       data-resume-card
+      data-resume-kind={held.kind}
       className="mt-4 flex items-center gap-4 rounded-xl bg-raised/50 ring-1 ring-edge px-4 py-3 text-left max-w-[520px]"
     >
-      <MediaArt src={offer.album.artUrl} kind="album" />
+      <MediaArt
+        src={held.kind === "queue" || held.kind === "radio" ? held.artUrl : null}
+        kind={held.kind === "radio" ? "station" : "track"}
+        icon={held.kind === "service" ? Cast : held.kind === "input" ? Cable : undefined}
+      />
       <div className="min-w-0 flex-1">
-        <div className="microlabel text-gold">Pick up where you left off</div>
-        <div className="truncate text-[13.5px] text-ink">
-          {offer.album.title}
-          {offer.album.artist ? <span className="text-dim"> · {offer.album.artist}</span> : null}
+        <div className="microlabel text-gold mb-[3px]">Pick up where you left off</div>
+        <div className="truncate text-[13.5px] text-ink" data-resume-title>
+          {title}
+          {held.kind === "queue" && held.artist ? (
+            <span className="text-dim"> · {held.artist}</span>
+          ) : null}
         </div>
-        <div className="truncate text-[12px] text-dim" data-resume-track={offer.next.title}>
-          Track {offer.position} of {offer.total}, {offer.next.title}
-          <span className="text-faint"> · {fmtAgo(offer.lastAt)}</span>
+        <div className="truncate text-[12px] text-dim" data-resume-detail>
+          {line}
+          <span className="text-faint">
+            {line ? FACT_SEP : ""}
+            {fmtRelative(held.at)}
+          </span>
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
-        <button
-          type="button"
-          onClick={() => {
-            dismissedKey = offer.key;
-            setOffer(null);
-          }}
-          className="rounded-full h-8 px-3 text-[12px] text-faint hover:text-ink hover:bg-veil2 transition-colors"
-        >
-          Not now
-        </button>
         <button
           type="button"
           data-resume-play
@@ -142,6 +107,15 @@ export function ResumeCard({
         >
           <Play size={13} />
           Resume
+        </button>
+        <button
+          type="button"
+          aria-label="Dismiss"
+          data-resume-dismiss
+          onClick={() => void saveSettings({ resumeDismissedAt: held.at })}
+          className="shrink-0 rounded p-1 text-faint hover:text-ink transition-colors"
+        >
+          <X size={12} />
         </button>
       </div>
     </div>

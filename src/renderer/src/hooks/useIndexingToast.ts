@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import type { MediaIndexStatus } from "@shared/model";
 import { useStore } from "@/store";
 import { fmtCount } from "@/lib/format";
+import { FACT_SEP } from "@/lib/mediaFacts";
 
 /** How long a burst of libraries finishing together is gathered into one
  *  toast — several servers indexed at startup land within a few seconds. */
@@ -46,7 +47,7 @@ export function useIndexingToast(): void {
       if (done.length === 0 || useStore.getState().screen === "library") return;
       const text =
         done.length === 1
-          ? `${done[0].serverName} indexed · ${fmtCount(done[0].tracks)} ${done[0].tracks === 1 ? "track" : "tracks"}`
+          ? `${done[0].serverName} indexed${FACT_SEP}${fmtCount(done[0].tracks)} ${done[0].tracks === 1 ? "track" : "tracks"}`
           : `${done.length} libraries indexed`;
       useStore.getState().showToast({
         kind: "success",

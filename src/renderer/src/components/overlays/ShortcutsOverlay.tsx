@@ -66,6 +66,7 @@ export function ShortcutsOverlay(): React.JSX.Element | null {
     <ModalShell
       open={open}
       onClose={() => setShortcutsOpen(false)}
+      label="Keyboard shortcuts"
       className="w-[540px] max-w-[calc(100%-2rem)] max-h-[calc(100%-2rem)] flex flex-col p-6"
     >
       <div className="flex items-center mb-5 shrink-0">

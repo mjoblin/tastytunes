@@ -14,6 +14,7 @@ import { PopoverCard } from "@/components/chrome/Overlay";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { cx } from "@/lib/format";
 import { Chip, ScreenTitle, GAP_WITHIN } from "@/components/chrome/Chrome";
+import { FACT_SEP } from "@/lib/mediaFacts";
 
 /**
  * Internet radio via the radio-browser.info community directory (keyless —
@@ -363,7 +364,7 @@ export function RadioScreen(): React.JSX.Element {
               })}
             </div>
             <div className="microlabel mt-6 px-1">
-              stations from radio-browser.info · community directory
+              stations from radio-browser.info{FACT_SEP}community directory
             </div>
           </div>
         </div>

@@ -28,6 +28,7 @@ import {
   type RecentTrack,
   KNOWN_DEVICES_MAX,
   RECONNECT_GRACE_MS,
+  type HeldState,
 } from "@shared/model";
 import type {
   Presets,
@@ -47,7 +48,13 @@ import type {
   ZonePosition,
   ZoneState,
 } from "@shared/smoip";
-import { EQ_GAIN_MAX, EQ_GAIN_MIN, isRadioMetadata, radioTrackTitle } from "@shared/smoip";
+import {
+  EQ_GAIN_MAX,
+  EQ_GAIN_MIN,
+  isRadioMetadata,
+  radioTrackTitle,
+  trackTitle,
+} from "@shared/smoip";
 import { discoverStreamers } from "./discovery";
 import { SmoipSocket } from "./smoipSocket";
 import * as smoipHttp from "./smoipHttp";
@@ -66,6 +73,7 @@ import {
   setPlaylistItems,
 } from "../data/playlists";
 import { QueueOps } from "./queueOps";
+import { heldFor, heldFrom, saveHeld } from "./heldState";
 import type { ResolvedContent } from "../media/resolveContent";
 import { scrobbler } from "../lookups/scrobbler";
 import { getNetRequests, loggedFetch } from "../netlog";
@@ -530,6 +538,9 @@ export class DeviceManager {
     "setSource",
   ]);
   private wakePromise: Promise<void> | null = null;
+  /** The live copy of what the streamer is doing (see HeldState and noteHeld). */
+  private live: HeldState | null = null;
+  private liveKey: string | null = null;
 
   /** What a wake-on-intent asks for, by name, when its verb names it: the preset's name (from
    *  the cached list) or the station's. The renderer's wake hold reads it to tell the asked
@@ -568,6 +579,88 @@ export class DeviceManager {
       }
     })();
     return this.wakePromise;
+  }
+
+  /** Keeps the live copy of what the streamer is doing (see HeldState), saved whenever what
+   *  it is doing changes (a track, a station, a source), so a standby the app never saw (it
+   *  was closed first) still has an offer; the position is saved at the standby itself. */
+  private noteHeld(): void {
+    const h = heldFrom({
+      streamer: this.cache.systemInfo?.udn ?? null,
+      power: this.cache.systemPower?.power ?? null,
+      playState: this.cache.playState ?? null,
+      nowPlaying: this.cache.nowPlaying ?? null,
+      zoneState: this.cache.zoneState ?? null,
+      sources: this.cache.sources ?? null,
+      position: this.cache.position?.position ?? null,
+      via: listeningRecord.currentVia(),
+      now: Date.now(),
+    });
+    if (!h) return;
+    this.live = h;
+    const key = [h.streamer, h.kind, h.sourceId, h.queueId, h.title].join("|");
+    if (key === this.liveKey) return;
+    this.liveKey = key;
+    saveHeld(h, !this.demo);
+  }
+
+  /** The streamer went to sleep: what it was doing, with the latest position, is the offer. */
+  private holdAtStandby(): void {
+    if (!this.live) return;
+    saveHeld(this.live, !this.demo);
+    this.push({ kind: "held", held: this.live });
+  }
+
+  /**
+   * RESUME PUTS THE STREAMER BACK AS IT WAS (0.10.0, user ask 2026-10-06; see HeldState). Wake
+   * it, come back on the held source if it woke on another (a TV on HDMI pulls it onto ARC),
+   * and for a queue track play the same entry and seek to where it was: the Evo keeps the
+   * entry through standby but not the position (live-probed 2026-10-06), so the position is
+   * the app's. Nothing is added to the queue, and a preset is never recalled again (that
+   * would start its first track). A station reconnects by itself and is only asked when it
+   * waits; a streaming service or an input needs nothing but its source (AirPlay comes back
+   * with no track: the session lived on the phone).
+   */
+  private async resumeHeld(socket: SmoipSocket): Promise<void> {
+    const held = heldFor(this.cache.systemInfo?.udn ?? null);
+    if (!held) throw new Error("nothing to resume");
+    await this.ensureAwake();
+    const until = async (ok: () => boolean, ms: number): Promise<boolean> => {
+      const end = Date.now() + ms;
+      while (!ok() && Date.now() < end) await new Promise((r) => setTimeout(r, 150));
+      return ok();
+    };
+    if (this.cache.zoneState?.source !== held.sourceId) {
+      socket.send("/zone/state", { source: held.sourceId });
+      await until(() => this.cache.zoneState?.source === held.sourceId, 5000);
+    }
+    if (held.kind === "radio") {
+      await until(
+        () => !["ready", "stop", "pause"].includes(this.cache.playState?.state ?? ""),
+        3000,
+      );
+      const st = this.cache.playState?.state;
+      if (st === "ready" || st === "stop" || st === "pause")
+        socket.send("/zone/play_control", { action: "play" });
+      return;
+    }
+    if (held.kind !== "queue" || held.queueId == null) return;
+    // the queue changed while it slept (another controller): play what the streamer holds
+    if (!(this.cache.queue?.items ?? []).some((i) => i.id === held.queueId)) {
+      socket.send("/zone/play_control", { action: "play" });
+      return;
+    }
+    if (this.cache.playState?.queue_id === held.queueId)
+      socket.send("/zone/play_control", { action: "play" });
+    else socket.send("/zone/play_control", { queue_id: held.queueId });
+    const at = Math.round(held.position ?? 0);
+    if (at < 5 || (held.duration != null && at > held.duration - 5)) return;
+    const playing = await until(
+      () =>
+        this.cache.playState?.state === "play" && this.cache.playState.queue_id === held.queueId,
+      8000,
+    );
+    if (playing) socket.send("/zone/play_control", { position: at });
   }
 
   /**
@@ -668,6 +761,8 @@ export class DeviceManager {
         });
       case "playQueueId":
         return socket.send("/zone/play_control", { queue_id: cmd.queueId });
+      case "resumeHeld":
+        return this.resumeHeld(socket);
       case "setRepeat":
         // FIRMWARE (live-probed 2026-09-18, the socket and HTTP alike): off and all set by
         // name, but "one" by name answers 200 and lands on "all". Only the toggle reaches
@@ -878,17 +973,21 @@ export class DeviceManager {
           this.cache.nowPlaying?.source?.name ?? this.cache.playState.metadata?.source ?? null,
           this.cache.systemInfo?.udn ?? null,
         );
+        this.noteHeld();
         return this.push({ kind: "playState", data: this.cache.playState });
       case "/zone/play_state/position":
         this.cache.position = data as ZonePosition;
+        this.noteHeld();
         return this.push({ kind: "position", data: this.cache.position });
       case "/zone/now_playing":
         this.cache.nowPlaying = data as ZoneNowPlaying;
         this.sourceChanged((data as ZoneNowPlaying).source?.id);
+        this.noteHeld();
         return this.push({ kind: "nowPlaying", data: this.cache.nowPlaying });
       case "/zone/state":
         this.cache.zoneState = data as ZoneState;
         this.sourceChanged((data as ZoneState).source);
+        this.noteHeld();
         return this.push({ kind: "zoneState", data: this.cache.zoneState });
       case "/queue/list":
         this.cache.queue = data as QueueList;
@@ -917,6 +1016,8 @@ export class DeviceManager {
             model: info.model ?? "",
           });
         }
+        // the streamer is known: what it held when it last slept (the standby face's offer)
+        this.push({ kind: "held", held: heldFor(info.udn ?? null) });
         return this.push({ kind: "systemInfo", data: this.cache.systemInfo });
       }
       case "/system/power": {
@@ -931,6 +1032,8 @@ export class DeviceManager {
             setTimeout(() => this.socket?.isOpen() && this.socket.send("/queue/list"), delay);
           }
         }
+        // going to sleep: what it was doing, with the latest position, is the offer
+        if (prev === "ON" && this.cache.systemPower.power !== "ON") this.holdAtStandby();
         return this.push({ kind: "systemPower", data: this.cache.systemPower });
       }
       case "/system/update": {
@@ -1013,7 +1116,7 @@ export class DeviceManager {
    */
   private trackChangeNotification(playState: ZonePlayState): void {
     const md = playState.metadata;
-    const title = md?.title ?? md?.station ?? null;
+    const title = trackTitle(md) ?? md?.station ?? null;
     if (!title) return;
     const key = `${title}|${md?.artist ?? ""}`;
     if (key === this.currentTrackKey) return;
@@ -1090,7 +1193,7 @@ export class DeviceManager {
     const station = md.station ?? null;
     // Radio titles normalize through the shared helper (absent / station-echo
     // "songs" become null) so recording and matching can never drift.
-    const title = isRadio ? radioTrackTitle(md) : (md.title ?? null);
+    const title = isRadio ? radioTrackTitle(md) : trackTitle(md);
     if (!title && !station) return; // nothing identifiable to log
 
     const sourceId = md.source ?? this.cache.nowPlaying?.source?.id ?? null;
@@ -1335,6 +1438,7 @@ export class DeviceManager {
       favorites: getFavorites(),
       playlists: getPlaylists(),
       playlistActivation: this.queueOps.activation,
+      held: heldFor(this.cache.systemInfo?.udn ?? null),
       missedSchedule: this.missedSchedule,
       mcpStatus: this.mcpStatus,
       mediaIndex: this.mediaIndexStatuses,

@@ -1,8 +1,9 @@
 import { useEffect, useRef } from "react";
 import { STRIP_BANDS } from "@shared/model";
-import { isRadioMetadata } from "@shared/smoip";
+import { isRadioMetadata, repeatModeOf } from "@shared/smoip";
 import { useStore } from "@/store";
-import { deriveNowPlaying } from "@/lib/format";
+import { tt } from "@/api";
+import { deriveNowPlaying, queuePlace } from "@/lib/format";
 import { useLyrics, type SyncedLine } from "@/hooks/useLyrics";
 import { DISPLAY_FONTS } from "@/hooks/useDisplayFont";
 import { usePlayingAnalysis, type Analysis } from "@/components/media/Waveform";
@@ -94,6 +95,10 @@ export class SceneFeed {
   font = "'Fraunces Variable', Georgia, serif";
   title: string | null = null;
   subtitle: string | null = null;
+  album: string | null = null;
+  /** The album art decoded for the deck scenes, and the URL it came from. */
+  art: HTMLImageElement | null = null;
+  artKey: string | null = null;
 
   private norm: Norm | null = null;
   /** The file's drum onsets and the cursor of the last one fired. */
@@ -503,6 +508,8 @@ export class SceneFeed {
     const kick = clamp((target[0] * gate - this.slowBands[0]) * 2.6);
     const real = this.analysis != null && !radio;
     const music = this.musicAt(position, playing && !radio, fresh, dt);
+    // the place in what is playing, the one home's (a disc's from now_playing)
+    const place = radio ? null : queuePlace(s.playState, s.nowPlaying);
     return {
       now,
       dt: callerDt ?? dt,
@@ -526,6 +533,17 @@ export class SceneFeed {
       lyric: words ? this.lyricAt(position, duration) : null,
       title: this.title,
       subtitle: this.subtitle,
+      deck: {
+        source: s.nowPlaying?.source?.name ?? null,
+        album: this.album,
+        track: place ? { index: place.index + 1, count: place.length } : null,
+        repeat: repeatModeOf(s.playState),
+        shuffle: s.playState?.mode_shuffle === "all",
+        radio,
+        loaded: this.title != null,
+        art: this.art,
+        artKey: this.art ? this.artKey : null,
+      },
       palette: this.palette,
       font: this.font,
       reduced: document.documentElement.classList.contains("reduce-motion"),
@@ -544,6 +562,29 @@ function firstAfter(at: Float32Array, secs: number): number {
     else hi = mid;
   }
   return lo;
+}
+
+/** The deck scenes' pictures, decoded once per URL and kept for a few tracks, so a
+ *  scene switch or a return to a track draws at once. */
+const artImages = new Map<string, Promise<HTMLImageElement | null>>();
+const ART_IMAGES_MAX = 8;
+function artImage(url: string): Promise<HTMLImageElement | null> {
+  let p = artImages.get(url);
+  if (!p) {
+    p = (async () => {
+      // a data URL (never a tainted canvas): the scenes' canvases are read back by the
+      // cathode finish, which a cross-origin picture would forbid
+      const dataUrl = url.startsWith("data:") ? url : ((await tt.fetchArt(url))?.dataUrl ?? null);
+      if (!dataUrl) return null;
+      const img = new Image();
+      img.src = dataUrl;
+      await img.decode();
+      return img;
+    })().catch(() => null);
+    artImages.set(url, p);
+    if (artImages.size > ART_IMAGES_MAX) artImages.delete(artImages.keys().next().value as string);
+  }
+  return p;
 }
 
 /** One feed per display mode, kept current from the hooks; `enabled` gates
@@ -565,6 +606,24 @@ export function useSceneFeed(enabled: boolean): SceneFeed {
   useEffect(() => {
     feed.setAnalysis(analysis === "loading" ? null : analysis);
   }, [feed, analysis]);
+  // the deck scenes draw the picture itself: decoded once per URL, only while a scene runs
+  const artUrl = enabled ? meta.artUrl : null;
+  useEffect(() => {
+    if (!artUrl) {
+      feed.art = null;
+      feed.artKey = null;
+      return;
+    }
+    let cancelled = false;
+    void artImage(artUrl).then((img) => {
+      if (cancelled) return;
+      feed.art = img;
+      feed.artKey = img ? artUrl : null;
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [feed, artUrl]);
   feed.synced = synced;
   feed.syncSecs = (syncMs ?? 0) / 1000;
   feed.dropTier = dropTier ?? "normal";
@@ -573,6 +632,7 @@ export function useSceneFeed(enabled: boolean): SceneFeed {
   feed.font = DISPLAY_FONTS.find((f) => f.id === fontId)?.stack ?? feed.font;
   feed.title = meta.title;
   feed.subtitle = meta.subtitle;
+  feed.album = meta.album;
   feed.trackKey = `${meta.title ?? ""}|${meta.subtitle ?? ""}|${meta.album ?? ""}`;
   return feed;
 }

@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Command, EyeOff, PanelLeftClose, PanelLeftOpen, PictureInPicture2 } from "lucide-react";
 import { tt } from "@/api";
 import { useStore, type Screen } from "@/store";
+import { useDiscCount } from "@/hooks/useDisc";
 import { cx, fmtCount } from "@/lib/format";
 import {
   MOD,
@@ -33,6 +34,9 @@ export function Nav(): React.JSX.Element {
   const jumpToSettingsTab = useStore((s) => s.jumpToSettingsTab);
   const setPaletteOpen = useStore((s) => s.setPaletteOpen);
   const queueTotal = useStore((s) => s.queue?.total ?? null);
+  // while the CD is the source the Queue screen opens on the disc, so its count is the disc's
+  // ("CD 10", user, 2026-09-26), and none until the streamer says how many
+  const discCount = useDiscCount();
   const ambientWindow = useStore((s) => s.ambientWindowActive);
   const settings = useStore((s) => s.settings);
   const update = useStore((s) => s.update);
@@ -117,6 +121,7 @@ export function Nav(): React.JSX.Element {
       }
       {...navTipHandlers(`${label} (${key})`)}
       aria-label={`${label} (${key})`}
+      aria-current={screen === id ? "page" : undefined}
       className={cx(
         "w-full flex items-center rounded-lg h-9 text-[13.5px] transition-colors",
         collapsed ? "justify-center px-0" : "gap-3 px-3",
@@ -133,9 +138,19 @@ export function Nav(): React.JSX.Element {
         // inner wrapper clips so labels never re-wrap mid collapse/expand
         <span className="flex-1 min-w-0 flex items-center gap-3 overflow-hidden whitespace-nowrap">
           <span className="flex-1 text-left">{label}</span>
-          {id === "queue" && queueTotal != null && queueTotal > 0 && (
-            <span className="font-mono text-[10px] text-faint">{fmtCount(queueTotal)}</span>
-          )}
+          {id === "queue" &&
+            (discCount !== undefined
+              ? discCount != null && (
+                  <span data-nav-count="disc" className="font-mono text-[10px] text-faint">
+                    CD {fmtCount(discCount)}
+                  </span>
+                )
+              : queueTotal != null &&
+                queueTotal > 0 && (
+                  <span data-nav-count="queue" className="font-mono text-[10px] text-faint">
+                    {fmtCount(queueTotal)}
+                  </span>
+                ))}
           <span className="font-mono text-[9px] text-faint/60">{key}</span>
         </span>
       )}
@@ -207,7 +222,7 @@ export function Nav(): React.JSX.Element {
           read as pinned to the bottom, as ever); once the two groups would
           meet, the margin is zero and the whole column scrolls as a single
           block — no measurement, the auto-margin does all the work. */}
-      <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
+      <div data-nav-rows className="flex-1 min-h-0 overflow-y-auto flex flex-col">
         <div className={cx("space-y-0.5 pb-2", collapsed ? "px-2" : "px-3")}>
           {visibleScreens.map(navItem)}
         </div>

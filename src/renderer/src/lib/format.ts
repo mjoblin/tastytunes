@@ -1,5 +1,5 @@
 import { isHiRes } from "@shared/model";
-import type { ZoneNowPlaying, ZonePlayState } from "@shared/smoip";
+import { cdToc, isCdPlayback, type ZoneNowPlaying, type ZonePlayState } from "@shared/smoip";
 
 export function cx(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(" ");
@@ -88,6 +88,10 @@ export interface NowPlayingMeta {
   artUrl: string | null;
   isRadio: boolean;
   badges: string[];
+  /** A stopped disc (0.10.0, the CD): the title is the disc's album (so no track's: no lyrics,
+   *  no heart, no track facts), and this is its track count and length from the table of
+   *  contents the streamer titles it with. */
+  disc: { tracks: number; secs: number } | null;
 }
 
 /**
@@ -128,6 +132,31 @@ export function deriveNowPlaying(
       artUrl: md?.art_url ?? display?.art_url ?? null,
       isRadio,
       badges,
+      disc: null,
+    };
+  }
+
+  // THE CD (see isCdPlayback): a disc's table of contents is never a track's title. Stopped,
+  // the disc itself is what is loaded, so it reads as its album and artist over its track
+  // count and length; playing, now_playing's line1 names the track (the owner's readout),
+  // whatever play_state's title turns out to hold.
+  if (isCdPlayback(md, display)) {
+    const toc = cdToc(md?.title);
+    const artist = md?.artist ?? display?.line2 ?? null;
+    const album = md?.album ?? display?.line3 ?? null;
+    const artUrl = md?.art_url ?? display?.art_url ?? null;
+    if (toc && playState?.state === "stop") {
+      return { title: album, subtitle: artist, album, artUrl, isRadio, badges, disc: toc };
+    }
+    const line1 = cdToc(display?.line1) ? null : (display?.line1 ?? null);
+    return {
+      title: (toc ? null : md?.title) ?? line1 ?? album,
+      subtitle: artist,
+      album,
+      artUrl,
+      isRadio,
+      badges,
+      disc: null,
     };
   }
 
@@ -138,7 +167,34 @@ export function deriveNowPlaying(
     artUrl: md?.art_url ?? display?.art_url ?? null,
     isRadio,
     badges,
+    disc: null,
   };
+}
+
+/**
+ * Where the playing track sits in what is playing, 0-based: the one home for "track 3 of 10".
+ * The Media Library's place is play_state's queue; a disc's is now_playing's queue (or its
+ * "1/10" context), since a disc is no queue of the streamer's and play_state has not been seen
+ * to carry one for it. Only a disc reads now_playing's: another source's may still hold the
+ * parked Media Library place.
+ */
+export function queuePlace(
+  playState: ZonePlayState | null,
+  nowPlaying: ZoneNowPlaying | null,
+): { index: number; length: number } | null {
+  if (isCdPlayback(playState?.metadata, nowPlaying?.display)) {
+    const q = nowPlaying?.queue;
+    if (q?.position != null && q.length != null && q.length > 0) {
+      return { index: q.position, length: q.length };
+    }
+    const m = /^\s*(\d+)\s*\/\s*(\d+)\s*$/.exec(nowPlaying?.display?.context ?? "");
+    return m && Number(m[1]) >= 1 && Number(m[2]) > 0
+      ? { index: Number(m[1]) - 1, length: Number(m[2]) }
+      : null;
+  }
+  const index = playState?.queue_index;
+  const length = playState?.queue_length;
+  return index != null && length != null && length > 0 ? { index, length } : null;
 }
 
 /** The transport controls the streamer currently allows (/zone/now_playing controls[]). */

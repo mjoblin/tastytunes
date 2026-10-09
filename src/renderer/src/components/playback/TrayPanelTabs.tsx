@@ -15,6 +15,7 @@ import { playRefNow } from "@/lib/mediaActions";
 import { scrollToVisible } from "@/lib/scroll";
 import { activeSourceId, cx, fmtDuration, fmtRelative } from "@/lib/format";
 import { useLitPresets } from "@/hooks/useLitPresets";
+import { useDisc, type Disc } from "@/hooks/useDisc";
 
 export type TrayTab = "queue" | "presets" | "playlists" | "recent";
 export type TrayDensity = "detailed" | "compressed";
@@ -159,6 +160,7 @@ export function QueueTab({
   const playingRow = useRef<HTMLDivElement | null>(null);
 
   const offline = useOffline();
+  const disc = useDisc();
   const items = queue?.items ?? [];
   const playId = useStore((s) => s.effectivePlayId); // the settled id, one home
   // THE QUEUE BELONGS TO MEDIA_PLAYER. Switch to a radio preset (or AirPlay)
@@ -192,6 +194,7 @@ export function QueueTab({
   }, [playId, followQueue]);
 
   if (offline) return <OfflineTab icon={ListMusic} what="Queue" they="It lives" />;
+  if (disc) return <DiscTab disc={disc} opens={opens} density={density} />;
   if (items.length === 0) {
     return (
       <TabEmpty
@@ -245,6 +248,73 @@ export function QueueTab({
                 playing={playing}
                 duration={md?.duration ?? null}
                 onClick={play}
+              />
+            )}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+/**
+ * The disc while the CD is the source (0.10.0): the Queue screen's disc view at panel scale,
+ * read-only like it (a disc takes next and previous, never a track by number), so no row is a
+ * button here either.
+ */
+function DiscTab({
+  disc,
+  opens,
+  density,
+}: {
+  disc: Disc;
+  opens: number;
+  density: TrayDensity;
+}): React.JSX.Element {
+  const followQueue = useStore((s) => s.settings.followQueue);
+  const headRow = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    scrollToVisible(headRow.current, 8);
+  }, [opens, density]);
+  useEffect(() => {
+    if (followQueue) scrollToVisible(headRow.current, 8);
+  }, [disc.head, followQueue]);
+
+  if (disc.rows.length === 0) {
+    return (
+      <TabEmpty
+        icon={Disc3}
+        title="No track list yet"
+        hint="Insert a disc, and its tracks appear here once the CD player has read it."
+      />
+    );
+  }
+  return (
+    <>
+      {disc.rows.map((row, i) => {
+        const playing = disc.head === i;
+        const title = row.title ?? `Track ${row.n}`;
+        return (
+          <div key={row.n} ref={playing ? headRow : undefined}>
+            {density === "compressed" ? (
+              <CompressedRow
+                withIndex
+                attrs={{ "data-tray-row": "disc" }}
+                position={row.n}
+                title={title}
+                duration={row.secs}
+                playing={playing}
+              />
+            ) : (
+              <MediaRow
+                dense
+                attrs={{ "data-tray-row": "disc" }}
+                title={title}
+                subtitle={[disc.artist, disc.album].filter(Boolean).join(" — ") || undefined}
+                kind="track"
+                artUrl={disc.artUrl}
+                playing={playing}
+                duration={row.secs}
               />
             )}
           </div>

@@ -24,6 +24,7 @@ import type {
   RecentTrack,
   Playlist,
   PlaylistActivation,
+  HeldState,
   MediaInfoTarget,
 } from "@shared/model";
 import type {
@@ -159,7 +160,9 @@ export interface AnalysisProgress {
 export interface ToastData {
   /** Monotonic nonce so an identical replacement still restarts the timer. */
   id: number;
-  kind: "success" | "error";
+  /** "working": a wait the user is in the middle of (useDriveWaitToast). It has no timer;
+   *  whoever showed it takes it down, or a newer toast replaces it. */
+  kind: "success" | "error" | "working";
   text: string;
   action?: ToastAction;
 }
@@ -349,6 +352,8 @@ interface TTState {
   playlists: Playlist[];
   /** Live playlist-activation progress (null when idle). */
   playlistActivation: PlaylistActivation | null;
+  /** What the streamer was doing when it last went to sleep (the standby face's offer). */
+  held: HeldState | null;
   /** See LibraryTarget — set by Favorites, consumed by LibraryScreen. */
   libraryTarget: LibraryTarget | null;
   /** See LastStation — session-only, set by every in-app streamRadio play. */
@@ -608,6 +613,7 @@ export const useStore = create<TTState>((set, get) => ({
   favorites: [],
   playlists: [],
   playlistActivation: null,
+  held: null,
   libraryTarget: null,
   lastStation: null,
   mcpStatus: { running: false, url: null, error: null },
@@ -835,6 +841,7 @@ export const useStore = create<TTState>((set, get) => ({
       favorites: snap.favorites,
       playlists: snap.playlists,
       playlistActivation: snap.playlistActivation,
+      held: snap.held,
       mcpStatus: snap.mcpStatus,
       missedSchedule: snap.missedSchedule,
       mediaIndex: snap.mediaIndex,
@@ -1030,6 +1037,8 @@ export const useStore = create<TTState>((set, get) => ({
           return { playlists: msg.data };
         case "playlistActivation":
           return { playlistActivation: msg.state };
+        case "held":
+          return { held: msg.held };
         case "settings":
           // settings changed outside the renderer (an MCP tool edited
           // schedules) — adopt wholesale, same as a snapshot would

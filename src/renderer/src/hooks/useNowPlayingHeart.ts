@@ -46,7 +46,7 @@ export function useNowPlayingHeart(): NowPlayingHeart {
     lastStation.name.trim().toLowerCase() === stationName.toLowerCase();
 
   const trackFav: Omit<FavoriteMedia, "addedAt"> | null =
-    !meta.isRadio && meta.title && meta.subtitle
+    !meta.isRadio && !meta.disc && meta.title && meta.subtitle
       ? {
           kind: "track",
           title: meta.title,

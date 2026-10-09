@@ -14,8 +14,8 @@ import type * as THREE from "three";
  * a WebGL2 canvas and a 2D overlay above it for text and marks. Sizes to
  * its box, caps the pixel ratio (1.5 full-screen, 1 for the picker's tiles:
  * a 5K display would otherwise paint fourteen million pixels a frame), sits
- * still while the window is hidden, and halves its frame rate under reduced
- * motion. The scene's settings are resolved here from the store and handed
+ * still while the window is hidden, and draws one picture a second under
+ * reduced motion. The scene's settings are resolved here from the store and handed
  * to the instance, so a change lands on the next frame. The canvases are
  * the effect's own children, never React's: a canvas that has ever held a
  * WebGL context cannot hand out a 2D one, nor a fresh GL one after
@@ -131,7 +131,6 @@ export function SceneCanvas({
     const ro = new ResizeObserver(size);
     ro.observe(wrap);
     let raf = 0;
-    let last = 0;
     let lastFrame = 0;
     const loop = (now: number): void => {
       if (document.hidden) {
@@ -142,9 +141,13 @@ export function SceneCanvas({
         return;
       }
       raf = requestAnimationFrame(loop);
+      // REDUCED MOTION SOFTENS A SCENE, IT DOES NOT STOP ONE (user, 2026-10-06): a scene runs
+      // only because someone picked it by name (both surfaces default to the album art), so
+      // it runs at its full rate and each scene softens itself through the frame's reduced
+      // flag (slower, no sprays, no entrances); what nobody picked stays still: the picker's
+      // tiles (ScenePicker) and the finish's hum (below). One picture a second was tried
+      // and read as choppy, neither still nor smooth.
       const reduced = document.documentElement.classList.contains("reduce-motion");
-      if (reduced && now - last < 30) return;
-      last = now;
       const dt = lastFrame ? frameDelta((now - lastFrame) / 1000) : 0;
       lastFrame = now;
       const f = feed.frame(now, w, h, mini, dt, wordsRef.current);
@@ -196,7 +199,6 @@ export function SceneCanvas({
         raf = 0;
         return;
       }
-      last = 0;
       lastFrame = 0;
       if (!raf) raf = requestAnimationFrame(loop);
     };

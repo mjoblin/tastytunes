@@ -48,6 +48,7 @@ export function LargeQueueConfirm(): React.JSX.Element | null {
       open={ask != null}
       onClose={() => ask?.answer(false)}
       escapeCloses
+      label="Queue a large selection"
       className="w-80 p-4"
     >
       {ask && (

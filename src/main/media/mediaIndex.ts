@@ -18,6 +18,8 @@ import { usbServer } from "@shared/model";
 import { join } from "node:path";
 import { app } from "electron";
 import { getSettings } from "../data/persist";
+import { getPlaylists } from "../data/playlists";
+import { getFavorites } from "../data/favorites";
 import { atomicWriteFileSync } from "../data/jsonStore";
 import type {
   MediaIndexPools,
@@ -42,6 +44,9 @@ import {
 } from "./reconcile";
 import {
   browseChildrenOf,
+  browseMetadataNode,
+  deviceCooling,
+  MOUNTED,
   probeObject,
   getSystemUpdateID,
   refreshServers,
@@ -59,6 +64,11 @@ interface StoredIndex {
   albums: MediaNode[];
   artists: MediaNode[];
   tracks: MediaNode[];
+  /** The counter the streamer's USB server reported when this index was last moved onto
+   *  its current mount without a walk (heal): the index answers for that counter, while
+   *  updateId stays the one its walk saw, so the Library's card still offers a re-index for
+   *  files added since. */
+  healedFor?: number;
 }
 
 // v11: profile notes are structured facts (ProfileNote), worded at display
@@ -85,7 +95,9 @@ interface StoredIndex {
 // Asset tagging). v2 added upnp:genre. A bump discards stored indexes
 // wholesale; rebuildHints below keeps that from costing Browse-only
 // servers their Build click.
-const VERSION = 12; // v12: nodes from a browse walk carry their folder titlePath
+const VERSION = 13; // v12: nodes from a browse walk carry their folder titlePath
+// v13: the DIDL parser keeps text as the server sent it ("007" stays "007"), and LPCM
+// (audio/L16;rate=…) reads as PCM with its depth
 const PAGE = 500;
 const MAX_TRACKS = 50_000;
 const MAX_CONTAINERS = 10_000;
@@ -116,6 +128,15 @@ const failed = new Map<string, string>();
 const staleIds = new Map<string, number>();
 let announce: (statuses: MediaIndexStatus[]) => void = () => {};
 let loaded = false;
+/** udn → the heal running for it now, ahead of time or for an act: one at a time per
+ *  server, and an act that arrives meanwhile waits for it (healOnce). */
+const healing = new Map<string, Promise<boolean>>();
+/** udn → how many acts have waited past WAIT_SHOWN_MS on its revalidation (the status's
+ *  `waiting`). */
+const waiters = new Map<string, number>();
+/** How long an act waits on a USB revalidation before the status says so: a heal on a drive
+ *  whose folders are warm is over in a tenth of a second and must not flash a toast. */
+const WAIT_SHOWN_MS = 1000;
 
 const file = (): string => join(app.getPath("userData"), "cache", "media-index.json");
 
@@ -172,6 +193,7 @@ export function status(): MediaIndexStatus[] {
       ...(k ? { searchable: k.searchable } : {}),
       ...(buildingWhy.get(idx.udn) === "refresh" ? { quiet: true } : {}),
       ...(staleIds.has(idx.udn) && !building.has(idx.udn) ? { stale: true } : {}),
+      ...(waiters.has(idx.udn) ? { waiting: true } : {}),
       strategy: idx.strategy,
       tracks: idx.tracks.length,
       albums: idx.albums.length,
@@ -547,6 +569,21 @@ export async function revalidate(
   probeId: string | null,
 ): Promise<boolean> {
   load();
+  // a heal already running for this server (ahead of time, after a wake): the act waits for
+  // it, under the waiting flag like any other; a heal that moved the index answers "ask
+  // again" (the caller's id is from before it), one that declined leaves the act to judge
+  const running = healing.get(udn);
+  if (running) {
+    const done = waitOn(udn);
+    let moved = false;
+    try {
+      moved = await running;
+    } finally {
+      done();
+    }
+    // the ids moved under the caller, who still holds an old one: it asks again
+    if (moved) return true;
+  }
   const existing = indexes.get(udn);
   if (!existing || existing.strategy !== "browse") return false;
   const server =
@@ -554,17 +591,310 @@ export async function revalidate(
   if (!server) return false;
   known.set(udn, server);
   const id = await getSystemUpdateID(host, udn);
-  let stale = id != null && existing.updateId != null && id !== existing.updateId;
+  let stale =
+    id != null &&
+    existing.updateId != null &&
+    id !== existing.updateId &&
+    id !== existing.healedFor;
   // the id in hand is stale only when the server REFUSES it; a server that is
   // not answering (a null counter, an unreachable probe) says nothing about
   // the id, and a walk into its silence was what took the Evo down (2026-09-16)
   if (!stale && probeId) stale = (await probeObject(host, udn, probeId)) === "missing";
   if (!stale) return false;
-  console.log(
-    `[mediaIndex] ${server.name}: ${id != null && existing.updateId != null && id !== existing.updateId ? `ids rotated (counter ${existing.updateId} → ${id})` : `the id in hand no longer answers (counter ${id ?? "unread"})`}, rebuilding`,
+  // the act that asked waits from here; past a second the status says so
+  const done = usbServer(server) ? waitOn(udn) : null;
+  try {
+    // the streamer's USB server re-mints its ids by the mount alone: move the index onto the
+    // new mount and confirm it by content before paying for a walk of the whole drive
+    if (usbServer(server) && (await healOnce(host, server, existing, id, probeId))) return true;
+    console.log(
+      `[mediaIndex] ${server.name}: ${id != null && existing.updateId != null && id !== existing.updateId ? `ids rotated (counter ${existing.updateId} → ${id})` : `the id in hand no longer answers (counter ${id ?? "unread"})`}, rebuilding`,
+    );
+    await build(host, server, "browse", "refresh");
+    return indexes.get(udn)?.builtAt !== existing.builtAt;
+  } finally {
+    done?.();
+  }
+}
+
+/** What else a heal checks, and when it stops: the user's likely next plays (likelyFor), and
+ *  for the heal ahead, the streamer going back to sleep. */
+interface HealOpts {
+  likely?: string[];
+  stopped?: () => boolean;
+}
+
+/** The heal for a server, one at a time: a second asker shares the one running. */
+function healOnce(
+  host: string,
+  server: MediaServerInfo,
+  existing: StoredIndex,
+  counter: number | null,
+  held: string | null,
+  opts: HealOpts = {},
+): Promise<boolean> {
+  const running = healing.get(server.udn);
+  if (running) return running;
+  const run = heal(host, server, existing, counter, held, opts).finally(() =>
+    healing.delete(server.udn),
   );
-  await build(host, server, "browse", "refresh");
-  return indexes.get(udn)?.builtAt !== existing.builtAt;
+  healing.set(server.udn, run);
+  return run;
+}
+
+/** How long after a wake the heal ahead of time first looks; it looks again at four and at
+ *  twelve times that, a drive still mounting at the first having nothing to heal by (the
+ *  user's Evo, 2026-10-06: begun 8 s after the wake, the heal ended about 25 s after it, and
+ *  a play at 10 s waited for it). The harness shortens it. */
+const HEAL_AHEAD_MS = Number(process.env["TASTYTUNES_HEAL_AHEAD_MS"] ?? 3000);
+let aheadTimers: NodeJS.Timeout[] = [];
+/** Moves on every cancel: a heal ahead begun before it stops at its next check. */
+let aheadGen = 0;
+
+/**
+ * The USB ids the user is likely to play next on a server: the first of each playlist's items
+ * there (the track a playlist starts on; the rest append while it plays), the most recently
+ * played playlist first, then favorites, newest first; at most HEAL_LIKELY of them, so a big
+ * collection never turns a heal into a walk.
+ */
+function likelyFor(udn: string): string[] {
+  const out: string[] = [];
+  const recent = (p: { lastPlayedAt?: number | null; updatedAt: number }): number =>
+    p.lastPlayedAt ?? p.updatedAt;
+  for (const p of [...getPlaylists()].sort((a, b) => recent(b) - recent(a))) {
+    const first = p.items.find((i) => i.serverUdn === udn && i.objectId);
+    if (first?.objectId) out.push(first.objectId);
+  }
+  for (const f of [...getFavorites()].sort((a, b) => b.addedAt - a.addedAt))
+    if (f.kind !== "station" && f.serverUdn === udn && f.objectId) out.push(f.objectId);
+  return [...new Set(out)].slice(0, HEAL_LIKELY);
+}
+
+/**
+ * THE HEAL AHEAD OF TIME (0.10.0; user, 2026-10-06: "broadly speaking, to me it's fine for
+ * the app to be doing that sort of thing for improved UX"). The streamer's USB ids move
+ * across every standby, and the first act that needs one used to wait for the heal while a
+ * cold drive's folders were listed (about 20 s on the user's stick). A few seconds after the
+ * streamer wakes, or after the app connects to one already awake, the heal runs on its own,
+ * one request at a time in the device's lane like any other, so the act finds the index
+ * already moved. Never a walk: a heal that declines leaves the index as it was and the act
+ * heals or walks as before. Nothing while the device's server is cooling or its counter has
+ * not moved (one counter read), nothing for a server with no index, and nothing when the
+ * user asked for indexing by the buttons only. A replug while awake sends the app no signal,
+ * so it still heals when an act asks.
+ */
+export async function healAhead(host: string): Promise<void> {
+  load();
+  const gen = aheadGen;
+  const stopped = (): boolean => gen !== aheadGen;
+  if (getSettings().mediaIndexAuto === false || deviceCooling()) return;
+  const servers = await refreshServers(host).catch(() => [] as MediaServerInfo[]);
+  for (const server of servers) {
+    const existing = indexes.get(server.udn);
+    if (!usbServer(server) || !existing || existing.strategy !== "browse") continue;
+    if (healing.has(server.udn)) continue;
+    known.set(server.udn, server);
+    const id = await getSystemUpdateID(host, server.udn);
+    if (id == null || existing.updateId == null) continue;
+    if (id === existing.updateId || id === existing.healedFor) continue;
+    console.log(
+      `[mediaIndex] ${server.name}: the counter moved (${existing.updateId} → ${id}); healing ahead of time`,
+    );
+    await healOnce(host, server, existing, id, null, { likely: likelyFor(server.udn), stopped });
+  }
+}
+
+/** A wake, or a connect to a streamer already awake: the heal ahead of time, three looks. */
+export function scheduleHealAhead(host: string): void {
+  cancelHealAhead();
+  aheadTimers = [HEAL_AHEAD_MS, HEAL_AHEAD_MS * 4, HEAL_AHEAD_MS * 12].map((ms) =>
+    setTimeout(() => void healAhead(host).catch(() => {}), ms),
+  );
+}
+
+/** The streamer went back to sleep or the connection went: nothing ahead to heal. */
+export function cancelHealAhead(): void {
+  aheadGen++;
+  for (const t of aheadTimers) clearTimeout(t);
+  aheadTimers = [];
+}
+
+/** One act waiting on a server's revalidation: counted in the status (`waiting`) once it
+ *  has waited WAIT_SHOWN_MS, and the function returned ends the wait. */
+function waitOn(udn: string): () => void {
+  let counted = false;
+  const timer = setTimeout(() => {
+    counted = true;
+    waiters.set(udn, (waiters.get(udn) ?? 0) + 1);
+    announce(status());
+  }, WAIT_SHOWN_MS);
+  return () => {
+    clearTimeout(timer);
+    if (!counted) return;
+    const left = (waiters.get(udn) ?? 1) - 1;
+    if (left > 0) waiters.set(udn, left);
+    else waiters.delete(udn);
+    announce(status());
+  };
+}
+
+/** How many objects a heal confirms by content: albums spread across the drive, and tracks
+ *  from inside them (see tryMount). */
+const HEAL_TRACKS = 8;
+const HEAL_ALBUMS = 4;
+/** At most this many of the user's likely next plays join a heal's checks (likelyFor). */
+const HEAL_LIKELY = 3;
+
+/**
+ * THE HEAL WITHOUT A WALK (0.10.0, filed 2026-09-25 from a CXN V2 owner's report: "sometimes
+ * it still loses the link to the library, and starts building again from scratch"). After a
+ * standby or a replug the streamer's USB server re-mints every id, and the first act that
+ * needs a fresh one (a playlist, Open in Library, an agent's id) walked the whole drive. The
+ * ids change by their mount number alone, so the index is moved onto a mount the root now
+ * lists (each in turn, a drive having more than one partition), and then CONFIRMED by content: a spread of albums, tracks from inside them and the user's likely next plays must answer
+ * under their new ids with the title the index holds, and a track with its parent and its
+ * number too (an album can sit under more than one container, so its parent says little). Any
+ * miss, or any id that does not have the mount's shape, and the walk runs as before, so a
+ * device that does not follow the pattern loses nothing. An index already on the current
+ * mount is confirmed the same way (an old id in hand is then simply old, and the caller asks
+ * again by content). A sample cannot see files ADDED since the walk, so the heal lets the
+ * acts work and leaves the Library's card offering the re-index, which still walks. Straight
+ * after a wake the device knows none of the new ids until their folders are listed again; the
+ * browse layer lists them on a miss (upnpBrowser's forgottenFolders), so the checks ask by id.
+ */
+async function heal(
+  host: string,
+  server: MediaServerInfo,
+  existing: StoredIndex,
+  counter: number | null,
+  held: string | null,
+  opts: HealOpts = {},
+): Promise<boolean> {
+  // every reason the heal gives up is logged, so a walk that follows says why (the user's
+  // Evo, 2026-10-06: a silent decline looked like the heal had never run)
+  const declined = (why: string): false => {
+    console.log(`[mediaIndex] ${server.name}: no heal, ${why}`);
+    return false;
+  };
+  let from: string | null = null;
+  for (const pool of [existing.albums, existing.tracks])
+    for (const n of pool) {
+      const m = MOUNTED.exec(n.id);
+      if (!m) return declined(`an id without a mount's shape (${n.id})`);
+      if (from == null) from = m[1];
+      else if (m[1] !== from) return declined(`the index spans mounts ${from} and ${m[1]}`);
+    }
+  if (from == null) return declined("the index is empty");
+  const top = await browseChildrenOf(host, server.udn, "0");
+  if (typeof top === "string") return declined(`the drive's top level did not answer (${top})`);
+  // A DRIVE CAN HOLD MORE THAN ONE PARTITION (the user's Evo, 2026-10-06: a stick with an EFI
+  // partition beside the music lists both at its top, "34:0" and "35:0", each renumbered on
+  // every wake and in either order; taking the first sent the heal to the empty partition
+  // half the time). Every mount the top lists is a candidate, the index's own first (a
+  // counter that moved without a renumber), and the first to confirm by content wins.
+  const mounts = [
+    ...new Set(top.map((n) => MOUNTED.exec(n.id)?.[1]).filter((p): p is string => p != null)),
+  ].sort((a, b) => (a === from ? -1 : b === from ? 1 : 0));
+  if (mounts.length === 0) return declined("the drive's top level lists no mount");
+  const spread = <T>(xs: T[], k: number): T[] =>
+    xs.length <= k
+      ? xs
+      : Array.from({ length: k }, (_, i) => xs[Math.floor(((i + 0.5) * xs.length) / k)]);
+  /** The index moved onto one mount and confirmed there, or why it is not that mount. */
+  const tryMount = async (to: string): Promise<StoredIndex | string> => {
+    const move = (id: string | null): string | null => {
+      const m = id == null ? null : MOUNTED.exec(id);
+      return m && m[1] === from ? `${to}:${m[2]}` : id;
+    };
+    const moved = (n: MediaNode): MediaNode => ({
+      ...n,
+      id: move(n.id) ?? n.id,
+      parentId: move(n.parentId),
+    });
+    const candidate: StoredIndex = {
+      ...existing,
+      albums: existing.albums.map(moved),
+      artists: existing.artists.map(moved),
+      tracks: existing.tracks.map(moved),
+    };
+    // THE TRACK CHECKS COME FROM INSIDE THE ALBUM CHECKS (2026-10-06, the heal ahead): after a
+    // wake every folder costs a second to list, and tracks drawn from anywhere on the drive
+    // put a dozen chains of folders between the heal and its answer (17 cold folders on the
+    // user's stick, about 25 s after the wake). Two tracks from each sampled album need only
+    // the album's own folder beyond what the album's check already listed. A drive whose
+    // albums hold no tracks of their own (a tag-built view) draws the rest from the whole.
+    const albums = spread(candidate.albums, HEAL_ALBUMS);
+    const per = HEAL_TRACKS / HEAL_ALBUMS;
+    const inAlbums = albums.flatMap((a) =>
+      spread(
+        candidate.tracks.filter((t) => t.parentId === a.id),
+        per,
+      ),
+    );
+    const rest = candidate.tracks.filter((t) => !inAlbums.includes(t));
+    const probes = [
+      ...inAlbums,
+      ...spread(rest, Math.max(0, HEAL_TRACKS - inAlbums.length)),
+      ...albums,
+    ];
+    if (probes.length === 0) return "nothing to confirm";
+    // the id a caller holds (a playlist's, an agent's) must be on the drive under this mount
+    // and in the healed index, whatever mount it was minted under, or the file is gone and
+    // only the walk can say what is there now
+    if (held) {
+      const m = MOUNTED.exec(held);
+      if (!m) return `the id in hand has no mount (${held})`;
+      const now = `${to}:${m[2]}`;
+      const want =
+        candidate.tracks.find((n) => n.id === now) ?? candidate.albums.find((n) => n.id === now);
+      if (!want) return `the id in hand is not in the index (${now})`;
+      probes.push(want);
+    }
+    // the user's likely next plays join the checks, so their folders are listed before a play
+    // asks for them; one the index no longer holds is simply left out
+    for (const id of opts.likely ?? []) {
+      const m = MOUNTED.exec(id);
+      const now = m ? `${to}:${m[2]}` : null;
+      const want =
+        candidate.tracks.find((n) => n.id === now) ?? candidate.albums.find((n) => n.id === now);
+      if (want && !probes.includes(want)) probes.push(want);
+    }
+    for (const want of probes) {
+      if (opts.stopped?.()) return "the streamer went to sleep";
+      const got = await browseMetadataNode(host, server.udn, want.id);
+      if (!got) return `${want.id} does not answer`;
+      if (got.title !== want.title) return `${want.id} is titled differently`;
+      // an album can sit under more than one container (its artist's folder, the library's
+      // own list), so its parent is not evidence; a track's parent and number are
+      const track = !want.upnpClass.startsWith("object.container");
+      if (track && want.parentId != null && got.parentId !== want.parentId)
+        return `${want.id} sits under another folder`;
+      if (track && want.trackNumber != null && got.trackNumber !== want.trackNumber)
+        return `${want.id} has another track number`;
+    }
+    return candidate;
+  };
+  const misses: string[] = [];
+  for (const to of mounts) {
+    if (opts.stopped?.()) return declined("the streamer went to sleep");
+    const healed = await tryMount(to);
+    if (typeof healed === "string") {
+      misses.push(`mount ${to}: ${healed}`);
+      continue;
+    }
+    indexes.set(server.udn, {
+      ...healed,
+      builtAt: Date.now(),
+      ...(counter != null ? { healedFor: counter } : {}),
+    });
+    save();
+    console.log(
+      `[mediaIndex] ${server.name}: ${from === to ? "the index is on the current mount" : `ids moved from mount ${from} to ${to}`}; confirmed by content, no walk${misses.length ? ` (passed over ${misses.join("; ")})` : ""}`,
+    );
+    announce(status());
+    return true;
+  }
+  return declined(`no mount confirmed (${misses.join("; ")})`);
 }
 
 /**

@@ -15,6 +15,7 @@ const WRITE_FAILURES: Partial<Record<StreamerCommand["type"], string>> = {
   streamRadio: "Couldn't play the station",
   zoneSavePreset: "Couldn't save the preset",
   recallPreset: "Couldn't recall the preset",
+  resumeHeld: "Couldn't pick up where you left off",
   presetDelete: "Couldn't delete the preset",
   presetMove: "Couldn't reorder the presets",
   queueDelete: "Couldn't remove the track",

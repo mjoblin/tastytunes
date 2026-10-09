@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import { cx } from "@/lib/format";
+import { Chip } from "@/components/chrome/Chrome";
 
 /**
  * The screen empty-state idiom: big quiet icon, display-font headline, faint
@@ -58,6 +59,39 @@ export function EmptyState({
         )}
       </div>
       {children}
+    </div>
+  );
+}
+
+/** One next step from an empty screen: where to go, and the key that goes there. */
+export interface EmptyAction {
+  label: string;
+  icon: LucideIcon;
+  /** The screen's single key, shown faint beside the label. */
+  keyHint?: string;
+  onClick(): void;
+}
+
+/**
+ * THE WAY ON FROM AN EMPTY SCREEN (0.10.0, the first five minutes): an empty state that has an
+ * obvious next step offers it as a row of chips under its caption, rather than only
+ * describing where to go. Chips, one gap within a kind, the toolbar's height.
+ */
+export function EmptyActions({ actions }: { actions: EmptyAction[] }): React.JSX.Element {
+  return (
+    <div data-empty-actions className="flex flex-wrap items-center justify-center gap-1.5">
+      {actions.map((a) => (
+        <Chip
+          key={a.label}
+          data-empty-action={a.label}
+          onClick={a.onClick}
+          className="gap-1.5 motion-safe:active:scale-95"
+        >
+          <a.icon size={13} />
+          {a.label}
+          {a.keyHint && <kbd className="ml-0.5 font-mono text-[10px] text-faint">{a.keyHint}</kbd>}
+        </Chip>
+      ))}
     </div>
   );
 }

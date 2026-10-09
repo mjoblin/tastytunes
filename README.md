@@ -19,19 +19,18 @@
   <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/now-playing.webp" alt="TastyTunes Now Playing: album art over an ambient backdrop, format badges, and the current lyric line">
 </p>
 
-TastyTunes is a desktop controller for Cambridge Audio StreamMagic streamers.
-It shows what's playing with full artwork and synced lyrics, browses every
-local media server and the streamer's USB drive as a single library,
-searches all of it instantly, tunes internet radio, and edits the queue and
-the streamer's 99 presets.
+TastyTunes shows what's playing on the streamer with full artwork and synced
+lyrics, browses every local media server and the streamer's USB drive as a
+single library, searches all of it, tunes internet radio, and edits the queue
+and the streamer's 99 presets.
 
-Beyond that: playlists and favorites, a log of what you've played, artist and
-album notes, tone and EQ, a menu bar / system tray panel, a mini player, a
+It also supports playlists and favorites, a listening history, artist and album
+notes, tone and EQ, a menu bar / system tray panel, a mini player, a
 Fullscreen Display mode with visualizer scenes, sleep timers and schedules,
 scrobbling to ListenBrainz, and an optional MCP server for local AI agents.
 
-It all runs on your machine and talks to the streamer over your own network.
-There's no account and no cloud service required.
+It all runs on your computer and connects to the streamer over your local
+network. There's no account and no cloud service required.
 
 ## Installing
 
@@ -41,7 +40,7 @@ There's no account and no cloud service required.
    one signed installer), Linux (x64 or arm64 AppImage).
 2. Launch it. TastyTunes discovers StreamMagic streamers on your network; if
    discovery comes up empty, enter the streamer's IP directly.
-3. There's no account and nothing else to configure.
+3. There's nothing else to configure.
 
 Without a streamer on the network, demo mode on the connect screen runs the
 whole app against a built-in virtual one with sample music libraries.
@@ -55,35 +54,33 @@ against an Evo 150.
 
 ### Now Playing
 
-Album art, track details, format badges and the live lyric line. The transport bar sits along the bottom of every screen.
-
-<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/now-playing.webp" alt="The Now Playing screen with album art, track details and the current lyric line">
+Album art, track details, format badges and the current lyric line. The transport bar is at the bottom of every screen.
 
 ### Audio analysis
 
 For music on your local media servers, TastyTunes reads the audio file and shows its waveform under the artwork and in the seek bar (both optional, in Settings › Appearance), with the track's dynamic range beside the format badges. Once analyzed, an album's dynamic range becomes a filter and is sortable in the Library.
 
-<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/audio-analysis.webp" alt="Now Playing with the waveform under the album art and the dynamic range beside the format badges">
+<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/audio-analysis-detail.webp" alt="Now Playing with the waveform under the album art and the dynamic range beside the format badges" width="640">
 
 ### The library as one collection
 
-Local UPnP servers and the streamer's USB drive, pooled into Artists, Albums and Tracks views with genre, decade, format and dynamic range filters.
+Local media servers and the streamer's USB drive, combined into Artists, Albums and Tracks views, with genre, decade, format, and dynamic range filters.
 
-<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/lens-albums.webp" alt="The Albums view pooling every library into one collection">
+<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/lens-albums.webp" alt="The Albums view combining every library into one collection">
 
 #### Artists and Tracks views
 
-The Artists view shows your artists, the selected artist's albums, and the selected album's tracks. The Tracks view is every track in every library as one list, narrowed by decade, genre, format and dynamic range, and the narrowed list can be played as a whole.
+The Artists view shows your artists, the selected artist's albums, and the selected album's tracks. The Tracks view lists every track in every library and can be filtered by decade, genre, format, and dynamic range, and the filtered list can be played as a whole.
 
 <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/lens-artists.webp" alt="The Artists view with an artist selected, their albums in the middle column and the tracks of one album on the right">
 
-<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/lens-tracks.webp" alt="The Tracks view narrowed by decade and dynamic range, with the Play these button live">
+<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/lens-tracks.webp" alt="The Tracks view filtered by decade and dynamic range">
 
-### One search
+### Search everything
 
-Libraries, playlists, favorites, presets and internet radio, with results grouped by where they live. Library results come from a local index.
+Search your libraries, playlists, favorites, presets, and internet radio at once, with the results grouped by type.
 
-<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/search.webp" alt="Search results grouped by where they live">
+<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/search.webp" alt="Search results grouped by type">
 
 ### Synced lyrics
 
@@ -91,7 +88,7 @@ The current line is highlighted and kept in view. Click a line to seek there.
 
 <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/lyrics.webp" alt="Lyrics panel with the current line highlighted">
 
-### Artist, album and track notes
+### Liner notes
 
 View a short biography of the artist, the album's year, label and genres with a summary, and the track's performers, writers and production credits. The notes come from MusicBrainz and Wikipedia, with a link to each source.
 
@@ -99,40 +96,42 @@ View a short biography of the artist, the album's year, label and genres with a 
 
 ### Presets
 
-The streamer's preset slots as a card grid (or table rows), each recallable with a click and holding its own volume. The playing preset stays lit.
+The streamer's presets as a card grid or table rows. A preset is recalled with a click, at the volume saved with it, and the playing preset is highlighted.
 
 <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/presets.webp" alt="The Presets grid with the playing preset lit">
 
 ### Fullscreen Display mode
 
-Press <kbd>F</kbd> for the front-panel view: album art or a scene, track details, the current lyric line and a clock.
+Press <kbd>F</kbd> to fill the screen with the album art or a scene, track details, the current lyric line and a clock.
 
 <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/display.webp" alt="Fullscreen display mode showing album art and the current lyric line">
 
 ### Scenes
 
-Visualizer scenes created from the track's audio analysis and lyrics: its loudness, beats, drum hits, drops and lyrics. A scene takes the album art's place on Now Playing, or fills the screen in Fullscreen Display mode. Pick one, or choose Shuffle to select a different scene for every track. Local media only: AirPlay, internet radio and other sources show the album art.
+Visualizer scenes created from the track's audio analysis and lyrics: its loudness, beats, drum hits, drops, and lyrics. A scene takes the album art's place on Now Playing, or fills the screen in Fullscreen Display mode. Select one, or Shuffle for a different scene on every track. Hi-Fi and Turntable show for every source; the other scenes need local media, and show the album art for AirPlay, internet radio and other sources.
 
 <table>
   <tr>
     <td align="center" width="25%"><img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/scenes/sleeve.webp" alt="The Sleeve scene"><br><sub>Sleeve</sub></td>
     <td align="center" width="25%"><img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/scenes/pit.webp" alt="The Ball Pit scene"><br><sub>Ball Pit</sub></td>
     <td align="center" width="25%"><img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/scenes/survey.webp" alt="The Contour scene"><br><sub>Contour</sub></td>
-    <td align="center" width="25%"><img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/scenes/confluence.webp" alt="The Ink scene"><br><sub>Ink</sub></td>
+    <td align="center" width="25%"><img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/scenes/panel.webp" alt="The Hi-Fi scene"><br><sub>Hi-Fi</sub></td>
   </tr>
   <tr>
+    <td align="center" width="25%"><img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/scenes/confluence.webp" alt="The Ink scene"><br><sub>Ink</sub></td>
     <td align="center" width="25%"><img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/scenes/orbit.webp" alt="The Orbit scene"><br><sub>Orbit</sub></td>
     <td align="center" width="25%"><img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/scenes/roll.webp" alt="The Piano Roll scene"><br><sub>Piano Roll</sub></td>
     <td align="center" width="25%"><img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/scenes/refrain.webp" alt="The Refrain scene"><br><sub>Refrain</sub></td>
-    <td align="center" width="25%"><img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/scenes/sea.webp" alt="The Sea scene"><br><sub>Sea</sub></td>
   </tr>
   <tr>
+    <td align="center" width="25%"><img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/scenes/sea.webp" alt="The Sea scene"><br><sub>Sea</sub></td>
     <td align="center" width="25%"><img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/scenes/terminal.webp" alt="The Terminal scene"><br><sub>Terminal</sub></td>
     <td align="center" width="25%"><img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/scenes/terrain.webp" alt="The Terrain scene"><br><sub>Terrain</sub></td>
     <td align="center" width="25%"><img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/scenes/tide.webp" alt="The Tide scene"><br><sub>Tide</sub></td>
-    <td align="center" width="25%"><img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/scenes/conduit.webp" alt="The Tunnel scene"><br><sub>Tunnel</sub></td>
   </tr>
   <tr>
+    <td align="center" width="25%"><img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/scenes/conduit.webp" alt="The Tunnel scene"><br><sub>Tunnel</sub></td>
+    <td align="center" width="25%"><img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/scenes/turntable.webp" alt="The Turntable scene"><br><sub>Turntable</sub></td>
     <td align="center" width="25%"><img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/scenes/type.webp" alt="The Type scene"><br><sub>Type</sub></td>
   </tr>
 </table>
@@ -145,7 +144,7 @@ A small always-on-top window: art, transport, playhead, volume and what's next.
 
 ### Menu bar / system tray
 
-Many of TastyTunes' features, shrunk down into a menu bar / system tray panel, accessible by clicking the TastyTunes icon from any desktop screen.
+A compact panel with many of TastyTunes' features, opened from the TastyTunes icon in the menu bar (macOS) or system tray (Windows).
 
 <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/tray-panel.webp" alt="The menu-bar panel showing now playing and the queue" width="380">
 
@@ -164,7 +163,7 @@ MCP tools that let local AI agents see and control the streamer.
 ## MCP server
 
 TastyTunes can host a local MCP server (off by default), so AI agents on your
-network (Claude Code, Cursor, anything that speaks MCP over HTTP) can see and
+network (Claude Code, Cursor, anything that supports MCP over HTTP) can see and
 control the streamer:
 
 ```bash
@@ -178,18 +177,18 @@ sources, library and radio, favorites, tone and EQ, sleep timers, the listening
 record (plays, last played, what was left unfinished), audio analysis, album art,
 the scenes and Display mode, etc. The editing
 ones, like queue and preset changes, are kept separate and off until you
-turn them on. Every tool has its own switch in Settings › AI agents, effective
-on the agent's next call. Agents inherit the same limits the UI has: the volume
-cap, the power safeguards, the Connections toggles. A call to a disabled tool is
+turn them on. Every tool can be enabled or disabled in Settings › AI agents.
+Agents are held to the same limits as the app: the volume limit, the power
+safeguards and the Connections settings. A call to a disabled tool is
 refused. Bind it to localhost, or to your network to reach the streamer from
-another machine. The setup for each client (Claude Code, Cursor, VS Code, Gemini CLI,
+another machine. Bound to your network, it requires the token from Settings ›
+AI agents. The setup for each client (Claude Code, Cursor, VS Code, Gemini CLI,
 Codex CLI, Claude Desktop, ChatGPT) is at [tastytunes.app/agents](https://tastytunes.app/agents/).
 
 ### Home Assistant
 
-Home Assistant can control the streamer with a `rest_command` with no additional
-integrations required. A scene or automation can then call it like any other
-service:
+Home Assistant can control the streamer through TastyTunes with a
+`rest_command`. A scene or automation can then call it like any other service:
 
 ```yaml
 rest_command:
@@ -197,20 +196,23 @@ rest_command:
     url: "http://<machine-running-tastytunes>:8555/mcp"
     method: post
     content_type: application/json
+    headers:
+      Authorization: Bearer <token from Settings › AI agents>
     payload: '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"recall_preset","arguments":{"id":3}}}'
 ```
 
 Any enabled tool works the same way, such as `set_volume`, `set_power`, and
 `pause`. Bind the server to your network in Settings › AI agents, enable the
-tools the Home Assistant automation needs, and keep TastyTunes running.
+tools the Home Assistant automation needs, copy the token into the
+`Authorization` header, and keep TastyTunes running.
 
 ## Every feature
 
 ### Connection & devices
 
 - Automatic discovery of streamers on the local network, with manual IP entry when discovery finds nothing
-- Device switcher in the playback bar
-- Auto-reconnect, and connection health checks after system sleep
+- Device switcher in the transport bar
+- Reconnects automatically, including after the computer sleeps
 - Power and standby
 - Demo mode: runs the whole app against a built-in virtual streamer and two sample libraries
 
@@ -219,48 +221,57 @@ tools the Home Assistant automation needs, and keep TastyTunes running.
 - Large artwork over an ambient blurred-art backdrop
 - Optional art-derived accent, with a gold tint following the current album
 - Format badges: codec, sample rate, bit depth, lossless, MQA
-- Signal-quality lamp: gold with a halo for hi-res lossless, blue for lossless, a hollow gray ring for lossy. Each state has its own shape as well as its own color, so they are readable without color vision; the legend is in Settings › Status lamps, and the full signal chain is in a popover
+- A signal-quality lamp: gold for hi-res lossless, blue for lossless and gray for lossy, each with its own shape so the states don't rely on color alone
+- The lamp's legend is in Settings › Status lamps
+- The full signal chain in a popover from the lamp
 - Internet-radio display, track *x* of *y*, and the current lyric line under the track details
-- Album art can be optionally replaced by a scene visualizer, chosen from the scene picker
+- Album art can be optionally replaced by a scene visualizer, selected from the scene picker
 - Album art (or scene visualizer) can be resized
-- Fullscreen Display mode (<kbd>F</kbd>): chrome-free full screen for a desk or shelf display, with the album art or a scene
+- Fullscreen Display mode (<kbd>F</kbd>), for a display on a desk or shelf, with the album art or a scene
 - Info: what the streamer reports about the current stream (codec, sample rate, bit depth, bitrate, queue position), for any source: local media, radio, AirPlay
 - The artist and album names link to the Library (local media only)
+- While the streamer is in standby, Now Playing offers to pick up where you left off: the same track from the same point, the same station or the same source
 
 ### Audio analysis
 
-- Waveform of the playing track in the seek bar and under the artwork on Now Playing, generated from the audio file on the local media server the first time the track plays (local media only; the plain seek bar returns for radio and tracks without a waveform). Can be disabled in Settings › Appearance (on by default)
-- Dynamic range for every analyzed track and album, following the DR database's TT-DR procedure: shown beside the format badges on Now Playing, in track rows in the Library, Queue, Playlists and Favorites, and in the album header once the whole album has been analyzed
-- Analyze audio on any album from its menu, or on the tracks shown in the Tracks view; albums with a dynamic range can be filtered and sorted by it
+- A waveform of the playing track in the seek bar and under the artwork on Now Playing (local media only). Can be disabled in Settings › Appearance (on by default)
+- Dynamic range for every analyzed track and album (same as the DR database's TT-DR value), shown on Now Playing, in track rows and in album headers
+- Analyze audio on any album from its menu, or on the tracks shown in the Tracks view
 - Peak and loudness details under the Now Playing waveform, and a Dynamic range row in Info
 
 ### Scenes
 
-- Thirteen scenes drawn from the playing track's audio analysis and lyrics: Ball Pit, Contour, Ink, Orbit, Piano Roll, Refrain, Sea, Sleeve, Terminal, Terrain, Tide, Tunnel and Type, plus Shuffle, which chooses a different scene for every track (or album)
-- Chosen from a picker on the Now Playing art box or in Fullscreen Display mode
-- Every scene comes with an explanation of what you see and what it means, and its own settings
-- The shared settings (across all scenes) include: a simulated cathode tube finish, toggling the corner title and clock display, drop sensitivity, and a sync nudge
+- Fifteen scenes: Ball Pit, Contour, Hi-Fi, Ink, Orbit, Piano Roll, Refrain, Sea, Sleeve, Terminal, Terrain, Tide, Tunnel, Turntable, and Type, plus Shuffle, which selects a different scene for every track (or album)
+- Hi-Fi (the lyrics on a glowing stereo display) and Turntable (the album on a turntable) show for every source, including radio and AirPlay
+- Selected from a picker on the Now Playing album art or in Fullscreen Display mode
+- Scenes come with an explanation of what you see and what it means, and their own settings
+- Settings shared by all scenes: a simulated cathode tube finish, the corner title and clock, drop sensitivity, and a playback sync nudge
 - Lyrics are optionally displayed in scenes that can show them
-- Local media only: a scene shows once the playing track has been analyzed; radio, AirPlay and other sources show the album art
+- The other scenes need local media: each shows once the playing track has been analyzed, and radio, AirPlay and other sources show the album art
 
 ### Library
 
 - Browse every local UPnP media server and the streamer's own USB storage
-- A local, rebuildable index: search as you type, and <kbd>⌘F</kbd> searches every library at once, grouped by server
-- Artists, Albums and Tracks views pooling all sources into one collection, with genre, decade, format (codec, lossless, hi-res), dynamic range and albums ⇄ compilations filters and sorting; the Albums view as cards or rows
+- A local index for fast searching as you type
+- <kbd>⌘F</kbd> searches every library at once, grouped by server
+- Artists, Albums and Tracks views combining every library into one collection, with filters for genre, decade, format (codec, lossless, hi-res), dynamic range, and albums or compilations
+- The Albums view can be shown as cards or rows
 - The Artists view shows your artists, the selected artist's albums, and the selected album's tracks
-- The Tracks view lists every track in every library; narrow it with the filters and play the whole narrowed list
-- Artist and album names link to the Library from every track row: the Library, Queue, Playlists, Favorites, History, Search and Now Playing
-- Albums stay intact: featured guests stay in the album, compilations sit under Various Artists, multi-disc sets show disc dividers, and multi-volume box sets collapse to one album with a volume selector; format and size in every album header
-- Info on any album, track or artist: performers, album artist, composers, disc and track numbers, format, size, and source ids, as the media server reports them; copy as JSON
+- The Tracks view lists every track in every library, and the filtered list can be played as a whole
+- Artist and album names in track rows link to the Library
+- Albums with featured artists stay together, and compilations are listed under Various Artists
+- Multi-disc albums show disc dividers, and a multi-volume set is shown as one album with a volume selector
+- Album headers show the album's format and size
+- Info on any album, track or artist, showing everything the local media server reports, which can be copied as JSON
 - Play now, play next, append, or replace
 - Select several tracks (<kbd>⌘</kbd>-click, <kbd>⇧</kbd>-click) and queue them, heart them or add them to a playlist together
 - Drag tracks, or an album, onto Queue, Playlists or Favorites in the navigation panel
 - Albums with no artwork on the local media server get a cover from the Cover Art Archive (can be disabled in Settings)
-- Album art from servers that don't support image resizing are cached on your computer, with the cache clearable in Settings › Libraries
+- Album art from local media servers that can't resize images is cached on your computer (clearable in Settings › Libraries)
 - Save an album, a track, or the whole queue to one of the streamer's preset slots
-- Open in Library from the queue, favorites, playlists, History and the Info panel: lands on the track's album with the track highlighted
-- <kbd>Backspace</kbd> goes up a level; filters are remembered per folder
+- Open in Library from the queue, favorites, playlists, History, and the Info panel navigates to the track's album, with the track highlighted
+- <kbd>Backspace</kbd> goes up a level
+- Filters are remembered per folder
 - The library index is checked for changes when the app connects and is automatically kept current
 
 ### Radio
@@ -271,14 +282,15 @@ tools the Home Assistant automation needs, and keep TastyTunes running.
 ### Favorites
 
 - Stations, albums and tracks, hearted from rows, cards or Now Playing
-- Favorites key on content definition, so they survive a media server re-indexing
+- Favorites keep working when a local media server re-indexes
 
 ### Playlists
 
-- Ordered collections of tracks, stored locally: built from any track the app shows, or captured whole from the queue
-- Entries key on content definition, so a playlist survives a media server re-indexing
-- Playing one replaces the queue a track at a time, with progress and a cancel; tracks that can't be found are listed rather than dropped silently
-- A playlist whose contents match the live queue is marked as such
+- Ordered collections of tracks, kept on your computer, built from any track or saved from the queue
+- Playlists keep working when a local media server re-indexes
+- Playing a playlist replaces the queue, with its progress shown and a way to cancel
+- Tracks that can't be found are listed once the playlist has loaded
+- A playlist that matches the current queue is marked
 - Reorder by drag or keyboard, rename, and delete with undo
 
 ### Transport & volume
@@ -286,67 +298,83 @@ tools the Home Assistant automation needs, and keep TastyTunes running.
 - Play, pause, stop, next, previous, seek, scrub; repeat and shuffle
 - Only the controls the streamer itself reports (based on source) are enabled
 - Pre-amp mode (absolute volume) and Control Bus mode (nudge), mute, and an optional volume limit
-- Scroll-wheel volume on the volume cluster and the mini player
+- Scroll-wheel volume on the volume control and the mini player
 
 ### Queue
 
 - View, jump, drag-to-reorder, remove, clear
 - Multi-select with <kbd>⌘</kbd>-click and <kbd>⇧</kbd>-click (<kbd>⌘A</kbd> for everything): the selected tracks can be moved, removed, hearted or added to a playlist together, and a drag moves the whole selection
-- Cards, rows and album-grouped layouts; follow mode keeps the playing track in view
+- Cards, rows and album-grouped layouts
+- Follow mode keeps the playing track in view
 
 ### Presets
 
 - All 99 hardware slots: recall, delete, drag-to-reorder; use keys <kbd>1</kbd>–<kbd>9</kbd> for immediate recall
-- Per-preset volume: each preset can carry its own volume level, applied on recall
+- Per-preset volume: each preset can keep its own volume level, applied when it's recalled
 - A preset broken by a media server re-indexing is flagged in place, and can be repaired with a click
 
 ### Tone, EQ & device
 
-- Seven-band EQ, tilt, and balance: changes apply live while dragging, with saveable presets (based on streamer model)
+- Seven-band EQ, tilt and balance, with saveable presets (based on streamer model)
 - Display brightness, standby mode, and auto power-down, where the streamer supports them
 
 ### Sources
 
 - One-click switching across every source the streamer exposes
 
+### CD
+
+With Cambridge Audio's Evo CD transport (on an Evo streaming amplifier):
+
+- The disc's tracks are listed on the Queue screen, beside the Media Library queue
+- Track names come from MusicBrainz when Liner notes is on in Settings › Connections
+- Now Playing shows track *x* of *y* while a disc plays
+
 ### Lyrics
 
-- Fetched from LRCLIB; synced lyrics are highlighted and follow the current line, and clicking a line seeks there
-- Shown in three locations: a full panel showing all track lyrics in Now Playing, an inline line under the track details also in Now Playing, and in the Fullscreen Display mode
-- Falls back to plain text, says why when there's nothing to show (instrumentals, radio), and can be force-refreshed
+- Synced lyrics from LRCLIB follow the current line
+- Clicking a line seeks there
+- Shown in a full panel on Now Playing, as a single line under the track details, and in Fullscreen Display mode
+- Plain lyrics when synced lyrics aren't available
 
-### Artist & album context
+### Liner notes
 
-- A short artist bio and album facts (year, label, genres, credits) in a side panel, from MusicBrainz and Wikipedia, with attribution links
-- Lookups cache to disk (with local storage caps, clearable in Settings)
+- A short artist biography and album facts (year, label, genres, credits), from MusicBrainz and Wikipedia, with a link to each source
+- Notes are cached on your computer (clearable in Settings)
 
 ### Scrobbling
 
-- ListenBrainz: a listen submits only after real played time (half the track or four minutes)
-- Paused time doesn't count and seeking doesn't advance it; short tracks and radio never scrobble
+- ListenBrainz: a listen is submitted after half the track or four minutes of playing
+- Short tracks and radio aren't scrobbled
 - Failed submissions are retried until successful
 
 ### History
 
-- One screen (<kbd>H</kbd>) with five views on a rail: Recent, Timeline, Stats, Rediscover and Elsewhere; when the record holds more than one streamer, every view can be narrowed to one
-- Recent: a capped local log (200 entries, clearable) of tracks and stations; station tracks are also logged when announced by the station
-- Timeline: every play in the listening record, grouped into listening sessions by day with a month rail, or shown play by play; filters for source, period and listens only
-- Stats for this week, this month, this year or all time, stepping back to any earlier week, month or year: plays and listening time, a listening calendar, most played albums, artists, tracks and stations, hours by source and by quality, a weekday by hour grid, and what was started from a preset or a playlist; Save image draws the period shown as a picture
-- Rediscover: albums worth coming back to, from the record and your library: started and never finished, more from the artists you play, not heard in a while, and never played; each section grows a few rows at a time, and its heading stays at the top while you scroll and takes you back to its start
-- Elsewhere: the artists you met away from the library, through AirPlay, a cast or a streaming service, or on internet radio, with whether your library holds them; a row opens to the tracks heard and, with artist context on, the artist's summary
-- Listening record: a local log of what plays and for how long (local media, radio, AirPlay and other sources), kept in plain JSON Lines files on your computer, one per year; a play is recorded once it ends, if it played for at least 30 seconds. Export or clear it in Settings › History; can be disabled (on by default). The file format is documented at [tastytunes.app/listening-record](https://tastytunes.app/listening-record/)
+- One screen (<kbd>H</kbd>) with five views: Recent, Timeline, Stats, Rediscover, and Elsewhere
+- With more than one streamer, every view can be filtered to a single streamer
+- Recent: the last 200 tracks and stations played (clearable), including the tracks a station announces
+- Timeline: every play in the listening record, grouped into listening sessions by day, or shown play by play
+- The Timeline can be filtered by source, period and listens only
+- Stats for this week, this month, this year, or all time, stepping back to any earlier week, month or year: plays, listening time, the most played albums, artists and tracks, and much more
+- Stats can be exported to an image on disk
+- Rediscover: albums worth coming back to: started and never finished, more from the artists you play, not heard in a while, and never played
+- Elsewhere: the artists you heard away from the library, through AirPlay, a cast or a streaming service, or on internet radio, with whether your library includes them; a row opens to the tracks heard and, with Liner notes on, the artist's summary
+- Listening record: a log of what plays and for how long (local media, radio, AirPlay, and other sources), kept on your computer in plain JSON Lines files, one per year
+- A play is recorded once it ends, if it played for at least 30 seconds
+- The listening record can be exported, cleared or disabled in Settings › History (on by default)
+- Its file format is documented at [tastytunes.app/listening-record](https://tastytunes.app/listening-record/)
 - AI agents can read the listening record through the MCP server's history tools: what played, when, and for how long, including "on this day"
 
 ### Automation
 
-- Sleep timer: 15 minutes to 2 hours, or end of track; pause or standby, with an optional volume fade-out (pre-amp mode); keeps running with the window closed, and survives a system sleep
+- Sleep timer: 15 minutes to 2 hours, or end of track, then pause or standby, with an optional volume fade-out (pre-amp mode)
 - Schedules: wake the streamer to a preset at a chosen volume, fading in, or send it to standby, per weekday (schedules only trigger while the app is running)
-- A wake schedule missed while the computer was asleep is offered on waking rather than run late: once, within ten minutes of the missed time, and only if nothing is already playing
+- A wake schedule missed while the computer was asleep is offered when the computer wakes, instead of running late
 
 ### Menu bar / system tray
 
 - An optional icon in the menu bar (macOS) or system tray (Windows, Linux), on by default, can be disabled in Settings
-- On macOS and Windows, clicking the icon opens a compact panel: now playing with transport and volume, plus queue, presets, playlists and Recent; picking something while the streamer sleeps wakes it first
+- On macOS and Windows, clicking the icon opens a compact panel: now playing with transport and volume, plus queue, presets, playlists and Recent
 - On Windows and Linux, closing the main window keeps TastyTunes running in the tray; Quit is in the icon's menu
 - On Linux there's no panel, just the icon and its menu
 
@@ -354,19 +382,22 @@ tools the Home Assistant automation needs, and keep TastyTunes running.
 
 - Mini player: frameless, always on top, remembers its position
 - Command palette (<kbd>⌘K</kbd>): transport, sources, presets by name, screens, and much more
-- Keyboard controls throughout: single keys jump screens, <kbd>space</kbd> toggles play, arrows seek and nudge volume, <kbd>/</kbd> filters lists; <kbd>?</kbd> shows the controls overlay
+- Keyboard controls throughout: single keys open specific screens, <kbd>space</kbd> toggles play, arrows seek and nudge volume, <kbd>/</kbd> filters lists; <kbd>?</kbd> shows the controls overlay
 - Back and forward through everywhere you've been, like a browser: <kbd>⌘←</kbd>/<kbd>⌘→</kbd> (Alt+arrows on Windows and Linux), the mouse side buttons, or View › Back/Forward, which also works from inside a text box (<kbd>⌘[</kbd>/<kbd>⌘]</kbd> on macOS)
-- Scroll position remembered in Library, Search and Playlists screens
-- Every reorderable list (queue, presets, playlists, the nav rail) reorders by keyboard as well as by drag
+- Scroll positions are remembered in the Library, Search and Playlists
+- Every reorderable list (queue, presets, playlists, the navigation panel) can be reordered by keyboard as well as by drag
+- Keyboard focus is shown with a visible ring
+- Notices are announced to screen readers
 - Undo for queue edits, favorites, playlist additions and schedule deletions, from the notice that follows each change
-- OS media keys, and a track-change notification with artwork when the window isn't focused
+- OS media keys
+- A track-change notification with artwork when the window isn't focused
 
 ### Appearance
 
-- Dark and light themes; optional per-album accent
+- Dark and light themes
 - Reduced motion: on, off, or follow the system setting
-- Card size and grid fill, cards ⇄ rows per screen, resizable side panels
-- The left nav can be reordered by drag or keyboard, and individual items hidden
+- Card size, cards or rows per screen, and resizable side panels
+- The navigation panel can be reordered, and screens hidden from it
 
 ### Transparency
 
@@ -375,7 +406,7 @@ tools the Home Assistant automation needs, and keep TastyTunes running.
 
 ### Updates & packaging
 
-- Update check on launch and every four hours; the self-updater downloads nothing until you click Download, installs nothing until you click Restart
+- An update is downloaded only when you click Download, and installed when you click Restart
 - Signed and notarized universal macOS builds (Intel and Apple Silicon); one signed Windows installer covering x64 and arm64 (native on Windows-on-ARM); Linux AppImages for x64 and arm64, including 64-bit Raspberry Pi OS
 
 ## What leaves your machine
@@ -387,9 +418,10 @@ The complete list:
 | Streamer control | your streamer, on your LAN | always (it's the app) |
 | Library browsing | your media servers, on your LAN | always (it's the app) |
 | Lyrics | lrclib.net | on by default; toggleable |
-| Artist & album context | musicbrainz.org · wikidata.org · wikipedia.org | on by default; toggleable |
+| Liner notes | musicbrainz.org · wikidata.org · wikipedia.org | on by default; toggleable |
 | Missing album art | musicbrainz.org · coverartarchive.org | on by default; toggleable |
 | Radio directory | radio-browser.info | when you search or browse Radio |
+| Station logos | each station's own website or image host | when a station is shown |
 | Update check | github.com | on by default; toggleable |
 | Scrobbles | listenbrainz.org | off until you add your token |
 

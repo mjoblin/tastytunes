@@ -11,7 +11,8 @@
  * The reference's quirks are load-bearing and reproduced deliberately —
  * validation (dev/validate-dr.mjs in ops) demands exact integer agreement
  * with the reference source running on identical samples:
- *  - blocks are 60 samples WIDER than 3s at exactly 44100 Hz (delta_fs);
+ *  - a block is 3 × (rate + 60) samples at exactly 44100 Hz (delta_fs), so 180 samples
+ *    wider than 3 s;
  *  - a tail row is always allocated and stays zero when the track divides
  *    evenly into blocks — and those zeros take part in the sorts;
  *  - the tail slice DROPS THE FINAL SAMPLE (the reference's Y[a : N-1]);

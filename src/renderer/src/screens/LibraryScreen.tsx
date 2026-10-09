@@ -1416,8 +1416,8 @@ export function LibraryScreen(): React.JSX.Element {
                 : analysisProgress.album}
               ”
               {analysisProgress.total > 0 &&
-                ` · ${analysisProgress.done}/${analysisProgress.total}`}
-              {analysisProgress.queued > 0 && ` · +${analysisProgress.queued} queued`}
+                `${FACT_SEP}${analysisProgress.done}/${analysisProgress.total}`}
+              {analysisProgress.queued > 0 && `${FACT_SEP}+${analysisProgress.queued} queued`}
             </div>
           )}
         </div>
@@ -1761,13 +1761,13 @@ export function LibraryScreen(): React.JSX.Element {
                         {doorsState === "building"
                           ? "Indexing…"
                           : doorsState === "failed"
-                            ? "Couldn't index · Retry"
+                            ? `Couldn't index${FACT_SEP}Retry`
                             : buildingCount > 0
                               ? door.count > 0
-                                ? `${fmtCount(door.count)} ${door.noun} · indexing…`
+                                ? `${fmtCount(door.count)} ${door.noun}${FACT_SEP}indexing…`
                                 : "Indexing…"
                               : door.count > 0
-                                ? `${fmtCount(door.count)} ${door.noun} · every library`
+                                ? `${fmtCount(door.count)} ${door.noun}${FACT_SEP}every library`
                                 : "Across every library"}
                       </div>
                     </div>
@@ -1875,7 +1875,7 @@ export function LibraryScreen(): React.JSX.Element {
                             {building ? (
                               <span className="motion-safe:animate-pulse">Indexing…</span>
                             ) : failed ? (
-                              "Couldn't index · Retry"
+                              `Couldn't index${FACT_SEP}Retry`
                             ) : state === "ready" && st && stale ? (
                               <button
                                 data-library-source-build
@@ -1893,7 +1893,7 @@ export function LibraryScreen(): React.JSX.Element {
                                 Check for changes
                               </button>
                             ) : state === "ready" && st ? (
-                              `Indexed · ${fmtCount(st.albums)} ${st.albums === 1 ? "album" : "albums"}`
+                              `Indexed${FACT_SEP}${fmtCount(st.albums)} ${st.albums === 1 ? "album" : "albums"}`
                             ) : unindexed ? (
                               <button
                                 data-library-source-build

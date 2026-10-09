@@ -18,14 +18,16 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
+  AlertTriangle,
   Crosshair,
   Footprints,
   LayoutGrid,
+  Library,
   Loader2,
   Play,
   Radio,
+  RadioTower,
   Rows3,
-  AlertTriangle,
   Trash2,
   Volume2,
 } from "lucide-react";
@@ -35,7 +37,7 @@ import { tt } from "@/api";
 import { useStore } from "@/store";
 import { useLitPresets } from "@/hooks/useLitPresets";
 import { Eqbars } from "@/components/media/Eqbars";
-import { EmptyState } from "@/components/chrome/EmptyState";
+import { EmptyActions, EmptyState } from "@/components/chrome/EmptyState";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { flashTarget, scrollToWithContext } from "@/lib/scroll";
 import { DND_ACCESSIBILITY, lockVertical } from "@/lib/dnd";
@@ -71,6 +73,7 @@ export function PresetsScreen(): React.JSX.Element {
   const cards = presetsLayout === "cards";
   const filter = useStore((s) => s.screenFilters.presets);
   const setScreenFilter = useStore((s) => s.setScreenFilter);
+  const setScreen = useStore((s) => s.setScreen);
   const allItems = (presets?.presets ?? []).filter((p) => p.id != null);
   // type/class are hidden fields but filterable: "radio" / "media" work —
   // as is the locally-recorded artist (the wire has no artist field; TT
@@ -309,7 +312,14 @@ export function PresetsScreen(): React.JSX.Element {
         icon={Radio}
         title="No presets"
         caption="Save radio stations or albums to a preset slot from their menus anywhere in the app and they'll appear here for one-click recall."
-      />
+      >
+        <EmptyActions
+          actions={[
+            { label: "Library", icon: Library, keyHint: "I", onClick: () => setScreen("library") },
+            { label: "Radio", icon: RadioTower, keyHint: "R", onClick: () => setScreen("radio") },
+          ]}
+        />
+      </EmptyState>
     );
   }
 
