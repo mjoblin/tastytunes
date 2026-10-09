@@ -1,11 +1,10 @@
 // Orchestrates discovery, the SMOIP socket, command dispatch, and the push relay
 // to renderer windows. Mirrors PunyTunes' StreamMagicManager, translated to Node.
 
-import { BrowserWindow, Notification, nativeImage, webContents } from "electron";
+import { webContents } from "electron";
 import { type PushMessage, type Snapshot, type StreamerCommand } from "@shared/ipc";
 import {
   presetVolumeKey,
-  sleepTrackKey,
   type ConnectionState,
   type DiscoveredDevice,
   type FirmwareStatus,
@@ -17,15 +16,12 @@ import {
   type SleepTimer,
   FRAME_RING_SIZE,
   LOG_RING_SIZE,
-  VOLUME_FADE_MS,
 } from "@shared/model";
 import {
   type ContentRef,
   type KnownDevice,
-  type Playlist,
   type PlaylistActivation,
   type QueueRestoreResult,
-  type RecentTrack,
   KNOWN_DEVICES_MAX,
   RECONNECT_GRACE_MS,
   type HeldState,
@@ -48,47 +44,26 @@ import type {
   ZonePosition,
   ZoneState,
 } from "@shared/smoip";
-import {
-  EQ_GAIN_MAX,
-  EQ_GAIN_MIN,
-  isRadioMetadata,
-  radioTrackTitle,
-  trackTitle,
-} from "@shared/smoip";
 import { discoverStreamers } from "./discovery";
 import { SmoipSocket } from "./smoipSocket";
 import * as smoipHttp from "./smoipHttp";
 import { getSettings, updateSettings } from "../data/persist";
-import { clearRecents, getRecents, recentKey, recordRecent, restoreRecents } from "../data/recents";
-import { CAPTURE_DELAY_MS, captureRecentArt, decorateRecents } from "../lookups/recentArt";
+import { getRecents } from "../data/recents";
+import { decorateRecents } from "../lookups/recentArt";
 import { listeningRecord } from "../data/listeningRecord";
-import { addFavorite, getFavorites, removeFavorite, updateFavorite } from "../data/favorites";
-import {
-  appendToPlaylist,
-  createPlaylist,
-  deletePlaylist,
-  getPlaylists,
-  renamePlaylist,
-  restorePlaylist,
-  setPlaylistItems,
-} from "../data/playlists";
+import { getFavorites } from "../data/favorites";
+import { getPlaylists } from "../data/playlists";
 import { QueueOps } from "./queueOps";
+import { Collections } from "./collections";
+import { commandFrames } from "./commandFrames";
+import { SleepCountdown } from "./sleepCountdown";
+import { TrackNotifier } from "./trackNotifier";
+import { VolumeFader } from "./volumeFader";
 import { heldFor, heldFrom, saveHeld } from "./heldState";
 import type { ResolvedContent } from "../media/resolveContent";
 import { scrobbler } from "../lookups/scrobbler";
-import { getNetRequests, loggedFetch } from "../netlog";
+import { getNetRequests } from "../netlog";
 import { errorMessage } from "@shared/guards";
-
-/**
- * The user_eq_bands write string: "<idx>,<freq>,<filter>,<gain>,<q>", blank
- * fields = keep, bands pipe-delimited. Gain-only writes, exactly like the
- * official app ("0,,,3.0,|1,,,1.2,|…"); gains clamp to the official client's
- * −6..+3 dB envelope (the firmware itself stores anything — probed live).
- */
-const bandString = (bands: [number, number][]): string =>
-  bands
-    .map(([i, g]) => `${i},,,${Math.max(EQ_GAIN_MIN, Math.min(EQ_GAIN_MAX, g)).toFixed(1)},`)
-    .join("|");
 
 interface Cache {
   playState: ZonePlayState | null;
@@ -135,18 +110,8 @@ export class DeviceManager {
   private frames: FrameEntry[] = [];
   private logs: LogEntry[] = [];
   private lastHealthCheckAt = 0;
-  private currentTrackKey: string | null = null;
   private lastSourceId: string | null = null;
   private queuePresetsTimer: NodeJS.Timeout | null = null;
-  private sleep: SleepTimer | null = null;
-  private sleepTimeout: NodeJS.Timeout | null = null;
-  /** Volume fade (sleep fade-out / schedule fade-in). Pre-amp mode only. */
-  private fadeTick: NodeJS.Timeout | null = null;
-  private fadeStartTimeout: NodeJS.Timeout | null = null;
-  /** The level to put back after a sleep fade's action fires (null = no fade ran). */
-  private fadeRestore: number | null = null;
-  /** True while the fade engine itself is writing volume — its own commands must not cancel it. */
-  private fadeWriting = false;
   /** Connected to the in-process demo device (labels the connection in the UI). */
   private demo = false;
   /** See Snapshot.lastRecalledPresetId — in-app recalls only, content-checked by consumers. */
@@ -284,10 +249,10 @@ export class DeviceManager {
     // A recall remembered from one device means nothing on another.
     this.setRecalledPreset(null);
     // A timer armed for one device must never act on another.
-    if (this.sleep && this.socket && this.socket.host !== host) this.setSleep(null);
+    if (this.sleeper.current && this.socket && this.socket.host !== host) this.setSleep(null);
     this.socket?.close();
     this.cache = emptyCache();
-    this.currentTrackKey = null;
+    this.trackNotifier.reset();
     this.lastSourceId = null;
     // The demo device passes remember:false — its ephemeral loopback port
     // must never become the reconnect target of the next launch.
@@ -337,7 +302,7 @@ export class DeviceManager {
   }
 
   disconnect(): void {
-    if (this.sleep) this.setSleep(null);
+    if (this.sleeper.current) this.setSleep(null);
     this.socket?.close();
     this.socket = null;
     this.cache = emptyCache();
@@ -357,173 +322,50 @@ export class DeviceManager {
   }
 
   shutdown(): void {
-    if (this.sleepTimeout) clearTimeout(this.sleepTimeout);
+    this.sleeper.stop();
     this.socket?.close();
     this.socket = null;
   }
 
   // ---------------------------------------------------------------- volume fade
 
-  private fadeMs(): number {
-    const n = Number(process.env["TASTYTUNES_FADE_MS"]);
-    return Number.isFinite(n) && n > 0 ? n : VOLUME_FADE_MS;
-  }
+  /** The volume fade (sleep fade-out, schedule fade-in), pre-amp mode only; see volumeFader.ts. */
+  private readonly fader = new VolumeFader({
+    level: () => this.preAmpVolume(),
+    write: (percent) => this.command({ type: "setVolumePercent", percent }),
+    connected: () => this.connection.phase === "connected",
+    log: (text) => this.log("info", "sleep", text),
+  });
 
   /** Current pre-amp level, or null when the device is in control-bus mode (no fades there). */
   preAmpVolume(): number | null {
     return this.cache.zoneState?.volume_percent ?? null;
   }
 
-  /** Stop any fade. `restore` puts the pre-fade level back (a cancelled fade-out); a user taking over passes false. */
-  private cancelFade(restore: boolean): void {
-    if (this.fadeTick) clearInterval(this.fadeTick);
-    this.fadeTick = null;
-    if (this.fadeStartTimeout) clearTimeout(this.fadeStartTimeout);
-    this.fadeStartTimeout = null;
-    const level = this.fadeRestore;
-    this.fadeRestore = null;
-    if (restore && level != null && this.connection.phase === "connected") {
-      void this.fadeVolumeWrite(level);
-    }
-  }
-
-  private async fadeVolumeWrite(percent: number): Promise<void> {
-    this.fadeWriting = true;
-    try {
-      await this.command({ type: "setVolumePercent", percent });
-    } finally {
-      this.fadeWriting = false;
-    }
-  }
-
-  /** Ramp the pre-amp volume to `to` over `ms`, one step per second. Resolves when done or cancelled. */
-  private rampVolume(to: number, ms: number): Promise<void> {
-    const from = this.preAmpVolume();
-    if (from == null || from === to) return Promise.resolve();
-    if (this.fadeTick) clearInterval(this.fadeTick);
-    const steps = Math.max(3, Math.round(ms / 1000));
-    const stepMs = ms / steps;
-    let i = 0;
-    this.log("info", "sleep", `fade ${from}% → ${to}% over ${Math.round(ms / 1000)}s`);
-    return new Promise((resolve) => {
-      this.fadeTick = setInterval(() => {
-        i += 1;
-        const level = Math.round(from + ((to - from) * i) / steps);
-        void this.fadeVolumeWrite(level);
-        if (i >= steps) {
-          if (this.fadeTick) clearInterval(this.fadeTick);
-          this.fadeTick = null;
-          resolve();
-        }
-      }, stepMs);
-    });
-  }
-
   /** A wake schedule's fade-in: ramp from the pre-set low level up to `target`. */
-  async fadeInTo(target: number): Promise<void> {
-    this.fadeRestore = null;
-    await this.rampVolume(target, this.fadeMs());
+  fadeInTo(target: number): Promise<void> {
+    return this.fader.fadeInTo(target);
   }
 
   // ---------------------------------------------------------------- sleep timer
 
-  /**
-   * Arm or clear the sleep timer. Lives here (not in a renderer) so it
-   * survives the window closing on macOS. Node timers stall during system
-   * sleep, so checkSleepTimer() re-evaluates the absolute deadline on resume.
-   */
+  /** The sleep timer, in main so it survives the window closing; see sleepCountdown.ts. */
+  private readonly sleeper = new SleepCountdown({
+    fader: this.fader,
+    connected: () => this.connection.phase === "connected",
+    command: (cmd) => this.command(cmd),
+    push: (msg) => this.push(msg),
+    log: (text) => this.log("info", "sleep", text),
+  });
+
+  /** Arm or clear the sleep timer. */
   setSleep(sleep: SleepTimer | null): void {
-    this.sleep = sleep;
-    if (this.sleepTimeout) {
-      clearTimeout(this.sleepTimeout);
-      this.sleepTimeout = null;
-    }
-    if (sleep) {
-      this.log(
-        "info",
-        "sleep",
-        sleep.minutes != null
-          ? `armed: ${sleep.action} in ${sleep.minutes} min`
-          : `armed: ${sleep.action} at end of track`,
-      );
-    }
-    // Arming (or re-arming) replaces any fade in flight; clearing restores the level.
-    this.cancelFade(sleep == null);
-    if (sleep?.firesAt != null) {
-      const ms = sleep.firesAt - Date.now();
-      if (ms <= 0) {
-        this.fireSleep();
-        return;
-      }
-      this.sleepTimeout = setTimeout(() => this.fireSleep(), ms);
-      // Countdown fade-out: ramp to near-silence over the last stretch, pre-amp
-      // mode only, honoring the setting. End-of-track timers never fade (no
-      // advance warning), and a timer shorter than the fade ramps from now.
-      if (getSettings().sleepFade && this.preAmpVolume() != null) {
-        // End the ramp a beat BEFORE the action so the last step (near
-        // silence) lands instead of racing fireSleep's cleanup.
-        const fadeMs = Math.min(this.fadeMs(), Math.max(0, ms - 1000));
-        if (fadeMs > 0) {
-          this.fadeStartTimeout = setTimeout(
-            () => {
-              this.fadeRestore = this.preAmpVolume();
-              void this.rampVolume(1, fadeMs);
-            },
-            Math.max(0, ms - fadeMs - 1000),
-          );
-        }
-      }
-    }
-    this.push({ kind: "sleep", sleep: this.sleep });
+    this.sleeper.setSleep(sleep);
   }
 
   /** Fire a countdown that came due while the system was asleep (on resume). */
   checkSleepTimer(): void {
-    if (this.sleep?.firesAt != null && Date.now() >= this.sleep.firesAt) this.fireSleep();
-  }
-
-  private fireSleep(): void {
-    const action = this.sleep?.action;
-    this.sleep = null;
-    if (this.sleepTimeout) {
-      clearTimeout(this.sleepTimeout);
-      this.sleepTimeout = null;
-    }
-    this.push({ kind: "sleep", sleep: null });
-    // Only touch the streamer while connected — a timer that expires after a
-    // dropout should quietly clear, never pause on reconnect.
-    if (this.fadeTick) clearInterval(this.fadeTick);
-    this.fadeTick = null;
-    if (this.fadeStartTimeout) clearTimeout(this.fadeStartTimeout);
-    this.fadeStartTimeout = null;
-    const restore = this.fadeRestore;
-    this.fadeRestore = null;
-    if (action && this.connection.phase === "connected") {
-      this.log("info", "sleep", `fired: ${action}`);
-      // Pause first either way, put the faded level back while nothing plays
-      // (so tomorrow's first press isn't a whisper), then standby if asked.
-      void (async () => {
-        await this.command({ type: "pause" });
-        if (restore != null) {
-          await new Promise((r) => setTimeout(r, 400));
-          await this.fadeVolumeWrite(restore);
-        }
-        if (action === "standby") {
-          await new Promise((r) => setTimeout(r, 400));
-          await this.command({ type: "power", power: "NETWORK" });
-        }
-      })();
-    }
-  }
-
-  /** End-of-track sleep: fire when the armed track gives way or playback ends. */
-  private sleepBoundaryCheck(ps: ZonePlayState): void {
-    const sleep = this.sleep;
-    if (!sleep || sleep.minutes != null) return;
-    const key = sleepTrackKey(ps);
-    const advanced = sleep.trackKey != null && key != null && key !== sleep.trackKey;
-    const ended = ps.state === "stop" || ps.state === "no_signal";
-    if (advanced || ended) this.fireSleep();
+    this.sleeper.checkSleepTimer();
   }
 
   // ------------------------------------------------------------------- commands
@@ -685,8 +527,7 @@ export class DeviceManager {
     // fade — cancel it without restoring (their level wins). The fade engine's
     // own writes are flagged and pass through.
     if (
-      !this.fadeWriting &&
-      (this.fadeTick != null || this.fadeStartTimeout != null) &&
+      this.fader.interruptible &&
       (cmd.type === "setVolumePercent" ||
         cmd.type === "setVolumeStep" ||
         cmd.type === "volumeStepChange" ||
@@ -695,7 +536,7 @@ export class DeviceManager {
         cmd.type === "play" ||
         cmd.type === "togglePlayback")
     ) {
-      this.cancelFade(false);
+      this.fader.cancelFade(false);
     }
     const socket = this.socket;
     const host = socket?.host;
@@ -725,56 +566,23 @@ export class DeviceManager {
     // (refresh availability) or action=UPDATE (install). Updating the streamer's
     // firmware stays the user's job via the Cambridge Audio app or the
     // streamer's own web admin. Do not add a firmware check/install command here.
+    const frames = commandFrames(cmd, {
+      nowPlaying: this.cache.nowPlaying,
+      playState: this.cache.playState,
+      zoneState: this.cache.zoneState,
+      systemPower: this.cache.systemPower,
+      audioSpec: this.cache.audioSpec,
+      powerSpec: this.cache.powerSpec,
+      volumeLimitPercent: getSettings().volumeLimitPercent,
+    });
+    if (frames) {
+      for (const f of frames) socket.send(f.path, f.params);
+      return;
+    }
+    // what is not a plain socket write (commandFrames answers null for these)
     switch (cmd.type) {
-      // Cast-style sources (AirPlay live-proven 2026-07-20) advertise ONLY the
-      // toggle verb — now_playing controls say play_pause, never play/pause —
-      // and the firmware SILENTLY IGNORES the explicit verbs there. Honor the
-      // device's own controls contract: translate to toggle when the explicit
-      // verb isn't offered, guarded by current state so pause never resumes.
-      case "play": {
-        const controls = this.cache.nowPlaying?.controls ?? [];
-        if (!controls.includes("play") && controls.includes("play_pause")) {
-          if (this.cache.playState?.state === "play") return;
-          return socket.send("/zone/play_control", { action: "toggle" });
-        }
-        return socket.send("/zone/play_control", { action: "play" });
-      }
-      case "pause": {
-        const controls = this.cache.nowPlaying?.controls ?? [];
-        if (!controls.includes("pause") && controls.includes("play_pause")) {
-          if (this.cache.playState?.state !== "play") return;
-          return socket.send("/zone/play_control", { action: "toggle" });
-        }
-        return socket.send("/zone/play_control", { action: "pause" });
-      }
-      case "stop":
-        return socket.send("/zone/play_control", { action: "stop" });
-      case "togglePlayback":
-        return socket.send("/zone/play_control", { action: "toggle" });
-      case "nextTrack":
-        return socket.send("/zone/play_control", { skip_track: 1 });
-      case "previousTrack":
-        return socket.send("/zone/play_control", { skip_track: -1 });
-      case "seek":
-        return socket.send("/zone/play_control", {
-          position: Math.max(0, Math.round(cmd.positionSecs)),
-        });
-      case "playQueueId":
-        return socket.send("/zone/play_control", { queue_id: cmd.queueId });
       case "resumeHeld":
         return this.resumeHeld(socket);
-      case "setRepeat":
-        // FIRMWARE (live-probed 2026-09-18, the socket and HTTP alike): off and all set by
-        // name, but "one" by name answers 200 and lands on "all". Only the toggle reaches
-        // it, stepping all → one → off → all, so the way to one is an absolute "all" and
-        // then one toggle, two frames the streamer takes in order (from off they land on
-        // one). Already there: nothing to send, since the pair would flash through all.
-        if (cmd.mode !== "one") return socket.send("/zone/play_control", { mode_repeat: cmd.mode });
-        if (this.cache.playState?.mode_repeat === "one") return;
-        socket.send("/zone/play_control", { mode_repeat: "all" });
-        return socket.send("/zone/play_control", { mode_repeat: "toggle" });
-      case "setShuffle":
-        return socket.send("/zone/play_control", { mode_shuffle: cmd.mode });
       case "recallPreset": {
         this.setRecalledPreset(cmd.presetId);
         listeningRecord.openContext({
@@ -807,24 +615,6 @@ export class DeviceManager {
         }
         return;
       }
-      case "power":
-        // Re-sending ON to a powered-on streamer reboots it (PunyTunes' hard-won guard).
-        if (cmd.power === "ON" && this.cache.systemPower?.power === "ON") return;
-        return socket.send("/system/power", { power: cmd.power });
-      case "setMute":
-        return socket.send("/zone/state", { mute: cmd.mute });
-      case "setSource":
-        return socket.send("/zone/state", { source: cmd.sourceId });
-      case "setVolumeStep":
-        return socket.send("/zone/state", { volume_step: cmd.step });
-      case "setVolumePercent":
-        return socket.send("/zone/state", { volume_percent: this.clampVolume(cmd.percent) });
-      case "volumeStepChange": {
-        const limit = getSettings().volumeLimitPercent;
-        const current = this.cache.zoneState?.volume_percent;
-        if (cmd.delta > 0 && limit != null && current != null && current >= limit) return;
-        return socket.send("/zone/state", { volume_step_change: cmd.delta });
-      }
       case "queueDelete":
         return smoipHttp.queueDelete(host, cmd.id);
       case "queueClear":
@@ -843,55 +633,6 @@ export class DeviceManager {
         return this.refreshPresets(socket);
       case "streamRadio":
         return smoipHttp.streamRadio(host, cmd.url, cmd.name);
-      // ---- /zone/audio tone controls. One frame per logical control: writes
-      // are ATOMIC on the firmware (one bad field rejects the whole frame —
-      // the stranded-balance lesson from the 2026-07-19 probe). WS params are
-      // JSON, so the '+'-literal query-encoding trap doesn't apply here.
-      case "setUserEq":
-        // Boolean ON WRITE — the read returns {enabled, bands}; writing the
-        // object shape 400s with code 112.
-        return socket.send("/zone/audio", { zone: "ZONE1", user_eq: cmd.enabled });
-      case "setEqBandGain":
-        return socket.send("/zone/audio", {
-          zone: "ZONE1",
-          user_eq_bands: bandString([[cmd.index, cmd.gain]]),
-        });
-      case "setEqBands":
-        return socket.send("/zone/audio", {
-          zone: "ZONE1",
-          user_eq_bands: bandString(cmd.gains.map((g, i) => [i, g])),
-        });
-      case "setTiltEq":
-        return socket.send("/zone/audio", { zone: "ZONE1", tilt_eq: cmd.enabled });
-      case "setTiltIntensity":
-        return socket.send("/zone/audio", {
-          zone: "ZONE1",
-          tilt_intensity: this.clampSpec(cmd.intensity, this.cache.audioSpec?.tilt_eq),
-        });
-      case "setBalance":
-        return socket.send("/zone/audio", {
-          zone: "ZONE1",
-          balance: this.clampSpec(cmd.balance, this.cache.audioSpec?.balance),
-        });
-      // ---- §10 device controls (writes over the WS like the power command;
-      // ---- standby fields are partial writes to /system/power, so they never
-      // ---- carry `power` and can't trip the re-send-ON reboot guard)
-      case "setBrightness":
-        return socket.send("/system/display", { brightness: cmd.brightness });
-      case "setStandbyMode":
-        return socket.send("/system/power", { standby_mode: cmd.mode });
-      case "setAutoPowerDown": {
-        // Clamp to the probed spec range like balance/tilt — the UI only
-        // offers in-range presets, but the boundary shouldn't rely on that.
-        const r = this.cache.powerSpec?.auto_power_down;
-        const secs = Math.max(0, Math.round(cmd.seconds));
-        return socket.send("/system/power", {
-          auto_power_down:
-            r?.minimum != null && r?.maximum != null
-              ? Math.max(r.minimum, Math.min(r.maximum, secs))
-              : secs,
-        });
-      }
       case "zoneSavePreset":
         await smoipHttp.zoneSavePreset(host, cmd.slot);
         return this.refreshPresets(socket);
@@ -911,17 +652,6 @@ export class DeviceManager {
     if (limit != null && current != null && current > limit) {
       this.fire({ type: "setVolumePercent", percent: limit });
     }
-  }
-
-  private clampVolume(percent: number): number {
-    const limit = getSettings().volumeLimitPercent;
-    const capped = limit != null ? Math.min(percent, limit) : percent;
-    return Math.max(0, Math.min(100, Math.round(capped)));
-  }
-
-  /** Clamp an integer tone value to the spec's published range (fallback ±15). */
-  private clampSpec(value: number, range?: { minimum?: number; maximum?: number }): number {
-    return Math.max(range?.minimum ?? -15, Math.min(range?.maximum ?? 15, Math.round(value)));
   }
 
   /**
@@ -964,9 +694,12 @@ export class DeviceManager {
     switch (frame.path) {
       case "/zone/play_state":
         this.cache.playState = data as ZonePlayState;
-        this.trackChangeNotification(this.cache.playState);
-        this.recordRecentlyPlayed(this.cache.playState);
-        this.sleepBoundaryCheck(this.cache.playState);
+        this.trackNotifier.note(this.cache.playState);
+        this.collections.recordRecentlyPlayed(this.cache.playState, {
+          nowPlaying: this.cache.nowPlaying ?? null,
+          streamer: this.cache.systemInfo?.udn ?? null,
+        });
+        this.sleeper.boundaryCheck(this.cache.playState);
         scrobbler.onPlayState(this.cache.playState);
         listeningRecord.onPlayState(
           this.cache.playState,
@@ -1110,43 +843,8 @@ export class DeviceManager {
     setTimeout(() => void this.refreshPresets(socket), 500);
   }
 
-  /**
-   * OS notification when the track changes while the app is unfocused. The first
-   * play_state after a connect only seeds the key — no notification for it.
-   */
-  private trackChangeNotification(playState: ZonePlayState): void {
-    const md = playState.metadata;
-    const title = trackTitle(md) ?? md?.station ?? null;
-    if (!title) return;
-    const key = `${title}|${md?.artist ?? ""}`;
-    if (key === this.currentTrackKey) return;
-    const previous = this.currentTrackKey;
-    this.currentTrackKey = key;
-    if (previous === null) return;
-
-    if (!getSettings().notifications) return;
-    if (!Notification.isSupported()) return;
-    if (BrowserWindow.getAllWindows().some((w) => w.isFocused())) return;
-
-    const body = [md?.artist, md?.album].filter(Boolean).join(" — ");
-    void (async () => {
-      let icon;
-      try {
-        if (md?.art_url) {
-          const res = await loggedFetch("art", md.art_url, { signal: AbortSignal.timeout(2000) });
-          if (res.ok) icon = nativeImage.createFromBuffer(Buffer.from(await res.arrayBuffer()));
-        }
-      } catch {
-        // art is optional
-      }
-      new Notification({
-        title,
-        body,
-        silent: true,
-        ...(icon && !icon.isEmpty() ? { icon } : {}),
-      }).show();
-    })();
-  }
+  /** The OS notification for a track change while the app is unfocused; see trackNotifier.ts. */
+  private readonly trackNotifier = new TrackNotifier();
 
   // ------------------------------------------------------------------ MCP status
 
@@ -1175,95 +873,11 @@ export class DeviceManager {
     }
   }
 
-  // ------------------------------------------------------------- recently played
+  // ------------------------------------------------------------------ collections
 
-  /**
-   * Log each track that plays. recordRecent() collapses consecutive repeats and
-   * merges in late-arriving art, so this can fire on every play_state push.
-   */
-  private recordRecentlyPlayed(ps: ZonePlayState): void {
-    // the Recent list can be switched off (Settings › History); what it holds stays until cleared
-    if (!getSettings().recents) return;
-    // Only log active playback: on connect (or wake) the device re-announces a
-    // paused/stopped track's metadata, which must not become a phantom row.
-    if (ps.state !== "play" && ps.state !== "buffering") return;
-    const md = ps.metadata;
-    if (!md) return;
-    const isRadio = isRadioMetadata(md);
-    const station = md.station ?? null;
-    // Radio titles normalize through the shared helper (absent / station-echo
-    // "songs" become null) so recording and matching can never drift.
-    const title = isRadio ? radioTrackTitle(md) : trackTitle(md);
-    if (!title && !station) return; // nothing identifiable to log
-
-    const sourceId = md.source ?? this.cache.nowPlaying?.source?.id ?? null;
-    // Continuous sources (radio, AirPlay, Spotify, …) group into one session; a
-    // queued local track has a queue_id and stays a discrete row of its own.
-    const session =
-      ps.queue_id != null
-        ? null
-        : isRadio
-          ? `radio:${station ?? sourceId ?? ""}`
-          : `src:${sourceId ?? "stream"}`;
-
-    const entry: RecentTrack = {
-      at: Date.now(),
-      title,
-      artist: md.artist ?? null,
-      album: md.album ?? null,
-      station,
-      artUrl: md.art_url ?? null,
-      source: this.cache.nowPlaying?.source?.name ?? md.source ?? null,
-      sourceId,
-      queueId: ps.queue_id ?? null,
-      isRadio,
-      radioId: md.radio_id ?? null,
-      session,
-      streamer: this.cache.systemInfo?.udn ?? null,
-    };
-    const { list, changed } = recordRecent(entry);
-    // a transient picture (AirPlay, casting) is captured while its URL lives,
-    // a beat on: the log can wait, and the streamer's small HTTP server
-    // should not be asked for the same picture by the capture, the accent
-    // and the hero at once (the startup burst, 2026-09-06). ONE second, not
-    // three (2026-09-15): the URL dies with the app's session, and a restart
-    // five seconds after a track change lost the capture to this wait plus
-    // the cache's write delay — the user's AirPlay cover gone after a dev
-    // restart while the streamer showed it. A second still clears the burst.
-    if (changed) {
-      // capture the head AS IT IS when the timer fires, not as it was: a second
-      // frame for the same track may have replaced the cover URL meanwhile
-      // (the AirPlay first-frame case), and the merge now takes the newer one
-      const key = recentKey(list[0]);
-      setTimeout(() => {
-        const head = getRecents()[0];
-        if (head && recentKey(head) === key) captureRecentArt(head);
-      }, CAPTURE_DELAY_MS);
-    }
-    if (changed) this.push({ kind: "recents", data: decorateRecents(list) });
-  }
-
-  /** The log again, with any picture captured since (the art cache's notifier). */
-  repushRecents(): void {
-    this.push({ kind: "recents", data: decorateRecents(getRecents()) });
-  }
-
-  clearRecents(): void {
-    this.push({ kind: "recents", data: clearRecents() });
-  }
-
-  recentsRestore(list: Parameters<typeof restoreRecents>[0]): void {
-    this.push({ kind: "recents", data: decorateRecents(restoreRecents(list)) });
-  }
-
-  // ------------------------------------------------------------------ favorites
-
-  /** Favorites mutations live here so every window sees the push. */
-  favoriteAdd(fav: Parameters<typeof addFavorite>[0]): ReturnType<typeof getFavorites> {
-    const list = addFavorite(fav);
-    this.push({ kind: "favorites", data: list });
-    return list;
-  }
+  /** The recently played log, favorites and playlists: each write pushes its list to every
+   *  window (see collections.ts). */
+  readonly collections = new Collections((msg) => this.push(msg));
 
   /**
    * The queue-writing engine (playlist activation, queue undo, content
@@ -1296,34 +910,6 @@ export class DeviceManager {
     return this.queueOps.playlistActivate(id);
   }
 
-  // Playlist writes mirror the favorites verbs: mutate the bounded local file,
-  // push the whole list, return it to the caller that asked.
-  private pushPlaylists(list: ReturnType<typeof getPlaylists>): ReturnType<typeof getPlaylists> {
-    this.push({ kind: "playlists", data: list });
-    return list;
-  }
-
-  /** Returns the CREATED playlist (its stored name may have been uniquified). */
-  playlistCreate(name: string, items: Parameters<typeof createPlaylist>[1]): Playlist {
-    const { list, created } = createPlaylist(name, items);
-    this.pushPlaylists(list);
-    return created;
-  }
-
-  playlistRename(id: string, name: string): ReturnType<typeof getPlaylists> {
-    return this.pushPlaylists(renamePlaylist(id, name));
-  }
-
-  playlistDelete(id: string): ReturnType<typeof getPlaylists> {
-    return this.pushPlaylists(deletePlaylist(id));
-  }
-
-  playlistRestore(
-    playlist: Parameters<typeof restorePlaylist>[0],
-  ): ReturnType<typeof getPlaylists> {
-    return this.pushPlaylists(restorePlaylist(playlist));
-  }
-
   /** See QueueOps.queueRestore — the undo behind the queue's ×. */
   async queueRestore(ref: ContentRef, position: number): Promise<QueueRestoreResult> {
     return this.queueOps.queueRestore(ref, position);
@@ -1333,35 +919,6 @@ export class DeviceManager {
    *  only by its content. */
   async contentResolve(ref: ContentRef): Promise<ResolvedContent | null> {
     return this.queueOps.contentResolve(ref);
-  }
-
-  playlistSetItems(
-    id: string,
-    items: Parameters<typeof setPlaylistItems>[1],
-  ): ReturnType<typeof getPlaylists> {
-    return this.pushPlaylists(setPlaylistItems(id, items));
-  }
-
-  playlistAppend(
-    id: string,
-    items: Parameters<typeof appendToPlaylist>[1],
-  ): ReturnType<typeof getPlaylists> {
-    return this.pushPlaylists(appendToPlaylist(id, items));
-  }
-
-  favoriteRemove(key: string): ReturnType<typeof getFavorites> {
-    const list = removeFavorite(key);
-    this.push({ kind: "favorites", data: list });
-    return list;
-  }
-
-  favoriteUpdate(
-    key: string,
-    patch: Parameters<typeof updateFavorite>[1],
-  ): ReturnType<typeof getFavorites> {
-    const list = updateFavorite(key, patch);
-    this.push({ kind: "favorites", data: list });
-    return list;
   }
 
   // ----------------------------------------------------------------- push relay
@@ -1430,7 +987,7 @@ export class DeviceManager {
       discovering: this.discovering,
       settings: getSettings(),
       ...this.cache,
-      sleep: this.sleep,
+      sleep: this.sleeper.current,
       lastRecalledPresetId: this.lastRecalledPresetId,
       // the snapshot carries the captured pictures too (a capture that landed
       // before the window existed would otherwise show the dead URL)

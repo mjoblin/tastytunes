@@ -170,7 +170,7 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
         // the stored name is uniquified, and finding by the REQUESTED name
         // would report the old playlist's id — an agent would then edit
         // the wrong list.
-        const made = dm.playlistCreate(a.name as string, items);
+        const made = dm.collections.playlistCreate(a.name as string, items);
         return ok(`Created "${made.name}" with ${made.items.length} tracks. id: ${made.id}`);
       },
     },
@@ -185,7 +185,7 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
         // in one, and content identity needs a title and an artist.
         if (!md || isRadioMetadata(md)) return err("Nothing playing that can go in a playlist.");
         if (!md.title || !md.artist) return err("The playing track has no title/artist to store.");
-        dm.playlistAppend(a.id as string, [
+        dm.collections.playlistAppend(a.id as string, [
           {
             title: md.title,
             artist: md.artist,
@@ -205,7 +205,7 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
       handler: (a) => {
         const p = dm.snapshot().playlists.find((x) => x.id === a.id);
         if (!p) return err(`No playlist '${String(a.id)}'. Use list_playlists.`);
-        dm.playlistDelete(a.id as string);
+        dm.collections.playlistDelete(a.id as string);
         return ok(`Deleted "${p.name}".`);
       },
     },
@@ -284,7 +284,7 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
                 return err(largeQueueAsk(e.tracks, "play_favorite"));
               throw e;
             }
-            dm.favoriteUpdate(a.key as string, {
+            dm.collections.favoriteUpdate(a.key as string, {
               serverUdn: server.udn,
               serverName: server.name,
               objectId: match.id,
@@ -341,7 +341,7 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
         }
         const key = favoriteKey(fav);
         if (s.favorites.some((f) => favoriteKey(f) === key)) return ok("Already a favorite.");
-        dm.favoriteAdd(fav);
+        dm.collections.favoriteAdd(fav);
         return ok(
           fav.kind === "station" ? `Favorited station ${fav.name}.` : `Favorited "${fav.title}".`,
         );
@@ -353,7 +353,7 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
         const s = ctx.connected();
         const fav = s.favorites.find((f) => favoriteKey(f) === a.key);
         if (!fav) return err(`No favorite with key '${String(a.key)}'. Use list_favorites.`);
-        dm.favoriteRemove(a.key as string);
+        dm.collections.favoriteRemove(a.key as string);
         return ok(
           fav.kind === "station"
             ? `Removed station ${fav.name} from favorites.`

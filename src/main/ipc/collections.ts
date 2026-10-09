@@ -12,30 +12,34 @@ export function registerCollectionsIpc(): void {
   handle(IPC.recentCover, (_e, key: string) =>
     typeof key === "string" ? recentCoverGet(key) : null,
   );
-  setRecentArtNotifier(() => deviceManager.repushRecents());
-  handle(IPC.clearRecents, () => deviceManager.clearRecents());
-  handle(IPC.recentsRestore, (_e, list: RecentTrack[]) => deviceManager.recentsRestore(list));
-  handle(IPC.favoriteAdd, (_e, fav: Favorite) => deviceManager.favoriteAdd(fav));
-  handle(IPC.favoriteRemove, (_e, key: string) => deviceManager.favoriteRemove(key));
+  setRecentArtNotifier(() => deviceManager.collections.repushRecents());
+  handle(IPC.clearRecents, () => deviceManager.collections.clearRecents());
+  handle(IPC.recentsRestore, (_e, list: RecentTrack[]) =>
+    deviceManager.collections.recentsRestore(list),
+  );
+  handle(IPC.favoriteAdd, (_e, fav: Favorite) => deviceManager.collections.favoriteAdd(fav));
+  handle(IPC.favoriteRemove, (_e, key: string) => deviceManager.collections.favoriteRemove(key));
   handle(IPC.favoriteUpdate, (_e, key: string, patch: Partial<Favorite>) =>
-    deviceManager.favoriteUpdate(key, patch),
+    deviceManager.collections.favoriteUpdate(key, patch),
   );
   handle(IPC.playlistCreate, (_e, name: string, items: PlaylistItem[]) =>
-    deviceManager.playlistCreate(name, items),
+    deviceManager.collections.playlistCreate(name, items),
   );
   handle(IPC.playlistRename, (_e, id: string, name: string) =>
-    deviceManager.playlistRename(id, name),
+    deviceManager.collections.playlistRename(id, name),
   );
-  handle(IPC.playlistDelete, (_e, id: string) => deviceManager.playlistDelete(id));
-  handle(IPC.playlistRestore, (_e, playlist: Playlist) => deviceManager.playlistRestore(playlist));
+  handle(IPC.playlistDelete, (_e, id: string) => deviceManager.collections.playlistDelete(id));
+  handle(IPC.playlistRestore, (_e, playlist: Playlist) =>
+    deviceManager.collections.playlistRestore(playlist),
+  );
   handle(IPC.queueRestore, (_e, ref: ContentRef, position: number) =>
     deviceManager.queueRestore(ref, position),
   );
   handle(IPC.playlistSetItems, (_e, id: string, items: PlaylistItem[]) =>
-    deviceManager.playlistSetItems(id, items),
+    deviceManager.collections.playlistSetItems(id, items),
   );
   handle(IPC.playlistAppend, (_e, id: string, items: PlaylistItem[]) =>
-    deviceManager.playlistAppend(id, items),
+    deviceManager.collections.playlistAppend(id, items),
   );
   // The tray panel gets special handling around this one verb, and it's
   // identified by its SENDER rather than by anything it tells us: a run started
