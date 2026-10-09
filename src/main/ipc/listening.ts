@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog } from "electron";
 import { writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { IPC } from "@shared/ipc";
-import { playKey } from "@shared/model";
+import { playKey, type MediaIndexPools } from "@shared/model";
 import { broadcastListening } from "../app/broadcast";
 import { getMainWindow } from "../app/windows";
 import { listeningRecord } from "../data/listeningRecord";
@@ -10,6 +10,25 @@ import { playStatsFromRecord } from "../data/playStats";
 import { recentArtGet } from "../lookups/recentArt";
 import * as mediaIndex from "../media/mediaIndex";
 import { handle } from "../app/guard";
+
+/**
+ * THE LIBRARY'S ART BY CONTENT KEY (0.11.0 sweep): playKey → the first track's picture,
+ * made once per pools answer (which is itself made once per set of stored indexes) instead
+ * of a walk over every track of every library for each slice of the Timeline.
+ */
+const artByKey = new WeakMap<MediaIndexPools[], Map<string, string | null>>();
+function libraryArt(groups: MediaIndexPools[]): Map<string, string | null> {
+  let art = artByKey.get(groups);
+  if (art) return art;
+  art = new Map();
+  for (const g of groups)
+    for (const t of g.tracks) {
+      const k = playKey(t.title, t.artist, t.album);
+      if (art.get(k) == null) art.set(k, t.artUrl ?? null);
+    }
+  artByKey.set(groups, art);
+  return art;
+}
 
 /** The listening record and play stats: the History screen's reads, export, clear and the stats card. (Split out of index.ts's registerIpc in the 0.11.0 sweep.) */
 export function registerListeningIpc(): void {
@@ -22,11 +41,8 @@ export function registerListeningIpc(): void {
     );
     const out: Record<string, string | null> = {};
     if (want.size === 0) return out;
-    for (const g of mediaIndex.pools())
-      for (const t of g.tracks) {
-        const k = playKey(t.title, t.artist, t.album);
-        if (want.has(k) && out[k] == null) out[k] = t.artUrl ?? null;
-      }
+    const art = libraryArt(mediaIndex.pools());
+    for (const k of want) out[k] = art.get(k) ?? null;
     // not in the library: the device log's captured picture, if any
     for (const k of want) if (out[k] == null) out[k] = recentArtGet(k) ?? out[k] ?? null;
     return out;

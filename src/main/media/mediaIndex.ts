@@ -1015,11 +1015,28 @@ export function searchAllIndexes(query: string): MediaSearchAllGroup[] {
  * Artists/Albums lenses' feedstock. A snapshot copy: callers can't mutate
  * the index, and the renderer caches it keyed on builtAt signatures.
  */
+/** The last pools() answer and the stored indexes it was made from (see pools). */
+let poolsMemo: { from: StoredIndex[]; out: MediaIndexPools[] } | null = null;
+
+/**
+ * Every ready index's albums, artists and tracks, stamped with their server. SHARED AND
+ * READ-ONLY (0.11.0 sweep): the answer is made once per set of stored indexes and handed to
+ * every caller until one is replaced or starts building (a stored index is never changed in
+ * place, only replaced, so its identity says whether the answer still holds). It used to
+ * copy every node of every library on each call: the Timeline's art, a lens opening, and
+ * most MCP tools ask. Never sort, splice or assign into what it returns.
+ */
 export function pools(): MediaIndexPools[] {
   load();
+  const live = [...indexes.values()].filter((idx) => !building.has(idx.udn));
+  if (
+    poolsMemo &&
+    poolsMemo.from.length === live.length &&
+    poolsMemo.from.every((idx, i) => idx === live[i])
+  )
+    return poolsMemo.out;
   const out: MediaIndexPools[] = [];
-  for (const idx of indexes.values()) {
-    if (building.has(idx.udn)) continue;
+  for (const idx of live) {
     const stamp = (n: MediaNode): MediaNode => ({
       ...n,
       serverUdn: idx.udn,
@@ -1034,6 +1051,7 @@ export function pools(): MediaIndexPools[] {
       ...(idx.profile ? { profile: idx.profile } : {}),
     });
   }
+  poolsMemo = { from: live, out };
   return out;
 }
 
