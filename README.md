@@ -324,7 +324,7 @@ tools the Home Assistant automation needs, copy the token into the
 
 ### CD
 
-With Cambridge Audio's Evo CD transport (on an Evo 75 or Evo 150):
+With Cambridge Audio's Evo CD transport (on an Evo streaming amplifier):
 
 - The disc's tracks are listed on the Queue screen, beside the Media Library queue
 - Track names come from MusicBrainz when Liner notes is on in Settings › Connections
