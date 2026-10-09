@@ -18,9 +18,21 @@ interface Entry<T> {
   at: number; // last-accessed (ms epoch) — the LRU key
 }
 
-const all: DiskCache<unknown>[] = [];
+/** What Settings' cache row counts and clears, and quit flushes: every DiskCache, and any
+ *  other cache that registers (the per-entry analysis store, 0.11.0). */
+export interface RegisteredCache {
+  stats(): { entries: number; bytes: number };
+  clear(): void;
+  flush(): void;
+}
+const all: RegisteredCache[] = [];
 
-export class DiskCache<T> {
+/** Count a cache that is not a DiskCache in the Settings row, its Clear and the quit flush. */
+export function registerCache(cache: RegisteredCache): void {
+  all.push(cache);
+}
+
+export class DiskCache<T> implements RegisteredCache {
   private map: Map<string, Entry<T>> | null = null;
   private timer: NodeJS.Timeout | null = null;
 
