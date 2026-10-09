@@ -336,8 +336,10 @@ export interface TastyTunesApi {
     secs: number | null,
   ): Promise<DiscTracks | null>;
   /** EXPERIMENT (0.7 exploration): the playing track's raw audio bytes from
-   *  its local media server, for renderer-side decode. Null on any miss. */
-  expTrackAudio(serverUdn: string, objectId: string): Promise<ArrayBuffer | null>;
+   *  its local media server, for renderer-side decode. Null on any miss. The bytes arrive as
+   *  a Uint8Array (main sends a Buffer): the contract said ArrayBuffer until the typed
+   *  handle held main's answer to it (0.11.0 sweep). */
+  expTrackAudio(serverUdn: string, objectId: string): Promise<Uint8Array | null>;
   /** EXPERIMENT: a stored analysis by content key (null = none yet). */
   audioAnalysisGet(key: string): Promise<AudioAnalysis | null>;
   /** EXPERIMENT: persist a finished analysis under its content key. */
@@ -576,3 +578,29 @@ export const IPC = {
   radioByTags: "tt:radioByTags",
   push: "tt:push",
 } as const;
+
+/**
+ * THE CHANNEL TABLE IS THE CONTRACT'S INDEX (0.11.0 sweep): every invoked method of
+ * TastyTunesApi has the channel `tt:<method>`, so main's handlers (app/guard handle) and
+ * the preload (generated from this table) take their types from TastyTunesApi by name.
+ * The two exceptions are the push stream (main → renderer) and the one-way display-mode
+ * report (renderer → main, no answer).
+ */
+export type InvokeMethod = Exclude<keyof TastyTunesApi, "onPush" | "reportDisplayMode">;
+/** The method a channel answers for: "tt:getSnapshot" → "getSnapshot". */
+export type MethodOf<C extends string> = C extends `tt:${infer M}` ? M : never;
+/** The channels the renderer invokes (everything but the push stream and the report). */
+export const INVOKE_METHODS = (Object.keys(IPC) as Array<keyof typeof IPC>).filter(
+  (k): k is InvokeMethod => k !== "push" && k !== "displayModeReport",
+);
+// the table and the API name the same methods: a method without a channel, or a channel
+// without a method, fails to compile here
+type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+const tableMatchesApi: Same<
+  InvokeMethod,
+  Exclude<keyof typeof IPC, "push" | "displayModeReport">
+> = true;
+void tableMatchesApi;
+// …and every channel is its method's name under tt:, which is what MethodOf reads
+const channelsAreNames: { readonly [K in keyof typeof IPC]: `tt:${K}` } = IPC;
+void channelsAreNames;
