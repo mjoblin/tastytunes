@@ -1,0 +1,37 @@
+// The MCP server's configuration and status. What the server is configured WITH lives here
+// (it is part of AppSettings); what it OFFERS is the catalog's business (mcpCatalog.ts).
+
+// ------------------------------------------------------------------- MCP server
+
+/** Which interface the MCP server binds to. */
+export type McpBind = "localhost" | "lan";
+
+export interface McpSettings {
+  /** Master switch — the server only exists while this is on. */
+  enabled: boolean;
+  /** localhost = this computer only; lan = any machine on the network. */
+  bind: McpBind;
+  port: number;
+  /** Cluster ids switched off (everything is on by default). */
+  disabledClusters: string[];
+  /** Opt-in cluster ids the user explicitly enabled (write-capable clusters
+   *  are OFF until they appear here). */
+  enabledClusters: string[];
+  /** Individual tool names switched off. */
+  disabledTools: string[];
+  /** The bearer token an agent on another machine sends with each request while the server
+   *  is reachable from the local network (0.10.0). Minted by main when empty, so every install
+   *  has its own; set it empty to have a new one minted, which stops the old one working. */
+  token: string;
+}
+
+export interface McpStatus {
+  running: boolean;
+  /** Reachable endpoint while running, e.g. http://192.168.1.20:8555/mcp. */
+  url: string | null;
+  error: string | null;
+}
+
+// The CATALOG — MCP_CLUSTERS, McpClusterInfo, McpToolInfo, mcpClusterEnabled —
+// lives in mcpCatalog.ts (2026-07-26). What the server is configured WITH stays
+// here (it is part of AppSettings); what it OFFERS is the catalog's business.

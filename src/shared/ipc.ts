@@ -4,11 +4,12 @@
 // Two neighbours split out of here 2026-07-26 (in two passes), when this file
 // had grown to ~1,600 lines and a contract change meant reading past a
 // 490-line tool catalogue to find it:
-//   · model.ts      — the app's own DOMAIN: everything that would still mean
+//   · model/        — the app's own DOMAIN: everything that would still mean
 //                     something with the IPC layer deleted (collections,
 //                     settings, media browser, schedules, diagnostics…) plus
-//                     the content-identity helpers. This file imports FROM it
-//                     and must never import back, so the contract stays free
+//                     the content-identity helpers, a module per domain behind
+//                     one barrel since the 0.11.0 sweep. This file imports FROM
+//                     it and must never import back, so the contract stays free
 //                     of domain churn.
 //   · mcpCatalog.ts — the MCP tool catalogue (it too leans on model, not here).
 // smoip.ts is a different axis entirely — the STREAMER's wire types, which all
