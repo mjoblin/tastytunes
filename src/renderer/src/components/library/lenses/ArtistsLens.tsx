@@ -13,6 +13,7 @@ import {
 import { cx, fmtTime, matchesFilter } from "@/lib/format";
 import { useStore } from "@/store";
 import { scrollToVisible } from "@/lib/scroll";
+import { useWindowedList } from "@/hooks/useWindowedList";
 import { isAlbumClass } from "@/lib/media";
 import { MediaArt } from "@/components/media/MediaArt";
 import { FilterInput } from "@/components/controls/FilterInput";
@@ -84,6 +85,15 @@ export function focusArtistsLens(name: string): void {
  *  a half of context above it, so the eye reads where it is rather than
  *  finding the row pinned to the edge (user call, 2026-09-01). */
 const REVEAL_PAD = 84;
+/** Past this many artists the column renders only the rows near the viewport
+ *  (useWindowedList); below it, every row, exactly as before (0.11.0 sweep, for review). */
+const WINDOW_ARTISTS_ABOVE = 150;
+
+/** An artist's letter on the A-Z rail ("The Cure" files under C; non-letters under #). */
+const letterOf = (name: string): string => {
+  const c = nameSortKey(name)[0]?.toUpperCase() ?? "#";
+  return c >= "A" && c <= "Z" ? c : "#";
+};
 
 /**
  * The miller view (vibin's Artists screen, adapted): Artists | Albums |
@@ -178,6 +188,24 @@ export function ArtistsLens({
   // A-Z fast travel: letter anchors in the artists column.
   const artistsColRef = useRef<HTMLDivElement | null>(null);
   const selectedRowRef = useRef<HTMLDivElement | null>(null);
+  // a long column renders the rows near its viewport; a row's place comes from its index
+  // (win.offsetOf), so the A-Z travel, the reveal and keeping the selection in sight do
+  // not need the row to be on the page
+  const win = useWindowedList({
+    scrollRef: artistsColRef,
+    count: shownArtists.length,
+    itemSelector: "[data-lens-artist-row]",
+    estimate: 52,
+    overscan: 12,
+    enabled: shownArtists.length > WINDOW_ARTISTS_ABOVE,
+  });
+  /** Scroll the column so artist `index` sits `pad` px below its top. */
+  const scrollColTo = (index: number, pad: number): number => {
+    const col = artistsColRef.current;
+    const top = Math.max(0, win.offsetOf(index) - pad);
+    col?.scrollTo({ top });
+    return top;
+  };
   // When the filter reshapes the artist list, keep the selection in sight —
   // clearing "beatles" pops hundreds of rows back in ABOVE the selected one.
   // Skips the mount run (the saved column scroll is restoring then).
@@ -189,7 +217,11 @@ export function ArtistsLens({
     }
     // a pending reveal (arrival by link) owns the column's first scroll
     if (artistsMem.reveal) return;
-    if (mem.artist && selectedRowRef.current) scrollToVisible(selectedRowRef.current);
+    if (!mem.artist) return;
+    const at = shownArtists.findIndex((a) => a.key === mem.artist);
+    if (at < win.first || at > win.last) {
+      if (at >= 0) scrollColTo(at, REVEAL_PAD);
+    } else if (selectedRowRef.current) scrollToVisible(selectedRowRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shownArtists]);
   const albumsColRef = useRef<HTMLDivElement | null>(null);
@@ -213,38 +245,32 @@ export function ArtistsLens({
   useEffect(() => {
     const key = artistsMem.reveal;
     if (!key) return;
-    const col = artistsColRef.current;
-    const row = col?.querySelector<HTMLElement>(`[data-lens-artist-row="${CSS.escape(key)}"]`);
-    if (!col || !row) return;
+    const at = shownArtists.findIndex((a) => a.key === key);
+    if (!artistsColRef.current || at < 0) return;
     requestAnimationFrame(() => {
       // consumed when APPLIED, not when scheduled — a repeated effect run
       // (StrictMode) schedules the same landing again, harmlessly
       if (artistsMem.reveal !== key) return;
-      const top = Math.max(
-        0,
-        row.getBoundingClientRect().top -
-          col.getBoundingClientRect().top +
-          col.scrollTop -
-          REVEAL_PAD,
-      );
-      col.scrollTo({ top });
-      artistsMem.scroll.artists = top;
+      artistsMem.scroll.artists = scrollColTo(at, REVEAL_PAD);
       artistsMem.reveal = null;
     });
+    // a reveal is asked once and lands when the list it names has rendered; the window's
+    // geometry (scrollColTo) is read at that moment, never a reason to land again
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shownArtists]);
-  const letterRefs = useRef(new Map<string, HTMLDivElement>());
-  const letterOf = (name: string): string => {
-    const c = nameSortKey(name)[0]?.toUpperCase() ?? "#";
-    return c >= "A" && c <= "Z" ? c : "#";
-  };
-  const letters = useMemo(
-    () => [...new Set(shownArtists.map((a) => letterOf(a.name)))],
-    [shownArtists],
-  );
+  // each letter's first artist, by index (a windowed column may not hold the row)
+  const letterStarts = useMemo(() => {
+    const m = new Map<string, number>();
+    shownArtists.forEach((a, i) => {
+      const l = letterOf(a.name);
+      if (!m.has(l)) m.set(l, i);
+    });
+    return m;
+  }, [shownArtists]);
+  const letters = useMemo(() => [...letterStarts.keys()], [letterStarts]);
   const jumpToLetter = (letter: string): void => {
-    const el = letterRefs.current.get(letter);
-    const col = artistsColRef.current;
-    if (el && col) col.scrollTo({ top: el.offsetTop - col.offsetTop });
+    const at = letterStarts.get(letter);
+    if (at != null) scrollColTo(at, 0);
   };
 
   // Playing-artist highlight is content identity, like everything else.
@@ -257,7 +283,6 @@ export function ArtistsLens({
     </div>
   );
 
-  let lastLetter = "";
   return (
     <div
       data-lens-artists
@@ -319,17 +344,14 @@ export function ArtistsLens({
               // padding box) without shifting the rows off the heading's edge
               className="relative min-h-0 flex-1 overflow-y-auto px-1.5 -mx-1.5 py-1 -my-1"
             >
-              {shownArtists.map((a) => {
-                const letter = letterOf(a.name);
-                const anchor = letter !== lastLetter;
-                lastLetter = letter;
+              {win.padTop > 0 && <div style={{ height: win.padTop }} />}
+              {shownArtists.slice(win.first, win.last + 1).map((a) => {
                 const selected = a.key === mem.artist;
                 const playing = a.key === playingArtistKey;
                 return (
                   <div
                     key={a.key}
                     ref={(el) => {
-                      if (anchor && el) letterRefs.current.set(letter, el);
                       if (selected && el) selectedRowRef.current = el;
                     }}
                     data-artist-row={a.name}
@@ -396,6 +418,7 @@ export function ArtistsLens({
                   </div>
                 );
               })}
+              {win.padBottom > 0 && <div style={{ height: win.padBottom }} />}
             </div>
             {/* the A-Z rail: fast travel for a long first column */}
             <div

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import {
   AudioLines,
   Heart,
@@ -17,6 +17,7 @@ import {
   type MediaNode,
   nameSortKey,
 } from "@shared/model";
+import { useWindowedList } from "@/hooks/useWindowedList";
 import { cx, matchesFilter, fmtCount } from "@/lib/format";
 import { usePlayStats, playedBucket, playedOptionsOf } from "@/lib/playStats";
 import { useStore } from "@/store";
@@ -74,6 +75,9 @@ let albumsMem: {
  *  call, 2026-09-01 / 2026-09-02): queue writes are one call per track with no
  *  progress affordance, so no gesture may hand the queue fifty albums. */
 
+/** Past this many tiles the cards grid windows its rows (0.11.0 sweep, for review). */
+const WINDOW_TILES_ABOVE = 120;
+
 export function AlbumsLens({
   pools,
   actions,
@@ -82,6 +86,7 @@ export function AlbumsLens({
   cardGap,
   fillRows,
   onToggleLayout,
+  scrollRef,
 }: {
   pools: MediaIndexPools[];
   actions: LensActions;
@@ -92,6 +97,8 @@ export function AlbumsLens({
   /** Flips libraryLayout — sort and layout are one presentation pairing
    *  (adjacent in the browse header), kept together here too. */
   onToggleLayout?: () => void;
+  /** The Library's page scroller, which this lens scrolls (the cards grid windows over it). */
+  scrollRef?: RefObject<HTMLDivElement | null>;
 }): React.JSX.Element {
   const [mem, setMemState] = useState(albumsMem);
   const setMem = (patch: Partial<typeof albumsMem>): void => {
@@ -265,6 +272,35 @@ export function AlbumsLens({
   // the tiles' selection: the row grammar from useRowSelection (one home
   // since 2026-09-13) over the tiles shown, keyed by nodeKey
   const tileKeys = useMemo(() => tiles.map((t) => nodeKey(t.node)), [tiles]);
+
+  // WINDOWED CARDS (0.11.0 sweep, for review): past WINDOW_TILES_ABOVE tiles the cards grid
+  // renders only the rows of cards near the page's viewport, as many columns as auto-fill
+  // would give (from the lens's measured width), the rows' pitch measured by useWindowedList.
+  // Below it, and in the rows layout, every tile renders exactly as before.
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [width, setWidth] = useState(0);
+  useLayoutEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    setWidth(el.getBoundingClientRect().width);
+    const ro = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const cols = Math.max(1, Math.floor((width + cardGap) / (cardSize + cardGap)));
+  const windowed = cards && scrollRef != null && width > 0 && tiles.length > WINDOW_TILES_ABOVE;
+  const colWidth = fillRows ? (width - cardGap * (cols - 1)) / cols : cardSize;
+  const win = useWindowedList({
+    scrollRef: scrollRef ?? rootRef,
+    count: windowed ? Math.ceil(tiles.length / cols) : 0,
+    itemSelector: "[data-albums-row]",
+    // the art is square; the title and its second line below it
+    estimate: Math.round(colWidth) + 52 + cardGap,
+    overscan: 3,
+    enabled: windowed,
+  });
+  const gridColumns = (n: number | "auto-fill"): string =>
+    fillRows ? `repeat(${n}, minmax(${cardSize}px, 1fr))` : `repeat(${n}, ${cardSize}px)`;
   const {
     selected: selA,
     setSelected: setSelA,
@@ -305,8 +341,61 @@ export function AlbumsLens({
     }
     actions.dragAlbum(set ? set.volumes : [raw], e, title);
   };
+  const renderTile = (
+    { node: rawNode, set }: (typeof tiles)[number],
+    ti: number,
+  ): React.JSX.Element => {
+    // a set tile is volume 1 wearing the base title and a count badge
+    const node = set ? { ...rawNode, title: set.base, year: null } : rawNode;
+    return cards ? (
+      <ContainerCard
+        key={nodeKey(rawNode)}
+        node={node}
+        playing={
+          set ? set.volumes.some((v) => actions.isPlayingAlbum(v)) : actions.isPlayingAlbum(node)
+        }
+        menuOpen={actions.menuNodeId === node.id}
+        favorited={actions.nodeFavorited(rawNode)}
+        badge={set ? `${set.volumes.length} volumes` : multiServer ? node.serverName : undefined}
+        selected={selA.has(nodeKey(rawNode))}
+        onHeart={() => actions.heartNode(rawNode)}
+        onEnter={(e) => {
+          if (albumClick(rawNode, e)) return;
+          actions.openAlbum(rawNode);
+        }}
+        onPlay={(el) => void actions.playContainer(rawNode, el)}
+        onMenu={(e) => actions.openMenu(rawNode, e)}
+        onNavDrag={(e) => startAlbumTileDrag(rawNode, set, node.title, e)}
+      />
+    ) : (
+      <ContainerRow
+        key={nodeKey(rawNode)}
+        node={node}
+        selected={selA.has(nodeKey(rawNode))}
+        selStart={!(ti > 0 && selA.has(tileKeys[ti - 1]))}
+        selEnd={!(ti < tileKeys.length - 1 && selA.has(tileKeys[ti + 1]))}
+        playing={
+          set ? set.volumes.some((v) => actions.isPlayingAlbum(v)) : actions.isPlayingAlbum(node)
+        }
+        menuOpen={actions.menuNodeId === node.id}
+        favorited={actions.nodeFavorited(rawNode)}
+        badge={set ? `${set.volumes.length} volumes` : multiServer ? node.serverName : undefined}
+        dr={albumDr[albumDrKey(node)]?.dr ?? null}
+        onArtistLink={
+          actions.goToArtist && node.artist ? () => actions.goToArtist?.(node) : undefined
+        }
+        onHeart={() => actions.heartNode(rawNode)}
+        onEnter={(e) => {
+          if (albumClick(rawNode, e)) return;
+          actions.openAlbum(rawNode);
+        }}
+        onMenu={(e) => actions.openMenu(rawNode, e)}
+        onNavDrag={(e) => startAlbumTileDrag(rawNode, set, node.title, e)}
+      />
+    );
+  };
   return (
-    <div data-lens-albums>
+    <div data-lens-albums ref={rootRef}>
       <div className="flex items-start gap-3 pb-3">
         <div className="flex-1 min-w-0">
           {/* one row: filter, partition, then the two facet PICKERS.
@@ -414,6 +503,29 @@ export function AlbumsLens({
       </div>
       {shown.length === 0 ? (
         <div className="text-[15px] text-faint pt-4 px-1">Nothing matches those filters.</div>
+      ) : windowed ? (
+        <div
+          data-albums-windowed
+          className={cx(selA.size > 0 && "pb-24")}
+          style={{ paddingTop: 8 }}
+        >
+          {win.padTop > 0 && <div style={{ height: win.padTop }} />}
+          {Array.from({ length: win.last - win.first + 1 }, (_, i) => win.first + i).map((r) => (
+            <div
+              key={r}
+              data-albums-row
+              style={{
+                display: "grid",
+                gridTemplateColumns: gridColumns(cols),
+                gap: cardGap,
+                marginBottom: cardGap,
+              }}
+            >
+              {tiles.slice(r * cols, (r + 1) * cols).map((t, j) => renderTile(t, r * cols + j))}
+            </div>
+          ))}
+          {win.padBottom > 0 && <div style={{ height: win.padBottom }} />}
+        </div>
       ) : (
         <div
           className={cx(
@@ -425,73 +537,14 @@ export function AlbumsLens({
             cards
               ? {
                   display: "grid",
-                  gridTemplateColumns: fillRows
-                    ? `repeat(auto-fill, minmax(${cardSize}px, 1fr))`
-                    : `repeat(auto-fill, ${cardSize}px)`,
+                  gridTemplateColumns: gridColumns("auto-fill"),
                   gap: cardGap,
                   paddingTop: 8,
                 }
               : undefined
           }
         >
-          {tiles.map(({ node: rawNode, set }, ti) => {
-            // a set tile is volume 1 wearing the base title and a count badge
-            const node = set ? { ...rawNode, title: set.base, year: null } : rawNode;
-            return cards ? (
-              <ContainerCard
-                key={nodeKey(rawNode)}
-                node={node}
-                playing={
-                  set
-                    ? set.volumes.some((v) => actions.isPlayingAlbum(v))
-                    : actions.isPlayingAlbum(node)
-                }
-                menuOpen={actions.menuNodeId === node.id}
-                favorited={actions.nodeFavorited(rawNode)}
-                badge={
-                  set ? `${set.volumes.length} volumes` : multiServer ? node.serverName : undefined
-                }
-                selected={selA.has(nodeKey(rawNode))}
-                onHeart={() => actions.heartNode(rawNode)}
-                onEnter={(e) => {
-                  if (albumClick(rawNode, e)) return;
-                  actions.openAlbum(rawNode);
-                }}
-                onPlay={(el) => void actions.playContainer(rawNode, el)}
-                onMenu={(e) => actions.openMenu(rawNode, e)}
-                onNavDrag={(e) => startAlbumTileDrag(rawNode, set, node.title, e)}
-              />
-            ) : (
-              <ContainerRow
-                key={nodeKey(rawNode)}
-                node={node}
-                selected={selA.has(nodeKey(rawNode))}
-                selStart={!(ti > 0 && selA.has(tileKeys[ti - 1]))}
-                selEnd={!(ti < tileKeys.length - 1 && selA.has(tileKeys[ti + 1]))}
-                playing={
-                  set
-                    ? set.volumes.some((v) => actions.isPlayingAlbum(v))
-                    : actions.isPlayingAlbum(node)
-                }
-                menuOpen={actions.menuNodeId === node.id}
-                favorited={actions.nodeFavorited(rawNode)}
-                badge={
-                  set ? `${set.volumes.length} volumes` : multiServer ? node.serverName : undefined
-                }
-                dr={albumDr[albumDrKey(node)]?.dr ?? null}
-                onArtistLink={
-                  actions.goToArtist && node.artist ? () => actions.goToArtist?.(node) : undefined
-                }
-                onHeart={() => actions.heartNode(rawNode)}
-                onEnter={(e) => {
-                  if (albumClick(rawNode, e)) return;
-                  actions.openAlbum(rawNode);
-                }}
-                onMenu={(e) => actions.openMenu(rawNode, e)}
-                onNavDrag={(e) => startAlbumTileDrag(rawNode, set, node.title, e)}
-              />
-            );
-          })}
+          {tiles.map((t, ti) => renderTile(t, ti))}
         </div>
       )}
       {selA.size > 0 && (

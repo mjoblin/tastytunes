@@ -1506,6 +1506,7 @@ export function LibraryScreen(): React.JSX.Element {
               cardGap={presetGap}
               fillRows={presetFillRows}
               onToggleLayout={() => void setLayout(cards ? "rows" : "cards")}
+              scrollRef={scrollRef}
             />
           ) : lens === "artists" ? (
             <ArtistsLens pools={lensPools} actions={lensActions} />
