@@ -6,10 +6,8 @@ import {
   type MediaIndexPools,
   type MediaNode,
   nameSortKey,
-  orderTracks,
   performerLine,
   sameArt,
-  trackArtists,
   trackInAlbumOf,
 } from "@shared/model";
 import { cx, fmtTime, matchesFilter } from "@/lib/format";
@@ -27,17 +25,10 @@ import {
   LensTrackSelectionBar,
   LensTrackMenu,
 } from "./useLensTrackSelection";
+import { useLensIndex, type LensArtist } from "./useLensIndex";
 
 // The Artists lens, split out of LibraryLenses.tsx (2026-09-13, the lenses round: three lenses of
 // 600 to 800 lines shared one file); what the lenses share lives in ./lensShared.
-
-interface LensArtist {
-  key: string;
-  name: string;
-  artUrl: string | null;
-  albums: MediaNode[];
-  tracks: MediaNode[];
-}
 
 /**
  * A lens artist is content identity, not a node — the ⋯ / right-click menu
@@ -118,41 +109,11 @@ export function ArtistsLens({
   const albumsOnly = useStore((s) => s.settings.lensArtistsAlbumsOnly);
   const saveSettings = useStore((s) => s.saveSettings);
 
-  const multiServer = useMemo(() => pools.filter((g) => g.albums.length > 0).length > 1, [pools]);
+  // what the lenses derive from the pools, once per snapshot (useLensIndex)
+  const index = useLensIndex(pools);
+  const multiServer = index.multiServer;
 
-  const artists = useMemo(() => {
-    const byKey = new Map<string, LensArtist>();
-    const ensure = (name: string): LensArtist => {
-      const key = lc(name);
-      let a = byKey.get(key);
-      if (!a) {
-        a = { key, name: name.trim(), artUrl: null, albums: [], tracks: [] };
-        byKey.set(key, a);
-      }
-      return a;
-    };
-    for (const g of pools) {
-      for (const e of g.artists) {
-        const a = ensure(e.title);
-        a.artUrl ??= e.artUrl;
-      }
-      for (const alb of g.albums) if (alb.artist) ensure(alb.artist).albums.push(alb);
-      // Every PERFORMER is an artist, and only performers — never the packed
-      // "A; B" string. A featured singer gets a row with their one track;
-      // the headliner keeps every track of the album (2026-08-15).
-      for (const t of g.tracks) for (const name of trackArtists(t)) ensure(name).tracks.push(t);
-    }
-    return [...byKey.values()]
-      .filter((a) => a.albums.length > 0 || a.tracks.length > 0)
-      .map((a) => ({
-        ...a,
-        artUrl: a.artUrl ?? a.albums.find((x) => x.artUrl)?.artUrl ?? null,
-        albums: [...a.albums].sort(
-          (x, y) => (y.year ?? "").localeCompare(x.year ?? "") || x.title.localeCompare(y.title),
-        ),
-      }))
-      .sort((a, b) => nameSortKey(a.name).localeCompare(nameSortKey(b.name)));
-  }, [pools]);
+  const artists = index.artists;
 
   // THE ARTIST YOU ASKED FOR IS ALWAYS IN THE COLUMN. Albums only is the
   // standing preference for browsing; a landing (Elsewhere's Go to artist, a
@@ -172,20 +133,7 @@ export function ArtistsLens({
   );
 
   // Album tracks by content identity: same server + same album title.
-  const tracksByAlbum = useMemo(() => {
-    const m = new Map<string, MediaNode[]>();
-    for (const g of pools) {
-      for (const t of g.tracks) {
-        if (!t.album) continue;
-        const k = `${g.udn}|${lc(t.album)}`;
-        const list = m.get(k);
-        if (list) list.push(t);
-        else m.set(k, [t]);
-      }
-    }
-    for (const [k, list] of m) m.set(k, orderTracks(list)); // disc, then position — or the server's order when the numbers repeat
-    return m;
-  }, [pools]);
+  const tracksByAlbum = index.tracksByAlbum;
 
   // Resolve the selection against the FILTERED list: filtering the selected
   // artist out empties the albums/tracks columns rather than showing content

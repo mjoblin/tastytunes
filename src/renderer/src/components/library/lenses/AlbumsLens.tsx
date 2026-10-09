@@ -13,7 +13,6 @@ import {
   albumDrKey,
   albumTracksOf,
   albumVolume,
-  isCompilation,
   type MediaIndexPools,
   type MediaNode,
   nameSortKey,
@@ -33,15 +32,13 @@ import {
   type LensActions,
   lc,
   nodeKey,
-  genreOptionsOf,
-  decadeOptionsOf,
   drOptionsOf,
-  formatTags,
   formatOptionsOf,
   RECORD_SORTS,
   PLAY_THESE_MAX,
 } from "./lensShared";
 import { useRowSelection } from "@/components/library/useRowSelection";
+import { useLensIndex } from "./useLensIndex";
 
 // The Albums lens, split out of LibraryLenses.tsx (2026-09-13, the lenses round: three lenses of
 // 600 to 800 lines shared one file); what the lenses share lives in ./lensShared.
@@ -115,33 +112,23 @@ export function AlbumsLens({
   const saveSettings = useStore((s) => s.saveSettings);
   const albumDr = useAlbumDr();
 
-  const all = useMemo(() => pools.flatMap((g) => g.albums), [pools]);
-  const multiServer = useMemo(() => pools.filter((g) => g.albums.length > 0).length > 1, [pools]);
+  // what the lenses derive from the pools, once per snapshot (useLensIndex)
+  const index = useLensIndex(pools);
+  const all = index.albums;
+  const multiServer = index.multiServer;
 
   // Facets from the data itself — the builders are shared with the Tracks
   // lens (genreOptionsOf / decadeOptionsOf); pickers render only when they
   // would actually distinguish (>=2 options).
-  const genreOptions = useMemo(() => genreOptionsOf(all), [all]);
-  const decadeOptions = useMemo(() => decadeOptionsOf(all), [all]);
+  const genreOptions = index.albumGenres;
+  const decadeOptions = index.albumDecades;
   const drOptions = useMemo(
     () => drOptionsOf(all.map((a) => albumDr[albumDrKey(a)]?.dr ?? null)),
     [all, albumDr],
   );
   // an album's codecs = the union over its tracks in the pool (a mixed album
   // matches every codec it holds, the way Genre aggregates)
-  const albumCodecs = useMemo(() => {
-    const m = new Map<string, Set<string>>();
-    for (const g of pools)
-      for (const t of g.tracks) {
-        const tags = formatTags(t.format);
-        if (!t.album || tags.length === 0) continue;
-        const k = `${g.udn}|${lc(t.album)}`;
-        const set = m.get(k) ?? new Set<string>();
-        for (const tag of tags) set.add(tag);
-        m.set(k, set);
-      }
-    return m;
-  }, [pools]);
+  const albumCodecs = index.albumCodecs;
   const formatOptions = useMemo(
     () =>
       formatOptionsOf(
@@ -155,22 +142,13 @@ export function AlbumsLens({
     if (!play.ready) return m;
     // an album's tracks together: plays and last played fold per track, and
     // the WHOLE listens are the record's runs against this track set
-    const groups = new Map<string, MediaNode[]>();
-    for (const g of pools)
-      for (const t of g.tracks) {
-        if (!t.album) continue;
-        const k = `${g.udn}|${lc(t.album)}`;
-        const list = groups.get(k);
-        if (list) list.push(t);
-        else groups.set(k, [t]);
-      }
-    for (const [k, tracks] of groups) {
+    for (const [k, tracks] of index.tracksByAlbum) {
       const a = play.album(tracks);
       if (a.plays > 0 || a.whole > 0)
         m.set(k, { plays: a.plays, lastAt: a.lastAt, whole: a.whole });
     }
     return m;
-  }, [pools, play]);
+  }, [index, play]);
   const playOf = (a: MediaNode): { plays: number; lastAt: number | null; whole: number } =>
     albumPlay.get(`${a.serverUdn}|${lc(a.title)}`) ?? { plays: 0, lastAt: null, whole: 0 };
   const playedOptions = useMemo(
@@ -183,21 +161,7 @@ export function AlbumsLens({
   // Compilation = named so by its album artist, or (tracks known) credited to
   // an album artist none of its performers is; "Daft Punk feat. …" is not.
   const kind = useStore((s) => s.settings.lensAlbumsKind);
-  const compilationKeys = useMemo(() => {
-    const byAlbum = new Map<string, MediaNode[]>();
-    for (const g of pools)
-      for (const t of g.tracks) {
-        if (!t.album) continue;
-        const k = `${g.udn}|${lc(t.album)}`;
-        const list = byAlbum.get(k);
-        if (list) list.push(t);
-        else byAlbum.set(k, [t]);
-      }
-    const keys = new Set<string>();
-    for (const a of all)
-      if (isCompilation(a, byAlbum.get(`${a.serverUdn}|${lc(a.title)}`))) keys.add(nodeKey(a));
-    return keys;
-  }, [pools, all]);
+  const compilationKeys = index.compilationKeys;
 
   const shown = useMemo(() => {
     let list = all;
