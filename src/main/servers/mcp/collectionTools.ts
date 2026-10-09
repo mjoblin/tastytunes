@@ -14,6 +14,7 @@ import {
   kindOf,
   largeQueueAsk,
   freshObjectId,
+  defineTool,
 } from "./toolkit";
 
 // The MCP bridge's collection tools (the collections: radio, playlists and their edits,
@@ -24,7 +25,7 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
   const { dm } = ctx;
   return {
     // ---- radio (keyless directory; never any listening telemetry)
-    search_radio: {
+    search_radio: defineTool({
       inputSchema: {
         query: z
           .string()
@@ -47,8 +48,8 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
             "The internet-radio directory is turned off in Settings › Connections (Internet radio directory), so station lookups are unavailable. Favorited stations still play.",
           );
         }
-        const q = (a.query as string | undefined)?.trim();
-        const g = (a.genre as string | undefined)?.trim().toLowerCase();
+        const q = a.query?.trim();
+        const g = a.genre?.trim().toLowerCase();
         if (!q && !g) return err("Pass query and/or genre.");
         let stations;
         if (g && !q) stations = await radioByTags([g]);
@@ -73,20 +74,20 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
           })),
         );
       },
-    },
-    play_radio: {
+    }),
+    play_radio: defineTool({
       inputSchema: {
         url: z.string().url().describe("Stream URL (from search_radio or a station favorite)."),
         name: z.string().min(1).describe("Display name for the station."),
       },
       handler: async (a) => {
         ctx.connected();
-        await dm.command({ type: "streamRadio", url: a.url as string, name: a.name as string });
+        await dm.command({ type: "streamRadio", url: a.url, name: a.name });
         return ok(`Tuning to ${String(a.name)}.`);
       },
-    },
+    }),
     // ---- favorites
-    list_playlists: {
+    list_playlists: defineTool({
       handler: () => {
         const s = dm.snapshot();
         return ok(
@@ -102,8 +103,8 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
           })),
         );
       },
-    },
-    get_playlist: {
+    }),
+    get_playlist: defineTool({
       inputSchema: { id: z.string().describe("Playlist id from list_playlists.") },
       handler: (a) => {
         const p = dm.snapshot().playlists.find((x) => x.id === a.id);
@@ -119,15 +120,15 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
           })),
         });
       },
-    },
-    play_playlist: {
+    }),
+    play_playlist: defineTool({
       inputSchema: { id: z.string().describe("Playlist id from list_playlists.") },
       handler: async (a) => {
         ctx.connected();
         const p = dm.snapshot().playlists.find((x) => x.id === a.id);
         if (!p) return err(`No playlist '${String(a.id)}'. Use list_playlists.`);
         if (p.items.length === 0) return err(`"${p.name}" is empty.`);
-        const res = await dm.playlistActivate(a.id as string);
+        const res = await dm.playlistActivate(a.id);
         const missed = res.missed.length;
         // Name a few and count the rest: a long playlist can miss dozens, and
         // twenty-two titles inline is noise an agent has to wade through.
@@ -139,8 +140,8 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
             : `Queued ${res.added} ${res.added === 1 ? "track" : "tracks"} from "${p.name}".`,
         );
       },
-    },
-    create_playlist: {
+    }),
+    create_playlist: defineTool({
       inputSchema: {
         name: z.string().describe("Name for the new playlist."),
         from_queue: z
@@ -170,11 +171,11 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
         // the stored name is uniquified, and finding by the REQUESTED name
         // would report the old playlist's id — an agent would then edit
         // the wrong list.
-        const made = dm.collections.playlistCreate(a.name as string, items);
+        const made = dm.collections.playlistCreate(a.name, items);
         return ok(`Created "${made.name}" with ${made.items.length} tracks. id: ${made.id}`);
       },
-    },
-    add_to_playlist: {
+    }),
+    add_to_playlist: defineTool({
       inputSchema: { id: z.string().describe("Playlist id from list_playlists.") },
       handler: (a) => {
         const s = dm.snapshot();
@@ -185,7 +186,7 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
         // in one, and content identity needs a title and an artist.
         if (!md || isRadioMetadata(md)) return err("Nothing playing that can go in a playlist.");
         if (!md.title || !md.artist) return err("The playing track has no title/artist to store.");
-        dm.collections.playlistAppend(a.id as string, [
+        dm.collections.playlistAppend(a.id, [
           {
             title: md.title,
             artist: md.artist,
@@ -199,17 +200,17 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
         ]);
         return ok(`Added "${md.title}" to "${p.name}".`);
       },
-    },
-    delete_playlist: {
+    }),
+    delete_playlist: defineTool({
       inputSchema: { id: z.string().describe("Playlist id from list_playlists.") },
       handler: (a) => {
         const p = dm.snapshot().playlists.find((x) => x.id === a.id);
         if (!p) return err(`No playlist '${String(a.id)}'. Use list_playlists.`);
-        dm.collections.playlistDelete(a.id as string);
+        dm.collections.playlistDelete(a.id);
         return ok(`Deleted "${p.name}".`);
       },
-    },
-    list_favorites: {
+    }),
+    list_favorites: defineTool({
       handler: () => {
         const s = dm.snapshot();
         return ok(
@@ -226,8 +227,8 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
           ),
         );
       },
-    },
-    play_favorite: {
+    }),
+    play_favorite: defineTool({
       inputSchema: {
         key: z.string().describe("Favorite key from list_favorites."),
         confirm_large: z
@@ -284,7 +285,7 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
                 return err(largeQueueAsk(e.tracks, "play_favorite"));
               throw e;
             }
-            dm.collections.favoriteUpdate(a.key as string, {
+            dm.collections.favoriteUpdate(a.key, {
               serverUdn: server.udn,
               serverName: server.name,
               objectId: match.id,
@@ -294,8 +295,8 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
         }
         return err(`Couldn't find "${fav.title}" on any media server right now.`);
       },
-    },
-    add_favorite: {
+    }),
+    add_favorite: defineTool({
       inputSchema: {
         station_url: z.string().url().optional().describe("Favorite a station: its stream URL…"),
         station_name: z.string().optional().describe("…and its display name (both or neither)."),
@@ -346,20 +347,20 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
           fav.kind === "station" ? `Favorited station ${fav.name}.` : `Favorited "${fav.title}".`,
         );
       },
-    },
-    remove_favorite: {
+    }),
+    remove_favorite: defineTool({
       inputSchema: { key: z.string().describe("Favorite key from list_favorites.") },
       handler: (a) => {
         const s = ctx.connected();
         const fav = s.favorites.find((f) => favoriteKey(f) === a.key);
         if (!fav) return err(`No favorite with key '${String(a.key)}'. Use list_favorites.`);
-        dm.collections.favoriteRemove(a.key as string);
+        dm.collections.favoriteRemove(a.key);
         return ok(
           fav.kind === "station"
             ? `Removed station ${fav.name} from favorites.`
             : `Removed "${fav.title}" from favorites.`,
         );
       },
-    },
+    }),
   };
 }

@@ -44,6 +44,7 @@ import {
   QUEUE_MODES,
   largeQueueAsk,
   freshObjectId,
+  defineTool,
 } from "./toolkit";
 
 // The MCP bridge's library tools (the library: servers, browsing, the lenses' lists, search and
@@ -54,7 +55,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
   const { dm } = ctx;
   return {
     // ---- library
-    rebuild_library_index: {
+    rebuild_library_index: defineTool({
       inputSchema: {
         server_udn: z
           .string()
@@ -63,8 +64,8 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
       handler: async (a) => {
         const s = ctx.connected();
         const servers = await refreshServers(s.connection.host);
-        const server = servers.find((x) => x.udn === (a.server_udn as string));
-        if (!server) return err(`No media server with udn ${a.server_udn as string}.`);
+        const server = servers.find((x) => x.udn === a.server_udn);
+        if (!server) return err(`No media server with udn ${a.server_udn}.`);
         // Browse-only servers (a streamer's USB drive) never index
         // themselves — this is the ONLY way to make them searchable, which
         // is why an agent needs it: list_media_servers can already SEE that
@@ -76,7 +77,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
         // instead of reporting zeros as though they were the answer.
         const statusOf = ():
           { state: string; albums: number; artists: number; tracks: number } | undefined => {
-          const x = indexStatus().find((y) => y.udn === (a.server_udn as string));
+          const x = indexStatus().find((y) => y.udn === a.server_udn);
           return x
             ? {
                 state: x.state,
@@ -106,8 +107,8 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
           tracks: st?.tracks ?? 0,
         });
       },
-    },
-    list_media_servers: {
+    }),
+    list_media_servers: defineTool({
       handler: async () => {
         const s = ctx.connected();
         const servers = await refreshServers(s.connection.host);
@@ -153,8 +154,8 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
           }),
         );
       },
-    },
-    search_library: {
+    }),
+    search_library: defineTool({
       inputSchema: {
         query: z.string().min(1).describe("Album, artist, or track name (partial matches ok)."),
         server_udn: z
@@ -204,15 +205,11 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
           ...servers.filter((x) => ready.has(x.udn)),
           ...servers.filter((x) => !ready.has(x.udn)).slice(0, 3),
         ];
-        const tokens = (a.query as string).toLowerCase().split(/\s+/).filter(Boolean);
+        const tokens = a.query.toLowerCase().split(/\s+/).filter(Boolean);
         const collected: unknown[] = [];
         let sourceCapped = false;
         for (const server of fleet) {
-          const { items, total } = await librarySearch(
-            s.connection.host,
-            server.udn,
-            a.query as string,
-          );
+          const { items, total } = await librarySearch(s.connection.host, server.udn, a.query);
           if (total > items.length) sourceCapped = true;
           for (const n of items) {
             const kind = kindOf(n);
@@ -242,8 +239,8 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
             });
           }
         }
-        const offset = (a.offset as number | undefined) ?? 0;
-        const limit = (a.limit as number | undefined) ?? 40;
+        const offset = a.offset ?? 0;
+        const limit = a.limit ?? 40;
         const page = collected.slice(offset, offset + limit);
         return ok({
           total: collected.length,
@@ -257,8 +254,8 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
           results: page,
         });
       },
-    },
-    list_albums: {
+    }),
+    list_albums: defineTool({
       inputSchema: {
         artist: z
           .string()
@@ -331,8 +328,8 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
               : ctx.kickIndex(),
           );
         }
-        const artistNeedle = (a.artist as string | undefined)?.toLowerCase();
-        const genreNeedle = (a.genre as string | undefined)?.toLowerCase();
+        const artistNeedle = a.artist?.toLowerCase();
+        const genreNeedle = a.genre?.toLowerCase();
         const decade = a.decade != null ? String(a.decade).replace(/s$/i, "") : null;
         let albums = groups.flatMap((p) => p.albums);
         if (artistNeedle != null)
@@ -383,10 +380,10 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
             );
           });
         if (a.min_dr != null) {
-          const min = a.min_dr as number;
+          const min = a.min_dr;
           albums = albums.filter((n) => (albumDr(n) ?? -1) >= min);
         }
-        const formatNeedle = (a.format as string | undefined)?.toLowerCase();
+        const formatNeedle = a.format?.toLowerCase();
         if (formatNeedle != null)
           albums = albums.filter((n) => {
             const { tracks, sum } = summaryFor(n);
@@ -395,7 +392,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
               tracks.some((t) => (formatLabel(t.format) ?? "").toLowerCase().includes(formatNeedle))
             );
           });
-        const composerNeedle = (a.composer as string | undefined)?.toLowerCase();
+        const composerNeedle = a.composer?.toLowerCase();
         if (composerNeedle != null)
           albums = albums.filter((n) =>
             summaryFor(n).tracks.some((t) =>
@@ -439,8 +436,8 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
             );
           return x.title.localeCompare(y.title);
         });
-        const offset = (a.offset as number | undefined) ?? 0;
-        const limit = (a.limit as number | undefined) ?? 40;
+        const offset = a.offset ?? 0;
+        const limit = a.limit ?? 40;
         const page = albums.slice(offset, offset + limit);
         return ok({
           total: albums.length,
@@ -480,8 +477,8 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
           }),
         });
       },
-    },
-    list_artists: {
+    }),
+    list_artists: defineTool({
       inputSchema: {
         query: z
           .string()
@@ -542,7 +539,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
             for (const t of p.tracks) for (const name of trackArtists(t)) bump(name, "tracks");
           }
         }
-        const needle = (a.query as string | undefined)?.toLowerCase();
+        const needle = a.query?.toLowerCase();
         let artists = [...byName.values()];
         if (needle != null) artists = artists.filter((x) => x.name.toLowerCase().includes(needle));
         const sort = (a.sort as string | undefined) ?? "name";
@@ -551,13 +548,13 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
             ? y.albums - x.albums || nameSortKey(x.name).localeCompare(nameSortKey(y.name))
             : nameSortKey(x.name).localeCompare(nameSortKey(y.name)),
         );
-        const offset = (a.offset as number | undefined) ?? 0;
-        const limit = (a.limit as number | undefined) ?? 100;
+        const offset = a.offset ?? 0;
+        const limit = a.limit ?? 100;
         const page = artists.slice(offset, offset + limit);
         return ok({ total: artists.length, offset, returned: page.length, artists: page });
       },
-    },
-    list_tracks: {
+    }),
+    list_tracks: defineTool({
       inputSchema: {
         artist: z
           .string()
@@ -613,11 +610,11 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
               : ctx.kickIndex(),
           );
         const lc = (v: string | null | undefined): string => (v ?? "").toLowerCase();
-        const artistNeedle = (a.artist as string | undefined)?.toLowerCase();
-        const albumNeedle = (a.album as string | undefined)?.toLowerCase();
-        const genreNeedle = (a.genre as string | undefined)?.toLowerCase();
+        const artistNeedle = a.artist?.toLowerCase();
+        const albumNeedle = a.album?.toLowerCase();
+        const genreNeedle = a.genre?.toLowerCase();
         const decade = a.decade != null ? String(a.decade).replace(/s$/i, "") : null;
-        const formatNeedle = (a.format as string | undefined)?.toLowerCase();
+        const formatNeedle = a.format?.toLowerCase();
         const drOf = (t: MediaNode): number | null => {
           const an = audioAnalysisGet(audioAnalysisKey(t));
           return an && an.dr > 0 ? an.dr : null;
@@ -650,7 +647,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
           tracks = tracks.filter((t) => LOSSLESS_CODECS.has((t.format?.codec ?? "").toUpperCase()));
         if (a.hires === true) tracks = tracks.filter((t) => (t.format ? isHiRes(t.format) : false));
         if (a.min_dr != null) {
-          const min = a.min_dr as number;
+          const min = a.min_dr;
           tracks = tracks.filter((t) => (drOf(t) ?? -1) >= min);
         }
         const stats = await playStatsFromRecord();
@@ -681,8 +678,8 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
             return (statOf(y)?.lastAt ?? 0) - (statOf(x)?.lastAt ?? 0) || byTitle(x, y);
           return byTitle(x, y);
         });
-        const offset = (a.offset as number | undefined) ?? 0;
-        const limit = (a.limit as number | undefined) ?? 50;
+        const offset = a.offset ?? 0;
+        const limit = a.limit ?? 50;
         const page = tracks.slice(offset, offset + limit);
         return ok({
           total: tracks.length,
@@ -708,8 +705,8 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
           }),
         });
       },
-    },
-    get_track_analysis: {
+    }),
+    get_track_analysis: defineTool({
       inputSchema: {
         title: z
           .string()
@@ -726,15 +723,15 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
             })
           | null = null;
         if (a.title) {
-          const title = lc(a.title as string);
+          const title = lc(a.title);
           t =
             indexPools()
               .flatMap((p) => p.tracks)
               .find(
                 (n) =>
                   lc(n.title) === title &&
-                  (!a.artist || lc(n.artist).includes(lc(a.artist as string))) &&
-                  (!a.album || lc(n.album).includes(lc(a.album as string))),
+                  (!a.artist || lc(n.artist).includes(lc(a.artist))) &&
+                  (!a.album || lc(n.album).includes(lc(a.album))),
               ) ?? null;
           if (!t)
             return err(
@@ -775,8 +772,8 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
             "EBU R128 integrated loudness (LUFS) with true peak (dBTP); the album value integrates across every track, gated as one programme.",
         });
       },
-    },
-    get_album_art: {
+    }),
+    get_album_art: defineTool({
       inputSchema: {
         server_udn: z.string().describe("From search_library / list_albums / list_media_servers."),
         object_id: z
@@ -800,13 +797,13 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
               ? ctx.kickIndex()
               : `No ready index for server '${String(a.server_udn)}'. Use list_media_servers.`,
           );
-        const id = a.object_id as string;
+        const id = a.object_id;
         const node = pool.albums.find((n) => n.id === id) ?? pool.tracks.find((n) => n.id === id);
         if (!node)
           return err(
             `Object '${id}' is not an album or a track in the index for '${pool.serverName}' — list_albums and search_library give indexed ids.`,
           );
-        const tier = (a.size as "card" | "thumb" | undefined) ?? "card";
+        const tier = a.size ?? "card";
         let got: { bytes: Buffer; type: string } | null = null;
         let from: "server" | "file" = "server";
         if (node.artUrl)
@@ -865,8 +862,8 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
           ],
         };
       },
-    },
-    get_media_info: {
+    }),
+    get_media_info: defineTool({
       inputSchema: {
         server_udn: z.string().describe("From search_library / list_albums / list_media_servers."),
         object_id: z.string().describe("The album, track or artist object id."),
@@ -883,7 +880,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
               ? ctx.kickIndex()
               : `No ready index for server '${String(a.server_udn)}'. Use list_media_servers.`,
           );
-        const id = a.object_id as string;
+        const id = a.object_id;
         const node =
           pool.tracks.find((n) => n.id === id) ??
           pool.albums.find((n) => n.id === id) ??
@@ -991,8 +988,8 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
           ...(summary.years ? { active_years: summary.years } : {}),
         });
       },
-    },
-    play_media: {
+    }),
+    play_media: defineTool({
       inputSchema: {
         server_udn: z.string().describe("From search_library / list_media_servers."),
         object_id: z.string().describe("From search_library."),
@@ -1013,22 +1010,13 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
         const s = ctx.connected();
         const mode = (a.mode as string | undefined) ?? "play_now";
         // a Browse-built (USB) index is revalidated first: the id in hand may have rotted
-        const fresh = await freshObjectId(
-          s.connection.host,
-          a.server_udn as string,
-          a.object_id as string,
-        );
+        const fresh = await freshObjectId(s.connection.host, a.server_udn, a.object_id);
         if ("error" in fresh) return err(fresh.error);
         try {
           await ctx.dm.ensureAwake(); // agents get wake-on-intent too
-          await queueAdd(
-            s.connection.host,
-            a.server_udn as string,
-            fresh.id,
-            QUEUE_MODES[mode],
-            undefined,
-            { confirmLarge: a.confirm_large === true },
-          );
+          await queueAdd(s.connection.host, a.server_udn, fresh.id, QUEUE_MODES[mode], undefined, {
+            confirmLarge: a.confirm_large === true,
+          });
         } catch (e) {
           if (e instanceof LargeQueueError) return err(largeQueueAsk(e.tracks, "play_media"));
           return err(
@@ -1045,6 +1033,6 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
                 : "Added to the end of the queue.",
         );
       },
-    },
+    }),
   };
 }

@@ -35,6 +35,21 @@ export interface ToolImpl {
   handler(args: Record<string, unknown>): Promise<ToolResult> | ToolResult;
 }
 
+/**
+ * A tool whose handler reads its arguments typed by its own schema (0.11.0 sweep): the SDK
+ * validates a call's arguments against inputSchema before the handler runs, so the types
+ * are what arrives, and the handlers lost their `as string` casts. A tool without a schema
+ * takes no arguments.
+ */
+export function defineTool<S extends ZodRawShape>(tool: {
+  inputSchema: S;
+  handler(args: z.infer<z.ZodObject<S>>): Promise<ToolResult> | ToolResult;
+}): ToolImpl;
+export function defineTool(tool: { handler(): Promise<ToolResult> | ToolResult }): ToolImpl;
+export function defineTool(tool: ToolImpl): ToolImpl {
+  return tool;
+}
+
 export const ok = (payload: unknown): ToolResult => ({
   content: [
     {

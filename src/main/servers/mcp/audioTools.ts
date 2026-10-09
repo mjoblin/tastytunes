@@ -4,7 +4,7 @@ import { getSettings } from "../../data/persist";
 import { fetchArtistInfo } from "../../lookups/artistInfo";
 import { fetchAlbumInfo } from "../../lookups/albumInfo";
 import { fetchLyrics } from "../../lookups/lyrics";
-import { type ToolContext, type ToolImpl, ok, err, lc, toneCaps } from "./toolkit";
+import { type ToolContext, type ToolImpl, ok, err, lc, toneCaps, defineTool } from "./toolkit";
 
 // The MCP bridge's audio tools (audio: tone and EQ, the analysis readouts, the display, the
 // lookups), one of six tool modules split out of mcpServer.ts 2026-09-13; the shapes and helpers
@@ -14,7 +14,7 @@ export function audioTools(ctx: ToolContext): Record<string, ToolImpl> {
   const { dm } = ctx;
   return {
     // ---- tone & EQ (feature-detected; toneCaps errors cleanly without)
-    get_audio_settings: {
+    get_audio_settings: defineTool({
       handler: () => {
         const { s, caps } = toneCaps(ctx);
         const za = s.zoneAudio;
@@ -31,8 +31,8 @@ export function audioTools(ctx: ToolContext): Record<string, ToolImpl> {
           saved_presets: getSettings().eqPresets.map((p) => p.name),
         });
       },
-    },
-    set_eq_band: {
+    }),
+    set_eq_band: defineTool({
       inputSchema: {
         band: z
           .number()
@@ -48,13 +48,13 @@ export function audioTools(ctx: ToolContext): Record<string, ToolImpl> {
           await dm.command({ type: "setUserEq", enabled: true });
         await dm.command({
           type: "setEqBandGain",
-          index: a.band as number,
-          gain: a.gain_db as number,
+          index: a.band,
+          gain: a.gain_db,
         });
         return ok(`Band ${String(a.band)} set to ${String(a.gain_db)} dB.`);
       },
-    },
-    set_tilt: {
+    }),
+    set_tilt: defineTool({
       inputSchema: {
         intensity: z
           .number()
@@ -65,11 +65,11 @@ export function audioTools(ctx: ToolContext): Record<string, ToolImpl> {
         if (!caps.tilt) return err("This streamer has no tone tilt.");
         if (s.zoneAudio?.tilt_eq?.enabled !== true)
           await dm.command({ type: "setTiltEq", enabled: true });
-        await dm.command({ type: "setTiltIntensity", intensity: a.intensity as number });
+        await dm.command({ type: "setTiltIntensity", intensity: a.intensity });
         return ok(`Tilt set to ${String(a.intensity)}.`);
       },
-    },
-    set_balance: {
+    }),
+    set_balance: defineTool({
       inputSchema: {
         balance: z
           .number()
@@ -78,15 +78,15 @@ export function audioTools(ctx: ToolContext): Record<string, ToolImpl> {
       handler: async (a) => {
         const { caps } = toneCaps(ctx);
         if (!caps.balance) return err("This streamer has no balance control.");
-        await dm.command({ type: "setBalance", balance: a.balance as number });
+        await dm.command({ type: "setBalance", balance: a.balance });
         return ok(`Balance set to ${String(a.balance)}.`);
       },
-    },
-    apply_eq_preset: {
+    }),
+    apply_eq_preset: defineTool({
       inputSchema: { name: z.string().describe("A saved preset name from get_audio_settings.") },
       handler: async (a) => {
         toneCaps(ctx);
-        const preset = getSettings().eqPresets.find((p) => lc(p.name) === lc(a.name as string));
+        const preset = getSettings().eqPresets.find((p) => lc(p.name) === lc(a.name));
         if (!preset)
           return err(
             `No saved EQ preset named '${String(a.name)}'. get_audio_settings lists them.`,
@@ -95,30 +95,30 @@ export function audioTools(ctx: ToolContext): Record<string, ToolImpl> {
         await dm.command({ type: "setEqBands", gains: preset.gains });
         return ok(`Applied EQ preset "${preset.name}".`);
       },
-    },
-    reset_eq: {
+    }),
+    reset_eq: defineTool({
       handler: async () => {
         toneCaps(ctx);
         await dm.command({ type: "setEqBands", gains: [0, 0, 0, 0, 0, 0, 0] });
         return ok("EQ reset to flat.");
       },
-    },
+    }),
     // ---- display
-    set_display_brightness: {
+    set_display_brightness: defineTool({
       inputSchema: { level: z.enum(["off", "dim", "bright"]) },
       handler: async (a) => {
         const s = ctx.connected();
         const options = brightnessOptions(s.displaySpec);
         if (!options) return err("This streamer has no front-panel display.");
-        if (!options.includes(a.level as string)) {
+        if (!options.includes(a.level)) {
           return err(`This display only supports: ${options.join(", ")}.`);
         }
-        await dm.command({ type: "setBrightness", brightness: a.level as string });
+        await dm.command({ type: "setBrightness", brightness: a.level });
         return ok(`Display set to ${String(a.level)}.`);
       },
-    },
+    }),
     // ---- lookups (each behind its Connections toggle: off = no requests, ever)
-    get_lyrics: {
+    get_lyrics: defineTool({
       handler: async () => {
         if (!getSettings().lyrics) {
           return err(
@@ -138,8 +138,8 @@ export function audioTools(ctx: ToolContext): Record<string, ToolImpl> {
         if (r.instrumental) return ok("Instrumental — no lyrics.");
         return ok({ title: md.title, artist: md.artist, lyrics: r.plain ?? r.synced });
       },
-    },
-    get_artist_info: {
+    }),
+    get_artist_info: defineTool({
       inputSchema: { artist: z.string().optional().describe("Defaults to the playing artist.") },
       handler: async (a) => {
         if (!getSettings().artistInfo) {
@@ -148,7 +148,7 @@ export function audioTools(ctx: ToolContext): Record<string, ToolImpl> {
           );
         }
         const s = ctx.connected();
-        const name = (a.artist as string | undefined) ?? s.playState?.metadata?.artist ?? null;
+        const name = a.artist ?? s.playState?.metadata?.artist ?? null;
         if (!name) return err("No artist playing — pass artist explicitly.");
         const info = await fetchArtistInfo(name);
         if (!info) return ok(`No artist match for "${name}".`);
@@ -159,8 +159,8 @@ export function audioTools(ctx: ToolContext): Record<string, ToolImpl> {
           musicbrainz: info.musicbrainzUrl,
         });
       },
-    },
-    get_album_info: {
+    }),
+    get_album_info: defineTool({
       inputSchema: {
         artist: z.string().optional().describe("Defaults to the playing artist."),
         album: z.string().optional().describe("Defaults to the playing album."),
@@ -173,8 +173,8 @@ export function audioTools(ctx: ToolContext): Record<string, ToolImpl> {
           );
         }
         const s = ctx.connected();
-        const artist = (a.artist as string | undefined) ?? s.playState?.metadata?.artist ?? null;
-        const album = (a.album as string | undefined) ?? s.playState?.metadata?.album ?? null;
+        const artist = a.artist ?? s.playState?.metadata?.artist ?? null;
+        const album = a.album ?? s.playState?.metadata?.album ?? null;
         if (!artist || !album) return err("No album playing — pass artist and album explicitly.");
         const info = await fetchAlbumInfo(artist, album, false, true);
         if (!info) return ok(`No album match for "${album}" by ${artist}.`);
@@ -190,6 +190,6 @@ export function audioTools(ctx: ToolContext): Record<string, ToolImpl> {
           musicbrainz: info.musicbrainzUrl,
         });
       },
-    },
+    }),
   };
 }

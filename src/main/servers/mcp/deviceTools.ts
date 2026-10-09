@@ -1,7 +1,15 @@
 import { z } from "zod";
 import { sleepTrackKey } from "@shared/model";
 import { getSettings } from "../../data/persist";
-import { type ToolContext, type ToolImpl, ok, err, status, scheduleOut } from "./toolkit";
+import {
+  type ToolContext,
+  type ToolImpl,
+  ok,
+  err,
+  status,
+  scheduleOut,
+  defineTool,
+} from "./toolkit";
 
 // The MCP bridge's device tools (the streamer itself: status and the lists, transport, volume,
 // presets, sources, power, devices and the sleep timer), one of six tool modules split out of
@@ -11,8 +19,8 @@ export function deviceTools(ctx: ToolContext): Record<string, ToolImpl> {
   const { dm } = ctx;
   return {
     // ---- status & lists
-    get_status: { handler: () => ok(status(ctx)) },
-    list_queue: {
+    get_status: defineTool({ handler: () => ok(status(ctx)) }),
+    list_queue: defineTool({
       handler: () => {
         const s = ctx.connected();
         return ok({
@@ -28,8 +36,8 @@ export function deviceTools(ctx: ToolContext): Record<string, ToolImpl> {
           })),
         });
       },
-    },
-    list_presets: {
+    }),
+    list_presets: defineTool({
       handler: () => {
         const s = ctx.connected();
         return ok(
@@ -41,8 +49,8 @@ export function deviceTools(ctx: ToolContext): Record<string, ToolImpl> {
           })),
         );
       },
-    },
-    list_sources: {
+    }),
+    list_sources: defineTool({
       handler: () => {
         const s = ctx.connected();
         const active = s.zoneState?.source ?? s.nowPlaying?.source?.id ?? null;
@@ -52,8 +60,8 @@ export function deviceTools(ctx: ToolContext): Record<string, ToolImpl> {
             .map((x) => ({ id: x.id, name: x.name, kind: x.class, active: x.id === active })),
         );
       },
-    },
-    list_devices: {
+    }),
+    list_devices: defineTool({
       handler: () => {
         const s = dm.snapshot();
         const current = s.connection.phase === "connected" ? s.connection.host : null;
@@ -66,8 +74,8 @@ export function deviceTools(ctx: ToolContext): Record<string, ToolImpl> {
           })),
         );
       },
-    },
-    list_recently_played: {
+    }),
+    list_recently_played: defineTool({
       inputSchema: {
         limit: z.number().int().min(1).max(200).optional().describe("Max entries (default 25)."),
       },
@@ -87,77 +95,77 @@ export function deviceTools(ctx: ToolContext): Record<string, ToolImpl> {
             })),
         );
       },
-    },
-    list_schedules: {
+    }),
+    list_schedules: defineTool({
       handler: () =>
         ok({
           note: "Schedules fire only while TastyTunes is running and connected.",
           schedules: getSettings().schedules.map(scheduleOut),
         }),
-    },
+    }),
     // ---- transport
-    play: {
+    play: defineTool({
       handler: async () => {
         ctx.connected();
         await dm.command({ type: "play" });
         return ok("Playing.");
       },
-    },
-    pause: {
+    }),
+    pause: defineTool({
       handler: async () => {
         ctx.connected();
         await dm.command({ type: "pause" });
         return ok("Paused.");
       },
-    },
-    stop: {
+    }),
+    stop: defineTool({
       handler: async () => {
         ctx.connected();
         await dm.command({ type: "stop" });
         return ok("Stopped.");
       },
-    },
-    next_track: {
+    }),
+    next_track: defineTool({
       handler: async () => {
         ctx.connected();
         await dm.command({ type: "nextTrack" });
         return ok("Skipped to the next track.");
       },
-    },
-    previous_track: {
+    }),
+    previous_track: defineTool({
       handler: async () => {
         ctx.connected();
         await dm.command({ type: "previousTrack" });
         return ok("Went back to the previous track.");
       },
-    },
-    seek: {
+    }),
+    seek: defineTool({
       inputSchema: {
         position_seconds: z.number().min(0).describe("Position in the current track, in seconds."),
       },
       handler: async (a) => {
         ctx.connected();
-        await dm.command({ type: "seek", positionSecs: a.position_seconds as number });
+        await dm.command({ type: "seek", positionSecs: a.position_seconds });
         return ok(`Seeked to ${String(a.position_seconds)}s.`);
       },
-    },
-    play_queue_item: {
+    }),
+    play_queue_item: defineTool({
       inputSchema: { id: z.number().int().describe("Queue item id from list_queue.") },
       handler: async (a) => {
         ctx.connected();
-        await dm.command({ type: "playQueueId", queueId: a.id as number });
+        await dm.command({ type: "playQueueId", queueId: a.id });
         return ok(`Playing queue item ${String(a.id)}.`);
       },
-    },
-    set_shuffle: {
+    }),
+    set_shuffle: defineTool({
       inputSchema: { on: z.boolean() },
       handler: async (a) => {
         ctx.connected();
         await dm.command({ type: "setShuffle", mode: a.on ? "all" : "off" });
         return ok(`Shuffle ${a.on ? "on" : "off"}.`);
       },
-    },
-    set_repeat: {
+    }),
+    set_repeat: defineTool({
       inputSchema: {
         mode: z
           .enum(["off", "all", "one"])
@@ -170,30 +178,28 @@ export function deviceTools(ctx: ToolContext): Record<string, ToolImpl> {
       },
       handler: async (a) => {
         ctx.connected();
-        const mode =
-          (a.mode as "off" | "all" | "one" | undefined) ??
-          (a.on === true ? "all" : a.on === false ? "off" : null);
+        const mode = a.mode ?? (a.on === true ? "all" : a.on === false ? "off" : null);
         if (!mode) return err("Say which: mode off, all or one.");
         await dm.command({ type: "setRepeat", mode });
         return ok(`Repeat ${mode}.`);
       },
-    },
+    }),
     // ---- volume
-    set_volume: {
+    set_volume: defineTool({
       inputSchema: { percent: z.number().min(0).max(100).describe("Absolute volume percent.") },
       handler: async (a) => {
         ctx.connected();
-        await dm.command({ type: "setVolumePercent", percent: a.percent as number });
+        await dm.command({ type: "setVolumePercent", percent: a.percent });
         const limit = getSettings().volumeLimitPercent;
-        const capped = limit != null && (a.percent as number) > limit;
+        const capped = limit != null && a.percent > limit;
         return ok(
           capped
             ? `Volume set to ${limit}% (the app's volume limit).`
             : `Volume set to ${String(a.percent)}%.`,
         );
       },
-    },
-    change_volume: {
+    }),
+    change_volume: defineTool({
       inputSchema: {
         steps: z
           .number()
@@ -204,30 +210,30 @@ export function deviceTools(ctx: ToolContext): Record<string, ToolImpl> {
       },
       handler: async (a) => {
         ctx.connected();
-        await dm.command({ type: "volumeStepChange", delta: a.steps as number });
+        await dm.command({ type: "volumeStepChange", delta: a.steps });
         return ok(`Volume nudged by ${String(a.steps)} step(s).`);
       },
-    },
-    set_mute: {
+    }),
+    set_mute: defineTool({
       inputSchema: { muted: z.boolean() },
       handler: async (a) => {
         ctx.connected();
-        await dm.command({ type: "setMute", mute: a.muted as boolean });
+        await dm.command({ type: "setMute", mute: a.muted });
         return ok(a.muted ? "Muted." : "Unmuted.");
       },
-    },
+    }),
     // ---- presets / sources / power / devices
-    recall_preset: {
+    recall_preset: defineTool({
       inputSchema: { id: z.number().int().min(1).describe("Preset id from list_presets.") },
       handler: async (a) => {
         const s = ctx.connected();
         const preset = (s.presets?.presets ?? []).find((p) => p.id === a.id);
         if (!preset) return err(`No preset ${String(a.id)}. Use list_presets.`);
-        await dm.command({ type: "recallPreset", presetId: a.id as number });
+        await dm.command({ type: "recallPreset", presetId: a.id });
         return ok(`Recalled preset ${String(a.id)}${preset.name ? ` (${preset.name})` : ""}.`);
       },
-    },
-    set_source: {
+    }),
+    set_source: defineTool({
       inputSchema: {
         id: z.string().describe("Source id from list_sources, e.g. MEDIA_PLAYER or IR."),
       },
@@ -235,27 +241,27 @@ export function deviceTools(ctx: ToolContext): Record<string, ToolImpl> {
         const s = ctx.connected();
         const src = (s.sources?.sources ?? []).find((x) => x.id === a.id);
         if (!src) return err(`Unknown source '${String(a.id)}'. Use list_sources.`);
-        await dm.command({ type: "setSource", sourceId: a.id as string });
+        await dm.command({ type: "setSource", sourceId: a.id });
         return ok(`Switched to ${src.name}.`);
       },
-    },
-    set_power: {
+    }),
+    set_power: defineTool({
       inputSchema: { state: z.enum(["on", "standby"]) },
       handler: async (a) => {
         ctx.connected();
         await dm.command({ type: "power", power: a.state === "on" ? "ON" : "NETWORK" });
         return ok(a.state === "on" ? "Powering on." : "Going to network standby.");
       },
-    },
-    connect_device: {
+    }),
+    connect_device: defineTool({
       inputSchema: { host: z.string().describe("Host or IP from list_devices.") },
       handler: (a) => {
-        dm.connect(a.host as string);
+        dm.connect(a.host);
         return ok(`Connecting to ${String(a.host)}. Call get_status to confirm.`);
       },
-    },
+    }),
     // ---- sleep timer
-    set_sleep_timer: {
+    set_sleep_timer: defineTool({
       inputSchema: {
         minutes: z
           .number()
@@ -272,8 +278,7 @@ export function deviceTools(ctx: ToolContext): Record<string, ToolImpl> {
       handler: (a) => {
         const s = ctx.connected();
         const stored = getSettings().sleepAction;
-        const action = (a.action ?? (stored === "pause" ? "pause" : "standby")) as
-          "pause" | "standby";
+        const action = a.action ?? (stored === "pause" ? "pause" : "standby");
         if (a.end_of_track) {
           const key = sleepTrackKey(s.playState);
           if (key == null) return err("Nothing identifiable is playing — use minutes instead.");
@@ -289,12 +294,12 @@ export function deviceTools(ctx: ToolContext): Record<string, ToolImpl> {
         });
         return ok(`Sleep timer armed: ${action} in ${a.minutes} minute(s).`);
       },
-    },
-    cancel_sleep_timer: {
+    }),
+    cancel_sleep_timer: defineTool({
       handler: () => {
         dm.setSleep(null);
         return ok("Sleep timer cleared.");
       },
-    },
+    }),
   };
 }
