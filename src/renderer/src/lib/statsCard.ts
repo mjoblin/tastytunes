@@ -1,5 +1,11 @@
 import { fmtCount, fmtDuration } from "@/lib/format";
-import { dayStartOf, type ListeningStats, type TopEntry } from "@/lib/historyStats";
+import {
+  cardSources,
+  dayStartOf,
+  FILES_SCOPE,
+  type ListeningStats,
+  type TopEntry,
+} from "@/lib/historyStats";
 import { FACT_SEP } from "@/lib/mediaFacts";
 
 /**
@@ -209,7 +215,12 @@ export async function renderStatsCard(input: StatsCardInput): Promise<Blob> {
     ctx.lineWidth = 1;
     ctx.stroke();
     micro(tile.label, x + 20, ty + 32);
-    ctx.font = `600 38px ${t.display}`;
+    // a value steps its size down to fit before it is ever cut (2026-10-11: "2 hrs 38 min"
+    // read "2 hrs 38…" at the tile's 38 px)
+    let size = 38;
+    ctx.font = `600 ${size}px ${t.display}`;
+    while (size > 24 && ctx.measureText(tile.value).width > tw - 40)
+      ctx.font = `600 ${--size}px ${t.display}`;
     ctx.fillStyle = t.ink;
     ctx.fillText(fit(ctx, tile.value, tw - 40), x + 20, ty + 76);
     ctx.font = `400 13px ${t.sans}`;
@@ -342,7 +353,8 @@ export async function renderStatsCard(input: StatsCardInput): Promise<Blob> {
   drawBars(
     M,
     "Where it played",
-    stats.bySource.slice(0, 4).map((s) => ({
+    // four rows fit; past four the rest fold into one (cardSources)
+    cardSources(stats.bySource).map((s) => ({
       label: s.source,
       seconds: s.seconds,
       detail:
@@ -357,13 +369,14 @@ export async function renderStatsCard(input: StatsCardInput): Promise<Blob> {
     { label: "Unknown", seconds: stats.quality.unknown, detail: null },
   ].filter((r) => r.seconds > 0);
   drawBars(M + half + colGap, "The files", files);
+  ctx.font = `400 11.5px ${t.sans}`;
+  ctx.fillStyle = t.faint;
+  ctx.fillText(FILES_SCOPE, M + half + colGap, barsY + 30 + files.length * 30 + 2);
   if (stats.quality.hires > 0) {
-    ctx.font = `400 11.5px ${t.sans}`;
-    ctx.fillStyle = t.faint;
     ctx.fillText(
       `${fmtDuration(stats.quality.hires)} of the lossless time was hi-res.`,
       M + half + colGap,
-      barsY + 30 + files.length * 30 + 2,
+      barsY + 30 + files.length * 30 + 20,
     );
   }
   const barsBottom = barsY + 30 + 4 * 30;

@@ -79,9 +79,41 @@ export const monthStartOf = (ms: number): number => {
 const secondsOf = (e: ListeningEvent): number =>
   "playedSeconds" in e && typeof e.playedSeconds === "number" ? e.playedSeconds : 0;
 
-/** The Source label for a line: Library, Radio, or the external source's name. */
+/**
+ * The saved card's "Where it played" rows: every source when four fit, else the top three and
+ * the rest folded into one row, so the card's time still adds up to the screen's (2026-10-11:
+ * the card kept the top four and a user's fifth, his AirPlay minute, went missing).
+ */
+export function cardSources(rows: ListeningStats["bySource"], fit = 4): ListeningStats["bySource"] {
+  if (rows.length <= fit) return rows;
+  const rest = rows.slice(fit - 1);
+  return [
+    ...rows.slice(0, fit - 1),
+    {
+      source: "Other sources",
+      seconds: rest.reduce((a, s) => a + s.seconds, 0),
+      count: rest.length,
+      unit: "sources",
+    },
+  ];
+}
+
+/** What "The files" counts, on the screen and on the saved card. */
+export const FILES_SCOPE = "Library plays only.";
+
+/**
+ * The Source label for a line: Library, Radio, or the external source's name. A track the
+ * streamer's media player played without a queue position (started by another app) is the
+ * same place as the Library and counts there (2026-10-11, a user's Stats: "Media Library",
+ * the Evo's name for that input, sat under "Library" as a near twin); it stays time, not a
+ * play, as the other sources do.
+ */
 export const sourceNameOf = (e: ListeningEvent): string =>
-  e.kind === "play" ? "Library" : e.kind === "external" ? (e.source ?? "Another source") : "Radio";
+  e.kind === "play" || (e.kind === "external" && e.sourceId === "MEDIA_PLAYER")
+    ? "Library"
+    : e.kind === "external"
+      ? (e.source ?? "Another source")
+      : "Radio";
 
 const TOP = 8;
 

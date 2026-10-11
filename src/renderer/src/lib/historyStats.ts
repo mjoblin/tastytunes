@@ -5,6 +5,8 @@ import type { ListeningStats } from "@shared/historyStats";
 // bridge answers the screen's numbers); this is the renderer's face of it —
 // the same exports for the History screens, plus the one formatted line.
 export {
+  cardSources,
+  FILES_SCOPE,
   statsFor,
   dayStartOf,
   monthStartOf,
