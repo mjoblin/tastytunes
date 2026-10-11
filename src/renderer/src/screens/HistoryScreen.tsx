@@ -39,7 +39,8 @@ import { NameLine } from "@/components/media/NameLine";
 import { PresetPicker } from "@/components/library/LibraryMenus";
 import { trackMenuItems, type MediaMenuItem } from "@/lib/mediaMenus";
 import { cx, fmtDayBucket, fmtRelative, matchesFilter } from "@/lib/format";
-import { clearRecentsWithUndo } from "@/lib/recents";
+import { CLEAR_RECENTS } from "@/lib/recents";
+import { useConfirmPopover } from "@/components/chrome/Confirm";
 import { FilterInput } from "@/components/controls/FilterInput";
 import { ScreenTitle, GAP_BETWEEN } from "@/components/chrome/Chrome";
 import { HistoryTimeline, filterEvents } from "@/components/history/HistoryTimeline";
@@ -97,6 +98,7 @@ let historyMem: { streamer: string | null } = { streamer: null };
 
 /** History: the local device log (Recent) and the listening record (Timeline). */
 export function HistoryScreen(): React.JSX.Element {
+  const clearConfirm = useConfirmPopover();
   const allRecents = useStore((s) => s.recents);
   const recentsOn = useStore((s) => s.settings.recents);
   const saveSettings = useStore((s) => s.saveSettings);
@@ -277,15 +279,17 @@ export function HistoryScreen(): React.JSX.Element {
               ]}
             />
             <button
-              onClick={() => void clearRecentsWithUndo()}
-              data-tip="Clear history"
-              aria-label="Clear history"
+              data-history-clear
+              onClick={(e) => clearConfirm.ask(e, CLEAR_RECENTS)}
+              data-tip="Clear the Recent list"
+              aria-label="Clear the Recent list"
               className="no-drag flex items-center gap-2 h-8 px-3 rounded-lg ring-1 ring-edge bg-panel/70 text-[12.5px] text-dim
                          hover:text-alert hover:ring-edge2 hover:bg-raised/70 transition-all"
             >
               <Trash2 size={14} strokeWidth={1.8} />
               Clear
             </button>
+            {clearConfirm.popover}
           </>
         )}
       </header>

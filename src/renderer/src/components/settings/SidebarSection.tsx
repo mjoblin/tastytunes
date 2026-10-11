@@ -34,6 +34,7 @@ import {
 import { OrderHandle } from "@/components/controls/OrderHandle";
 import { DND_ACCESSIBILITY, lockVertical } from "@/lib/dnd";
 import { HeaderChip } from "@/components/chrome/Chrome";
+import { useConfirmPopover } from "@/components/chrome/Confirm";
 
 // The Sidebar section, split out of SettingsScreen.tsx 2026-09-13 (the Settings split: the screen had held every
 // section and control at 2,142 lines); the shared rows and controls live in ./SettingsKit.
@@ -43,6 +44,7 @@ export function SidebarSection(): React.JSX.Element {
   const navHiddenTools = useStore((s) => s.settings.navHiddenTools);
   const navOrder = useStore((s) => s.settings.navOrder);
   const save = useStore((s) => s.saveSettings);
+  const resetConfirm = useConfirmPopover();
   const hidden = sanitizeNavHidden(navHidden);
   const hiddenSet = new Set(hidden);
   const hiddenTools = sanitizeNavHiddenTools(navHiddenTools);
@@ -94,13 +96,22 @@ export function SidebarSection(): React.JSX.Element {
           </p>
           {customized && (
             <HeaderChip
-              onClick={() => void save({ navOrder: [] })}
+              data-nav-reset
+              onClick={(e) =>
+                // the custom order has no undo: it confirms, as the other whole-list resets do
+                resetConfirm.ask(e, {
+                  question: "Reset the sidebar to the default order?",
+                  verb: "Reset",
+                  onConfirm: () => void save({ navOrder: [] }),
+                })
+              }
               data-tip="Back to the default order"
               className="tip-top tip-end shrink-0 text-[12px] px-2.5 py-1 motion-safe:active:scale-90"
             >
               Reset order
             </HeaderChip>
           )}
+          {resetConfirm.popover}
         </div>
         <div className="space-y-0.5">
           <DndContext

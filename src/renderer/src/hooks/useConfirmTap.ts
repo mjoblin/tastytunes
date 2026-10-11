@@ -20,9 +20,8 @@ const DISARM_MS = 3000;
  * timeout AND blur — before this, an armed control could sit indefinitely
  * waiting to delete something.
  *
- * Confirms are for what CAN'T be undone; anything with a working undo should
- * stay instant (see the destructive-edit rules in the ROADMAP). This hook is
- * for the former.
+ * When to confirm at all: Confirm.tsx (whole collections and what can't be
+ * undone confirm; items are instant + undo).
  *
  * ```
  * const confirm = useConfirmTap<string>()
