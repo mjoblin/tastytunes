@@ -103,7 +103,6 @@ const PAGE = 500;
 const MAX_TRACKS = 50_000;
 const MAX_CONTAINERS = 10_000;
 const TTL_MS = 7 * 24 * 3600 * 1000; // recrawl backstop for servers whose counter never moves
-const SEARCH_RESULT_CAP = 500;
 
 const indexes = new Map<string, StoredIndex>();
 // Strategies salvaged from a stale-VERSION index file: the data is discarded,
@@ -998,18 +997,16 @@ export function searchIndex(
       `${n.title} ${n.artist ?? ""} ${n.album ?? ""} ${(n.composers ?? []).join(" ")}`.toLowerCase();
     return tokens.every((t) => hay.includes(t));
   };
+  // EVERY MATCH (2026-10-11, a user: 1,035 results stopped at "first 500", "Is there a way to
+  // go to the next page?"): the scan is local, the lenses already hold the whole index, and the
+  // Library reveals the results 500 at a time, so nothing here needs a cap.
   const items: MediaNode[] = [];
-  let total = 0;
   // Hierarchy order — artists make albums, albums contain tracks — mirrored
   // by the result sections and the kind filter (user call, 2026-07-21).
   for (const pool of [idx.artists, idx.albums, idx.tracks]) {
-    for (const n of pool) {
-      if (!matches(n)) continue;
-      total++;
-      if (items.length < SEARCH_RESULT_CAP) items.push(n);
-    }
+    for (const n of pool) if (matches(n)) items.push(n);
   }
-  return { items, total };
+  return { items, total: items.length };
 }
 
 /**

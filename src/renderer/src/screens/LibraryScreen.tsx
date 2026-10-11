@@ -39,7 +39,7 @@ import { usePlayStats } from "@/lib/playStats";
 import { useBestArt } from "@/lib/bestArt";
 import { queueWrite, tt } from "@/api";
 import { useStore } from "@/store";
-import { cx, matchesFilter } from "@/lib/format";
+import { cx, fmtCount, matchesFilter } from "@/lib/format";
 import { useIndexPools } from "@/hooks/useIndexPools";
 import { MOD } from "@/lib/screens";
 import { flashTarget, scrollToCentered } from "@/lib/scroll";
@@ -136,6 +136,8 @@ const UNIFIED_SEARCH_CRUMB_ID = "__from-search__";
 
 /** One wording for a queue write that didn't land, whichever verb sent it. */
 const QUEUE_FAILED = "Couldn't reach the streamer. Nothing was queued.";
+/** How many search results the Library draws at a time (the "Show more" step). */
+const SEARCH_STEP = 500;
 
 /**
  * Library: browse UPnP media (LAN servers and the streamer's own USB storage)
@@ -827,6 +829,36 @@ export function LibraryScreen(): React.JSX.Element {
   const filterAvailable = !searchMode && !atRoot && state === "ready" && hasPlayable;
   const effFilter = filterAvailable ? filter : "";
 
+  // THE RESULTS REVEAL 500 AT A TIME (2026-10-11, a user: 1,035 results stopped at "first 500",
+  // "Is there a way to go to the next page?"): the searches return every match, the listing
+  // draws the first SEARCH_STEP and a "Show more" at its end adds the next, so a broad query
+  // never draws thousands of rows at once. A new search, kind, sort or server starts again.
+  const revealOf = searchMode ? searchState : crossState;
+  const revealKey = `${searchKind}|${searchSort}|${searchSortReversed}|${crossServerUdn ?? ""}`;
+  const [revealed, setRevealed] = useState<{ of: unknown; key: string; n: number }>({
+    of: null,
+    key: "",
+    n: SEARCH_STEP,
+  });
+  const reveal = revealed.of === revealOf && revealed.key === revealKey ? revealed.n : SEARCH_STEP;
+  const showMore = (hidden: number): React.JSX.Element => (
+    <div className="px-1 pt-4 pb-2 text-[11.5px]">
+      <button
+        data-search-more
+        onClick={() => setRevealed({ of: revealOf, key: revealKey, n: reveal + SEARCH_STEP })}
+        className="text-amber hover:brightness-110 transition-all"
+      >
+        Show {fmtCount(Math.min(SEARCH_STEP, hidden))} more →
+      </button>
+      {hidden > SEARCH_STEP && (
+        <span className="text-faint">
+          {FACT_SEP}
+          {fmtCount(hidden)} not shown yet
+        </span>
+      )}
+    </div>
+  );
+
   // Album level: header with art + album metadata; tracks drop per-row art.
   // (Derived before the listing memo — album tracklists sort by track number.)
   const lastCrumbNode = path.length > 0 ? path[path.length - 1].node : undefined;
@@ -868,7 +900,7 @@ export function LibraryScreen(): React.JSX.Element {
   // Filtered + sorted listings are memoized: unmemoized they re-ran the
   // localeCompare sorts and filter scans on every store push — once a second
   // during playback, under grids that can hold 400+ cards.
-  const { baseNodes, shown, containers, tracks } = useMemo(() => {
+  const { baseNodes, shown, containers, tracks, searchHidden } = useMemo(() => {
     const baseNodes = searchMode ? (searchState?.items ?? []) : nodes;
     const shown = effFilter
       ? baseNodes.filter((n) => matchesFilter(effFilter, [n.title, n.artist, n.album, n.year]))
@@ -894,9 +926,12 @@ export function LibraryScreen(): React.JSX.Element {
     // Search results: the kind filter narrows, the search sort orders (its
     // 'relevance' default keeps the index's artists→albums→tracks order).
     let searchShown = shown;
+    let searchHidden = 0;
     if (searchMode) {
       if (searchKind !== "all") searchShown = shown.filter((n) => matchesKind(n, searchKind));
       searchShown = sortSearch(searchShown, searchSort, searchSortReversed);
+      searchHidden = Math.max(0, searchShown.length - reveal);
+      searchShown = searchShown.slice(0, reveal);
     }
     const containers = searchMode
       ? searchShown.filter((n) => n.isContainer)
@@ -911,7 +946,7 @@ export function LibraryScreen(): React.JSX.Element {
       : searchMode
         ? rawTracks
         : sortNodes(rawTracks);
-    return { baseNodes, shown, containers, tracks };
+    return { baseNodes, shown, containers, tracks, searchHidden };
   }, [
     nodes,
     searchMode,
@@ -923,6 +958,7 @@ export function LibraryScreen(): React.JSX.Element {
     searchKind,
     searchSort,
     searchSortReversed,
+    reveal,
   ]);
 
   // the selection and the drag to the nav (after the listing: the selection
@@ -972,15 +1008,18 @@ export function LibraryScreen(): React.JSX.Element {
     return crossState.groups
       .filter((g) => !crossServerUdn || g.udn === crossServerUdn)
       .map((g) => {
-        const items = sortSearch(
+        const sorted = sortSearch(
           searchKind === "all" ? g.items : g.items.filter((n) => matchesKind(n, searchKind)),
           searchSort,
           searchSortReversed,
         );
+        // each server's results reveal 500 at a time, as one library's do
+        const items = sorted.slice(0, reveal);
         return {
           udn: g.udn,
           serverName: g.serverName,
           total: g.total,
+          hidden: sorted.length - items.length,
           albums: items.filter((n) => n.isContainer && isAlbumClass(n.upnpClass)),
           artists: items.filter((n) => n.isContainer && n.upnpClass.includes("musicArtist")),
           folders: items.filter(
@@ -991,7 +1030,7 @@ export function LibraryScreen(): React.JSX.Element {
         };
       })
       .filter((g) => g.albums.length + g.artists.length + g.folders.length + g.tracks.length > 0);
-  }, [crossState, crossServerUdn, searchKind, searchSort, searchSortReversed]);
+  }, [crossState, crossServerUdn, searchKind, searchSort, searchSortReversed, reveal]);
   const crossItemCount = crossState
     ? crossState.groups.reduce((acc, g) => acc + g.items.length, 0)
     : 0;
@@ -1732,6 +1771,13 @@ export function LibraryScreen(): React.JSX.Element {
           </div>
         ) : null}
 
+        {!atRoot &&
+          state === "ready" &&
+          searchMode &&
+          searchState &&
+          searchHidden > 0 &&
+          showMore(searchHidden)}
+
         {/* cross-server results: grouped by SERVER first (provenance at a
             glance — the same album can live on two servers), then the usual
             kind clusters within each group. Entering any result scopes the
@@ -1784,6 +1830,7 @@ export function LibraryScreen(): React.JSX.Element {
                     </div>
                   </>
                 )}
+                {g.hidden > 0 && showMore(g.hidden)}
               </div>
             );
           })}
