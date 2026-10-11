@@ -106,6 +106,10 @@ export interface LibraryNodeTarget {
   title: string;
   /** A track to land on: scrolled to and flashed once the album's listing lands. */
   track?: string;
+  /** The target's own class, for the stand-in node the Library lands on (an artist opened
+   *  from Search landed as an album, with the album header's Play and heart, 2026-10-11);
+   *  an album when unsaid. */
+  upnpClass?: string;
   /** Planted by unified search: the Library shows a "Search" crumb that leads
    *  BACK to the Search screen, instead of stranding you in a browse tree you
    *  never navigated into. */

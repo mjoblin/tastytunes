@@ -43,7 +43,7 @@ import { cx, fmtCount, matchesFilter } from "@/lib/format";
 import { useIndexPools } from "@/hooks/useIndexPools";
 import { MOD } from "@/lib/screens";
 import { flashTarget, scrollToCentered } from "@/lib/scroll";
-import { isAlbumClass, stripFurniture } from "@/lib/media";
+import { isAlbumClass, isArtistClass, stripFurniture } from "@/lib/media";
 import { FilterInput } from "@/components/controls/FilterInput";
 import { ContainerCard, ContainerRow, TrackRow } from "@/components/library/LibraryCards";
 import { Crumbs } from "@/components/library/Crumbs";
@@ -81,6 +81,7 @@ import { useIndexDoors } from "@/components/library/useIndexDoors";
 import { usePlayingMatch } from "@/components/library/usePlayingMatch";
 import { useQueueMatch } from "@/components/library/useQueueMatch";
 import { AlbumHeader } from "@/components/library/AlbumHeader";
+import { ArtistHeader } from "@/components/library/ArtistHeader";
 import { LibrarySearchBar } from "@/components/library/LibrarySearchBar";
 import { useLibrarySelection, type SelectionLate } from "@/components/library/useLibrarySelection";
 import {
@@ -478,7 +479,7 @@ export function LibraryScreen(): React.JSX.Element {
                     id: target.objectId,
                     parentId: null,
                     title,
-                    upnpClass: "object.container.album.musicAlbum",
+                    upnpClass: target.upnpClass ?? "object.container.album.musicAlbum",
                     isContainer: true,
                     artUrl: null,
                     artist: null,
@@ -864,6 +865,9 @@ export function LibraryScreen(): React.JSX.Element {
   const lastCrumbNode = path.length > 0 ? path[path.length - 1].node : undefined;
   const albumNode =
     !searchMode && lastCrumbNode && isAlbumClass(lastCrumbNode.upnpClass) ? lastCrumbNode : null;
+  /** An artist folder opens under the artist's picture and name (ArtistHeader). */
+  const artistNode =
+    !searchMode && lastCrumbNode && isArtistClass(lastCrumbNode.upnpClass) ? lastCrumbNode : null;
   const albumVol = albumNode ? albumVolume(albumNode.title) : null;
   /** The browsed album's volume siblings (same parsed base + artist), by volume. */
   const setSiblings = useMemo(() => {
@@ -1586,6 +1590,9 @@ export function LibraryScreen(): React.JSX.Element {
         )}
         {/* the album header and its box-set pills (components/library/AlbumHeader,
             lifted 2026-09-13, the fifth lift's second part) */}
+        {!atRoot && state === "ready" && artistNode && (
+          <ArtistHeader node={artistNode} folders={nodes} />
+        )}
         {!atRoot && state === "ready" && albumNode && (
           <AlbumHeader
             albumNode={albumNode}

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { app, nativeImage } from "electron";
+import { USER_AGENT } from "../netlog";
 
 /**
  * ALBUM ART THUMBNAILS for servers that cannot be asked for a size (2026-09-14,
@@ -154,7 +155,12 @@ async function gate<T>(work: () => Promise<T>, device: boolean): Promise<T> {
 
 export async function fetchOrigin(url: string): Promise<{ raw: Buffer; type: string } | null> {
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+    // the app's own User-Agent, as every lookup sends: Wikimedia refuses a generic one (the
+    // artist photos, 2026-10-11), and a media server is none the worse for it
+    const res = await fetch(url, {
+      headers: { "User-Agent": USER_AGENT },
+      signal: AbortSignal.timeout(20_000),
+    });
     if (!res.ok) return null;
     return {
       raw: Buffer.from(await res.arrayBuffer()),

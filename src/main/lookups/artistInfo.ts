@@ -14,7 +14,8 @@ import { MB, mbFetch, wikipediaFromRels, type Fetched, type MbRelation } from ".
  *  an opened row, an agent — so it takes the gate's urgent lane. */
 const ask = (url: string): Promise<Fetched> => mbFetch(url, true);
 
-const CACHE_MAX = 500;
+// a library's worth of artists keeps its photos (a user's 518 artists); entries are small
+const CACHE_MAX = 1000;
 const MIN_MATCH_SCORE = 75;
 
 const cache = new DiskCache<ArtistInfo>("artist", CACHE_MAX);
@@ -28,7 +29,11 @@ interface MbArtist {
 export async function fetchArtistInfo(artist: string, force = false): Promise<ArtistInfo | null> {
   const key = artist.trim().toLowerCase();
   if (!key) return null;
-  if (!force && cache.has(key)) return cache.get(key) ?? null;
+  if (!force && cache.has(key)) {
+    const hit = cache.get(key);
+    // an answer cached before photos were read is asked again, once (0.11.0)
+    if (hit == null || hit.image !== undefined) return hit ?? null;
+  }
 
   let result: ArtistInfo | null = null;
   // Only a conclusion built purely from real answers goes into the cache.
@@ -45,7 +50,7 @@ export async function fetchArtistInfo(artist: string, force = false): Promise<Ar
 
   if (match && (match.score ?? 0) >= MIN_MATCH_SCORE) {
     const musicbrainzUrl = `https://musicbrainz.org/artist/${match.id}`;
-    result = { name: match.name, summary: null, wikipediaUrl: null, musicbrainzUrl };
+    result = { name: match.name, summary: null, wikipediaUrl: null, musicbrainzUrl, image: null };
 
     const lookupGot = await ask(`${MB}/ws/2/artist/${match.id}?inc=url-rels&fmt=json`);
     if (lookupGot.kind !== "ok") {
@@ -55,6 +60,7 @@ export async function fetchArtistInfo(artist: string, force = false): Promise<Ar
       const wiki = await wikipediaFromRels(rels);
       result.summary = wiki.summary;
       result.wikipediaUrl = wiki.wikipediaUrl;
+      result.image = wiki.image;
       if (!wiki.definitive) definitive = false;
     }
   }
@@ -62,4 +68,12 @@ export async function fetchArtistInfo(artist: string, force = false): Promise<Ar
 
   if (definitive) cache.set(key, result);
   return result;
+}
+
+/** An artist's photo as already known, without asking anyone: the rows and cards read this
+ *  (a lookup per row would be minutes of MusicBrainz at its one request a second). */
+export function knownArtistImage(artist: string): string | null {
+  const key = artist.trim().toLowerCase();
+  if (!key || !cache.has(key)) return null;
+  return cache.get(key)?.image ?? null;
 }

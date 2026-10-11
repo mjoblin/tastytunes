@@ -16,6 +16,7 @@ import { scrollToVisible } from "@/lib/scroll";
 import { useWindowedList } from "@/hooks/useWindowedList";
 import { isAlbumClass } from "@/lib/media";
 import { MediaArt } from "@/components/media/MediaArt";
+import { ArtistArt } from "@/components/media/ArtistArt";
 import { FilterInput } from "@/components/controls/FilterInput";
 import { Chip, GAP_BETWEEN } from "@/components/chrome/Chrome";
 import { TrackRow } from "@/components/library/LibraryCards";
@@ -378,7 +379,7 @@ export function ArtistsLens({
                       selected ? "bg-amberdim" : playing ? "bg-gold/10" : "hover:bg-veil",
                     )}
                   >
-                    <MediaArt src={a.artUrl} kind="artist" />
+                    <ArtistArt name={a.name} src={a.artUrl} />
                     <div className="min-w-0">
                       <div
                         className={cx(

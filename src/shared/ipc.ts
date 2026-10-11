@@ -321,6 +321,9 @@ export interface TastyTunesApi {
   /** Artist bio via MusicBrainz + Wikipedia (main process, cached; null = no match).
    *  `force` bypasses the cache read — the user-driven refresh. */
   fetchArtistInfo(artist: string, force?: boolean): Promise<ArtistInfo | null>;
+  /** Pictures for artists by name, never fetched: a known photo (with the artist lookups on),
+   *  else a cover from the artist's own albums in the indexed libraries, else null. */
+  artistPictures(names: string[]): Promise<Record<string, string | null>>;
   /** Album details via MusicBrainz + Wikipedia (main process, cached; null = no match).
    *  `force` bypasses the cache read — the user-driven refresh. */
   fetchAlbumInfo(artist: string, album: string, force?: boolean): Promise<AlbumInfo | null>;
@@ -516,6 +519,7 @@ export const IPC = {
   updateInstall: "tt:updateInstall",
   updateCheckNow: "tt:updateCheckNow",
   fetchArtistInfo: "tt:fetchArtistInfo",
+  artistPictures: "tt:artistPictures",
   fetchAlbumInfo: "tt:fetchAlbumInfo",
   fetchTrackInfo: "tt:fetchTrackInfo",
   fetchDiscTracks: "tt:fetchDiscTracks",

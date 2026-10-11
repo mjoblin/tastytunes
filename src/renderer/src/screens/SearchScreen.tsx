@@ -358,6 +358,7 @@ export function SearchScreen(): React.JSX.Element {
         objectId: node.id,
         titlePath: [node.title],
         title: node.title,
+        upnpClass: node.upnpClass,
         fromSearch: true,
       });
       return;
@@ -571,6 +572,7 @@ export function SearchScreen(): React.JSX.Element {
               title={node.title}
               subtitle={[node.artist, node.serverName].filter(Boolean).join(" — ")}
               artUrl={node.artUrl}
+              artistName={nodeKind(node) === "artist" ? node.title : null}
               kind={nodeKind(node)}
               badge={kindLabel(nodeKind(node))}
               duration={nodeKind(node) === "track" ? node.durationSecs : undefined}

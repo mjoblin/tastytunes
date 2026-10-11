@@ -10,6 +10,9 @@ export interface ArtistInfo {
   summary: string | null;
   wikipediaUrl: string | null;
   musicbrainzUrl: string | null;
+  /** The artist's photo: the lead picture of their Wikipedia article (0.11.0), or null when
+   *  the article has none. Absent on an answer cached before it was read (asked again). */
+  image?: string | null;
 }
 
 export interface AlbumInfo {
