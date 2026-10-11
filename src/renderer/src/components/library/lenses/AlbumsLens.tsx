@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   AudioLines,
   Heart,
@@ -69,7 +69,9 @@ let albumsMem: {
   /** The Played facet (0.8.0): a playedBucket, or null for any. */
   played: string | null;
   filter: string;
-} = { genre: null, decade: null, dr: null, format: null, played: null, filter: "" };
+  /** The grid's own scroller's spot, recorded as it scrolls (a trip away comes back to it). */
+  scroll: number;
+} = { genre: null, decade: null, dr: null, format: null, played: null, filter: "", scroll: 0 };
 
 /** The queue write's cap, shared by Play these and the album selection bar (user
  *  call, 2026-09-01 / 2026-09-02): queue writes are one call per track with no
@@ -86,7 +88,6 @@ export function AlbumsLens({
   cardGap,
   fillRows,
   onToggleLayout,
-  scrollRef,
 }: {
   pools: MediaIndexPools[];
   actions: LensActions;
@@ -97,8 +98,6 @@ export function AlbumsLens({
   /** Flips libraryLayout — sort and layout are one presentation pairing
    *  (adjacent in the browse header), kept together here too. */
   onToggleLayout?: () => void;
-  /** The Library's page scroller, which this lens scrolls (the cards grid windows over it). */
-  scrollRef?: RefObject<HTMLDivElement | null>;
 }): React.JSX.Element {
   const [mem, setMemState] = useState(albumsMem);
   const setMem = (patch: Partial<typeof albumsMem>): void => {
@@ -273,14 +272,22 @@ export function AlbumsLens({
   // since 2026-09-13) over the tiles shown, keyed by nodeKey
   const tileKeys = useMemo(() => tiles.map((t) => nodeKey(t.node)), [tiles]);
 
-  // WINDOWED CARDS (0.11.0 sweep, for review): past WINDOW_TILES_ABOVE tiles the cards grid
-  // renders only the rows of cards near the page's viewport, as many columns as auto-fill
-  // would give (from the lens's measured width), the rows' pitch measured by useWindowedList.
-  // Below it, and in the rows layout, every tile renders exactly as before.
-  const rootRef = useRef<HTMLDivElement | null>(null);
+  // THE GRID SCROLLS ITS OWN COLUMN under a toolbar that stays put (user, 2026-10-11: "the
+  // filters/etc at the top are not pinned like they are for tracks"), the Tracks lens's frame:
+  // the toolbar on the bare ground, the scroller's top edge the cut, no band of its own (a
+  // sticky bar needs a background, and a band over the ambient wash read as a seam, the
+  // History screens' lesson). The scroller spans the page's padding, so the cards' hover glow
+  // keeps the room it had when the page scrolled them.
+  const gridRef = useRef<HTMLDivElement | null>(null);
+  // WINDOWED CARDS (0.11.0 sweep): past WINDOW_TILES_ABOVE tiles the cards grid renders only
+  // the rows of cards near the scroller's viewport, as many columns as auto-fill would give
+  // (from the measured width inside the scroller, its scrollbar excluded), the rows' pitch
+  // measured by useWindowedList. Below it, and in the rows layout, every tile renders exactly
+  // as before.
+  const bodyRef = useRef<HTMLDivElement | null>(null);
   const [width, setWidth] = useState(0);
   useLayoutEffect(() => {
-    const el = rootRef.current;
+    const el = bodyRef.current;
     if (!el) return;
     setWidth(el.getBoundingClientRect().width);
     const ro = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width));
@@ -288,10 +295,10 @@ export function AlbumsLens({
     return () => ro.disconnect();
   }, []);
   const cols = Math.max(1, Math.floor((width + cardGap) / (cardSize + cardGap)));
-  const windowed = cards && scrollRef != null && width > 0 && tiles.length > WINDOW_TILES_ABOVE;
+  const windowed = cards && width > 0 && tiles.length > WINDOW_TILES_ABOVE;
   const colWidth = fillRows ? (width - cardGap * (cols - 1)) / cols : cardSize;
   const win = useWindowedList({
-    scrollRef: scrollRef ?? rootRef,
+    scrollRef: gridRef,
     count: windowed ? Math.ceil(tiles.length / cols) : 0,
     itemSelector: "[data-albums-row]",
     // the art is square; the title and its second line below it
@@ -299,6 +306,26 @@ export function AlbumsLens({
     overscan: 3,
     enabled: windowed,
   });
+  // A TRIP AWAY COMES BACK TO THE SPOT, once the grid can hold it: the windowed grid holds no
+  // rows until it has measured its width, and a scrollTo then clamped the spot to 0 (the
+  // useScrollMemory rule), so settle a few frames, and apply once more after the rows it lands
+  // on have been measured (their height was an estimate until then)
+  useEffect(() => {
+    const target = albumsMem.scroll;
+    if (target <= 0) return;
+    let frames = 0;
+    let landed = 0;
+    let raf = requestAnimationFrame(function apply() {
+      const sc = gridRef.current;
+      if (!sc) return;
+      if (landed > 0 || sc.scrollHeight - sc.clientHeight >= target || frames++ > 30) {
+        sc.scrollTo({ top: target });
+        if (++landed >= 3 || Math.abs(sc.scrollTop - target) < 1) return;
+      }
+      raf = requestAnimationFrame(apply);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, []);
   const gridColumns = (n: number | "auto-fill"): string =>
     fillRows ? `repeat(${n}, minmax(${cardSize}px, 1fr))` : `repeat(${n}, ${cardSize}px)`;
   const {
@@ -395,8 +422,8 @@ export function AlbumsLens({
     );
   };
   return (
-    <div data-lens-albums ref={rootRef}>
-      <div className="flex items-start gap-3 pb-3">
+    <div data-lens-albums className="h-full min-h-0 flex flex-col">
+      <div className="flex items-start gap-3 pb-3 shrink-0">
         <div className="flex-1 min-w-0">
           {/* one row: filter, partition, then the two facet PICKERS.
               Genre joined Decade as a PickerPill (user, 2026-08-31): real
@@ -501,129 +528,148 @@ export function AlbumsLens({
           />
         </div>
       </div>
-      {shown.length === 0 ? (
-        <div className="text-[15px] text-faint pt-4 px-1">Nothing matches those filters.</div>
-      ) : windowed ? (
+      <div className="relative flex-1 min-w-0 min-h-0 flex flex-col">
         <div
-          data-albums-windowed
-          className={cx(selA.size > 0 && "pb-24")}
-          // overflow-anchor off (the Queue's rule): Chromium's scroll anchoring moved the
-          // restored spot as the spacers' estimated heights became measured ones
-          style={{ paddingTop: 8, overflowAnchor: "none" }}
+          ref={gridRef}
+          data-lens-albums-scroll
+          onScroll={(e) => {
+            albumsMem.scroll = e.currentTarget.scrollTop;
+          }}
+          className="min-h-0 flex-1 overflow-y-auto px-8 -mx-8 pb-2"
         >
-          {win.padTop > 0 && <div style={{ height: win.padTop }} />}
-          {Array.from({ length: win.last - win.first + 1 }, (_, i) => win.first + i).map((r) => (
-            <div
-              key={r}
-              data-albums-row
-              style={{
-                display: "grid",
-                gridTemplateColumns: gridColumns(cols),
-                gap: cardGap,
-                marginBottom: cardGap,
+          <div ref={bodyRef}>
+            {shown.length === 0 ? (
+              <div className="text-[15px] text-faint pt-4 px-1">Nothing matches those filters.</div>
+            ) : windowed ? (
+              <div
+                data-albums-windowed
+                className={cx(selA.size > 0 && "pb-24")}
+                // overflow-anchor off (the Queue's rule): Chromium's scroll anchoring moved the
+                // restored spot as the spacers' estimated heights became measured ones
+                style={{ paddingTop: 8, overflowAnchor: "none" }}
+              >
+                {win.padTop > 0 && <div style={{ height: win.padTop }} />}
+                {Array.from({ length: win.last - win.first + 1 }, (_, i) => win.first + i).map(
+                  (r) => (
+                    <div
+                      key={r}
+                      data-albums-row
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: gridColumns(cols),
+                        gap: cardGap,
+                        marginBottom: cardGap,
+                      }}
+                    >
+                      {tiles
+                        .slice(r * cols, (r + 1) * cols)
+                        .map((t, j) => renderTile(t, r * cols + j))}
+                    </div>
+                  ),
+                )}
+                {win.padBottom > 0 && <div style={{ height: win.padBottom }} />}
+              </div>
+            ) : (
+              <div
+                className={cx(
+                  !cards && "divide-y divide-edge/50 -mx-2",
+                  // selection mode adds scroll-room under the floating bar (the S45 rule)
+                  selA.size > 0 && "pb-24",
+                )}
+                style={
+                  cards
+                    ? {
+                        display: "grid",
+                        gridTemplateColumns: gridColumns("auto-fill"),
+                        gap: cardGap,
+                        paddingTop: 8,
+                      }
+                    : undefined
+                }
+              >
+                {tiles.map((t, ti) => renderTile(t, ti))}
+              </div>
+            )}
+          </div>
+        </div>
+        {selA.size > 0 && (
+          <SelectionBar
+            count={selA.size}
+            onClear={() => setSelA(new Set())}
+            className="bottom-2 inset-x-0 z-20"
+            data-albums-selection-bar
+          >
+            <SelectionVerb
+              icon={<Play size={13} />}
+              disabled={selAOverCap}
+              data-tip={selAOverCap ? capTip : undefined}
+              className={cx(selAOverCap && "tip-top opacity-50")}
+              onClick={() =>
+                actions.queueTracks(chosenATracks(), "replace", () => setSelA(new Set()))
+              }
+            >
+              Play
+            </SelectionVerb>
+            <SelectionVerb
+              icon={<ListStart size={13} />}
+              disabled={selAOverCap}
+              data-tip={selAOverCap ? capTip : undefined}
+              className={cx(selAOverCap && "tip-top opacity-50")}
+              onClick={() => actions.queueTracks(chosenATracks(), "next", () => setSelA(new Set()))}
+            >
+              Play next
+            </SelectionVerb>
+            <SelectionVerb
+              icon={<ListEnd size={13} />}
+              disabled={selAOverCap}
+              data-tip={selAOverCap ? capTip : undefined}
+              className={cx(selAOverCap && "tip-top opacity-50")}
+              onClick={() =>
+                actions.queueTracks(chosenATracks(), "append", () => setSelA(new Set()))
+              }
+            >
+              Add to end of queue
+            </SelectionVerb>
+            <SelectionVerb
+              icon={<ListPlus size={13} />}
+              onClick={(e) =>
+                actions.addTracksToPlaylist(chosenATracks(), { x: e.clientX, y: e.clientY }, () =>
+                  setSelA(new Set()),
+                )
+              }
+            >
+              Add to playlist…
+            </SelectionVerb>
+            {(() => {
+              const nodes = chosenA();
+              const allIn = nodes.length > 0 && nodes.every(actions.nodeFavorited);
+              return (
+                <SelectionVerb
+                  icon={<Heart size={13} fill={allIn ? "currentColor" : "none"} />}
+                  onClick={() => actions.heartNodes(nodes, allIn)}
+                >
+                  {allIn ? "Remove from favorites" : "Add to favorites"}
+                </SelectionVerb>
+              );
+            })()}
+            <SelectionVerb
+              icon={<AudioLines size={13} />}
+              disabled={chosenA().every((n) => actions.unreadable(n))}
+              title={chosenA().every((n) => actions.unreadable(n)) ? USB_ANALYSIS_HINT : undefined}
+              data-analyze-albums
+              onClick={() => {
+                actions.analyzeAlbums(chosenA());
+                setSelA(new Set());
               }}
             >
-              {tiles.slice(r * cols, (r + 1) * cols).map((t, j) => renderTile(t, r * cols + j))}
-            </div>
-          ))}
-          {win.padBottom > 0 && <div style={{ height: win.padBottom }} />}
-        </div>
-      ) : (
-        <div
-          className={cx(
-            !cards && "divide-y divide-edge/50 -mx-2",
-            // selection mode adds scroll-room under the floating bar (the S45 rule)
-            selA.size > 0 && "pb-24",
-          )}
-          style={
-            cards
-              ? {
-                  display: "grid",
-                  gridTemplateColumns: gridColumns("auto-fill"),
-                  gap: cardGap,
-                  paddingTop: 8,
-                }
-              : undefined
-          }
-        >
-          {tiles.map((t, ti) => renderTile(t, ti))}
-        </div>
-      )}
-      {selA.size > 0 && (
-        <SelectionBar
-          count={selA.size}
-          onClear={() => setSelA(new Set())}
-          className="bottom-2 inset-x-0 z-20"
-          data-albums-selection-bar
-        >
-          <SelectionVerb
-            icon={<Play size={13} />}
-            disabled={selAOverCap}
-            data-tip={selAOverCap ? capTip : undefined}
-            className={cx(selAOverCap && "tip-top opacity-50")}
-            onClick={() =>
-              actions.queueTracks(chosenATracks(), "replace", () => setSelA(new Set()))
-            }
-          >
-            Play
-          </SelectionVerb>
-          <SelectionVerb
-            icon={<ListStart size={13} />}
-            disabled={selAOverCap}
-            data-tip={selAOverCap ? capTip : undefined}
-            className={cx(selAOverCap && "tip-top opacity-50")}
-            onClick={() => actions.queueTracks(chosenATracks(), "next", () => setSelA(new Set()))}
-          >
-            Play next
-          </SelectionVerb>
-          <SelectionVerb
-            icon={<ListEnd size={13} />}
-            disabled={selAOverCap}
-            data-tip={selAOverCap ? capTip : undefined}
-            className={cx(selAOverCap && "tip-top opacity-50")}
-            onClick={() => actions.queueTracks(chosenATracks(), "append", () => setSelA(new Set()))}
-          >
-            Add to end of queue
-          </SelectionVerb>
-          <SelectionVerb
-            icon={<ListPlus size={13} />}
-            onClick={(e) =>
-              actions.addTracksToPlaylist(chosenATracks(), { x: e.clientX, y: e.clientY }, () =>
-                setSelA(new Set()),
-              )
-            }
-          >
-            Add to playlist…
-          </SelectionVerb>
-          {(() => {
-            const nodes = chosenA();
-            const allIn = nodes.length > 0 && nodes.every(actions.nodeFavorited);
-            return (
-              <SelectionVerb
-                icon={<Heart size={13} fill={allIn ? "currentColor" : "none"} />}
-                onClick={() => actions.heartNodes(nodes, allIn)}
-              >
-                {allIn ? "Remove from favorites" : "Add to favorites"}
-              </SelectionVerb>
-            );
-          })()}
-          <SelectionVerb
-            icon={<AudioLines size={13} />}
-            disabled={chosenA().every((n) => actions.unreadable(n))}
-            title={chosenA().every((n) => actions.unreadable(n)) ? USB_ANALYSIS_HINT : undefined}
-            data-analyze-albums
-            onClick={() => {
-              actions.analyzeAlbums(chosenA());
-              setSelA(new Set());
-            }}
-          >
-            Analyze audio
-          </SelectionVerb>
-          <span className="shrink-0 py-px text-faint tabular-nums mt-[3px] text-[11.5px]">
-            {fmtCount(selATrackCount)} {selATrackCount === 1 ? "track" : "tracks"}
-          </span>
-        </SelectionBar>
-      )}
+              Analyze audio
+            </SelectionVerb>
+            <span className="shrink-0 py-px text-faint tabular-nums mt-[3px] text-[11.5px]">
+              {fmtCount(selATrackCount)} {selATrackCount === 1 ? "track" : "tracks"}
+            </span>
+          </SelectionBar>
+        )}
+      </div>
     </div>
   );
 }

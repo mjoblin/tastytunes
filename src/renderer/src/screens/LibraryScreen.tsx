@@ -136,9 +136,6 @@ const UNIFIED_SEARCH_CRUMB_ID = "__from-search__";
 
 /** One wording for a queue write that didn't land, whichever verb sent it. */
 const QUEUE_FAILED = "Couldn't reach the streamer. Nothing was queued.";
-// The Albums lens scrolls the page scroller — its spot is remembered apart
-// from the source list's (they share the root path key otherwise).
-let albumsLensScroll = 0;
 
 /**
  * Library: browse UPnP media (LAN servers and the streamer's own USB storage)
@@ -275,27 +272,6 @@ export function LibraryScreen(): React.JSX.Element {
   // can offer the set line without a lens ever having been opened
   const tailVol = albumVolume(path.at(-1)?.title ?? "");
   const lensPools = useIndexPools(lens != null || tailVol != null);
-  useEffect(() => {
-    if (lens !== "albums" || lensPools == null) return;
-    // RESTORE WHEN THE SPOT IS REACHABLE, not at the first frame: the windowed cards grid
-    // (0.11.0, for review) holds no rows until it has measured its width, and a scrollTo
-    // then clamped the remembered spot to 0 (the useScrollMemory rule); settle a few frames,
-    // and apply once more after the rows it lands on have been measured (their height was
-    // an estimate until then)
-    const target = albumsLensScroll;
-    let frames = 0;
-    let landed = 0;
-    let raf = requestAnimationFrame(function apply() {
-      const sc = scrollRef.current;
-      if (!sc) return;
-      if (landed > 0 || sc.scrollHeight - sc.clientHeight >= target || frames++ > 30) {
-        sc.scrollTo({ top: target });
-        if (++landed >= 3 || Math.abs(sc.scrollTop - target) < 1) return;
-      }
-      raf = requestAnimationFrame(apply);
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [lens, lensPools]);
 
   // Action feedback: the app-wide toast for failures, a gold pulse for wins.
   // (The screen's original local notice banner graduated into the toast.)
@@ -1469,10 +1445,6 @@ export function LibraryScreen(): React.JSX.Element {
       <div
         ref={scrollRef}
         onScroll={(e) => {
-          if (atRoot && lens === "albums" && !searchMode) {
-            albumsLensScroll = e.currentTarget.scrollTop;
-            return;
-          }
           // Recorded as you scroll, not only when you navigate: leaving for
           // another screen UNMOUNTS this one, and the album you were halfway
           // down came back at the top (user, 2026-08-22).
@@ -1485,8 +1457,9 @@ export function LibraryScreen(): React.JSX.Element {
           // right-aligned control as listings shrink/grow (macOS always-on
           // scrollbars — the "filter box moves" report)
           "flex-1 px-8 pt-1 [scrollbar-gutter:stable]",
-          // the miller view scrolls its own columns — the page must not
-          atRoot && (lens === "artists" || lens === "tracks") && !searchMode
+          // every lens scrolls its own column under its toolbar (the miller view's columns, the
+          // tracks list, the albums grid since 2026-10-11) — the page must not
+          atRoot && lens != null && !searchMode
             ? "overflow-hidden min-h-0 pb-6"
             : // the floating bar overlaps the last rows at full scroll —
               // selection mode adds scroll-room so every row can clear it
@@ -1523,7 +1496,6 @@ export function LibraryScreen(): React.JSX.Element {
               cardGap={presetGap}
               fillRows={presetFillRows}
               onToggleLayout={() => void setLayout(cards ? "rows" : "cards")}
-              scrollRef={scrollRef}
             />
           ) : lens === "artists" ? (
             <ArtistsLens pools={lensPools} actions={lensActions} />
