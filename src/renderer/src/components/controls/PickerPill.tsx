@@ -21,7 +21,9 @@ import { cx, fmtCount } from "@/lib/format";
  * other facets do, so the labels a pill has offered this session are remembered (per id,
  * bounded by the library's own facet values): the width grows to a new widest, never shrinks.
  */
-const LABEL_MAX_PX = 160;
+// 112 (user, 2026-10-11, from comparison shots): at 160 one long genre ("Contemporary Hip Hop")
+// set its pill's width and the lens row wrapped at a 1,180 px window; at 112 the row fits
+const LABEL_MAX_PX = 112;
 const offered = new Map<string, Set<string>>();
 
 function sizingLabels(id: string, neutral: string, labels: string[]): string[] {
@@ -76,7 +78,9 @@ export function PickerPill({
         onClick={() => setOpen((o) => !o)}
         className={cx("no-drag gap-1 motion-safe:active:scale-95", truncated && "tip-bottom")}
       >
-        <span className="grid min-w-0" style={{ maxWidth: LABEL_MAX_PX }}>
+        {/* text-left: the label leads and the chevron closes the pill, as in a select (a button
+            centres its text, and in a pill wider than its label the word sat adrift) */}
+        <span className="grid min-w-0 text-left" style={{ maxWidth: LABEL_MAX_PX }}>
           {sizes.map((l) => (
             <span
               key={l}
