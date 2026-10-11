@@ -362,6 +362,18 @@ export const ONE_HOME = [
     },
   },
   {
+    id: "focus-reveal",
+    was: "none (0.11.0: Chromium's focus-visible lights after any key, so a reveal on it showed after a click and a hotkey)",
+    selector: strings("/focus-visible:/"),
+    files: [`^${R}`],
+    message:
+      "A reveal on keyboard focus is focus-kbd: (it waits for Tab, lib/inputModality), never focus-visible:",
+    bad: {
+      file: `${R}components/media/RowAction.tsx`,
+      code: "const c = 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100';",
+    },
+  },
+  {
     id: "settings-pointer",
     was: "S93",
     selector: strings("/Settings →/"),

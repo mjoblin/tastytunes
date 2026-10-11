@@ -67,7 +67,7 @@ export function RowAction({
         // shown on hover, while pinned, or while the row holds its menu (MediaRow's held)
         pinned || open
           ? "opacity-100"
-          : "opacity-0 group-hover:opacity-100 group-data-[held]:opacity-100 focus-visible:opacity-100",
+          : "opacity-0 group-hover:opacity-100 group-data-[held]:opacity-100 focus-kbd:opacity-100",
       )}
     >
       <Icon size={size} />

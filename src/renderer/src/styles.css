@@ -4,6 +4,9 @@
    a .reduce-motion class on :root (useMotionPreference), so motion-safe:
    utilities follow the app's choice rather than the media query directly. */
 @custom-variant motion-safe (&:where(:root:not(.reduce-motion), :root:not(.reduce-motion) *));
+/* a reveal on keyboard focus: focus-visible once Tab has moved focus (lib/inputModality), never
+   after a click and a hotkey; the lint rule focus-reveal keeps focus-visible: out of the app */
+@custom-variant focus-kbd (:root[data-keyboard-nav] &:focus-visible);
 
 /* Runtime-tintable accent: useArtAccent() overrides this per album.
    --gold-rgb is the STATIC state/brand gold (per theme, never art-tinted). */
@@ -207,12 +210,20 @@ body {
   outline: 2px solid color-mix(in srgb, var(--color-ink) 70%, transparent);
   outline-offset: 2px;
 }
+/* THE RING WAITS FOR THE KEYBOARD (0.11.0, user 2026-10-10: "the accessibility borders often
+   seem to turn on when i don't want them"): Chromium's :focus-visible lights after any key, so
+   a clicked chip rang at the next hotkey and a menu closed with Escape rang its trigger. The
+   ring shows once Tab has moved focus (lib/inputModality marks the root, a pointer press
+   clears it): a keyboard user keeps every ring, a pointer user sees none. */
+:root:not([data-keyboard-nav]) :focus-visible {
+  outline: none;
+}
 /* THE RING IS ALWAYS ROUNDED (user, 2026-10-06): an outline follows its element's radius, so a
    square element (the wordmark, the volume slider, the time) drew a square ring. A focused
    element with no radius of its own takes one; in the base layer, so every rounded-*
    utility (a pill, a circle) keeps its own shape */
 @layer base {
-  :focus-visible {
+  :root[data-keyboard-nav] :focus-visible {
     border-radius: 6px;
   }
 }
@@ -231,6 +242,8 @@ select:focus-visible,
    the link underlines instead, thick and in the ink, where the clip cannot reach */
 [data-name-link]:focus-visible {
   outline: none;
+}
+:root[data-keyboard-nav] [data-name-link]:focus-visible {
   text-decoration: underline;
   text-decoration-thickness: 2px;
   text-underline-offset: 4px;
