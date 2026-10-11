@@ -3,6 +3,7 @@ import { useKnownDrs } from "@/lib/audioAnalysis";
 import { useSavedPerformer } from "@/hooks/useQueuePerformer";
 import { Heart, Library, Loader2, MoreHorizontal, Play, RadioTower } from "lucide-react";
 import {
+  playKey,
   type MediaNode,
   type MediaQueueAction,
   type MediaServerInfo,
@@ -504,6 +505,7 @@ export function FavoritesScreen(): React.JSX.Element {
                       title={f.title}
                       kind="track"
                       artUrl={f.artUrl}
+                      artKey={playKey(f.title, f.artist, f.album)}
                       subtitle={
                         <>
                           <NameLine

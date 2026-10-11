@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { queueContentHash } from "@shared/smoip";
 import {
+  playKey,
   favoriteKey,
   playlistContentHash,
   playlistItemKey,
@@ -776,7 +777,11 @@ function TrackRow({
         )}
       </OrderHandle>
 
-      <MediaArt src={item.artUrl} kind="track" />
+      <MediaArt
+        src={item.artUrl}
+        artKey={playKey(item.title, item.artist, item.album)}
+        kind="track"
+      />
 
       <div className="min-w-0">
         <div className="text-[13.5px] truncate text-ink">{item.title}</div>

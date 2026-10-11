@@ -2,12 +2,12 @@ import { app, BrowserWindow, dialog } from "electron";
 import { writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { IPC } from "@shared/ipc";
-import { playKey, type MediaIndexPools } from "@shared/model";
+import { playAlbumKey, playKey, type MediaIndexPools } from "@shared/model";
 import { broadcastListening } from "../app/broadcast";
 import { getMainWindow } from "../app/windows";
 import { listeningRecord } from "../data/listeningRecord";
 import { playStatsFromRecord } from "../data/playStats";
-import { recentArtGet } from "../lookups/recentArt";
+import { capturesByAlbum, recentArtGet } from "../lookups/recentArt";
 import * as mediaIndex from "../media/mediaIndex";
 import { handle } from "../app/guard";
 
@@ -16,15 +16,23 @@ import { handle } from "../app/guard";
  * made once per pools answer (which is itself made once per set of stored indexes) instead
  * of a walk over every track of every library for each slice of the Timeline.
  */
-const artByKey = new WeakMap<MediaIndexPools[], Map<string, string | null>>();
-function libraryArt(groups: MediaIndexPools[]): Map<string, string | null> {
+interface LibraryArt {
+  byTrack: Map<string, string | null>;
+  /** One picture per album (playAlbumKey): a track the library does not hold under that
+   *  title still shows its album's cover. */
+  byAlbum: Map<string, string>;
+}
+const artByKey = new WeakMap<MediaIndexPools[], LibraryArt>();
+function libraryArt(groups: MediaIndexPools[]): LibraryArt {
   let art = artByKey.get(groups);
   if (art) return art;
-  art = new Map();
+  art = { byTrack: new Map(), byAlbum: new Map() };
   for (const g of groups)
     for (const t of g.tracks) {
       const k = playKey(t.title, t.artist, t.album);
-      if (art.get(k) == null) art.set(k, t.artUrl ?? null);
+      if (art.byTrack.get(k) == null) art.byTrack.set(k, t.artUrl ?? null);
+      const album = playAlbumKey(k);
+      if (album && t.artUrl && !art.byAlbum.has(album)) art.byAlbum.set(album, t.artUrl);
     }
   artByKey.set(groups, art);
   return art;
@@ -42,9 +50,17 @@ export function registerListeningIpc(): void {
     const out: Record<string, string | null> = {};
     if (want.size === 0) return out;
     const art = libraryArt(mediaIndex.pools());
-    for (const k of want) out[k] = art.get(k) ?? null;
+    for (const k of want) out[k] = art.byTrack.get(k) ?? null;
     // not in the library: the device log's captured picture, if any
     for (const k of want) if (out[k] == null) out[k] = recentArtGet(k) ?? out[k] ?? null;
+    // a track's cover is its album's (2026-10-11): the library's picture for the album, else a
+    // cover the device log captured for another of its tracks
+    let captured: Map<string, string> | null = null;
+    for (const k of want) {
+      const album = out[k] == null ? playAlbumKey(k) : null;
+      if (album == null) continue;
+      out[k] = art.byAlbum.get(album) ?? (captured ??= capturesByAlbum()).get(album) ?? null;
+    }
     return out;
   });
   handle(IPC.listeningYears, () => listeningRecord.years());

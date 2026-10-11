@@ -1,7 +1,9 @@
+import { useMemo, useState } from "react";
 import { Disc3, Folder, ListOrdered, Music, Radio, RadioTower, UserRound } from "lucide-react";
 import { ArtImage } from "@/components/media/ArtImage";
 import { cx } from "@/lib/format";
 import { artSrc } from "@/lib/artSrc";
+import { useArtByKeys } from "@/lib/artByKey";
 
 /**
  * THE row-scale artwork thumb. One size (h-10 — the 44px grid column's inset),
@@ -71,12 +73,21 @@ const GLYPH_STROKE: Record<MediaArtSize, number> = { row: 2, dense: 2, card: CAR
 
 export function MediaArt({
   src,
+  artKey,
   kind = "track",
   icon,
   size = "row",
   className,
 }: {
   src?: string | null;
+  /**
+   * The track's content key (playKey) on a SAVED row (Recently Played, favorites, playlists):
+   * when the saved picture is missing or no longer answers, the row draws the library's
+   * current picture for the track or its album, else a cover the device log captured
+   * (2026-10-11: the streamer re-mints its picture addresses on every wake, so a saved one
+   * dies; libraryArtByKeys answers). Live rows (the queue, the library's own) pass none.
+   */
+  artKey?: string | null;
   kind?: MediaArtKind;
   /** Escape hatch for a caller with a better icon than the kind default. */
   icon?: React.ComponentType<{ size?: number; className?: string }>;
@@ -84,6 +95,12 @@ export function MediaArt({
   className?: string;
 }): React.JSX.Element {
   const Fallback = icon ?? MEDIA_ART_FALLBACK[kind];
+  const px = size === "card" ? 240 : size === "dense" ? 32 : 40;
+  /** The saved picture this row gave up on (a new src tries again). */
+  const [gaveUp, setGaveUp] = useState<string | null>(null);
+  const fallback = (
+    <Fallback size={GLYPH[size]} strokeWidth={GLYPH_STROKE[size]} className="text-faint" />
+  );
   return (
     <div
       data-media-art
@@ -94,16 +111,53 @@ export function MediaArt({
         className,
       )}
     >
-      <ArtImage
-        // fetch at the drawn size — Asset serves the 1400px original for a
-        // 40px thumb otherwise (shared/artUrl); cards fill up to ~240px tiles
-        src={artSrc(src, size === "card" ? 240 : size === "dense" ? 32 : 40)}
-        lazy
-        shimmer={size === "card"}
-        fallback={
-          <Fallback size={GLYPH[size]} strokeWidth={GLYPH_STROKE[size]} className="text-faint" />
-        }
-      />
+      {artKey && (!src || gaveUp === src) ? (
+        <LibraryArt
+          artKey={artKey}
+          not={src}
+          px={px}
+          shimmer={size === "card"}
+          fallback={fallback}
+        />
+      ) : (
+        <ArtImage
+          // fetch at the drawn size — Asset serves the 1400px original for a
+          // 40px thumb otherwise (shared/artUrl); cards fill up to ~240px tiles
+          src={artSrc(src, px)}
+          lazy
+          shimmer={size === "card"}
+          onGiveUp={artKey ? () => setGaveUp(src ?? null) : undefined}
+          fallback={fallback}
+        />
+      )}
     </div>
+  );
+}
+
+/** A saved row's picture from the library (useArtByKeys): mounted only once the saved one is
+ *  missing or has failed, so a row whose picture answers subscribes to nothing. One switch per
+ *  saved picture: if this one fails too, the icon stays. */
+function LibraryArt({
+  artKey,
+  not,
+  px,
+  shimmer,
+  fallback,
+}: {
+  artKey: string;
+  not: string | null | undefined;
+  px: number;
+  shimmer: boolean;
+  fallback: React.ReactNode;
+}): React.JSX.Element {
+  const keys = useMemo(() => [artKey], [artKey]);
+  const url = useArtByKeys(keys)[artKey] ?? null;
+  return (
+    <ArtImage
+      src={url && url !== not ? artSrc(url, px) : null}
+      lazy
+      shimmer={shimmer}
+      fallback={fallback}
+    />
   );
 }

@@ -23,6 +23,7 @@ export function MediaRow({
   title,
   subtitle,
   artUrl,
+  artKey,
   kind,
   icon,
   badge,
@@ -44,6 +45,8 @@ export function MediaRow({
   title: string;
   subtitle?: React.ReactNode;
   artUrl?: string | null;
+  /** A saved row's track key: its picture falls back to the library's (see MediaArt). */
+  artKey?: string | null;
   /** Picks the art fallback icon — see MediaArt. */
   kind?: MediaArtKind;
   icon?: React.ComponentType<{ size?: number; className?: string }>;
@@ -155,7 +158,13 @@ export function MediaRow({
         dimmed && "opacity-50 cursor-default",
       )}
     >
-      <MediaArt src={artUrl} kind={kind} icon={icon} size={dense ? "dense" : "row"} />
+      <MediaArt
+        src={artUrl}
+        artKey={artKey}
+        kind={kind}
+        icon={icon}
+        size={dense ? "dense" : "row"}
+      />
       {slot != null && (
         <span
           data-slot={String(slot).padStart(2, "0")}

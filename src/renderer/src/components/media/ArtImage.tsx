@@ -39,6 +39,7 @@ export function ArtImage({
   className = "h-full w-full object-cover",
   lazy = false,
   shimmer = false,
+  onGiveUp,
 }: {
   src: string | null | undefined;
   fallback: React.ReactNode;
@@ -58,6 +59,9 @@ export function ArtImage({
    * scrolled-to card flash the band before its cached picture landed.
    */
   shimmer?: boolean;
+  /** Told when the picture at `src` has failed for good (after its retries), so a caller with
+   *  another way to the picture can take it (MediaArt's library fallback). */
+  onGiveUp?: () => void;
 }): React.JSX.Element {
   const [loaded, setLoaded] = useState<string | null>(null);
   const [slow, setSlow] = useState(false);
@@ -142,7 +146,10 @@ export function ArtImage({
             );
             return;
           }
-          if (base === src) console.warn("[art] gave up on", base);
+          if (base === src) {
+            console.warn("[art] gave up on", base);
+            onGiveUp?.();
+          }
           setFailedSrc(base);
         }}
       />

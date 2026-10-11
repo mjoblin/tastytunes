@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Disc3, ListMusic, Radio, RadioTower, X } from "lucide-react";
-import { playlistTotalSecs, type ScreenLayout } from "@shared/model";
+import { playKey, playlistTotalSecs, type ScreenLayout } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { useQueuePerformer } from "@/hooks/useQueuePerformer";
@@ -642,6 +642,7 @@ export function RecentTab({ density }: { density: TrayDensity }): React.JSX.Elem
             subtitle={subtitle}
             kind={entry.isRadio ? "station" : "track"}
             artUrl={entry.artUrl}
+            artKey={entry.isRadio ? null : playKey(entry.title, entry.artist, entry.album)}
             meta={ago}
             dimmed={!ref}
             onClick={play}

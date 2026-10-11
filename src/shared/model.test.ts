@@ -35,6 +35,7 @@ import {
   orderTracks,
   performerLine,
   PLAY_STATS_RECENT,
+  playAlbumKey,
   playKey,
   resumeRun,
   resumeTarget,
@@ -436,6 +437,21 @@ describe("isListen: the one definition of a listen", () => {
   it("the words say the same thing as the numbers", () => {
     expect(LISTEN_DEFINITION).toContain("half its track");
     expect(LISTEN_DEFINITION).toContain(`${listenThresholdSecs(null) / 60} minutes`);
+  });
+});
+
+describe("playAlbumKey: the part of a play's key its picture shares with its album", () => {
+  it("is the artist and album, whatever the title", () => {
+    expect(playAlbumKey(playKey("Baby steps", "Quadeca", "Life 1"))).toBe("quadeca|life 1");
+    expect(playAlbumKey(playKey("Dark magic", " QUADECA", "Life  1"))).toBe("quadeca|life 1");
+  });
+  it("keeps a title that holds the separator out of the album", () => {
+    expect(playAlbumKey(playKey("A | B", "Band", "Record"))).toBe("band|record");
+  });
+  it("names no album without an artist or an album", () => {
+    expect(playAlbumKey(playKey("Song", "Band", null))).toBeNull();
+    expect(playAlbumKey(playKey("Song", null, "Record"))).toBeNull();
+    expect(playAlbumKey("")).toBeNull();
   });
 });
 

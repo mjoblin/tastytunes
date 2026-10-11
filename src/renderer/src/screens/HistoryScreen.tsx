@@ -12,6 +12,7 @@ import {
   Trash2,
 } from "lucide-react";
 import {
+  playKey,
   favoriteKey,
   recentMatchesPlayState,
   MAX_RECENTS,
@@ -420,7 +421,13 @@ export function HistoryScreen(): React.JSX.Element {
 // ------------------------------------------------------------------- row pieces
 
 function Thumb({ entry }: { entry: RecentTrack }): React.JSX.Element {
-  return <MediaArt src={entry.artUrl} kind={entry.isRadio ? "station" : "track"} />;
+  return (
+    <MediaArt
+      src={entry.artUrl}
+      artKey={entry.isRadio ? null : playKey(entry.title, entry.artist, entry.album)}
+      kind={entry.isRadio ? "station" : "track"}
+    />
+  );
 }
 
 function TrackRow({
@@ -456,6 +463,7 @@ function TrackRow({
       subtitle={subtitle ?? undefined}
       kind={entry.isRadio ? "station" : "track"}
       artUrl={entry.artUrl}
+      artKey={entry.isRadio ? null : playKey(entry.title, entry.artist, entry.album)}
       playing={live}
       meta={<RightMeta at={entry.at} now={now} source={entry.source} live={live} />}
       onContextMenu={ref ? (e) => onMenu(entry, e) : undefined}

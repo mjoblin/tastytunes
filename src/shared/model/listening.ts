@@ -47,6 +47,22 @@ export function playKey(
   return `${n(title)}|${n(artist)}|${n(album)}`;
 }
 
+/**
+ * The artist and album of a playKey (its last two parts): what a track's PICTURE shares with
+ * every track of its album, so a play whose own cover is lost can show its album's (2026-10-11:
+ * the streamer serves only the current track's cover, and of 25 AirPlay plays of one album
+ * the device log had captured the cover once). Null when the key names no artist or no album
+ * (an empty pair would match every untitled play).
+ */
+export function playAlbumKey(key: string): string | null {
+  const last = key.lastIndexOf("|");
+  const before = last > 0 ? key.lastIndexOf("|", last - 1) : -1;
+  if (before < 0) return null;
+  const artist = key.slice(before + 1, last);
+  const album = key.slice(last + 1);
+  return artist && album ? `${artist}|${album}` : null;
+}
+
 /** One track's tally in the record: recorded plays (each ≥ the 30s floor),
  *  listens (the house definition), the most recent start, and seconds heard. */
 export interface PlayStat {
