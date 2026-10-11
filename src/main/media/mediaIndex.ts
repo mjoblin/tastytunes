@@ -53,6 +53,7 @@ import {
   search as liveSearch,
   searchPage,
 } from "./upnpBrowser";
+import { learnArtMove, moveArt } from "./artMove";
 
 interface StoredIndex {
   udn: string;
@@ -761,6 +762,8 @@ const HEAL_LIKELY = 3;
  * acts work and leaves the Library's card offering the re-index, which still walks. Straight
  * after a wake the device knows none of the new ids until their folders are listed again; the
  * browse layer lists them on a miss (upnpBrowser's forgottenFolders), so the checks ask by id.
+ * The drive's pictures are re-minted with the ids (2026-10-11), so the checks' pictures teach
+ * the move every picture in the index takes (artMove); pictures that disagree are a miss.
  */
 async function heal(
   host: string,
@@ -800,6 +803,8 @@ async function heal(
     xs.length <= k
       ? xs
       : Array.from({ length: k }, (_, i) => xs[Math.floor(((i + 0.5) * xs.length) / k)]);
+  /** Whether the confirmed mount's pictures moved too (the log says so). */
+  let picturesMoved = false;
   /** The index moved onto one mount and confirmed there, or why it is not that mount. */
   const tryMount = async (to: string): Promise<StoredIndex | string> => {
     const move = (id: string | null): string | null => {
@@ -859,11 +864,13 @@ async function heal(
         candidate.tracks.find((n) => n.id === now) ?? candidate.albums.find((n) => n.id === now);
       if (want && !probes.includes(want)) probes.push(want);
     }
+    const pictures: [string | null, string | null][] = [];
     for (const want of probes) {
       if (opts.stopped?.()) return "the streamer went to sleep";
       const got = await browseMetadataNode(host, server.udn, want.id);
       if (!got) return `${want.id} does not answer`;
       if (got.title !== want.title) return `${want.id} is titled differently`;
+      pictures.push([want.artUrl, got.artUrl]);
       // an album can sit under more than one container (its artist's folder, the library's
       // own list), so its parent is not evidence; a track's parent and number are
       const track = !want.upnpClass.startsWith("object.container");
@@ -872,7 +879,24 @@ async function heal(
       if (track && want.trackNumber != null && got.trackNumber !== want.trackNumber)
         return `${want.id} has another track number`;
     }
-    return candidate;
+    // THE PICTURES MOVED WITH THE IDS (artMove): the move the checks' pictures agree on, applied
+    // to every picture in the index, or a miss when one does not start where the move starts
+    const art = learnArtMove(pictures);
+    if (typeof art === "string") return art;
+    if (art.from === art.to) return candidate;
+    const stray = [...candidate.albums, ...candidate.artists, ...candidate.tracks].find(
+      (n) => n.artUrl != null && moveArt(n.artUrl, art) === undefined,
+    );
+    if (stray) return `${stray.id}'s picture is not where the others were (${stray.artUrl})`;
+    const pictured = (n: MediaNode): MediaNode =>
+      n.artUrl == null ? n : { ...n, artUrl: moveArt(n.artUrl, art) ?? n.artUrl };
+    picturesMoved = true;
+    return {
+      ...candidate,
+      albums: candidate.albums.map(pictured),
+      artists: candidate.artists.map(pictured),
+      tracks: candidate.tracks.map(pictured),
+    };
   };
   const misses: string[] = [];
   for (const to of mounts) {
@@ -889,7 +913,7 @@ async function heal(
     });
     save();
     console.log(
-      `[mediaIndex] ${server.name}: ${from === to ? "the index is on the current mount" : `ids moved from mount ${from} to ${to}`}; confirmed by content, no walk${misses.length ? ` (passed over ${misses.join("; ")})` : ""}`,
+      `[mediaIndex] ${server.name}: ${from === to ? "the index is on the current mount" : `ids moved from mount ${from} to ${to}`}${picturesMoved ? ", pictures with them" : ""}; confirmed by content, no walk${misses.length ? ` (passed over ${misses.join("; ")})` : ""}`,
     );
     announce(status());
     return true;
