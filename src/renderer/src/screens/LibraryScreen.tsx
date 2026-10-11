@@ -233,7 +233,8 @@ export function LibraryScreen(): React.JSX.Element {
   const pendingTrack = useRef<string | null>(null);
   useLayoutEffect(() => {
     if (pendingScroll.current != null && scrollRef.current) {
-      scrollRef.current.scrollTop = pendingScroll.current;
+      // a lens at the root holds the page at 0 (it scrolls its own column)
+      scrollRef.current.scrollTop = serverUdn == null && lens != null ? 0 : pendingScroll.current;
       pendingScroll.current = null;
     }
     // only once THIS destination's listing has landed — a fresh mount's first
@@ -263,6 +264,15 @@ export function LibraryScreen(): React.JSX.Element {
   // what the indexes offer: the doors' state, cross-server search (useIndexDoors)
   const { readyIndexes, crossAvailable, crossPending } = useIndexDoors();
   const [lens, setLens] = useState<Lens | null>(null);
+  // A LENS OPENS AT THE TOP OF THE PAGE: it scrolls its own column with the page held still, so
+  // a root left scrolled would carry the lens up out of view; closing it at the root brings the
+  // doors back to their own spot (a move between levels restores through the listing's effect)
+  useLayoutEffect(() => {
+    const sc = scrollRef.current;
+    if (!sc || serverUdn != null || searchMode) return;
+    sc.scrollTop = lens != null ? 0 : (scrollMemory.get(nodeKey(null, path)) ?? 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lens]);
 
   // (⌘A/Esc keyboard handling lives below the listing memo — its deps need
   // the visible tracks.)
@@ -297,6 +307,12 @@ export function LibraryScreen(): React.JSX.Element {
     if (!serverUdn) {
       setNodes([]);
       setState("ready");
+      // THE ROOT KEEPS ITS OWN SPOT (2026-10-11, found checking the sweep): it records as it
+      // scrolls and comes back to it like every other level; it never did (no loadedKey), so
+      // the page stayed wherever the level before it was. The front door clears the spot
+      // (the reset effect), so re-invoking Library lands at the top.
+      loadedKey.current = nodeKey(null, path);
+      pendingScroll.current = scrollMemory.get(nodeKey(null, path)) ?? 0;
       return;
     }
     let stale = false;
@@ -334,6 +350,8 @@ export function LibraryScreen(): React.JSX.Element {
   }, [serverUdn, path, fetchNonce]);
 
   const rememberScroll = (): void => {
+    // a lens scrolls its own column; the page under it is not the root's spot
+    if (lens != null) return;
     const key = nodeKey(serverUdn, path);
     if (scrollRef.current && loadedKey.current === key)
       scrollMemory.set(key, scrollRef.current.scrollTop);
@@ -481,7 +499,10 @@ export function LibraryScreen(): React.JSX.Element {
         setLens(mem.lens); // moveTo clears it; the remembered lens wins
         return;
       }
+      // THE FRONT DOOR is the top of the root: its remembered spot goes (after moveTo has
+      // recorded the level being left)
       moveTo(null, []);
+      scrollMemory.delete(nodeKey(null, []));
     } finally {
       restoring.current = false;
     }
