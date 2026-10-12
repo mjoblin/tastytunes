@@ -19,8 +19,9 @@ import { cx } from "@/lib/format";
  * over the Artists lens (the lens's columns are untouched: "i really like that"): the header
  * (ArtistHeader), the artist's albums as the Library's cards or rows, then APPEARS ON, their
  * tracks on other artists' albums, and TRACKS, their loose ones, as the lens's track rows with
- * its selection. The server's own folder for the artist stays one click away at the foot
- * (MinimServer's sub-indexes).
+ * its selection. No link to the server's own folder for the artist (the user: "it links to
+ * what is (to the user) effectively the same page"): on Asset it holds the same albums, on
+ * MinimServer its sub-indexes group them again, and browsing the server still reaches it.
  */
 export function ArtistPage({
   name,
@@ -31,7 +32,6 @@ export function ArtistPage({
   cardGap,
   fillRows,
   onOpenAlbum,
-  onBrowseServer,
 }: {
   name: string;
   pools: MediaIndexPools[];
@@ -42,7 +42,6 @@ export function ArtistPage({
   fillRows: boolean;
   /** An album, and from an Appears-on row the track to land on. */
   onOpenAlbum(node: MediaNode, track?: string): void;
-  onBrowseServer(node: MediaNode): void;
 }): React.JSX.Element {
   const index = useLensIndex(pools);
   const key = lc(name);
@@ -65,16 +64,6 @@ export function ArtistPage({
     const pool = pools.find((p) => p.udn === t.serverUdn);
     return pool ? albumOfTrack(t, pool) : null;
   };
-  // each server's own folder for the artist (the index's artist containers)
-  const folders = useMemo(
-    () =>
-      pools.flatMap((p) =>
-        p.artists
-          .filter((a) => lc(a.title) === key)
-          .map((a) => ({ ...a, serverName: a.serverName ?? p.serverName })),
-      ),
-    [pools, key],
-  );
   const label = (text: string, first: boolean): React.JSX.Element => (
     <div className={cx("microlabel pb-0.5 px-1", first ? "pt-2" : "pt-6")}>{text}</div>
   );
@@ -166,20 +155,6 @@ export function ArtistPage({
       {!artist && (
         <div className="text-[13px] text-faint pt-2 px-1">
           No albums or tracks by {name} in your indexed libraries.
-        </div>
-      )}
-      {folders.length > 0 && (
-        <div className="pt-8 pb-2 px-1 text-[11.5px] flex flex-wrap gap-x-4 gap-y-1">
-          {folders.map((f) => (
-            <button
-              key={nodeKey(f)}
-              data-artist-browse={f.serverName ?? ""}
-              onClick={() => onBrowseServer(f)}
-              className="text-amber hover:brightness-110 transition-all"
-            >
-              Browse {name} on {f.serverName} →
-            </button>
-          ))}
         </div>
       )}
       {sel.dragGhost}

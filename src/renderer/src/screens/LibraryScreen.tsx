@@ -1798,10 +1798,6 @@ export function LibraryScreen(): React.JSX.Element {
               cardGap={presetGap}
               fillRows={presetFillRows}
               onOpenAlbum={(node, track) => openAlbumFromArtistPage(node, artistPage, track)}
-              onBrowseServer={(node) => {
-                if (node.serverUdn)
-                  moveTo(node.serverUdn, [{ id: node.id, title: node.title, node }]);
-              }}
             />
           ) : lens === "artists" ? (
             <ArtistsLens
