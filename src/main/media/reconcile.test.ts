@@ -9,6 +9,8 @@
 import { describe, expect, it } from "vitest";
 import type { MediaNode } from "@shared/model";
 import {
+  albumArtistOf,
+  albumsFromTheirTracks,
   albumsFromTracks,
   audioItemsOnly,
   dedupeAlbums,
@@ -383,6 +385,97 @@ describe("POOL RULE albums-from-tracks (UMS, folder-only servers)", () => {
       ["f1", "A"],
       ["f2", "B"],
     ]);
+  });
+});
+
+describe("albumArtistOf: an album's artist from its tracks", () => {
+  it("takes the performer most tracks carry when one featured track names nobody else's", () => {
+    // the Evo's USB drive sends no AlbumArtist and one packed credit per track
+    const tracks = [
+      track("t1", "One", { artist: "Jack White" }),
+      track("t2", "Two", { artist: "Jack White" }),
+      track("t3", "Three", { artist: "Jack White feat. Guest" }),
+    ];
+    expect(albumArtistOf(tracks)).toBe("Jack White");
+  });
+  it("still calls an even split, or a compilation, Various Artists", () => {
+    expect(
+      albumArtistOf([track("a", "A", { artist: "A" }), track("b", "B", { artist: "B" })]),
+    ).toBe("Various Artists");
+  });
+});
+
+describe("POOL RULE folder-albums (the Evo's USB drive)", () => {
+  // the drive's shape, read live 2026-10-11: albums are folders titled by the folder's name,
+  // with no artist and no date; the tracks listed in them carry the real tags
+  const usb = (folderId: string, folder: string, tag: string, by: string, n = 2): MediaNode[] => [
+    album(folderId, folder),
+    ...Array.from({ length: n }, (_, i) =>
+      track(`${folderId}/${i}`, `Song ${i}`, { parentId: folderId, album: tag, artist: by }),
+    ),
+  ];
+  const split = (nodes: MediaNode[]): [MediaNode[], MediaNode[]] => [
+    nodes.filter((x) => x.isContainer),
+    nodes.filter((x) => !x.isContainer),
+  ];
+
+  it("gives a folder album its tracks' artist, and the album tag the folder's name ends with", () => {
+    const [albums, tracks] = split([
+      ...usb("14:0_0_3", "Jack White - Frozen Charlotte", "Frozen Charlotte", "Jack White"),
+      ...usb("14:0_0_2", "C'mon You Know", "C'mon You Know", "Liam Gallagher"),
+      ...usb(
+        "14:0_0_0_0_3",
+        "Jack White - St. Andrew's Hall, Detroit MI, Aug 5 2024",
+        "Detroit MI, Aug 5 2024",
+        "Jack White",
+      ),
+    ]);
+    const r = albumsFromTheirTracks(albums, tracks);
+    expect(r.filled).toBe(3);
+    expect(r.albums.map((a) => [a.id, a.title, a.artist])).toEqual([
+      ["14:0_0_3", "Frozen Charlotte", "Jack White"],
+      ["14:0_0_2", "C'mon You Know", "Liam Gallagher"],
+      ["14:0_0_0_0_3", "Detroit MI, Aug 5 2024", "Jack White"],
+    ]);
+  });
+
+  it("keeps the folder's name when the tag is not its end, or the tracks disagree", () => {
+    const [albums, tracks] = split([
+      // the tag runs into a word: not an "Artist - Album" name
+      ...usb("f1", "Bootlegged", "Bootleg", "The Garden"),
+      // a folder of two albums' tracks
+      album("f2", "Mixed Folder"),
+      track("f2/0", "A", { parentId: "f2", album: "One", artist: "X" }),
+      track("f2/1", "B", { parentId: "f2", album: "Two", artist: "X" }),
+    ]);
+    expect(albumsFromTheirTracks(albums, tracks).albums.map((a) => [a.title, a.artist])).toEqual([
+      ["Bootlegged", "The Garden"],
+      ["Mixed Folder", "X"],
+    ]);
+  });
+
+  it("takes the year the tracks agree on when the folder has none", () => {
+    const [albums, tracks] = split([
+      album("f", "Band - Record"),
+      track("f/0", "A", { parentId: "f", album: "Record", artist: "Band", year: "2001" }),
+      track("f/1", "B", { parentId: "f", album: "Record", artist: "Band", year: "2001" }),
+    ]);
+    expect(albumsFromTheirTracks(albums, tracks).albums[0]).toMatchObject({
+      title: "Record",
+      artist: "Band",
+      year: "2001",
+    });
+  });
+
+  it("is a no-op on a credited album, and on one with no tracks listed in it", () => {
+    // Asset and every search crawl: the album has its artist, the tracks hang off the search
+    const credited = album("a1", "Band - Record", { artist: "Band" });
+    const searched = album("a2", "Lonely");
+    const tracks = [track("t", "A", { parentId: "search-scope", album: "Lonely", artist: "B" })];
+    const r = albumsFromTheirTracks([credited, searched], tracks);
+    expect(r.filled).toBe(0);
+    expect(r.albums[0]).toBe(credited);
+    expect(r.albums[1]).toBe(searched);
   });
 });
 

@@ -292,22 +292,8 @@ export function albumsFromTracks(tracks: MediaNode[]): MediaNode[] {
   const out: MediaNode[] = [];
   for (const group of groups.values()) {
     const first = group[0];
-    // the album's artist: the AlbumArtist role when every track agrees on
-    // one, else the one performer they all share, else Various Artists
     const albumArtists = new Set(group.map((t) => lc(t.albumArtist)).filter(Boolean));
-    const performerSets = group.map(
-      (t) => new Set((t.artists ?? (t.artist ? [t.artist] : [])).map(lc)),
-    );
-    const shared = [...(performerSets[0] ?? [])].filter((p) =>
-      performerSets.every((s) => s.has(p)),
-    );
-    const artist =
-      (albumArtists.size === 1 ? group.find((t) => t.albumArtist)?.albumArtist : null) ??
-      (shared.length > 0
-        ? (group
-            .flatMap((t) => t.artists ?? (t.artist ? [t.artist] : []))
-            .find((n) => lc(n) === shared[0]) ?? null)
-        : "Various Artists");
+    const artist = albumArtistOf(group);
     // the container the tracks live in: the most common parentId
     const parents = new Map<string, number>();
     for (const t of group)
@@ -335,6 +321,79 @@ export function albumsFromTracks(tracks: MediaNode[]): MediaNode[] {
     });
   }
   return out;
+}
+
+/**
+ * An album's artist from its tracks (one home for the two rules that build or mend an album
+ * from what its tracks say): the AlbumArtist role when every track agrees on one, else the
+ * one performer they all share, else the performer more than half of them carry (a lone
+ * "feat." track, whose packed credit names nobody else's, must not make an album Various
+ * Artists: the Evo's USB drive sends no AlbumArtist), else Various Artists.
+ */
+export function albumArtistOf(group: readonly MediaNode[]): string {
+  const albumArtists = new Set(group.map((t) => lc(t.albumArtist)).filter(Boolean));
+  if (albumArtists.size === 1) {
+    const agreed = group.find((t) => t.albumArtist)?.albumArtist;
+    if (agreed) return agreed;
+  }
+  const performers = group.map((t) => t.artists ?? (t.artist ? [t.artist] : []));
+  const sets = performers.map((p) => new Set(p.map(lc)));
+  const spelled = (key: string): string => performers.flat().find((n) => lc(n) === key) ?? key;
+  const shared = [...(sets[0] ?? [])].filter((p) => sets.every((s) => s.has(p)));
+  if (shared.length > 0) return spelled(shared[0]);
+  const counts = new Map<string, number>();
+  for (const s of sets) for (const p of s) counts.set(p, (counts.get(p) ?? 0) + 1);
+  const [lead, n] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0] ?? ["", 0];
+  return lead && n * 2 > group.length ? spelled(lead) : "Various Artists";
+}
+
+/**
+ * POOL RULE folder-albums (the Evo's own USB drive, read live 2026-10-11): the drive's albums
+ * are its FOLDERS, classed as albums but titled by the folder's name ("Jack White - Frozen
+ * Charlotte") with no artist and no date, while every track inside carries the real tags
+ * (artist "Jack White", album "Frozen Charlotte"). Joined by the folder itself (the tracks
+ * listed in it), never by title: an album container with no artist takes the artist its
+ * tracks give (albumArtistOf), a year they agree on when it has none, and the album tag
+ * they all agree on as its title when the folder's name ends with it ("Artist - Album", or
+ * "Artist - Venue, City, Date" for a tag of "City, Date"), so the album has the name its
+ * tracks are played under. A container with an artist, or with no tracks listed in it (a
+ * search crawl's tracks hang off the search scope), is untouched.
+ */
+export function albumsFromTheirTracks(
+  albums: MediaNode[],
+  tracks: MediaNode[],
+): { albums: MediaNode[]; filled: number } {
+  const byParent = new Map<string, MediaNode[]>();
+  for (const t of tracks)
+    if (t.parentId) byParent.set(t.parentId, [...(byParent.get(t.parentId) ?? []), t]);
+  let filled = 0;
+  const out = albums.map((a) => {
+    if (a.artist) return a;
+    const own = byParent.get(a.id);
+    if (!own || own.length === 0) return a;
+    filled++;
+    const tags = new Set(own.map((t) => lc(t.album)));
+    const tag = tags.size === 1 ? (own.find((t) => t.album)?.album ?? null) : null;
+    const folder = lc(a.title);
+    const named =
+      tag &&
+      lc(tag) !== folder &&
+      folder.endsWith(lc(tag)) &&
+      /[^\p{L}\p{N}]$/u.test(folder.slice(0, folder.length - lc(tag).length));
+    const years = new Map<string, number>();
+    for (const t of own) if (t.year) years.set(t.year, (years.get(t.year) ?? 0) + 1);
+    const year = a.year ?? [...years.entries()].sort((x, y) => y[1] - x[1])[0]?.[0] ?? null;
+    const albumArtists = new Set(own.map((t) => lc(t.albumArtist)).filter(Boolean));
+    const artist = albumArtistOf(own);
+    return {
+      ...a,
+      ...(named && tag ? { title: tag } : {}),
+      artist,
+      year,
+      ...(albumArtists.size === 1 ? { albumArtist: artist } : {}),
+    };
+  });
+  return { albums: out, filled };
 }
 
 /** A fresh, honest profile — the crawl fills it in as it learns. */

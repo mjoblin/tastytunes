@@ -31,6 +31,7 @@ import type {
   ProfileNote,
 } from "@shared/model";
 import {
+  albumsFromTheirTracks,
   albumsFromTracks,
   audioItemsOnly,
   dedupeAlbums,
@@ -96,9 +97,11 @@ interface StoredIndex {
 // Asset tagging). v2 added upnp:genre. A bump discards stored indexes
 // wholesale; rebuildHints below keeps that from costing Browse-only
 // servers their Build click.
-const VERSION = 13; // v12: nodes from a browse walk carry their folder titlePath
+const VERSION = 14; // v12: nodes from a browse walk carry their folder titlePath
 // v13: the DIDL parser keeps text as the server sent it ("007" stays "007"), and LPCM
 // (audio/L16;rate=…) reads as PCM with its depth
+// v14: an album folder with no artist takes its artist, year and title from the tracks in it
+// (albumsFromTheirTracks: the Evo's USB drive, 2026-10-11)
 const PAGE = 500;
 const MAX_TRACKS = 50_000;
 const MAX_CONTAINERS = 10_000;
@@ -444,6 +447,10 @@ function reconcilePools(c: Crawled, serverName: string): Crawled {
     note({ kind: "albums-assembled-from-tracks", count: c.tracks.length });
     console.log(`[mediaIndex] ${serverName}: ${albums.length} albums synthesised from tracks`);
   }
+  // before the dedupe, which keeps same-titled albums apart by their artists
+  const ft = albumsFromTheirTracks(albums, c.tracks);
+  albums = ft.albums;
+  if (ft.filled > 0) note({ kind: "albums-from-their-tracks", count: ft.filled });
   const dd = dedupeAlbums(albums, c.tracks, c.parentsOf);
   if (dd.collapsed > 0) note({ kind: "duplicate-albums-merged", count: dd.collapsed });
   const yf = yearFromTracks(dd.albums, c.tracks);

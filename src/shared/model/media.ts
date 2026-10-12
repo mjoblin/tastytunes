@@ -722,6 +722,7 @@ export type ProfileNote =
   | { kind: "albums-assembled-from-tracks"; count: number }
   | { kind: "duplicate-albums-merged"; count: number }
   | { kind: "years-from-tracks"; count: number }
+  | { kind: "albums-from-their-tracks"; count: number }
   | { kind: "search-failed-browsed-instead" }
   | { kind: "search-paged-smaller" }
   | { kind: "browse-capped"; count: number };
@@ -752,6 +753,10 @@ export function describeProfileNote(note: ProfileNote): string {
       return note.count === 1
         ? "1 album with no year took the year from its tracks"
         : `${note.count} albums with no year took the year from their tracks`;
+    case "albums-from-their-tracks":
+      return note.count === 1
+        ? "1 album listed without an artist took its artist and name from its tracks"
+        : `${note.count} albums listed without an artist took their artist and name from their tracks`;
     case "search-failed-browsed-instead":
       return "the server's search failed, so the library was indexed by browsing instead";
     case "search-paged-smaller":
