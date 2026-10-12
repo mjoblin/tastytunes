@@ -39,7 +39,7 @@ import { usePlayStats } from "@/lib/playStats";
 import { useBestArt } from "@/lib/bestArt";
 import { queueWrite, tt } from "@/api";
 import { useStore } from "@/store";
-import { cx, fmtCount, matchesFilter } from "@/lib/format";
+import { cx, matchesFilter } from "@/lib/format";
 import { useIndexPools } from "@/hooks/useIndexPools";
 import { MOD } from "@/lib/screens";
 import { flashTarget, scrollToCentered } from "@/lib/scroll";
@@ -80,6 +80,7 @@ import { LibraryRoot } from "@/components/library/LibraryRoot";
 import { useIndexDoors } from "@/components/library/useIndexDoors";
 import { usePlayingMatch } from "@/components/library/usePlayingMatch";
 import { useQueueMatch } from "@/components/library/useQueueMatch";
+import { useWindowedList } from "@/hooks/useWindowedList";
 import { AlbumHeader } from "@/components/library/AlbumHeader";
 import { ArtistHeader } from "@/components/library/ArtistHeader";
 import { LibrarySearchBar } from "@/components/library/LibrarySearchBar";
@@ -137,8 +138,17 @@ const UNIFIED_SEARCH_CRUMB_ID = "__from-search__";
 
 /** One wording for a queue write that didn't land, whichever verb sent it. */
 const QUEUE_FAILED = "Couldn't reach the streamer. Nothing was queued.";
-/** How many search results the Library draws at a time (the "Show more" step). */
-const SEARCH_STEP = 500;
+
+/** One line of the windowed search results (see searchLines): every kind has one height. */
+type SearchLine =
+  | {
+      kind: "group0" | "group";
+      key: string;
+      group: { udn: string; serverName: string; total: number };
+    }
+  | { kind: "label0" | "label" | "klabel"; key: string; text: string }
+  | { kind: "cards0" | "cards"; key: string; nodes: MediaNode[] }
+  | { kind: "crow" | "track"; key: string; node: MediaNode; list: MediaNode[]; index: number };
 
 /**
  * Library: browse UPnP media (LAN servers and the streamer's own USB storage)
@@ -830,36 +840,6 @@ export function LibraryScreen(): React.JSX.Element {
   const filterAvailable = !searchMode && !atRoot && state === "ready" && hasPlayable;
   const effFilter = filterAvailable ? filter : "";
 
-  // THE RESULTS REVEAL 500 AT A TIME (2026-10-11, a user: 1,035 results stopped at "first 500",
-  // "Is there a way to go to the next page?"): the searches return every match, the listing
-  // draws the first SEARCH_STEP and a "Show more" at its end adds the next, so a broad query
-  // never draws thousands of rows at once. A new search, kind, sort or server starts again.
-  const revealOf = searchMode ? searchState : crossState;
-  const revealKey = `${searchKind}|${searchSort}|${searchSortReversed}|${crossServerUdn ?? ""}`;
-  const [revealed, setRevealed] = useState<{ of: unknown; key: string; n: number }>({
-    of: null,
-    key: "",
-    n: SEARCH_STEP,
-  });
-  const reveal = revealed.of === revealOf && revealed.key === revealKey ? revealed.n : SEARCH_STEP;
-  const showMore = (hidden: number): React.JSX.Element => (
-    <div className="px-1 pt-4 pb-2 text-[11.5px]">
-      <button
-        data-search-more
-        onClick={() => setRevealed({ of: revealOf, key: revealKey, n: reveal + SEARCH_STEP })}
-        className="text-amber hover:brightness-110 transition-all"
-      >
-        Show {fmtCount(Math.min(SEARCH_STEP, hidden))} more →
-      </button>
-      {hidden > SEARCH_STEP && (
-        <span className="text-faint">
-          {FACT_SEP}
-          {fmtCount(hidden)} not shown yet
-        </span>
-      )}
-    </div>
-  );
-
   // Album level: header with art + album metadata; tracks drop per-row art.
   // (Derived before the listing memo — album tracklists sort by track number.)
   const lastCrumbNode = path.length > 0 ? path[path.length - 1].node : undefined;
@@ -904,7 +884,7 @@ export function LibraryScreen(): React.JSX.Element {
   // Filtered + sorted listings are memoized: unmemoized they re-ran the
   // localeCompare sorts and filter scans on every store push — once a second
   // during playback, under grids that can hold 400+ cards.
-  const { baseNodes, shown, containers, tracks, searchHidden } = useMemo(() => {
+  const { baseNodes, shown, containers, tracks } = useMemo(() => {
     const baseNodes = searchMode ? (searchState?.items ?? []) : nodes;
     const shown = effFilter
       ? baseNodes.filter((n) => matchesFilter(effFilter, [n.title, n.artist, n.album, n.year]))
@@ -930,12 +910,9 @@ export function LibraryScreen(): React.JSX.Element {
     // Search results: the kind filter narrows, the search sort orders (its
     // 'relevance' default keeps the index's artists→albums→tracks order).
     let searchShown = shown;
-    let searchHidden = 0;
     if (searchMode) {
       if (searchKind !== "all") searchShown = shown.filter((n) => matchesKind(n, searchKind));
       searchShown = sortSearch(searchShown, searchSort, searchSortReversed);
-      searchHidden = Math.max(0, searchShown.length - reveal);
-      searchShown = searchShown.slice(0, reveal);
     }
     const containers = searchMode
       ? searchShown.filter((n) => n.isContainer)
@@ -950,7 +927,7 @@ export function LibraryScreen(): React.JSX.Element {
       : searchMode
         ? rawTracks
         : sortNodes(rawTracks);
-    return { baseNodes, shown, containers, tracks, searchHidden };
+    return { baseNodes, shown, containers, tracks };
   }, [
     nodes,
     searchMode,
@@ -962,7 +939,6 @@ export function LibraryScreen(): React.JSX.Element {
     searchKind,
     searchSort,
     searchSortReversed,
-    reveal,
   ]);
 
   // the selection and the drag to the nav (after the listing: the selection
@@ -1012,18 +988,15 @@ export function LibraryScreen(): React.JSX.Element {
     return crossState.groups
       .filter((g) => !crossServerUdn || g.udn === crossServerUdn)
       .map((g) => {
-        const sorted = sortSearch(
+        const items = sortSearch(
           searchKind === "all" ? g.items : g.items.filter((n) => matchesKind(n, searchKind)),
           searchSort,
           searchSortReversed,
         );
-        // each server's results reveal 500 at a time, as one library's do
-        const items = sorted.slice(0, reveal);
         return {
           udn: g.udn,
           serverName: g.serverName,
           total: g.total,
-          hidden: sorted.length - items.length,
           albums: items.filter((n) => n.isContainer && isAlbumClass(n.upnpClass)),
           artists: items.filter((n) => n.isContainer && n.upnpClass.includes("musicArtist")),
           folders: items.filter(
@@ -1034,7 +1007,116 @@ export function LibraryScreen(): React.JSX.Element {
         };
       })
       .filter((g) => g.albums.length + g.artists.length + g.folders.length + g.tracks.length > 0);
-  }, [crossState, crossServerUdn, searchKind, searchSort, searchSortReversed, reveal]);
+  }, [crossState, crossServerUdn, searchKind, searchSort, searchSortReversed]);
+  // ONE WINDOWED LIST OF EVERY RESULT (2026-10-11, user: "one big (windowed) list seems more
+  // user friendly", after the 500-at-a-time button sat at the end of the first library's group,
+  // mid-list): the results flatten into lines (a library's heading, a kind's label, a row of
+  // cards, a container row, a track row), and only the lines near the viewport are drawn, the
+  // Albums grid's rule. Each line carries its own spacing inside it (padding, a border on every
+  // row, transparent on a section's first), so a kind of line has one height to measure.
+  const [searchWidth, setSearchWidth] = useState(0);
+  const searchRo = useRef<ResizeObserver | null>(null);
+  const searchBodyRef = useCallback((el: HTMLDivElement | null) => {
+    searchRo.current?.disconnect();
+    searchRo.current = null;
+    if (!el) return;
+    setSearchWidth(el.getBoundingClientRect().width);
+    const ro = new ResizeObserver(([e]) => setSearchWidth(e.contentRect.width));
+    ro.observe(el);
+    searchRo.current = ro;
+  }, []);
+  const searchCols = Math.max(
+    1,
+    Math.floor((searchWidth + presetGap) / (presetCardSize + presetGap)),
+  );
+  const searchLines = useMemo((): SearchLine[] => {
+    const lines: SearchLine[] = [];
+    const section = (key: string, text: string, list: MediaNode[], containers: boolean): void => {
+      if (list.length === 0) return;
+      // across libraries a kind's label sits tight under its library's heading
+      const label = crossMode ? "klabel" : lines.length === 0 ? "label0" : "label";
+      lines.push({ kind: label, key: `${key}-l`, text });
+      if (containers && cards) {
+        for (let i = 0; i < list.length; i += searchCols)
+          lines.push({
+            kind: i === 0 ? "cards0" : "cards",
+            key: `${key}-c${i}`,
+            nodes: list.slice(i, i + searchCols),
+          });
+      } else
+        list.forEach((node, index) =>
+          lines.push({
+            kind: containers ? "crow" : "track",
+            key: `${key}-${node.id}`,
+            node,
+            list,
+            index,
+          }),
+        );
+    };
+    const kinds = (key: string, items: MediaNode[], tracksOf: MediaNode[]): void => {
+      section(
+        `${key}a`,
+        "Artists",
+        items.filter((c) => c.isContainer && c.upnpClass.includes("musicArtist")),
+        true,
+      );
+      section(
+        `${key}b`,
+        "Albums",
+        items.filter((c) => c.isContainer && isAlbumClass(c.upnpClass)),
+        true,
+      );
+      section(
+        `${key}f`,
+        "Folders",
+        items.filter(
+          (c) =>
+            c.isContainer && !isAlbumClass(c.upnpClass) && !c.upnpClass.includes("musicArtist"),
+        ),
+        true,
+      );
+      section(`${key}t`, "Tracks", tracksOf, false);
+    };
+    if (crossMode && crossState)
+      crossGroups.forEach((g) => {
+        lines.push({ kind: lines.length === 0 ? "group0" : "group", key: `g-${g.udn}`, group: g });
+        kinds(`g-${g.udn}-`, [...g.artists, ...g.albums, ...g.folders], g.tracks);
+      });
+    else if (searchMode && searchState) kinds("s-", containers, tracks);
+    return lines;
+  }, [
+    crossMode,
+    crossState,
+    crossGroups,
+    searchMode,
+    searchState,
+    containers,
+    tracks,
+    cards,
+    searchCols,
+  ]);
+  const searchKinds = useMemo(() => searchLines.map((l) => l.kind), [searchLines]);
+  const searchWin = useWindowedList({
+    scrollRef,
+    count: searchLines.length,
+    itemSelector: "[data-search-line]",
+    kinds: searchKinds,
+    estimate: {
+      group0: 36,
+      group: 56,
+      label0: 30,
+      label: 42,
+      klabel: 30,
+      cards0: presetCardSize + 60,
+      cards: presetCardSize + 52 + presetGap,
+      crow: 57,
+      track: 57,
+    },
+    overscan: 6,
+    enabled: searchLines.length > 80,
+  });
+
   const crossItemCount = crossState
     ? crossState.groups.reduce((acc, g) => acc + g.items.length, 0)
     : 0;
@@ -1181,8 +1263,42 @@ export function LibraryScreen(): React.JSX.Element {
   // the lists below carry no extra top margin in search mode), identical
   // above-gap too (mt-2 for whichever group lands first, mt-5 after).
   selectionLate.current = { heartNode, heartNodes, nodeFavorited };
-  const groupLabelClass = (first: boolean): string =>
-    cx("microlabel mb-0.5 px-1", first ? "mt-2" : "mt-5");
+  /** One container as the listing draws it: a card, or a row in the rows layout. */
+  const containerItem = (node: MediaNode): React.JSX.Element =>
+    cards ? (
+      <ContainerCard
+        key={node.id}
+        node={node}
+        playing={queueSourceActive && isPlayingAlbum(node)}
+        menuOpen={menuNodeId === node.id}
+        favorited={isAlbumClass(node.upnpClass) ? nodeFavorited(node) : undefined}
+        onHeart={isAlbumClass(node.upnpClass) ? () => heartNode(node) : undefined}
+        onEnter={() => enter(node)}
+        onPlay={(el) => void playContainer(node, el)}
+        onMenu={(e) => openMenu(node, e)}
+        onNavDrag={
+          isAlbumClass(node.upnpClass) ? (e) => startAlbumDrag([node], e, node.title) : undefined
+        }
+      />
+    ) : (
+      <ContainerRow
+        key={node.id}
+        node={node}
+        playing={queueSourceActive && isPlayingAlbum(node)}
+        menuOpen={menuNodeId === node.id}
+        favorited={isAlbumClass(node.upnpClass) ? nodeFavorited(node) : undefined}
+        dr={isAlbumClass(node.upnpClass) ? (albumDrMap[albumDrKey(node)]?.dr ?? null) : null}
+        onArtistLink={
+          isAlbumClass(node.upnpClass) && node.artist ? () => goToArtistFromLens(node) : undefined
+        }
+        onHeart={isAlbumClass(node.upnpClass) ? () => heartNode(node) : undefined}
+        onEnter={() => enter(node)}
+        onMenu={(e) => openMenu(node, e)}
+        onNavDrag={
+          isAlbumClass(node.upnpClass) ? (e) => startAlbumDrag([node], e, node.title) : undefined
+        }
+      />
+    );
 
   const containerGrid = (list: MediaNode[]): React.JSX.Element => (
     <div
@@ -1200,48 +1316,7 @@ export function LibraryScreen(): React.JSX.Element {
           : undefined
       }
     >
-      {list.map((node) =>
-        cards ? (
-          <ContainerCard
-            key={node.id}
-            node={node}
-            playing={queueSourceActive && isPlayingAlbum(node)}
-            menuOpen={menuNodeId === node.id}
-            favorited={isAlbumClass(node.upnpClass) ? nodeFavorited(node) : undefined}
-            onHeart={isAlbumClass(node.upnpClass) ? () => heartNode(node) : undefined}
-            onEnter={() => enter(node)}
-            onPlay={(el) => void playContainer(node, el)}
-            onMenu={(e) => openMenu(node, e)}
-            onNavDrag={
-              isAlbumClass(node.upnpClass)
-                ? (e) => startAlbumDrag([node], e, node.title)
-                : undefined
-            }
-          />
-        ) : (
-          <ContainerRow
-            key={node.id}
-            node={node}
-            playing={queueSourceActive && isPlayingAlbum(node)}
-            menuOpen={menuNodeId === node.id}
-            favorited={isAlbumClass(node.upnpClass) ? nodeFavorited(node) : undefined}
-            dr={isAlbumClass(node.upnpClass) ? (albumDrMap[albumDrKey(node)]?.dr ?? null) : null}
-            onArtistLink={
-              isAlbumClass(node.upnpClass) && node.artist
-                ? () => goToArtistFromLens(node)
-                : undefined
-            }
-            onHeart={isAlbumClass(node.upnpClass) ? () => heartNode(node) : undefined}
-            onEnter={() => enter(node)}
-            onMenu={(e) => openMenu(node, e)}
-            onNavDrag={
-              isAlbumClass(node.upnpClass)
-                ? (e) => startAlbumDrag([node], e, node.title)
-                : undefined
-            }
-          />
-        ),
-      )}
+      {list.map((node) => containerItem(node))}
     </div>
   );
 
@@ -1304,6 +1379,71 @@ export function LibraryScreen(): React.JSX.Element {
       }
     />
   );
+
+  /** One line of the windowed search results; its spacing lives inside it (see searchLines). */
+  const searchLine = (line: SearchLine): React.JSX.Element => {
+    const attrs = { "data-search-line": "", "data-win-kind": line.kind };
+    if ("group" in line) {
+      const src = servers?.find((x) => x.udn === line.group.udn);
+      return (
+        <div
+          key={line.key}
+          {...attrs}
+          data-cross-server-group={line.group.serverName}
+          className={cx("flex items-center gap-2 px-1", line.kind === "group0" ? "pt-2" : "pt-7")}
+        >
+          {src?.isStreamer ? (
+            <Usb size={15} className="text-dim" />
+          ) : (
+            <HardDrive size={15} className="text-dim" />
+          )}
+          <span className="text-[13.5px] font-medium">{line.group.serverName}</span>
+          <span className="font-mono text-[11px] text-faint tabular-nums">
+            {line.group.total} result{line.group.total === 1 ? "" : "s"}
+          </span>
+        </div>
+      );
+    }
+    if ("text" in line)
+      return (
+        <div
+          key={line.key}
+          {...attrs}
+          className={cx("microlabel pb-0.5 px-1", line.kind === "label" ? "pt-5" : "pt-2")}
+        >
+          {line.text}
+        </div>
+      );
+    if ("nodes" in line)
+      return (
+        <div
+          key={line.key}
+          {...attrs}
+          style={{
+            display: "grid",
+            gridTemplateColumns: presetFillRows
+              ? `repeat(${searchCols}, minmax(${presetCardSize}px, 1fr))`
+              : `repeat(${searchCols}, ${presetCardSize}px)`,
+            gap: presetGap,
+            paddingTop: line.kind === "cards0" ? 8 : presetGap,
+          }}
+        >
+          {line.nodes.map((node) => containerItem(node))}
+        </div>
+      );
+    // a row: its divider is its own top border, transparent on a section's first
+    return (
+      <div
+        key={line.key}
+        {...attrs}
+        className={cx("-mx-2 border-t", line.index === 0 ? "border-transparent" : "border-edge/50")}
+      >
+        {line.kind === "crow"
+          ? containerItem(line.node)
+          : trackRow(line.node, line.list, line.index, { showArt: true, links: true })}
+      </div>
+    );
+  };
 
   return (
     <div
@@ -1652,47 +1792,17 @@ export function LibraryScreen(): React.JSX.Element {
           !searchMode &&
           containerGrid(containers)}
 
-        {/* search results come grouped so artists / albums / tracks read
-            at a glance (hierarchy order, matching the kind filter) */}
-        {!atRoot && state === "ready" && searchMode && searchState && (
-          <>
-            {(() => {
-              const albums = containers.filter((c) => isAlbumClass(c.upnpClass));
-              const artists = containers.filter((c) => c.upnpClass.includes("musicArtist"));
-              const other = containers.filter(
-                (c) => !isAlbumClass(c.upnpClass) && !c.upnpClass.includes("musicArtist"),
-              );
-              return (
-                <>
-                  {artists.length > 0 && (
-                    <>
-                      <div className={groupLabelClass(true)}>Artists</div>
-                      {containerGrid(artists)}
-                    </>
-                  )}
-                  {albums.length > 0 && (
-                    <>
-                      <div className={groupLabelClass(artists.length === 0)}>Albums</div>
-                      {containerGrid(albums)}
-                    </>
-                  )}
-                  {other.length > 0 && (
-                    <>
-                      <div className={groupLabelClass(artists.length === 0 && albums.length === 0)}>
-                        Folders
-                      </div>
-                      {containerGrid(other)}
-                    </>
-                  )}
-                </>
-              );
-            })()}
-          </>
-        )}
-
-        {searchMode && searchState && state === "ready" && tracks.length > 0 && (
-          <div className={groupLabelClass(containers.length === 0)}>Tracks</div>
-        )}
+        {/* every search result, one windowed list (searchLines): one library's search
+            and the search across libraries alike */}
+        {((!atRoot && state === "ready" && searchMode && searchState) ||
+          (crossMode && crossState)) &&
+          searchLines.length > 0 && (
+            <div ref={searchBodyRef} data-search-list style={{ overflowAnchor: "none" }}>
+              {searchWin.padTop > 0 && <div style={{ height: searchWin.padTop }} />}
+              {searchLines.slice(searchWin.first, searchWin.last + 1).map(searchLine)}
+              {searchWin.padBottom > 0 && <div style={{ height: searchWin.padBottom }} />}
+            </div>
+          )}
 
         {/* tracks are ALWAYS rows — the app-wide idiom (Queue, Recently,
             Favorites, album tracklists). The cards ⇄ rows toggle governs
@@ -1745,7 +1855,7 @@ export function LibraryScreen(): React.JSX.Element {
             })()}
           </SelectionBar>
         )}
-        {!atRoot && state === "ready" && tracks.length > 0 ? (
+        {!atRoot && state === "ready" && !searchMode && tracks.length > 0 ? (
           <div
             className={cx(
               "divide-y divide-edge/50 -mx-2",
@@ -1777,70 +1887,6 @@ export function LibraryScreen(): React.JSX.Element {
             ))}
           </div>
         ) : null}
-
-        {!atRoot &&
-          state === "ready" &&
-          searchMode &&
-          searchState &&
-          searchHidden > 0 &&
-          showMore(searchHidden)}
-
-        {/* cross-server results: grouped by SERVER first (provenance at a
-            glance — the same album can live on two servers), then the usual
-            kind clusters within each group. Entering any result scopes the
-            screen to its server; the query crumb leads back here. */}
-        {crossMode &&
-          crossState &&
-          crossGroups.map((g, gi) => {
-            const src = servers?.find((s) => s.udn === g.udn);
-            const kindLabel = (text: string): React.JSX.Element => (
-              <div className="microlabel mb-0.5 mt-2 px-1">{text}</div>
-            );
-            return (
-              <div key={g.udn} data-cross-server-group={g.serverName}>
-                <div className={cx("flex items-center gap-2 px-1", gi === 0 ? "mt-2" : "mt-7")}>
-                  {src?.isStreamer ? (
-                    <Usb size={15} className="text-dim" />
-                  ) : (
-                    <HardDrive size={15} className="text-dim" />
-                  )}
-                  <span className="text-[13.5px] font-medium">{g.serverName}</span>
-                  <span className="font-mono text-[11px] text-faint tabular-nums">
-                    {g.total} result{g.total === 1 ? "" : "s"}
-                  </span>
-                </div>
-                {g.artists.length > 0 && (
-                  <>
-                    {kindLabel("Artists")}
-                    {containerGrid(g.artists)}
-                  </>
-                )}
-                {g.albums.length > 0 && (
-                  <>
-                    {kindLabel("Albums")}
-                    {containerGrid(g.albums)}
-                  </>
-                )}
-                {g.folders.length > 0 && (
-                  <>
-                    {kindLabel("Folders")}
-                    {containerGrid(g.folders)}
-                  </>
-                )}
-                {g.tracks.length > 0 && (
-                  <>
-                    {kindLabel("Tracks")}
-                    <div className="divide-y divide-edge/50 -mx-2">
-                      {g.tracks.map((node, ti) =>
-                        trackRow(node, g.tracks, ti, { showArt: true, links: true }),
-                      )}
-                    </div>
-                  </>
-                )}
-                {g.hidden > 0 && showMore(g.hidden)}
-              </div>
-            );
-          })}
       </div>
 
       {/* the popovers over the listing: the menus, the playlist panels, the preset
