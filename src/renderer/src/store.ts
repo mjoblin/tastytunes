@@ -999,6 +999,8 @@ export const useStore = create<TTState>((set, get) => ({
           return { lastRecalledPresetId: msg.id };
         case "recents":
           return { recents: msg.data };
+        case "albumDr":
+          return { albumDr: { ...s.albumDr, [msg.key]: msg.entry } };
         case "listening":
           return { listeningStats: msg.data };
         case "playStats":

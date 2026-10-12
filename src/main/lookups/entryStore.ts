@@ -135,6 +135,12 @@ export class EntryStore<T, S> {
     return this.load().has(key);
   }
 
+  /** The entry's summary WITHOUT counting a use: for a sweep over every entry (the album DR
+   *  check), which must not make the whole store equally young. */
+  peekSummary(key: string): S | undefined {
+    return this.load().get(key)?.s;
+  }
+
   /** The entry, read from its file; null when there is none (or its file is gone). Bumps the LRU. */
   get(key: string): T | null {
     const entry = this.load().get(key);

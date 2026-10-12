@@ -127,6 +127,27 @@ export function integrateLoudnessHistograms(
   return n2 === 0 ? null : LOUD_OFFSET + 10 * Math.log10(sum2 / n2);
 }
 
+/** Round half to even, as the reference meter (numpy's round) does. */
+export function roundHalfEven(x: number): number {
+  const f = Math.floor(x);
+  const diff = x - f;
+  if (diff > 0.5) return f + 1;
+  if (diff < 0.5) return f;
+  return f % 2 === 0 ? f : f + 1;
+}
+
+/**
+ * The album's official DR — the reference's dynamic_range_meter.py sums
+ * each track's INTEGER DR and divides by the scanned-track count, rounded
+ * half-to-even like everything else. A decoded DR0 track (a silent
+ * interlude) counts in the mean; only tracks that failed to decode don't.
+ * An album value therefore exists only when EVERY track is measured.
+ */
+export function albumDr14(trackDrs: readonly number[]): number {
+  if (trackDrs.length === 0) return 0;
+  return roundHalfEven(trackDrs.reduce((s, v) => s + v, 0) / trackDrs.length);
+}
+
 /** An album's recorded DR — written ONLY when every track measured (the TT
  *  album value is the mean of ALL its tracks; a partial read has no honest
  *  number). `tracks` lets surfaces retire a stale entry when the album's

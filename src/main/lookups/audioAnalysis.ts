@@ -8,10 +8,11 @@
 // reads (the rows' DR and loudness) answer from the store's index alone.
 import { join } from "node:path";
 import { app } from "electron";
-import type { AlbumDr, AudioAnalysis, KnownStats } from "@shared/model";
+import type { AlbumDr, AudioAnalysis, KnownStats, MediaIndexPools } from "@shared/model";
 import { isRecord } from "@shared/guards";
 import { DiskCache, registerCache } from "./diskCache";
 import { EntryStore } from "./entryStore";
+import { albumDrsFromTracks } from "./albumDrFromTracks";
 
 const TRACK_CAP = 2000;
 const ALBUM_CAP = 2000;
@@ -76,6 +77,25 @@ export function audioStatsMany(keys: string[]): Record<string, KnownStats> {
 
 export function albumDrPut(key: string, entry: unknown): void {
   if (isAlbumDrShape(entry)) albums.set(key, entry);
+}
+
+/** Albums whose every track is now measured get their DR recorded (albumDrsFromTracks): after
+ *  a track's analysis is stored (its album only), and before the map is handed out (all). */
+export function recordAlbumDrsFromTracks(
+  pools: readonly MediaIndexPools[],
+  onlyTrackKey?: string,
+): { key: string; entry: AlbumDr }[] {
+  const found = albumDrsFromTracks(
+    pools,
+    {
+      recorded: new Map(albums.snapshot()),
+      dr: (k) => tracks.peekSummary(k)?.dr,
+      hist: (k) => tracks.get(k)?.loudHist,
+    },
+    onlyTrackKey,
+  );
+  for (const { key, entry } of found) albums.set(key, entry);
+  return found;
 }
 
 export function albumDrMap(): Record<string, AlbumDr> {

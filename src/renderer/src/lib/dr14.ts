@@ -1,3 +1,8 @@
+import { albumDr14, roundHalfEven } from "@shared/model";
+
+// the album value and the rounding live in shared/model (main records an album the moment
+// its last track is measured, 2026-10-12); re-exported for the renderer's callers
+export { albumDr14 };
 /**
  * TT dynamic range — the "DR" integer of the loudness-war database
  * (dr.loudness-war.info) — ported line-for-line from the reference
@@ -28,26 +33,6 @@
 
 const AUDIO_MIN = 1 / 2 ** 24;
 const MAX_DYNAMIC_24BIT = 20 * Math.log10(2 ** 24);
-
-function roundHalfEven(x: number): number {
-  const f = Math.floor(x);
-  const diff = x - f;
-  if (diff > 0.5) return f + 1;
-  if (diff < 0.5) return f;
-  return f % 2 === 0 ? f : f + 1;
-}
-
-/**
- * The album's official DR — the reference's dynamic_range_meter.py sums
- * each track's INTEGER DR and divides by the scanned-track count, rounded
- * half-to-even like everything else. A decoded DR0 track (a silent
- * interlude) counts in the mean; only tracks that failed to decode don't.
- * An album value therefore exists only when EVERY track is measured.
- */
-export function albumDr14(trackDrs: readonly number[]): number {
-  if (trackDrs.length === 0) return 0;
-  return roundHalfEven(trackDrs.reduce((s, v) => s + v, 0) / trackDrs.length);
-}
 
 export function computeDr14(channels: readonly Float32Array[], sampleRate: number): number {
   const ch = channels.length;

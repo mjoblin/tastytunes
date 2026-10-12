@@ -1,5 +1,5 @@
 import { IPC } from "@shared/ipc";
-import { broadcastSettings } from "../app/broadcast";
+import { broadcastAlbumDrs, broadcastSettings } from "../app/broadcast";
 import { streamerHost } from "../app/runtime";
 import { getSettings, updateSettings } from "../data/persist";
 import {
@@ -9,7 +9,9 @@ import {
   audioAnalysisPut,
   audioDrMany,
   audioStatsMany,
+  recordAlbumDrsFromTracks,
 } from "../lookups/audioAnalysis";
+import { pools } from "../media/mediaIndex";
 import { audioResUrl } from "../media/upnpBrowser";
 import { loggedFetch } from "../netlog";
 import { handle } from "../app/guard";
@@ -56,8 +58,15 @@ export function registerAudioIpc(): void {
     if (typeof key !== "string") return;
     audioAnalysisPut(key, analysis);
     noteWaveformSeen();
+    // the album this track completes, if it does, gets its DR (as the sweep would give it),
+    // and every window hears it
+    broadcastAlbumDrs(recordAlbumDrsFromTracks(pools(), key));
   });
-  handle(IPC.albumDrMap, () => albumDrMap());
+  // albums completed track by track before 2026-10-12 (or while the app was elsewhere)
+  handle(IPC.albumDrMap, () => {
+    broadcastAlbumDrs(recordAlbumDrsFromTracks(pools()));
+    return albumDrMap();
+  });
   handle(IPC.audioDrMany, (_e, keys: unknown) =>
     Array.isArray(keys) ? audioDrMany(keys.filter((k): k is string => typeof k === "string")) : {},
   );

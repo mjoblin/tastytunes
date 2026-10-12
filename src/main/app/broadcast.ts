@@ -1,6 +1,6 @@
 import { BrowserWindow } from "electron";
 import { IPC } from "@shared/ipc";
-import type { AppSettings } from "@shared/model";
+import type { AlbumDr, AppSettings } from "@shared/model";
 import { listeningRecord } from "../data/listeningRecord";
 
 // Pushes every window hears (split out of index.ts in the 0.11.0 sweep). The device's own
@@ -16,6 +16,15 @@ export function broadcastSettings(settings: AppSettings): void {
   for (const w of BrowserWindow.getAllWindows()) {
     w.webContents.send(IPC.push, { kind: "settings", settings });
   }
+}
+
+/** Every window hears an album DR main recorded from its tracks (a track measured in the mini
+ *  player completes the album the main window shows). */
+export function broadcastAlbumDrs(found: readonly { key: string; entry: AlbumDr }[]): void {
+  if (found.length === 0) return;
+  for (const w of BrowserWindow.getAllWindows())
+    for (const { key, entry } of found)
+      w.webContents.send(IPC.push, { kind: "albumDr", key, entry });
 }
 
 // The History tab's truth row stays live: every append (or failed append)

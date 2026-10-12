@@ -176,21 +176,30 @@ export async function analyzeTracks(
   }
 }
 
-let loaded = false;
+let loadedFor: string | null = null;
 
-/** The album-DR map, loaded once per session into the store; surfaces read
- *  it live (the sweep updates it in place). The load flag is module scope
- *  and never cleared in a cleanup — the StrictMode seed rule. */
+/** The album-DR map, loaded into the store; surfaces read it live (the sweep and a track's
+ *  stored analysis update it in place). Main fills in albums completed track by track when it
+ *  hands the map out, so the map is asked again whenever the set of ready indexes changes (an
+ *  index that lands after the first load). The loaded-for mark is module scope and never
+ *  cleared in a cleanup — the StrictMode seed rule. */
 export function useAlbumDr(): Record<string, AlbumDr> {
   const map = useStore((s) => s.albumDr);
+  const ready = useStore((s) =>
+    s.mediaIndex
+      .filter((x) => x.state === "ready")
+      .map((x) => x.udn)
+      .sort()
+      .join("|"),
+  );
   useEffect(() => {
-    if (loaded) return;
-    loaded = true;
+    if (loadedFor === ready) return;
+    loadedFor = ready;
     void tt
       .albumDrMap()
       .then((m) => useStore.getState().setAlbumDr(m))
       .catch(() => {});
-  }, []);
+  }, [ready]);
   return map;
 }
 

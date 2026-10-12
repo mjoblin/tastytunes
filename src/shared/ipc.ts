@@ -144,6 +144,8 @@ export type PushMessage =
   | { kind: "frame"; entry: FrameEntry }
   | { kind: "log"; entry: LogEntry }
   | { kind: "recents"; data: RecentTrack[] }
+  /** An album's DR, recorded by main the moment its last track was measured (2026-10-12). */
+  | { kind: "albumDr"; key: string; entry: AlbumDr }
   | { kind: "listening"; data: ListeningRecordStats }
   /** The record's aggregate, whole (after a clear) — the reading surfaces' seed. */
   | { kind: "playStats"; data: PlayStats }

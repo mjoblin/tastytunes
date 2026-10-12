@@ -182,6 +182,7 @@ export function analyzeTrack(
         native,
         CAPTURE_BUCKETS,
       );
+      // (main records the album this track completes, if it does, and every window hears it)
       if (contentKey) void tt.audioAnalysisPut(contentKey, toStored(analysis));
       return analysis;
     } catch {
