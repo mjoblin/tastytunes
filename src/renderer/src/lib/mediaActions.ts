@@ -29,8 +29,8 @@ async function resolveRef(ref: MediaRef): Promise<{ serverUdn: string; objectId:
 /** Land the Library on an ARTIST by name: the Artists lens at the root, the
  *  artist selected and revealed near the top — the Tracks lens's own link,
  *  reachable from every row that shows a name since 2026-09-02 (NameLine). */
-export function openArtistInLibrary(artist: string): void {
-  useStore.getState().openArtistInLibrary(artist);
+export function openArtistInLibrary(artist: string, page = false): void {
+  useStore.getState().openArtistInLibrary(artist, page);
 }
 
 export async function openRefInLibrary(ref: MediaRef): Promise<boolean> {

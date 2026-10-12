@@ -108,9 +108,13 @@ const letterOf = (name: string): string => {
 export function ArtistsLens({
   pools,
   actions,
+  onOpenArtistPage,
 }: {
   pools: MediaIndexPools[];
   actions: LensActions;
+  /** The artist's page (ArtistPage, 2026-10-11): the columns stay the browser, the page is
+   *  one step in from the selected artist (the Albums heading's link, a double-click). */
+  onOpenArtistPage?(name: string): void;
 }): React.JSX.Element {
   const [mem, setMemState] = useState(artistsMem);
   const setMem = (patch: Partial<typeof artistsMem>): void => {
@@ -277,10 +281,15 @@ export function ArtistsLens({
   // Playing-artist highlight is content identity, like everything else.
   const playingArtistKey = actions.playingArtist ? lc(actions.playingArtist) : null;
 
-  const colHeading = (label: string, detail?: string): React.JSX.Element => (
+  const colHeading = (
+    label: string,
+    detail?: string,
+    link?: React.ReactNode,
+  ): React.JSX.Element => (
     <div className="shrink-0 pb-1.5 mb-1.5 border-b border-edge flex items-baseline gap-2">
       <span className="microlabel">{label}</span>
       {detail && <span className="font-mono text-[10.5px] text-faint tabular-nums">{detail}</span>}
+      {link}
     </div>
   );
 
@@ -357,6 +366,9 @@ export function ArtistsLens({
                     }}
                     data-artist-row={a.name}
                     onClick={() => setMem({ artist: selected ? null : a.key, album: null })}
+                    // a double-click opens the artist's page (the page re-selects the
+                    // artist, so the two clicks' toggle never shows on the way back)
+                    onDoubleClick={() => onOpenArtistPage?.(a.name)}
                     // right-click = the ⋯ (the app-wide rule): the artist menu — the
                     // pivot and Info. A lens artist is content identity, not a
                     // node, so one is synthesized: the entity's server (or the first
@@ -441,7 +453,21 @@ export function ArtistsLens({
 
         {/* Albums -------------------------------------------------------- */}
         <div className="w-[28%] min-w-[250px] max-w-[400px] shrink-0 min-h-0 flex flex-col">
-          {colHeading("Albums", selectedArtist ? String(selectedArtist.albums.length) : undefined)}
+          {colHeading(
+            "Albums",
+            selectedArtist ? String(selectedArtist.albums.length) : undefined,
+            selectedArtist && onOpenArtistPage && (
+              // THE WAY IN to the artist's page: over the column the page expands on (its
+              // albums as cards, the tracks they appear on, the picture and summary)
+              <button
+                data-lens-artist-page
+                onClick={() => onOpenArtistPage(selectedArtist.name)}
+                className="ml-auto text-[11.5px] text-amber hover:brightness-110 transition-all"
+              >
+                Artist page →
+              </button>
+            ),
+          )}
           <div
             ref={albumsColRef}
             onScroll={(e) => {

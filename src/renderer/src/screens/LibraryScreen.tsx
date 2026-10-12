@@ -57,6 +57,7 @@ import {
 } from "@/components/library/LibraryLenses";
 import {
   LENS_ARTIST_CRUMB_ID,
+  ARTIST_PAGE_CRUMB_ID,
   LENS_CRUMB_ID,
   LENS_LABEL,
   lensNavigation,
@@ -81,8 +82,10 @@ import { useIndexDoors } from "@/components/library/useIndexDoors";
 import { usePlayingMatch } from "@/components/library/usePlayingMatch";
 import { useQueueMatch } from "@/components/library/useQueueMatch";
 import { useWindowedList } from "@/hooks/useWindowedList";
+import { Lru } from "@/lib/lru";
 import { AlbumHeader } from "@/components/library/AlbumHeader";
 import { ArtistHeader } from "@/components/library/ArtistHeader";
+import { ArtistPage } from "@/components/library/ArtistPage";
 import { LibrarySearchBar } from "@/components/library/LibrarySearchBar";
 import { useLibrarySelection, type SelectionLate } from "@/components/library/useLibrarySelection";
 import {
@@ -138,6 +141,8 @@ const UNIFIED_SEARCH_CRUMB_ID = "__from-search__";
 
 /** One wording for a queue write that didn't land, whichever verb sent it. */
 const QUEUE_FAILED = "Couldn't reach the streamer. Nothing was queued.";
+/** Each artist page's scroll spot for the session (an album opened from it and Back). */
+const artistPageScroll = new Lru<string, number>(200);
 
 /** One line of the windowed search results (see searchLines): every kind has one height. */
 type SearchLine =
@@ -277,15 +282,21 @@ export function LibraryScreen(): React.JSX.Element {
   // what the indexes offer: the doors' state, cross-server search (useIndexDoors)
   const { readyIndexes, crossAvailable, crossPending } = useIndexDoors();
   const [lens, setLens] = useState<Lens | null>(null);
+  /** The artist page open over the Artists lens, by name (ArtistPage, 2026-10-11). */
+  const [artistPage, setArtistPage] = useState<string | null>(null);
   // A LENS OPENS AT THE TOP OF THE PAGE: it scrolls its own column with the page held still, so
   // a root left scrolled would carry the lens up out of view; closing it at the root brings the
   // doors back to their own spot (a move between levels restores through the listing's effect)
   useLayoutEffect(() => {
     const sc = scrollRef.current;
     if (!sc || serverUdn != null || searchMode) return;
-    sc.scrollTop = lens != null ? 0 : (scrollMemory.get(nodeKey(null, path)) ?? 0);
+    sc.scrollTop = artistPage
+      ? (artistPageScroll.get(artistPage.toLowerCase()) ?? 0)
+      : lens != null
+        ? 0
+        : (scrollMemory.get(nodeKey(null, path)) ?? 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lens]);
+  }, [lens, artistPage]);
 
   // (⌘A/Esc keyboard handling lives below the listing memo — its deps need
   // the visible tracks.)
@@ -341,7 +352,8 @@ export function LibraryScreen(): React.JSX.Element {
               c.id !== UNIFIED_SEARCH_CRUMB_ID &&
               // lens crumbs are the app's, not the server's containers
               c.id !== LENS_CRUMB_ID &&
-              c.id !== LENS_ARTIST_CRUMB_ID,
+              c.id !== LENS_ARTIST_CRUMB_ID &&
+              c.id !== ARTIST_PAGE_CRUMB_ID,
           )
           .map((c) => c.title),
       )
@@ -387,6 +399,7 @@ export function LibraryScreen(): React.JSX.Element {
     searchNow: searchState,
     crossNow: crossState,
     lens,
+    artist: artistPage,
   });
 
   const moveTo = (udn: string | null, newPath: Crumb[]): void => {
@@ -394,6 +407,7 @@ export function LibraryScreen(): React.JSX.Element {
     rememberScroll();
     exitSearch();
     setLens(null);
+    setArtistPage(null);
     filterMemory.set(nodeKey(serverUdn, path), filter);
     setScreenFilter("library", filterMemory.get(nodeKey(udn, newPath)) ?? "");
     setServerUdn(udn);
@@ -411,11 +425,17 @@ export function LibraryScreen(): React.JSX.Element {
     landOn,
     openAlbumFromLens,
     returnToLens,
+    openArtistPage,
+    closeArtistPage,
+    openAlbumFromArtistPage,
+    returnToArtistPage,
     goToAlbumFromLens,
     goToArtistFromLens,
   } = lensNavigation({
     lens,
     setLens,
+    artistPage,
+    setArtistPage,
     atRoot,
     searchMode,
     serverUdn,
@@ -471,8 +491,9 @@ export function LibraryScreen(): React.JSX.Element {
       if (target && target.nonce === libraryResetNonce) {
         if ("artist" in target) {
           // a NAME from another screen's row: the Artists lens at the root,
-          // focused and revealed on it (the Tracks lens's link, app-wide)
-          landOn({ artist: target.artist });
+          // focused and revealed on it (the Tracks lens's link, app-wide); a
+          // search's artist result asks for the artist's page
+          landOn(target.page ? { artistPage: target.artist } : { artist: target.artist });
           return;
         }
         const last = target.titlePath.length - 1;
@@ -510,6 +531,7 @@ export function LibraryScreen(): React.JSX.Element {
       if (cameBack && mem) {
         moveTo(mem.udn, mem.path);
         setLens(mem.lens); // moveTo clears it; the remembered lens wins
+        setArtistPage(mem.lens === "artists" ? (mem.artist ?? null) : null);
         return;
       }
       // THE FRONT DOOR is the top of the root: its remembered spot goes (after moveTo has
@@ -535,9 +557,22 @@ export function LibraryScreen(): React.JSX.Element {
   useEffect(() => {
     setLibraryLocation(snapshot());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverUdn, path, searchMode, searchQuery, searchState, crossState, lens]);
+  }, [serverUdn, path, searchMode, searchQuery, searchState, crossState, lens, artistPage]);
+
+  // THE ARTIST PAGE is built from the indexes: an artist has one when an index holds their server
+  // (the lens's artists always; a search's or a folder's artist when theirs is indexed)
+  const artistPageOf = (node: MediaNode): (() => void) | undefined =>
+    node.isContainer &&
+    isArtistClass(node.upnpClass) &&
+    readyIndexes.some((x) => x.udn === (node.serverUdn ?? serverUdn))
+      ? () => openArtistPage(node.title)
+      : undefined;
 
   const enter = (node: MediaNode): void => {
+    // A SEARCH'S ARTIST opens the artist's page (2026-10-11); an artist from a live search of an
+    // unindexed server keeps its folder, as does an artist met browsing a server's folders
+    const page = searchMode || crossMode ? artistPageOf(node) : undefined;
+    if (page) return page();
     if (crossMode && crossState) {
       // Entering a cross-server result SCOPES to its server; the query crumb
       // leads back to the root cross view with its groups intact.
@@ -584,6 +619,7 @@ export function LibraryScreen(): React.JSX.Element {
     if (newPath[newPath.length - 1]?.id === UNIFIED_SEARCH_CRUMB_ID) return setScreen("search");
     if (newPath[newPath.length - 1]?.id === SEARCH_CRUMB_ID) return returnToSearch();
     const last = newPath[newPath.length - 1];
+    if (last?.id === ARTIST_PAGE_CRUMB_ID) return returnToArtistPage(last.title);
     if (last?.id === LENS_ARTIST_CRUMB_ID) {
       focusArtistsLens(last.title);
       return returnToLens();
@@ -599,9 +635,12 @@ export function LibraryScreen(): React.JSX.Element {
       if (path.length === 1 && path[0]?.id === UNIFIED_SEARCH_CRUMB_ID) return setScreen("search");
       if (path[path.length - 2]?.id === SEARCH_CRUMB_ID) return returnToSearch();
       const parent = path[path.length - 2]?.id;
+      if (parent === ARTIST_PAGE_CRUMB_ID) return returnToArtistPage(path[path.length - 2].title);
       if (parent === LENS_CRUMB_ID || parent === LENS_ARTIST_CRUMB_ID) return returnToLens();
       moveTo(serverUdn, path.slice(0, -1));
     } else if (serverUdn) moveTo(null, []);
+    else if (artistPage)
+      closeArtistPage(); // the page exits to the Artists lens's columns
     else if (lens) setLens(null); // lens exits to the source list
   };
 
@@ -623,6 +662,7 @@ export function LibraryScreen(): React.JSX.Element {
         setLensReturn(snap.lens);
         setLens(snap.lens);
       }
+      setArtistPage(snap.lens === "artists" ? (snap.artist ?? null) : null);
     } finally {
       restoring.current = false;
     }
@@ -1201,7 +1241,11 @@ export function LibraryScreen(): React.JSX.Element {
   // synthetic crumb ids are known
   const pathTitles = path
     .filter(
-      (c) => c.id !== SEARCH_CRUMB_ID && c.id !== LENS_CRUMB_ID && c.id !== LENS_ARTIST_CRUMB_ID,
+      (c) =>
+        c.id !== SEARCH_CRUMB_ID &&
+        c.id !== LENS_CRUMB_ID &&
+        c.id !== LENS_ARTIST_CRUMB_ID &&
+        c.id !== ARTIST_PAGE_CRUMB_ID,
     )
     .map((c) => c.title);
   const { nodeFavorited, heartNode, heartNodes } = useLibraryFavorites({
@@ -1646,7 +1690,16 @@ export function LibraryScreen(): React.JSX.Element {
                 onClick: () => jumpTo(0),
                 current: atRoot && !lens,
               },
-              ...(atRoot && lens ? [{ key: "lens", label: LENS_LABEL[lens] }] : []),
+              ...(atRoot && lens
+                ? artistPage
+                  ? [
+                      // the artist page over the Artists lens: the lens crumb leads back to
+                      // its columns, the artist still selected
+                      { key: "lens", label: LENS_LABEL[lens], onClick: closeArtistPage },
+                      { key: "artist-page", label: artistPage, current: true },
+                    ]
+                  : [{ key: "lens", label: LENS_LABEL[lens] }]
+                : []),
               ...(server && path[0]?.id !== LENS_CRUMB_ID
                 ? [
                     {
@@ -1681,6 +1734,10 @@ export function LibraryScreen(): React.JSX.Element {
           // Recorded as you scroll, not only when you navigate: leaving for
           // another screen UNMOUNTS this one, and the album you were halfway
           // down came back at the top (user, 2026-08-22).
+          if (artistPage && atRoot && !searchMode) {
+            artistPageScroll.set(artistPage.toLowerCase(), e.currentTarget.scrollTop);
+            return;
+          }
           if (searchMode || lens) return;
           const key = nodeKey(serverUdn, path);
           if (loadedKey.current === key) scrollMemory.set(key, e.currentTarget.scrollTop);
@@ -1691,8 +1748,9 @@ export function LibraryScreen(): React.JSX.Element {
           // scrollbars — the "filter box moves" report)
           "flex-1 px-8 pt-1 [scrollbar-gutter:stable]",
           // every lens scrolls its own column under its toolbar (the miller view's columns, the
-          // tracks list, the albums grid since 2026-10-11) — the page must not
-          atRoot && lens != null && !searchMode
+          // tracks list, the albums grid since 2026-10-11) — the page must not; the artist page
+          // is a page, and scrolls as one
+          atRoot && lens != null && !searchMode && !artistPage
             ? "overflow-hidden min-h-0 pb-6"
             : // the floating bar overlaps the last rows at full scroll —
               // selection mode adds scroll-room so every row can clear it
@@ -1730,8 +1788,27 @@ export function LibraryScreen(): React.JSX.Element {
               fillRows={presetFillRows}
               onToggleLayout={() => void setLayout(cards ? "rows" : "cards")}
             />
+          ) : lens === "artists" && artistPage ? (
+            <ArtistPage
+              name={artistPage}
+              pools={lensPools}
+              actions={lensActions}
+              cards={cards}
+              cardSize={presetCardSize}
+              cardGap={presetGap}
+              fillRows={presetFillRows}
+              onOpenAlbum={(node, track) => openAlbumFromArtistPage(node, artistPage, track)}
+              onBrowseServer={(node) => {
+                if (node.serverUdn)
+                  moveTo(node.serverUdn, [{ id: node.id, title: node.title, node }]);
+              }}
+            />
           ) : lens === "artists" ? (
-            <ArtistsLens pools={lensPools} actions={lensActions} />
+            <ArtistsLens
+              pools={lensPools}
+              actions={lensActions}
+              onOpenArtistPage={openArtistPage}
+            />
           ) : (
             <TracksLens pools={lensPools} actions={lensActions} />
           ))}
@@ -1760,7 +1837,7 @@ export function LibraryScreen(): React.JSX.Element {
         {/* the album header and its box-set pills (components/library/AlbumHeader,
             lifted 2026-09-13, the fifth lift's second part) */}
         {!atRoot && state === "ready" && artistNode && (
-          <ArtistHeader node={artistNode} folders={nodes} />
+          <ArtistHeader name={artistNode.title} serverArt={artistNode.artUrl} folders={nodes} />
         )}
         {!atRoot && state === "ready" && albumNode && (
           <AlbumHeader
@@ -1952,6 +2029,7 @@ export function LibraryScreen(): React.JSX.Element {
         searchMode={searchMode}
         goToAlbumFromLens={goToAlbumFromLens}
         goToArtistFromLens={goToArtistFromLens}
+        artistPageOf={artistPageOf}
         playContainer={playContainer}
         playAlbumFrom={playAlbumFrom}
         act={act}

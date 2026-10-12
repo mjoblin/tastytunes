@@ -50,6 +50,8 @@ export function LibraryPopovers(
       searchMode: boolean;
       goToAlbumFromLens(node: MediaNode): void;
       goToArtistFromLens(node: MediaNode): void;
+      /** An artist's page, when they have one (the ⋯'s first verb). */
+      artistPageOf(node: MediaNode): (() => void) | undefined;
       playContainer(node: MediaNode, el: HTMLElement | null): Promise<void>;
       playAlbumFrom(track: MediaNode): Promise<void>;
       act(
@@ -95,6 +97,7 @@ export function LibraryPopovers(
     searchMode,
     goToAlbumFromLens,
     goToArtistFromLens,
+    artistPageOf,
     playContainer,
     playAlbumFrom,
     act,
@@ -142,6 +145,7 @@ export function LibraryPopovers(
           onClose={() => setMenu(null)}
           navVerbs={volumeNavVerbs(menu.node)}
           utilityVerbs={analyzeVerbs(menu.node)}
+          openArtistPage={artistPageOf(menu.node)}
           goToAlbum={
             lens === "tracks" && !menu.node.isContainer && menu.node.album
               ? () => {

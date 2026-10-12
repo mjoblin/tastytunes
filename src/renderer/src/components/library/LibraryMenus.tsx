@@ -29,6 +29,7 @@ export function ItemMenu({
   onInfo,
   navVerbs,
   utilityVerbs,
+  openArtistPage,
 }: {
   menu: { node: MediaNode; x: number; y: number };
   onClose(): void;
@@ -50,6 +51,8 @@ export function ItemMenu({
   /** Once-and-done utilities, above Info… (the builders' utility slot) —
    *  the album's Analyze audio lives here. */
   utilityVerbs?: MediaMenuItem[];
+  /** An artist's page (the app's own, built from the indexes), when they have one. */
+  openArtistPage?(): void;
 }): React.JSX.Element {
   const { node } = menu;
   // The item lists come from the per-entity builders (lib/mediaMenus) — the
@@ -81,7 +84,7 @@ export function ItemMenu({
   };
   const items: MediaMenuItem[] =
     node.isContainer && isArtistClass(node.upnpClass)
-      ? artistMenuItems(ref, {})
+      ? artistMenuItems(ref, { openArtistPage })
       : node.isContainer && !isAlbumClass(node.upnpClass)
         ? [
             { label: "Play", run: () => onAction("PLAY") },

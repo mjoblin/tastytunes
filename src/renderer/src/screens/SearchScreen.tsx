@@ -23,7 +23,7 @@ import {
   refToPlaylistItem,
   type MediaRef,
 } from "@/lib/mediaRef";
-import { saveRefToPreset } from "@/lib/mediaActions";
+import { openArtistInLibrary, saveRefToPreset } from "@/lib/mediaActions";
 import {
   albumMenuItems,
   artistMenuItems,
@@ -352,6 +352,12 @@ export function SearchScreen(): React.JSX.Element {
   const playNode = (node: MediaNode): void => {
     const udn = node.serverUdn;
     if (!udn) return;
+    // an ARTIST opens their page in the Library (2026-10-11): Search's results are the indexes',
+    // and the page is built from them, the same on every server
+    if (nodeKind(node) === "artist") {
+      openArtistInLibrary(node.title, true);
+      return;
+    }
     if (node.isContainer) {
       openInLibrary({
         serverUdn: udn,
@@ -456,7 +462,7 @@ export function SearchScreen(): React.JSX.Element {
     const kind = nodeKind(node);
     const items =
       kind === "artist"
-        ? artistMenuItems(ref)
+        ? artistMenuItems(ref, { openArtistPage: () => openArtistInLibrary(node.title, true) })
         : kind === "album"
           ? albumMenuItems(ref, {
               ...caps,

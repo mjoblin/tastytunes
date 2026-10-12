@@ -25,35 +25,39 @@ import { FACT_SEP } from "@/lib/mediaFacts";
  * this lookup's photo, else the server's picture, else a picture from the page's own folders.
  */
 export function ArtistHeader({
-  node,
+  name,
+  serverArt,
   folders,
 }: {
-  node: MediaNode;
+  name: string;
+  /** The server's own picture for the artist, as its folder or the index has it. */
+  serverArt?: string | null;
+  /** Nodes whose pictures stand in last (the page's folders, or the artist's albums). */
   folders: readonly MediaNode[];
 }): React.JSX.Element {
   const lookups = useStore((s) => s.settings.artistInfo);
-  const known = useArtistPicture(node.title);
-  const { info } = useArtistAbout(node.title, true);
+  const known = useArtistPicture(name);
+  const { info } = useArtistAbout(name, true);
   const photo = lookups ? (info?.image ?? null) : null;
   // the lookup that brought the photo also taught main: the rows (and this page) ask again
   useEffect(() => {
-    if (photo) refreshArtistPicture(node.title);
-  }, [photo, node.title]);
+    if (photo) refreshArtistPicture(name);
+  }, [photo, name]);
   const [facts, setFacts] = useState<{ of: string; albums: number; tracks: number } | null>(null);
   useEffect(() => {
     let live = true;
     void tt
-      .artistFacts(node.title)
+      .artistFacts(name)
       .then((f) => {
-        if (live) setFacts(f ? { of: node.title, ...f } : null);
+        if (live) setFacts(f ? { of: name, ...f } : null);
       })
       .catch(() => {});
     return () => {
       live = false;
     };
-  }, [node.title]);
+  }, [name]);
   const factsLine =
-    facts && facts.of === node.title
+    facts && facts.of === name
       ? [
           facts.albums > 0 && `${fmtCount(facts.albums)} album${facts.albums === 1 ? "" : "s"}`,
           facts.tracks > 0 && `${fmtCount(facts.tracks)} track${facts.tracks === 1 ? "" : "s"}`,
@@ -61,7 +65,7 @@ export function ArtistHeader({
           .filter(Boolean)
           .join(FACT_SEP)
       : "";
-  const picture = known ?? photo ?? node.artUrl ?? folders.find((f) => f.artUrl)?.artUrl ?? null;
+  const picture = known ?? photo ?? serverArt ?? folders.find((f) => f.artUrl)?.artUrl ?? null;
   return (
     <div className="flex items-start gap-6 pb-6 pt-2" data-artist-header>
       <div className="relative h-[160px] w-[160px] shrink-0 rounded-xl overflow-hidden ring-1 ring-edge bg-veil flex items-center justify-center">
@@ -75,7 +79,7 @@ export function ArtistHeader({
       <div className="min-w-0 max-w-2xl pt-1 flex min-h-[160px] flex-col gap-1.5">
         <div className="space-y-0.5">
           <div className="font-display font-bold text-[24px] tracking-tight leading-tight">
-            {node.title}
+            {name}
           </div>
           {factsLine && (
             <div className="text-[12.5px] text-faint" data-artist-facts>
@@ -83,7 +87,7 @@ export function ArtistHeader({
             </div>
           )}
         </div>
-        <ArtistAbout name={node.title} quiet header />
+        <ArtistAbout name={name} quiet header />
       </div>
     </div>
   );
