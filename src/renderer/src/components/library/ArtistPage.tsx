@@ -98,6 +98,9 @@ export function ArtistPage({
                 onEnter: () => onOpenAlbum(node),
                 onMenu: (e: React.MouseEvent) => actions.openMenu(node, e),
                 onNavDrag: (e: React.PointerEvent) => actions.dragAlbum([node], e, node.title),
+                // which library, as the Albums lens says it whenever there is more than one
+                // (his Jack White: the same albums on minitunes and on the streamer's drive)
+                badge: index.multiServer ? (node.serverName ?? undefined) : undefined,
               };
               return cards ? (
                 <ContainerCard
