@@ -31,20 +31,42 @@ import { handle } from "../app/guard";
  * image"; MinimServer shows a related album's picture by default): the first of their albums
  * with a picture, else the first of their tracks. One map per pools snapshot.
  */
-const coversByPools = new WeakMap<MediaIndexPools[], Map<string, string>>();
-function artistCovers(pools: MediaIndexPools[]): Map<string, string> {
-  const known = coversByPools.get(pools);
+interface ArtistEntry {
+  cover: string | null;
+  albums: number;
+  tracks: number;
+}
+const artistsByPools = new WeakMap<MediaIndexPools[], Map<string, ArtistEntry>>();
+/** Every artist the indexes know, by name: a cover and the counts, by the Artists lens's rules
+ *  (an album by its artist, a track by every performer), so the artist page and the lens agree. */
+function artistIndex(pools: MediaIndexPools[]): Map<string, ArtistEntry> {
+  const known = artistsByPools.get(pools);
   if (known) return known;
-  const covers = new Map<string, string>();
-  const add = (name: string | null | undefined, url: string | null | undefined): void => {
+  const map = new Map<string, ArtistEntry>();
+  const entry = (name: string | null | undefined): ArtistEntry | null => {
     const key = name?.trim().toLowerCase();
-    if (key && url && !covers.has(key)) covers.set(key, url);
+    if (!key) return null;
+    let e = map.get(key);
+    if (!e) map.set(key, (e = { cover: null, albums: 0, tracks: 0 }));
+    return e;
   };
-  for (const p of pools) for (const a of p.albums) add(a.albumArtist ?? a.artist, a.artUrl);
   for (const p of pools)
-    for (const t of p.tracks) for (const n of trackArtists(t)) add(n, t.artUrl);
-  coversByPools.set(pools, covers);
-  return covers;
+    for (const a of p.albums) {
+      const e = entry(a.artist);
+      if (!e) continue;
+      e.albums++;
+      e.cover ??= a.artUrl;
+    }
+  for (const p of pools)
+    for (const t of p.tracks)
+      for (const n of trackArtists(t)) {
+        const e = entry(n);
+        if (!e) continue;
+        e.tracks++;
+        e.cover ??= t.artUrl;
+      }
+  artistsByPools.set(pools, map);
+  return map;
 }
 
 export function registerLookupsIpc(): void {
@@ -57,10 +79,17 @@ export function registerLookupsIpc(): void {
     const out: Record<string, string | null> = {};
     if (want.length === 0) return out;
     const photos = getSettings().artistInfo;
-    const covers = artistCovers(mediaIndex.pools());
+    const artists = artistIndex(mediaIndex.pools());
     for (const n of want)
-      out[n] = (photos ? knownArtistImage(n) : null) ?? covers.get(n.trim().toLowerCase()) ?? null;
+      out[n] =
+        (photos ? knownArtistImage(n) : null) ?? artists.get(n.trim().toLowerCase())?.cover ?? null;
     return out;
+  });
+  // the artist page's facts line: the lens's counts, from the ready indexes
+  handle(IPC.artistFacts, (_e, name: unknown) => {
+    if (typeof name !== "string") return null;
+    const e = artistIndex(mediaIndex.pools()).get(name.trim().toLowerCase());
+    return e ? { albums: e.albums, tracks: e.tracks } : null;
   });
   // Belt-and-braces gate: the renderer only asks while the setting is on, but
   // "off = no requests, ever" should hold even if a stale renderer asks.

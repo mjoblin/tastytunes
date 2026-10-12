@@ -7,7 +7,11 @@ import { decadeOptionsOf, formatTags, genreOptionsOf, lc, nodeKey } from "./lens
 export interface LensArtist {
   key: string;
   name: string;
+  /** The server's own artist picture, else an album's (the row's picture without a photo). */
   artUrl: string | null;
+  /** The server's own artist picture alone: a known photo outranks an album's cover, never
+   *  the server's (ArtistArt). */
+  ownArt?: string | null;
   albums: MediaNode[];
   tracks: MediaNode[];
 }
@@ -123,6 +127,7 @@ function build(pools: MediaIndexPools[]): LensIndex {
           .filter((a) => a.albums.length > 0 || a.tracks.length > 0)
           .map((a) => ({
             ...a,
+            ownArt: a.artUrl,
             artUrl: a.artUrl ?? a.albums.find((x) => x.artUrl)?.artUrl ?? null,
             albums: [...a.albums].sort(
               (x, y) =>

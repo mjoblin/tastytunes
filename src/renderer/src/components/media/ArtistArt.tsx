@@ -3,19 +3,22 @@ import { useArtistPicture } from "@/lib/artistPictures";
 
 /**
  * An artist's row thumb: the server's picture, else a known photo or a cover from the artist's
- * albums (lib/artistPictures, one batched ask per frame, never a lookup), else the artist icon.
+ * albums (lib/artistPictures, one batched ask per frame, never a lookup), else the caller's own
+ * cover (the Artists lens has one at hand), else the artist icon.
  * For the lists that map their rows inline (the Artists lens, Search), where the hook cannot
  * sit in the map.
  */
 export function ArtistArt({
   name,
   src,
+  cover,
   size,
 }: {
   name: string;
   src?: string | null;
+  cover?: string | null;
   size?: MediaArtSize;
 }): React.JSX.Element {
   const picture = useArtistPicture(src ? null : name);
-  return <MediaArt src={src ?? picture} kind="artist" size={size} />;
+  return <MediaArt src={src ?? picture ?? cover} kind="artist" size={size} />;
 }

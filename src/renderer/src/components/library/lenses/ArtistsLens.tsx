@@ -379,7 +379,7 @@ export function ArtistsLens({
                       selected ? "bg-amberdim" : playing ? "bg-gold/10" : "hover:bg-veil",
                     )}
                   >
-                    <ArtistArt name={a.name} src={a.artUrl} />
+                    <ArtistArt name={a.name} src={a.ownArt} cover={a.artUrl} />
                     <div className="min-w-0">
                       <div
                         className={cx(

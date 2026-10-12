@@ -1320,6 +1320,35 @@ export function LibraryScreen(): React.JSX.Element {
     </div>
   );
 
+  // AN ARTIST PAGE NAMES WHAT IT HOLDS (2026-10-11, user: "do we want to add an 'Albums' title
+  // above the albums? i'm a little unclear exactly what this is supposed to be showing"): the
+  // server's own folder for the artist holds what that server decides (Asset: the albums;
+  // MinimServer: its sub-indexes, "2 albums", "Date", "Genre"), so the contents are labelled by
+  // kind as search results are, never one fixed title that is wrong on some server
+  const artistSections = ((): React.JSX.Element | null => {
+    if (!artistNode) return null;
+    const albums = containers.filter((c) => isAlbumClass(c.upnpClass));
+    const other = containers.filter((c) => !isAlbumClass(c.upnpClass));
+    return (
+      <>
+        {albums.length > 0 && (
+          <>
+            <div className="microlabel pb-0.5 px-1 pt-2">Albums</div>
+            {containerGrid(albums)}
+          </>
+        )}
+        {other.length > 0 && (
+          <>
+            <div className={cx("microlabel pb-0.5 px-1", albums.length > 0 ? "pt-5" : "pt-2")}>
+              Folders
+            </div>
+            {containerGrid(other)}
+          </>
+        )}
+      </>
+    );
+  })();
+
   if (servers != null && servers.length === 0) {
     return (
       <EmptyState
@@ -1790,7 +1819,7 @@ export function LibraryScreen(): React.JSX.Element {
           state === "ready" &&
           containers.length > 0 &&
           !searchMode &&
-          containerGrid(containers)}
+          (artistNode ? artistSections : containerGrid(containers))}
 
         {/* every search result, one windowed list (searchLines): one library's search
             and the search across libraries alike */}
@@ -1855,11 +1884,17 @@ export function LibraryScreen(): React.JSX.Element {
             })()}
           </SelectionBar>
         )}
+        {/* an artist page's tracks are labelled, as its albums and folders are */}
+        {!atRoot && state === "ready" && !searchMode && artistNode && tracks.length > 0 && (
+          <div className={cx("microlabel pb-0.5 px-1", containers.length > 0 ? "pt-5" : "pt-2")}>
+            Tracks
+          </div>
+        )}
         {!atRoot && state === "ready" && !searchMode && tracks.length > 0 ? (
           <div
             className={cx(
               "divide-y divide-edge/50 -mx-2",
-              containers.length > 0 && !searchMode && "mt-4",
+              containers.length > 0 && !searchMode && !artistNode && "mt-4",
             )}
           >
             {/* an album leaf that spans discs gets the same quiet "Disc N"
