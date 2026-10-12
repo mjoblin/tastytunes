@@ -90,10 +90,11 @@ const REVEAL_PAD = 84;
  *  (useWindowedList); below it, every row, exactly as before (0.11.0 sweep, for review). */
 const WINDOW_ARTISTS_ABOVE = 150;
 
-/** The artist row's name fades out under its floating buttons (two 26px buttons, 10px apart,
- *  8px in from the row's edge): from the column's right edge, clear for the buttons, then a
- *  20px fade. A playing row's column already stops at the eqbars (14px and the 10px gap), so
- *  its fade starts that much sooner. Literal strings, so Tailwind sees each one. */
+/** A row's name fades out under its floating buttons (two 26px buttons, 10px apart, 8px in
+ *  from the row's edge; the artist and album rows alike): from the column's right edge, clear
+ *  for the buttons, then a 20px fade. A playing artist row's column already stops at the
+ *  eqbars (14px and the 10px gap), so its fade starts that much sooner (an album row's eqbars
+ *  ride inside its title). Literal strings, so Tailwind sees each one. */
 const NAME_FADE = {
   idle: {
     on: "[mask-image:linear-gradient(to_left,transparent_64px,black_84px)]",
@@ -530,6 +531,7 @@ export function ArtistsLens({
               selectedArtist.albums.map((alb) => {
                 const selected = nodeKey(alb) === mem.album;
                 const playing = actions.isPlayingAlbum(alb);
+                const menuOpen = actions.menuNodeId === alb.id;
                 return (
                   <div
                     key={nodeKey(alb)}
@@ -540,7 +542,9 @@ export function ArtistsLens({
                       actions.dragAlbum([alb], e, alb.title);
                     }}
                     className={cx(
-                      "group grid grid-cols-[44px_1fr_auto_auto] items-center gap-2.5 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
+                      // the row's buttons float (below), as the artist rows' do: a title has
+                      // the row's whole width at rest
+                      "group relative grid grid-cols-[44px_1fr] items-center gap-2.5 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
                       // SELECTED is "open here" — the Playlists sidebar's amber, so it
                       // reads apart from gold (= playing); a row that is both keeps
                       // the playing signals (gold title, eqbars) on the amber fill
@@ -553,7 +557,7 @@ export function ArtistsLens({
                     )}
                   >
                     <MediaArt src={alb.artUrl} kind="album" />
-                    <div className="min-w-0">
+                    <div className={cx("min-w-0", NAME_FADE.idle[menuOpen ? "on" : "hover"])}>
                       <div
                         className={cx(
                           "flex items-center gap-2 text-[13.5px]",
@@ -579,42 +583,43 @@ export function ArtistsLens({
                         )}
                       </div>
                     </div>
-                    <button
-                      aria-label={`Open album ${alb.title}`}
-                      data-tip="Open album"
-                      data-lens-open-album={alb.title}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        actions.openAlbum(alb);
-                      }}
+                    {/* THE ROW'S BUTTONS FLOAT over its end, shown on hover and while its menu
+                      is open (user, 2026-10-11: "do the same for the album rows too"), the
+                      title fading under them: the ↗ opens the album, the ⋯ its menu (a plain
+                      folder has none; its slot stays, so every ↗ sits on one line) */}
+                    <div
                       className={cx(
-                        "tip-bottom p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-all",
-                        actions.menuNodeId === alb.id
-                          ? "opacity-100"
-                          : "opacity-0 group-hover:opacity-100",
+                        "absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2.5 transition-opacity",
+                        menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100",
                       )}
                     >
-                      <ArrowUpRight size={14} />
-                    </button>
-                    {isAlbumClass(alb.upnpClass) ? (
                       <button
-                        aria-label="More actions"
+                        aria-label={`Open album ${alb.title}`}
+                        data-tip="Open album"
+                        data-lens-open-album={alb.title}
                         onClick={(e) => {
                           e.stopPropagation();
-                          actions.openMenu(alb, e);
+                          actions.openAlbum(alb);
                         }}
-                        className={cx(
-                          "p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-all",
-                          actions.menuNodeId === alb.id
-                            ? "opacity-100"
-                            : "opacity-0 group-hover:opacity-100",
-                        )}
+                        className="tip-bottom p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-colors"
                       >
-                        <MoreHorizontal size={14} />
+                        <ArrowUpRight size={14} />
                       </button>
-                    ) : (
-                      <span />
-                    )}
+                      {isAlbumClass(alb.upnpClass) ? (
+                        <button
+                          aria-label="More actions"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            actions.openMenu(alb, e);
+                          }}
+                          className="p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-colors"
+                        >
+                          <MoreHorizontal size={14} />
+                        </button>
+                      ) : (
+                        <span className="w-[26px]" />
+                      )}
+                    </div>
                   </div>
                 );
               })
