@@ -90,6 +90,21 @@ const REVEAL_PAD = 84;
  *  (useWindowedList); below it, every row, exactly as before (0.11.0 sweep, for review). */
 const WINDOW_ARTISTS_ABOVE = 150;
 
+/** The artist row's name fades out under its floating buttons (two 26px buttons, 10px apart,
+ *  8px in from the row's edge): from the column's right edge, clear for the buttons, then a
+ *  20px fade. A playing row's column already stops at the eqbars (14px and the 10px gap), so
+ *  its fade starts that much sooner. Literal strings, so Tailwind sees each one. */
+const NAME_FADE = {
+  idle: {
+    on: "[mask-image:linear-gradient(to_left,transparent_64px,black_84px)]",
+    hover: "group-hover:[mask-image:linear-gradient(to_left,transparent_64px,black_84px)]",
+  },
+  playing: {
+    on: "[mask-image:linear-gradient(to_left,transparent_40px,black_60px)]",
+    hover: "group-hover:[mask-image:linear-gradient(to_left,transparent_40px,black_60px)]",
+  },
+} as const;
+
 /** An artist's letter on the A-Z rail ("The Cure" files under C; non-letters under #). */
 const letterOf = (name: string): string => {
   const c = nameSortKey(name)[0]?.toUpperCase() ?? "#";
@@ -358,6 +373,7 @@ export function ArtistsLens({
               {shownArtists.slice(win.first, win.last + 1).map((a) => {
                 const selected = a.key === mem.artist;
                 const playing = a.key === playingArtistKey;
+                const menuOpen = actions.menuNodeId === `lens-artist:${a.key}`;
                 return (
                   <div
                     key={a.key}
@@ -379,7 +395,10 @@ export function ArtistsLens({
                     }}
                     data-lens-artist-row={a.key}
                     className={cx(
-                      "group grid grid-cols-[44px_1fr_auto] items-center gap-2.5 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
+                      // the eqbars' column only while the artist plays: the row's buttons float
+                      // (below), so a name has the row's whole width at rest
+                      "group relative grid items-center gap-2.5 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
+                      playing ? "grid-cols-[44px_1fr_auto]" : "grid-cols-[44px_1fr]",
                       // SELECTED is "open here" — the Playlists sidebar's amber, so it
                       // reads apart from gold (= playing); a row that is both keeps
                       // the playing signals (gold title, eqbars) on the amber fill
@@ -392,7 +411,14 @@ export function ArtistsLens({
                     )}
                   >
                     <ArtistArt name={a.name} src={a.ownArt} cover={a.artUrl} />
-                    <div className="min-w-0">
+                    {/* under the floating buttons the name fades out rather than reflowing
+                      (the column is narrow: reserved buttons cut names to a few letters) */}
+                    <div
+                      className={cx(
+                        "min-w-0",
+                        NAME_FADE[playing ? "playing" : "idle"][menuOpen ? "on" : "hover"],
+                      )}
+                    >
                       <div
                         className={cx(
                           "text-[13.5px] truncate",
@@ -407,10 +433,35 @@ export function ArtistsLens({
                           : `${a.tracks.length} track${a.tracks.length === 1 ? "" : "s"}`}
                       </div>
                     </div>
-                    <div className="flex items-center gap-1">
-                      {playing && <Eqbars />}
-                      {/* the ⋯, hover-revealed like the album rows' — the same
-                        artist menu the right-click opens */}
+                    {playing && (
+                      <div className={cx(menuOpen ? "opacity-0" : "group-hover:opacity-0")}>
+                        <Eqbars />
+                      </div>
+                    )}
+                    {/* THE ROW'S BUTTONS FLOAT over its end, shown on hover and while its menu
+                      is open: the ↗ to the artist's page, as an album row's ↗ opens the album
+                      (user, 2026-10-11: a click here selects, the ↗ goes there), and the ⋯,
+                      the same artist menu the right-click opens */}
+                    <div
+                      className={cx(
+                        "absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2.5 transition-opacity",
+                        menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+                      )}
+                    >
+                      {onOpenArtistPage && (
+                        <button
+                          aria-label={`Open artist page for ${a.name}`}
+                          data-tip="Open artist page"
+                          data-lens-open-artist={a.name}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenArtistPage(a.name);
+                          }}
+                          className="tip-bottom p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-colors"
+                        >
+                          <ArrowUpRight size={14} />
+                        </button>
+                      )}
                       <button
                         aria-label="More actions"
                         data-lens-artist-menu
@@ -418,12 +469,7 @@ export function ArtistsLens({
                           e.stopPropagation();
                           actions.openMenu(lensArtistNode(a), e);
                         }}
-                        className={cx(
-                          "p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-all",
-                          actions.menuNodeId === `lens-artist:${a.key}`
-                            ? "opacity-100"
-                            : "opacity-0 group-hover:opacity-100",
-                        )}
+                        className="p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-colors"
                       >
                         <MoreHorizontal size={14} />
                       </button>
