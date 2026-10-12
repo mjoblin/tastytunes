@@ -9,9 +9,10 @@ import { Lru } from "@/lib/lru";
  * image? (Like Plexamp does)"). A row never looks an artist up (MusicBrainz answers one
  * request a second, and a library has hundreds of artists): every name asked for in one frame
  * goes to main in one artistPictures request, which answers a photo already known (the artist
- * page and About the artist look them up) or a cover from the artist's own albums. Kept for
- * the session; a miss is asked again when the index changes, and a photo that lands on the
- * artist page reaches every row at once (noteArtistPicture).
+ * page and About the artist look them up) or a cover from the artist's own albums, behind the
+ * server's own picture when that is a real one (main tells them apart). Kept for the session; a
+ * miss is asked again when the index changes, and a photo that lands on the artist page sends
+ * every row back to main at once (refreshArtistPicture).
  */
 const cache = new Lru<string, string | null>(3000);
 const pending = new Map<string, string>();
@@ -53,9 +54,10 @@ function want(name: string): void {
   flushTimer ??= setTimeout(flush, 0);
 }
 
-/** A picture found elsewhere (the artist page's lookup): every row showing the artist takes it. */
-export function noteArtistPicture(name: string, url: string): void {
-  cache.set(keyOf(name), url);
+/** Main knows more now (the artist page's lookup found a photo): every row showing the artist
+ *  asks again, and takes main's answer (a real server picture still outranks the photo). */
+export function refreshArtistPicture(name: string): void {
+  cache.delete(keyOf(name));
   emit();
 }
 

@@ -53,11 +53,15 @@ export function useArtistAbout(
 export function ArtistAbout({
   name,
   quiet = false,
+  header = false,
 }: {
   name: string;
   /** The artist page: nothing while it loads or when nothing is found (the page's picture and
    *  name already say who it is); History › Elsewhere says both. */
   quiet?: boolean;
+  /** In a header beside the picture (the artist page): two lines until asked, and the links
+   *  pinned to the column's foot, as the album header's verbs sit on its art's bottom edge. */
+  header?: boolean;
 }): React.JSX.Element | null {
   const { status, info } = useArtistAbout(name, true);
   const [whole, setWhole] = useState(false);
@@ -89,13 +93,16 @@ export function ArtistAbout({
       </div>
     );
   return (
-    <div className={cx("space-y-2", !quiet && "px-1")} data-elsewhere-about="ready">
+    <div
+      className={cx(header ? "flex flex-1 flex-col gap-2" : "space-y-2", !quiet && "px-1")}
+      data-elsewhere-about="ready"
+    >
       {info.summary ? (
         <p
           ref={textRef}
           className={cx(
             "text-[13px] leading-relaxed text-dim whitespace-pre-wrap max-w-xl",
-            !whole && "line-clamp-4",
+            !whole && (header ? "line-clamp-2" : "line-clamp-4"),
           )}
         >
           {info.summary}
@@ -105,7 +112,7 @@ export function ArtistAbout({
           Matched on MusicBrainz, but no Wikipedia summary is linked.
         </p>
       )}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+      <div className={cx("flex flex-wrap items-center gap-x-3 gap-y-2", header && "mt-auto")}>
         {info.summary && !whole && clamped && (
           <HeaderChip
             onClick={() => setWhole(true)}

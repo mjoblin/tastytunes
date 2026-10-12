@@ -321,8 +321,9 @@ export interface TastyTunesApi {
   /** Artist bio via MusicBrainz + Wikipedia (main process, cached; null = no match).
    *  `force` bypasses the cache read — the user-driven refresh. */
   fetchArtistInfo(artist: string, force?: boolean): Promise<ArtistInfo | null>;
-  /** Pictures for artists by name, never fetched: a known photo (with the artist lookups on),
-   *  else a cover from the artist's own albums in the indexed libraries, else null. */
+  /** Pictures for artists by name, never fetched: the server's own picture when it is not an
+   *  album's cover, else a known photo (with the artist lookups on), else a cover from the
+   *  artist's own albums in the indexed libraries, else null. */
   artistPictures(names: string[]): Promise<Record<string, string | null>>;
   /** An artist's albums and tracks in the indexed libraries (the Artists lens's counts), or
    *  null when no index knows them. */

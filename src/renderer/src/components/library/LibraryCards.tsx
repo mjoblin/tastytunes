@@ -110,8 +110,8 @@ export function ContainerCard({
   const menuable = album || artist;
   const muted = isMutedArt(node);
   const subtitle = [node.artist, node.year].filter(Boolean).join(" · ");
-  // an artist the server gives no picture takes a known photo or an album cover (artistPictures)
-  const artistPic = useArtistPicture(artist && !node.artUrl ? node.title : null);
+  // an artist takes main's picture (a real server one, a known photo, an album cover)
+  const artistPic = useArtistPicture(artist ? node.title : null);
   return (
     // Preset-card idiom: inset tile, hover grow + lift + glow; the highlight
     // wraps the gray tile so it stays legible over gold/orange covers.
@@ -152,7 +152,7 @@ export function ContainerCard({
             the faceplate, a plateau on paper) */}
         <div className="relative aspect-square w-full rounded-lg overflow-hidden bg-veil flex items-center justify-center">
           <ArtImage
-            src={node.artUrl ? artSrc(node.artUrl, 240, artKeyOf(node)) : artSrc(artistPic, 240)}
+            src={artistPic ? artSrc(artistPic, 240) : artSrc(node.artUrl, 240, artKeyOf(node))}
             fallbackArt={
               album ? { artist: node.albumArtist ?? node.artist, album: node.title } : undefined
             }
@@ -295,7 +295,7 @@ export function ContainerRow({
   const artist = isArtistClass(node.upnpClass);
   const menuable = album || artist;
   const muted = isMutedArt(node);
-  const artistPic = useArtistPicture(artist && !node.artUrl ? node.title : null);
+  const artistPic = useArtistPicture(artist ? node.title : null);
   return (
     <div
       className={cx(
@@ -336,7 +336,7 @@ export function ContainerRow({
         />
       )}
       <MediaArt
-        src={node.artUrl ? artSrc(node.artUrl, 240, artKeyOf(node)) : artistPic}
+        src={artistPic ?? artSrc(node.artUrl, 240, artKeyOf(node))}
         kind={album ? "album" : artist ? "artist" : "folder"}
         className={muted ? "opacity-60 saturate-[.6]" : undefined}
       />

@@ -6,21 +6,23 @@ import { useStore } from "@/store";
 import { ArtImage } from "@/components/media/ArtImage";
 import { ArtistAbout, useArtistAbout } from "@/components/media/ArtistAbout";
 import { artSrc } from "@/lib/artSrc";
-import { noteArtistPicture, useArtistPicture } from "@/lib/artistPictures";
+import { refreshArtistPicture, useArtistPicture } from "@/lib/artistPictures";
 import { fmtCount } from "@/lib/format";
 import { FACT_SEP } from "@/lib/mediaFacts";
 
 /**
  * THE ARTIST PAGE'S HEADER (0.11.0, a user's email: "Would it be possible for TastyTunes to
- * scrape artist image and display it instead of the grey square with disc image?"; the user,
- * reviewing it: the name sat at the bottom and nothing said this is an artist). The album
- * header's geometry with no verbs (the Library does not play a whole artist): the picture, then
- * a column that reads like the album header's: the "Artist" label, the name, the facts line
- * (the Artists lens's counts, from the indexes), and the artist's Wikipedia summary with its
- * links (ArtistAbout, History › Elsewhere's block). The picture, first found wins: the
- * server's own (a curated one), the artist's photo (the same lookup's lead picture, with Liner
- * notes on, then known to every row), a known photo or a cover from their albums in the index,
- * a picture from the page's own folders (MinimServer's sub-indexes carry art), the icon.
+ * scrape artist image and display it instead of the grey square with disc image?"), shaped like
+ * the album header (user, 2026-10-11: "let's make it more consistent with our existing album
+ * page"): the picture, and beside it a column exactly the picture's height: the name, the
+ * facts line (the Artists lens's counts, from the indexes), two lines of the artist's
+ * Wikipedia summary, and its links pinned to the picture's bottom edge where the album
+ * header's verbs sit (ArtistAbout, History › Elsewhere's block); "read more" grows the column
+ * as a composer line grows the album's. No label: the crumbs, the picture and the name say
+ * whose page it is, as an album's do. No verbs: the Library does not play a whole artist.
+ * The picture is main's answer for the artist (a real server picture, else the photo, else a
+ * cover from their albums: a server picture that is an album's cover counts as a cover), else
+ * this lookup's photo, else the server's picture, else a picture from the page's own folders.
  */
 export function ArtistHeader({
   node,
@@ -33,8 +35,9 @@ export function ArtistHeader({
   const known = useArtistPicture(node.title);
   const { info } = useArtistAbout(node.title, true);
   const photo = lookups ? (info?.image ?? null) : null;
+  // the lookup that brought the photo also taught main: the rows (and this page) ask again
   useEffect(() => {
-    if (photo) noteArtistPicture(node.title, photo);
+    if (photo) refreshArtistPicture(node.title);
   }, [photo, node.title]);
   const [facts, setFacts] = useState<{ of: string; albums: number; tracks: number } | null>(null);
   useEffect(() => {
@@ -58,7 +61,7 @@ export function ArtistHeader({
           .filter(Boolean)
           .join(FACT_SEP)
       : "";
-  const picture = node.artUrl ?? photo ?? known ?? folders.find((f) => f.artUrl)?.artUrl ?? null;
+  const picture = known ?? photo ?? node.artUrl ?? folders.find((f) => f.artUrl)?.artUrl ?? null;
   return (
     <div className="flex items-start gap-6 pb-6 pt-2" data-artist-header>
       <div className="relative h-[160px] w-[160px] shrink-0 rounded-xl overflow-hidden ring-1 ring-edge bg-veil flex items-center justify-center">
@@ -69,9 +72,8 @@ export function ArtistHeader({
           fallback={<UserRound size={48} strokeWidth={1} className="text-faint" />}
         />
       </div>
-      <div className="min-w-0 max-w-2xl pt-1 flex flex-col gap-3">
+      <div className="min-w-0 max-w-2xl pt-1 flex min-h-[160px] flex-col gap-1.5">
         <div className="space-y-0.5">
-          <div className="microlabel">Artist</div>
           <div className="font-display font-bold text-[24px] tracking-tight leading-tight">
             {node.title}
           </div>
@@ -81,7 +83,7 @@ export function ArtistHeader({
             </div>
           )}
         </div>
-        <ArtistAbout name={node.title} quiet />
+        <ArtistAbout name={node.title} quiet header />
       </div>
     </div>
   );
