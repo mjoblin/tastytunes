@@ -43,6 +43,8 @@ export function useLibraryMenus(d: {
   showToast: ReturnType<typeof useStore.getState>["showToast"];
   showNotice(msg: string): void;
   late: { current: MenusLate };
+  /** The artist's page by name (lensNavigation's, packed names resolved there). */
+  openArtistPage(name: string): void;
 }) {
   const { serverUdn, servers, path, nodeUdn, enter, lensPools, showToast, showNotice, late } = d;
   const mediaIndexStatuses = useStore((s) => s.mediaIndex);
@@ -52,7 +54,9 @@ export function useLibraryMenus(d: {
   // Per-NODE, so cross-server rows gate against their own server's index.
   const linkable = (node: MediaNode, pool: "albums" | "artists"): boolean => {
     const idx = mediaIndexStatuses.find((x) => x.udn === nodeUdn(node));
-    return idx?.state === "ready" && idx[pool] > 0;
+    // an artist goes to their page, which the index builds whether or not the server lists
+    // artists (the Evo's USB drive lists none)
+    return idx?.state === "ready" && (pool === "artists" || idx[pool] > 0);
   };
 
   /** Album-as-link: resolve a track's album by content identity against the
@@ -82,28 +86,10 @@ export function useLibraryMenus(d: {
     }
   };
 
-  /** Artist-as-link: same content-identity resolution, aimed at the artist
-   *  entity. Failure degrades to a quiet toast, never a broken screen. */
-  const goToArtist = async (track: MediaNode): Promise<void> => {
-    const udn = nodeUdn(track);
-    if (!udn || !track.artist) return;
-    const lc = (x: string | null): string => (x ?? "").trim().toLowerCase();
-    try {
-      const { items } = await tt.mediaSearch(udn, track.artist);
-      const artist = items.find(
-        (n) =>
-          n.isContainer &&
-          (n.upnpClass.includes("person") || n.upnpClass.includes("Artist")) &&
-          lc(n.title) === lc(track.artist),
-      );
-      if (!artist) {
-        showNotice(`Couldn't find "${track.artist}" in this library.`);
-        return;
-      }
-      enter(track.serverUdn ? { ...artist, serverUdn: udn, serverName: track.serverName } : artist);
-    } catch {
-      showNotice(`Couldn't find "${track.artist}" in this library.`);
-    }
+  /** Artist-as-link: the artist's page (2026-10-11), offered only where the track's server
+   *  has a ready index (linkable), which the page is built from. */
+  const goToArtist = (track: MediaNode): void => {
+    if (track.artist) d.openArtistPage(track.artist);
   };
 
   const [menu, setMenu] = useState<{ node: MediaNode; x: number; y: number } | null>(null);

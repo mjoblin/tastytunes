@@ -52,8 +52,7 @@ export interface LensActions {
     onAdded?: () => void,
   ): void;
   /** The Tracks lens's second-line links (and its menu's Go-to verbs): the
-   *  album by content identity through the lens crumb, the artist as the
-   *  Artists lens focused on them. */
+   *  album by content identity through the lens crumb, the artist's page. */
   goToAlbum?(track: MediaNode): void;
   goToArtist?(track: MediaNode): void;
   /** The Tracks lens's "what's shown" verbs behind its split button: a

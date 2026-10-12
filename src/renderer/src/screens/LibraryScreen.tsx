@@ -490,10 +490,9 @@ export function LibraryScreen(): React.JSX.Element {
       if (target && target.nonce !== libraryResetNonce) clearLibraryTarget();
       if (target && target.nonce === libraryResetNonce) {
         if ("artist" in target) {
-          // a NAME from another screen's row: the Artists lens at the root,
-          // focused and revealed on it (the Tracks lens's link, app-wide); a
-          // search's artist result asks for the artist's page
-          landOn(target.page ? { artistPage: target.artist } : { artist: target.artist });
+          // a NAME from another screen's row, Now Playing, History or Search: the
+          // artist's page, over the Artists lens
+          landOn({ artist: target.artist });
           return;
         }
         const last = target.titlePath.length - 1;
@@ -752,6 +751,7 @@ export function LibraryScreen(): React.JSX.Element {
     showToast,
     showNotice,
     late: menusLate,
+    openArtistPage,
   });
 
   const act = async (
@@ -1446,9 +1446,7 @@ export function LibraryScreen(): React.JSX.Element {
           : undefined
       }
       onArtistLink={
-        opts.links && node.artist && linkable(node, "artists")
-          ? () => void goToArtist(node)
-          : undefined
+        opts.links && node.artist && linkable(node, "artists") ? () => goToArtist(node) : undefined
       }
     />
   );

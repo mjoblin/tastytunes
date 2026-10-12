@@ -355,7 +355,7 @@ export function SearchScreen(): React.JSX.Element {
     // an ARTIST opens their page in the Library (2026-10-11): Search's results are the indexes',
     // and the page is built from them, the same on every server
     if (nodeKind(node) === "artist") {
-      openArtistInLibrary(node.title, true);
+      openArtistInLibrary(node.title);
       return;
     }
     if (node.isContainer) {
@@ -462,7 +462,7 @@ export function SearchScreen(): React.JSX.Element {
     const kind = nodeKind(node);
     const items =
       kind === "artist"
-        ? artistMenuItems(ref, { openArtistPage: () => openArtistInLibrary(node.title, true) })
+        ? artistMenuItems(ref, { openArtistPage: () => openArtistInLibrary(node.title) })
         : kind === "album"
           ? albumMenuItems(ref, {
               ...caps,

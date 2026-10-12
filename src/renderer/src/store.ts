@@ -129,10 +129,8 @@ export interface LibraryNodeTarget {
 /** A NAME asked for from another screen's row (2026-09-02): the Library
  *  opens the Artists lens at the root, focused and revealed on that artist. */
 export interface LibraryArtistTarget {
+  /** The artist's page (2026-10-11; the Artists lens focused on them before). */
   artist: string;
-  /** Land on the artist's page rather than the Artists lens focused on them (a search's
-   *  artist result, 2026-10-11). */
-  page?: boolean;
   nonce: number;
 }
 
@@ -467,7 +465,7 @@ interface TTState {
   setScreenFilter: (screen: keyof TTState["screenFilters"], text: string) => void;
   /** Navigate to the Library opened at a specific node (Favorites → album). */
   openInLibrary: (target: Omit<LibraryNodeTarget, "nonce">) => void;
-  openArtistInLibrary: (artist: string, page?: boolean) => void;
+  openArtistInLibrary: (artist: string) => void;
   clearLibraryTarget: () => void;
   setLastStation: (st: LastStation) => void;
   setAmbientWindowActive: (on: boolean) => void;
@@ -808,10 +806,10 @@ export const useStore = create<TTState>((set, get) => ({
       screen: "library",
       libraryResetNonce: s.libraryResetNonce + 1,
     })),
-  openArtistInLibrary: (artist, page) =>
+  openArtistInLibrary: (artist) =>
     set((s) => ({
       ...navTo(s, "library"),
-      libraryTarget: { artist, ...(page ? { page: true } : {}), nonce: s.libraryResetNonce + 1 },
+      libraryTarget: { artist, nonce: s.libraryResetNonce + 1 },
       screen: "library",
       libraryResetNonce: s.libraryResetNonce + 1,
     })),

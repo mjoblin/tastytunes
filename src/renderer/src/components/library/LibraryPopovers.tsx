@@ -174,7 +174,7 @@ export function LibraryPopovers(
                   linkable(menu.node, "artists")
                 ? () => {
                     setMenu(null);
-                    void goToArtist(menu.node);
+                    goToArtist(menu.node);
                   }
                 : undefined
           }

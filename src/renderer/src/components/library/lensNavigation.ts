@@ -1,4 +1,4 @@
-import { albumOfTrack, type MediaIndexPools, type MediaNode } from "@shared/model";
+import { albumOfTrack, trackArtists, type MediaIndexPools, type MediaNode } from "@shared/model";
 import { focusArtistsLens } from "@/components/library/LibraryLenses";
 import type { Crumb } from "@/screens/LibraryScreen";
 
@@ -45,8 +45,8 @@ export const setLensReturn = (lens: Lens): void => {
  * that leads the trail off this screen (the unified search's way back).
  */
 export type Landing =
+  /** An artist by name: their page (since 2026-10-11, every way to an artist). */
   | { artist: string }
-  | { artistPage: string }
   | { udn: string | null; path: Crumb[]; track?: string | null; returnTo?: Lens; lead?: Crumb };
 
 export function lensNavigation(d: {
@@ -80,7 +80,24 @@ export function lensNavigation(d: {
    *  so its crumb trail reads Library › Artists › <artist>, the Artists crumb returns to the
    *  columns with the artist selected, and Back undoes it like any move. From a folder or a
    *  search the root is re-seated first (moveTo's one history entry). */
-  const openArtistPage = (name: string): void => {
+  /** The artist a name means: the name when the indexes know it, else the first of its packed
+   *  performers they know (a featured track's "The Neon Collective; Ivy Lane"). */
+  const knownArtist = (name: string): string => {
+    const pools = d.lensPools ?? [];
+    const knows = (n: string): boolean => {
+      const k = n.trim().toLowerCase();
+      return pools.some(
+        (p) =>
+          p.artists.some((a) => a.title.trim().toLowerCase() === k) ||
+          p.albums.some((a) => (a.artist ?? "").trim().toLowerCase() === k) ||
+          p.tracks.some((t) => trackArtists(t).some((x) => x.trim().toLowerCase() === k)),
+      );
+    };
+    if (knows(name)) return name;
+    return name.split(/\s*;\s*/).find((part) => part && knows(part)) ?? name;
+  };
+  const openArtistPage = (asked: string): void => {
+    const name = knownArtist(asked);
     focusArtistsLens(name);
     lensReturnTo = "artists";
     // the root's lens switch records the spot; an arrival, a folder or a search re-seats the
@@ -103,19 +120,10 @@ export function lensNavigation(d: {
    *  to land on. The landing used to be a side effect each caller remembered,
    *  and the Tracks lens once forgot it. */
   const landOn = (to: Landing): void => {
-    if ("artistPage" in to) return openArtistPage(to.artistPage);
-    if ("artist" in to) {
-      focusArtistsLens(to.artist);
-      // a link at the root outside search is a lens switch (openLens records
-      // it); an arrival, or a link from a folder or a search, re-seats the root
-      // first (moveTo's one history entry, none while arriving)
-      if (!d.restoring.current && d.atRoot && !d.searchMode) return openLens("artists");
-      d.moveTo(null, []);
-      lensReturnTo = "artists";
-      d.setLens("artists");
-      d.setArtistPage(null);
-      return;
-    }
+    // AN ARTIST LANDS ON THEIR PAGE (user, 2026-10-11, "yes, build it": an album's name opens
+    // the album, so an artist's opens the artist; the navigator is the page's Artists crumb,
+    // the artist selected there). It used to land on the Artists lens focused on the name.
+    if ("artist" in to) return openArtistPage(to.artist);
     if (to.returnTo) lensReturnTo = to.returnTo;
     d.pendingTrack.current = to.track ?? null;
     d.moveTo(to.udn, to.path);
@@ -178,8 +186,8 @@ export function lensNavigation(d: {
 
   /** The Tracks lens's links (and its menu's Go-to verbs): the album by
    *  content identity in the same server's pool — no network — entered
-   *  through the lens crumb so Back returns to the lens; the artist as the
-   *  Artists lens, focused on them (a lens switch, so Back returns too). */
+   *  through the lens crumb so Back returns to the lens; the artist's page
+   *  (Back returns too). */
   const goToAlbumFromLens = (track: MediaNode): void => {
     const pool = d.lensPools?.find((g) => g.udn === (track.serverUdn ?? d.serverUdn));
     const album = pool ? albumOfTrack(track, pool) : null;
