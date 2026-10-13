@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, RotateCw } from "lucide-react";
 import type { ArtistInfo } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
@@ -15,12 +15,42 @@ import { Lru } from "@/lib/lru";
  *  on (the same gate and the same main-process chain as Now Playing's panel;
  *  main caches, this keeps the promise so a reopen is free). */
 const aboutCache = new Lru<string, Promise<ArtistInfo | null>>(300);
+/** Every view of an artist hears a refresh of them (the artist page's header and its block). */
+const refreshed = new Set<(name: string) => void>();
+
+/**
+ * Ask main again past its cache (the artist page's Refresh details, as Now Playing's panel has
+ * it; his ask, 2026-10-12: "is there some way to attempt to load artist art again (maybe a
+ * wikipedia page has been added since last check)"). An ask that comes back with nothing keeps
+ * the answer already held: a refresh never takes away what the page was showing.
+ */
+export function refreshArtistAbout(name: string): Promise<ArtistInfo | null> {
+  const held = aboutCache.get(name) ?? Promise.resolve(null);
+  const p = tt
+    .fetchArtistInfo(name, true)
+    .catch(() => null)
+    .then((info) => info ?? held);
+  aboutCache.set(name, p);
+  for (const r of refreshed) r(name);
+  return p;
+}
+
 export function useArtistAbout(
   name: string,
   wanted: boolean,
 ): { status: "off" | "loading" | "ready" | "none"; info: ArtistInfo | null } {
   const enabled = useStore((s) => s.settings.artistInfo);
   const [got, setGot] = useState<{ name: string; info: ArtistInfo | null } | null>(null);
+  const [round, setRound] = useState(0);
+  useEffect(() => {
+    const hear = (n: string): void => {
+      if (n === name) setRound((r) => r + 1);
+    };
+    refreshed.add(hear);
+    return () => {
+      refreshed.delete(hear);
+    };
+  }, [name]);
   useEffect(() => {
     if (!wanted || !enabled) return;
     let live = true;
@@ -40,7 +70,7 @@ export function useArtistAbout(
     return () => {
       live = false;
     };
-  }, [name, wanted, enabled]);
+  }, [name, wanted, enabled, round]);
   if (!enabled) return { status: "off", info: null };
   if (!got || got.name !== name) return { status: "loading", info: null };
   return { status: got.info ? "ready" : "none", info: got.info };
@@ -65,6 +95,7 @@ export function ArtistAbout({
 }): React.JSX.Element | null {
   const { status, info } = useArtistAbout(name, true);
   const [whole, setWhole] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   // "read more" only when the clamp cuts something (a short summary had one that did nothing)
   const textRef = useRef<HTMLParagraphElement | null>(null);
   const [clamped, setClamped] = useState(false);
@@ -79,6 +110,39 @@ export function ArtistAbout({
     return () => ro.disconnect();
   }, [summary, whole]);
   if (status === "off") return null;
+  // the artist page's Refresh details: at the column's foot beside the links, and alone when
+  // nothing was found, which is when it is wanted most
+  const refresh = header ? (
+    <HeaderChip
+      onClick={() => {
+        setRefreshing(true);
+        void refreshArtistAbout(name).finally(() => setRefreshing(false));
+      }}
+      disabled={refreshing}
+      aria-label="Refresh details"
+      data-tip="Refresh details"
+      data-artist-refresh
+      className="tip-bottom p-1.5 motion-safe:active:scale-90 disabled:opacity-60"
+    >
+      <RotateCw size={12} className={cx(refreshing && "motion-safe:animate-spin")} />
+    </HeaderChip>
+  ) : null;
+  if (header && quiet && status !== "loading" && !info?.summary)
+    return (
+      <div className="flex flex-1 flex-col">
+        <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-2">
+          {info?.musicbrainzUrl && (
+            <HeaderChip
+              onClick={() => void tt.openExternal(info.musicbrainzUrl ?? "")}
+              className="microlabel flex items-center gap-1.5 px-2.5 py-1.5 motion-safe:active:scale-90"
+            >
+              musicbrainz <ExternalLink size={10} />
+            </HeaderChip>
+          )}
+          {refresh}
+        </div>
+      </div>
+    );
   if (quiet && (status === "loading" || status === "none" || !info?.summary)) return null;
   if (status === "loading")
     return (
@@ -137,6 +201,7 @@ export function ArtistAbout({
             musicbrainz <ExternalLink size={10} />
           </HeaderChip>
         )}
+        {refresh}
       </div>
     </div>
   );

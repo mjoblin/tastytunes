@@ -63,6 +63,12 @@ export function refreshArtistPicture(name: string): void {
 
 /** The picture for an artist row or card: a known photo, else an album cover, else null. */
 export function useArtistPicture(name: string | null | undefined): string | null {
+  return useArtistPictureAnswer(name) ?? null;
+}
+
+/** Main's answer as it stands: undefined while it is being asked (the artist page waits for
+ *  it rather than drawing a picture it may replace a moment later), null for none. */
+export function useArtistPictureAnswer(name: string | null | undefined): string | null | undefined {
   const k = name ? keyOf(name) : null;
   const mediaIndex = useStore((s) => s.mediaIndex);
   useEffect(() => {
@@ -77,5 +83,5 @@ export function useArtistPicture(name: string | null | undefined): string | null
   useEffect(() => {
     if (name && value === undefined) want(name);
   }, [name, value]);
-  return value ?? null;
+  return value;
 }
