@@ -495,7 +495,7 @@ function ConnectGate(): React.JSX.Element {
           )}
           {stillLooking && IS_MAC && (
             <div className="text-[12.5px] text-faint max-w-sm leading-relaxed">
-              Also worth a check: macOS asks once whether TastyTunes may use the local network — if
+              Also worth a check: macOS asks once whether TastyTunes may use the local network. If
               that was declined, nothing here can be found. Allow it under
               System&nbsp;Settings&nbsp;→ Privacy&nbsp;&amp;&nbsp;Security&nbsp;→
               Local&nbsp;Network, then quit and reopen the app.
