@@ -83,6 +83,7 @@ export function ArtistHeader({
             : null
         }
         fallback={(px) => <UserRound size={px} strokeWidth={1} className="text-faint" />}
+        portraitTop
       />
       <div className="min-w-0 max-w-2xl pt-1 flex min-h-[160px] flex-col gap-1.5">
         <div className="space-y-0.5">

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArtImage } from "@/components/media/ArtImage";
+import { ArtImage, isPortrait, PORTRAIT_POSITION } from "@/components/media/ArtImage";
 import { CornerResizeHandle } from "@/components/controls/CornerResizeHandle";
 import type { useHeaderArtSize } from "@/hooks/useHeaderArtSize";
 
@@ -22,6 +22,7 @@ export function HeaderArt({
   sharp,
   fallbackArt,
   fallback,
+  portraitTop = false,
 }: {
   art: Pick<ReturnType<typeof useHeaderArtSize>, "size" | "dragging" | "snapped" | "handleProps">;
   /** The grip's label. */
@@ -33,6 +34,8 @@ export function HeaderArt({
   fallbackArt?: { artist: string | null | undefined; album: string | null | undefined };
   /** Drawn when there is no picture, at the well's size. */
   fallback(px: number): React.ReactNode;
+  /** A portrait picture is cropped from near its top (an artist's photo; ArtImage). */
+  portraitTop?: boolean;
 }): React.JSX.Element {
   return (
     <div
@@ -45,10 +48,13 @@ export function HeaderArt({
         fallbackArt={fallbackArt}
         className="h-full w-full object-cover"
         shimmer
+        portraitTop={portraitTop}
         fallback={fallback(Math.round(art.size * 0.3))}
       />
       {/* keyed by the picture, so another album's larger file never lies over this one */}
-      {sharp && sharp !== src && <LargerLayer key={src ?? ""} src={sharp} />}
+      {sharp && sharp !== src && (
+        <LargerLayer key={src ?? ""} src={sharp} portraitTop={portraitTop} />
+      )}
       <CornerResizeHandle
         corner="bottom-right"
         dragging={art.dragging}
@@ -61,15 +67,21 @@ export function HeaderArt({
 }
 
 /** The larger file, shown once loaded; a new size keeps the last one showing until it lands. */
-function LargerLayer({ src }: { src: string }): React.JSX.Element | null {
-  const [shown, setShown] = useState<string | null>(null);
+function LargerLayer({
+  src,
+  portraitTop,
+}: {
+  src: string;
+  portraitTop: boolean;
+}): React.JSX.Element | null {
+  const [shown, setShown] = useState<{ src: string; tall: boolean } | null>(null);
   useEffect(() => {
-    if (shown === src) return;
+    if (shown?.src === src) return;
     let live = true;
     const img = new Image();
     img.decoding = "async";
     img.onload = () => {
-      if (live) setShown(src);
+      if (live) setShown({ src, tall: isPortrait(img.naturalWidth, img.naturalHeight) });
     };
     img.src = src;
     return () => {
@@ -80,9 +92,10 @@ function LargerLayer({ src }: { src: string }): React.JSX.Element | null {
   if (!shown) return null;
   return (
     <img
-      src={shown}
+      src={shown.src}
       alt=""
       draggable={false}
+      style={portraitTop && shown.tall ? { objectPosition: PORTRAIT_POSITION } : undefined}
       data-header-art-larger
       className="pointer-events-none absolute inset-0 h-full w-full object-cover"
     />
