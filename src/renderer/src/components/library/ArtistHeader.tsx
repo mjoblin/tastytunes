@@ -3,9 +3,11 @@ import { UserRound } from "lucide-react";
 import type { MediaNode } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
-import { ArtImage } from "@/components/media/ArtImage";
 import { ArtistAbout, useArtistAbout } from "@/components/media/ArtistAbout";
+import { HeaderArt } from "@/components/library/HeaderArt";
+import { HEADER_ART_PX, useHeaderArtSize } from "@/hooks/useHeaderArtSize";
 import { artSrc } from "@/lib/artSrc";
+import { wikiThumbAt } from "@shared/artUrl";
 import { refreshArtistPicture, useArtistPicture } from "@/lib/artistPictures";
 import { fmtCount } from "@/lib/format";
 import { FACT_SEP } from "@/lib/mediaFacts";
@@ -14,15 +16,17 @@ import { FACT_SEP } from "@/lib/mediaFacts";
  * THE ARTIST PAGE'S HEADER (0.11.0, a user's email: "Would it be possible for TastyTunes to
  * scrape artist image and display it instead of the grey square with disc image?"), shaped like
  * the album header (user, 2026-10-11: "let's make it more consistent with our existing album
- * page"): the picture, and beside it a column exactly the picture's height: the name, the
- * facts line (the Artists lens's counts, from the indexes), two lines of the artist's
- * Wikipedia summary, and its links pinned to the picture's bottom edge where the album
+ * page"): the picture, and beside it a column at least the default picture's height: the
+ * name, the facts line (the Artists lens's counts, from the indexes), two lines of the
+ * artist's Wikipedia summary, and its links pinned to the column's foot where the album
  * header's verbs sit (ArtistAbout, History › Elsewhere's block); "read more" grows the column
  * as a composer line grows the album's. No label: the crumbs, the picture and the name say
  * whose page it is, as an album's do. No verbs: the Library does not play a whole artist.
  * The picture is main's answer for the artist (a real server picture, else the photo, else a
  * cover from their albums: a server picture that is an album's cover counts as a cover), else
  * this lookup's photo, else the server's picture, else a picture from the page's own folders.
+ * Its size is dragged from the corner, one size with the album header's (HeaderArt, 0.11.0);
+ * a Wikipedia photo is asked for again at the size drawn (wikiThumbAt).
  */
 export function ArtistHeader({
   name,
@@ -36,6 +40,7 @@ export function ArtistHeader({
   folders: readonly MediaNode[];
 }): React.JSX.Element {
   const lookups = useStore((s) => s.settings.artistInfo);
+  const art = useHeaderArtSize("Resize Artist Picture");
   const known = useArtistPicture(name);
   const { info } = useArtistAbout(name, true);
   const photo = lookups ? (info?.image ?? null) : null;
@@ -67,15 +72,18 @@ export function ArtistHeader({
       : "";
   const picture = known ?? photo ?? serverArt ?? folders.find((f) => f.artUrl)?.artUrl ?? null;
   return (
-    <div className="flex items-start gap-6 pb-6 pt-2" data-artist-header>
-      <div className="relative h-[160px] w-[160px] shrink-0 rounded-xl overflow-hidden ring-1 ring-edge bg-veil flex items-center justify-center">
-        <ArtImage
-          src={artSrc(picture, 160)}
-          className="h-full w-full object-cover"
-          shimmer
-          fallback={<UserRound size={48} strokeWidth={1} className="text-faint" />}
-        />
-      </div>
+    <div className="flex items-start gap-6 pb-6 pt-2" data-artist-header ref={art.attachRow}>
+      <HeaderArt
+        art={art}
+        label="Resize the artist's picture"
+        src={artSrc(picture, HEADER_ART_PX)}
+        sharp={
+          art.settled > HEADER_ART_PX
+            ? artSrc(wikiThumbAt(picture, art.settled) ?? picture, art.settled)
+            : null
+        }
+        fallback={(px) => <UserRound size={px} strokeWidth={1} className="text-faint" />}
+      />
       <div className="min-w-0 max-w-2xl pt-1 flex min-h-[160px] flex-col gap-1.5">
         <div className="space-y-0.5">
           <div className="font-display font-bold text-[24px] tracking-tight leading-tight">
