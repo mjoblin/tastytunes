@@ -260,6 +260,13 @@ export interface AppSettings {
    *  Null is the automatic size: three tiers by window width, and the detent the drag
    *  snaps back to. */
   nowPlayingArtShare: number | null;
+  /** The picture's size in the Library's album and artist headers, dragged from its corner
+   *  (0.11.0, his ask after the artist page): one size for both, so moving between an artist
+   *  and their albums keeps the picture still, and apart from Now Playing's, whose room is the
+   *  whole hero (a fit, not a preference). Pixels, clamped at draw time to the header's cap, so
+   *  a size dragged on a large monitor comes back there and still fits a small window. Null is
+   *  the default size, the detent the drag snaps back to. */
+  libraryHeaderArt: number | null;
   /** EVIDENCE, not preference: flips true the first time an analysis is
    *  served (stored or read back) and never clears. The playback bar's
    *  taller geometry keys on the setting AND this — a household with no
@@ -491,6 +498,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   nowPlayingScene: "sleeve",
   nowPlayingSceneWords: false,
   nowPlayingArtShare: null,
+  libraryHeaderArt: null,
   waveformSeen: false,
   lyrics: true,
   lyricsLine: true,

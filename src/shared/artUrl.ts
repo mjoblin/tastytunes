@@ -34,6 +34,31 @@ export function artUrlResizable(url: string | null | undefined): boolean {
   return !!url && ASSET_ART.test(url);
 }
 
+// Wikimedia's thumbnails: .../wikipedia/<wiki>/thumb/<a>/<ab>/<file>/<width>px-<file>
+const WIKI_THUMB =
+  /^(https:\/\/upload\.wikimedia\.org\/wikipedia\/[^/]+\/thumb\/.+\/)(\d+)px-([^/]+)$/;
+/** Wikimedia's standard thumbnail widths: a width off this list is made on demand and
+ *  rate-limited, one on it is served from their cache. */
+const WIKI_STEPS = [330, 500, 960, 1280];
+
+/**
+ * An artist's Wikipedia photo drawn `px` CSS pixels wide (0.11.0, the resizable header): the
+ * article summary hands out a thumbnail about 320 px wide, sharp at the header's default 160
+ * and soft when the picture is dragged larger, so the thumbnail is asked for again at the
+ * smallest standard width covering 2× the size (Retina). Null when the URL is not a Wikimedia
+ * thumbnail or is already wide enough; a width larger than the original fails, and the caller
+ * keeps the picture it has.
+ */
+export function wikiThumbAt(url: string | null | undefined, px: number): string | null {
+  const m = url ? WIKI_THUMB.exec(url) : null;
+  if (!m) return null;
+  const want = Math.round(px * 2);
+  const has = Number(m[2]);
+  if (has >= want) return null;
+  const step = WIKI_STEPS.find((w) => w >= want) ?? WIKI_STEPS[WIKI_STEPS.length - 1];
+  return step > has ? `${m[1]}${step}px-${m[3]}` : null;
+}
+
 /** A node's art identity: the server and the album it belongs to (its own title for an
  *  album). The thumbnail cache's key (main/lookups/artThumbs), shared since 2026-09-14 so
  *  the renderer's cards and the MCP bridge's get_album_art find the same file. */
