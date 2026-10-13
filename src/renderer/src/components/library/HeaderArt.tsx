@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ArtImage, isPortrait, PORTRAIT_POSITION } from "@/components/media/ArtImage";
+import { cx } from "@/lib/format";
 import { CornerResizeHandle } from "@/components/controls/CornerResizeHandle";
 import type { useHeaderArtSize } from "@/hooks/useHeaderArtSize";
 
@@ -14,6 +15,11 @@ import type { useHeaderArtSize } from "@/hooks/useHeaderArtSize";
  * picture at the size drawn, laid on only once it has loaded, so a larger size never shows a
  * blank well while the bigger file arrives, and a bigger file that fails leaves the smaller
  * one showing. The larger layer is asked for at the SETTLED size, not on every step of a drag.
+ * WHILE THE CALLER IS STILL DECIDING WHICH PICTURE (`pending`, the artist page waiting for its
+ * photo lookup): the empty well with the slow picture's line along its bottom edge after the
+ * same 300 ms, never a stand-in it would replace a moment later (his ask, 2026-10-12: "i see
+ * album art first then it gets replaced ... the sudden image swap feels unexpected"); the
+ * picture eases in once the well has waited for it.
  */
 export function HeaderArt({
   art,
@@ -23,6 +29,8 @@ export function HeaderArt({
   fallbackArt,
   fallback,
   portraitTop = false,
+  pending = false,
+  onGiveUp,
 }: {
   art: Pick<ReturnType<typeof useHeaderArtSize>, "size" | "dragging" | "snapped" | "handleProps">;
   /** The grip's label. */
@@ -36,23 +44,42 @@ export function HeaderArt({
   fallback(px: number): React.ReactNode;
   /** A portrait picture is cropped from near its top (an artist's photo; ArtImage). */
   portraitTop?: boolean;
+  /** Which picture to show is not known yet. */
+  pending?: boolean;
+  /** Told when the picture has failed for good, so the caller can show its next one. */
+  onGiveUp?: () => void;
 }): React.JSX.Element {
+  /** The well showed its line: the picture eases in when it comes. */
+  const [waited, setWaited] = useState(false);
+  useEffect(() => {
+    if (!pending) return;
+    setWaited(false);
+    const t = setTimeout(() => setWaited(true), WAIT_MS);
+    return () => clearTimeout(t);
+  }, [pending]);
   return (
     <div
       data-header-art={art.size}
       style={{ width: art.size, height: art.size }}
       className="group relative shrink-0 rounded-xl overflow-hidden ring-1 ring-edge has-[[data-art-pending]]:ring-edge2 has-[[data-art-pending]]:duration-100 transition-shadow duration-300 bg-veil flex items-center justify-center"
     >
-      <ArtImage
-        src={src}
-        fallbackArt={fallbackArt}
-        className="h-full w-full object-cover"
-        shimmer
-        portraitTop={portraitTop}
-        fallback={fallback(Math.round(art.size * 0.3))}
-      />
+      {pending ? (
+        <span data-art-pending="" data-header-art-waiting className="contents">
+          {waited && <span className="art-shimmer" aria-hidden />}
+        </span>
+      ) : (
+        <ArtImage
+          src={src}
+          fallbackArt={fallbackArt}
+          className={cx("h-full w-full object-cover", waited && "art-in")}
+          shimmer
+          portraitTop={portraitTop}
+          onGiveUp={onGiveUp}
+          fallback={fallback(Math.round(art.size * 0.3))}
+        />
+      )}
       {/* keyed by the picture, so another album's larger file never lies over this one */}
-      {sharp && sharp !== src && (
+      {!pending && sharp && sharp !== src && (
         <LargerLayer key={src ?? ""} src={sharp} portraitTop={portraitTop} />
       )}
       <CornerResizeHandle
@@ -65,6 +92,9 @@ export function HeaderArt({
     </div>
   );
 }
+
+/** ArtImage's wait before a pending picture shows its line (a quick answer never does). */
+const WAIT_MS = 300;
 
 /** The larger file, shown once loaded; a new size keeps the last one showing until it lands. */
 function LargerLayer({

@@ -1,14 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { UserRound } from "lucide-react";
 import type { MediaNode } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { ArtistAbout, useArtistAbout } from "@/components/media/ArtistAbout";
+import { ArtImage } from "@/components/media/ArtImage";
 import { HeaderArt } from "@/components/library/HeaderArt";
 import { HEADER_ART_PX, useHeaderArtSize } from "@/hooks/useHeaderArtSize";
 import { artSrc } from "@/lib/artSrc";
 import { wikiThumbAt } from "@shared/artUrl";
-import { refreshArtistPicture, useArtistPicture } from "@/lib/artistPictures";
+import { refreshArtistPicture, useArtistPictureAnswer } from "@/lib/artistPictures";
 import { fmtCount } from "@/lib/format";
 import { FACT_SEP } from "@/lib/mediaFacts";
 
@@ -27,7 +28,16 @@ import { FACT_SEP } from "@/lib/mediaFacts";
  * this lookup's photo, else the server's picture, else a picture from the page's own folders.
  * Its size is dragged from the corner, one size with the album header's (HeaderArt, 0.11.0);
  * a Wikipedia photo is asked for again at the size drawn (wikiThumbAt).
+ * ONE PICTURE, NOT A STAND-IN AND THEN ANOTHER (his ask, 2026-10-12: "i see album art first then
+ * it gets replaced"): until main has answered and the photo lookup has (or LOOKUP_WAIT_MS has
+ * passed), the well waits with its line; then the best picture there is: a real server
+ * picture, the photo, the server's own, a cover. A picture that fails shows the next one,
+ * the cover behind it while it is retried. Once a name's picture has settled, a later answer
+ * (Refresh details, main asked again) changes it in place without waiting again.
  */
+/** How long the page waits for a photo lookup before it shows what it has. */
+const LOOKUP_WAIT_MS = 6000;
+
 export function ArtistHeader({
   name,
   serverArt,
@@ -41,9 +51,30 @@ export function ArtistHeader({
 }): React.JSX.Element {
   const lookups = useStore((s) => s.settings.artistInfo);
   const art = useHeaderArtSize("Resize Artist Picture");
-  const known = useArtistPicture(name);
-  const { info } = useArtistAbout(name, true);
+  const answer = useArtistPictureAnswer(name);
+  // main's last answer for this name, held while it is asked again (a photo found here sends
+  // every row back to main), so the picture never steps back to a cover in between
+  const held = useRef<{ name: string; value: string | null } | null>(null);
+  if (answer !== undefined) held.current = { name, value: answer };
+  const known =
+    answer !== undefined ? answer : held.current?.name === name ? held.current.value : undefined;
+  const { status, info } = useArtistAbout(name, true);
   const photo = lookups ? (info?.image ?? null) : null;
+  // a slow lookup (MusicBrainz takes one request a second) stops being waited for
+  const [waitedOut, setWaitedOut] = useState<string | null>(null);
+  const looking = lookups && status === "loading";
+  useEffect(() => {
+    if (!looking) return;
+    const t = setTimeout(() => setWaitedOut(name), LOOKUP_WAIT_MS);
+    return () => clearTimeout(t);
+  }, [looking, name]);
+  const settled = useRef<string | null>(null);
+  const pending =
+    settled.current !== name &&
+    ((known === undefined && !photo) || (looking && waitedOut !== name));
+  if (!pending) settled.current = name;
+  const [failed, setFailed] = useState<{ name: string; urls: string[] }>({ name, urls: [] });
+  const gaveUp = failed.name === name ? failed.urls : [];
   // the lookup that brought the photo also taught main: the rows (and this page) ask again
   useEffect(() => {
     if (photo) refreshArtistPicture(name);
@@ -70,7 +101,17 @@ export function ArtistHeader({
           .filter(Boolean)
           .join(FACT_SEP)
       : "";
-  const picture = known ?? photo ?? serverArt ?? folders.find((f) => f.artUrl)?.artUrl ?? null;
+  const cover = folders.find((f) => f.artUrl)?.artUrl ?? null;
+  // main's answer is a cover when it is one of the page's own albums' pictures
+  const knownCover = known != null && folders.some((f) => f.artUrl === known);
+  const choices = [knownCover ? null : known, photo, serverArt, known, cover].filter(
+    (u, i, all): u is string => !!u && all.indexOf(u) === i && !gaveUp.includes(u),
+  );
+  const picture = choices[0] ?? null;
+  const next = choices[1] ?? null;
+  const icon = (px: number): React.ReactNode => (
+    <UserRound size={px} strokeWidth={1} className="text-faint" />
+  );
   return (
     <div className="flex items-start gap-6 pb-6 pt-2" data-artist-header ref={art.attachRow}>
       <HeaderArt
@@ -82,8 +123,23 @@ export function ArtistHeader({
             ? artSrc(wikiThumbAt(picture, art.settled) ?? picture, art.settled)
             : null
         }
-        fallback={(px) => <UserRound size={px} strokeWidth={1} className="text-faint" />}
+        fallback={(px) =>
+          next ? (
+            <ArtImage
+              src={artSrc(next, HEADER_ART_PX)}
+              className="h-full w-full object-cover"
+              portraitTop
+              fallback={icon(px)}
+            />
+          ) : (
+            icon(px)
+          )
+        }
         portraitTop
+        pending={pending}
+        onGiveUp={() => {
+          if (picture) setFailed({ name, urls: [...gaveUp, picture] });
+        }}
       />
       <div className="min-w-0 max-w-2xl pt-1 flex min-h-[160px] flex-col gap-1.5">
         <div className="space-y-0.5">
