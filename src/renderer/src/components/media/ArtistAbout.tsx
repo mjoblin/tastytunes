@@ -3,7 +3,7 @@ import { ExternalLink, RotateCw } from "lucide-react";
 import type { ArtistInfo } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
-import { HeaderChip } from "@/components/chrome/Chrome";
+import { GAP_BETWEEN, GAP_WITHIN, HeaderChip } from "@/components/chrome/Chrome";
 import { cx } from "@/lib/format";
 import { Lru } from "@/lib/lru";
 
@@ -127,20 +127,30 @@ export function ArtistAbout({
       <RotateCw size={12} className={cx(refreshing && "motion-safe:animate-spin")} />
     </HeaderChip>
   ) : null;
+  // the links are one kind and sit close; the refresh is another and stands a step apart, the
+  // toolbars' two tiers (his ask, 2026-10-13); with no links it is simply first in the row
+  const row = (links: React.ReactNode): React.JSX.Element =>
+    header ? (
+      <div className={cx("mt-auto flex flex-wrap items-center", GAP_BETWEEN)}>
+        <div className={cx("flex flex-wrap items-center empty:hidden", GAP_WITHIN)}>{links}</div>
+        {refresh}
+      </div>
+    ) : (
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">{links}</div>
+    );
   if (header && quiet && status !== "loading" && !info?.summary)
     return (
       <div className="flex flex-1 flex-col">
-        <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-2">
-          {info?.musicbrainzUrl && (
+        {row(
+          info?.musicbrainzUrl && (
             <HeaderChip
               onClick={() => void tt.openExternal(info.musicbrainzUrl ?? "")}
               className="microlabel flex items-center gap-1.5 px-2.5 py-1.5 motion-safe:active:scale-90"
             >
               musicbrainz <ExternalLink size={10} />
             </HeaderChip>
-          )}
-          {refresh}
-        </div>
+          ),
+        )}
       </div>
     );
   if (quiet && (status === "loading" || status === "none" || !info?.summary)) return null;
@@ -176,33 +186,34 @@ export function ArtistAbout({
           Matched on MusicBrainz, but no Wikipedia summary is linked.
         </p>
       )}
-      <div className={cx("flex flex-wrap items-center gap-x-3 gap-y-2", header && "mt-auto")}>
-        {info.summary && !whole && clamped && (
-          <HeaderChip
-            onClick={() => setWhole(true)}
-            className="microlabel px-2.5 py-1.5 motion-safe:active:scale-90"
-          >
-            read more
-          </HeaderChip>
-        )}
-        {info.wikipediaUrl && (
-          <HeaderChip
-            onClick={() => void tt.openExternal(info.wikipediaUrl ?? "")}
-            className="microlabel flex items-center gap-1.5 px-2.5 py-1.5 motion-safe:active:scale-90"
-          >
-            wikipedia <ExternalLink size={10} />
-          </HeaderChip>
-        )}
-        {info.musicbrainzUrl && (
-          <HeaderChip
-            onClick={() => void tt.openExternal(info.musicbrainzUrl ?? "")}
-            className="microlabel flex items-center gap-1.5 px-2.5 py-1.5 motion-safe:active:scale-90"
-          >
-            musicbrainz <ExternalLink size={10} />
-          </HeaderChip>
-        )}
-        {refresh}
-      </div>
+      {row(
+        <>
+          {info.summary && !whole && clamped && (
+            <HeaderChip
+              onClick={() => setWhole(true)}
+              className="microlabel px-2.5 py-1.5 motion-safe:active:scale-90"
+            >
+              read more
+            </HeaderChip>
+          )}
+          {info.wikipediaUrl && (
+            <HeaderChip
+              onClick={() => void tt.openExternal(info.wikipediaUrl ?? "")}
+              className="microlabel flex items-center gap-1.5 px-2.5 py-1.5 motion-safe:active:scale-90"
+            >
+              wikipedia <ExternalLink size={10} />
+            </HeaderChip>
+          )}
+          {info.musicbrainzUrl && (
+            <HeaderChip
+              onClick={() => void tt.openExternal(info.musicbrainzUrl ?? "")}
+              className="microlabel flex items-center gap-1.5 px-2.5 py-1.5 motion-safe:active:scale-90"
+            >
+              musicbrainz <ExternalLink size={10} />
+            </HeaderChip>
+          )}
+        </>,
+      )}
     </div>
   );
 }
