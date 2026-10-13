@@ -94,7 +94,9 @@ export function ArtistAbout({
   header?: boolean;
 }): React.JSX.Element | null {
   const { status, info } = useArtistAbout(name, true);
-  const [whole, setWhole] = useState(false);
+  // read in full for this artist only: the next artist's summary opens clamped
+  const [wholeFor, setWholeFor] = useState<string | null>(null);
+  const whole = wholeFor === name;
   const [refreshing, setRefreshing] = useState(false);
   // "read more" only when the clamp cuts something (a short summary had one that did nothing)
   const textRef = useRef<HTMLParagraphElement | null>(null);
@@ -188,12 +190,18 @@ export function ArtistAbout({
       )}
       {row(
         <>
-          {info.summary && !whole && clamped && (
+          {/* a toggle (his ask, 2026-10-13: "if i choose read more i can't revert back"):
+              both labels hold one grid cell, the other kept invisible, so the chip is one
+              width whichever it says */}
+          {info.summary && clamped && (
             <HeaderChip
-              onClick={() => setWhole(true)}
-              className="microlabel px-2.5 py-1.5 motion-safe:active:scale-90"
+              onClick={() => setWholeFor(whole ? null : name)}
+              aria-expanded={whole}
+              data-artist-read={whole ? "less" : "more"}
+              className="microlabel grid px-2.5 py-1.5 motion-safe:active:scale-90"
             >
-              read more
+              <span className={cx("[grid-area:1/1]", whole && "invisible")}>read more</span>
+              <span className={cx("[grid-area:1/1]", !whole && "invisible")}>read less</span>
             </HeaderChip>
           )}
           {info.wikipediaUrl && (
