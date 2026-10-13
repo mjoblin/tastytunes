@@ -126,6 +126,7 @@ export function MediaArt({
           src={artSrc(src, px)}
           lazy
           shimmer={size === "card"}
+          portraitTop={kind === "artist"}
           onGiveUp={artKey ? () => setGaveUp(src ?? null) : undefined}
           fallback={fallback}
         />

@@ -158,6 +158,7 @@ export function ContainerCard({
             }
             lazy
             shimmer
+            portraitTop={artist}
             className={cx("h-full w-full object-cover", muted && "opacity-60 saturate-[.6]")}
             fallback={
               album ? (
