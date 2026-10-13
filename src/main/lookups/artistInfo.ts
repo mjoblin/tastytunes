@@ -29,10 +29,14 @@ interface MbArtist {
 export async function fetchArtistInfo(artist: string, force = false): Promise<ArtistInfo | null> {
   const key = artist.trim().toLowerCase();
   if (!key) return null;
+  // an answer cached before photos were read (0.11.0) is asked again, once; if that ask cannot
+  // finish, the answer already held (its summary and links) is what the page shows, never none
+  // (the 0.11.0-rc.1 shots: The Cure's page came up bare beside a cached summary)
+  let stale: ArtistInfo | null = null;
   if (!force && cache.has(key)) {
     const hit = cache.get(key);
-    // an answer cached before photos were read is asked again, once (0.11.0)
     if (hit == null || hit.image !== undefined) return hit ?? null;
+    stale = hit;
   }
 
   let result: ArtistInfo | null = null;
@@ -43,8 +47,8 @@ export async function fetchArtistInfo(artist: string, force = false): Promise<Ar
     `${MB}/ws/2/artist?query=artist:${encodeURIComponent(JSON.stringify(artist))}&fmt=json&limit=3`,
   );
   if (searchGot.kind !== "ok") {
-    // couldn't even search — nothing to show, nothing to remember
-    return null;
+    // couldn't even search: nothing new to show or remember (what was held, if anything)
+    return stale;
   }
   const match = (searchGot.body as { artists?: MbArtist[] }).artists?.[0];
 
@@ -64,10 +68,13 @@ export async function fetchArtistInfo(artist: string, force = false): Promise<Ar
       if (!wiki.definitive) definitive = false;
     }
   }
-  // no match / low score with an OK search: an answer — cache the null
-
-  if (definitive) cache.set(key, result);
-  return result;
+  // no match / low score with an OK search: an answer, cache the null (a held answer keeps its
+  // words, marked as asked so it is not asked again)
+  const answer = result ?? (stale ? { ...stale, image: null } : null);
+  if (definitive) cache.set(key, answer);
+  // an ask that could not finish without a summary keeps the held answer
+  if (!definitive && stale && !result?.summary) return stale;
+  return answer;
 }
 
 /** An artist's photo as already known, without asking anyone: the rows and cards read this
