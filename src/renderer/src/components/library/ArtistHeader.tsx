@@ -3,7 +3,7 @@ import { UserRound } from "lucide-react";
 import type { MediaNode } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
-import { ArtistAbout, useArtistAbout } from "@/components/media/ArtistAbout";
+import { ArtistAbout, ArtistLinks, useArtistAbout } from "@/components/media/ArtistAbout";
 import { ArtImage } from "@/components/media/ArtImage";
 import { HeaderArt } from "@/components/library/HeaderArt";
 import { HEADER_ART_PX, useHeaderArtSize } from "@/hooks/useHeaderArtSize";
@@ -18,10 +18,11 @@ import { FACT_SEP } from "@/lib/mediaFacts";
  * scrape artist image and display it instead of the grey square with disc image?"), shaped like
  * the album header (user, 2026-10-11: "let's make it more consistent with our existing album
  * page"): the picture, and beside it a column at least the default picture's height: the
- * name, the facts line (the Artists lens's counts, from the indexes), two lines of the
- * artist's Wikipedia summary, and its links pinned to the column's foot where the album
- * header's verbs sit (ArtistAbout, History › Elsewhere's block); "read more" grows the column
- * as a composer line grows the album's. No label: the crumbs, the picture and the name say
+ * name with the links out at the right of its line (ArtistLinks, so they never move when the
+ * summary opens; his idea, 2026-10-13), the facts line (the Artists lens's counts, from the
+ * indexes), and two lines of the artist's Wikipedia summary with read more / read less under
+ * them (ArtistAbout, History › Elsewhere's block); read more grows the column as a composer
+ * line grows the album's. No label: the crumbs, the picture and the name say
  * whose page it is, as an album's do. No verbs: the Library does not play a whole artist.
  * The picture is main's answer for the artist (a real server picture, else the photo, else a
  * cover from their albums: a server picture that is an album's cover counts as a cover), else
@@ -141,10 +142,18 @@ export function ArtistHeader({
           if (picture) setFailed({ name, urls: [...gaveUp, picture] });
         }}
       />
-      <div className="min-w-0 max-w-2xl pt-1 flex min-h-[160px] flex-col gap-1.5">
+      {/* a set width, the summary's measure (max-w-xl), so the links on the name's line keep one
+          edge from artist to artist and end where the words do; a long name wraps before it
+          reaches them */}
+      <div className="min-w-0 w-full max-w-xl pt-1 flex flex-col gap-1.5">
         <div className="space-y-0.5">
-          <div className="font-display font-bold text-[24px] tracking-tight leading-tight">
-            {name}
+          <div className="flex items-start gap-3">
+            <div className="min-w-0 flex-1 font-display font-bold text-[24px] tracking-tight leading-tight">
+              {name}
+            </div>
+            <div className="flex h-[30px] shrink-0 items-center">
+              <ArtistLinks name={name} />
+            </div>
           </div>
           {factsLine && (
             <div className="text-[12.5px] text-faint" data-artist-facts>
