@@ -401,4 +401,14 @@ export const ONE_HOME = [
       code: "window.addEventListener('keydown', onKey);",
     },
   },
+  {
+    id: "url-scheme-registration",
+    was: "none (0.12.0, the URL scheme: a dev run registering Electron.app would take tastytunes:// from the installed app)",
+    selector:
+      "CallExpression[callee.property.name=/^(setAsDefaultProtocolClient|removeAsDefaultProtocolClient)$/]",
+    allow: ["^src/main/app/urlActions\\.ts$"],
+    message:
+      "The tastytunes:// scheme is registered only in app/urlActions, and only by a packaged build",
+    bad: { file: "src/main/index.ts", code: 'app.setAsDefaultProtocolClient("tastytunes");' },
+  },
 ];

@@ -11,6 +11,8 @@ import { deviceManager, mcpBridge } from "./app/runtime";
 import { catchUpOnResume, noteSuspend, startScheduler } from "./app/scheduler";
 import { hasTray, refreshTrayMenu, syncTray, trayWantsRefresh } from "./app/tray";
 import { startUpdater } from "./app/updater";
+import { serveUrlActions } from "./app/urlActions";
+import { takeUrlFromArgv } from "./app/urlInbox";
 import {
   createWindow,
   focusMain,
@@ -46,7 +48,10 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
-  app.on("second-instance", () => {
+  app.on("second-instance", (_event, argv) => {
+    // A tastytunes:// URL on Windows and Linux arrives as a second launch: its verb decides
+    // whether a window shows (app/urlActions), so a key press does not pull the app forward.
+    if (takeUrlFromArgv(argv)) return;
     // A second launch means "show me the app" — recreate the window if the
     // first instance is running window-less (macOS after close).
     const mainWindow = getMainWindow();
@@ -108,6 +113,8 @@ if (!gotLock) {
       };
       mcpBridge.sync(getSettings());
       void deviceManager.startup();
+      // tastytunes:// URLs, those that arrived before ready first (app/urlInbox)
+      serveUrlActions();
       startScheduler(deviceManager);
       mediaIndex.init((statuses) => deviceManager.setMediaIndex(statuses));
       startUpdater((state) => {

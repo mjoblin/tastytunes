@@ -990,7 +990,9 @@ export class DeviceManager {
     for (const wc of this.frameWatchers) if (!wc.isDestroyed()) wc.send("tt:push", msg);
   }
 
-  private log(level: LogEntry["level"], scope: string, text: string): void {
+  /** A line in the diagnostics log (the ring the Device screen shows, and the console); public
+   *  since the URL scheme, whose verbs report there too (app/urlActions). */
+  log(level: LogEntry["level"], scope: string, text: string): void {
     const entry: LogEntry = { at: Date.now(), level, scope, text };
     this.logs.push(entry);
     if (this.logs.length > LOG_RING_SIZE) this.logs.shift();

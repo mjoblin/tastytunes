@@ -29,6 +29,14 @@ npmRebuild: false
 # Costs, accepted: a downloaded file doesn't carry its version in the name
 # (the installed app shows it in Settings' tab rail), and linking an OLDER
 # release means hand-building the URL.
+# tastytunes:// (0.12.0, the URL scheme; src/main/app/urlActions): CFBundleURLTypes on macOS,
+# the .desktop file's x-scheme-handler on Linux. NSIS has no step for a scheme, so on Windows a
+# packaged launch registers it and build/installer.nsh's uninstall removes it.
+protocols:
+  - name: TastyTunes
+    role: Viewer
+    schemes:
+      - tastytunes
 mac:
   category: public.app-category.music
   target:

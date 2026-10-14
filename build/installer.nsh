@@ -39,3 +39,13 @@
   ${endIf}
   DetailPrint "Install verified: ${APP_EXECUTABLE_FILENAME} is present."
 !macroend
+
+; THE tastytunes:// SCHEME (0.12.0, src/main/app/urlActions): NSIS has no step for a URL scheme,
+; so a packaged launch registers it under HKCU (app.setAsDefaultProtocolClient), and an uninstall
+; removes that key here, or Windows would keep offering a scheme whose handler is gone. An update
+; runs the old version's uninstaller too, and leaves the key: the new version keeps the scheme.
+!macro customUnInstall
+  ${ifNot} ${isUpdated}
+    DeleteRegKey HKCU "Software\Classes\tastytunes"
+  ${endIf}
+!macroend
