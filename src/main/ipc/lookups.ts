@@ -3,7 +3,7 @@ import type { EmbeddedArtQuery, LyricsQuery, TrackInfoQuery } from "@shared/mode
 import { connectedHost, deviceManager } from "../app/runtime";
 import { getSettings } from "../data/persist";
 import { fetchAlbumInfo } from "../lookups/albumInfo";
-import { fetchArtDataUrl } from "../lookups/artFetch";
+import { artHostTrust, fetchArtDataUrl } from "../lookups/artFetch";
 import { fetchArtistInfo, knownArtistImage } from "../lookups/artistInfo";
 import { artThumbsStats, clearArtThumbs } from "../lookups/artThumbs";
 import { fetchCoverArt } from "../lookups/coverArt";
@@ -16,7 +16,6 @@ import { scrobbler } from "../lookups/scrobbler";
 import { fetchTrackInfo } from "../lookups/trackInfo";
 import { artistIndex } from "../media/artistIndex";
 import * as mediaIndex from "../media/mediaIndex";
-import { knownServerHost } from "../media/upnpBrowser";
 import { demoHost } from "../servers/demoStreamer";
 import { handle } from "../app/guard";
 
@@ -94,16 +93,8 @@ export function registerLookupsIpc(): void {
   handle(IPC.embeddedArt, (_e, query: EmbeddedArtQuery) => embeddedArtFor(connectedHost(), query));
   handle(IPC.fetchArt, async (_e, url: string) => {
     // a private address only for the streamer or a media server the app knows (lookups/artFetch)
-    const streamer = ((): string | null => {
-      const h = connectedHost();
-      try {
-        return h ? new URL(`http://${h}`).hostname : null;
-      } catch {
-        return null;
-      }
-    })();
     try {
-      return await fetchArtDataUrl(url, (host) => host === streamer || knownServerHost(host));
+      return await fetchArtDataUrl(url, artHostTrust(connectedHost()));
     } catch {
       return null;
     }
