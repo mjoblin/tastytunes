@@ -99,7 +99,7 @@ function commandFor(
         all.find((x) => same(x.default_name, action.name));
       return hit
         ? { type: "setSource", sourceId: hit.id }
-        : `This streamer has no source called “${action.name}”.`;
+        : `The streamer has no source called “${action.name}”.`;
     }
   }
 }
@@ -126,10 +126,6 @@ async function run(url: string, stoleFocus: boolean): Promise<void> {
     await deviceManager.command(cmd);
     report("info", `${verb}: ${cmd.type} sent`);
   } catch (e) {
-    refuse(
-      url,
-      "The streamer didn't respond. Check that it's on and on the network.",
-      errorMessage(e),
-    );
+    refuse(url, "Couldn't reach the streamer.", errorMessage(e));
   }
 }

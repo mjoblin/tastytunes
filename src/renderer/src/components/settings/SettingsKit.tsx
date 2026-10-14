@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Check, Copy } from "lucide-react";
 import { tt } from "@/api";
 import { cx } from "@/lib/format";
 import { Slider } from "@/components/controls/Slider";
@@ -9,7 +10,8 @@ import { FACT_SEP } from "@/lib/mediaFacts";
 // The Settings screen's rows and controls, shared by its sections (split out of
 // SettingsScreen.tsx 2026-09-13 with the sections): a setting row, the toggle, the
 // slider, the segmented switch, the number field, the legend row, the cache row
-// and the byte formatter. The segmented switch is the app's one Segmented
+// and the byte formatter; the copy row and its feedback since the URL scheme (0.12.0), shared by
+// the agents room and the action links. The segmented switch is the app's one Segmented
 // (components/controls) since 2026-09-13; the kit had carried a near-copy.
 
 export const fmtBytes = (b: number): string =>
@@ -229,5 +231,50 @@ export function SliderSetting({
         </span>
       </div>
     </SettingRow>
+  );
+}
+
+/** Which copy button last copied (its tick shows for a moment), and the copy itself. */
+export function useCopied(): { copied: string | null; copy(key: string, text: string): void } {
+  const [copied, setCopied] = useState<string | null>(null);
+  const copy = (key: string, text: string): void => {
+    void navigator.clipboard.writeText(text).then(() => {
+      setCopied(key);
+      setTimeout(() => setCopied(null), 1600);
+    });
+  };
+  return { copied, copy };
+}
+
+/** A label, a value in mono and a copy button (the agents room's endpoint and snippets, the
+ *  action links). `labelWidth` widens the label column for longer labels. */
+export function CopyRow({
+  label,
+  text,
+  copied,
+  onCopy,
+  hint,
+  labelWidth = "w-24",
+}: {
+  label: string;
+  text: string;
+  copied: boolean;
+  onCopy(): void;
+  hint?: string;
+  labelWidth?: string;
+}): React.JSX.Element {
+  return (
+    <div className="flex items-center gap-2">
+      <span className={cx("microlabel shrink-0", labelWidth)}>{label}</span>
+      <code className="flex-1 min-w-0 truncate font-mono text-[11px] text-faint">{text}</code>
+      <button
+        onClick={onCopy}
+        data-tip={copied ? "Copied" : (hint ?? "Copy")}
+        aria-label={`Copy ${label}`}
+        className="tip-top shrink-0 p-1.5 rounded text-dim hover:text-ink transition-colors"
+      >
+        {copied ? <Check size={13} className="text-led" /> : <Copy size={13} />}
+      </button>
+    </div>
   );
 }

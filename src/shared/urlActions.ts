@@ -87,7 +87,7 @@ export function parseUrlAction(raw: string, screens: Readonly<Record<string, str
       .filter((p) => p !== "")
       .map((p) => decodeURIComponent(p).trim());
   } catch {
-    return { ok: false, reason: "That TastyTunes link is malformed." };
+    return { ok: false, reason: "Couldn't read that TastyTunes link." };
   }
   const verb = (parts[0] ?? "").toLowerCase();
   const arg = parts[1];
@@ -96,7 +96,7 @@ export function parseUrlAction(raw: string, screens: Readonly<Record<string, str
     ok: false,
     reason: verb
       ? `TastyTunes has no action called “${parts.join("/")}”.`
-      : "That link names no action.",
+      : "That TastyTunes link names no action.",
   };
   const ok = (action: UrlAction): UrlParse => ({ ok: true, action, verb: parts.join("/") });
 
@@ -122,7 +122,7 @@ export function parseUrlAction(raw: string, screens: Readonly<Record<string, str
       const to = arg?.toLowerCase();
       if (parts.length === 2 && (to === "on" || to === "off"))
         return ok({ kind: "command", command: { type: "setMute", mute: to === "on" } });
-      return { ok: false, reason: "Mute takes on or off, or nothing to switch it." };
+      return { ok: false, reason: "Mute takes on or off." };
     }
     case "preset": {
       const slot = parts.length === 2 ? wholeIn(arg, 1, 99) : null;
