@@ -45,9 +45,9 @@ export const URL_EXAMPLES = [
   "mute/off",
   "preset/1",
   "source/CD",
-  "wake",
-  "standby",
   "power",
+  "power/on",
+  "power/standby",
   "screen/now-playing",
   "mini",
 ] as const;
@@ -59,9 +59,6 @@ const PLAIN: Record<string, StreamerCommand> = {
   stop: { type: "stop" },
   next: { type: "nextTrack" },
   previous: { type: "previousTrack" },
-  wake: { type: "power", power: "ON" },
-  standby: { type: "power", power: "NETWORK" },
-  power: { type: "power", power: "toggle" },
 };
 
 /** A whole number written as one, in a range ("05" and "5" alike; "5.5", "1e2" and "" not). */
@@ -123,6 +120,18 @@ export function parseUrlAction(raw: string, screens: Readonly<Record<string, str
       if (parts.length === 2 && (to === "on" || to === "off"))
         return ok({ kind: "command", command: { type: "setMute", mute: to === "on" } });
       return { ok: false, reason: "Mute takes on or off." };
+    }
+    // power has mute's shape and SMoIP's words (/system/power: toggle, ON, NETWORK); there is no
+    // off, so standby is named for what it is
+    case "power": {
+      if (lone) return ok({ kind: "command", command: { type: "power", power: "toggle" } });
+      const to = arg?.toLowerCase();
+      if (parts.length === 2 && (to === "on" || to === "standby"))
+        return ok({
+          kind: "command",
+          command: { type: "power", power: to === "on" ? "ON" : "NETWORK" },
+        });
+      return { ok: false, reason: "Power takes on or standby." };
     }
     case "preset": {
       const slot = parts.length === 2 ? wholeIn(arg, 1, 99) : null;

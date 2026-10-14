@@ -13,7 +13,7 @@ describe("parseUrlAction", () => {
     for (const ex of URL_EXAMPLES) expect(parse(`tastytunes://${ex}`).ok, ex).toBe(true);
   });
 
-  it("maps the transport and power verbs onto the app's own commands", () => {
+  it("maps the transport verbs onto the app's own commands", () => {
     expect(action("tastytunes://toggle")).toEqual({
       kind: "command",
       command: { type: "togglePlayback" },
@@ -22,14 +22,24 @@ describe("parseUrlAction", () => {
       kind: "command",
       command: { type: "nextTrack" },
     });
-    expect(action("tastytunes://wake")).toEqual({
+  });
+
+  it("switches power, or sets it on or to standby, in mute's shape", () => {
+    expect(action("tastytunes://power")).toEqual({
+      kind: "command",
+      command: { type: "power", power: "toggle" },
+    });
+    expect(action("tastytunes://power/on")).toEqual({
       kind: "command",
       command: { type: "power", power: "ON" },
     });
-    expect(action("tastytunes://standby")).toEqual({
+    expect(action("tastytunes://power/standby")).toEqual({
       kind: "command",
       command: { type: "power", power: "NETWORK" },
     });
+    // no off (the streamer has standby modes, not off), and the old loose verbs are gone
+    for (const bad of ["power/off", "power/on/now", "wake", "standby"])
+      expect(parse(`tastytunes://${bad}`).ok, bad).toBe(false);
   });
 
   it("reads volume as steps or a percent, and refuses anything else", () => {
