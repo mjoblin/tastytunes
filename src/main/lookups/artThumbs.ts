@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync 
 import { join } from "node:path";
 import { app, nativeImage } from "electron";
 import { USER_AGENT } from "../netlog";
+import { fetchPicture } from "./artFetch";
 
 /**
  * ALBUM ART THUMBNAILS for servers that cannot be asked for a size (2026-09-14,
@@ -153,19 +154,27 @@ async function gate<T>(work: () => Promise<T>, device: boolean): Promise<T> {
   }
 }
 
-export async function fetchOrigin(url: string): Promise<{ raw: Buffer; type: string } | null> {
+/** The largest origin picture fetched; it is resized to the tiers, so a big cover is fine. */
+const ORIGIN_MAX_BYTES = 20 * 1024 * 1024;
+
+/** An origin picture, through the one picture fetch (lookups/artFetch): on the local network
+ *  only from the streamer or a known media server, every redirect checked, capped, and only a
+ *  picture (the 0.11 re-score: this was a bare fetch of any URL, buffered whole, storing
+ *  whatever came). */
+export async function fetchOrigin(
+  url: string,
+  trusted: (hostname: string) => boolean,
+): Promise<{ raw: Buffer; type: string } | null> {
   try {
-    // the app's own User-Agent, as every lookup sends: Wikimedia refuses a generic one (the
-    // artist photos, 2026-10-11), and a media server is none the worse for it
-    const res = await fetch(url, {
+    const got = await fetchPicture(url, trusted, {
+      maxBytes: ORIGIN_MAX_BYTES,
+      timeoutMs: 20_000,
+      // the app's own User-Agent, as every lookup sends: Wikimedia refuses a generic one (the
+      // artist photos, 2026-10-11), and a media server is none the worse for it
       headers: { "User-Agent": USER_AGENT },
-      signal: AbortSignal.timeout(20_000),
+      logged: false,
     });
-    if (!res.ok) return null;
-    return {
-      raw: Buffer.from(await res.arrayBuffer()),
-      type: res.headers.get("content-type") ?? "application/octet-stream",
-    };
+    return got ? { raw: got.bytes, type: got.type } : null;
   } catch {
     return null;
   }
@@ -175,12 +184,13 @@ export async function fetchOrigin(url: string): Promise<{ raw: Buffer; type: str
 function makeAll(
   key: string,
   origin: string,
+  trusted: (hostname: string) => boolean,
   device: boolean,
 ): Promise<Record<ArtTier, Made> | null> {
   const pending = inflight.get(key);
   if (pending) return pending;
   const run = gate(async () => {
-    const got = await fetchOrigin(origin);
+    const got = await fetchOrigin(origin, trusted);
     if (!got) return null;
     const map = load();
     const img = nativeImage.createFromBuffer(got.raw);
@@ -226,6 +236,8 @@ export async function artThumb(
   key: string,
   tier: ArtTier,
   origin: string,
+  /** The local hosts the origin may be on (lookups/artFetch artHostTrust). */
+  trusted: (hostname: string) => boolean,
   /** The origin is the streamer's own art server: fetched one at a time. */
   device = false,
 ): Promise<Made | null> {
@@ -242,7 +254,7 @@ export async function artThumb(
       map.delete(id); // the file went; make it again
     }
   }
-  const made = await makeAll(key, origin, device);
+  const made = await makeAll(key, origin, trusted, device);
   return made?.[tier] ?? null;
 }
 

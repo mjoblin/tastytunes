@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { artKeyOf, artUrlAt, artUrlResizable } from "@shared/artUrl";
 import { nativeImage } from "electron";
+import { artHostTrust } from "../../lookups/artFetch";
 import { artThumb, fetchOrigin, JPEG_QUALITY, TIERS } from "../../lookups/artThumbs";
 import { embeddedArtFor } from "../../lookups/embeddedArt";
 import {
@@ -804,14 +805,16 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
             `Object '${id}' is not an album or a track in the index for '${pool.serverName}' — list_albums and search_library give indexed ids.`,
           );
         const tier = a.size ?? "card";
+        const link = ctx.dm.snapshot().connection;
+        const trust = artHostTrust(link.phase === "connected" ? link.host : null);
         let got: { bytes: Buffer; type: string } | null = null;
         let from: "server" | "file" = "server";
         if (node.artUrl)
           got = artUrlResizable(node.artUrl)
-            ? await fetchOrigin(artUrlAt(node.artUrl, TIERS[tier]) ?? node.artUrl).then((r) =>
-                r ? { bytes: r.raw, type: r.type } : null,
+            ? await fetchOrigin(artUrlAt(node.artUrl, TIERS[tier]) ?? node.artUrl, trust).then(
+                (r) => (r ? { bytes: r.raw, type: r.type } : null),
               )
-            : await artThumb(artKeyOf(node), tier, node.artUrl);
+            : await artThumb(artKeyOf(node), tier, node.artUrl, trust);
         if (!got) {
           // the app's own fall-through (lib/bestArt): the picture inside the audio file when
           // the server has none, read through main's embedded-art lookup (its Settings switch

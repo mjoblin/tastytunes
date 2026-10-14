@@ -1,4 +1,5 @@
 import { protocol } from "electron";
+import { artHostTrust } from "../lookups/artFetch";
 import { artThumb } from "../lookups/artThumbs";
 import { deviceManager } from "./runtime";
 
@@ -15,14 +16,22 @@ export function serveArtProtocol(): void {
     if ((tier !== "thumb" && tier !== "card") || !key || !origin)
       return new Response(null, { status: 400 });
     // the streamer's own art server is fetched one picture at a time
+    const conn = deviceManager.snapshot().connection;
+    const streamer = conn.phase === "connected" ? conn.host : null;
     let device = false;
     try {
-      const conn = deviceManager.snapshot().connection;
-      device = conn.phase === "connected" && new URL(origin).hostname === conn.host.split(":")[0];
+      device = streamer != null && new URL(origin).hostname === streamer.split(":")[0];
     } catch {
       device = false;
     }
-    const got = await artThumb(decodeURIComponent(key), tier, origin, device);
+    // the origin comes from the renderer, so it is checked like every picture fetch
+    const got = await artThumb(
+      decodeURIComponent(key),
+      tier,
+      origin,
+      artHostTrust(streamer),
+      device,
+    );
     if (!got) return new Response(null, { status: 404 });
     return new Response(new Uint8Array(got.bytes), {
       headers: {
