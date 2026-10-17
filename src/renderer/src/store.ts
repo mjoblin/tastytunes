@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { contentPlayId, PLAYING_SETTLE_MS } from "@/lib/playingEntry";
-import type { InfoList } from "@/lib/infoSteps";
+import type { InfoList, InfoPage } from "@/lib/infoSteps";
+import { modalHasKeyboard } from "@/lib/keyboardOwner";
 import type { MenuCommand, PushMessage, Snapshot } from "@shared/ipc";
 import type {
   AppSettings,
@@ -301,6 +302,10 @@ interface TTState {
   mediaInfo: MediaInfoTarget | null;
   /** The list the Info modal was opened from, for its ‹ › (lib/infoSteps); null for a lone Info. */
   mediaInfoList: InfoList | null;
+  /** The Info window's own history (lib/infoSteps): the pages behind the one shown and the
+   *  pages gone back from. Emptied when Info closes. */
+  mediaInfoBack: InfoPage[];
+  mediaInfoForward: InfoPage[];
   paletteOpen: boolean;
   displayMode: boolean;
   /** Lyrics drawer on the Now Playing screen (ephemeral, not persisted). */
@@ -610,6 +615,8 @@ export const useStore = create<TTState>((set, get) => ({
   infoOpen: false,
   mediaInfo: null,
   mediaInfoList: null,
+  mediaInfoBack: [],
+  mediaInfoForward: [],
   paletteOpen: false,
   displayMode: false,
   lyricsOpen: false,
@@ -781,8 +788,13 @@ export const useStore = create<TTState>((set, get) => ({
   adoptFrames: (frames) => set({ frames: frames.slice(-FRAME_RING_SIZE) }),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   setInfoOpen: (infoOpen) => set({ infoOpen }),
+  // replaces the page shown (a step, a lookup landing); closing empties the history
   setMediaInfo: (mediaInfo, list) =>
-    set({ mediaInfo, mediaInfoList: mediaInfo ? (list ?? null) : null }),
+    set(
+      mediaInfo
+        ? { mediaInfo, mediaInfoList: list ?? null }
+        : { mediaInfo: null, mediaInfoList: null, mediaInfoBack: [], mediaInfoForward: [] },
+    ),
   albumDr: {},
   setAlbumDr: (albumDr) => set({ albumDr }),
   setAlbumDrEntry: (key, entry) => set((s) => ({ albumDr: { ...s.albumDr, [key]: entry } })),
@@ -1121,11 +1133,15 @@ export const useStore = create<TTState>((set, get) => ({
       case "screen":
         s.setScreen(command.screen as Screen);
         break;
+      // View › Back/Forward (⌘[ ⌘]): the Info window's own pages while it is open, nothing
+      // behind another modal, else the app's (lib/keyboardOwner, lib/infoSteps)
       case "navBack":
-        s.goBack();
+        if (s.mediaInfo) void import("@/lib/infoSteps").then((m) => m.infoBack());
+        else if (!modalHasKeyboard()) s.goBack();
         break;
       case "navForward":
-        s.goForward();
+        if (s.mediaInfo) void import("@/lib/infoSteps").then((m) => m.infoForward());
+        else if (!modalHasKeyboard()) s.goForward();
         break;
     }
   },

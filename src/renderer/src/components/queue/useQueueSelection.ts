@@ -6,6 +6,7 @@ import { tt } from "@/api";
 import { useStore } from "@/store";
 import { toggleFavorite } from "@/lib/favorites";
 import { fromQueueItem, refToFavorite } from "@/lib/mediaRef";
+import { onScreenKey } from "@/lib/keyboardOwner";
 
 // The Queue's SELECTION, lifted out of QueueScreen (2026-09-13, the second lift
 // of the screen's hygiene round): the multi-select over the visible rows —
@@ -118,15 +119,15 @@ export function useQueueSelection(d: {
   // Delete/Backspace is Remove from queue while a selection stands — the
   // Finder/Spotify key (⌘A and Escape are the grammar's, in useRowSelection).
   // Never inside a text box.
+  // Quiet while a modal has the keyboard (lib/keyboardOwner): Info over the Queue once took
+  // a Backspace as Remove from queue.
   useEffect(() => {
     if (selected.size === 0) return;
-    const onKey = (e: KeyboardEvent): void => {
+    return onScreenKey((e) => {
       const t = e.target;
       if (t instanceof HTMLElement && t.matches("input, textarea, [contenteditable]")) return;
       if (e.key === "Delete" || e.key === "Backspace") removeSelected();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    });
   }, [selected.size, removeSelected]);
 
   // The selection's favorites as ONE verb with the album-header rule: adds

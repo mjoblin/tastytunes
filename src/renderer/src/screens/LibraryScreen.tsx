@@ -35,6 +35,7 @@ import {
 } from "@shared/model";
 import { albumDrKey, artistSummary } from "@shared/model";
 import { setInfoHere } from "@/lib/infoHotkey";
+import { onScreenKey } from "@/lib/keyboardOwner";
 import { useAlbumDr } from "@/lib/audioAnalysis";
 import { FACT_SEP, albumFactsLine, albumFromTracks } from "@/lib/mediaFacts";
 import { usePlayStats } from "@/lib/playStats";
@@ -701,31 +702,19 @@ export function LibraryScreen(): React.JSX.Element {
   // Backspace goes UP a level (folder semantics; above a source's root it
   // lands on the source list). ⌘/Alt ←/→ and mouse 4/5 are history, app-wide —
   // useShortcuts owns them since 2026-08-23.
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent): void => {
-      const target = e.target as HTMLElement | null;
-      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
-      if (e.key === "Backspace" && !e.metaKey && !e.ctrlKey && !e.altKey) {
-        e.preventDefault();
-        goUp();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-    };
+  useEffect(
+    () =>
+      onScreenKey((e) => {
+        const target = e.target as HTMLElement | null;
+        if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
+        if (e.key === "Backspace" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+          e.preventDefault();
+          goUp();
+        }
+      }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    path,
-    serverUdn,
-    filter,
-    searchState,
-    searchReturn,
-    searchMode,
-    searchQuery,
-    crossState,
-    lens,
-  ]);
+    [path, serverUdn, filter, searchState, searchReturn, searchMode, searchQuery, crossState, lens],
+  );
 
   const setLayout = async (libraryLayout: ScreenLayout): Promise<void> => {
     await saveSettings({ libraryLayout });

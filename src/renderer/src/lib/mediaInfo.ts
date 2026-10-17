@@ -5,7 +5,13 @@ import { useStore } from "@/store";
 import type { MediaRef } from "@/lib/mediaRef";
 import { deriveNowPlaying, queuePlace } from "@/lib/format";
 import { queueSourceActive } from "@/hooks/useQueueSourceActive";
-import { newInfoList, openInfoInList, refSiblings, replaceInfoInList } from "@/lib/infoSteps";
+import {
+  newInfoList,
+  openInfoInList,
+  pushInfo,
+  refSiblings,
+  replaceInfoInList,
+} from "@/lib/infoSteps";
 import { fromQueueItem } from "@/lib/mediaRef";
 
 /** What a list knew about a ref, as an Info node: shown at once while the library is asked. */
@@ -69,6 +75,8 @@ export async function lookupRefInfo(ref: MediaRef, stub = refStub(ref)): Promise
 export async function openInfoForRef(
   ref: MediaRef,
   siblings?: { refs: readonly MediaRef[]; index: number },
+  /** As a new page of the Info window's history (a track's album name), not in place. */
+  { push = false }: { push?: boolean } = {},
 ): Promise<void> {
   if (ref.kind === "station") return;
   const set = useStore.getState().setMediaInfo;
@@ -88,7 +96,8 @@ export async function openInfoForRef(
           siblings.index,
         )
       : null;
-  set(opening, list);
+  if (push) pushInfo(opening, list);
+  else set(opening, list);
   const found = await lookupRefInfo(ref, stub);
   // only replace if the user hasn't closed (or opened something else) meanwhile
   const current = useStore.getState().mediaInfo;

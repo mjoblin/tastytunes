@@ -44,6 +44,7 @@ import { CornerResizeHandle } from "@/components/controls/CornerResizeHandle";
 import type { SceneId } from "@/components/display/scenes/types";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { useQueueSourceActive } from "@/hooks/useQueueSourceActive";
+import { onScreenKey } from "@/lib/keyboardOwner";
 
 const ALIGN_H = { left: "justify-start", center: "justify-center", right: "justify-end" } as const;
 const ALIGN_V = { top: "items-start", center: "items-center", bottom: "items-end" } as const;
@@ -136,18 +137,17 @@ export function NowPlayingScreen(): React.JSX.Element {
   // could not reach (the user hit it on the nav and the controls)
   useEffect(() => {
     if (!scenesOpen) return;
-    const onKey = (e: KeyboardEvent): void => {
+    const offKey = onScreenKey((e) => {
       if (e.key === "Escape") setScenesOpen(false);
-    };
+    });
     const onDown = (e: PointerEvent): void => {
       const el = e.target instanceof Element ? e.target : null;
       if (el?.closest("[data-display-scenes],[data-now-playing-scene-chip]")) return;
       setScenesOpen(false);
     };
-    window.addEventListener("keydown", onKey);
     window.addEventListener("pointerdown", onDown);
     return () => {
-      window.removeEventListener("keydown", onKey);
+      offKey();
       window.removeEventListener("pointerdown", onDown);
     };
   }, [scenesOpen]);

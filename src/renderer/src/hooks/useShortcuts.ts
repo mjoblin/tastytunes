@@ -1,7 +1,8 @@
 import { useEffect } from "react";
 import { tt } from "@/api";
 import { toggleInfo } from "@/lib/infoHotkey";
-import { stepInfo } from "@/lib/infoSteps";
+import { infoBack, infoForward, stepInfo } from "@/lib/infoSteps";
+import { modalHasKeyboard } from "@/lib/keyboardOwner";
 import { useStore, type Screen } from "@/store";
 import { SCREENS, IS_MAC } from "@/lib/screens";
 
@@ -69,6 +70,8 @@ export function useShortcuts(opts?: { transportOnly?: boolean }): void {
         (e.key === "f" || e.key === "F")
       ) {
         e.preventDefault();
+        // a modal has the keyboard: no search opens behind it (lib/keyboardOwner)
+        if (modalHasKeyboard()) return;
         const s = useStore.getState();
         // ⌘⇧F is the editor idiom: find HERE (⌘F, contextual) vs search
         // EVERYWHERE (⌘⇧F, unconditional). The shift form is what reaches the
@@ -101,6 +104,14 @@ export function useShortcuts(opts?: { transportOnly?: boolean }): void {
       ) {
         e.preventDefault();
         const s = useStore.getState();
+        // the Info window's own pages while it is open, nothing behind another modal
+        // (lib/infoSteps, lib/keyboardOwner)
+        if (s.mediaInfo) {
+          if (e.key === "ArrowLeft") infoBack();
+          else infoForward();
+          return;
+        }
+        if (modalHasKeyboard()) return;
         if (e.key === "ArrowLeft") s.goBack();
         else s.goForward();
         return;
@@ -178,10 +189,14 @@ export function useShortcuts(opts?: { transportOnly?: boolean }): void {
         // (← and → skipped the streamer's track, ↑ and ↓ moved its volume, a letter switched
         // the screen behind the modal, a digit recalled a preset). Escape, ? and ` above keep
         // working; ← and → step the Info modal through the list it was opened from.
-        if (s.mediaInfo || s.shortcutsOpen || s.infoOpen) {
+        // Backspace goes back a page in Info, as it goes up a level in the Library.
+        if (s.mediaInfo || s.shortcutsOpen || s.infoOpen || modalHasKeyboard()) {
           if (s.mediaInfo && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
             e.preventDefault();
             void stepInfo(e.key === "ArrowLeft" ? -1 : 1);
+          } else if (s.mediaInfo && e.key === "Backspace") {
+            e.preventDefault();
+            infoBack();
           }
           return;
         }
@@ -271,14 +286,18 @@ export function useShortcuts(opts?: { transportOnly?: boolean }): void {
     // evict it — these fire device commands, which must never fan out N×.
     window.__ttShortcutsOff?.();
     window.addEventListener("keydown", onKeyDown);
+    // the mouse's side buttons: the Info window's pages while it is open, nothing behind
+    // another modal, else the app's history
     const onMouseUp = (e: MouseEvent): void => {
-      if (transportOnly) return;
-      if (e.button === 3) {
-        e.preventDefault();
-        useStore.getState().goBack();
-      } else if (e.button === 4) {
-        e.preventDefault();
-        useStore.getState().goForward();
+      if (transportOnly || (e.button !== 3 && e.button !== 4)) return;
+      e.preventDefault();
+      const s = useStore.getState();
+      if (s.mediaInfo) {
+        if (e.button === 3) infoBack();
+        else infoForward();
+      } else if (!modalHasKeyboard()) {
+        if (e.button === 3) s.goBack();
+        else s.goForward();
       }
     };
     window.addEventListener("mouseup", onMouseUp);

@@ -61,9 +61,17 @@ import {
 import { cx, fmtTime } from "@/lib/format";
 import { openRefInLibrary } from "@/lib/mediaActions";
 import { fromNode } from "@/lib/mediaRef";
-import { canStep, openInfoInList, setInfoWarmer, stepInfo } from "@/lib/infoSteps";
+import {
+  canStep,
+  infoBack,
+  openInfoInList,
+  pushInfo,
+  setInfoWarmer,
+  stepInfo,
+} from "@/lib/infoSteps";
 import { openInfoForRef } from "@/lib/mediaInfo";
 import { isAlbumClass, isArtistClass } from "@/lib/media";
+import { IS_MAC } from "@/lib/screens";
 
 /**
  * The Info modal: everything the server said about a piece of media, laid out
@@ -164,6 +172,8 @@ function MediaInfoBody({
   const [copied, setCopied] = useState(false);
   // the list it was opened from, for the ‹ › (lib/infoSteps); tracks only
   const infoList = useStore((s) => s.mediaInfoList);
+  // the page behind this one in the window's own history (lib/infoSteps)
+  const backTo = useStore((s) => s.mediaInfoBack.at(-1) ?? null);
   const stepping = infoList != null && kind === "track";
   const session = stepping ? infoList.session : null;
   // THE HEIGHT HOLDS WHILE STEPPING: the modal sizes to its content and sits centered, so a
@@ -270,29 +280,35 @@ function MediaInfoBody({
   };
   const openTrack = (t: MediaNode): void => {
     if (!orderedTracks) return;
+    // a new page of the window's history: back returns to this album (lib/infoSteps)
     openInfoInList(
       trackTargetFor(t),
       orderedTracks.map((x) => () => trackTargetFor(x)),
       orderedTracks.indexOf(t),
       target,
+      { push: true },
     );
   };
   const albumUp =
     kind === "track" && node.album
       ? (): void => {
           if (infoList?.parent) {
-            setMediaInfo(infoList.parent);
+            pushInfo(infoList.parent);
             return;
           }
-          void openInfoForRef({
-            ...fromNode(node, serverUdn ?? null, serverName ?? null),
-            kind: "album",
-            title: node.album ?? "",
-            artist: node.albumArtist ?? node.artist,
-            album: null,
-            durationSecs: null,
-            objectId: null,
-          });
+          void openInfoForRef(
+            {
+              ...fromNode(node, serverUdn ?? null, serverName ?? null),
+              kind: "album",
+              title: node.album ?? "",
+              artist: node.albumArtist ?? node.artist,
+              album: null,
+              durationSecs: null,
+              objectId: null,
+            },
+            undefined,
+            { push: true },
+          );
         }
       : null;
   const albumName =
@@ -486,6 +502,20 @@ function MediaInfoBody({
       className="w-[640px] max-w-[92vw] max-h-[86vh] flex flex-col p-6"
       style={minHeight != null ? { minHeight } : undefined}
     >
+      {/* THE WAY BACK (lib/infoSteps' history): the page behind this one, by name, where a
+          browser's or a phone's back sits; ⌘← and Backspace do the same */}
+      {backTo && (
+        <button
+          data-info-back
+          onClick={() => infoBack()}
+          data-tip={`Back (${IS_MAC ? "⌘" : "Alt+"}←)`}
+          // no transition inside the frosted shell (S11): the shell fades as a whole
+          className="tip-bottom tip-start -mt-2 mb-3 flex max-w-[60%] items-center gap-1 self-start text-[12.5px] text-dim hover:text-ink"
+        >
+          <ChevronLeft size={15} className="-ml-1 shrink-0" />
+          <span className="truncate">{backTo.target.node.title}</span>
+        </button>
+      )}
       <div className="flex items-start gap-5" data-media-info>
         <div className="h-[128px] w-[128px] shrink-0 rounded-xl overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
           <ArtImage

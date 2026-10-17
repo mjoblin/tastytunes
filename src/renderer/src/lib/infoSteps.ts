@@ -30,6 +30,12 @@ export interface InfoList {
 
 let sessions = 0;
 
+/** One page of the Info window's history: what it showed and the list it stepped through. */
+export interface InfoPage {
+  target: MediaInfoTarget;
+  list: InfoList | null;
+}
+
 // What a step looks up before it shows, so the next track appears whole (its analysis, its
 // cover): the modal registers it (MediaInfoModal), and a slow answer stops holding a step after
 // WARM_CAP_MS (the step then shows, and the rest lands as it would have)
@@ -73,16 +79,19 @@ function prefetchAround(list: InfoList): void {
 }
 
 /** Opens Info on `first`, the entry at `index` of a list (the list's other entries resolve on
- *  demand), with the album it was opened from when there is one. */
+ *  demand), with the album it was opened from when there is one; `push` opens it as a new page
+ *  of the window's history (from an album's Tracks) rather than in place of the one shown. */
 export function openInfoInList(
   first: MediaInfoTarget,
   entries: readonly InfoEntry[],
   index: number,
   parent?: MediaInfoTarget,
+  { push = false }: { push?: boolean } = {},
 ): InfoList {
   const list = newInfoList(entries, index, parent);
   list.cache.set(index, Promise.resolve(first));
-  useStore.getState().setMediaInfo(first, list);
+  if (push) pushInfo(first, list);
+  else useStore.getState().setMediaInfo(first, list);
   prefetchAround(list);
   return list;
 }
@@ -145,4 +154,63 @@ export function refSiblings<T>(
     refs.push(ref);
   }
   return index >= 0 && refs.length > 1 ? { refs, index } : undefined;
+}
+
+/**
+ * THE INFO WINDOW'S OWN BACK AND FORWARD (0.12.0, his ask: "i'm getting a bit lost as a user
+ * and don't know how to get back"). Opening a track from its album's Tracks, or an album from a
+ * track's album name, is a new page; a step through a list (‹ ›) replaces the page shown, so
+ * back from track 7 is the album, not tracks 6, 5 and 4. The window shows "‹ <the page behind>"
+ * at its top-left, and the app's back and forward keys (⌘← ⌘→, ⌘[ ⌘], the mouse's side
+ * buttons, Backspace) move through these pages while it is open. Escape still closes it, and
+ * closing empties the history (the store's setMediaInfo).
+ */
+const HISTORY_CAP = 30;
+
+/** Shows `target` as a new page: the page shown goes behind it, and forward empties. */
+export function pushInfo(target: MediaInfoTarget, list: InfoList | null = null): void {
+  const s = useStore.getState();
+  if (!s.mediaInfo) {
+    s.setMediaInfo(target, list);
+    return;
+  }
+  want = null;
+  useStore.setState({
+    mediaInfoBack: [...s.mediaInfoBack, { target: s.mediaInfo, list: s.mediaInfoList }].slice(
+      -HISTORY_CAP,
+    ),
+    mediaInfoForward: [],
+    mediaInfo: target,
+    mediaInfoList: list,
+  });
+}
+
+/** Back one page; false when there is none. */
+export function infoBack(): boolean {
+  const s = useStore.getState();
+  const to = s.mediaInfoBack.at(-1);
+  if (!s.mediaInfo || !to) return false;
+  want = null;
+  useStore.setState({
+    mediaInfoBack: s.mediaInfoBack.slice(0, -1),
+    mediaInfoForward: [...s.mediaInfoForward, { target: s.mediaInfo, list: s.mediaInfoList }],
+    mediaInfo: to.target,
+    mediaInfoList: to.list,
+  });
+  return true;
+}
+
+/** Forward one page, to where back came from; false when there is none. */
+export function infoForward(): boolean {
+  const s = useStore.getState();
+  const to = s.mediaInfoForward.at(-1);
+  if (!s.mediaInfo || !to) return false;
+  want = null;
+  useStore.setState({
+    mediaInfoForward: s.mediaInfoForward.slice(0, -1),
+    mediaInfoBack: [...s.mediaInfoBack, { target: s.mediaInfo, list: s.mediaInfoList }],
+    mediaInfo: to.target,
+    mediaInfoList: to.list,
+  });
+  return true;
 }

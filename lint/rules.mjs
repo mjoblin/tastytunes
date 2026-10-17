@@ -380,4 +380,25 @@ export const ONE_HOME = [
     message: "A Settings pointer reads Settings › Tab, never an arrow",
     bad: { file: `${R}screens/RadioScreen.tsx`, code: "const s = 'Settings → Connections';" },
   },
+  {
+    id: "window-keydown",
+    was: "none (0.12.0: the Library's Backspace and the Queue's Delete acted behind the Info window)",
+    selector:
+      "CallExpression[callee.object.name='window'][callee.property.name='addEventListener'][arguments.0.value='keydown']",
+    files: [`^${R}`],
+    allow: [
+      "lib/keyboardOwner\\.ts$",
+      "hooks/useShortcuts\\.ts$",
+      "hooks/usePopover\\.ts$",
+      "hooks/useNavDrag\\.tsx$",
+      "components/controls/Slider\\.tsx$",
+      "components/device/ToneEq\\.tsx$",
+    ],
+    message:
+      "A screen hears keys through onScreenKey (lib/keyboardOwner), quiet while a modal has the keyboard",
+    bad: {
+      file: `${R}screens/QueueScreen.tsx`,
+      code: "window.addEventListener('keydown', onKey);",
+    },
+  },
 ];

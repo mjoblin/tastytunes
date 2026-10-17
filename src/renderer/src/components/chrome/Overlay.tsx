@@ -1,9 +1,10 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { cx } from "@/lib/format";
 import { PopoverChrome, usePopoverChrome, useClampedPosition } from "@/hooks/usePopover";
 import { useFadePresence } from "@/hooks/useFadePresence";
 import { useDialogFocus } from "@/hooks/useDialogFocus";
+import { holdKeyboard } from "@/lib/keyboardOwner";
 
 /**
  * The two overlay shells. Every transient surface in the app is one of these:
@@ -144,6 +145,8 @@ export function ModalShell({
   const panelRef = useRef<HTMLDivElement | null>(null);
   // a modal holds keyboard focus while it is open and hands it back when it closes
   useDialogFocus(open && mounted, panelRef, { trap: true });
+  // …and the keys: nothing behind it acts on them while it is open (lib/keyboardOwner)
+  useEffect(() => (open ? holdKeyboard() : undefined), [open]);
   if (open) shown.current = children;
   if (!mounted) return null;
   return (
