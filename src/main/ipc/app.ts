@@ -1,5 +1,6 @@
 import { IPC } from "@shared/ipc";
 import { shell } from "electron";
+import { hasLocalNetworkPrivacy } from "../app/localNetwork";
 import { mcpBridge } from "../app/runtime";
 import { checkUpdatesOnDemand, downloadUpdate, installUpdate } from "../app/updater";
 import {
@@ -16,6 +17,9 @@ export function registerAppIpc(): void {
     if (/^https?:/i.test(url)) return shell.openExternal(url);
     return Promise.resolve();
   });
+  handle(IPC.localNetworkPrivacy, () =>
+    Promise.resolve(hasLocalNetworkPrivacy(process.platform, process.getSystemVersion())),
+  );
   handle(IPC.updateDownload, () => downloadUpdate());
   handle(IPC.updateInstall, () => installUpdate());
   handle(IPC.updateCheckNow, () => checkUpdatesOnDemand());

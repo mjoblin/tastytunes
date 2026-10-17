@@ -340,6 +340,16 @@ function ConnectGate(): React.JSX.Element {
     prevDiscovering.current = discovering;
   }, [discovering]);
   const stillLooking = !busy && devices.length === 0 && sweeps >= 3;
+  // A Mac that asks before an app reaches the local network (macOS 15 and later) drops both the
+  // search and an IP typed by hand when the ask was declined, so the still-looking note names
+  // the setting there (main's app/localNetwork)
+  const [localNetworkPrivacy, setLocalNetworkPrivacy] = useState(false);
+  useEffect(() => {
+    void tt
+      .localNetworkPrivacy()
+      .then(setLocalNetworkPrivacy)
+      .catch(() => {});
+  }, []);
   // THE ADDRESS IN PLACE (0.10.0, the first five minutes): typing a streamer's IP opens a
   // field here rather than sending a new owner off to the Device screen
   const [ipOpen, setIpOpen] = useState(false);
@@ -488,6 +498,12 @@ function ConnectGate(): React.JSX.Element {
             <div className="text-[12.5px] text-faint max-w-sm leading-relaxed">
               Still looking. The search repeats on its own. If the streamer sits on a different
               subnet or Wi-Fi band, enter its IP manually below.
+            </div>
+          )}
+          {stillLooking && localNetworkPrivacy && (
+            <div data-local-network className="text-[12.5px] text-faint max-w-sm leading-relaxed">
+              Your Mac may be blocking TastyTunes from your local network. Allow it in System
+              Settings › Privacy & Security › Local Network.
             </div>
           )}
           <div className="flex items-center gap-4">
