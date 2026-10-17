@@ -23,6 +23,9 @@ export interface InfoList {
   session: number;
   /** Resolved and in-flight targets by position, shared by every step of the session. */
   cache: Map<number, Promise<MediaInfoTarget>>;
+  /** The album whose Info the list was opened from: its tracks' album link goes back to it
+   *  as it was (0.12.0, the album's Tracks section), rather than looking the album up. */
+  parent?: MediaInfoTarget;
 }
 
 let sessions = 0;
@@ -36,8 +39,12 @@ export function setInfoWarmer(fn: (target: MediaInfoTarget) => Promise<unknown>)
   warm = fn;
 }
 
-export function newInfoList(entries: readonly InfoEntry[], index: number): InfoList {
-  return { entries, index, session: ++sessions, cache: new Map() };
+export function newInfoList(
+  entries: readonly InfoEntry[],
+  index: number,
+  parent?: MediaInfoTarget,
+): InfoList {
+  return { entries, index, session: ++sessions, cache: new Map(), ...(parent ? { parent } : {}) };
 }
 
 function resolve(list: InfoList, i: number): Promise<MediaInfoTarget> {
@@ -66,13 +73,14 @@ function prefetchAround(list: InfoList): void {
 }
 
 /** Opens Info on `first`, the entry at `index` of a list (the list's other entries resolve on
- *  demand). */
+ *  demand), with the album it was opened from when there is one. */
 export function openInfoInList(
   first: MediaInfoTarget,
   entries: readonly InfoEntry[],
   index: number,
+  parent?: MediaInfoTarget,
 ): InfoList {
-  const list = newInfoList(entries, index);
+  const list = newInfoList(entries, index, parent);
   list.cache.set(index, Promise.resolve(first));
   useStore.getState().setMediaInfo(first, list);
   prefetchAround(list);

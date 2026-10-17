@@ -15,9 +15,11 @@ import {
   albumDrKey,
   albumFormat,
   audioAnalysisKey,
+  discCountIn,
   discGroups,
   fmtBytes,
   keyName,
+  orderTracks,
   tempoBpm,
   trackArtists,
   trackPosition,
@@ -32,7 +34,13 @@ import { useStore } from "@/store";
 import { ModalShell } from "@/components/chrome/Overlay";
 import { CloseButton } from "@/components/controls/CloseButton";
 import { ArtImage } from "@/components/media/ArtImage";
-import { DrChip, InfoWaveform, useKnownAnalysis, warmAnalysis } from "@/components/media/Waveform";
+import {
+  DrBadge,
+  DrChip,
+  InfoWaveform,
+  useKnownAnalysis,
+  warmAnalysis,
+} from "@/components/media/Waveform";
 import {
   FACT_SEP,
   albumFactsLine,
@@ -53,7 +61,8 @@ import {
 import { cx, fmtTime } from "@/lib/format";
 import { openRefInLibrary } from "@/lib/mediaActions";
 import { fromNode } from "@/lib/mediaRef";
-import { canStep, setInfoWarmer, stepInfo } from "@/lib/infoSteps";
+import { canStep, openInfoInList, setInfoWarmer, stepInfo } from "@/lib/infoSteps";
+import { openInfoForRef } from "@/lib/mediaInfo";
 import { isAlbumClass, isArtistClass } from "@/lib/media";
 
 /**
@@ -212,24 +221,27 @@ function MediaInfoBody({
   const albumEntry = kind === "album" ? (albumDrMap[albumDrKey(given)] ?? null) : null;
   const progress = useStore((s) => s.analysisProgress);
   const sweeping = kind === "album" && progress?.key === albumDrKey(given);
-  const [trackDrs, setTrackDrs] = useState<number[] | null>(null);
+  // each measured track's DR by its analysis key: the coverage line counts them, the Tracks
+  // section shows each beside its track
+  const [trackDrMap, setTrackDrMap] = useState<Record<string, number> | null>(null);
   const [coverageNonce, setCoverageNonce] = useState(0);
   useEffect(() => {
     if (kind !== "album" || !tracks || tracks.length === 0 || !waveformsOn) {
-      setTrackDrs(null);
+      setTrackDrMap(null);
       return;
     }
     let stale = false;
     void tt
       .audioDrMany(tracks.map((t) => audioAnalysisKey(t)))
       .then((m) => {
-        if (!stale) setTrackDrs(Object.values(m));
+        if (!stale) setTrackDrMap(m);
       })
       .catch(() => {});
     return () => {
       stale = true;
     };
   }, [kind, tracks, waveformsOn, coverageNonce]);
+  const trackDrs = trackDrMap ? Object.values(trackDrMap) : null;
   const albumTotal = tracks?.length ?? 0;
   const albumKnown = trackDrs?.length ?? 0;
   const albumComplete = albumTotal > 0 && albumKnown === albumTotal;
@@ -238,6 +250,60 @@ function MediaInfoBody({
     trackDrs && trackDrs.length > 0
       ? { min: Math.min(...trackDrs), max: Math.max(...trackDrs) }
       : null;
+  // ---- from an album to its tracks and back (0.12.0, his word on the mockup): a row of the
+  // album's Tracks section opens that track's Info, ‹ › stepping the album in its order, and
+  // the track's album name comes back to this album as it was; a track's Info opened anywhere
+  // else finds its album by name in the index
+  const orderedTracks = useMemo(
+    () => (kind === "album" && tracks && tracks.length > 0 ? orderTracks(tracks) : null),
+    [kind, tracks],
+  );
+  const trackTargetFor = (t: MediaNode): MediaInfoTarget => {
+    const count = tracks ? discCountIn(t, tracks) : null;
+    return {
+      node: t,
+      serverName: serverName ?? null,
+      serverUdn: t.serverUdn ?? serverUdn ?? null,
+      ...(serverProfile ? { serverProfile } : {}),
+      ...(count != null ? { discTrackCount: count } : {}),
+    };
+  };
+  const openTrack = (t: MediaNode): void => {
+    if (!orderedTracks) return;
+    openInfoInList(
+      trackTargetFor(t),
+      orderedTracks.map((x) => () => trackTargetFor(x)),
+      orderedTracks.indexOf(t),
+      target,
+    );
+  };
+  const albumUp =
+    kind === "track" && node.album
+      ? (): void => {
+          if (infoList?.parent) {
+            setMediaInfo(infoList.parent);
+            return;
+          }
+          void openInfoForRef({
+            ...fromNode(node, serverUdn ?? null, serverName ?? null),
+            kind: "album",
+            title: node.album ?? "",
+            artist: node.albumArtist ?? node.artist,
+            album: null,
+            durationSecs: null,
+            objectId: null,
+          });
+        }
+      : null;
+  const albumName =
+    kind === "track" && node.album ? (
+      albumUp ? (
+        <AlbumLink name={node.album} onGo={albumUp} />
+      ) : (
+        node.album
+      )
+    ) : null;
+
   const runAlbumAnalysis = (): void => {
     if (!udn) return;
     void analyzeAlbum(given, udn, []).then(() => setCoverageNonce((n) => n + 1));
@@ -271,7 +337,7 @@ function MediaInfoBody({
           ["Title", node.title],
           ["Performers", performers.length > 1 ? performers.join(", ") : (node.artist ?? null)],
           ["Album artist", node.albumArtist ?? null],
-          ["Album", node.album ?? null],
+          ["Album", albumName],
           ["Composers", node.composers?.join(", ") ?? null],
           ["Year", node.year ?? null],
           ["Genres", node.genre?.join(", ") ?? null],
@@ -439,7 +505,14 @@ function MediaInfoBody({
           <div className="font-display font-bold text-[20px] tracking-tight leading-tight mt-1 break-words">
             {node.title}
           </div>
-          {subtitle && <div className="text-[13px] text-dim mt-0.5 truncate">{subtitle}</div>}
+          {kind === "track" && albumName ? (
+            <div className="text-[13px] text-dim mt-0.5 truncate">
+              {node.artist ? `${node.artist} · ` : ""}
+              {albumName}
+            </div>
+          ) : (
+            subtitle && <div className="text-[13px] text-dim mt-0.5 truncate">{subtitle}</div>
+          )}
           {/* two registers (lib/mediaFacts): collection facts as prose, then
               the format TOKENS as chips with the DR chip closing the row —
               the clothes Now Playing taught the eye (user call, 2026-09-01) */}
@@ -531,6 +604,14 @@ function MediaInfoBody({
         <InfoSections>
           {stream_.length > 0 && <Section title="Stream" rows={stream_} />}
           <Section title="Identity" rows={identity} />
+          {orderedTracks && (
+            <AlbumTrackList
+              tracks={orderedTracks}
+              albumArtist={node.artist ?? null}
+              drs={trackDrMap}
+              onOpen={openTrack}
+            />
+          )}
           {artistRows.length > 0 && <Section title="Library" rows={artistRows} />}
           {albumRows.length > 0 && <Section title="Album" rows={albumRows} />}
           {trackFormat.length > 0 && <Section title="Format" rows={trackFormat} />}
@@ -562,6 +643,78 @@ function MediaInfoBody({
 }
 
 /** One of the footer's ‹ ›: dim and inert at either end of the list, never wrapping. */
+/** An album name in a track's Info that opens the album's Info (the subtitle and the Album row). */
+function AlbumLink({ name, onGo }: { name: string; onGo(): void }): React.JSX.Element {
+  return (
+    <button
+      data-info-album-link
+      onClick={onGo}
+      data-tip="Show the album's Info"
+      // no transition inside the frosted shell (S11): the shell fades as a whole
+      className="tip-bottom text-left hover:text-ink hover:underline underline-offset-2"
+    >
+      {name}
+    </button>
+  );
+}
+
+/** An album's tracks in its Info, in the album's order: number, title (and the performer when
+ *  not the album's), the DR when measured, the length; a row opens that track's Info. Disc
+ *  headings on an album of several. */
+function AlbumTrackList({
+  tracks,
+  albumArtist,
+  drs,
+  onOpen,
+}: {
+  tracks: MediaNode[];
+  albumArtist: string | null;
+  drs: Record<string, number> | null;
+  onOpen(t: MediaNode): void;
+}): React.JSX.Element {
+  const groups = discGroups(tracks);
+  const lc = (v: string | null | undefined): string => (v ?? "").trim().toLowerCase();
+  return (
+    <div data-info-section="tracks" className="col-span-full">
+      <div className="microlabel mb-1.5">Tracks</div>
+      {groups.map((g, gi) => (
+        <div key={g.disc ?? 0} className={gi > 0 ? "mt-3" : undefined}>
+          {g.disc != null && (
+            <div className="mb-1 text-[11.5px] text-faint" data-info-disc={g.disc}>
+              Disc {g.disc}
+            </div>
+          )}
+          {g.tracks.map((t) => {
+            const dr = drs?.[audioAnalysisKey(t)] ?? null;
+            const other = t.artist && albumArtist && lc(t.artist) !== lc(albumArtist);
+            return (
+              <button
+                key={t.id}
+                data-info-track={t.title}
+                onClick={() => onOpen(t)}
+                aria-label={`Info for ${t.title}`}
+                // no transition inside the frosted shell (S11): the shell fades as a whole
+                className="group -mx-2 grid w-[calc(100%+1rem)] grid-cols-[1.5rem_minmax(0,1fr)_auto_2.75rem_0.875rem] items-center gap-2.5 rounded-lg px-2 py-1 text-left text-[12.5px] hover:bg-veil2"
+              >
+                <span className="text-right tabular-nums text-faint">{trackPosition(t) ?? ""}</span>
+                <span className="min-w-0 truncate text-ink">
+                  {t.title}
+                  {other && <span className="text-faint"> · {t.artist}</span>}
+                </span>
+                <span className="flex">{dr != null && <DrBadge dr={dr} className="" />}</span>
+                <span className="text-right tabular-nums text-faint">
+                  {t.durationSecs != null ? fmtTime(t.durationSecs) : ""}
+                </span>
+                <ChevronRight size={13} className="text-transparent group-hover:text-dim" />
+              </button>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function StepButton({ dir, enabled }: { dir: -1 | 1; enabled: boolean }): React.JSX.Element {
   const label = dir < 0 ? "Previous track" : "Next track";
   return (
