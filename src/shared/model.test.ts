@@ -53,7 +53,9 @@ import {
   type ResumeRun,
   KEY_CONFIDENCE_FLOOR,
   TEMPO_CONFIDENCE_FLOOR,
+  keyMatches,
   keyName,
+  parseKeyName,
   tempoBpm,
 } from "./model";
 
@@ -740,5 +742,32 @@ describe("measured facts: tempo and key, said once (0.12.0)", () => {
     expect(keyName({ tonic: 9, mode: "minor", confidence: 0.1 })).toBeNull();
     expect(keyName({ tonic: 12, mode: "major", confidence: 0.9 })).toBeNull();
     expect(keyName(undefined)).toBeNull();
+  });
+
+  it("reads a key as a person or an agent writes it, for a filter", () => {
+    expect(parseKeyName("A minor")).toEqual({ tonic: 9, mode: "minor" });
+    expect(parseKeyName("F# major")).toEqual({ tonic: 6, mode: "major" });
+    expect(parseKeyName("B♭ minor")).toEqual({ tonic: 10, mode: "minor" });
+    expect(parseKeyName("bb min")).toEqual({ tonic: 10, mode: "minor" });
+    expect(parseKeyName("C♯m")).toEqual({ tonic: 1, mode: "minor" });
+    expect(parseKeyName("Am")).toEqual({ tonic: 9, mode: "minor" });
+    expect(parseKeyName("bm")).toEqual({ tonic: 11, mode: "minor" });
+    expect(parseKeyName("Cb maj")).toEqual({ tonic: 11, mode: "major" });
+    expect(parseKeyName("E♭")).toEqual({ tonic: 3, mode: null });
+    expect(parseKeyName(" Minor ")).toEqual({ tonic: null, mode: "minor" });
+    expect(parseKeyName("H minor")).toBeNull();
+    expect(parseKeyName("A dorian")).toBeNull();
+    expect(parseKeyName("")).toBeNull();
+  });
+
+  it("matches a key only above its floor, by tonic and mode as asked", () => {
+    const am = { tonic: 9, mode: "minor" as const, confidence: 0.5 };
+    expect(keyMatches(am, { tonic: 9, mode: "minor" })).toBe(true);
+    expect(keyMatches(am, { tonic: 9, mode: null })).toBe(true);
+    expect(keyMatches(am, { tonic: null, mode: "minor" })).toBe(true);
+    expect(keyMatches(am, { tonic: 9, mode: "major" })).toBe(false);
+    expect(keyMatches(am, { tonic: 0, mode: null })).toBe(false);
+    expect(keyMatches({ ...am, confidence: 0.1 }, { tonic: 9, mode: "minor" })).toBe(false);
+    expect(keyMatches(null, { tonic: null, mode: null })).toBe(false);
   });
 });

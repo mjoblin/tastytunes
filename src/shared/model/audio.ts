@@ -204,3 +204,33 @@ export function keyName(
     ? `${PITCH_NAMES[key.tonic]} ${key.mode}`
     : null;
 }
+
+/** A key as a person or an agent writes it, for a filter: "A minor", "F# major", "B♭ minor",
+ *  "C♯m", "Am", a tonic alone ("E♭", either mode) or a mode alone ("minor", any tonic). Null
+ *  when it names neither (0.12.0, list_tracks' key filter). */
+export function parseKeyName(
+  s: string,
+): { tonic: number | null; mode: "major" | "minor" | null } | null {
+  const t = s.trim().toLowerCase().replace(/♯/g, "#").replace(/♭/g, "b").replace(/\s+/g, " ");
+  const modeOf = (m: string | undefined): "major" | "minor" | null =>
+    m == null ? null : m === "maj" || m === "major" ? "major" : "minor";
+  const alone = /^(major|minor)$/.exec(t);
+  if (alone) return { tonic: null, mode: modeOf(alone[1]) };
+  const k = /^([a-g])([#b]?) ?(major|minor|maj|min|m)?$/.exec(t);
+  if (!k) return null;
+  const natural = { c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11 }[k[1] as "c"];
+  const tonic = (natural + (k[2] === "#" ? 1 : k[2] === "b" ? -1 : 0) + 12) % 12;
+  return { tonic, mode: modeOf(k[3]) };
+}
+
+/** Whether a track's key, above its floor, is the one a filter asked for. */
+export function keyMatches(
+  key: { tonic: number; mode: "major" | "minor"; confidence: number } | null | undefined,
+  want: { tonic: number | null; mode: "major" | "minor" | null },
+): boolean {
+  if (!key || key.confidence < KEY_CONFIDENCE_FLOOR) return false;
+  return (
+    (want.tonic == null || key.tonic === want.tonic) &&
+    (want.mode == null || key.mode === want.mode)
+  );
+}

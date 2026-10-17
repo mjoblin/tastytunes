@@ -269,13 +269,13 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         name: "list_tracks",
         title: "List tracks",
         description:
-          "Every indexed track as one list, filtered by artist, album, genre, decade, format, lossless, hi-res or minimum dynamic range (DR), sorted by title, artist, album, year, duration, DR, plays or last played. Each row carries its play count and last-played time from the listening record when known. The app's Tracks view as a tool.",
+          "Every indexed track as one list, filtered by artist, album, genre, decade, format, lossless, hi-res, minimum dynamic range (DR), a tempo range in beats per minute or a key, sorted by title, artist, album, year, duration, DR, loudness, tempo, plays or last played. Each row carries its DR, tempo and key when measured, and its play count and last-played time from the listening record when known. The app's Tracks view as a tool.",
       },
       {
         name: "get_track_analysis",
         title: "Get track analysis",
         description:
-          "The audio analysis TastyTunes has for a track (the playing track by default): dynamic range (DR, the TT-DR procedure), peak, RMS and crest in dB, plus the album's DR when the whole album has been analyzed. Says so when a track has not been analyzed yet.",
+          "The audio analysis TastyTunes has for a track (the playing track by default): dynamic range (DR, the TT-DR procedure), peak, RMS and crest in dB, loudness (LUFS, loudness range, true peak), tempo in beats per minute and key with their confidences, plus the album's DR and loudness when the whole album has been analyzed. Says so when a track has not been analyzed yet.",
       },
       {
         name: "get_media_info",
