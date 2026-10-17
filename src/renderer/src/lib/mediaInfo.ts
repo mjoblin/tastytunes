@@ -1,5 +1,5 @@
 import type { MediaInfoQuery, MediaInfoTarget, MediaNode, StreamInfo } from "@shared/model";
-import type { ZoneNowPlaying, ZonePlayState } from "@shared/smoip";
+import { isCdPlayback, type ZoneNowPlaying, type ZonePlayState } from "@shared/smoip";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import type { MediaRef } from "@/lib/mediaRef";
@@ -154,6 +154,11 @@ export function nowPlayingInfoTarget(
     trackNumber: md?.track_number ?? null,
     durationSecs: md?.duration ?? display?.progress?.duration ?? null,
   };
+  // A DISC finds its twin in the library only by the same names AND the same length (main's
+  // contentMatch): its waveform, scenes and dynamic range are measured from that file, the
+  // nearest thing to the disc the app can read (0.12.0, kept on purpose after Malcolm saw it)
+  const cd = isCdPlayback(md, display);
+  const cdDuration = cd ? stub.durationSecs : null;
   // local media only: enrich from the library, by content
   const local =
     !isRadio &&
@@ -163,7 +168,16 @@ export function nowPlayingInfoTarget(
   return {
     target: { node: stub, stream, serverName: null },
     localQuery:
-      local && title ? { kind: "track", title, artist, album, artUrl: stub.artUrl } : null,
+      local && title && (!cd || cdDuration != null)
+        ? {
+            kind: "track",
+            title,
+            artist,
+            album,
+            artUrl: stub.artUrl,
+            ...(cd ? { durationSecs: cdDuration } : {}),
+          }
+        : null,
   };
 }
 

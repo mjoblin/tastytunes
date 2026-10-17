@@ -711,6 +711,9 @@ export interface MediaInfoQuery {
   objectId?: string | null;
   /** See ContentRef.artUrl — the playing server, when the query has no hint. */
   artUrl?: string | null;
+  /** When given, a content match must also last as long (within CONTENT_DURATION_SLACK_SECS,
+   *  main/media/mediaInfo): a disc's track finding its twin in the library (0.12.0). */
+  durationSecs?: number | null;
 }
 
 /** One server's slice of a cross-server (all ready indexes) search. */
