@@ -505,10 +505,13 @@ function MediaInfoBody({
           <div className="font-display font-bold text-[20px] tracking-tight leading-tight mt-1 break-words">
             {node.title}
           </div>
-          {kind === "track" && albumName ? (
-            <div className="text-[13px] text-dim mt-0.5 truncate">
-              {node.artist ? `${node.artist} · ` : ""}
-              {albumName}
+          {kind === "track" && node.album && albumUp ? (
+            // a row of two names that each shorten with an ellipsis: the album name is a button,
+            // which a truncating line would drop whole for "…" (his Now Playing ⌘I, 2026-10-17)
+            <div className="mt-0.5 flex min-w-0 text-[13px] text-dim" data-info-subtitle>
+              {node.artist && <span className="max-w-[50%] shrink-0 truncate">{node.artist}</span>}
+              {node.artist && <span className="shrink-0 whitespace-pre"> · </span>}
+              <AlbumLink name={node.album} onGo={albumUp} truncate />
             </div>
           ) : (
             subtitle && <div className="text-[13px] text-dim mt-0.5 truncate">{subtitle}</div>
@@ -644,16 +647,29 @@ function MediaInfoBody({
 
 /** One of the footer's ‹ ›: dim and inert at either end of the list, never wrapping. */
 /** An album name in a track's Info that opens the album's Info (the subtitle and the Album row). */
-function AlbumLink({ name, onGo }: { name: string; onGo(): void }): React.JSX.Element {
+function AlbumLink({
+  name,
+  onGo,
+  truncate = false,
+}: {
+  name: string;
+  onGo(): void;
+  /** In a line of its own: shortens with an ellipsis inside the button (the tooltip stays on
+   *  the button, outside the clipping). */
+  truncate?: boolean;
+}): React.JSX.Element {
   return (
     <button
       data-info-album-link
       onClick={onGo}
       data-tip="Show the album's Info"
       // no transition inside the frosted shell (S11): the shell fades as a whole
-      className="tip-bottom text-left hover:text-ink hover:underline underline-offset-2"
+      className={cx(
+        "tip-bottom text-left hover:text-ink hover:underline underline-offset-2",
+        truncate && "min-w-0 shrink",
+      )}
     >
-      {name}
+      {truncate ? <span className="block truncate">{name}</span> : name}
     </button>
   );
 }
