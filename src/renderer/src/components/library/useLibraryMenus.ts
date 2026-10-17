@@ -1,6 +1,8 @@
 import { useState } from "react";
 import {
   albumTracksOf,
+  discCountIn,
+  discTrackCount,
   type MediaIndexPools,
   type MediaNode,
   type MediaServerInfo,
@@ -110,6 +112,16 @@ export function useLibraryMenus(d: {
     if (!lensPools || !node.serverUdn) return undefined;
     const pool = lensPools.find((g) => g.udn === node.serverUdn);
     return pool ? albumTracksOf(node, pool) : undefined;
+  };
+  // a track's "of 12" on its disc for the Info header: the open album's own listing when the
+  // track is in it (an album browsed from the server's folders has no index pools; his Only God
+  // Was Above Us read "track 1"), else the index
+  const discCountForInfo = (node: MediaNode): number | null => {
+    if (node.isContainer) return null;
+    const { albumNode, allTracks } = late.current;
+    if (albumNode && allTracks?.some((t) => t.id === node.id)) return discCountIn(node, allTracks);
+    const pool = lensPools?.find((g) => g.udn === node.serverUdn);
+    return pool ? discTrackCount(node, pool) : null;
   };
   const [presetPicker, setPresetPicker] = useState<{
     node: MediaNode;
@@ -238,6 +250,7 @@ export function useLibraryMenus(d: {
     menuNodeId,
     openMenu,
     tracksForInfo,
+    discCountForInfo,
     volumeNavVerbs,
     analyzeVerbs,
     linkable,

@@ -342,10 +342,17 @@ export function discTrackCount(
   pool: { albums: MediaNode[]; tracks: ReadonlyArray<MediaNode> },
 ): number | null {
   const album = albumOfTrack(track, pool);
-  if (!album) return null;
-  const tracks = albumTracksOf(album, pool);
+  return album ? discCountIn(track, albumTracksOf(album, pool)) : null;
+}
+
+/** The same count from an album's own listing (a browsed album, which has no index pools). */
+export function discCountIn(
+  track: Pick<MediaNode, "discNumber">,
+  albumTracks: ReadonlyArray<Pick<MediaNode, "discNumber">>,
+): number | null {
   const disc = track.discNumber ?? null;
-  const onDisc = disc == null ? tracks : tracks.filter((t) => (t.discNumber ?? 1) === disc);
+  const onDisc =
+    disc == null ? albumTracks : albumTracks.filter((t) => (t.discNumber ?? 1) === disc);
   return onDisc.length > 0 ? onDisc.length : null;
 }
 

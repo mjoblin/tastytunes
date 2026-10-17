@@ -5,7 +5,7 @@ import type {
   MediaQueueAction,
   MediaServerInfo,
 } from "@shared/model";
-import { artistSummary, discTrackCount } from "@shared/model";
+import { artistSummary } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { openInfoInList } from "@/lib/infoSteps";
@@ -50,6 +50,7 @@ export function LibraryPopovers(
       | "goToAlbum"
       | "goToArtist"
       | "tracksForInfo"
+      | "discCountForInfo"
     > &
     Pick<Fav, "nodeFavorited" | "heartNode" | "heartNodes"> & {
       savePreset(node: MediaNode, slot: number, name: string | null): Promise<void>;
@@ -97,6 +98,7 @@ export function LibraryPopovers(
     goToAlbum,
     goToArtist,
     tracksForInfo,
+    discCountForInfo,
     presetPicker,
     setPresetPicker,
     savePreset,
@@ -207,8 +209,8 @@ export function LibraryPopovers(
                 n.isContainer && isArtistClass(n.upnpClass) && pool
                   ? artistSummary(n.title, pool)
                   : undefined;
-              // a track's "of 12" on its disc, for the header (discTrackCount)
-              const count = !n.isContainer && pool ? discTrackCount(n, pool) : null;
+              // a track's "of 12" on its disc, for the header (useLibraryMenus)
+              const count = discCountForInfo(n);
               return {
                 node: artist && !n.artUrl && artist.artUrl ? { ...n, artUrl: artist.artUrl } : n,
                 tracks: artist ? undefined : tracksForInfo(n),

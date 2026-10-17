@@ -732,6 +732,7 @@ export function LibraryScreen(): React.JSX.Element {
     menuNodeId,
     openMenu,
     tracksForInfo,
+    discCountForInfo,
     volumeNavVerbs,
     analyzeVerbs,
     linkable,
@@ -2025,6 +2026,7 @@ export function LibraryScreen(): React.JSX.Element {
         goToAlbum={goToAlbum}
         goToArtist={goToArtist}
         tracksForInfo={tracksForInfo}
+        discCountForInfo={discCountForInfo}
         presetPicker={presetPicker}
         setPresetPicker={setPresetPicker}
         savePreset={savePreset}
