@@ -1095,6 +1095,10 @@ export const useStore = create<TTState>((set, get) => ({
       case "palette":
         s.setPaletteOpen(!s.paletteOpen);
         break;
+      // ⌘I from the menu (lib/infoHotkey; lazy, as the hotkey's module reads the store)
+      case "info":
+        void import("@/lib/infoHotkey").then((m) => m.toggleInfo());
+        break;
       case "shortcuts":
         s.setShortcutsOpen(!s.shortcutsOpen);
         break;

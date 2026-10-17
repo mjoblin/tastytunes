@@ -110,6 +110,7 @@ export type MenuCommand =
   | { id: "undo" }
   | { id: "about" }
   | { id: "palette" }
+  | { id: "info" }
   | { id: "shortcuts" }
   | { id: "displayMode" }
   | { id: "displayModeOn" }

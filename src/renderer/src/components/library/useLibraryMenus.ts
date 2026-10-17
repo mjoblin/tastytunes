@@ -1,9 +1,11 @@
 import { useState } from "react";
 import {
   albumTracksOf,
+  artistSummary,
   discCountIn,
   discTrackCount,
   type MediaIndexPools,
+  type MediaInfoTarget,
   type MediaNode,
   type MediaServerInfo,
 } from "@shared/model";
@@ -12,7 +14,8 @@ import { tt } from "@/api";
 import { useStore } from "@/store";
 import { analyzeAlbum, analyzeTracks, USB_ANALYSIS_HINT } from "@/lib/audioAnalysis";
 import { fmtCount } from "@/lib/format";
-import { isAlbumClass } from "@/lib/media";
+import { openInfoInList } from "@/lib/infoSteps";
+import { isAlbumClass, isArtistClass } from "@/lib/media";
 import type { MediaMenuItem } from "@/lib/mediaMenus";
 import { itemFromNode } from "@/components/overlays/AddToPlaylistPanel";
 import type { Crumb } from "@/screens/LibraryScreen";
@@ -122,6 +125,40 @@ export function useLibraryMenus(d: {
     if (albumNode && allTracks?.some((t) => t.id === node.id)) return discCountIn(node, allTracks);
     const pool = lensPools?.find((g) => g.udn === node.serverUdn);
     return pool ? discTrackCount(node, pool) : null;
+  };
+  // THE LIBRARY'S INFO, ONE HOME (0.12.0, with ⌘I; it lived inline in the menu's Info…): the
+  // target a node's Info shows (an artist's page summed by NAME from the index, the lens's merged
+  // rows and the server's person entities alike; an album's tracks; a track's place on its disc)
+  // and its opening, a track stepping through the rows it was opened from (lib/infoSteps). The
+  // menus' Info… and ⌘I on an album or an artist's page both open through it.
+  const infoTargetFor = (n: MediaNode): MediaInfoTarget => {
+    const server = servers?.find((x) => x.udn === serverUdn) ?? null;
+    const pool = lensPools?.find((g) => g.udn === (n.serverUdn ?? server?.udn)) ?? lensPools?.[0];
+    const artist =
+      n.isContainer && isArtistClass(n.upnpClass) && pool
+        ? artistSummary(n.title, pool)
+        : undefined;
+    const count = discCountForInfo(n);
+    return {
+      node: artist && !n.artUrl && artist.artUrl ? { ...n, artUrl: artist.artUrl } : n,
+      tracks: artist ? undefined : tracksForInfo(n),
+      artist,
+      ...(count != null ? { discTrackCount: count } : {}),
+      serverName: n.serverName ?? server?.name ?? null,
+      serverUdn: nodeUdn(n),
+      // what the index learned about this server (the modal's Indexed line + notes)
+      ...(pool?.profile ? { serverProfile: pool.profile } : {}),
+    };
+  };
+  const openInfoFor = (n: MediaNode, list?: readonly MediaNode[]): void => {
+    const at = !n.isContainer && list ? list.indexOf(n) : -1;
+    if (list && at >= 0 && list.length > 1)
+      openInfoInList(
+        infoTargetFor(n),
+        list.map((t) => () => infoTargetFor(t)),
+        at,
+      );
+    else useStore.getState().setMediaInfo(infoTargetFor(n));
   };
   const [presetPicker, setPresetPicker] = useState<{
     node: MediaNode;
@@ -249,8 +286,7 @@ export function useLibraryMenus(d: {
     setPresetPicker,
     menuNodeId,
     openMenu,
-    tracksForInfo,
-    discCountForInfo,
+    openInfoFor,
     volumeNavVerbs,
     analyzeVerbs,
     linkable,

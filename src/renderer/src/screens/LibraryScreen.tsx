@@ -18,6 +18,7 @@ import {
 import {
   presetVolumeKey,
   type AppSettings,
+  type MediaIndexPools,
   type MediaNode,
   type MediaQueueAction,
   type MediaServerInfo,
@@ -32,7 +33,8 @@ import {
   albumOfTrack,
   trackPosition,
 } from "@shared/model";
-import { albumDrKey } from "@shared/model";
+import { albumDrKey, artistSummary } from "@shared/model";
+import { setInfoHere } from "@/lib/infoHotkey";
 import { useAlbumDr } from "@/lib/audioAnalysis";
 import { FACT_SEP, albumFactsLine, albumFromTracks } from "@/lib/mediaFacts";
 import { usePlayStats } from "@/lib/playStats";
@@ -161,6 +163,29 @@ type SearchLine =
  * container click = drill in); queue-replacing verbs live behind explicit
  * buttons and the ⋯ menu.
  */
+/** An artist's page as a node for Info, from the index that knows them best (Info sums an
+ *  artist's page from one index, as the Artists lens's row menu does). */
+function artistPageNode(name: string, pools: MediaIndexPools[]): MediaNode {
+  const best = pools
+    .map((g) => ({ g, n: artistSummary(name, g).trackCount }))
+    .sort((a, b) => b.n - a.n)[0].g;
+  return {
+    id: `artist-page:${name.toLowerCase()}`,
+    parentId: null,
+    title: name,
+    upnpClass: "object.container.person.musicArtist",
+    isContainer: true,
+    artUrl: null,
+    artist: null,
+    album: null,
+    year: null,
+    trackNumber: null,
+    durationSecs: null,
+    serverUdn: best.udn,
+    serverName: best.serverName,
+  };
+}
+
 export function LibraryScreen(): React.JSX.Element {
   const {
     libraryLayout,
@@ -731,8 +756,7 @@ export function LibraryScreen(): React.JSX.Element {
     setPresetPicker,
     menuNodeId,
     openMenu,
-    tracksForInfo,
-    discCountForInfo,
+    openInfoFor,
     volumeNavVerbs,
     analyzeVerbs,
     linkable,
@@ -869,8 +893,6 @@ export function LibraryScreen(): React.JSX.Element {
       action: { label: "View", screen: "presets" },
     });
   };
-
-  const setMediaInfo = useStore((s) => s.setMediaInfo);
 
   // -------------------------------------------------------------- derivation
 
@@ -1167,7 +1189,27 @@ export function LibraryScreen(): React.JSX.Element {
   const { md, queueSourceActive, isCurrentTrack, isPlayingAlbum } = usePlayingMatch();
 
   const allTracks = useMemo(() => nodes.filter((n) => !n.isContainer), [nodes]);
+  const infoHereLate = useRef<(() => void) | null>(null);
+  useEffect(
+    () =>
+      setInfoHere(() => {
+        const open = infoHereLate.current;
+        open?.();
+        return open != null;
+      }),
+    [],
+  );
   menusLate.current = { albumNode, setSiblings, openVolume, allTracks };
+  // ⌘I here (lib/infoHotkey): the album shown, an artist's folder, an artist's page, opened as
+  // their menus' Info… opens them (useLibraryMenus); late-bound, read when the key is pressed
+  const shownSubject =
+    !searchMode && !atRoot && state === "ready" ? (albumNode ?? artistNode) : null;
+  const shownArtistPage =
+    !searchMode && atRoot && lens === "artists" && artistPage && lensPools?.length
+      ? artistPageNode(artistPage, lensPools)
+      : null;
+  const infoSubject = shownSubject ?? shownArtistPage;
+  infoHereLate.current = infoSubject ? () => openInfoFor(infoSubject) : null;
   // what the album's tracks say where the album is silent (lib/mediaFacts, the one rule the
   // album's Info reads too): an album opened from another screen arrives with only its title
   const albumSaid = useMemo(
@@ -2026,8 +2068,7 @@ export function LibraryScreen(): React.JSX.Element {
         linkable={linkable}
         goToAlbum={goToAlbum}
         goToArtist={goToArtist}
-        tracksForInfo={tracksForInfo}
-        discCountForInfo={discCountForInfo}
+        openInfoFor={openInfoFor}
         presetPicker={presetPicker}
         setPresetPicker={setPresetPicker}
         savePreset={savePreset}
@@ -2039,10 +2080,6 @@ export function LibraryScreen(): React.JSX.Element {
         playContainer={playContainer}
         playAlbumFrom={playAlbumFrom}
         act={act}
-        lensPools={lensPools}
-        server={server}
-        setMediaInfo={setMediaInfo}
-        nodeUdn={nodeUdn}
         playlistPicker={playlistPicker}
         setPlaylistPicker={setPlaylistPicker}
         serverUdn={serverUdn}

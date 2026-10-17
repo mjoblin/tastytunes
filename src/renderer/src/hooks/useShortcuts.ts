@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { tt } from "@/api";
+import { toggleInfo } from "@/lib/infoHotkey";
 import { stepInfo } from "@/lib/infoSteps";
 import { useStore, type Screen } from "@/store";
 import { SCREENS, IS_MAC } from "@/lib/screens";
@@ -34,6 +35,21 @@ export function useShortcuts(opts?: { transportOnly?: boolean }): void {
         e.preventDefault();
         const s = useStore.getState();
         s.setPaletteOpen(!s.paletteOpen);
+        return;
+      }
+      // ⌘I / Ctrl+I: Info for what is in front of you (lib/infoHotkey), from anywhere but an
+      // open palette, shortcuts sheet or About. The View menu's Get Info carries the same key;
+      // this serves the keys the menu never sees.
+      if (
+        !transportOnly &&
+        (e.metaKey || e.ctrlKey) &&
+        !e.altKey &&
+        !e.shiftKey &&
+        (e.key === "i" || e.key === "I")
+      ) {
+        e.preventDefault();
+        const s = useStore.getState();
+        if (!s.paletteOpen && !s.shortcutsOpen && !s.infoOpen) toggleInfo();
         return;
       }
       // ⌘F / Ctrl+F: find semantics, and CONTEXTUAL like a browser's.

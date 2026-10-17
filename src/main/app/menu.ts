@@ -112,6 +112,15 @@ export function installAppMenu(deps: MenuDeps): void {
   };
 
   const viewSubmenu: MenuItemConstructorOptions[] = [
+    // Info for what is in front of you, the Mac's Get Info key (0.12.0; the renderer's
+    // lib/infoHotkey decides what, and its own ⌘I handler serves keys the menu never sees)
+    {
+      id: "menu-info",
+      label: "Get Info",
+      accelerator: "CmdOrCtrl+I",
+      click: () => deps.sendToMain({ id: "info" }),
+    },
+    { type: "separator" },
     { id: "menu-mini", label: "Mini Player", click: () => deps.toggleMini() },
     {
       id: "menu-display",

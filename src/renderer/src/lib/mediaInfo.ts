@@ -4,7 +4,9 @@ import { tt } from "@/api";
 import { useStore } from "@/store";
 import type { MediaRef } from "@/lib/mediaRef";
 import { deriveNowPlaying, queuePlace } from "@/lib/format";
-import { newInfoList, replaceInfoInList } from "@/lib/infoSteps";
+import { queueSourceActive } from "@/hooks/useQueueSourceActive";
+import { newInfoList, openInfoInList, refSiblings, replaceInfoInList } from "@/lib/infoSteps";
+import { fromQueueItem } from "@/lib/mediaRef";
 
 /** What a list knew about a ref, as an Info node: shown at once while the library is asked. */
 function refStub(ref: MediaRef): MediaNode {
@@ -187,17 +189,26 @@ export function nowPlayingInfoTarget(
  * for local media the library node is looked up by content and its sections
  * join (file format beside stream format, composers, disc, ids). Radio and
  * AirPlay have no library node and keep the stream page — no lookup, no
- * caveat, that IS the page. Nothing loaded → nothing to open.
+ * caveat, that IS the page. Nothing loaded → nothing to open. While the media
+ * queue plays, ‹ › step through the queue from the playing entry (0.12.0, ⌘I,
+ * lib/infoHotkey; the queue's rows as the Queue screen's Info steps them).
  */
-export async function openInfoForNowPlaying(
-  playState: ZonePlayState | null,
-  nowPlaying: ZoneNowPlaying | null,
-): Promise<void> {
-  const built = nowPlayingInfoTarget(playState, nowPlaying);
+export async function openInfoForNowPlaying(): Promise<void> {
+  const s = useStore.getState();
+  const built = nowPlayingInfoTarget(s.playState, s.nowPlaying);
   if (!built) return;
   const { target, localQuery } = built;
-  const set = useStore.getState().setMediaInfo;
-  set(target);
+  const items = queueSourceActive(s) ? (s.queue?.items ?? []).filter((i) => i.id != null) : [];
+  const playing = items.find((i) => i.id === s.effectivePlayId);
+  const siblings = playing ? refSiblings(items, playing, fromQueueItem) : undefined;
+  const list = siblings
+    ? openInfoInList(
+        target,
+        siblings.refs.map((r) => () => lookupRefInfo(r)),
+        siblings.index,
+      )
+    : null;
+  if (!list) s.setMediaInfo(target);
   if (!localQuery) return;
   let found = null;
   try {
@@ -207,9 +218,11 @@ export async function openInfoForNowPlaying(
   }
   const current = useStore.getState().mediaInfo;
   if (!current || current.node !== target.node || !found) return;
-  set({
+  const enriched: MediaInfoTarget = {
     ...found,
     stream: target.stream,
     node: { ...found.node, artUrl: found.node.artUrl ?? target.node.artUrl },
-  });
+  };
+  if (list) replaceInfoInList(list, enriched);
+  else s.setMediaInfo(enriched);
 }

@@ -2,6 +2,7 @@ import {
   AlarmClock,
   ArrowUpCircle,
   AudioLines,
+  BadgeInfo,
   Bluetooth,
   Bot,
   Cable,
@@ -52,7 +53,8 @@ import { tt } from "@/api";
 import { useStore } from "@/store";
 import { systemTheme } from "@/hooks/useTheme";
 import { activeSourceId, controlSet, deriveNowPlaying } from "@/lib/format";
-import { SCREENS, sanitizeNavHidden, sanitizeNavHiddenTools } from "@/lib/screens";
+import { MOD, SCREENS, sanitizeNavHidden, sanitizeNavHiddenTools } from "@/lib/screens";
+import { toggleInfo } from "@/lib/infoHotkey";
 import { SLEEP_DURATIONS } from "@/components/playback/SleepTimer";
 import { FACT_SEP } from "@/lib/mediaFacts";
 
@@ -636,6 +638,16 @@ export function buildCommands(ctx: CommandContext): Command[] {
     icon: Terminal,
     keywords: "diagnostics debug frames",
     run: () => setDiagnosticsOpen(true),
+  });
+  // ⌘I's command (lib/infoHotkey): the album or artist on screen, else the playing track
+  cmds.push({
+    id: "view:info",
+    label: "Info",
+    group: "View",
+    hint: `${MOD}I`,
+    icon: BadgeInfo,
+    keywords: "get info details track album artist format analysis",
+    run: toggleInfo,
   });
   cmds.push({
     id: "view:shortcuts",
