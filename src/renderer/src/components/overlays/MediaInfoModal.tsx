@@ -448,7 +448,12 @@ function MediaInfoBody({
       </div>
 
       {kind === "track" && known.available && (
-        <InfoWaveform state={known.state} onAnalyze={known.analyze} />
+        <InfoWaveform
+          state={known.state}
+          onAnalyze={known.analyze}
+          serverUdn={udn}
+          objectId={node.id}
+        />
       )}
       {/* An album's analysis coverage, and the sweep on offer — the same verb
           as the album menu and the track modal's button, one vocabulary. */}

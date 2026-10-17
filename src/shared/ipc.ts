@@ -348,7 +348,12 @@ export interface TastyTunesApi {
    *  its local media server, for renderer-side decode. Null on any miss. The bytes arrive as
    *  a Uint8Array (main sends a Buffer): the contract said ArrayBuffer until the typed
    *  handle held main's answer to it (0.11.0 sweep). */
-  expTrackAudio(serverUdn: string, objectId: string): Promise<Uint8Array | null>;
+  /** A track's bytes for the analysis decode; `tooLarge` when the file is past the size the
+   *  decode can hold (main/ipc/audio), refused before it is downloaded. */
+  expTrackAudio(
+    serverUdn: string,
+    objectId: string,
+  ): Promise<Uint8Array | { tooLarge: { bytes: number; maxBytes: number } } | null>;
   /** EXPERIMENT: a stored analysis by content key (null = none yet). */
   audioAnalysisGet(key: string): Promise<AudioAnalysis | null>;
   /** EXPERIMENT: persist a finished analysis under its content key. */

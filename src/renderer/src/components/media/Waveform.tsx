@@ -9,7 +9,7 @@ import { onsetsFromStored, onsetsToStored } from "@/lib/onsets";
 import { FEATURES_VERSION, featuresFromStored, featuresToStored } from "@/lib/features";
 import { measureOffThread } from "@/lib/measureClient";
 import type { Measured } from "@/lib/measure";
-import { audioAnalysisKey, type AudioAnalysis } from "@shared/model";
+import { audioAnalysisKey, fmtBytes, type AudioAnalysis } from "@shared/model";
 import { AudioLines } from "lucide-react";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { Lru } from "@/lib/lru";
@@ -56,6 +56,17 @@ const cache = new Lru<string, Promise<Analysis | null>>(48);
 // to the unreadable USB copy), and the network is held off for a minute.
 const failedAt = new Lru<string, number>(500);
 const FAILED_MEMO_MS = 60_000;
+// files main refused for their size (main/ipc/audio), so the absent line can say so
+const tooLarge = new Lru<string, { bytes: number; maxBytes: number }>(500);
+
+/** Why a track has no waveform, in the absent line's words (0.12.0: the reason crosses the IPC
+ *  now; a file past the size limit says so instead of naming two possible causes). */
+export function absentLine(serverUdn: string | null, objectId: string | null): string {
+  const big = serverUdn && objectId ? tooLarge.get(`${serverUdn}|${objectId}`) : undefined;
+  return big
+    ? `No waveform for this file. At ${fmtBytes(big.bytes)} it's larger than TastyTunes can analyze (${fmtBytes(big.maxBytes)}).`
+    : "No waveform for this file. It couldn't be read or decoded.";
+}
 
 /**
  * Optimistic seek hold, shared by every waveform surface: between a click
@@ -149,9 +160,15 @@ export function analyzeTrack(
     }
     const failed = failedAt.get(key);
     if (failed != null && Date.now() - failed < FAILED_MEMO_MS) return null;
-    const bytes = await tt.expTrackAudio(serverUdn, objectId);
-    if (!bytes) return null;
-    const u8 = new Uint8Array(bytes);
+    const got = await tt.expTrackAudio(serverUdn, objectId);
+    if (!got) return null;
+    if (!ArrayBuffer.isView(got)) {
+      tooLarge.set(key, got.tooLarge);
+      return null;
+    }
+    // the bytes as they came: no copy (a 24/192 file is hundreds of MB, and its samples as
+    // many again; main/ipc/audio's cap is set by what the decode holds)
+    const u8 = got;
     // NATIVE RATE (2026-09-01): decodeAudioData resamples to its context's
     // rate, and at the device's 48k a 44.1k FLAC came back with a +0.5 dB
     // "peak" and a DR computed on interpolated samples — the harness had
@@ -171,7 +188,11 @@ export function analyzeTrack(
       ctx = new OfflineAudioContext(1, 1, 48000);
     }
     try {
-      const audio = await ctx.decodeAudioData(u8.slice().buffer);
+      // the decode takes (and detaches) the whole buffer; a view onto part of one is copied out
+      const whole = u8.byteOffset === 0 && u8.byteLength === u8.buffer.byteLength;
+      const audio = await ctx.decodeAudioData(
+        whole ? (u8.buffer as ArrayBuffer) : u8.slice().buffer,
+      );
       const chans: Float32Array[] = [];
       for (let c = 0; c < audio.numberOfChannels; c++) chans.push(audio.getChannelData(c));
       // the arithmetic (peaks, envelopes, DR, R128, the scenes' strip, onsets and
@@ -484,15 +505,14 @@ export function Waveform({
 
   // Absence explains itself here, quietly — the one place a curious user
   // looks when a track has no waveform (a 71MB track met the fetch cap in
-  // silence, 2026-09-01). The reason isn't known this side of the IPC, so
-  // the line names the two real causes rather than guessing at one.
+  // silence, 2026-09-01); since 0.12.0 a file past the size limit says so
+  // (absentLine), the rest name what is left.
   if (analysis === null)
     return enabled ? (
       <div data-waveform className="pt-1">
         <div className="microlabel mb-1.5">waveform</div>
         <div className="text-[11.5px] text-faint" data-waveform-absent>
-          No waveform for this file. It may be too large to analyze, or in a format that can't be
-          decoded.
+          {absentLine(serverUdn, objectId)}
         </div>
       </div>
     ) : null;
@@ -746,9 +766,14 @@ export function useKnownAnalysis(
 export function InfoWaveform({
   state,
   onAnalyze,
+  serverUdn = null,
+  objectId = null,
 }: {
   state: KnownAnalysis;
   onAnalyze(): void;
+  /** The file's location, for why it has no waveform (absentLine). */
+  serverUdn?: string | null;
+  objectId?: string | null;
 }): React.JSX.Element | null {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const ready = state != null && state !== "loading" && state !== "unknown";
@@ -773,8 +798,7 @@ export function InfoWaveform({
         </button>
       ) : state === null ? (
         <div className="text-[11.5px] text-faint" data-waveform-absent>
-          No waveform for this file. It may be too large to analyze, or in a format that can't be
-          decoded.
+          {absentLine(serverUdn, objectId)}
         </div>
       ) : (
         <>
