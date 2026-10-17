@@ -34,7 +34,7 @@ import {
 } from "@shared/model";
 import { albumDrKey } from "@shared/model";
 import { useAlbumDr } from "@/lib/audioAnalysis";
-import { FACT_SEP, albumFactsLine } from "@/lib/mediaFacts";
+import { FACT_SEP, albumFactsLine, albumFromTracks } from "@/lib/mediaFacts";
 import { usePlayStats } from "@/lib/playStats";
 import { useBestArt } from "@/lib/bestArt";
 import { queueWrite, tt } from "@/api";
@@ -1168,7 +1168,13 @@ export function LibraryScreen(): React.JSX.Element {
 
   const allTracks = useMemo(() => nodes.filter((n) => !n.isContainer), [nodes]);
   menusLate.current = { albumNode, setSiblings, openVolume, allTracks };
-  const albumArtServer = albumNode ? (albumNode.artUrl ?? allTracks[0]?.artUrl ?? null) : null;
+  // what the album's tracks say where the album is silent (lib/mediaFacts, the one rule the
+  // album's Info reads too): an album opened from another screen arrives with only its title
+  const albumSaid = useMemo(
+    () => (albumNode ? albumFromTracks(albumNode, allTracks) : null),
+    [albumNode, allTracks],
+  );
+  const albumArtServer = albumSaid?.artUrl ?? null;
   // the header's 160px tile (320 on retina) asks the first track's file when
   // the server's art is small (lib/bestArt)
   const firstTrack = allTracks[0];
@@ -1180,13 +1186,8 @@ export function LibraryScreen(): React.JSX.Element {
     true,
     albumNode ? artKeyOf(albumNode) : undefined,
   );
-  const albumArtist = albumNode
-    ? (albumNode.artist ??
-      (allTracks.length > 0 && allTracks.every((t) => t.artist === allTracks[0].artist)
-        ? allTracks[0].artist
-        : allTracks.length > 0
-          ? "Various artists"
-          : null))
+  const albumArtist = albumSaid
+    ? (albumSaid.artist ?? (allTracks.length > 0 ? "Various artists" : null))
     : null;
   const albumInQueue = allTracks.length > 0 && allTracks.every(trackQueued);
   // Format and size come from the tracks' <res> (Asset describes them; the

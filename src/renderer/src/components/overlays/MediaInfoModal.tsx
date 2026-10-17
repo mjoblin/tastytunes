@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import {
   AudioLines,
   Copy,
@@ -37,6 +37,7 @@ import {
   FACT_SEP,
   albumFactsLine,
   albumFormatChips,
+  albumFromTracks,
   formatChips,
   trackFactsLine,
 } from "@/lib/mediaFacts";
@@ -131,9 +132,25 @@ function MediaInfoBody({
 }): React.JSX.Element {
   const setMediaInfo = useStore((s) => s.setMediaInfo);
   const close = (): void => setMediaInfo(null);
-  const { node, tracks, serverName, serverUdn, note, artist, stream, serverProfile } = target;
+  const {
+    node: given,
+    tracks,
+    serverName,
+    serverUdn,
+    note,
+    artist,
+    stream,
+    serverProfile,
+  } = target;
   const placeCount = target.discTrackCount ?? null;
-  const kind = kindOf(node);
+  const kind = kindOf(given);
+  // an album shows what its tracks say where it is silent, as the Library header does
+  // (lib/mediaFacts); Copy as JSON, the album's DR key and its sweep keep the node as it was
+  // given, as the header's do
+  const node = useMemo(
+    () => (kind === "album" && tracks ? albumFromTracks(given, tracks) : given),
+    [kind, given, tracks],
+  );
   const [copied, setCopied] = useState(false);
   // the list it was opened from, for the ‹ › (lib/infoSteps); tracks only
   const infoList = useStore((s) => s.mediaInfoList);
@@ -160,7 +177,7 @@ function MediaInfoBody({
   const minHeight = session != null && hold?.session === session ? hold.h : undefined;
 
   const copy = (): void => {
-    const payload = tracks && tracks.length > 0 ? { node, tracks } : node;
+    const payload = tracks && tracks.length > 0 ? { node: given, tracks } : given;
     void navigator.clipboard.writeText(JSON.stringify(payload, null, 2)).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
@@ -191,9 +208,9 @@ function MediaInfoBody({
       : null;
   const waveformsOn = useStore((s) => s.settings.waveforms);
   const albumDrMap = useAlbumDr();
-  const albumEntry = kind === "album" ? (albumDrMap[albumDrKey(node)] ?? null) : null;
+  const albumEntry = kind === "album" ? (albumDrMap[albumDrKey(given)] ?? null) : null;
   const progress = useStore((s) => s.analysisProgress);
-  const sweeping = kind === "album" && progress?.key === albumDrKey(node);
+  const sweeping = kind === "album" && progress?.key === albumDrKey(given);
   const [trackDrs, setTrackDrs] = useState<number[] | null>(null);
   const [coverageNonce, setCoverageNonce] = useState(0);
   useEffect(() => {
@@ -222,7 +239,7 @@ function MediaInfoBody({
       : null;
   const runAlbumAnalysis = (): void => {
     if (!udn) return;
-    void analyzeAlbum(node, udn, []).then(() => setCoverageNonce((n) => n + 1));
+    void analyzeAlbum(given, udn, []).then(() => setCoverageNonce((n) => n + 1));
   };
   const headerDr = kind === "track" ? trackDr : kind === "album" ? albumDr : null;
   // NO LOUDNESS CHIP in this header (0.12.0, his call: seven chips wrapped to a second row): a

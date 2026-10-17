@@ -40,6 +40,26 @@ export function albumFactsLine(
     .join(FACT_SEP);
 }
 
+/** An album as its tracks describe it, where the album itself is silent: its cover (the first
+ *  track's that has one), its artist and its year (when every track agrees). An album opened
+ *  from another screen lands as a bare node with only its title (LibraryScreen's arrival), and
+ *  a server may leave a container's art off; the Library header and the album's Info both read
+ *  this, so neither shows less than the other (0.12.0, his Only God Was Above Us: the header
+ *  had the cover, Info had none). Returns the album itself when the tracks add nothing. */
+export function albumFromTracks(album: MediaNode, tracks: readonly MediaNode[]): MediaNode {
+  if (tracks.length === 0) return album;
+  const agreed = <T>(of: (t: MediaNode) => T | null | undefined): T | null => {
+    const first = of(tracks[0]);
+    return first != null && tracks.every((t) => of(t) === first) ? first : null;
+  };
+  const artUrl = album.artUrl ?? tracks.find((t) => t.artUrl)?.artUrl ?? null;
+  const artist = album.artist ?? agreed((t) => t.albumArtist ?? t.artist);
+  const year = album.year ?? agreed((t) => t.year);
+  return artUrl === album.artUrl && artist === album.artist && year === album.year
+    ? album
+    : { ...album, artUrl, artist, year };
+}
+
 /** A track's collection facts — its duration. */
 export function trackFactsLine(node: Pick<MediaNode, "durationSecs">): string {
   return node.durationSecs ? fmtTime(node.durationSecs) : "";

@@ -4,9 +4,10 @@
  * Library header and the Info modal can never drift.
  */
 import { describe, expect, it } from "vitest";
-import type { MediaFormat } from "@shared/model";
+import type { MediaFormat, MediaNode } from "@shared/model";
 import {
   albumFactsLine,
+  albumFromTracks,
   albumFormatChips,
   FACT_SEP,
   formatChips,
@@ -85,5 +86,58 @@ describe("albumFormatChips: the album's headline, split into chips", () => {
     ];
     expect(albumFormatChips(mixed)).toEqual(["mixed formats"]);
     expect(albumFormatChips([{}, {}])).toEqual([]);
+  });
+});
+
+describe("albumFromTracks: what an album's tracks say when the album is silent", () => {
+  const node = (over: Partial<MediaNode>): MediaNode => ({
+    id: "x",
+    parentId: null,
+    title: "Only God Was Above Us",
+    upnpClass: "object.container.album.musicAlbum",
+    isContainer: true,
+    artUrl: null,
+    artist: null,
+    album: null,
+    year: null,
+    trackNumber: null,
+    durationSecs: null,
+    ...over,
+  });
+  const track = (over: Partial<MediaNode>): MediaNode =>
+    node({ upnpClass: "object.item.audioItem.musicTrack", isContainer: false, ...over });
+
+  it("fills a bare album's cover, artist and year from its tracks", () => {
+    const tracks = [
+      track({ id: "1", artUrl: null, artist: "Vampire Weekend", year: "2024" }),
+      track({ id: "2", artUrl: "http://s/cover.jpg", artist: "Vampire Weekend", year: "2024" }),
+    ];
+    const filled = albumFromTracks(node({}), tracks);
+    expect(filled.artUrl).toBe("http://s/cover.jpg");
+    expect(filled.artist).toBe("Vampire Weekend");
+    expect(filled.year).toBe("2024");
+  });
+
+  it("names an artist or a year only when every track agrees, the album artist first", () => {
+    const mixed = [
+      track({ id: "1", artist: "A", albumArtist: "Various Artists", year: "1999" }),
+      track({ id: "2", artist: "B", albumArtist: "Various Artists", year: "2001" }),
+    ];
+    const filled = albumFromTracks(node({}), mixed);
+    expect(filled.artist).toBe("Various Artists");
+    expect(filled.year).toBeNull();
+    expect(
+      albumFromTracks(node({}), [track({ artist: "A" }), track({ artist: "B" })]).artist,
+    ).toBeNull();
+  });
+
+  it("keeps what the album says, and returns the album itself when the tracks add nothing", () => {
+    const album = node({ artUrl: "http://s/a.jpg", artist: "Own", year: "1980" });
+    expect(
+      albumFromTracks(album, [track({ artUrl: "http://s/t.jpg", artist: "T", year: "1" })]),
+    ).toBe(album);
+    const bare = node({});
+    expect(albumFromTracks(bare, [])).toBe(bare);
+    expect(albumFromTracks(bare, [track({})])).toBe(bare);
   });
 });
