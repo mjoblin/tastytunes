@@ -27,7 +27,12 @@ import { PanelResizeHandle } from "@/components/controls/PanelResizeHandle";
 import { Segmented } from "@/components/controls/Segmented";
 import { HeaderChip } from "@/components/chrome/Chrome";
 import { Section, sourceRows, streamRows, trackFormatRows } from "@/components/media/InfoRows";
-import { Waveform, usePlayingDr, usePlayingLoudness } from "@/components/media/Waveform";
+import {
+  Waveform,
+  usePlayingDr,
+  usePlayingLoudness,
+  usePlayingMeasured,
+} from "@/components/media/Waveform";
 import { audioAnalysisKey } from "@shared/model";
 import { FACT_SEP } from "@/lib/mediaFacts";
 
@@ -60,6 +65,7 @@ const TRACK_SETTLE_MS = 2000;
 export function ArtistPanel({ className }: { className?: string }): React.JSX.Element {
   const playingDr = usePlayingDr();
   const playingLoud = usePlayingLoudness();
+  const playingMeasured = usePlayingMeasured();
   const playState = useStore((s) => s.playState);
   const nowPlaying = useStore((s) => s.nowPlaying);
   const setArtistOpen = useStore((s) => s.setArtistOpen);
@@ -450,7 +456,7 @@ export function ArtistPanel({ className }: { className?: string }): React.JSX.El
             />
             <Section
               title="Format"
-              rows={trackFormatRows(streamTarget.node, playingDr, playingLoud)}
+              rows={trackFormatRows(streamTarget.node, playingDr, playingLoud, playingMeasured)}
             />
             <Section
               title="Source"

@@ -51,6 +51,10 @@ import {
   type MediaFormat,
   type MediaNode,
   type ResumeRun,
+  KEY_CONFIDENCE_FLOOR,
+  TEMPO_CONFIDENCE_FLOOR,
+  keyName,
+  tempoBpm,
 } from "./model";
 
 // ------------------------------------------------------------------ fixtures
@@ -717,5 +721,24 @@ describe("integrateLoudnessHistograms: one loudness over several tracks' blocks"
   it("is null with no blocks at all", () => {
     expect(integrateLoudnessHistograms([])).toBeNull();
     expect(integrateLoudnessHistograms([new Array<number>(LOUD_HIST_BINS).fill(0)])).toBeNull();
+  });
+});
+
+describe("measured facts: tempo and key, said once (0.12.0)", () => {
+  it("rounds a confident tempo and withholds a guess", () => {
+    expect(tempoBpm({ bpm: 80.6, confidence: 0.6 })).toBe(81);
+    expect(tempoBpm({ bpm: 120, confidence: TEMPO_CONFIDENCE_FLOOR })).toBe(120);
+    expect(tempoBpm({ bpm: 120, confidence: 0.2 })).toBeNull();
+    expect(tempoBpm({ bpm: 0, confidence: 0.9 })).toBeNull();
+    expect(tempoBpm(null)).toBeNull();
+  });
+
+  it("names a confident key with its sharps and flats, and withholds a guess", () => {
+    expect(keyName({ tonic: 9, mode: "minor", confidence: 0.5 })).toBe("A minor");
+    expect(keyName({ tonic: 1, mode: "minor", confidence: 0.5 })).toBe("C♯ minor");
+    expect(keyName({ tonic: 3, mode: "major", confidence: KEY_CONFIDENCE_FLOOR })).toBe("E♭ major");
+    expect(keyName({ tonic: 9, mode: "minor", confidence: 0.1 })).toBeNull();
+    expect(keyName({ tonic: 12, mode: "major", confidence: 0.9 })).toBeNull();
+    expect(keyName(undefined)).toBeNull();
   });
 });

@@ -9,7 +9,7 @@ import { onsetsFromStored, onsetsToStored } from "@/lib/onsets";
 import { FEATURES_VERSION, featuresFromStored, featuresToStored } from "@/lib/features";
 import { measureOffThread } from "@/lib/measureClient";
 import type { Measured } from "@/lib/measure";
-import { audioAnalysisKey, fmtBytes, type AudioAnalysis } from "@shared/model";
+import { audioAnalysisKey, fmtBytes, keyName, tempoBpm, type AudioAnalysis } from "@shared/model";
 import { AudioLines } from "lucide-react";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { Lru } from "@/lib/lru";
@@ -869,7 +869,11 @@ export function usePlayingDr(): number | null {
 }
 
 /** The playing track's loudness facts for the Info surfaces (null until measured). */
-export function usePlayingLoudness(): { lufs: number | null; truePeakDb: number | null } | null {
+export function usePlayingLoudness(): {
+  lufs: number | null;
+  truePeakDb: number | null;
+  lra: number | null;
+} | null {
   const enabled = useStore((s) => s.settings.waveforms);
   const ref = usePlayingFileRef();
   const analysis = usePeaks(
@@ -878,8 +882,21 @@ export function usePlayingLoudness(): { lufs: number | null; truePeakDb: number 
     ref?.contentKey ?? null,
   );
   return analysis != null && analysis !== "loading" && analysis.lufs != null
-    ? { lufs: analysis.lufs, truePeakDb: analysis.truePeakDb }
+    ? { lufs: analysis.lufs, truePeakDb: analysis.truePeakDb, lra: analysis.lra }
     : null;
+}
+
+/** The playing track's tempo and key for the Stream tab's rows (shared/model's words). */
+export function usePlayingMeasured(): { tempo: number | null; key: string | null } | null {
+  const enabled = useStore((s) => s.settings.waveforms);
+  const ref = usePlayingFileRef();
+  const analysis = usePeaks(
+    enabled ? (ref?.serverUdn ?? null) : null,
+    ref?.objectId ?? null,
+    ref?.contentKey ?? null,
+  );
+  const f = analysis != null && analysis !== "loading" ? analysis.features : null;
+  return f ? { tempo: tempoBpm(f.beats), key: keyName(f.key) } : null;
 }
 
 /** Now Playing's format row wears the playing track's DR — at the END of the

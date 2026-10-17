@@ -17,6 +17,8 @@ import {
   audioAnalysisKey,
   discGroups,
   fmtBytes,
+  keyName,
+  tempoBpm,
   trackArtists,
   trackPosition,
   type MediaInfoTarget,
@@ -176,7 +178,16 @@ function MediaInfoBody({
       : null;
   const trackLoud =
     known.state != null && known.state !== "loading" && known.state !== "unknown"
-      ? { lufs: known.state.lufs ?? null, truePeakDb: known.state.truePeakDb ?? null }
+      ? {
+          lufs: known.state.lufs ?? null,
+          truePeakDb: known.state.truePeakDb ?? null,
+          lra: known.state.lra ?? null,
+        }
+      : null;
+  // tempo and key, above their confidence floors (shared/model)
+  const trackMeasured =
+    known.state != null && known.state !== "loading" && known.state !== "unknown"
+      ? { tempo: tempoBpm(known.state.features?.beats), key: keyName(known.state.features?.key) }
       : null;
   const waveformsOn = useStore((s) => s.settings.waveforms);
   const albumDrMap = useAlbumDr();
@@ -264,7 +275,8 @@ function MediaInfoBody({
         : [["Name", node.title], ...(node.artist ? ([["Artist", node.artist]] as Row[]) : [])];
 
   // ---- format (a track's own; an album's summed from its tracks)
-  const trackFormat: Row[] = kind === "track" ? trackFormatRows(node, trackDr, trackLoud) : [];
+  const trackFormat: Row[] =
+    kind === "track" ? trackFormatRows(node, trackDr, trackLoud, trackMeasured) : [];
   const albumRows: Row[] = (() => {
     if (kind !== "album" || !tracks || tracks.length === 0) return [];
     const secs = tracks.reduce((a, t) => a + (t.durationSecs ?? 0), 0);

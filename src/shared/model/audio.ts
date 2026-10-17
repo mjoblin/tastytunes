@@ -175,3 +175,32 @@ export function audioAnalysisKey(
 export function albumDrKey(a: Pick<MediaNode, "title" | "artist">): string {
   return `${a.artist ?? ""}|${a.title}`.toLowerCase();
 }
+
+/**
+ * MEASURED FACTS, SAID ONCE (0.12.0, the first of the measured facts): a track's tempo and key as
+ * the app says them, and only above the confidence the analysis earned (a beat grid below 0.35 is
+ * a guess, and a key below 0.3). The Info rows, the agents' tools and the scenes' readouts read
+ * these; the scenes' own spellings stay theirs (Terminal's plain "C#m").
+ */
+export const TEMPO_CONFIDENCE_FLOOR = 0.35;
+export const KEY_CONFIDENCE_FLOOR = 0.3;
+/** The pitch classes as a key is named, C = 0, with the usual sharps and flats. */
+export const PITCH_NAMES = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
+
+/** A track's tempo in whole beats per minute, or null below its confidence floor. */
+export function tempoBpm(
+  beats: { bpm: number; confidence: number } | null | undefined,
+): number | null {
+  return beats && beats.confidence >= TEMPO_CONFIDENCE_FLOOR && beats.bpm > 0
+    ? Math.round(beats.bpm)
+    : null;
+}
+
+/** A track's key by name ("A minor"), or null below its confidence floor. */
+export function keyName(
+  key: { tonic: number; mode: "major" | "minor"; confidence: number } | null | undefined,
+): string | null {
+  return key && key.confidence >= KEY_CONFIDENCE_FLOOR && PITCH_NAMES[key.tonic] != null
+    ? `${PITCH_NAMES[key.tonic]} ${key.mode}`
+    : null;
+}
