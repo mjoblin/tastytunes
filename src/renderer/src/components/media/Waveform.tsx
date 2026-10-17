@@ -667,10 +667,32 @@ async function peekAnalysis(
   contentKey: string,
 ): Promise<Analysis | null | undefined> {
   const hit = cache.get(`${serverUdn}|${objectId}`);
-  if (hit) return hit;
-  const stored = await tt.audioAnalysisGet(contentKey);
-  return stored ? fromStored(stored) : undefined;
+  const found = hit
+    ? await hit
+    : await tt.audioAnalysisGet(contentKey).then((s) => (s ? fromStored(s) : undefined));
+  peeked.set(`${serverUdn}|${objectId}`, { found });
+  return found;
 }
+
+// What a peek last found, by location, read synchronously: a step in the Info modal looks the
+// next track's analysis up BEFORE it swaps (warmAnalysis, through lib/infoSteps), so the new track
+// renders whole in one frame instead of passing through "loading" (0.12.0: the waveform, the DR
+// and LUFS chips and the Format rows flashed out and back on every step)
+const peeked = new Lru<string, { found: Analysis | null | undefined }>(200);
+
+/** Looks a track's analysis up ahead of showing it (memory, then disk; never a decode). */
+export async function warmAnalysis(
+  serverUdn: string,
+  objectId: string,
+  contentKey: string,
+): Promise<void> {
+  await peekAnalysis(serverUdn, objectId, contentKey);
+}
+
+const knownNow = (serverUdn: string | null, objectId: string): KnownAnalysis | null => {
+  const hit = serverUdn ? peeked.get(`${serverUdn}|${objectId}`) : undefined;
+  return hit ? (hit.found === undefined ? "unknown" : hit.found) : null;
+};
 
 export type KnownAnalysis = Analysis | null | "loading" | "unknown";
 
@@ -687,11 +709,14 @@ export function useKnownAnalysis(
   contentKey: string,
 ): { available: boolean; state: KnownAnalysis; analyze(): void } {
   const enabled = useStore((s) => s.settings.waveforms);
-  const [state, setState] = useState<KnownAnalysis>("loading");
+  const [state, setState] = useState<KnownAnalysis>(
+    () => knownNow(serverUdn, objectId) ?? "loading",
+  );
   useEffect(() => {
     if (!enabled || !serverUdn) return;
     let stale = false;
-    setState("loading");
+    // what a step already looked up shows at once; the peek still runs, to catch a newer answer
+    setState(knownNow(serverUdn, objectId) ?? "loading");
     void peekAnalysis(serverUdn, objectId, contentKey).then((a) => {
       if (!stale) setState(a === undefined ? "unknown" : a);
     });

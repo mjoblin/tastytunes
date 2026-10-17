@@ -10,6 +10,7 @@
 import {
   albumTracksOf,
   artistSummary,
+  discTrackCount,
   trackArtists,
   trackInAlbumOf,
   type MediaInfoQuery,
@@ -97,11 +98,14 @@ export async function lookupMediaInfo(
         ...profile,
       };
     }
+    // a track's "of 12" on its disc, for the Info modal's header (discTrackCount)
+    const count = node.isContainer ? null : discTrackCount(node, pool);
     return {
       node,
       tracks: node.isContainer ? albumTracksOf(node, pool) : undefined,
       serverName: pool.serverName,
       ...profile,
+      ...(count != null ? { discTrackCount: count } : {}),
     };
   };
   // 1. identity

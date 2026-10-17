@@ -27,6 +27,15 @@ export interface InfoList {
 
 let sessions = 0;
 
+// What a step looks up before it shows, so the next track appears whole (its analysis, its
+// cover): the modal registers it (MediaInfoModal), and a slow answer stops holding a step after
+// WARM_CAP_MS (the step then shows, and the rest lands as it would have)
+let warm: ((target: MediaInfoTarget) => Promise<unknown>) | null = null;
+const WARM_CAP_MS = 400;
+export function setInfoWarmer(fn: (target: MediaInfoTarget) => Promise<unknown>): void {
+  warm = fn;
+}
+
 export function newInfoList(entries: readonly InfoEntry[], index: number): InfoList {
   return { entries, index, session: ++sessions, cache: new Map() };
 }
@@ -34,7 +43,16 @@ export function newInfoList(entries: readonly InfoEntry[], index: number): InfoL
 function resolve(list: InfoList, i: number): Promise<MediaInfoTarget> {
   let p = list.cache.get(i);
   if (!p) {
-    p = Promise.resolve().then(() => list.entries[i]());
+    p = Promise.resolve()
+      .then(() => list.entries[i]())
+      .then(async (target) => {
+        if (warm)
+          await Promise.race([
+            warm(target).catch(() => {}),
+            new Promise((r) => setTimeout(r, WARM_CAP_MS)),
+          ]);
+        return target;
+      });
     list.cache.set(i, p);
     // a failed lookup is asked again on the next step that wants it
     p.catch(() => list.cache.delete(i));

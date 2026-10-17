@@ -333,6 +333,23 @@ export function albumOfTrack(
 }
 
 /**
+ * How many tracks share a track's disc on its album, as the index knows it: the "of 12" of the
+ * Info modal's "track 4 of 12" (0.12.0). A track's number counts within its disc, so the count
+ * does too; an album with no disc numbers counts whole. Null when the index holds no album.
+ */
+export function discTrackCount(
+  track: Pick<MediaNode, "album" | "artist" | "artists" | "albumArtist" | "discNumber">,
+  pool: { albums: MediaNode[]; tracks: ReadonlyArray<MediaNode> },
+): number | null {
+  const album = albumOfTrack(track, pool);
+  if (!album) return null;
+  const tracks = albumTracksOf(album, pool);
+  const disc = track.discNumber ?? null;
+  const onDisc = disc == null ? tracks : tracks.filter((t) => (t.discNumber ?? 1) === disc);
+  return onDisc.length > 0 ? onDisc.length : null;
+}
+
+/**
  * Order an album's tracks: by (disc, position) when that key is UNIQUE across
  * the list, otherwise the LISTING ORDER stands. minidlna (rig-verified
  * 2026-08-16) sends no disc number and per-disc track numbers — a two-disc
@@ -631,6 +648,8 @@ export interface MediaInfoTarget {
   stream?: StreamInfo;
   /** What the index learned about the server this came from — how it was crawled and every reconciliation that changed something. */
   serverProfile?: MediaServerProfile;
+  /** For a track: how many tracks share its disc on its album (discTrackCount), when known. */
+  discTrackCount?: number;
 }
 
 /**

@@ -30,7 +30,13 @@ import { useStore } from "@/store";
 import { ModalShell } from "@/components/chrome/Overlay";
 import { CloseButton } from "@/components/controls/CloseButton";
 import { ArtImage } from "@/components/media/ArtImage";
-import { DrChip, InfoWaveform, useKnownAnalysis, LufsChip } from "@/components/media/Waveform";
+import {
+  DrChip,
+  InfoWaveform,
+  useKnownAnalysis,
+  LufsChip,
+  warmAnalysis,
+} from "@/components/media/Waveform";
 import {
   FACT_SEP,
   albumFactsLine,
@@ -49,7 +55,7 @@ import {
 import { cx, fmtTime } from "@/lib/format";
 import { openRefInLibrary } from "@/lib/mediaActions";
 import { fromNode } from "@/lib/mediaRef";
-import { canStep, stepInfo } from "@/lib/infoSteps";
+import { canStep, setInfoWarmer, stepInfo } from "@/lib/infoSteps";
 import { isAlbumClass, isArtistClass } from "@/lib/media";
 
 /**
@@ -63,6 +69,37 @@ import { isAlbumClass, isArtistClass } from "@/lib/media";
  * — never a second reading. "Copy as JSON" hands the raw node(s) to the
  * clipboard for bug reports.
  */
+
+// A step shows the next track whole (lib/infoSteps): its analysis looked up and its cover
+// decoded before the swap
+setInfoWarmer(async ({ node, serverUdn }) => {
+  const udn = node.serverUdn ?? serverUdn ?? null;
+  const art = artSrc(node.artUrl, 128);
+  await Promise.all([
+    udn && !node.isContainer ? warmAnalysis(udn, node.id, audioAnalysisKey(node)) : null,
+    art ? preloadImage(art) : null,
+  ]);
+});
+
+function preloadImage(src: string): Promise<void> {
+  const img = new Image();
+  img.src = src;
+  return img.decode().catch(() => {});
+}
+
+/** A track's place in the header's small label, as Now Playing says it: "track 4 of 12", with
+ *  its disc on an album of several; plain "track" without a number (0.12.0, his ask once the
+ *  ‹ › made moving between tracks easy). */
+function trackLabel(node: MediaNode, count: number | null): string {
+  const pos = trackPosition(node);
+  if (pos == null) return "track";
+  const disc =
+    node.discNumber != null &&
+    ((node.discCount ?? 0) > 1 || (node.discCount == null && node.discNumber > 1))
+      ? `${FACT_SEP}disc ${node.discNumber}${node.discCount ? ` of ${node.discCount}` : ""}`
+      : "";
+  return `track ${pos}${count ? ` of ${count}` : ""}${disc}`;
+}
 
 function kindOf(node: MediaNode): "album" | "artist" | "folder" | "track" {
   if (!node.isContainer) return "track";
@@ -99,6 +136,7 @@ function MediaInfoBody({
   const setMediaInfo = useStore((s) => s.setMediaInfo);
   const close = (): void => setMediaInfo(null);
   const { node, tracks, serverName, serverUdn, note, artist, stream, serverProfile } = target;
+  const placeCount = target.discTrackCount ?? null;
   const kind = kindOf(node);
   const [copied, setCopied] = useState(false);
   // the list it was opened from, for the ‹ › (lib/infoSteps); tracks only
@@ -374,7 +412,9 @@ function MediaInfoBody({
           <div className="microlabel">
             {stream
               ? `now playing · ${kind === "track" && /audioBroadcast/.test(node.upnpClass) ? "radio" : kind}`
-              : kind}
+              : kind === "track"
+                ? trackLabel(node, placeCount)
+                : kind}
           </div>
           <div className="font-display font-bold text-[20px] tracking-tight leading-tight mt-1 break-words">
             {node.title}

@@ -5,7 +5,7 @@ import type {
   MediaQueueAction,
   MediaServerInfo,
 } from "@shared/model";
-import { artistSummary } from "@shared/model";
+import { artistSummary, discTrackCount } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { openInfoInList } from "@/lib/infoSteps";
@@ -207,10 +207,13 @@ export function LibraryPopovers(
                 n.isContainer && isArtistClass(n.upnpClass) && pool
                   ? artistSummary(n.title, pool)
                   : undefined;
+              // a track's "of 12" on its disc, for the header (discTrackCount)
+              const count = !n.isContainer && pool ? discTrackCount(n, pool) : null;
               return {
                 node: artist && !n.artUrl && artist.artUrl ? { ...n, artUrl: artist.artUrl } : n,
                 tracks: artist ? undefined : tracksForInfo(n),
                 artist,
+                ...(count != null ? { discTrackCount: count } : {}),
                 serverName: n.serverName ?? server?.name ?? null,
                 serverUdn: nodeUdn(n),
                 // what the index learned about this server (the modal's Indexed line + notes)
