@@ -23,6 +23,7 @@ import {
   refToPlaylistItem,
   type MediaRef,
 } from "@/lib/mediaRef";
+import { refSiblings } from "@/lib/infoSteps";
 import { openArtistInLibrary, saveRefToPreset } from "@/lib/mediaActions";
 import {
   albumMenuItems,
@@ -468,7 +469,11 @@ export function SearchScreen(): React.JSX.Element {
               ...caps,
               openInLibrary: () => playNode(node), // container click contract: open
             })
-          : trackMenuItems(ref, caps);
+          : trackMenuItems(ref, {
+              ...caps,
+              // Info steps through the library's results as shown (lib/infoSteps)
+              infoList: refSiblings(libShown, node, (n) => fromNode(n)),
+            });
     setRowMenu({ title: node.title, ...at, items });
   };
 

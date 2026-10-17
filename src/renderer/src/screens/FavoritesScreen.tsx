@@ -26,6 +26,7 @@ import { ContainerCard } from "@/components/library/LibraryCards";
 import { AddToPlaylistPanel } from "@/components/overlays/AddToPlaylistPanel";
 import { PresetPicker } from "@/components/library/LibraryMenus";
 import { fromFavorite, fromNode, refToPlaylistItem } from "@/lib/mediaRef";
+import { refSiblings } from "@/lib/infoSteps";
 import { recordPresetSaved, openRefInLibrary } from "@/lib/mediaActions";
 import { NameLine } from "@/components/media/NameLine";
 import { albumMenuItems, trackMenuItems } from "@/lib/mediaMenus";
@@ -601,6 +602,8 @@ export function FavoritesScreen(): React.JSX.Element {
                   ...shared,
                   playNow: () => playTrack(menu.fav, null),
                   openInLibrary: () => void openRefInLibrary(fromFavorite(menu.fav)),
+                  // Info steps through the favorite tracks as shown (lib/infoSteps)
+                  infoList: refSiblings(tracks, menu.fav, fromFavorite),
                 });
           })()}
         />

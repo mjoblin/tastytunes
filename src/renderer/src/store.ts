@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { contentPlayId, PLAYING_SETTLE_MS } from "@/lib/playingEntry";
+import type { InfoList } from "@/lib/infoSteps";
 import type { MenuCommand, PushMessage, Snapshot } from "@shared/ipc";
 import type {
   AppSettings,
@@ -298,6 +299,8 @@ interface TTState {
   infoOpen: boolean;
   /** The media Info modal's subject; null = closed. */
   mediaInfo: MediaInfoTarget | null;
+  /** The list the Info modal was opened from, for its ‹ › (lib/infoSteps); null for a lone Info. */
+  mediaInfoList: InfoList | null;
   paletteOpen: boolean;
   displayMode: boolean;
   /** Lyrics drawer on the Now Playing screen (ephemeral, not persisted). */
@@ -448,7 +451,9 @@ interface TTState {
   adoptFrames: (frames: FrameEntry[]) => void;
   setShortcutsOpen: (open: boolean) => void;
   setInfoOpen: (open: boolean) => void;
-  setMediaInfo: (target: MediaInfoTarget | null) => void;
+  /** Opens (or closes, with null) the Info modal; a list makes it step (lib/infoSteps), and any
+   *  open without one is a lone Info. */
+  setMediaInfo: (target: MediaInfoTarget | null, list?: InfoList | null) => void;
   /** EXPERIMENT (0.7 exploration): the album-DR map (albumDrKey -> AlbumDr),
    *  loaded lazily by useAlbumDr and updated in place by Analyze audio. */
   albumDr: Record<string, AlbumDr>;
@@ -604,6 +609,7 @@ export const useStore = create<TTState>((set, get) => ({
   shortcutsOpen: false,
   infoOpen: false,
   mediaInfo: null,
+  mediaInfoList: null,
   paletteOpen: false,
   displayMode: false,
   lyricsOpen: false,
@@ -775,7 +781,8 @@ export const useStore = create<TTState>((set, get) => ({
   adoptFrames: (frames) => set({ frames: frames.slice(-FRAME_RING_SIZE) }),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   setInfoOpen: (infoOpen) => set({ infoOpen }),
-  setMediaInfo: (mediaInfo) => set({ mediaInfo }),
+  setMediaInfo: (mediaInfo, list) =>
+    set({ mediaInfo, mediaInfoList: mediaInfo ? (list ?? null) : null }),
   albumDr: {},
   setAlbumDr: (albumDr) => set({ albumDr }),
   setAlbumDrEntry: (key, entry) => set((s) => ({ albumDr: { ...s.albumDr, [key]: entry } })),

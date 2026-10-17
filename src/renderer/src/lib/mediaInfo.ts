@@ -4,30 +4,11 @@ import { tt } from "@/api";
 import { useStore } from "@/store";
 import type { MediaRef } from "@/lib/mediaRef";
 import { deriveNowPlaying, queuePlace } from "@/lib/format";
+import { newInfoList, replaceInfoInList } from "@/lib/infoSteps";
 
-/**
- * Open the Info modal for something a LIST holds only a ref to (a queue row,
- * favorite, playlist item, recent, search hit). Main looks the node up —
- * index by id, then by content, then live BrowseMetadata — and the modal
- * shows everything found; when nothing is found it still opens on what the
- * list knew, with a caveat, rather than doing nothing. Stations have no
- * library node and are left to their own surfaces.
- */
-export async function openInfoForRef(ref: MediaRef): Promise<void> {
-  if (ref.kind === "station") return;
-  const query: MediaInfoQuery = {
-    kind: ref.kind,
-    title: ref.title,
-    artist: ref.artist,
-    album: ref.album,
-    serverUdn: ref.serverUdn,
-    objectId: ref.objectId,
-  };
-  const set = useStore.getState().setMediaInfo;
-  // open at once on what we have — the lookup usually lands within a beat and
-  // simply enriches it (a click that does nothing while a live browse runs
-  // reads as a dead menu item)
-  const stub: MediaNode = {
+/** What a list knew about a ref, as an Info node: shown at once while the library is asked. */
+function refStub(ref: MediaRef): MediaNode {
+  return {
     id: ref.objectId ?? "",
     parentId: null,
     title: ref.title,
@@ -47,23 +28,71 @@ export async function openInfoForRef(ref: MediaRef): Promise<void> {
     ...(ref.serverUdn ? { serverUdn: ref.serverUdn } : {}),
     ...(ref.serverName ? { serverName: ref.serverName } : {}),
   };
-  set({ node: stub, serverName: ref.serverName ?? null, note: "Looking it up in the library…" });
+}
+
+/** A ref's Info target: the library's node when main finds it (index by id, then by content,
+ *  then live BrowseMetadata), else what the list knew, with a caveat. */
+export async function lookupRefInfo(ref: MediaRef, stub = refStub(ref)): Promise<MediaInfoTarget> {
+  const query: MediaInfoQuery = {
+    kind: ref.kind === "station" ? "track" : ref.kind,
+    title: ref.title,
+    artist: ref.artist,
+    album: ref.album,
+    serverUdn: ref.serverUdn,
+    objectId: ref.objectId,
+  };
   let found = null;
   try {
     found = await tt.mediaNodeInfo(query, "show");
   } catch {
     found = null;
   }
+  return found
+    ? { ...found, serverName: found.serverName ?? ref.serverName ?? null }
+    : {
+        node: stub,
+        serverName: ref.serverName ?? null,
+        note: "Not found in any library index. Showing what this list knows.",
+      };
+}
+
+/**
+ * Open the Info modal for something a LIST holds only a ref to (a queue row,
+ * favorite, playlist item, recent, search hit). Main looks the node up and the
+ * modal shows everything found; when nothing is found it still opens on what
+ * the list knew, with a caveat, rather than doing nothing. Stations have no
+ * library node and are left to their own surfaces. Given the list the ref sits
+ * in (its refs and the ref's place), the modal steps through it (lib/infoSteps).
+ */
+export async function openInfoForRef(
+  ref: MediaRef,
+  siblings?: { refs: readonly MediaRef[]; index: number },
+): Promise<void> {
+  if (ref.kind === "station") return;
+  const set = useStore.getState().setMediaInfo;
+  // open at once on what we have — the lookup usually lands within a beat and
+  // simply enriches it (a click that does nothing while a live browse runs
+  // reads as a dead menu item)
+  const stub = refStub(ref);
+  const opening: MediaInfoTarget = {
+    node: stub,
+    serverName: ref.serverName ?? null,
+    note: "Looking it up in the library…",
+  };
+  const list =
+    siblings && siblings.refs.length > 1 && siblings.refs[siblings.index] != null
+      ? newInfoList(
+          siblings.refs.map((r) => () => lookupRefInfo(r)),
+          siblings.index,
+        )
+      : null;
+  set(opening, list);
+  const found = await lookupRefInfo(ref, stub);
   // only replace if the user hasn't closed (or opened something else) meanwhile
   const current = useStore.getState().mediaInfo;
   if (!current || current.node !== stub) return;
-  if (found) set({ ...found, serverName: found.serverName ?? ref.serverName ?? null });
-  else
-    set({
-      node: stub,
-      serverName: ref.serverName ?? null,
-      note: "Not found in any library index. Showing what this list knows.",
-    });
+  if (list) replaceInfoInList(list, found);
+  else set(found);
 }
 
 /**

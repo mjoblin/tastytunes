@@ -1,7 +1,14 @@
-import type { MediaIndexPools, MediaNode, MediaQueueAction, MediaServerInfo } from "@shared/model";
+import type {
+  MediaIndexPools,
+  MediaInfoTarget,
+  MediaNode,
+  MediaQueueAction,
+  MediaServerInfo,
+} from "@shared/model";
 import { artistSummary } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
+import { openInfoInList } from "@/lib/infoSteps";
 import { isAlbumClass, isArtistClass } from "@/lib/media";
 import { ItemMenu, PresetPicker } from "@/components/library/LibraryMenus";
 import { RowMenu } from "@/components/media/RowMenu";
@@ -190,25 +197,37 @@ export function LibraryPopovers(
           }}
           onInfo={() => {
             setMenu(null);
+            const targetFor = (n: MediaNode): MediaInfoTarget => {
+              // an artist's page is summed by NAME from the index (albums,
+              // credits) — the lens's merged rows and the server's person
+              // entities alike; without a pool the modal shows what it has
+              const pool =
+                lensPools?.find((g) => g.udn === (n.serverUdn ?? server?.udn)) ?? lensPools?.[0];
+              const artist =
+                n.isContainer && isArtistClass(n.upnpClass) && pool
+                  ? artistSummary(n.title, pool)
+                  : undefined;
+              return {
+                node: artist && !n.artUrl && artist.artUrl ? { ...n, artUrl: artist.artUrl } : n,
+                tracks: artist ? undefined : tracksForInfo(n),
+                artist,
+                serverName: n.serverName ?? server?.name ?? null,
+                serverUdn: nodeUdn(n),
+                // what the index learned about this server (the modal's Indexed line + notes)
+                ...(pool?.profile ? { serverProfile: pool.profile } : {}),
+              };
+            };
             const n = menu.node;
-            // an artist's page is summed by NAME from the index (albums,
-            // credits) — the lens's merged rows and the server's person
-            // entities alike; without a pool the modal shows what it has
-            const pool =
-              lensPools?.find((g) => g.udn === (n.serverUdn ?? server?.udn)) ?? lensPools?.[0];
-            const artist =
-              n.isContainer && isArtistClass(n.upnpClass) && pool
-                ? artistSummary(n.title, pool)
-                : undefined;
-            setMediaInfo({
-              node: artist && !n.artUrl && artist.artUrl ? { ...n, artUrl: artist.artUrl } : n,
-              tracks: artist ? undefined : tracksForInfo(n),
-              artist,
-              serverName: n.serverName ?? server?.name ?? null,
-              serverUdn: nodeUdn(n),
-              // what the index learned about this server (the modal's Indexed line + notes)
-              ...(pool?.profile ? { serverProfile: pool.profile } : {}),
-            });
+            // a track's Info steps through the rows it was opened from (lib/infoSteps)
+            const list = menu.list;
+            const at = !n.isContainer && list ? list.indexOf(n) : -1;
+            if (list && at >= 0 && list.length > 1)
+              openInfoInList(
+                targetFor(n),
+                list.map((t) => () => targetFor(t)),
+                at,
+              );
+            else setMediaInfo(targetFor(n));
           }}
           onAddToPlaylist={
             !menu.node.isContainer || isAlbumClass(menu.node.upnpClass)

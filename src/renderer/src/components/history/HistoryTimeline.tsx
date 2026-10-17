@@ -24,6 +24,7 @@ import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { useWindowedList } from "@/hooks/useWindowedList";
 import { useArtByKeys } from "@/lib/artByKey";
 import { fromPlayEvent } from "@/lib/mediaRef";
+import { refSiblings } from "@/lib/infoSteps";
 import { openRefInLibrary, playRefNow } from "@/lib/mediaActions";
 import { trackMenuItems, type MediaMenuItem } from "@/lib/mediaMenus";
 import { cx, fmtCount, fmtDuration, fmtTime, matchesFilter } from "@/lib/format";
@@ -545,6 +546,12 @@ export function HistoryTimeline({
       items: trackMenuItems(ref, {
         playNow: () => void playRefNow(ref),
         openInLibrary: () => void openRefInLibrary(ref),
+        // Info steps through the plays as shown, the open sessions' (lib/infoSteps)
+        infoList: refSiblings(
+          items.flatMap((it) => (it.kind === "play" && it.event.kind === "play" ? [it.event] : [])),
+          ev,
+          fromPlayEvent,
+        ),
       }),
     });
   };

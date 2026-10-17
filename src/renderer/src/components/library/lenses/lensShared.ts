@@ -15,7 +15,8 @@ export interface LensActions {
   openAlbum(node: MediaNode): void;
   playTrack(node: MediaNode, el: HTMLElement | null): void;
   playContainer(node: MediaNode, el: HTMLElement | null): void;
-  openMenu(node: MediaNode, e: React.MouseEvent): void;
+  /** A track's ⋯; `list` is the rows it sits in, so its Info steps through them. */
+  openMenu(node: MediaNode, e: React.MouseEvent, list?: MediaNode[]): void;
   menuNodeId: string | null;
   heartNode(node: MediaNode): void;
   /** Batch hearts: silent per-item toggles behind ONE aggregate undo entry. */

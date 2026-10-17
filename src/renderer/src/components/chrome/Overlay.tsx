@@ -123,6 +123,7 @@ export function ModalShell({
   onClose,
   escapeCloses = false,
   className,
+  style,
   label,
   children,
 }: {
@@ -134,6 +135,8 @@ export function ModalShell({
   label?: string;
   /** Panel geometry — width, max-*, flex, padding. The surface is the shell's. */
   className?: string;
+  /** Geometry that is measured rather than fixed (the Info modal's held height). */
+  style?: React.CSSProperties;
   children: React.ReactNode;
 }): React.JSX.Element | null {
   const { mounted, faded } = useFadePresence(open);
@@ -185,6 +188,7 @@ export function ModalShell({
             "rounded-2xl bg-panel ring-1 ring-edge2 shadow-2xl outline-none",
             className,
           )}
+          style={style}
           onClick={(e) => e.stopPropagation()}
         >
           {open ? children : shown.current}

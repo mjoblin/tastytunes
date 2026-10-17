@@ -1420,7 +1420,14 @@ export function LibraryScreen(): React.JSX.Element {
     node: MediaNode,
     siblings: MediaNode[],
     ti: number,
-    opts: { showArt: boolean; note?: string | null; artistLabel?: string | null; links: boolean },
+    opts: {
+      showArt: boolean;
+      note?: string | null;
+      artistLabel?: string | null;
+      links: boolean;
+      /** The list Info steps through when it isn't `siblings` (an album's every disc). */
+      infoList?: MediaNode[];
+    },
   ): React.JSX.Element => (
     <TrackRow
       key={node.id}
@@ -1437,7 +1444,7 @@ export function LibraryScreen(): React.JSX.Element {
       selEnd={!(ti < siblings.length - 1 && selTracks.has(siblings[ti + 1].id))}
       onRowClick={(e) => trackRowClick(node, e)}
       onNavDrag={(e) => startTrackDrag(node, e)}
-      onMenu={(e) => openMenu(node, e)}
+      onMenu={(e) => openMenu(node, e, opts.infoList ?? siblings)}
       note={opts.note}
       artistLabel={opts.artistLabel}
       onAlbumLink={
@@ -1980,6 +1987,8 @@ export function LibraryScreen(): React.JSX.Element {
                 <div className="divide-y divide-edge/50">
                   {g.tracks.map((node, ti) =>
                     trackRow(node, g.tracks, ti, {
+                      // Info steps through the whole album, every disc
+                      infoList: tracks,
                       showArt: !albumNode,
                       note: albumNoteFor(node),
                       artistLabel: albumNode

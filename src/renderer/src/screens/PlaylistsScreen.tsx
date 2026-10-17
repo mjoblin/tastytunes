@@ -55,6 +55,7 @@ import { AddToPlaylistPanel } from "@/components/overlays/AddToPlaylistPanel";
 import { toggleFavorite } from "@/lib/favorites";
 import { activatePlaylist } from "@/lib/playlists";
 import { fromPlaylistItem } from "@/lib/mediaRef";
+import { refSiblings } from "@/lib/infoSteps";
 import { saveRefToPreset, openRefInLibrary, playRefNow, queueRef } from "@/lib/mediaActions";
 import { NameLine } from "@/components/media/NameLine";
 import { trackMenuItems } from "@/lib/mediaMenus";
@@ -347,6 +348,10 @@ export function PlaylistsScreen(): React.JSX.Element {
             saveToPreset: () =>
               setPresetFor({ item: trackMenu.item, x: trackMenu.x, y: trackMenu.y }),
             openInLibrary: () => void openRefInLibrary(fromPlaylistItem(trackMenu.item)),
+            // Info steps through the playlist (lib/infoSteps)
+            infoList: selected
+              ? refSiblings(selected.items, trackMenu.item, fromPlaylistItem)
+              : undefined,
             extra: [{ label: "Remove from playlist", run: () => removeItem(trackMenu.index) }],
           })}
         />

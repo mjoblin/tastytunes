@@ -92,7 +92,13 @@ export function useLibraryMenus(d: {
     if (track.artist) d.openArtistPage(track.artist);
   };
 
-  const [menu, setMenu] = useState<{ node: MediaNode; x: number; y: number } | null>(null);
+  // `list`: the rows the node sits in, for Info's ‹ › (lib/infoSteps)
+  const [menu, setMenu] = useState<{
+    node: MediaNode;
+    x: number;
+    y: number;
+    list?: MediaNode[];
+  } | null>(null);
   // The Info modal wants an album's tracks summed: the browsed album's own
   // listing when the node IS the open album; otherwise the lens's index
   // (same server, same title, album artist / performers, and — when twin
@@ -112,10 +118,10 @@ export function useLibraryMenus(d: {
   } | null>(null);
   // The card/row a popover belongs to holds its hover treatment while open.
   const menuNodeId = menu?.node.id ?? presetPicker?.node.id ?? null;
-  const openMenu = (node: MediaNode, e: React.MouseEvent): void => {
+  const openMenu = (node: MediaNode, e: React.MouseEvent, list?: MediaNode[]): void => {
     e.preventDefault();
     e.stopPropagation();
-    setMenu({ node, x: e.clientX, y: e.clientY });
+    setMenu({ node, x: e.clientX, y: e.clientY, list });
   };
 
   /** ⋯-menu garnish on a box set's open album: the volume walk as named

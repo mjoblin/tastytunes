@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { tt } from "@/api";
+import { stepInfo } from "@/lib/infoSteps";
 import { useStore, type Screen } from "@/store";
 import { SCREENS, IS_MAC } from "@/lib/screens";
 
@@ -154,6 +155,18 @@ export function useShortcuts(opts?: { transportOnly?: boolean }): void {
         }
         if (e.key === "`") {
           s.setDiagnosticsOpen(!s.diagnosticsOpen);
+          return;
+        }
+        // A MODAL TAKES THE KEYBOARD (0.12.0, found building the Info modal's ‹ ›): with Info,
+        // the shortcuts overlay or About open, every key below acted on the room underneath
+        // (← and → skipped the streamer's track, ↑ and ↓ moved its volume, a letter switched
+        // the screen behind the modal, a digit recalled a preset). Escape, ? and ` above keep
+        // working; ← and → step the Info modal through the list it was opened from.
+        if (s.mediaInfo || s.shortcutsOpen || s.infoOpen) {
+          if (s.mediaInfo && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+            e.preventDefault();
+            void stepInfo(e.key === "ArrowLeft" ? -1 : 1);
+          }
           return;
         }
 

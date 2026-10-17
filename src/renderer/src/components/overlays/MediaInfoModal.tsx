@@ -1,5 +1,15 @@
 import { useEffect, useState, useRef } from "react";
-import { AudioLines, Copy, Check, Disc3, Library, Music2, User } from "lucide-react";
+import {
+  AudioLines,
+  Copy,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Disc3,
+  Library,
+  Music2,
+  User,
+} from "lucide-react";
 import {
   albumComposers,
   albumDrKey,
@@ -7,7 +17,6 @@ import {
   audioAnalysisKey,
   discGroups,
   fmtBytes,
-  formatLabel,
   trackArtists,
   trackPosition,
   type MediaInfoTarget,
@@ -37,9 +46,10 @@ import {
   type Row,
   loudnessLine,
 } from "@/components/media/InfoRows";
-import { fmtTime } from "@/lib/format";
+import { cx, fmtTime } from "@/lib/format";
 import { openRefInLibrary } from "@/lib/mediaActions";
 import { fromNode } from "@/lib/mediaRef";
+import { canStep, stepInfo } from "@/lib/infoSteps";
 import { isAlbumClass, isArtistClass } from "@/lib/media";
 
 /**
@@ -91,6 +101,29 @@ function MediaInfoBody({
   const { node, tracks, serverName, serverUdn, note, artist, stream, serverProfile } = target;
   const kind = kindOf(node);
   const [copied, setCopied] = useState(false);
+  // the list it was opened from, for the ‹ › (lib/infoSteps); tracks only
+  const infoList = useStore((s) => s.mediaInfoList);
+  const stepping = infoList != null && kind === "track";
+  const session = stepping ? infoList.session : null;
+  // THE HEIGHT HOLDS WHILE STEPPING: the modal sizes to its content and sits centered, so a
+  // shorter track would move the arrows out from under the pointer; for one open of a list it
+  // only ever grows (the body takes the slack, the footer stays put), whenever its content grows
+  // (a step, or a waveform landing after one)
+  const footRef = useRef<HTMLDivElement | null>(null);
+  const [hold, setHold] = useState<{ session: number; h: number } | null>(null);
+  useEffect(() => {
+    const panel = footRef.current?.parentElement;
+    if (session == null || !open || !panel) return;
+    const grow = (): void => {
+      const h = Math.ceil(panel.getBoundingClientRect().height);
+      setHold((cur) => (cur && cur.session === session && cur.h >= h ? cur : { session, h }));
+    };
+    grow();
+    const ro = new ResizeObserver(grow);
+    ro.observe(panel);
+    return () => ro.disconnect();
+  }, [session, open]);
+  const minHeight = session != null && hold?.session === session ? hold.h : undefined;
 
   const copy = (): void => {
     const payload = tracks && tracks.length > 0 ? { node, tracks } : node;
@@ -303,6 +336,16 @@ function MediaInfoBody({
   // listing can be explained here instead of guessed at.
   const source: Row[] = sourceRows(node, serverName ?? null, serverProfile);
 
+  // the caveat under the header: the target's own, else what is missing for an album or an
+  // artist (they sat in the footer until the ‹ › took its place)
+  const noteLine =
+    note ??
+    (kind === "album" && (!tracks || tracks.length === 0)
+      ? "Open the album to see its tracks summed here."
+      : kind === "artist" && !artist
+        ? "No library index covers this artist yet."
+        : null);
+
   const Icon = kind === "track" ? Music2 : kind === "artist" ? User : Disc3;
   const subtitle =
     kind === "track"
@@ -317,6 +360,7 @@ function MediaInfoBody({
       onClose={close}
       label="Info"
       className="w-[640px] max-w-[92vw] max-h-[86vh] flex flex-col p-6"
+      style={minHeight != null ? { minHeight } : undefined}
     >
       <div className="flex items-start gap-5" data-media-info>
         <div className="h-[128px] w-[128px] shrink-0 rounded-xl overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center">
@@ -414,12 +458,12 @@ function MediaInfoBody({
         </div>
       )}
 
-      {note && (
+      {noteLine && (
         <div className="mt-3 text-[11.5px] text-faint" data-info-note>
-          {note}
+          {noteLine}
         </div>
       )}
-      <div className="mt-5 min-h-0 overflow-y-auto pr-1 space-y-5" data-info-body>
+      <div className="mt-5 min-h-0 flex-1 overflow-y-auto pr-1 space-y-5" data-info-body>
         {stream_.length > 0 && <Section title="Stream" rows={stream_} />}
         <Section title="Identity" rows={identity} />
         {artistRows.length > 0 && <Section title="Library" rows={artistRows} />}
@@ -428,14 +472,16 @@ function MediaInfoBody({
         <Section title="Source" rows={source} />
       </div>
 
-      <div className="mt-5 flex items-center justify-between">
-        <span className="text-[11.5px] text-faint">
-          {kind === "album" && (!tracks || tracks.length === 0)
-            ? "Open the album to see its tracks summed here."
-            : kind === "artist" && !artist
-              ? "No library index covers this artist yet."
-              : (formatLabel(node.format) ?? "")}
-        </span>
+      <div ref={footRef} className="mt-5 flex items-center justify-between">
+        {/* ‹ › where Music puts them; the format line that sat here repeated the chips above */}
+        <div className="flex items-center gap-1.5" data-info-steps>
+          {stepping && (
+            <>
+              <StepButton dir={-1} enabled={canStep(infoList, -1)} />
+              <StepButton dir={1} enabled={canStep(infoList, 1)} />
+            </>
+          )}
+        </div>
         <button
           onClick={copy}
           data-info-copy
@@ -446,5 +492,28 @@ function MediaInfoBody({
         </button>
       </div>
     </ModalShell>
+  );
+}
+
+/** One of the footer's ‹ ›: dim and inert at either end of the list, never wrapping. */
+function StepButton({ dir, enabled }: { dir: -1 | 1; enabled: boolean }): React.JSX.Element {
+  const label = dir < 0 ? "Previous track" : "Next track";
+  return (
+    <button
+      onClick={() => void stepInfo(dir)}
+      disabled={!enabled}
+      data-info-step={dir < 0 ? "prev" : "next"}
+      data-tip={enabled ? `${label} (${dir < 0 ? "←" : "→"})` : undefined}
+      aria-label={label}
+      // no transition inside the frosted shell (S11): the shell fades as a whole
+      className={cx(
+        "tip-top flex h-8 w-8 items-center justify-center rounded-full ring-1 ring-edge bg-raised/70",
+        enabled
+          ? "text-dim hover:text-ink hover:ring-edge2"
+          : "text-faint opacity-40 cursor-default",
+      )}
+    >
+      {dir < 0 ? <ChevronLeft size={15} /> : <ChevronRight size={15} />}
+    </button>
   );
 }
