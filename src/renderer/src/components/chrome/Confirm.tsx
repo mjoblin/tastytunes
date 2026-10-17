@@ -9,19 +9,34 @@ import { cx } from "@/lib/format";
  * hover transitions, which a ModalShell forbids (on the software path every
  * animated hover frame re-runs the backdrop blur).
  */
+/**
+ * THE ACTION ROW of every popover that commits something (0.12.0, his call: the preset volume
+ * and the repair popovers had a lone button and no Cancel, unlike Delete): Cancel and the verb,
+ * right-aligned, Cancel focused so Enter and Escape are both safe. The verb is red when it
+ * destroys (alert, the default) and gold when it doesn't; `start` holds a different action on
+ * the left (the preset volume's Clear); `busy` holds the verb while it runs.
+ */
 export function ConfirmActions({
   verb,
   onCancel,
   onConfirm,
   modal = false,
+  tone = "alert",
+  start,
+  busy = false,
 }: {
   verb: string;
   onCancel(): void;
   onConfirm(): void;
   modal?: boolean;
+  tone?: "alert" | "gold";
+  start?: React.ReactNode;
+  busy?: boolean;
 }): React.JSX.Element {
   return (
-    <div className="mt-2.5 flex items-center justify-end gap-1.5">
+    <div className="mt-2.5 flex items-center gap-1.5" data-confirm-actions>
+      {start}
+      <span className="flex-1" />
       <button
         autoFocus
         onClick={onCancel}
@@ -34,8 +49,10 @@ export function ConfirmActions({
       </button>
       <button
         onClick={onConfirm}
+        disabled={busy}
         className={cx(
-          "px-2.5 py-1 rounded-lg text-[12px] bg-alert text-white hover:brightness-110",
+          "px-2.5 py-1 rounded-lg text-[12px] hover:brightness-110 disabled:opacity-50",
+          tone === "gold" ? "bg-gold text-bg font-medium" : "bg-alert text-white",
           !modal && "motion-safe:active:scale-95 transition-all",
         )}
       >

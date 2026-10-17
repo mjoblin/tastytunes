@@ -53,7 +53,7 @@ import { ArtImage } from "@/components/media/ArtImage";
 import { PopoverChrome } from "@/hooks/usePopover";
 import { POPOVER_CARD, PopoverCard } from "@/components/chrome/Overlay";
 import { HeaderChip, ScreenTitle, GAP_BETWEEN, GAP_WITHIN } from "@/components/chrome/Chrome";
-import { useConfirmPopover } from "@/components/chrome/Confirm";
+import { ConfirmActions, useConfirmPopover } from "@/components/chrome/Confirm";
 import { artSrc } from "@/lib/artSrc";
 import { RowMenu } from "@/components/media/RowMenu";
 import { openArtistInLibrary, openRefInLibrary } from "@/lib/mediaActions";
@@ -516,28 +516,30 @@ function usePresetVolumePopover(
           TastyTunes sets this volume whenever it starts this preset. Recalls from the official app
           or the streamer itself aren't affected.
         </span>
-        <span className="flex items-center gap-2 mt-2.5">
-          <button
-            onClick={() => {
-              onVolume(level);
-              setAt(null);
-            }}
-            className="text-[12px] px-3 py-1 rounded-lg bg-gold text-bg font-medium hover:brightness-110 motion-safe:active:scale-95 transition-all"
-          >
-            Set {level}%
-          </button>
-          {volume != null && (
-            <button
-              onClick={() => {
-                onVolume(null);
-                setAt(null);
-              }}
-              className="text-[12px] px-2.5 py-1 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-alert hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
-            >
-              Clear
-            </button>
-          )}
-        </span>
+        {/* the app's action row (Confirm): Cancel and Set right-aligned; Clear, which removes
+            the preset's volume rather than setting one, apart on the left */}
+        <ConfirmActions
+          tone="gold"
+          verb={`Set ${level}%`}
+          onCancel={() => setAt(null)}
+          onConfirm={() => {
+            onVolume(level);
+            setAt(null);
+          }}
+          start={
+            volume != null && (
+              <button
+                onClick={() => {
+                  onVolume(null);
+                  setAt(null);
+                }}
+                className="px-2.5 py-1 rounded-lg text-[12px] ring-1 ring-edge bg-panel/70 text-dim hover:text-alert hover:ring-edge2 hover:bg-raised/70 transition-colors"
+              >
+                Clear
+              </button>
+            )
+          }
+        />
       </PopoverCard>
     </PopoverStop>
   );
@@ -1140,16 +1142,13 @@ function RepairChip({
                   <span className="block text-[11px] text-dim truncate">
                     {[match.artist, match.serverName].filter(Boolean).join(" · ")}
                   </span>
-                  <button
-                    disabled={saving}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void repair();
-                    }}
-                    className="mt-2.5 text-[12px] px-3 py-1 rounded-lg bg-gold text-bg font-medium hover:brightness-110 motion-safe:active:scale-95 transition-all disabled:opacity-50"
-                  >
-                    {saving ? "Repairing…" : `Save to slot ${preset.id}`}
-                  </button>
+                  <ConfirmActions
+                    tone="gold"
+                    busy={saving}
+                    verb={saving ? "Repairing…" : `Save to slot ${preset.id}`}
+                    onCancel={() => setOpen(false)}
+                    onConfirm={() => void repair()}
+                  />
                 </>
               )}
             </span>
