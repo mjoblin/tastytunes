@@ -51,7 +51,7 @@ import { FilterInput } from "@/components/controls/FilterInput";
 import { Slider } from "@/components/controls/Slider";
 import { ArtImage } from "@/components/media/ArtImage";
 import { PopoverChrome } from "@/hooks/usePopover";
-import { POPOVER_CARD } from "@/components/chrome/Overlay";
+import { POPOVER_CARD, PopoverCard } from "@/components/chrome/Overlay";
 import { HeaderChip, ScreenTitle, GAP_BETWEEN, GAP_WITHIN } from "@/components/chrome/Chrome";
 import { useConfirmPopover } from "@/components/chrome/Confirm";
 import { artSrc } from "@/lib/artSrc";
@@ -451,119 +451,113 @@ interface PresetVolumeProps {
 }
 
 /**
- * Feature 10's popover, shared by rows and cards. Renders through a portal:
- * the sortable cards/rows carry a dnd-kit transform, which makes them
- * containing blocks — a position:fixed child would anchor to the CARD, not
- * the viewport. Saving is EXPLICIT: the slider only stages a draft and the
- * gold Set button commits, so clicking away always means "never mind".
+ * Feature 10's popover, shared by rows and cards: the app's anchored popover (PopoverCard), so it
+ * opens where it was asked for, under the gold speaker or where the ⋯ menu stood, and is clamped
+ * on screen (it opened right-aligned and upward before 0.12.0, landing over the next card). Saving
+ * is EXPLICIT: the slider only stages a draft and the gold Set button commits, so clicking away
+ * always means "never mind".
  */
 function usePresetVolumePopover(
   volume: number | null,
   onVolume: (level: number | null) => void,
 ): {
   open: boolean;
-  /** Opens under an element: a click's, or the ⋯ that offered "Preset volume…". */
+  /** Opens under an element (the gold speaker). */
   openFrom(e: { currentTarget: Element; stopPropagation(): void }): void;
+  /** Opens at a point (where the ⋯ menu that offered "Preset volume…" stood). */
+  openAt(at: { x: number; y: number }): void;
   popover: React.ReactNode;
 } {
-  const [open, setOpen] = useState(false);
-  const [anchor, setAnchor] = useState<{ left: number; top?: number; bottom?: number } | null>(
-    null,
-  );
+  const [at, setAt] = useState<{ x: number; y: number } | null>(null);
   const [draft, setDraft] = useState<number | null>(null);
   const zoneVolume = useStore((s) => s.zoneState?.volume_percent);
+  const open = at != null;
 
   const level = draft ?? volume ?? zoneVolume ?? 25;
-  const WIDTH = 240; // keep in step with w-60 below
 
+  const openAt = (point: { x: number; y: number }): void => {
+    setDraft(null);
+    setAt(point);
+  };
   const openFrom = (e: { currentTarget: Element; stopPropagation(): void }): void => {
     e.stopPropagation();
     if (open) {
-      setOpen(false);
+      setAt(null);
       return;
     }
     const r = e.currentTarget.getBoundingClientRect();
-    const above = r.top > 300; // flip below the anchor when there's no headroom
-    setAnchor({
-      // right-aligned to the anchor, clamped into the viewport so the
-      // left-most card's popover slides right instead of clipping
-      left: Math.min(Math.max(8, r.right - WIDTH), window.innerWidth - WIDTH - 8),
-      ...(above ? { bottom: window.innerHeight - r.top + 8 } : { top: r.bottom + 8 }),
-    });
-    setDraft(null);
-    setOpen(true);
+    openAt({ x: r.left, y: r.bottom + 6 });
   };
 
-  const popover =
-    open && anchor
-      ? createPortal(
-          <>
-            <PopoverChrome onClose={() => setOpen(false)} />
-            <span
-              data-preset-volume-overlay
-              className="fixed inset-0 z-30 cursor-default"
-              onClick={(e) => {
-                e.stopPropagation();
-                setOpen(false);
+  const popover = at && (
+    // the card or row underneath recalls on click: the popover's clicks (and its click-away)
+    // stop here, never reaching it through React's tree
+    <PopoverStop>
+      <PopoverCard
+        at={at}
+        width="w-60"
+        onClose={() => setAt(null)}
+        className="p-3"
+        data-preset-volume-popover
+      >
+        <span className="flex items-center justify-between mb-2">
+          <span className="microlabel text-dim">preset volume</span>
+          <span className="font-mono text-[11px] text-gold tabular-nums">{level}%</span>
+        </span>
+        <Slider
+          value={level / 100}
+          onScrub={(v) => setDraft(Math.round(v * 100))}
+          onCancel={() => setDraft(null)}
+          onCommit={(v) => setDraft(Math.round(v * 100))}
+          ariaLabel="Preset volume"
+          thumb="always"
+        />
+        <span className="block text-[11px] text-faint leading-relaxed mt-2.5">
+          TastyTunes sets this volume whenever it starts this preset. Recalls from the official app
+          or the streamer itself aren't affected.
+        </span>
+        <span className="flex items-center gap-2 mt-2.5">
+          <button
+            onClick={() => {
+              onVolume(level);
+              setAt(null);
+            }}
+            className="text-[12px] px-3 py-1 rounded-lg bg-gold text-bg font-medium hover:brightness-110 motion-safe:active:scale-95 transition-all"
+          >
+            Set {level}%
+          </button>
+          {volume != null && (
+            <button
+              onClick={() => {
+                onVolume(null);
+                setAt(null);
               }}
-            />
-            <span
-              data-preset-volume-popover
-              style={anchor}
-              className={cx("fixed z-40 w-60 p-3 block cursor-default", POPOVER_CARD)}
-              onClick={(e) => e.stopPropagation()}
-              onPointerDown={(e) => e.stopPropagation()}
+              className="text-[12px] px-2.5 py-1 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-alert hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
             >
-              <span className="flex items-center justify-between mb-2">
-                <span className="microlabel text-dim">preset volume</span>
-                <span className="font-mono text-[11px] text-gold tabular-nums">{level}%</span>
-              </span>
-              <Slider
-                value={level / 100}
-                onScrub={(v) => setDraft(Math.round(v * 100))}
-                onCancel={() => setDraft(null)}
-                onCommit={(v) => setDraft(Math.round(v * 100))}
-                ariaLabel="Preset volume"
-                thumb="always"
-              />
-              <span className="block text-[11px] text-faint leading-relaxed mt-2.5">
-                TastyTunes sets this volume whenever it starts this preset. Recalls from the
-                official app or the streamer itself aren't affected.
-              </span>
-              <span className="flex items-center gap-2 mt-2.5">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onVolume(level);
-                    setOpen(false);
-                  }}
-                  className="text-[12px] px-3 py-1 rounded-lg bg-gold text-bg font-medium hover:brightness-110 motion-safe:active:scale-95 transition-all"
-                >
-                  Set {level}%
-                </button>
-                {volume != null && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onVolume(null);
-                      setOpen(false);
-                    }}
-                    className="text-[12px] px-2.5 py-1 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-alert hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all"
-                  >
-                    Clear
-                  </button>
-                )}
-              </span>
-            </span>
-          </>,
-          document.body,
-        )
-      : null;
+              Clear
+            </button>
+          )}
+        </span>
+      </PopoverCard>
+    </PopoverStop>
+  );
 
-  return { open, openFrom, popover };
+  return { open, openFrom, openAt, popover };
 }
 
-/** Row view of a preset — mirrors the queue row's anatomy. */
+/** Holds a popover's clicks: a preset's row recalls on click, and React carries a portal's events
+ *  up its component tree, so a click inside a popover (or on its click-away backdrop) would
+ *  otherwise recall the preset underneath; pointer-downs would start a card's drag, a right-click
+ *  would reopen the menu. */
+function PopoverStop({ children }: { children: React.ReactNode }): React.JSX.Element {
+  const stop = (e: React.SyntheticEvent): void => e.stopPropagation();
+  return (
+    <span className="contents" onClick={stop} onPointerDown={stop} onContextMenu={stop}>
+      {children}
+    </span>
+  );
+}
+
 /**
  * THE ARTWORK IS THE FINGERPRINT: a media preset's album in the library is the one album whose
  * art URL is the preset's (the streamer keeps no object id worth trusting, Asset re-mints them
@@ -597,21 +591,25 @@ function usePresetMenu(
     startRename(): void;
   },
 ): {
-  btnRef: React.MutableRefObject<HTMLElement | null>;
   open(e: React.MouseEvent): void;
   isOpen: boolean;
   popovers: React.ReactNode;
 } {
   const [at, setAt] = useState<{ x: number; y: number } | null>(null);
-  const btnRef = useRef<HTMLElement | null>(null);
   const confirmDelete = useConfirmPopover();
   const showToast = useStore((s) => s.showToast);
   const name = preset.name ?? `Preset ${preset.id}`;
-  // the ⋯ is the anchor for what the menu opens (a right-click opens it where the pointer is)
-  const anchor = (): { currentTarget: Element; stopPropagation(): void } => ({
-    currentTarget: btnRef.current ?? document.body,
-    stopPropagation: () => {},
-  });
+  // what the menu offers opens where the menu stood (the ⋯ clicked, or the right-click's point),
+  // so a choice turns into its popover in place
+  const [from, setFrom] = useState<{ x: number; y: number } | null>(null);
+  const here = (): { x: number; y: number } => from ?? { x: 0, y: 0 };
+  // A MEDIA PRESET by its class: the Evo calls a library album's preset type "UPnP" (read
+  // 2026-10-17; the mock had "MEDIA"), a station "Radio", an input "Input", and a saved queue is a
+  // "MediaQueue" with a collage of covers, nothing to open
+  const media =
+    /^stream\.media/.test(preset.class ?? "") &&
+    preset.type !== "MediaQueue" &&
+    !(preset.art_urls && preset.art_urls.length > 1);
   const withAlbum = (then: (album: MediaNode) => void): void => {
     void presetAlbum(preset).then((album) => {
       if (album) then(album);
@@ -620,7 +618,7 @@ function usePresetMenu(
   };
   const items = [
     { label: "Play", run: d.onRecall },
-    ...(preset.type === "MEDIA"
+    ...(media
       ? [
           {
             label: "Open in Library",
@@ -637,11 +635,11 @@ function usePresetMenu(
         ]
       : []),
     { label: "Rename…", run: d.startRename },
-    ...(d.canVolume ? [{ label: "Preset volume…", run: () => d.pv.openFrom(anchor()) }] : []),
+    ...(d.canVolume ? [{ label: "Preset volume…", run: () => d.pv.openAt(here()) }] : []),
     {
       label: "Delete preset",
       run: () =>
-        confirmDelete.ask(anchor(), {
+        confirmDelete.askAt(here(), {
           question: `Delete “${name}”?`,
           onConfirm: () => {
             if (preset.id != null) void tt.command({ type: "presetDelete", presetId: preset.id });
@@ -650,19 +648,21 @@ function usePresetMenu(
     },
   ];
   return {
-    btnRef,
     open: (e) => {
       e.preventDefault();
       e.stopPropagation();
       setAt({ x: e.clientX, y: e.clientY });
+      setFrom({ x: e.clientX, y: e.clientY });
     },
     isOpen: at != null,
-    popovers: (
-      <>
-        {at && <RowMenu title={name} at={at} items={items} onClose={() => setAt(null)} />}
-        {confirmDelete.popover}
-      </>
-    ),
+    // rendered only while something is open: a row's grid counts its children (S2's anatomy)
+    popovers:
+      at || confirmDelete.popover ? (
+        <PopoverStop>
+          {at && <RowMenu title={name} at={at} items={items} onClose={() => setAt(null)} />}
+          {confirmDelete.popover}
+        </PopoverStop>
+      ) : null,
   };
 }
 
@@ -713,6 +713,7 @@ function PresetNameEdit({
   );
 }
 
+/** Row view of a preset — mirrors the queue row's anatomy. */
 function PresetRow({
   preset,
   playing,
@@ -806,7 +807,9 @@ function PresetRow({
 
       <span className="inline-flex items-center" onPointerDown={(e) => e.stopPropagation()}>
         {dead && <RepairChip preset={preset} variant="row" onRepaired={() => onRepaired?.()} />}
-        {volume != null ? (
+        {/* a set volume shows as its status (it changes what a recall does); setting one is the
+            ⋯ menu's Preset volume… (0.12.0: the hover speaker went with the menu's arrival) */}
+        {volume != null && (
           <button
             data-tip={`Recalled at ${volume}% volume`}
             aria-label="Preset volume"
@@ -817,27 +820,11 @@ function PresetRow({
             <Volume2 size={11} />
             {volume}%
           </button>
-        ) : canSetVolume ? (
-          <button
-            data-tip="Preset volume"
-            aria-label="Preset volume"
-            onClick={pv.openFrom}
-            data-preset-volume
-            className={cx(
-              "tip-bottom p-1.5 rounded text-faint hover:text-ink transition-all",
-              pv.open ? "opacity-100" : "opacity-0 group-hover:opacity-100",
-            )}
-          >
-            <Volume2 size={13} />
-          </button>
-        ) : null}
+        )}
         {pv.popover}
       </span>
 
       <button
-        ref={(el) => {
-          menu.btnRef.current = el;
-        }}
         aria-label="More actions"
         data-preset-menu
         onPointerDown={(e) => e.stopPropagation()}
@@ -907,8 +894,8 @@ function PresetCard({
       )}
     >
       {/* relative wrapper bounds exactly the art, so the corner chips anchor
-          to the artwork: playing top-left, volume-set bottom-left, hover
-          speaker top-right, the ⋯ bottom-right (the card grammar's corner) */}
+          to the artwork: playing top-left, a set volume's speaker top-right, the ⋯
+          bottom-right (the card grammar's corner) */}
       <div className="relative">
         <button className="relative block w-full cursor-pointer" onClick={onRecall}>
           {/* the art well is a veil lift, never a panel hole — see LibraryCards */}
@@ -974,30 +961,22 @@ function PresetCard({
           invalid, and this one must not also fire the recall */}
         {dead && <RepairChip preset={preset} variant="card" onRepaired={() => onRepaired?.()} />}
 
-        {/* ONE speaker: hover-revealed control normally; when a volume is set it
-          stays visible in gold — presence + color IS the indicator, and the
-          tooltip carries the percentage */}
-        {(canSetVolume || volume != null) && (
+        {/* the gold speaker shows a set volume (presence and color are the status, the tooltip
+          carries the percentage, a click adjusts it); setting one is the ⋯ menu's Preset
+          volume… (0.12.0: the hover-revealed speaker went with the menu's arrival) */}
+        {volume != null && (
           <button
-            data-tip={volume != null ? `Recalled at ${volume}% volume` : "Preset volume"}
+            data-tip={`Recalled at ${volume}% volume`}
             aria-label="Preset volume"
             onClick={pv.openFrom}
             onPointerDown={(e) => e.stopPropagation()}
             data-preset-volume
-            className={cx(
-              "tip-bottom absolute top-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-lg bg-panel/80 ring-1 ring-edge transition-all",
-              volume != null || pv.open
-                ? "opacity-100 text-gold hover:text-ink"
-                : "opacity-0 group-hover:opacity-100 text-dim hover:text-gold",
-            )}
+            className="tip-bottom absolute top-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-lg bg-panel/80 ring-1 ring-edge text-gold hover:text-ink transition-all"
           >
             <Volume2 size={13} />
           </button>
         )}
         <button
-          ref={(el) => {
-            menu.btnRef.current = el;
-          }}
           aria-label="More actions"
           data-preset-menu
           onPointerDown={(e) => e.stopPropagation()}

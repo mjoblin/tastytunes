@@ -401,7 +401,7 @@ function buildDemo(host: string): {
     presets.push({
       id: Number(body.preset),
       name: title,
-      type: "MEDIA",
+      type: "UPnP", // the Evo's own word for a library preset (read 2026-10-17)
       class: "stream.media.upnp",
       state: "OK",
       is_playing: false,

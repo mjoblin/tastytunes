@@ -85,6 +85,11 @@ export function useConfirmPopover(): {
     e: { currentTarget: Element },
     opts: { question: string; verb?: string; onConfirm(): void },
   ): void;
+  /** Open it at a point: where a menu that offered the verb stood. */
+  askAt(
+    at: { x: number; y: number },
+    opts: { question: string; verb?: string; onConfirm(): void },
+  ): void;
   /** Render this once, near the trigger (portaled, so position is free). */
   popover: React.ReactNode;
 } {
@@ -95,14 +100,17 @@ export function useConfirmPopover(): {
     onConfirm(): void;
   } | null>(null);
 
-  const ask: ReturnType<typeof useConfirmPopover>["ask"] = (e, opts) => {
-    const r = e.currentTarget.getBoundingClientRect();
+  const askAt: ReturnType<typeof useConfirmPopover>["askAt"] = (at, opts) => {
     setOpen({
-      at: { x: r.left, y: r.bottom + 6 },
+      at,
       question: opts.question,
       verb: opts.verb ?? "Delete",
       onConfirm: opts.onConfirm,
     });
+  };
+  const ask: ReturnType<typeof useConfirmPopover>["ask"] = (e, opts) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    askAt({ x: r.left, y: r.bottom + 6 }, opts);
   };
 
   const popover = open != null && (
@@ -120,5 +128,5 @@ export function useConfirmPopover(): {
     </PopoverCard>
   );
 
-  return { ask, popover };
+  return { ask, askAt, popover };
 }
