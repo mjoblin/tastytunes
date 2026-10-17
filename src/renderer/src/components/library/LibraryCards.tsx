@@ -1,8 +1,9 @@
 import { useRef } from "react";
-import { Disc3, Folder, Heart, MoreHorizontal, Play } from "lucide-react";
+import { Disc3, Folder, Heart, MoreHorizontal, Play, UserRound } from "lucide-react";
 import { trackPosition, type MediaNode } from "@shared/model";
 import { cx } from "@/lib/format";
 import { isAlbumClass, isArtistClass, isMutedArt } from "@/lib/media";
+import { useArtistPicture } from "@/lib/artistPictures";
 import { RowAction } from "@/components/media/RowAction";
 import { RowHeart } from "@/components/media/RowHeart";
 import { ArtImage } from "@/components/media/ArtImage";
@@ -105,9 +106,12 @@ export function ContainerCard({
   // containers carry the ⋯ (their menu holds only the search-everywhere
   // pivot — see ItemMenu) but never the play chip.
   const album = isAlbumClass(node.upnpClass);
-  const menuable = album || isArtistClass(node.upnpClass);
+  const artist = isArtistClass(node.upnpClass);
+  const menuable = album || artist;
   const muted = isMutedArt(node);
   const subtitle = [node.artist, node.year].filter(Boolean).join(" · ");
+  // an artist takes main's picture (a real server one, a known photo, an album cover)
+  const artistPic = useArtistPicture(artist ? node.title : null);
   return (
     // Preset-card idiom: inset tile, hover grow + lift + glow; the highlight
     // wraps the gray tile so it stays legible over gold/orange covers.
@@ -148,16 +152,19 @@ export function ContainerCard({
             the faceplate, a plateau on paper) */}
         <div className="relative aspect-square w-full rounded-lg overflow-hidden bg-veil flex items-center justify-center">
           <ArtImage
-            src={artSrc(node.artUrl, 240, artKeyOf(node))}
+            src={artistPic ? artSrc(artistPic, 240) : artSrc(node.artUrl, 240, artKeyOf(node))}
             fallbackArt={
               album ? { artist: node.albumArtist ?? node.artist, album: node.title } : undefined
             }
             lazy
             shimmer
+            portraitTop={artist}
             className={cx("h-full w-full object-cover", muted && "opacity-60 saturate-[.6]")}
             fallback={
               album ? (
                 <Disc3 size={34} strokeWidth={1.2} className="text-dim" />
+              ) : artist ? (
+                <UserRound size={34} strokeWidth={1.2} className="text-dim" />
               ) : (
                 <Folder size={34} strokeWidth={1.2} className="text-dim" />
               )
@@ -286,8 +293,10 @@ export function ContainerRow({
   // (theirs holds only the search-everywhere pivot — see ItemMenu). Plain
   // folders stay menu-less: a folder is filing, and none of the verbs apply.
   const album = isAlbumClass(node.upnpClass);
-  const menuable = album || isArtistClass(node.upnpClass);
+  const artist = isArtistClass(node.upnpClass);
+  const menuable = album || artist;
   const muted = isMutedArt(node);
+  const artistPic = useArtistPicture(artist ? node.title : null);
   return (
     <div
       className={cx(
@@ -328,8 +337,8 @@ export function ContainerRow({
         />
       )}
       <MediaArt
-        src={artSrc(node.artUrl, 240, artKeyOf(node))}
-        kind={album ? "album" : isArtistClass(node.upnpClass) ? "artist" : "folder"}
+        src={artistPic ?? artSrc(node.artUrl, 240, artKeyOf(node))}
+        kind={album ? "album" : artist ? "artist" : "folder"}
         className={muted ? "opacity-60 saturate-[.6]" : undefined}
       />
       <div className="min-w-0">

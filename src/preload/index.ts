@@ -1,127 +1,22 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
-import type {
-  AlbumDr,
-  AudioAnalysis,
-  MediaInfoQuery,
-  LookupPurpose,
-  TrackInfoQuery,
-} from "@shared/model";
-import { IPC, type PushMessage, type StreamerCommand, type TastyTunesApi } from "@shared/ipc";
-import {
-  type AppSettings,
-  type LyricsQuery,
-  type MediaQueueAction,
-  type SleepTimer,
-} from "@shared/model";
-import {
-  type ContentRef,
-  type Favorite,
-  type Playlist,
-  type PlaylistItem,
-  type RecentTrack,
-} from "@shared/model";
+import { INVOKE_METHODS, IPC, type PushMessage, type TastyTunesApi } from "@shared/ipc";
 
-const api: TastyTunesApi = {
-  getSnapshot: () => ipcRenderer.invoke(IPC.getSnapshot),
-  albumArt: (artist, album) => ipcRenderer.invoke(IPC.albumArt, artist, album),
-  discover: () => ipcRenderer.invoke(IPC.discover),
-  connect: (host: string) => ipcRenderer.invoke(IPC.connect, host),
-  disconnect: () => ipcRenderer.invoke(IPC.disconnect),
-  demoStart: () => ipcRenderer.invoke(IPC.demoStart),
-  command: (cmd: StreamerCommand) => ipcRenderer.invoke(IPC.command, cmd),
-  openExternal: (url: string) => ipcRenderer.invoke(IPC.openExternal, url),
-  getSettings: () => ipcRenderer.invoke(IPC.getSettings),
-  setSettings: (patch: Partial<AppSettings>) => ipcRenderer.invoke(IPC.setSettings, patch),
-  fetchArt: (url: string) => ipcRenderer.invoke(IPC.fetchArt, url),
-  embeddedArt: (query) => ipcRenderer.invoke(IPC.embeddedArt, query),
-  fetchLyrics: (query: LyricsQuery, force?: boolean) =>
-    ipcRenderer.invoke(IPC.fetchLyrics, query, force),
-  lbValidate: () => ipcRenderer.invoke(IPC.lbValidate),
-  updateDownload: () => ipcRenderer.invoke(IPC.updateDownload),
-  updateInstall: () => ipcRenderer.invoke(IPC.updateInstall),
-  updateCheckNow: () => ipcRenderer.invoke(IPC.updateCheckNow),
-  fetchArtistInfo: (artist: string, force?: boolean) =>
-    ipcRenderer.invoke(IPC.fetchArtistInfo, artist, force),
-  fetchAlbumInfo: (artist: string, album: string, force?: boolean) =>
-    ipcRenderer.invoke(IPC.fetchAlbumInfo, artist, album, force),
-  fetchTrackInfo: (query: TrackInfoQuery, force?: boolean) =>
-    ipcRenderer.invoke(IPC.fetchTrackInfo, query, force),
-  fetchDiscTracks: (releaseId: string, count: number | null, secs: number | null) =>
-    ipcRenderer.invoke(IPC.fetchDiscTracks, releaseId, count, secs),
-  expTrackAudio: (serverUdn: string, objectId: string) =>
-    ipcRenderer.invoke(IPC.expTrackAudio, serverUdn, objectId),
-  audioAnalysisGet: (key: string) => ipcRenderer.invoke(IPC.audioAnalysisGet, key),
-  audioAnalysisPut: (key: string, analysis: AudioAnalysis) =>
-    ipcRenderer.invoke(IPC.audioAnalysisPut, key, analysis),
-  albumDrMap: () => ipcRenderer.invoke(IPC.albumDrMap),
-  albumDrPut: (key: string, entry: AlbumDr) => ipcRenderer.invoke(IPC.albumDrPut, key, entry),
-  audioDrMany: (keys: string[]) => ipcRenderer.invoke(IPC.audioDrMany, keys),
-  audioStatsMany: (keys: string[]) => ipcRenderer.invoke(IPC.audioStatsMany, keys),
-  libraryArtByKeys: (keys: string[]) => ipcRenderer.invoke(IPC.libraryArtByKeys, keys),
-  toggleMini: () => ipcRenderer.invoke(IPC.toggleMini),
-  showMain: (screen?: string) => ipcRenderer.invoke(IPC.showMain, screen),
-  setSleep: (sleep: SleepTimer | null) => ipcRenderer.invoke(IPC.setSleep, sleep),
-  scheduleRunMissed: () => ipcRenderer.invoke(IPC.scheduleRunMissed),
-  scheduleDismissMissed: () => ipcRenderer.invoke(IPC.scheduleDismissMissed),
-  getRecents: () => ipcRenderer.invoke(IPC.getRecents),
-  recentCover: (key: string) => ipcRenderer.invoke(IPC.recentCover, key),
-  clearRecents: () => ipcRenderer.invoke(IPC.clearRecents),
-  recentsRestore: (list: RecentTrack[]) => ipcRenderer.invoke(IPC.recentsRestore, list),
-  favoriteAdd: (fav: Favorite) => ipcRenderer.invoke(IPC.favoriteAdd, fav),
-  favoriteRemove: (key: string) => ipcRenderer.invoke(IPC.favoriteRemove, key),
-  favoriteUpdate: (key: string, patch: Partial<Favorite>) =>
-    ipcRenderer.invoke(IPC.favoriteUpdate, key, patch),
-  playlistCreate: (name: string, items: PlaylistItem[]) =>
-    ipcRenderer.invoke(IPC.playlistCreate, name, items),
-  playlistRename: (id: string, name: string) => ipcRenderer.invoke(IPC.playlistRename, id, name),
-  playlistDelete: (id: string) => ipcRenderer.invoke(IPC.playlistDelete, id),
-  playlistRestore: (playlist: Playlist) => ipcRenderer.invoke(IPC.playlistRestore, playlist),
-  queueRestore: (ref: ContentRef, position: number) =>
-    ipcRenderer.invoke(IPC.queueRestore, ref, position),
-  playlistSetItems: (id: string, items: PlaylistItem[]) =>
-    ipcRenderer.invoke(IPC.playlistSetItems, id, items),
-  playlistAppend: (id: string, items: PlaylistItem[]) =>
-    ipcRenderer.invoke(IPC.playlistAppend, id, items),
-  playlistActivate: (id: string) => ipcRenderer.invoke(IPC.playlistActivate, id),
-  playlistActivateCancel: () => ipcRenderer.invoke(IPC.playlistActivateCancel),
-  listeningStats: () => ipcRenderer.invoke(IPC.listeningStats),
-  listeningClear: () => ipcRenderer.invoke(IPC.listeningClear),
-  listeningExport: () => ipcRenderer.invoke(IPC.listeningExport),
-  statsCardSave: (png: Uint8Array, name: string) =>
-    ipcRenderer.invoke(IPC.statsCardSave, png, name),
-  playStats: () => ipcRenderer.invoke(IPC.playStats),
-  listeningYears: () => ipcRenderer.invoke(IPC.listeningYears),
-  listeningStreamers: () => ipcRenderer.invoke(IPC.listeningStreamers),
-  listeningYear: (year: number) => ipcRenderer.invoke(IPC.listeningYear, year),
-  undoLabelSet: (label) => ipcRenderer.invoke(IPC.undoLabelSet, label),
-  lookupCacheStats: () => ipcRenderer.invoke(IPC.lookupCacheStats),
-  clearLookupCaches: () => ipcRenderer.invoke(IPC.clearLookupCaches),
-  artThumbsStats: () => ipcRenderer.invoke(IPC.artThumbsStats),
-  clearArtThumbs: () => ipcRenderer.invoke(IPC.clearArtThumbs),
-  mediaServers: () => ipcRenderer.invoke(IPC.mediaServers),
-  mediaBrowse: (serverUdn: string, objectId: string | null, titlePath: string[]) =>
-    ipcRenderer.invoke(IPC.mediaBrowse, serverUdn, objectId, titlePath),
-  mediaSearch: (serverUdn: string, query: string) =>
-    ipcRenderer.invoke(IPC.mediaSearch, serverUdn, query),
-  mediaSearchAll: (query: string) => ipcRenderer.invoke(IPC.mediaSearchAll, query),
-  mediaIndexPools: () => ipcRenderer.invoke(IPC.mediaIndexPools),
-  mediaQueueAdd: (
-    serverUdn: string,
-    objectId: string,
-    action: MediaQueueAction,
-    playFromId?: string,
-    confirmLarge?: boolean,
-  ) => ipcRenderer.invoke(IPC.mediaQueueAdd, serverUdn, objectId, action, playFromId, confirmLarge),
-  mediaPresetSave: (serverUdn: string, objectId: string, slot: number) =>
-    ipcRenderer.invoke(IPC.mediaPresetSave, serverUdn, objectId, slot),
-  contentResolve: (ref: ContentRef) => ipcRenderer.invoke(IPC.contentResolve, ref),
-  mediaNodeInfo: (query: MediaInfoQuery, purpose: LookupPurpose) =>
-    ipcRenderer.invoke(IPC.mediaNodeInfo, query, purpose),
-  mediaIndexRebuild: (serverUdn: string) => ipcRenderer.invoke(IPC.mediaIndexRebuild, serverUdn),
+/**
+ * THE BRIDGE, GENERATED FROM THE CHANNEL TABLE (0.11.0 sweep; it was 70 hand-written
+ * lines, one per method, each a chance to pass the wrong channel or drop an argument).
+ * Every invoked method forwards its arguments to its own channel (@shared/ipc
+ * INVOKE_METHODS, checked against TastyTunesApi at compile time); the push stream and the
+ * one-way display-mode report are the two written out.
+ */
+const invokers = Object.fromEntries(
+  INVOKE_METHODS.map((m) => [m, (...args: unknown[]) => ipcRenderer.invoke(IPC[m], ...args)]),
+);
+
+// one cast, at the seam: each invoker carries its method's arguments to the handler main
+// registered under the same name, which is typed by the same contract (app/guard handle)
+const api = {
+  ...invokers,
   reportDisplayMode: (on: boolean) => ipcRenderer.send(IPC.displayModeReport, on),
-  radioSearch: (query: string) => ipcRenderer.invoke(IPC.radioSearch, query),
-  radioTop: () => ipcRenderer.invoke(IPC.radioTop),
-  radioByTags: (tags: string[]) => ipcRenderer.invoke(IPC.radioByTags, tags),
   onPush: (cb: (msg: PushMessage) => void) => {
     const listener = (_e: IpcRendererEvent, msg: PushMessage): void => cb(msg);
     ipcRenderer.on(IPC.push, listener);
@@ -129,6 +24,6 @@ const api: TastyTunesApi = {
       ipcRenderer.removeListener(IPC.push, listener);
     };
   },
-};
+} as unknown as TastyTunesApi;
 
 contextBridge.exposeInMainWorld("tastytunes", api);

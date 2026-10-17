@@ -7,6 +7,7 @@ import { tt } from "@/api";
 import { useStore } from "@/store";
 import { cx } from "@/lib/format";
 import { HeaderChip } from "@/components/chrome/Chrome";
+import { useConfirmPopover } from "@/components/chrome/Confirm";
 import { SettingRow, Toggle, NumberField } from "@/components/settings/SettingsKit";
 import { Segmented } from "@/components/controls/Segmented";
 
@@ -24,6 +25,7 @@ export function McpSection({
   const lan = mcp.bind === "lan";
   const status = useStore((s) => s.mcpStatus);
   const [copied, setCopied] = useState<string | null>(null);
+  const tokenConfirm = useConfirmPopover();
 
   const saveMcp = (patch: Partial<McpSettings>): void => {
     void save({ mcp: { ...mcp, ...patch } });
@@ -129,12 +131,21 @@ export function McpSection({
                     <button
                       type="button"
                       data-mcp-token-new
-                      onClick={() => saveMcp({ token: "" })}
+                      onClick={(e) =>
+                        // not undoable, and every agent on the old token stops working
+                        tokenConfirm.ask(e, {
+                          question:
+                            "Make a new token? Agents using the current one stop working until they have the new one.",
+                          verb: "New token",
+                          onConfirm: () => saveMcp({ token: "" }),
+                        })
+                      }
                       data-tip="Agents using the old token stop working."
                       className="tip-top shrink-0 rounded px-1.5 py-1 text-[11.5px] text-dim hover:text-ink transition-colors"
                     >
                       New token
                     </button>
+                    {tokenConfirm.popover}
                   </div>
                 )}
                 <CopyRow

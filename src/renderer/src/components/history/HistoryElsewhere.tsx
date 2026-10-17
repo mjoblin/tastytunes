@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronRight, ExternalLink, Globe, Library, MoreHorizontal } from "lucide-react";
-import { playKey, type ArtistInfo } from "@shared/model";
+import { ChevronRight, Globe, Library, MoreHorizontal } from "lucide-react";
+import { playKey } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
-import { HeaderChip, Chip } from "@/components/chrome/Chrome";
+import { Chip } from "@/components/chrome/Chrome";
 import { EmptyState } from "@/components/chrome/EmptyState";
 import { SortChip } from "@/components/controls/SortChip";
 import { MediaRow } from "@/components/media/MediaRow";
@@ -17,6 +17,8 @@ import { openArtistInLibrary, openRefInLibrary } from "@/lib/mediaActions";
 import type { MediaRef } from "@/lib/mediaRef";
 import { cx, fmtCount, fmtRelative, matchesFilter } from "@/lib/format";
 import { FACT_SEP } from "@/lib/mediaFacts";
+import { Lru } from "@/lib/lru";
+import { ArtistAbout } from "@/components/media/ArtistAbout";
 
 /**
  * The History screen's ELSEWHERE (0.8.0): the artists the record met away from
@@ -56,7 +58,7 @@ const ARCHIVE_TRIES = 1;
  *  lived), and the Cover Art Archive when album-art lookups are on (main gates
  *  it and caches its misses). Split so an artist's row can try every track's
  *  saved cover, then a bounded few at the archive. */
-const coverCache = new Map<string, Promise<string | null>>();
+const coverCache = new Lru<string, Promise<string | null>>(300);
 function savedCover(t: Pick<HeardTrack, "title" | "artist" | "album">): Promise<string | null> {
   const key = playKey(t.title, t.artist, t.album);
   let p = coverCache.get(key);
@@ -66,7 +68,7 @@ function savedCover(t: Pick<HeardTrack, "title" | "artist" | "album">): Promise<
   }
   return p;
 }
-const archiveCache = new Map<string, Promise<string | null>>();
+const archiveCache = new Lru<string, Promise<string | null>>(300);
 function archiveArt(t: Pick<HeardTrack, "artist" | "album">): Promise<string | null> {
   if (!t.artist || !t.album) return Promise.resolve(null);
   const key = `${t.artist.toLowerCase()}|${t.album.toLowerCase()}`;
@@ -113,7 +115,7 @@ const DWELL_MS = 500;
  *  fire hundreds of lookups. A picture found is kept for the session; a miss
  *  is asked again on the next mount, and main answers a definitive one from
  *  its own cache at once. */
-const rowArtCache = new Map<string, Promise<string | null>>();
+const rowArtCache = new Lru<string, Promise<string | null>>(300);
 function useLazyArt(
   ref: React.RefObject<HTMLElement | null>,
   key: string,
@@ -157,41 +159,6 @@ function useLazyArt(
     };
   }, [ref, key]);
   return url;
-}
-
-/** The artist's summary, asked when a row opens and the Artist info setting is
- *  on (the same gate and the same main-process chain as Now Playing's panel;
- *  main caches, this keeps the promise so a reopen is free). */
-const aboutCache = new Map<string, Promise<ArtistInfo | null>>();
-function useAbout(
-  name: string,
-  wanted: boolean,
-): { status: "off" | "loading" | "ready" | "none"; info: ArtistInfo | null } {
-  const enabled = useStore((s) => s.settings.artistInfo);
-  const [got, setGot] = useState<{ name: string; info: ArtistInfo | null } | null>(null);
-  useEffect(() => {
-    if (!wanted || !enabled) return;
-    let live = true;
-    let p = aboutCache.get(name);
-    if (!p) {
-      p = tt.fetchArtistInfo(name).catch(() => null);
-      aboutCache.set(name, p);
-    }
-    void p.then((info) => {
-      // THE RENDERER REMEMBERS ANSWERS, MAIN REMEMBERS MISSES: main returns null
-      // for a search that never happened (a 503, a timeout) and refuses to
-      // cache it, so keeping that null here turned one bad second into
-      // "Nothing found" for the session (user, 2026-09-12: Dominic Fike).
-      if (info == null) aboutCache.delete(name);
-      if (live) setGot({ name, info });
-    });
-    return () => {
-      live = false;
-    };
-  }, [name, wanted, enabled]);
-  if (!enabled) return { status: "off", info: null };
-  if (!got || got.name !== name) return { status: "loading", info: null };
-  return { status: got.info ? "ready" : "none", info: got.info };
 }
 
 const refOf = (title: string, artist: string | null, album: string | null): MediaRef => ({
@@ -560,7 +527,7 @@ function ArtistRow({
       />
       {open && (
         <div className="ml-12 mr-1 mt-1 mb-3 space-y-2" data-elsewhere-open={a.key}>
-          <About name={a.name} />
+          <ArtistAbout name={a.name} />
           <div className="space-y-1">
             {a.tracks.map((t) => (
               <TrackRow
@@ -574,72 +541,6 @@ function ArtistRow({
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-/** The artist's summary, as Now Playing's context panel has it: the name
- *  MusicBrainz matched, the Wikipedia extract clamped to a few lines until
- *  asked, and the two links out. Nothing at all when the setting is off — the
- *  row's menu still offers Look it up. */
-function About({ name }: { name: string }): React.JSX.Element | null {
-  const { status, info } = useAbout(name, true);
-  const [whole, setWhole] = useState(false);
-  if (status === "off") return null;
-  if (status === "loading")
-    return (
-      <div className="px-1 text-[12px] text-faint" data-elsewhere-about="loading">
-        Looking up {name}…
-      </div>
-    );
-  if (status === "none" || !info)
-    return (
-      <div className="px-1 text-[12px] text-faint" data-elsewhere-about="none">
-        Nothing found on MusicBrainz for {name}.
-      </div>
-    );
-  return (
-    <div className="px-1 space-y-2" data-elsewhere-about="ready">
-      {info.summary ? (
-        <p
-          className={cx(
-            "text-[13px] leading-relaxed text-dim whitespace-pre-wrap max-w-xl",
-            !whole && "line-clamp-4",
-          )}
-        >
-          {info.summary}
-        </p>
-      ) : (
-        <p className="text-[12px] text-faint">
-          Matched on MusicBrainz, but no Wikipedia summary is linked.
-        </p>
-      )}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        {info.summary && !whole && (
-          <HeaderChip
-            onClick={() => setWhole(true)}
-            className="microlabel px-2.5 py-1.5 motion-safe:active:scale-90"
-          >
-            read more
-          </HeaderChip>
-        )}
-        {info.wikipediaUrl && (
-          <HeaderChip
-            onClick={() => void tt.openExternal(info.wikipediaUrl ?? "")}
-            className="microlabel flex items-center gap-1.5 px-2.5 py-1.5 motion-safe:active:scale-90"
-          >
-            wikipedia <ExternalLink size={10} />
-          </HeaderChip>
-        )}
-        {info.musicbrainzUrl && (
-          <HeaderChip
-            onClick={() => void tt.openExternal(info.musicbrainzUrl ?? "")}
-            className="microlabel flex items-center gap-1.5 px-2.5 py-1.5 motion-safe:active:scale-90"
-          >
-            musicbrainz <ExternalLink size={10} />
-          </HeaderChip>
-        )}
-      </div>
     </div>
   );
 }

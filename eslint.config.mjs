@@ -14,6 +14,8 @@ import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 import reactHooks from "eslint-plugin-react-hooks";
 import prettier from "eslint-config-prettier";
+import tastytunes from "./lint/plugin.mjs";
+import { ONE_HOME } from "./lint/rules.mjs";
 
 export default tseslint.config(
   // src only: the type-aware rules need a tsconfig, and the root configs,
@@ -78,6 +80,24 @@ export default tseslint.config(
       // "next · title": the no-break spaces around the middle dot are deliberate
       "no-irregular-whitespace": ["error", { skipTemplates: true }],
     },
+  },
+  // TastyTunes' own rules (lint/), 0.11.0: the one-home rules and banned
+  // patterns that were the invariant suite's source-text pins, and no em dash
+  // aside in copy a reader sees (the register). lint/rules.test.mjs proves
+  // every entry fires on the code it forbids.
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["**/*.test.ts"],
+    plugins: { tastytunes },
+    rules: {
+      "tastytunes/one-home": ["error", ...ONE_HOME.map(({ bad: _bad, was: _was, ...entry }) => entry)],
+    },
+  },
+  {
+    files: ["src/renderer/src/**/*.{ts,tsx}", "src/shared/**/*.ts", "src/main/app/**/*.ts"],
+    ignores: ["**/*.d.ts", "**/*.test.ts", "**/*[mM]cp*", "**/mcp/**"],
+    plugins: { tastytunes },
+    rules: { "tastytunes/no-dash-aside": "error" },
   },
   prettier,
 );

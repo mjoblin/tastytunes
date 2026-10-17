@@ -31,6 +31,7 @@ import type {
   ProfileNote,
 } from "@shared/model";
 import {
+  albumsFromTheirTracks,
   albumsFromTracks,
   audioItemsOnly,
   dedupeAlbums,
@@ -53,6 +54,7 @@ import {
   search as liveSearch,
   searchPage,
 } from "./upnpBrowser";
+import { learnArtMove, moveArt } from "./artMove";
 
 interface StoredIndex {
   udn: string;
@@ -95,14 +97,15 @@ interface StoredIndex {
 // Asset tagging). v2 added upnp:genre. A bump discards stored indexes
 // wholesale; rebuildHints below keeps that from costing Browse-only
 // servers their Build click.
-const VERSION = 13; // v12: nodes from a browse walk carry their folder titlePath
+const VERSION = 14; // v12: nodes from a browse walk carry their folder titlePath
 // v13: the DIDL parser keeps text as the server sent it ("007" stays "007"), and LPCM
 // (audio/L16;rate=…) reads as PCM with its depth
+// v14: an album folder with no artist takes its artist, year and title from the tracks in it
+// (albumsFromTheirTracks: the Evo's USB drive, 2026-10-11)
 const PAGE = 500;
 const MAX_TRACKS = 50_000;
 const MAX_CONTAINERS = 10_000;
 const TTL_MS = 7 * 24 * 3600 * 1000; // recrawl backstop for servers whose counter never moves
-const SEARCH_RESULT_CAP = 500;
 
 const indexes = new Map<string, StoredIndex>();
 // Strategies salvaged from a stale-VERSION index file: the data is discarded,
@@ -444,6 +447,10 @@ function reconcilePools(c: Crawled, serverName: string): Crawled {
     note({ kind: "albums-assembled-from-tracks", count: c.tracks.length });
     console.log(`[mediaIndex] ${serverName}: ${albums.length} albums synthesised from tracks`);
   }
+  // before the dedupe, which keeps same-titled albums apart by their artists
+  const ft = albumsFromTheirTracks(albums, c.tracks);
+  albums = ft.albums;
+  if (ft.filled > 0) note({ kind: "albums-from-their-tracks", count: ft.filled });
   const dd = dedupeAlbums(albums, c.tracks, c.parentsOf);
   if (dd.collapsed > 0) note({ kind: "duplicate-albums-merged", count: dd.collapsed });
   const yf = yearFromTracks(dd.albums, c.tracks);
@@ -761,6 +768,8 @@ const HEAL_LIKELY = 3;
  * acts work and leaves the Library's card offering the re-index, which still walks. Straight
  * after a wake the device knows none of the new ids until their folders are listed again; the
  * browse layer lists them on a miss (upnpBrowser's forgottenFolders), so the checks ask by id.
+ * The drive's pictures are re-minted with the ids (2026-10-11), so the checks' pictures teach
+ * the move every picture in the index takes (artMove); pictures that disagree are a miss.
  */
 async function heal(
   host: string,
@@ -800,6 +809,8 @@ async function heal(
     xs.length <= k
       ? xs
       : Array.from({ length: k }, (_, i) => xs[Math.floor(((i + 0.5) * xs.length) / k)]);
+  /** Whether the confirmed mount's pictures moved too (the log says so). */
+  let picturesMoved = false;
   /** The index moved onto one mount and confirmed there, or why it is not that mount. */
   const tryMount = async (to: string): Promise<StoredIndex | string> => {
     const move = (id: string | null): string | null => {
@@ -859,11 +870,13 @@ async function heal(
         candidate.tracks.find((n) => n.id === now) ?? candidate.albums.find((n) => n.id === now);
       if (want && !probes.includes(want)) probes.push(want);
     }
+    const pictures: [string | null, string | null][] = [];
     for (const want of probes) {
       if (opts.stopped?.()) return "the streamer went to sleep";
       const got = await browseMetadataNode(host, server.udn, want.id);
       if (!got) return `${want.id} does not answer`;
       if (got.title !== want.title) return `${want.id} is titled differently`;
+      pictures.push([want.artUrl, got.artUrl]);
       // an album can sit under more than one container (its artist's folder, the library's
       // own list), so its parent is not evidence; a track's parent and number are
       const track = !want.upnpClass.startsWith("object.container");
@@ -872,7 +885,24 @@ async function heal(
       if (track && want.trackNumber != null && got.trackNumber !== want.trackNumber)
         return `${want.id} has another track number`;
     }
-    return candidate;
+    // THE PICTURES MOVED WITH THE IDS (artMove): the move the checks' pictures agree on, applied
+    // to every picture in the index, or a miss when one does not start where the move starts
+    const art = learnArtMove(pictures);
+    if (typeof art === "string") return art;
+    if (art.from === art.to) return candidate;
+    const stray = [...candidate.albums, ...candidate.artists, ...candidate.tracks].find(
+      (n) => n.artUrl != null && moveArt(n.artUrl, art) === undefined,
+    );
+    if (stray) return `${stray.id}'s picture is not where the others were (${stray.artUrl})`;
+    const pictured = (n: MediaNode): MediaNode =>
+      n.artUrl == null ? n : { ...n, artUrl: moveArt(n.artUrl, art) ?? n.artUrl };
+    picturesMoved = true;
+    return {
+      ...candidate,
+      albums: candidate.albums.map(pictured),
+      artists: candidate.artists.map(pictured),
+      tracks: candidate.tracks.map(pictured),
+    };
   };
   const misses: string[] = [];
   for (const to of mounts) {
@@ -889,7 +919,7 @@ async function heal(
     });
     save();
     console.log(
-      `[mediaIndex] ${server.name}: ${from === to ? "the index is on the current mount" : `ids moved from mount ${from} to ${to}`}; confirmed by content, no walk${misses.length ? ` (passed over ${misses.join("; ")})` : ""}`,
+      `[mediaIndex] ${server.name}: ${from === to ? "the index is on the current mount" : `ids moved from mount ${from} to ${to}`}${picturesMoved ? ", pictures with them" : ""}; confirmed by content, no walk${misses.length ? ` (passed over ${misses.join("; ")})` : ""}`,
     );
     announce(status());
     return true;
@@ -974,18 +1004,16 @@ export function searchIndex(
       `${n.title} ${n.artist ?? ""} ${n.album ?? ""} ${(n.composers ?? []).join(" ")}`.toLowerCase();
     return tokens.every((t) => hay.includes(t));
   };
+  // EVERY MATCH (2026-10-11, a user: 1,035 results stopped at "first 500", "Is there a way to
+  // go to the next page?"): the scan is local, the lenses already hold the whole index, and the
+  // Library reveals the results 500 at a time, so nothing here needs a cap.
   const items: MediaNode[] = [];
-  let total = 0;
   // Hierarchy order — artists make albums, albums contain tracks — mirrored
   // by the result sections and the kind filter (user call, 2026-07-21).
   for (const pool of [idx.artists, idx.albums, idx.tracks]) {
-    for (const n of pool) {
-      if (!matches(n)) continue;
-      total++;
-      if (items.length < SEARCH_RESULT_CAP) items.push(n);
-    }
+    for (const n of pool) if (matches(n)) items.push(n);
   }
-  return { items, total };
+  return { items, total: items.length };
 }
 
 /**
@@ -1015,11 +1043,28 @@ export function searchAllIndexes(query: string): MediaSearchAllGroup[] {
  * Artists/Albums lenses' feedstock. A snapshot copy: callers can't mutate
  * the index, and the renderer caches it keyed on builtAt signatures.
  */
+/** The last pools() answer and the stored indexes it was made from (see pools). */
+let poolsMemo: { from: StoredIndex[]; out: MediaIndexPools[] } | null = null;
+
+/**
+ * Every ready index's albums, artists and tracks, stamped with their server. SHARED AND
+ * READ-ONLY (0.11.0 sweep): the answer is made once per set of stored indexes and handed to
+ * every caller until one is replaced or starts building (a stored index is never changed in
+ * place, only replaced, so its identity says whether the answer still holds). It used to
+ * copy every node of every library on each call: the Timeline's art, a lens opening, and
+ * most MCP tools ask. Never sort, splice or assign into what it returns.
+ */
 export function pools(): MediaIndexPools[] {
   load();
+  const live = [...indexes.values()].filter((idx) => !building.has(idx.udn));
+  if (
+    poolsMemo &&
+    poolsMemo.from.length === live.length &&
+    poolsMemo.from.every((idx, i) => idx === live[i])
+  )
+    return poolsMemo.out;
   const out: MediaIndexPools[] = [];
-  for (const idx of indexes.values()) {
-    if (building.has(idx.udn)) continue;
+  for (const idx of live) {
     const stamp = (n: MediaNode): MediaNode => ({
       ...n,
       serverUdn: idx.udn,
@@ -1034,6 +1079,7 @@ export function pools(): MediaIndexPools[] {
       ...(idx.profile ? { profile: idx.profile } : {}),
     });
   }
+  poolsMemo = { from: live, out };
   return out;
 }
 

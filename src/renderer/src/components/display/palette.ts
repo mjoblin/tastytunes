@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { tt } from "@/api";
 import type { Rgb, ScenePalette } from "./scenes/types";
+import { Lru } from "@/lib/lru";
 
 /**
  * The scenes' colors: the theme's tokens read off :root (so a scene is at
@@ -147,7 +148,7 @@ async function artAccents(dataUrl: string, light: boolean): Promise<ArtColors | 
   return { accent: out, tint };
 }
 
-const cache = new Map<string, ArtColors | null>();
+const cache = new Lru<string, ArtColors | null>(60);
 
 /** The full palette for the current art and theme, re-read when either changes. */
 export function useScenePalette(artUrl: string | null): ScenePalette {
@@ -190,7 +191,6 @@ export function useScenePalette(artUrl: string | null): ScenePalette {
         out = null;
       }
       cache.set(key, out);
-      if (cache.size > 60) cache.delete(cache.keys().next().value as string);
       if (!cancelled) setAccent(out);
     })();
     return () => {

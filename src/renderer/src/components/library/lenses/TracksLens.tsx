@@ -24,8 +24,6 @@ import {
   type LensActions,
   lc,
   nodeKey,
-  genreOptionsOf,
-  decadeOptionsOf,
   drOptionsOf,
   formatTags,
   formatOptionsOf,
@@ -38,6 +36,7 @@ import {
   LensTrackSelectionBar,
   LensTrackMenu,
 } from "./useLensTrackSelection";
+import { useLensIndex } from "./useLensIndex";
 
 // The Tracks lens, split out of LibraryLenses.tsx (2026-09-13, the lenses round: three lenses of
 // 600 to 800 lines shared one file); what the lenses share lives in ./lensShared.
@@ -112,9 +111,11 @@ export function TracksLens({
   const sort = !play.ready && RECORD_SORTS.has(sortSetting) ? "title" : sortSetting;
   const saveSettings = useStore((s) => s.saveSettings);
 
-  const all = useMemo(() => pools.flatMap((g) => g.tracks), [pools]);
-  const genreOptions = useMemo(() => genreOptionsOf(all), [all]);
-  const decadeOptions = useMemo(() => decadeOptionsOf(all), [all]);
+  // what the lenses derive from the pools, once per snapshot (useLensIndex)
+  const index = useLensIndex(pools);
+  const all = index.tracks;
+  const genreOptions = index.trackGenres;
+  const decadeOptions = index.trackDecades;
 
   // Per-track DR: one bulk cache-only read (never a fetch), refreshed each
   // time a sweep finishes — the DR sort has its numbers without asking the

@@ -1,6 +1,7 @@
 import { app, ipcMain, shell, type IpcMainEvent, type IpcMainInvokeEvent } from "electron";
 import { join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { IPC, InvokeMethod, MethodOf, TastyTunesApi } from "@shared/ipc";
 
 /**
  * THE APP'S OWN PAGES ARE THE ONLY ONES THAT REACH MAIN (0.10.0, the whole-app review).
@@ -57,16 +58,28 @@ export function installNavigationGuard(): void {
   });
 }
 
-/** ipcMain.handle for the app's own frames only. The contract (TastyTunesApi) types each
- *  channel's arguments; this is the seam where they arrive, untyped, from the preload. */
-export function handle<A extends unknown[]>(
-  channel: string,
-  fn: (e: IpcMainInvokeEvent, ...args: A) => unknown,
+/** A channel the renderer invokes, and the API method it answers for. */
+type InvokeChannel = (typeof IPC)[InvokeMethod];
+type MethodFor<C extends InvokeChannel> = MethodOf<C> & InvokeMethod;
+
+/**
+ * ipcMain.handle for the app's own frames only, TYPED BY THE CONTRACT (0.11.0 sweep): the
+ * channel names its TastyTunesApi method (`tt:<method>`), so the handler's arguments are
+ * that method's parameters and its answer must be what the method promises. The arguments
+ * still arrive untyped from the preload: a handler that checks them declares them unknown,
+ * which every parameter type satisfies.
+ */
+export function handle<C extends InvokeChannel>(
+  channel: C,
+  fn: (
+    e: IpcMainInvokeEvent,
+    ...args: Parameters<TastyTunesApi[MethodFor<C>]>
+  ) => ReturnType<TastyTunesApi[MethodFor<C>]> | Awaited<ReturnType<TastyTunesApi[MethodFor<C>]>>,
 ): void {
   ipcMain.handle(channel, (e, ...args: unknown[]) => {
     const from = e.senderFrame?.url ?? "";
     if (!isAppUrl(from)) throw new Error(`refused ${channel} from ${from || "an unknown frame"}`);
-    return fn(e, ...(args as A));
+    return fn(e, ...(args as Parameters<TastyTunesApi[MethodFor<C>]>));
   });
 }
 

@@ -8,8 +8,8 @@ import { cx } from "@/lib/format";
  * 2026-09-02: the Queue, Playlists, Favorites and Recently Played rows).
  *
  * One home for the grammar: the row itself keeps the app-wide click contract
- * (a track row plays), the names inside it navigate — the artist to the
- * Artists lens focused on that name, the album to the track's album in the
+ * (a track row plays), the names inside it navigate — the artist to their
+ * page (2026-10-11; the Artists lens focused on the name before), the album to the track's album in the
  * Library with the track scrolled to and flashed (openRefInLibrary, the same
  * resolve "Open in Library" uses, so a stale server id can't strand the
  * link). Hover is ONE STEP up from the line's own tone and an underline,
@@ -21,8 +21,8 @@ import { cx } from "@/lib/format";
  */
 /**
  * ONE name, one link — the primitive NameLine, Now Playing and the Library's
- * rows and album header all render. The artist navigates by NAME (the Artists
- * lens focused on it); the album by the row's REF through openRefInLibrary
+ * rows and album header all render. The artist navigates by NAME (their page);
+ * the album by the row's REF through openRefInLibrary
  * (content-resolved, the track flashed). `onGo` replaces that navigation for
  * the Library's own rows, which resolve through the same library's pools
  * instead (2026-09-10: the link markup has one owner, the resolve stays

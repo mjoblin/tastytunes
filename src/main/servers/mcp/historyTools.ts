@@ -13,7 +13,15 @@ import { pools as indexPools } from "../../media/mediaIndex";
 import { statsFor, type TopEntry } from "@shared/historyStats";
 import { heardElsewhere } from "@shared/elsewhere";
 import { shelvesFor, UNFINISHED_QUIET_DAYS } from "@shared/rediscover";
-import { type ToolContext, type ToolImpl, ok, err, STREAMER_ARG, streamerKeep } from "./toolkit";
+import {
+  type ToolContext,
+  type ToolImpl,
+  ok,
+  err,
+  STREAMER_ARG,
+  streamerKeep,
+  defineTool,
+} from "./toolkit";
 
 // The MCP bridge's history tools (the listening record: recents, stats, the unplayed and the
 // resume offer), one of six tool modules split out of mcpServer.ts 2026-09-13; the shapes and
@@ -22,7 +30,7 @@ import { type ToolContext, type ToolImpl, ok, err, STREAMER_ARG, streamerKeep } 
 export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
   const { dm } = ctx;
   return {
-    list_history: {
+    list_history: defineTool({
       inputSchema: {
         streamer: STREAMER_ARG,
         from: z.string().optional().describe("Earliest local date, YYYY-MM-DD."),
@@ -45,8 +53,8 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
         const { events: everyLine, unreadable } = await listeningRecord.readAll();
         const keep = streamerKeep(a.streamer, dm.snapshot().devices);
         const events = keep ? everyLine.filter(keep) : everyLine;
-        const fromMs = a.from != null ? Date.parse(`${a.from as string}T00:00:00`) : null;
-        const toMs = a.to != null ? Date.parse(`${a.to as string}T23:59:59.999`) : null;
+        const fromMs = a.from != null ? Date.parse(`${a.from}T00:00:00`) : null;
+        const toMs = a.to != null ? Date.parse(`${a.to}T23:59:59.999`) : null;
         const filtered = events
           .filter(
             (e) =>
@@ -57,8 +65,8 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
                 (e.kind === "play" && isListen(e.playedSeconds, e.duration))),
           )
           .sort((x, y) => y.at - x.at);
-        const offset = (a.offset as number | undefined) ?? 0;
-        const limit = (a.limit as number | undefined) ?? 50;
+        const offset = a.offset ?? 0;
+        const limit = a.limit ?? 50;
         const page = filtered.slice(offset, offset + limit).map((e) => ({
           ...e,
           at: new Date(e.at).toISOString(),
@@ -72,8 +80,8 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
           events: page,
         });
       },
-    },
-    history_top: {
+    }),
+    history_top: defineTool({
       inputSchema: {
         streamer: STREAMER_ARG,
         by: z
@@ -89,9 +97,9 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
         const { events: everyLine } = await listeningRecord.readAll();
         const keep = streamerKeep(a.streamer, dm.snapshot().devices);
         const events = keep ? everyLine.filter(keep) : everyLine;
-        const fromMs = a.from != null ? Date.parse(`${a.from as string}T00:00:00`) : null;
-        const toMs = a.to != null ? Date.parse(`${a.to as string}T23:59:59.999`) : null;
-        const limit = (a.limit as number | undefined) ?? 20;
+        const fromMs = a.from != null ? Date.parse(`${a.from}T00:00:00`) : null;
+        const toMs = a.to != null ? Date.parse(`${a.to}T23:59:59.999`) : null;
+        const limit = a.limit ?? 20;
         if (a.by === "stations" || a.by === "presets" || a.by === "playlists") {
           // the Stats view's own ranks (shared/historyStats), over the range
           const st = statsFor(events, {
@@ -143,8 +151,8 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
           results,
         });
       },
-    },
-    history_summary: {
+    }),
+    history_summary: defineTool({
       inputSchema: {
         streamer: STREAMER_ARG,
         from: z.string().optional().describe("Earliest local date, YYYY-MM-DD."),
@@ -163,15 +171,15 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
         const { events: everyLine } = await listeningRecord.readAll();
         const keep = streamerKeep(a.streamer, dm.snapshot().devices);
         const events = keep ? everyLine.filter(keep) : everyLine;
-        const fromMs = a.from != null ? Date.parse(`${a.from as string}T00:00:00`) : null;
-        const toMs = a.to != null ? Date.parse(`${a.to as string}T23:59:59.999`) : null;
+        const fromMs = a.from != null ? Date.parse(`${a.from}T00:00:00`) : null;
+        const toMs = a.to != null ? Date.parse(`${a.to}T23:59:59.999`) : null;
         if ((fromMs != null && Number.isNaN(fromMs)) || (toMs != null && Number.isNaN(toMs)))
           return err("from and to must be YYYY-MM-DD.");
         const st = statsFor(events, {
           from: fromMs ?? 0,
           to: toMs != null ? toMs + 1 : Number.POSITIVE_INFINITY,
         });
-        const top = (a.top as number | undefined) ?? 10;
+        const top = a.top ?? 10;
         const list = (rows: TopEntry[]): unknown[] =>
           rows.slice(0, top).map((r) => ({
             name: r.name,
@@ -221,8 +229,8 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
             .map(([day, seconds]) => ({ day: localDay(day), seconds })),
         });
       },
-    },
-    history_elsewhere: {
+    }),
+    history_elsewhere: defineTool({
       inputSchema: {
         streamer: STREAMER_ARG,
         in_library: z
@@ -244,8 +252,8 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
         const artists = heard.artists.filter((x) =>
           want === "yes" ? x.inLibrary : want === "no" ? !x.inLibrary : true,
         );
-        const limit = (a.limit as number | undefined) ?? 40;
-        const perArtist = (a.tracks_per_artist as number | undefined) ?? 5;
+        const limit = a.limit ?? 40;
+        const perArtist = a.tracks_per_artist ?? 5;
         return ok({
           sources: heard.sources,
           stations: heard.stations,
@@ -272,8 +280,8 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
           })),
         });
       },
-    },
-    history_shelves: {
+    }),
+    history_shelves: defineTool({
       inputSchema: {
         streamer: STREAMER_ARG,
         limit: z.number().int().min(1).max(100).optional().describe("Per shelf, default 12."),
@@ -285,7 +293,7 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
         if (groups.length === 0) return err(ctx.kickIndex());
         const stats = await playStatsFromRecord(streamerKeep(a.streamer, dm.snapshot().devices));
         const shelves = shelvesFor(groups, stats, Date.now());
-        const limit = (a.limit as number | undefined) ?? 12;
+        const limit = a.limit ?? 12;
         const row = (s: (typeof shelves.quiet)[number]): unknown => ({
           server_udn: s.album.serverUdn,
           object_id: s.album.id,
@@ -316,8 +324,8 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
           },
         });
       },
-    },
-    history_on_this_day: {
+    }),
+    history_on_this_day: defineTool({
       inputSchema: {
         streamer: STREAMER_ARG,
         month: z.number().int().min(1).max(12).optional().describe("Default: today's month."),
@@ -325,8 +333,8 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
       },
       handler: async (a) => {
         const now = new Date();
-        const month = (a.month as number | undefined) ?? now.getMonth() + 1;
-        const day = (a.day as number | undefined) ?? now.getDate();
+        const month = a.month ?? now.getMonth() + 1;
+        const day = a.day ?? now.getDate();
         const { events: everyLine } = await listeningRecord.readAll();
         const keep = streamerKeep(a.streamer, dm.snapshot().devices);
         const events = keep ? everyLine.filter(keep) : everyLine;
@@ -345,8 +353,8 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
           }));
         return ok({ month, day, total: hits.length, events: hits });
       },
-    },
-    history_first_listen: {
+    }),
+    history_first_listen: defineTool({
       inputSchema: {
         streamer: STREAMER_ARG,
         title: z.string().describe("Track title, case-insensitive exact match."),
@@ -364,8 +372,8 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
           .filter(
             (e): e is ListeningPlayEvent =>
               e.kind === "play" &&
-              lc(e.title) === lc(a.title as string) &&
-              (a.artist == null || (e.artist ?? "").toLowerCase().includes(lc(a.artist as string))),
+              lc(e.title) === lc(a.title) &&
+              (a.artist == null || (e.artist ?? "").toLowerCase().includes(lc(a.artist))),
           )
           .sort((x, y) => x.at - y.at);
         if (plays.length === 0) return ok({ found: false });
@@ -378,9 +386,9 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
           listens: listens.length,
         });
       },
-    },
+    }),
     // ---- the record's reading surfaces as tools (0.8.0)
-    history_stats: {
+    history_stats: defineTool({
       inputSchema: {
         streamer: STREAMER_ARG,
         title: z
@@ -395,13 +403,9 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
       handler: async (a) => {
         const stats = await playStatsFromRecord(streamerKeep(a.streamer, dm.snapshot().devices));
         const md = dm.snapshot().playState?.metadata;
-        const title =
-          (a.title as string | undefined) ?? (a.album ? undefined : (md?.title ?? undefined));
-        const artist =
-          (a.artist as string | undefined) ??
-          (a.title || a.album ? undefined : (md?.artist ?? undefined));
-        const album =
-          (a.album as string | undefined) ?? (a.title ? undefined : (md?.album ?? undefined));
+        const title = a.title ?? (a.album ? undefined : (md?.title ?? undefined));
+        const artist = a.artist ?? (a.title || a.album ? undefined : (md?.artist ?? undefined));
+        const album = a.album ?? (a.title ? undefined : (md?.album ?? undefined));
         const since = stats.since != null ? new Date(stats.since).toISOString() : null;
         const lc = (v: string | null | undefined): string => (v ?? "").trim().toLowerCase();
         if (title) {
@@ -464,8 +468,8 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
         }
         return err("Nothing is playing and no track or album was named.");
       },
-    },
-    history_unplayed: {
+    }),
+    history_unplayed: defineTool({
       inputSchema: {
         streamer: STREAMER_ARG,
         artist: z.string().optional().describe("Case-insensitive substring on the album artist."),
@@ -479,8 +483,8 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
         if (groups.length === 0) return err(ctx.kickIndex());
         const stats = await playStatsFromRecord(streamerKeep(a.streamer, dm.snapshot().devices));
         const poolOf = new Map(groups.map((p) => [p.udn, p]));
-        const artistNeedle = (a.artist as string | undefined)?.toLowerCase();
-        const genreNeedle = (a.genre as string | undefined)?.toLowerCase();
+        const artistNeedle = a.artist?.toLowerCase();
+        const genreNeedle = a.genre?.toLowerCase();
         const decade = a.decade != null ? String(a.decade).replace(/s$/i, "") : null;
         const albums = groups
           .flatMap((p) => p.albums)
@@ -505,8 +509,8 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
               nameSortKey(x.artist ?? "￿").localeCompare(nameSortKey(y.artist ?? "￿")) ||
               x.title.localeCompare(y.title),
           );
-        const offset = (a.offset as number | undefined) ?? 0;
-        const limit = (a.limit as number | undefined) ?? 50;
+        const offset = a.offset ?? 0;
+        const limit = a.limit ?? 50;
         const page = albums.slice(offset, offset + limit);
         return ok({
           record_since: stats.since != null ? new Date(stats.since).toISOString() : null,
@@ -524,8 +528,8 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
           })),
         });
       },
-    },
-    history_rediscover: {
+    }),
+    history_rediscover: defineTool({
       inputSchema: {
         streamer: STREAMER_ARG,
         not_since: z
@@ -541,10 +545,10 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
         const stats = await playStatsFromRecord(streamerKeep(a.streamer, dm.snapshot().devices));
         const cutoff =
           a.not_since != null
-            ? Date.parse(`${a.not_since as string}T00:00:00`)
+            ? Date.parse(`${a.not_since}T00:00:00`)
             : Date.now() - REDISCOVER_QUIET_DAYS * 86_400_000;
         if (Number.isNaN(cutoff)) return err("not_since must be YYYY-MM-DD.");
-        const minPlays = (a.min_plays as number | undefined) ?? 1;
+        const minPlays = a.min_plays ?? 1;
         const poolOf = new Map(groups.map((p) => [p.udn, p]));
         const rows = groups
           .flatMap((p) => p.albums)
@@ -554,7 +558,7 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
             return plays >= minPlays && lastAt > 0 && lastAt < cutoff ? [{ n, plays, lastAt }] : [];
           });
         rows.sort((x, y) => x.lastAt - y.lastAt);
-        const limit = (a.limit as number | undefined) ?? 30;
+        const limit = a.limit ?? 30;
         return ok({
           not_since: new Date(cutoff).toISOString(),
           total: rows.length,
@@ -570,8 +574,8 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
           })),
         });
       },
-    },
-    history_resume: {
+    }),
+    history_resume: defineTool({
       handler: async () => {
         const offer = await ctx.resumeOffer();
         if ("reason" in offer) return ok({ offer: null, reason: offer.reason });
@@ -588,6 +592,6 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
           },
         });
       },
-    },
+    }),
   };
 }

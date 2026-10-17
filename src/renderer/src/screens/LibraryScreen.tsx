@@ -1,15 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useLayoutEffect } from "react";
 import { artKeyOf } from "@/lib/artSrc";
-import { setCurrentLibrarySpot } from "@/lib/navSpot";
 import type { LibrarySpot } from "@/store";
 import {
-  Disc3,
   HardDrive,
   Heart,
   LayoutGrid,
   Library,
   ListEnd,
-  Loader2,
   ListPlus,
   ListStart,
   Play,
@@ -17,8 +14,6 @@ import {
   Rows3,
   Search,
   Usb,
-  Users,
-  Music2,
 } from "lucide-react";
 import {
   presetVolumeKey,
@@ -42,20 +37,13 @@ import { useAlbumDr } from "@/lib/audioAnalysis";
 import { FACT_SEP, albumFactsLine } from "@/lib/mediaFacts";
 import { usePlayStats } from "@/lib/playStats";
 import { useBestArt } from "@/lib/bestArt";
-import type { QueueListItem } from "@shared/smoip";
 import { queueWrite, tt } from "@/api";
 import { useStore } from "@/store";
-import { activeSourceId, cx, matchesFilter, fmtCount } from "@/lib/format";
-import {
-  albumMatchesEntry,
-  entryArtistMatches,
-  playingQueueEntry,
-  trackMatchesEntry,
-} from "@/lib/playingEntry";
+import { cx, matchesFilter } from "@/lib/format";
 import { useIndexPools } from "@/hooks/useIndexPools";
 import { MOD } from "@/lib/screens";
 import { flashTarget, scrollToCentered } from "@/lib/scroll";
-import { isAlbumClass, stripFurniture } from "@/lib/media";
+import { isAlbumClass, isArtistClass, stripFurniture } from "@/lib/media";
 import { FilterInput } from "@/components/controls/FilterInput";
 import { ContainerCard, ContainerRow, TrackRow } from "@/components/library/LibraryCards";
 import { Crumbs } from "@/components/library/Crumbs";
@@ -69,6 +57,7 @@ import {
 } from "@/components/library/LibraryLenses";
 import {
   LENS_ARTIST_CRUMB_ID,
+  ARTIST_PAGE_CRUMB_ID,
   LENS_CRUMB_ID,
   LENS_LABEL,
   lensNavigation,
@@ -88,7 +77,15 @@ import { useOneShotAsk } from "@/hooks/useOneShotAsk";
 import { useLibraryMenus, type MenusLate } from "@/components/library/useLibraryMenus";
 import { useLibraryFavorites } from "@/components/library/useLibraryFavorites";
 import { LibraryPopovers } from "@/components/library/LibraryPopovers";
+import { LibraryRoot } from "@/components/library/LibraryRoot";
+import { useIndexDoors } from "@/components/library/useIndexDoors";
+import { usePlayingMatch } from "@/components/library/usePlayingMatch";
+import { useQueueMatch } from "@/components/library/useQueueMatch";
+import { useWindowedList } from "@/hooks/useWindowedList";
+import { Lru } from "@/lib/lru";
 import { AlbumHeader } from "@/components/library/AlbumHeader";
+import { ArtistHeader } from "@/components/library/ArtistHeader";
+import { ArtistPage } from "@/components/library/ArtistPage";
 import { LibrarySearchBar } from "@/components/library/LibrarySearchBar";
 import { useLibrarySelection, type SelectionLate } from "@/components/library/useLibrarySelection";
 import {
@@ -111,17 +108,12 @@ const scrollMemory = new Map<string, number>();
 // Per-LEVEL filter memory: each folder keeps its own filter for the session
 // (the store's screenFilters.library always holds the current level's).
 const filterMemory = new Map<string, string>();
-// Where the last visit left off — server, crumb trail, and which lens was open.
-// The screen UNMOUNTS on every navigation away (App renders only the active
-// screen), so component state can't survive the trip; this is the same
-// module-scope, session-only shape as the memories above, and never a setting.
-// Restored on arrival from another screen; deliberately NOT consulted when the
-// front door is asked for explicitly (see the reset effect).
-let positionMemory: {
-  udn: string | null;
-  path: Crumb[];
-  lens: Lens | null;
-} | null = null;
+// Where the last visit left off — server, crumb trail, and which lens was open —
+// is the store's libraryLocation (the 0.11.0 sweep; it was a module variable here
+// and a second copy in lib/navSpot for history). The screen UNMOUNTS on every
+// navigation away (App renders only the active screen), so component state can't
+// survive the trip. Restored on arrival from another screen; deliberately NOT
+// consulted when the front door is asked for explicitly (see the reset effect).
 
 const nodeKey = (serverUdn: string | null, path: Crumb[]): string =>
   `${serverUdn ?? ""}|${path.map((c) => c.id).join("/")}`;
@@ -149,9 +141,19 @@ const UNIFIED_SEARCH_CRUMB_ID = "__from-search__";
 
 /** One wording for a queue write that didn't land, whichever verb sent it. */
 const QUEUE_FAILED = "Couldn't reach the streamer. Nothing was queued.";
-// The Albums lens scrolls the page scroller — its spot is remembered apart
-// from the source list's (they share the root path key otherwise).
-let albumsLensScroll = 0;
+/** Each artist page's scroll spot for the session (an album opened from it and Back). */
+const artistPageScroll = new Lru<string, number>(200);
+
+/** One line of the windowed search results (see searchLines): every kind has one height. */
+type SearchLine =
+  | {
+      kind: "group0" | "group";
+      key: string;
+      group: { udn: string; serverName: string; total: number };
+    }
+  | { kind: "label0" | "label" | "klabel"; key: string; text: string }
+  | { kind: "cards0" | "cards"; key: string; nodes: MediaNode[] }
+  | { kind: "crow" | "track"; key: string; node: MediaNode; list: MediaNode[]; index: number };
 
 /**
  * Library: browse UPnP media (LAN servers and the streamer's own USB storage)
@@ -168,20 +170,11 @@ export function LibraryScreen(): React.JSX.Element {
     presetGap,
     presetFillRows,
   } = useStore((s) => s.settings);
-  // Standby honesty: USB source cards dim (the streamer's own ContentDirectory
-  // has no content until wake — probed 2026-07-23); external servers and the
-  // local index browse fine while the device sleeps.
-  const inStandby = useStore((s) => s.systemPower != null && s.systemPower.power !== "ON");
   const setSettings = useStore((s) => s.setSettings);
   const saveSettings = useStore((s) => s.saveSettings);
   const filter = useStore((s) => s.screenFilters.library);
   const setScreenFilter = useStore((s) => s.setScreenFilter);
   const setScreen = useStore((s) => s.setScreen);
-  const playState = useStore((s) => s.playState);
-  const effectivePlayId = useStore((s) => s.effectivePlayId);
-  const nowPlaying = useStore((s) => s.nowPlaying);
-  const zoneState = useStore((s) => s.zoneState);
-  const queue = useStore((s) => s.queue);
   const systemInfo = useStore((s) => s.systemInfo);
   const cards = libraryLayout === "cards";
 
@@ -258,7 +251,8 @@ export function LibraryScreen(): React.JSX.Element {
   const pendingTrack = useRef<string | null>(null);
   useLayoutEffect(() => {
     if (pendingScroll.current != null && scrollRef.current) {
-      scrollRef.current.scrollTop = pendingScroll.current;
+      // a lens at the root holds the page at 0 (it scrolls its own column)
+      scrollRef.current.scrollTop = serverUdn == null && lens != null ? 0 : pendingScroll.current;
       pendingScroll.current = null;
     }
     // only once THIS destination's listing has landed — a fresh mount's first
@@ -285,53 +279,24 @@ export function LibraryScreen(): React.JSX.Element {
   }, [nodes, state]);
   const atRoot = serverUdn == null;
 
-  // Cross-server search: every READY index at once, grouped by server. It
-  // activates at TWO ready indexes — with one, the scoped per-server flow
-  // already covers everything (and keeps its live fallback).
-  const mediaIndexStatuses = useStore((s) => s.mediaIndex);
-  const readyIndexes = useMemo(
-    () => mediaIndexStatuses.filter((x) => x.state === "ready"),
-    [mediaIndexStatuses],
-  );
-  const crossAvailable = readyIndexes.length >= 2;
-  // The button used to POP IN when the second index finished building —
-  // confusing (real-user report). While builds that will unlock cross
-  // search are still running, show it disabled with a building tip instead.
-  // aria-disabled (not the HTML attr) keeps the hover tip alive — the
-  // cross-search server filter's precedent.
-  const buildingCount = useMemo(
-    () => mediaIndexStatuses.filter((x) => x.state === "building").length,
-    [mediaIndexStatuses],
-  );
-  const crossPending =
-    !crossAvailable && buildingCount > 0 && readyIndexes.length + buildingCount >= 2;
-
-  // The lenses: OUR views over the union of ready indexes, offered as doors
-  // at the root beside the sources (places, not modes). One ready index is
-  // enough — for a Browse-only USB stick the lens is the first real library
-  // UI it's ever had.
-  const lensAvailable = readyIndexes.length >= 1;
-  // The doors used to POP IN when the first index finished building — the
-  // same complaint the cross-search button drew (see above), and every
-  // schema bump replays it for everyone. So the block is on screen from the
-  // moment anything is BUILDING (or has FAILED — a silent "not indexed" told
-  // nobody anything): building doors are dimmed with a pulsing icon and say
-  // so, failed ones offer Retry in place, and because the block holds its
-  // space from the first paint nothing below it ever moves. Hidden only when
-  // no index exists AND nothing is building or failed (a fresh browse-only
-  // setup: the servers' own tiles are right below).
-  const failedIndexes = useMemo(
-    () => mediaIndexStatuses.filter((x) => x.state === "failed"),
-    [mediaIndexStatuses],
-  );
-  const doorsState: "ready" | "building" | "failed" | "hidden" = lensAvailable
-    ? "ready"
-    : buildingCount > 0
-      ? "building"
-      : failedIndexes.length > 0
-        ? "failed"
-        : "hidden";
+  // what the indexes offer: the doors' state, cross-server search (useIndexDoors)
+  const { readyIndexes, crossAvailable, crossPending } = useIndexDoors();
   const [lens, setLens] = useState<Lens | null>(null);
+  /** The artist page open over the Artists lens, by name (ArtistPage, 2026-10-11). */
+  const [artistPage, setArtistPage] = useState<string | null>(null);
+  // A LENS OPENS AT THE TOP OF THE PAGE: it scrolls its own column with the page held still, so
+  // a root left scrolled would carry the lens up out of view; closing it at the root brings the
+  // doors back to their own spot (a move between levels restores through the listing's effect)
+  useLayoutEffect(() => {
+    const sc = scrollRef.current;
+    if (!sc || serverUdn != null || searchMode) return;
+    sc.scrollTop = artistPage
+      ? (artistPageScroll.get(artistPage.toLowerCase()) ?? 0)
+      : lens != null
+        ? 0
+        : (scrollMemory.get(nodeKey(null, path)) ?? 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lens, artistPage]);
 
   // (⌘A/Esc keyboard handling lives below the listing memo — its deps need
   // the visible tracks.)
@@ -341,10 +306,6 @@ export function LibraryScreen(): React.JSX.Element {
   // can offer the set line without a lens ever having been opened
   const tailVol = albumVolume(path.at(-1)?.title ?? "");
   const lensPools = useIndexPools(lens != null || tailVol != null);
-  useEffect(() => {
-    if (lens !== "albums" || lensPools == null) return;
-    requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: albumsLensScroll }));
-  }, [lens, lensPools]);
 
   // Action feedback: the app-wide toast for failures, a gold pulse for wins.
   // (The screen's original local notice banner graduated into the toast.)
@@ -370,6 +331,12 @@ export function LibraryScreen(): React.JSX.Element {
     if (!serverUdn) {
       setNodes([]);
       setState("ready");
+      // THE ROOT KEEPS ITS OWN SPOT (2026-10-11, found checking the sweep): it records as it
+      // scrolls and comes back to it like every other level; it never did (no loadedKey), so
+      // the page stayed wherever the level before it was. The front door clears the spot
+      // (the reset effect), so re-invoking Library lands at the top.
+      loadedKey.current = nodeKey(null, path);
+      pendingScroll.current = scrollMemory.get(nodeKey(null, path)) ?? 0;
       return;
     }
     let stale = false;
@@ -385,7 +352,8 @@ export function LibraryScreen(): React.JSX.Element {
               c.id !== UNIFIED_SEARCH_CRUMB_ID &&
               // lens crumbs are the app's, not the server's containers
               c.id !== LENS_CRUMB_ID &&
-              c.id !== LENS_ARTIST_CRUMB_ID,
+              c.id !== LENS_ARTIST_CRUMB_ID &&
+              c.id !== ARTIST_PAGE_CRUMB_ID,
           )
           .map((c) => c.title),
       )
@@ -407,6 +375,8 @@ export function LibraryScreen(): React.JSX.Element {
   }, [serverUdn, path, fetchNonce]);
 
   const rememberScroll = (): void => {
+    // a lens scrolls its own column; the page under it is not the root's spot
+    if (lens != null) return;
     const key = nodeKey(serverUdn, path);
     if (scrollRef.current && loadedKey.current === key)
       scrollMemory.set(key, scrollRef.current.scrollTop);
@@ -429,6 +399,7 @@ export function LibraryScreen(): React.JSX.Element {
     searchNow: searchState,
     crossNow: crossState,
     lens,
+    artist: artistPage,
   });
 
   const moveTo = (udn: string | null, newPath: Crumb[]): void => {
@@ -436,6 +407,7 @@ export function LibraryScreen(): React.JSX.Element {
     rememberScroll();
     exitSearch();
     setLens(null);
+    setArtistPage(null);
     filterMemory.set(nodeKey(serverUdn, path), filter);
     setScreenFilter("library", filterMemory.get(nodeKey(udn, newPath)) ?? "");
     setServerUdn(udn);
@@ -453,11 +425,17 @@ export function LibraryScreen(): React.JSX.Element {
     landOn,
     openAlbumFromLens,
     returnToLens,
+    openArtistPage,
+    closeArtistPage,
+    openAlbumFromArtistPage,
+    returnToArtistPage,
     goToAlbumFromLens,
     goToArtistFromLens,
   } = lensNavigation({
     lens,
     setLens,
+    artistPage,
+    setArtistPage,
     atRoot,
     searchMode,
     serverUdn,
@@ -512,8 +490,8 @@ export function LibraryScreen(): React.JSX.Element {
       if (target && target.nonce !== libraryResetNonce) clearLibraryTarget();
       if (target && target.nonce === libraryResetNonce) {
         if ("artist" in target) {
-          // a NAME from another screen's row: the Artists lens at the root,
-          // focused and revealed on it (the Tracks lens's link, app-wide)
+          // a NAME from another screen's row, Now Playing, History or Search: the
+          // artist's page, over the Artists lens
           landOn({ artist: target.artist });
           return;
         }
@@ -531,7 +509,7 @@ export function LibraryScreen(): React.JSX.Element {
                     id: target.objectId,
                     parentId: null,
                     title,
-                    upnpClass: "object.container.album.musicAlbum",
+                    upnpClass: target.upnpClass ?? "object.container.album.musicAlbum",
                     isContainer: true,
                     artUrl: null,
                     artist: null,
@@ -548,32 +526,52 @@ export function LibraryScreen(): React.JSX.Element {
         });
         return;
       }
-      if (cameBack && positionMemory) {
-        const mem = positionMemory;
+      const mem = useStore.getState().libraryLocation;
+      if (cameBack && mem) {
         moveTo(mem.udn, mem.path);
         setLens(mem.lens); // moveTo clears it; the remembered lens wins
+        setArtistPage(mem.lens === "artists" ? (mem.artist ?? null) : null);
         return;
       }
+      // THE FRONT DOOR is the top of the root: its remembered spot goes (after moveTo has
+      // recorded the level being left)
       moveTo(null, []);
+      scrollMemory.delete(nodeKey(null, []));
     } finally {
       restoring.current = false;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [libraryResetNonce]);
 
-  // Keep the memory current as you browse (a module var write, like the scroll
-  // and find-recall memories — not state, nothing re-renders on it).
+  // Keep the location current as you browse: history reads it as the spot being
+  // left when a navigation goes elsewhere, and a return visit restores it (the
+  // store's libraryLocation; nothing subscribes to it, so nothing re-renders on it).
   // DECLARATION ORDER MATTERS: this must stay BELOW the arrival effect. On a
-  // return-mount both run, in order — arrival reads the memory and queues the
+  // return-mount both run, in order — arrival reads the location and queues the
   // restore, then this one overwrites it with the mount's initial (empty)
   // state; the restore's re-render writes the real values back a beat later.
   // Declared above the arrival effect, the clobber would come first and there
   // would be nothing left to restore.
+  const setLibraryLocation = useStore((s) => s.setLibraryLocation);
   useEffect(() => {
-    positionMemory = { udn: serverUdn, path, lens };
-  }, [serverUdn, path, lens]);
+    setLibraryLocation(snapshot());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverUdn, path, searchMode, searchQuery, searchState, crossState, lens, artistPage]);
+
+  // THE ARTIST PAGE is built from the indexes: an artist has one when an index holds their server
+  // (the lens's artists always; a search's or a folder's artist when theirs is indexed)
+  const artistPageOf = (node: MediaNode): (() => void) | undefined =>
+    node.isContainer &&
+    isArtistClass(node.upnpClass) &&
+    readyIndexes.some((x) => x.udn === (node.serverUdn ?? serverUdn))
+      ? () => openArtistPage(node.title)
+      : undefined;
 
   const enter = (node: MediaNode): void => {
+    // A SEARCH'S ARTIST opens the artist's page (2026-10-11); an artist from a live search of an
+    // unindexed server keeps its folder, as does an artist met browsing a server's folders
+    const page = searchMode || crossMode ? artistPageOf(node) : undefined;
+    if (page) return page();
     if (crossMode && crossState) {
       // Entering a cross-server result SCOPES to its server; the query crumb
       // leads back to the root cross view with its groups intact.
@@ -620,6 +618,7 @@ export function LibraryScreen(): React.JSX.Element {
     if (newPath[newPath.length - 1]?.id === UNIFIED_SEARCH_CRUMB_ID) return setScreen("search");
     if (newPath[newPath.length - 1]?.id === SEARCH_CRUMB_ID) return returnToSearch();
     const last = newPath[newPath.length - 1];
+    if (last?.id === ARTIST_PAGE_CRUMB_ID) return returnToArtistPage(last.title);
     if (last?.id === LENS_ARTIST_CRUMB_ID) {
       focusArtistsLens(last.title);
       return returnToLens();
@@ -635,9 +634,12 @@ export function LibraryScreen(): React.JSX.Element {
       if (path.length === 1 && path[0]?.id === UNIFIED_SEARCH_CRUMB_ID) return setScreen("search");
       if (path[path.length - 2]?.id === SEARCH_CRUMB_ID) return returnToSearch();
       const parent = path[path.length - 2]?.id;
+      if (parent === ARTIST_PAGE_CRUMB_ID) return returnToArtistPage(path[path.length - 2].title);
       if (parent === LENS_CRUMB_ID || parent === LENS_ARTIST_CRUMB_ID) return returnToLens();
       moveTo(serverUdn, path.slice(0, -1));
     } else if (serverUdn) moveTo(null, []);
+    else if (artistPage)
+      closeArtistPage(); // the page exits to the Artists lens's columns
     else if (lens) setLens(null); // lens exits to the source list
   };
 
@@ -659,6 +661,7 @@ export function LibraryScreen(): React.JSX.Element {
         setLensReturn(snap.lens);
         setLens(snap.lens);
       }
+      setArtistPage(snap.lens === "artists" ? (snap.artist ?? null) : null);
     } finally {
       restoring.current = false;
     }
@@ -669,12 +672,6 @@ export function LibraryScreen(): React.JSX.Element {
     claim: navRestore?.nonce,
     clear: clearNavRestore,
   });
-  // the store reads this when a navigation leaves the Library (lib/navSpot)
-  useEffect(() => {
-    setCurrentLibrarySpot(snapshot());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverUdn, path, searchMode, searchQuery, searchState, crossState, lens]);
-  useEffect(() => () => setCurrentLibrarySpot(null), []);
 
   // Backspace goes UP a level (folder semantics; above a source's root it
   // lands on the source list). ⌘/Alt ←/→ and mouse 4/5 are history, app-wide —
@@ -754,6 +751,7 @@ export function LibraryScreen(): React.JSX.Element {
     showToast,
     showNotice,
     late: menusLate,
+    openArtistPage,
   });
 
   const act = async (
@@ -769,49 +767,8 @@ export function LibraryScreen(): React.JSX.Element {
     else if (outcome === "ok" && el) flashTarget(el);
   };
 
-  // Title-keyed queue index: the content-match used to scan the whole queue
-  // once per TRACK ROW per render (O(nodes × queue) under a 400-item grid);
-  // one Map per queue push makes each lookup O(same-titled entries).
-  const queueByTitle = useMemo(() => {
-    const m = new Map<string, QueueListItem[]>();
-    for (const i of queue?.items ?? []) {
-      const t = i.metadata?.title;
-      if (t == null || i.id == null) continue;
-      const list = m.get(t);
-      if (list) list.push(i);
-      else m.set(t, [i]);
-    }
-    return m;
-  }, [queue]);
-
-  /**
-   * Queue entries whose metadata content-matches a library track — the ONE
-   * matcher (lib/playingEntry), so a compilation track whose entry carries
-   * the album artist is found, not duplicated on click.
-   */
-  const queueMatches = (node: MediaNode): QueueListItem[] =>
-    (queueByTitle.get(node.title) ?? []).filter((i) => trackMatchesEntry(node, i.metadata));
-  const trackQueued = (node: MediaNode): boolean => queueMatches(node).length > 0;
-
-  /**
-   * Bare track click: if the track is already in the queue, JUMP to that
-   * queue entry (first occurrence at-or-after the current position) instead
-   * of inserting a duplicate — clicking an album you just queued navigates
-   * it. Only genuinely un-queued tracks insert (PLAY_NOW). The ⋯ verbs stay
-   * literal inserts.
-   */
-  const playTrack = (node: MediaNode, el: HTMLElement | null): void => {
-    const items = queue?.items ?? [];
-    const matches = queueMatches(node);
-    if (matches.length > 0) {
-      const curIdx = items.findIndex((i) => i.id === effectivePlayId);
-      const target = matches.find((mi) => items.indexOf(mi) >= curIdx) ?? matches[0];
-      void tt.command({ type: "playQueueId", queueId: target.id as number });
-      if (el) flashTarget(el);
-      return;
-    }
-    void act(node, "PLAY_NOW", el);
-  };
+  // which tracks are queued, and a bare click's jump to a queued entry (useQueueMatch)
+  const { trackQueued, playTrack } = useQueueMatch((node, el) => void act(node, "PLAY_NOW", el));
 
   // Selection and drag live in components/library/useLibrarySelection (lifted
   // 2026-09-13, the third lift): the multi-select over the visible track rows,
@@ -928,6 +885,9 @@ export function LibraryScreen(): React.JSX.Element {
   const lastCrumbNode = path.length > 0 ? path[path.length - 1].node : undefined;
   const albumNode =
     !searchMode && lastCrumbNode && isAlbumClass(lastCrumbNode.upnpClass) ? lastCrumbNode : null;
+  /** An artist folder opens under the artist's picture and name (ArtistHeader). */
+  const artistNode =
+    !searchMode && lastCrumbNode && isArtistClass(lastCrumbNode.upnpClass) ? lastCrumbNode : null;
   const albumVol = albumNode ? albumVolume(albumNode.title) : null;
   /** The browsed album's volume siblings (same parsed base + artist), by volume. */
   const setSiblings = useMemo(() => {
@@ -1088,37 +1048,122 @@ export function LibraryScreen(): React.JSX.Element {
       })
       .filter((g) => g.albums.length + g.artists.length + g.folders.length + g.tracks.length > 0);
   }, [crossState, crossServerUdn, searchKind, searchSort, searchSortReversed]);
+  // ONE WINDOWED LIST OF EVERY RESULT (2026-10-11, user: "one big (windowed) list seems more
+  // user friendly", after the 500-at-a-time button sat at the end of the first library's group,
+  // mid-list): the results flatten into lines (a library's heading, a kind's label, a row of
+  // cards, a container row, a track row), and only the lines near the viewport are drawn, the
+  // Albums grid's rule. Each line carries its own spacing inside it (padding, a border on every
+  // row, transparent on a section's first), so a kind of line has one height to measure.
+  const [searchWidth, setSearchWidth] = useState(0);
+  const searchRo = useRef<ResizeObserver | null>(null);
+  const searchBodyRef = useCallback((el: HTMLDivElement | null) => {
+    searchRo.current?.disconnect();
+    searchRo.current = null;
+    if (!el) return;
+    setSearchWidth(el.getBoundingClientRect().width);
+    const ro = new ResizeObserver(([e]) => setSearchWidth(e.contentRect.width));
+    ro.observe(el);
+    searchRo.current = ro;
+  }, []);
+  const searchCols = Math.max(
+    1,
+    Math.floor((searchWidth + presetGap) / (presetCardSize + presetGap)),
+  );
+  const searchLines = useMemo((): SearchLine[] => {
+    const lines: SearchLine[] = [];
+    const section = (key: string, text: string, list: MediaNode[], containers: boolean): void => {
+      if (list.length === 0) return;
+      // across libraries a kind's label sits tight under its library's heading
+      const label = crossMode ? "klabel" : lines.length === 0 ? "label0" : "label";
+      lines.push({ kind: label, key: `${key}-l`, text });
+      if (containers && cards) {
+        for (let i = 0; i < list.length; i += searchCols)
+          lines.push({
+            kind: i === 0 ? "cards0" : "cards",
+            key: `${key}-c${i}`,
+            nodes: list.slice(i, i + searchCols),
+          });
+      } else
+        list.forEach((node, index) =>
+          lines.push({
+            kind: containers ? "crow" : "track",
+            key: `${key}-${node.id}`,
+            node,
+            list,
+            index,
+          }),
+        );
+    };
+    const kinds = (key: string, items: MediaNode[], tracksOf: MediaNode[]): void => {
+      section(
+        `${key}a`,
+        "Artists",
+        items.filter((c) => c.isContainer && c.upnpClass.includes("musicArtist")),
+        true,
+      );
+      section(
+        `${key}b`,
+        "Albums",
+        items.filter((c) => c.isContainer && isAlbumClass(c.upnpClass)),
+        true,
+      );
+      section(
+        `${key}f`,
+        "Folders",
+        items.filter(
+          (c) =>
+            c.isContainer && !isAlbumClass(c.upnpClass) && !c.upnpClass.includes("musicArtist"),
+        ),
+        true,
+      );
+      section(`${key}t`, "Tracks", tracksOf, false);
+    };
+    if (crossMode && crossState)
+      crossGroups.forEach((g) => {
+        lines.push({ kind: lines.length === 0 ? "group0" : "group", key: `g-${g.udn}`, group: g });
+        kinds(`g-${g.udn}-`, [...g.artists, ...g.albums, ...g.folders], g.tracks);
+      });
+    else if (searchMode && searchState) kinds("s-", containers, tracks);
+    return lines;
+  }, [
+    crossMode,
+    crossState,
+    crossGroups,
+    searchMode,
+    searchState,
+    containers,
+    tracks,
+    cards,
+    searchCols,
+  ]);
+  const searchKinds = useMemo(() => searchLines.map((l) => l.kind), [searchLines]);
+  const searchWin = useWindowedList({
+    scrollRef,
+    count: searchLines.length,
+    itemSelector: "[data-search-line]",
+    kinds: searchKinds,
+    estimate: {
+      group0: 36,
+      group: 56,
+      label0: 30,
+      label: 42,
+      klabel: 30,
+      cards0: presetCardSize + 60,
+      cards: presetCardSize + 52 + presetGap,
+      crow: 57,
+      track: 57,
+    },
+    overscan: 6,
+    enabled: searchLines.length > 80,
+  });
+
   const crossItemCount = crossState
     ? crossState.groups.reduce((acc, g) => acc + g.items.length, 0)
     : 0;
   const crossTotal = crossState ? crossState.groups.reduce((acc, g) => acc + g.total, 0) : 0;
 
-  // Playing-item highlight, queue-screen rules: library items carry no queue
-  // ids, so match by content — against the PLAYING QUEUE ENTRY's metadata
-  // (server-shaped, the same strings the library shows; see lib/playingEntry:
-  // play_state.metadata is the streamer's FILE-TAG readout and disagrees with
-  // the server on every album Asset renames), falling back to that readout
-  // only while the queue isn't known. Only while the queue's source is audible.
-  const md = playState?.metadata ?? null;
-  const queueSourceActive = activeSourceId(zoneState, nowPlaying) === "MEDIA_PLAYER";
-  const playingEntry = playingQueueEntry(queue, playState, effectivePlayId)?.metadata ?? null;
-  const isCurrentTrack = (node: MediaNode): boolean =>
-    playingEntry != null
-      ? trackMatchesEntry(node, playingEntry)
-      : md != null &&
-        node.title === md.title &&
-        (node.album == null || md.album == null || node.album === md.album) &&
-        entryArtistMatches(md.artist, node) &&
-        // Twin titles on one album (a reprise, a bonus cut) are real — duration
-        // is the content identity left, so require agreement when both sides
-        // know it (±2s: the device and UPnP round track lengths differently).
-        (node.durationSecs == null ||
-          md.duration == null ||
-          Math.abs(node.durationSecs - md.duration) <= 2);
-  const isPlayingAlbum = (node: MediaNode): boolean =>
-    playingEntry != null
-      ? albumMatchesEntry(node, playingEntry)
-      : md != null && md.album === node.title && entryArtistMatches(md.artist, node);
+  // the playing row and card, by content against the playing queue entry (usePlayingMatch)
+  const { md, queueSourceActive, isCurrentTrack, isPlayingAlbum } = usePlayingMatch();
 
   const allTracks = useMemo(() => nodes.filter((n) => !n.isContainer), [nodes]);
   menusLate.current = { albumNode, setSiblings, openVolume, allTracks };
@@ -1196,7 +1241,11 @@ export function LibraryScreen(): React.JSX.Element {
   // synthetic crumb ids are known
   const pathTitles = path
     .filter(
-      (c) => c.id !== SEARCH_CRUMB_ID && c.id !== LENS_CRUMB_ID && c.id !== LENS_ARTIST_CRUMB_ID,
+      (c) =>
+        c.id !== SEARCH_CRUMB_ID &&
+        c.id !== LENS_CRUMB_ID &&
+        c.id !== LENS_ARTIST_CRUMB_ID &&
+        c.id !== ARTIST_PAGE_CRUMB_ID,
     )
     .map((c) => c.title);
   const { nodeFavorited, heartNode, heartNodes } = useLibraryFavorites({
@@ -1258,8 +1307,42 @@ export function LibraryScreen(): React.JSX.Element {
   // the lists below carry no extra top margin in search mode), identical
   // above-gap too (mt-2 for whichever group lands first, mt-5 after).
   selectionLate.current = { heartNode, heartNodes, nodeFavorited };
-  const groupLabelClass = (first: boolean): string =>
-    cx("microlabel mb-0.5 px-1", first ? "mt-2" : "mt-5");
+  /** One container as the listing draws it: a card, or a row in the rows layout. */
+  const containerItem = (node: MediaNode): React.JSX.Element =>
+    cards ? (
+      <ContainerCard
+        key={node.id}
+        node={node}
+        playing={queueSourceActive && isPlayingAlbum(node)}
+        menuOpen={menuNodeId === node.id}
+        favorited={isAlbumClass(node.upnpClass) ? nodeFavorited(node) : undefined}
+        onHeart={isAlbumClass(node.upnpClass) ? () => heartNode(node) : undefined}
+        onEnter={() => enter(node)}
+        onPlay={(el) => void playContainer(node, el)}
+        onMenu={(e) => openMenu(node, e)}
+        onNavDrag={
+          isAlbumClass(node.upnpClass) ? (e) => startAlbumDrag([node], e, node.title) : undefined
+        }
+      />
+    ) : (
+      <ContainerRow
+        key={node.id}
+        node={node}
+        playing={queueSourceActive && isPlayingAlbum(node)}
+        menuOpen={menuNodeId === node.id}
+        favorited={isAlbumClass(node.upnpClass) ? nodeFavorited(node) : undefined}
+        dr={isAlbumClass(node.upnpClass) ? (albumDrMap[albumDrKey(node)]?.dr ?? null) : null}
+        onArtistLink={
+          isAlbumClass(node.upnpClass) && node.artist ? () => goToArtistFromLens(node) : undefined
+        }
+        onHeart={isAlbumClass(node.upnpClass) ? () => heartNode(node) : undefined}
+        onEnter={() => enter(node)}
+        onMenu={(e) => openMenu(node, e)}
+        onNavDrag={
+          isAlbumClass(node.upnpClass) ? (e) => startAlbumDrag([node], e, node.title) : undefined
+        }
+      />
+    );
 
   const containerGrid = (list: MediaNode[]): React.JSX.Element => (
     <div
@@ -1277,50 +1360,38 @@ export function LibraryScreen(): React.JSX.Element {
           : undefined
       }
     >
-      {list.map((node) =>
-        cards ? (
-          <ContainerCard
-            key={node.id}
-            node={node}
-            playing={queueSourceActive && isPlayingAlbum(node)}
-            menuOpen={menuNodeId === node.id}
-            favorited={isAlbumClass(node.upnpClass) ? nodeFavorited(node) : undefined}
-            onHeart={isAlbumClass(node.upnpClass) ? () => heartNode(node) : undefined}
-            onEnter={() => enter(node)}
-            onPlay={(el) => void playContainer(node, el)}
-            onMenu={(e) => openMenu(node, e)}
-            onNavDrag={
-              isAlbumClass(node.upnpClass)
-                ? (e) => startAlbumDrag([node], e, node.title)
-                : undefined
-            }
-          />
-        ) : (
-          <ContainerRow
-            key={node.id}
-            node={node}
-            playing={queueSourceActive && isPlayingAlbum(node)}
-            menuOpen={menuNodeId === node.id}
-            favorited={isAlbumClass(node.upnpClass) ? nodeFavorited(node) : undefined}
-            dr={isAlbumClass(node.upnpClass) ? (albumDrMap[albumDrKey(node)]?.dr ?? null) : null}
-            onArtistLink={
-              isAlbumClass(node.upnpClass) && node.artist
-                ? () => goToArtistFromLens(node)
-                : undefined
-            }
-            onHeart={isAlbumClass(node.upnpClass) ? () => heartNode(node) : undefined}
-            onEnter={() => enter(node)}
-            onMenu={(e) => openMenu(node, e)}
-            onNavDrag={
-              isAlbumClass(node.upnpClass)
-                ? (e) => startAlbumDrag([node], e, node.title)
-                : undefined
-            }
-          />
-        ),
-      )}
+      {list.map((node) => containerItem(node))}
     </div>
   );
+
+  // AN ARTIST PAGE NAMES WHAT IT HOLDS (2026-10-11, user: "do we want to add an 'Albums' title
+  // above the albums? i'm a little unclear exactly what this is supposed to be showing"): the
+  // server's own folder for the artist holds what that server decides (Asset: the albums;
+  // MinimServer: its sub-indexes, "2 albums", "Date", "Genre"), so the contents are labelled by
+  // kind as search results are, never one fixed title that is wrong on some server
+  const artistSections = ((): React.JSX.Element | null => {
+    if (!artistNode) return null;
+    const albums = containers.filter((c) => isAlbumClass(c.upnpClass));
+    const other = containers.filter((c) => !isAlbumClass(c.upnpClass));
+    return (
+      <>
+        {albums.length > 0 && (
+          <>
+            <div className="microlabel pb-0.5 px-1 pt-2">Albums</div>
+            {containerGrid(albums)}
+          </>
+        )}
+        {other.length > 0 && (
+          <>
+            <div className={cx("microlabel pb-0.5 px-1", albums.length > 0 ? "pt-5" : "pt-2")}>
+              Folders
+            </div>
+            {containerGrid(other)}
+          </>
+        )}
+      </>
+    );
+  })();
 
   if (servers != null && servers.length === 0) {
     return (
@@ -1375,12 +1446,75 @@ export function LibraryScreen(): React.JSX.Element {
           : undefined
       }
       onArtistLink={
-        opts.links && node.artist && linkable(node, "artists")
-          ? () => void goToArtist(node)
-          : undefined
+        opts.links && node.artist && linkable(node, "artists") ? () => goToArtist(node) : undefined
       }
     />
   );
+
+  /** One line of the windowed search results; its spacing lives inside it (see searchLines). */
+  const searchLine = (line: SearchLine): React.JSX.Element => {
+    const attrs = { "data-search-line": "", "data-win-kind": line.kind };
+    if ("group" in line) {
+      const src = servers?.find((x) => x.udn === line.group.udn);
+      return (
+        <div
+          key={line.key}
+          {...attrs}
+          data-cross-server-group={line.group.serverName}
+          className={cx("flex items-center gap-2 px-1", line.kind === "group0" ? "pt-2" : "pt-7")}
+        >
+          {src?.isStreamer ? (
+            <Usb size={15} className="text-dim" />
+          ) : (
+            <HardDrive size={15} className="text-dim" />
+          )}
+          <span className="text-[13.5px] font-medium">{line.group.serverName}</span>
+          <span className="font-mono text-[11px] text-faint tabular-nums">
+            {line.group.total} result{line.group.total === 1 ? "" : "s"}
+          </span>
+        </div>
+      );
+    }
+    if ("text" in line)
+      return (
+        <div
+          key={line.key}
+          {...attrs}
+          className={cx("microlabel pb-0.5 px-1", line.kind === "label" ? "pt-5" : "pt-2")}
+        >
+          {line.text}
+        </div>
+      );
+    if ("nodes" in line)
+      return (
+        <div
+          key={line.key}
+          {...attrs}
+          style={{
+            display: "grid",
+            gridTemplateColumns: presetFillRows
+              ? `repeat(${searchCols}, minmax(${presetCardSize}px, 1fr))`
+              : `repeat(${searchCols}, ${presetCardSize}px)`,
+            gap: presetGap,
+            paddingTop: line.kind === "cards0" ? 8 : presetGap,
+          }}
+        >
+          {line.nodes.map((node) => containerItem(node))}
+        </div>
+      );
+    // a row: its divider is its own top border, transparent on a section's first
+    return (
+      <div
+        key={line.key}
+        {...attrs}
+        className={cx("-mx-2 border-t", line.index === 0 ? "border-transparent" : "border-edge/50")}
+      >
+        {line.kind === "crow"
+          ? containerItem(line.node)
+          : trackRow(line.node, line.list, line.index, { showArt: true, links: true })}
+      </div>
+    );
+  };
 
   return (
     <div
@@ -1554,7 +1688,16 @@ export function LibraryScreen(): React.JSX.Element {
                 onClick: () => jumpTo(0),
                 current: atRoot && !lens,
               },
-              ...(atRoot && lens ? [{ key: "lens", label: LENS_LABEL[lens] }] : []),
+              ...(atRoot && lens
+                ? artistPage
+                  ? [
+                      // the artist page over the Artists lens: the lens crumb leads back to
+                      // its columns, the artist still selected
+                      { key: "lens", label: LENS_LABEL[lens], onClick: closeArtistPage },
+                      { key: "artist-page", label: artistPage, current: true },
+                    ]
+                  : [{ key: "lens", label: LENS_LABEL[lens] }]
+                : []),
               ...(server && path[0]?.id !== LENS_CRUMB_ID
                 ? [
                     {
@@ -1586,13 +1729,13 @@ export function LibraryScreen(): React.JSX.Element {
       <div
         ref={scrollRef}
         onScroll={(e) => {
-          if (atRoot && lens === "albums" && !searchMode) {
-            albumsLensScroll = e.currentTarget.scrollTop;
-            return;
-          }
           // Recorded as you scroll, not only when you navigate: leaving for
           // another screen UNMOUNTS this one, and the album you were halfway
           // down came back at the top (user, 2026-08-22).
+          if (artistPage && atRoot && !searchMode) {
+            artistPageScroll.set(artistPage.toLowerCase(), e.currentTarget.scrollTop);
+            return;
+          }
           if (searchMode || lens) return;
           const key = nodeKey(serverUdn, path);
           if (loadedKey.current === key) scrollMemory.set(key, e.currentTarget.scrollTop);
@@ -1602,8 +1745,10 @@ export function LibraryScreen(): React.JSX.Element {
           // right-aligned control as listings shrink/grow (macOS always-on
           // scrollbars — the "filter box moves" report)
           "flex-1 px-8 pt-1 [scrollbar-gutter:stable]",
-          // the miller view scrolls its own columns — the page must not
-          atRoot && (lens === "artists" || lens === "tracks") && !searchMode
+          // every lens scrolls its own column under its toolbar (the miller view's columns, the
+          // tracks list, the albums grid since 2026-10-11) — the page must not; the artist page
+          // is a page, and scrolls as one
+          atRoot && lens != null && !searchMode && !artistPage
             ? "overflow-hidden min-h-0 pb-6"
             : // the floating bar overlaps the last rows at full scroll —
               // selection mode adds scroll-room so every row can clear it
@@ -1641,283 +1786,35 @@ export function LibraryScreen(): React.JSX.Element {
               fillRows={presetFillRows}
               onToggleLayout={() => void setLayout(cards ? "rows" : "cards")}
             />
+          ) : lens === "artists" && artistPage ? (
+            <ArtistPage
+              name={artistPage}
+              pools={lensPools}
+              actions={lensActions}
+              cards={cards}
+              cardSize={presetCardSize}
+              cardGap={presetGap}
+              fillRows={presetFillRows}
+              onOpenAlbum={(node, track) => openAlbumFromArtistPage(node, artistPage, track)}
+            />
           ) : lens === "artists" ? (
-            <ArtistsLens pools={lensPools} actions={lensActions} />
+            <ArtistsLens
+              pools={lensPools}
+              actions={lensActions}
+              onOpenArtistPage={openArtistPage}
+            />
           ) : (
             <TracksLens pools={lensPools} actions={lensActions} />
           ))}
 
+        {/* root: the lens doors and the sources (components/library/LibraryRoot) */}
         {!loading && atRoot && !searchMode && lens == null && (
-          <div className="space-y-7 pt-1">
-            {shownServers.length === 0 && (
-              <div className="text-[15px] text-faint pt-3 px-1">
-                {filter ? `No matches for “${filter}”` : "Nothing here"}
-              </div>
-            )}
-            {/* the lens doors LEAD the root: our views over EVERY built
-                index at once — same card geometry as the sources, gold
-                surface marking them as a different kind of door */}
-            {doorsState !== "hidden" && (
-              <div data-library-doors={doorsState}>
-                <div className="microlabel mb-0.5 px-1">All libraries</div>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: presetFillRows
-                      ? `repeat(auto-fill, minmax(${presetCardSize}px, 1fr))`
-                      : `repeat(auto-fill, ${presetCardSize}px)`,
-                    gap: presetGap,
-                    paddingTop: 8,
-                  }}
-                >
-                  {[
-                    {
-                      key: "artists" as const,
-                      title: "Artists",
-                      icon: Users,
-                      count: readyIndexes.reduce((acc, x) => acc + x.artists, 0),
-                      noun: "artists",
-                    },
-                    {
-                      key: "albums" as const,
-                      title: "Albums",
-                      icon: Disc3,
-                      count: readyIndexes.reduce((acc, x) => acc + x.albums, 0),
-                      noun: "albums",
-                    },
-                    {
-                      key: "tracks" as const,
-                      title: "Tracks",
-                      icon: Music2,
-                      count: readyIndexes.reduce((acc, x) => acc + x.tracks, 0),
-                      noun: "tracks",
-                    },
-                  ].map((door) => (
-                    <div
-                      key={door.key}
-                      data-library-lens={door.key}
-                      aria-disabled={doorsState === "building" ? true : undefined}
-                      data-tip={
-                        buildingCount > 0 && doorsState !== "failed"
-                          ? `Indexing ${buildingCount === 1 ? "a library" : `${buildingCount} libraries`}…${doorsState === "ready" ? " What is already indexed is browsable now." : ""}`
-                          : doorsState === "failed"
-                            ? `Couldn't index ${failedIndexes.map((x) => `${x.serverName} (${x.failure ?? "no index"})`).join(", ")}. Click to retry.`
-                            : undefined
-                      }
-                      onClick={() => {
-                        if (doorsState === "building") return;
-                        if (doorsState === "failed") {
-                          for (const x of failedIndexes) void tt.mediaIndexRebuild(x.udn);
-                          return;
-                        }
-                        openLens(door.key);
-                      }}
-                      className={cx(
-                        // tip-wide anchors the tooltip to the card's LEFT edge and wraps it:
-                        // centered, the indexing tip poked past the scrollport's left
-                        // edge and clipped (user, 2026-08-29)
-                        "group relative rounded-2xl p-2 pb-2.5 bg-raised/50 ring-1 ring-gold/25 transition-all duration-200 ease-out tip-bottom tip-wide",
-                        doorsState === "building"
-                          ? "opacity-60 cursor-default"
-                          : "card-hover-glow cursor-pointer hover:z-10 motion-safe:hover:scale-[1.04]",
-                      )}
-                    >
-                      <div className="aspect-square w-full rounded-lg bg-golddim flex items-center justify-center">
-                        {buildingCount > 0 && doorsState !== "failed" ? (
-                          <>
-                            {/* the boot screen's own loading glyph at the door icon's
-                                size, while ANYTHING is still building — the icon's
-                                pulse read as styling, not activity (user, 2026-08-29).
-                                Reduced motion keeps the icon: a frozen spinner reads
-                                as broken. */}
-                            <Loader2
-                              size={40}
-                              strokeWidth={1.1}
-                              className="spin text-gold/70 motion-reduce:hidden"
-                            />
-                            <door.icon
-                              size={40}
-                              strokeWidth={1.1}
-                              className="hidden motion-reduce:block text-gold/70"
-                            />
-                          </>
-                        ) : (
-                          <door.icon
-                            size={40}
-                            strokeWidth={1.1}
-                            className="text-gold/70 group-hover:text-gold transition-colors"
-                          />
-                        )}
-                      </div>
-                      <div className="pt-1.5 text-[12.5px] truncate">{door.title}</div>
-                      {/* the count line fades in when the index lands (motion-safe, the modal's 140ms) — the door itself never moves */}
-                      <div
-                        key={doorsState === "ready" && buildingCount === 0 ? "ready" : "waiting"}
-                        className={cx(
-                          "text-[11.5px] truncate motion-safe:transition-opacity motion-safe:duration-[140ms]",
-                          doorsState === "failed" ? "text-alert" : "text-faint",
-                        )}
-                      >
-                        {doorsState === "building"
-                          ? "Indexing…"
-                          : doorsState === "failed"
-                            ? `Couldn't index${FACT_SEP}Retry`
-                            : buildingCount > 0
-                              ? door.count > 0
-                                ? `${fmtCount(door.count)} ${door.noun}${FACT_SEP}indexing…`
-                                : "Indexing…"
-                              : door.count > 0
-                                ? `${fmtCount(door.count)} ${door.noun}${FACT_SEP}every library`
-                                : "Across every library"}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {(["servers", "usb"] as const).map((kind) => {
-              const group = shownServers.filter((s) => (kind === "usb") === s.isStreamer);
-              if (group.length === 0) return null;
-              return (
-                <div key={kind}>
-                  <div className="microlabel mb-0.5 px-1">
-                    {kind === "usb" ? "USB drives" : "Servers"}
-                  </div>
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: presetFillRows
-                        ? `repeat(auto-fill, minmax(${presetCardSize}px, 1fr))`
-                        : `repeat(auto-fill, ${presetCardSize}px)`,
-                      gap: presetGap,
-                      paddingTop: 8,
-                    }}
-                  >
-                    {group.map((s) => {
-                      // the card carries ITS server's index state (2026-09-14): the
-                      // doors animate for any build, this says which one, and a
-                      // stick's first index is a Build ask the Library never offered
-                      const st = mediaIndexStatuses.find((x) => x.udn === s.udn) ?? null;
-                      const state = st?.state ?? "none";
-                      const building = state === "building";
-                      const failed = state === "failed";
-                      const unindexed = state === "none" && !s.searchable;
-                      // the stick's counter moved (a standby renumbers it, so its music may be
-                      // just as it was) and the app will not walk it unasked
-                      const stale = st?.stale === true;
-                      const Icon = s.isStreamer ? Usb : HardDrive;
-                      return (
-                        <div
-                          key={s.udn}
-                          data-library-source
-                          data-library-source-state={state}
-                          onClick={() => {
-                            if (failed) {
-                              void tt.mediaIndexRebuild(s.udn);
-                              return;
-                            }
-                            enterServer(s.udn);
-                          }}
-                          data-tip={
-                            s.isStreamer && inStandby
-                              ? "In standby. USB content appears once the streamer wakes."
-                              : failed
-                                ? `Couldn't index (${st?.failure ?? "no index"}). Click to retry.`
-                                : stale
-                                  ? "The drive may have changed since it was last indexed."
-                                  : undefined
-                          }
-                          className={cx(
-                            "group relative rounded-2xl p-2 pb-2.5 bg-raised/50 ring-1 ring-edge card-hover-glow cursor-pointer transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]",
-                            s.isStreamer && inStandby && "opacity-50 tip-bottom",
-                            building && "opacity-60",
-                            failed && "tip-bottom",
-                            // the tip explains the caption, so it sits beside the card level
-                            // with the caption (user, 2026-10-05: the default put it beside the
-                            // card's middle, far from the cursor; under the card a low card's
-                            // tip ran into the playback bar)
-                            stale && "tip-low",
-                          )}
-                        >
-                          {/* one frame per card: the well is a veil lift with no ring of its own (see LibraryCards) */}
-                          <div className="aspect-square w-full rounded-lg bg-veil flex items-center justify-center">
-                            {building ? (
-                              <>
-                                {/* the doors' loading glyph: a spinner reads as activity where a
-                                    pulsing icon read as styling; reduced motion keeps the icon */}
-                                <Loader2
-                                  size={40}
-                                  strokeWidth={1.1}
-                                  className="spin text-dim motion-reduce:hidden"
-                                />
-                                <Icon
-                                  size={40}
-                                  strokeWidth={1.1}
-                                  className="hidden motion-reduce:block text-dim"
-                                />
-                              </>
-                            ) : (
-                              <Icon
-                                size={40}
-                                strokeWidth={1.1}
-                                className="text-dim group-hover:text-ink transition-colors"
-                              />
-                            )}
-                          </div>
-                          <div className="pt-1.5 text-[12.5px] truncate">{s.name}</div>
-                          <div
-                            data-library-source-caption
-                            className={cx(
-                              "text-[11.5px] truncate",
-                              failed ? "text-alert" : "text-faint",
-                            )}
-                          >
-                            {building ? (
-                              <span className="motion-safe:animate-pulse">Indexing…</span>
-                            ) : failed ? (
-                              `Couldn't index${FACT_SEP}Retry`
-                            ) : state === "ready" && st && stale ? (
-                              <button
-                                data-library-source-build
-                                data-library-source-stale
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  void tt.mediaIndexRebuild(s.udn);
-                                }}
-                                // the caption's own color, gold only under the cursor: after
-                                // a standby the streamer renumbers the drive and this shows
-                                // whether or not anything changed, so it offers, never alarms
-                                // (user, 2026-10-05)
-                                className="hover:text-gold transition-colors"
-                              >
-                                Check for changes
-                              </button>
-                            ) : state === "ready" && st ? (
-                              `Indexed${FACT_SEP}${fmtCount(st.albums)} ${st.albums === 1 ? "album" : "albums"}`
-                            ) : unindexed ? (
-                              <button
-                                data-library-source-build
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  void tt.mediaIndexRebuild(s.udn);
-                                }}
-                                className="text-gold/90 hover:text-gold transition-colors"
-                              >
-                                {s.isStreamer ? "Index this drive" : "Index this server"}
-                              </button>
-                            ) : (
-                              (s.model ??
-                              (s.isStreamer ? "Storage on the streamer" : "Media server"))
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <LibraryRoot
+            servers={shownServers}
+            filter={filter}
+            openLens={openLens}
+            enterServer={enterServer}
+          />
         )}
 
         {!atRoot && state === "error" && (
@@ -1933,6 +1830,9 @@ export function LibraryScreen(): React.JSX.Element {
         )}
         {/* the album header and its box-set pills (components/library/AlbumHeader,
             lifted 2026-09-13, the fifth lift's second part) */}
+        {!atRoot && state === "ready" && artistNode && (
+          <ArtistHeader name={artistNode.title} serverArt={artistNode.artUrl} folders={nodes} />
+        )}
         {!atRoot && state === "ready" && albumNode && (
           <AlbumHeader
             albumNode={albumNode}
@@ -1990,49 +1890,19 @@ export function LibraryScreen(): React.JSX.Element {
           state === "ready" &&
           containers.length > 0 &&
           !searchMode &&
-          containerGrid(containers)}
+          (artistNode ? artistSections : containerGrid(containers))}
 
-        {/* search results come grouped so artists / albums / tracks read
-            at a glance (hierarchy order, matching the kind filter) */}
-        {!atRoot && state === "ready" && searchMode && searchState && (
-          <>
-            {(() => {
-              const albums = containers.filter((c) => isAlbumClass(c.upnpClass));
-              const artists = containers.filter((c) => c.upnpClass.includes("musicArtist"));
-              const other = containers.filter(
-                (c) => !isAlbumClass(c.upnpClass) && !c.upnpClass.includes("musicArtist"),
-              );
-              return (
-                <>
-                  {artists.length > 0 && (
-                    <>
-                      <div className={groupLabelClass(true)}>Artists</div>
-                      {containerGrid(artists)}
-                    </>
-                  )}
-                  {albums.length > 0 && (
-                    <>
-                      <div className={groupLabelClass(artists.length === 0)}>Albums</div>
-                      {containerGrid(albums)}
-                    </>
-                  )}
-                  {other.length > 0 && (
-                    <>
-                      <div className={groupLabelClass(artists.length === 0 && albums.length === 0)}>
-                        Folders
-                      </div>
-                      {containerGrid(other)}
-                    </>
-                  )}
-                </>
-              );
-            })()}
-          </>
-        )}
-
-        {searchMode && searchState && state === "ready" && tracks.length > 0 && (
-          <div className={groupLabelClass(containers.length === 0)}>Tracks</div>
-        )}
+        {/* every search result, one windowed list (searchLines): one library's search
+            and the search across libraries alike */}
+        {((!atRoot && state === "ready" && searchMode && searchState) ||
+          (crossMode && crossState)) &&
+          searchLines.length > 0 && (
+            <div ref={searchBodyRef} data-search-list style={{ overflowAnchor: "none" }}>
+              {searchWin.padTop > 0 && <div style={{ height: searchWin.padTop }} />}
+              {searchLines.slice(searchWin.first, searchWin.last + 1).map(searchLine)}
+              {searchWin.padBottom > 0 && <div style={{ height: searchWin.padBottom }} />}
+            </div>
+          )}
 
         {/* tracks are ALWAYS rows — the app-wide idiom (Queue, Recently,
             Favorites, album tracklists). The cards ⇄ rows toggle governs
@@ -2085,11 +1955,17 @@ export function LibraryScreen(): React.JSX.Element {
             })()}
           </SelectionBar>
         )}
-        {!atRoot && state === "ready" && tracks.length > 0 ? (
+        {/* an artist page's tracks are labelled, as its albums and folders are */}
+        {!atRoot && state === "ready" && !searchMode && artistNode && tracks.length > 0 && (
+          <div className={cx("microlabel pb-0.5 px-1", containers.length > 0 ? "pt-5" : "pt-2")}>
+            Tracks
+          </div>
+        )}
+        {!atRoot && state === "ready" && !searchMode && tracks.length > 0 ? (
           <div
             className={cx(
               "divide-y divide-edge/50 -mx-2",
-              containers.length > 0 && !searchMode && "mt-4",
+              containers.length > 0 && !searchMode && !artistNode && "mt-4",
             )}
           >
             {/* an album leaf that spans discs gets the same quiet "Disc N"
@@ -2117,62 +1993,6 @@ export function LibraryScreen(): React.JSX.Element {
             ))}
           </div>
         ) : null}
-
-        {/* cross-server results: grouped by SERVER first (provenance at a
-            glance — the same album can live on two servers), then the usual
-            kind clusters within each group. Entering any result scopes the
-            screen to its server; the query crumb leads back here. */}
-        {crossMode &&
-          crossState &&
-          crossGroups.map((g, gi) => {
-            const src = servers?.find((s) => s.udn === g.udn);
-            const kindLabel = (text: string): React.JSX.Element => (
-              <div className="microlabel mb-0.5 mt-2 px-1">{text}</div>
-            );
-            return (
-              <div key={g.udn} data-cross-server-group={g.serverName}>
-                <div className={cx("flex items-center gap-2 px-1", gi === 0 ? "mt-2" : "mt-7")}>
-                  {src?.isStreamer ? (
-                    <Usb size={15} className="text-dim" />
-                  ) : (
-                    <HardDrive size={15} className="text-dim" />
-                  )}
-                  <span className="text-[13.5px] font-medium">{g.serverName}</span>
-                  <span className="font-mono text-[11px] text-faint tabular-nums">
-                    {g.total} result{g.total === 1 ? "" : "s"}
-                  </span>
-                </div>
-                {g.artists.length > 0 && (
-                  <>
-                    {kindLabel("Artists")}
-                    {containerGrid(g.artists)}
-                  </>
-                )}
-                {g.albums.length > 0 && (
-                  <>
-                    {kindLabel("Albums")}
-                    {containerGrid(g.albums)}
-                  </>
-                )}
-                {g.folders.length > 0 && (
-                  <>
-                    {kindLabel("Folders")}
-                    {containerGrid(g.folders)}
-                  </>
-                )}
-                {g.tracks.length > 0 && (
-                  <>
-                    {kindLabel("Tracks")}
-                    <div className="divide-y divide-edge/50 -mx-2">
-                      {g.tracks.map((node, ti) =>
-                        trackRow(node, g.tracks, ti, { showArt: true, links: true }),
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
-            );
-          })}
       </div>
 
       {/* the popovers over the listing: the menus, the playlist panels, the preset
@@ -2203,6 +2023,7 @@ export function LibraryScreen(): React.JSX.Element {
         searchMode={searchMode}
         goToAlbumFromLens={goToAlbumFromLens}
         goToArtistFromLens={goToArtistFromLens}
+        artistPageOf={artistPageOf}
         playContainer={playContainer}
         playAlbumFrom={playAlbumFrom}
         act={act}

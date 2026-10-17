@@ -118,9 +118,13 @@ export interface MbRelation {
  * false` means a transient failure somewhere in the chain — show what we
  * have, but don't cache it.
  */
-export async function wikipediaFromRels(
-  rels: MbRelation[],
-): Promise<{ summary: string | null; wikipediaUrl: string | null; definitive: boolean }> {
+export async function wikipediaFromRels(rels: MbRelation[]): Promise<{
+  summary: string | null;
+  wikipediaUrl: string | null;
+  /** The article's lead picture (Wikipedia's thumbnail, about 320 px), or null. */
+  image: string | null;
+  definitive: boolean;
+}> {
   let definitive = true;
   let title: string | null = null;
 
@@ -149,6 +153,7 @@ export async function wikipediaFromRels(
 
   let summary: string | null = null;
   let wikipediaUrl: string | null = null;
+  let image: string | null = null;
   if (title) {
     const summaryGot = await getJson(
       "wikipedia",
@@ -160,7 +165,10 @@ export async function wikipediaFromRels(
       const s = summaryGot.body as {
         extract?: string;
         content_urls?: { desktop?: { page?: string } };
+        thumbnail?: { source?: string };
       };
+      // the lead picture rides the same answer (an artist's photo, 2026-10-11)
+      image = typeof s.thumbnail?.source === "string" ? s.thumbnail.source : null;
       if (s.extract) {
         summary = s.extract;
         wikipediaUrl =
@@ -171,5 +179,5 @@ export async function wikipediaFromRels(
     // 'missing' = the article is gone: an answer, stays definitive
   }
 
-  return { summary, wikipediaUrl, definitive };
+  return { summary, wikipediaUrl, image, definitive };
 }

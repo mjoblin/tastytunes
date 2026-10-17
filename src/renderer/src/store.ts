@@ -53,7 +53,6 @@ import {
   foldPlayEvent,
 } from "@shared/model";
 import { isRadioMetadata } from "@shared/smoip";
-import { currentLibrarySpot } from "@/lib/navSpot";
 import { tt } from "./api";
 
 export type Screen =
@@ -81,6 +80,8 @@ export interface LibrarySpot {
   searchNow: { query: string; items: MediaNode[]; total: number } | null;
   crossNow: { query: string; groups: MediaSearchAllGroup[] } | null;
   lens: "albums" | "artists" | "tracks" | null;
+  /** The artist page open over the Artists lens (2026-10-11), by name. */
+  artist?: string | null;
 }
 
 /**
@@ -107,6 +108,10 @@ export interface LibraryNodeTarget {
   title: string;
   /** A track to land on: scrolled to and flashed once the album's listing lands. */
   track?: string;
+  /** The target's own class, for the stand-in node the Library lands on (an artist opened
+   *  from Search landed as an album, with the album header's Play and heart, 2026-10-11);
+   *  an album when unsaid. */
+  upnpClass?: string;
   /** Planted by unified search: the Library shows a "Search" crumb that leads
    *  BACK to the Search screen, instead of stranding you in a browse tree you
    *  never navigated into. */
@@ -124,6 +129,7 @@ export interface LibraryNodeTarget {
 /** A NAME asked for from another screen's row (2026-09-02): the Library
  *  opens the Artists lens at the root, focused and revealed on that artist. */
 export interface LibraryArtistTarget {
+  /** The artist's page (2026-10-11; the Artists lens focused on them before). */
   artist: string;
   nonce: number;
 }
@@ -211,6 +217,15 @@ interface TTState {
   arrivedByHistory: boolean;
   /** Record the spot being left by an in-Library move (the Library calls this). */
   navPush: (entry: NavEntry) => void;
+  /**
+   * WHERE THE LIBRARY IS (0.11.0 sweep, one home for what was a module variable in the
+   * screen and a second copy in lib/navSpot): kept current by the screen as it moves, read
+   * by history as the spot being left while the Library is the screen, and by the screen
+   * on a return visit to restore where the last one left off. Session memory, never a
+   * setting; nothing subscribes to it.
+   */
+  libraryLocation: LibrarySpot | null;
+  setLibraryLocation: (spot: LibrarySpot) => void;
   goBack: () => void;
   goForward: () => void;
   clearNavRestore: () => void;
@@ -429,6 +444,8 @@ interface TTState {
   lastRecalledPresetId: number | null;
   setScreen: (screen: Screen) => void;
   setDiagnosticsOpen: (open: boolean) => void;
+  /** The frame ring main answered when this window's drawer opened (diagnosticsWatch). */
+  adoptFrames: (frames: FrameEntry[]) => void;
   setShortcutsOpen: (open: boolean) => void;
   setInfoOpen: (open: boolean) => void;
   setMediaInfo: (target: MediaInfoTarget | null) => void;
@@ -463,13 +480,13 @@ interface TTState {
 }
 
 /** The spot being left right now, as a history entry (the Library's snapshot rides along). */
-const leaving = (s: { screen: Screen }): NavEntry =>
-  s.screen === "library" && currentLibrarySpot()
-    ? { screen: "library", library: currentLibrarySpot() ?? undefined }
+const leaving = (s: { screen: Screen; libraryLocation: LibrarySpot | null }): NavEntry =>
+  s.screen === "library" && s.libraryLocation
+    ? { screen: "library", library: s.libraryLocation }
     : { screen: s.screen };
 /** History push for a navigation to `screen` from state `s` — nothing for a same-screen re-invoke. */
 const navTo = (
-  s: { screen: Screen; navBackStack: NavEntry[] },
+  s: { screen: Screen; navBackStack: NavEntry[]; libraryLocation: LibrarySpot | null },
   screen: Screen,
 ): Partial<{ navBackStack: NavEntry[]; navForwardStack: NavEntry[]; arrivedByHistory: boolean }> =>
   screen === s.screen
@@ -525,6 +542,8 @@ export const useStore = create<TTState>((set, get) => ({
   arrivedByHistory: false,
   navPush: (entry) =>
     set((s) => ({ navBackStack: [...s.navBackStack, entry], navForwardStack: [] })),
+  libraryLocation: null,
+  setLibraryLocation: (spot) => set({ libraryLocation: spot }),
   goBack: () => {
     const s = get();
     const entry = s.navBackStack[s.navBackStack.length - 1];
@@ -753,6 +772,7 @@ export const useStore = create<TTState>((set, get) => ({
         : { screen }),
     })),
   setDiagnosticsOpen: (diagnosticsOpen) => set({ diagnosticsOpen }),
+  adoptFrames: (frames) => set({ frames: frames.slice(-FRAME_RING_SIZE) }),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   setInfoOpen: (infoOpen) => set({ infoOpen }),
   setMediaInfo: (mediaInfo) => set({ mediaInfo }),
@@ -979,6 +999,8 @@ export const useStore = create<TTState>((set, get) => ({
           return { lastRecalledPresetId: msg.id };
         case "recents":
           return { recents: msg.data };
+        case "albumDr":
+          return { albumDr: { ...s.albumDr, [msg.key]: msg.entry } };
         case "listening":
           return { listeningStats: msg.data };
         case "playStats":

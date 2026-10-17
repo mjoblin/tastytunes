@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { DISPLAY_SCENE_IDS, type DisplayScene } from "@shared/model";
 import { SCENE_TEXT, orderScenes, sceneText } from "@shared/scenes";
-import { type ToolContext, type ToolImpl, ok, err, appState } from "./toolkit";
+import { type ToolContext, type ToolImpl, ok, err, appState, defineTool } from "./toolkit";
 
 // The MCP bridge's scene tools (2026-09-14, the catch-up round after the
 // visualizer landed): what the scenes are, which one shows on the wall
@@ -13,7 +13,7 @@ import { type ToolContext, type ToolImpl, ok, err, appState } from "./toolkit";
 
 export function sceneTools(ctx: ToolContext): Record<string, ToolImpl> {
   return {
-    list_scenes: {
+    list_scenes: defineTool({
       handler: () => {
         const state = appState(ctx);
         return ok({
@@ -31,8 +31,8 @@ export function sceneTools(ctx: ToolContext): Record<string, ToolImpl> {
           ...state,
         });
       },
-    },
-    set_scene: {
+    }),
+    set_scene: defineTool({
       inputSchema: {
         scene: z
           .string()
@@ -52,7 +52,7 @@ export function sceneTools(ctx: ToolContext): Record<string, ToolImpl> {
             `Unknown scene '${String(a.scene)}'. list_scenes gives the ids: ${DISPLAY_SCENE_IDS.join(", ")}.`,
           );
         const id = scene as DisplayScene;
-        const host = a.host as "display" | "tile";
+        const host = a.host;
         ctx.saveSettings(host === "display" ? { displayScene: id } : { nowPlayingScene: id });
         return ok({
           host,
@@ -66,8 +66,8 @@ export function sceneTools(ctx: ToolContext): Record<string, ToolImpl> {
                 : "Abstract scenes draw once the playing track has been analyzed (local media only); until then the album art shows.",
         });
       },
-    },
-    set_display_mode: {
+    }),
+    set_display_mode: defineTool({
       inputSchema: {
         on: z.boolean().describe("true to enter display mode, false to leave it."),
       },
@@ -80,6 +80,6 @@ export function sceneTools(ctx: ToolContext): Record<string, ToolImpl> {
             : "Display mode off.",
         );
       },
-    },
+    }),
   };
 }

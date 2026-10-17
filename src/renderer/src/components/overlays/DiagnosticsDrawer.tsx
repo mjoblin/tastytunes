@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowDownLeft, ArrowUpRight, Pause, Play } from "lucide-react";
 import { DEFAULT_SETTINGS } from "@shared/model";
+import { tt } from "@/api";
 import { useStore } from "@/store";
 import { useDragExtent } from "@/hooks/useDragExtent";
 import { cx } from "@/lib/format";
@@ -22,6 +23,19 @@ export function DiagnosticsDrawer(): React.JSX.Element {
   const netRequests = useStore((s) => s.netRequests);
   const setDiagnosticsOpen = useStore((s) => s.setDiagnosticsOpen);
   const settings = useStore((s) => s.settings);
+  // The frames reach this window only while the drawer is open (main's frame watchers): open,
+  // it asks for them and adopts the ring so far; closed, it lets them go.
+  const adoptFrames = useStore((s) => s.adoptFrames);
+  useEffect(() => {
+    let live = true;
+    void tt.diagnosticsWatch(true).then((ring) => {
+      if (live) adoptFrames(ring);
+    });
+    return () => {
+      live = false;
+      void tt.diagnosticsWatch(false);
+    };
+  }, [adoptFrames]);
   // Last-selected tab persists; switch locally first so it feels instant.
   const [tab, setTab] = useState<Tab>(() =>
     settings.diagnosticsTab === "requests" ? "requests" : "smoip",

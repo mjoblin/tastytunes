@@ -66,8 +66,12 @@ export function ConfirmActions({
  * card would fight the first. The rule that emerges: an in-place arm is fine
  * ONLY where the control's box cannot change; everywhere else, this popover.
  *
- * Confirms remain for what CAN'T be undone (the standing rule) — anything
- * with a working undo stays instant.
+ * WHEN TO CONFIRM (the destructive-edit rule, user call 2026-07-24, restated
+ * 2026-10-11 after this comment had drifted to "only what can't be undone" and
+ * the Recent list's Clear shipped without one): confirm for WHOLE COLLECTIONS
+ * (a playlist, the queue, the Recent list, a reset order) and for anything that
+ * can't be undone (a preset slot, a token); instant + undo for ITEMS (a track,
+ * a schedule, a favorite). A whole-collection confirm keeps its undo behind it.
  *
  * ```
  * const confirm = useConfirmPopover()

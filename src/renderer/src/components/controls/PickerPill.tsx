@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { Chip } from "@/components/chrome/Chrome";
 import { POPOVER_CARD } from "@/components/chrome/Overlay";
@@ -11,7 +11,29 @@ import { cx, fmtCount } from "@/lib/format";
  * (2026-09-05, moved out of the Library lenses when the History Timeline
  * grew its own facets): the Albums and Tracks lenses' Genre / Decade / Format
  * / DR / Played pickers and the Timeline's Source / Period.
+ *
+ * THE PILL HOLDS ITS WIDTH (user, 2026-10-10: choosing a genre resized the pill and moved
+ * everything after it). Every label the pill can show sits in one grid cell, the shown one
+ * as text and the rest invisible, so the pill is as wide as its widest label whatever is
+ * chosen, up to LABEL_MAX_PX; a longer label truncates and the pill's tip names it. The
+ * invisible ones draw their label from a data attribute (::before), so they give width and
+ * nothing else: no text for a reader, a search or a screen reader. The options narrow as the
+ * other facets do, so the labels a pill has offered this session are remembered (per id,
+ * bounded by the library's own facet values): the width grows to a new widest, never shrinks.
  */
+// 112 (user, 2026-10-11, from comparison shots): at 160 one long genre ("Contemporary Hip Hop")
+// set its pill's width and the lens row wrapped at a 1,180 px window; at 112 the row fits
+const LABEL_MAX_PX = 112;
+const offered = new Map<string, Set<string>>();
+
+function sizingLabels(id: string, neutral: string, labels: string[]): string[] {
+  let seen = offered.get(id);
+  if (!seen) offered.set(id, (seen = new Set()));
+  seen.add(neutral);
+  for (const l of labels) seen.add(l);
+  return [...seen];
+}
+
 export function PickerPill({
   id,
   neutral,
@@ -33,17 +55,44 @@ export function PickerPill({
   min?: number;
 }): React.JSX.Element | null {
   const [open, setOpen] = useState(false);
-  if (options.length < (min ?? 2)) return null;
+  const labelRef = useRef<HTMLSpanElement | null>(null);
+  const [truncated, setTruncated] = useState(false);
   const active = value ? options.find((o) => o.value === value) : null;
+  const shown = active ? active.label : neutral;
+  const sizes = sizingLabels(
+    id,
+    neutral,
+    options.map((o) => o.label),
+  );
+  useLayoutEffect(() => {
+    const el = labelRef.current;
+    setTruncated(el != null && el.scrollWidth > el.clientWidth);
+  }, [shown, sizes.length]);
+  if (options.length < (min ?? 2)) return null;
   return (
     <div className="relative">
       <Chip
         state={active ? "active" : open ? "open" : "idle"}
         data-lens-picker={id}
+        data-tip={truncated ? shown : undefined}
         onClick={() => setOpen((o) => !o)}
-        className="no-drag gap-1 motion-safe:active:scale-95"
+        className={cx("no-drag gap-1 motion-safe:active:scale-95", truncated && "tip-bottom")}
       >
-        {active ? active.label : neutral}
+        {/* text-left: the label leads and the chevron closes the pill, as in a select (a button
+            centres its text, and in a pill wider than its label the word sat adrift) */}
+        <span className="grid min-w-0 text-left" style={{ maxWidth: LABEL_MAX_PX }}>
+          {sizes.map((l) => (
+            <span
+              key={l}
+              aria-hidden
+              data-pill-size={l}
+              className="col-start-1 row-start-1 min-w-0 overflow-hidden whitespace-nowrap invisible before:content-[attr(data-pill-size)]"
+            />
+          ))}
+          <span ref={labelRef} className="col-start-1 row-start-1 min-w-0 truncate">
+            {shown}
+          </span>
+        </span>
         <ChevronDown size={12} className={active ? "text-gold/70" : "text-faint"} />
       </Chip>
       {open && (

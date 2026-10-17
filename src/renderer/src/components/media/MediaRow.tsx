@@ -2,6 +2,7 @@ import { Loader2 } from "lucide-react";
 import { DrBadge } from "@/components/media/Waveform";
 import { DurationCell } from "@/components/media/DurationCell";
 import { MediaArt, type MediaArtKind } from "@/components/media/MediaArt";
+import { ArtistArt } from "@/components/media/ArtistArt";
 import { Eqbars } from "@/components/media/Eqbars";
 import { cx } from "@/lib/format";
 
@@ -23,6 +24,8 @@ export function MediaRow({
   title,
   subtitle,
   artUrl,
+  artKey,
+  artistName,
   kind,
   icon,
   badge,
@@ -44,6 +47,10 @@ export function MediaRow({
   title: string;
   subtitle?: React.ReactNode;
   artUrl?: string | null;
+  /** A saved row's track key: its picture falls back to the library's (see MediaArt). */
+  artKey?: string | null;
+  /** An artist row's name: with no picture of its own it takes the artist's (ArtistArt). */
+  artistName?: string | null;
   /** Picks the art fallback icon — see MediaArt. */
   kind?: MediaArtKind;
   icon?: React.ComponentType<{ size?: number; className?: string }>;
@@ -155,7 +162,17 @@ export function MediaRow({
         dimmed && "opacity-50 cursor-default",
       )}
     >
-      <MediaArt src={artUrl} kind={kind} icon={icon} size={dense ? "dense" : "row"} />
+      {artistName ? (
+        <ArtistArt name={artistName} src={artUrl} size={dense ? "dense" : "row"} />
+      ) : (
+        <MediaArt
+          src={artUrl}
+          artKey={artKey}
+          kind={kind}
+          icon={icon}
+          size={dense ? "dense" : "row"}
+        />
+      )}
       {slot != null && (
         <span
           data-slot={String(slot).padStart(2, "0")}

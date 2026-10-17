@@ -12,6 +12,7 @@ import type { Measured } from "@/lib/measure";
 import { audioAnalysisKey, type AudioAnalysis } from "@shared/model";
 import { AudioLines } from "lucide-react";
 import { FACT_SEP } from "@/lib/mediaFacts";
+import { Lru } from "@/lib/lru";
 
 /**
  * EXPERIMENT (0.7 exploration, the audio-file-data GO): waveforms from the
@@ -46,13 +47,14 @@ const CAPTURE_BUCKETS = 1200;
 /** What a decoded track measures as (lib/measure), the shape every surface reads. */
 export type Analysis = Measured;
 
-const cache = new Map<string, Promise<Analysis | null>>();
+// decoded analyses hold every envelope: the last 48 tracks (lib/lru)
+const cache = new Lru<string, Promise<Analysis | null>>(48);
 // A read that came back empty is NOT kept as the answer for the session: the
 // disk is asked by content on every call (an Analyze audio sweep may have
 // written this track's analysis under its content key since — the user's
 // "no DR, no scene until a restart", 2026-09-16, a track that had resolved
 // to the unreadable USB copy), and the network is held off for a minute.
-const failedAt = new Map<string, number>();
+const failedAt = new Lru<string, number>(500);
 const FAILED_MEMO_MS = 60_000;
 
 /**
@@ -180,6 +182,7 @@ export function analyzeTrack(
         native,
         CAPTURE_BUCKETS,
       );
+      // (main records the album this track completes, if it does, and every window hears it)
       if (contentKey) void tt.audioAnalysisPut(contentKey, toStored(analysis));
       return analysis;
     } catch {

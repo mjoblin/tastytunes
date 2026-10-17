@@ -15,7 +15,13 @@ import { openArtistInLibrary, openRefInLibrary } from "@/lib/mediaActions";
 import type { MediaRef } from "@/lib/mediaRef";
 import { cx, fmtCount, fmtDuration } from "@/lib/format";
 import { FACT_SEP } from "@/lib/mediaFacts";
-import { dayStartOf, statsFor, type ListeningStats, type TopEntry } from "@/lib/historyStats";
+import {
+  dayStartOf,
+  FILES_SCOPE,
+  statsFor,
+  type ListeningStats,
+  type TopEntry,
+} from "@/lib/historyStats";
 import { narrowToStreamer } from "@/lib/historyStreamers";
 
 /**
@@ -393,11 +399,14 @@ export function HistoryStats({
                       { label: "Unknown", seconds: stats.quality.unknown },
                     ].filter((r) => r.seconds > 0)}
                   />
-                  {stats.quality.hires > 0 && (
-                    <div className="mt-3 px-1 text-[12px] text-faint/70">
-                      {fmtDuration(stats.quality.hires)} of the lossless time was hi-res.
-                    </div>
-                  )}
+                  {/* the files are the Library's: the other sources don't say what they play
+                      (a user read 4 lossy minutes beside an hour of Spotify as an error) */}
+                  <div className="mt-3 px-1 text-[12px] text-faint/70 space-y-1">
+                    <div>{FILES_SCOPE}</div>
+                    {stats.quality.hires > 0 && (
+                      <div>{fmtDuration(stats.quality.hires)} of the lossless time was hi-res.</div>
+                    )}
+                  </div>
                 </section>
               )}
 

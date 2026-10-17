@@ -13,6 +13,7 @@ import {
   guardSlot,
   scheduleOut,
   freshObjectId,
+  defineTool,
 } from "./toolkit";
 
 // The MCP bridge's edit tools (the writes with a contract: queue edits, preset saves, schedules),
@@ -23,25 +24,25 @@ export function editTools(ctx: ToolContext): Record<string, ToolImpl> {
   const { dm } = ctx;
   return {
     // ---- queue editing (opt-in cluster)
-    remove_queue_item: {
+    remove_queue_item: defineTool({
       inputSchema: { id: z.number().int().describe("Queue item id from list_queue.") },
       handler: async (a) => {
         const s = ctx.connected();
         const item = (s.queue?.items ?? []).find((i) => i.id === a.id);
         if (!item) return err(`No queue item ${String(a.id)}. Use list_queue.`);
-        await dm.command({ type: "queueDelete", id: a.id as number });
+        await dm.command({ type: "queueDelete", id: a.id });
         return ok(`Removed "${item.metadata?.title ?? `item ${String(a.id)}`}" from the queue.`);
       },
-    },
-    clear_queue: {
+    }),
+    clear_queue: defineTool({
       handler: async () => {
         const s = ctx.connected();
         const n = s.queue?.total ?? s.queue?.items?.length ?? 0;
         await dm.command({ type: "queueClear" });
         return ok(`Queue cleared (${n} items removed).`);
       },
-    },
-    resume_playback: {
+    }),
+    resume_playback: defineTool({
       handler: async () => {
         const s = ctx.connected();
         const offer = await ctx.resumeOffer();
@@ -68,8 +69,8 @@ export function editTools(ctx: ToolContext): Record<string, ToolImpl> {
           `Resuming "${offer.node.title}" from track ${tracks.indexOf(target) + 1}, "${target.title}".`,
         );
       },
-    },
-    move_queue_item: {
+    }),
+    move_queue_item: defineTool({
       inputSchema: {
         id: z.number().int().describe("Queue item id from list_queue."),
         to_position: z.number().int().min(0).describe("New 0-based position."),
@@ -80,20 +81,20 @@ export function editTools(ctx: ToolContext): Record<string, ToolImpl> {
         if (!item || item.position == null)
           return err(`No queue item ${String(a.id)}. Use list_queue.`);
         const total = s.queue?.total ?? 0;
-        if ((a.to_position as number) >= total) return err(`to_position must be below ${total}.`);
+        if (a.to_position >= total) return err(`to_position must be below ${total}.`);
         await dm.command({
           type: "queueMove",
-          id: a.id as number,
+          id: a.id,
           from: item.position,
-          to: a.to_position as number,
+          to: a.to_position,
         });
         return ok(
           `Moved "${item.metadata?.title ?? `item ${String(a.id)}`}" to position ${String(a.to_position)}.`,
         );
       },
-    },
+    }),
     // ---- preset saving (opt-in cluster; explicit-overwrite contract)
-    save_queue_as_preset: {
+    save_queue_as_preset: defineTool({
       inputSchema: {
         slot: z.number().int().min(1).max(99).describe("Preset slot 1–99."),
         name: z.string().min(1).describe("Name for the saved queue."),
@@ -102,22 +103,22 @@ export function editTools(ctx: ToolContext): Record<string, ToolImpl> {
       handler: async (a) => {
         const s = ctx.connected();
         if ((s.queue?.total ?? 0) === 0) return err("The queue is empty.");
-        guardSlot(s, a.slot as number, a.overwrite === true);
+        guardSlot(s, a.slot, a.overwrite === true);
         await dm.command({
           type: "queueSavePreset",
-          slot: a.slot as number,
-          name: a.name as string,
+          slot: a.slot,
+          name: a.name,
         });
         return ok(`Saved the queue to preset ${String(a.slot)} as "${String(a.name)}".`);
       },
-    },
-    repair_preset: {
+    }),
+    repair_preset: defineTool({
       inputSchema: {
         slot: z.number().int().min(1).max(99).describe("The preset slot that will not play."),
       },
       handler: async (a) => {
         const s = ctx.connected();
-        const slot = a.slot as number;
+        const slot = a.slot;
         const preset = (s.presets?.presets ?? []).find((p) => p.id === slot);
         if (!preset) return err(`Preset slot ${slot} is empty.`);
         if (!preset.art_url)
@@ -146,8 +147,8 @@ export function editTools(ctx: ToolContext): Record<string, ToolImpl> {
           server: match.serverName ?? null,
         });
       },
-    },
-    save_playing_to_preset: {
+    }),
+    save_playing_to_preset: defineTool({
       inputSchema: {
         slot: z.number().int().min(1).max(99).describe("Preset slot 1–99."),
         name: z
@@ -161,18 +162,18 @@ export function editTools(ctx: ToolContext): Record<string, ToolImpl> {
         if (s.playState?.state !== "play" && s.playState?.state !== "pause") {
           return err("Nothing is playing to save.");
         }
-        guardSlot(s, a.slot as number, a.overwrite === true);
-        await dm.command({ type: "zoneSavePreset", slot: a.slot as number });
+        guardSlot(s, a.slot, a.overwrite === true);
+        await dm.command({ type: "zoneSavePreset", slot: a.slot });
         if (typeof a.name === "string" && a.name.length > 0) {
-          await dm.command({ type: "presetRename", slot: a.slot as number, name: a.name });
+          await dm.command({ type: "presetRename", slot: a.slot, name: a.name });
         }
         return ok(
           `Saved the current playback to preset ${String(a.slot)}${a.name ? ` as "${String(a.name)}"` : ""}.`,
         );
       },
-    },
+    }),
     // ---- schedules (opt-in cluster; list_schedules lives with Status & lists)
-    create_schedule: {
+    create_schedule: defineTool({
       inputSchema: {
         time: z
           .string()
@@ -208,11 +209,11 @@ export function editTools(ctx: ToolContext): Record<string, ToolImpl> {
         const sched: Schedule = {
           id: randomUUID(),
           enabled: a.enabled !== false,
-          time: a.time as string,
-          days: [...new Set(a.days as number[])].sort(),
+          time: a.time,
+          days: [...new Set(a.days)].sort(),
           action: a.action === "wake" ? "on" : "standby",
-          presetId: (a.preset_id as number | undefined) ?? null,
-          volumePercent: (a.volume_percent as number | undefined) ?? null,
+          presetId: a.preset_id ?? null,
+          volumePercent: a.volume_percent ?? null,
         };
         ctx.mutateSchedules((list) => [...list, sched]);
         return ok({
@@ -220,8 +221,8 @@ export function editTools(ctx: ToolContext): Record<string, ToolImpl> {
           note: "Schedules fire only while TastyTunes is running and connected.",
         });
       },
-    },
-    set_schedule_enabled: {
+    }),
+    set_schedule_enabled: defineTool({
       inputSchema: {
         id: z.string().describe("Schedule id from list_schedules."),
         enabled: z.boolean(),
@@ -230,12 +231,12 @@ export function editTools(ctx: ToolContext): Record<string, ToolImpl> {
         const found = getSettings().schedules.find((x) => x.id === a.id);
         if (!found) return err(`No schedule '${String(a.id)}'. Use list_schedules.`);
         ctx.mutateSchedules((list) =>
-          list.map((x) => (x.id === a.id ? { ...x, enabled: a.enabled as boolean } : x)),
+          list.map((x) => (x.id === a.id ? { ...x, enabled: a.enabled } : x)),
         );
         return ok(`Schedule ${a.enabled ? "enabled" : "disabled"}.`);
       },
-    },
-    delete_schedule: {
+    }),
+    delete_schedule: defineTool({
       inputSchema: { id: z.string().describe("Schedule id from list_schedules.") },
       handler: (a) => {
         const found = getSettings().schedules.find((x) => x.id === a.id);
@@ -243,6 +244,6 @@ export function editTools(ctx: ToolContext): Record<string, ToolImpl> {
         ctx.mutateSchedules((list) => list.filter((x) => x.id !== a.id));
         return ok("Schedule deleted.");
       },
-    },
+    }),
   };
 }

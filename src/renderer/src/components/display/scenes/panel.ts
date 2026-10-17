@@ -3,6 +3,7 @@ import { easeTowards } from "../clock";
 import { monoFont } from "../type";
 import { BAND_EDGES_HZ } from "@/lib/featureStrip";
 import { clamp, mix, rgb, rgba } from "./lib";
+import { Lru } from "@/lib/lru";
 
 /**
  * FRONT PANEL. The glowing display of a hi-fi deck, a vacuum fluorescent panel behind
@@ -80,7 +81,7 @@ function sansFont(): string {
   return sansStack;
 }
 
-const dotCache = new Map<string, Dots>();
+const dotCache = new Lru<string, Dots>(160);
 /** A line of text as dots `rows` high: drawn small with the UI sans and thresholded, so any
  *  script the font has (accents, Cyrillic, Japanese) shows, not only a bitmap font's ASCII. */
 function rasterize(text: string, rows: number, weight = DOT_WEIGHT): Dots {
@@ -106,7 +107,6 @@ function rasterize(text: string, rows: number, weight = DOT_WEIGHT): Dots {
   for (let i = 0; i < cols * rows; i++) bits[i] = data[i * 4 + 3] > 96 ? 1 : 0;
   const dots: Dots = { cols, rows, bits };
   dotCache.set(key, dots);
-  if (dotCache.size > 160) dotCache.delete(dotCache.keys().next().value as string);
   return dots;
 }
 

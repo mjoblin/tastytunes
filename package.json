@@ -1,6 +1,6 @@
 {
   "name": "tastytunes",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "A desktop controller for Cambridge Audio StreamMagic streamers.",
   "repository": {
     "type": "git",
@@ -18,11 +18,13 @@
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
-    "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\"",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"lint/**/*.mjs\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"lint/**/*.mjs\"",
     "lint": "eslint",
     "lint:fix": "eslint --fix",
-    "check": "npm run typecheck && npm run lint && npm run format:check",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm run test",
     "dist:mac": "electron-vite build && electron-builder --mac",
     "dist:win": "electron-vite build && node scripts/build-win.mjs",
     "dist:linux": "electron-vite build && electron-builder --linux"
@@ -69,6 +71,7 @@
     "typescript": "^5.7.0",
     "typescript-eslint": "^8.67.0",
     "vite": "^6.0.0",
+    "vitest": "^5.0.1",
     "zustand": "^5.0.0"
   }
 }

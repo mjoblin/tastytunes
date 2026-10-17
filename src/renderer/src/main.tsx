@@ -15,6 +15,7 @@ import React, { Suspense, lazy } from "react";
 import ReactDOM from "react-dom/client";
 import { tt } from "./api";
 import { useStore } from "./store";
+import { trackInputModality } from "./lib/inputModality";
 
 // Split at the one natural seam: the always-on-top mini strip used to parse
 // the ENTIRE app bundle (all screens, dnd-kit, the palette) and the main
@@ -41,6 +42,7 @@ declare global {
   interface Window {
     __ttRoot?: ReactDOM.Root;
     __ttUnwirePush?: () => void;
+    __ttModalityOff?: () => void;
   }
 }
 
@@ -53,6 +55,10 @@ window.__ttUnwirePush = tt.onPush((msg) => {
   else useStore.getState().applyPush(msg);
 });
 void tt.getSnapshot().then((snapshot) => useStore.getState().init(snapshot));
+
+// the focus ring waits for the keyboard (lib/inputModality), in every window
+window.__ttModalityOff?.();
+window.__ttModalityOff = trackInputModality();
 
 // Secondary windows load the same bundle with a query flag: ?mini=1 for the
 // mini player, ?tray=1 for the tray panel.

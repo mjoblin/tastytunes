@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   AudioLines,
   Heart,
@@ -13,11 +13,11 @@ import {
   albumDrKey,
   albumTracksOf,
   albumVolume,
-  isCompilation,
   type MediaIndexPools,
   type MediaNode,
   nameSortKey,
 } from "@shared/model";
+import { useWindowedList } from "@/hooks/useWindowedList";
 import { cx, matchesFilter, fmtCount } from "@/lib/format";
 import { usePlayStats, playedBucket, playedOptionsOf } from "@/lib/playStats";
 import { useStore } from "@/store";
@@ -33,15 +33,13 @@ import {
   type LensActions,
   lc,
   nodeKey,
-  genreOptionsOf,
-  decadeOptionsOf,
   drOptionsOf,
-  formatTags,
   formatOptionsOf,
   RECORD_SORTS,
   PLAY_THESE_MAX,
 } from "./lensShared";
 import { useRowSelection } from "@/components/library/useRowSelection";
+import { useLensIndex } from "./useLensIndex";
 
 // The Albums lens, split out of LibraryLenses.tsx (2026-09-13, the lenses round: three lenses of
 // 600 to 800 lines shared one file); what the lenses share lives in ./lensShared.
@@ -71,11 +69,16 @@ let albumsMem: {
   /** The Played facet (0.8.0): a playedBucket, or null for any. */
   played: string | null;
   filter: string;
-} = { genre: null, decade: null, dr: null, format: null, played: null, filter: "" };
+  /** The grid's own scroller's spot, recorded as it scrolls (a trip away comes back to it). */
+  scroll: number;
+} = { genre: null, decade: null, dr: null, format: null, played: null, filter: "", scroll: 0 };
 
 /** The queue write's cap, shared by Play these and the album selection bar (user
  *  call, 2026-09-01 / 2026-09-02): queue writes are one call per track with no
  *  progress affordance, so no gesture may hand the queue fifty albums. */
+
+/** Past this many tiles the cards grid windows its rows (0.11.0 sweep, for review). */
+const WINDOW_TILES_ABOVE = 120;
 
 export function AlbumsLens({
   pools,
@@ -115,33 +118,23 @@ export function AlbumsLens({
   const saveSettings = useStore((s) => s.saveSettings);
   const albumDr = useAlbumDr();
 
-  const all = useMemo(() => pools.flatMap((g) => g.albums), [pools]);
-  const multiServer = useMemo(() => pools.filter((g) => g.albums.length > 0).length > 1, [pools]);
+  // what the lenses derive from the pools, once per snapshot (useLensIndex)
+  const index = useLensIndex(pools);
+  const all = index.albums;
+  const multiServer = index.multiServer;
 
   // Facets from the data itself — the builders are shared with the Tracks
   // lens (genreOptionsOf / decadeOptionsOf); pickers render only when they
   // would actually distinguish (>=2 options).
-  const genreOptions = useMemo(() => genreOptionsOf(all), [all]);
-  const decadeOptions = useMemo(() => decadeOptionsOf(all), [all]);
+  const genreOptions = index.albumGenres;
+  const decadeOptions = index.albumDecades;
   const drOptions = useMemo(
     () => drOptionsOf(all.map((a) => albumDr[albumDrKey(a)]?.dr ?? null)),
     [all, albumDr],
   );
   // an album's codecs = the union over its tracks in the pool (a mixed album
   // matches every codec it holds, the way Genre aggregates)
-  const albumCodecs = useMemo(() => {
-    const m = new Map<string, Set<string>>();
-    for (const g of pools)
-      for (const t of g.tracks) {
-        const tags = formatTags(t.format);
-        if (!t.album || tags.length === 0) continue;
-        const k = `${g.udn}|${lc(t.album)}`;
-        const set = m.get(k) ?? new Set<string>();
-        for (const tag of tags) set.add(tag);
-        m.set(k, set);
-      }
-    return m;
-  }, [pools]);
+  const albumCodecs = index.albumCodecs;
   const formatOptions = useMemo(
     () =>
       formatOptionsOf(
@@ -155,22 +148,13 @@ export function AlbumsLens({
     if (!play.ready) return m;
     // an album's tracks together: plays and last played fold per track, and
     // the WHOLE listens are the record's runs against this track set
-    const groups = new Map<string, MediaNode[]>();
-    for (const g of pools)
-      for (const t of g.tracks) {
-        if (!t.album) continue;
-        const k = `${g.udn}|${lc(t.album)}`;
-        const list = groups.get(k);
-        if (list) list.push(t);
-        else groups.set(k, [t]);
-      }
-    for (const [k, tracks] of groups) {
+    for (const [k, tracks] of index.tracksByAlbum) {
       const a = play.album(tracks);
       if (a.plays > 0 || a.whole > 0)
         m.set(k, { plays: a.plays, lastAt: a.lastAt, whole: a.whole });
     }
     return m;
-  }, [pools, play]);
+  }, [index, play]);
   const playOf = (a: MediaNode): { plays: number; lastAt: number | null; whole: number } =>
     albumPlay.get(`${a.serverUdn}|${lc(a.title)}`) ?? { plays: 0, lastAt: null, whole: 0 };
   const playedOptions = useMemo(
@@ -183,21 +167,7 @@ export function AlbumsLens({
   // Compilation = named so by its album artist, or (tracks known) credited to
   // an album artist none of its performers is; "Daft Punk feat. …" is not.
   const kind = useStore((s) => s.settings.lensAlbumsKind);
-  const compilationKeys = useMemo(() => {
-    const byAlbum = new Map<string, MediaNode[]>();
-    for (const g of pools)
-      for (const t of g.tracks) {
-        if (!t.album) continue;
-        const k = `${g.udn}|${lc(t.album)}`;
-        const list = byAlbum.get(k);
-        if (list) list.push(t);
-        else byAlbum.set(k, [t]);
-      }
-    const keys = new Set<string>();
-    for (const a of all)
-      if (isCompilation(a, byAlbum.get(`${a.serverUdn}|${lc(a.title)}`))) keys.add(nodeKey(a));
-    return keys;
-  }, [pools, all]);
+  const compilationKeys = index.compilationKeys;
 
   const shown = useMemo(() => {
     let list = all;
@@ -301,6 +271,63 @@ export function AlbumsLens({
   // the tiles' selection: the row grammar from useRowSelection (one home
   // since 2026-09-13) over the tiles shown, keyed by nodeKey
   const tileKeys = useMemo(() => tiles.map((t) => nodeKey(t.node)), [tiles]);
+
+  // THE GRID SCROLLS ITS OWN COLUMN under a toolbar that stays put (user, 2026-10-11: "the
+  // filters/etc at the top are not pinned like they are for tracks"), the Tracks lens's frame:
+  // the toolbar on the bare ground, the scroller's top edge the cut, no band of its own (a
+  // sticky bar needs a background, and a band over the ambient wash read as a seam, the
+  // History screens' lesson). The scroller spans the page's padding, so the cards' hover glow
+  // keeps the room it had when the page scrolled them.
+  const gridRef = useRef<HTMLDivElement | null>(null);
+  // WINDOWED CARDS (0.11.0 sweep): past WINDOW_TILES_ABOVE tiles the cards grid renders only
+  // the rows of cards near the scroller's viewport, as many columns as auto-fill would give
+  // (from the measured width inside the scroller, its scrollbar excluded), the rows' pitch
+  // measured by useWindowedList. Below it, and in the rows layout, every tile renders exactly
+  // as before.
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+  const [width, setWidth] = useState(0);
+  useLayoutEffect(() => {
+    const el = bodyRef.current;
+    if (!el) return;
+    setWidth(el.getBoundingClientRect().width);
+    const ro = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const cols = Math.max(1, Math.floor((width + cardGap) / (cardSize + cardGap)));
+  const windowed = cards && width > 0 && tiles.length > WINDOW_TILES_ABOVE;
+  const colWidth = fillRows ? (width - cardGap * (cols - 1)) / cols : cardSize;
+  const win = useWindowedList({
+    scrollRef: gridRef,
+    count: windowed ? Math.ceil(tiles.length / cols) : 0,
+    itemSelector: "[data-albums-row]",
+    // the art is square; the title and its second line below it
+    estimate: Math.round(colWidth) + 52 + cardGap,
+    overscan: 3,
+    enabled: windowed,
+  });
+  // A TRIP AWAY COMES BACK TO THE SPOT, once the grid can hold it: the windowed grid holds no
+  // rows until it has measured its width, and a scrollTo then clamped the spot to 0 (the
+  // useScrollMemory rule), so settle a few frames, and apply once more after the rows it lands
+  // on have been measured (their height was an estimate until then)
+  useEffect(() => {
+    const target = albumsMem.scroll;
+    if (target <= 0) return;
+    let frames = 0;
+    let landed = 0;
+    let raf = requestAnimationFrame(function apply() {
+      const sc = gridRef.current;
+      if (!sc) return;
+      if (landed > 0 || sc.scrollHeight - sc.clientHeight >= target || frames++ > 30) {
+        sc.scrollTo({ top: target });
+        if (++landed >= 3 || Math.abs(sc.scrollTop - target) < 1) return;
+      }
+      raf = requestAnimationFrame(apply);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  const gridColumns = (n: number | "auto-fill"): string =>
+    fillRows ? `repeat(${n}, minmax(${cardSize}px, 1fr))` : `repeat(${n}, ${cardSize}px)`;
   const {
     selected: selA,
     setSelected: setSelA,
@@ -341,9 +368,62 @@ export function AlbumsLens({
     }
     actions.dragAlbum(set ? set.volumes : [raw], e, title);
   };
+  const renderTile = (
+    { node: rawNode, set }: (typeof tiles)[number],
+    ti: number,
+  ): React.JSX.Element => {
+    // a set tile is volume 1 wearing the base title and a count badge
+    const node = set ? { ...rawNode, title: set.base, year: null } : rawNode;
+    return cards ? (
+      <ContainerCard
+        key={nodeKey(rawNode)}
+        node={node}
+        playing={
+          set ? set.volumes.some((v) => actions.isPlayingAlbum(v)) : actions.isPlayingAlbum(node)
+        }
+        menuOpen={actions.menuNodeId === node.id}
+        favorited={actions.nodeFavorited(rawNode)}
+        badge={set ? `${set.volumes.length} volumes` : multiServer ? node.serverName : undefined}
+        selected={selA.has(nodeKey(rawNode))}
+        onHeart={() => actions.heartNode(rawNode)}
+        onEnter={(e) => {
+          if (albumClick(rawNode, e)) return;
+          actions.openAlbum(rawNode);
+        }}
+        onPlay={(el) => void actions.playContainer(rawNode, el)}
+        onMenu={(e) => actions.openMenu(rawNode, e)}
+        onNavDrag={(e) => startAlbumTileDrag(rawNode, set, node.title, e)}
+      />
+    ) : (
+      <ContainerRow
+        key={nodeKey(rawNode)}
+        node={node}
+        selected={selA.has(nodeKey(rawNode))}
+        selStart={!(ti > 0 && selA.has(tileKeys[ti - 1]))}
+        selEnd={!(ti < tileKeys.length - 1 && selA.has(tileKeys[ti + 1]))}
+        playing={
+          set ? set.volumes.some((v) => actions.isPlayingAlbum(v)) : actions.isPlayingAlbum(node)
+        }
+        menuOpen={actions.menuNodeId === node.id}
+        favorited={actions.nodeFavorited(rawNode)}
+        badge={set ? `${set.volumes.length} volumes` : multiServer ? node.serverName : undefined}
+        dr={albumDr[albumDrKey(node)]?.dr ?? null}
+        onArtistLink={
+          actions.goToArtist && node.artist ? () => actions.goToArtist?.(node) : undefined
+        }
+        onHeart={() => actions.heartNode(rawNode)}
+        onEnter={(e) => {
+          if (albumClick(rawNode, e)) return;
+          actions.openAlbum(rawNode);
+        }}
+        onMenu={(e) => actions.openMenu(rawNode, e)}
+        onNavDrag={(e) => startAlbumTileDrag(rawNode, set, node.title, e)}
+      />
+    );
+  };
   return (
-    <div data-lens-albums>
-      <div className="flex items-start gap-3 pb-3">
+    <div data-lens-albums className="h-full min-h-0 flex flex-col">
+      <div className="flex items-start gap-3 pb-3 shrink-0">
         <div className="flex-1 min-w-0">
           {/* one row: filter, partition, then the two facet PICKERS.
               Genre joined Decade as a PickerPill (user, 2026-08-31): real
@@ -448,163 +528,148 @@ export function AlbumsLens({
           />
         </div>
       </div>
-      {shown.length === 0 ? (
-        <div className="text-[15px] text-faint pt-4 px-1">Nothing matches those filters.</div>
-      ) : (
+      <div className="relative flex-1 min-w-0 min-h-0 flex flex-col">
         <div
-          className={cx(
-            !cards && "divide-y divide-edge/50 -mx-2",
-            // selection mode adds scroll-room under the floating bar (the S45 rule)
-            selA.size > 0 && "pb-24",
-          )}
-          style={
-            cards
-              ? {
-                  display: "grid",
-                  gridTemplateColumns: fillRows
-                    ? `repeat(auto-fill, minmax(${cardSize}px, 1fr))`
-                    : `repeat(auto-fill, ${cardSize}px)`,
-                  gap: cardGap,
-                  paddingTop: 8,
-                }
-              : undefined
-          }
+          ref={gridRef}
+          data-lens-albums-scroll
+          onScroll={(e) => {
+            albumsMem.scroll = e.currentTarget.scrollTop;
+          }}
+          className="min-h-0 flex-1 overflow-y-auto px-8 -mx-8 pb-2"
         >
-          {tiles.map(({ node: rawNode, set }, ti) => {
-            // a set tile is volume 1 wearing the base title and a count badge
-            const node = set ? { ...rawNode, title: set.base, year: null } : rawNode;
-            return cards ? (
-              <ContainerCard
-                key={nodeKey(rawNode)}
-                node={node}
-                playing={
-                  set
-                    ? set.volumes.some((v) => actions.isPlayingAlbum(v))
-                    : actions.isPlayingAlbum(node)
-                }
-                menuOpen={actions.menuNodeId === node.id}
-                favorited={actions.nodeFavorited(rawNode)}
-                badge={
-                  set ? `${set.volumes.length} volumes` : multiServer ? node.serverName : undefined
-                }
-                selected={selA.has(nodeKey(rawNode))}
-                onHeart={() => actions.heartNode(rawNode)}
-                onEnter={(e) => {
-                  if (albumClick(rawNode, e)) return;
-                  actions.openAlbum(rawNode);
-                }}
-                onPlay={(el) => void actions.playContainer(rawNode, el)}
-                onMenu={(e) => actions.openMenu(rawNode, e)}
-                onNavDrag={(e) => startAlbumTileDrag(rawNode, set, node.title, e)}
-              />
-            ) : (
-              <ContainerRow
-                key={nodeKey(rawNode)}
-                node={node}
-                selected={selA.has(nodeKey(rawNode))}
-                selStart={!(ti > 0 && selA.has(tileKeys[ti - 1]))}
-                selEnd={!(ti < tileKeys.length - 1 && selA.has(tileKeys[ti + 1]))}
-                playing={
-                  set
-                    ? set.volumes.some((v) => actions.isPlayingAlbum(v))
-                    : actions.isPlayingAlbum(node)
-                }
-                menuOpen={actions.menuNodeId === node.id}
-                favorited={actions.nodeFavorited(rawNode)}
-                badge={
-                  set ? `${set.volumes.length} volumes` : multiServer ? node.serverName : undefined
-                }
-                dr={albumDr[albumDrKey(node)]?.dr ?? null}
-                onArtistLink={
-                  actions.goToArtist && node.artist ? () => actions.goToArtist?.(node) : undefined
-                }
-                onHeart={() => actions.heartNode(rawNode)}
-                onEnter={(e) => {
-                  if (albumClick(rawNode, e)) return;
-                  actions.openAlbum(rawNode);
-                }}
-                onMenu={(e) => actions.openMenu(rawNode, e)}
-                onNavDrag={(e) => startAlbumTileDrag(rawNode, set, node.title, e)}
-              />
-            );
-          })}
-        </div>
-      )}
-      {selA.size > 0 && (
-        <SelectionBar
-          count={selA.size}
-          onClear={() => setSelA(new Set())}
-          className="bottom-2 inset-x-0 z-20"
-          data-albums-selection-bar
-        >
-          <SelectionVerb
-            icon={<Play size={13} />}
-            disabled={selAOverCap}
-            data-tip={selAOverCap ? capTip : undefined}
-            className={cx(selAOverCap && "tip-top opacity-50")}
-            onClick={() =>
-              actions.queueTracks(chosenATracks(), "replace", () => setSelA(new Set()))
-            }
-          >
-            Play
-          </SelectionVerb>
-          <SelectionVerb
-            icon={<ListStart size={13} />}
-            disabled={selAOverCap}
-            data-tip={selAOverCap ? capTip : undefined}
-            className={cx(selAOverCap && "tip-top opacity-50")}
-            onClick={() => actions.queueTracks(chosenATracks(), "next", () => setSelA(new Set()))}
-          >
-            Play next
-          </SelectionVerb>
-          <SelectionVerb
-            icon={<ListEnd size={13} />}
-            disabled={selAOverCap}
-            data-tip={selAOverCap ? capTip : undefined}
-            className={cx(selAOverCap && "tip-top opacity-50")}
-            onClick={() => actions.queueTracks(chosenATracks(), "append", () => setSelA(new Set()))}
-          >
-            Add to end of queue
-          </SelectionVerb>
-          <SelectionVerb
-            icon={<ListPlus size={13} />}
-            onClick={(e) =>
-              actions.addTracksToPlaylist(chosenATracks(), { x: e.clientX, y: e.clientY }, () =>
-                setSelA(new Set()),
-              )
-            }
-          >
-            Add to playlist…
-          </SelectionVerb>
-          {(() => {
-            const nodes = chosenA();
-            const allIn = nodes.length > 0 && nodes.every(actions.nodeFavorited);
-            return (
-              <SelectionVerb
-                icon={<Heart size={13} fill={allIn ? "currentColor" : "none"} />}
-                onClick={() => actions.heartNodes(nodes, allIn)}
+          <div ref={bodyRef}>
+            {shown.length === 0 ? (
+              <div className="text-[15px] text-faint pt-4 px-1">Nothing matches those filters.</div>
+            ) : windowed ? (
+              <div
+                data-albums-windowed
+                className={cx(selA.size > 0 && "pb-24")}
+                // overflow-anchor off (the Queue's rule): Chromium's scroll anchoring moved the
+                // restored spot as the spacers' estimated heights became measured ones
+                style={{ paddingTop: 8, overflowAnchor: "none" }}
               >
-                {allIn ? "Remove from favorites" : "Add to favorites"}
-              </SelectionVerb>
-            );
-          })()}
-          <SelectionVerb
-            icon={<AudioLines size={13} />}
-            disabled={chosenA().every((n) => actions.unreadable(n))}
-            title={chosenA().every((n) => actions.unreadable(n)) ? USB_ANALYSIS_HINT : undefined}
-            data-analyze-albums
-            onClick={() => {
-              actions.analyzeAlbums(chosenA());
-              setSelA(new Set());
-            }}
+                {win.padTop > 0 && <div style={{ height: win.padTop }} />}
+                {Array.from({ length: win.last - win.first + 1 }, (_, i) => win.first + i).map(
+                  (r) => (
+                    <div
+                      key={r}
+                      data-albums-row
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: gridColumns(cols),
+                        gap: cardGap,
+                        marginBottom: cardGap,
+                      }}
+                    >
+                      {tiles
+                        .slice(r * cols, (r + 1) * cols)
+                        .map((t, j) => renderTile(t, r * cols + j))}
+                    </div>
+                  ),
+                )}
+                {win.padBottom > 0 && <div style={{ height: win.padBottom }} />}
+              </div>
+            ) : (
+              <div
+                className={cx(
+                  !cards && "divide-y divide-edge/50 -mx-2",
+                  // selection mode adds scroll-room under the floating bar (the S45 rule)
+                  selA.size > 0 && "pb-24",
+                )}
+                style={
+                  cards
+                    ? {
+                        display: "grid",
+                        gridTemplateColumns: gridColumns("auto-fill"),
+                        gap: cardGap,
+                        paddingTop: 8,
+                      }
+                    : undefined
+                }
+              >
+                {tiles.map((t, ti) => renderTile(t, ti))}
+              </div>
+            )}
+          </div>
+        </div>
+        {selA.size > 0 && (
+          <SelectionBar
+            count={selA.size}
+            onClear={() => setSelA(new Set())}
+            className="bottom-2 inset-x-0 z-20"
+            data-albums-selection-bar
           >
-            Analyze audio
-          </SelectionVerb>
-          <span className="shrink-0 py-px text-faint tabular-nums mt-[3px] text-[11.5px]">
-            {fmtCount(selATrackCount)} {selATrackCount === 1 ? "track" : "tracks"}
-          </span>
-        </SelectionBar>
-      )}
+            <SelectionVerb
+              icon={<Play size={13} />}
+              disabled={selAOverCap}
+              data-tip={selAOverCap ? capTip : undefined}
+              className={cx(selAOverCap && "tip-top opacity-50")}
+              onClick={() =>
+                actions.queueTracks(chosenATracks(), "replace", () => setSelA(new Set()))
+              }
+            >
+              Play
+            </SelectionVerb>
+            <SelectionVerb
+              icon={<ListStart size={13} />}
+              disabled={selAOverCap}
+              data-tip={selAOverCap ? capTip : undefined}
+              className={cx(selAOverCap && "tip-top opacity-50")}
+              onClick={() => actions.queueTracks(chosenATracks(), "next", () => setSelA(new Set()))}
+            >
+              Play next
+            </SelectionVerb>
+            <SelectionVerb
+              icon={<ListEnd size={13} />}
+              disabled={selAOverCap}
+              data-tip={selAOverCap ? capTip : undefined}
+              className={cx(selAOverCap && "tip-top opacity-50")}
+              onClick={() =>
+                actions.queueTracks(chosenATracks(), "append", () => setSelA(new Set()))
+              }
+            >
+              Add to end of queue
+            </SelectionVerb>
+            <SelectionVerb
+              icon={<ListPlus size={13} />}
+              onClick={(e) =>
+                actions.addTracksToPlaylist(chosenATracks(), { x: e.clientX, y: e.clientY }, () =>
+                  setSelA(new Set()),
+                )
+              }
+            >
+              Add to playlist…
+            </SelectionVerb>
+            {(() => {
+              const nodes = chosenA();
+              const allIn = nodes.length > 0 && nodes.every(actions.nodeFavorited);
+              return (
+                <SelectionVerb
+                  icon={<Heart size={13} fill={allIn ? "currentColor" : "none"} />}
+                  onClick={() => actions.heartNodes(nodes, allIn)}
+                >
+                  {allIn ? "Remove from favorites" : "Add to favorites"}
+                </SelectionVerb>
+              );
+            })()}
+            <SelectionVerb
+              icon={<AudioLines size={13} />}
+              disabled={chosenA().every((n) => actions.unreadable(n))}
+              title={chosenA().every((n) => actions.unreadable(n)) ? USB_ANALYSIS_HINT : undefined}
+              data-analyze-albums
+              onClick={() => {
+                actions.analyzeAlbums(chosenA());
+                setSelA(new Set());
+              }}
+            >
+              Analyze audio
+            </SelectionVerb>
+            <span className="shrink-0 py-px text-faint tabular-nums mt-[3px] text-[11.5px]">
+              {fmtCount(selATrackCount)} {selATrackCount === 1 ? "track" : "tracks"}
+            </span>
+          </SelectionBar>
+        )}
+      </div>
     </div>
   );
 }

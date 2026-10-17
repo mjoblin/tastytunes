@@ -1,5 +1,5 @@
 import { nativeImage } from "electron";
-import { playKey, type RecentTrack } from "@shared/model";
+import { playAlbumKey, playKey, type RecentTrack } from "@shared/model";
 import { DiskCache } from "./diskCache";
 
 /**
@@ -42,6 +42,18 @@ const transient = (e: RecentTrack): boolean =>
 
 export function recentArtGet(key: string): string | null {
   return cache.get(key) ?? null;
+}
+
+/** Every captured cover by its album (playAlbumKey), one per album: a play the capture missed
+ *  shows its album's cover, captured for another of its tracks (2026-10-11, his Recently Played:
+ *  25 plays of one AirPlay album, one capture). Built per read, from a few hundred entries. */
+export function capturesByAlbum(): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const [k, v] of cache.snapshot()) {
+    const album = playAlbumKey(k);
+    if (album && !out.has(album)) out.set(album, v);
+  }
+  return out;
 }
 
 /** The hero-size copy, when the capture landed while the URL lived. */
@@ -100,9 +112,14 @@ export function captureRecentArt(e: RecentTrack): void {
 /** The log for the renderer: a transient entry whose picture was captured
  *  carries the durable copy in place of the streamer's URL. */
 export function decorateRecents(list: RecentTrack[]): RecentTrack[] {
+  let byAlbum: Map<string, string> | null = null;
   return list.map((e) => {
     if (e.isRadio || e.sourceId === "MEDIA_PLAYER" || !e.title) return e;
-    const d = cache.get(recentArtKey(e));
+    const key = recentArtKey(e);
+    const album = playAlbumKey(key);
+    // the play's own capture, else its album's (capturesByAlbum)
+    const d =
+      cache.get(key) ?? (album != null ? (byAlbum ??= capturesByAlbum()).get(album) : undefined);
     return d ? { ...e, artUrl: d } : e;
   });
 }

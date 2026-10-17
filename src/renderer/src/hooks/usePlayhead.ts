@@ -8,7 +8,14 @@ import { useStore } from "@/store";
  */
 /** `known`: the elapsed is a real figure — the tuned-at stamp for radio, a playhead the
  *  streamer reported for a track — and not the zero a source reporting nothing leaves. */
-export function usePlayhead(): { position: number; duration: number | null; known: boolean } {
+/** `active`: false stops the 4 Hz interpolation while the surface cannot be seen (the tray
+ *  panel, created hidden and kept, runs unthrottled so its pushes stay current; its playhead
+ *  need not tick while nobody sees it, and the next render reads the position fresh). */
+export function usePlayhead(active = true): {
+  position: number;
+  duration: number | null;
+  known: boolean;
+} {
   const playhead = useStore((s) => s.playhead);
   const playState = useStore((s) => s.playState);
   const nowPlaying = useStore((s) => s.nowPlaying);
@@ -17,10 +24,10 @@ export function usePlayhead(): { position: number; duration: number | null; know
   const playing = playState?.state === "play";
 
   useEffect(() => {
-    if (!playing) return;
+    if (!playing || !active) return;
     const timer = setInterval(() => forceTick((n) => n + 1), 250);
     return () => clearInterval(timer);
-  }, [playing]);
+  }, [playing, active]);
 
   const stationTunedAt = useStore((s) => s.stationTunedAt);
 

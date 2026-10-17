@@ -11,6 +11,7 @@ import {
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { activeSourceId, queuePlace } from "@/lib/format";
+import { Lru } from "@/lib/lru";
 
 /** One track of the disc in the player: named when MusicBrainz or this session has named it. */
 export interface DiscRow {
@@ -43,9 +44,10 @@ export interface Disc {
 // the track names and lengths it gave as each track played. Answers from MusicBrainz are kept
 // here too so a screen that remounts does not ask again (a miss is asked again: the main
 // process caches the definitive ones, and a transient one deserves the retry).
-const tocs = new Map<string, { tracks: number; secs: number }>();
-const heard = new Map<string, Map<number, { title: string; secs: number | null }>>();
-const found = new Map<string, DiscTracks>();
+// per disc, for the session: the last 32 discs (lib/lru)
+const tocs = new Lru<string, { tracks: number; secs: number }>(32);
+const heard = new Lru<string, Map<number, { title: string; secs: number | null }>>(32);
+const found = new Lru<string, DiscTracks>(32);
 
 const discKey = (releaseId: string | null, artist: string | null, album: string | null) =>
   releaseId ?? (album ? `${artist ?? ""}|${album}`.toLowerCase() : null);

@@ -76,6 +76,17 @@ The Artists view shows your artists, the selected artist's albums, and the selec
 
 <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/lens-tracks.webp" alt="The Tracks view filtered by decade and dynamic range">
 
+#### Album and artist pages
+
+An album's page lists its tracks with their format and dynamic range. An artist's page shows the artist's picture and a short biography, every album across your libraries, and the tracks they appear on from other artists' albums.
+
+<table>
+  <tr>
+    <td align="center" width="50%"><img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/album-page.webp" alt="An album page listing its tracks, with the playing track highlighted"><br><sub>Album page</sub></td>
+    <td align="center" width="50%"><img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/artist-page.webp" alt="An artist page with the artist's photo, a short biography and their albums"><br><sub>Artist page</sub></td>
+  </tr>
+</table>
+
 ### Search everything
 
 Search your libraries, playlists, favorites, presets, and internet radio at once, with the results grouped by type.
@@ -257,8 +268,10 @@ tools the Home Assistant automation needs, copy the token into the
 - Artists, Albums and Tracks views combining every library into one collection, with filters for genre, decade, format (codec, lossless, hi-res), dynamic range, and albums or compilations
 - The Albums view can be shown as cards or rows
 - The Artists view shows your artists, the selected artist's albums, and the selected album's tracks
+- Artist pages show the artist's picture and a short biography (when Liner notes is on), every album across your libraries, and the tracks they appear on from other artists' albums
+- Artists are shown with their photo (when Liner notes is on) or a cover from one of their albums
 - The Tracks view lists every track in every library, and the filtered list can be played as a whole
-- Artist and album names in track rows link to the Library
+- Artist and album names in track rows link to the artist's page and the album
 - Albums with featured artists stay together, and compilations are listed under Various Artists
 - Multi-disc albums show disc dividers, and a multi-volume set is shown as one album with a volume selector
 - Album headers show the album's format and size
@@ -436,7 +449,8 @@ shows the traffic live.
 npm install
 npm run dev        # run with HMR
 npm run typecheck  # typecheck main + preload + renderer
-npm run check      # typecheck, lint (ESLint) and format check (Prettier); what CI runs
+npm run test       # run the unit tests (Vitest); test:watch reruns them on save
+npm run check      # typecheck, lint (ESLint), format check (Prettier) and unit tests; what CI runs
 npm run format     # format the source with Prettier
 npm run build      # bundle to out/
 npm run dist:mac   # package a dmg (also: dist:win, dist:linux)

@@ -137,7 +137,7 @@ jobs:
 
       - run: npm ci
 
-      # typecheck + lint + format:check — the same gate as `npm run check` locally
+      # typecheck + lint + format:check + unit tests — the same gate as `npm run check` locally
       - run: npm run check
 
       - run: npm run build
@@ -206,7 +206,7 @@ jobs:
 
       - run: npm ci
 
-      # typecheck + lint + format:check — the same gate as `npm run check` locally
+      # typecheck + lint + format:check + unit tests — the same gate as `npm run check` locally
       - run: npm run check
 
       - run: npm run build

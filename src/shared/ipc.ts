@@ -4,11 +4,12 @@
 // Two neighbours split out of here 2026-07-26 (in two passes), when this file
 // had grown to ~1,600 lines and a contract change meant reading past a
 // 490-line tool catalogue to find it:
-//   · model.ts      — the app's own DOMAIN: everything that would still mean
+//   · model/        — the app's own DOMAIN: everything that would still mean
 //                     something with the IPC layer deleted (collections,
 //                     settings, media browser, schedules, diagnostics…) plus
-//                     the content-identity helpers. This file imports FROM it
-//                     and must never import back, so the contract stays free
+//                     the content-identity helpers, a module per domain behind
+//                     one barrel since the 0.11.0 sweep. This file imports FROM
+//                     it and must never import back, so the contract stays free
 //                     of domain churn.
 //   · mcpCatalog.ts — the MCP tool catalogue (it too leans on model, not here).
 // smoip.ts is a different axis entirely — the STREAMER's wire types, which all
@@ -143,6 +144,8 @@ export type PushMessage =
   | { kind: "frame"; entry: FrameEntry }
   | { kind: "log"; entry: LogEntry }
   | { kind: "recents"; data: RecentTrack[] }
+  /** An album's DR, recorded by main the moment its last track was measured (2026-10-12). */
+  | { kind: "albumDr"; key: string; entry: AlbumDr }
   | { kind: "listening"; data: ListeningRecordStats }
   /** The record's aggregate, whole (after a clear) — the reading surfaces' seed. */
   | { kind: "playStats"; data: PlayStats }
@@ -320,6 +323,13 @@ export interface TastyTunesApi {
   /** Artist bio via MusicBrainz + Wikipedia (main process, cached; null = no match).
    *  `force` bypasses the cache read — the user-driven refresh. */
   fetchArtistInfo(artist: string, force?: boolean): Promise<ArtistInfo | null>;
+  /** Pictures for artists by name, never fetched: the server's own picture when it is not an
+   *  album's cover, else a known photo (with the artist lookups on), else a cover from the
+   *  artist's own albums in the indexed libraries, else null. */
+  artistPictures(names: string[]): Promise<Record<string, string | null>>;
+  /** An artist's albums and tracks in the indexed libraries (the Artists lens's counts), or
+   *  null when no index knows them. */
+  artistFacts(name: string): Promise<{ albums: number; tracks: number } | null>;
   /** Album details via MusicBrainz + Wikipedia (main process, cached; null = no match).
    *  `force` bypasses the cache read — the user-driven refresh. */
   fetchAlbumInfo(artist: string, album: string, force?: boolean): Promise<AlbumInfo | null>;
@@ -335,8 +345,10 @@ export interface TastyTunesApi {
     secs: number | null,
   ): Promise<DiscTracks | null>;
   /** EXPERIMENT (0.7 exploration): the playing track's raw audio bytes from
-   *  its local media server, for renderer-side decode. Null on any miss. */
-  expTrackAudio(serverUdn: string, objectId: string): Promise<ArrayBuffer | null>;
+   *  its local media server, for renderer-side decode. Null on any miss. The bytes arrive as
+   *  a Uint8Array (main sends a Buffer): the contract said ArrayBuffer until the typed
+   *  handle held main's answer to it (0.11.0 sweep). */
+  expTrackAudio(serverUdn: string, objectId: string): Promise<Uint8Array | null>;
   /** EXPERIMENT: a stored analysis by content key (null = none yet). */
   audioAnalysisGet(key: string): Promise<AudioAnalysis | null>;
   /** EXPERIMENT: persist a finished analysis under its content key. */
@@ -481,6 +493,10 @@ export interface TastyTunesApi {
   /** The undo stack's top label (or null when empty) — the Edit menu's
    *  Undo item names its target from this, the Music.app pattern. */
   undoLabelSet(label: string | null): Promise<void>;
+  /** The diagnostics drawer opened (true) or closed (false) in this window: the SMOIP frames
+   *  are pushed only to windows whose drawer is open (0.11.0 sweep; every frame used to reach
+   *  every window, the position tick once a second among them). Answers the ring so far. */
+  diagnosticsWatch(on: boolean): Promise<FrameEntry[]>;
   lookupCacheStats(): Promise<{ entries: number; bytes: number }>;
   /** Wipe the lookup caches (memory + disk); resolves to the fresh stats. */
   clearLookupCaches(): Promise<{ entries: number; bytes: number }>;
@@ -509,6 +525,8 @@ export const IPC = {
   updateInstall: "tt:updateInstall",
   updateCheckNow: "tt:updateCheckNow",
   fetchArtistInfo: "tt:fetchArtistInfo",
+  artistPictures: "tt:artistPictures",
+  artistFacts: "tt:artistFacts",
   fetchAlbumInfo: "tt:fetchAlbumInfo",
   fetchTrackInfo: "tt:fetchTrackInfo",
   fetchDiscTracks: "tt:fetchDiscTracks",
@@ -550,6 +568,7 @@ export const IPC = {
   listeningStreamers: "tt:listeningStreamers",
   listeningYear: "tt:listeningYear",
   undoLabelSet: "tt:undoLabelSet",
+  diagnosticsWatch: "tt:diagnosticsWatch",
   lookupCacheStats: "tt:lookupCacheStats",
   clearLookupCaches: "tt:clearLookupCaches",
   artThumbsStats: "tt:artThumbsStats",
@@ -570,3 +589,29 @@ export const IPC = {
   radioByTags: "tt:radioByTags",
   push: "tt:push",
 } as const;
+
+/**
+ * THE CHANNEL TABLE IS THE CONTRACT'S INDEX (0.11.0 sweep): every invoked method of
+ * TastyTunesApi has the channel `tt:<method>`, so main's handlers (app/guard handle) and
+ * the preload (generated from this table) take their types from TastyTunesApi by name.
+ * The two exceptions are the push stream (main → renderer) and the one-way display-mode
+ * report (renderer → main, no answer).
+ */
+export type InvokeMethod = Exclude<keyof TastyTunesApi, "onPush" | "reportDisplayMode">;
+/** The method a channel answers for: "tt:getSnapshot" → "getSnapshot". */
+export type MethodOf<C extends string> = C extends `tt:${infer M}` ? M : never;
+/** The channels the renderer invokes (everything but the push stream and the report). */
+export const INVOKE_METHODS = (Object.keys(IPC) as Array<keyof typeof IPC>).filter(
+  (k): k is InvokeMethod => k !== "push" && k !== "displayModeReport",
+);
+// the table and the API name the same methods: a method without a channel, or a channel
+// without a method, fails to compile here
+type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+const tableMatchesApi: Same<
+  InvokeMethod,
+  Exclude<keyof typeof IPC, "push" | "displayModeReport">
+> = true;
+void tableMatchesApi;
+// …and every channel is its method's name under tt:, which is what MethodOf reads
+const channelsAreNames: { readonly [K in keyof typeof IPC]: `tt:${K}` } = IPC;
+void channelsAreNames;

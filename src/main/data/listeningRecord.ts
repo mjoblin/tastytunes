@@ -8,7 +8,7 @@ import {
   readSync,
   statSync,
 } from "node:fs";
-import { readdir, stat, unlink, writeFile } from "node:fs/promises";
+import { readdir, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { app } from "electron";
 import { isRecord } from "@shared/guards";
@@ -163,6 +163,74 @@ function historyDir(): string {
 
 const yearFile = (year: number): string => join(historyDir(), `${year}.jsonl`);
 
+/**
+ * THE RECORD IN MEMORY (0.11.0 sweep): each year's parsed lines, kept while its file is
+ * unchanged (the same size and mtime), so the Settings truth row (re-read at every append),
+ * the play stats and the History reads stop re-reading and re-parsing every year at every
+ * track boundary. This process's own appends extend the cached year in place; a change from
+ * anywhere else (a restore, an editor, another build) is a new size or mtime, and that year
+ * is read again.
+ */
+interface YearLines {
+  size: number;
+  mtimeMs: number;
+  events: ListeningEvent[];
+  unreadable: number;
+  /** The year's first line of any kind (the record's "since"). */
+  since: number | null;
+}
+const years = new Map<number, YearLines>();
+
+/** One year's lines as parsed: torn or unparseable lines are counted, never thrown over;
+ *  unknown kinds pass through untyped (readers skip what they don't know — the
+ *  additive-evolution contract). */
+function parseLines(raw: string): { events: ListeningEvent[]; unreadable: number } {
+  const events: ListeningEvent[] = [];
+  let unreadable = 0;
+  for (const line of raw.split("\n")) {
+    if (line.trim() === "") continue;
+    try {
+      const parsed: unknown = JSON.parse(line);
+      if (isRecord(parsed) && typeof parsed.at === "number" && typeof parsed.kind === "string") {
+        events.push(parsed as unknown as ListeningEvent);
+      } else {
+        unreadable++;
+      }
+    } catch {
+      unreadable++;
+    }
+  }
+  return { events, unreadable };
+}
+
+/** The year's lines, from memory while the file is unchanged; null when there is no file. */
+function yearLines(year: number): YearLines | null {
+  const file = yearFile(year);
+  let size: number;
+  let mtimeMs: number;
+  try {
+    ({ size, mtimeMs } = statSync(file));
+  } catch {
+    years.delete(year);
+    return null;
+  }
+  const hit = years.get(year);
+  if (hit && hit.size === size && hit.mtimeMs === mtimeMs) return hit;
+  let raw: string;
+  try {
+    raw = readFileSync(file, "utf-8");
+  } catch {
+    years.delete(year);
+    return null;
+  }
+  const { events, unreadable } = parseLines(raw);
+  let since: number | null = null;
+  for (const e of events) if (since == null || e.at < since) since = e.at;
+  const lines = { size, mtimeMs, events, unreadable, since };
+  years.set(year, lines);
+  return lines;
+}
+
 /** Files whose tail this process has already verified ends on a newline. */
 const cleanTails = new Set<string>();
 
@@ -197,17 +265,40 @@ function ensureCleanTail(path: string): void {
 function append(event: ListeningEvent): void {
   try {
     mkdirSync(historyDir(), { recursive: true });
-    const file = yearFile(new Date(event.at).getFullYear());
+    const year = new Date(event.at).getFullYear();
+    const file = yearFile(year);
+    // the year in memory extends in place below only while it is still the file on disk
+    const cached = years.get(year);
+    let upToDate = false;
+    if (cached) {
+      try {
+        const st = statSync(file);
+        upToDate = st.size === cached.size && st.mtimeMs === cached.mtimeMs;
+      } catch {
+        upToDate = false;
+      }
+    }
     ensureCleanTail(file);
+    const line = `${JSON.stringify(event)}\n`;
     const fd = openSync(file, "a");
     try {
-      appendFileSync(fd, `${JSON.stringify(event)}\n`);
+      appendFileSync(fd, line);
       notifyEvent?.(event);
       fsyncSync(fd);
     } finally {
       closeSync(fd);
     }
     writeError = null;
+    if (cached) {
+      // exactly this line was added (a repaired torn tail adds a newline too: read again)
+      const st = upToDate ? statSync(file) : null;
+      if (st && st.size === cached.size + Buffer.byteLength(line)) {
+        cached.events.push(JSON.parse(line) as ListeningEvent);
+        cached.size = st.size;
+        cached.mtimeMs = st.mtimeMs;
+        if (cached.since == null || event.at < cached.since) cached.since = event.at;
+      } else years.delete(year);
+    }
   } catch (err) {
     writeError = err instanceof Error ? err.message : String(err);
     console.error("listening record append failed", err);
@@ -447,28 +538,11 @@ export const listeningRecord = {
    *  thrown over; unknown kinds pass through untyped (readers skip what
    *  they don't know — the additive-evolution contract). */
   readYear(year: number): { events: ListeningEvent[]; unreadable: number } {
-    let raw: string;
-    try {
-      raw = readFileSync(yearFile(year), "utf-8");
-    } catch {
-      return { events: [], unreadable: 0 };
-    }
-    const events: ListeningEvent[] = [];
-    let unreadable = 0;
-    for (const line of raw.split("\n")) {
-      if (line.trim() === "") continue;
-      try {
-        const parsed: unknown = JSON.parse(line);
-        if (isRecord(parsed) && typeof parsed.at === "number" && typeof parsed.kind === "string") {
-          events.push(parsed as unknown as ListeningEvent);
-        } else {
-          unreadable++;
-        }
-      } catch {
-        unreadable++;
-      }
-    }
-    return { events, unreadable };
+    const lines = yearLines(year);
+    // a copy: the year in memory is never handed out to be sorted or spliced
+    return lines
+      ? { events: lines.events.slice(), unreadable: lines.unreadable }
+      : { events: [], unreadable: 0 };
   },
 
   /** Every event across all years, with the unreadable-line total — the MCP
@@ -484,18 +558,19 @@ export const listeningRecord = {
     return { events, unreadable };
   },
 
-  /** The Settings truth row, computed fresh from the files. */
+  /** The Settings truth row, from the years in memory (each re-read when its file changed). */
   async stats(): Promise<ListeningRecordStats> {
     let events = 0;
     let bytes = 0;
     let since: number | null = null;
     let unreadableLines = 0;
     for (const year of await listYears()) {
-      bytes += (await stat(yearFile(year))).size;
-      const { events: list, unreadable } = this.readYear(year);
-      events += list.length;
-      unreadableLines += unreadable;
-      for (const e of list) if (since == null || e.at < since) since = e.at;
+      const lines = yearLines(year);
+      if (!lines) continue;
+      bytes += lines.size;
+      events += lines.events.length;
+      unreadableLines += lines.unreadable;
+      if (lines.since != null && (since == null || lines.since < since)) since = lines.since;
     }
     const pending = current
       ? ((current.payload.title as string | null | undefined) ??
@@ -522,6 +597,7 @@ export const listeningRecord = {
   async clear(): Promise<void> {
     this.flush();
     for (const year of await listYears()) await unlink(yearFile(year));
+    years.clear();
   },
 
   /** Write the whole record to one file at `path` — the years concatenated

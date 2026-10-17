@@ -14,6 +14,19 @@ import { useStore } from "@/store";
  * covers what can (see restoreRecents for the merge that keeps it honest when
  * a track gets logged while the offer is up).
  */
+/**
+ * The Recent list's clear, as both its buttons ask it (the History screen's and Settings ›
+ * History's): the whole list goes, so it confirms first (the destructive-edit rule: confirm for
+ * whole collections, instant + undo for items; user, 2026-10-11: "the 'clear' button has no
+ * affordance for 'Are you sure' which we have elsewhere in the app"), and the undo stays behind
+ * the confirm.
+ */
+export const CLEAR_RECENTS = {
+  question: "Clear the Recent list? The listening record is kept.",
+  verb: "Clear",
+  onConfirm: (): void => void clearRecentsWithUndo(),
+};
+
 export async function clearRecentsWithUndo(): Promise<void> {
   const { recents, showToast } = useStore.getState();
   if (recents.length === 0) return;

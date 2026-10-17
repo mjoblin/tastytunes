@@ -4,7 +4,8 @@ import { cx, fmtAgo } from "@/lib/format";
 import { useStore } from "@/store";
 import { artSrc, artKeyOf } from "@/lib/artSrc";
 import type { MediaNode } from "@shared/model";
-import { ArtImage } from "@/components/media/ArtImage";
+import { HeaderArt } from "@/components/library/HeaderArt";
+import { HEADER_ART_PX, useHeaderArtSize } from "@/hooks/useHeaderArtSize";
 import { NameLink } from "@/components/media/NameLine";
 import { DrChip, LufsChip } from "@/components/media/Waveform";
 import { HeaderChip } from "@/components/chrome/Chrome";
@@ -71,9 +72,10 @@ export function AlbumHeader(
     volumeMarker,
     openVolume,
   } = p;
+  const art = useHeaderArtSize("Resize Album Art");
   return (
     <>
-      <div className="flex items-start gap-6 pb-6 pt-2" data-album-header>
+      <div className="flex items-start gap-6 pb-6 pt-2" data-album-header ref={art.attachRow}>
         {/* keyed by the album's content like its card, so the thumb the card's fetch made
             is the one drawn here (a click used to fetch the origin again and show blank
             while it did, 2026-09-14); the well is positioned for the pending line, and
@@ -82,22 +84,26 @@ export function AlbumHeader(
             edge from the first pending frame (a quick rise, not the line's 300 ms wait, which
             left a moment with no border; the ring is a shadow, so the size never moves) and
             settling back slowly when the picture lands; a cached picture lands before the
-            rise shows (user, 2026-09-14) */}
-        <div className="relative h-[160px] w-[160px] shrink-0 rounded-xl overflow-hidden ring-1 ring-edge has-[[data-art-pending]]:ring-edge2 has-[[data-art-pending]]:duration-100 transition-shadow duration-300 bg-veil flex items-center justify-center">
-          <ArtImage
-            src={artSrc(albumArt, 160, artKeyOf(albumNode))}
-            fallbackArt={{ artist: albumArtist, album: albumNode.title }}
-            className="h-full w-full object-cover"
-            shimmer
-            fallback={<Disc3 size={48} strokeWidth={1} className="text-faint" />}
-          />
-        </div>
+            rise shows (user, 2026-09-14); its size is dragged from the corner, one size with
+            the artist header's (HeaderArt, 0.11.0) */}
+        <HeaderArt
+          art={art}
+          label="Resize the album art"
+          src={artSrc(albumArt, HEADER_ART_PX, artKeyOf(albumNode))}
+          sharp={
+            art.settled > HEADER_ART_PX ? artSrc(albumArt, art.settled, artKeyOf(albumNode)) : null
+          }
+          fallbackArt={{ artist: albumArtist, album: albumNode.title }}
+          fallback={(px) => <Disc3 size={px} strokeWidth={1} className="text-faint" />}
+        />
         {/* the text column is at least the art's height with the verb row
                 pinned to its bottom: a header without a composer line is
                 exactly the art's height on every album (the track list starts
                 at one place), the verbs sit on the art's bottom edge, and only
                 a composer line or a wrapped title grows the header (user call,
-                2026-09-05, measured: 153px of 160 without, ~180 with). */}
+                2026-09-05, measured: 153px of 160 without, ~180 with). A picture dragged
+                larger leaves the column as it is, the verbs following the words rather than
+                pinned to a bottom edge far below them (0.11.0). */}
         <div className="min-w-0 pt-1 flex min-h-[160px] flex-col gap-1.5">
           {/* title + artist are one thought — set tight */}
           <div className="space-y-0.5">

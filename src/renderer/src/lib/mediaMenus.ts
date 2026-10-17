@@ -45,6 +45,8 @@ export interface MediaMenuCaps {
   openInLibrary?(): void;
   goToAlbum?(): void;
   goToArtist?(): void;
+  /** The artist's page in the Library (the app's own, built from the indexes). Artists only. */
+  openArtistPage?(): void;
   saveToPreset?(): void;
   addToPlaylist?(): void;
   /** Override the derived heart (the Library stores richer favorites). */
@@ -160,6 +162,7 @@ export function albumMenuItems(ref: MediaRef, caps: MediaMenuCaps = {}): MediaMe
  *  artist can answer, and any future artist verb has a home here. */
 export function artistMenuItems(ref: MediaRef, caps: MediaMenuCaps = {}): MediaMenuItem[] {
   return [
+    ...cap("Open artist page", caps.openArtistPage),
     ...pivotItem(ref),
     ...(caps.utilityVerbs ?? []),
     ...infoItem(ref, caps),

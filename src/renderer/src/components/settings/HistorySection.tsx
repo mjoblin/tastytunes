@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { clearRecentsWithUndo } from "@/lib/recents";
+import { CLEAR_RECENTS } from "@/lib/recents";
 import { LISTEN_FLOOR_SECS, type AppSettings, type ListeningRecordStats } from "@shared/model";
 import { tt } from "@/api";
 import { useConfirmPopover } from "@/components/chrome/Confirm";
@@ -146,7 +146,7 @@ export function HistorySection({
         >
           <button
             data-recents-clear
-            onClick={() => void clearRecentsWithUndo()}
+            onClick={(e) => confirmClear.ask(e, CLEAR_RECENTS)}
             disabled={recentsCount === 0}
             className="shrink-0 text-[12.5px] px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-dim hover:text-alert hover:ring-edge2 hover:bg-raised/70 motion-safe:active:scale-90 transition-all disabled:opacity-40 disabled:hover:text-dim disabled:hover:ring-edge disabled:hover:bg-panel/70"
           >

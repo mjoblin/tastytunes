@@ -96,7 +96,9 @@ export function TrayPanel(): React.JSX.Element {
   const systemInfo = useStore((s) => s.systemInfo);
   const settings = useStore((s) => s.settings);
   const saveSettings = useStore((s) => s.saveSettings);
-  const { position, duration } = usePlayhead();
+  // the playhead ticks only while the panel shows (the trayPanel push; it is kept hidden between opens)
+  const panelVisible = useStore((s) => s.trayPanelVisible);
+  const { position, duration } = usePlayhead(panelVisible);
   const onWheel = useWheelVolume();
   // Unconditional, above any early return — the hook count must never shift.
   const vol = useVolumeSlider();

@@ -28,6 +28,13 @@ const RETRY_DELAYS_MS = [1500, 4000];
 /** How long a pending picture waits before the well shimmers (a cached one never does). */
 const SLOW_MS = 300;
 
+/** Where a picture taller than it is wide is cropped to the square (0.11.0, his Madonna: the top
+ *  of her head cut off): artists' photos are mostly portraits with the head in the top third,
+ *  and a centered crop takes as much off the top as the bottom. */
+export const PORTRAIT_POSITION = "50% 20%";
+/** Taller than wide by more than a rounding error. */
+export const isPortrait = (w: number, h: number): boolean => w > 0 && h > w * 1.02;
+
 const retriable = (url: string): boolean => /^https?:/i.test(url);
 const bust = (url: string, n: number): string =>
   n > 0 && retriable(url) ? `${url}${url.includes("?") ? "&" : "?"}tt_retry=${n}` : url;
@@ -39,6 +46,8 @@ export function ArtImage({
   className = "h-full w-full object-cover",
   lazy = false,
   shimmer = false,
+  portraitTop = false,
+  onGiveUp,
 }: {
   src: string | null | undefined;
   fallback: React.ReactNode;
@@ -58,11 +67,19 @@ export function ArtImage({
    * scrolled-to card flash the band before its cached picture landed.
    */
   shimmer?: boolean;
+  /** Crop a portrait picture from near its top rather than its middle (PORTRAIT_POSITION): an
+   *  artist's photo. A square picture, every album cover, is drawn as before. */
+  portraitTop?: boolean;
+  /** Told when the picture at `src` has failed for good (after its retries), so a caller with
+   *  another way to the picture can take it (MediaArt's library fallback). */
+  onGiveUp?: () => void;
 }): React.JSX.Element {
   const [loaded, setLoaded] = useState<string | null>(null);
   const [slow, setSlow] = useState(false);
   /** The src that landed after the wait: only that one eases in; a quick one is simply there. */
   const [eased, setEased] = useState<string | null>(null);
+  /** The shown src that loaded taller than wide (for portraitTop). */
+  const [tall, setTall] = useState<string | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
   useEffect(() => {
     if (!shimmer || !src || loaded === src) {
@@ -123,7 +140,12 @@ export function ArtImage({
         data-art-pending={loaded === src ? undefined : ""}
         loading={lazy ? "lazy" : undefined}
         className={cx(className, shimmer && eased === src && "art-in")}
-        onLoad={() => {
+        style={portraitTop && tall === shown ? { objectPosition: PORTRAIT_POSITION } : undefined}
+        onLoad={(e) => {
+          if (portraitTop) {
+            const { naturalWidth: w, naturalHeight: h } = e.currentTarget;
+            setTall(isPortrait(w, h) ? shown : null);
+          }
           if (base === src) {
             // ease in only a picture the well waited for; one from the cache is
             // just there, as it would be with no indicator at all (user, 2026-09-14:
@@ -142,7 +164,10 @@ export function ArtImage({
             );
             return;
           }
-          if (base === src) console.warn("[art] gave up on", base);
+          if (base === src) {
+            console.warn("[art] gave up on", base);
+            onGiveUp?.();
+          }
           setFailedSrc(base);
         }}
       />

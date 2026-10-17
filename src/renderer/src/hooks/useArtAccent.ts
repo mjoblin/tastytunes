@@ -1,11 +1,12 @@
 import { useEffect } from "react";
 import { tt } from "@/api";
+import { Lru } from "@/lib/lru";
 
 // Plexamp-style per-album accent: sample the dominant color of the current art
 // and retint the app's amber accent by overriding --amber-rgb on :root. Art is
 // fetched through the main process (data URL) so the canvas isn't CORS-tainted.
 
-const cache = new Map<string, string | null>(); // theme|artUrl -> "r g b" | null
+const cache = new Lru<string, string | null>(80); // theme|artUrl -> "r g b" | null
 
 export function useArtAccent(artUrl: string | null, theme: "dark" | "light" = "dark"): void {
   useEffect(() => {
@@ -35,7 +36,6 @@ export function useArtAccent(artUrl: string | null, theme: "dark" | "light" = "d
         rgb = null;
       }
       cache.set(key, rgb);
-      if (cache.size > 80) cache.delete(cache.keys().next().value as string);
       if (!cancelled) apply(rgb);
     })();
 

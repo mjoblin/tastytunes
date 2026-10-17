@@ -43,6 +43,7 @@ import { useArtSize } from "@/hooks/useArtSize";
 import { CornerResizeHandle } from "@/components/controls/CornerResizeHandle";
 import type { SceneId } from "@/components/display/scenes/types";
 import { FACT_SEP } from "@/lib/mediaFacts";
+import { useQueueSourceActive } from "@/hooks/useQueueSourceActive";
 
 const ALIGN_H = { left: "justify-start", center: "justify-center", right: "justify-end" } as const;
 const ALIGN_V = { top: "items-start", center: "items-center", bottom: "items-end" } as const;
@@ -51,6 +52,7 @@ export function NowPlayingScreen(): React.JSX.Element {
   const playState = useStore((s) => s.playState);
   const saveSettings = useStore((s) => s.saveSettings);
   const nowPlaying = useStore((s) => s.nowPlaying);
+  const queueSourceActive = useQueueSourceActive();
   const queue = useStore((s) => s.queue);
   const zoneState = useStore((s) => s.zoneState);
   const effectivePlayId = useStore((s) => s.effectivePlayId);
@@ -157,11 +159,7 @@ export function NowPlayingScreen(): React.JSX.Element {
   // settled snapshot's. Display mode keeps the hero quiet; radio, AirPlay and
   // the other sources show plain text.
   const playingEntry = playingQueueEntry(queue, playState, effectivePlayId);
-  const linkable =
-    !displayMode &&
-    !meta.isRadio &&
-    playingEntry != null &&
-    activeSourceId(zoneState, nowPlaying) === "MEDIA_PLAYER";
+  const linkable = !displayMode && !meta.isRadio && playingEntry != null && queueSourceActive;
   const entryRef = linkable && playingEntry ? fromQueueItem(playingEntry) : null;
   const entryArtist = linkable ? (playingEntry?.metadata?.artist ?? null) : null;
 
@@ -227,11 +225,7 @@ export function NowPlayingScreen(): React.JSX.Element {
     !meta.isRadio && meta.title
       ? { title: meta.title, artist: meta.subtitle ?? null, album: meta.album ?? null }
       : null;
-  const heroArt = useBestArt(
-    meta.artUrl,
-    heroQuery,
-    activeSourceId(zoneState, nowPlaying) === "MEDIA_PLAYER",
-  );
+  const heroArt = useBestArt(meta.artUrl, heroQuery, queueSourceActive);
   const { art: tileArt } = useDecodedArt(heroArt);
   // Live, not snapshotted — the queue moves independently of the track.
   const place = queuePlace(playState, nowPlaying);

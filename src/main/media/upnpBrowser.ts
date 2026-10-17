@@ -643,13 +643,34 @@ async function rewalk(entry: ServerEntry, titlePath: string[]): Promise<MediaNod
 
 // ----------------------------------------------------------------- Search
 
-const SEARCH_MAX = 500;
+/** A live search asks 500 at a time (2026-10-11: one page of 500 was the whole answer, so a
+ *  server with more said "first 500"); it pages on to the server's total, up to SEARCH_MAX per
+ *  kind, and stops early on an empty page or none (what it has stands). A server may answer
+ *  fewer than it was asked for (the mock's 150, as real ones do), so a short page ends the
+ *  search only when the server gives no total. */
+const SEARCH_PAGE = 500;
+const SEARCH_MAX = 5000;
 
 async function searchScope(
   entry: ServerEntry,
   criteria: string,
 ): Promise<{ items: MediaNode[]; total: number } | null> {
-  return searchPageRaw(entry, criteria, 0, SEARCH_MAX);
+  const first = await searchPageRaw(entry, criteria, 0, SEARCH_PAGE);
+  if (!first) return null;
+  const items = [...first.items];
+  // a server that cannot count says 0: then only a full page says there may be more
+  const known = first.total > 0 ? first.total : null;
+  let last = first.items.length;
+  while (
+    items.length < SEARCH_MAX &&
+    (known != null ? items.length < known : last >= SEARCH_PAGE)
+  ) {
+    const next = await searchPageRaw(entry, criteria, items.length, SEARCH_PAGE);
+    if (!next || next.items.length === 0) break;
+    items.push(...next.items);
+    last = next.items.length;
+  }
+  return { items, total: Math.max(first.total, items.length) };
 }
 
 async function searchPageRaw(

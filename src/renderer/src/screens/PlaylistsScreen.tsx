@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { queueContentHash } from "@shared/smoip";
 import {
+  playKey,
   favoriteKey,
   playlistContentHash,
   playlistItemKey,
@@ -64,7 +65,7 @@ import { DurationCell } from "@/components/media/DurationCell";
 import { PresetPicker } from "@/components/library/LibraryMenus";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { DND_ACCESSIBILITY, lockVertical } from "@/lib/dnd";
-import { activeSourceId, cx, fmtDuration, fmtRelative, matchesFilter } from "@/lib/format";
+import { cx, fmtDuration, fmtRelative, matchesFilter } from "@/lib/format";
 import { Eqbars } from "@/components/media/Eqbars";
 import {
   HeaderChip,
@@ -77,6 +78,7 @@ import { useConfirmPopover } from "@/components/chrome/Confirm";
 import { useOneShotAsk } from "@/hooks/useOneShotAsk";
 import { artSrc } from "@/lib/artSrc";
 import { FACT_SEP } from "@/lib/mediaFacts";
+import { useQueueSourceActive } from "@/hooks/useQueueSourceActive";
 
 /**
  * Stored playlists: the collection on the left, the selected playlist's tracks
@@ -143,9 +145,7 @@ export function PlaylistsScreen(): React.JSX.Element {
   // order-sensitive), so the playing queue POSITION is the playlist index —
   // no title matching, and twin-titled tracks can't cross-light.
   const effectivePlayId = useStore((s) => s.effectivePlayId);
-  const zoneState = useStore((s) => s.zoneState);
-  const nowPlaying = useStore((s) => s.nowPlaying);
-  const queueSourceActive = activeSourceId(zoneState, nowPlaying) === "MEDIA_PLAYER";
+  const queueSourceActive = useQueueSourceActive();
   const playingIndex = useMemo(() => {
     if (effectivePlayId == null) return null;
     return queue?.items?.find((it) => it.id === effectivePlayId)?.position ?? null;
@@ -777,7 +777,11 @@ function TrackRow({
         )}
       </OrderHandle>
 
-      <MediaArt src={item.artUrl} kind="track" />
+      <MediaArt
+        src={item.artUrl}
+        artKey={playKey(item.title, item.artist, item.album)}
+        kind="track"
+      />
 
       <div className="min-w-0">
         <div className="text-[13.5px] truncate text-ink">{item.title}</div>

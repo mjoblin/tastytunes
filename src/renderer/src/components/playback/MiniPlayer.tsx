@@ -31,8 +31,9 @@ import { Slider } from "@/components/controls/Slider";
 import { ArtImage } from "@/components/media/ArtImage";
 import { AmbientArt } from "@/components/media/AmbientArt";
 import { useDecodedArt } from "@/hooks/useDecodedArt";
-import { activeSourceId, cx, deriveNowPlaying, fmtTime } from "@/lib/format";
+import { cx, deriveNowPlaying, fmtTime } from "@/lib/format";
 import { useDisc } from "@/hooks/useDisc";
+import { useQueueSourceActive } from "@/hooks/useQueueSourceActive";
 
 /**
  * The mini player window (?mini=1): a frameless always-on-top strip with art,
@@ -94,7 +95,7 @@ export function MiniPlayer(): React.JSX.Element {
   // next, so the line stays empty
   const items = queue?.items ?? [];
   const currentIdx = items.findIndex((i) => i.id === effectivePlayId);
-  const queueAudible = activeSourceId(zoneState, nowPlaying) === "MEDIA_PLAYER";
+  const queueAudible = useQueueSourceActive();
   const disc = useDisc();
   const next = disc
     ? disc.head != null

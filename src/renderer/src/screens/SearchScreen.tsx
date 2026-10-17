@@ -23,7 +23,7 @@ import {
   refToPlaylistItem,
   type MediaRef,
 } from "@/lib/mediaRef";
-import { saveRefToPreset } from "@/lib/mediaActions";
+import { openArtistInLibrary, saveRefToPreset } from "@/lib/mediaActions";
 import {
   albumMenuItems,
   artistMenuItems,
@@ -352,12 +352,19 @@ export function SearchScreen(): React.JSX.Element {
   const playNode = (node: MediaNode): void => {
     const udn = node.serverUdn;
     if (!udn) return;
+    // an ARTIST opens their page in the Library (2026-10-11): Search's results are the indexes',
+    // and the page is built from them, the same on every server
+    if (nodeKind(node) === "artist") {
+      openArtistInLibrary(node.title);
+      return;
+    }
     if (node.isContainer) {
       openInLibrary({
         serverUdn: udn,
         objectId: node.id,
         titlePath: [node.title],
         title: node.title,
+        upnpClass: node.upnpClass,
         fromSearch: true,
       });
       return;
@@ -455,7 +462,7 @@ export function SearchScreen(): React.JSX.Element {
     const kind = nodeKind(node);
     const items =
       kind === "artist"
-        ? artistMenuItems(ref)
+        ? artistMenuItems(ref, { openArtistPage: () => openArtistInLibrary(node.title) })
         : kind === "album"
           ? albumMenuItems(ref, {
               ...caps,
@@ -571,6 +578,7 @@ export function SearchScreen(): React.JSX.Element {
               title={node.title}
               subtitle={[node.artist, node.serverName].filter(Boolean).join(" — ")}
               artUrl={node.artUrl}
+              artistName={nodeKind(node) === "artist" ? node.title : null}
               kind={nodeKind(node)}
               badge={kindLabel(nodeKind(node))}
               duration={nodeKind(node) === "track" ? node.durationSecs : undefined}

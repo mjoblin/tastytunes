@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Disc3, ListMusic, Radio, RadioTower, X } from "lucide-react";
-import { playlistTotalSecs, type ScreenLayout } from "@shared/model";
+import { playKey, playlistTotalSecs, type ScreenLayout } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { useQueuePerformer } from "@/hooks/useQueuePerformer";
@@ -13,9 +13,10 @@ import { EmptyState } from "@/components/chrome/EmptyState";
 import { fromRecent } from "@/lib/mediaRef";
 import { playRefNow } from "@/lib/mediaActions";
 import { scrollToVisible } from "@/lib/scroll";
-import { activeSourceId, cx, fmtDuration, fmtRelative } from "@/lib/format";
+import { cx, fmtDuration, fmtRelative } from "@/lib/format";
 import { useLitPresets } from "@/hooks/useLitPresets";
 import { useDisc, type Disc } from "@/hooks/useDisc";
+import { useQueueSourceActive } from "@/hooks/useQueueSourceActive";
 
 export type TrayTab = "queue" | "presets" | "playlists" | "recent";
 export type TrayDensity = "detailed" | "compressed";
@@ -154,8 +155,6 @@ export function QueueTab({
 }): React.JSX.Element {
   const performerOf = useQueuePerformer();
   const queue = useStore((s) => s.queue);
-  const zoneState = useStore((s) => s.zoneState);
-  const nowPlaying = useStore((s) => s.nowPlaying);
   const followQueue = useStore((s) => s.settings.followQueue);
   const playingRow = useRef<HTMLDivElement | null>(null);
 
@@ -168,7 +167,7 @@ export function QueueTab({
   // is PARKED, and a panel that leaves eqbars dancing on it is claiming a
   // track is playing when it stopped minutes ago. The Queue screen has drawn
   // this distinction since the AirPlay round; the panel was missing it.
-  const queueAudible = activeSourceId(zoneState, nowPlaying) === "MEDIA_PLAYER";
+  const queueAudible = useQueueSourceActive();
 
   // TWO DIFFERENT SCROLLS, deliberately split.
   //
@@ -643,6 +642,7 @@ export function RecentTab({ density }: { density: TrayDensity }): React.JSX.Elem
             subtitle={subtitle}
             kind={entry.isRadio ? "station" : "track"}
             artUrl={entry.artUrl}
+            artKey={entry.isRadio ? null : playKey(entry.title, entry.artist, entry.album)}
             meta={ago}
             dimmed={!ref}
             onClick={play}

@@ -1,4 +1,4 @@
-import { albumOfTrack, type MediaIndexPools, type MediaNode } from "@shared/model";
+import { albumOfTrack, trackArtists, type MediaIndexPools, type MediaNode } from "@shared/model";
 import { focusArtistsLens } from "@/components/library/LibraryLenses";
 import type { Crumb } from "@/screens/LibraryScreen";
 
@@ -26,6 +26,9 @@ export const LENS_CRUMB_ID = "__lens__";
  *  on that artist (2026-09-01: "minitunes > Artists > <album>" read as a
  *  hierarchy that doesn't exist and lost the one node connecting them). */
 export const LENS_ARTIST_CRUMB_ID = "__lens-artist__";
+/** The artist PAGE between the Artists crumb and an album opened from it (2026-10-11): the
+ *  crumb returns to the page, where LENS_ARTIST_CRUMB_ID returns to the lens's columns. */
+export const ARTIST_PAGE_CRUMB_ID = "__artist-page__";
 
 // Which lens the crumb leads back to (module scope — survives the scoped
 // album detour, like the lens components' own selection memories).
@@ -42,12 +45,16 @@ export const setLensReturn = (lens: Lens): void => {
  * that leads the trail off this screen (the unified search's way back).
  */
 export type Landing =
+  /** An artist by name: their page (since 2026-10-11, every way to an artist). */
   | { artist: string }
   | { udn: string | null; path: Crumb[]; track?: string | null; returnTo?: Lens; lead?: Crumb };
 
 export function lensNavigation(d: {
   lens: Lens | null;
   setLens(lens: Lens | null): void;
+  /** The artist page over the Artists lens, by name (null: the lens's columns). */
+  artistPage: string | null;
+  setArtistPage(name: string | null): void;
   atRoot: boolean;
   searchMode: boolean;
   serverUdn: string | null;
@@ -65,6 +72,45 @@ export function lensNavigation(d: {
     d.pushSpot();
     lensReturnTo = which;
     d.setLens(which);
+    d.setArtistPage(null);
+  };
+
+  /** THE ARTIST PAGE (2026-10-11, the user: "we get to an album page from the albums lens.
+   *  but we can't get to an artist page from the artist lens"): opened over the Artists lens,
+   *  so its crumb trail reads Library › Artists › <artist>, the Artists crumb returns to the
+   *  columns with the artist selected, and Back undoes it like any move. From a folder or a
+   *  search the root is re-seated first (moveTo's one history entry). */
+  /** The artist a name means: the name when the indexes know it, else the first of its packed
+   *  performers they know (a featured track's "The Neon Collective; Ivy Lane"). */
+  const knownArtist = (name: string): string => {
+    const pools = d.lensPools ?? [];
+    const knows = (n: string): boolean => {
+      const k = n.trim().toLowerCase();
+      return pools.some(
+        (p) =>
+          p.artists.some((a) => a.title.trim().toLowerCase() === k) ||
+          p.albums.some((a) => (a.artist ?? "").trim().toLowerCase() === k) ||
+          p.tracks.some((t) => trackArtists(t).some((x) => x.trim().toLowerCase() === k)),
+      );
+    };
+    if (knows(name)) return name;
+    return name.split(/\s*;\s*/).find((part) => part && knows(part)) ?? name;
+  };
+  const openArtistPage = (asked: string): void => {
+    const name = knownArtist(asked);
+    focusArtistsLens(name);
+    lensReturnTo = "artists";
+    // the root's lens switch records the spot; an arrival, a folder or a search re-seats the
+    // root (moveTo's one history entry, none while arriving), as the artist landing does
+    if (!d.restoring.current && d.atRoot && !d.searchMode) d.pushSpot();
+    else d.moveTo(null, []);
+    d.setLens("artists");
+    d.setArtistPage(name);
+  };
+  /** Back from the page to the Artists lens's columns, the artist still selected. */
+  const closeArtistPage = (): void => {
+    d.pushSpot();
+    d.setArtistPage(null);
   };
 
   /** THE ONE LANDING (filed 2026-09-02, folded 2026-09-10). An arrival from
@@ -74,17 +120,10 @@ export function lensNavigation(d: {
    *  to land on. The landing used to be a side effect each caller remembered,
    *  and the Tracks lens once forgot it. */
   const landOn = (to: Landing): void => {
-    if ("artist" in to) {
-      focusArtistsLens(to.artist);
-      // a link at the root outside search is a lens switch (openLens records
-      // it); an arrival, or a link from a folder or a search, re-seats the root
-      // first (moveTo's one history entry, none while arriving)
-      if (!d.restoring.current && d.atRoot && !d.searchMode) return openLens("artists");
-      d.moveTo(null, []);
-      lensReturnTo = "artists";
-      d.setLens("artists");
-      return;
-    }
+    // AN ARTIST LANDS ON THEIR PAGE (user, 2026-10-11, "yes, build it": an album's name opens
+    // the album, so an artist's opens the artist; the navigator is the page's Artists crumb,
+    // the artist selected there). It used to land on the Artists lens focused on the name.
+    if ("artist" in to) return openArtistPage(to.artist);
     if (to.returnTo) lensReturnTo = to.returnTo;
     d.pendingTrack.current = to.track ?? null;
     d.moveTo(to.udn, to.path);
@@ -121,10 +160,34 @@ export function lensNavigation(d: {
     d.setLens(lensReturnTo);
   };
 
+  /** An album opened from the artist page: the trail is Library › Artists › <artist> ›
+   *  <album>, the artist crumb returning to the page; from an Appears-on row, on the track. */
+  const openAlbumFromArtistPage = (node: MediaNode, artist: string, track?: string): void => {
+    if (!node.serverUdn) return;
+    landOn({
+      udn: node.serverUdn,
+      path: [
+        { id: LENS_CRUMB_ID, title: LENS_LABEL.artists },
+        { id: ARTIST_PAGE_CRUMB_ID, title: artist },
+        { id: node.id, title: node.title, node },
+      ],
+      track: track ?? null,
+      returnTo: "artists",
+    });
+  };
+  /** The artist crumb of an album opened from the page: back to the page. */
+  const returnToArtistPage = (name: string): void => {
+    d.moveTo(null, []);
+    lensReturnTo = "artists";
+    focusArtistsLens(name);
+    d.setLens("artists");
+    d.setArtistPage(name);
+  };
+
   /** The Tracks lens's links (and its menu's Go-to verbs): the album by
    *  content identity in the same server's pool — no network — entered
-   *  through the lens crumb so Back returns to the lens; the artist as the
-   *  Artists lens, focused on them (a lens switch, so Back returns too). */
+   *  through the lens crumb so Back returns to the lens; the artist's page
+   *  (Back returns too). */
   const goToAlbumFromLens = (track: MediaNode): void => {
     const pool = d.lensPools?.find((g) => g.udn === (track.serverUdn ?? d.serverUdn));
     const album = pool ? albumOfTrack(track, pool) : null;
@@ -143,6 +206,10 @@ export function lensNavigation(d: {
     landOn,
     openAlbumFromLens,
     returnToLens,
+    openArtistPage,
+    closeArtistPage,
+    openAlbumFromArtistPage,
+    returnToArtistPage,
     goToAlbumFromLens,
     goToArtistFromLens,
   };

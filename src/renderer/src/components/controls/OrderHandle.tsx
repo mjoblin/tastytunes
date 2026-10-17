@@ -40,7 +40,7 @@ export function OrderHandle({
         {...attributes}
         {...listeners}
         onClick={(e) => e.stopPropagation()}
-        className="absolute inset-0 grid place-items-center rounded text-dim opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 hover:text-ink cursor-grab active:cursor-grabbing"
+        className="absolute inset-0 grid place-items-center rounded text-dim opacity-0 transition-opacity group-hover:opacity-100 focus-kbd:opacity-100 hover:text-ink cursor-grab active:cursor-grabbing"
       >
         <GripVertical size={14} />
       </button>

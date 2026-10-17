@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { tt } from "@/api";
 import { useStore } from "@/store";
+import { Lru } from "@/lib/lru";
 
 /**
  * Art for content keys (playKey) from the library index, for surfaces whose
@@ -9,8 +10,14 @@ import { useStore } from "@/store";
  * once is never asked again (a miss caches as null), and a render passes only
  * the keys on screen, so a windowed list costs one small IPC per slice.
  */
-const cache = new Map<string, string | null>();
+const cache = new Lru<string, string | null>(5000);
 let inFlight: Set<string> = new Set();
+/** Found pictures from before the index last changed: still shown, and asked again (a wake
+ *  re-mints a USB drive's picture addresses and the heal moves the index's, 2026-10-11; a hit
+ *  kept for the session went dead with them). */
+const stale = new Set<string>();
+/** The index status the cache last answered from (module-wide: one change, one re-ask). */
+let seenIndex: string | null = null;
 
 export function useArtByKeys(keys: readonly string[]): Record<string, string | null> {
   // gen counts landed lookups: the result memo and the missing list re-read
@@ -31,9 +38,16 @@ export function useArtByKeys(keys: readonly string[]): Record<string, string | n
   const indexSig = useStore((s) => JSON.stringify(s.mediaIndex));
   useEffect(() => {
     for (const [k, v] of cache) if (v == null) cache.delete(k);
+    // a found picture is asked again once the index itself has changed (not on every mount)
+    if (seenIndex === indexSig) return;
+    const changed = seenIndex != null;
+    seenIndex = indexSig;
+    if (!changed) return;
+    for (const [k] of cache) stale.add(k);
+    bump((n) => n + 1);
   }, [indexSig]);
   const missing = useMemo(
-    () => keys.filter((k) => !cache.has(k) && !inFlight.has(k)),
+    () => keys.filter((k) => (!cache.has(k) || stale.has(k)) && !inFlight.has(k)),
     // gen and indexSig re-read the cache; they are not read directly
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [keys, gen, indexSig],
@@ -44,10 +58,18 @@ export function useArtByKeys(keys: readonly string[]): Record<string, string | n
     void tt
       .libraryArtByKeys(missing)
       .then((m) => {
-        for (const k of missing) cache.set(k, m[k] ?? null);
+        for (const k of missing) {
+          // a re-ask that finds nothing keeps the picture it had (a miss is no evidence the
+          // old one died); a fresh answer replaces it
+          if (m[k] != null || !stale.has(k)) cache.set(k, m[k] ?? null);
+          stale.delete(k);
+        }
       })
       .catch(() => {
-        for (const k of missing) cache.set(k, null);
+        for (const k of missing) {
+          if (!stale.has(k)) cache.set(k, null);
+          stale.delete(k);
+        }
       })
       .finally(() => {
         for (const k of missing) inFlight.delete(k);

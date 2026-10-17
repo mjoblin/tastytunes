@@ -6,17 +6,17 @@ import {
   type MediaIndexPools,
   type MediaNode,
   nameSortKey,
-  orderTracks,
   performerLine,
   sameArt,
-  trackArtists,
   trackInAlbumOf,
 } from "@shared/model";
 import { cx, fmtTime, matchesFilter } from "@/lib/format";
 import { useStore } from "@/store";
 import { scrollToVisible } from "@/lib/scroll";
+import { useWindowedList } from "@/hooks/useWindowedList";
 import { isAlbumClass } from "@/lib/media";
 import { MediaArt } from "@/components/media/MediaArt";
+import { ArtistArt } from "@/components/media/ArtistArt";
 import { FilterInput } from "@/components/controls/FilterInput";
 import { Chip, GAP_BETWEEN } from "@/components/chrome/Chrome";
 import { TrackRow } from "@/components/library/LibraryCards";
@@ -27,17 +27,10 @@ import {
   LensTrackSelectionBar,
   LensTrackMenu,
 } from "./useLensTrackSelection";
+import { useLensIndex, type LensArtist } from "./useLensIndex";
 
 // The Artists lens, split out of LibraryLenses.tsx (2026-09-13, the lenses round: three lenses of
 // 600 to 800 lines shared one file); what the lenses share lives in ./lensShared.
-
-interface LensArtist {
-  key: string;
-  name: string;
-  artUrl: string | null;
-  albums: MediaNode[];
-  tracks: MediaNode[];
-}
 
 /**
  * A lens artist is content identity, not a node — the ⋯ / right-click menu
@@ -93,6 +86,31 @@ export function focusArtistsLens(name: string): void {
  *  a half of context above it, so the eye reads where it is rather than
  *  finding the row pinned to the edge (user call, 2026-09-01). */
 const REVEAL_PAD = 84;
+/** Past this many artists the column renders only the rows near the viewport
+ *  (useWindowedList); below it, every row, exactly as before (0.11.0 sweep, for review). */
+const WINDOW_ARTISTS_ABOVE = 150;
+
+/** A row's name fades out under its floating buttons (two 26px buttons, 10px apart, 8px in
+ *  from the row's edge; the artist and album rows alike): from the column's right edge, clear
+ *  for the buttons, then a 20px fade. A playing artist row's column already stops at the
+ *  eqbars (14px and the 10px gap), so its fade starts that much sooner (an album row's eqbars
+ *  ride inside its title). Literal strings, so Tailwind sees each one. */
+const NAME_FADE = {
+  idle: {
+    on: "[mask-image:linear-gradient(to_left,transparent_64px,black_84px)]",
+    hover: "group-hover:[mask-image:linear-gradient(to_left,transparent_64px,black_84px)]",
+  },
+  playing: {
+    on: "[mask-image:linear-gradient(to_left,transparent_40px,black_60px)]",
+    hover: "group-hover:[mask-image:linear-gradient(to_left,transparent_40px,black_60px)]",
+  },
+} as const;
+
+/** An artist's letter on the A-Z rail ("The Cure" files under C; non-letters under #). */
+const letterOf = (name: string): string => {
+  const c = nameSortKey(name)[0]?.toUpperCase() ?? "#";
+  return c >= "A" && c <= "Z" ? c : "#";
+};
 
 /**
  * The miller view (vibin's Artists screen, adapted): Artists | Albums |
@@ -106,9 +124,13 @@ const REVEAL_PAD = 84;
 export function ArtistsLens({
   pools,
   actions,
+  onOpenArtistPage,
 }: {
   pools: MediaIndexPools[];
   actions: LensActions;
+  /** The artist's page (ArtistPage, 2026-10-11): the columns stay the browser, the page is
+   *  one step in from the selected artist (the Albums heading's link, a double-click). */
+  onOpenArtistPage?(name: string): void;
 }): React.JSX.Element {
   const [mem, setMemState] = useState(artistsMem);
   const setMem = (patch: Partial<typeof artistsMem>): void => {
@@ -118,41 +140,11 @@ export function ArtistsLens({
   const albumsOnly = useStore((s) => s.settings.lensArtistsAlbumsOnly);
   const saveSettings = useStore((s) => s.saveSettings);
 
-  const multiServer = useMemo(() => pools.filter((g) => g.albums.length > 0).length > 1, [pools]);
+  // what the lenses derive from the pools, once per snapshot (useLensIndex)
+  const index = useLensIndex(pools);
+  const multiServer = index.multiServer;
 
-  const artists = useMemo(() => {
-    const byKey = new Map<string, LensArtist>();
-    const ensure = (name: string): LensArtist => {
-      const key = lc(name);
-      let a = byKey.get(key);
-      if (!a) {
-        a = { key, name: name.trim(), artUrl: null, albums: [], tracks: [] };
-        byKey.set(key, a);
-      }
-      return a;
-    };
-    for (const g of pools) {
-      for (const e of g.artists) {
-        const a = ensure(e.title);
-        a.artUrl ??= e.artUrl;
-      }
-      for (const alb of g.albums) if (alb.artist) ensure(alb.artist).albums.push(alb);
-      // Every PERFORMER is an artist, and only performers — never the packed
-      // "A; B" string. A featured singer gets a row with their one track;
-      // the headliner keeps every track of the album (2026-08-15).
-      for (const t of g.tracks) for (const name of trackArtists(t)) ensure(name).tracks.push(t);
-    }
-    return [...byKey.values()]
-      .filter((a) => a.albums.length > 0 || a.tracks.length > 0)
-      .map((a) => ({
-        ...a,
-        artUrl: a.artUrl ?? a.albums.find((x) => x.artUrl)?.artUrl ?? null,
-        albums: [...a.albums].sort(
-          (x, y) => (y.year ?? "").localeCompare(x.year ?? "") || x.title.localeCompare(y.title),
-        ),
-      }))
-      .sort((a, b) => nameSortKey(a.name).localeCompare(nameSortKey(b.name)));
-  }, [pools]);
+  const artists = index.artists;
 
   // THE ARTIST YOU ASKED FOR IS ALWAYS IN THE COLUMN. Albums only is the
   // standing preference for browsing; a landing (Elsewhere's Go to artist, a
@@ -172,20 +164,7 @@ export function ArtistsLens({
   );
 
   // Album tracks by content identity: same server + same album title.
-  const tracksByAlbum = useMemo(() => {
-    const m = new Map<string, MediaNode[]>();
-    for (const g of pools) {
-      for (const t of g.tracks) {
-        if (!t.album) continue;
-        const k = `${g.udn}|${lc(t.album)}`;
-        const list = m.get(k);
-        if (list) list.push(t);
-        else m.set(k, [t]);
-      }
-    }
-    for (const [k, list] of m) m.set(k, orderTracks(list)); // disc, then position — or the server's order when the numbers repeat
-    return m;
-  }, [pools]);
+  const tracksByAlbum = index.tracksByAlbum;
 
   // Resolve the selection against the FILTERED list: filtering the selected
   // artist out empties the albums/tracks columns rather than showing content
@@ -230,6 +209,24 @@ export function ArtistsLens({
   // A-Z fast travel: letter anchors in the artists column.
   const artistsColRef = useRef<HTMLDivElement | null>(null);
   const selectedRowRef = useRef<HTMLDivElement | null>(null);
+  // a long column renders the rows near its viewport; a row's place comes from its index
+  // (win.offsetOf), so the A-Z travel, the reveal and keeping the selection in sight do
+  // not need the row to be on the page
+  const win = useWindowedList({
+    scrollRef: artistsColRef,
+    count: shownArtists.length,
+    itemSelector: "[data-lens-artist-row]",
+    estimate: 52,
+    overscan: 12,
+    enabled: shownArtists.length > WINDOW_ARTISTS_ABOVE,
+  });
+  /** Scroll the column so artist `index` sits `pad` px below its top. */
+  const scrollColTo = (index: number, pad: number): number => {
+    const col = artistsColRef.current;
+    const top = Math.max(0, win.offsetOf(index) - pad);
+    col?.scrollTo({ top });
+    return top;
+  };
   // When the filter reshapes the artist list, keep the selection in sight —
   // clearing "beatles" pops hundreds of rows back in ABOVE the selected one.
   // Skips the mount run (the saved column scroll is restoring then).
@@ -241,7 +238,11 @@ export function ArtistsLens({
     }
     // a pending reveal (arrival by link) owns the column's first scroll
     if (artistsMem.reveal) return;
-    if (mem.artist && selectedRowRef.current) scrollToVisible(selectedRowRef.current);
+    if (!mem.artist) return;
+    const at = shownArtists.findIndex((a) => a.key === mem.artist);
+    if (at < win.first || at > win.last) {
+      if (at >= 0) scrollColTo(at, REVEAL_PAD);
+    } else if (selectedRowRef.current) scrollToVisible(selectedRowRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shownArtists]);
   const albumsColRef = useRef<HTMLDivElement | null>(null);
@@ -265,51 +266,49 @@ export function ArtistsLens({
   useEffect(() => {
     const key = artistsMem.reveal;
     if (!key) return;
-    const col = artistsColRef.current;
-    const row = col?.querySelector<HTMLElement>(`[data-lens-artist-row="${CSS.escape(key)}"]`);
-    if (!col || !row) return;
+    const at = shownArtists.findIndex((a) => a.key === key);
+    if (!artistsColRef.current || at < 0) return;
     requestAnimationFrame(() => {
       // consumed when APPLIED, not when scheduled — a repeated effect run
       // (StrictMode) schedules the same landing again, harmlessly
       if (artistsMem.reveal !== key) return;
-      const top = Math.max(
-        0,
-        row.getBoundingClientRect().top -
-          col.getBoundingClientRect().top +
-          col.scrollTop -
-          REVEAL_PAD,
-      );
-      col.scrollTo({ top });
-      artistsMem.scroll.artists = top;
+      artistsMem.scroll.artists = scrollColTo(at, REVEAL_PAD);
       artistsMem.reveal = null;
     });
+    // a reveal is asked once and lands when the list it names has rendered; the window's
+    // geometry (scrollColTo) is read at that moment, never a reason to land again
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shownArtists]);
-  const letterRefs = useRef(new Map<string, HTMLDivElement>());
-  const letterOf = (name: string): string => {
-    const c = nameSortKey(name)[0]?.toUpperCase() ?? "#";
-    return c >= "A" && c <= "Z" ? c : "#";
-  };
-  const letters = useMemo(
-    () => [...new Set(shownArtists.map((a) => letterOf(a.name)))],
-    [shownArtists],
-  );
+  // each letter's first artist, by index (a windowed column may not hold the row)
+  const letterStarts = useMemo(() => {
+    const m = new Map<string, number>();
+    shownArtists.forEach((a, i) => {
+      const l = letterOf(a.name);
+      if (!m.has(l)) m.set(l, i);
+    });
+    return m;
+  }, [shownArtists]);
+  const letters = useMemo(() => [...letterStarts.keys()], [letterStarts]);
   const jumpToLetter = (letter: string): void => {
-    const el = letterRefs.current.get(letter);
-    const col = artistsColRef.current;
-    if (el && col) col.scrollTo({ top: el.offsetTop - col.offsetTop });
+    const at = letterStarts.get(letter);
+    if (at != null) scrollColTo(at, 0);
   };
 
   // Playing-artist highlight is content identity, like everything else.
   const playingArtistKey = actions.playingArtist ? lc(actions.playingArtist) : null;
 
-  const colHeading = (label: string, detail?: string): React.JSX.Element => (
+  const colHeading = (
+    label: string,
+    detail?: string,
+    link?: React.ReactNode,
+  ): React.JSX.Element => (
     <div className="shrink-0 pb-1.5 mb-1.5 border-b border-edge flex items-baseline gap-2">
       <span className="microlabel">{label}</span>
       {detail && <span className="font-mono text-[10.5px] text-faint tabular-nums">{detail}</span>}
+      {link}
     </div>
   );
 
-  let lastLetter = "";
   return (
     <div
       data-lens-artists
@@ -371,21 +370,22 @@ export function ArtistsLens({
               // padding box) without shifting the rows off the heading's edge
               className="relative min-h-0 flex-1 overflow-y-auto px-1.5 -mx-1.5 py-1 -my-1"
             >
-              {shownArtists.map((a) => {
-                const letter = letterOf(a.name);
-                const anchor = letter !== lastLetter;
-                lastLetter = letter;
+              {win.padTop > 0 && <div style={{ height: win.padTop }} />}
+              {shownArtists.slice(win.first, win.last + 1).map((a) => {
                 const selected = a.key === mem.artist;
                 const playing = a.key === playingArtistKey;
+                const menuOpen = actions.menuNodeId === `lens-artist:${a.key}`;
                 return (
                   <div
                     key={a.key}
                     ref={(el) => {
-                      if (anchor && el) letterRefs.current.set(letter, el);
                       if (selected && el) selectedRowRef.current = el;
                     }}
                     data-artist-row={a.name}
                     onClick={() => setMem({ artist: selected ? null : a.key, album: null })}
+                    // a double-click opens the artist's page (the page re-selects the
+                    // artist, so the two clicks' toggle never shows on the way back)
+                    onDoubleClick={() => onOpenArtistPage?.(a.name)}
                     // right-click = the ⋯ (the app-wide rule): the artist menu — the
                     // pivot and Info. A lens artist is content identity, not a
                     // node, so one is synthesized: the entity's server (or the first
@@ -396,7 +396,10 @@ export function ArtistsLens({
                     }}
                     data-lens-artist-row={a.key}
                     className={cx(
-                      "group grid grid-cols-[44px_1fr_auto] items-center gap-2.5 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
+                      // the eqbars' column only while the artist plays: the row's buttons float
+                      // (below), so a name has the row's whole width at rest
+                      "group relative grid items-center gap-2.5 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
+                      playing ? "grid-cols-[44px_1fr_auto]" : "grid-cols-[44px_1fr]",
                       // SELECTED is "open here" — the Playlists sidebar's amber, so it
                       // reads apart from gold (= playing); a row that is both keeps
                       // the playing signals (gold title, eqbars) on the amber fill
@@ -408,8 +411,15 @@ export function ArtistsLens({
                       selected ? "bg-amberdim" : playing ? "bg-gold/10" : "hover:bg-veil",
                     )}
                   >
-                    <MediaArt src={a.artUrl} kind="artist" />
-                    <div className="min-w-0">
+                    <ArtistArt name={a.name} src={a.ownArt} cover={a.artUrl} />
+                    {/* under the floating buttons the name fades out rather than reflowing
+                      (the column is narrow: reserved buttons cut names to a few letters) */}
+                    <div
+                      className={cx(
+                        "min-w-0",
+                        NAME_FADE[playing ? "playing" : "idle"][menuOpen ? "on" : "hover"],
+                      )}
+                    >
                       <div
                         className={cx(
                           "text-[13.5px] truncate",
@@ -424,10 +434,35 @@ export function ArtistsLens({
                           : `${a.tracks.length} track${a.tracks.length === 1 ? "" : "s"}`}
                       </div>
                     </div>
-                    <div className="flex items-center gap-1">
-                      {playing && <Eqbars />}
-                      {/* the ⋯, hover-revealed like the album rows' — the same
-                        artist menu the right-click opens */}
+                    {playing && (
+                      <div className={cx(menuOpen ? "opacity-0" : "group-hover:opacity-0")}>
+                        <Eqbars />
+                      </div>
+                    )}
+                    {/* THE ROW'S BUTTONS FLOAT over its end, shown on hover and while its menu
+                      is open: the ↗ to the artist's page, as an album row's ↗ opens the album
+                      (user, 2026-10-11: a click here selects, the ↗ goes there), and the ⋯,
+                      the same artist menu the right-click opens */}
+                    <div
+                      className={cx(
+                        "absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2.5 transition-opacity",
+                        menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+                      )}
+                    >
+                      {onOpenArtistPage && (
+                        <button
+                          aria-label={`Open artist page for ${a.name}`}
+                          data-tip="Open artist page"
+                          data-lens-open-artist={a.name}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenArtistPage(a.name);
+                          }}
+                          className="tip-bottom p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-colors"
+                        >
+                          <ArrowUpRight size={14} />
+                        </button>
+                      )}
                       <button
                         aria-label="More actions"
                         data-lens-artist-menu
@@ -435,12 +470,7 @@ export function ArtistsLens({
                           e.stopPropagation();
                           actions.openMenu(lensArtistNode(a), e);
                         }}
-                        className={cx(
-                          "p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-all",
-                          actions.menuNodeId === `lens-artist:${a.key}`
-                            ? "opacity-100"
-                            : "opacity-0 group-hover:opacity-100",
-                        )}
+                        className="p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-colors"
                       >
                         <MoreHorizontal size={14} />
                       </button>
@@ -448,6 +478,7 @@ export function ArtistsLens({
                   </div>
                 );
               })}
+              {win.padBottom > 0 && <div style={{ height: win.padBottom }} />}
             </div>
             {/* the A-Z rail: fast travel for a long first column */}
             <div
@@ -469,7 +500,21 @@ export function ArtistsLens({
 
         {/* Albums -------------------------------------------------------- */}
         <div className="w-[28%] min-w-[250px] max-w-[400px] shrink-0 min-h-0 flex flex-col">
-          {colHeading("Albums", selectedArtist ? String(selectedArtist.albums.length) : undefined)}
+          {colHeading(
+            "Albums",
+            selectedArtist ? String(selectedArtist.albums.length) : undefined,
+            selectedArtist && onOpenArtistPage && (
+              // THE WAY IN to the artist's page: over the column the page expands on (its
+              // albums as cards, the tracks they appear on, the picture and summary)
+              <button
+                data-lens-artist-page
+                onClick={() => onOpenArtistPage(selectedArtist.name)}
+                className="ml-auto text-[11.5px] text-amber hover:brightness-110 transition-all"
+              >
+                Artist page →
+              </button>
+            ),
+          )}
           <div
             ref={albumsColRef}
             onScroll={(e) => {
@@ -486,6 +531,7 @@ export function ArtistsLens({
               selectedArtist.albums.map((alb) => {
                 const selected = nodeKey(alb) === mem.album;
                 const playing = actions.isPlayingAlbum(alb);
+                const menuOpen = actions.menuNodeId === alb.id;
                 return (
                   <div
                     key={nodeKey(alb)}
@@ -496,7 +542,9 @@ export function ArtistsLens({
                       actions.dragAlbum([alb], e, alb.title);
                     }}
                     className={cx(
-                      "group grid grid-cols-[44px_1fr_auto_auto] items-center gap-2.5 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
+                      // the row's buttons float (below), as the artist rows' do: a title has
+                      // the row's whole width at rest
+                      "group relative grid grid-cols-[44px_1fr] items-center gap-2.5 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
                       // SELECTED is "open here" — the Playlists sidebar's amber, so it
                       // reads apart from gold (= playing); a row that is both keeps
                       // the playing signals (gold title, eqbars) on the amber fill
@@ -509,7 +557,7 @@ export function ArtistsLens({
                     )}
                   >
                     <MediaArt src={alb.artUrl} kind="album" />
-                    <div className="min-w-0">
+                    <div className={cx("min-w-0", NAME_FADE.idle[menuOpen ? "on" : "hover"])}>
                       <div
                         className={cx(
                           "flex items-center gap-2 text-[13.5px]",
@@ -535,42 +583,43 @@ export function ArtistsLens({
                         )}
                       </div>
                     </div>
-                    <button
-                      aria-label={`Open album ${alb.title}`}
-                      data-tip="Open album"
-                      data-lens-open-album={alb.title}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        actions.openAlbum(alb);
-                      }}
+                    {/* THE ROW'S BUTTONS FLOAT over its end, shown on hover and while its menu
+                      is open (user, 2026-10-11: "do the same for the album rows too"), the
+                      title fading under them: the ↗ opens the album, the ⋯ its menu (a plain
+                      folder has none; its slot stays, so every ↗ sits on one line) */}
+                    <div
                       className={cx(
-                        "tip-bottom p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-all",
-                        actions.menuNodeId === alb.id
-                          ? "opacity-100"
-                          : "opacity-0 group-hover:opacity-100",
+                        "absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2.5 transition-opacity",
+                        menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100",
                       )}
                     >
-                      <ArrowUpRight size={14} />
-                    </button>
-                    {isAlbumClass(alb.upnpClass) ? (
                       <button
-                        aria-label="More actions"
+                        aria-label={`Open album ${alb.title}`}
+                        data-tip="Open album"
+                        data-lens-open-album={alb.title}
                         onClick={(e) => {
                           e.stopPropagation();
-                          actions.openMenu(alb, e);
+                          actions.openAlbum(alb);
                         }}
-                        className={cx(
-                          "p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-all",
-                          actions.menuNodeId === alb.id
-                            ? "opacity-100"
-                            : "opacity-0 group-hover:opacity-100",
-                        )}
+                        className="tip-bottom p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-colors"
                       >
-                        <MoreHorizontal size={14} />
+                        <ArrowUpRight size={14} />
                       </button>
-                    ) : (
-                      <span />
-                    )}
+                      {isAlbumClass(alb.upnpClass) ? (
+                        <button
+                          aria-label="More actions"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            actions.openMenu(alb, e);
+                          }}
+                          className="p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-colors"
+                        >
+                          <MoreHorizontal size={14} />
+                        </button>
+                      ) : (
+                        <span className="w-[26px]" />
+                      )}
+                    </div>
                   </div>
                 );
               })
