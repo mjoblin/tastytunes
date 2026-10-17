@@ -42,6 +42,7 @@ import {
   trackFactsLine,
 } from "@/lib/mediaFacts";
 import {
+  InfoSections,
   Section,
   sourceRows,
   streamRows,
@@ -526,13 +527,15 @@ function MediaInfoBody({
           {noteLine}
         </div>
       )}
-      <div className="mt-5 min-h-0 flex-1 overflow-y-auto pr-1 space-y-5" data-info-body>
-        {stream_.length > 0 && <Section title="Stream" rows={stream_} />}
-        <Section title="Identity" rows={identity} />
-        {artistRows.length > 0 && <Section title="Library" rows={artistRows} />}
-        {albumRows.length > 0 && <Section title="Album" rows={albumRows} />}
-        {trackFormat.length > 0 && <Section title="Format" rows={trackFormat} />}
-        <Section title="Source" rows={source} />
+      <div className="mt-5 min-h-0 flex-1 overflow-y-auto pr-1" data-info-body>
+        <InfoSections>
+          {stream_.length > 0 && <Section title="Stream" rows={stream_} />}
+          <Section title="Identity" rows={identity} />
+          {artistRows.length > 0 && <Section title="Library" rows={artistRows} />}
+          {albumRows.length > 0 && <Section title="Album" rows={albumRows} />}
+          {trackFormat.length > 0 && <Section title="Format" rows={trackFormat} />}
+          <Section title="Source" rows={source} />
+        </InfoSections>
       </div>
 
       <div ref={footRef} className="mt-5 flex items-center justify-between">

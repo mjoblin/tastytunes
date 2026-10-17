@@ -26,7 +26,13 @@ import { usePanelWidth } from "@/hooks/usePanelWidth";
 import { PanelResizeHandle } from "@/components/controls/PanelResizeHandle";
 import { Segmented } from "@/components/controls/Segmented";
 import { HeaderChip } from "@/components/chrome/Chrome";
-import { Section, sourceRows, streamRows, trackFormatRows } from "@/components/media/InfoRows";
+import {
+  InfoSections,
+  Section,
+  sourceRows,
+  streamRows,
+  trackFormatRows,
+} from "@/components/media/InfoRows";
 import {
   Waveform,
   usePlayingDr,
@@ -450,22 +456,24 @@ export function ArtistPanel({ className }: { className?: string }): React.JSX.El
                 </div>
               </div>
             )}
-            <Section
-              title="Stream"
-              rows={streamTarget.stream ? streamRows(streamTarget.stream) : []}
-            />
-            <Section
-              title="Format"
-              rows={trackFormatRows(streamTarget.node, playingDr, playingLoud, playingMeasured)}
-            />
-            <Section
-              title="Source"
-              rows={sourceRows(
-                streamTarget.node,
-                streamTarget.serverName ?? null,
-                streamTarget.serverProfile,
-              )}
-            />
+            <InfoSections>
+              <Section
+                title="Stream"
+                rows={streamTarget.stream ? streamRows(streamTarget.stream) : []}
+              />
+              <Section
+                title="Format"
+                rows={trackFormatRows(streamTarget.node, playingDr, playingLoud, playingMeasured)}
+              />
+              <Section
+                title="Source"
+                rows={sourceRows(
+                  streamTarget.node,
+                  streamTarget.serverName ?? null,
+                  streamTarget.serverProfile,
+                )}
+              />
+            </InfoSections>
           </div>
         )}
 

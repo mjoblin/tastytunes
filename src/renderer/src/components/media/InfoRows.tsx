@@ -19,18 +19,34 @@ import { FACT_SEP } from "@/lib/mediaFacts";
 
 export type Row = [label: string, value: React.ReactNode];
 
+/** The sections of one Info surface share one label column, as wide as the longest label shown
+ *  (at most 9rem), its labels set against their values, so every label sits next to its value
+ *  and every section's values still line up (0.12.0, his ask: a fixed 112px column left a short
+ *  label like Year looking abandoned; right-aligned his pick, the Mac's Get Info look). Every
+ *  Section sits inside one. */
+export function InfoSections({ children }: { children: React.ReactNode }): React.JSX.Element {
+  return (
+    <div
+      data-info-sections
+      className="grid grid-cols-[fit-content(9rem)_minmax(0,1fr)] gap-x-4 gap-y-5"
+    >
+      {children}
+    </div>
+  );
+}
+
 export function Section({ title, rows }: { title: string; rows: Row[] }): React.JSX.Element | null {
   const shown = rows.filter(
     ([, v]) => v != null && v !== "" && !(Array.isArray(v) && v.length === 0),
   );
   if (shown.length === 0) return null;
   return (
-    <div data-info-section={title.toLowerCase()}>
-      <div className="microlabel mb-1.5">{title}</div>
-      <dl className="grid grid-cols-[112px_1fr] gap-x-4 gap-y-1 text-[12.5px]">
+    <div data-info-section={title.toLowerCase()} className="col-span-full grid grid-cols-subgrid">
+      <div className="microlabel mb-1.5 col-span-full">{title}</div>
+      <dl className="col-span-full grid grid-cols-subgrid gap-y-1 text-[12.5px]">
         {shown.map(([label, value]) => (
           <div key={label} className="contents">
-            <dt className="text-faint truncate">{label}</dt>
+            <dt className="text-faint truncate text-right">{label}</dt>
             <dd className="text-ink min-w-0 break-words" data-info-field={label}>
               {value}
             </dd>
