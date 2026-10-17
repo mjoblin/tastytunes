@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { STRIP_BANDS } from "@shared/model";
+import { STRIP_BANDS, TEMPO_CONFIDENCE_FLOOR } from "@shared/model";
 import { isRadioMetadata, repeatModeOf } from "@shared/smoip";
 import { useStore } from "@/store";
 import { tt } from "@/api";
@@ -223,7 +223,7 @@ export class SceneFeed {
     if (F && live) {
       // the beat grid, when the track's tempo was confident
       const B = F.beats;
-      if (B && B.confidence >= 0.35 && B.times.length > 2) {
+      if (B && B.confidence >= TEMPO_CONFIDENCE_FLOOR && B.times.length > 2) {
         const i = Math.min(B.times.length - 2, Math.max(0, firstAfter(B.times, position) - 1));
         const t0 = B.times[i];
         const period = Math.max(0.05, B.times[i + 1] - t0);

@@ -1,4 +1,4 @@
-import type { AnalysisFeatures } from "@shared/model";
+import { TEMPO_CONFIDENCE_FLOOR, type AnalysisFeatures } from "@shared/model";
 import { Fft, b64, unb64, type Strip } from "./featureStrip";
 import { ONSET_HOP_MS, type Onsets } from "./onsets";
 
@@ -85,7 +85,6 @@ export interface Features {
   drops: Drops;
 }
 
-export const PITCH_NAMES = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
 const CHROMA_FPS = 2;
 
 export function computeFeatures(
@@ -937,7 +936,8 @@ export function findDrops(strip: Strip, onsets: Onsets, beats: Beats | null): Dr
       }
       return m ? s / m : 0;
     };
-    const grid = beats && beats.confidence >= 0.35 && beats.times.length > 4 ? beats : null;
+    const grid =
+      beats && beats.confidence >= TEMPO_CONFIDENCE_FLOOR && beats.times.length > 4 ? beats : null;
     if (grid && grid.downbeat >= 0) {
       for (let k = 0; k < grid.times.length; k++) {
         const d = grid.times[k];

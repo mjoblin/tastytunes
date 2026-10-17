@@ -1,3 +1,4 @@
+import { TEMPO_CONFIDENCE_FLOOR, KEY_CONFIDENCE_FLOOR } from "@shared/model";
 import type { Rgb, Scene, SceneFrame, SceneKey, SceneSettingDef, SceneSettings } from "./types";
 import { easeTowards } from "../clock";
 import { sceneFont } from "../type";
@@ -216,8 +217,9 @@ export class Terminal implements Scene {
     }
     if (!this.measured && f.real) {
       const parts: string[] = [];
-      if (f.beat && f.beat.confidence >= 0.35) parts.push(`${Math.round(f.beat.bpm)} bpm`);
-      if (f.key && f.key.confidence >= 0.3)
+      if (f.beat && f.beat.confidence >= TEMPO_CONFIDENCE_FLOOR)
+        parts.push(`${Math.round(f.beat.bpm)} bpm`);
+      if (f.key && f.key.confidence >= KEY_CONFIDENCE_FLOOR)
         parts.push(`key ${NOTES[f.key.tonic]}${f.key.mode === "minor" ? " minor" : " major"}`);
       if (f.sections.length > 1) parts.push(`${f.sections.length} sections`);
       if (parts.length) {
@@ -290,8 +292,9 @@ export class Terminal implements Scene {
       }
       const bits: string[] = [];
       bits.push(`${stamp(f.position)}${f.duration ? `/${stamp(f.duration)}` : ""}`);
-      if (f.beat && f.beat.confidence >= 0.35) bits.push(`${Math.round(f.beat.bpm)} BPM`);
-      if (f.key && f.key.confidence >= 0.3)
+      if (f.beat && f.beat.confidence >= TEMPO_CONFIDENCE_FLOOR)
+        bits.push(`${Math.round(f.beat.bpm)} BPM`);
+      if (f.key && f.key.confidence >= KEY_CONFIDENCE_FLOOR)
         bits.push(`${NOTES[f.key.tonic]}${f.key.mode === "minor" ? "m" : ""}`);
       const secIndex = f.section ? f.section.index : -1;
       if (secIndex >= 0)
@@ -318,7 +321,8 @@ export class Terminal implements Scene {
     const textW = w - 2 * margin - stampW;
     const rows = (e: Entry): string[] => wrap(ctx, e.text, textW);
     // the cursor: on the beat, longer on the downbeat; a plain blink without a grid
-    const beatPhase = f.beat && f.beat.confidence >= 0.35 ? f.beat.phase : (f.now % 1000) / 1000;
+    const beatPhase =
+      f.beat && f.beat.confidence >= TEMPO_CONFIDENCE_FLOOR ? f.beat.phase : (f.now % 1000) / 1000;
     const cursorOn = f.reduced || beatPhase < (f.beat?.onBar ? 0.7 : 0.55);
     let y = bottom + this.scroll * rowH;
     const entries: Array<{ e: Entry; rows: string[]; typing: boolean }> = [];
