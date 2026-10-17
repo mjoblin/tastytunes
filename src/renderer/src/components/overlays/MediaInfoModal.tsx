@@ -30,13 +30,7 @@ import { useStore } from "@/store";
 import { ModalShell } from "@/components/chrome/Overlay";
 import { CloseButton } from "@/components/controls/CloseButton";
 import { ArtImage } from "@/components/media/ArtImage";
-import {
-  DrChip,
-  InfoWaveform,
-  useKnownAnalysis,
-  LufsChip,
-  warmAnalysis,
-} from "@/components/media/Waveform";
+import { DrChip, InfoWaveform, useKnownAnalysis, warmAnalysis } from "@/components/media/Waveform";
 import {
   FACT_SEP,
   albumFactsLine,
@@ -220,13 +214,9 @@ function MediaInfoBody({
     void analyzeAlbum(node, udn, []).then(() => setCoverageNonce((n) => n + 1));
   };
   const headerDr = kind === "track" ? trackDr : kind === "album" ? albumDr : null;
-  // the loudness chip beside DR: a track's own, or the album's integrated value
-  const headerLufs =
-    kind === "track"
-      ? (trackLoud?.lufs ?? null)
-      : kind === "album"
-        ? (albumEntry?.lufs ?? null)
-        : null;
+  // NO LOUDNESS CHIP in this header (0.12.0, his call: seven chips wrapped to a second row): a
+  // track's loudness ends the waveform's caption just below and has its Format row, an album's
+  // its Album row; the header keeps the format and DR. The Library's album header keeps its chip
   // the catalog facts line — the Library album header's exact string (one
   // home, lib/mediaFacts); a track gets its own in the same register
   const factsLine =
@@ -428,7 +418,7 @@ function MediaInfoBody({
               {factsLine}
             </div>
           )}
-          {(chips.length > 0 || headerDr != null || headerLufs != null) && (
+          {(chips.length > 0 || headerDr != null) && (
             <div className="mt-2 flex flex-wrap items-center gap-1.5" data-info-chips>
               {chips.map((b) => (
                 <span key={b} className="badge">
@@ -436,7 +426,6 @@ function MediaInfoBody({
                 </span>
               ))}
               {headerDr != null && <DrChip dr={headerDr} />}
-              {headerLufs != null && <LufsChip lufs={headerLufs} />}
             </div>
           )}
         </div>
