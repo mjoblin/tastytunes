@@ -24,11 +24,11 @@ import {
   LayoutGrid,
   Library,
   Loader2,
+  MoreHorizontal,
   Play,
   Radio,
   RadioTower,
   Rows3,
-  Trash2,
   Volume2,
 } from "lucide-react";
 import { isPreAmpMode, type PresetItem } from "@shared/smoip";
@@ -55,6 +55,9 @@ import { POPOVER_CARD } from "@/components/chrome/Overlay";
 import { HeaderChip, ScreenTitle, GAP_BETWEEN, GAP_WITHIN } from "@/components/chrome/Chrome";
 import { useConfirmPopover } from "@/components/chrome/Confirm";
 import { artSrc } from "@/lib/artSrc";
+import { RowMenu } from "@/components/media/RowMenu";
+import { openArtistInLibrary, openRefInLibrary } from "@/lib/mediaActions";
+import { fromNode } from "@/lib/mediaRef";
 import { TUNING_WINDOW_MS } from "@/hooks/useStationTuning";
 
 /** A recall that moved nothing after this long is treated as dead — well inside TUNING_WINDOW_MS. */
@@ -457,7 +460,12 @@ interface PresetVolumeProps {
 function usePresetVolumePopover(
   volume: number | null,
   onVolume: (level: number | null) => void,
-): { open: boolean; openFrom(e: React.MouseEvent): void; popover: React.ReactNode } {
+): {
+  open: boolean;
+  /** Opens under an element: a click's, or the ⋯ that offered "Preset volume…". */
+  openFrom(e: { currentTarget: Element; stopPropagation(): void }): void;
+  popover: React.ReactNode;
+} {
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<{ left: number; top?: number; bottom?: number } | null>(
     null,
@@ -468,7 +476,7 @@ function usePresetVolumePopover(
   const level = draft ?? volume ?? zoneVolume ?? 25;
   const WIDTH = 240; // keep in step with w-60 below
 
-  const openFrom = (e: React.MouseEvent): void => {
+  const openFrom = (e: { currentTarget: Element; stopPropagation(): void }): void => {
     e.stopPropagation();
     if (open) {
       setOpen(false);
@@ -556,6 +564,155 @@ function usePresetVolumePopover(
 }
 
 /** Row view of a preset — mirrors the queue row's anatomy. */
+/**
+ * THE ARTWORK IS THE FINGERPRINT: a media preset's album in the library is the one album whose
+ * art URL is the preset's (the streamer keeps no object id worth trusting, Asset re-mints them
+ * on a rescan, but the art id survives; 44/44 of the author's UPnP presets matched this way).
+ * One home: the repair chip finds the album's current id with it, the ⋯ menu's Open in Library
+ * and Go to artist find the album. Null when no album, or more than one, carries the art.
+ */
+async function presetAlbum(preset: PresetItem): Promise<MediaNode | null> {
+  if (!preset.art_url) return null;
+  const pools = await tt.mediaIndexPools();
+  const hits = pools.flatMap((pool) =>
+    pool.albums.filter((a) => a.artUrl != null && a.artUrl === preset.art_url),
+  );
+  return hits.length === 1 ? hits[0] : null;
+}
+
+/**
+ * A PRESET'S ⋯ (0.12.0, his call after Malcolm's email asked why a preset plays rather than
+ * opening): a click still recalls (a preset is the streamer's button, and the streamer keeps no
+ * track list for it), and the ⋯, where the trash used to be, holds the rest. Play; Open in
+ * Library and Go to artist for a media preset (by its art, presetAlbum; a station or a saved
+ * queue has nothing to open); Rename… in place; Preset volume…; Delete preset, last and
+ * confirmed, only here. Right-click opens it too.
+ */
+function usePresetMenu(
+  preset: PresetItem,
+  d: {
+    onRecall(): void;
+    pv: ReturnType<typeof usePresetVolumePopover>;
+    canVolume: boolean;
+    startRename(): void;
+  },
+): {
+  btnRef: React.MutableRefObject<HTMLElement | null>;
+  open(e: React.MouseEvent): void;
+  isOpen: boolean;
+  popovers: React.ReactNode;
+} {
+  const [at, setAt] = useState<{ x: number; y: number } | null>(null);
+  const btnRef = useRef<HTMLElement | null>(null);
+  const confirmDelete = useConfirmPopover();
+  const showToast = useStore((s) => s.showToast);
+  const name = preset.name ?? `Preset ${preset.id}`;
+  // the ⋯ is the anchor for what the menu opens (a right-click opens it where the pointer is)
+  const anchor = (): { currentTarget: Element; stopPropagation(): void } => ({
+    currentTarget: btnRef.current ?? document.body,
+    stopPropagation: () => {},
+  });
+  const withAlbum = (then: (album: MediaNode) => void): void => {
+    void presetAlbum(preset).then((album) => {
+      if (album) then(album);
+      else showToast({ kind: "error", text: `Couldn't find “${name}” in your library.` });
+    });
+  };
+  const items = [
+    { label: "Play", run: d.onRecall },
+    ...(preset.type === "MEDIA"
+      ? [
+          {
+            label: "Open in Library",
+            run: () => withAlbum((a) => void openRefInLibrary(fromNode(a, a.serverUdn))),
+          },
+          {
+            label: "Go to artist",
+            run: () =>
+              withAlbum((a) => {
+                if (a.artist) openArtistInLibrary(a.artist);
+                else showToast({ kind: "error", text: `“${name}” has no artist in your library.` });
+              }),
+          },
+        ]
+      : []),
+    { label: "Rename…", run: d.startRename },
+    ...(d.canVolume ? [{ label: "Preset volume…", run: () => d.pv.openFrom(anchor()) }] : []),
+    {
+      label: "Delete preset",
+      run: () =>
+        confirmDelete.ask(anchor(), {
+          question: `Delete “${name}”?`,
+          onConfirm: () => {
+            if (preset.id != null) void tt.command({ type: "presetDelete", presetId: preset.id });
+          },
+        }),
+    },
+  ];
+  return {
+    btnRef,
+    open: (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setAt({ x: e.clientX, y: e.clientY });
+    },
+    isOpen: at != null,
+    popovers: (
+      <>
+        {at && <RowMenu title={name} at={at} items={items} onClose={() => setAt(null)} />}
+        {confirmDelete.popover}
+      </>
+    ),
+  };
+}
+
+/** A preset's name, edited in place: Enter or leaving the field saves it (trimmed, if changed),
+ *  Escape keeps the old one. The streamer's own rename verb, until now only offered at save. */
+function PresetNameEdit({
+  preset,
+  className,
+  onDone,
+}: {
+  preset: PresetItem;
+  className: string;
+  onDone(): void;
+}): React.JSX.Element {
+  const ref = useRef<HTMLInputElement | null>(null);
+  const done = useRef(false);
+  useEffect(() => {
+    ref.current?.focus();
+    ref.current?.select();
+  }, []);
+  const finish = (save: boolean): void => {
+    if (done.current) return;
+    done.current = true;
+    const name = ref.current?.value.trim() ?? "";
+    if (save && name && name !== preset.name && preset.id != null)
+      void tt.command({ type: "presetRename", slot: preset.id, name });
+    onDone();
+  };
+  return (
+    <input
+      ref={ref}
+      data-preset-rename
+      defaultValue={preset.name ?? ""}
+      aria-label={`Rename preset ${preset.id}`}
+      onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.key === "Enter") finish(true);
+        else if (e.key === "Escape") finish(false);
+      }}
+      onBlur={() => finish(true)}
+      className={cx(
+        "w-full min-w-0 rounded-md bg-panel ring-1 ring-edge2 px-1.5 py-0.5 outline-none focus:ring-gold/60",
+        className,
+      )}
+    />
+  );
+}
+
 function PresetRow({
   preset,
   playing,
@@ -578,13 +735,20 @@ function PresetRow({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: preset.id as number,
   });
-  const confirmDelete = useConfirmPopover();
   const pv = usePresetVolumePopover(volume, onVolume);
+  const [renaming, setRenaming] = useState(false);
+  const menu = usePresetMenu(preset, {
+    onRecall,
+    pv,
+    canVolume: canSetVolume || volume != null,
+    startRename: () => setRenaming(true),
+  });
 
   return (
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(lockVertical(transform)), transition }}
+      onContextMenu={menu.open}
       data-playing={playing || undefined}
       className={cx(
         // FIVE columns for five children — the sixth column outlived the
@@ -595,9 +759,9 @@ function PresetRow({
         isDragging && "z-10 bg-raised shadow-xl",
         // hold the hover highlight while this row's volume popover is open —
         // the pointer leaves the row, but the row is still what's being edited
-        playing ? "row-playing bg-gold/10" : pv.open ? "bg-veil" : "hover:bg-veil",
+        playing ? "row-playing bg-gold/10" : pv.open || menu.isOpen ? "bg-veil" : "hover:bg-veil",
       )}
-      onClick={onRecall}
+      onClick={renaming ? undefined : onRecall}
     >
       <OrderHandle
         label={`Reorder preset ${preset.id}`}
@@ -624,9 +788,17 @@ function PresetRow({
       </div>
 
       <div className="min-w-0">
-        <div className={cx("text-[13.5px] truncate", playing ? "text-gold" : "text-ink")}>
-          {preset.name ?? `Preset ${preset.id}`}
-        </div>
+        {renaming ? (
+          <PresetNameEdit
+            preset={preset}
+            className="text-[13.5px] text-ink"
+            onDone={() => setRenaming(false)}
+          />
+        ) : (
+          <div className={cx("text-[13.5px] truncate", playing ? "text-gold" : "text-ink")}>
+            {preset.name ?? `Preset ${preset.id}`}
+          </div>
+        )}
         <div className="text-[12px] text-dim truncate">
           {preset.class ? preset.class.replace(/^stream\./, "") : ""}
         </div>
@@ -663,23 +835,21 @@ function PresetRow({
       </span>
 
       <button
-        data-tip="Delete preset"
-        aria-label="Delete preset"
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => {
-          e.stopPropagation();
-          confirmDelete.ask(e, {
-            question: `Delete “${preset.name ?? `Preset ${preset.id}`}”?`,
-            onConfirm: () => {
-              if (preset.id != null) void tt.command({ type: "presetDelete", presetId: preset.id });
-            },
-          });
+        ref={(el) => {
+          menu.btnRef.current = el;
         }}
-        className="tip-bottom flex items-center p-1.5 rounded transition-all text-faint opacity-0 group-hover:opacity-100 hover:text-alert"
+        aria-label="More actions"
+        data-preset-menu
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={menu.open}
+        className={cx(
+          "p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-all",
+          menu.isOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+        )}
       >
-        <Trash2 size={13} />
+        <MoreHorizontal size={14} />
       </button>
-      {confirmDelete.popover}
+      {menu.popovers}
     </div>
   );
 }
@@ -706,8 +876,14 @@ function PresetCard({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: preset.id as number,
   });
-  const confirmDelete = useConfirmPopover();
   const pv = usePresetVolumePopover(volume, onVolume);
+  const [renaming, setRenaming] = useState(false);
+  const menu = usePresetMenu(preset, {
+    onRecall,
+    pv,
+    canVolume: canSetVolume || volume != null,
+    startRename: () => setRenaming(true),
+  });
 
   return (
     <div
@@ -715,6 +891,7 @@ function PresetCard({
       style={{ transform: CSS.Transform.toString(transform), transition }}
       {...attributes}
       {...listeners}
+      onContextMenu={menu.open}
       data-playing={playing || undefined}
       className={cx(
         // Inset tile: the gold highlight wraps the gray tile, never the art, so
@@ -726,12 +903,12 @@ function PresetCard({
         playing ? "bg-goldtile/70 tile-playing" : "bg-raised/50 ring-1 ring-edge card-hover-glow",
         // held while this card's volume popover is open — the pointer has left,
         // but the card is still what's being edited
-        pv.open && "ring-1 ring-edge2",
+        (pv.open || menu.isOpen) && "ring-1 ring-edge2",
       )}
     >
       {/* relative wrapper bounds exactly the art, so the corner chips anchor
           to the artwork: playing top-left, volume-set bottom-left, hover
-          speaker top-right, hover trash bottom-right */}
+          speaker top-right, the ⋯ bottom-right (the card grammar's corner) */}
       <div className="relative">
         <button className="relative block w-full cursor-pointer" onClick={onRecall}>
           {/* the art well is a veil lift, never a panel hole — see LibraryCards */}
@@ -818,46 +995,49 @@ function PresetCard({
           </button>
         )}
         <button
-          data-tip="Delete preset"
-          aria-label="Delete preset"
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation();
-            confirmDelete.ask(e, {
-              question: `Delete “${preset.name ?? `Preset ${preset.id}`}”?`,
-              onConfirm: () => {
-                if (preset.id != null)
-                  void tt.command({ type: "presetDelete", presetId: preset.id });
-              },
-            });
+          ref={(el) => {
+            menu.btnRef.current = el;
           }}
+          aria-label="More actions"
+          data-preset-menu
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={menu.open}
           className={cx(
-            "tip-bottom absolute bottom-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-lg transition-all",
-            "bg-panel/80 ring-1 ring-edge text-dim hover:text-alert opacity-0 group-hover:opacity-100",
+            "absolute bottom-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-lg transition-all",
+            "bg-panel/80 ring-1 ring-edge text-dim hover:text-ink",
+            menu.isOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100",
           )}
         >
-          <Trash2 size={13} />
+          <MoreHorizontal size={14} />
         </button>
       </div>
 
       {/* the label is part of the card — clicking it recalls too (it used to
           be a dead zone below the artwork button, which read as a broken card) */}
-      <div className="mt-2 px-1 cursor-pointer" onClick={onRecall}>
-        <div
-          className={cx(
-            "text-[12.5px] leading-snug line-clamp-2",
-            playing ? "text-gold" : "text-ink",
-          )}
-        >
-          {preset.name ?? `Preset ${preset.id}`}
-        </div>
+      <div className="mt-2 px-1 cursor-pointer" onClick={renaming ? undefined : onRecall}>
+        {renaming ? (
+          <PresetNameEdit
+            preset={preset}
+            className="text-[12.5px] leading-snug text-ink"
+            onDone={() => setRenaming(false)}
+          />
+        ) : (
+          <div
+            className={cx(
+              "text-[12.5px] leading-snug line-clamp-2",
+              playing ? "text-gold" : "text-ink",
+            )}
+          >
+            {preset.name ?? `Preset ${preset.id}`}
+          </div>
+        )}
         <div className="microlabel mt-1">
           {String(preset.id).padStart(2, "0")}
           {preset.class ? ` · ${preset.class.replace(/^stream\./, "")}` : ""}
         </div>
       </div>
       {pv.popover}
-      {confirmDelete.popover}
+      {menu.popovers}
     </div>
   );
 }
@@ -897,12 +1077,8 @@ function RepairChip({
     });
     setMatch(undefined);
     setOpen(true);
-    // The artwork is the fingerprint: same art url, same album, current id.
-    const pools = await tt.mediaIndexPools();
-    const hits = pools.flatMap((pool) =>
-      pool.albums.filter((a) => a.artUrl != null && a.artUrl === preset.art_url),
-    );
-    setMatch(hits.length === 1 ? hits[0] : null);
+    // the artwork is the fingerprint: same art url, same album, current id (presetAlbum)
+    setMatch(await presetAlbum(preset));
   };
 
   const repair = async (): Promise<void> => {
