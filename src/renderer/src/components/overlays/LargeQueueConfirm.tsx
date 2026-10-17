@@ -61,8 +61,10 @@ export function LargeQueueConfirm(): React.JSX.Element | null {
               This replaces the current queue.
             </div>
           )}
+          {/* gold: queueing is not a destructive verb (the shared action row, Confirm) */}
           <ConfirmActions
             modal
+            tone="gold"
             verb="Queue them"
             onCancel={() => ask.answer(false)}
             onConfirm={() => ask.answer(true)}
