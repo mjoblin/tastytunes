@@ -28,9 +28,13 @@ export type UrlAction =
 export type UrlParse =
   { ok: true; action: UrlAction; verb: string } | { ok: false; reason: string };
 
-/** One example of every verb, in the order Settings lists them; the unit test parses each. */
+/** One example of every verb, in the order Settings lists them; the unit test parses each.
+ *  THREE SHAPES, EACH ONE MEANING (his call, 2026-10-17, before the scheme shipped): a bare verb
+ *  acts (play, next), thing/value sets a state (mute/on, volume/30), toggle-thing switches one
+ *  (toggle-play, toggle-mute, toggle-power, toggle-mini). A bare mute, power, mini or toggle is
+ *  refused with the toggle's name, so a link never leaves a reader guessing which it does. */
 export const URL_EXAMPLES = [
-  "toggle",
+  "toggle-play",
   "play",
   "pause",
   "stop",
@@ -40,20 +44,20 @@ export const URL_EXAMPLES = [
   "volume/down",
   "volume/up/5",
   "volume/30",
-  "mute",
+  "toggle-mute",
   "mute/on",
   "mute/off",
   "preset/1",
   "source/CD",
-  "power",
+  "toggle-power",
   "power/on",
   "power/standby",
   "screen/now-playing",
-  "mini",
+  "toggle-mini",
 ] as const;
 
 const PLAIN: Record<string, StreamerCommand> = {
-  toggle: { type: "togglePlayback" },
+  "toggle-play": { type: "togglePlayback" },
   play: { type: "play" },
   pause: { type: "pause" },
   stop: { type: "stop" },
@@ -114,24 +118,26 @@ export function parseUrlAction(raw: string, screens: Readonly<Record<string, str
         return { ok: false, reason: "Volume takes up, down or a number from 0 to 100." };
       return ok({ kind: "command", command: { type: "setVolumePercent", percent } });
     }
+    case "toggle-mute":
+      return lone ? ok({ kind: "muteToggle" }) : unknown;
     case "mute": {
-      if (lone) return ok({ kind: "muteToggle" });
       const to = arg?.toLowerCase();
       if (parts.length === 2 && (to === "on" || to === "off"))
         return ok({ kind: "command", command: { type: "setMute", mute: to === "on" } });
-      return { ok: false, reason: "Mute takes on or off." };
+      return { ok: false, reason: "Mute takes on or off. toggle-mute switches it." };
     }
     // power has mute's shape and SMoIP's words (/system/power: toggle, ON, NETWORK); there is no
     // off, so standby is named for what it is
+    case "toggle-power":
+      return lone ? ok({ kind: "command", command: { type: "power", power: "toggle" } }) : unknown;
     case "power": {
-      if (lone) return ok({ kind: "command", command: { type: "power", power: "toggle" } });
       const to = arg?.toLowerCase();
       if (parts.length === 2 && (to === "on" || to === "standby"))
         return ok({
           kind: "command",
           command: { type: "power", power: to === "on" ? "ON" : "NETWORK" },
         });
-      return { ok: false, reason: "Power takes on or standby." };
+      return { ok: false, reason: "Power takes on or standby. toggle-power switches it." };
     }
     case "preset": {
       const slot = parts.length === 2 ? wholeIn(arg, 1, 99) : null;
@@ -152,8 +158,12 @@ export function parseUrlAction(raw: string, screens: Readonly<Record<string, str
         };
       return ok({ kind: "screen", screen });
     }
-    case "mini":
+    case "toggle-mini":
       return lone ? ok({ kind: "mini" }) : unknown;
+    case "mini":
+      return { ok: false, reason: "toggle-mini opens or closes the mini player." };
+    case "toggle":
+      return { ok: false, reason: "toggle-play plays or pauses." };
     default:
       return unknown;
   }

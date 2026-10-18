@@ -14,7 +14,7 @@ describe("parseUrlAction", () => {
   });
 
   it("maps the transport verbs onto the app's own commands", () => {
-    expect(action("tastytunes://toggle")).toEqual({
+    expect(action("tastytunes://toggle-play")).toEqual({
       kind: "command",
       command: { type: "togglePlayback" },
     });
@@ -25,7 +25,7 @@ describe("parseUrlAction", () => {
   });
 
   it("switches power, or sets it on or to standby, in mute's shape", () => {
-    expect(action("tastytunes://power")).toEqual({
+    expect(action("tastytunes://toggle-power")).toEqual({
       kind: "command",
       command: { type: "power", power: "toggle" },
     });
@@ -73,7 +73,7 @@ describe("parseUrlAction", () => {
   });
 
   it("switches mute, or sets it", () => {
-    expect(action("tastytunes://mute")).toEqual({ kind: "muteToggle" });
+    expect(action("tastytunes://toggle-mute")).toEqual({ kind: "muteToggle" });
     expect(action("tastytunes://mute/on")).toEqual({
       kind: "command",
       command: { type: "setMute", mute: true },
@@ -108,11 +108,11 @@ describe("parseUrlAction", () => {
 
   it("is forgiving about how the link arrives", () => {
     const toggle = { kind: "command", command: { type: "togglePlayback" } };
-    expect(action("TASTYTUNES://Toggle")).toEqual(toggle);
-    expect(action("tastytunes://toggle/")).toEqual(toggle);
-    expect(action("tastytunes:toggle")).toEqual(toggle);
-    expect(action("tastytunes://toggle?from=deck#x")).toEqual(toggle);
-    expect(action("  tastytunes://toggle  ")).toEqual(toggle);
+    expect(action("TASTYTUNES://Toggle-Play")).toEqual(toggle);
+    expect(action("tastytunes://toggle-play/")).toEqual(toggle);
+    expect(action("tastytunes:toggle-play")).toEqual(toggle);
+    expect(action("tastytunes://toggle-play?from=deck#x")).toEqual(toggle);
+    expect(action("  tastytunes://toggle-play  ")).toEqual(toggle);
   });
 
   it("refuses what is not one of its links, and names an unknown verb", () => {
@@ -131,5 +131,18 @@ describe("parseUrlAction", () => {
     const q = parse("tastytunes://preset/3");
     expect(p.ok && staysInBackground(p.action)).toBe(false);
     expect(q.ok && staysInBackground(q.action)).toBe(true);
+  });
+
+  it("names its toggles: a bare mute, power, mini or toggle is refused with the toggle's name", () => {
+    expect(action("tastytunes://toggle-mini")).toEqual({ kind: "mini" });
+    expect(action("tastytunes://mute")).toBe("Mute takes on or off. toggle-mute switches it.");
+    expect(action("tastytunes://power")).toBe(
+      "Power takes on or standby. toggle-power switches it.",
+    );
+    expect(action("tastytunes://mini")).toBe("toggle-mini opens or closes the mini player.");
+    expect(action("tastytunes://toggle")).toBe("toggle-play plays or pauses.");
+    // every toggle stands alone
+    for (const bad of ["toggle-mute/on", "toggle-play/1", "toggle-power/standby", "toggle-mini/x"])
+      expect(parse(`tastytunes://${bad}`).ok, bad).toBe(false);
   });
 });
