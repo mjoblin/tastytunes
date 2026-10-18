@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Play } from "lucide-react";
 import {
   audioAnalysisKey,
+  type AppSettings,
   type MediaIndexPools,
   type MediaNode,
   nameSortKey,
@@ -25,6 +26,9 @@ import {
   lc,
   nodeKey,
   drOptionsOf,
+  tempoBandLabel,
+  tempoBandOf,
+  tempoOptionsOf,
   formatTags,
   formatOptionsOf,
   decadeOf,
@@ -42,8 +46,7 @@ import { useLensIndex } from "./useLensIndex";
 // 600 to 800 lines shared one file); what the lenses share lives in ./lensShared.
 
 const TRACK_SORTS: Array<{
-  value:
-    "title" | "artist" | "album" | "year" | "duration" | "dr" | "loudness" | "lastPlayed" | "plays";
+  value: AppSettings["lensTracksSort"];
   label: string;
 }> = [
   { value: "title", label: "Title" },
@@ -53,6 +56,7 @@ const TRACK_SORTS: Array<{
   { value: "duration", label: "Duration (longest first)" },
   { value: "dr", label: "Dynamic range" },
   { value: "loudness", label: "Loudness" },
+  { value: "tempo", label: "Tempo (fastest first)" },
   { value: "lastPlayed", label: "Last played" },
   { value: "plays", label: "Plays" },
 ];
@@ -70,12 +74,23 @@ let tracksMem: {
   genre: string | null;
   decade: string | null;
   dr: string | null;
+  /** The Tempo facet (0.12.0): a band's floor (lensShared's tempoBandOf), or null for any. */
+  tempo: string | null;
   format: string | null;
   /** The Played facet (0.8.0): a playedBucket, or null for any. */
   played: string | null;
   filter: string;
   scroll: number;
-} = { genre: null, decade: null, dr: null, format: null, played: null, filter: "", scroll: 0 };
+} = {
+  genre: null,
+  decade: null,
+  dr: null,
+  tempo: null,
+  format: null,
+  played: null,
+  filter: "",
+  scroll: 0,
+};
 
 /**
  * THE TRACKS LENS (2026-09-01, user: "it feels like an obvious gap"): every
@@ -124,6 +139,14 @@ export function TracksLens({
   const statsByKey = useKnownStats(drKeys); // one home for known DR + loudness (lib/audioAnalysis)
   const drOf = (t: MediaNode): number | null => statsByKey[audioAnalysisKey(t)]?.dr ?? null;
   const lufsOf = (t: MediaNode): number | null => statsByKey[audioAnalysisKey(t)]?.lufs ?? null;
+  // the tempo as Info says it, above its floor (the measured facts, 0.12.0)
+  const tempoOf = (t: MediaNode): number | null => statsByKey[audioAnalysisKey(t)]?.bpm ?? null;
+  const tempoOptions = useMemo(
+    () => tempoOptionsOf(all.map((t) => tempoOf(t))),
+    // tempoOf reads statsByKey; listing it keeps the memo honest
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [all, statsByKey],
+  );
   const drOptions = useMemo(
     () => drOptionsOf(all.map((t) => drOf(t))),
     // drOf reads statsByKey; listing it keeps the memo honest
@@ -144,6 +167,7 @@ export function TracksLens({
     if (mem.genre) list = list.filter((t) => (t.genre ?? []).some((g) => lc(g) === mem.genre));
     if (mem.decade) list = list.filter((t) => decadeOf(t.year) === mem.decade);
     if (mem.dr) list = list.filter((t) => String(drOf(t) ?? "") === mem.dr);
+    if (mem.tempo) list = list.filter((t) => tempoBandOf(tempoOf(t)) === mem.tempo);
     if (mem.played)
       list = list.filter((t) => playedBucket(play.track(t)?.lastAt ?? null) === mem.played);
     const fmt = mem.format;
@@ -170,6 +194,7 @@ export function TracksLens({
         return (b.durationSecs ?? 0) - (a.durationSecs ?? 0) || byTitle(a, b);
       if (sort === "dr") return (drOf(b) ?? -1) - (drOf(a) ?? -1) || byTitle(a, b);
       if (sort === "loudness") return (lufsOf(b) ?? -1000) - (lufsOf(a) ?? -1000) || byTitle(a, b);
+      if (sort === "tempo") return (tempoOf(b) ?? -1) - (tempoOf(a) ?? -1) || byTitle(a, b);
       // the record's sorts: most recent / most played first, unplayed last
       if (sort === "lastPlayed")
         return (play.track(b)?.lastAt ?? 0) - (play.track(a)?.lastAt ?? 0) || byTitle(a, b);
@@ -199,6 +224,10 @@ export function TracksLens({
       const l = lufsOf(t);
       return l != null ? fmtLufs(l) : null;
     }
+    if (sort === "tempo") {
+      const bpm = tempoOf(t);
+      return bpm != null ? `${bpm} bpm` : null;
+    }
     return undefined;
   };
 
@@ -222,7 +251,7 @@ export function TracksLens({
   const start = win.first;
   const end = total === 0 ? 0 : win.last + 1;
   const narrowed = Boolean(
-    mem.filter || mem.genre || mem.decade || mem.dr || mem.format || mem.played,
+    mem.filter || mem.genre || mem.decade || mem.dr || mem.tempo || mem.format || mem.played,
   );
   const overCap = shown.length > PLAY_THESE_MAX;
   // CONSTANT GEOMETRY for the split button (user call, 2026-09-01: popping
@@ -238,7 +267,7 @@ export function TracksLens({
         : "live";
   const theseTip =
     theseState === "invite"
-      ? "Filter, or pick a decade, genre or DR, to play a set"
+      ? "Filter, or pick a decade, genre, DR or tempo, to play a set"
       : theseState === "over"
         ? `Narrow to ${fmtCount(PLAY_THESE_MAX)} tracks or fewer`
         : theseState === "empty"
@@ -252,6 +281,7 @@ export function TracksLens({
     mem.decade,
     mem.format ? (formatOptions.find((o) => o.value === mem.format)?.label ?? mem.format) : null,
     mem.dr ? `DR${mem.dr}` : null,
+    mem.tempo ? tempoBandLabel(mem.tempo) : null,
   ]
     .filter(Boolean)
     .join(FACT_SEP);
@@ -325,6 +355,15 @@ export function TracksLens({
                 options={drOptions}
                 value={mem.dr}
                 onChange={(dr) => setMem({ dr })}
+                min={1}
+              />
+              <PickerPill
+                id="tempo"
+                neutral="Tempo"
+                clearLabel="Any tempo"
+                options={tempoOptions}
+                value={mem.tempo}
+                onChange={(tempo) => setMem({ tempo })}
                 min={1}
               />
               <PickerPill

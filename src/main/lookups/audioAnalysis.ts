@@ -9,6 +9,7 @@
 import { join } from "node:path";
 import { app } from "electron";
 import type { AlbumDr, AudioAnalysis, KnownStats, MediaIndexPools } from "@shared/model";
+import { keyName, tempoBpm } from "@shared/model";
 import { isRecord } from "@shared/guards";
 import { DiskCache, registerCache } from "./diskCache";
 import { EntryStore } from "./entryStore";
@@ -17,11 +18,25 @@ import { albumDrsFromTracks } from "./albumDrFromTracks";
 const TRACK_CAP = 2000;
 const ALBUM_CAP = 2000;
 
-const tracks = new EntryStore<AudioAnalysis, { dr: number; lufs: number | null }>({
+// What the rows read without opening an entry: its DR and loudness, and since 0.12.0 its tempo
+// and key as Info says them (above their floors, shared/model). A summary made before has no
+// `bpm` at all (undefined, not null) until refreshAnalysisSummaries remakes it.
+interface Summary {
+  dr: number;
+  lufs: number | null;
+  bpm?: number | null;
+  key?: string | null;
+}
+const tracks = new EntryStore<AudioAnalysis, Summary>({
   dir: () => join(app.getPath("userData"), "cache"),
   name: "analysis",
   cap: TRACK_CAP,
-  summarize: (a) => ({ dr: a.dr, lufs: a.lufs ?? null }),
+  summarize: (a) => ({
+    dr: a.dr,
+    lufs: a.lufs ?? null,
+    bpm: tempoBpm(a.features?.beats),
+    key: keyName(a.features?.key),
+  }),
   // the single-file cache before 0.11.0, read once into entry files and left in place
   legacyFile: "analysis.json",
   isValue: (v): v is AudioAnalysis => isAnalysisShape(v),
@@ -62,7 +77,8 @@ export function audioDrMany(keys: string[]): Record<string, number> {
   return out;
 }
 
-/** Cache-only DR + loudness per key (the rows' cells and the DR tooltip). */
+/** Cache-only DR, loudness, tempo and key per key (the rows' cells, the Tracks view's sorts and
+ *  facets, the DR tooltip). */
 export function audioStatsMany(keys: string[]): Record<string, KnownStats> {
   const out: Record<string, KnownStats> = {};
   for (const k of keys) {
@@ -70,9 +86,17 @@ export function audioStatsMany(keys: string[]): Record<string, KnownStats> {
     if (!a) continue;
     const dr = a.dr > 0 ? a.dr : null;
     const lufs = a.lufs;
-    if (dr != null || lufs != null) out[k] = { dr, lufs };
+    const bpm = a.bpm ?? null;
+    const key = a.key ?? null;
+    if (dr != null || lufs != null || bpm != null || key != null) out[k] = { dr, lufs, bpm, key };
   }
   return out;
+}
+
+/** Remakes the summaries made before tempo and key were in them, in the background; resolves
+ *  to how many changed (the rows then read again: main's analysisStats push). */
+export function refreshAnalysisSummaries(): Promise<number> {
+  return tracks.refreshSummaries((s) => s.bpm === undefined);
 }
 
 export function albumDrPut(key: string, entry: unknown): void {

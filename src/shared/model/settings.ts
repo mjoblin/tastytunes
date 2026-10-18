@@ -205,7 +205,16 @@ export interface AppSettings {
   /** Tracks lens sort — the third lens (2026-09-01), every track across the
    *  ready indexes; DR sorts newest-analysis-first once the sweep has run. */
   lensTracksSort:
-    "title" | "artist" | "album" | "year" | "duration" | "dr" | "loudness" | "lastPlayed" | "plays";
+    | "title"
+    | "artist"
+    | "album"
+    | "year"
+    | "duration"
+    | "dr"
+    | "loudness"
+    | "tempo"
+    | "lastPlayed"
+    | "plays";
   lensTracksSortReversed: boolean;
   playlistsSort: "updated" | "created" | "played" | "name" | "length";
   playlistsSortReversed: boolean;

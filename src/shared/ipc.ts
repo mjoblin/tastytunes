@@ -147,6 +147,7 @@ export type PushMessage =
   | { kind: "recents"; data: RecentTrack[] }
   /** An album's DR, recorded by main the moment its last track was measured (2026-10-12). */
   | { kind: "albumDr"; key: string; entry: AlbumDr }
+  | { kind: "analysisStats" }
   | { kind: "listening"; data: ListeningRecordStats }
   /** The record's aggregate, whole (after a clear) — the reading surfaces' seed. */
   | { kind: "playStats"; data: PlayStats }

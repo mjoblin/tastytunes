@@ -82,10 +82,13 @@ export interface AnalysisStrip {
   loud: string;
 }
 
-/** What a row can know without decoding: the cached DR and loudness. */
+/** What a row can know without decoding: the cached DR and loudness, and the tempo and key as
+ *  Info says them (above their floors). */
 export interface KnownStats {
   dr: number | null;
   lufs: number | null;
+  bpm: number | null;
+  key: string | null;
 }
 
 /** The block-loudness histogram: 0.1 LU bins from −70 LUFS (the absolute

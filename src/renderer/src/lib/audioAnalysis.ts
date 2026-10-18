@@ -216,6 +216,8 @@ export function useAlbumDr(): Record<string, AlbumDr> {
 export function useKnownStats(keys: readonly string[]): Record<string, KnownStats> {
   const waveformsOn = useStore((s) => s.settings.waveforms);
   const sweepIdle = useStore((s) => s.analysisProgress == null);
+  // main remade the summaries (tempo and key joined them in 0.12.0): read again
+  const epoch = useStore((s) => s.analysisStatsEpoch);
   const sig = keys.join("\u0000");
   const [map, setMap] = useState<Record<string, KnownStats>>({});
   useEffect(() => {
@@ -230,7 +232,7 @@ export function useKnownStats(keys: readonly string[]): Record<string, KnownStat
     return () => {
       stale = true;
     };
-  }, [sig, sweepIdle, waveformsOn]);
+  }, [sig, sweepIdle, waveformsOn, epoch]);
   return map;
 }
 

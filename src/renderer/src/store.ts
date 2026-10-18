@@ -462,6 +462,9 @@ interface TTState {
   /** EXPERIMENT (0.7 exploration): the album-DR map (albumDrKey -> AlbumDr),
    *  loaded lazily by useAlbumDr and updated in place by Analyze audio. */
   albumDr: Record<string, AlbumDr>;
+  /** Bumped when main remade the stored analyses' summaries (the rows' measured facts read
+   *  again: useKnownStats). */
+  analysisStatsEpoch: number;
   setAlbumDr: (map: Record<string, AlbumDr>) => void;
   setAlbumDrEntry: (key: string, entry: AlbumDr) => void;
   /** EXPERIMENT: the running sweep's position (null = idle). */
@@ -796,6 +799,7 @@ export const useStore = create<TTState>((set, get) => ({
         : { mediaInfo: null, mediaInfoList: null, mediaInfoBack: [], mediaInfoForward: [] },
     ),
   albumDr: {},
+  analysisStatsEpoch: 0,
   setAlbumDr: (albumDr) => set({ albumDr }),
   setAlbumDrEntry: (key, entry) => set((s) => ({ albumDr: { ...s.albumDr, [key]: entry } })),
   analysisProgress: null,
@@ -1020,6 +1024,8 @@ export const useStore = create<TTState>((set, get) => ({
           return { recents: msg.data };
         case "albumDr":
           return { albumDr: { ...s.albumDr, [msg.key]: msg.entry } };
+        case "analysisStats":
+          return { analysisStatsEpoch: s.analysisStatsEpoch + 1 };
         case "listening":
           return { listeningStats: msg.data };
         case "playStats":

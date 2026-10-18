@@ -1,5 +1,5 @@
 import { IPC } from "@shared/ipc";
-import { broadcastAlbumDrs, broadcastSettings } from "../app/broadcast";
+import { broadcastAlbumDrs, broadcastAnalysisStats, broadcastSettings } from "../app/broadcast";
 import { streamerHost } from "../app/runtime";
 import { getSettings, updateSettings } from "../data/persist";
 import {
@@ -9,6 +9,7 @@ import {
   audioAnalysisPut,
   audioDrMany,
   audioStatsMany,
+  refreshAnalysisSummaries,
   recordAlbumDrsFromTracks,
 } from "../lookups/audioAnalysis";
 import { pools } from "../media/mediaIndex";
@@ -29,6 +30,9 @@ import { handle } from "../app/guard";
  */
 const ANALYSIS_MAX_BYTES =
   Number(process.env["TASTYTUNES_ANALYSIS_MAX_BYTES"]) || 512 * 1024 * 1024;
+
+// whether this session has asked for the summaries made before tempo and key to be remade
+let summariesRefreshed = false;
 
 /** Audio analysis: a track's bytes for the decode, and the stored analyses and album DR. (Split out of index.ts's registerIpc in the 0.11.0 sweep.) */
 export function registerAudioIpc(): void {
@@ -108,11 +112,19 @@ export function registerAudioIpc(): void {
   handle(IPC.audioDrMany, (_e, keys: unknown) =>
     Array.isArray(keys) ? audioDrMany(keys.filter((k): k is string => typeof k === "string")) : {},
   );
-  handle(IPC.audioStatsMany, (_e, keys: unknown) =>
-    Array.isArray(keys)
+  handle(IPC.audioStatsMany, (_e, keys: unknown) => {
+    // the first read of a session remakes, in the background, the summaries made before tempo
+    // and key were in them, and the rows read again once it has (0.12.0)
+    if (!summariesRefreshed) {
+      summariesRefreshed = true;
+      void refreshAnalysisSummaries().then((n) => {
+        if (n > 0) broadcastAnalysisStats();
+      });
+    }
+    return Array.isArray(keys)
       ? audioStatsMany(keys.filter((k): k is string => typeof k === "string"))
-      : {},
-  );
+      : {};
+  });
   handle(IPC.albumDrPut, (_e, key: unknown, entry: unknown) => {
     if (typeof key === "string") albumDrPut(key, entry);
   });
