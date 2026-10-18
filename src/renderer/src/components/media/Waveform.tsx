@@ -149,34 +149,44 @@ function fromStored(st: AudioAnalysis): Analysis {
   };
 }
 
+/** A stored analysis the current version would write the same: every measurement there, the
+ *  features its version. An entry from before loudness (0.7.0's cache shape) is incomplete and
+ *  is measured again ONCE, on the next play or Analyze audio, rather than carrying the gap
+ *  forever (user, 2026-09-05: re-analysis showed only DR); likewise the later measurements. */
+const isCurrent = (st: AudioAnalysis): boolean =>
+  !predatesLoudness(st) && !predatesStrip(st) && !predatesOnsets(st) && !predatesFeatures(st);
+
+/** Whether a track's stored analysis is current (Analyze audio's "is there work to do":
+ *  lib/audioAnalysis measures again what is current only when nothing else needs it). */
+export async function storedIsCurrent(contentKey: string): Promise<boolean> {
+  const st = await tt.audioAnalysisGet(contentKey).catch(() => null);
+  return st != null && isCurrent(st);
+}
+
 /** The analysis engine, exported for the Analyze-audio sweep
  *  (lib/audioAnalysis). contentKey engages the disk cache; the in-memory
- *  key stays LOCATION (udn|objectId), scoped to the session. */
+ *  key stays LOCATION (udn|objectId), scoped to the session. `force` measures
+ *  the file again even when a current analysis is stored (Analyze audio with
+ *  nothing else to do, 0.12.0: a file replaced under the same title, artist,
+ *  album and length keeps its old analysis otherwise). */
 export function analyzeTrack(
   serverUdn: string,
   objectId: string,
   contentKey: string | null = null,
+  { force = false }: { force?: boolean } = {},
 ): Promise<Analysis | null> {
   const key = `${serverUdn}|${objectId}`;
-  const hit = cache.get(key);
+  const hit = force ? undefined : cache.get(key);
   if (hit) return hit;
+  // a forced measurement: what a peek last found is old news
+  if (force) peeked.delete(key);
   const p = (async (): Promise<Analysis | null> => {
-    if (contentKey) {
+    if (contentKey && !force) {
       const stored = await tt.audioAnalysisGet(contentKey);
-      // an entry from before loudness (0.7.0's cache shape) is incomplete:
-      // measure it again ONCE, on the next play or Analyze audio, rather than
-      // carry the gap forever (user, 2026-09-05: re-analysis showed only DR)
-      if (
-        stored &&
-        !predatesLoudness(stored) &&
-        !predatesStrip(stored) &&
-        !predatesOnsets(stored) &&
-        !predatesFeatures(stored)
-      )
-        return fromStored(stored);
+      if (stored && isCurrent(stored)) return fromStored(stored);
     }
     const failed = failedAt.get(key);
-    if (failed != null && Date.now() - failed < FAILED_MEMO_MS) return null;
+    if (!force && failed != null && Date.now() - failed < FAILED_MEMO_MS) return null;
     const got = await tt.expTrackAudio(serverUdn, objectId);
     if (!got) return null;
     if (!ArrayBuffer.isView(got)) {

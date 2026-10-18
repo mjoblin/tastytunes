@@ -535,7 +535,11 @@ export function TracksLens({
                     ...(shown.every((n) => actions.unreadable(n))
                       ? { disabled: true, hint: USB_ANALYSIS_HINT }
                       : {}),
-                    run: () => actions.analyzeTracks?.(shown, `${fmtCount(shown.length)} tracks`),
+                    run: () =>
+                      actions.analyzeTracks?.(
+                        shown,
+                        `${fmtCount(shown.length)} ${shown.length === 1 ? "track" : "tracks"}`,
+                      ),
                   },
                 ]
               : []),

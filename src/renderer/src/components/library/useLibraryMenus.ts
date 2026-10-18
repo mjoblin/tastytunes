@@ -208,7 +208,11 @@ export function useLibraryMenus(d: {
     if (r == null) showNotice(`Couldn't read “${node.title}” from the server.`);
     else if (r.dr == null)
       showNotice(`Read ${r.analyzed} of ${r.tracks} tracks. An album DR needs all of them.`);
-    else showToast({ kind: "success", text: `“${node.title}” analyzed: DR${r.dr}` });
+    else
+      showToast({
+        kind: "success",
+        text: `“${node.title}” analyzed${r.again ? " again" : ""}: DR${r.dr}`,
+      });
   };
   /** The album selection bar's Analyze audio (0.8.0): each album's own sweep in
    *  turn, so every one lands its album DR; the sweep queue serializes them. */
@@ -241,10 +245,12 @@ export function useLibraryMenus(d: {
     showToast({ kind: "success", text: `Analyzing ${label}…` });
     const r = await analyzeTracks(label, readable);
     if (r === "busy" || r == null) return;
+    // one track by its name, more by their count; "again" when all were current and every one
+    // was measured again (lib/audioAnalysis' againIfDone)
     if (r.analyzed === r.tracks)
       showToast({
         kind: "success",
-        text: `Analyzed ${fmtCount(r.tracks)} ${r.tracks === 1 ? "track" : "tracks"}`,
+        text: `Analyzed ${r.tracks === 1 && chosen.length === 1 ? label : `${fmtCount(r.tracks)} tracks`}${r.again ? " again" : ""}`,
       });
     else showNotice(`Read ${r.analyzed} of ${r.tracks} tracks. The rest couldn't be read.`);
   };
