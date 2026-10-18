@@ -16,6 +16,7 @@ import ReactDOM from "react-dom/client";
 import { tt } from "./api";
 import { useStore } from "./store";
 import { trackInputModality } from "./lib/inputModality";
+import { SurfaceBoundary } from "./components/chrome/SurfaceBoundary";
 
 // Split at the one natural seam: the always-on-top mini strip used to parse
 // the ENTIRE app bundle (all screens, dnd-kit, the palette) and the main
@@ -77,8 +78,14 @@ if (!/mac/i.test(navigator.platform)) document.documentElement.classList.add("na
 const root = (window.__ttRoot ??= ReactDOM.createRoot(document.getElementById("root")!));
 root.render(
   <React.StrictMode>
-    <Suspense fallback={null}>
-      {isTray ? <TrayPanel /> : isMini ? <MiniPlayer /> : <App />}
-    </Suspense>
+    {/* the window's last resort: a surface's own boundary (App's) normally holds a failure */}
+    <SurfaceBoundary
+      surface={isTray ? "this panel" : isMini ? "the mini player" : "this window"}
+      shape={isTray || isMini ? "panel" : "screen"}
+    >
+      <Suspense fallback={null}>
+        {isTray ? <TrayPanel /> : isMini ? <MiniPlayer /> : <App />}
+      </Suspense>
+    </SurfaceBoundary>
   </React.StrictMode>,
 );
