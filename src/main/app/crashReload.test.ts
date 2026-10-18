@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CRASH_MAX_RELOADS, CRASH_WINDOW_MS, takeReload } from "./crashReload";
+import { CRASH_MAX_RELOADS, CRASH_WINDOW_MS, reloads, takeReload } from "./crashReload";
 
 describe("takeReload: a dead renderer reloads, but never in a loop", () => {
   it("allows three reloads in a minute and refuses the fourth", () => {
@@ -14,5 +14,18 @@ describe("takeReload: a dead renderer reloads, but never in a loop", () => {
     const times = [0, 10_000, 20_000];
     expect(takeReload(times, CRASH_WINDOW_MS + 1)).toBe(true);
     expect(times).toEqual([10_000, 20_000, CRASH_WINDOW_MS + 1]);
+  });
+});
+
+describe("reloads: only a renderer that failed on its own comes back", () => {
+  it("reloads a crash, an out-of-memory and an abnormal exit", () => {
+    for (const r of ["crashed", "oom", "abnormal-exit", "launch-failed"])
+      expect(reloads(r, false)).toBe(true);
+  });
+
+  it("leaves an outside kill and a clean exit alone, and anything while the app quits", () => {
+    expect(reloads("killed", false)).toBe(false);
+    expect(reloads("clean-exit", false)).toBe(false);
+    expect(reloads("crashed", true)).toBe(false);
   });
 });
