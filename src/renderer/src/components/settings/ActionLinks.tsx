@@ -36,8 +36,8 @@ export function ActionLinks(): React.JSX.Element {
     <div data-action-links>
       <div className="text-[13.5px]">Action links</div>
       <div className="text-[11.5px] text-faint max-w-sm">
-        Use these links on a Stream Deck key or in a launcher like Raycast to control the streamer
-        without switching to TastyTunes.
+        Use these links on an Elgato Stream Deck or in a launcher like Raycast to control the
+        streamer without switching to TastyTunes.
       </div>
       <button
         onClick={() => setOpen(!open)}
