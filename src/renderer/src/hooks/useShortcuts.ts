@@ -11,6 +11,17 @@ import { SCREENS, IS_MAC } from "@/lib/screens";
 // old hand-written copy had l: 'library', silently eating seek-forward).
 // One key a screen, the one it shows: the hidden-alias field that carried
 // Recently Played's R for a cycle went in 0.9.0 with no other user.
+/** The keys dnd-kit's keyboard sensor uses on a focused drag activator (see the guard below). */
+const DRAG_KEYS = new Set([
+  " ",
+  "Enter",
+  "Escape",
+  "ArrowUp",
+  "ArrowDown",
+  "ArrowLeft",
+  "ArrowRight",
+]);
+
 const SCREEN_KEYS: Record<string, Screen> = Object.fromEntries(
   SCREENS.map((s) => [s.key.toLowerCase(), s.id]),
 );
@@ -142,7 +153,13 @@ export function useShortcuts(opts?: { transportOnly?: boolean }): void {
       // bubbled event (`if (activator && event.target !== activator) return
       // false` in core.esm.js), so a child's keydown was never going to reorder
       // anything.
+      //
+      // THE DRAG'S KEYS ONLY (0.12.0-rc.2; the strict live gate's Radio check): the activator
+      // used to take EVERY key, so a click on a preset card's body (whose root is the activator)
+      // left R, Q and every screen key dead until focus moved. It owns what the sensor uses
+      // (Space and Enter lift and drop, Escape cancels, the arrows move) and nothing else.
       if (
+        DRAG_KEYS.has(e.key) &&
         target?.matches('[aria-roledescription="sortable"], [aria-roledescription="draggable"]')
       ) {
         return;
