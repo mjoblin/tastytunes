@@ -45,6 +45,17 @@ network. There's no account and no cloud service required.
 Without a streamer on the network, demo mode on the connect screen runs the
 whole app against a built-in virtual one with sample music libraries.
 
+On Linux, make the AppImage executable before you launch it. AppImages need
+FUSE 2, which newer Ubuntu releases don't include: install it with
+`sudo apt install libfuse2` (`libfuse2t64` on Ubuntu 24.04). Ubuntu 24.04 also
+restricts the sandbox that Electron apps like TastyTunes use, so if it doesn't
+start there, launch it with `--no-sandbox`:
+
+```bash
+chmod +x TastyTunes-x86_64.AppImage
+./TastyTunes-x86_64.AppImage --no-sandbox
+```
+
 You'll need a Cambridge Audio network player built on the StreamMagic
 platform, on the same network as your computer: Evo 75/150, CXN100 /
 CXN (V2), MXN10, AXN10, EXN100, Edge NQ, 851N. Developed and tested daily
@@ -220,11 +231,13 @@ tools the Home Assistant automation needs, copy the token into the
 ## Stream Deck and launchers
 
 A `tastytunes://` link controls the streamer from anything that can open a link,
-such as a Stream Deck's Website action, Raycast, Alfred, Keyboard Maestro or
-Shortcuts. `tastytunes://preset/3` recalls preset 3, `tastytunes://volume/up`
-turns the volume up a step, and `tastytunes://toggle-play` plays or pauses, without
-bringing TastyTunes to the front. Every link is listed in Settings › Behavior
-(on Linux, the AppImage must be integrated with the desktop for links to work).
+such as a Stream Deck's Website action, Raycast, Alfred, Keyboard Maestro,
+Shortcuts, or a browser bookmark. `tastytunes://preset/3` recalls preset 3,
+`tastytunes://volume/up` turns the volume up a step, and
+`tastytunes://toggle-play` plays or pauses. To keep the focus where it is, open
+links in the background where the launcher allows it, such as `open -g` in
+Terminal. Every link is listed in Settings › Behavior (on Linux, the AppImage
+must be integrated with the desktop for links to work).
 
 ## Every feature
 
