@@ -402,6 +402,18 @@ export const ONE_HOME = [
     },
   },
   {
+    id: "scroll-into-view",
+    was: "none (docs/renderer.md banned it in prose; HistoryTimeline's month rail still called it, found 2026-10-13)",
+    selector: "CallExpression[callee.property.name='scrollIntoView']",
+    files: [`^${R}`],
+    message:
+      "scrollIntoView scrolls every scrollable ancestor, the window too: use lib/scroll's container-scoped helpers",
+    bad: {
+      file: `${R}components/history/HistoryTimeline.tsx`,
+      code: "el.scrollIntoView({ block: 'start' });",
+    },
+  },
+  {
     id: "url-scheme-registration",
     was: "none (0.12.0, the URL scheme: a dev run registering Electron.app would take tastytunes:// from the installed app)",
     selector:

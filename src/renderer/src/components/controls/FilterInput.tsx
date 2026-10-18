@@ -4,7 +4,8 @@ import { cx, fmtCount } from "@/lib/format";
 
 /**
  * Compact text filter for the list screens' headers. `/` focuses it from
- * anywhere (useShortcuts); Escape clears, then blurs. Shows shown/total while
+ * anywhere (useShortcuts); Escape and Enter hand the keyboard back without
+ * clearing, the ✕ (or ⌘⌫) clears. Shows shown/total while
  * active; the value lives in the store per screen (session only), so an
  * active filter is always visible in the box.
  */
