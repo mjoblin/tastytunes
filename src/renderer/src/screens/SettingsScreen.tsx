@@ -31,6 +31,7 @@ import { cx } from "@/lib/format";
 import { SignalDot } from "@/components/device/SignalLamp";
 import { HeaderChip, PrimaryButton, ScreenTitle } from "@/components/chrome/Chrome";
 import { useOneShotAsk } from "@/hooks/useOneShotAsk";
+import { ActionLinks } from "@/components/settings/ActionLinks";
 import { McpSection } from "@/components/settings/McpSection";
 import { SchedulesSection } from "@/components/settings/SchedulesSection";
 import { LibrariesSection } from "@/components/settings/LibrariesSection";
@@ -381,6 +382,8 @@ export function SettingsScreen(): React.JSX.Element {
                     checked={settings.mediaKeys}
                     onChange={(mediaKeys) => void save({ mediaKeys })}
                   />
+
+                  <ActionLinks />
 
                   <Toggle
                     label="Track-change notifications"

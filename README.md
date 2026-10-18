@@ -217,6 +217,15 @@ Any enabled tool works the same way, such as `set_volume`, `set_power`, and
 tools the Home Assistant automation needs, copy the token into the
 `Authorization` header, and keep TastyTunes running.
 
+## Stream Deck and launchers
+
+A `tastytunes://` link controls the streamer from anything that can open a link,
+such as a Stream Deck's Website action, Raycast, Alfred, Keyboard Maestro or
+Shortcuts. `tastytunes://preset/3` recalls preset 3, `tastytunes://volume/up`
+turns the volume up a step, and `tastytunes://toggle-play` plays or pauses, without
+bringing TastyTunes to the front. Every link is listed in Settings › Behavior
+(on Linux, the AppImage must be integrated with the desktop for links to work).
+
 ## Every feature
 
 ### Connection & devices
@@ -403,6 +412,7 @@ With Cambridge Audio's Evo CD transport (on an Evo streaming amplifier):
 - Notices are announced to screen readers
 - Undo for queue edits, favorites, playlist additions and schedule deletions, from the notice that follows each change
 - OS media keys
+- `tastytunes://` links for Stream Deck keys and launchers: playback, volume, presets, sources, power and screens
 - A track-change notification with artwork when the window isn't focused
 
 ### Appearance
