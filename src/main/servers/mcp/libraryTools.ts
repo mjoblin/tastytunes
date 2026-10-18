@@ -21,6 +21,7 @@ import {
 import {
   audioAnalysisKey,
   albumDrKey,
+  currentFeatures,
   keyMatches,
   keyName,
   parseKeyName,
@@ -653,7 +654,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
           audioAnalysisGet(audioAnalysisKey(t))?.lufs ?? null;
         // tempo and key above their confidence floors, as Info says them (shared/model)
         const featuresOf = (t: MediaNode) =>
-          audioAnalysisGet(audioAnalysisKey(t))?.features ?? null;
+          currentFeatures(audioAnalysisGet(audioAnalysisKey(t))?.features);
         const bpmOf = (t: MediaNode): number | null => tempoBpm(featuresOf(t)?.beats);
         const wantKey = a.key != null ? parseKeyName(a.key) : null;
         if (a.key != null && wantKey == null)
@@ -803,8 +804,10 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
         const albumDr = albumEntry?.dr ?? null;
         // tempo and key as Info says them, above their floors, with the confidence either way;
         // an analysis from before the music features (0.8.0) has neither until it plays again
-        const beats = an?.features?.beats ?? null;
-        const key = an?.features?.key ?? null;
+        // only the current version's (an older one's tempo may sit an octave off)
+        const features = currentFeatures(an?.features);
+        const beats = features?.beats ?? null;
+        const key = features?.key ?? null;
         const round2 = (v: number): number => Math.round(v * 100) / 100;
         return ok({
           track: { title: t.title, artist: t.artist, album: t.album },
@@ -822,10 +825,10 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
                 tempo_confidence: beats ? round2(beats.confidence) : null,
                 key: keyName(key),
                 key_confidence: key ? round2(key.confidence) : null,
-                ...(an.features == null
+                ...(features == null && an.features !== null
                   ? {
                       tempo_key_note:
-                        "Measured before tempo and key were part of the analysis; they are measured the next time it plays in TastyTunes.",
+                        "Measured before the current tempo and key detection; they are measured again the next time it plays in TastyTunes, or with “Analyze audio” on its album.",
                     }
                   : {}),
               }

@@ -53,6 +53,8 @@ import {
   type ResumeRun,
   KEY_CONFIDENCE_FLOOR,
   TEMPO_CONFIDENCE_FLOOR,
+  currentFeatures,
+  FEATURES_VERSION,
   keyMatches,
   keyName,
   parseKeyName,
@@ -769,5 +771,13 @@ describe("measured facts: tempo and key, said once (0.12.0)", () => {
     expect(keyMatches(am, { tonic: 0, mode: null })).toBe(false);
     expect(keyMatches({ ...am, confidence: 0.1 }, { tonic: 9, mode: "minor" })).toBe(false);
     expect(keyMatches(null, { tonic: null, mode: null })).toBe(false);
+  });
+
+  it("says a tempo or key only from the current version's features", () => {
+    const now = { version: FEATURES_VERSION, beats: { bpm: 81, confidence: 0.8 } };
+    expect(currentFeatures(now)).toBe(now);
+    expect(currentFeatures({ ...now, version: FEATURES_VERSION - 1 })).toBeNull();
+    expect(currentFeatures(null)).toBeNull();
+    expect(currentFeatures(undefined)).toBeNull();
   });
 });

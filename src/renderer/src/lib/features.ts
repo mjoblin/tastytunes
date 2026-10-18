@@ -1,4 +1,4 @@
-import { TEMPO_CONFIDENCE_FLOOR, type AnalysisFeatures } from "@shared/model";
+import { FEATURES_VERSION, TEMPO_CONFIDENCE_FLOOR, type AnalysisFeatures } from "@shared/model";
 import { Fft, b64, unb64, type Strip } from "./featureStrip";
 import { ONSET_HOP_MS, type Onsets } from "./onsets";
 
@@ -14,9 +14,10 @@ import { ONSET_HOP_MS, type Onsets } from "./onsets";
  * (brightness and noisiness per strip frame), SILENCES, and DROPS (a sudden
  * return after three seconds of chill or one second of near silence).
  * Stored packed beside the analysis under one version: bump FEATURES_VERSION
- * and every cached track measures again once, on its next play.
+ * (shared/model, since main reads it too) and every cached track measures again once, on its
+ * next play.
  */
-export const FEATURES_VERSION = 12; // 12: the tempo's octave check; 11: the breath and the cut read past a riser before the slam; 9: drops at frame resolution
+export { FEATURES_VERSION };
 
 export interface Beats {
   bpm: number;

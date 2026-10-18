@@ -9,7 +9,7 @@
 import { join } from "node:path";
 import { app } from "electron";
 import type { AlbumDr, AudioAnalysis, KnownStats, MediaIndexPools } from "@shared/model";
-import { keyName, tempoBpm } from "@shared/model";
+import { currentFeatures, FEATURES_VERSION, keyName, tempoBpm } from "@shared/model";
 import { isRecord } from "@shared/guards";
 import { DiskCache, registerCache } from "./diskCache";
 import { EntryStore } from "./entryStore";
@@ -19,24 +19,31 @@ const TRACK_CAP = 2000;
 const ALBUM_CAP = 2000;
 
 // What the rows read without opening an entry: its DR and loudness, and since 0.12.0 its tempo
-// and key as Info says them (above their floors, shared/model). A summary made before has no
-// `bpm` at all (undefined, not null) until refreshAnalysisSummaries remakes it.
+// and key as Info says them (above their floors, and only from the current version's features,
+// shared/model). `sv` is the features version the summary was made under: a summary made
+// before tempo and key joined has none, and one made under an older version may hold a tempo
+// since corrected, so refreshAnalysisSummaries remakes both.
 interface Summary {
   dr: number;
   lufs: number | null;
   bpm?: number | null;
   key?: string | null;
+  sv?: number;
 }
 const tracks = new EntryStore<AudioAnalysis, Summary>({
   dir: () => join(app.getPath("userData"), "cache"),
   name: "analysis",
   cap: TRACK_CAP,
-  summarize: (a) => ({
-    dr: a.dr,
-    lufs: a.lufs ?? null,
-    bpm: tempoBpm(a.features?.beats),
-    key: keyName(a.features?.key),
-  }),
+  summarize: (a) => {
+    const f = currentFeatures(a.features);
+    return {
+      dr: a.dr,
+      lufs: a.lufs ?? null,
+      bpm: tempoBpm(f?.beats),
+      key: keyName(f?.key),
+      sv: FEATURES_VERSION,
+    };
+  },
   // the single-file cache before 0.11.0, read once into entry files and left in place
   legacyFile: "analysis.json",
   isValue: (v): v is AudioAnalysis => isAnalysisShape(v),
@@ -93,10 +100,11 @@ export function audioStatsMany(keys: string[]): Record<string, KnownStats> {
   return out;
 }
 
-/** Remakes the summaries made before tempo and key were in them, in the background; resolves
- *  to how many changed (the rows then read again: main's analysisStats push). */
+/** Remakes the summaries made before tempo and key were in them, or under another features
+ *  version, in the background; resolves to how many changed (the rows then read again: main's
+ *  analysisStats push). */
 export function refreshAnalysisSummaries(): Promise<number> {
-  return tracks.refreshSummaries((s) => s.bpm === undefined);
+  return tracks.refreshSummaries((s) => s.sv !== FEATURES_VERSION);
 }
 
 export function albumDrPut(key: string, entry: unknown): void {

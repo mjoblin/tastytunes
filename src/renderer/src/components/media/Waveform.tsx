@@ -9,7 +9,15 @@ import { onsetsFromStored, onsetsToStored } from "@/lib/onsets";
 import { FEATURES_VERSION, featuresFromStored, featuresToStored } from "@/lib/features";
 import { measureOffThread } from "@/lib/measureClient";
 import type { Measured } from "@/lib/measure";
-import { audioAnalysisKey, fmtBytes, keyName, tempoBpm, type AudioAnalysis } from "@shared/model";
+import {
+  audioAnalysisKey,
+  currentFeatures,
+  fmtBytes,
+  keyName,
+  tempoBpm,
+  type AnalysisFeatures,
+  type AudioAnalysis,
+} from "@shared/model";
 import { AudioLines } from "lucide-react";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { Lru } from "@/lib/lru";
@@ -128,7 +136,11 @@ function fromStored(st: AudioAnalysis): Analysis {
     loudHist: st.loudHist ?? null,
     strip: st.strip ? stripFromStored(st.strip) : null,
     onsets: st.onsets ? onsetsFromStored(st.onsets) : null,
-    features: st.features ? featuresFromStored(st.features) : null,
+    // an older version's features say nothing (shared/model's currentFeatures): a peek (Info,
+    // never re-measuring) shows no tempo or key for them until the track is measured again
+    features: currentFeatures(st.features)
+      ? featuresFromStored(st.features as AnalysisFeatures)
+      : null,
   };
 }
 
