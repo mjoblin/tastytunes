@@ -31,6 +31,7 @@ import {
   nameSortKey,
   albumVolume,
   albumOfTrack,
+  indexAlbumFor,
   trackPosition,
 } from "@shared/model";
 import { albumDrKey, artistSummary } from "@shared/model";
@@ -146,6 +147,9 @@ const UNIFIED_SEARCH_CRUMB_ID = "__from-search__";
 const QUEUE_FAILED = "Couldn't reach the streamer. Nothing was queued.";
 /** Each artist page's scroll spot for the session (an album opened from it and Back). */
 const artistPageScroll = new Lru<string, number>(200);
+/** The stand-in album nodes an arrival builds (the arrival effect): an album opened from another
+ *  screen lands on one, and resolves to the index's own entry once the pools are in. */
+const standIns = new WeakSet<MediaNode>();
 
 /** One line of the windowed search results (see searchLines): every kind has one height. */
 type SearchLine =
@@ -166,6 +170,12 @@ type SearchLine =
  */
 /** An artist's page as a node for Info, from the index that knows them best (Info sums an
  *  artist's page from one index, as the Artists lens's row menu does). */
+/** Marks an arrival's stand-in album node (see standIns). */
+function standIn(node: MediaNode): MediaNode {
+  standIns.add(node);
+  return node;
+}
+
 function artistPageNode(name: string, pools: MediaIndexPools[]): MediaNode {
   const best = pools
     .map((g) => ({ g, n: artistSummary(name, g).trackCount }))
@@ -331,7 +341,10 @@ export function LibraryScreen(): React.JSX.Element {
   // pools also load while browsing a volume-suffixed album, so the header
   // can offer the set line without a lens ever having been opened
   const tailVol = albumVolume(path.at(-1)?.title ?? "");
-  const lensPools = useIndexPools(lens != null || tailVol != null);
+  // and while an album that arrived from another screen stands in for the index's own entry
+  const tailNode = path.at(-1)?.node;
+  const arrived = tailNode != null && standIns.has(tailNode);
+  const lensPools = useIndexPools(lens != null || tailVol != null || arrived);
 
   // Action feedback: the app-wide toast for failures, a gold pulse for wins.
   // (The screen's original local notice banner graduated into the toast.)
@@ -529,11 +542,14 @@ export function LibraryScreen(): React.JSX.Element {
               ? {
                   id: target.objectId,
                   title,
-                  // synthetic album node so the header renders without a
-                  // metadata re-fetch (art falls back to the first track's)
-                  node: {
+                  // a stand-in album node so the header renders without a metadata
+                  // re-fetch; the index's own entry replaces it as albumNode once the
+                  // pools are in (its keys are the Albums lens's), and until then the
+                  // tracks fill what it lacks (albumFromTracks)
+                  node: standIn({
                     id: target.objectId,
                     parentId: null,
+                    serverUdn: target.serverUdn,
                     title,
                     upnpClass: target.upnpClass ?? "object.container.album.musicAlbum",
                     isContainer: true,
@@ -543,7 +559,7 @@ export function LibraryScreen(): React.JSX.Element {
                     year: null,
                     trackNumber: null,
                     durationSecs: null,
-                  },
+                  }),
                 }
               : { id: `__fav-crumb-${i}__`, title },
           ),
@@ -895,8 +911,16 @@ export function LibraryScreen(): React.JSX.Element {
   // Album level: header with art + album metadata; tracks drop per-row art.
   // (Derived before the listing memo — album tracklists sort by track number.)
   const lastCrumbNode = path.length > 0 ? path[path.length - 1].node : undefined;
-  const albumNode =
+  const crumbAlbum =
     !searchMode && lastCrumbNode && isAlbumClass(lastCrumbNode.upnpClass) ? lastCrumbNode : null;
+  // an album that arrived from another screen is the index's own entry once the pools are in, so
+  // its DR, sweep, art and favorite keys are the ones every other way in uses
+  const albumNode = useMemo(() => {
+    if (!crumbAlbum || !standIns.has(crumbAlbum) || !lensPools) return crumbAlbum;
+    const pool = lensPools.find((g) => g.udn === (crumbAlbum.serverUdn ?? serverUdn));
+    const found = pool ? indexAlbumFor(crumbAlbum, pool) : null;
+    return found ? { ...found, serverUdn: found.serverUdn ?? pool?.udn } : crumbAlbum;
+  }, [crumbAlbum, lensPools, serverUdn]);
   /** An artist folder opens under the artist's picture and name (ArtistHeader). */
   const artistNode =
     !searchMode && lastCrumbNode && isArtistClass(lastCrumbNode.upnpClass) ? lastCrumbNode : null;
