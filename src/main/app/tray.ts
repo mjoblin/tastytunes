@@ -15,6 +15,8 @@ import { IPC, type MenuCommand, type PushMessage, type Snapshot } from "@shared/
 import type { StreamerCommand } from "@shared/ipc";
 import { getSettings, updateSettings } from "../data/persist";
 import { anchorToTray, workAreaFor, type Rect } from "./windowPlacement";
+import { reloadOnCrash } from "./crashReload";
+import { deviceManager } from "./runtime";
 import trayTemplateIcon from "../../../resources/trayTemplate.png?asset";
 import trayTemplateIcon2x from "../../../resources/trayTemplate@2x.png?asset";
 import trayTileIcon from "../../../resources/tray.png?asset";
@@ -571,6 +573,7 @@ function ensurePanel(): BrowserWindow {
   panel.webContents.on("did-finish-load", () => {
     if (panelVisible()) announcePanel(true);
   });
+  reloadOnCrash(panel, "menu bar panel", (text) => deviceManager.log("warn", "app", text));
 
   if (process.env["ELECTRON_RENDERER_URL"]) {
     void panel.loadURL(`${process.env["ELECTRON_RENDERER_URL"]}?tray=1`);

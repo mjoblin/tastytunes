@@ -7,6 +7,7 @@ import { noteClosedToTray } from "./tray";
 import { currentUpdateState } from "./updater";
 import { homeWorkArea, isOnScreen } from "./windowPlacement";
 import { deviceManager } from "./runtime";
+import { reloadOnCrash } from "./crashReload";
 
 // The main window and the mini player, and the callbacks the app menu and the tray use to
 // reach them (split out of index.ts in the 0.11.0 sweep).
@@ -147,6 +148,8 @@ export function createWindow(): void {
     persistBounds();
   });
 
+  reloadOnCrash(mainWindow, "main", (text) => deviceManager.log("warn", "app", text));
+
   // A window created (or reloaded) after a state change missed the push.
   mainWindow.webContents.on("did-finish-load", () => {
     const state = currentUpdateState();
@@ -239,6 +242,7 @@ export function toggleMiniPlayer(): void {
 
   // A push sent while the renderer is still loading is lost — reset so the
   // next poll re-announces the current hover state after load.
+  reloadOnCrash(miniWindow, "mini player", (text) => deviceManager.log("warn", "app", text));
   miniWindow.webContents.on("did-finish-load", () => {
     hovered = false;
   });

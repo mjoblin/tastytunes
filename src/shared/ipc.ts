@@ -307,6 +307,9 @@ export interface TastyTunesApi {
   /** Whether the OS asks before an app reaches the local network (macOS 15 and later), so the
    *  welcome screen can say where to allow it. */
   localNetworkPrivacy(): Promise<boolean>;
+  /** A surface that failed to render (components/chrome/SurfaceBoundary), for the diagnostics
+   *  log: which surface and the error's message. */
+  reportRenderError(surface: string, message: string): Promise<void>;
   getSettings(): Promise<AppSettings>;
   setSettings(patch: Partial<AppSettings>): Promise<AppSettings>;
   /** Fetch album art via the main process (bypasses CORS) as a data URL. */
@@ -526,6 +529,7 @@ export const IPC = {
   command: "tt:command",
   openExternal: "tt:openExternal",
   localNetworkPrivacy: "tt:localNetworkPrivacy",
+  reportRenderError: "tt:reportRenderError",
   getSettings: "tt:getSettings",
   setSettings: "tt:setSettings",
   fetchArt: "tt:fetchArt",

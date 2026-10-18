@@ -24,6 +24,7 @@ import { CommandPalette } from "@/components/overlays/CommandPalette";
 import { InfoModal } from "@/components/overlays/InfoModal";
 import { MediaInfoModal } from "@/components/overlays/MediaInfoModal";
 import { LargeQueueConfirm } from "@/components/overlays/LargeQueueConfirm";
+import { SurfaceBoundary } from "@/components/chrome/SurfaceBoundary";
 import { DisplayMode } from "@/components/playback/DisplayMode";
 import { NowPlayingScreen } from "@/screens/NowPlayingScreen";
 import { QueueScreen } from "@/screens/QueueScreen";
@@ -57,6 +58,8 @@ export default function App(): React.JSX.Element {
   const diagnosticsOpen = useStore((s) => s.diagnosticsOpen);
   const mediaInfo = useStore((s) => s.mediaInfo);
   const paletteOpen = useStore((s) => s.paletteOpen);
+  const shortcutsOpen = useStore((s) => s.shortcutsOpen);
+  const infoOpen = useStore((s) => s.infoOpen);
   const displayMode = useStore((s) => s.displayMode);
   const setDisplayMode = useStore((s) => s.setDisplayMode);
 
@@ -170,24 +173,54 @@ export default function App(): React.JSX.Element {
 
       <div className="relative h-full flex flex-col">
         <div className="flex-1 flex min-h-0 relative">
-          <Nav />
+          {/* each surface in a boundary of its own (SurfaceBoundary): a failure stays in it */}
+          <SurfaceBoundary surface="the navigation" shape="strip">
+            <Nav />
+          </SurfaceBoundary>
           <main className="flex-1 min-w-0 min-h-0 relative">
             {/* main-area-only ambient art, behind the screen content */}
             {!coverWindow && ambient}
-            <div className="relative h-full">{content}</div>
-            {diagnosticsOpen && <DiagnosticsDrawer />}
+            <div className="relative h-full">
+              <SurfaceBoundary surface="this screen" shape="screen" resetKey={screen}>
+                {content}
+              </SurfaceBoundary>
+            </div>
+            {diagnosticsOpen && (
+              <SurfaceBoundary surface="diagnostics" shape="quiet">
+                <DiagnosticsDrawer />
+              </SurfaceBoundary>
+            )}
             <ToastHost />
           </main>
         </div>
-        <PlaybackBar />
-        {displayMode && <DisplayMode />}
+        <SurfaceBoundary surface="the playback bar" shape="strip">
+          <PlaybackBar />
+        </SurfaceBoundary>
+        {displayMode && (
+          <SurfaceBoundary surface="display mode" shape="quiet">
+            <DisplayMode />
+          </SurfaceBoundary>
+        )}
         {/* The modals stay mounted and take their open state themselves —
-            the shell's exit fade needs the DOM to outlive the close. */}
-        <ShortcutsOverlay />
-        {paletteOpen && <CommandPalette />}
-        <InfoModal />
-        <MediaInfoModal target={mediaInfo} />
-        <LargeQueueConfirm />
+            the shell's exit fade needs the DOM to outlive the close. A failed one draws
+            nothing and toasts; the next open tries again (resetKey). */}
+        <SurfaceBoundary surface="shortcuts" shape="quiet" resetKey={shortcutsOpen}>
+          <ShortcutsOverlay />
+        </SurfaceBoundary>
+        {paletteOpen && (
+          <SurfaceBoundary surface="the command palette" shape="quiet">
+            <CommandPalette />
+          </SurfaceBoundary>
+        )}
+        <SurfaceBoundary surface="info" shape="quiet" resetKey={infoOpen}>
+          <InfoModal />
+        </SurfaceBoundary>
+        <SurfaceBoundary surface="media info" shape="quiet" resetKey={mediaInfo}>
+          <MediaInfoModal target={mediaInfo} />
+        </SurfaceBoundary>
+        <SurfaceBoundary surface="the large queue confirm" shape="quiet">
+          <LargeQueueConfirm />
+        </SurfaceBoundary>
       </div>
     </div>
   );
