@@ -1,11 +1,11 @@
 import {
   albumFormat,
   fmtBytes,
-  LOSSLESS_CODECS,
+  formatLabel,
   type MediaFormat,
   type MediaNode,
 } from "@shared/model";
-import { fmtKHz, fmtTime } from "@/lib/format";
+import { fmtTime } from "@/lib/format";
 
 /**
  * TWO REGISTERS, split by KIND OF FACT (user call, 2026-09-01):
@@ -65,18 +65,13 @@ export function trackFactsLine(node: Pick<MediaNode, "durationSecs">): string {
   return node.durationSecs ? fmtTime(node.durationSecs) : "";
 }
 
-/** The format tokens as Now Playing's chip row spells them — codec · kHz ·
- *  bit depth · kbps · lossless — from the server's description of the file,
- *  so a track at rest wears the same chips it will wear playing. */
-export function formatChips(f: MediaFormat | undefined | null): string[] {
-  if (!f) return [];
-  const out: string[] = [];
-  if (f.codec) out.push(f.codec);
-  if (f.rate) out.push(fmtKHz(f.rate));
-  if (f.bits) out.push(`${f.bits}-bit`);
-  if (f.kbps) out.push(`${f.kbps} kbps`);
-  if (f.codec && LOSSLESS_CODECS.has(f.codec.toUpperCase())) out.push("lossless");
-  return out;
+/** A track's format tokens as its Info header wears them: the album header's compact spelling,
+ *  codec and depth/rate ("FLAC", "16/44.1"), or codec and bitrate for a lossy file ("MP3",
+ *  "320 kbps"). The bitrate and the rest are the Format section's rows just below (0.12.0, his
+ *  call: six chips beside Open in Library wrapped to two rows). */
+export function trackFormatChips(f: MediaFormat | undefined | null): string[] {
+  const label = formatLabel(f);
+  return label ? label.split(" · ").filter(Boolean) : [];
 }
 
 /** An album's format tokens: "FLAC · 16/44.1" split into chips, or the one

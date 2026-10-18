@@ -242,7 +242,10 @@ export function useLibraryMenus(d: {
     const r = await analyzeTracks(label, readable);
     if (r === "busy" || r == null) return;
     if (r.analyzed === r.tracks)
-      showToast({ kind: "success", text: `Analyzed ${fmtCount(r.tracks)} tracks` });
+      showToast({
+        kind: "success",
+        text: `Analyzed ${fmtCount(r.tracks)} ${r.tracks === 1 ? "track" : "tracks"}`,
+      });
     else showNotice(`Read ${r.analyzed} of ${r.tracks} tracks. The rest couldn't be read.`);
   };
   /** One-click save of a shown list as a playlist (the Queue's precedent:
@@ -268,15 +271,26 @@ export function useLibraryMenus(d: {
       showNotice("Couldn't create the playlist.");
     }
   };
+  // an album's, and since 0.12.0 a track's (his ask: one track measured again, as an album's
+  // sweep does; a current analysis is kept, an earlier version's re-measured)
   const analyzeVerbs = (node: MediaNode): MediaMenuItem[] | undefined => {
-    if (!waveformsOn || !node.isContainer || !isAlbumClass(node.upnpClass)) return undefined;
+    const track = !node.isContainer;
+    if (!waveformsOn || (!track && !isAlbumClass(node.upnpClass))) return undefined;
     const udn = nodeUdn(node);
     if (!udn) return undefined;
     // the streamer's own server: the verb stays, disabled, saying why — the
     // outcome is known before the click, and a vanished item teaches nothing
     if (unreadable(node))
       return [{ label: "Analyze audio", disabled: true, hint: USB_ANALYSIS_HINT, run: () => {} }];
-    return [{ label: "Analyze audio", run: () => void runAnalyzeAlbum(node, udn) }];
+    return [
+      {
+        label: "Analyze audio",
+        run: () =>
+          void (track
+            ? runAnalyzeTracks([{ ...node, serverUdn: udn }], `“${node.title}”`)
+            : runAnalyzeAlbum(node, udn)),
+      },
+    ];
   };
 
   return {

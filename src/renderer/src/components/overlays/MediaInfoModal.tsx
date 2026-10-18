@@ -46,8 +46,8 @@ import {
   albumFactsLine,
   albumFormatChips,
   albumFromTracks,
-  formatChips,
   trackFactsLine,
+  trackFormatChips,
 } from "@/lib/mediaFacts";
 import {
   InfoSections,
@@ -337,10 +337,11 @@ function MediaInfoBody({
         ? albumFactsLine(node, tracks)
         : "";
 
-  // the format TOKENS beside it, as chips — the Now Playing row's spelling
+  // the format TOKENS beside it, as chips: a track's and an album's in the one compact spelling
+  // (codec, depth/rate), the rest in the Format rows below
   const chips: string[] =
     kind === "track"
-      ? formatChips(node.format)
+      ? trackFormatChips(node.format)
       : kind === "album" && tracks && tracks.length > 0
         ? albumFormatChips(tracks)
         : [];

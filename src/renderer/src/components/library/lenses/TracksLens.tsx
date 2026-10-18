@@ -376,44 +376,47 @@ export function TracksLens({
                 min={1}
               />
             </div>
-            {/* the narrowed list as the queue, in one gesture — the album
-                Play button's semantics (replaces the queue) for what's shown */}
-            {
-              // a SPLIT button: the one-click primary, and a chevron opening
-              // the rest of what a shown list can become — the selection
-              // bar's verbs applied to what's shown, plus the two the bar
-              // lacks (user call, 2026-09-01: "the shown list behaves like a
-              // selection")
-              <div
-                className="flex items-center tip-bottom"
-                data-lens-these
-                data-lens-these-state={theseState}
-                data-tip={theseTip}
-              >
-                <PrimaryButton
-                  data-lens-play-these
-                  disabled={theseState !== "live"}
-                  onClick={() => actions.queueTracks(shown, "replace")}
-                  className="no-drag tip-bottom flex items-center gap-1.5 h-8 px-3 text-[12.5px] rounded-r-none"
-                >
-                  <Play size={13} fill="currentColor" /> Play these
-                  {narrowed && shown.length > 0 ? ` ${fmtCount(shown.length)}` : ""}
-                </PrimaryButton>
-                <PrimaryButton
-                  data-lens-these-more
-                  aria-label="More for these tracks"
-                  disabled={theseState !== "live"}
-                  onClick={(e) => setTheseMenu({ x: e.clientX, y: e.clientY })}
-                  className="no-drag flex items-center h-8 px-2 rounded-l-none border-l border-bg/25 shadow-none"
-                >
-                  <ChevronDown size={14} />
-                </PrimaryButton>
-              </div>
-            }
           </div>
         </div>
         <div className={`flex items-center ${GAP_WITHIN} shrink-0`}>
-          {/* the sort chip keeps its lone right spot */}
+          {/* PLAY THESE BESIDE THE SORT (0.12.0, his call: with the Tempo facet the row wrapped and
+              left the verb alone on a line): the facets wrap among themselves, the verb stays */}
+          {/* the narrowed list as the queue, in one gesture — the album
+              Play button's semantics (replaces the queue) for what's shown */}
+          {
+            // a SPLIT button: the one-click primary, and a chevron opening
+            // the rest of what a shown list can become — the selection
+            // bar's verbs applied to what's shown, plus the two the bar
+            // lacks (user call, 2026-09-01: "the shown list behaves like a
+            // selection")
+            <div
+              // at the row's right end, its tip opens leftward
+              className="flex items-center tip-bottom tip-end"
+              data-lens-these
+              data-lens-these-state={theseState}
+              data-tip={theseTip}
+            >
+              <PrimaryButton
+                data-lens-play-these
+                disabled={theseState !== "live"}
+                onClick={() => actions.queueTracks(shown, "replace")}
+                className="no-drag tip-bottom flex items-center gap-1.5 h-8 px-3 text-[12.5px] rounded-r-none"
+              >
+                <Play size={13} fill="currentColor" /> Play these
+                {narrowed && shown.length > 0 ? ` ${fmtCount(shown.length)}` : ""}
+              </PrimaryButton>
+              <PrimaryButton
+                data-lens-these-more
+                aria-label="More for these tracks"
+                disabled={theseState !== "live"}
+                onClick={(e) => setTheseMenu({ x: e.clientX, y: e.clientY })}
+                className="no-drag flex items-center h-8 px-2 rounded-l-none border-l border-bg/25 shadow-none"
+              >
+                <ChevronDown size={14} />
+              </PrimaryButton>
+            </div>
+          }
+          {/* the sort chip closes the row */}
           <SortChip
             sorts={trackSorts}
             neutral="title"

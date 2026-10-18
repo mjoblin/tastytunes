@@ -53,7 +53,10 @@ import { Lru } from "@/lib/lru";
 const CAPTURE_BUCKETS = 1200;
 
 /** What a decoded track measures as (lib/measure), the shape every surface reads. */
-export type Analysis = Measured;
+/** A measured track; `outdated` marks a stored analysis an earlier version wrote (a measurement
+ *  it lacks, or features of another version): Info offers Analyze audio again, which re-measures
+ *  it (analyzeTrack), as playing it does. */
+export type Analysis = Measured & { outdated?: boolean };
 
 // decoded analyses hold every envelope: the last 48 tracks (lib/lru)
 const cache = new Lru<string, Promise<Analysis | null>>(48);
@@ -138,6 +141,8 @@ function fromStored(st: AudioAnalysis): Analysis {
     onsets: st.onsets ? onsetsFromStored(st.onsets) : null,
     // an older version's features say nothing (shared/model's currentFeatures): a peek (Info,
     // never re-measuring) shows no tempo or key for them until the track is measured again
+    outdated:
+      predatesLoudness(st) || predatesStrip(st) || predatesOnsets(st) || predatesFeatures(st),
     features: currentFeatures(st.features)
       ? featuresFromStored(st.features as AnalysisFeatures)
       : null,
@@ -821,6 +826,24 @@ export function InfoWaveform({
             {FACT_SEP}crest {fmtDb(state.crestDb)}
             {state.lufs != null && `${FACT_SEP}${fmtLufs(state.lufs)}`}
           </div>
+          {/* AN EARLIER VERSION'S MEASUREMENT (0.12.0, his ask for a way to re-measure one
+              track): said once, with the verb that measures it again (its tempo and key say
+              nothing meanwhile, shared/model's currentFeatures) */}
+          {state.outdated && (
+            <div className="mt-2.5 flex items-center gap-3" data-info-outdated>
+              <span className="text-[11.5px] text-faint">
+                Measured by an earlier version of TastyTunes.
+              </span>
+              <button
+                data-info-analyze
+                onClick={onAnalyze}
+                // no transition inside the frosted shell (S11): the shell fades as a whole
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/80 text-[12px] text-dim hover:text-ink hover:bg-veil"
+              >
+                <AudioLines size={13} /> Analyze audio
+              </button>
+            </div>
+          )}
         </>
       )}
     </div>

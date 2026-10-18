@@ -10,7 +10,7 @@ import {
   albumFromTracks,
   albumFormatChips,
   FACT_SEP,
-  formatChips,
+  trackFormatChips,
   trackFactsLine,
 } from "./mediaFacts";
 
@@ -57,20 +57,19 @@ describe("trackFactsLine", () => {
   });
 });
 
-describe("formatChips: a track's format tokens, as Now Playing spells them", () => {
-  it("is codec, kHz, bit depth, kbps, then lossless", () => {
-    const f: MediaFormat = { codec: "FLAC", rate: 96_000, bits: 24, kbps: 2765 };
-    expect(formatChips(f)).toEqual(["FLAC", "96 kHz", "24-bit", "2765 kbps", "lossless"]);
-  });
-
-  it("says lossless only for lossless codecs, whatever the codec's case", () => {
-    expect(formatChips({ codec: "MP3", rate: 44_100, kbps: 320 })).toEqual([
+describe("trackFormatChips: a track's tokens in the album header's compact spelling", () => {
+  it("is codec and depth/rate for a lossless file, codec and bitrate for a lossy one", () => {
+    const f: MediaFormat = { codec: "FLAC", rate: 96_000, bits: 24, kbps: 2765, sizeBytes: 0 };
+    expect(trackFormatChips(f)).toEqual(["FLAC", "24/96"]);
+    expect(trackFormatChips({ codec: "FLAC", rate: 44_100, bits: 16 })).toEqual([
+      "FLAC",
+      "16/44.1",
+    ]);
+    expect(trackFormatChips({ codec: "MP3", rate: 44_100, kbps: 320 })).toEqual([
       "MP3",
-      "44.1 kHz",
       "320 kbps",
     ]);
-    expect(formatChips({ codec: "alac" })).toEqual(["alac", "lossless"]);
-    expect(formatChips(null)).toEqual([]);
+    expect(trackFormatChips(null)).toEqual([]);
   });
 });
 
