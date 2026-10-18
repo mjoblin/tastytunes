@@ -28,6 +28,7 @@ import { refSiblings } from "@/lib/infoSteps";
 import { openRefInLibrary, playRefNow } from "@/lib/mediaActions";
 import { trackMenuItems, type MediaMenuItem } from "@/lib/mediaMenus";
 import { cx, fmtCount, fmtDuration, fmtTime, matchesFilter } from "@/lib/format";
+import { scrollToStart } from "@/lib/scroll";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { monthLine, monthStartOf, statsFor } from "@/lib/historyStats";
 
@@ -372,7 +373,7 @@ export function HistoryTimeline({
     const sc = scrollRef.current;
     if (!sc) return;
     const el = sc.querySelector<HTMLElement>(`[data-win-index="${i}"]`);
-    if (el) el.scrollIntoView({ block: "start" });
+    if (el) scrollToStart(sc, el);
     else sc.scrollTop = win.offsetOf(i);
   };
 

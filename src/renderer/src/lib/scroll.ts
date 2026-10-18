@@ -80,6 +80,15 @@ export function scrollToCentered(el: HTMLElement | null, behavior?: ScrollBehavi
 }
 
 /**
+ * Bring the element to the top of the given scroll container, and only that container (the
+ * container-scoped equivalent of scrollIntoView's block: 'start'; see scrollToCentered for why
+ * scrollIntoView is banned, which lint/rules.mjs holds as scroll-into-view).
+ */
+export function scrollToStart(container: HTMLElement, el: HTMLElement): void {
+  container.scrollTop += el.getBoundingClientRect().top - container.getBoundingClientRect().top;
+}
+
+/**
  * Keep the element visible in its nearest scroll container, nudging by the
  * smallest amount (the container-scoped equivalent of scrollIntoView's
  * block: 'nearest' — see scrollToCentered for why scrollIntoView is banned).
