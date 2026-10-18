@@ -333,6 +333,24 @@ export function albumOfTrack(
 }
 
 /**
+ * The index's own entry for an album that arrived with only its id and title (Open in Library,
+ * Go to album, a favorite: the Library's stand-in node, 0.12.0-rc.2): the album with that id on
+ * the server, else the one album of that title there. Its artist, art and year make the album's
+ * keys (DR, sweep, art, favorite) the ones the Albums lens uses for the same album. Null when the
+ * index cannot say (two albums of that title, or none).
+ */
+export function indexAlbumFor(
+  album: Pick<MediaNode, "id" | "title">,
+  pool: { albums: MediaNode[] },
+): MediaNode | null {
+  const byId = pool.albums.find((a) => a.id === album.id);
+  if (byId) return byId;
+  const want = album.title.trim().toLowerCase();
+  const same = pool.albums.filter((a) => a.title.trim().toLowerCase() === want);
+  return same.length === 1 ? same[0] : null;
+}
+
+/**
  * How many tracks share a track's disc on its album, as the index knows it: the "of 12" of the
  * Info modal's "track 4 of 12" (0.12.0). A track's number counts within its disc, so the count
  * does too; an album with no disc numbers counts whole. Null when the index holds no album.

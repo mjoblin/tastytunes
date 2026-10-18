@@ -22,6 +22,7 @@ import {
   formatLabel,
   groupSessions,
   inLibraryIndex,
+  indexAlbumFor,
   integrateLoudnessHistograms,
   isCompilation,
   isHiRes,
@@ -293,6 +294,28 @@ describe("albumVolume: a member of a multi-volume set", () => {
   it("needs the keyword and a real number, and a base before it", () => {
     for (const title of ["Rocky IV", "Formula One", "Part Time", "Disc 1", "Plain Album"])
       expect(albumVolume(title), title).toBeNull();
+  });
+});
+
+describe("indexAlbumFor: an arrived album as the index knows it", () => {
+  const album = (id: string, title: string, artist: string): MediaNode =>
+    track(id, title, { isContainer: true, artist, albumArtist: artist });
+  const pool = {
+    albums: [
+      album("a1", "Record", "Lead"),
+      album("a2", "Greatest Hits", "Lead"),
+      album("a3", "Greatest Hits", "Other Band"),
+    ],
+  };
+
+  it("finds the album by its id, then by a title only one album has", () => {
+    expect(indexAlbumFor({ id: "a3", title: "Greatest Hits" }, pool)?.artist).toBe("Other Band");
+    expect(indexAlbumFor({ id: "stale", title: " record " }, pool)?.id).toBe("a1");
+  });
+
+  it("says nothing when two albums share the title or none has it", () => {
+    expect(indexAlbumFor({ id: "stale", title: "Greatest Hits" }, pool)).toBeNull();
+    expect(indexAlbumFor({ id: "stale", title: "Unknown" }, pool)).toBeNull();
   });
 });
 
