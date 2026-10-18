@@ -4,6 +4,7 @@ import "./app/boot";
 import { app, globalShortcut, powerMonitor } from "electron";
 import { IPC } from "@shared/ipc";
 import { serveArtProtocol } from "./app/artProtocol";
+import { denyPermissionsByDefault } from "./app/permissions";
 import { broadcastSettings, wireListeningPushes } from "./app/broadcast";
 import { syncMediaKeys } from "./app/mediaKeys";
 import { installAppMenu } from "./app/menu";
@@ -63,6 +64,7 @@ if (!gotLock) {
   app
     .whenReady()
     .then(() => {
+      denyPermissionsByDefault();
       serveArtProtocol();
       registerIpc();
       installAppMenu(menuDeps);

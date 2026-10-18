@@ -162,6 +162,9 @@ export function TracksLens({
     [all],
   );
 
+  // the listening record changes with every play: the list is filtered and sorted again on it
+  // only while a sort or the Played facet reads it (0.12.0-rc.2, the 0.11 re-score)
+  const record = RECORD_SORTS.has(sort) || mem.played ? play : null;
   const shown = useMemo(() => {
     let list = all;
     if (mem.genre) list = list.filter((t) => (t.genre ?? []).some((g) => lc(g) === mem.genre));
@@ -169,7 +172,7 @@ export function TracksLens({
     if (mem.dr) list = list.filter((t) => String(drOf(t) ?? "") === mem.dr);
     if (mem.tempo) list = list.filter((t) => tempoBandOf(tempoOf(t)) === mem.tempo);
     if (mem.played)
-      list = list.filter((t) => playedBucket(play.track(t)?.lastAt ?? null) === mem.played);
+      list = list.filter((t) => playedBucket(record?.track(t)?.lastAt ?? null) === mem.played);
     const fmt = mem.format;
     if (fmt) list = list.filter((t) => formatTags(t.format).includes(fmt));
     if (mem.filter)
@@ -197,15 +200,15 @@ export function TracksLens({
       if (sort === "tempo") return (tempoOf(b) ?? -1) - (tempoOf(a) ?? -1) || byTitle(a, b);
       // the record's sorts: most recent / most played first, unplayed last
       if (sort === "lastPlayed")
-        return (play.track(b)?.lastAt ?? 0) - (play.track(a)?.lastAt ?? 0) || byTitle(a, b);
+        return (record?.track(b)?.lastAt ?? 0) - (record?.track(a)?.lastAt ?? 0) || byTitle(a, b);
       if (sort === "plays")
-        return (play.track(b)?.plays ?? 0) - (play.track(a)?.plays ?? 0) || byTitle(a, b);
+        return (record?.track(b)?.plays ?? 0) - (record?.track(a)?.plays ?? 0) || byTitle(a, b);
       return byTitle(a, b);
     });
     return reversed ? sorted.reverse() : sorted;
     // drOf and lufsOf read statsByKey; listing it keeps the memo honest
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [all, mem, sort, reversed, statsByKey, play]);
+  }, [all, mem, sort, reversed, statsByKey, record]);
   const playedOptions = useMemo(
     () => (play.ready ? playedOptionsOf(all.map((t) => play.track(t)?.lastAt ?? null)) : []),
     [all, play],
