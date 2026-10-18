@@ -820,30 +820,31 @@ export function InfoWaveform({
       ) : (
         <>
           <canvas ref={canvasRef} className="w-full h-16 block" />
-          <div className="mt-1.5 font-mono text-[10.5px] text-faint">
-            peak {fmtDb(state.peakDb)}
-            {FACT_SEP}rms {fmtDb(state.rmsDb)}
-            {FACT_SEP}crest {fmtDb(state.crestDb)}
-            {state.lufs != null && `${FACT_SEP}${fmtLufs(state.lufs)}`}
-          </div>
-          {/* AN EARLIER VERSION'S MEASUREMENT (0.12.0, his ask for a way to re-measure one
-              track): said once, with the verb that measures it again (its tempo and key say
-              nothing meanwhile, shared/model's currentFeatures) */}
-          {state.outdated && (
-            <div className="mt-2.5 flex items-center gap-3" data-info-outdated>
-              <span className="text-[11.5px] text-faint">
-                Measured by an earlier version of TastyTunes.
-              </span>
+          <div className="mt-1.5 flex items-center gap-2">
+            <div className="min-w-0 flex-1 font-mono text-[10.5px] text-faint">
+              peak {fmtDb(state.peakDb)}
+              {FACT_SEP}rms {fmtDb(state.rmsDb)}
+              {FACT_SEP}crest {fmtDb(state.crestDb)}
+              {state.lufs != null && `${FACT_SEP}${fmtLufs(state.lufs)}`}
+            </div>
+            {/* AN EARLIER VERSION'S MEASUREMENT (0.12.0, his ask for a way to re-measure one
+                track): the verb that measures it again, an icon at the end of the measurements'
+                line with the reason in its tip, taking no row of its own (his call); its tempo
+                and key say nothing meanwhile (shared/model's currentFeatures) */}
+            {state.outdated && (
               <button
+                data-info-outdated
                 data-info-analyze
                 onClick={onAnalyze}
+                aria-label="Analyze audio again"
+                data-tip="Measured by an earlier version of TastyTunes. Analyze audio again."
                 // no transition inside the frosted shell (S11): the shell fades as a whole
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/80 text-[12px] text-dim hover:text-ink hover:bg-veil"
+                className="tip-top tip-end -my-1 shrink-0 rounded-md p-1 text-dim hover:bg-veil2 hover:text-ink"
               >
-                <AudioLines size={13} /> Analyze audio
+                <AudioLines size={14} />
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </>
       )}
     </div>
