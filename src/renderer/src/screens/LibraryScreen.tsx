@@ -146,6 +146,12 @@ const UNIFIED_SEARCH_CRUMB_ID = "__from-search__";
 
 /** One wording for a queue write that didn't land, whichever verb sent it. */
 const QUEUE_FAILED = "Couldn't reach the streamer. Nothing was queued.";
+
+/** The breadcrumb row's height (its type and the space under it), shared by the trail and by
+ *  the empty place the bare root keeps for it. */
+const CRUMB_ROW = "pb-3 text-[12.5px]";
+/** The bare root's trail, never shown: it only holds the row's place (see the root below). */
+const ROOT_TRAIL = [{ key: "root", label: "Library", current: true }];
 /** Each artist page's scroll spot for the session (an album opened from it and Back). */
 const artistPageScroll = new Lru<string, number>(200);
 /** The stand-in album nodes an arrival builds (the arrival effect): an album opened from another
@@ -1742,7 +1748,7 @@ export function LibraryScreen(): React.JSX.Element {
           the bare root, where the screen title already says it; the trail
           folds its middle when it would not fit (Crumbs) */}
       {!searchMode && (serverUdn != null || lens != null || path.length > 0) && (
-        <div data-library-crumbs className="no-drag px-8 pb-3 text-[12.5px]">
+        <div data-library-crumbs className={cx("no-drag px-8", CRUMB_ROW)}>
           <Crumbs
             items={[
               {
@@ -1875,12 +1881,22 @@ export function LibraryScreen(): React.JSX.Element {
 
         {/* root: the lens doors and the sources (components/library/LibraryRoot) */}
         {!loading && atRoot && !searchMode && lens == null && (
-          <LibraryRoot
-            servers={shownServers}
-            filter={filter}
-            openLens={openLens}
-            enterServer={enterServer}
-          />
+          <>
+            {/* the trail's place, kept empty at the bare root (the title says Library): every
+            view below shows its trail here, so a door's lens opens with its trail where this
+            space was and its first row where the doors were, nothing jumping either way; and
+            inside the scroller, so a door's hover glow fades into it rather than being cut
+            off at the scroller's edge (his ask, 2026-10-21, when the doors' label went) */}
+            <div aria-hidden className={cx("invisible", CRUMB_ROW)}>
+              <Crumbs items={ROOT_TRAIL} />
+            </div>
+            <LibraryRoot
+              servers={shownServers}
+              filter={filter}
+              openLens={openLens}
+              enterServer={enterServer}
+            />
+          </>
         )}
 
         {!atRoot && state === "error" && (
