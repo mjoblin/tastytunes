@@ -31,18 +31,36 @@ import { DOOR_WAVES, type DoorWave } from "@/components/library/useDoorArt";
  * from assistive tech, which reads the door's title and caption.
  */
 
-/** Left to right: the size against the front item, the brightness, and the outer pair the
- *  narrowest doors drop. */
-const POSITIONS = [
-  { x: -0.92, k: 0.6, dim: 0.72, outer: true },
-  { x: -0.52, k: 0.8, dim: 0.86, outer: false },
-  { x: 0, k: 1, dim: 1, outer: false },
-  { x: 0.52, k: 0.8, dim: 0.86, outer: false },
-  { x: 0.92, k: 0.6, dim: 0.72, outer: true },
-];
-/** Which ranked item stands at each position: the most played in front, the next two beside
- *  it, so a door that keeps three keeps the top three. */
-const RANK_AT = [3, 1, 0, 2, 4];
+/** Where each ranked item stands, left to right, by how many there are: `x` its offset and `k`
+ *  its size against the front item, `dim` its brightness, `step` its place from the front (the
+ *  crate's tilt and drop), `outer` the pair the narrowest doors drop, and `peek` where a side
+ *  face's initial sits, in the part of it the faces in front leave showing (a fraction of its
+ *  width). Five put the most played in front and the next two beside it, so a door that keeps
+ *  three keeps the top three; one or two stay centered rather than leaning on one side. */
+interface Slot {
+  rank: number;
+  x: number;
+  k: number;
+  dim: number;
+  step: number;
+  outer: boolean;
+  peek: number;
+}
+const FRONT: Slot = { rank: 0, x: 0, k: 1, dim: 1, step: 0, outer: false, peek: 0 };
+const SLOTS: Record<"one" | "two" | "many", Slot[]> = {
+  one: [FRONT],
+  two: [
+    { rank: 1, x: -0.3, k: 0.8, dim: 0.86, step: -1, outer: false, peek: -0.24 },
+    { ...FRONT, x: 0.22 },
+  ],
+  many: [
+    { rank: 3, x: -0.92, k: 0.6, dim: 0.72, step: -2, outer: true, peek: -0.2 },
+    { rank: 1, x: -0.52, k: 0.8, dim: 0.86, step: -1, outer: false, peek: -0.24 },
+    FRONT,
+    { rank: 2, x: 0.52, k: 0.8, dim: 0.86, step: 1, outer: false, peek: 0.24 },
+    { rank: 4, x: 0.92, k: 0.6, dim: 0.72, step: 2, outer: true, peek: 0.2 },
+  ],
+};
 
 /** The sleeves' and monograms' colors: muted, warm, readable under white type. */
 const PALETTE = [
@@ -67,25 +85,26 @@ function placed<T>(
   items: T[],
   fanned: boolean,
 ): Array<{ item: T; style: Styled; outer: boolean; key: number }> {
+  const slots = items.length === 1 ? SLOTS.one : items.length === 2 ? SLOTS.two : SLOTS.many;
   const out: Array<{ item: T; style: Styled; outer: boolean; key: number }> = [];
-  POSITIONS.forEach((p, i) => {
-    const item = items[RANK_AT[i]];
-    if (item === undefined) return;
-    const step = i - 2;
+  for (const p of slots) {
+    const item = items[p.rank];
+    if (item === undefined) continue;
     out.push({
       item,
-      key: RANK_AT[i],
+      key: p.rank,
       outer: p.outer,
       style: {
         "--x": p.x,
         "--k": p.k,
         "--dim": p.dim,
-        "--y": fanned ? Math.abs(step) * 0.05 : 0,
-        "--r": fanned ? `${step * 7}deg` : "0deg",
-        zIndex: 10 - Math.abs(step),
+        "--peek": p.peek,
+        "--y": fanned ? Math.abs(p.step) * 0.05 : 0,
+        "--r": fanned ? `${p.step * 7}deg` : "0deg",
+        zIndex: 10 - Math.abs(p.step),
       },
     });
-  });
+  }
   return out;
 }
 
@@ -93,10 +112,7 @@ function Wash({ src, color }: { src?: string | null; color?: string }): React.JS
   return src ? (
     <div className="lib-door-wash" style={{ backgroundImage: `url("${src}")` }} />
   ) : (
-    <div
-      className="lib-door-wash lib-door-wash-plain"
-      style={{ background: `radial-gradient(90% 80% at 50% 30%, ${color}, transparent 75%)` }}
-    />
+    <div className="lib-door-wash lib-door-wash-plain" style={{ "--wash": color } as Styled} />
   );
 }
 
@@ -165,11 +181,14 @@ export function ArtistsArt({ picks }: { picks: DoorPicks }): React.JSX.Element |
   ];
   const named = picks.artists.length;
   if (answers.slice(0, named).some((a) => a === undefined)) return null;
-  const real = answers.filter((a) => a != null).length >= DOOR_MIN_PICTURES;
-  const faces = faceOrder(
-    picks.artists.map((name, i) => ({ name, pic: real ? (answers[i] ?? null) : null })),
-    picks.coverArt,
-  );
+  // all pictures or all monograms: with three pictures the cluster is the artists who have
+  // one, never photos beside letters
+  const asked = picks.artists.map((name, i) => ({ name, pic: answers[i] ?? null }));
+  const pictured = asked.filter((f) => f.pic != null);
+  const real = pictured.length >= DOOR_MIN_PICTURES;
+  const faces = real
+    ? faceOrder(pictured, picks.coverArt)
+    : asked.map((f) => ({ name: f.name, pic: null }));
   const front = faces[0];
   return (
     <>
@@ -192,10 +211,10 @@ export function ArtistsArt({ picks }: { picks: DoorPicks }): React.JSX.Element |
                 src={artSrc(item.pic, 240)}
                 portraitTop
                 className="h-full w-full object-cover"
-                fallback={<Monogram name={item.name} />}
+                fallback={<Monogram name={item.name} front={key === 0} />}
               />
             ) : (
-              <Monogram name={item.name} />
+              <Monogram name={item.name} front={key === 0} />
             )}
           </div>
         ))}
@@ -204,10 +223,13 @@ export function ArtistsArt({ picks }: { picks: DoorPicks }): React.JSX.Element |
   );
 }
 
-function Monogram({ name }: { name: string }): React.JSX.Element {
+/** The front face's monogram in full; a side face shows its first initial alone, in the part
+ *  of it the faces in front leave showing (the whole pair there was cut to fragments). */
+function Monogram({ name, front }: { name: string; front: boolean }): React.JSX.Element {
+  const letters = monogram(name);
   return (
     <div className="lib-door-monogram" style={{ background: colorOf(name) }}>
-      <span>{monogram(name)}</span>
+      <span>{front ? letters : ([...letters][0] ?? "")}</span>
     </div>
   );
 }

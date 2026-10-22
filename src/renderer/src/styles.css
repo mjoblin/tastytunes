@@ -4,6 +4,9 @@
    a .reduce-motion class on :root (useMotionPreference), so motion-safe:
    utilities follow the app's choice rather than the media query directly. */
 @custom-variant motion-safe (&:where(:root:not(.reduce-motion), :root:not(.reduce-motion) *));
+/* and motion-reduce: its mirror (0.12.0-rc.3): Tailwind's own read only the media query, so with
+   Motion off in Settings the Library's indexing spinners kept turning where the icon belongs */
+@custom-variant motion-reduce (&:where(:root.reduce-motion, :root.reduce-motion *));
 /* a reveal on keyboard focus: focus-visible once Tab has moved focus (lib/inputModality), never
    after a click and a hotkey; the lint rule focus-reveal keeps focus-visible: out of the app */
 @custom-variant focus-kbd (:root[data-keyboard-nav] &:focus-visible);
@@ -817,7 +820,8 @@ img {
    with the window. The picture sits under a scrim and the words over both (WCAG AA where the
    text sits, decisions/0016). A door is at most 480px wide (his call: on a wide screen a third
    of the row was a long, short strip), and past that the row leaves the room to its right, as
-   the source cards below do. A door under 250px drops its outer pair; a row under 720px
+   the source cards below do; at most 320px tall, what the widest door's picture and words need
+   to clear the top and each other (at 300 the front cover touched the title). A door under 250px drops its outer pair; a row under 720px
    stacks the doors as bands, the picture bleeding off the left and the words to its right. In
    a components layer so a state's utilities (opacity-60, text-alert) still win. */
 @layer components {
@@ -833,7 +837,7 @@ img {
   .lib-door {
     position: relative;
     container-type: inline-size;
-    height: clamp(196px, 26cqi, 300px);
+    height: clamp(196px, 26cqi, 320px);
     border-radius: 18px;
     background: var(--color-raised);
     box-shadow:
@@ -860,13 +864,18 @@ img {
     transform: scale(1.5);
     opacity: 0.55;
   }
+  /* a glow of one color (a fallback's palette color, or gold) behind the picture: --wash is
+     the color, --wash-at where it centers (over the picture, whichever layout) */
   .lib-door-wash-plain {
     filter: none;
     transform: none;
     opacity: 0.5;
+    --wash-at: 50% 30%;
+    background: radial-gradient(90% 80% at var(--wash-at), var(--wash), transparent 75%);
   }
   .lib-door-wash-gold {
-    background: radial-gradient(90% 80% at 50% 25%, rgb(var(--gold-rgb) / 0.35), transparent 72%);
+    --wash: rgb(var(--gold-rgb) / 0.35);
+    --wash-at: 50% 25%;
     opacity: 0.6;
   }
   .lib-door-scrim {
@@ -968,6 +977,9 @@ img {
     line-height: 1;
     color: rgb(255 255 255 / 0.9);
   }
+  .lib-door-monogram > span {
+    transform: translateX(calc(var(--front) * var(--k) * var(--peek, 0)));
+  }
   .lib-door-rows {
     display: flex;
     flex-direction: column;
@@ -1019,12 +1031,6 @@ img {
     justify-content: center;
     pointer-events: none;
   }
-  .lib-door-glyph-corner {
-    left: auto;
-    top: 12px;
-    right: 12px;
-    height: auto;
-  }
   .lib-door-text {
     position: absolute;
     z-index: 3;
@@ -1039,11 +1045,19 @@ img {
     line-height: 1;
     color: var(--color-ink);
   }
+  /* the caption's words, and while another library still indexes a small spinner after them,
+     part of the sentence ("358 albums · indexing…") */
   .lib-door-caption {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     font-size: clamp(11.5px, 4cqi, 14px);
     line-height: 1.35;
     color: var(--color-dim);
     margin-top: 6px;
+  }
+  .lib-door-caption-text {
+    min-width: 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1070,11 +1084,14 @@ img {
       width: 58%;
       --front: clamp(56px, 27cqi, 128px);
     }
-    .lib-door-glyph:not(.lib-door-glyph-corner) {
+    .lib-door-glyph {
       top: 0;
       height: 100%;
       right: auto;
       width: 50%;
+    }
+    .lib-door-wash-plain {
+      --wash-at: 26% 50%;
     }
     .lib-door-scrim {
       background: linear-gradient(
@@ -1093,7 +1110,7 @@ img {
     .lib-door-title {
       font-size: 24px;
     }
-    .lib-door-caption {
+    .lib-door-caption-text {
       white-space: normal;
     }
   }
