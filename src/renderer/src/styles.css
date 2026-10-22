@@ -832,6 +832,7 @@ img {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 480px));
     gap: 16px;
+    padding-top: 8px;
   }
   .lib-door {
     position: relative;
