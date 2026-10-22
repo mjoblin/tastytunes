@@ -82,6 +82,7 @@ import { useLibraryMenus, type MenusLate } from "@/components/library/useLibrary
 import { useLibraryFavorites } from "@/components/library/useLibraryFavorites";
 import { LibraryPopovers } from "@/components/library/LibraryPopovers";
 import { LibraryRoot } from "@/components/library/LibraryRoot";
+import { EmptyCrate } from "@/components/library/DoorArt";
 import { useIndexDoors } from "@/components/library/useIndexDoors";
 import { usePlayingMatch } from "@/components/library/usePlayingMatch";
 import { useQueueMatch } from "@/components/library/useQueueMatch";
@@ -1455,6 +1456,7 @@ export function LibraryScreen(): React.JSX.Element {
       <EmptyState
         className="h-full"
         icon={Library}
+        art={<EmptyCrate />}
         title="No media libraries found"
         caption="UPnP servers on your network and USB storage attached to the streamer show up here."
       >
