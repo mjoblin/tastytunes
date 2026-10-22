@@ -49,10 +49,11 @@ export function LibraryRoot({
       )}
       {/* the lens doors LEAD the root: our views over EVERY built index at once, wide hero
       doors with a picture of each lens from the reader's own library (DoorArt), so they never
-      read as one more source beside the streamer's (his ask, 0.12.0-rc.3) */}
+      read as one more source beside the streamer's (his ask, 0.12.0-rc.3). No section label:
+      each caption already says "every library", and unlabeled they read as the page's lead
+      with the sources' labeled sections below (his call, 2026-10-21) */}
       {doorsState !== "hidden" && (
         <div data-library-doors={doorsState} className="lib-doors">
-          <div className="microlabel mb-0.5 px-1">All libraries</div>
           <div className="lib-doors-row">
             {[
               {
@@ -123,26 +124,20 @@ export function LibraryRoot({
                   )}
                   <div className="lib-door-scrim" />
                 </div>
-                {buildingCount > 0 && doorsState !== "failed" ? (
-                  // the boot screen's own loading glyph while ANYTHING is still building: in the
-                  // middle of a door with nothing to show yet, in its corner over the picture of
-                  // what is already indexed. The icon's pulse read as styling, not activity
-                  // (user, 2026-08-29); reduced motion keeps the icon: a frozen spinner reads as
-                  // broken.
-                  <div
-                    className={cx(
-                      "lib-door-glyph",
-                      doorsState === "ready" && "lib-door-glyph-corner",
-                    )}
-                  >
+                {doorsState === "building" ? (
+                  // the boot screen's own loading glyph while the first index builds, in the
+                  // middle of a door with nothing to show yet. The icon's pulse read as styling,
+                  // not activity (user, 2026-08-29); reduced motion keeps the icon: a frozen
+                  // spinner reads as broken.
+                  <div className="lib-door-glyph">
                     <Loader2
-                      size={doorsState === "ready" ? 18 : 40}
-                      strokeWidth={doorsState === "ready" ? 1.6 : 1.1}
+                      size={40}
+                      strokeWidth={1.1}
                       className="spin text-gold/70 motion-reduce:hidden"
                     />
                     <door.icon
-                      size={doorsState === "ready" ? 18 : 40}
-                      strokeWidth={doorsState === "ready" ? 1.6 : 1.1}
+                      size={40}
+                      strokeWidth={1.1}
                       className="hidden motion-reduce:block text-gold/70"
                     />
                   </div>
@@ -165,17 +160,29 @@ export function LibraryRoot({
                       doorsState === "failed" && "text-alert",
                     )}
                   >
-                    {doorsState === "building"
-                      ? "Indexing…"
-                      : doorsState === "failed"
-                        ? `Couldn't index${FACT_SEP}Retry`
-                        : buildingCount > 0
-                          ? door.count > 0
-                            ? `${fmtCount(door.count)} ${door.noun}${FACT_SEP}indexing…`
-                            : "Indexing…"
-                          : door.count > 0
-                            ? `${fmtCount(door.count)} ${door.noun}${FACT_SEP}every library`
-                            : "Across every library"}
+                    <span className="lib-door-caption-text">
+                      {doorsState === "building"
+                        ? "Indexing…"
+                        : doorsState === "failed"
+                          ? `Couldn't index${FACT_SEP}Retry`
+                          : buildingCount > 0
+                            ? door.count > 0
+                              ? `${fmtCount(door.count)} ${door.noun}${FACT_SEP}indexing…`
+                              : "Indexing…"
+                            : door.count > 0
+                              ? `${fmtCount(door.count)} ${door.noun}${FACT_SEP}every library`
+                              : "Across every library"}
+                    </span>
+                    {/* what is indexed is open while another library still builds: the
+                    spinner says so after the words, in the line that says "indexing…" (in
+                    the door's corner it sat on the Tracks door's top row) */}
+                    {doorsState === "ready" && buildingCount > 0 && (
+                      <Loader2
+                        size={12}
+                        strokeWidth={2}
+                        className="spin text-gold/70 motion-reduce:hidden"
+                      />
+                    )}
                   </div>
                 </div>
               </div>

@@ -161,7 +161,8 @@ describe("an artist's monogram", () => {
     expect(monogram("Kate Bush")).toBe("KB");
     expect(monogram("Siouxsie and the Banshees")).toBe("SB");
     expect(monogram("Echo & the Bunnymen")).toBe("EB");
-    expect(monogram("!!!")).toBe("");
+    expect(monogram("!!!")).toBe("!");
+    expect(monogram("")).toBe("");
     expect(monogram("Ólafur Arnalds")).toBe("ÓA");
   });
 });

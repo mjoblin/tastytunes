@@ -155,6 +155,8 @@ export function monogram(name: string): string {
     .filter(
       (w, i) => /[\p{L}\p{N}]/u.test(w) && (i === 0 || !/^(and|the|of|a|an|n'|'n')$/i.test(w)),
     );
+  // a name of symbols alone ("!!!") keeps its first one rather than an empty circle
+  if (words.length === 0) return [...name.trim()][0] ?? "";
   return words
     .slice(0, 2)
     .map((w) => [...w.replace(/^[^\p{L}\p{N}]+/u, "")][0]?.toUpperCase() ?? "")
