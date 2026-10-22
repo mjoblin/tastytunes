@@ -880,12 +880,15 @@ img {
       color-mix(in srgb, var(--color-bg) 92%, transparent) 86%
     );
   }
+  /* the band's top sits low enough that the front item clears the door's top by 24px: at the
+     480px cap the front cover (206px) all but fills the band (210px of 300) and touched the top
+     (his eye, 2026-10-21); a narrower door has the room already and keeps 2% */
   .lib-door-art {
     position: absolute;
     z-index: 1;
     left: 0;
     right: 0;
-    top: 2%;
+    top: max(2%, calc(24px - (70% - var(--front)) / 2));
     height: 70%;
     --front: clamp(64px, 43cqi, 215px);
     transition: transform 0.3s ease-out;
