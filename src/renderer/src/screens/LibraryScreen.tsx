@@ -146,12 +146,6 @@ const UNIFIED_SEARCH_CRUMB_ID = "__from-search__";
 
 /** One wording for a queue write that didn't land, whichever verb sent it. */
 const QUEUE_FAILED = "Couldn't reach the streamer. Nothing was queued.";
-
-/** The breadcrumb row's height (its type and the space under it), shared by the trail and by
- *  the empty place the bare root keeps for it. */
-const CRUMB_ROW = "pb-3 text-[12.5px]";
-/** The bare root's trail, never shown: it only holds the row's place (see the root below). */
-const ROOT_TRAIL = [{ key: "root", label: "Library", current: true }];
 /** Each artist page's scroll spot for the session (an album opened from it and Back). */
 const artistPageScroll = new Lru<string, number>(200);
 /** The stand-in album nodes an arrival builds (the arrival effect): an album opened from another
@@ -1601,7 +1595,8 @@ export function LibraryScreen(): React.JSX.Element {
         setSelTracks(new Set());
       }}
     >
-      <header className="drag-region flex items-center gap-4 px-8 pt-8 pb-2">
+      {/* above the scroller, which reaches up under its lower strip for ring room (below) */}
+      <header className="drag-region relative z-10 flex items-center gap-4 px-8 pt-8 pb-2">
         {/* EXPERIMENT (0.7 exploration): the Analyze-audio sweep's pulse —
             the silent seconds between its toasts, made visible (the panel
             waveform's "Reading the file…" grammar). BASELINE-paired with the
@@ -1748,7 +1743,7 @@ export function LibraryScreen(): React.JSX.Element {
           the bare root, where the screen title already says it; the trail
           folds its middle when it would not fit (Crumbs) */}
       {!searchMode && (serverUdn != null || lens != null || path.length > 0) && (
-        <div data-library-crumbs className={cx("no-drag px-8", CRUMB_ROW)}>
+        <div data-library-crumbs className="no-drag relative z-10 px-8 pb-3 text-[12.5px]">
           <Crumbs
             items={[
               {
@@ -1812,11 +1807,19 @@ export function LibraryScreen(): React.JSX.Element {
           const key = nodeKey(serverUdn, path);
           if (loadedKey.current === key) scrollMemory.set(key, e.currentTarget.scrollTop);
         }}
+        // RING ROOM at the top edge (docs/renderer.md; his call, 2026-10-21, when the doors'
+        // label went and their hover glow was cut flat at this edge): the scroller reaches 24px
+        // up under the header and the trail, padded by as much, so nothing moves and a hover
+        // glow has room above the first row; the strip fades rather than cuts (fade-top, 0 to
+        // 24px), so the glow and any row scrolled up dissolve under the heading; a row scrolled
+        // into view stops below the strip (scroll-pt-6). The header and the trail sit above
+        // the scroller, their controls clickable over the strip.
+        style={{ "--fade-top-clear": "0px", "--fade-top-solid": "24px" } as React.CSSProperties}
         className={cx(
           // stable gutter: without it the scrollbar's appearance shifts every
           // right-aligned control as listings shrink/grow (macOS always-on
           // scrollbars — the "filter box moves" report)
-          "flex-1 px-8 pt-1 [scrollbar-gutter:stable]",
+          "flex-1 px-8 -mt-6 pt-7 scroll-pt-6 fade-top [scrollbar-gutter:stable]",
           // every lens scrolls its own column under its toolbar (the miller view's columns, the
           // tracks list, the albums grid since 2026-10-11) — the page must not; the artist page
           // is a page, and scrolls as one
@@ -1881,22 +1884,12 @@ export function LibraryScreen(): React.JSX.Element {
 
         {/* root: the lens doors and the sources (components/library/LibraryRoot) */}
         {!loading && atRoot && !searchMode && lens == null && (
-          <>
-            {/* the trail's place, kept empty at the bare root (the title says Library): every
-            view below shows its trail here, so a door's lens opens with its trail where this
-            space was and its first row where the doors were, nothing jumping either way; and
-            inside the scroller, so a door's hover glow fades into it rather than being cut
-            off at the scroller's edge (his ask, 2026-10-21, when the doors' label went) */}
-            <div aria-hidden className={cx("invisible", CRUMB_ROW)}>
-              <Crumbs items={ROOT_TRAIL} />
-            </div>
-            <LibraryRoot
-              servers={shownServers}
-              filter={filter}
-              openLens={openLens}
-              enterServer={enterServer}
-            />
-          </>
+          <LibraryRoot
+            servers={shownServers}
+            filter={filter}
+            openLens={openLens}
+            enterServer={enterServer}
+          />
         )}
 
         {!atRoot && state === "error" && (
