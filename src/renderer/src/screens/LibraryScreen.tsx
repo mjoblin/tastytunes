@@ -1810,11 +1810,14 @@ export function LibraryScreen(): React.JSX.Element {
         // RING ROOM at the top edge (docs/renderer.md; his call, 2026-10-21, when the doors'
         // label went and their hover glow was cut flat at this edge): the scroller reaches 24px
         // up under the header and the trail, padded by as much, so nothing moves and a hover
-        // glow has room above the first row; the strip fades rather than cuts (fade-top, 0 to
-        // 24px), so the glow and any row scrolled up dissolve under the heading; a row scrolled
-        // into view stops below the strip (scroll-pt-6). The header and the trail sit above
-        // the scroller, their controls clickable over the strip.
-        style={{ "--fade-top-clear": "0px", "--fade-top-solid": "24px" } as React.CSSProperties}
+        // glow has room above the first row; the strip fades rather than cuts (fade-top), clear
+        // across its top 12px, where the heading's letters and the trail's words reach down into
+        // it (nothing shows behind words: History's rule), in over the 12px below them, so the
+        // glow and any row scrolled up dissolve under the heading; a row scrolled into view stops
+        // below the strip (scroll-pt-6). The header and the trail sit above the scroller, their
+        // controls clickable over the strip. The mask would stop lazy pictures preloading here
+        // but for ArtImage's own look-ahead (S84).
+        style={{ "--fade-top-clear": "12px", "--fade-top-solid": "24px" } as React.CSSProperties}
         className={cx(
           // stable gutter: without it the scrollbar's appearance shifts every
           // right-aligned control as listings shrink/grow (macOS always-on

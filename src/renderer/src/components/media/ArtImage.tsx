@@ -28,6 +28,58 @@ const RETRY_DELAYS_MS = [1500, 4000];
 /** How long a pending picture waits before the well shimmers (a cached one never does). */
 const SLOW_MS = 300;
 
+/**
+ * A LAZY PICTURE PRELOADS AHEAD OF ITS OWN SCROLLER (0.12.0-rc.3). Chromium's own lazy loading
+ * starts a picture 1,250px before it scrolls into view, looking past the scroller's edge; a
+ * mask on the scroller or any ancestor (a fade-top, the Library's ring room) cuts that look-ahead
+ * back to the visible box, and a server's album cards below the fold never loaded until scrolled
+ * to (S84 caught it). So a lazy picture also watches its nearest scroller itself, with the same
+ * reach, and turns eager when it comes within it; where Chromium's own reach works, whichever is
+ * first wins. One observer per scroller, shared by every picture in it.
+ */
+const NEAR_MARGIN = "1250px 0px";
+const nearObservers = new Map<
+  Element | null,
+  { io: IntersectionObserver; near: Map<Element, () => void> }
+>();
+
+function scrollerOf(el: Element): Element | null {
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    if (/(auto|scroll)/.test(getComputedStyle(p).overflowY)) return p;
+  }
+  return null;
+}
+
+function watchNear(el: Element, onNear: () => void): () => void {
+  const root = scrollerOf(el);
+  let entry = nearObservers.get(root);
+  if (!entry) {
+    const near = new Map<Element, () => void>();
+    const io = new IntersectionObserver(
+      (es) => {
+        for (const e of es) {
+          if (!e.isIntersecting) continue;
+          near.get(e.target)?.();
+        }
+      },
+      { root, rootMargin: NEAR_MARGIN },
+    );
+    entry = { io, near };
+    nearObservers.set(root, entry);
+  }
+  const { io, near } = entry;
+  near.set(el, onNear);
+  io.observe(el);
+  return () => {
+    io.unobserve(el);
+    near.delete(el);
+    if (near.size === 0) {
+      io.disconnect();
+      nearObservers.delete(root);
+    }
+  };
+}
+
 /** Where a picture taller than it is wide is cropped to the square (0.11.0, his Madonna: the top
  *  of her head cut off): artists' photos are mostly portraits with the head in the top third,
  *  and a centered crop takes as much off the top as the bottom. */
@@ -81,6 +133,8 @@ export function ArtImage({
   /** The shown src that loaded taller than wide (for portraitTop). */
   const [tall, setTall] = useState<string | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
+  // a lazy picture turns eager once its own scroller brings it within reach (above)
+  const [near, setNear] = useState(false);
   useEffect(() => {
     if (!shimmer || !src || loaded === src) {
       setSlow(false);
@@ -127,7 +181,13 @@ export function ArtImage({
   const missing = !src || failedSrc === src;
   const caa = useArtFallback(fallbackArt, missing && fallbackArt != null);
   const base = missing ? caa : src;
-  if (!base || failedSrc === base || (waiting && base === src)) return <>{fallback}</>;
+  const drawn = !!base && failedSrc !== base && !(waiting && base === src);
+  useEffect(() => {
+    const el = imgRef.current;
+    if (!lazy || near || !drawn || !el || typeof IntersectionObserver === "undefined") return;
+    return watchNear(el, () => setNear(true));
+  }, [lazy, near, drawn, base]);
+  if (!drawn) return <>{fallback}</>;
   const shown = base === src ? bust(base, attempt) : base;
   return (
     <>
@@ -138,7 +198,7 @@ export function ArtImage({
         // pending from the first frame until the picture lands: a well can read it
         // (the album header's ring steps up on it, without the line's 300 ms wait)
         data-art-pending={loaded === src ? undefined : ""}
-        loading={lazy ? "lazy" : undefined}
+        loading={lazy && !near ? "lazy" : undefined}
         className={cx(className, shimmer && eased === src && "art-in")}
         style={portraitTop && tall === shown ? { objectPosition: PORTRAIT_POSITION } : undefined}
         onLoad={(e) => {
