@@ -839,7 +839,6 @@ img {
     box-shadow:
       0 0 0 1px rgb(var(--gold-rgb) / 0.3),
       0 20px 44px -24px rgb(0 0 0 / 0.7);
-    transition: box-shadow 0.2s ease-out;
   }
   :root.light .lib-door {
     box-shadow:
@@ -891,10 +890,6 @@ img {
     top: max(2%, calc(24px - (70% - var(--front)) / 2));
     height: 70%;
     --front: clamp(64px, 43cqi, 215px);
-    transition: transform 0.3s ease-out;
-  }
-  :root:not(.reduce-motion) .lib-door.card-hover-glow:hover .lib-door-art {
-    transform: scale(1.03);
   }
   .lib-door-item {
     position: absolute;

@@ -99,11 +99,12 @@ export function LibraryRoot({
                 className={cx(
                   // tip-wide anchors the tooltip to the card's LEFT edge and wraps it:
                   // centered, the indexing tip poked past the scrollport's left
-                  // edge and clipped (user, 2026-08-29)
-                  "lib-door group tip-bottom tip-wide",
+                  // edge and clipped (user, 2026-08-29). Under the cursor the whole door
+                  // grows, words and all, as every card does (his ask, 2026-10-21)
+                  "lib-door group tip-bottom tip-wide transition-all duration-200 ease-out",
                   doorsState === "building"
                     ? "opacity-60 cursor-default"
-                    : "card-hover-glow cursor-pointer hover:z-10",
+                    : "card-hover-glow cursor-pointer hover:z-10 motion-safe:hover:scale-[1.04]",
                 )}
               >
                 {/* the picture, its wash and the scrim the words sit on, clipped to the door
