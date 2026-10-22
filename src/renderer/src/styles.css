@@ -809,3 +809,292 @@ img {
 :root.light .scene-float {
   opacity: 1;
 }
+
+/* THE LIBRARY'S DOORS (0.12.0-rc.3, his ask: our own entry points looked like the streamer's).
+   Three wide doors, each a picture of its lens from the reader's library (DoorArt) under its
+   title. Every size follows the door's own width: --front is the front item's size, and the
+   rest of a composition is a fraction of it, so the crate, the cluster and the waveforms scale
+   with the window. The picture sits under a scrim and the words over both (WCAG AA where the
+   text sits, decisions/0016). A door under 250px drops its outer pair; a row under 720px
+   stacks the doors as bands, the picture bleeding off the left and the words to its right. In
+   a components layer so a state's utilities (opacity-60, text-alert) still win. */
+@layer components {
+  .lib-doors {
+    container: doors / inline-size;
+  }
+  .lib-doors-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+    padding-top: 8px;
+  }
+  .lib-door {
+    position: relative;
+    container-type: inline-size;
+    height: clamp(196px, 26cqi, 300px);
+    border-radius: 18px;
+    background: var(--color-raised);
+    box-shadow:
+      0 0 0 1px rgb(var(--gold-rgb) / 0.3),
+      0 20px 44px -24px rgb(0 0 0 / 0.7);
+    transition: box-shadow 0.2s ease-out;
+  }
+  :root.light .lib-door {
+    box-shadow:
+      0 0 0 1px rgb(var(--gold-rgb) / 0.35),
+      0 18px 36px -22px rgb(60 42 8 / 0.45);
+  }
+  .lib-door-clip {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    overflow: hidden;
+  }
+  .lib-door-wash {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    filter: blur(32px) saturate(1.25);
+    transform: scale(1.5);
+    opacity: 0.55;
+  }
+  .lib-door-wash-plain {
+    filter: none;
+    transform: none;
+    opacity: 0.5;
+  }
+  .lib-door-wash-gold {
+    background: radial-gradient(90% 80% at 50% 25%, rgb(var(--gold-rgb) / 0.35), transparent 72%);
+    opacity: 0.6;
+  }
+  .lib-door-scrim {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    background: linear-gradient(
+      to bottom,
+      transparent 38%,
+      color-mix(in srgb, var(--color-bg) 92%, transparent) 86%
+    );
+  }
+  .lib-door-art {
+    position: absolute;
+    z-index: 1;
+    left: 0;
+    right: 0;
+    top: 2%;
+    height: 70%;
+    --front: clamp(64px, 43cqi, 215px);
+    transition: transform 0.3s ease-out;
+  }
+  :root:not(.reduce-motion) .lib-door.card-hover-glow:hover .lib-door-art {
+    transform: scale(1.03);
+  }
+  .lib-door-item {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: calc(var(--front) * var(--k));
+    height: calc(var(--front) * var(--k));
+    transform: translate(-50%, -50%) translateX(calc(var(--front) * var(--x)))
+      translateY(calc(var(--front) * var(--y))) rotate(var(--r));
+    filter: brightness(var(--dim));
+  }
+  .lib-door-cover {
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow:
+      0 14px 28px -12px rgb(0 0 0 / 0.8),
+      0 0 0 1px rgb(255 255 255 / 0.08);
+  }
+  /* the front circle is exactly the front cover's size, border included */
+  .lib-door-face {
+    border-radius: 50%;
+    overflow: hidden;
+    border: 3px solid var(--color-raised);
+    box-shadow: 0 12px 26px -12px rgb(0 0 0 / 0.8);
+  }
+  :root.light .lib-door-cover,
+  :root.light .lib-door-face {
+    box-shadow: 0 12px 24px -12px rgb(60 42 8 / 0.5);
+  }
+  .lib-door-sleeve {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 9%;
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.08);
+  }
+  .lib-door-sleeve-title {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: calc(var(--front) * 0.13);
+    line-height: 1.05;
+    color: rgb(255 255 255 / 0.9);
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .lib-door-sleeve-artist {
+    font-family: var(--font-mono);
+    font-weight: 500;
+    font-size: calc(var(--front) * 0.075);
+    line-height: 1.2;
+    color: rgb(255 255 255 / 0.6);
+    margin-top: 5%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .lib-door-sleeve-rule {
+    width: 46%;
+    height: 2px;
+    border-radius: 2px;
+    background: rgb(255 255 255 / 0.32);
+  }
+  .lib-door-monogram {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: calc(var(--front) * var(--k) * 0.34);
+    line-height: 1;
+    color: rgb(255 255 255 / 0.9);
+  }
+  .lib-door-rows {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: calc(var(--front) * 0.09);
+  }
+  .lib-door-row {
+    width: calc(var(--front) * 2 * var(--w));
+    margin: 0 auto;
+  }
+  .lib-door-wave {
+    height: calc(var(--front) * 0.17);
+    fill: rgb(var(--gold-rgb));
+  }
+  .lib-door-strip {
+    height: calc(var(--front) * 0.2);
+    border-radius: 999px;
+    background: rgb(var(--gold-rgb) / 0.16);
+    box-shadow: inset 0 0 0 1px rgb(var(--gold-rgb) / 0.35);
+    display: flex;
+    align-items: center;
+    gap: 6%;
+    padding: 0 6%;
+    font-family: var(--font-mono);
+    font-weight: 500;
+    font-size: calc(var(--front) * 0.085);
+    line-height: 1;
+    color: var(--color-ink);
+  }
+  .lib-door-strip-title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .lib-door-strip-length {
+    color: rgb(var(--gold-rgb));
+  }
+  .lib-door-glyph {
+    position: absolute;
+    z-index: 3;
+    left: 0;
+    right: 0;
+    top: 2%;
+    height: 70%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+  .lib-door-glyph-corner {
+    left: auto;
+    top: 12px;
+    right: 12px;
+    height: auto;
+  }
+  .lib-door-text {
+    position: absolute;
+    z-index: 3;
+    left: 7cqi;
+    right: 7cqi;
+    bottom: clamp(12px, 5cqi, 20px);
+  }
+  .lib-door-title {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: clamp(18px, 8cqi, 30px);
+    line-height: 1;
+    color: var(--color-ink);
+  }
+  .lib-door-caption {
+    font-size: clamp(11.5px, 4cqi, 14px);
+    line-height: 1.35;
+    color: var(--color-dim);
+    margin-top: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  @container (max-width: 250px) {
+    .lib-door-outer {
+      display: none;
+    }
+  }
+  @container doors (max-width: 720px) {
+    .lib-doors-row {
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+    .lib-door {
+      height: 138px;
+    }
+    .lib-door-art {
+      top: 0;
+      bottom: 0;
+      height: auto;
+      right: auto;
+      left: -4%;
+      width: 58%;
+      --front: clamp(56px, 27cqi, 128px);
+    }
+    .lib-door-glyph:not(.lib-door-glyph-corner) {
+      top: 0;
+      height: 100%;
+      right: auto;
+      width: 50%;
+    }
+    .lib-door-scrim {
+      background: linear-gradient(
+        to right,
+        transparent 34%,
+        color-mix(in srgb, var(--color-bg) 92%, transparent) 60%
+      );
+    }
+    .lib-door-text {
+      left: 54%;
+      right: 4cqi;
+      bottom: auto;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+    .lib-door-title {
+      font-size: 24px;
+    }
+    .lib-door-caption {
+      white-space: normal;
+    }
+  }
+}

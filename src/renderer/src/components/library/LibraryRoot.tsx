@@ -6,13 +6,19 @@ import { cx, fmtCount } from "@/lib/format";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import type { Lens } from "@/components/library/lensNavigation";
 import { useIndexDoors } from "@/components/library/useIndexDoors";
+import { useDoorArt } from "@/components/library/useDoorArt";
+import { AlbumsArt, ArtistsArt, TracksArt } from "@/components/library/DoorArt";
+
+/** The sources' cards: a fixed, compact width (the card-size slider is for art). */
+const SOURCE_CARD_PX = 150;
 
 /**
  * The Library's ROOT: the lens doors over every built index, then the sources, grouped
- * like the official app (Servers / USB drives). Cards, not a list built for volume — same
- * geometry and the same size/gap/fill settings as every other media card grid, so the
- * card-size slider governs the landing too. (Split out of LibraryScreen in the 0.11.0
- * sweep; the screen decides when it shows.)
+ * like the official app (Servers / USB drives). The doors lead, wide and pictured (0.12.0-rc.3);
+ * the sources follow as quiet compact cards with a short well, at the card grids' gap: a
+ * source is a place to browse, not a picture, and beside the doors a full-size card with one
+ * glyph in it read as the main event. (Split out of LibraryScreen in the 0.11.0 sweep; the
+ * screen decides when it shows.)
  */
 export function LibraryRoot({
   servers,
@@ -25,13 +31,14 @@ export function LibraryRoot({
   openLens: (lens: Lens) => void;
   enterServer: (udn: string) => void;
 }): React.JSX.Element {
-  const { presetCardSize, presetGap, presetFillRows } = useStore((s) => s.settings);
+  const presetGap = useStore((s) => s.settings.presetGap);
   // Standby honesty: USB source cards dim (the streamer's own ContentDirectory
   // has no content until wake — probed 2026-07-23); external servers and the
   // local index browse fine while the device sleeps.
   const inStandby = useStore((s) => s.systemPower != null && s.systemPower.power !== "ON");
   const { mediaIndexStatuses, readyIndexes, buildingCount, failedIndexes, doorsState } =
     useIndexDoors();
+  const art = useDoorArt(doorsState === "ready");
   const shownServers = servers;
   return (
     <div className="space-y-7 pt-1">
@@ -40,36 +47,27 @@ export function LibraryRoot({
           {filter ? `No matches for “${filter}”` : "Nothing here"}
         </div>
       )}
-      {/* the lens doors LEAD the root: our views over EVERY built
-      index at once — same card geometry as the sources, gold
-      surface marking them as a different kind of door */}
+      {/* the lens doors LEAD the root: our views over EVERY built index at once, wide hero
+      doors with a picture of each lens from the reader's own library (DoorArt), so they never
+      read as one more source beside the streamer's (his ask, 0.12.0-rc.3) */}
       {doorsState !== "hidden" && (
-        <div data-library-doors={doorsState}>
+        <div data-library-doors={doorsState} className="lib-doors">
           <div className="microlabel mb-0.5 px-1">All libraries</div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: presetFillRows
-                ? `repeat(auto-fill, minmax(${presetCardSize}px, 1fr))`
-                : `repeat(auto-fill, ${presetCardSize}px)`,
-              gap: presetGap,
-              paddingTop: 8,
-            }}
-          >
+          <div className="lib-doors-row">
             {[
-              {
-                key: "artists" as const,
-                title: "Artists",
-                icon: Users,
-                count: readyIndexes.reduce((acc, x) => acc + x.artists, 0),
-                noun: "artists",
-              },
               {
                 key: "albums" as const,
                 title: "Albums",
                 icon: Disc3,
                 count: readyIndexes.reduce((acc, x) => acc + x.albums, 0),
                 noun: "albums",
+              },
+              {
+                key: "artists" as const,
+                title: "Artists",
+                icon: Users,
+                count: readyIndexes.reduce((acc, x) => acc + x.artists, 0),
+                noun: "artists",
               },
               {
                 key: "tracks" as const,
@@ -102,59 +100,82 @@ export function LibraryRoot({
                   // tip-wide anchors the tooltip to the card's LEFT edge and wraps it:
                   // centered, the indexing tip poked past the scrollport's left
                   // edge and clipped (user, 2026-08-29)
-                  "group relative rounded-2xl p-2 pb-2.5 bg-raised/50 ring-1 ring-gold/25 transition-all duration-200 ease-out tip-bottom tip-wide",
+                  "lib-door group tip-bottom tip-wide",
                   doorsState === "building"
                     ? "opacity-60 cursor-default"
-                    : "card-hover-glow cursor-pointer hover:z-10 motion-safe:hover:scale-[1.04]",
+                    : "card-hover-glow cursor-pointer hover:z-10",
                 )}
               >
-                <div className="aspect-square w-full rounded-lg bg-golddim flex items-center justify-center">
-                  {buildingCount > 0 && doorsState !== "failed" ? (
-                    <>
-                      {/* the boot screen's own loading glyph at the door icon's
-                      size, while ANYTHING is still building — the icon's
-                      pulse read as styling, not activity (user, 2026-08-29).
-                      Reduced motion keeps the icon: a frozen spinner reads
-                      as broken. */}
-                      <Loader2
-                        size={40}
-                        strokeWidth={1.1}
-                        className="spin text-gold/70 motion-reduce:hidden"
-                      />
-                      <door.icon
-                        size={40}
-                        strokeWidth={1.1}
-                        className="hidden motion-reduce:block text-gold/70"
-                      />
-                    </>
+                {/* the picture, its wash and the scrim the words sit on, clipped to the door
+                (the door itself is not clipped: its tip hangs below it) */}
+                <div className="lib-door-clip" aria-hidden>
+                  {doorsState === "ready" && art.picks ? (
+                    door.key === "albums" ? (
+                      <AlbumsArt picks={art.picks} />
+                    ) : door.key === "artists" ? (
+                      <ArtistsArt picks={art.picks} />
+                    ) : (
+                      <TracksArt picks={art.picks} waves={art.waves} />
+                    )
                   ) : (
-                    <door.icon
-                      size={40}
-                      strokeWidth={1.1}
-                      className="text-gold/70 group-hover:text-gold transition-colors"
-                    />
+                    <div className="lib-door-wash lib-door-wash-plain lib-door-wash-gold" />
                   )}
+                  <div className="lib-door-scrim" />
                 </div>
-                <div className="pt-1.5 text-[12.5px] truncate">{door.title}</div>
-                {/* the count line fades in when the index lands (motion-safe, the modal's 140ms) — the door itself never moves */}
-                <div
-                  key={doorsState === "ready" && buildingCount === 0 ? "ready" : "waiting"}
-                  className={cx(
-                    "text-[11.5px] truncate motion-safe:transition-opacity motion-safe:duration-[140ms]",
-                    doorsState === "failed" ? "text-alert" : "text-faint",
-                  )}
-                >
-                  {doorsState === "building"
-                    ? "Indexing…"
-                    : doorsState === "failed"
-                      ? `Couldn't index${FACT_SEP}Retry`
-                      : buildingCount > 0
-                        ? door.count > 0
-                          ? `${fmtCount(door.count)} ${door.noun}${FACT_SEP}indexing…`
-                          : "Indexing…"
-                        : door.count > 0
-                          ? `${fmtCount(door.count)} ${door.noun}${FACT_SEP}every library`
-                          : "Across every library"}
+                {buildingCount > 0 && doorsState !== "failed" ? (
+                  // the boot screen's own loading glyph while ANYTHING is still building: in the
+                  // middle of a door with nothing to show yet, in its corner over the picture of
+                  // what is already indexed. The icon's pulse read as styling, not activity
+                  // (user, 2026-08-29); reduced motion keeps the icon: a frozen spinner reads as
+                  // broken.
+                  <div
+                    className={cx(
+                      "lib-door-glyph",
+                      doorsState === "ready" && "lib-door-glyph-corner",
+                    )}
+                  >
+                    <Loader2
+                      size={doorsState === "ready" ? 18 : 40}
+                      strokeWidth={doorsState === "ready" ? 1.6 : 1.1}
+                      className="spin text-gold/70 motion-reduce:hidden"
+                    />
+                    <door.icon
+                      size={doorsState === "ready" ? 18 : 40}
+                      strokeWidth={doorsState === "ready" ? 1.6 : 1.1}
+                      className="hidden motion-reduce:block text-gold/70"
+                    />
+                  </div>
+                ) : (
+                  doorsState === "failed" && (
+                    <div className="lib-door-glyph">
+                      <door.icon size={40} strokeWidth={1.1} className="text-gold/70" />
+                    </div>
+                  )
+                )}
+                {/* the title and its caption, the door's only words (and one block: a reader
+                and the suite find the door by them) */}
+                <div className="lib-door-text">
+                  <div className="lib-door-title">{door.title}</div>
+                  {/* the count line fades in when the index lands (motion-safe, the modal's 140ms) — the door itself never moves */}
+                  <div
+                    key={doorsState === "ready" && buildingCount === 0 ? "ready" : "waiting"}
+                    className={cx(
+                      "lib-door-caption motion-safe:transition-opacity motion-safe:duration-[140ms]",
+                      doorsState === "failed" && "text-alert",
+                    )}
+                  >
+                    {doorsState === "building"
+                      ? "Indexing…"
+                      : doorsState === "failed"
+                        ? `Couldn't index${FACT_SEP}Retry`
+                        : buildingCount > 0
+                          ? door.count > 0
+                            ? `${fmtCount(door.count)} ${door.noun}${FACT_SEP}indexing…`
+                            : "Indexing…"
+                          : door.count > 0
+                            ? `${fmtCount(door.count)} ${door.noun}${FACT_SEP}every library`
+                            : "Across every library"}
+                  </div>
                 </div>
               </div>
             ))}
@@ -172,9 +193,7 @@ export function LibraryRoot({
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: presetFillRows
-                  ? `repeat(auto-fill, minmax(${presetCardSize}px, 1fr))`
-                  : `repeat(auto-fill, ${presetCardSize}px)`,
+                gridTemplateColumns: `repeat(auto-fill, ${SOURCE_CARD_PX}px)`,
                 gap: presetGap,
                 paddingTop: 8,
               }}
@@ -226,26 +245,26 @@ export function LibraryRoot({
                     )}
                   >
                     {/* one frame per card: the well is a veil lift with no ring of its own (see LibraryCards) */}
-                    <div className="aspect-square w-full rounded-lg bg-veil flex items-center justify-center">
+                    <div className="h-[70px] w-full rounded-lg bg-veil flex items-center justify-center">
                       {building ? (
                         <>
                           {/* the doors' loading glyph: a spinner reads as activity where a
                           pulsing icon read as styling; reduced motion keeps the icon */}
                           <Loader2
-                            size={40}
-                            strokeWidth={1.1}
+                            size={28}
+                            strokeWidth={1.2}
                             className="spin text-dim motion-reduce:hidden"
                           />
                           <Icon
-                            size={40}
-                            strokeWidth={1.1}
+                            size={28}
+                            strokeWidth={1.2}
                             className="hidden motion-reduce:block text-dim"
                           />
                         </>
                       ) : (
                         <Icon
-                          size={40}
-                          strokeWidth={1.1}
+                          size={28}
+                          strokeWidth={1.2}
                           className="text-dim group-hover:text-ink transition-colors"
                         />
                       )}

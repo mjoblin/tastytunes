@@ -253,6 +253,14 @@ export function useKnownStats(keys: readonly string[]): Record<string, KnownStat
   return map;
 }
 
+/** Which of these keys have a stored analysis, in the order given: the same cache-only read,
+ *  once, for a surface that draws a stored analysis rather than a cell (the Library's Tracks
+ *  door picks its waveforms by it). */
+export async function analyzedKeys(keys: readonly string[]): Promise<string[]> {
+  const known = await tt.audioStatsMany([...keys]).catch(() => null);
+  return known ? keys.filter((k) => k in known) : [];
+}
+
 /** The DR view of useKnownStats — what the Queue, Playlists and Favorites rows read. */
 export function useKnownDrs(keys: readonly string[]): Record<string, number> {
   const stats = useKnownStats(keys);
