@@ -121,7 +121,6 @@ export function AlbumsLens({
   // what the lenses derive from the pools, once per snapshot (useLensIndex)
   const index = useLensIndex(pools);
   const all = index.albums;
-  const multiServer = index.multiServer;
 
   // Facets from the data itself — the builders are shared with the Tracks
   // lens (genreOptionsOf / decadeOptionsOf); pickers render only when they
@@ -374,6 +373,12 @@ export function AlbumsLens({
   ): React.JSX.Element => {
     // a set tile is volume 1 wearing the base title and a count badge
     const node = set ? { ...rawNode, title: set.base, year: null } : rawNode;
+    // a set's count, else which library, only when the same album is in another one too
+    const badge = set
+      ? `${set.volumes.length} volumes`
+      : index.inTwoLibraries(rawNode)
+        ? (rawNode.serverName ?? undefined)
+        : undefined;
     return cards ? (
       <ContainerCard
         key={nodeKey(rawNode)}
@@ -383,7 +388,7 @@ export function AlbumsLens({
         }
         menuOpen={actions.menuNodeId === node.id}
         favorited={actions.nodeFavorited(rawNode)}
-        badge={set ? `${set.volumes.length} volumes` : multiServer ? node.serverName : undefined}
+        badge={badge}
         selected={selA.has(nodeKey(rawNode))}
         onHeart={() => actions.heartNode(rawNode)}
         onEnter={(e) => {
@@ -406,7 +411,7 @@ export function AlbumsLens({
         }
         menuOpen={actions.menuNodeId === node.id}
         favorited={actions.nodeFavorited(rawNode)}
-        badge={set ? `${set.volumes.length} volumes` : multiServer ? node.serverName : undefined}
+        badge={badge}
         dr={albumDr[albumDrKey(node)]?.dr ?? null}
         onArtistLink={
           actions.goToArtist && node.artist ? () => actions.goToArtist?.(node) : undefined
