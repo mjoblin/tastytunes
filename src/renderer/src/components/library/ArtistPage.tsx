@@ -9,6 +9,7 @@ import {
   useLensTrackSelection,
 } from "@/components/library/lenses/useLensTrackSelection";
 import { cx } from "@/lib/format";
+import type { LandingTrack } from "@/components/library/landing";
 
 /**
  * THE ARTIST PAGE (2026-10-11, the user: "we get to an album page from the albums lens. but we
@@ -41,7 +42,7 @@ export function ArtistPage({
   cardGap: number;
   fillRows: boolean;
   /** An album, and from an Appears-on row the track to land on. */
-  onOpenAlbum(node: MediaNode, track?: string): void;
+  onOpenAlbum(node: MediaNode, track?: LandingTrack): void;
 }): React.JSX.Element {
   const index = useLensIndex(pools);
   const key = lc(name);
@@ -148,7 +149,16 @@ export function ArtistPage({
                         onHeart={() => actions.heartNode(t)}
                         onPlayNow={(el) => actions.playTrack(t, el)}
                         onMenu={(e) => sel.rowMenu(t, e)}
-                        onAlbumLink={album ? () => onOpenAlbum(album, t.title) : undefined}
+                        onAlbumLink={
+                          album
+                            ? () =>
+                                onOpenAlbum(album, {
+                                  title: t.title,
+                                  id: t.id,
+                                  secs: t.durationSecs,
+                                })
+                            : undefined
+                        }
                       />
                     );
                   })}
