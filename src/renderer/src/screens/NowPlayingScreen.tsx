@@ -609,9 +609,11 @@ export function NowPlayingScreen(): React.JSX.Element {
                   data-tip="More actions"
                   data-now-playing-art-menu
                   className={cx(
-                    // the corner the resize grip leaves free, the art's other chips' glass
-                    "tip-top absolute bottom-2 p-2 rounded-full bg-panel/60 backdrop-blur ring-1 ring-edge transition-all motion-safe:active:scale-90",
-                    mirrored ? "right-2 tip-end" : "left-2 tip-start",
+                    // bottom right, as a card's ⋯ is, in the art's other chips' glass; beside
+                    // the resize grip when the grip holds that corner (it must: the art grows
+                    // from it), in the corner itself when the layout is mirrored
+                    "tip-top tip-end absolute bottom-2 p-2 rounded-full bg-panel/60 backdrop-blur ring-1 ring-edge transition-all motion-safe:active:scale-90",
+                    mirrored ? "right-2" : "right-9",
                     artMenu
                       ? "text-ink opacity-100"
                       : "text-dim hover:text-ink opacity-0 group-hover:opacity-100",
