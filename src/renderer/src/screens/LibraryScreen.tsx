@@ -1826,24 +1826,27 @@ export function LibraryScreen(): React.JSX.Element {
         // it (nothing shows behind words: History's rule), in over the 12px below them, so the
         // glow and any row scrolled up dissolve under the heading; a row scrolled into view stops
         // below the strip (scroll-pt-6). The header and the trail sit above the scroller, their
-        // controls clickable over the strip. The mask would stop lazy pictures preloading here
-        // but for ArtImage's own look-ahead (S84).
+        // controls clickable over the strip. Only while the PAGE scrolls: a lens scrolls its own
+        // columns, and a mask around them stopped Chromium's own lazy loading inside them (his
+        // lenses' pictures, 0.12.0-rc.3), so a lens keeps the page as it was. Under the mask
+        // ArtImage looks ahead for its lazy pictures itself (S84).
         style={{ "--fade-top-clear": "12px", "--fade-top-solid": "24px" } as React.CSSProperties}
         className={cx(
           // stable gutter: without it the scrollbar's appearance shifts every
           // right-aligned control as listings shrink/grow (macOS always-on
           // scrollbars — the "filter box moves" report)
-          "flex-1 px-8 -mt-6 pt-7 scroll-pt-6 fade-top [scrollbar-gutter:stable]",
+          "flex-1 px-8 [scrollbar-gutter:stable]",
           // every lens scrolls its own column under its toolbar (the miller view's columns, the
           // tracks list, the albums grid since 2026-10-11) — the page must not; the artist page
           // is a page, and scrolls as one
           atRoot && lens != null && !searchMode && !artistPage
-            ? "overflow-hidden min-h-0 pb-6"
-            : // the floating bar overlaps the last rows at full scroll —
-              // selection mode adds scroll-room so every row can clear it
-              selTracks.size > 0
-              ? "overflow-y-auto pb-28"
-              : "overflow-y-auto pb-8",
+            ? "pt-1 overflow-hidden min-h-0 pb-6"
+            : cx(
+                "-mt-6 pt-7 scroll-pt-6 fade-top overflow-y-auto",
+                // the floating bar overlaps the last rows at full scroll —
+                // selection mode adds scroll-room so every row can clear it
+                selTracks.size > 0 ? "pb-28" : "pb-8",
+              ),
         )}
       >
         {showLoading && (
