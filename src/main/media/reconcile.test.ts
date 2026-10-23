@@ -14,6 +14,7 @@ import {
   albumsFromTracks,
   audioItemsOnly,
   dedupeAlbums,
+  discsFromFileNames,
   emptyProfile,
   preferCopy,
   richer,
@@ -146,6 +147,88 @@ describe("POOL RULE year-from-tracks (minidlna)", () => {
     expect(out[0]).toBe(dated);
     expect(out[1]).toBe(bare);
     expect(filled).toBe(0);
+  });
+});
+
+describe("POOL RULE discs-from-file-names (MinimServer)", () => {
+  // Malcolm's Songbooks+: per-disc track numbers, no disc, the disc in each file's name
+  const box = (fd: Array<[number, number]>, album = "Songbooks+"): MediaNode[] =>
+    fd.map(([disc, n], i) =>
+      track(`i${i}`, n === 11 ? "Close Your Eyes" : `Song ${disc}.${n}`, {
+        album,
+        albumArtist: "Oscar Peterson",
+        artist: "Oscar Peterson",
+        trackNumber: n,
+        fileDisc: disc,
+      }),
+    );
+
+  it("an album whose every track's file name gives a disc takes them, its disc count the highest", () => {
+    const { tracks, albums } = discsFromFileNames(
+      box([
+        [2, 1],
+        [2, 11],
+        [5, 1],
+        [5, 11],
+      ]),
+    );
+    expect(albums).toBe(1);
+    expect(tracks.map((t) => [t.discNumber, t.trackNumber])).toEqual([
+      [2, 1],
+      [2, 11],
+      [5, 1],
+      [5, 11],
+    ]);
+    expect(tracks.every((t) => t.discCount === 5 && t.fileDisc === undefined)).toBe(true);
+  });
+
+  it("is all or nothing: one track without a disc, one disc only, or a repeated pair leaves the album as sent", () => {
+    const missing = box([
+      [2, 1],
+      [2, 11],
+      [5, 1],
+    ]);
+    delete missing[2].fileDisc;
+    const oneDisc = box([
+      [1, 1],
+      [1, 2],
+      [1, 3],
+    ]);
+    const repeated = box([
+      [2, 11],
+      [2, 11],
+      [5, 1],
+    ]);
+    for (const g of [missing, oneDisc, repeated]) {
+      const { tracks, albums } = discsFromFileNames(g);
+      expect(albums).toBe(0);
+      expect(tracks.every((t) => t.discNumber === undefined && t.fileDisc === undefined)).toBe(
+        true,
+      );
+    }
+  });
+
+  it("judges each album apart, and is a no-op when no parse guessed a disc", () => {
+    const fits = box(
+      [
+        [1, 1],
+        [2, 1],
+      ],
+      "Set A",
+    );
+    const not = box(
+      [
+        [1, 1],
+        [1, 1],
+      ],
+      "Set B",
+    );
+    const { albums, tracks } = discsFromFileNames([...fits, ...not]);
+    expect(albums).toBe(1);
+    expect(tracks.filter((t) => t.album === "Set A").every((t) => t.discNumber != null)).toBe(true);
+    expect(tracks.filter((t) => t.album === "Set B").every((t) => t.discNumber == null)).toBe(true);
+    const clean = [track("t1", "One", { album: "Clean", trackNumber: 1, discNumber: 1 })];
+    expect(discsFromFileNames(clean).tracks).toBe(clean);
   });
 });
 
