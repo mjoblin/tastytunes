@@ -5,6 +5,9 @@ type Props = Pick<ReturnType<typeof useDragExtent>, "dragging" | "snapped" | "ha
   /** The corner it sits in: the one the box grows from. */
   corner: "bottom-right" | "bottom-left";
   label?: string;
+  /** A 12px grip for a corner it shares with a chip (Now Playing's art ⋯, 0.12.0-rc.3): small
+   *  enough to sit outside the chip's circle when the chip keeps the box's 8px inset. */
+  compact?: boolean;
 };
 
 /**
@@ -21,8 +24,10 @@ export function CornerResizeHandle({
   handleProps,
   corner,
   label = "Resize",
+  compact = false,
 }: Props): React.JSX.Element {
   const left = corner === "bottom-left";
+  const box = compact ? 12 : 28;
   return (
     <div
       {...handleProps}
@@ -30,12 +35,13 @@ export function CornerResizeHandle({
       aria-label={label}
       data-corner-resize={corner}
       className={cx(
-        "absolute bottom-0 z-10 h-7 w-7 touch-none",
+        "absolute bottom-0 z-10 touch-none",
+        compact ? "h-3 w-3" : "h-7 w-7",
         left ? "left-0 cursor-nesw-resize" : "right-0 cursor-nwse-resize",
       )}
     >
       <svg
-        viewBox="0 0 28 28"
+        viewBox={`0 0 ${box} ${box}`}
         aria-hidden
         className={cx(
           "absolute inset-0 transition-opacity",
@@ -45,9 +51,9 @@ export function CornerResizeHandle({
         )}
       >
         <path
-          d="M23 13 L13 23 M23 19 L19 23"
+          d={compact ? "M10.5 3.5 L3.5 10.5 M10.5 7.5 L7.5 10.5" : "M23 13 L13 23 M23 19 L19 23"}
           stroke="currentColor"
-          strokeWidth="2"
+          strokeWidth={compact ? 1.6 : 2}
           strokeLinecap="round"
           fill="none"
         />
