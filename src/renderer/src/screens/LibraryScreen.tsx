@@ -1842,10 +1842,10 @@ export function LibraryScreen(): React.JSX.Element {
           atRoot && lens != null && !searchMode && !artistPage
             ? "pt-1 overflow-hidden min-h-0 pb-6"
             : cx(
-                "-mt-6 pt-7 scroll-pt-6 fade-top overflow-y-auto",
+                "-mt-6 pt-7 scroll-pt-6 fade-top",
                 // the floating bar overlaps the last rows at full scroll —
                 // selection mode adds scroll-room so every row can clear it
-                selTracks.size > 0 ? "pb-28" : "pb-8",
+                selTracks.size > 0 ? "overflow-y-auto pb-28" : "overflow-y-auto pb-8",
               ),
         )}
       >
