@@ -29,13 +29,15 @@ const RETRY_DELAYS_MS = [1500, 4000];
 const SLOW_MS = 300;
 
 /**
- * A LAZY PICTURE PRELOADS AHEAD OF ITS OWN SCROLLER (0.12.0-rc.3). Chromium's own lazy loading
- * starts a picture 1,250px before it scrolls into view, looking past the scroller's edge; a
- * mask on the scroller or any ancestor (a fade-top, the Library's ring room) cuts that look-ahead
- * back to the visible box, and a server's album cards below the fold never loaded until scrolled
- * to (S84 caught it). So a lazy picture also watches its nearest scroller itself, with the same
- * reach, and turns eager when it comes within it; where Chromium's own reach works, whichever is
- * first wins. One observer per scroller, shared by every picture in it.
+ * A LAZY PICTURE UNDER A FADE PRELOADS AHEAD OF ITS OWN SCROLLER (0.12.0-rc.3). Chromium's own
+ * lazy loading starts a picture 1,250px before it scrolls into view, looking past the scroller's
+ * edge; a mask on the scroller or any ancestor (a fade-top, the Library's ring room) cuts that
+ * look-ahead back to the visible box, and a server's album cards below the fold never loaded
+ * until scrolled to (S84 caught it). So a lazy picture UNDER A MASK watches its nearest scroller
+ * itself, with the same reach, and turns eager when it comes within it. Anywhere else Chromium's
+ * own lazy loading is left alone, as it always was (the look-ahead everywhere was suspected in
+ * his lenses' pictures not loading, 2026-10-22). One observer per scroller, shared by every
+ * picture in it.
  */
 const NEAR_MARGIN = "1250px 0px";
 const nearObservers = new Map<
@@ -50,7 +52,18 @@ function scrollerOf(el: Element): Element | null {
   return null;
 }
 
+/** Whether a mask sits on the picture's way up to the page (a fade cuts the look-ahead). */
+function underMask(el: Element): boolean {
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    const cs = getComputedStyle(p);
+    if (cs.maskImage !== "none" && cs.maskImage !== "") return true;
+    if (cs.webkitMaskImage !== "none" && cs.webkitMaskImage !== "") return true;
+  }
+  return false;
+}
+
 function watchNear(el: Element, onNear: () => void): () => void {
+  if (!underMask(el)) return () => {};
   const root = scrollerOf(el);
   let entry = nearObservers.get(root);
   if (!entry) {
