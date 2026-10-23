@@ -51,6 +51,7 @@ import { isAlbumClass, isArtistClass, stripFurniture } from "@/lib/media";
 import { FilterInput } from "@/components/controls/FilterInput";
 import { ContainerCard, ContainerRow, TrackRow } from "@/components/library/LibraryCards";
 import { Crumbs } from "@/components/library/Crumbs";
+import { landingRowIndex, type LandingTrack } from "@/components/library/landing";
 import { SortChip } from "@/components/controls/SortChip";
 import {
   AlbumsLens,
@@ -284,8 +285,8 @@ export function LibraryScreen(): React.JSX.Element {
   // 0, listing not yet fetched) can't clobber a remembered spot.
   const loadedKey = useRef<string | null>(null);
   const pendingScroll = useRef<number | null>(null);
-  /** A track title a destination asked to land on (LibraryTarget.track). */
-  const pendingTrack = useRef<string | null>(null);
+  /** The track a destination asked to land on (LibraryTarget.track and its id and length). */
+  const pendingTrack = useRef<LandingTrack | null>(null);
   useLayoutEffect(() => {
     if (pendingScroll.current != null && scrollRef.current) {
       // a lens at the root holds the page at 0 (it scrolls its own column)
@@ -301,8 +302,16 @@ export function LibraryScreen(): React.JSX.Element {
       scrollRef.current &&
       loadedKey.current === nodeKey(serverUdn, path)
     ) {
-      const sel = `[data-library-track="${CSS.escape(pendingTrack.current)}"]`;
-      const row = scrollRef.current.querySelector<HTMLElement>(sel);
+      const rows = [...scrollRef.current.querySelectorAll<HTMLElement>("[data-library-track]")];
+      const at = landingRowIndex(
+        rows.map((r) => ({
+          title: r.dataset.libraryTrack ?? "",
+          id: r.dataset.libraryTrackId ?? null,
+          secs: r.dataset.libraryTrackSecs ? Number(r.dataset.libraryTrackSecs) : null,
+        })),
+        pendingTrack.current,
+      );
+      const row = at >= 0 ? rows[at] : null;
       pendingTrack.current = null;
       if (row) {
         scrollToCentered(row, "auto");
@@ -564,7 +573,9 @@ export function LibraryScreen(): React.JSX.Element {
                 }
               : { id: `__fav-crumb-${i}__`, title },
           ),
-          track: target.track ?? null,
+          track: target.track
+            ? { title: target.track, id: target.trackId ?? null, secs: target.trackSecs ?? null }
+            : null,
           ...(target.fromSearch ? { lead: { id: UNIFIED_SEARCH_CRUMB_ID, title: "Search" } } : {}),
         });
         return;

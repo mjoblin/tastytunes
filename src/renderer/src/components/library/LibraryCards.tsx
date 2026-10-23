@@ -541,6 +541,8 @@ export function TrackRow({
       onPointerDown={onNavDrag}
       onContextMenu={onMenu}
       data-library-track={node.title}
+      data-library-track-id={node.id}
+      data-library-track-secs={node.durationSecs ?? undefined}
     >
       {!isCurrent && selected && (
         <span

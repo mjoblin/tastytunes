@@ -110,6 +110,10 @@ export interface LibraryNodeTarget {
   title: string;
   /** A track to land on: scrolled to and flashed once the album's listing lands. */
   track?: string;
+  /** The track's id and length, so of two tracks with its title the landing finds the one meant
+   *  (components/library/landing; Malcolm's twins, 0.12.0-rc.3). */
+  trackId?: string | null;
+  trackSecs?: number | null;
   /** The target's own class, for the stand-in node the Library lands on (an artist opened
    *  from Search landed as an album, with the album header's Play and heart, 2026-10-11);
    *  an album when unsaid. */
