@@ -609,11 +609,9 @@ export function NowPlayingScreen(): React.JSX.Element {
                   data-tip="More actions"
                   data-now-playing-art-menu
                   className={cx(
-                    // bottom right, as a card's ⋯ is, in the art's other chips' glass; beside
-                    // the resize grip when the grip holds that corner (it must: the art grows
-                    // from it), in the corner itself when the layout is mirrored
-                    "tip-top tip-end absolute bottom-2 p-2 rounded-full bg-panel/60 backdrop-blur ring-1 ring-edge transition-all motion-safe:active:scale-90",
-                    mirrored ? "right-2" : "right-9",
+                    // bottom right, as a card's ⋯ is, at the top chips' 8px inset and in their
+                    // glass; the resize grip keeps the corner beyond it, compact (his call)
+                    "tip-top tip-end absolute bottom-2 right-2 p-2 rounded-full bg-panel/60 backdrop-blur ring-1 ring-edge transition-all motion-safe:active:scale-90",
                     artMenu
                       ? "text-ink opacity-100"
                       : "text-dim hover:text-ink opacity-0 group-hover:opacity-100",
@@ -624,6 +622,7 @@ export function NowPlayingScreen(): React.JSX.Element {
               )}
               <CornerResizeHandle
                 corner={mirrored ? "bottom-left" : "bottom-right"}
+                compact={entryRef != null && !mirrored}
                 dragging={art.dragging}
                 snapped={art.snapped}
                 handleProps={art.handleProps}
