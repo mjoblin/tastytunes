@@ -27,8 +27,9 @@ type Options = ReturnType<typeof genreOptionsOf>;
 export interface LensIndex {
   albums: MediaNode[];
   tracks: MediaNode[];
-  /** More than one server holds albums (the lenses then say which). */
-  multiServer: boolean;
+  /** The same album (its title and artist) is in more than one library: only then does a card
+   *  say which library it is from (his ask, 2026-10-22: with two libraries every card said so). */
+  inTwoLibraries(a: Pick<MediaNode, "title" | "albumArtist" | "artist">): boolean;
   /** An album's key in the maps below: its server and its lowercased title. */
   albumKey(a: Pick<MediaNode, "serverUdn" | "title">): string;
   /** Each album's tracks by that key, in disc and position order (orderTracks). */
@@ -48,6 +49,10 @@ export interface LensIndex {
 const albumKey = (a: Pick<MediaNode, "serverUdn" | "title">): string =>
   `${a.serverUdn ?? ""}|${lc(a.title)}`;
 
+/** An album across libraries: its title and artist, whatever server holds it. */
+const sameAlbum = (a: Pick<MediaNode, "title" | "albumArtist" | "artist">): string =>
+  `${lc(a.title)}|${lc(a.albumArtist ?? a.artist)}`;
+
 function build(pools: MediaIndexPools[]): LensIndex {
   const cache = new Map<string, unknown>();
   const lazy = <T>(name: string, make: () => T): T => {
@@ -62,8 +67,19 @@ function build(pools: MediaIndexPools[]): LensIndex {
     get tracks() {
       return lazy("tracks", () => pools.flatMap((g) => g.tracks));
     },
-    get multiServer() {
-      return lazy("multiServer", () => pools.filter((g) => g.albums.length > 0).length > 1);
+    inTwoLibraries(a) {
+      const libraries = lazy("albumLibraries", () => {
+        const m = new Map<string, Set<string>>();
+        for (const g of pools)
+          for (const alb of g.albums) {
+            const k = sameAlbum(alb);
+            const set = m.get(k);
+            if (set) set.add(g.udn);
+            else m.set(k, new Set([g.udn]));
+          }
+        return m;
+      });
+      return (libraries.get(sameAlbum(a))?.size ?? 0) > 1;
     },
     get tracksByAlbum() {
       return lazy("tracksByAlbum", () => {

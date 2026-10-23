@@ -142,7 +142,6 @@ export function ArtistsLens({
 
   // what the lenses derive from the pools, once per snapshot (useLensIndex)
   const index = useLensIndex(pools);
-  const multiServer = index.multiServer;
 
   const artists = index.artists;
 
@@ -573,10 +572,10 @@ export function ArtistsLens({
                       </div>
                       <div className="flex items-center gap-1.5 min-w-0 text-[12px] text-dim">
                         {alb.year && <span>{alb.year}</span>}
-                        {multiServer && alb.serverName && (
+                        {alb.serverName && index.inTwoLibraries(alb) && (
                           <span
                             data-card-badge={alb.serverName}
-                            className="shrink-0 text-[9.5px] px-1.5 py-px rounded-full ring-1 ring-edge"
+                            className="ml-auto shrink-0 text-[9.5px] px-1.5 py-px rounded-full ring-1 ring-edge"
                           >
                             {alb.serverName}
                           </span>

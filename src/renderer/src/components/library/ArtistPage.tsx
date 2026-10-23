@@ -48,7 +48,6 @@ export function ArtistPage({
   const key = lc(name);
   const artist = index.artists.find((a) => a.key === key) ?? null;
   const albums = artist?.albums ?? [];
-  const albumsSpanLibraries = new Set(albums.map((a) => a.serverUdn ?? "")).size > 1;
   // their tracks beyond their own albums: APPEARS ON, a credit on another artist's album (by
   // title, on its server), then TRACKS, the loose ones that belong to no album. One list, one
   // selection, two labelled runs
@@ -100,10 +99,11 @@ export function ArtistPage({
                 onEnter: () => onOpenAlbum(node),
                 onMenu: (e: React.MouseEvent) => actions.openMenu(node, e),
                 onNavDrag: (e: React.PointerEvent) => actions.dragAlbum([node], e, node.title),
-                // which library, only when this artist's albums come from more than one (his Jack
-                // White: the same albums on minitunes and on the streamer's drive); an artist on
-                // one library shows none, its years not squeezed out by a chip that says nothing
-                badge: albumsSpanLibraries ? (node.serverName ?? undefined) : undefined,
+                // which library, only when the same album is in another one too (his Jack White:
+                // the same albums on minitunes and on the streamer's drive), the Albums lens's
+                // rule; an album in one library shows none, its year not squeezed by a chip that
+                // says nothing
+                badge: index.inTwoLibraries(node) ? (node.serverName ?? undefined) : undefined,
               };
               return cards ? (
                 <ContainerCard
