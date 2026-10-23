@@ -35,6 +35,7 @@ import {
   albumsFromTracks,
   audioItemsOnly,
   dedupeAlbums,
+  discsFromFileNames,
   emptyProfile,
   preferCopy,
   richer,
@@ -97,11 +98,13 @@ interface StoredIndex {
 // Asset tagging). v2 added upnp:genre. A bump discards stored indexes
 // wholesale; rebuildHints below keeps that from costing Browse-only
 // servers their Build click.
-const VERSION = 14; // v12: nodes from a browse walk carry their folder titlePath
+const VERSION = 15; // v12: nodes from a browse walk carry their folder titlePath
 // v13: the DIDL parser keeps text as the server sent it ("007" stays "007"), and LPCM
 // (audio/L16;rate=…) reads as PCM with its depth
 // v14: an album folder with no artist takes its artist, year and title from the tracks in it
 // (albumsFromTheirTracks: the Evo's USB drive, 2026-10-11)
+// v15: a server that sends no disc numbers has them read from its file names, all or nothing
+// per album (discsFromFileNames: MinimServer, Malcolm's box sets, 0.12.0-rc.3)
 const PAGE = 500;
 const MAX_TRACKS = 50_000;
 const MAX_CONTAINERS = 10_000;
@@ -455,7 +458,9 @@ function reconcilePools(c: Crawled, serverName: string): Crawled {
   if (dd.collapsed > 0) note({ kind: "duplicate-albums-merged", count: dd.collapsed });
   const yf = yearFromTracks(dd.albums, c.tracks);
   if (yf.filled > 0) note({ kind: "years-from-tracks", count: yf.filled });
-  return { ...c, albums: yf.albums };
+  const fd = discsFromFileNames(c.tracks);
+  if (fd.albums > 0) note({ kind: "discs-from-file-names", count: fd.albums });
+  return { ...c, albums: yf.albums, tracks: fd.tracks };
 }
 
 async function crawl(

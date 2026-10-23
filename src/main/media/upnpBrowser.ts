@@ -15,6 +15,7 @@ import {
 } from "@shared/model";
 import { LARGE_QUEUE_TOKEN } from "@shared/ipc";
 import { asArray, didlToNodes, parser, text } from "./didl";
+import { discsFromFileNames } from "./reconcile";
 import { loggedFetch } from "../netlog";
 
 const PAGE_SIZE = 5000; // the streamer's own server ignores RequestedCount=0
@@ -625,8 +626,10 @@ export async function browse(
     nodes = await rewalk(entry, titlePath);
   }
   if (typeof nodes === "string") throw new Error("browse failed");
-  nodeCache.set(key, nodes);
-  return nodes;
+  // an album opened live reads its discs as the index does (the pool rule discs-from-file-names)
+  const settled = discsFromFileNames(nodes).tracks;
+  nodeCache.set(key, settled);
+  return settled;
 }
 
 async function rewalk(entry: ServerEntry, titlePath: string[]): Promise<MediaNode[] | Miss> {

@@ -92,6 +92,14 @@ export interface MediaNode {
   discNumber?: number;
   discCount?: number;
   /**
+   * PROVISIONAL, a parse's guess for the pool rule discs-from-file-names (main/media/reconcile)
+   * and never kept: the disc a track's file name gives ("2-11 Close Your Eyes.flac", the second
+   * number its track number), read only when the server sent no disc (MinimServer sends none,
+   * 0.12.0-rc.3, Malcolm's box sets). The rule promotes it to discNumber only when every track
+   * of the album agrees, and drops it either way.
+   */
+  fileDisc?: number;
+  /**
    * The audio format of the primary <res>, when the server describes it
    * (DLNA attributes: protocolInfo mime, bitsPerSample, sampleFrequency,
    * bitrate in BYTES/s per the UPnP spec, size). Asset sends all of them
@@ -363,12 +371,24 @@ export function discTrackCount(
   return album ? discCountIn(track, albumTracksOf(album, pool)) : null;
 }
 
-/** The same count from an album's own listing (a browsed album, which has no index pools). */
+/** The same count from an album's own listing (a browsed album, which has no index pools).
+ *  Null, so no "of", when the album has no disc numbers and its track numbers repeat: the
+ *  numbers count within discs the server never named, and the whole album's count would say
+ *  "track 11 of 143" of a box set's eleventh track (0.12.0-rc.3, Malcolm's MinimServer). */
 export function discCountIn(
   track: Pick<MediaNode, "discNumber">,
-  albumTracks: ReadonlyArray<Pick<MediaNode, "discNumber">>,
+  albumTracks: ReadonlyArray<Pick<MediaNode, "discNumber" | "trackNumber">>,
 ): number | null {
   const disc = track.discNumber ?? null;
+  if (disc == null) {
+    const seen = new Set<number>();
+    for (const t of albumTracks) {
+      const pos = trackPosition(t);
+      if (pos == null) continue;
+      if (seen.has(pos)) return null;
+      seen.add(pos);
+    }
+  }
   const onDisc =
     disc == null ? albumTracks : albumTracks.filter((t) => (t.discNumber ?? 1) === disc);
   return onDisc.length > 0 ? onDisc.length : null;
@@ -770,6 +790,7 @@ export type ProfileNote =
   | { kind: "duplicate-albums-merged"; count: number }
   | { kind: "years-from-tracks"; count: number }
   | { kind: "albums-from-their-tracks"; count: number }
+  | { kind: "discs-from-file-names"; count: number }
   | { kind: "search-failed-browsed-instead" }
   | { kind: "search-paged-smaller" }
   | { kind: "browse-capped"; count: number };
@@ -804,6 +825,10 @@ export function describeProfileNote(note: ProfileNote): string {
       return note.count === 1
         ? "1 album listed without an artist took its artist and name from its tracks"
         : `${note.count} albums listed without an artist took their artist and name from their tracks`;
+    case "discs-from-file-names":
+      return note.count === 1
+        ? "1 album with no disc numbers took them from its file names"
+        : `${note.count} albums with no disc numbers took them from their file names`;
     case "search-failed-browsed-instead":
       return "the server's search failed, so the library was indexed by browsing instead";
     case "search-paged-smaller":

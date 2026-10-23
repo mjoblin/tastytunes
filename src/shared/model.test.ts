@@ -13,6 +13,7 @@ import {
   albumTracksOf,
   albumVolume,
   compareTrackOrder,
+  discCountIn,
   discGroups,
   editionless,
   emptyPlayStats,
@@ -259,6 +260,23 @@ describe("orderTracks: sort only when (disc, position) is unique", () => {
     const listing = [at(2), at(1)];
     orderTracks(listing);
     expect(listing).toEqual([at(2), at(1)]);
+  });
+});
+
+describe("discCountIn: the count after a track's place", () => {
+  it("counts the track's own disc", () => {
+    const album = [at(1, 1), at(2, 1), at(1, 2), at(2, 2), at(3, 2)];
+    expect(discCountIn(at(3, 2), album)).toBe(3);
+  });
+
+  it("counts a whole album without discs whose numbers do not repeat", () => {
+    expect(discCountIn(at(2), [at(1), at(2), at(3)])).toBe(3);
+  });
+
+  it("says no count when there are no discs and the numbers repeat (MinimServer's box sets)", () => {
+    // Malcolm's Songbooks+: track 11 of the box is on several discs the server never named
+    const box = [1, 2, 11, 1, 2, 11].map((n, i) => ({ ...at(n), id: i }));
+    expect(discCountIn(at(11), box)).toBeNull();
   });
 });
 
