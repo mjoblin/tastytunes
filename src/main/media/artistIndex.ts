@@ -9,8 +9,11 @@ import { trackArtists, type MediaIndexPools } from "@shared/model";
  */
 export interface ArtistEntry {
   /** The server's own picture for the artist when it is a real one: not one of the indexed
-   *  albums' covers (2026-10-11, his minitunes: 370 of 371 artists carried one of their own
-   *  album covers as their picture, which hid the photo; the one left was a userart.jpg). */
+   *  albums' or tracks' covers (2026-10-11, his minitunes: 370 of 371 artists carried one of
+   *  their own album covers as their picture, which hid the photo; the one left was a
+   *  userart.jpg. 0.12.0-rc.3, Malcolm: always an album image, likely a MinimServer whose
+   *  pictures are each track's embedded cover, so an artist's is some track's, never the
+   *  album's own URL). */
   own: string | null;
   cover: string | null;
   albums: number;
@@ -30,12 +33,17 @@ export function artistIndex(pools: MediaIndexPools[]): Map<string, ArtistEntry> 
     if (!e) map.set(key, (e = { own: null, cover: null, albums: 0, tracks: 0 }));
     return e;
   };
-  const albumArt = new Set<string>();
-  for (const p of pools) for (const a of p.albums) if (a.artUrl) albumArt.add(a.artUrl);
+  // every cover the indexes hold, an album's or a track's: an artist's picture that is one of
+  // them is a cover, and a photo outranks it
+  const coverArt = new Set<string>();
+  for (const p of pools) {
+    for (const a of p.albums) if (a.artUrl) coverArt.add(a.artUrl);
+    for (const t of p.tracks) if (t.artUrl) coverArt.add(t.artUrl);
+  }
   for (const p of pools)
     for (const a of p.artists) {
       const e = entry(a.title);
-      if (e && a.artUrl && !albumArt.has(a.artUrl)) e.own ??= a.artUrl;
+      if (e && a.artUrl && !coverArt.has(a.artUrl)) e.own ??= a.artUrl;
     }
   for (const p of pools)
     for (const a of p.albums) {
