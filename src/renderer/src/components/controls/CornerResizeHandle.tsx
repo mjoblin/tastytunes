@@ -5,8 +5,10 @@ type Props = Pick<ReturnType<typeof useDragExtent>, "dragging" | "snapped" | "ha
   /** The corner it sits in: the one the box grows from. */
   corner: "bottom-right" | "bottom-left";
   label?: string;
-  /** A 12px grip for a corner it shares with a chip (Now Playing's art ⋯, 0.12.0-rc.3): small
-   *  enough to sit outside the chip's circle when the chip keeps the box's 8px inset. */
+  /** A 12px grip for a corner it shares with a chip (Now Playing's art ⋯, 0.12.0-rc.3): its
+   *  hit area small enough to sit outside the chip's circle when the chip keeps the box's 8px
+   *  inset. Only the hit area shrinks: the strokes keep their size and place, drawn past it and
+   *  deaf to the pointer (drawn inside 12px they slid onto the box's rounded corner and faded). */
   compact?: boolean;
 };
 
@@ -27,7 +29,6 @@ export function CornerResizeHandle({
   compact = false,
 }: Props): React.JSX.Element {
   const left = corner === "bottom-left";
-  const box = compact ? 12 : 28;
   return (
     <div
       {...handleProps}
@@ -41,19 +42,21 @@ export function CornerResizeHandle({
       )}
     >
       <svg
-        viewBox={`0 0 ${box} ${box}`}
+        viewBox="0 0 28 28"
         aria-hidden
         className={cx(
-          "absolute inset-0 transition-opacity",
+          "pointer-events-none absolute bottom-0 h-7 w-7 transition-opacity",
+          left ? "left-0" : "right-0",
           dragging ? "opacity-100" : "opacity-0 group-hover:opacity-100",
           left && "-scale-x-100",
           dragging && snapped ? "text-gold" : "text-dim",
         )}
       >
         <path
-          d={compact ? "M10.5 3.5 L3.5 10.5 M10.5 7.5 L7.5 10.5" : "M23 13 L13 23 M23 19 L19 23"}
+          // a pixel nearer the corner than before, so beside the ⋯ they clear its circle by 4px
+          d="M24 14 L14 24 M24 20 L20 24"
           stroke="currentColor"
-          strokeWidth={compact ? 1.6 : 2}
+          strokeWidth={2}
           strokeLinecap="round"
           fill="none"
         />
