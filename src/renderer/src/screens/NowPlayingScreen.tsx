@@ -10,6 +10,7 @@ import {
   ListOrdered,
   Maximize2,
   MicVocal,
+  MoreHorizontal,
   Radio,
   RadioTower,
   Sparkles,
@@ -20,6 +21,9 @@ import { activeSourceId, cx, deriveNowPlaying, fmtDuration, queuePlace } from "@
 import { playingQueueEntry } from "@/lib/playingEntry";
 import { fromQueueItem } from "@/lib/mediaRef";
 import { NameLink } from "@/components/media/NameLine";
+import { RowMenu } from "@/components/media/RowMenu";
+import { trackMenuItems } from "@/lib/mediaMenus";
+import { openArtistInLibrary, openRefInLibrary } from "@/lib/mediaActions";
 import { useSettledSnapshot } from "@/hooks/useSettledSnapshot";
 import { useNowPlayingHeart } from "@/hooks/useNowPlayingHeart";
 import { useDecodedArt } from "@/hooks/useDecodedArt";
@@ -254,6 +258,10 @@ export function NowPlayingScreen(): React.JSX.Element {
   // list, so the button simply isn't offered for one.
   const playlistBtn = useRef<HTMLButtonElement | null>(null);
   const [playlistAt, setPlaylistAt] = useState<{ x: number; y: number } | null>(null);
+  // THE ART'S ⋯ (0.12.0-rc.3, his ask: the Queue offered Open in Library and Go to album for the
+  // playing track, Now Playing only through its name links): the Queue's own track menu for the
+  // playing entry, from a ⋯ on the art that shows under the cursor or from a right-click there.
+  const [artMenu, setArtMenu] = useState<{ x: number; y: number } | null>(null);
   const playlistAvailable = !meta.isRadio && !meta.disc && !!meta.title;
 
   const empty = !meta.title && !meta.subtitle;
@@ -451,6 +459,18 @@ export function NowPlayingScreen(): React.JSX.Element {
       {/* ambient art backdrop is rendered app-wide by AmbientBackdrop in App */}
       {header}
 
+      {artMenu && entryRef && (
+        <RowMenu
+          title={meta.title ?? "Track"}
+          at={artMenu}
+          onClose={() => setArtMenu(null)}
+          items={trackMenuItems(entryRef, {
+            openInLibrary: () => void openRefInLibrary(entryRef),
+            goToArtist: entryArtist ? () => openArtistInLibrary(entryArtist) : undefined,
+            addToPlaylist: playlistAvailable ? () => setPlaylistAt(artMenu) : undefined,
+          })}
+        />
+      )}
       {playlistAt && (
         <AddToPlaylistPanel
           label={meta.title ?? "this track"}
@@ -507,6 +527,11 @@ export function NowPlayingScreen(): React.JSX.Element {
               data-now-playing-art-size={art.size}
               className="group relative"
               style={{ width: art.size, height: art.size }}
+              onContextMenu={(e) => {
+                if (!entryRef) return;
+                e.preventDefault();
+                setArtMenu({ x: e.clientX, y: e.clientY });
+              }}
             >
               {sceneOn && tileStage ? (
                 <div className="scene-float absolute inset-0 rounded-2xl overflow-hidden bg-raised art-glow">
@@ -572,6 +597,27 @@ export function NowPlayingScreen(): React.JSX.Element {
                   )}
                 >
                   <Sparkles size={16} />
+                </button>
+              )}
+              {entryRef && (
+                <button
+                  onClick={(e) => {
+                    const r = e.currentTarget.getBoundingClientRect();
+                    setArtMenu({ x: r.left, y: r.bottom + 6 });
+                  }}
+                  aria-label="More actions"
+                  data-tip="More actions"
+                  data-now-playing-art-menu
+                  className={cx(
+                    // the corner the resize grip leaves free, the art's other chips' glass
+                    "tip-top absolute bottom-2 p-2 rounded-full bg-panel/60 backdrop-blur ring-1 ring-edge transition-all motion-safe:active:scale-90",
+                    mirrored ? "right-2 tip-end" : "left-2 tip-start",
+                    artMenu
+                      ? "text-ink opacity-100"
+                      : "text-dim hover:text-ink opacity-0 group-hover:opacity-100",
+                  )}
+                >
+                  <MoreHorizontal size={16} />
                 </button>
               )}
               <CornerResizeHandle
