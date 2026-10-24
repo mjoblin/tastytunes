@@ -844,7 +844,9 @@ img {
     container-type: inline-size;
     height: clamp(196px, 26cqi, 320px);
     border-radius: 18px;
-    background: var(--color-raised);
+    /* the card surface at half, as the source cards and every album card are, so the ambient
+       wash shows through (his eye, 2026-10-23: they sat heavy as the page's only opaque cards) */
+    background: color-mix(in oklab, var(--color-raised) 50%, transparent);
     box-shadow: 0 0 0 1px var(--color-edge);
   }
   .lib-door-clip {
@@ -874,14 +876,15 @@ img {
     transform: translate(-50%, -50%) translateX(calc(var(--front) * var(--x)));
   }
   /* each picture's hairline (the edge every album picture has, ring-1 ring-edge), then a ring of
-     the door's surface where the pictures overlap; the front circle is exactly the front cover's
-     size, rings and all */
+     the door's surface where the pictures overlap, the half-surface over the page's ground (the
+     door is translucent, a solid ring would read as a frame); the front circle is exactly the
+     front cover's size, rings and all */
   .lib-door-cover,
   .lib-door-face {
     overflow: hidden;
     box-shadow:
       0 0 0 1px var(--color-edge),
-      0 0 0 3px var(--color-raised);
+      0 0 0 3px color-mix(in oklab, var(--color-raised) 50%, var(--color-bg));
   }
   .lib-door-cover {
     border-radius: 6px;
