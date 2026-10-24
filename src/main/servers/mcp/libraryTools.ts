@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { artKeyOf, artUrlAt, artUrlResizable } from "@shared/artUrl";
+import { artKeyOf, artUrlAt, artUrlResizable, isDeviceArt } from "@shared/artUrl";
 import { nativeImage } from "electron";
 import { artHostTrust } from "../../lookups/artFetch";
 import { artThumb, fetchOrigin, JPEG_QUALITY, TIERS } from "../../lookups/artThumbs";
@@ -877,7 +877,8 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
           );
         const tier = a.size ?? "card";
         const link = ctx.dm.snapshot().connection;
-        const trust = artHostTrust(link.phase === "connected" ? link.host : null);
+        const host = link.phase === "connected" ? link.host : null;
+        const trust = artHostTrust(host);
         let got: { bytes: Buffer; type: string } | null = null;
         let from: "server" | "file" = "server";
         if (node.artUrl)
@@ -885,7 +886,14 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
             ? await fetchOrigin(artUrlAt(node.artUrl, TIERS[tier]) ?? node.artUrl, trust).then(
                 (r) => (r ? { bytes: r.raw, type: r.type } : null),
               )
-            : await artThumb(artKeyOf(node), tier, node.artUrl, trust);
+            : // the same storage key as the cards (thumbKey), so both find one file
+              await artThumb(
+                artKeyOf(node),
+                tier,
+                node.artUrl,
+                trust,
+                isDeviceArt(node.artUrl, host),
+              );
         if (!got) {
           // the app's own fall-through (lib/bestArt): the picture inside the audio file when
           // the server has none, read through main's embedded-art lookup (its Settings switch

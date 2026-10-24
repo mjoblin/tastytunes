@@ -1,4 +1,5 @@
 import { protocol } from "electron";
+import { isDeviceArt } from "@shared/artUrl";
 import { artHostTrust } from "../lookups/artFetch";
 import { artThumb } from "../lookups/artThumbs";
 import { deviceManager } from "./runtime";
@@ -18,12 +19,7 @@ export function serveArtProtocol(): void {
     // the streamer's own art server is fetched one picture at a time
     const conn = deviceManager.snapshot().connection;
     const streamer = conn.phase === "connected" ? conn.host : null;
-    let device = false;
-    try {
-      device = streamer != null && new URL(origin).hostname === streamer.split(":")[0];
-    } catch {
-      device = false;
-    }
+    const device = isDeviceArt(origin, streamer);
     // the origin comes from the renderer, so it is checked like every picture fetch
     const got = await artThumb(
       decodeURIComponent(key),

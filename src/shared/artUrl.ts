@@ -61,11 +61,35 @@ export function wikiThumbAt(url: string | null | undefined, px: number): string 
 
 /** A node's art identity: the server and the album it belongs to (its own title for an
  *  album). The thumbnail cache's key (main/lookups/artThumbs), shared since 2026-09-14 so
- *  the renderer's cards and the MCP bridge's get_album_art find the same file. */
+ *  the renderer's cards and the MCP bridge's get_album_art find the same file; the cache
+ *  stores by thumbKey, which adds the picture's URL wherever the URL is the picture's own. */
 export function artKeyOf(
   node: Pick<MediaNode, "serverUdn" | "title" | "album" | "artist" | "albumArtist" | "isContainer">,
 ): string {
   const album = node.isContainer ? node.title : (node.album ?? node.title);
   const artist = node.albumArtist ?? node.artist ?? "";
   return `${node.serverUdn ?? ""}|${album.trim().toLowerCase()}|${artist.trim().toLowerCase()}`;
+}
+
+/** Whether a picture comes from the streamer's own art server: its host is the connected
+ *  streamer's, whatever the port (the Evo serves its pictures on another port than its control
+ *  socket). */
+export function isDeviceArt(origin: string, streamerHost: string | null): boolean {
+  if (!streamerHost) return false;
+  try {
+    const own = new URL(`http://${streamerHost}`).hostname.replace(/^\[|\]$/g, "");
+    return new URL(origin).hostname.replace(/^\[|\]$/g, "") === own;
+  } catch {
+    return false;
+  }
+}
+
+/** What the thumbnail cache stores a picture under. On the streamer's own art server the
+ *  content key alone, since its URLs change with every standby (the drive's mount counter is in
+ *  its ids) and a rotated id must find the same file; everywhere else the content key and the
+ *  URL, since there a URL is the picture's own, and the content key alone gave two editions of
+ *  one album, or two ">> Disc 1" folders of one artist, the same picture (a user's MinimServer,
+ *  2026-10-24). */
+export function thumbKey(key: string, origin: string, device: boolean): string {
+  return device ? key : `${key}|${origin}`;
 }
