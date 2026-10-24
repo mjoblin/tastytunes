@@ -831,7 +831,8 @@ img {
   .lib-doors-row {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 480px));
-    gap: 16px;
+    /* 24px apart, half again the first 16 (his call, 2026-10-23) */
+    gap: 24px;
     padding-top: 8px;
   }
   .lib-door {
@@ -1070,7 +1071,7 @@ img {
   @container doors (max-width: 720px) {
     .lib-doors-row {
       grid-template-columns: 1fr;
-      gap: 12px;
+      gap: 18px;
     }
     .lib-door {
       height: 138px;
