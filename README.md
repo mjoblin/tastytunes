@@ -77,11 +77,13 @@ For music on your local media servers, TastyTunes reads the audio file and shows
 
 Local media servers and the streamer's USB drive, combined into Artists, Albums and Tracks views, with genre, decade, format, and dynamic range filters.
 
+<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/library.webp" alt="The Library with its Albums, Artists, and Tracks cards over every library, and its two media servers below">
+
 <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/lens-albums.webp" alt="The Albums view combining every library into one collection">
 
 #### Artists and Tracks views
 
-The Artists view shows your artists, the selected artist's albums, and the selected album's tracks. The Tracks view lists every track in every library and can be filtered by decade, genre, format, and dynamic range, and the filtered list can be played as a whole.
+The Artists view shows your artists, the selected artist's albums, and the selected album's tracks. The Tracks view lists every track in every library and can be filtered by decade, genre, format, dynamic range, and tempo, and the filtered list can be played as a whole.
 
 <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/lens-artists.webp" alt="The Artists view with an artist selected, their albums in the middle column and the tracks of one album on the right">
 
