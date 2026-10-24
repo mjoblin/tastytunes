@@ -108,21 +108,18 @@ export function LibraryRoot({
                     : "card-hover-glow cursor-pointer hover:z-10 motion-safe:hover:scale-[1.04]",
                 )}
               >
-                {/* the picture, its wash and the scrim the words sit on, clipped to the door
-                (the door itself is not clipped: its tip hangs below it) */}
+                {/* the picture, clipped to the door (the door itself is not clipped: its tip
+                hangs below it); the words sit on the door's own surface below it */}
                 <div className="lib-door-clip" aria-hidden>
-                  {doorsState === "ready" && art.picks ? (
-                    door.key === "albums" ? (
+                  {doorsState === "ready" &&
+                    art.picks &&
+                    (door.key === "albums" ? (
                       <AlbumsArt picks={art.picks} />
                     ) : door.key === "artists" ? (
                       <ArtistsArt picks={art.picks} />
                     ) : (
                       <TracksArt picks={art.picks} waves={art.waves} />
-                    )
-                  ) : (
-                    <div className="lib-door-wash lib-door-wash-plain lib-door-wash-gold" />
-                  )}
-                  <div className="lib-door-scrim" />
+                    ))}
                 </div>
                 {doorsState === "building" ? (
                   // the boot screen's own loading glyph while the first index builds, in the

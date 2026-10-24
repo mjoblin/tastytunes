@@ -14,16 +14,20 @@ import { hashStr } from "@/components/display/scenes/lib";
 import { DOOR_WAVES, type DoorWave } from "@/components/library/useDoorArt";
 
 /**
- * THE DOORS' PICTURES (0.12.0-rc.3): what sits behind each door's title, drawn from the reader's
+ * THE DOORS' PICTURES (0.12.0-rc.3): what sits above each door's title, drawn from the reader's
  * own library (doorPicks chooses it). Every door has one composition and two contents, the real one
  * and a fallback for a library without it, so a door never looks broken and never pretends:
  *
- *   Albums   a fanned crate of covers, the front one largest | plain colored sleeves, the front
- *            one titled
+ *   Albums   a row of overlapping covers, the front one largest | plain colored sleeves, the
+ *            front one titled
  *   Artists  an overlapping cluster of pictures, the front circle as wide as the front cover |
  *            monograms
  *   Tracks   four stepped waveforms from stored analyses | strips with each track's title and
  *            length (never a made-up waveform)
+ *
+ * FLAT (his call, 2026-10-23, the cards read as dated): no blurred backdrop and no fade, the
+ * pictures straight and at full brightness, each with the app's hairline and a ring of the door's
+ * own surface where they overlap, in place of tilts, dimming and shadows.
  *
  * The geometry is in styles.css (the doors section): every size is a fraction of --front, which
  * follows the door's own width, so the composition scales with the window, drops its outer pair
@@ -32,8 +36,8 @@ import { DOOR_WAVES, type DoorWave } from "@/components/library/useDoorArt";
  */
 
 /** Where each ranked item stands, left to right, by how many there are: `x` its offset and `k`
- *  its size against the front item, `dim` its brightness, `step` its place from the front (the
- *  crate's tilt and drop), `outer` the pair the narrowest doors drop, and `peek` where a side
+ *  its size against the front item, `step` its place from the front (which item lies on top),
+ *  `outer` the pair the narrowest doors and the stacked bands drop, and `peek` where a side
  *  face's initial sits, in the part of it the faces in front leave showing (a fraction of its
  *  width). Five put the most played in front and the next two beside it, so a door that keeps
  *  three keeps the top three; one or two stay centered rather than leaning on one side. */
@@ -41,24 +45,23 @@ interface Slot {
   rank: number;
   x: number;
   k: number;
-  dim: number;
   step: number;
   outer: boolean;
   peek: number;
 }
-const FRONT: Slot = { rank: 0, x: 0, k: 1, dim: 1, step: 0, outer: false, peek: 0 };
+const FRONT: Slot = { rank: 0, x: 0, k: 1, step: 0, outer: false, peek: 0 };
 const SLOTS: Record<"one" | "two" | "many", Slot[]> = {
   one: [FRONT],
   two: [
-    { rank: 1, x: -0.3, k: 0.8, dim: 0.86, step: -1, outer: false, peek: -0.24 },
+    { rank: 1, x: -0.3, k: 0.8, step: -1, outer: false, peek: -0.24 },
     { ...FRONT, x: 0.22 },
   ],
   many: [
-    { rank: 3, x: -0.92, k: 0.6, dim: 0.72, step: -2, outer: true, peek: -0.2 },
-    { rank: 1, x: -0.52, k: 0.8, dim: 0.86, step: -1, outer: false, peek: -0.24 },
+    { rank: 3, x: -0.92, k: 0.6, step: -2, outer: true, peek: -0.2 },
+    { rank: 1, x: -0.52, k: 0.8, step: -1, outer: false, peek: -0.24 },
     FRONT,
-    { rank: 2, x: 0.52, k: 0.8, dim: 0.86, step: 1, outer: false, peek: 0.24 },
-    { rank: 4, x: 0.92, k: 0.6, dim: 0.72, step: 2, outer: true, peek: 0.2 },
+    { rank: 2, x: 0.52, k: 0.8, step: 1, outer: false, peek: 0.24 },
+    { rank: 4, x: 0.92, k: 0.6, step: 2, outer: true, peek: 0.2 },
   ],
 };
 
@@ -80,11 +83,8 @@ const colorOf = (s: string): string => PALETTE[hashStr(s.toLowerCase()) % PALETT
 
 type Styled = React.CSSProperties & Record<`--${string}`, string | number>;
 
-/** Each ranked item at its position, left to right; `fanned` tilts and drops them like a crate. */
-function placed<T>(
-  items: T[],
-  fanned: boolean,
-): Array<{ item: T; style: Styled; outer: boolean; key: number }> {
+/** Each ranked item at its position, left to right, the front one on top. */
+function placed<T>(items: T[]): Array<{ item: T; style: Styled; outer: boolean; key: number }> {
   const slots = items.length === 1 ? SLOTS.one : items.length === 2 ? SLOTS.two : SLOTS.many;
   const out: Array<{ item: T; style: Styled; outer: boolean; key: number }> = [];
   for (const p of slots) {
@@ -97,10 +97,7 @@ function placed<T>(
       style: {
         "--x": p.x,
         "--k": p.k,
-        "--dim": p.dim,
         "--peek": p.peek,
-        "--y": fanned ? Math.abs(p.step) * 0.05 : 0,
-        "--r": fanned ? `${p.step * 7}deg` : "0deg",
         zIndex: 10 - Math.abs(p.step),
       },
     });
@@ -108,47 +105,31 @@ function placed<T>(
   return out;
 }
 
-function Wash({ src, color }: { src?: string | null; color?: string }): React.JSX.Element {
-  return src ? (
-    <div className="lib-door-wash" style={{ backgroundImage: `url("${src}")` }} />
-  ) : (
-    <div className="lib-door-wash lib-door-wash-plain" style={{ "--wash": color } as Styled} />
-  );
-}
-
 export function AlbumsArt({ picks }: { picks: DoorPicks }): React.JSX.Element {
   const real = picks.covers.length >= DOOR_MIN_PICTURES;
   const items = real ? picks.covers : picks.sleeves;
-  const front = items[0];
   return (
-    <>
-      {real && front ? (
-        <Wash src={artSrc(front.artUrl, 120, artKeyOf(front))} />
-      ) : (
-        <Wash color={colorOf(front?.title ?? "albums")} />
-      )}
-      <div className="lib-door-art">
-        {placed(items, true).map(({ item, style, outer, key }) => (
-          <div
-            key={key}
-            className={
-              outer ? "lib-door-item lib-door-cover lib-door-outer" : "lib-door-item lib-door-cover"
-            }
-            style={style}
-          >
-            {real ? (
-              <ArtImage
-                src={artSrc(item.artUrl, 240, artKeyOf(item))}
-                className="h-full w-full object-cover"
-                fallback={<Sleeve album={item} titled={false} />}
-              />
-            ) : (
-              <Sleeve album={item} titled={key === 0} />
-            )}
-          </div>
-        ))}
-      </div>
-    </>
+    <div className="lib-door-art">
+      {placed(items).map(({ item, style, outer, key }) => (
+        <div
+          key={key}
+          className={
+            outer ? "lib-door-item lib-door-cover lib-door-outer" : "lib-door-item lib-door-cover"
+          }
+          style={style}
+        >
+          {real ? (
+            <ArtImage
+              src={artSrc(item.artUrl, 240, artKeyOf(item))}
+              className="h-full w-full object-cover"
+              fallback={<Sleeve album={item} titled={false} />}
+            />
+          ) : (
+            <Sleeve album={item} titled={key === 0} />
+          )}
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -189,37 +170,29 @@ export function ArtistsArt({ picks }: { picks: DoorPicks }): React.JSX.Element |
   const faces = real
     ? faceOrder(pictured, picks.coverArt)
     : asked.map((f) => ({ name: f.name, pic: null }));
-  const front = faces[0];
   return (
-    <>
-      {real && front?.pic ? (
-        <Wash src={artSrc(front.pic, 120)} />
-      ) : (
-        <Wash color={colorOf(front?.name ?? "artists")} />
-      )}
-      <div className="lib-door-art">
-        {placed(faces, false).map(({ item, style, outer, key }) => (
-          <div
-            key={key}
-            className={
-              outer ? "lib-door-item lib-door-face lib-door-outer" : "lib-door-item lib-door-face"
-            }
-            style={style}
-          >
-            {item.pic ? (
-              <ArtImage
-                src={artSrc(item.pic, 240)}
-                portraitTop
-                className="h-full w-full object-cover"
-                fallback={<Monogram name={item.name} front={key === 0} />}
-              />
-            ) : (
-              <Monogram name={item.name} front={key === 0} />
-            )}
-          </div>
-        ))}
-      </div>
-    </>
+    <div className="lib-door-art">
+      {placed(faces).map(({ item, style, outer, key }) => (
+        <div
+          key={key}
+          className={
+            outer ? "lib-door-item lib-door-face lib-door-outer" : "lib-door-item lib-door-face"
+          }
+          style={style}
+        >
+          {item.pic ? (
+            <ArtImage
+              src={artSrc(item.pic, 240)}
+              portraitTop
+              className="h-full w-full object-cover"
+              fallback={<Monogram name={item.name} front={key === 0} />}
+            />
+          ) : (
+            <Monogram name={item.name} front={key === 0} />
+          )}
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -248,42 +221,39 @@ export function TracksArt({
 }: {
   picks: DoorPicks;
   waves: DoorWave[] | null;
-}): React.JSX.Element {
-  const gold = <div className="lib-door-wash lib-door-wash-plain lib-door-wash-gold" />;
-  if (waves == null) return gold;
+}): React.JSX.Element | null {
+  // nothing until the stored waveforms are read, so the strips never stand in for a moment
+  if (waves == null) return null;
   const real = waves.length >= 2;
   const strips = picks.tracks.slice(0, DOOR_WAVES);
   return (
-    <>
-      {gold}
-      <div className="lib-door-art lib-door-rows">
-        {ROWS.map((r, i) => {
-          const wave = real ? waves[i] : undefined;
-          const track = real ? undefined : strips[i];
-          if (!wave && !track) return null;
-          return (
-            <div
-              key={i}
-              className={wave ? "lib-door-row lib-door-wave" : "lib-door-row lib-door-strip"}
-              style={{ "--w": r.w, opacity: r.o } as Styled}
-            >
-              {wave ? (
-                <WaveBars bars={wave.bars} />
-              ) : (
-                track && (
-                  <>
-                    <span className="lib-door-strip-title">{track.title}</span>
-                    {track.durationSecs != null && (
-                      <span className="lib-door-strip-length">{fmtTime(track.durationSecs)}</span>
-                    )}
-                  </>
-                )
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </>
+    <div className="lib-door-art lib-door-rows">
+      {ROWS.map((r, i) => {
+        const wave = real ? waves[i] : undefined;
+        const track = real ? undefined : strips[i];
+        if (!wave && !track) return null;
+        return (
+          <div
+            key={i}
+            className={wave ? "lib-door-row lib-door-wave" : "lib-door-row lib-door-strip"}
+            style={{ "--w": r.w, opacity: r.o } as Styled}
+          >
+            {wave ? (
+              <WaveBars bars={wave.bars} />
+            ) : (
+              track && (
+                <>
+                  <span className="lib-door-strip-title">{track.title}</span>
+                  {track.durationSecs != null && (
+                    <span className="lib-door-strip-length">{fmtTime(track.durationSecs)}</span>
+                  )}
+                </>
+              )
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
