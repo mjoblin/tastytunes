@@ -3,6 +3,7 @@ import { tt } from "@/api";
 import { cx, fmtTime } from "@/lib/format";
 import { useStore } from "@/store";
 import { nowPlayingInfoTarget } from "@/lib/mediaInfo";
+import { useReadyIndexSig } from "@/hooks/useIndexPools";
 import { sniffSampleRate } from "@/lib/audioHeader";
 import { stripFromStored, stripToStored } from "@/lib/featureStrip";
 import { onsetsFromStored, onsetsToStored } from "@/lib/onsets";
@@ -292,7 +293,14 @@ export function usePlayingFileRef(): {
   psRef.current = playState;
   const npRef = useRef(nowPlaying);
   npRef.current = nowPlaying;
+  // AFTER A REBUILD (his rc.3 launch, 2026-10-23: the seek bar's waveform waited for the next
+  // track): an index that is building answers no lookup, so a track that started then asks
+  // again once the ready indexes change; a file already found for this track is kept
+  const readySig = useReadyIndexSig();
+  const heldFor = useRef<string | null>(null);
   useEffect(() => {
+    if (heldFor.current === trackKey) return;
+    heldFor.current = null;
     let stale = false;
     setRef(null);
     const built = nowPlayingInfoTarget(psRef.current, npRef.current);
@@ -302,6 +310,7 @@ export function usePlayingFileRef(): {
       .mediaNodeInfo(built.localQuery, "show")
       .then((found) => {
         if (stale || !found?.node.serverUdn || !found.node.id) return;
+        heldFor.current = trackKey;
         setRef({
           serverUdn: found.node.serverUdn,
           objectId: found.node.id,
@@ -312,7 +321,7 @@ export function usePlayingFileRef(): {
     return () => {
       stale = true;
     };
-  }, [trackKey]);
+  }, [trackKey, readySig]);
   return ref;
 }
 
