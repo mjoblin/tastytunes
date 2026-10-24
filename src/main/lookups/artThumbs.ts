@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { app, nativeImage } from "electron";
+import { thumbKey } from "@shared/artUrl";
 import { USER_AGENT } from "../netlog";
 import { fetchPicture } from "./artFetch";
 
@@ -23,8 +24,11 @@ import { fetchPicture } from "./artFetch";
  * a click lands on the picture — it used to fetch the origin again, and the
  * user saw the art pop in on the card and then a blank header (2026-09-14). A
  * second asker while the fetch is in flight waits for it, whichever tier. Keyed
- * by CONTENT — server, album title, album artist — so a rotated id finds the
- * same file; a caller with only a URL keys by the URL. A picture the resizer
+ * by CONTENT (server, album title, album artist) on the streamer's own art server,
+ * so a rotated id finds the same file, and by content AND URL everywhere else,
+ * where the URL is the picture's own: content alone gave two editions of one
+ * album, or two same-named disc folders, one picture (shared/artUrl thumbKey,
+ * 2026-10-24); a caller with only a URL keys by the URL. A picture the resizer
  * cannot read (SVG) is kept as it came, bounded. Files live under
  * userData/cache/art/<tier>/<sha1 of version|tier|key>.<jpg|origin ext>
  * beside a small index.json; least-recently-drawn entries go when the budget
@@ -242,7 +246,8 @@ export async function artThumb(
   device = false,
 ): Promise<Made | null> {
   const map = load();
-  const id = idFor(key, tier);
+  const stored = thumbKey(key, origin, device);
+  const id = idFor(stored, tier);
   const hit = map.get(id);
   if (hit) {
     try {
@@ -254,7 +259,7 @@ export async function artThumb(
       map.delete(id); // the file went; make it again
     }
   }
-  const made = await makeAll(key, origin, trusted, device);
+  const made = await makeAll(stored, origin, trusted, device);
   return made?.[tier] ?? null;
 }
 
