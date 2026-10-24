@@ -22,9 +22,12 @@ import { useStore } from "@/store";
  */
 let poolsCache: { sig: string; pools: MediaIndexPools[] } | null = null;
 
-export function useIndexPools(enabled = true): MediaIndexPools[] | null {
+/** The ready indexes and when each was built, as one string: it changes when an index finishes
+ *  building or starts a rebuild. The pools below refetch on it, and the playing file asks for
+ *  itself again on it while it has not been found (usePlayingFileRef). */
+export function useReadyIndexSig(): string {
   const statuses = useStore((s) => s.mediaIndex);
-  const sig = useMemo(
+  return useMemo(
     () =>
       statuses
         .filter((x) => x.state === "ready")
@@ -33,6 +36,10 @@ export function useIndexPools(enabled = true): MediaIndexPools[] | null {
         .join("|"),
     [statuses],
   );
+}
+
+export function useIndexPools(enabled = true): MediaIndexPools[] | null {
+  const sig = useReadyIndexSig();
   const [pools, setPools] = useState<MediaIndexPools[] | null>(() =>
     poolsCache?.sig === sig ? poolsCache.pools : null,
   );
