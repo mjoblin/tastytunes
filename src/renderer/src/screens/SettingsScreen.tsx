@@ -444,7 +444,7 @@ export function SettingsScreen(): React.JSX.Element {
 
                   <Toggle
                     label="Liner notes"
-                    hint="The panel on Now Playing with Artist, Album and Track tabs: Wikipedia summaries, release details and track credits matched via MusicBrainz, fetched when you open them. Also shows a CD's track names on the Queue screen and artists' photos in the Library. Sends the current artist, album and track names, an artist's name when you open their page, or a CD's MusicBrainz release. Off means no requests will be sent. The panel's Stream tab stays either way."
+                    hint="The panel on Now Playing with Artist, Album and Track tabs: Wikipedia summaries, release details and track credits matched via MusicBrainz, fetched when you open them. Also shows a CD's track names on the Queue screen and artists' photos in the Library. Sends the current artist, album and track names, an artist's name when you open their page, the names of the artists in your library to have their photos ready, or a CD's MusicBrainz release. Off means no requests will be sent. The panel's Stream tab stays either way."
                     checked={settings.artistInfo}
                     onChange={(artistInfo) => void save({ artistInfo })}
                   />
