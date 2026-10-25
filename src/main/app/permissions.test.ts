@@ -1,7 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-vi.mock("electron", () => ({ session: {} }));
-const { permitted } = await import("./permissions");
+import { permitted } from "./permissions";
 
 describe("permitted: a page gets only what the app uses", () => {
   it("allows the copy buttons' clipboard writes and display mode's fullscreen", () => {
