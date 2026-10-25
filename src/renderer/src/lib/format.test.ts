@@ -16,6 +16,7 @@ import {
   fmtRelative,
   fmtTime,
   matchesFilter,
+  queuePlace,
   signalQuality,
 } from "./format";
 
@@ -246,6 +247,116 @@ describe("deriveNowPlaying: the one merge of play_state and now_playing", () => 
     );
     const paused = ps({ state: "ready", queue_id: null }, { title: "Known", duration: 200 });
     expect(deriveNowPlaying(paused, null).title).toBe("Known");
+  });
+});
+
+// an Evo CD owner's readouts (GitHub issue #1), verbatim but for the art's stream id: they
+// carry fewer fields than the types declare (a stopped disc has no queue fields at all)
+const CD_TOC = "Tracks: 10 Length: 37:39";
+const CD_ART =
+  "http://coverartarchive.org/release/d53751bc-0595-4a60-8425-d9a19478fb55/33406720128.jpg";
+const asPlayState = (r: object): ZonePlayState => r as ZonePlayState;
+const asNowPlaying = (r: object): ZoneNowPlaying => r as ZoneNowPlaying;
+const cdStopped = {
+  state: "stop",
+  position: 0,
+  presettable: true,
+  mode_repeat: "off",
+  mode_shuffle: "off",
+  metadata: {
+    class: "md.track.cd",
+    source: "CD",
+    name: "CD",
+    album: "Will of the People",
+    artist: "Muse",
+    title: CD_TOC,
+    art_url: CD_ART,
+    mqa: "none",
+    signal: false,
+  },
+};
+const cdNowPlaying = {
+  state: "PLAYING",
+  source: { id: "CD", name: "CD" },
+  display: {
+    line1: "Liberation",
+    line2: "Muse",
+    line3: "Will of the People",
+    mqa: "none",
+    playback_source: "CD",
+    class: "digital.cd",
+    art_url: CD_ART,
+    progress: { position: 22, duration: 198 },
+    context: "4/10",
+  },
+  queue: { length: 10, position: 3, shuffle: "off", repeat: "off" },
+  controls: [
+    "pause",
+    "play_pause",
+    "toggle_shuffle",
+    "toggle_repeat",
+    "track_next",
+    "track_previous",
+    "seek",
+  ],
+};
+
+describe("deriveNowPlaying: a disc", () => {
+  it("reads the owner's stopped disc as its album and artist over its size", () => {
+    const meta = deriveNowPlaying(asPlayState(cdStopped), null);
+    expect(meta.title).toBe("Will of the People");
+    expect(meta.subtitle).toBe("Muse");
+    expect(meta.disc?.tracks).toBe(10);
+    expect(meta.disc?.secs).toBe(2259);
+  });
+
+  it("names line1's track while it plays, the table of contents still in play_state", () => {
+    const meta = deriveNowPlaying(
+      asPlayState({ ...cdStopped, state: "play" }),
+      asNowPlaying(cdNowPlaying),
+    );
+    expect(meta.title).toBe("Liberation");
+    expect(meta.album).toBe("Will of the People");
+    expect(meta.disc).toBeNull();
+  });
+});
+
+describe("queuePlace: track x of y", () => {
+  it("takes a disc's place from now_playing's queue, else its context, and the Media Library's from play_state", () => {
+    const playing = asPlayState({ ...cdStopped, state: "play" });
+    const airplay = asNowPlaying({
+      ...cdNowPlaying,
+      source: { id: "AIRPLAY", name: "AirPlay" },
+      display: { ...cdNowPlaying.display, class: "stream.service.airplay" },
+      queue: { length: 30, position: 27 },
+    });
+    const places = [
+      queuePlace(playing, asNowPlaying(cdNowPlaying)),
+      queuePlace(playing, asNowPlaying({ ...cdNowPlaying, queue: null })),
+      // another source's now_playing queue never counts
+      queuePlace(
+        asPlayState({
+          state: "play",
+          metadata: { class: "stream.service.airplay", title: "A Song" },
+        }),
+        airplay,
+      ),
+      queuePlace(
+        asPlayState({
+          state: "play",
+          queue_index: 2,
+          queue_length: 30,
+          metadata: { class: "stream.media.upnp", title: "Mock Track 3" },
+        }),
+        null,
+      ),
+    ];
+    expect(places).toEqual([
+      { index: 3, length: 10 },
+      { index: 3, length: 10 },
+      null,
+      { index: 2, length: 30 },
+    ]);
   });
 });
 
