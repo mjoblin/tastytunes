@@ -145,7 +145,9 @@ export function ArtistPictureDialog({
     >
       <div data-artist-picture-dialog className="flex min-h-0 flex-col">
         <div className="text-[13px] font-medium text-ink">Picture for {name}</div>
-        <div className="mt-3 min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
+        {/* p-1 inside, -m-1 outside: room for a chosen tile's ring, which the scroller would
+            otherwise cut at its edge (his look, 2026-10-25) */}
+        <div className="mt-2 -mx-1 -mb-1 min-h-0 flex-1 space-y-4 overflow-y-auto p-1">
           <Section title="From Wikipedia">
             {!lookups ? (
               <Note>Turn on Liner notes in Settings › Connections to choose from Wikipedia.</Note>

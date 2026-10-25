@@ -196,13 +196,14 @@ export function ArtistHeader({
         onContextMenu={openMenu}
         overlay={
           <button
+            // named, but no tip: the well clips to its rounded corners, and a card's ⋯ has none
+            // either (his look, 2026-10-25: the tip was cut off at the well's edge)
             aria-label="Change the picture"
-            data-tip="Change the picture"
             data-artist-picture-menu
             onPointerDown={(e) => e.stopPropagation()}
             onClick={openMenu}
             className={cx(
-              "tip-bottom absolute top-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-lg transition-all",
+              "absolute top-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-lg transition-all",
               "bg-panel/80 ring-1 ring-edge text-dim hover:text-ink",
               menuAt ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
             )}
