@@ -125,6 +125,10 @@
 .art-in {
   animation: art-fade-in 0.15s ease-out;
 }
+/* the album page's compact bar arriving in its trail (AlbumHeader's AlbumCompactVerbs) */
+.compact-in {
+  animation: art-fade-in 0.15s ease-out;
+}
 
 @theme {
   --font-display: "Fraunces Variable", Georgia, serif;

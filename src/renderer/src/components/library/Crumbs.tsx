@@ -13,6 +13,9 @@ export interface CrumbItem {
   current?: boolean;
   /** The way back to search results: gold with the glyph (the search bar's identity). */
   search?: boolean;
+  /** Drawn before the label: the album's cover once its header has scrolled away (the compact
+   *  bar, AlbumCrumbArt). */
+  lead?: React.ReactNode;
 }
 
 /** The trail keeps this many from the start (Library, the source, the volume)
@@ -69,7 +72,15 @@ export function Crumbs({ items }: { items: CrumbItem[] }): React.JSX.Element {
     : items;
   const crumb = (it: CrumbItem): React.JSX.Element => {
     const long = it.label.length > 28;
-    const label = <span className="block max-w-[14rem] truncate">{it.label}</span>;
+    const text = <span className="block max-w-[14rem] truncate">{it.label}</span>;
+    const label = it.lead ? (
+      <span className="flex items-center gap-1.5">
+        {it.lead}
+        {text}
+      </span>
+    ) : (
+      text
+    );
     if (!it.onClick)
       return (
         <span className="px-1.5 py-0.5 text-ink" data-tip={long ? it.label : undefined}>

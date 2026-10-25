@@ -89,7 +89,7 @@ import { usePlayingMatch } from "@/components/library/usePlayingMatch";
 import { useQueueMatch } from "@/components/library/useQueueMatch";
 import { useWindowedList } from "@/hooks/useWindowedList";
 import { Lru } from "@/lib/lru";
-import { AlbumHeader } from "@/components/library/AlbumHeader";
+import { AlbumCompactVerbs, AlbumCrumbArt, AlbumHeader } from "@/components/library/AlbumHeader";
 import { ArtistHeader } from "@/components/library/ArtistHeader";
 import { ArtistPage } from "@/components/library/ArtistPage";
 import { LibrarySearchBar } from "@/components/library/LibrarySearchBar";
@@ -1327,6 +1327,28 @@ export function LibraryScreen(): React.JSX.Element {
     albumArt,
   });
 
+  // THE COMPACT BAR (0.13.0 round 5, AlbumHeader's AlbumCompactVerbs): once the header's verbs have
+  // gone above the scroller's top (under its faded strip, where they can no longer be read), the
+  // trail takes the album's cover and its Play, heart and menu. Watched, not measured on scroll:
+  // one observer per album page, rooted at the page's own scroller.
+  const [verbsGone, setVerbsGone] = useState(false);
+  const albumPageKey =
+    !atRoot && state === "ready" && !searchMode && albumNode ? albumNode.id : null;
+  useEffect(() => {
+    setVerbsGone(false);
+    const root = scrollRef.current;
+    const verbs = root?.querySelector("[data-album-verbs]");
+    if (albumPageKey == null || !root || !verbs) return;
+    const io = new IntersectionObserver(
+      ([e]) =>
+        setVerbsGone(!e.isIntersecting && e.boundingClientRect.bottom <= (e.rootBounds?.top ?? 0)),
+      { root, rootMargin: "-24px 0px 0px 0px" },
+    );
+    io.observe(verbs);
+    return () => io.disconnect();
+  }, [albumPageKey]);
+  const compactBar = verbsGone && albumPageKey != null && albumNode != null;
+
   // "Retrieving…" only appears when a browse actually takes a moment —
   // cached/fast responses swap in without a flash of loading copy.
   const [showLoading, setShowLoading] = useState(false);
@@ -1754,53 +1776,71 @@ export function LibraryScreen(): React.JSX.Element {
           the bare root, where the screen title already says it; the trail
           folds its middle when it would not fit (Crumbs) */}
       {!searchMode && (serverUdn != null || lens != null || path.length > 0) && (
-        <div data-library-crumbs className="no-drag relative z-10 px-8 pb-3 text-[12.5px]">
-          <Crumbs
-            items={[
-              {
-                // Arriving from unified search, the trail LEADS with Search rather
-                // than burying it mid-trail: you didn't come through the library root,
-                // and the first crumb is the way back to where you did come from.
-                key: "root",
-                label: path[0]?.id === UNIFIED_SEARCH_CRUMB_ID ? "Search" : "Library",
-                onClick: () => jumpTo(0),
-                current: atRoot && !lens,
-              },
-              ...(atRoot && lens
-                ? artistPage
+        <div
+          data-library-crumbs
+          className="no-drag relative z-10 flex min-h-[36px] items-start gap-3 px-8 pb-3 text-[12.5px]"
+        >
+          <div className="min-w-0 flex-1">
+            <Crumbs
+              items={[
+                {
+                  // Arriving from unified search, the trail LEADS with Search rather
+                  // than burying it mid-trail: you didn't come through the library root,
+                  // and the first crumb is the way back to where you did come from.
+                  key: "root",
+                  label: path[0]?.id === UNIFIED_SEARCH_CRUMB_ID ? "Search" : "Library",
+                  onClick: () => jumpTo(0),
+                  current: atRoot && !lens,
+                },
+                ...(atRoot && lens
+                  ? artistPage
+                    ? [
+                        // the artist page over the Artists lens: the lens crumb leads back to
+                        // its columns, the artist still selected
+                        { key: "lens", label: LENS_LABEL[lens], onClick: closeArtistPage },
+                        { key: "artist-page", label: artistPage, current: true },
+                      ]
+                    : [{ key: "lens", label: LENS_LABEL[lens] }]
+                  : []),
+                ...(server && path[0]?.id !== LENS_CRUMB_ID
                   ? [
-                      // the artist page over the Artists lens: the lens crumb leads back to
-                      // its columns, the artist still selected
-                      { key: "lens", label: LENS_LABEL[lens], onClick: closeArtistPage },
-                      { key: "artist-page", label: artistPage, current: true },
-                    ]
-                  : [{ key: "lens", label: LENS_LABEL[lens] }]
-                : []),
-              ...(server && path[0]?.id !== LENS_CRUMB_ID
-                ? [
-                    {
-                      key: "server",
-                      label: server.name,
-                      onClick: () => jumpTo(1),
-                      current: path.length === 0,
-                    },
-                  ]
-                : []),
-              ...path.flatMap((crumb, i) =>
-                crumb.id === UNIFIED_SEARCH_CRUMB_ID
-                  ? []
-                  : [
                       {
-                        key: `${crumb.id}-${i}`,
-                        label: crumb.title,
-                        onClick: () => jumpTo(i + 2),
-                        current: i === path.length - 1,
-                        search: crumb.id === SEARCH_CRUMB_ID,
+                        key: "server",
+                        label: server.name,
+                        onClick: () => jumpTo(1),
+                        current: path.length === 0,
                       },
-                    ],
-              ),
-            ]}
-          />
+                    ]
+                  : []),
+                ...path.flatMap((crumb, i) =>
+                  crumb.id === UNIFIED_SEARCH_CRUMB_ID
+                    ? []
+                    : [
+                        {
+                          key: `${crumb.id}-${i}`,
+                          label: crumb.title,
+                          onClick: () => jumpTo(i + 2),
+                          current: i === path.length - 1,
+                          search: crumb.id === SEARCH_CRUMB_ID,
+                          lead:
+                            compactBar && albumNode && i === path.length - 1 ? (
+                              <AlbumCrumbArt albumNode={albumNode} albumArt={albumArt} />
+                            ) : undefined,
+                        },
+                      ],
+                ),
+              ]}
+            />
+          </div>
+          {compactBar && albumNode && (
+            <AlbumCompactVerbs
+              albumNode={albumNode}
+              playContainer={playContainer}
+              nodeFavorited={nodeFavorited}
+              heartNode={heartNode}
+              openMenu={openMenu}
+            />
+          )}
         </div>
       )}
 
