@@ -19,7 +19,8 @@ import {
 } from "@shared/model";
 import { useWindowedList } from "@/hooks/useWindowedList";
 import { cx, matchesFilter, fmtCount } from "@/lib/format";
-import { usePlayStats, playedBucket, playedOptionsOf } from "@/lib/playStats";
+import { usePlayStats } from "@/lib/playStats";
+import { playedBucket, playedOptionsOf } from "@/lib/playStatsView";
 import { useStore } from "@/store";
 import { useAlbumDr, USB_ANALYSIS_HINT } from "@/lib/audioAnalysis";
 import { FilterInput } from "@/components/controls/FilterInput";
@@ -281,8 +282,11 @@ export function AlbumsLens({
   // WINDOWED CARDS (0.11.0 sweep): past WINDOW_TILES_ABOVE tiles the cards grid renders only
   // the rows of cards near the scroller's viewport, as many columns as auto-fill would give
   // (from the measured width inside the scroller, its scrollbar excluded), the rows' pitch
-  // measured by useWindowedList. Below it, and in the rows layout, every tile renders exactly
-  // as before.
+  // measured by useWindowedList. Until the width is measured (the layout effect, before the
+  // first paint) it renders none: it rendered every tile, and at 5,000 albums that first pass,
+  // its pictures each reading their ancestors' styles, took 1.5 of the lens's 1.9 s to open
+  // (0.13.0, the scale fixture). The rows layout windows its rows the same way since then.
+  // Below the threshold every tile renders exactly as before.
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const [width, setWidth] = useState(0);
   useLayoutEffect(() => {
@@ -294,7 +298,7 @@ export function AlbumsLens({
     return () => ro.disconnect();
   }, []);
   const cols = Math.max(1, Math.floor((width + cardGap) / (cardSize + cardGap)));
-  const windowed = cards && width > 0 && tiles.length > WINDOW_TILES_ABOVE;
+  const windowed = cards && tiles.length > WINDOW_TILES_ABOVE;
   const colWidth = fillRows ? (width - cardGap * (cols - 1)) / cols : cardSize;
   const win = useWindowedList({
     scrollRef: gridRef,
@@ -303,7 +307,15 @@ export function AlbumsLens({
     // the art is square; the title and its second line below it
     estimate: Math.round(colWidth) + 52 + cardGap,
     overscan: 3,
-    enabled: windowed,
+    enabled: windowed && width > 0,
+  });
+  const linesWindowed = !cards && tiles.length > WINDOW_TILES_ABOVE;
+  const lines = useWindowedList({
+    scrollRef: gridRef,
+    count: linesWindowed ? tiles.length : 0,
+    itemSelector: "[data-albums-line]",
+    estimate: 56,
+    enabled: linesWindowed,
   });
   // A TRIP AWAY COMES BACK TO THE SPOT, once the grid can hold it: the windowed grid holds no
   // rows until it has measured its width, and a scrollTo then clamped the spot to 0 (the
@@ -541,7 +553,7 @@ export function AlbumsLens({
           <div ref={bodyRef}>
             {shown.length === 0 ? (
               <div className="text-[15px] text-faint pt-4 px-1">Nothing matches those filters.</div>
-            ) : windowed ? (
+            ) : windowed && width === 0 ? null : windowed ? (
               <div
                 data-albums-windowed
                 className={cx(selA.size > 0 && "pb-24")}
@@ -588,7 +600,19 @@ export function AlbumsLens({
                     : undefined
                 }
               >
-                {tiles.map((t, ti) => renderTile(t, ti))}
+                {linesWindowed ? (
+                  <>
+                    {lines.padTop > 0 && <div style={{ height: lines.padTop }} />}
+                    {tiles.slice(lines.first, lines.last + 1).map((t, i) => (
+                      <div key={nodeKey(t.node)} data-albums-line>
+                        {renderTile(t, lines.first + i)}
+                      </div>
+                    ))}
+                    {lines.padBottom > 0 && <div style={{ height: lines.padBottom }} />}
+                  </>
+                ) : (
+                  tiles.map((t, ti) => renderTile(t, ti))
+                )}
               </div>
             )}
           </div>

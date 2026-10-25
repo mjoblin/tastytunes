@@ -9,7 +9,8 @@ import {
   trackPosition,
 } from "@shared/model";
 import { cx, matchesFilter, fmtCount, fmtAgo } from "@/lib/format";
-import { usePlayStats, playedBucket, playedOptionsOf } from "@/lib/playStats";
+import { usePlayStats } from "@/lib/playStats";
+import { playedBucket, playedOptionsOf, talliesOf } from "@/lib/playStatsView";
 import { useStore } from "@/store";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { useKnownStats, USB_ANALYSIS_HINT } from "@/lib/audioAnalysis";
@@ -171,8 +172,10 @@ export function TracksLens({
     if (mem.decade) list = list.filter((t) => decadeOf(t.year) === mem.decade);
     if (mem.dr) list = list.filter((t) => String(drOf(t) ?? "") === mem.dr);
     if (mem.tempo) list = list.filter((t) => tempoBandOf(tempoOf(t)) === mem.tempo);
+    // each row's tally read once, when a sort or the facet reads the record
+    const tally = record ? talliesOf(record, list) : null;
     if (mem.played)
-      list = list.filter((t) => playedBucket(record?.track(t)?.lastAt ?? null) === mem.played);
+      list = list.filter((t) => playedBucket(tally?.get(t)?.lastAt ?? null) === mem.played);
     const fmt = mem.format;
     if (fmt) list = list.filter((t) => formatTags(t.format).includes(fmt));
     if (mem.filter)
@@ -200,9 +203,9 @@ export function TracksLens({
       if (sort === "tempo") return (tempoOf(b) ?? -1) - (tempoOf(a) ?? -1) || byTitle(a, b);
       // the record's sorts: most recent / most played first, unplayed last
       if (sort === "lastPlayed")
-        return (record?.track(b)?.lastAt ?? 0) - (record?.track(a)?.lastAt ?? 0) || byTitle(a, b);
+        return (tally?.get(b)?.lastAt ?? 0) - (tally?.get(a)?.lastAt ?? 0) || byTitle(a, b);
       if (sort === "plays")
-        return (record?.track(b)?.plays ?? 0) - (record?.track(a)?.plays ?? 0) || byTitle(a, b);
+        return (tally?.get(b)?.plays ?? 0) - (tally?.get(a)?.plays ?? 0) || byTitle(a, b);
       return byTitle(a, b);
     });
     return reversed ? sorted.reverse() : sorted;

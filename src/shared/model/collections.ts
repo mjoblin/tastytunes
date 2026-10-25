@@ -188,6 +188,23 @@ export function heartPeersFrom(
   };
 }
 
+/** The media favorites by content, made once per favorites list (the store hands out a new
+ *  list on every change): a heart check is then one lookup, not a key made for every favorite. */
+const contentMaps = new WeakMap<readonly Favorite[], Map<string, FavoriteMedia[]>>();
+function byContent(favorites: readonly Favorite[]): Map<string, FavoriteMedia[]> {
+  let m = contentMaps.get(favorites);
+  if (!m) {
+    m = new Map();
+    for (const f of favorites) {
+      if (f.kind === "station") continue;
+      const k = favoriteContentKey(f);
+      m.set(k, [...(m.get(k) ?? []), f]);
+    }
+    contentMaps.set(favorites, m);
+  }
+  return m;
+}
+
 /**
  * THE HEART A COPY CARRIES (0.13.0): of the favorites of the same content, the one whose facts
  * pick this copy out of the library's copies (`peers`: the library's albums or tracks of the same
@@ -201,11 +218,8 @@ export function heartOf(
   favorites: readonly Favorite[],
   peers: ReadonlyArray<Pick<MediaNode, "artUrl" | "durationSecs" | "format" | "serverUdn">> = [],
 ): FavoriteMedia | null {
-  const key = favoriteContentKey(item);
-  const same = favorites.filter(
-    (f): f is FavoriteMedia => f.kind !== "station" && favoriteContentKey(f) === key,
-  );
-  if (same.length === 0) return null;
+  const same = byContent(favorites).get(favoriteContentKey(item));
+  if (!same) return null;
   const mine = heartFacts(item);
   const isMine = (f: CopyFacts): boolean =>
     f.server != null &&
