@@ -13,8 +13,9 @@ import { openAlbumNode, playAlbumNode } from "@/lib/mediaActions";
 import { fromNode } from "@/lib/mediaRef";
 
 /** The shelf's cards against the reader's card size: smaller, so the doors above stay the
- *  page's lead and more of a batch fits (his note, 2026-10-25: "a little smaller"). */
-const SHELF_SCALE = 0.8;
+ *  page's lead and more of a batch fits (his note, 2026-10-25: "a little smaller"; then, on his
+ *  library, "a little small now. bump them a bit bigger": 0.8 became 0.9). */
+const SHELF_SCALE = 0.9;
 
 /**
  * RECENTLY ADDED ON THE LIBRARY'S FRONT PAGE (0.13.0 round 9, his pick on the decision page: a
