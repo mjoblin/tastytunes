@@ -78,6 +78,7 @@ import { useOneShotAsk } from "@/hooks/useOneShotAsk";
 import { artSrc } from "@/lib/artSrc";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { useQueueSourceActive } from "@/hooks/useQueueSourceActive";
+import { menuAt } from "@/lib/menuAt";
 
 /**
  * Stored playlists: the collection on the left, the selected playlist's tracks
@@ -607,7 +608,7 @@ export function PlaylistsScreen(): React.JSX.Element {
                         current={queuedId === selected.id && playingIndex === i}
                         sourceActive={queueSourceActive}
                         onRemove={() => removeItem(i)}
-                        onMenu={(e) => setTrackMenu({ item, index: i, x: e.clientX, y: e.clientY })}
+                        onMenu={(e) => setTrackMenu({ item, index: i, ...menuAt(e) })}
                       />
                     ))}
                   </SortableContext>

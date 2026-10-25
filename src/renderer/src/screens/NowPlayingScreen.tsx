@@ -49,6 +49,7 @@ import type { SceneId } from "@/components/display/scenes/types";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { useQueueSourceActive } from "@/hooks/useQueueSourceActive";
 import { onScreenKey } from "@/lib/keyboardOwner";
+import { menuAt } from "@/lib/menuAt";
 
 const ALIGN_H = { left: "justify-start", center: "justify-center", right: "justify-end" } as const;
 const ALIGN_V = { top: "items-start", center: "items-center", bottom: "items-end" } as const;
@@ -530,7 +531,7 @@ export function NowPlayingScreen(): React.JSX.Element {
               onContextMenu={(e) => {
                 if (!entryRef) return;
                 e.preventDefault();
-                setArtMenu({ x: e.clientX, y: e.clientY });
+                setArtMenu(menuAt(e));
               }}
             >
               {sceneOn && tileStage ? (

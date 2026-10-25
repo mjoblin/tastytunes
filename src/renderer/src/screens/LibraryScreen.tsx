@@ -100,6 +100,7 @@ import {
   useLibrarySearch,
   type SearchLate,
 } from "@/components/library/useLibrarySearch";
+import { menuAt } from "@/lib/menuAt";
 
 // Crumbs keep the entered node so an album level can render its header
 // (art, artist, year) without re-fetching metadata.
@@ -2070,9 +2071,7 @@ export function LibraryScreen(): React.JSX.Element {
             </SelectionVerb>
             <SelectionVerb
               icon={<ListPlus size={13} />}
-              onClick={(e) =>
-                setPlaylistMulti({ nodes: selectedNodes(), x: e.clientX, y: e.clientY })
-              }
+              onClick={(e) => setPlaylistMulti({ nodes: selectedNodes(), ...menuAt(e) })}
             >
               Add to playlist…
             </SelectionVerb>

@@ -43,6 +43,7 @@ import {
 } from "./lensShared";
 import { useRowSelection } from "@/components/library/useRowSelection";
 import { useLensIndex } from "./useLensIndex";
+import { menuAt } from "@/lib/menuAt";
 
 // The Albums lens, split out of LibraryLenses.tsx (2026-09-13, the lenses round: three lenses of
 // 600 to 800 lines shared one file); what the lenses share lives in ./lensShared.
@@ -665,9 +666,7 @@ export function AlbumsLens({
             <SelectionVerb
               icon={<ListPlus size={13} />}
               onClick={(e) =>
-                actions.addTracksToPlaylist(chosenATracks(), { x: e.clientX, y: e.clientY }, () =>
-                  setSelA(new Set()),
-                )
+                actions.addTracksToPlaylist(chosenATracks(), menuAt(e), () => setSelA(new Set()))
               }
             >
               Add to playlist…

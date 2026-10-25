@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { ChevronRight, Search } from "lucide-react";
 import { cx } from "@/lib/format";
 import { PopoverCard } from "@/components/chrome/Overlay";
+import { menuAt } from "@/lib/menuAt";
 
 /** One crumb of the trail: what it says and where it leads. */
 export interface CrumbItem {
@@ -122,7 +123,7 @@ export function Crumbs({ items }: { items: CrumbItem[] }): React.JSX.Element {
             <button
               data-library-crumbs-fold={hidden.length}
               data-tip={`${hidden.length} more`}
-              onClick={(e) => setFold({ x: e.clientX, y: e.clientY })}
+              onClick={(e) => setFold(menuAt(e))}
               className="px-1.5 py-0.5 rounded text-dim hover:text-ink hover:bg-veil transition-colors"
             >
               …

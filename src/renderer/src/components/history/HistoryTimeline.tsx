@@ -31,6 +31,7 @@ import { cx, fmtCount, fmtDuration, fmtTime, matchesFilter } from "@/lib/format"
 import { scrollToStart } from "@/lib/scroll";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { monthLine, monthStartOf, statsFor } from "@/lib/historyStats";
+import { menuAt } from "@/lib/menuAt";
 
 /**
  * The History screen's TIMELINE (0.8.0, rounds two and 2b): the whole
@@ -542,8 +543,7 @@ export function HistoryTimeline({
     e.stopPropagation();
     setRowMenu({
       title: ref.title,
-      x: e.clientX,
-      y: e.clientY,
+      ...menuAt(e),
       items: trackMenuItems(ref, {
         playNow: () => void playRefNow(ref),
         openInLibrary: () => void openRefInLibrary(ref),

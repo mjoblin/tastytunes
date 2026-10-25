@@ -49,6 +49,7 @@ import { HistoryStats } from "@/components/history/HistoryStats";
 import { HistoryRediscover } from "@/components/history/HistoryRediscover";
 import { HistoryElsewhere } from "@/components/history/HistoryElsewhere";
 import { FACT_SEP } from "@/lib/mediaFacts";
+import { menuAt } from "@/lib/menuAt";
 
 interface Block {
   session: string | null;
@@ -226,7 +227,7 @@ export function HistoryScreen(): React.JSX.Element {
     if (!ref) return;
     e.preventDefault();
     e.stopPropagation();
-    const at = { x: e.clientX, y: e.clientY };
+    const at = menuAt(e);
     setRowMenu({
       title: ref.title,
       ...at,

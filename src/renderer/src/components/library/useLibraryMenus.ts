@@ -19,6 +19,7 @@ import { isAlbumClass, isArtistClass } from "@/lib/media";
 import type { MediaMenuItem } from "@/lib/mediaMenus";
 import { itemFromNode } from "@/components/overlays/AddToPlaylistPanel";
 import type { Crumb } from "@/screens/LibraryScreen";
+import { menuAt } from "@/lib/menuAt";
 
 // The Library's MENUS, lifted out of LibraryScreen (2026-09-13, the second
 // lift of the screen's hygiene round, after search mode): the open menu and
@@ -170,7 +171,7 @@ export function useLibraryMenus(d: {
   const openMenu = (node: MediaNode, e: React.MouseEvent, list?: MediaNode[]): void => {
     e.preventDefault();
     e.stopPropagation();
-    setMenu({ node, x: e.clientX, y: e.clientY, list });
+    setMenu({ node, ...menuAt(e), list });
   };
 
   /** ⋯-menu garnish on a box set's open album: the volume walk as named

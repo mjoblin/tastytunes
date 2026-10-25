@@ -84,6 +84,7 @@ import { useDisc } from "@/hooks/useDisc";
 import { useQueueSelection, type SelectionLate } from "@/components/queue/useQueueSelection";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { useQueueSourceActive } from "@/hooks/useQueueSourceActive";
+import { menuAt } from "@/lib/menuAt";
 
 /**
  * Queue → preset: the shared PresetSavePanel in a centered modal. The device
@@ -505,7 +506,7 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
     onMenu: (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      setRowMenu({ item, x: e.clientX, y: e.clientY });
+      setRowMenu({ item, ...menuAt(e) });
     },
     item,
     isCurrent: item.id === playId,
@@ -769,10 +770,7 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
           >
             Move to bottom
           </SelectionVerb>
-          <SelectionVerb
-            icon={<ListPlus size={13} />}
-            onClick={(e) => setPlaylistBatch({ x: e.clientX, y: e.clientY })}
-          >
+          <SelectionVerb icon={<ListPlus size={13} />} onClick={(e) => setPlaylistBatch(menuAt(e))}>
             Add to playlist…
           </SelectionVerb>
           {selFavs.length > 0 && (
@@ -840,7 +838,7 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
                 onMenu={(item, e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  setRowMenu({ item, x: e.clientX, y: e.clientY });
+                  setRowMenu({ item, ...menuAt(e) });
                 }}
               />
             ) : cards ? (

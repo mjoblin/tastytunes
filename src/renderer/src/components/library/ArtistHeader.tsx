@@ -13,6 +13,7 @@ import { artSrc } from "@/lib/artSrc";
 import { wikiThumbAt } from "@shared/artUrl";
 import { refreshArtistPicture, useArtistPictureAnswer } from "@/lib/artistPictures";
 import { cx, fmtCount } from "@/lib/format";
+import { menuAt } from "@/lib/menuAt";
 import { FACT_SEP } from "@/lib/mediaFacts";
 
 /**
@@ -86,7 +87,7 @@ export function ArtistHeader({
     };
   }, [name, askChosen, lookups]);
   const chosen = chosenOf?.name === name ? chosenOf.value : undefined;
-  const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
+  const [menuPoint, setMenuPoint] = useState<{ x: number; y: number } | null>(null);
   const [choosing, setChoosing] = useState(false);
   const { status, info } = useArtistAbout(name, true);
   const photo = lookups ? (info?.image ?? null) : null;
@@ -150,11 +151,7 @@ export function ArtistHeader({
   const openMenu = (e: React.MouseEvent): void => {
     e.preventDefault();
     e.stopPropagation();
-    // a ⋯ pressed from the keyboard has no pointer: the menu opens under the button
-    if (e.type === "click" && e.detail === 0) {
-      const r = e.currentTarget.getBoundingClientRect();
-      setMenuAt({ x: r.left, y: r.bottom + 4 });
-    } else setMenuAt({ x: e.clientX, y: e.clientY });
+    setMenuPoint(menuAt(e));
   };
   const reset = (): void => {
     void tt
@@ -205,7 +202,7 @@ export function ArtistHeader({
             onClick={openMenu}
             className={cx(
               "absolute bottom-2 right-2 z-10 p-2 rounded-full bg-panel/60 backdrop-blur ring-1 ring-edge transition-all motion-safe:active:scale-90",
-              menuAt
+              menuPoint
                 ? "text-ink opacity-100"
                 : "text-dim hover:text-ink opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
             )}
@@ -214,11 +211,11 @@ export function ArtistHeader({
           </button>
         }
       />
-      {menuAt && (
+      {menuPoint && (
         <RowMenu
           title={name}
-          at={menuAt}
-          onClose={() => setMenuAt(null)}
+          at={menuPoint}
+          onClose={() => setMenuPoint(null)}
           items={[
             { label: "Choose a picture…", run: () => setChoosing(true) },
             ...(chosen

@@ -11,6 +11,7 @@ import { fmtAdded, fmtCount } from "@/lib/format";
 import { albumMenuItems, type MediaMenuItem } from "@/lib/mediaMenus";
 import { openAlbumNode, playAlbumNode } from "@/lib/mediaActions";
 import { fromNode } from "@/lib/mediaRef";
+import { menuAt } from "@/lib/menuAt";
 
 /** The shelf's cards against the reader's card size (his calls, 2026-10-25: "a little smaller"
  *  at the decision page, then on his own library 0.8 read "a little small", 0.9 next, then
@@ -49,8 +50,7 @@ export function RecentlyAddedShelf({ seeAll }: { seeAll(): void }): React.JSX.El
     setMenu({
       key: `${album.serverUdn}|${album.id}`,
       title: album.title,
-      x: e.clientX,
-      y: e.clientY,
+      ...menuAt(e),
       items: albumMenuItems(fromNode(album, album.serverUdn, album.serverName), {
         playNow: () => void playAlbumNode(album),
         openInLibrary: () => openAlbumNode(album),

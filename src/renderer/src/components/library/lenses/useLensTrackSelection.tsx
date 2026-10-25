@@ -7,6 +7,7 @@ import { RowMenu } from "@/components/media/RowMenu";
 import { SelectionBar, SelectionVerb } from "@/components/controls/SelectionBar";
 import { useRowSelection } from "@/components/library/useRowSelection";
 import { type LensActions, nodeKey } from "./lensShared";
+import { menuAt } from "@/lib/menuAt";
 
 // The track lenses' selection (2026-09-13, step two of the lenses round; the
 // Artists and Tracks lenses carried two copies of all of it): the row grammar
@@ -68,7 +69,7 @@ export function useLensTrackSelection(d: { tracks: MediaNode[]; actions: LensAct
     if (selT.size > 1 && selT.has(nodeKey(t))) {
       e.preventDefault();
       e.stopPropagation();
-      setLensMenu({ x: e.clientX, y: e.clientY });
+      setLensMenu(menuAt(e));
     } else actions.openMenu(t, e, d.tracks);
   };
   /** The five verbs over the chosen tracks, in the bar and the plural menu
@@ -144,11 +145,7 @@ export function LensTrackSelectionBar({
       data-lens-selection-bar
     >
       {sel.verbs().map((v) => (
-        <SelectionVerb
-          key={v.label}
-          icon={v.icon}
-          onClick={(e) => v.run({ x: e.clientX, y: e.clientY })}
-        >
+        <SelectionVerb key={v.label} icon={v.icon} onClick={(e) => v.run(menuAt(e))}>
           {v.label}
         </SelectionVerb>
       ))}

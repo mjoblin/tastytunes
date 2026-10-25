@@ -19,6 +19,7 @@ import { cx, fmtCount, fmtRelative, matchesFilter } from "@/lib/format";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { Lru } from "@/lib/lru";
 import { ArtistAbout } from "@/components/media/ArtistAbout";
+import { menuAt } from "@/lib/menuAt";
 
 /**
  * The History screen's ELSEWHERE (0.8.0): the artists the record met away from
@@ -264,8 +265,7 @@ export function HistoryElsewhere({
     setMenu({
       key: t.key,
       title: t.title,
-      x: e.clientX,
-      y: e.clientY,
+      ...menuAt(e),
       items: [
         ...(t.owned
           ? [
@@ -287,8 +287,7 @@ export function HistoryElsewhere({
     setMenu({
       key: a.key,
       title: a.name,
-      x: e.clientX,
-      y: e.clientY,
+      ...menuAt(e),
       items: [
         ...(a.inLibrary ? [{ label: "Go to artist", run: () => openArtistInLibrary(a.name) }] : []),
         { label: "Search the library", run: () => requestSearch(a.name) },

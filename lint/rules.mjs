@@ -437,4 +437,26 @@ export const ONE_HOME = [
       code: 'const c = "opacity-0 group-hover:opacity-100";',
     },
   },
+  {
+    id: "menu-anchor",
+    was: "none (0.13.0: his try of round 4, a Queue row's ⋯ pressed from the keyboard opened its menu in the window's top-left corner)",
+    // a point read straight off the pointer, { x: e.clientX, y: e.clientY }: a menu's comes from
+    // menuAt, which places a key press's under its control (it has no pointer: 0, 0). A hover
+    // (RowAction) and the drags follow the pointer itself, and keep it.
+    selector:
+      "ObjectExpression:has(Property[key.name='x'] > MemberExpression[property.name='clientX']):has(Property[key.name='y'] > MemberExpression[property.name='clientY'])",
+    files: [`^${R}`],
+    allow: [
+      "lib/menuAt\\.ts$",
+      "media/RowAction\\.tsx$",
+      "queue/useQueueDrag\\.ts$",
+      "hooks/useNavDrag\\.tsx$",
+    ],
+    message:
+      "A menu's point comes from menuAt(e) (lib/menuAt): a key press has no pointer, and a menu placed at it opens in the window's corner",
+    bad: {
+      file: `${R}screens/QueueScreen.tsx`,
+      code: "const at = { x: e.clientX, y: e.clientY };",
+    },
+  },
 ];

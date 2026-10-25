@@ -50,6 +50,7 @@ import {
   type SearchCategoryId,
   type SearchGroup,
 } from "@/lib/searchGroups";
+import { menuAt } from "@/lib/menuAt";
 
 /** Below this, a query matches half the library and every station on earth. */
 const MIN_RADIO_CHARS = 2;
@@ -435,7 +436,7 @@ export function SearchScreen(): React.JSX.Element {
     e.stopPropagation();
     const ref = fromNode(node);
     const udn = node.serverUdn;
-    const at = { x: e.clientX, y: e.clientY };
+    const at = menuAt(e);
     const queueVerb = (action: "PLAY_NOW" | "PLAY_NEXT" | "APPEND" | "REPLACE") =>
       udn ? () => void tt.mediaQueueAdd(udn, node.id, action) : undefined;
     const caps = {
@@ -482,7 +483,7 @@ export function SearchScreen(): React.JSX.Element {
     e.preventDefault();
     e.stopPropagation();
     const ref = fromFavorite(media);
-    const at = { x: e.clientX, y: e.clientY };
+    const at = menuAt(e);
     const favQueue = (action: "PLAY_NEXT" | "APPEND" | "REPLACE") => () =>
       void favoriteAct(media, (udn, id) => tt.mediaQueueAdd(udn, id, action));
     const caps = {

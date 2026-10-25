@@ -59,6 +59,7 @@ import { RowMenu } from "@/components/media/RowMenu";
 import { openArtistInLibrary, openRefInLibrary } from "@/lib/mediaActions";
 import { fromNode } from "@/lib/mediaRef";
 import { TUNING_WINDOW_MS } from "@/hooks/useStationTuning";
+import { menuAt } from "@/lib/menuAt";
 
 /** A recall that moved nothing after this long is treated as dead — well inside TUNING_WINDOW_MS. */
 const DEAD_RECALL_MS = 8_000;
@@ -653,8 +654,8 @@ function usePresetMenu(
     open: (e) => {
       e.preventDefault();
       e.stopPropagation();
-      setAt({ x: e.clientX, y: e.clientY });
-      setFrom({ x: e.clientX, y: e.clientY });
+      setAt(menuAt(e));
+      setFrom(menuAt(e));
     },
     isOpen: at != null,
     // rendered only while something is open: a row's grid counts its children (S2's anatomy)

@@ -42,6 +42,7 @@ import {
   LensTrackMenu,
 } from "./useLensTrackSelection";
 import { useLensIndex } from "./useLensIndex";
+import { menuAt } from "@/lib/menuAt";
 
 // The Tracks lens, split out of LibraryLenses.tsx (2026-09-13, the lenses round: three lenses of
 // 600 to 800 lines shared one file); what the lenses share lives in ./lensShared.
@@ -415,7 +416,7 @@ export function TracksLens({
                 data-lens-these-more
                 aria-label="More for these tracks"
                 disabled={theseState !== "live"}
-                onClick={(e) => setTheseMenu({ x: e.clientX, y: e.clientY })}
+                onClick={(e) => setTheseMenu(menuAt(e))}
                 className="no-drag flex items-center h-8 px-2 rounded-l-none border-l border-bg/25 shadow-none"
               >
                 <ChevronDown size={14} />

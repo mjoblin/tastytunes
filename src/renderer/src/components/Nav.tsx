@@ -17,6 +17,7 @@ import {
   type ScreenDef,
 } from "@/lib/screens";
 import { PopoverCard } from "@/components/chrome/Overlay";
+import { menuAt } from "@/lib/menuAt";
 
 /**
  * Right-click target: which nav item (a screen or a bottom-cluster tool), and
@@ -111,7 +112,7 @@ export function Nav(): React.JSX.Element {
     (id: NavTool, label: string) =>
     (e: React.MouseEvent): void => {
       e.preventDefault();
-      setMenu({ kind: "tool", id, label, x: e.clientX, y: e.clientY });
+      setMenu({ kind: "tool", id, label, ...menuAt(e) });
     };
 
   const navItem = ({ id, label, icon: Icon, key }: ScreenDef): React.JSX.Element => (
@@ -126,7 +127,7 @@ export function Nav(): React.JSX.Element {
           ? undefined
           : (e) => {
               e.preventDefault();
-              setMenu({ kind: "screen", id, label, x: e.clientX, y: e.clientY });
+              setMenu({ kind: "screen", id, label, ...menuAt(e) });
             }
       }
       {...navTipHandlers(`${label} (${key})`)}

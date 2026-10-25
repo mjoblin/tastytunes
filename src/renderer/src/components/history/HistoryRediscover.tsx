@@ -21,6 +21,7 @@ import { openAlbumNode, playAlbumNode } from "@/lib/mediaActions";
 import { cx, fmtCount } from "@/lib/format";
 import { scrollToWithContext } from "@/lib/scroll";
 import { Chip, GAP_WITHIN } from "@/components/chrome/Chrome";
+import { menuAt } from "@/lib/menuAt";
 
 /**
  * The History screen's REDISCOVER (0.8.0): sections of albums worth coming back
@@ -257,8 +258,7 @@ export function HistoryRediscover({
     setMenu({
       key: `${album.serverUdn}|${album.id}`,
       title: album.title,
-      x: e.clientX,
-      y: e.clientY,
+      ...menuAt(e),
       items: albumMenuItems(fromNode(album, album.serverUdn, album.serverName), {
         playNow: () => void playAlbumNode(album),
         openInLibrary: () => openAlbumNode(album),

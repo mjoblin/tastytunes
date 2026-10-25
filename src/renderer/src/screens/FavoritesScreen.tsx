@@ -51,6 +51,7 @@ import { ScreenTitle, GAP_BETWEEN } from "@/components/chrome/Chrome";
 import { useQueueSourceActive } from "@/hooks/useQueueSourceActive";
 import { useIndexPools } from "@/hooks/useIndexPools";
 import { lensIndexOf } from "@/components/library/lenses/useLensIndex";
+import { menuAt } from "@/lib/menuAt";
 
 /** Kind visibility — session memory, like the Radio screen's chip state. */
 type FavKind = "all" | "station" | "album" | "track";
@@ -338,7 +339,7 @@ export function FavoritesScreen(): React.JSX.Element {
   const openMenu = (fav: FavoriteMedia, e: React.MouseEvent): void => {
     e.preventDefault();
     e.stopPropagation();
-    setMenu({ fav, x: e.clientX, y: e.clientY });
+    setMenu({ fav, ...menuAt(e) });
   };
 
   /** Adapter: a media favorite rendered through the Library's card component. */
