@@ -323,6 +323,19 @@ export interface TastyTunesApi {
   fetchLyrics(query: LyricsQuery, force?: boolean): Promise<LyricsResult | null>;
   /** Check the saved ListenBrainz token (null = network failure, not a verdict). */
   lbValidate(): Promise<{ valid: boolean; userName: string | null } | null>;
+  /** The secrets store (0.13.0 round 10, main/data/secrets): what Settings may know of the tokens,
+   *  whether each is saved and its last four characters, and whether this system encrypts them. */
+  secretsStatus(): Promise<{
+    encrypted: boolean;
+    lbToken: { saved: boolean; ends: string | null };
+    mcpToken: { saved: boolean; ends: string | null };
+  }>;
+  /** Save the ListenBrainz token (into the store, never settings), or forget it (null). */
+  setLbToken(token: string | null): Promise<void>;
+  /** The MCP token itself, for a Copy the person pressed; nothing else asks for it. */
+  mcpTokenReveal(): Promise<string>;
+  /** A new MCP token: agents using the old one stop working until they have this one. */
+  mcpTokenNew(): Promise<void>;
   /** Consent step 1: start downloading the offered update. */
   updateDownload(): Promise<void>;
   /** Consent step 2: restart into the downloaded update now. */
@@ -559,6 +572,10 @@ export const IPC = {
   embeddedArt: "tt:embeddedArt",
   fetchLyrics: "tt:fetchLyrics",
   lbValidate: "tt:lbValidate",
+  secretsStatus: "tt:secretsStatus",
+  setLbToken: "tt:setLbToken",
+  mcpTokenReveal: "tt:mcpTokenReveal",
+  mcpTokenNew: "tt:mcpTokenNew",
   updateDownload: "tt:updateDownload",
   updateInstall: "tt:updateInstall",
   updateCheckNow: "tt:updateCheckNow",

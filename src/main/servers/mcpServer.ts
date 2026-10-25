@@ -27,6 +27,7 @@ import { app } from "electron";
 import type { MenuCommand } from "@shared/ipc";
 import type { DeviceManager } from "../device/deviceManager";
 import { getSettings, updateSettings } from "../data/persist";
+import { getSecret } from "../data/secrets";
 
 import { refreshServers } from "../media/upnpBrowser";
 import { pools as indexPools, ensureFresh as indexEnsureFresh } from "../media/mediaIndex";
@@ -214,7 +215,7 @@ export class McpBridge {
       return;
     }
     if (bind === "lan" && !loopbackAddress(req.socket.remoteAddress)) {
-      if (!tokenMatches(req.headers.authorization, getSettings().mcp.token)) {
+      if (!tokenMatches(req.headers.authorization, getSecret("mcpToken") ?? "")) {
         reject(401, "This server needs its token: Authorization: Bearer <token>.", {
           "www-authenticate": 'Bearer realm="tastytunes"',
         });

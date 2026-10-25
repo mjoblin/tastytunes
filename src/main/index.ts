@@ -25,7 +25,7 @@ import {
   showMainWindow,
   trayDeps,
 } from "./app/windows";
-import { getSettings } from "./data/persist";
+import { getSettings, moveSecrets } from "./data/persist";
 import { listeningRecord } from "./data/listeningRecord";
 import { registerIpc } from "./ipc";
 import { artistPrefetchAfterIndex, startArtistPrefetch } from "./lookups/artistPrefetch";
@@ -65,6 +65,8 @@ if (!gotLock) {
   app
     .whenReady()
     .then(() => {
+      // the tokens into the secrets store before any window opens, so none ever receives one
+      moveSecrets();
       denyPermissionsByDefault();
       serveArtProtocol();
       registerIpc();

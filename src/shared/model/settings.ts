@@ -350,10 +350,9 @@ export interface AppSettings {
    *  sends small artwork, the full picture is read from the file's own tags for
    *  the big surfaces. Reads from the media server over the local network. */
   artFromFiles: boolean;
-  /** Scrobble listens to ListenBrainz (needs a user token; radio is never scrobbled). */
+  /** Scrobble listens to ListenBrainz (needs a user token; radio is never scrobbled). The token,
+   *  from listenbrainz.org/settings, is the secrets store's lbToken since 0.13.0, never here. */
   lbEnabled: boolean;
-  /** ListenBrainz user token, from listenbrainz.org/settings. Stored locally. */
-  lbToken: string;
   /** Artist bio panel on Now Playing (MusicBrainz + Wikipedia, on demand). */
   artistInfo: boolean;
   /** Fill covers the media server doesn't have (MusicBrainz identifies the
@@ -545,7 +544,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   recents: true,
   artFromFiles: true,
   lbEnabled: false,
-  lbToken: "",
   artistInfo: true,
   albumArtLookup: true,
   radioDirectory: true,
@@ -560,7 +558,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
     disabledClusters: [],
     enabledClusters: [],
     disabledTools: [],
-    token: "",
   },
   mediaIndexAuto: true,
   settingsTab: "appearance",

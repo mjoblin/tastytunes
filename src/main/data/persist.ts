@@ -10,11 +10,24 @@ import {
   type AppSettings,
 } from "@shared/model";
 import { atomicWriteFileSync } from "./jsonStore";
+import { getSecret, setSecret } from "./secrets";
 
 let cached: AppSettings | null = null;
 
-/** The MCP server's bearer token (McpSettings.token): minted here and nowhere else. */
+/** The MCP server's bearer token (the secrets store's mcpToken): minted here and nowhere else. */
 const mintToken = (): string => randomBytes(24).toString("base64url");
+
+/** The tokens settings.json held before the secrets store (0.13.0): read only to move them. */
+type Legacy = AppSettings & { lbToken?: unknown; mcp: AppSettings["mcp"] & { token?: unknown } };
+/** The tokens have moved: from here on a write never carries them back into settings.json. */
+let secretsMoved = false;
+
+/** A settings object without the tokens that once lived in it. */
+function withoutSecrets(s: AppSettings): AppSettings {
+  const { lbToken: _lb, ...rest } = s as Legacy;
+  const { token: _token, ...mcp } = (s as Legacy).mcp;
+  return { ...rest, mcp };
+}
 
 function settingsPath(): string {
   return join(app.getPath("userData"), "settings.json");
@@ -46,16 +59,36 @@ export function getSettings(): AppSettings {
     loaded = { ...DEFAULT_SETTINGS };
   }
   cached = loaded;
-  // every install has its own token from its first launch, written at once so it is the
-  // same token on the next launch
-  if (!loaded.mcp.token) updateSettings({ mcp: { ...loaded.mcp, token: mintToken() } });
   return cached;
 }
 
+/**
+ * MOVE THE TOKENS INTO THE SECRETS STORE (0.13.0 round 10; main/data/secrets): once, in whenReady
+ * before any window opens (safeStorage needs the app ready; a window then never receives one).
+ * A token found in settings.json moves and leaves the file: the newer one wins, since a build from
+ * before the store writes its tokens there (the installed 0.12.0 mints an MCP token where it
+ * finds none). Every install has its own MCP token from its first launch, minted here when there
+ * is none.
+ */
+export function moveSecrets(): void {
+  const s = getSettings() as Legacy;
+  const lb = typeof s.lbToken === "string" ? s.lbToken.trim() : "";
+  const mcp = typeof s.mcp.token === "string" ? s.mcp.token.trim() : "";
+  if (lb) setSecret("lbToken", lb);
+  if (mcp) setSecret("mcpToken", mcp);
+  if (!getSecret("mcpToken")) setSecret("mcpToken", mintToken());
+  secretsMoved = true;
+  if ("lbToken" in s || "token" in s.mcp) updateSettings({});
+}
+
+/** A new MCP token: every agent on the old one stops working until it has this one. */
+export function newMcpToken(): void {
+  setSecret("mcpToken", mintToken());
+}
+
 export function updateSettings(patch: Partial<AppSettings>): AppSettings {
-  const next = { ...getSettings(), ...patch };
-  // an emptied token asks for a new one
-  if (patch.mcp && !patch.mcp.token) next.mcp = { ...patch.mcp, token: mintToken() };
+  const merged = { ...getSettings(), ...patch };
+  const next = secretsMoved ? withoutSecrets(merged) : merged;
   cached = next;
   try {
     // atomic (temp + rename) — a crash mid-write must not truncate settings.

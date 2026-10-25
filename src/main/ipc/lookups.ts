@@ -8,7 +8,8 @@ import type {
   TrackInfoQuery,
 } from "@shared/model";
 import { connectedHost, deviceManager } from "../app/runtime";
-import { getSettings } from "../data/persist";
+import { getSettings, newMcpToken } from "../data/persist";
+import { canEncrypt, getSecret, secretHint, setSecret } from "../data/secrets";
 import { fetchAlbumInfo } from "../lookups/albumInfo";
 import { artHostTrust, fetchArtDataUrl } from "../lookups/artFetch";
 import { isArtistChoice, pickPictureFile, resolveChoice, setChoice } from "../data/artistChoices";
@@ -98,6 +99,19 @@ export function registerLookupsIpc(): void {
     getSettings().lyrics ? fetchLyrics(q, !!force) : null,
   );
   handle(IPC.lbValidate, () => scrobbler.validateToken());
+  // THE SECRETS STORE (0.13.0 round 10): a window learns only whether a token is saved and how it
+  // ends; the MCP token itself goes to a window only for a Copy the person pressed
+  handle(IPC.secretsStatus, () => ({
+    encrypted: canEncrypt(),
+    lbToken: secretHint("lbToken"),
+    mcpToken: secretHint("mcpToken"),
+  }));
+  handle(IPC.setLbToken, (_e, token: unknown) => {
+    if (token !== null && typeof token !== "string") return;
+    setSecret("lbToken", token);
+  });
+  handle(IPC.mcpTokenReveal, () => getSecret("mcpToken") ?? "");
+  handle(IPC.mcpTokenNew, () => newMcpToken());
   handle(IPC.fetchArtistInfo, (_e, artist: string, force?: boolean) =>
     getSettings().artistInfo ? fetchArtistInfo(artist, !!force) : null,
   );
