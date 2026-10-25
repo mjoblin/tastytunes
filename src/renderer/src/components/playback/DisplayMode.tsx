@@ -23,6 +23,20 @@ import type { SceneId } from "@/components/display/scenes/types";
 import { onScreenKey } from "@/lib/keyboardOwner";
 
 /**
+ * THE CAPTION'S CHIP (0.13.0 round 6; his call 2026-10-24, option C on the decision page): the
+ * caption at the display's foot, the track and its artist, and the clock beside it sit in the
+ * frosted surface the scene toast wears (FROSTED, one home for both) whenever a scene draws
+ * behind them. Over a scene whose foot is dark (the paper Sea, Tide) the bare caption all but
+ * vanished; the chip reads over any scene and asks nothing of one, so a scene to come cannot
+ * break it. Its padding steps the chip out around the words, which keep their place (left-4 and
+ * px-3 are left-7's 28px). On a scene the corners hold still when the cursor idles: the chip is
+ * their quiet, and the old fade to 60% faded the chip too, letting the scene through (S142
+ * measured the caption at 1.6:1 on Sea in light); off a scene the bare clock fades as before.
+ */
+const FROSTED = "rounded-full bg-panel/85 ring-1 ring-edge backdrop-blur";
+const SCENE_CHIP = cx(FROSTED, "px-3 py-0.5");
+
+/**
  * Full-screen "display mode" (Roon display mode / Volumio now-playing kiosk):
  * chrome-free art + metadata for a desk or wall screen. Toggled with F; the
  * cursor and close control fade out after a few idle seconds.
@@ -68,6 +82,8 @@ export function DisplayMode(): React.JSX.Element {
     stage ? sceneNeeds(stage) : "analysis",
   );
   const standIn = stage != null && !sceneLive;
+  /** A scene is drawing behind the corners: the caption and the clock wear the chip. */
+  const onScene = stage != null && !standIn;
   const stageDef = stage ? SCENES.find((sc) => sc.id === stage) : null;
   const idleLine =
     stage && stageDef && !sceneLive && sceneIdle ? sceneIdleLine(stageDef.label, sceneIdle) : null;
@@ -174,15 +190,17 @@ export function DisplayMode(): React.JSX.Element {
       )}
 
       {/* the corners are each a switch in All scenes (2026-09-15): a shelf display wants the
-          clock without the title, a mood wants neither */}
+          clock without the title, a mood wants neither. Over a scene each sits in the frosted
+          chip the scene toast wears (SCENE_CHIP, 0.13.0) */}
       {(settings.displayCornerClock ?? true) && (
         <div
+          data-display-clock
           className={cx(
             // The clock shares the lyric line's vertical band (bottom-16), clear of
             // the waveform strip below — one bottom edge for everything that
             // floats above the strip (user call, 2026-08-30).
-            "absolute bottom-16 right-7 font-mono text-[13px] text-dim transition-opacity",
-            cursorIdle && "opacity-60",
+            "absolute bottom-16 font-mono text-[13px] text-dim transition-opacity",
+            onScene ? cx(SCENE_CHIP, "right-4") : cx("right-7", cursorIdle && "opacity-60"),
           )}
         >
           <span title="The time of day">{clock}</span>
@@ -199,24 +217,24 @@ export function DisplayMode(): React.JSX.Element {
           {idleLine}
         </div>
       )}
-      {stage &&
-        !standIn &&
-        (settings.displayCornerTitle ?? true) &&
-        (meta.title || meta.subtitle) && (
-          <div
-            data-display-caption
-            className={cx(
-              "absolute bottom-16 left-7 max-w-[44vw] truncate font-mono text-[13px] text-dim transition-opacity",
-              cursorIdle && "opacity-60",
-            )}
-          >
-            {[meta.title, meta.subtitle].filter(Boolean).join(FACT_SEP)}
-          </div>
-        )}
+      {onScene && (settings.displayCornerTitle ?? true) && (meta.title || meta.subtitle) && (
+        <div
+          data-display-caption
+          className={cx(
+            "absolute bottom-16 left-4 max-w-[44vw] truncate font-mono text-[13px] text-dim",
+            SCENE_CHIP,
+          )}
+        >
+          {[meta.title, meta.subtitle].filter(Boolean).join(FACT_SEP)}
+        </div>
+      )}
       {toast && (
         <div
           data-display-scene-toast
-          className="absolute bottom-28 left-1/2 z-30 -translate-x-1/2 rounded-full bg-panel/85 px-4 py-1.5 text-[13px] text-ink ring-1 ring-edge backdrop-blur"
+          className={cx(
+            "absolute bottom-28 left-1/2 z-30 -translate-x-1/2 px-4 py-1.5 text-[13px] text-ink",
+            FROSTED,
+          )}
         >
           {toast}
         </div>
