@@ -1,5 +1,7 @@
+import { readFile } from "node:fs/promises";
 import { protocol } from "electron";
 import { isDeviceArt } from "@shared/artUrl";
+import { pickedPath } from "../data/artistChoices";
 import { artHostTrust } from "../lookups/artFetch";
 import { artThumb } from "../lookups/artThumbs";
 import { deviceManager } from "./runtime";
@@ -12,6 +14,22 @@ export function serveArtProtocol(): void {
   // so the browser cache answers re-draws without asking main
   protocol.handle("tt-art", async (req) => {
     const url = new URL(req.url);
+    // tt-art://picked/<file>: a picture file chosen for an artist, read only from the folder the
+    // app copied it into, by a name the app made (data/artistChoices)
+    if (url.host === "picked") {
+      const path = pickedPath(decodeURIComponent(url.pathname.slice(1)));
+      if (!path) return new Response(null, { status: 404 });
+      try {
+        return new Response(new Uint8Array(await readFile(path)), {
+          headers: {
+            "content-type": path.endsWith(".png") ? "image/png" : "image/jpeg",
+            "cache-control": "public, max-age=31536000, immutable",
+          },
+        });
+      } catch {
+        return new Response(null, { status: 404 });
+      }
+    }
     const [, tier, key] = url.pathname.split("/");
     const origin = url.searchParams.get("u");
     if ((tier !== "thumb" && tier !== "card") || !key || !origin)

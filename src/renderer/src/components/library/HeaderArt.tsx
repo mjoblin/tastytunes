@@ -31,6 +31,8 @@ export function HeaderArt({
   portraitTop = false,
   pending = false,
   onGiveUp,
+  onContextMenu,
+  overlay,
 }: {
   art: Pick<ReturnType<typeof useHeaderArtSize>, "size" | "dragging" | "snapped" | "handleProps">;
   /** The grip's label. */
@@ -48,6 +50,10 @@ export function HeaderArt({
   pending?: boolean;
   /** Told when the picture has failed for good, so the caller can show its next one. */
   onGiveUp?: () => void;
+  /** A right-click on the well (the artist page's picture menu). */
+  onContextMenu?: (e: React.MouseEvent) => void;
+  /** Laid over the well, under the grip (the artist page's ⋯). */
+  overlay?: React.ReactNode;
 }): React.JSX.Element {
   /** The well showed its line: the picture eases in when it comes. */
   const [waited, setWaited] = useState(false);
@@ -61,6 +67,7 @@ export function HeaderArt({
     <div
       data-header-art={art.size}
       style={{ width: art.size, height: art.size }}
+      onContextMenu={onContextMenu}
       className="group relative shrink-0 rounded-xl overflow-hidden ring-1 ring-edge has-[[data-art-pending]]:ring-edge2 has-[[data-art-pending]]:duration-100 transition-shadow duration-300 bg-veil flex items-center justify-center"
     >
       {pending ? (
@@ -82,6 +89,7 @@ export function HeaderArt({
       {!pending && sharp && sharp !== src && (
         <LargerLayer key={src ?? ""} src={sharp} portraitTop={portraitTop} />
       )}
+      {overlay}
       <CornerResizeHandle
         corner="bottom-right"
         dragging={art.dragging}

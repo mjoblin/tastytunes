@@ -10,6 +10,13 @@ describe("wikiThumbAt", () => {
     expect(wikiThumbAt(THUMB, 400)).toBe(THUMB.replace("/320px-", "/960px-"));
   });
 
+  it("reads the thumbnails Wikipedia hands out now, on thumb.wikimedia.org with a query", () => {
+    const now =
+      "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/5a/Band_(cropped).jpg/330px-Band_(cropped).jpg?utm_source=en.wikipedia.org&utm_campaign=api";
+    expect(wikiThumbAt(now, 400)).toBe(now.replace("/330px-", "/960px-"));
+    expect(wikiThumbAt(now, 160)).toBeNull();
+  });
+
   it("stops at the largest standard width", () => {
     expect(wikiThumbAt(THUMB, 900)).toBe(THUMB.replace("/320px-", "/1280px-"));
   });

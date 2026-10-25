@@ -28,6 +28,7 @@ import {
 import { getSettings } from "./data/persist";
 import { listeningRecord } from "./data/listeningRecord";
 import { registerIpc } from "./ipc";
+import { startArtistPrefetch } from "./lookups/artistPrefetch";
 import { flushArtThumbs } from "./lookups/artThumbs";
 import { flushLookupCaches } from "./lookups/diskCache";
 import * as mediaIndex from "./media/mediaIndex";
@@ -118,6 +119,7 @@ if (!gotLock) {
       // tastytunes:// URLs, those that arrived before ready first (app/urlInbox)
       serveUrlActions();
       startScheduler(deviceManager);
+      startArtistPrefetch();
       mediaIndex.init((statuses) => deviceManager.setMediaIndex(statuses));
       startUpdater((state) => {
         getMainWindow()?.webContents.send(IPC.push, { kind: "updateState", state });

@@ -15,6 +15,23 @@ export interface ArtistInfo {
   image?: string | null;
 }
 
+/**
+ * AN ARTIST'S CHOSEN PICTURE (0.13.0 round 7; a user's ask, like Plexamp: Wikipedia's lead image is
+ * often a poor stage photo). Within decisions/0013 (a photo changes only when asked: choosing is
+ * asking, and nothing replaces a choice but another, or a reset) and 0001 (no API keys): another
+ * image from the artist's Wikipedia article, one of their album covers in the library, or a
+ * picture file (copied into the app's data, so moving the original loses nothing). It outranks
+ * every other picture: the page's, the Artists view's rows, the Library's Artists card.
+ */
+export type ArtistChoice =
+  /** An image from the artist's Wikipedia article (its address on Wikimedia). */
+  | { kind: "image"; url: string }
+  /** One of the artist's album covers: the album by server and title, so a cover whose address
+   *  moves (the streamer's drive, after a standby) is found again; `url` as it was chosen. */
+  | { kind: "cover"; url: string; album: string; serverUdn: string | null }
+  /** A picture file, copied into the app's data under `file`. */
+  | { kind: "file"; file: string };
+
 export interface AlbumInfo {
   /** MusicBrainz's canonical title for the matched release group. */
   title: string;

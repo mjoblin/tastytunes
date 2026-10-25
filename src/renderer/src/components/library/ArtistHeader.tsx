@@ -1,16 +1,18 @@
 import { useEffect, useRef, useState } from "react";
-import { UserRound } from "lucide-react";
+import { MoreHorizontal, UserRound } from "lucide-react";
 import type { MediaNode } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { ArtistAbout, ArtistLinks, useArtistAbout } from "@/components/media/ArtistAbout";
 import { ArtImage } from "@/components/media/ArtImage";
+import { ArtistPictureDialog, type CoverOffer } from "@/components/library/ArtistPictureDialog";
 import { HeaderArt } from "@/components/library/HeaderArt";
+import { RowMenu } from "@/components/media/RowMenu";
 import { HEADER_ART_PX, useHeaderArtSize } from "@/hooks/useHeaderArtSize";
 import { artSrc } from "@/lib/artSrc";
 import { wikiThumbAt } from "@shared/artUrl";
 import { refreshArtistPicture, useArtistPictureAnswer } from "@/lib/artistPictures";
-import { fmtCount } from "@/lib/format";
+import { cx, fmtCount } from "@/lib/format";
 import { FACT_SEP } from "@/lib/mediaFacts";
 
 /**
@@ -35,6 +37,10 @@ import { FACT_SEP } from "@/lib/mediaFacts";
  * picture, the photo, the server's own, a cover. A picture that fails shows the next one,
  * the cover behind it while it is retried. Once a name's picture has settled, a later answer
  * (Refresh details, main asked again) changes it in place without waiting again.
+ * A PICTURE CHOSEN FOR THE ARTIST (0.13.0 round 7) comes before all of them, and the page waits
+ * only for main to say whether there is one: the picture's menu (its ⋯ on hover or keyboard
+ * focus, or a right-click on it) offers Choose a picture (ArtistPictureDialog) and, once one is
+ * chosen, the reset back to the usual picture.
  */
 /** How long the page waits for a photo lookup before it shows what it has. */
 const LOOKUP_WAIT_MS = 6000;
@@ -59,6 +65,29 @@ export function ArtistHeader({
   if (answer !== undefined) held.current = { name, value: answer };
   const known =
     answer !== undefined ? answer : held.current?.name === name ? held.current.value : undefined;
+  // the picture chosen for the artist, held per name while it is asked again after a change
+  const [chosenOf, setChosenOf] = useState<{
+    name: string;
+    value: Awaited<ReturnType<typeof tt.artistChoice>>;
+  } | null>(null);
+  const [askChosen, setAskChosen] = useState(0);
+  useEffect(() => {
+    let live = true;
+    void tt
+      .artistChoice(name)
+      .then((value) => {
+        if (live) setChosenOf({ name, value });
+      })
+      .catch(() => {
+        if (live) setChosenOf({ name, value: null });
+      });
+    return () => {
+      live = false;
+    };
+  }, [name, askChosen, lookups]);
+  const chosen = chosenOf?.name === name ? chosenOf.value : undefined;
+  const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
+  const [choosing, setChoosing] = useState(false);
   const { status, info } = useArtistAbout(name, true);
   const photo = lookups ? (info?.image ?? null) : null;
   // a slow lookup (MusicBrainz takes one request a second) stops being waited for
@@ -72,7 +101,8 @@ export function ArtistHeader({
   const settled = useRef<string | null>(null);
   const pending =
     settled.current !== name &&
-    ((known === undefined && !photo) || (looking && waitedOut !== name));
+    (chosen === undefined ||
+      (chosen == null && ((known === undefined && !photo) || (looking && waitedOut !== name))));
   if (!pending) settled.current = name;
   const [failed, setFailed] = useState<{ name: string; urls: string[] }>({ name, urls: [] });
   const gaveUp = failed.name === name ? failed.urls : [];
@@ -105,7 +135,7 @@ export function ArtistHeader({
   const cover = folders.find((f) => f.artUrl)?.artUrl ?? null;
   // main's answer is a cover when it is one of the page's own albums' pictures
   const knownCover = known != null && folders.some((f) => f.artUrl === known);
-  const choices = [knownCover ? null : known, photo, serverArt, known, cover].filter(
+  const choices = [chosen?.url, knownCover ? null : known, photo, serverArt, known, cover].filter(
     (u, i, all): u is string => !!u && all.indexOf(u) === i && !gaveUp.includes(u),
   );
   const picture = choices[0] ?? null;
@@ -113,6 +143,28 @@ export function ArtistHeader({
   const icon = (px: number): React.ReactNode => (
     <UserRound size={px} strokeWidth={1} className="text-faint" />
   );
+  // the covers the chooser offers: the page's albums', each picture once
+  const covers: CoverOffer[] = folders
+    .filter((f, i) => f.artUrl && folders.findIndex((g) => g.artUrl === f.artUrl) === i)
+    .map((f) => ({ url: f.artUrl as string, album: f.title, serverUdn: f.serverUdn ?? null }));
+  const openMenu = (e: React.MouseEvent): void => {
+    e.preventDefault();
+    e.stopPropagation();
+    // a ⋯ pressed from the keyboard has no pointer: the menu opens under the button
+    if (e.type === "click" && e.detail === 0) {
+      const r = e.currentTarget.getBoundingClientRect();
+      setMenuAt({ x: r.left, y: r.bottom + 4 });
+    } else setMenuAt({ x: e.clientX, y: e.clientY });
+  };
+  const reset = (): void => {
+    void tt
+      .setArtistChoice(name, null)
+      .then(() => {
+        refreshArtistPicture(name);
+        setAskChosen((n) => n + 1);
+      })
+      .catch(() => {});
+  };
   return (
     <div className="flex items-start gap-6 pb-6 pt-2" data-artist-header ref={art.attachRow}>
       <HeaderArt
@@ -141,6 +193,49 @@ export function ArtistHeader({
         onGiveUp={() => {
           if (picture) setFailed({ name, urls: [...gaveUp, picture] });
         }}
+        onContextMenu={openMenu}
+        overlay={
+          <button
+            aria-label="Change the picture"
+            data-tip="Change the picture"
+            data-artist-picture-menu
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={openMenu}
+            className={cx(
+              "tip-bottom absolute top-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-lg transition-all",
+              "bg-panel/80 ring-1 ring-edge text-dim hover:text-ink",
+              menuAt ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
+            )}
+          >
+            <MoreHorizontal size={14} />
+          </button>
+        }
+      />
+      {menuAt && (
+        <RowMenu
+          title={name}
+          at={menuAt}
+          onClose={() => setMenuAt(null)}
+          items={[
+            { label: "Choose a picture…", run: () => setChoosing(true) },
+            ...(chosen
+              ? [
+                  {
+                    label: photo ? "Reset to the Wikipedia photo" : "Reset the picture",
+                    run: reset,
+                  },
+                ]
+              : []),
+          ]}
+        />
+      )}
+      <ArtistPictureDialog
+        name={name}
+        open={choosing}
+        onClose={() => setChoosing(false)}
+        covers={covers}
+        current={chosen ?? null}
+        onChosen={() => setAskChosen((n) => n + 1)}
       />
       {/* a set width, the summary's measure (max-w-xl), so the links on the name's line keep one
           edge from artist to artist and end where the words do; a long name wraps before it

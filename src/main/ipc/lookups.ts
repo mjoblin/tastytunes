@@ -1,10 +1,18 @@
+import { BrowserWindow } from "electron";
 import { IPC } from "@shared/ipc";
-import type { EmbeddedArtQuery, LyricsQuery, TrackInfoQuery } from "@shared/model";
+import type {
+  ArtistChoice,
+  EmbeddedArtQuery,
+  LyricsQuery,
+  MediaIndexPools,
+  TrackInfoQuery,
+} from "@shared/model";
 import { connectedHost, deviceManager } from "../app/runtime";
 import { getSettings } from "../data/persist";
 import { fetchAlbumInfo } from "../lookups/albumInfo";
 import { artHostTrust, fetchArtDataUrl } from "../lookups/artFetch";
-import { fetchArtistInfo, knownArtistImage } from "../lookups/artistInfo";
+import { isArtistChoice, pickPictureFile, resolveChoice, setChoice } from "../data/artistChoices";
+import { fetchArtistImages, fetchArtistInfo, knownArtistImage } from "../lookups/artistInfo";
 import { artThumbsStats, clearArtThumbs } from "../lookups/artThumbs";
 import { fetchCoverArt } from "../lookups/coverArt";
 import { clearLookupCaches, lookupCacheStats } from "../lookups/diskCache";
@@ -31,14 +39,52 @@ export function registerLookupsIpc(): void {
     const out: Record<string, string | null> = {};
     if (want.length === 0) return out;
     const photos = getSettings().artistInfo;
-    const artists = artistIndex(mediaIndex.pools());
-    // the server's real picture, else the photo, else a cover (a server picture that is an
-    // album's cover counts as a cover)
+    const pools = mediaIndex.pools();
+    const artists = artistIndex(pools);
+    // the picture chosen for them, else the server's real picture, else the photo, else a cover
+    // (a server picture that is an album's cover counts as a cover)
     for (const n of want) {
       const e = artists.get(n.trim().toLowerCase());
-      out[n] = e?.own ?? (photos ? knownArtistImage(n) : null) ?? e?.cover ?? null;
+      out[n] =
+        chosenPicture(n, pools, photos) ??
+        e?.own ??
+        (photos ? knownArtistImage(n) : null) ??
+        e?.cover ??
+        null;
     }
     return out;
+  });
+  // THE CHOSEN PICTURE (0.13.0 round 7; data/artistChoices): the artist page reads it first, and
+  // the chooser offers the article's images, the artist's covers and a file. A Wikipedia image
+  // is drawn only with the artist lookups on ("off = no requests, ever"), so with them off the
+  // usual picture shows and the choice waits; a cover or a file shows either way.
+  handle(IPC.artistChoice, (_e, name: unknown) =>
+    typeof name === "string" ? chosen(name, mediaIndex.pools(), getSettings().artistInfo) : null,
+  );
+  handle(IPC.artistImages, async (_e, name: unknown) =>
+    typeof name === "string" && name.trim() && getSettings().artistInfo
+      ? fetchArtistImages(name)
+      : [],
+  );
+  handle(IPC.pickArtistPictureFile, (e) =>
+    pickPictureFile(BrowserWindow.fromWebContents(e.sender)),
+  );
+  // a window chooses what the app offered: one of the article's images, an album's cover (found
+  // again by its album later: resolveChoice), or a file the app copied in; false when it was not
+  // one of those
+  handle(IPC.setArtistChoice, async (_e, name: unknown, choice: unknown) => {
+    if (typeof name !== "string" || !name.trim() || name.length > 500) return false;
+    if (choice === null) {
+      setChoice(name, null);
+      return true;
+    }
+    if (!isArtistChoice(choice)) return false;
+    if (choice.kind === "image") {
+      if (!getSettings().artistInfo) return false;
+      if (!(await fetchArtistImages(name)).includes(choice.url)) return false;
+    }
+    setChoice(name, choice);
+    return true;
   });
   // the artist page's facts line: the lens's counts, from the ready indexes
   handle(IPC.artistFacts, (_e, name: unknown) => {
@@ -100,3 +146,17 @@ export function registerLookupsIpc(): void {
     }
   });
 }
+
+/** An artist's chosen picture as resolveChoice finds it, a Wikipedia image only with the lookups
+ *  on; null with no choice (or one waiting for the lookups). */
+function chosen(
+  name: string,
+  pools: MediaIndexPools[],
+  photos: boolean,
+): { kind: ArtistChoice["kind"]; url: string } | null {
+  const c = resolveChoice(name, pools);
+  return c && (c.kind !== "image" || photos) ? c : null;
+}
+
+const chosenPicture = (name: string, pools: MediaIndexPools[], photos: boolean): string | null =>
+  chosen(name, pools, photos)?.url ?? null;
