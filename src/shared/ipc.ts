@@ -336,8 +336,11 @@ export interface TastyTunesApi {
   setFanartKey(key: string | null): Promise<"works" | "refused" | "unreachable" | "removed">;
   /** An artist's photos at fanart.tv, for the picture chooser; empty with no key or Liner notes off. */
   artistFanart(name: string): Promise<string[]>;
-  /** Save the ListenBrainz token (into the store, never settings), or forget it (null). */
-  setLbToken(token: string | null): Promise<void>;
+  /** Save the ListenBrainz token once ListenBrainz takes it (into the store, never settings):
+   *  refused, not kept; unreachable, kept unchecked; or forget it (null). */
+  setLbToken(
+    token: string | null,
+  ): Promise<{ verdict: "works" | "refused" | "unreachable" | "removed"; userName: string | null }>;
   /** The MCP token itself, for a Copy the person pressed; nothing else asks for it. */
   mcpTokenReveal(): Promise<string>;
   /** A new MCP token: agents using the old one stop working until they have this one. */

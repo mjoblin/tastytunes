@@ -126,9 +126,19 @@ export function registerLookupsIpc(): void {
       ? fetchFanartPhotos(name)
       : [],
   );
-  handle(IPC.setLbToken, (_e, token: unknown) => {
-    if (token !== null && typeof token !== "string") return;
-    setSecret("lbToken", token);
+  // a ListenBrainz token checked with ListenBrainz before it is kept, as a fanart.tv key is
+  handle(IPC.setLbToken, async (_e, token: unknown) => {
+    if (token === null) {
+      setSecret("lbToken", null);
+      return { verdict: "removed", userName: null };
+    }
+    if (typeof token !== "string" || !token.trim()) return { verdict: "refused", userName: null };
+    const got = await scrobbler.validateToken(token.trim());
+    if (got && !got.valid) return { verdict: "refused", userName: null };
+    setSecret("lbToken", token.trim());
+    return got
+      ? { verdict: "works", userName: got.userName }
+      : { verdict: "unreachable", userName: null };
   });
   handle(IPC.mcpTokenReveal, () => getSecret("mcpToken") ?? "");
   handle(IPC.mcpTokenNew, () => newMcpToken());

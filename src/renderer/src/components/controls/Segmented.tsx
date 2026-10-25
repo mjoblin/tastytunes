@@ -9,6 +9,9 @@ export interface SegmentedOption<T> {
   /** Rendered but inert and dimmed (e.g. a server with no matches) — the
    *  option stays visible so the control never reshapes with the data. */
   disabled?: boolean;
+  /** How many the option holds, after its label (Choose a picture's sources); null while it is
+   *  still being asked, so the label keeps its place. */
+  count?: number | null;
 }
 
 /**
@@ -21,11 +24,14 @@ export function Segmented<T extends string | number | boolean>({
   options,
   onChange,
   className,
+  modal = false,
 }: {
   value: T;
   options: Array<SegmentedOption<T>>;
   onChange(value: T): void;
   className?: string;
+  /** Inside a ModalShell: no hover transition (its note: they crawl over the blur). */
+  modal?: boolean;
 }): React.JSX.Element {
   return (
     <div
@@ -41,7 +47,8 @@ export function Segmented<T extends string | number | boolean>({
           aria-disabled={opt.disabled || undefined}
           data-tip={opt.tip}
           className={cx(
-            "flex items-center gap-1.5 px-3 rounded-md text-[12px] transition-colors",
+            "flex items-center gap-1.5 px-3 rounded-md text-[12px]",
+            !modal && "transition-colors",
             opt.tip && "tip-top",
             opt.disabled
               ? "text-faint opacity-50 cursor-default"
@@ -52,6 +59,17 @@ export function Segmented<T extends string | number | boolean>({
         >
           {opt.icon}
           {opt.label}
+          {opt.count !== undefined && (
+            <span
+              data-segment-count
+              className={cx(
+                "min-w-[1ch] font-mono text-[10.5px] tabular-nums",
+                value === opt.value ? "text-gold/70" : "text-faint",
+              )}
+            >
+              {opt.count ?? ""}
+            </span>
+          )}
         </button>
       ))}
     </div>

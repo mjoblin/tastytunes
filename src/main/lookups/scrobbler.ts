@@ -179,15 +179,21 @@ export const scrobbler = {
     current = null;
   },
 
-  /** GET /1/validate-token for the settings UI. null = network failure. */
-  async validateToken(): Promise<{ valid: boolean; userName: string | null } | null> {
-    const token = getSecret("lbToken") ?? "";
+  /** GET /1/validate-token for the settings UI: the saved token, or one about to be saved
+   *  (0.13.0, checked before it is kept). null = network failure. */
+  async validateToken(
+    candidate?: string,
+  ): Promise<{ valid: boolean; userName: string | null } | null> {
+    const token = candidate ?? getSecret("lbToken") ?? "";
     if (!token) return { valid: false, userName: null };
     try {
       const res = await loggedFetch("listenbrainz", `${BASE}/1/validate-token`, {
         headers: { authorization: `Token ${token}` },
         signal: AbortSignal.timeout(10_000),
       });
+      // only ListenBrainz's own no is a refusal: a busy or failing server is "couldn't ask", so
+      // a good token is not turned away while it is down (a refused one is not kept)
+      if (res.status === 429 || res.status >= 500) return null;
       if (!res.ok) return { valid: false, userName: null };
       const body = (await res.json()) as { valid?: boolean; user_name?: string };
       return { valid: !!body.valid, userName: body.user_name ?? null };

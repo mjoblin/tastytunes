@@ -1,10 +1,45 @@
 import { useCallback, useEffect, useState } from "react";
 import { type AppSettings } from "@shared/model";
 import { tt } from "@/api";
-import { SavedSecret, SettingRow, Toggle } from "@/components/settings/SettingsKit";
+import { SettingRow, Toggle } from "@/components/settings/SettingsKit";
+import { SecretKeyRow, type SecretKeySpec } from "@/components/settings/SecretKey";
 
 // The ListenBrainz section, split out of SettingsScreen.tsx 2026-09-13 (the Settings split: the screen had held every
 // section and control at 2,142 lines); the shared rows and controls live in ./SettingsKit.
+
+// the token is checked with ListenBrainz before it is kept (ipc/lookups setLbToken): one it
+// refuses is not saved, and the dialog says so with the field still there to fix; a working one
+// says what is next, the switch below when scrobbling is off
+const lbToken = (scrobbling: boolean): SecretKeySpec => ({
+  id: "lbToken",
+  title: "ListenBrainz token",
+  noun: "token",
+  what: "ListenBrainz keeps a free, open log of what you listen to. With your token, TastyTunes can add what you play to it.",
+  getStep:
+    "Sign in to ListenBrainz (a MetaBrainz account is free) and copy your user token from its settings.",
+  getLabel: "Open listenbrainz.org",
+  getUrl: "https://listenbrainz.org/settings/",
+  placeholder: "user token",
+  check: (token) =>
+    tt.setLbToken(token).then((got) =>
+      got.verdict === "works"
+        ? {
+            verdict: "works",
+            said: `The token works${got.userName ? `, for ${got.userName}` : ""}. ${scrobbling ? "What you play is scrobbled to it." : "Turn on “Scrobble to ListenBrainz” to start."}`,
+          }
+        : got.verdict === "unreachable"
+          ? {
+              verdict: "unreachable",
+              said: "Couldn't reach listenbrainz.org to check the token. It's saved, and it will be tried when scrobbling.",
+            }
+          : {
+              verdict: "refused",
+              said: "ListenBrainz didn't accept this token. Check that it's the whole token and try again.",
+            },
+    ),
+  remove: () => tt.setLbToken(null).then(() => {}),
+  removeQuestion: "Remove your ListenBrainz token? Scrobbling stops until you add it again.",
+});
 
 export function ListenBrainzSection({
   settings,
@@ -42,12 +77,8 @@ export function ListenBrainzSection({
     // re-checked per token: whether one is saved, and how it ends
   }, [hasToken, stored?.ends]);
 
-  const keep = (token: string | null): void => {
-    void tt.setLbToken(token).then(refresh);
-  };
-
   const status = !hasToken
-    ? "Paste your user token from listenbrainz.org/settings."
+    ? "Your user token from listenbrainz.org, for scrobbling what you play to your account."
     : tokenStatus === "checking" || tokenStatus === "idle"
       ? "Checking token…"
       : tokenStatus === null
@@ -63,16 +94,11 @@ export function ListenBrainzSection({
   return (
     <div className="space-y-4 pt-1 border-t border-edge">
       <SettingRow label="ListenBrainz token" hint={status + kept}>
-        <SavedSecret
-          id="lbToken"
+        <SecretKeyRow
+          spec={lbToken(settings.lbEnabled)}
           saved={hasToken}
           ends={stored?.ends ?? null}
-          placeholder="user token"
-          label="ListenBrainz user token"
-          getLabel="Get token"
-          getUrl="https://listenbrainz.org/settings/"
-          onSave={(token) => keep(token)}
-          onRemove={() => keep(null)}
+          onChanged={refresh}
         />
       </SettingRow>
       <Toggle
