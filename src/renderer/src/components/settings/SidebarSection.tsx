@@ -269,7 +269,12 @@ function SidebarRowBody({
       />
       <span className={cx("flex-1 text-[13px]", hidden && "opacity-45")}>{label}</span>
       {keyBadge && (
-        <span className={cx("font-mono text-[9px] text-faint/60 shrink-0", hidden && "opacity-45")}>
+        <span
+          className={cx(
+            "nav-key font-mono text-[9px] text-faint/60 shrink-0",
+            hidden && "opacity-45",
+          )}
+        >
           {keyBadge}
         </span>
       )}

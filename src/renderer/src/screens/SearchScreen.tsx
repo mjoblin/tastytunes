@@ -911,7 +911,7 @@ export function SearchScreen(): React.JSX.Element {
                   className={cx("gap-1.5", !empty && "motion-safe:active:scale-95")}
                 >
                   {c.label}
-                  <span className="tabular-nums opacity-70">
+                  <span className="tabular-nums fade-dark">
                     {c.pending ? "…" : c.unknown ? "—" : c.total}
                   </span>
                 </Chip>
@@ -1051,7 +1051,7 @@ export function SearchScreen(): React.JSX.Element {
                         if (inKind.length === 0) return null;
                         return (
                           <div key={k} className="space-y-1.5">
-                            <div className="microlabel pt-2 px-1 opacity-70">
+                            <div className="microlabel pt-2 px-1 fade-dark">
                               {k === "artist" ? "Artists" : k === "album" ? "Albums" : "Tracks"}{" "}
                               <span className="tabular-nums">{inKind.length}</span>
                             </div>

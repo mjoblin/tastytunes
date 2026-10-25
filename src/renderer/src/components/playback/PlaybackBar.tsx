@@ -174,7 +174,7 @@ export function PlaybackBar(): React.JSX.Element {
         <div className="flex items-center gap-3 w-full max-w-[520px]">
           <span
             data-bar-elapsed
-            className="font-mono text-[10.5px] text-faint w-11 text-right tabular-nums"
+            className="playhead-time font-mono text-[10.5px] text-faint w-11 text-right tabular-nums"
           >
             {active && elapsedKnown ? fmtTime(shownPosition) : "–:––"}
           </span>
@@ -190,7 +190,7 @@ export function PlaybackBar(): React.JSX.Element {
             />
           </div>
           <button
-            className="tip-top font-mono text-[10.5px] text-faint w-11 text-left tabular-nums hover:text-dim"
+            className="playhead-time tip-top font-mono text-[10.5px] text-faint w-11 text-left tabular-nums hover:text-dim"
             onClick={() => setShowRemaining((r) => !r)}
             data-tip="Toggle remaining time"
             aria-label="Toggle remaining time"

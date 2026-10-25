@@ -180,9 +180,24 @@
   /* Firmer ink and edges: paper offers no glow to carry definition. */
   --color-edge: rgb(30 20 5 / 0.14);
   --color-edge2: rgb(30 20 5 / 0.26);
-  --color-ink: #241d12;
-  --color-dim: #5f5749;
-  --color-faint: #736c5c; /* 3.12:1 -> 4.50:1 on paper; see the dark note */
+  /* LIGHT-MODE LEGIBILITY (0.13.0, his calls 2026-10-24, held to decisions/0016: 4.5:1 where the
+     text sits, measured on the darkest tenth of its real backgrounds). Each text color a step
+     darker than it was (#241d12, #5f5749, #736c5c), its warmth kept: the old ones were tuned on
+     bare paper, and most text sits on darker tinted panels and the wash (faint measured a median
+     3.9:1 where it sat). Dark mode is left as it is (0016's named exception). */
+  --color-ink: #1a140b;
+  --color-dim: #4a4338;
+  --color-faint: #60594a;
+  /* gold and amber AS TEXT, a step deeper than the fills, rings and icons keep (gold text measured
+     2.6:1); deeper still on their own wash (an active nav item); and a button's fill under
+     paper-colored text (3.3:1 on the light gold). Amber follows the album art, so its deeper
+     forms are mixes, matching #7b5009 and #8a5a0a on the default gold. */
+  --color-goldink: #7b5009;
+  --color-goldink-wash: #654309;
+  --color-goldbutton: #8a5a0a;
+  --color-amberink: color-mix(in srgb, rgb(var(--amber-rgb)) 69%, black);
+  --color-amberink-wash: color-mix(in srgb, rgb(var(--amber-rgb)) 57%, black);
+  --color-amberbutton: color-mix(in srgb, rgb(var(--amber-rgb)) 78%, black);
   --color-goldtile: #eee0bd;
   --color-led: #1fa456;
   --alert-rgb: 199 74 53;
@@ -1071,4 +1086,77 @@ img {
       white-space: normal;
     }
   }
+}
+
+/* LIGHT-MODE LEGIBILITY, THE RULES (0.13.0; the colors are the light tokens above). Light only,
+   unlayered so they win over the utilities they adjust: dark mode is left exactly as it is
+   (decisions/0016). Held by the suite's text survey (S139). */
+/* the system's own smoothing: antialiased (every text, both themes) lays down 12 to 30% less ink
+   for dark text on paper; light text on the dark faceplate keeps it */
+:root.light body {
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
+}
+/* gold and amber as text take their deeper ink (an icon keeps the bright gold, a graphic at 3:1),
+   their faded forms at full strength, and deeper still on their own wash */
+:root.light
+  :is(.text-gold, .text-gold\/50, .text-gold\/70, .text-gold\/80, .text-gold\/90):not(svg) {
+  color: var(--color-goldink);
+}
+:root.light :is(.text-amber, .text-amber\/70, .text-amber\/90):not(svg) {
+  color: var(--color-amberink);
+}
+:root.light .bg-golddim.text-gold:not(svg) {
+  color: var(--color-goldink-wash);
+}
+:root.light .bg-amberdim.text-amber:not(svg) {
+  color: var(--color-amberink-wash);
+}
+/* a gold or amber button under paper-colored text takes the deeper fill */
+:root.light .bg-gold.text-bg {
+  background-color: var(--color-goldbutton);
+}
+:root.light .bg-amber.text-bg {
+  background-color: var(--color-amberbutton);
+}
+/* a faded form of faint is for a disabled control only: readable text (a menu's hint, a card's
+   note, the palette's keys) is at full faint (the deeper fades, /30 to /50, dress disabled
+   controls and keep theirs; an icon is a graphic and keeps its own) */
+:root.light
+  :is(.text-faint\/60, .text-faint\/70, .text-faint\/80):not(
+    svg,
+    :disabled,
+    :disabled *,
+    [aria-disabled="true"],
+    [aria-disabled="true"] *
+  ) {
+  color: var(--color-faint);
+}
+/* a fade dark mode keeps and light mode drops (a count in a chip, a group's label) */
+.fade-dark {
+  opacity: 0.7;
+}
+:root.light .fade-dark {
+  opacity: 1;
+}
+/* the uppercase mono labels: a weight up, a little less tracking, dim rather than faint */
+:root.light :is(.microlabel, .badge, .font-mono.uppercase) {
+  font-weight: 500;
+}
+:root.light :is(.microlabel, .badge, .tracking-\[0\.14em\]) {
+  letter-spacing: 0.1em;
+}
+:root.light
+  .font-mono.uppercase:is(.text-faint, .text-faint\/60, .text-faint\/70, .text-faint\/80) {
+  color: var(--color-dim);
+}
+/* the navigation's shortcut letters: 9px at 60% was about 2:1; 10px at full faint */
+:root.light .nav-key {
+  font-size: 10px;
+}
+/* the playback bar's position and length sit on the album's wash, darkest under a dark cover:
+   faint there was the one place it fell under the floor (4.1:1 on the mock's grey), so they read
+   in dim, as the primary readouts they are */
+:root.light .playhead-time {
+  color: var(--color-dim);
 }

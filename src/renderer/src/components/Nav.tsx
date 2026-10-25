@@ -151,7 +151,7 @@ export function Nav(): React.JSX.Element {
                     {fmtCount(queueTotal)}
                   </span>
                 ))}
-          <span className="font-mono text-[9px] text-faint/60">{key}</span>
+          <span className="nav-key font-mono text-[9px] text-faint/60">{key}</span>
         </span>
       )}
     </button>
@@ -247,7 +247,7 @@ export function Nav(): React.JSX.Element {
               {!collapsed && (
                 <span className="flex-1 min-w-0 flex items-center gap-3 overflow-hidden whitespace-nowrap">
                   <span className="flex-1 text-left">Commands</span>
-                  <span className="font-mono text-[9px] text-faint/60">{MOD}K</span>
+                  <span className="nav-key font-mono text-[9px] text-faint/60">{MOD}K</span>
                 </span>
               )}
             </button>
