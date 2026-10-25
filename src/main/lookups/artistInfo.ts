@@ -10,8 +10,10 @@ import type { ArtistInfo } from "@shared/model";
 import { DiskCache } from "./diskCache";
 import { MB, WIKI, getJson, mbFetch, wikipediaFromRels, type Fetched, type MbRelation } from "./mb";
 
-// a library's worth of artists keeps its photos (a user's 518 artists); entries are small
-const CACHE_MAX = 1000;
+// a library's worth of artists keeps its photos: every artist in the libraries is looked up
+// ahead since 0.13.0 (artistPrefetch), so the cap is a large library's artists rather than a
+// user's 518 (0.11.0); an entry is small, a summary paragraph and three addresses
+const CACHE_MAX = 10_000;
 const MIN_MATCH_SCORE = 75;
 
 const cache = new DiskCache<ArtistInfo>("artist", CACHE_MAX);
@@ -93,6 +95,12 @@ export function knownArtistImage(artist: string): string | null {
   return cache.get(key)?.image ?? null;
 }
 
+/** Whether another artist fits without the cache dropping one: the photos fetched ahead stop at
+ *  nine in ten of the cap, so a library larger than it never churns its own photos. */
+export function artistCacheHasRoom(): boolean {
+  return cache.stats().entries < CACHE_MAX * 0.9;
+}
+
 /** Whether the artist has been asked about and answered (a photo or a settled none). */
 export function knowsArtist(artist: string): boolean {
   return cache.has(artist.trim().toLowerCase());
@@ -101,7 +109,7 @@ export function knowsArtist(artist: string): boolean {
 // THE ARTICLE'S OTHER IMAGES (0.13.0 round 7, the picture chooser): the images in the artist's
 // Wikipedia article (its media list, no key needed: decisions/0001), as Wikimedia thumbnails, the
 // lead picture first. Cached per article, settled answers only, like the summary.
-const mediaCache = new DiskCache<string[]>("artistMedia", CACHE_MAX);
+const mediaCache = new DiskCache<string[]>("artistMedia", 1000);
 /** Artists whose details were refreshed: their article's images are asked again, once. */
 const mediaStale = new Set<string>();
 /** At most this many images offered (an article with a gallery can hold dozens). */
