@@ -12,11 +12,14 @@ import { readdir, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { app } from "electron";
 import { isRecord } from "@shared/guards";
+import { isDeviceArt } from "@shared/artUrl";
 import {
   LISTEN_FLOOR_SECS,
   type ListeningEvent,
   type ListeningRecordStats,
   type ListeningVia,
+  artAddress,
+  artHostOf,
 } from "@shared/model";
 import { isRadioMetadata, radioTrackTitle, trackTitle, type ZonePlayState } from "@shared/smoip";
 import { getSettings } from "./persist";
@@ -373,8 +376,15 @@ export const listeningRecord = {
 
   /** Feed every /zone/play_state push through here (DeviceManager does,
    *  beside the scrobbler). `sourceName` is now_playing's display name;
-   *  `streamer` the connected device's udn, stamped on every line it plays. */
-  onPlayState(ps: ZonePlayState, sourceName: string | null, streamer: string | null): void {
+   *  `streamer` the connected device's udn, stamped on every line it plays;
+   *  `streamerHost` its address, which tells its own pictures from a media
+   *  server's (a play keeps a media server's picture address, never the drive's). */
+  onPlayState(
+    ps: ZonePlayState,
+    sourceName: string | null,
+    streamer: string | null,
+    streamerHost: string | null = null,
+  ): void {
     if (!getSettings().listeningRecord) {
       // Off mid-playback: freeze accumulation; the open play stays open so
       // flipping the switch back on doesn't split one play into two events.
@@ -415,6 +425,11 @@ export const listeningRecord = {
         lossless: md.lossless ?? null,
         source: sourceName,
         sourceId,
+        // which copy it was (shared/model/copies): the picture's host always, its address only
+        // where it is the copy's own (the drive's change with every standby)
+        artHost: artHostOf(md.art_url),
+        artUrl:
+          md.art_url && !isDeviceArt(md.art_url, streamerHost) ? artAddress(md.art_url) : null,
         streamer,
       };
     } else if (md && title) {

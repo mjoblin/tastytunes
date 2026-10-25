@@ -145,17 +145,17 @@ export function AlbumsLens({
   const albumPlay = useMemo(() => {
     const m = new Map<string, { plays: number; lastAt: number | null; whole: number }>();
     if (!play.ready) return m;
-    // an album's tracks together: plays and last played fold per track, and
-    // the WHOLE listens are the record's runs against this track set
-    for (const [k, tracks] of index.tracksByAlbum) {
-      const a = play.album(tracks);
+    // an album's own tracks together (its copy's, 0.13.0): plays and last played fold per
+    // track, and the WHOLE listens are the record's runs against this track set
+    for (const alb of all) {
+      const a = play.album(index.tracksOf(alb));
       if (a.plays > 0 || a.whole > 0)
-        m.set(k, { plays: a.plays, lastAt: a.lastAt, whole: a.whole });
+        m.set(nodeKey(alb), { plays: a.plays, lastAt: a.lastAt, whole: a.whole });
     }
     return m;
-  }, [index, play]);
+  }, [all, index, play]);
   const playOf = (a: MediaNode): { plays: number; lastAt: number | null; whole: number } =>
-    albumPlay.get(`${a.serverUdn}|${lc(a.title)}`) ?? { plays: 0, lastAt: null, whole: 0 };
+    albumPlay.get(nodeKey(a)) ?? { plays: 0, lastAt: null, whole: 0 };
   const playedOptions = useMemo(
     () => (play.ready ? playedOptionsOf(all.map((a) => playOf(a).lastAt)) : []),
     // playOf reads albumPlay; listing it keeps the memo honest

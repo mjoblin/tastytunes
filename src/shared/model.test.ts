@@ -565,6 +565,8 @@ describe("foldPlayEvent: folding the record into play stats", () => {
         endAt: T0 + 260_000,
         plays: 2,
         listened: [playKey("One", "Band", "Record")],
+        // which copy the run was (0.13.0): its first play's facts, less the length
+        facts: { art: null, host: null, secs: null, rate: null, bits: null },
       },
     ]);
   });

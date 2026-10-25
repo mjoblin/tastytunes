@@ -1,6 +1,12 @@
 import { useMemo } from "react";
 import type { MediaIndexPools, MediaNode } from "@shared/model";
-import { isCompilation, nameSortKey, orderTracks, trackArtists } from "@shared/model";
+import {
+  albumTracksOf,
+  isCompilation,
+  nameSortKey,
+  orderTracks,
+  trackArtists,
+} from "@shared/model";
 import { decadeOptionsOf, formatTags, genreOptionsOf, lc, nodeKey } from "./lensShared";
 
 /** A lens artist: content identity, every album they own and every track they perform. */
@@ -34,6 +40,10 @@ export interface LensIndex {
   albumKey(a: Pick<MediaNode, "serverUdn" | "title">): string;
   /** Each album's tracks by that key, in disc and position order (orderTracks). */
   tracksByAlbum: Map<string, MediaNode[]>;
+  /** One album's own tracks: its key's, less another artist's album of the same title, and
+   *  split from a second copy on the same server by their pictures (albumTracksOf). What an
+   *  album's play tally is read over, so two copies keep their own counts (0.13.0). */
+  tracksOf(a: MediaNode): MediaNode[];
   /** Each album's codec and format tags: the union over its tracks. */
   albumCodecs: Map<string, Set<string>>;
   /** The albums that are compilations (by nodeKey). */
@@ -96,6 +106,30 @@ function build(pools: MediaIndexPools[]): LensIndex {
         for (const [k, list] of m) m.set(k, orderTracks(list));
         return m;
       });
+    },
+    tracksOf(a) {
+      const memo = lazy("tracksOf", () => new Map<string, MediaNode[]>());
+      const id = nodeKey(a);
+      let got = memo.get(id);
+      if (!got) {
+        const byKey = lazy("albumsByKey", () => {
+          const m = new Map<string, MediaNode[]>();
+          for (const alb of index.albums) {
+            const k = albumKey(alb);
+            const list = m.get(k);
+            if (list) list.push(alb);
+            else m.set(k, [alb]);
+          }
+          return m;
+        });
+        const k = albumKey(a);
+        got = albumTracksOf(a, {
+          albums: byKey.get(k) ?? [a],
+          tracks: index.tracksByAlbum.get(k) ?? [],
+        });
+        memo.set(id, got);
+      }
+      return got;
     },
     get albumCodecs() {
       return lazy("albumCodecs", () => {

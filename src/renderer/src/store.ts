@@ -1054,6 +1054,7 @@ export const useStore = create<TTState>((set, get) => ({
           // fold into a copy: the surfaces select by reference
           const next: PlayStats = {
             tracks: { ...cur.tracks },
+            variants: { ...cur.variants },
             recent: [...cur.recent],
             since: cur.since,
             albumRuns: { ...cur.albumRuns },

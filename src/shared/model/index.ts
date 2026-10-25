@@ -22,6 +22,7 @@
 
 export * from "./collections";
 export * from "./listening";
+export * from "./copies";
 export * from "./media";
 export * from "./audio";
 export * from "./settings";
