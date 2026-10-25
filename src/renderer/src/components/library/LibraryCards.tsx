@@ -69,6 +69,7 @@ export function ContainerCard({
   favorited,
   badge,
   note,
+  subtitle: line,
   onHeart,
   onEnter,
   onPlay,
@@ -91,6 +92,9 @@ export function ContainerCard({
    *  a listen got, when it last played (History's Rediscover). Inside the card
    *  so it lifts with it; a line outside is covered by the hover glow. */
   note?: string;
+  /** The line under the name in place of the artist and year: an artist's card in the Artists
+   *  lens says what the row says ("12 albums"; 0.13.0 round 12). */
+  subtitle?: string;
   onHeart?(): void;
   /** The body click, with its event: a caller with a selection model reads the
    *  chord (⌘/ctrl, shift) and decides whether this click opens or picks. */
@@ -114,7 +118,7 @@ export function ContainerCard({
   const artist = isArtistClass(node.upnpClass);
   const menuable = album || artist || folderMenu;
   const muted = isMutedArt(node);
-  const subtitle = [node.artist, node.year].filter(Boolean).join(" · ");
+  const subtitle = line ?? [node.artist, node.year].filter(Boolean).join(" · ");
   // an artist takes main's picture (a real server one, a known photo, an album cover)
   const artistPic = useArtistPicture(artist ? node.title : null);
   return (

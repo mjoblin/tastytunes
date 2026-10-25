@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   AudioLines,
   Heart,
@@ -43,6 +43,7 @@ import {
 } from "./lensShared";
 import { useRowSelection } from "@/components/library/useRowSelection";
 import { useLensIndex } from "./useLensIndex";
+import { useCardGrid, WINDOW_CARDS_ABOVE } from "./useCardGrid";
 import { menuAt } from "@/lib/menuAt";
 
 // The Albums lens, split out of LibraryLenses.tsx (2026-09-13, the lenses round: three lenses of
@@ -83,8 +84,8 @@ let albumsMem: {
  *  call, 2026-09-01 / 2026-09-02): queue writes are one call per track with no
  *  progress affordance, so no gesture may hand the queue fifty albums. */
 
-/** Past this many tiles the cards grid windows its rows (0.11.0 sweep, for review). */
-const WINDOW_TILES_ABOVE = 120;
+/** Past this many tiles the grid windows its rows, cards (useCardGrid's threshold) and lines. */
+const WINDOW_TILES_ABOVE = WINDOW_CARDS_ABOVE;
 
 export function AlbumsLens({
   pools,
@@ -285,35 +286,18 @@ export function AlbumsLens({
   // History screens' lesson). The scroller spans the page's padding, so the cards' hover glow
   // keeps the room it had when the page scrolled them.
   const gridRef = useRef<HTMLDivElement | null>(null);
-  // WINDOWED CARDS (0.11.0 sweep): past WINDOW_TILES_ABOVE tiles the cards grid renders only
-  // the rows of cards near the scroller's viewport, as many columns as auto-fill would give
-  // (from the measured width inside the scroller, its scrollbar excluded), the rows' pitch
-  // measured by useWindowedList. Until the width is measured (the layout effect, before the
-  // first paint) it renders none: it rendered every tile, and at 5,000 albums that first pass,
-  // its pictures each reading their ancestors' styles, took 1.5 of the lens's 1.9 s to open
-  // (0.13.0, the scale fixture). The rows layout windows its rows the same way since then.
-  // Below the threshold every tile renders exactly as before.
-  const bodyRef = useRef<HTMLDivElement | null>(null);
-  const [width, setWidth] = useState(0);
-  useLayoutEffect(() => {
-    const el = bodyRef.current;
-    if (!el) return;
-    setWidth(el.getBoundingClientRect().width);
-    const ro = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  const cols = Math.max(1, Math.floor((width + cardGap) / (cardSize + cardGap)));
+  // the cards' geometry, windowing and the spot a trip away left: useCardGrid (one home since
+  // 0.13.0 round 12, the Artists lens's cards). Past WINDOW_TILES_ABOVE tiles it windows.
   const windowed = cards && tiles.length > WINDOW_TILES_ABOVE;
-  const colWidth = fillRows ? (width - cardGap * (cols - 1)) / cols : cardSize;
-  const win = useWindowedList({
+  const { bodyRef, width, cols, win, gridColumns } = useCardGrid({
     scrollRef: gridRef,
-    count: windowed ? Math.ceil(tiles.length / cols) : 0,
-    itemSelector: "[data-albums-row]",
-    // the art is square; the title and its second line below it
-    estimate: Math.round(colWidth) + 52 + cardGap,
-    overscan: 3,
-    enabled: windowed && width > 0,
+    count: tiles.length,
+    cardSize,
+    cardGap,
+    fillRows,
+    windowed,
+    rowSelector: "[data-albums-row]",
+    restoreTop: albumsMem.scroll,
   });
   const linesWindowed = !cards && tiles.length > WINDOW_TILES_ABOVE;
   const lines = useWindowedList({
@@ -323,28 +307,6 @@ export function AlbumsLens({
     estimate: 56,
     enabled: linesWindowed,
   });
-  // A TRIP AWAY COMES BACK TO THE SPOT, once the grid can hold it: the windowed grid holds no
-  // rows until it has measured its width, and a scrollTo then clamped the spot to 0 (the
-  // useScrollMemory rule), so settle a few frames, and apply once more after the rows it lands
-  // on have been measured (their height was an estimate until then)
-  useEffect(() => {
-    const target = albumsMem.scroll;
-    if (target <= 0) return;
-    let frames = 0;
-    let landed = 0;
-    let raf = requestAnimationFrame(function apply() {
-      const sc = gridRef.current;
-      if (!sc) return;
-      if (landed > 0 || sc.scrollHeight - sc.clientHeight >= target || frames++ > 30) {
-        sc.scrollTo({ top: target });
-        if (++landed >= 3 || Math.abs(sc.scrollTop - target) < 1) return;
-      }
-      raf = requestAnimationFrame(apply);
-    });
-    return () => cancelAnimationFrame(raf);
-  }, []);
-  const gridColumns = (n: number | "auto-fill"): string =>
-    fillRows ? `repeat(${n}, minmax(${cardSize}px, 1fr))` : `repeat(${n}, ${cardSize}px)`;
   const {
     selected: selA,
     setSelected: setSelA,

@@ -459,4 +459,18 @@ export const ONE_HOME = [
       code: "const at = { x: e.clientX, y: e.clientY };",
     },
   },
+  {
+    id: "lens-card-grid",
+    was: "none (0.13.0 round 12: the Artists lens took cards, and the Albums lens's grid moved into useCardGrid rather than gaining a copy)",
+    // a lens's card grid measures its width, counts its columns and windows its rows in one place
+    selector: "NewExpression[callee.name='ResizeObserver']",
+    files: [`^${R}components/library/lenses/`],
+    allow: ["lenses/useCardGrid\\.ts$"],
+    message:
+      "A lens's card grid is laid out by useCardGrid (lenses/useCardGrid): its width, columns, windowing and spot have one home",
+    bad: {
+      file: `${R}components/library/lenses/ArtistCards.tsx`,
+      code: "const ro = new ResizeObserver(() => {});",
+    },
+  },
 ];

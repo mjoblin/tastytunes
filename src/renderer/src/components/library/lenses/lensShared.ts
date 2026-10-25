@@ -1,4 +1,11 @@
-import { isHiRes, LOSSLESS_CODECS, type MediaFormat, type MediaNode } from "@shared/model";
+import {
+  type AppSettings,
+  isHiRes,
+  LOSSLESS_CODECS,
+  type MediaFormat,
+  type MediaNode,
+} from "@shared/model";
+import { compareRecentlyAdded } from "@shared/recentlyAdded";
 
 // The library lenses: OUR views over the union of every ready index —
 // alternative paths to the same leaf views the native flow uses, never a
@@ -197,3 +204,41 @@ export const decadeOf = (year: string | null | undefined): string | null =>
 export const RECORD_SORTS = new Set<string>(["lastPlayed", "plays", "wholeListens"]);
 
 export const PLAY_THESE_MAX = 50;
+
+/**
+ * THE ARTISTS LENS'S ORDERS (0.13.0 round 12, a sort as the other lenses have): by name, the
+ * index's own order; the most played first; the newest arrival first, an artist ranked by their
+ * newest album in the Recently added order (dated, then a server's list). An artist the order
+ * knows nothing of (no plays, nothing dated or listed) follows in name order, and reversed turns
+ * the whole list, as the Albums lens does. The input is in name order.
+ */
+export function orderArtists<A extends { albums: readonly MediaNode[] }>(
+  artists: readonly A[],
+  sort: AppSettings["lensArtistsSort"],
+  reversed: boolean,
+  playsOf: (a: A) => number,
+): A[] {
+  let out = [...artists];
+  if (sort === "plays") {
+    const plays = new Map(out.map((a) => [a, playsOf(a)]));
+    out.sort((a, b) => (plays.get(b) ?? 0) - (plays.get(a) ?? 0));
+  } else if (sort === "added") {
+    const newest = new Map(
+      out.map((a) => [
+        a,
+        a.albums
+          .filter((x) => (x.addedAt ?? 0) > 0 || x.recentRank != null)
+          .sort(compareRecentlyAdded)[0] ?? null,
+      ]),
+    );
+    out.sort((a, b) => {
+      const x = newest.get(a) ?? null;
+      const y = newest.get(b) ?? null;
+      if (!x || !y) return (x ? 0 : 1) - (y ? 0 : 1);
+      const rank = (n: MediaNode): number => n.recentRank ?? Number.MAX_SAFE_INTEGER;
+      return (y.addedAt ?? 0) - (x.addedAt ?? 0) || rank(x) - rank(y);
+    });
+  }
+  if (reversed) out = out.reverse();
+  return out;
+}

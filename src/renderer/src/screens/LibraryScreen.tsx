@@ -1937,9 +1937,17 @@ export function LibraryScreen(): React.JSX.Element {
             />
           ) : lens === "artists" ? (
             <ArtistsLens
+              // a switch of layout is a fresh mount: the columns' windowing and spots attach to
+              // their scrollers as the lens mounts (its memory is module scope, so nothing is lost)
+              key={cards ? "cards" : "rows"}
               pools={lensPools}
               actions={lensActions}
               onOpenArtistPage={openArtistPage}
+              cards={cards}
+              cardSize={presetCardSize}
+              cardGap={presetGap}
+              fillRows={presetFillRows}
+              onToggleLayout={() => void setLayout(cards ? "rows" : "cards")}
             />
           ) : (
             <TracksLens pools={lensPools} actions={lensActions} />

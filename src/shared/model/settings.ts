@@ -208,6 +208,10 @@ export interface AppSettings {
   lensAlbumsSortReversed: boolean;
   /** Artists lens: hide artists that only have loose tracks. */
   lensArtistsAlbumsOnly: boolean;
+  /** Artists lens sort (0.13.0 round 12, the third way the lenses differed): by name with the
+   *  A-Z rail, the most played first, or the newest arrival first (an artist's newest album). */
+  lensArtistsSort: "name" | "plays" | "added";
+  lensArtistsSortReversed: boolean;
   /** Albums lens partition: everything, artist albums only, or compilations only. */
   lensAlbumsKind: "all" | "albums" | "compilations";
   /** Tracks lens sort — the third lens (2026-09-01), every track across the
@@ -499,6 +503,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   lensAlbumsSort: "title",
   lensAlbumsSortReversed: false,
   lensArtistsAlbumsOnly: false,
+  lensArtistsSort: "name",
+  lensArtistsSortReversed: false,
   lensAlbumsKind: "all",
   lensTracksSort: "title",
   lensTracksSortReversed: false,
