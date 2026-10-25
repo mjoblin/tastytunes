@@ -81,6 +81,13 @@ export function fmtDayBucket(at: number, now: number = Date.now()): string {
   return new Date(at).toLocaleDateString(undefined, { month: "long", day: "numeric" });
 }
 
+/** When an album arrived, for a card's note (0.13.0, Recently added): "Added today", "Added
+ *  yesterday", a weekday inside the week, then the date, in the day buckets' words. */
+export function fmtAdded(at: number, now: number = Date.now()): string {
+  const day = fmtDayBucket(at, now);
+  return `Added ${day === "Today" || day === "Yesterday" ? day.toLowerCase() : day}`;
+}
+
 export interface NowPlayingMeta {
   title: string | null;
   subtitle: string | null; // artist, or the "now playing" text on radio

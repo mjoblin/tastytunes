@@ -23,15 +23,16 @@ import { useStore } from "@/store";
 let poolsCache: { sig: string; pools: MediaIndexPools[] } | null = null;
 
 /** The ready indexes and when each was built, as one string: it changes when an index finishes
- *  building or starts a rebuild. The pools below refetch on it, and the playing file asks for
- *  itself again on it while it has not been found (usePlayingFileRef). */
+ *  building or starts a rebuild, or its server's Recently added list is read again (0.13.0). The
+ *  pools below refetch on it, and the playing file asks for itself again on it while it has not
+ *  been found (usePlayingFileRef). */
 export function useReadyIndexSig(): string {
   const statuses = useStore((s) => s.mediaIndex);
   return useMemo(
     () =>
       statuses
         .filter((x) => x.state === "ready")
-        .map((x) => `${x.udn}:${x.builtAt}`)
+        .map((x) => `${x.udn}:${x.builtAt}:${x.recentAt ?? ""}`)
         .sort()
         .join("|"),
     [statuses],

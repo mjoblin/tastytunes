@@ -64,6 +64,7 @@ export function ContainerCard({
   node,
   playing,
   menuOpen,
+  folderMenu = false,
   selected = false,
   favorited,
   badge,
@@ -96,18 +97,22 @@ export function ContainerCard({
   onEnter(e: React.MouseEvent): void;
   onPlay(el: HTMLElement | null): void;
   onMenu(e: React.MouseEvent): void;
+  /** A plain folder takes a ⋯ too while its server is browsed (0.13.0): its one verb, Use as
+   *  Recently added (useLibraryMenus). Elsewhere a folder stays menu-less. */
+  folderMenu?: boolean;
   /** Albums drag to the nav rail (2026-09-02): a press on the card BODY arms
    *  the shared drag; the corner chips (play bloom, heart, ⋯) never do. */
   onNavDrag?(e: React.PointerEvent): void;
 }): React.JSX.Element {
   const ref = useRef<HTMLDivElement | null>(null);
   // Queue/preset verbs only make sense on albums — plain folders (USB
-  // volumes, Asset's virtual views) get no chips and no menu. ARTIST
-  // containers carry the ⋯ (their menu holds only the search-everywhere
-  // pivot — see ItemMenu) but never the play chip.
+  // volumes, Asset's virtual views) get no chips and no menu, but for the ⋯
+  // their server's browse gives them (folderMenu, 0.13.0: Use as Recently
+  // added). ARTIST containers carry the ⋯ (their menu holds only the
+  // search-everywhere pivot — see ItemMenu) but never the play chip.
   const album = isAlbumClass(node.upnpClass);
   const artist = isArtistClass(node.upnpClass);
-  const menuable = album || artist;
+  const menuable = album || artist || folderMenu;
   const muted = isMutedArt(node);
   const subtitle = [node.artist, node.year].filter(Boolean).join(" · ");
   // an artist takes main's picture (a real server one, a known photo, an album cover)
@@ -256,6 +261,7 @@ export function ContainerRow({
   node,
   playing,
   menuOpen,
+  folderMenu = false,
   selected = false,
   selStart = true,
   selEnd = true,
@@ -292,13 +298,15 @@ export function ContainerRow({
   /** The row click, with its event (see ContainerCard.onEnter). */
   onEnter(e: React.MouseEvent): void;
   onMenu(e: React.MouseEvent): void;
+  /** A plain folder's ⋯ while its server is browsed (ContainerCard.folderMenu). */
+  folderMenu?: boolean;
 }): React.JSX.Element {
   // Same rule as cards: albums carry the full ⋯ menu; ARTISTS carry it too now
   // (theirs holds only the search-everywhere pivot — see ItemMenu). Plain
   // folders stay menu-less: a folder is filing, and none of the verbs apply.
   const album = isAlbumClass(node.upnpClass);
   const artist = isArtistClass(node.upnpClass);
-  const menuable = album || artist;
+  const menuable = album || artist || folderMenu;
   const muted = isMutedArt(node);
   const artistPic = useArtistPicture(artist ? node.title : null);
   return (

@@ -1,6 +1,10 @@
 import type { MediaNode, MediaQueueAction, MediaServerInfo } from "@shared/model";
 import { tt } from "@/api";
-import { isAlbumClass } from "@/lib/media";
+import { isAlbumClass, isArtistClass } from "@/lib/media";
+
+/** A folder, not an album or an artist: its ⋯ holds Use as Recently added alone. */
+const plainFolder = (n: MediaNode): boolean =>
+  n.isContainer && !isAlbumClass(n.upnpClass) && !isArtistClass(n.upnpClass);
 import { ItemMenu, PresetPicker } from "@/components/library/LibraryMenus";
 import { RowMenu } from "@/components/media/RowMenu";
 import { AddToPlaylistPanel, itemFromNode } from "@/components/overlays/AddToPlaylistPanel";
@@ -37,6 +41,7 @@ export function LibraryPopovers(
       | "setPresetPicker"
       | "volumeNavVerbs"
       | "analyzeVerbs"
+      | "recentListVerbs"
       | "linkable"
       | "goToAlbum"
       | "goToArtist"
@@ -80,6 +85,7 @@ export function LibraryPopovers(
     heartNodes,
     volumeNavVerbs,
     analyzeVerbs,
+    recentListVerbs,
     linkable,
     goToAlbum,
     goToArtist,
@@ -129,85 +135,102 @@ export function LibraryPopovers(
           ]}
         />
       )}
-      {menu && !(!menu.node.isContainer && selTracks.has(menu.node.id) && selTracks.size > 1) && (
-        <ItemMenu
-          menu={menu}
+      {/* a plain folder's ⋯ (a server browsed): its one verb, Use as Recently added */}
+      {menu && plainFolder(menu.node) && (
+        <RowMenu
+          title={menu.node.title}
+          at={{ x: menu.x, y: menu.y }}
           onClose={() => setMenu(null)}
-          navVerbs={volumeNavVerbs(menu.node)}
-          utilityVerbs={analyzeVerbs(menu.node)}
-          openArtistPage={artistPageOf(menu.node)}
-          goToAlbum={
-            lens === "tracks" && !menu.node.isContainer && menu.node.album
-              ? () => {
-                  setMenu(null);
-                  goToAlbumFromLens(menu.node);
-                }
-              : searchMode &&
-                  !menu.node.isContainer &&
-                  menu.node.album &&
-                  linkable(menu.node, "albums")
-                ? () => {
-                    setMenu(null);
-                    void goToAlbum(menu.node);
-                  }
-                : undefined
-          }
-          goToArtist={
-            lens === "tracks" && !menu.node.isContainer && menu.node.artist
-              ? () => {
-                  setMenu(null);
-                  goToArtistFromLens(menu.node);
-                }
-              : searchMode &&
-                  !menu.node.isContainer &&
-                  menu.node.artist &&
-                  linkable(menu.node, "artists")
-                ? () => {
-                    setMenu(null);
-                    goToArtist(menu.node);
-                  }
-                : undefined
-          }
-          onAction={(action, playFromId) => {
-            setMenu(null);
-            if (action === "PLAY") void playContainer(menu.node, null);
-            else if (action === "PLAY_FROM_HERE") void playAlbumFrom(menu.node);
-            else void act(menu.node, action, null, playFromId);
-          }}
-          onSavePreset={() => {
-            setPresetPicker({ node: menu.node, x: menu.x, y: menu.y });
-            setMenu(null);
-          }}
-          onInfo={() => {
-            setMenu(null);
-            // a track's Info steps through the rows it was opened from (useLibraryMenus)
-            openInfoFor(menu.node, menu.list);
-          }}
-          onAddToPlaylist={
-            !menu.node.isContainer || isAlbumClass(menu.node.upnpClass)
-              ? () => {
-                  setPlaylistPicker({ node: menu.node, x: menu.x, y: menu.y });
-                  setMenu(null);
-                }
-              : undefined
-          }
-          // Back-link for the builders' search pivot: a browse pivot returns
-          // via the position restore, a pivot out of SEARCH MODE returns via
-          // find-recall (its browse position is just the search's scope root).
-          // Albums and tracks are heartable; plain folders and artists aren't.
-          favorite={
-            !menu.node.isContainer || isAlbumClass(menu.node.upnpClass)
-              ? {
-                  active: nodeFavorited(menu.node),
-                  toggle: () => {
-                    heartNode(menu.node);
-                    setMenu(null);
-                  },
-                }
-              : undefined
-          }
+          items={recentListVerbs(menu.node) ?? []}
         />
       )}
+      {menu &&
+        !plainFolder(menu.node) &&
+        !(!menu.node.isContainer && selTracks.has(menu.node.id) && selTracks.size > 1) && (
+          <ItemMenu
+            menu={menu}
+            onClose={() => setMenu(null)}
+            navVerbs={volumeNavVerbs(menu.node)}
+            utilityVerbs={(() => {
+              const verbs = [
+                ...(analyzeVerbs(menu.node) ?? []),
+                ...(lens == null && !searchMode ? (recentListVerbs(menu.node) ?? []) : []),
+              ];
+              return verbs.length > 0 ? verbs : undefined;
+            })()}
+            openArtistPage={artistPageOf(menu.node)}
+            goToAlbum={
+              lens === "tracks" && !menu.node.isContainer && menu.node.album
+                ? () => {
+                    setMenu(null);
+                    goToAlbumFromLens(menu.node);
+                  }
+                : searchMode &&
+                    !menu.node.isContainer &&
+                    menu.node.album &&
+                    linkable(menu.node, "albums")
+                  ? () => {
+                      setMenu(null);
+                      void goToAlbum(menu.node);
+                    }
+                  : undefined
+            }
+            goToArtist={
+              lens === "tracks" && !menu.node.isContainer && menu.node.artist
+                ? () => {
+                    setMenu(null);
+                    goToArtistFromLens(menu.node);
+                  }
+                : searchMode &&
+                    !menu.node.isContainer &&
+                    menu.node.artist &&
+                    linkable(menu.node, "artists")
+                  ? () => {
+                      setMenu(null);
+                      goToArtist(menu.node);
+                    }
+                  : undefined
+            }
+            onAction={(action, playFromId) => {
+              setMenu(null);
+              if (action === "PLAY") void playContainer(menu.node, null);
+              else if (action === "PLAY_FROM_HERE") void playAlbumFrom(menu.node);
+              else void act(menu.node, action, null, playFromId);
+            }}
+            onSavePreset={() => {
+              setPresetPicker({ node: menu.node, x: menu.x, y: menu.y });
+              setMenu(null);
+            }}
+            onInfo={() => {
+              setMenu(null);
+              // a track's Info steps through the rows it was opened from (useLibraryMenus)
+              openInfoFor(menu.node, menu.list);
+            }}
+            onAddToPlaylist={
+              !menu.node.isContainer || isAlbumClass(menu.node.upnpClass)
+                ? () => {
+                    setPlaylistPicker({ node: menu.node, x: menu.x, y: menu.y });
+                    setMenu(null);
+                  }
+                : undefined
+            }
+            // Back-link for the builders' search pivot: a browse pivot returns
+            // via the position restore, a pivot out of SEARCH MODE returns via
+            // find-recall (its browse position is just the search's scope root).
+            // Albums and tracks are heartable; plain folders and artists aren't.
+            favorite={
+              !menu.node.isContainer || isAlbumClass(menu.node.upnpClass)
+                ? {
+                    active: nodeFavorited(menu.node),
+                    toggle: () => {
+                      heartNode(menu.node);
+                      setMenu(null);
+                    },
+                  }
+                : undefined
+            }
+          />
+        )}
       {ghost}
       {playlistMulti && (
         <AddToPlaylistPanel

@@ -196,7 +196,15 @@ export interface AppSettings {
    */
   /** Albums lens sort (the native album grid above keeps librarySort). */
   lensAlbumsSort:
-    "title" | "artist" | "year" | "dr" | "loudness" | "lastPlayed" | "plays" | "wholeListens";
+    | "title"
+    | "artist"
+    | "added"
+    | "year"
+    | "dr"
+    | "loudness"
+    | "lastPlayed"
+    | "plays"
+    | "wholeListens";
   lensAlbumsSortReversed: boolean;
   /** Artists lens: hide artists that only have loose tracks. */
   lensArtistsAlbumsOnly: boolean;
@@ -436,6 +444,13 @@ export interface AppSettings {
    */
   presetArtists: Record<string, string>;
   /**
+   * Each media server's own Recently added list, as the reader set it (0.13.0 round 9): a
+   * container chosen in the Library (a folder's ⋯, Use as Recently added), with the titles of
+   * the folders down to it so an id the server re-mints is found again, or "off" (Settings ›
+   * Libraries). A server absent here uses the list found by its name. Keyed by server udn.
+   */
+  recentlyAddedLists: Record<string, { id: string; title: string; titlePath: string[] } | "off">;
+  /**
    * User-saved EQ gain-sets (7 gains, dB). LOCAL by design: the firmware has
    * no preset storage — the official app's EQ presets are client-side too
    * (confirmed on the wire: tapping/saving one produces zero device traffic),
@@ -562,5 +577,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   miniBounds: null,
   mainBounds: null,
   presetArtists: {},
+  recentlyAddedLists: {},
   eqPresets: [],
 };

@@ -56,6 +56,9 @@ import {
   searchPage,
 } from "./upnpBrowser";
 import { learnArtMove, moveArt } from "./artMove";
+import { arrivalKey, recentRanks } from "@shared/recentlyAdded";
+import { arrivalsOf, noteArrivals } from "../data/albumArrivals";
+import { readRecentList, type RecentListRead } from "./recentList";
 
 interface StoredIndex {
   udn: string;
@@ -72,7 +75,16 @@ interface StoredIndex {
    *  updateId stays the one its walk saw, so the Library's card still offers a re-index for
    *  files added since. */
   healedFor?: number;
+  /** The server's own Recently added list as last read (0.13.0 round 9; main/media/recentList),
+   *  and when: a choice in Settings or the Library reads it again without a walk. */
+  recent?: RecentListRead;
+  recentAt?: number;
 }
+
+/** Whether an index's picture addresses name the same picture build after build, so an album's
+ *  arrival key may carry its picture (shared/recentlyAdded arrivalKey): a search-built index's
+ *  server keeps them; a walked one may not (the streamer's USB drive re-mints them every wake). */
+const stableArt = (idx: Pick<StoredIndex, "strategy">): boolean => idx.strategy === "search";
 
 // v11: profile notes are structured facts (ProfileNote), worded at display
 //      time — the v10 indexes stored prose (2026-08-19).
@@ -155,6 +167,8 @@ function load(): void {
       servers?: StoredIndex[];
     };
     if (raw.version === VERSION && Array.isArray(raw.servers)) {
+      // an index held from before arrivals were noted is the server's baseline (no-op after)
+      for (const idx of raw.servers) noteArrivals(idx.udn, idx.albums, stableArt(idx));
       for (const idx of raw.servers) indexes.set(idx.udn, idx);
     } else if (Array.isArray(raw.servers)) {
       for (const idx of raw.servers) {
@@ -207,6 +221,11 @@ export function status(): MediaIndexStatus[] {
       builtAt: idx.builtAt,
       updateId: idx.updateId,
       ...(idx.profile ? { profile: idx.profile } : {}),
+      recentList: idx.recent?.list
+        ? { title: idx.recent.list.title, chosen: idx.recent.chosen }
+        : null,
+      ...(idx.recent?.off ? { recentOff: true } : {}),
+      recentAt: idx.recentAt ?? null,
     });
   }
   for (const server of known.values()) {
@@ -496,6 +515,7 @@ async function crawl(
   }
   const r = reconcilePools(c, server.name);
   const updateId = await getSystemUpdateID(host, server.udn);
+  const recent = await readRecentList(host, server);
   return {
     udn: server.udn,
     serverName: server.name,
@@ -506,6 +526,8 @@ async function crawl(
     artists: r.artists,
     tracks: r.tracks,
     profile: r.profile,
+    recent,
+    recentAt: Date.now(),
   };
 }
 
@@ -535,6 +557,8 @@ async function buildNow(
   try {
     const built = await crawl(host, server, strategy);
     if (built) {
+      // before the index is in place, so the pools never show it without its arrivals
+      noteArrivals(server.udn, built.albums, stableArt(built));
       indexes.set(server.udn, built);
       rebuildHints.delete(server.udn);
       failed.delete(server.udn);
@@ -1075,10 +1099,23 @@ export function pools(): MediaIndexPools[] {
       serverUdn: idx.udn,
       serverName: idx.serverName,
     });
+    // an album carries its arrival and its place in the server's own list (shared/recentlyAdded)
+    const arrived = arrivalsOf(idx.udn);
+    const ranks = recentRanks(idx.albums, idx.recent?.entries ?? []);
+    const stable = stableArt(idx);
+    const album = (n: MediaNode, i: number): MediaNode => {
+      const at = arrived[arrivalKey(n, stable)] ?? 0;
+      const rank = ranks.get(i);
+      return {
+        ...stamp(n),
+        ...(at > 0 ? { addedAt: at } : {}),
+        ...(rank != null ? { recentRank: rank } : {}),
+      };
+    };
     out.push({
       udn: idx.udn,
       serverName: idx.serverName,
-      albums: idx.albums.map(stamp),
+      albums: idx.albums.map(album),
       artists: idx.artists.map(stamp),
       tracks: idx.tracks.map(stamp),
       ...(idx.profile ? { profile: idx.profile } : {}),
@@ -1097,4 +1134,22 @@ export async function searchServer(
   const fromIndex = searchIndex(serverUdn, query);
   if (fromIndex) return fromIndex;
   return liveSearch(host, serverUdn, query);
+}
+
+/**
+ * Read a server's own Recently added list again (the reader chose or turned off one: Settings ›
+ * Libraries, a folder's ⋯ in the Library), with no walk of the library; the pools and the
+ * Library's shelf follow at once.
+ */
+export async function refreshRecentList(host: string, udn: string): Promise<void> {
+  load();
+  const server = known.get(udn);
+  if (!server || !indexes.has(udn)) return;
+  const recent = await readRecentList(host, server);
+  // the index as it stands now: a build may have replaced it while the list was read
+  const now = indexes.get(udn);
+  if (!now) return;
+  indexes.set(udn, { ...now, recent, recentAt: Date.now() });
+  save();
+  announce(status());
 }

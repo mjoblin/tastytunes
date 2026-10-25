@@ -13,12 +13,14 @@ import {
   albumDrKey,
   albumTracksOf,
   albumVolume,
+  type AppSettings,
   type MediaIndexPools,
   type MediaNode,
   nameSortKey,
 } from "@shared/model";
 import { useWindowedList } from "@/hooks/useWindowedList";
-import { cx, matchesFilter, fmtCount } from "@/lib/format";
+import { cx, fmtAdded, matchesFilter, fmtCount } from "@/lib/format";
+import { compareRecentlyAdded } from "@shared/recentlyAdded";
 import { usePlayStats } from "@/lib/playStats";
 import { playedBucket, playedOptionsOf } from "@/lib/playStatsView";
 import { useStore } from "@/store";
@@ -46,11 +48,13 @@ import { useLensIndex } from "./useLensIndex";
 // 600 to 800 lines shared one file); what the lenses share lives in ./lensShared.
 
 const ALBUM_SORTS: Array<{
-  value: "title" | "artist" | "year" | "dr" | "loudness" | "lastPlayed" | "plays" | "wholeListens";
+  value: AppSettings["lensAlbumsSort"];
   label: string;
 }> = [
   { value: "title", label: "Title" },
   { value: "artist", label: "Artist" },
+  // the dated newest first, then a server's own list, then the rest (shared/recentlyAdded)
+  { value: "added", label: "Recently added" },
   { value: "year", label: "Year (newest first)" },
   { value: "dr", label: "Dynamic range" },
   { value: "loudness", label: "Loudness" },
@@ -193,6 +197,7 @@ export function AlbumsLens({
           nameSortKey(a.artist ?? "￿").localeCompare(nameSortKey(b.artist ?? "￿")) ||
           a.title.localeCompare(b.title)
         );
+      if (sort === "added") return compareRecentlyAdded(a, b);
       if (sort === "year")
         return (b.year ?? "").localeCompare(a.year ?? "") || a.title.localeCompare(b.title);
       if (sort === "dr") {
@@ -397,6 +402,8 @@ export function AlbumsLens({
         menuOpen={actions.menuNodeId === node.id}
         favorited={actions.nodeFavorited(rawNode)}
         badge={badge}
+        // in Recently added order a card says when its album arrived, where the app knows
+        note={sort === "added" && rawNode.addedAt ? fmtAdded(rawNode.addedAt) : undefined}
         selected={selA.has(nodeKey(rawNode))}
         onHeart={() => actions.heartNode(rawNode)}
         onEnter={(e) => {

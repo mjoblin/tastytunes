@@ -60,6 +60,13 @@ export interface MediaIndexStatus {
   builtAt: number | null;
   updateId: number | null;
   profile?: MediaServerProfile;
+  /** The server's own Recently added list (0.13.0 round 9; shared/recentlyAdded): the one in
+   *  use, found by its name or chosen by the reader, or null; `recentOff` when the reader turned
+   *  it off in Settings › Libraries. */
+  recentList?: { title: string; chosen: boolean } | null;
+  recentOff?: boolean;
+  /** When the list was last read: the Library's pools are fetched again when it changes. */
+  recentAt?: number | null;
 }
 
 export interface MediaNode {
@@ -75,6 +82,11 @@ export interface MediaNode {
    * it, and the Library's browse re-walks it when the stored id has rotted.
    */
   titlePath?: string[];
+  /** An album's arrival in its index (0.13.0 round 9, shared/recentlyAdded): the day the app
+   *  first saw it, absent when it was there before the app began noting arrivals. */
+  addedAt?: number;
+  /** An album's place in its server's own Recently added list (0 first), when the list names it. */
+  recentRank?: number;
   upnpClass: string;
   isContainer: boolean;
   artUrl: string | null;

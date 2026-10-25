@@ -776,6 +776,7 @@ export function LibraryScreen(): React.JSX.Element {
     openInfoFor,
     volumeNavVerbs,
     analyzeVerbs,
+    recentListVerbs,
     linkable,
     goToAlbum,
     goToArtist,
@@ -1398,6 +1399,8 @@ export function LibraryScreen(): React.JSX.Element {
   // the lists below carry no extra top margin in search mode), identical
   // above-gap too (mt-2 for whichever group lands first, mt-5 after).
   selectionLate.current = { heartNode, heartNodes, nodeFavorited };
+  /** A server's folders, browsed: a plain folder takes a ⋯ (Use as Recently added, 0.13.0). */
+  const folderMenus = serverUdn != null && !searchMode && lens == null;
   /** One container as the listing draws it: a card, or a row in the rows layout. */
   const containerItem = (node: MediaNode): React.JSX.Element =>
     cards ? (
@@ -1411,6 +1414,7 @@ export function LibraryScreen(): React.JSX.Element {
         onEnter={() => enter(node)}
         onPlay={(el) => void playContainer(node, el)}
         onMenu={(e) => openMenu(node, e)}
+        folderMenu={folderMenus}
         onNavDrag={
           isAlbumClass(node.upnpClass) ? (e) => startAlbumDrag([node], e, node.title) : undefined
         }
@@ -1429,6 +1433,7 @@ export function LibraryScreen(): React.JSX.Element {
         onHeart={isAlbumClass(node.upnpClass) ? () => heartNode(node) : undefined}
         onEnter={() => enter(node)}
         onMenu={(e) => openMenu(node, e)}
+        folderMenu={folderMenus}
         onNavDrag={
           isAlbumClass(node.upnpClass) ? (e) => startAlbumDrag([node], e, node.title) : undefined
         }
@@ -2146,6 +2151,7 @@ export function LibraryScreen(): React.JSX.Element {
         heartNodes={heartNodes}
         volumeNavVerbs={volumeNavVerbs}
         analyzeVerbs={analyzeVerbs}
+        recentListVerbs={recentListVerbs}
         linkable={linkable}
         goToAlbum={goToAlbum}
         goToArtist={goToArtist}

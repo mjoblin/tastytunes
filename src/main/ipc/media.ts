@@ -1,6 +1,8 @@
 import { IPC } from "@shared/ipc";
 import type { ContentRef, MediaInfoQuery, MediaQueueAction } from "@shared/model";
 import { deviceManager, streamerHost } from "../app/runtime";
+import { broadcastSettings } from "../app/broadcast";
+import { getSettings, updateSettings } from "../data/persist";
 import * as mediaIndex from "../media/mediaIndex";
 import { lookupMediaInfo } from "../media/mediaInfo";
 import { browse as mediaBrowse, presetSave, queueAdd, refreshServers } from "../media/upnpBrowser";
@@ -20,6 +22,28 @@ export function registerMediaIpc(): void {
     const servers = await refreshServers(streamerHost());
     const server = servers.find((x) => x.udn === serverUdn);
     if (server) await mediaIndex.rebuild(streamerHost(), server);
+  });
+  // a server's own Recently added list: chosen, off, or back to the one found by its name
+  handle(IPC.setRecentlyAddedList, async (_e, serverUdn: unknown, choice: unknown) => {
+    if (typeof serverUdn !== "string" || !serverUdn) return;
+    const lists = { ...getSettings().recentlyAddedLists };
+    if (choice === null) delete lists[serverUdn];
+    else if (choice === "off") lists[serverUdn] = "off";
+    else if (
+      choice != null &&
+      typeof choice === "object" &&
+      "id" in choice &&
+      "title" in choice &&
+      "titlePath" in choice &&
+      typeof choice.id === "string" &&
+      typeof choice.title === "string" &&
+      Array.isArray(choice.titlePath) &&
+      choice.titlePath.every((t) => typeof t === "string")
+    )
+      lists[serverUdn] = { id: choice.id, title: choice.title, titlePath: choice.titlePath };
+    else return;
+    broadcastSettings(updateSettings({ recentlyAddedLists: lists }));
+    await mediaIndex.refreshRecentList(streamerHost(), serverUdn);
   });
   handle(IPC.mediaBrowse, (_e, serverUdn: string, objectId: string | null, titlePath: string[]) =>
     mediaBrowse(streamerHost(), serverUdn, objectId, titlePath),

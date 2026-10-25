@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Loader2, RefreshCw } from "lucide-react";
-import { type AppSettings } from "@shared/model";
+import { type AppSettings, type MediaIndexStatus } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { fmtCount } from "@/lib/format";
@@ -67,6 +67,7 @@ export function LibrariesSection({
                       ? `not indexed${FACT_SEP}search asks the server live`
                       : `${fmtCount(st.tracks)} tracks${FACT_SEP}${fmtCount(st.albums)} albums${FACT_SEP}updated ${age(st.builtAt)}`}
               </span>
+              <RecentListLine st={st} />
             </span>
             <HeaderChip
               onClick={() => void tt.mediaIndexRebuild(st.udn)}
@@ -86,6 +87,53 @@ export function LibrariesSection({
         <ArtThumbsRow />
       </div>
     </section>
+  );
+}
+
+/**
+ * A server's own Recently added list (0.13.0 round 9; shared/recentlyAdded): the one in use and
+ * a way to turn it off, back on, or from a chosen one back to the one found by its name. A server
+ * the index searches and that has none says so, with where one is chosen; the streamer's USB drive
+ * and other walked servers show the line only once one is chosen.
+ */
+function RecentListLine({ st }: { st: MediaIndexStatus }): React.JSX.Element | null {
+  const set = (choice: "off" | null): void => void tt.setRecentlyAddedList(st.udn, choice);
+  const list = st.recentList;
+  if (st.state !== "ready" || (!list && !st.recentOff && st.strategy !== "search")) return null;
+  const chip =
+    "font-sans text-[11px] text-dim hover:text-ink underline-offset-2 hover:underline focus-kbd:underline";
+  return (
+    <span
+      data-recent-list={st.udn}
+      className="flex flex-wrap items-baseline gap-x-2 font-mono text-[10.5px] text-faint"
+    >
+      {list ? (
+        <>
+          <span>
+            recently added from “{list.title}”{list.chosen ? `${FACT_SEP}chosen` : ""}
+          </span>
+          {list.chosen && (
+            <button type="button" className={chip} onClick={() => set(null)}>
+              Reset
+            </button>
+          )}
+          <button type="button" className={chip} onClick={() => set("off")}>
+            Turn off
+          </button>
+        </>
+      ) : st.recentOff ? (
+        <>
+          <span>recently added list off</span>
+          <button type="button" className={chip} onClick={() => set(null)}>
+            Turn on
+          </button>
+        </>
+      ) : (
+        <span>
+          no recently added list found{FACT_SEP}choose one from a folder’s ⋯ in the Library
+        </span>
+      )}
+    </span>
   );
 }
 

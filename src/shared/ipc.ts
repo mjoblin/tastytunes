@@ -485,6 +485,12 @@ export interface TastyTunesApi {
   /** Force a media-index (re)build for one server (also the only way to
    *  build one for a Browse-only server). */
   mediaIndexRebuild(serverUdn: string): Promise<void>;
+  /** A server's own Recently added list (0.13.0 round 9): a container chosen in the Library,
+   *  "off", or null for the one found by its name; read again at once, with no walk. */
+  setRecentlyAddedList(
+    serverUdn: string,
+    choice: { id: string; title: string; titlePath: string[] } | "off" | null,
+  ): Promise<void>;
   /** The renderer tells main whether display mode is on (2026-09-14): the MCP bridge reports it
    *  in get_status and list_scenes, and set_display_mode asks the window through a menu command. */
   reportDisplayMode(on: boolean): void;
@@ -614,6 +620,7 @@ export const IPC = {
   contentResolve: "tt:contentResolve",
   mediaNodeInfo: "tt:mediaNodeInfo",
   mediaIndexRebuild: "tt:mediaIndexRebuild",
+  setRecentlyAddedList: "tt:setRecentlyAddedList",
   displayModeReport: "tt:displayModeReport",
   radioSearch: "tt:radioSearch",
   radioTop: "tt:radioTop",
