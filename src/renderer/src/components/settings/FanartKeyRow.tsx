@@ -15,7 +15,7 @@ const FANART: SecretKeySpec = {
   id: "fanartKey",
   title: "fanart.tv key",
   noun: "key",
-  what: "fanart.tv has large artist photos, made by its community. With your key, they're among the choices in “Choose a picture” on an artist's page.",
+  what: "fanart.tv has artist photos made by the community. With your key, they're among the choices in “Choose a picture” on an artist's page.",
   getStep: "Sign in to fanart.tv (an account is free) and copy your personal API key.",
   getLabel: "Open fanart.tv",
   getUrl: "https://fanart.tv/get-an-api-key/",

@@ -255,8 +255,16 @@ export function ArtistPictureDialog({
             ) : !fan.keyed ? (
               <div className="space-y-3" data-artist-picture-no-key>
                 <Note>
-                  fanart.tv has large artist photos, made by its community. Add your fanart.tv key
-                  in Settings › Connections to choose from them.
+                  <button
+                    type="button"
+                    data-artist-picture-fanart-link
+                    onClick={() => void tt.openExternal("https://fanart.tv/")}
+                    className="text-dim underline decoration-gold/50 underline-offset-2 hover:text-ink"
+                  >
+                    fanart.tv
+                  </button>{" "}
+                  has artist photos made by the community. Add your fanart.tv key in Settings ›
+                  Connections.
                 </Note>
                 <SmallButton onClick={() => openConnections()}>Open Settings</SmallButton>
               </div>
