@@ -20,6 +20,10 @@ import { cx, fmtCount } from "@/lib/format";
  * nothing else: no text for a reader, a search or a screen reader. The options narrow as the
  * other facets do, so the labels a pill has offered this session are remembered (per id,
  * bounded by the library's own facet values): the width grows to a new widest, never shrinks.
+ * A SETTING'S CHOICE TOO (`choice`, 0.13.0, his ask: Settings › Libraries' Recently added list in
+ * "the app's dropdown widget" rather than a native select): always one value, so no clearing row
+ * and a pick never toggles off, no counts, the chip in its resting look (gold says a filter is on),
+ * the list under the chip's right edge.
  */
 // 112 (user, 2026-10-11, from comparison shots): at 160 one long genre ("Contemporary Hip Hop")
 // set its pill's width and the lens row wrapped at a 1,180 px window; at 112 the row fits
@@ -42,13 +46,17 @@ export function PickerPill({
   value,
   onChange,
   min,
+  choice = false,
 }: {
   id: string;
   neutral: string;
-  clearLabel: string;
-  options: Array<{ value: string; label: string; count: number }>;
+  /** The facet's clearing row ("Any decade"); a choice has none. */
+  clearLabel?: string;
+  options: Array<{ value: string; label: string; count?: number }>;
   value: string | null;
   onChange(value: string | null): void;
+  /** A setting's choice rather than a facet (see above). */
+  choice?: boolean;
   /** Options needed before the pill shows (default 2 — a facet that can't
    *  distinguish is furniture; DR passes 1: one known value still filters
    *  the analyzed from the rest). */
@@ -68,11 +76,11 @@ export function PickerPill({
     const el = labelRef.current;
     setTruncated(el != null && el.scrollWidth > el.clientWidth);
   }, [shown, sizes.length]);
-  if (options.length < (min ?? 2)) return null;
+  if (options.length < (min ?? (choice ? 1 : 2))) return null;
   return (
     <div className="relative">
       <Chip
-        state={active ? "active" : open ? "open" : "idle"}
+        state={active && !choice ? "active" : open ? "open" : "idle"}
         data-lens-picker={id}
         data-tip={truncated ? shown : undefined}
         onClick={() => setOpen((o) => !o)}
@@ -93,7 +101,7 @@ export function PickerPill({
             {shown}
           </span>
         </span>
-        <ChevronDown size={12} className={active ? "text-gold/70" : "text-faint"} />
+        <ChevronDown size={12} className={active && !choice ? "text-gold/70" : "text-faint"} />
       </Chip>
       {open && (
         <>
@@ -102,30 +110,33 @@ export function PickerPill({
           <div
             data-lens-picker-popover={id}
             className={cx(
-              "absolute left-0 top-full mt-1.5 z-30 w-56 max-h-72 overflow-y-auto",
+              "absolute top-full mt-1.5 z-30 w-56 max-h-72 overflow-y-auto",
+              choice ? "right-0" : "left-0",
               POPOVER_CARD,
               "p-1.5 space-y-0.5",
             )}
           >
-            <button
-              data-lens-chip={clearLabel}
-              onClick={() => {
-                onChange(null);
-                setOpen(false);
-              }}
-              className={cx(
-                "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-[13px] transition-colors",
-                value === null ? "text-gold bg-golddim" : "text-dim hover:text-ink hover:bg-veil",
-              )}
-            >
-              <span className="min-w-0 flex-1 truncate">{clearLabel}</span>
-            </button>
+            {!choice && (
+              <button
+                data-lens-chip={clearLabel}
+                onClick={() => {
+                  onChange(null);
+                  setOpen(false);
+                }}
+                className={cx(
+                  "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-[13px] transition-colors",
+                  value === null ? "text-gold bg-golddim" : "text-dim hover:text-ink hover:bg-veil",
+                )}
+              >
+                <span className="min-w-0 flex-1 truncate">{clearLabel}</span>
+              </button>
+            )}
             {options.map((o) => (
               <button
                 key={o.value}
                 data-lens-chip={o.label}
                 onClick={() => {
-                  onChange(value === o.value ? null : o.value);
+                  onChange(choice ? o.value : value === o.value ? null : o.value);
                   setOpen(false);
                 }}
                 className={cx(
@@ -136,9 +147,11 @@ export function PickerPill({
                 )}
               >
                 <span className="min-w-0 flex-1 truncate">{o.label}</span>
-                <span className="font-mono text-[10.5px] text-faint tabular-nums">
-                  {fmtCount(o.count)}
-                </span>
+                {o.count != null && (
+                  <span className="font-mono text-[10.5px] text-faint tabular-nums">
+                    {fmtCount(o.count)}
+                  </span>
+                )}
               </button>
             ))}
           </div>

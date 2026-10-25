@@ -5,6 +5,7 @@ import { tt } from "@/api";
 import { useStore } from "@/store";
 import { fmtCount } from "@/lib/format";
 import { HeaderChip } from "@/components/chrome/Chrome";
+import { PickerPill } from "@/components/controls/PickerPill";
 import { useConfirmPopover } from "@/components/chrome/Confirm";
 import { SettingRow, Toggle, fmtBytes } from "@/components/settings/SettingsKit";
 import { FACT_SEP } from "@/lib/mediaFacts";
@@ -96,7 +97,8 @@ export function LibrariesSection({
  * A SERVER'S OWN RECENTLY ADDED LIST (0.13.0 round 9; shared/recentlyAdded), as a setting in the
  * screen's own idiom (his look, 2026-10-25: the first cut's status line and text links read as
  * status, "a little small/noodly", and it was not clear it could be changed): the label, a
- * sentence saying what it is for, and a picker of the server's folders (the top level and under
+ * sentence saying what it is for, and the app's dropdown (PickerPill as a choice, his ask: the
+ * native select read out of place) of the server's folders (the top level and under
  * Music, Audio or Media Library: listRecentCandidates), the one found by its name first, then the
  * rest, then None. A folder chosen from a folder's ⋯ in the Library deeper down is offered too.
  * For a server the index searches, or one with a list chosen; never the streamer's USB drive.
@@ -138,6 +140,17 @@ function RecentListRow({
           : "off";
   const label = (f: { titlePath: string[] }): string => f.titlePath.join(" › ");
   const others = folders.filter((f) => !f.named);
+  // the found list first, a folder chosen deeper down (from a folder's ⋯), the rest, then None
+  const options = [
+    ...(named || (st.recentList && !st.recentList.chosen)
+      ? [{ value: "auto", label: named ? label(named) : (st.recentList?.title ?? "") }]
+      : []),
+    ...(picked && !others.some((f) => f.id === picked.id)
+      ? [{ value: `id:${picked.id}`, label: picked.titlePath.join(" › ") }]
+      : []),
+    ...others.map((f) => ({ value: `id:${f.id}`, label: label(f) })),
+    { value: "off", label: "None" },
+  ];
   const set = (v: string): void => {
     if (v === "off") void tt.setRecentlyAddedList(st.udn, "off");
     else if (v === "auto") void tt.setRecentlyAddedList(st.udn, null);
@@ -159,26 +172,16 @@ function RecentListRow({
           added from now on are dated by TastyTunes either way.
         </div>
       </div>
-      <select
-        aria-label={`Recently added list for ${st.serverName}`}
-        value={value}
-        onChange={(e) => set(e.target.value)}
-        className="shrink-0 bg-bg rounded-lg ring-1 ring-edge px-2 py-1.5 text-[12.5px] outline-none focus:ring-edge2 max-w-56"
-      >
-        {(named || (st.recentList && !st.recentList.chosen)) && (
-          <option value="auto">{named ? label(named) : st.recentList?.title}</option>
-        )}
-        {/* a folder chosen deeper down, from a folder's ⋯ in the Library */}
-        {picked && !others.some((f) => f.id === picked.id) && (
-          <option value={`id:${picked.id}`}>{picked.titlePath.join(" › ")}</option>
-        )}
-        {others.map((f) => (
-          <option key={f.id} value={`id:${f.id}`}>
-            {label(f)}
-          </option>
-        ))}
-        <option value="off">None</option>
-      </select>
+      <div className="shrink-0">
+        <PickerPill
+          id={`recent-${st.udn}`}
+          choice
+          neutral="None"
+          options={options}
+          value={value}
+          onChange={(v) => set(v ?? "off")}
+        />
+      </div>
     </div>
   );
 }
