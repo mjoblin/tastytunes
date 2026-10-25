@@ -3,7 +3,7 @@ import type { MediaNode } from "@shared/model";
 import { ContainerCard } from "@/components/library/LibraryCards";
 import { type LensActions } from "./lensShared";
 import { type LensArtist } from "./useLensIndex";
-import { useCardGrid, WINDOW_CARDS_ABOVE } from "./useCardGrid";
+import { CARD_GRID_SCROLLER, useCardGrid, WINDOW_CARDS_ABOVE } from "./useCardGrid";
 
 // The Artists lens as cards (0.13.0 round 12; Malcolm, 2026-10-25: "a degree of uniformity
 // across the Album, Artist and Tracks sections ... only the Albums section gives a choice of
@@ -177,6 +177,7 @@ export function ArtistCards({
         onScroll={(e) => onScrolled(e.currentTarget.scrollTop)}
         className="h-full overflow-y-auto pb-2"
         style={{
+          ...CARD_GRID_SCROLLER,
           marginInline: -PAGE_PAD,
           paddingLeft: PAGE_PAD,
           paddingRight: PAGE_PAD + (letterStarts ? RAIL_ROOM : 0),

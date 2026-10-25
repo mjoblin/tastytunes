@@ -9,6 +9,16 @@ import { useWindowedList, type WindowedList } from "@/hooks/useWindowedList";
 export const WINDOW_CARDS_ABOVE = 120;
 
 /**
+ * THE SCROLLBAR'S ROOM, HELD FROM THE START (his eye on 0.13.0, 2026-10-25: the Albums lens's grid
+ * "seems to grow its cards" as it opens). A windowed grid counts its columns from its width before
+ * any row exists, so before the rows overflow and the 10 px scrollbar arrives; where those 10 px
+ * took a column away (a window just above a column boundary) the grid painted one more column,
+ * then every card grew a fifth (160 to 202 px, S147). The lens's scroller keeps the scrollbar's
+ * gutter whether it scrolls or not, so the width the grid measures is the width it keeps.
+ */
+export const CARD_GRID_SCROLLER: React.CSSProperties = { scrollbarGutter: "stable" };
+
+/**
  * WINDOWED CARDS (0.11.0 sweep): past a lens's threshold the cards grid renders only the rows of
  * cards near the scroller's viewport, as many columns as auto-fill would give (from the measured
  * width inside the scroller, its scrollbar excluded), the rows' pitch measured by

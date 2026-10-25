@@ -43,7 +43,7 @@ import {
 } from "./lensShared";
 import { useRowSelection } from "@/components/library/useRowSelection";
 import { useLensIndex } from "./useLensIndex";
-import { useCardGrid, WINDOW_CARDS_ABOVE } from "./useCardGrid";
+import { CARD_GRID_SCROLLER, useCardGrid, WINDOW_CARDS_ABOVE } from "./useCardGrid";
 import { menuAt } from "@/lib/menuAt";
 
 // The Albums lens, split out of LibraryLenses.tsx (2026-09-13, the lenses round: three lenses of
@@ -519,6 +519,7 @@ export function AlbumsLens({
             albumsMem.scroll = e.currentTarget.scrollTop;
           }}
           className="min-h-0 flex-1 overflow-y-auto px-8 -mx-8 pb-2"
+          style={CARD_GRID_SCROLLER}
         >
           <div ref={bodyRef}>
             {shown.length === 0 ? (
