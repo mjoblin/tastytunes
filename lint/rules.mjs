@@ -423,4 +423,18 @@ export const ONE_HOME = [
       "The tastytunes:// scheme is registered only in app/urlActions, and only by a packaged build",
     bad: { file: "src/main/index.ts", code: 'app.setAsDefaultProtocolClient("tastytunes");' },
   },
+  {
+    id: "hover-reveal-keyboard",
+    was: "none (0.13.0 round 4, the accessibility second layer: the 0.11 re-score found two dozen controls hidden from the keyboard)",
+    // a class string that reveals on a group's hover (or hides on it) with no keyboard twin (one
+    // with focus-visible: is focus-reveal's to report)
+    selector: String.raw`:matches(Literal[value=/group-hover(\/[a-z]+)?:opacity-(0|100)(?![\w-])/]:not([value=/((group|focus)-kbd|focus-visible):opacity-/]), TemplateElement[value.raw=/group-hover(\/[a-z]+)?:opacity-(0|100)(?![\w-])/]:not([value.raw=/((group|focus)-kbd|focus-visible):opacity-/]))`,
+    files: [`^${R}`],
+    message:
+      "What a hover reveals, keyboard focus reveals too: add group-kbd: (focus anywhere in the group) or focus-kbd: (the control itself)",
+    bad: {
+      file: `${R}components/media/RowHeart.tsx`,
+      code: 'const c = "opacity-0 group-hover:opacity-100";',
+    },
+  },
 ];

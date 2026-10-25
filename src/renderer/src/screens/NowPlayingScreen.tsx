@@ -573,7 +573,7 @@ export function NowPlayingScreen(): React.JSX.Element {
                   }
                   data-now-playing-scene-words
                   className={cx(
-                    "tip-bottom tip-start absolute top-2 left-2 p-2 rounded-full bg-panel/60 backdrop-blur ring-1 ring-edge transition-all opacity-0 group-hover:opacity-100",
+                    "tip-bottom tip-start absolute top-2 left-2 p-2 rounded-full bg-panel/60 backdrop-blur ring-1 ring-edge transition-all opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
                     tileWords ? "text-gold" : "text-dim",
                     wordsForced
                       ? "cursor-default disabled:opacity-60"
@@ -593,7 +593,7 @@ export function NowPlayingScreen(): React.JSX.Element {
                     "tip-bottom tip-end absolute top-2 right-2 p-2 rounded-full bg-panel/60 backdrop-blur ring-1 ring-edge transition-all motion-safe:active:scale-90",
                     scenesOpen
                       ? "text-gold opacity-100"
-                      : "text-dim hover:text-ink opacity-0 group-hover:opacity-100",
+                      : "text-dim hover:text-ink opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
                   )}
                 >
                   <Sparkles size={16} />
@@ -614,7 +614,7 @@ export function NowPlayingScreen(): React.JSX.Element {
                     "tip-top tip-end absolute bottom-2 right-2 p-2 rounded-full bg-panel/60 backdrop-blur ring-1 ring-edge transition-all motion-safe:active:scale-90",
                     artMenu
                       ? "text-ink opacity-100"
-                      : "text-dim hover:text-ink opacity-0 group-hover:opacity-100",
+                      : "text-dim hover:text-ink opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
                   )}
                 >
                   <MoreHorizontal size={16} />

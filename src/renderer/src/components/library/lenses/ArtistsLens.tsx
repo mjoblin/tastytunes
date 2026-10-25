@@ -434,7 +434,11 @@ export function ArtistsLens({
                       </div>
                     </div>
                     {playing && (
-                      <div className={cx(menuOpen ? "opacity-0" : "group-hover:opacity-0")}>
+                      <div
+                        className={cx(
+                          menuOpen ? "opacity-0" : "group-hover:opacity-0 group-kbd:opacity-0",
+                        )}
+                      >
                         <Eqbars />
                       </div>
                     )}
@@ -445,7 +449,9 @@ export function ArtistsLens({
                     <div
                       className={cx(
                         "absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2.5 transition-opacity",
-                        menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+                        menuOpen
+                          ? "opacity-100"
+                          : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
                       )}
                     >
                       {onOpenArtistPage && (
@@ -590,7 +596,9 @@ export function ArtistsLens({
                     <div
                       className={cx(
                         "absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2.5 transition-opacity",
-                        menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+                        menuOpen
+                          ? "opacity-100"
+                          : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
                       )}
                     >
                       <button

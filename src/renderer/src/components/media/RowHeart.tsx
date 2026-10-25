@@ -33,7 +33,7 @@ export function RowHeart({
           ? "text-gold hover:text-ink"
           : cx(
               "text-dim hover:text-ink hover:bg-veil2",
-              held ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+              held ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
             ),
       )}
     >

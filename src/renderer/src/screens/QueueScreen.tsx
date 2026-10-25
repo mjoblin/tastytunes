@@ -1625,7 +1625,7 @@ function QueueCard({
             fallback={<Disc3 size={34} strokeWidth={1.2} className="text-faint" />}
           />
 
-          <div className="absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+          <div className="absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 group-kbd:opacity-100 transition-opacity flex items-center justify-center">
             <span
               className="h-11 w-11 rounded-full bg-amber text-bg flex items-center justify-center
                          transition-all duration-150 motion-safe:hover:scale-110
@@ -1646,7 +1646,7 @@ function QueueCard({
             }}
             className={cx(
               "absolute bottom-1.5 right-1.5 z-10 h-8 w-8 rounded-lg bg-panel/80 ring-1 ring-edge text-dim hover:text-ink flex items-center justify-center transition-all",
-              menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+              menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
             )}
           >
             <MoreHorizontal size={15} />
@@ -1697,7 +1697,7 @@ function QueueCard({
             e.stopPropagation();
             removeFromQueue(item);
           }}
-          className="tip-bottom p-1 rounded text-faint opacity-0 group-hover:opacity-100 hover:text-alert transition-all"
+          className="tip-bottom p-1 rounded text-faint opacity-0 group-hover:opacity-100 group-kbd:opacity-100 hover:text-alert transition-all"
         >
           <X size={13} />
         </button>

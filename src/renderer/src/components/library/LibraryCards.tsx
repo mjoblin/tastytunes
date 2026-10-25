@@ -51,7 +51,7 @@ function HeartChip({
           ? "text-gold opacity-100"
           : cx(
               "text-dim hover:text-ink",
-              held ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+              held ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
             ),
       )}
     >
@@ -187,7 +187,9 @@ export function ContainerCard({
               data-tip="Play, replacing the queue"
               className={cx(
                 "tip-bottom absolute bottom-1.5 left-1.5 h-11 w-11 rounded-full bg-amber text-bg flex items-center justify-center transition-all duration-150 motion-safe:hover:scale-110 hover:shadow-[0_0_24px_rgb(var(--amber-rgb)_/_0.6)]",
-                menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+                menuOpen
+                  ? "opacity-100"
+                  : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
               )}
             >
               <Play size={18} fill="currentColor" />
@@ -199,7 +201,9 @@ export function ContainerCard({
               onClick={onMenu}
               className={cx(
                 "absolute bottom-1.5 right-1.5 h-8 w-8 rounded-lg bg-panel/80 ring-1 ring-edge text-dim hover:text-ink flex items-center justify-center transition-all",
-                menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+                menuOpen
+                  ? "opacity-100"
+                  : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
               )}
             >
               <MoreHorizontal size={15} />
@@ -394,7 +398,7 @@ export function ContainerRow({
           onClick={onMenu}
           className={cx(
             "p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-all",
-            menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+            menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
           )}
         >
           <MoreHorizontal size={14} />

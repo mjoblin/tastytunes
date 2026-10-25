@@ -5,6 +5,7 @@ import { tt } from "@/api";
 import { useStore, type Screen } from "@/store";
 import { useDiscCount } from "@/hooks/useDisc";
 import { cx, fmtCount } from "@/lib/format";
+import { KEYBOARD_NAV_ATTR } from "@/lib/inputModality";
 import {
   MOD,
   orderedNavScreens,
@@ -60,18 +61,27 @@ export function Nav(): React.JSX.Element {
   const toggleCollapsed = async (): Promise<void> => {
     await saveSettings({ navCollapsed: !collapsed });
   };
+  // the collapsed rail's names, on hover and on keyboard focus (0.13.0: a control reached with Tab
+  // says what it is, as one under the pointer does)
+  const showNavTip = (el: HTMLElement, label: string): void => {
+    if (!collapsed) return;
+    const r = el.getBoundingClientRect();
+    const pos = { label, top: r.top + r.height / 2, left: r.right + 10 };
+    if (navTipTimer.current) clearTimeout(navTipTimer.current);
+    navTipTimer.current = setTimeout(() => setNavTip(pos), 450);
+  };
+  const hideNavTip = (): void => {
+    if (navTipTimer.current) clearTimeout(navTipTimer.current);
+    setNavTip(null);
+  };
   const navTipHandlers = (label: string) => ({
-    onMouseEnter: (e: React.MouseEvent<HTMLElement>) => {
-      if (!collapsed) return;
-      const r = e.currentTarget.getBoundingClientRect();
-      const pos = { label, top: r.top + r.height / 2, left: r.right + 10 };
-      if (navTipTimer.current) clearTimeout(navTipTimer.current);
-      navTipTimer.current = setTimeout(() => setNavTip(pos), 450);
+    onMouseEnter: (e: React.MouseEvent<HTMLElement>) => showNavTip(e.currentTarget, label),
+    onMouseLeave: hideNavTip,
+    onFocus: (e: React.FocusEvent<HTMLElement>) => {
+      if (document.documentElement.hasAttribute(KEYBOARD_NAV_ATTR))
+        showNavTip(e.currentTarget, label);
     },
-    onMouseLeave: () => {
-      if (navTipTimer.current) clearTimeout(navTipTimer.current);
-      setNavTip(null);
-    },
+    onBlur: hideNavTip,
   });
 
   const hidden = sanitizeNavHidden(settings.navHidden);

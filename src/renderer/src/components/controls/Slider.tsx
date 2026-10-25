@@ -247,7 +247,7 @@ export function Slider({
             "shadow-[0_0_8px_rgb(var(--gold-rgb)_/_0.7)] transition-opacity",
             dragValue !== null || thumb === "always"
               ? "opacity-100"
-              : "opacity-0 group-hover:opacity-100",
+              : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
           )}
           style={{ left: `${shown * 100}%` }}
         />

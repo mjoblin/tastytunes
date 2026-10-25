@@ -10,6 +10,9 @@ import {
   fuzzyScore,
 } from "@/components/overlays/paletteCommands";
 
+/** A command's element id in the listbox: the input's active descendant names it. */
+const optionId = (i: number): string => `palette-command-${i}`;
+
 export function CommandPalette(): React.JSX.Element {
   const setPaletteOpen = useStore((s) => s.setPaletteOpen);
   const saveSettings = useStore((s) => s.saveSettings);
@@ -179,6 +182,9 @@ export function CommandPalette(): React.JSX.Element {
     } else if (e.key === "Enter") {
       e.preventDefault();
       run(filtered[selected]);
+    } else if (e.key === "Tab") {
+      // a modal: the input is the palette's one stop, Tab never reaches the page behind it
+      e.preventDefault();
     } else if (e.key === "Escape") {
       e.preventDefault();
       setPaletteOpen(false);
@@ -193,7 +199,14 @@ export function CommandPalette(): React.JSX.Element {
       className="absolute inset-0 z-40 bg-black/60 backdrop-blur-sm flex items-start justify-center pt-[12vh]"
       onClick={() => setPaletteOpen(false)}
     >
+      {/* THE PALETTE'S SEMANTICS (0.13.0 round 4, the accessibility second layer): a modal dialog
+          holding an editable combobox, the input, whose listbox is the commands; the highlighted
+          command is the input's active descendant, so a screen reader names each as the arrows
+          move, and the focus never leaves the input */}
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Command palette"
         className="w-[560px] max-w-[90vw] rounded-2xl bg-panel ring-1 ring-edge2 shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
@@ -201,6 +214,12 @@ export function CommandPalette(): React.JSX.Element {
           <Search size={17} className="text-faint shrink-0" />
           <input
             autoFocus
+            role="combobox"
+            aria-label="Command"
+            aria-expanded={filtered.length > 0}
+            aria-controls="palette-commands"
+            aria-autocomplete="list"
+            aria-activedescendant={filtered[selected] ? optionId(selected) : undefined}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onKeyDown}
@@ -210,9 +229,17 @@ export function CommandPalette(): React.JSX.Element {
           <span className="microlabel shrink-0">⌘K</span>
         </div>
 
-        <div ref={listRef} className="max-h-[52vh] overflow-y-auto py-2">
+        <div
+          ref={listRef}
+          id="palette-commands"
+          role="listbox"
+          aria-label="Commands"
+          className="max-h-[52vh] overflow-y-auto py-2"
+        >
           {filtered.length === 0 ? (
-            <div className="px-4 py-8 text-center text-[13px] text-faint">No matching commands</div>
+            <div role="status" className="px-4 py-8 text-center text-[13px] text-faint">
+              No matching commands
+            </div>
           ) : (
             filtered.map((cmd, i) => {
               const header = showHeaders && cmd.group !== lastGroup ? cmd.group : null;
@@ -220,9 +247,17 @@ export function CommandPalette(): React.JSX.Element {
               const Icon = cmd.icon;
               const active = i === selected;
               return (
-                <div key={cmd.id}>
-                  {header && <div className="microlabel px-4 pt-3 pb-1.5">{header}</div>}
+                <div key={cmd.id} role="none">
+                  {header && (
+                    <div role="presentation" className="microlabel px-4 pt-3 pb-1.5">
+                      {header}
+                    </div>
+                  )}
                   <button
+                    id={optionId(i)}
+                    role="option"
+                    aria-selected={active}
+                    tabIndex={-1}
                     data-selected={active || undefined}
                     onMouseMove={() => setSelected(i)}
                     onClick={() => run(cmd)}

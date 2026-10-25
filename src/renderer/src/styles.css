@@ -10,6 +10,11 @@
 /* a reveal on keyboard focus: focus-visible once Tab has moved focus (lib/inputModality), never
    after a click and a hotkey; the lint rule focus-reveal keeps focus-visible: out of the app */
 @custom-variant focus-kbd (:root[data-keyboard-nav] &:focus-visible);
+/* KEYBOARD REVEAL (0.13.0 round 4, the accessibility second layer): what a group shows on hover it
+   shows while keyboard focus is anywhere in it, so a row's or a card's hidden buttons appear when
+   Tab reaches them instead of being focused invisible (the 0.11 re-score). Every hover reveal
+   carries this twin (the lint rule hover-reveal-keyboard). */
+@custom-variant group-kbd (:root[data-keyboard-nav] .group:focus-within &);
 
 /* Runtime-tintable accent: useArtAccent() overrides this per album.
    --gold-rgb is the STATIC state/brand gold (per theme, never art-tinted). */
@@ -636,7 +641,9 @@ img {
 }
 
 /* deterministic tooltips for the nav rail (native titles are unreliable in
-   frameless windows): appears to the right of the element after a short dwell */
+   frameless windows): appears to the right of the element after a short dwell,
+   on hover and, since 0.13.0, on keyboard focus (a control reached with Tab says
+   what it does, as one under the pointer does) */
 @layer base {
   /* positioning context for the ::after tooltip — in @layer base so that
      explicit positioning utilities (.absolute on the preset art chips) win:
@@ -684,7 +691,8 @@ img {
   z-index: 60;
   transition: opacity 0.12s ease;
 }
-[data-tip]:hover::after {
+[data-tip]:hover::after,
+:root[data-keyboard-nav] [data-tip]:focus-visible::after {
   opacity: 1;
   transition-delay: 0.45s;
 }

@@ -833,7 +833,7 @@ function PresetRow({
         onClick={menu.open}
         className={cx(
           "p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-all",
-          menu.isOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+          menu.isOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
         )}
       >
         <MoreHorizontal size={14} />
@@ -930,7 +930,7 @@ function PresetCard({
             )}
 
             {/* hover overlay — the whole card recalls the preset; the chip is the affordance */}
-            <div className="absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+            <div className="absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 group-kbd:opacity-100 transition-opacity flex items-center justify-center">
               <span
                 className="h-11 w-11 rounded-full bg-amber text-bg flex items-center justify-center
                          transition-all duration-150 motion-safe:hover:scale-110
@@ -986,7 +986,7 @@ function PresetCard({
           className={cx(
             "absolute bottom-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-lg transition-all",
             "bg-panel/80 ring-1 ring-edge text-dim hover:text-ink",
-            menu.isOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+            menu.isOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
           )}
         >
           <MoreHorizontal size={14} />
