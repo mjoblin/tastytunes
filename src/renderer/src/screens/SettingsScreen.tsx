@@ -36,6 +36,7 @@ import { McpSection } from "@/components/settings/McpSection";
 import { SchedulesSection } from "@/components/settings/SchedulesSection";
 import { LibrariesSection } from "@/components/settings/LibrariesSection";
 import { HistorySection } from "@/components/settings/HistorySection";
+import { FanartKeyRow } from "@/components/settings/FanartKeyRow";
 import { ListenBrainzSection } from "@/components/settings/ListenBrainzSection";
 import { UpdatesSection } from "@/components/settings/UpdatesSection";
 import { SidebarSection } from "@/components/settings/SidebarSection";
@@ -448,6 +449,8 @@ export function SettingsScreen(): React.JSX.Element {
                     checked={settings.artistInfo}
                     onChange={(artistInfo) => void save({ artistInfo })}
                   />
+
+                  <FanartKeyRow lookups={settings.artistInfo} />
 
                   <Toggle
                     label="Missing album art"

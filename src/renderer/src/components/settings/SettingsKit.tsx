@@ -4,6 +4,7 @@ import { tt } from "@/api";
 import { cx } from "@/lib/format";
 import { Slider } from "@/components/controls/Slider";
 import { Switch } from "@/components/controls/Switch";
+import { HeaderChip } from "@/components/chrome/Chrome";
 import { useConfirmPopover } from "@/components/chrome/Confirm";
 import { FACT_SEP } from "@/lib/mediaFacts";
 
@@ -61,6 +62,11 @@ export function CacheRow(): React.JSX.Element {
   );
 }
 
+/**
+ * Numeric input that lets you actually type: edits live in a draft and are
+ * clamped + committed on blur/Enter (Escape reverts). Clamping per keystroke
+ * made intermediate values impossible — typing "45" became 10, then 100.
+ */
 export function NumberField({
   value,
   min,
@@ -276,5 +282,115 @@ export function CopyRow({
         {copied ? <Check size={13} className="text-led" /> : <Copy size={13} />}
       </button>
     </div>
+  );
+}
+
+/**
+ * A SAVED SECRET, write-only (0.13.0 rounds 10 and 11, the secrets store): a token or a key the
+ * app keeps encrypted, pasted in once and never shown or filled back. Saved, it reads "Saved,
+ * ending in 4321" with Replace and Remove; not, a masked field to paste into and a link to where
+ * one is got. One control for the ListenBrainz token and the fanart.tv key, so the two cannot
+ * drift apart.
+ */
+export function SavedSecret({
+  id,
+  saved,
+  ends,
+  placeholder,
+  label,
+  getLabel,
+  getUrl,
+  onSave,
+  onRemove,
+}: {
+  /** The secret's name, on the row for the suite (data-secret). */
+  id: string;
+  saved: boolean;
+  ends: string | null;
+  placeholder: string;
+  /** The field's name for assistive technology. */
+  label: string;
+  getLabel: string;
+  getUrl: string;
+  onSave(value: string): void;
+  onRemove(): void;
+}): React.JSX.Element {
+  const [replacing, setReplacing] = useState(false);
+  const chip = "shrink-0 text-[12.5px] px-3 py-1.5 motion-safe:active:scale-90";
+  return (
+    <div
+      className="flex items-center gap-2"
+      data-secret={id}
+      data-secret-state={saved ? "saved" : "none"}
+    >
+      {saved && !replacing ? (
+        <>
+          <span className="text-[12.5px] text-dim whitespace-nowrap">
+            Saved, ending in <span className="font-mono text-ink">{ends}</span>
+          </span>
+          <HeaderChip onClick={() => setReplacing(true)} className={chip}>
+            Replace
+          </HeaderChip>
+          <HeaderChip onClick={onRemove} className={chip}>
+            Remove
+          </HeaderChip>
+        </>
+      ) : (
+        <>
+          <SecretInput
+            placeholder={placeholder}
+            label={label}
+            onCommit={(value) => {
+              setReplacing(false);
+              onSave(value);
+            }}
+          />
+          {replacing ? (
+            <HeaderChip onClick={() => setReplacing(false)} className={chip}>
+              Cancel
+            </HeaderChip>
+          ) : (
+            <HeaderChip onClick={() => void tt.openExternal(getUrl)} className={chip}>
+              {getLabel}
+            </HeaderChip>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** What a secret is pasted into: masked, committed on blur or Enter (Escape clears), never
+ *  filled back. */
+function SecretInput({
+  placeholder,
+  label,
+  onCommit,
+}: {
+  placeholder: string;
+  label: string;
+  onCommit(next: string): void;
+}): React.JSX.Element {
+  const [draft, setDraft] = useState("");
+  const commit = (): void => {
+    if (draft.trim()) onCommit(draft.trim());
+    setDraft("");
+  };
+  return (
+    <input
+      type="password"
+      autoComplete="off"
+      spellCheck={false}
+      value={draft}
+      placeholder={placeholder}
+      aria-label={label}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        if (e.key === "Escape") setDraft("");
+      }}
+      className="w-48 bg-bg rounded-lg ring-1 ring-edge px-3 py-1.5 text-[12.5px] font-mono outline-none focus:ring-edge2 placeholder:text-faint"
+    />
   );
 }

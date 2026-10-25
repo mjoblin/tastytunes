@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { type AppSettings } from "@shared/model";
 import { tt } from "@/api";
-import { HeaderChip } from "@/components/chrome/Chrome";
-import { SettingRow, Toggle } from "@/components/settings/SettingsKit";
+import { SavedSecret, SettingRow, Toggle } from "@/components/settings/SettingsKit";
 
 // The ListenBrainz section, split out of SettingsScreen.tsx 2026-09-13 (the Settings split: the screen had held every
 // section and control at 2,142 lines); the shared rows and controls live in ./SettingsKit.
@@ -21,7 +20,6 @@ export function ListenBrainzSection({
     ends: string | null;
     encrypted: boolean;
   } | null>(null);
-  const [replacing, setReplacing] = useState(false);
   const refresh = useCallback((): void => {
     void tt
       .secretsStatus()
@@ -45,10 +43,7 @@ export function ListenBrainzSection({
   }, [hasToken, stored?.ends]);
 
   const keep = (token: string | null): void => {
-    void tt.setLbToken(token).then(() => {
-      setReplacing(false);
-      refresh();
-    });
+    void tt.setLbToken(token).then(refresh);
   };
 
   const status = !hasToken
@@ -68,46 +63,17 @@ export function ListenBrainzSection({
   return (
     <div className="space-y-4 pt-1 border-t border-edge">
       <SettingRow label="ListenBrainz token" hint={status + kept}>
-        <div className="flex items-center gap-2" data-lb-token={hasToken ? "saved" : "none"}>
-          {hasToken && !replacing ? (
-            <>
-              <span className="text-[12.5px] text-dim whitespace-nowrap">
-                Saved, ending in <span className="font-mono text-ink">{stored?.ends}</span>
-              </span>
-              <HeaderChip
-                onClick={() => setReplacing(true)}
-                className="shrink-0 text-[12.5px] px-3 py-1.5 motion-safe:active:scale-90"
-              >
-                Replace
-              </HeaderChip>
-              <HeaderChip
-                onClick={() => keep(null)}
-                className="shrink-0 text-[12.5px] px-3 py-1.5 motion-safe:active:scale-90"
-              >
-                Remove
-              </HeaderChip>
-            </>
-          ) : (
-            <>
-              <TokenField onCommit={(token) => keep(token)} />
-              {replacing ? (
-                <HeaderChip
-                  onClick={() => setReplacing(false)}
-                  className="shrink-0 text-[12.5px] px-3 py-1.5 motion-safe:active:scale-90"
-                >
-                  Cancel
-                </HeaderChip>
-              ) : (
-                <HeaderChip
-                  onClick={() => void tt.openExternal("https://listenbrainz.org/settings/")}
-                  className="shrink-0 text-[12.5px] px-3 py-1.5 motion-safe:active:scale-90"
-                >
-                  Get token
-                </HeaderChip>
-              )}
-            </>
-          )}
-        </div>
+        <SavedSecret
+          id="lbToken"
+          saved={hasToken}
+          ends={stored?.ends ?? null}
+          placeholder="user token"
+          label="ListenBrainz user token"
+          getLabel="Get token"
+          getUrl="https://listenbrainz.org/settings/"
+          onSave={(token) => keep(token)}
+          onRemove={() => keep(null)}
+        />
       </SettingRow>
       <Toggle
         label="Scrobble to ListenBrainz"
@@ -123,37 +89,3 @@ export function ListenBrainzSection({
     </div>
   );
 }
-
-/** A token pasted in: masked, committed on blur or Enter (Escape clears), never filled back. */
-function TokenField({ onCommit }: { onCommit(next: string): void }): React.JSX.Element {
-  const [draft, setDraft] = useState("");
-
-  const commit = (): void => {
-    if (draft.trim()) onCommit(draft.trim());
-    setDraft("");
-  };
-
-  return (
-    <input
-      type="password"
-      autoComplete="off"
-      spellCheck={false}
-      value={draft}
-      placeholder="user token"
-      aria-label="ListenBrainz user token"
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-        if (e.key === "Escape") setDraft("");
-      }}
-      className="w-48 bg-bg rounded-lg ring-1 ring-edge px-3 py-1.5 text-[12.5px] font-mono outline-none focus:ring-edge2 placeholder:text-faint"
-    />
-  );
-}
-
-/**
- * Numeric input that lets you actually type: edits live in a draft and are
- * clamped + committed on blur/Enter (Escape reverts). Clamping per keystroke
- * made intermediate values impossible — typing "45" became 10, then 100.
- */

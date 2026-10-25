@@ -50,6 +50,8 @@ export function ArtistPictureDialog({
 }): React.JSX.Element {
   const lookups = useStore((s) => s.settings.artistInfo);
   const [images, setImages] = useState<{ of: string; urls: string[] } | null>(null);
+  // fanart.tv's photos (0.13.0 round 11), asked only with a key saved: none saved, no section
+  const [fanart, setFanart] = useState<{ of: string; urls: string[]; keyed: boolean } | null>(null);
   const [file, setFile] = useState<{ file: string; url: string } | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -76,10 +78,26 @@ export function ArtistPictureDialog({
       .catch(() => {
         if (live) setImages({ of: name, urls: [] });
       });
+    void tt
+      .secretsStatus()
+      .then(async (s) => {
+        const urls = s.fanartKey.saved ? await tt.artistFanart(name) : [];
+        if (live) setFanart({ of: name, urls, keyed: s.fanartKey.saved });
+      })
+      .catch(() => {
+        if (live) setFanart({ of: name, urls: [], keyed: false });
+      });
     return () => {
       live = false;
     };
   }, [open, name, lookups, current]);
+  const fan = fanart?.of === name ? fanart : null;
+  const fanartTiles: Tile[] = (fan?.urls ?? []).map((url, i) => ({
+    key: url,
+    url,
+    label: `fanart.tv photo ${i + 1}`,
+    choice: { kind: "image", url },
+  }));
   const wiki = images?.of === name ? images.urls : null;
   const wikiTiles: Tile[] = (wiki ?? []).map((url, i) => ({
     key: url,
@@ -103,7 +121,7 @@ export function ArtistPictureDialog({
         },
       ]
     : [];
-  const all = [...wikiTiles, ...coverTiles, ...fileTiles];
+  const all = [...wikiTiles, ...fanartTiles, ...coverTiles, ...fileTiles];
   const pick = all.find((t) => t.key === selected) ?? null;
   const use = (): void => {
     if (!pick) return;
@@ -170,6 +188,20 @@ export function ArtistPictureDialog({
               <Tiles tiles={wikiTiles} selected={selected} onSelect={setSelected} kind="image" />
             )}
           </Section>
+          {lookups && fan?.keyed && (
+            <Section title="From fanart.tv">
+              {fanartTiles.length > 0 ? (
+                <Tiles
+                  tiles={fanartTiles}
+                  selected={selected}
+                  onSelect={setSelected}
+                  kind="image"
+                />
+              ) : (
+                <Note>No photos of “{name}” on fanart.tv.</Note>
+              )}
+            </Section>
+          )}
           {coverTiles.length > 0 && (
             <Section title="Album covers">
               <Tiles tiles={coverTiles} selected={selected} onSelect={setSelected} kind="cover" />

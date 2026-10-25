@@ -14,6 +14,7 @@ import { fetchAlbumInfo } from "../lookups/albumInfo";
 import { artHostTrust, fetchArtDataUrl } from "../lookups/artFetch";
 import { isArtistChoice, pickPictureFile, resolveChoice, setChoice } from "../data/artistChoices";
 import { fetchArtistImages, fetchArtistInfo, knownArtistImage } from "../lookups/artistInfo";
+import { checkFanartKey, fetchFanartPhotos } from "../lookups/fanart";
 import { artThumbsStats, clearArtThumbs } from "../lookups/artThumbs";
 import { fetchCoverArt } from "../lookups/coverArt";
 import { clearLookupCaches, lookupCacheStats } from "../lookups/diskCache";
@@ -82,7 +83,8 @@ export function registerLookupsIpc(): void {
     if (!isArtistChoice(choice)) return false;
     if (choice.kind === "image") {
       if (!getSettings().artistInfo) return false;
-      if (!(await fetchArtistImages(name)).includes(choice.url)) return false;
+      const offered = [...(await fetchArtistImages(name)), ...(await fetchFanartPhotos(name))];
+      if (!offered.includes(choice.url)) return false;
     }
     setChoice(name, choice);
     return true;
@@ -105,7 +107,25 @@ export function registerLookupsIpc(): void {
     encrypted: canEncrypt(),
     lbToken: secretHint("lbToken"),
     mcpToken: secretHint("mcpToken"),
+    fanartKey: secretHint("fanartKey"),
   }));
+  // a personal fanart.tv key (0.13.0 round 11): checked with fanart.tv before it is kept; a key
+  // it refuses is not kept, one it could not be asked about is (checked again in use)
+  handle(IPC.setFanartKey, async (_e, key: unknown) => {
+    if (key === null) {
+      setSecret("fanartKey", null);
+      return "removed";
+    }
+    if (typeof key !== "string" || !key.trim()) return "refused";
+    const verdict = await checkFanartKey(key.trim());
+    if (verdict !== "refused") setSecret("fanartKey", key.trim());
+    return verdict;
+  });
+  handle(IPC.artistFanart, (_e, name: unknown) =>
+    typeof name === "string" && name.trim() && getSettings().artistInfo
+      ? fetchFanartPhotos(name)
+      : [],
+  );
   handle(IPC.setLbToken, (_e, token: unknown) => {
     if (token !== null && typeof token !== "string") return;
     setSecret("lbToken", token);

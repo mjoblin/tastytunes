@@ -329,7 +329,13 @@ export interface TastyTunesApi {
     encrypted: boolean;
     lbToken: { saved: boolean; ends: string | null };
     mcpToken: { saved: boolean; ends: string | null };
+    fanartKey: { saved: boolean; ends: string | null };
   }>;
+  /** Save a personal fanart.tv key once fanart.tv takes it (refused: not saved; unreachable:
+   *  saved, unchecked), or forget it (null). 0.13.0 round 11. */
+  setFanartKey(key: string | null): Promise<"works" | "refused" | "unreachable" | "removed">;
+  /** An artist's photos at fanart.tv, for the picture chooser; empty with no key or Liner notes off. */
+  artistFanart(name: string): Promise<string[]>;
   /** Save the ListenBrainz token (into the store, never settings), or forget it (null). */
   setLbToken(token: string | null): Promise<void>;
   /** The MCP token itself, for a Copy the person pressed; nothing else asks for it. */
@@ -576,6 +582,8 @@ export const IPC = {
   setLbToken: "tt:setLbToken",
   mcpTokenReveal: "tt:mcpTokenReveal",
   mcpTokenNew: "tt:mcpTokenNew",
+  setFanartKey: "tt:setFanartKey",
+  artistFanart: "tt:artistFanart",
   updateDownload: "tt:updateDownload",
   updateInstall: "tt:updateInstall",
   updateCheckNow: "tt:updateCheckNow",

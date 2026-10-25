@@ -15,7 +15,7 @@ import { atomicWriteFileSync } from "./jsonStore";
 // the user's account can read, and Settings says so. The suite's launches keep it that way too
 // (TASTYTUNES_SECRETS_PLAIN): an unsigned test build touching the Keychain asks his Mac for leave.
 
-export type SecretName = "lbToken" | "mcpToken";
+export type SecretName = "lbToken" | "mcpToken" | "fanartKey";
 
 interface Stored {
   /** Encrypted with safeStorage (base64), or as it is where nothing can encrypt. */

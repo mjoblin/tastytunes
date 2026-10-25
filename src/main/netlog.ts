@@ -18,6 +18,27 @@ export const USER_AGENT = `TastyTunes/${version} (${REPO_URL})`;
 let nextId = 1;
 const entries: NetRequestEntry[] = [];
 
+/** Query parameters that carry a key or a token: blanked in what the log keeps (0.13.0 round 11,
+ *  a fanart.tv key rides its request's URL), so the Requests console and anything copied from it
+ *  never show one. */
+const SECRET_PARAMS = /^(api_?key|client_?key|key|token|access_token|auth)$/i;
+
+/** A URL as the log keeps it: every key or token parameter's value blanked. */
+export function redactUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    let changed = false;
+    for (const name of [...u.searchParams.keys()])
+      if (SECRET_PARAMS.test(name)) {
+        u.searchParams.set(name, "REDACTED");
+        changed = true;
+      }
+    return changed ? u.toString() : url;
+  } catch {
+    return url;
+  }
+}
+
 function broadcast(entry: NetRequestEntry): void {
   for (const wc of webContents.getAllWebContents()) {
     if (!wc.isDestroyed()) wc.send("tt:push", { kind: "netRequest", entry: { ...entry } });
@@ -39,7 +60,7 @@ export async function loggedFetch(
     at: Date.now(),
     service,
     method: init?.method ?? "GET",
-    url: String(url),
+    url: redactUrl(String(url)),
     status: null,
     ms: null,
     error: false,
