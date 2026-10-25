@@ -5,6 +5,7 @@ import { broadcastSettings } from "../app/broadcast";
 import { getSettings, updateSettings } from "../data/persist";
 import * as mediaIndex from "../media/mediaIndex";
 import { lookupMediaInfo } from "../media/mediaInfo";
+import { listRecentCandidates } from "../media/recentList";
 import { browse as mediaBrowse, presetSave, queueAdd, refreshServers } from "../media/upnpBrowser";
 import { handle } from "../app/guard";
 
@@ -44,6 +45,13 @@ export function registerMediaIpc(): void {
     else return;
     broadcastSettings(updateSettings({ recentlyAddedLists: lists }));
     await mediaIndex.refreshRecentList(streamerHost(), serverUdn);
+  });
+  // the folders Settings › Libraries offers as a server's own list
+  handle(IPC.recentListCandidates, async (_e, serverUdn: unknown) => {
+    if (typeof serverUdn !== "string") return [];
+    const servers = await refreshServers(streamerHost());
+    const server = servers.find((x) => x.udn === serverUdn);
+    return server ? listRecentCandidates(streamerHost(), server) : [];
   });
   handle(IPC.mediaBrowse, (_e, serverUdn: string, objectId: string | null, titlePath: string[]) =>
     mediaBrowse(streamerHost(), serverUdn, objectId, titlePath),

@@ -62,6 +62,49 @@ export async function findRecentList(host: string, udn: string): Promise<RecentL
   return level("0", [], 0);
 }
 
+/** A folder Settings › Libraries offers as the server's list; `named` marks the one found by its
+ *  name (findRecentList's), the list the server uses when the reader has chosen none. */
+export interface RecentCandidate extends RecentListRef {
+  named: boolean;
+}
+
+/** At most this many folders offered (a folder server's top level can be its whole library). */
+const CANDIDATES_MAX = 60;
+
+/**
+ * The folders the reader may choose the list from, in Settings › Libraries (his ask, 2026-10-25:
+ * the control should be there, not only in a folder's ⋯): the server's top-level folders and those
+ * under a Music, Audio or Media Library, where the lists live, searched in findRecentList's order.
+ * Albums and artists are not folders to choose. None for the streamer's USB drive.
+ */
+export async function listRecentCandidates(
+  host: string,
+  server: Pick<MediaServerInfo, "udn" | "isStreamer" | "searchable">,
+): Promise<RecentCandidate[]> {
+  if (usbServer(server)) return [];
+  const out: RecentCandidate[] = [];
+  let named = false;
+  const level = async (id: string, path: string[], depth: number): Promise<void> => {
+    const kids = await kidsOf(host, server.udn, id);
+    if (!kids) return;
+    for (const k of kids) {
+      if (!k.isContainer || /musicAlbum|person/.test(k.upnpClass)) continue;
+      const isNamed = !named && isRecentListTitle(k.title);
+      if (isNamed) named = true;
+      out.push({ id: k.id, title: k.title, titlePath: [...path, k.title], named: isNamed });
+    }
+    if (depth >= 2) return;
+    for (const k of kids.filter((c) => c.isContainer && mayHoldRecentList(c.title)).slice(0, 3))
+      await level(k.id, [...path, k.title], depth + 1);
+  };
+  try {
+    await level("0", [], 0);
+  } catch {
+    // a server not answering offers nothing to choose
+  }
+  return out.slice(0, CANDIDATES_MAX);
+}
+
 /** A chosen list's children: by its id, else found again by its folders' titles. */
 async function childrenOfChosen(
   host: string,

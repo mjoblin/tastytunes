@@ -491,6 +491,11 @@ export interface TastyTunesApi {
     serverUdn: string,
     choice: { id: string; title: string; titlePath: string[] } | "off" | null,
   ): Promise<void>;
+  /** The folders Settings › Libraries offers as a server's Recently added list, the one found by
+   *  its name marked (main/media/recentList listRecentCandidates). */
+  recentListCandidates(
+    serverUdn: string,
+  ): Promise<Array<{ id: string; title: string; titlePath: string[]; named: boolean }>>;
   /** The renderer tells main whether display mode is on (2026-09-14): the MCP bridge reports it
    *  in get_status and list_scenes, and set_display_mode asks the window through a menu command. */
   reportDisplayMode(on: boolean): void;
@@ -621,6 +626,7 @@ export const IPC = {
   mediaNodeInfo: "tt:mediaNodeInfo",
   mediaIndexRebuild: "tt:mediaIndexRebuild",
   setRecentlyAddedList: "tt:setRecentlyAddedList",
+  recentListCandidates: "tt:recentListCandidates",
   displayModeReport: "tt:displayModeReport",
   radioSearch: "tt:radioSearch",
   radioTop: "tt:radioTop",

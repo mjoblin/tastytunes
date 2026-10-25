@@ -55,32 +55,34 @@ export function LibrariesSection({
           </div>
         )}
         {statuses.map((st) => (
-          <div key={st.udn} className="flex items-center gap-3">
-            <span className="flex-1 min-w-0 text-[12.5px] truncate">
-              {st.serverName}
-              <span className="block font-mono text-[10.5px] text-faint">
-                {st.state === "building"
-                  ? "building…"
-                  : st.state === "failed"
-                    ? `couldn't index${FACT_SEP}${st.failure ?? "no index"}`
-                    : st.state === "none"
-                      ? `not indexed${FACT_SEP}search asks the server live`
-                      : `${fmtCount(st.tracks)} tracks${FACT_SEP}${fmtCount(st.albums)} albums${FACT_SEP}updated ${age(st.builtAt)}`}
+          <div key={st.udn} className="space-y-3">
+            <div className="flex items-center gap-3">
+              <span className="flex-1 min-w-0 text-[12.5px] truncate">
+                {st.serverName}
+                <span className="block font-mono text-[10.5px] text-faint">
+                  {st.state === "building"
+                    ? "building…"
+                    : st.state === "failed"
+                      ? `couldn't index${FACT_SEP}${st.failure ?? "no index"}`
+                      : st.state === "none"
+                        ? `not indexed${FACT_SEP}search asks the server live`
+                        : `${fmtCount(st.tracks)} tracks${FACT_SEP}${fmtCount(st.albums)} albums${FACT_SEP}updated ${age(st.builtAt)}`}
+                </span>
               </span>
-              <RecentListLine st={st} />
-            </span>
-            <HeaderChip
-              onClick={() => void tt.mediaIndexRebuild(st.udn)}
-              disabled={st.state === "building"}
-              className="shrink-0 flex items-center gap-1.5 text-[12px] px-3 py-1.5 motion-safe:active:scale-90 disabled:opacity-40 disabled:pointer-events-none"
-            >
-              {st.state === "building" ? (
-                <Loader2 size={13} className="motion-safe:animate-spin" />
-              ) : (
-                <RefreshCw size={13} />
-              )}
-              {st.state === "ready" ? "Rebuild" : st.state === "failed" ? "Retry" : "Build"}
-            </HeaderChip>
+              <HeaderChip
+                onClick={() => void tt.mediaIndexRebuild(st.udn)}
+                disabled={st.state === "building"}
+                className="shrink-0 flex items-center gap-1.5 text-[12px] px-3 py-1.5 motion-safe:active:scale-90 disabled:opacity-40 disabled:pointer-events-none"
+              >
+                {st.state === "building" ? (
+                  <Loader2 size={13} className="motion-safe:animate-spin" />
+                ) : (
+                  <RefreshCw size={13} />
+                )}
+                {st.state === "ready" ? "Rebuild" : st.state === "failed" ? "Retry" : "Build"}
+              </HeaderChip>
+            </div>
+            <RecentListRow st={st} chosen={settings.recentlyAddedLists[st.udn]} />
           </div>
         ))}
 
@@ -91,49 +93,93 @@ export function LibrariesSection({
 }
 
 /**
- * A server's own Recently added list (0.13.0 round 9; shared/recentlyAdded): the one in use and
- * a way to turn it off, back on, or from a chosen one back to the one found by its name. A server
- * the index searches and that has none says so, with where one is chosen; the streamer's USB drive
- * and other walked servers show the line only once one is chosen.
+ * A SERVER'S OWN RECENTLY ADDED LIST (0.13.0 round 9; shared/recentlyAdded), as a setting in the
+ * screen's own idiom (his look, 2026-10-25: the first cut's status line and text links read as
+ * status, "a little small/noodly", and it was not clear it could be changed): the label, a
+ * sentence saying what it is for, and a picker of the server's folders (the top level and under
+ * Music, Audio or Media Library: listRecentCandidates), the one found by its name first, then the
+ * rest, then None. A folder chosen from a folder's ⋯ in the Library deeper down is offered too.
+ * For a server the index searches, or one with a list chosen; never the streamer's USB drive.
  */
-function RecentListLine({ st }: { st: MediaIndexStatus }): React.JSX.Element | null {
-  const set = (choice: "off" | null): void => void tt.setRecentlyAddedList(st.udn, choice);
-  const list = st.recentList;
-  if (st.state !== "ready" || (!list && !st.recentOff && st.strategy !== "search")) return null;
-  const chip =
-    "font-sans text-[11px] text-dim hover:text-ink underline-offset-2 hover:underline focus-kbd:underline";
+function RecentListRow({
+  st,
+  chosen,
+}: {
+  st: MediaIndexStatus;
+  chosen: AppSettings["recentlyAddedLists"][string] | undefined;
+}): React.JSX.Element | null {
+  const shown = st.state === "ready" && (st.strategy === "search" || st.recentList != null);
+  const [folders, setFolders] = useState<Awaited<ReturnType<typeof tt.recentListCandidates>>>([]);
+  useEffect(() => {
+    if (!shown) return;
+    let live = true;
+    void tt
+      .recentListCandidates(st.udn)
+      .then((got) => {
+        if (live) setFolders(got);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [shown, st.udn]);
+  if (!shown) return null;
+  const named = folders.find((f) => f.named) ?? null;
+  // a folder chosen by hand that is the list found by its name is that list (no second entry)
+  const picked = chosen && chosen !== "off" && !(named && chosen.id === named.id) ? chosen : null;
+  // what the picker shows: the folder chosen, the list found by its name, or None
+  const value =
+    st.recentOff || chosen === "off"
+      ? "off"
+      : picked
+        ? `id:${picked.id}`
+        : st.recentList
+          ? "auto"
+          : "off";
+  const label = (f: { titlePath: string[] }): string => f.titlePath.join(" › ");
+  const others = folders.filter((f) => !f.named);
+  const set = (v: string): void => {
+    if (v === "off") void tt.setRecentlyAddedList(st.udn, "off");
+    else if (v === "auto") void tt.setRecentlyAddedList(st.udn, null);
+    else {
+      const f = folders.find((x) => `id:${x.id}` === v);
+      if (f)
+        void tt.setRecentlyAddedList(
+          st.udn,
+          f.named ? null : { id: f.id, title: f.title, titlePath: f.titlePath },
+        );
+    }
+  };
   return (
-    <span
-      data-recent-list={st.udn}
-      className="flex flex-wrap items-baseline gap-x-2 font-mono text-[10.5px] text-faint"
-    >
-      {list ? (
-        <>
-          <span>
-            recently added from “{list.title}”{list.chosen ? `${FACT_SEP}chosen` : ""}
-          </span>
-          {list.chosen && (
-            <button type="button" className={chip} onClick={() => set(null)}>
-              Reset
-            </button>
-          )}
-          <button type="button" className={chip} onClick={() => set("off")}>
-            Turn off
-          </button>
-        </>
-      ) : st.recentOff ? (
-        <>
-          <span>recently added list off</span>
-          <button type="button" className={chip} onClick={() => set(null)}>
-            Turn on
-          </button>
-        </>
-      ) : (
-        <span>
-          no recently added list found{FACT_SEP}choose one from a folder’s ⋯ in the Library
-        </span>
-      )}
-    </span>
+    <div data-recent-list={st.udn} className="flex items-start gap-3 pl-3 border-l border-edge">
+      <div className="flex-1 min-w-0">
+        <div className="text-[12.5px]">Recently added</div>
+        <div className="text-[11.5px] text-faint max-w-sm">
+          Which of this server&apos;s lists fills the Library&apos;s Recently added shelf. Albums
+          added from now on are dated by TastyTunes either way.
+        </div>
+      </div>
+      <select
+        aria-label={`Recently added list for ${st.serverName}`}
+        value={value}
+        onChange={(e) => set(e.target.value)}
+        className="shrink-0 bg-bg rounded-lg ring-1 ring-edge px-2 py-1.5 text-[12.5px] outline-none focus:ring-edge2 max-w-56"
+      >
+        {(named || (st.recentList && !st.recentList.chosen)) && (
+          <option value="auto">{named ? label(named) : st.recentList?.title}</option>
+        )}
+        {/* a folder chosen deeper down, from a folder's ⋯ in the Library */}
+        {picked && !others.some((f) => f.id === picked.id) && (
+          <option value={`id:${picked.id}`}>{picked.titlePath.join(" › ")}</option>
+        )}
+        {others.map((f) => (
+          <option key={f.id} value={`id:${f.id}`}>
+            {label(f)}
+          </option>
+        ))}
+        <option value="off">None</option>
+      </select>
+    </div>
   );
 }
 
