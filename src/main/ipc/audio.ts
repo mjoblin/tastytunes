@@ -25,7 +25,7 @@ import { handle } from "../app/guard";
  * With those copies gone, 512 MiB (about 11 minutes of 24/192 music, 22 of 24/96) costs about
  * what 256 MiB did, measured 2026-10-17 on 24/192 FLACs: a 507 MB file raised the window's
  * process by 2.2 GB and main's by 0.6 GB, where the old code took 2.0 GB and 0.7 GB for a 249 MB
- * one (journal/0.12.0.md). The streaming decoder (0.13.0) retires the cap.
+ * one (journal/0.12.0.md). The streaming decoder (0.14.0) retires the cap.
  * TASTYTUNES_ANALYSIS_MAX_BYTES lets a harness set it small.
  */
 const ANALYSIS_MAX_BYTES =
