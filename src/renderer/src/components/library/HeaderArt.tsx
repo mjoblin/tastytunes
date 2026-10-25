@@ -52,7 +52,8 @@ export function HeaderArt({
   onGiveUp?: () => void;
   /** A right-click on the well (the artist page's picture menu). */
   onContextMenu?: (e: React.MouseEvent) => void;
-  /** Laid over the well, under the grip (the artist page's ⋯). */
+  /** Laid over the well, under the grip (the artist page's ⋯, at the bottom right as Now
+   *  Playing's is; the grip then keeps the corner beyond it, compact). */
   overlay?: React.ReactNode;
 }): React.JSX.Element {
   /** The well showed its line: the picture eases in when it comes. */
@@ -92,6 +93,7 @@ export function HeaderArt({
       {overlay}
       <CornerResizeHandle
         corner="bottom-right"
+        compact={overlay != null}
         dragging={art.dragging}
         snapped={art.snapped}
         handleProps={art.handleProps}

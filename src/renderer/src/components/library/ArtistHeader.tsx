@@ -196,19 +196,21 @@ export function ArtistHeader({
         onContextMenu={openMenu}
         overlay={
           <button
-            // named, but no tip: the well clips to its rounded corners, and a card's ⋯ has none
-            // either (his look, 2026-10-25: the tip was cut off at the well's edge)
-            aria-label="Change the picture"
+            // bottom right, as a card's ⋯ is and exactly as Now Playing's picture has it (round,
+            // in the top chips' glass, the grip compact beyond it: his consistency check,
+            // 2026-10-25); no tip, the well clips to its rounded corners
+            aria-label="More actions"
             data-artist-picture-menu
             onPointerDown={(e) => e.stopPropagation()}
             onClick={openMenu}
             className={cx(
-              "absolute top-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-lg transition-all",
-              "bg-panel/80 ring-1 ring-edge text-dim hover:text-ink",
-              menuAt ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
+              "absolute bottom-2 right-2 z-10 p-2 rounded-full bg-panel/60 backdrop-blur ring-1 ring-edge transition-all motion-safe:active:scale-90",
+              menuAt
+                ? "text-ink opacity-100"
+                : "text-dim hover:text-ink opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
             )}
           >
-            <MoreHorizontal size={14} />
+            <MoreHorizontal size={16} />
           </button>
         }
       />
