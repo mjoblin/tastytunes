@@ -12,10 +12,10 @@ import { albumMenuItems, type MediaMenuItem } from "@/lib/mediaMenus";
 import { openAlbumNode, playAlbumNode } from "@/lib/mediaActions";
 import { fromNode } from "@/lib/mediaRef";
 
-/** The shelf's cards against the reader's card size: smaller, so the doors above stay the
- *  page's lead and more of a batch fits (his note, 2026-10-25: "a little smaller"; then, on his
- *  library, "a little small now. bump them a bit bigger": 0.8 became 0.9). */
-const SHELF_SCALE = 0.9;
+/** The shelf's cards against the reader's card size (his calls, 2026-10-25: "a little smaller"
+ *  at the decision page, then on his own library 0.8 read "a little small", 0.9 next, then
+ *  "let's try 100%"): the card size itself, each card its own width rather than stretched. */
+const SHELF_SCALE = 1;
 
 /**
  * RECENTLY ADDED ON THE LIBRARY'S FRONT PAGE (0.13.0 round 9, his pick on the decision page: a
