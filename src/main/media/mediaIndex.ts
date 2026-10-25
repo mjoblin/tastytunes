@@ -970,6 +970,15 @@ export function ensureFresh(host: string, servers: MediaServerInfo[]): void {
     known.set(server.udn, server);
   }
   if (announceNeeded) announce(status());
+  // an index held from before Recently added (0.13.0) has never read its server's own list:
+  // read it now, a few requests and no walk, so the Library's shelf is there on the first launch
+  // after an upgrade rather than after the next rebuild (his first try, 2026-10-25: no shelf
+  // until he chose New Albums by hand)
+  for (const server of servers) {
+    const held = indexes.get(server.udn);
+    if (held && held.recentAt == null && !building.has(server.udn) && !usbServer(server))
+      void refreshRecentList(host, server.udn).catch(() => {});
+  }
   if (getSettings().mediaIndexAuto === false) return; // user said: buttons only
   for (const server of servers) {
     const existing = indexes.get(server.udn);
@@ -1136,6 +1145,11 @@ export async function searchServer(
   return liveSearch(host, serverUdn, query);
 }
 
+/** Servers whose own list is being read now: the Library lists servers more than once as it
+ *  opens, and one read is enough. */
+const recentReading = new Set<string>();
+const recentAgain = new Set<string>();
+
 /**
  * Read a server's own Recently added list again (the reader chose or turned off one: Settings ›
  * Libraries, a folder's ⋯ in the Library), with no walk of the library; the pools and the
@@ -1145,11 +1159,22 @@ export async function refreshRecentList(host: string, udn: string): Promise<void
   load();
   const server = known.get(udn);
   if (!server || !indexes.has(udn)) return;
-  const recent = await readRecentList(host, server);
-  // the index as it stands now: a build may have replaced it while the list was read
-  const now = indexes.get(udn);
-  if (!now) return;
-  indexes.set(udn, { ...now, recent, recentAt: Date.now() });
-  save();
-  announce(status());
+  // one read at a time; a choice made during it is read once more after
+  if (recentReading.has(udn)) {
+    recentAgain.add(udn);
+    return;
+  }
+  recentReading.add(udn);
+  try {
+    const recent: RecentListRead = await readRecentList(host, server);
+    // the index as it stands now: a build may have replaced it while the list was read
+    const now = indexes.get(udn);
+    if (!now) return;
+    indexes.set(udn, { ...now, recent, recentAt: Date.now() });
+    save();
+    announce(status());
+  } finally {
+    recentReading.delete(udn);
+    if (recentAgain.delete(udn)) void refreshRecentList(host, udn);
+  }
 }
