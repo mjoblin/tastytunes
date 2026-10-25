@@ -8,8 +8,8 @@ import {
   type MediaQueueAction,
   type Schedule,
 } from "@shared/model";
-import { favoriteKey, resumeRun } from "@shared/model";
-import { audioCaps } from "@shared/smoip";
+import { type Favorite, heartOf, heartPeersFrom, resumeRun } from "@shared/model";
+import { audioCaps, type ZonePlayState } from "@shared/smoip";
 import type { DeviceManager } from "../../device/deviceManager";
 import { getSettings } from "../../data/persist";
 import { pools as indexPools, revalidate } from "../../media/mediaIndex";
@@ -219,6 +219,26 @@ export const guardSlot = (s: Snapshot, slot: number, overwrite: boolean): void =
   }
 };
 
+/** Whether the playing track's copy is hearted (0.13.0: a heart is per copy; the playing copy
+ *  told apart by its picture, length and format against the library's other copies). */
+function playingHearted(
+  md: NonNullable<ZonePlayState["metadata"]>,
+  favorites: Favorite[],
+): boolean {
+  const item = {
+    kind: "track" as const,
+    title: md.title ?? "",
+    artist: md.artist ?? null,
+    album: md.album ?? null,
+    artUrl: md.art_url ?? null,
+    serverUdn: null,
+    durationSecs: md.duration ?? null,
+    rate: md.sample_rate ?? null,
+    bits: md.bit_depth ?? null,
+  };
+  return heartOf(item, favorites, heartPeersFrom(indexPools())(item)) != null;
+}
+
 export const status = (ctx: ToolContext): unknown => {
   const s = ctx.dm.snapshot();
   if (s.connection.phase !== "connected") {
@@ -256,27 +276,9 @@ export const status = (ctx: ToolContext): unknown => {
       queue_length: s.playState?.queue_length ?? null,
       shuffle: s.playState?.mode_shuffle ?? null,
       repeat: s.playState?.mode_repeat ?? null,
-      // Track-content match against the favorites (station URLs aren't
-      // knowable from playback metadata, so stations report null here).
-      favorited:
-        md?.title != null && !md.station
-          ? s.favorites.some(
-              (f) =>
-                favoriteKey(f) ===
-                favoriteKey({
-                  kind: "track",
-                  addedAt: 0,
-                  title: md.title!,
-                  artist: md.artist ?? null,
-                  album: md.album ?? null,
-                  artUrl: null,
-                  serverUdn: null,
-                  serverName: null,
-                  objectId: null,
-                  titlePath: null,
-                }),
-            )
-          : null,
+      // The playing copy's heart, as the Now Playing heart reads it (station
+      // URLs aren't knowable from playback metadata, so stations report null).
+      favorited: md?.title != null && !md.station ? playingHearted(md, s.favorites) : null,
       format: md
         ? {
             codec: md.codec,

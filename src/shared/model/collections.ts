@@ -4,6 +4,8 @@
 
 import type { ZonePlayState } from "../smoip";
 import { contentRowsHash, isRadioMetadata, radioTrackTitle } from "../smoip";
+import type { MediaNode } from "./media";
+import { type CopyFacts, artAddress, artHostOf, contradicts, copiesOf, nodeFacts } from "./copies";
 
 // --------------------------------------------------------------- recently played
 
@@ -100,20 +102,130 @@ export interface FavoriteMedia {
   /** Track length in seconds, captured at heart time (tracks; null when the
    *  source had none — favorites hearted before this field show blank). */
   durationSecs?: number | null;
+  /** WHICH COPY the heart is on (0.13.0, his call: each copy its own, across servers): its
+   *  server and item at heart time, or the moment it was made. It makes favoriteKey one per
+   *  copy, so two copies of one album can each be hearted. Absent on hearts from before, whose
+   *  server, item, picture and length still say which copy they are (heartOf). */
+  copy?: string;
+  /** The copy's sample rate and bit depth at heart time (0.13.0), when it was known: what tells
+   *  two copies on one server apart, and what the Favorites screen shows beside the name. */
+  rate?: number | null;
+  bits?: number | null;
 }
 
 export type Favorite = FavoriteStation | FavoriteMedia;
 
-/**
- * Content identity — dedupe and heart-lit checks. Stations key on the URL;
- * media keys on lowercased content fields, deliberately WITHOUT the server
- * (the same album on two servers is the same music).
- */
-export function favoriteKey(f: Favorite): string {
+/** The content a favorite is of, with no copy: what two copies of one album share. Stations key
+ *  on the URL; media on lowercased content fields, without the server. */
+export function favoriteContentKey(
+  f: Favorite | Pick<FavoriteMedia, "kind" | "title" | "artist" | "album">,
+): string {
   const lc = (s: string | null | undefined): string => (s ?? "").trim().toLowerCase();
   if (f.kind === "station") return `station:${f.url}`;
   if (f.kind === "album") return `album:${lc(f.title)}:${lc(f.artist)}`;
   return `track:${lc(f.title)}:${lc(f.artist)}:${lc(f.album)}`;
+}
+
+/**
+ * A favorite's identity: its content and, since 0.13.0, the copy it is on (FavoriteMedia.copy),
+ * so the store keeps one per copy. Adds, removals and updates go by it; whether a thing is
+ * hearted is heartOf's question, never a key compared with a payload's.
+ */
+export function favoriteKey(f: Favorite): string {
+  const k = favoriteContentKey(f);
+  return f.kind !== "station" && f.copy ? `${k}@${f.copy}` : k;
+}
+
+/** A new heart's copy mark: its server and item when it came from the library, else the moment
+ *  it was made (one heart per copy, however the copy was named). */
+export function copyMarkOf(
+  f: Pick<FavoriteMedia, "serverUdn" | "objectId">,
+  addedAt: number,
+): string {
+  return f.serverUdn && f.objectId ? `${f.serverUdn}|${f.objectId}` : `t${addedAt}`;
+}
+
+/** What a heart, or a thing that may be hearted, says about its copy (copies.ts). */
+export function heartFacts(
+  f: Pick<FavoriteMedia, "artUrl" | "serverUdn" | "durationSecs" | "rate" | "bits">,
+): CopyFacts {
+  return {
+    art: artAddress(f.artUrl),
+    server: f.serverUdn ?? null,
+    host: artHostOf(f.artUrl),
+    secs: f.durationSecs ?? null,
+    rate: f.rate ?? null,
+    bits: f.bits ?? null,
+  };
+}
+
+/** A thing that may be hearted: its content, and what it says about its copy. */
+export type HeartItem = Pick<
+  FavoriteMedia,
+  "kind" | "title" | "artist" | "album" | "artUrl" | "serverUdn" | "durationSecs" | "rate" | "bits"
+>;
+
+/** The library's albums and tracks by favorite content key, made on the first ask: the other
+ *  copies a heart is told apart from (heartOf). */
+export function heartPeersFrom(
+  pools: ReadonlyArray<{ albums: readonly MediaNode[]; tracks: readonly MediaNode[] }>,
+): (item: Pick<FavoriteMedia, "kind" | "title" | "artist" | "album">) => readonly MediaNode[] {
+  let byKey: Map<string, MediaNode[]> | null = null;
+  return (item) => {
+    if (!byKey) {
+      byKey = new Map();
+      const add = (k: string, n: MediaNode): void => {
+        const list = byKey?.get(k);
+        if (list) list.push(n);
+        else byKey?.set(k, [n]);
+      };
+      for (const g of pools) {
+        for (const a of g.albums) add(favoriteContentKey({ ...a, kind: "album", album: null }), a);
+        for (const t of g.tracks) add(favoriteContentKey({ ...t, kind: "track" }), t);
+      }
+    }
+    return byKey.get(favoriteContentKey(item)) ?? [];
+  };
+}
+
+/**
+ * THE HEART A COPY CARRIES (0.13.0): of the favorites of the same content, the one whose facts
+ * pick this copy out of the library's copies (`peers`: the library's albums or tracks of the same
+ * content, the index's and the listing's; the item's own entry among them is recognized and
+ * dropped). With no other copy known (the library not read here), a favorite of the same content
+ * counts unless its facts contradict this copy's (another server, another length). A heart whose
+ * copy has left the library lights every copy rather than none (copiesOf sets its facts aside).
+ */
+export function heartOf(
+  item: HeartItem,
+  favorites: readonly Favorite[],
+  peers: ReadonlyArray<Pick<MediaNode, "artUrl" | "durationSecs" | "format" | "serverUdn">> = [],
+): FavoriteMedia | null {
+  const key = favoriteContentKey(item);
+  const same = favorites.filter(
+    (f): f is FavoriteMedia => f.kind !== "station" && favoriteContentKey(f) === key,
+  );
+  if (same.length === 0) return null;
+  const mine = heartFacts(item);
+  const isMine = (f: CopyFacts): boolean =>
+    f.server != null &&
+    f.server === mine.server &&
+    f.art === mine.art &&
+    (f.secs == null || mine.secs == null || Math.abs(f.secs - mine.secs) < 1);
+  const copies: Array<{ f: CopyFacts; mine: boolean }> = [{ f: mine, mine: true }];
+  for (const p of peers) {
+    const f = nodeFacts(p);
+    if (!isMine(f)) copies.push({ f, mine: false });
+  }
+  for (const fav of same) {
+    const want = heartFacts(fav);
+    const hit =
+      copies.length === 1
+        ? !contradicts(want, mine)
+        : copiesOf(want, copies, (c) => c.f).some((c) => c.mine);
+    if (hit) return fav;
+  }
+  return null;
 }
 
 // -------------------------------------------------------------------- playlists

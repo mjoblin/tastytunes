@@ -33,11 +33,9 @@ import {
 import { queueContentHash } from "@shared/smoip";
 import {
   playKey,
-  favoriteKey,
   playlistContentHash,
   playlistItemKey,
   playlistTotalSecs,
-  type Favorite,
   type FavoriteMedia,
   type Playlist,
   type PlaylistItem,
@@ -52,7 +50,7 @@ import { RowAction } from "@/components/media/RowAction";
 import { RowMenu } from "@/components/media/RowMenu";
 import { RowHeart } from "@/components/media/RowHeart";
 import { AddToPlaylistPanel } from "@/components/overlays/AddToPlaylistPanel";
-import { toggleFavorite } from "@/lib/favorites";
+import { isFavorited, toggleFavorite } from "@/lib/favorites";
 import { activatePlaylist } from "@/lib/playlists";
 import { fromPlaylistItem } from "@/lib/mediaRef";
 import { refSiblings } from "@/lib/infoSteps";
@@ -742,8 +740,7 @@ function TrackRow({
           durationSecs: item.durationSecs ?? null,
         }
       : null;
-  const hearted =
-    favorite != null && favorites.some((f) => favoriteKey(f) === favoriteKey(favorite as Favorite));
+  const hearted = favorite != null && isFavorited(favorite, favorites);
   return (
     // Same anatomy as a queue row (QueueScreen's QueueRow): position/handle,
     // art, title+artist, actions cluster, duration last — on the same grid.

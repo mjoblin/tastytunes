@@ -45,12 +45,7 @@ import {
 } from "lucide-react";
 import { queueContentHash, type QueueListItem } from "@shared/smoip";
 import { presetVolumeKey, type QueueLayout, audioAnalysisKey } from "@shared/model";
-import {
-  favoriteKey,
-  type ContentRef,
-  type Favorite,
-  type QueueRestoreResult,
-} from "@shared/model";
+import { type ContentRef, type QueueRestoreResult } from "@shared/model";
 import { tt } from "@/api";
 import { useConfirmPopover } from "@/components/chrome/Confirm";
 import { useStore } from "@/store";
@@ -60,7 +55,7 @@ import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { flashTarget, scrollToWithContext } from "@/lib/scroll";
 import { DND_ACCESSIBILITY, lockVertical } from "@/lib/dnd";
 import { cx, fmtDuration, fmtTime, matchesFilter, fmtCount } from "@/lib/format";
-import { toggleFavorite } from "@/lib/favorites";
+import { isFavorited, toggleFavorite } from "@/lib/favorites";
 import { fromQueueItem, refToFavorite, refToPlaylistItem, type MediaRef } from "@/lib/mediaRef";
 import { refSiblings } from "@/lib/infoSteps";
 import { saveRefToPreset, openRefInLibrary } from "@/lib/mediaActions";
@@ -1406,8 +1401,7 @@ function QueueRow({
   const favorites = useStore((s) => s.favorites);
   const ref = fromQueueItem(item);
   const favorite = ref ? refToFavorite(ref) : null;
-  const hearted =
-    favorite != null && favorites.some((f) => favoriteKey(f) === favoriteKey(favorite as Favorite));
+  const hearted = favorite != null && isFavorited(favorite, favorites);
 
   return (
     <div

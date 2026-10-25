@@ -373,12 +373,8 @@ export function AlbumsLens({
   ): React.JSX.Element => {
     // a set tile is volume 1 wearing the base title and a count badge
     const node = set ? { ...rawNode, title: set.base, year: null } : rawNode;
-    // a set's count, else which library, only when the same album is in another one too
-    const badge = set
-      ? `${set.volumes.length} volumes`
-      : index.inTwoLibraries(rawNode)
-        ? (rawNode.serverName ?? undefined)
-        : undefined;
+    // a set's count, else which copy it is, only when there is another (useLensIndex.copyBadge)
+    const badge = set ? `${set.volumes.length} volumes` : index.copyBadge(rawNode);
     return cards ? (
       <ContainerCard
         key={nodeKey(rawNode)}

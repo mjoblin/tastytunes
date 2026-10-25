@@ -1,7 +1,7 @@
-import { favoriteKey, type Favorite, type FavoriteMedia } from "@shared/model";
+import { favoriteKey, type FavoriteMedia } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
-import { toggleFavorite } from "@/lib/favorites";
+import { isFavorited, toggleFavorite } from "@/lib/favorites";
 import { deriveNowPlaying } from "@/lib/format";
 
 export interface NowPlayingHeart {
@@ -58,13 +58,14 @@ export function useNowPlayingHeart(): NowPlayingHeart {
           objectId: null,
           titlePath: null,
           durationSecs: md?.duration ?? null,
+          // which copy is playing (0.13.0): a heart is per copy
+          rate: md?.sample_rate ?? null,
+          bits: md?.bit_depth ?? null,
         }
       : null;
 
   return {
-    active: trackFav
-      ? favorites.some((f) => favoriteKey(f) === favoriteKey(trackFav as Favorite))
-      : stationFav != null,
+    active: trackFav ? isFavorited(trackFav, favorites) : stationFav != null,
     available: trackFav != null || stationFav != null || lastMatches,
     toggle(): void {
       if (trackFav) void toggleFavorite(trackFav);

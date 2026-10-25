@@ -1,6 +1,5 @@
-import { favoriteKey, type Favorite } from "@shared/model";
 import { useStore } from "@/store";
-import { toggleFavorite } from "@/lib/favorites";
+import { isFavorited, toggleFavorite } from "@/lib/favorites";
 import { refToFavorite, type MediaRef } from "@/lib/mediaRef";
 import { openInfoForRef } from "@/lib/mediaInfo";
 
@@ -105,8 +104,7 @@ function heartItem(ref: MediaRef, caps: MediaMenuCaps): MediaMenuItem[] {
   }
   const fav = refToFavorite(ref);
   if (!fav) return [];
-  const key = favoriteKey(fav as Favorite);
-  const active = useStore.getState().favorites.some((f) => favoriteKey(f) === key);
+  const active = isFavorited(fav, useStore.getState().favorites);
   return [
     {
       label: active ? "Remove from favorites" : "Add to favorites",

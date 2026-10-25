@@ -1,5 +1,13 @@
 import { z } from "zod";
-import { favoriteKey, type Favorite, LARGE_QUEUE_TRACKS } from "@shared/model";
+import {
+  copyMarkOf,
+  favoriteKey,
+  heartOf,
+  heartPeersFrom,
+  type Favorite,
+  LARGE_QUEUE_TRACKS,
+} from "@shared/model";
+import { pools as indexPools } from "../../media/mediaIndex";
 import { isRadioMetadata } from "@shared/smoip";
 import { getSettings } from "../../data/persist";
 import { radioSearch, radioByTags } from "../../lookups/radioBrowser";
@@ -338,7 +346,13 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
             objectId: null,
             titlePath: null,
             durationSecs: md.duration ?? null,
+            rate: md.sample_rate ?? null,
+            bits: md.bit_depth ?? null,
           };
+          // a heart is per copy (0.13.0): the playing copy's, beside any other copy's
+          if (heartOf(fav, s.favorites, heartPeersFrom(indexPools())(fav)))
+            return ok("Already a favorite.");
+          fav.copy = copyMarkOf(fav, fav.addedAt);
         }
         const key = favoriteKey(fav);
         if (s.favorites.some((f) => favoriteKey(f) === key)) return ok("Already a favorite.");

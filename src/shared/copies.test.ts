@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  type FavoriteMedia,
   type ListeningPlayEvent,
   type MediaNode,
   copiesOf,
+  copyMarkOf,
+  favoriteKey,
+  heartOf,
   copyStat,
   emptyPlayStats,
   foldPlayEvent,
@@ -184,5 +188,133 @@ describe("copyStat: a row's own tally", () => {
       secs: 241,
       host: "nas",
     });
+  });
+});
+
+const album = (over: Partial<MediaNode>): MediaNode =>
+  node({
+    title: "Toto IV",
+    artist: "Toto",
+    album: null,
+    isContainer: true,
+    upnpClass: "object.container.album.musicAlbum",
+    ...over,
+  });
+const heart = (over: Partial<FavoriteMedia>): FavoriteMedia => ({
+  kind: "album",
+  addedAt: 1,
+  title: "Toto IV",
+  artist: "Toto",
+  album: null,
+  artUrl: null,
+  serverUdn: null,
+  serverName: null,
+  objectId: null,
+  titlePath: null,
+  ...over,
+});
+const asItem = (n: MediaNode) => ({
+  kind: n.isContainer ? ("album" as const) : ("track" as const),
+  title: n.title,
+  artist: n.artist,
+  album: n.isContainer ? null : n.album,
+  artUrl: n.artUrl,
+  serverUdn: n.serverUdn ?? null,
+  durationSecs: n.isContainer ? null : n.durationSecs,
+});
+
+describe("heartOf: the heart a copy carries", () => {
+  const jp = album({ id: "jp", artUrl: "http://nas/Toto IV (JP)/folder.jpg" });
+  const us = album({ id: "us", artUrl: "http://nas/Toto IV (US)/folder.jpg" });
+  const usb = album({ id: "u", serverUdn: "uuid:evo", artUrl: "http://192.168.50.45:8080/a.jpg" });
+  const library = [jp, us, usb];
+
+  it("lights the copy a heart from before 0.13.0 was made on, and no other", () => {
+    const old = heart({ serverUdn: "uuid:nas", objectId: "us", artUrl: us.artUrl });
+    expect(heartOf(asItem(us), [old], library)).toBe(old);
+    expect(heartOf(asItem(jp), [old], library)).toBeNull();
+    expect(heartOf(asItem(usb), [old], library)).toBeNull();
+  });
+
+  it("keeps a heart per copy, each lighting its own", () => {
+    const a = heart({
+      serverUdn: "uuid:nas",
+      objectId: "us",
+      artUrl: us.artUrl,
+      copy: "uuid:nas|us",
+    });
+    const b = heart({
+      serverUdn: "uuid:evo",
+      objectId: "u",
+      artUrl: usb.artUrl,
+      copy: "uuid:evo|u",
+    });
+    expect(favoriteKey(a)).not.toBe(favoriteKey(b));
+    expect(heartOf(asItem(us), [a, b], library)).toBe(a);
+    expect(heartOf(asItem(usb), [a, b], library)).toBe(b);
+    expect(heartOf(asItem(jp), [a, b], library)).toBeNull();
+  });
+
+  it("finds a drive copy's heart after a standby moved its picture", () => {
+    const b = heart({ serverUdn: "uuid:evo", artUrl: "http://192.168.50.45:8080/old-mount/a.jpg" });
+    expect(heartOf(asItem(usb), [b], library)).toBe(b);
+    expect(heartOf(asItem(us), [b], library)).toBeNull();
+  });
+
+  it("with no other copy known, lights unless the facts contradict", () => {
+    const onNas = heart({ serverUdn: "uuid:nas", artUrl: us.artUrl });
+    expect(heartOf(asItem(us), [onNas])).toBe(onNas);
+    expect(heartOf(asItem(usb), [onNas])).toBeNull();
+    expect(heartOf(asItem(usb), [heart({})])).not.toBeNull();
+  });
+
+  it("lights every copy for a heart whose copy has left the library", () => {
+    const gone = heart({ serverUdn: "uuid:old-nas", artUrl: "http://old-nas/x.jpg" });
+    expect(heartOf(asItem(us), [gone], library)).toBe(gone);
+    expect(heartOf(asItem(jp), [gone], library)).toBe(gone);
+  });
+
+  it("tells the playing copy's heart by what the streamer says of it", () => {
+    const usTrack = node({
+      id: "ust",
+      title: "Rosanna",
+      album: "Toto IV",
+      artist: "Toto",
+      artUrl: us.artUrl,
+      durationSecs: 331,
+    });
+    const jpTrack = node({
+      id: "jpt",
+      title: "Rosanna",
+      album: "Toto IV",
+      artist: "Toto",
+      artUrl: jp.artUrl,
+      durationSecs: 331,
+    });
+    const playing = {
+      kind: "track" as const,
+      title: "Rosanna",
+      artist: "Toto",
+      album: "Toto IV",
+      artUrl: `${jp.artUrl}?size=500`,
+      serverUdn: null,
+      durationSecs: 331,
+    };
+    const onJp = heart({
+      kind: "track",
+      title: "Rosanna",
+      album: "Toto IV",
+      serverUdn: "uuid:nas",
+      objectId: "jpt",
+      artUrl: jp.artUrl,
+      durationSecs: 331,
+    });
+    expect(heartOf(playing, [onJp], [usTrack, jpTrack])).toBe(onJp);
+    expect(heartOf({ ...playing, artUrl: us.artUrl }, [onJp], [usTrack, jpTrack])).toBeNull();
+  });
+
+  it("marks a new heart by its server and item, else by when it was made", () => {
+    expect(copyMarkOf({ serverUdn: "uuid:nas", objectId: "us" }, 5)).toBe("uuid:nas|us");
+    expect(copyMarkOf({ serverUdn: null, objectId: null }, 5)).toBe("t5");
   });
 });

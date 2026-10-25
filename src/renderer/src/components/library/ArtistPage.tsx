@@ -99,11 +99,11 @@ export function ArtistPage({
                 onEnter: () => onOpenAlbum(node),
                 onMenu: (e: React.MouseEvent) => actions.openMenu(node, e),
                 onNavDrag: (e: React.PointerEvent) => actions.dragAlbum([node], e, node.title),
-                // which library, only when the same album is in another one too (his Jack White:
-                // the same albums on minitunes and on the streamer's drive), the Albums lens's
-                // rule; an album in one library shows none, its year not squeezed by a chip that
-                // says nothing
-                badge: index.inTwoLibraries(node) ? (node.serverName ?? undefined) : undefined,
+                // which copy, only when there is another (his Jack White: the same albums on
+                // minitunes and on the streamer's drive; Malcolm's two Toto IVs on one server),
+                // the Albums lens's rule; an album with no other copy shows none, its year not
+                // squeezed by a chip that says nothing
+                badge: index.copyBadge(node),
               };
               return cards ? (
                 <ContainerCard

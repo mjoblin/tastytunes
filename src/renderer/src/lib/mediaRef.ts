@@ -39,6 +39,10 @@ export interface MediaRef {
   serverUdn: string | null;
   serverName: string | null;
   objectId: string | null;
+  /** The copy's sample rate and bit depth, where the source says (0.13.0): a heart is per copy,
+   *  and two copies on one server differ by format. */
+  rate: number | null;
+  bits: number | null;
 }
 
 const base = {
@@ -50,6 +54,8 @@ const base = {
   serverUdn: null as string | null,
   serverName: null as string | null,
   objectId: null as string | null,
+  rate: null as number | null,
+  bits: null as number | null,
 };
 
 /** A library node (browse, search results, unified search's library group). */
@@ -69,6 +75,8 @@ export function fromNode(
     serverUdn: node.serverUdn ?? serverUdn ?? null,
     serverName: node.serverName ?? serverName ?? null,
     objectId: node.id,
+    rate: node.format?.rate ?? null,
+    bits: node.format?.bits ?? null,
   };
 }
 
@@ -104,6 +112,8 @@ export function fromFavorite(f: Favorite): MediaRef {
     serverUdn: f.serverUdn,
     serverName: f.serverName,
     objectId: f.objectId,
+    rate: f.rate ?? null,
+    bits: f.bits ?? null,
   };
 }
 
@@ -146,6 +156,10 @@ export function fromPlayEvent(e: ListeningPlayEvent): MediaRef {
     artist: e.artist,
     album: e.album,
     durationSecs: e.duration,
+    // which copy played, where the record kept it (0.13.0)
+    artUrl: e.artUrl ?? null,
+    rate: e.sampleRate,
+    bits: e.bitDepth,
   };
 }
 
@@ -177,6 +191,8 @@ export function refToFavorite(ref: MediaRef): NewFavorite | null {
     objectId: ref.objectId,
     titlePath: null,
     durationSecs: ref.durationSecs,
+    rate: ref.rate,
+    bits: ref.bits,
   };
 }
 

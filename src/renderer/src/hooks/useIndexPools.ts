@@ -38,6 +38,10 @@ export function useReadyIndexSig(): string {
   );
 }
 
+/** The last pools snapshot this window read, if any: for a reader outside React that can do
+ *  without (a heart's other copies, lib/favorites). */
+export const cachedPools = (): MediaIndexPools[] | null => poolsCache?.pools ?? null;
+
 export function useIndexPools(enabled = true): MediaIndexPools[] | null {
   const sig = useReadyIndexSig();
   const [pools, setPools] = useState<MediaIndexPools[] | null>(() =>

@@ -1,6 +1,8 @@
 import { useMemo } from "react";
 import type { MediaIndexPools, MediaNode } from "@shared/model";
 import {
+  FACT_SEP,
+  albumFormat,
   albumTracksOf,
   isCompilation,
   nameSortKey,
@@ -44,6 +46,12 @@ export interface LensIndex {
    *  split from a second copy on the same server by their pictures (albumTracksOf). What an
    *  album's play tally is read over, so two copies keep their own counts (0.13.0). */
   tracksOf(a: MediaNode): MediaNode[];
+  /** The chip an album's card wears to say WHICH copy it is, or undefined: its library when the
+   *  same album is in another one too (his ask, 2026-10-22), and its format when another copy of
+   *  it is in the same library (his call, 2026-10-24: each copy its own, the card shows the
+   *  format), its folder's name when the formats match too. One rule for the Albums lens, the
+   *  Artists lens and the artist page. */
+  copyBadge(a: MediaNode): string | undefined;
   /** Each album's codec and format tags: the union over its tracks. */
   albumCodecs: Map<string, Set<string>>;
   /** The albums that are compilations (by nodeKey). */
@@ -69,6 +77,18 @@ function build(pools: MediaIndexPools[]): LensIndex {
     if (!cache.has(name)) cache.set(name, make());
     return cache.get(name) as T;
   };
+  /** The albums by albumKey: a server's albums of one title, two copies among them. */
+  const albumsByKey = (): Map<string, MediaNode[]> =>
+    lazy("albumsByKey", () => {
+      const m = new Map<string, MediaNode[]>();
+      for (const alb of index.albums) {
+        const k = albumKey(alb);
+        const list = m.get(k);
+        if (list) list.push(alb);
+        else m.set(k, [alb]);
+      }
+      return m;
+    });
   const index: LensIndex = {
     albumKey,
     get albums() {
@@ -112,24 +132,29 @@ function build(pools: MediaIndexPools[]): LensIndex {
       const id = nodeKey(a);
       let got = memo.get(id);
       if (!got) {
-        const byKey = lazy("albumsByKey", () => {
-          const m = new Map<string, MediaNode[]>();
-          for (const alb of index.albums) {
-            const k = albumKey(alb);
-            const list = m.get(k);
-            if (list) list.push(alb);
-            else m.set(k, [alb]);
-          }
-          return m;
-        });
         const k = albumKey(a);
         got = albumTracksOf(a, {
-          albums: byKey.get(k) ?? [a],
+          albums: albumsByKey().get(k) ?? [a],
           tracks: index.tracksByAlbum.get(k) ?? [],
         });
         memo.set(id, got);
       }
       return got;
+    },
+    copyBadge(a) {
+      const parts: string[] = [];
+      if (a.serverName && index.inTwoLibraries(a)) parts.push(a.serverName);
+      const twins = (albumsByKey().get(albumKey(a)) ?? []).filter(
+        (b) => b !== a && lc(b.artist) === lc(a.artist),
+      );
+      if (twins.length > 0) {
+        const formatOf = (x: MediaNode): string | null => albumFormat(index.tracksOf(x)).label;
+        const mine = formatOf(a);
+        const folder = a.titlePath?.[a.titlePath.length - 1] ?? null;
+        if (mine && twins.every((t) => formatOf(t) !== mine)) parts.push(mine);
+        else if (folder && lc(folder) !== lc(a.title)) parts.push(folder);
+      }
+      return parts.length > 0 ? parts.join(FACT_SEP) : undefined;
     },
     get albumCodecs() {
       return lazy("albumCodecs", () => {

@@ -531,6 +531,7 @@ export function ArtistsLens({
                 const selected = nodeKey(alb) === mem.album;
                 const playing = actions.isPlayingAlbum(alb);
                 const menuOpen = actions.menuNodeId === alb.id;
+                const badge = index.copyBadge(alb);
                 return (
                   <div
                     key={nodeKey(alb)}
@@ -572,12 +573,12 @@ export function ArtistsLens({
                       </div>
                       <div className="flex items-center gap-1.5 min-w-0 text-[12px] text-dim">
                         {alb.year && <span>{alb.year}</span>}
-                        {alb.serverName && index.inTwoLibraries(alb) && (
+                        {badge && (
                           <span
-                            data-card-badge={alb.serverName}
+                            data-card-badge={badge}
                             className="ml-auto shrink-0 text-[9.5px] px-1.5 py-px rounded-full ring-1 ring-edge"
                           >
-                            {alb.serverName}
+                            {badge}
                           </span>
                         )}
                       </div>

@@ -1,7 +1,6 @@
-import { useMemo } from "react";
-import { favoriteKey, type Favorite, type FavoriteMedia, type MediaNode } from "@shared/model";
+import { type FavoriteMedia, type MediaNode } from "@shared/model";
 import { useStore } from "@/store";
-import { toggleFavorite } from "@/lib/favorites";
+import { isFavorited, toggleFavorite } from "@/lib/favorites";
 
 // The Library's FAVORITES, lifted out of LibraryScreen (2026-09-13, the fourth
 // lift of the screen's hygiene round): a node as a favorite payload with its
@@ -21,7 +20,6 @@ export function useLibraryFavorites(d: {
 }) {
   const { serverUdn, serverName, searchMode, pathTitles, albumNode, albumArtist, albumArt } = d;
   const favorites = useStore((s) => s.favorites);
-  const favKeys = useMemo(() => new Set(favorites.map(favoriteKey)), [favorites]);
   /**
    * A library node as a favorite payload. Content identity + resolution
    * hints: the entered album's titlePath is the current trail (it already
@@ -45,9 +43,11 @@ export function useLibraryFavorites(d: {
           ? [...pathTitles, node.title]
           : pathTitles,
     durationSecs: node.isContainer ? null : node.durationSecs,
+    // which copy (0.13.0): a heart is per copy, and two copies on one server differ by format
+    rate: node.format?.rate ?? null,
+    bits: node.format?.bits ?? null,
   });
-  const nodeFavorited = (node: MediaNode): boolean =>
-    favKeys.has(favoriteKey(mediaFav(node) as Favorite));
+  const nodeFavorited = (node: MediaNode): boolean => isFavorited(mediaFav(node), favorites);
   const heartNode = (node: MediaNode, opts?: { silent?: boolean }): void => {
     void toggleFavorite(mediaFav(node), opts);
   };

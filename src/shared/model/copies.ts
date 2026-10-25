@@ -18,6 +18,8 @@ export interface CopyFacts {
   /** The picture's address without its query, where it is the copy's own: a media server's.
    *  Never the streamer's own drive's, whose addresses change with every standby. */
   art?: string | null;
+  /** The server the copy is on, by udn: a library row's and a heart's (a play does not know). */
+  server?: string | null;
   /** The host the picture is served from: which server the copy is on. */
   host?: string | null;
   /** The length, in seconds. */
@@ -47,9 +49,12 @@ export function artHostOf(url: string | null | undefined): string | null {
 }
 
 /** A library row's facts. */
-export function nodeFacts(n: Pick<MediaNode, "artUrl" | "durationSecs" | "format">): CopyFacts {
+export function nodeFacts(
+  n: Pick<MediaNode, "artUrl" | "durationSecs" | "format" | "serverUdn">,
+): CopyFacts {
   return {
     art: artAddress(n.artUrl),
+    server: n.serverUdn ?? null,
     host: artHostOf(n.artUrl),
     secs: n.durationSecs,
     rate: n.format?.rate ?? null,
@@ -97,12 +102,27 @@ type Check = (want: CopyFacts, have: CopyFacts) => boolean | null;
  *  nothing), else whether the two agree. */
 const CHECKS: Check[] = [
   (w, h) => (w.art && h.art ? w.art === h.art : null),
+  (w, h) => (w.server && h.server ? w.server === h.server : null),
   (w, h) => (w.host && h.host ? w.host === h.host : null),
   (w, h) =>
     w.secs != null && h.secs != null ? Math.abs(w.secs - h.secs) <= COPY_SECS_SLACK : null,
   (w, h) => (w.rate != null && h.rate != null ? w.rate === h.rate : null),
   (w, h) => (w.bits != null && h.bits != null ? w.bits === h.bits : null),
 ];
+
+/**
+ * Whether two sets of facts say outright that they are different copies: another server, another
+ * picture host, another length. The test for a heart when no other copy is known to compare
+ * with (the library not read in this window): the sample rate and depth are left out, since a
+ * server that converts reports another rate for the same copy.
+ */
+export function contradicts(a: CopyFacts, b: CopyFacts): boolean {
+  return (
+    (a.server != null && b.server != null && a.server !== b.server) ||
+    (a.host != null && b.host != null && a.host !== b.host) ||
+    (a.secs != null && b.secs != null && Math.abs(a.secs - b.secs) > COPY_SECS_SLACK)
+  );
+}
 
 /**
  * The copies these facts could be, narrowed check by check. A copy that lacks a fact passes

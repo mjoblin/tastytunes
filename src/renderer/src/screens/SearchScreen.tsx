@@ -14,7 +14,7 @@ import { StationRow } from "@/components/media/StationRow";
 import { RowMenu } from "@/components/media/RowMenu";
 import { AddToPlaylistPanel } from "@/components/overlays/AddToPlaylistPanel";
 import { PresetPicker } from "@/components/library/LibraryMenus";
-import { favoriteAct, toggleFavorite } from "@/lib/favorites";
+import { favoriteAct, isFavorited, toggleFavorite } from "@/lib/favorites";
 import { activatePlaylist } from "@/lib/playlists";
 import {
   fromFavorite,
@@ -407,11 +407,10 @@ export function SearchScreen(): React.JSX.Element {
   const nodeKind = (n: MediaNode): MediaKind => mediaKind(n.upnpClass, n.isContainer);
   const kindLabel = (k: MediaKind): string => k[0].toUpperCase() + k.slice(1);
 
-  const favKeys = useMemo(() => new Set(favorites.map(favoriteKey)), [favorites]);
-  /** Hearted, by content key — null fav (artists, identity-less) = no heart. */
+  /** Hearted, by its copy — null fav (artists, identity-less) = no heart. */
   const refFavorited = (ref: MediaRef): boolean => {
     const fav = refToFavorite(ref);
-    return fav != null && favKeys.has(favoriteKey(fav as Favorite));
+    return fav != null && isFavorited(fav, favorites);
   };
 
   // ---- the ⋯ (and right-click): items built at open time from the shared

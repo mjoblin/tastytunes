@@ -172,6 +172,8 @@ const refOf = (title: string, artist: string | null, album: string | null): Medi
   serverUdn: null,
   serverName: null,
   objectId: null,
+  rate: null,
+  bits: null,
 });
 const times = (n: number, one: string, many: string): string =>
   `${fmtCount(n)} ${n === 1 ? one : many}`;

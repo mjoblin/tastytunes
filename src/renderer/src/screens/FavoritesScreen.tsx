@@ -3,6 +3,12 @@ import { useKnownDrs } from "@/lib/audioAnalysis";
 import { useSavedPerformer } from "@/hooks/useQueuePerformer";
 import { Heart, Library, Loader2, MoreHorizontal, Play, RadioTower } from "lucide-react";
 import {
+  FACT_SEP,
+  copiesOf,
+  formatLabel,
+  heartFacts,
+  heartPeersFrom,
+  nodeFacts,
   playKey,
   type MediaNode,
   type MediaQueueAction,
@@ -10,6 +16,7 @@ import {
   audioAnalysisKey,
 } from "@shared/model";
 import {
+  favoriteContentKey,
   favoriteKey,
   type Favorite,
   type FavoriteMedia,
@@ -42,6 +49,8 @@ import { playingStationName } from "@/lib/radio";
 import { useStationTuning } from "@/hooks/useStationTuning";
 import { ScreenTitle, GAP_BETWEEN } from "@/components/chrome/Chrome";
 import { useQueueSourceActive } from "@/hooks/useQueueSourceActive";
+import { useIndexPools } from "@/hooks/useIndexPools";
+import { lensIndexOf } from "@/components/library/lenses/useLensIndex";
 
 /** Kind visibility — session memory, like the Radio screen's chip state. */
 type FavKind = "all" | "station" | "album" | "track";
@@ -118,6 +127,8 @@ export function FavoritesScreen(): React.JSX.Element {
   // while the streamer answered /system/upnp, and a single transient fetch
   // failure stuck the false "offline" for the whole visit — user report).
   // A failed fetch retries twice before offline is ever declared.
+  const copyChip = useCopyChips(displayed);
+
   const [servers, setServers] = useState<MediaServerInfo[] | null>(null);
   useEffect(() => {
     if (!connected) {
@@ -462,6 +473,7 @@ export function FavoritesScreen(): React.JSX.Element {
                           zooms and lifts with the hover animation */}
                       <ContainerCard
                         node={asNode(f)}
+                        badge={copyChip(f)}
                         playing={albumPlaying(f)}
                         menuOpen={menu?.fav === f}
                         favorited={active}
@@ -514,6 +526,7 @@ export function FavoritesScreen(): React.JSX.Element {
                             album={f.album}
                             ref={fromFavorite(f)}
                           />
+                          {copyChip(f) ? `${FACT_SEP}${copyChip(f)}` : ""}
                           {!routed && f.serverName
                             ? `${(performerOf(f) ?? f.artist ?? f.album) ? " · " : ""}${f.serverName} is offline`
                             : ""}
@@ -671,3 +684,48 @@ function StationFavRow({
 }
 
 /** Small portal menu (the ItemMenu idiom, but favorites-shaped items). */
+
+/**
+ * WHICH COPY a heart is on (0.13.0, his call: each copy its own): when two hearts are on two
+ * copies of one album or track, each says which it is, as the Library's cards do. An album wears
+ * its card's chip (the lens index's copyBadge: its library, else its format, else its folder); a
+ * track its library when the two are in two, else its format. The library is read only when two
+ * such hearts are shown.
+ */
+function useCopyChips(shown: readonly Favorite[]): (f: FavoriteMedia) => string | undefined {
+  const twins = useMemo(() => {
+    const byKey = new Map<string, FavoriteMedia[]>();
+    for (const f of shown) {
+      if (f.kind === "station") continue;
+      const k = favoriteContentKey(f);
+      byKey.set(k, [...(byKey.get(k) ?? []), f]);
+    }
+    return new Map([...byKey].filter(([, list]) => list.length > 1));
+  }, [shown]);
+  const pools = useIndexPools(twins.size > 0);
+  return useMemo(() => {
+    if (!pools || twins.size === 0) return () => undefined;
+    const index = lensIndexOf(pools);
+    const peersOf = heartPeersFrom(pools);
+    const copyOf = (f: FavoriteMedia): MediaNode | null => {
+      const picked = copiesOf(heartFacts(f), peersOf(f), nodeFacts);
+      return picked.length === 1 ? picked[0] : null;
+    };
+    const chips = new Map<FavoriteMedia, string | undefined>();
+    for (const list of twins.values()) {
+      const nodes = list.map(copyOf);
+      const twoLibraries = new Set(nodes.map((n) => n?.serverUdn ?? null)).size > 1;
+      list.forEach((f, i) => {
+        const n = nodes[i];
+        if (!n) return;
+        chips.set(
+          f,
+          f.kind === "album"
+            ? index.copyBadge(n)
+            : ((twoLibraries ? n.serverName : formatLabel(n.format)) ?? undefined),
+        );
+      });
+    }
+    return (f) => chips.get(f);
+  }, [pools, twins]);
+}
