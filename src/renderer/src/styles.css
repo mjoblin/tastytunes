@@ -629,6 +629,16 @@ img {
   content-visibility: auto;
   contain-intrinsic-size: auto 200px;
 }
+/* ...but a tip under a card's last lines does overflow it (0.13.0-rc.4: the copy chip's "There's
+   another copy of this album" and the format line's tip both open below the card, and both were
+   cut at its edge): the card under the pointer or the keyboard drops the containment, as it is on
+   screen anyway */
+[data-library-card]:hover,
+[data-library-card]:focus-within,
+[data-library-track-card]:hover,
+[data-library-track-card]:focus-within {
+  content-visibility: visible;
+}
 
 /* Inline lyric line: a faint gold halo so the current line reads as "lit"
    against the dark screen. drop-shadow, NOT text-shadow: the element is
@@ -732,6 +742,15 @@ img {
   left: 0;
   right: auto;
   translate: 0 0;
+}
+/* modifier: a tip of a few short lines, broken only where its text breaks (an album card's format
+   line: the format, then the dynamic range), so a tip under a narrow card stays about the card's
+   width and inside the scrollport's padding instead of running past it */
+[data-tip].tip-lines::after {
+  white-space: pre;
+  width: max-content;
+  text-align: left;
+  line-height: 1.45;
 }
 /* variant: beside the element as the default is, but level with its BOTTOM rather than its
    middle — a tall card whose tip explains its last line (the Library's USB card, its "Check

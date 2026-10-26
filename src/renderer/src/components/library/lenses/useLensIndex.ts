@@ -8,7 +8,7 @@ import {
   isCompilation,
   nameSortKey,
 } from "@shared/model";
-import { decadeOptionsOf, formatTags, genreOptionsOf, lc, nodeKey } from "./lensShared";
+import { decadeOptionsOf, formatTags, genreOptionsOf, lc, nodeKey, whichCopy } from "./lensShared";
 
 /** A lens artist: content identity, every album they own and every track they perform. */
 export interface LensArtist {
@@ -47,11 +47,11 @@ export interface LensIndex {
    *  column (0.13.0, so two copies and two artists' albums of one title keep their own). */
   tracksOf(a: MediaNode): MediaNode[];
   /** The chip an album's card wears to say WHICH copy it is, or undefined: its library when the
-   *  same album is in another one too (his ask, 2026-10-22), and its format when another copy of
-   *  it is in the same library (his call, 2026-10-24: each copy its own, the card shows the
-   *  format), its folder's name when the formats match too. One rule for the Albums lens, the
-   *  Artists lens and the artist page. */
-  copyBadge(a: MediaNode): string | undefined;
+   *  same album is in another one too (his ask, 2026-10-22), and which copy it is when another
+   *  copy of it is in the same library (whichCopy: what tells it from the others, else "Copy 2";
+   *  0.13.0-rc.4). `formatShown` when the card's format line already says the format. One rule
+   *  for the Albums lens, the Artists lens, the artist page and Favorites. */
+  copyBadge(a: MediaNode, shown?: { formatShown?: boolean }): string | undefined;
   /** Each album's codec and format tags, by nodeKey: the union over its own tracks. */
   albumCodecs: Map<string, Set<string>>;
   /** The albums that are compilations (by nodeKey). */
@@ -140,18 +140,15 @@ function build(pools: MediaIndexPools[]): LensIndex {
       }
       return got;
     },
-    copyBadge(a) {
+    copyBadge(a, shown) {
       const parts: string[] = [];
       if (a.serverName && index.inTwoLibraries(a)) parts.push(a.serverName);
-      const twins = (albumsByKey().get(albumKey(a)) ?? []).filter(
-        (b) => b !== a && lc(b.artist) === lc(a.artist),
+      const copies = (albumsByKey().get(albumKey(a)) ?? []).filter(
+        (b) => lc(b.artist) === lc(a.artist),
       );
-      if (twins.length > 0) {
+      if (copies.some((b) => b !== a)) {
         const formatOf = (x: MediaNode): string | null => albumFormat(index.tracksOf(x)).label;
-        const mine = formatOf(a);
-        const folder = a.titlePath?.[a.titlePath.length - 1] ?? null;
-        if (mine && twins.every((t) => formatOf(t) !== mine)) parts.push(mine);
-        else if (folder && lc(folder) !== lc(a.title)) parts.push(folder);
+        parts.push(whichCopy(a, copies, formatOf, shown));
       }
       return parts.length > 0 ? parts.join(FACT_SEP) : undefined;
     },

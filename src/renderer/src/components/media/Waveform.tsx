@@ -494,18 +494,25 @@ export function DrBadge({
   dr,
   className,
   lufs = null,
+  titled = true,
 }: {
   dr: number;
   /** Integrated loudness, when known — the tooltip carries it beside the band word. */
   lufs?: number | null;
   /** Overrides the default ml-2.5 (row cells manage their own spacing). */
   className?: string;
+  /** False where the line around it carries the tip (an album card's format line). */
+  titled?: boolean;
 }): React.JSX.Element | null {
   if (dr <= 0) return null;
   const { tone, word } = drTone(dr);
   return (
     <span
-      title={`Dynamic range (the TT DR procedure, as in the DR database): ${word}${lufs != null ? ` · loudness ${fmtLufs(lufs)}` : ""}`}
+      title={
+        titled
+          ? `Dynamic range (the TT DR procedure, as in the DR database): ${word}${lufs != null ? ` · loudness ${fmtLufs(lufs)}` : ""}`
+          : undefined
+      }
       className={`rounded px-1 py-px ${className ?? "ml-2.5"}`}
       style={{
         color: tone,

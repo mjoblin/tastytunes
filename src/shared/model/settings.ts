@@ -138,6 +138,10 @@ export interface AppSettings {
   presetGap: number;
   /** Preset grid: stretch cards to fill each row (true) or keep them exact-size (false). */
   presetFillRows: boolean;
+  /** The Library's album cards carry a format line under their names: the status lamp's glyph,
+   *  the format, and DR once measured (0.13.0-rc.4, his picks on "Card details"; on by default,
+   *  for listeners who choose by format). */
+  albumCardFormat: boolean;
   /** Now Playing content placement. */
   nowPlayingAlignH: AlignH;
   nowPlayingAlignV: AlignV;
@@ -491,6 +495,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   presetCardSize: 160,
   presetGap: 12,
   presetFillRows: true,
+  albumCardFormat: true,
   nowPlayingAlignH: "left",
   nowPlayingAlignV: "top",
   navCollapsed: false,

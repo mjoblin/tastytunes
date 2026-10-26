@@ -43,6 +43,7 @@ import {
   PLAY_THESE_MAX,
 } from "./lensShared";
 import { useRowSelection } from "@/components/library/useRowSelection";
+import { useCardDetails } from "@/components/library/useCardDetails";
 import { useLensIndex } from "./useLensIndex";
 import { CARD_GRID_SCROLLER, useCardGrid, WINDOW_CARDS_ABOVE } from "./useCardGrid";
 import { menuAt } from "@/lib/menuAt";
@@ -128,6 +129,8 @@ export function AlbumsLens({
 
   // what the lenses derive from the pools, once per snapshot (useLensIndex)
   const index = useLensIndex(pools);
+  // each card's format line, while Settings › Layout shows it (useCardDetails)
+  const detailsOf = useCardDetails(index);
   const all = index.albums;
 
   // Facets from the data itself — the builders are shared with the Tracks
@@ -351,8 +354,11 @@ export function AlbumsLens({
   ): React.JSX.Element => {
     // a set tile is volume 1 wearing the base title and a count badge
     const node = set ? { ...rawNode, title: set.base, year: null } : rawNode;
-    // a set's count, else which copy it is, only when there is another (useLensIndex.copyBadge)
-    const badge = set ? `${set.volumes.length} volumes` : index.copyBadge(rawNode);
+    // a set's count, else which copy it is, only when there is another (useLensIndex.copyBadge),
+    // the format left to a card's format line when it shows one
+    const badge = set
+      ? `${set.volumes.length} volumes`
+      : index.copyBadge(rawNode, { formatShown: cards && detailsOf != null });
     return cards ? (
       <ContainerCard
         key={nodeKey(rawNode)}
@@ -364,6 +370,7 @@ export function AlbumsLens({
         favorited={actions.nodeFavorited(rawNode)}
         badge={badge}
         badgeTip={set ? undefined : COPY_BADGE_TIP}
+        details={detailsOf?.(rawNode, set?.volumes)}
         // in Recently added order a card says when its album arrived, where the app knows
         note={sort === "added" && rawNode.addedAt ? fmtAdded(rawNode.addedAt) : undefined}
         selected={selA.has(nodeKey(rawNode))}
