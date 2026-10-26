@@ -52,7 +52,13 @@ import { Slider } from "@/components/controls/Slider";
 import { ArtImage } from "@/components/media/ArtImage";
 import { PopoverChrome } from "@/hooks/usePopover";
 import { POPOVER_CARD, PopoverCard } from "@/components/chrome/Overlay";
-import { HeaderChip, ScreenTitle, GAP_BETWEEN, GAP_WITHIN } from "@/components/chrome/Chrome";
+import {
+  HeaderChip,
+  ScreenTitle,
+  GAP_BETWEEN,
+  GAP_WITHIN,
+  cardChip,
+} from "@/components/chrome/Chrome";
 import { ConfirmActions, useConfirmPopover } from "@/components/chrome/Confirm";
 import { artSrc } from "@/lib/artSrc";
 import { RowMenu } from "@/components/media/RowMenu";
@@ -943,17 +949,14 @@ function PresetCard({
 
             {playing && (
               // h/w match the corner buttons so the four corners feel weighted
-              <span className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-lg bg-panel/80 ring-1 ring-edge">
+              <span className={cx("absolute top-2 left-2", cardChip())}>
                 <Eqbars />
               </span>
             )}
             {tuning && (
               // same corner the playing chip will claim — spinner hands over to bars
-              <span
-                data-preset-tuning
-                className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-lg bg-panel/80 ring-1 ring-edge"
-              >
-                <Loader2 size={13} className="spin text-gold/90" />
+              <span data-preset-tuning className={cx("absolute top-2 left-2", cardChip())}>
+                <Loader2 size={14} className="spin text-gold/90" />
               </span>
             )}
           </div>
@@ -974,9 +977,12 @@ function PresetCard({
             onClick={pv.openFrom}
             onPointerDown={(e) => e.stopPropagation()}
             data-preset-volume
-            className="tip-bottom absolute top-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-lg bg-panel/80 ring-1 ring-edge text-gold hover:text-ink transition-all"
+            className={cx(
+              "tip-bottom absolute top-2 right-2 z-10 text-gold hover:text-ink transition-all",
+              cardChip(),
+            )}
           >
-            <Volume2 size={13} />
+            <Volume2 size={14} />
           </button>
         )}
         <button
@@ -985,12 +991,12 @@ function PresetCard({
           onPointerDown={(e) => e.stopPropagation()}
           onClick={menu.open}
           className={cx(
-            "absolute bottom-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-lg transition-all",
-            "bg-panel/80 ring-1 ring-edge text-dim hover:text-ink",
+            "absolute bottom-2 right-2 z-10 transition-all text-dim hover:text-ink",
+            cardChip(),
             menu.isOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
           )}
         >
-          <MoreHorizontal size={14} />
+          <MoreHorizontal size={15} />
         </button>
       </div>
 
@@ -1083,9 +1089,9 @@ function RepairChip({
         aria-label="Repair preset (didn't load)"
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => void openFrom(e)}
-        className="tip-bottom absolute top-2 left-2 z-10 flex h-7 w-7 items-center justify-center rounded-lg bg-panel/80 ring-1 ring-alert/50 text-alert"
+        className={cx("tip-bottom absolute top-2 left-2 z-10 text-alert", cardChip(true))}
       >
-        <AlertTriangle size={13} />
+        <AlertTriangle size={14} />
       </button>
     ) : (
       <button

@@ -1,6 +1,8 @@
 import { useEffect, useSyncExternalStore } from "react";
+import type { ChosenPicture, MediaNode } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
+import { useReadyIndexSig } from "@/hooks/useIndexPools";
 import { Lru } from "@/lib/lru";
 
 /**
@@ -54,11 +56,79 @@ function want(name: string): void {
   flushTimer ??= setTimeout(flush, 0);
 }
 
-/** Main knows more now (the artist page's lookup found a photo): every row showing the artist
- *  asks again, and takes main's answer (a real server picture still outranks the photo). */
+/** Main knows more now (the artist page's lookup found a photo, a picture was chosen or reset):
+ *  every row showing the artist asks again, and takes main's answer (a real server picture still
+ *  outranks the photo), and the window's chosen pictures are read again. */
 export function refreshArtistPicture(name: string): void {
   cache.delete(keyOf(name));
   emit();
+  loadArtistChoices();
+}
+
+// ------------------------------------------------------------------ chosen pictures
+
+/** A cover the chooser offers: an album's picture, and which album it is (a choice keeps the
+ *  album, so a cover whose address moves is found again). */
+export interface CoverOffer {
+  url: string;
+  album: string;
+  serverUdn: string | null;
+}
+
+/** The covers of an artist's albums, each picture once. */
+export const coverOffers = (albums: readonly MediaNode[]): CoverOffer[] =>
+  albums
+    .filter((a, i) => a.artUrl && albums.findIndex((b) => b.artUrl === a.artUrl) === i)
+    .map((a) => ({ url: a.artUrl as string, album: a.title, serverUdn: a.serverUdn ?? null }));
+
+/**
+ * THE CHOSEN PICTURES, one map for the window (0.13.0 rc.3, his pick: "Choose a picture" in the
+ * artist's menu everywhere): read whole from main, so a menu built anywhere knows at once whether
+ * an artist has one, as a heart knows from the favorites. Read again when a picture is chosen or
+ * reset here (refreshArtistPicture), when the artist lookups are switched (a Wikipedia image
+ * waits for them), and when an index is built (a cover is found again by its album). A read that
+ * fails keeps the last map.
+ */
+let choicesAsked = 0;
+export function loadArtistChoices(): void {
+  const n = ++choicesAsked;
+  const { setArtistChoices } = useStore.getState();
+  void tt.artistChoices().then(
+    (m) => {
+      if (n === choicesAsked) setArtistChoices(m);
+    },
+    () => {
+      if (n === choicesAsked && useStore.getState().artistChoices == null) setArtistChoices({});
+    },
+  );
+}
+
+/** Keeps the window's map current; App mounts it once. */
+export function useArtistChoicesKept(): void {
+  const lookups = useStore((s) => s.settings.artistInfo);
+  const sig = useReadyIndexSig();
+  useEffect(() => {
+    loadArtistChoices();
+  }, [lookups, sig]);
+}
+
+/** The picture chosen for an artist as the map has it now, for a menu built outside React. */
+export const artistChoiceNow = (name: string): ChosenPicture | null =>
+  useStore.getState().artistChoices?.[keyOf(name)] ?? null;
+
+/** The picture chosen for an artist: undefined until the map is first read, null for none. A
+ *  read again keeps the last answer until the new one lands. */
+export function useArtistChoice(name: string): ChosenPicture | null | undefined {
+  const k = keyOf(name);
+  return useStore((s) => (s.artistChoices ? (s.artistChoices[k] ?? null) : undefined));
+}
+
+/** Clear an artist's chosen picture: the usual one comes back. */
+export function resetArtistPicture(name: string): void {
+  void tt
+    .setArtistChoice(name, null)
+    .then(() => refreshArtistPicture(name))
+    .catch(() => {});
 }
 
 /** The picture for an artist row or card: a known photo, else an album cover, else null. */

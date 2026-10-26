@@ -29,6 +29,21 @@ export const GAP_WITHIN = "gap-1.5";
 export const GAP_BETWEEN = "gap-x-3 gap-y-1.5";
 
 /**
+ * A CHIP ON A CARD'S PICTURE (0.13.0-rc.3, his pick of three on the decision page: circles
+ * everywhere): the ⋯, the heart, the playing and tuning status, a preset's volume and repair.
+ * Round, as the big pictures' chips are (Now Playing's art, the artist page's picture), and one
+ * size, 32px, the controls' height; solid where theirs are frosted, since a blur behind every
+ * card's chips costs too much on a computer without graphics acceleration. Unlike the recipes
+ * below it carries its size, which is the grammar; the corner and the glyph's color stay at the
+ * call site. `alert` rings it in the alert color (a preset that didn't load).
+ */
+export const cardChip = (alert = false): string =>
+  cx(
+    "flex h-8 w-8 items-center justify-center rounded-full bg-panel/80 ring-1",
+    alert ? "ring-alert/50" : "ring-edge",
+  );
+
+/**
  * The ringed icon/label button that sits in screen headers, settings rows and
  * side panels — 22 hand-written copies before this.
  *

@@ -75,7 +75,13 @@ import { DragChip } from "@/components/controls/DragChip";
 import { clampChipPos } from "@/lib/navDrop";
 import { ModalShell } from "@/components/chrome/Overlay";
 import { PresetSavePanel, PresetPicker } from "@/components/library/LibraryMenus";
-import { HeaderChip, ScreenTitle, GAP_BETWEEN, GAP_WITHIN } from "@/components/chrome/Chrome";
+import {
+  HeaderChip,
+  ScreenTitle,
+  GAP_BETWEEN,
+  GAP_WITHIN,
+  cardChip,
+} from "@/components/chrome/Chrome";
 import { artSrc } from "@/lib/artSrc";
 import { useQueueDrag } from "@/components/queue/useQueueDrag";
 import { DiscQueue } from "@/components/queue/DiscQueue";
@@ -1634,7 +1640,7 @@ function QueueCard({
           </div>
 
           {/* the one card-chip grammar (ContainerCard's): ⋯ bottom-right on
-              the art, status top-left, one chip surface — this card used a
+              the art, status top-left, one chip (cardChip) — this card used a
               rounded-full blur chip at TOP-right, the only card that did */}
           <span
             aria-label="More actions"
@@ -1643,7 +1649,8 @@ function QueueCard({
               onMenu?.(e);
             }}
             className={cx(
-              "absolute bottom-1.5 right-1.5 z-10 h-8 w-8 rounded-lg bg-panel/80 ring-1 ring-edge text-dim hover:text-ink flex items-center justify-center transition-all",
+              "absolute bottom-1.5 right-1.5 z-10 text-dim hover:text-ink transition-all",
+              cardChip(),
               menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
             )}
           >
@@ -1651,7 +1658,7 @@ function QueueCard({
           </span>
 
           {isCurrent && (
-            <span className="absolute top-1.5 left-1.5 flex items-center rounded-lg bg-panel/80 ring-1 ring-edge px-1.5 h-7">
+            <span className={cx("absolute top-1.5 left-1.5", cardChip())}>
               <Eqbars dim={!sourceActive} />
             </span>
           )}

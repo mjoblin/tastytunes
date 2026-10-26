@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { UserRound } from "lucide-react";
-import type { ArtistChoice } from "@shared/model";
+import type { ArtistChoice, MediaIndexPools } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { ModalShell } from "@/components/chrome/Overlay";
@@ -9,12 +9,20 @@ import { Segmented } from "@/components/controls/Segmented";
 import { ArtImage } from "@/components/media/ArtImage";
 import { artSrc } from "@/lib/artSrc";
 import { PICKED_ART } from "@shared/artUrl";
-import { refreshArtistPicture } from "@/lib/artistPictures";
+import {
+  coverOffers,
+  refreshArtistPicture,
+  useArtistChoice,
+  type CoverOffer,
+} from "@/lib/artistPictures";
 import { cx } from "@/lib/format";
+import { useIndexPools } from "@/hooks/useIndexPools";
+import { useLensIndex } from "@/components/library/lenses/useLensIndex";
+import { lc } from "@/components/library/lenses/lensShared";
 
 /**
  * CHOOSING AN ARTIST'S PICTURE (0.13.0 round 7; a user's report, 2026-10-24: Wikipedia's lead image is
- * often a poor stage photo). The artist page's picture menu opens this: the images in the
+ * often a poor stage photo). An artist's menu opens this, anywhere (ArtistPictureHost): the images in the
  * artist's Wikipedia article (with Liner notes on), the covers of their albums in the library,
  * and a picture file, copied into the app's data so the original can move. One is chosen and
  * "Use this picture" keeps it until another is chosen or the menu's reset clears it
@@ -28,12 +36,6 @@ import { cx } from "@/lib/format";
  * if that one answers empty before a tab is clicked. A source that cannot answer says why in its
  * tab (Liner notes off, no fanart.tv key) with the way to Settings › Connections.
  */
-export interface CoverOffer {
-  url: string;
-  album: string;
-  serverUdn: string | null;
-}
-
 type Tile = { key: string; url: string; label: string; choice: ArtistChoice };
 type Source = "wiki" | "fanart" | "covers" | "file";
 
@@ -63,17 +65,14 @@ export function ArtistPictureDialog({
   onClose,
   covers,
   current,
-  onChosen,
 }: {
   name: string;
   open: boolean;
   onClose(): void;
-  /** The covers of the artist's albums on the page, each once. */
+  /** The covers of the artist's albums, each once. */
   covers: readonly CoverOffer[];
   /** The picture chosen now, so its tile starts selected. */
   current: { kind: ArtistChoice["kind"]; url: string } | null;
-  /** Told once a choice is kept, so the page reads it again. */
-  onChosen(): void;
 }): React.JSX.Element {
   const lookups = useStore((s) => s.settings.artistInfo);
   const jumpToSettingsTab = useStore((s) => s.jumpToSettingsTab);
@@ -87,17 +86,20 @@ export function ArtistPictureDialog({
   const [saving, setSaving] = useState(false);
   /** Why the last step did not happen, in the notice form. */
   const [notice, setNotice] = useState<string | null>(null);
+  // the choice by value: the window's map is read again with new objects (an index built)
+  const currentKind = current?.kind ?? null;
+  const currentUrl = current?.url ?? null;
   useEffect(() => {
     if (!open) return;
     // a file chosen before is offered again, so it can stay chosen
     setFile(
-      current?.kind === "file"
-        ? { file: current.url.slice(PICKED_ART.length), url: current.url }
+      currentKind === "file" && currentUrl
+        ? { file: currentUrl.slice(PICKED_ART.length), url: currentUrl }
         : null,
     );
     setSaving(false);
     setNotice(null);
-    setSelected(current?.url ?? null);
+    setSelected(currentUrl);
     setClicked(null);
     if (!lookups) return;
     let live = true;
@@ -121,7 +123,7 @@ export function ArtistPictureDialog({
     return () => {
       live = false;
     };
-  }, [open, name, lookups, current]);
+  }, [open, name, lookups, currentKind, currentUrl]);
   const fan = fanart?.of === name ? fanart : null;
   const fanartTiles: Tile[] = (fan?.urls ?? []).map((url, i) => ({
     key: url,
@@ -181,7 +183,6 @@ export function ArtistPictureDialog({
       .then((kept) => {
         if (!kept) return failed();
         refreshArtistPicture(name);
-        onChosen();
         onClose();
       })
       .catch(failed);
@@ -424,5 +425,38 @@ function Tiles({
         );
       })}
     </Grid>
+  );
+}
+
+const NO_POOLS: MediaIndexPools[] = [];
+
+/**
+ * THE ONE CHOOSER (0.13.0 rc.3, his pick: "Choose a picture" in the artist's menu everywhere):
+ * every artist menu opens it through the store (mediaMenus artistPictureItems), so the cards, the
+ * rows, Search and the artist page share one dialog, mounted once in App. The covers are the
+ * caller's when it has its own (the artist page's albums), else the artist's albums in the
+ * indexes, as the Artists view has them.
+ */
+export function ArtistPictureHost(): React.JSX.Element {
+  const chooser = useStore((s) => s.pictureChooser);
+  const setPictureChooser = useStore((s) => s.setPictureChooser);
+  // closed, the name empties: ModalShell holds its last children through the exit fade
+  const name = chooser?.name ?? "";
+  const pools = useIndexPools(chooser != null && !chooser.covers);
+  const index = useLensIndex(pools ?? NO_POOLS);
+  const own = chooser?.covers;
+  const covers = useMemo(
+    () => own ?? coverOffers(index.artists.find((a) => a.key === lc(name))?.albums ?? []),
+    [own, index, name],
+  );
+  const current = useArtistChoice(name) ?? null;
+  return (
+    <ArtistPictureDialog
+      name={name}
+      open={chooser != null}
+      onClose={() => setPictureChooser(null)}
+      covers={covers}
+      current={current}
+    />
   );
 }
