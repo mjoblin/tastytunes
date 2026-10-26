@@ -44,7 +44,9 @@ export function SortChip<T extends string>({
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
           <div
             className={cx(
-              "absolute right-0 top-full mt-1.5 z-30 w-48",
+              // 224 px: the longest labels ("Duration (longest first)") and the hint each fit one
+              // line (at 192 the hint left "it" alone on a second, his eye on 0.13.0-rc.4)
+              "absolute right-0 top-full mt-1.5 z-30 w-56",
               POPOVER_CARD,
               "p-1.5 space-y-0.5",
             )}
@@ -77,7 +79,8 @@ export function SortChip<T extends string>({
                 </button>
               );
             })}
-            <div className="px-2.5 pt-1 pb-0.5 text-[10.5px] text-faint">
+            {/* balanced: a larger text size that does wrap it breaks into even lines */}
+            <div className="px-2.5 pt-1 pb-0.5 text-[10.5px] text-faint text-balance">
               Click the active sort to reverse it
             </div>
           </div>
