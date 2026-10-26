@@ -45,7 +45,7 @@ describe("artistIndex: what the indexes know of an artist", () => {
     expect(m.get("muse")).toMatchObject({ own: null, cover: "http://a/aa/1/cover.jpg" });
   });
   it("counts a server picture that is one of the tracks' covers as a cover too (MinimServer)", () => {
-    // Malcolm: each track carries its own embedded cover URL, and the artist's picture is one
+    // a user's server: each track carries its own embedded cover URL, and the artist's picture is one
     // of them, never the album container's own URL
     const pic = (n: number): string =>
       `http://m:9790/minimserver/*/Oscar*20Peterson/CD02/2-${n}*20Song.flac/$!picture-1730-300546.jpg`;

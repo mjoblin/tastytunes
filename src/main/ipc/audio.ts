@@ -18,7 +18,7 @@ import { loggedFetch } from "../netlog";
 import { handle } from "../app/guard";
 
 /**
- * THE LARGEST FILE THE ANALYSIS READS (0.12.0, from Malcolm's email: 24/192 FLACs past about
+ * THE LARGEST FILE THE ANALYSIS READS (0.12.0, from a user's email: 24/192 FLACs past about
  * 5:40 had no waveform). The renderer decodes the whole file at its native rate, so a file costs
  * its own size again as samples (a 6-minute 24/192 track is about 525 MB of them); the cap is a
  * memory bound. It was 256 MiB, with the renderer holding three copies of the file and main two.

@@ -98,7 +98,7 @@ export function yearFromTracks(
 }
 
 /**
- * POOL RULE discs-from-file-names (MinimServer, 0.12.0-rc.3, Malcolm's box sets): a server that
+ * POOL RULE discs-from-file-names (MinimServer, 0.12.0-rc.3, a user's box sets): a server that
  * sends no disc numbers lists a ten-CD set as one album whose track numbers repeat ("Close Your
  * Eyes" is track 11 twice), so it reads "track 11 of 143", sorts the discs together, and cannot
  * tell the twins apart. The node rule file-disc (didl.ts) kept the disc a file name gives

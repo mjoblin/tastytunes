@@ -5,7 +5,7 @@ import { type LensActions } from "./lensShared";
 import { type LensArtist } from "./useLensIndex";
 import { CARD_GRID_SCROLLER, useCardGrid, WINDOW_CARDS_ABOVE } from "./useCardGrid";
 
-// The Artists lens as cards (0.13.0 round 12; Malcolm, 2026-10-25: "a degree of uniformity
+// The Artists lens as cards (0.13.0 round 12; a user's suggestion, 2026-10-25: "a degree of uniformity
 // across the Album, Artist and Tracks sections ... only the Albums section gives a choice of
 // displaying by rows or by cards"; his picks the same day on the decision page "Artists as
 // Cards"). The cards are the Albums lens's own (ContainerCard: an artist container takes main's

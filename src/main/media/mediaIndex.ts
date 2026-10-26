@@ -116,7 +116,7 @@ const VERSION = 15; // v12: nodes from a browse walk carry their folder titlePat
 // v14: an album folder with no artist takes its artist, year and title from the tracks in it
 // (albumsFromTheirTracks: the Evo's USB drive, 2026-10-11)
 // v15: a server that sends no disc numbers has them read from its file names, all or nothing
-// per album (discsFromFileNames: MinimServer, Malcolm's box sets, 0.12.0-rc.3)
+// per album (discsFromFileNames: MinimServer, a user's box sets, 0.12.0-rc.3)
 const PAGE = 500;
 const MAX_TRACKS = 50_000;
 const MAX_CONTAINERS = 10_000;

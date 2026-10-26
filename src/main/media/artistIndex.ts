@@ -11,7 +11,7 @@ export interface ArtistEntry {
   /** The server's own picture for the artist when it is a real one: not one of the indexed
    *  albums' or tracks' covers (2026-10-11, his minitunes: 370 of 371 artists carried one of
    *  their own album covers as their picture, which hid the photo; the one left was a
-   *  userart.jpg. 0.12.0-rc.3, Malcolm: always an album image, likely a MinimServer whose
+   *  userart.jpg. 0.12.0-rc.3, a user's report: always an album image, likely a MinimServer whose
    *  pictures are each track's embedded cover, so an artist's is some track's, never the
    *  album's own URL). */
   own: string | null;

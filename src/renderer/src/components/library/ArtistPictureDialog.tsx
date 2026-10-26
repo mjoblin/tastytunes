@@ -13,7 +13,7 @@ import { refreshArtistPicture } from "@/lib/artistPictures";
 import { cx } from "@/lib/format";
 
 /**
- * CHOOSING AN ARTIST'S PICTURE (0.13.0 round 7; Malcolm, 2026-10-24: Wikipedia's lead image is
+ * CHOOSING AN ARTIST'S PICTURE (0.13.0 round 7; a user's report, 2026-10-24: Wikipedia's lead image is
  * often a poor stage photo). The artist page's picture menu opens this: the images in the
  * artist's Wikipedia article (with Liner notes on), the covers of their albums in the library,
  * and a picture file, copied into the app's data so the original can move. One is chosen and

@@ -274,7 +274,7 @@ describe("discCountIn: the count after a track's place", () => {
   });
 
   it("says no count when there are no discs and the numbers repeat (MinimServer's box sets)", () => {
-    // Malcolm's Songbooks+: track 11 of the box is on several discs the server never named
+    // a user's box set: track 11 of the box is on several discs the server never named
     const box = [1, 2, 11, 1, 2, 11].map((n, i) => ({ ...at(n), id: i }));
     expect(discCountIn(at(11), box)).toBeNull();
   });

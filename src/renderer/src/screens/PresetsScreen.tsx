@@ -578,7 +578,7 @@ async function presetAlbum(preset: PresetItem): Promise<MediaNode | null> {
 }
 
 /**
- * A PRESET'S ⋯ (0.12.0, his call after Malcolm's email asked why a preset plays rather than
+ * A PRESET'S ⋯ (0.12.0, his call after a user's email asked why a preset plays rather than
  * opening): a click still recalls (a preset is the streamer's button, and the streamer keeps no
  * track list for it), and the ⋯, where the trash used to be, holds the rest. Play; Open in
  * Library and Go to artist for a media preset (by its art, presetAlbum; a station or a saved

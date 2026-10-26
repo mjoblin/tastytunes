@@ -1,4 +1,4 @@
-// RECENTLY ADDED (0.13.0 round 9; Malcolm, 2026-10-25: MinimServer's Recently Added stops at
+// RECENTLY ADDED (0.13.0 round 9; a user's report, 2026-10-25: MinimServer's Recently Added stops at
 // 1,000 tracks, so albums imported in a batch get forgotten). Two sources, one order. The app
 // notes the day each album first appears in an index (main/data/albumArrivals), on every server
 // and with no cap, from the day this shipped; before that, a media server's own list (Asset's New

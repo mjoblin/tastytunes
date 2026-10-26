@@ -6,7 +6,7 @@ import * as mediaIndex from "../media/mediaIndex";
 import { artistCacheHasRoom, fetchArtistInfo, knowsArtist } from "./artistInfo";
 
 /**
- * PHOTOS FETCHED AHEAD (0.13.0; Malcolm, 2026-10-24: a photo loads only on an artist page's first
+ * PHOTOS FETCHED AHEAD (0.13.0; a user's report, 2026-10-24: a photo loads only on an artist page's first
  * visit). Round 7 fetched the 50 most-played; round 8 (his next email, 2026-10-25: "the fetch will
  * only tax the system the first time you link to your library") every artist in the libraries,
  * the most-played first (the listening record's library plays), then the rest by how much of the

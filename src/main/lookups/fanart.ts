@@ -4,7 +4,7 @@ import { fetchArtistInfo } from "./artistInfo";
 import { getJson } from "./mb";
 
 /**
- * FANART.TV'S ARTIST PHOTOS (0.13.0 round 11; Malcolm, 2026-10-25, Plex's picture editor: its
+ * FANART.TV'S ARTIST PHOTOS (0.13.0 round 11; a user's report, 2026-10-25, Plex's picture editor: its
  * 1000 x 1000 artist photos are fanart.tv's). With the reader's own personal key (his test that
  * night: a personal key answers alone, so no key of ours ships: decisions/0001), kept in the
  * secrets store and sent to fanart.tv alone, in its request's query (the request log blanks it:
