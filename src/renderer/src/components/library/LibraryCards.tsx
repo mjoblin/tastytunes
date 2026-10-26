@@ -70,6 +70,7 @@ export function ContainerCard({
   selected = false,
   favorited,
   badge,
+  badgeTip,
   note,
   subtitle: line,
   onHeart,
@@ -90,6 +91,8 @@ export function ContainerCard({
   favorited?: boolean;
   /** Provenance chip on the subtitle line (lens grids pooling several servers). */
   badge?: string;
+  /** What the chip means (CardBadge). */
+  badgeTip?: string;
   /** A quiet fact this surface knows about the album, under its names — how far
    *  a listen got, when it last played (History's Rediscover). Inside the card
    *  so it lifts with it; a line outside is covered by the hover glow. */
@@ -235,14 +238,7 @@ export function ContainerCard({
             {subtitle && (
               <div className="text-[11.5px] text-faint truncate text-left">{subtitle}</div>
             )}
-            {badge && (
-              <span
-                data-card-badge={badge}
-                className="ml-auto shrink-0 text-[9.5px] px-1.5 py-px rounded-full ring-1 ring-edge text-faint"
-              >
-                {badge}
-              </span>
-            )}
+            {badge && <CardBadge label={badge} tip={badgeTip} />}
           </div>
         )}
         {note && (
@@ -384,6 +380,26 @@ export function TrackCard({
   );
 }
 
+/**
+ * An album's chip at the end of its line (a set's volume count, or which copy it is: the lens
+ * index's copyBadge), one home for the cards, the rows and the Artists lens's album column
+ * (0.13.0-rc.4, when its tip arrived: three hand-written copies before). `tip` says what it means.
+ */
+export function CardBadge({ label, tip }: { label: string; tip?: string }): React.JSX.Element {
+  return (
+    <span
+      data-card-badge={label}
+      data-tip={tip}
+      className={cx(
+        "ml-auto shrink-0 text-[9.5px] px-1.5 py-px rounded-full ring-1 ring-edge text-faint",
+        tip && "tip-bottom tip-end",
+      )}
+    >
+      {label}
+    </span>
+  );
+}
+
 /** Row-cluster heart: hover-revealed control, permanently gold when set. */
 
 export function ContainerRow({
@@ -396,6 +412,7 @@ export function ContainerRow({
   selEnd = true,
   favorited,
   badge,
+  badgeTip,
   dr,
   onArtistLink,
   onNavDrag,
@@ -415,6 +432,8 @@ export function ContainerRow({
   favorited?: boolean;
   /** Provenance chip beside the subline (lens listings pooling several servers). */
   badge?: string;
+  /** What the chip means (CardBadge). */
+  badgeTip?: string;
   /** EXPERIMENT (0.7): the album's recorded TT-DR for the data cluster;
    *  null renders the reserved cell empty (absence as absence). */
   dr?: number | null;
@@ -499,14 +518,7 @@ export function ContainerRow({
               ) : (
                 <div className="text-[12px] text-faint truncate">{node.artist}</div>
               ))}
-            {badge && (
-              <span
-                data-card-badge={badge}
-                className="ml-auto shrink-0 text-[9.5px] px-1.5 py-px rounded-full ring-1 ring-edge text-faint"
-              >
-                {badge}
-              </span>
-            )}
+            {badge && <CardBadge label={badge} tip={badgeTip} />}
           </div>
         )}
       </div>

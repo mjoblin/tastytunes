@@ -33,6 +33,7 @@ import { Segmented } from "@/components/controls/Segmented";
 import { ContainerCard, ContainerRow } from "@/components/library/LibraryCards";
 import { SelectionBar, SelectionVerb } from "@/components/controls/SelectionBar";
 import {
+  COPY_BADGE_TIP,
   type LensActions,
   lc,
   nodeKey,
@@ -362,6 +363,7 @@ export function AlbumsLens({
         menuOpen={actions.menuNodeId === node.id}
         favorited={actions.nodeFavorited(rawNode)}
         badge={badge}
+        badgeTip={set ? undefined : COPY_BADGE_TIP}
         // in Recently added order a card says when its album arrived, where the app knows
         note={sort === "added" && rawNode.addedAt ? fmtAdded(rawNode.addedAt) : undefined}
         selected={selA.has(nodeKey(rawNode))}
@@ -387,6 +389,7 @@ export function AlbumsLens({
         menuOpen={actions.menuNodeId === node.id}
         favorited={actions.nodeFavorited(rawNode)}
         badge={badge}
+        badgeTip={set ? undefined : COPY_BADGE_TIP}
         dr={albumDr[albumDrKey(node)]?.dr ?? null}
         onArtistLink={
           actions.goToArtist && node.artist ? () => actions.goToArtist?.(node) : undefined

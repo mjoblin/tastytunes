@@ -205,6 +205,30 @@ export const RECORD_SORTS = new Set<string>(["lastPlayed", "plays", "wholeListen
 
 export const PLAY_THESE_MAX = 50;
 
+/** What an album's copy chip means, as its tip says it (the lens index's copyBadge: the library,
+ *  else the format, else the folder, shown only when there is another copy; 0.13.0-rc.4, a user
+ *  had to work out what "FLAC · 24/96" on one album was telling him). */
+export const COPY_BADGE_TIP = "There's another copy of this album";
+
+/**
+ * THE ARTIST PAGE'S ALBUM ORDER (0.13.0-rc.4, a user's question: the page lists an artist's albums
+ * newest first, and with the year cut off on each card he could not tell what the order was).
+ * By year, newest first, ties by title (the lens index's own order); or by title. Reversed turns
+ * the whole list, as the lenses' sorts do.
+ */
+export function orderArtistAlbums(
+  albums: readonly MediaNode[],
+  sort: AppSettings["artistPageSort"],
+  reversed: boolean,
+): MediaNode[] {
+  const byTitle = (a: MediaNode, b: MediaNode): number => a.title.localeCompare(b.title);
+  const byYear = (a: MediaNode, b: MediaNode): number => (b.year ?? "").localeCompare(a.year ?? "");
+  const sorted = [...albums].sort((a, b) =>
+    sort === "title" ? byTitle(a, b) || byYear(a, b) : byYear(a, b) || byTitle(a, b),
+  );
+  return reversed ? sorted.reverse() : sorted;
+}
+
 // ------------------------------------------------------------- the filter's scope
 
 /** The one field the Tracks lens's filter may be held to; null searches them all. */
