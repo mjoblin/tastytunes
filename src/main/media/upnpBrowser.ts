@@ -68,7 +68,9 @@ const DEVICE_GAP_MS = 10;
 // few thousand folders must still index within minutes (25 ms cost the harness's
 // 450-container walk its 30 s window)
 const DEVICE_WALK_GAP_MS = 10;
-const DEVICE_CANARY_MS = 2000;
+// the canary's first wait, doubling to the cap; shortened by the unit tests
+// (TASTYTUNES_DEVICE_CANARY_MS) so a silence they stage closes in under a second
+const DEVICE_CANARY_MS = Number(process.env["TASTYTUNES_DEVICE_CANARY_MS"] ?? 2000);
 // the cap, shortened by the harness (TASTYTUNES_DEVICE_COOL_MS) so a suite can
 // watch a silence open and close
 const DEVICE_COOL_MS = Number(process.env["TASTYTUNES_DEVICE_COOL_MS"] ?? 30_000);
