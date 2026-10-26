@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Play } from "lucide-react";
+import { ChevronDown, LayoutGrid, Play, Rows3 } from "lucide-react";
 import {
   audioAnalysisKey,
   type AppSettings,
@@ -8,7 +8,7 @@ import {
   nameSortKey,
   trackPosition,
 } from "@shared/model";
-import { cx, matchesFilter, fmtCount, fmtAgo } from "@/lib/format";
+import { cx, matchesFilter, fmtCount, fmtAgo, fmtTime } from "@/lib/format";
 import { usePlayStats } from "@/lib/playStats";
 import { playedBucket, playedOptionsOf, talliesOf } from "@/lib/playStatsView";
 import { useStore } from "@/store";
@@ -17,7 +17,7 @@ import { useKnownStats, USB_ANALYSIS_HINT } from "@/lib/audioAnalysis";
 import { useWindowedList } from "@/hooks/useWindowedList";
 import { fmtLufs } from "@/components/media/Waveform";
 import { FilterInput } from "@/components/controls/FilterInput";
-import { PrimaryButton, GAP_BETWEEN, GAP_WITHIN } from "@/components/chrome/Chrome";
+import { HeaderChip, PrimaryButton, GAP_BETWEEN, GAP_WITHIN } from "@/components/chrome/Chrome";
 import { SortChip } from "@/components/controls/SortChip";
 import { PickerPill } from "@/components/controls/PickerPill";
 import { TrackRow } from "@/components/library/LibraryCards";
@@ -42,6 +42,7 @@ import {
   LensTrackMenu,
 } from "./useLensTrackSelection";
 import { useLensIndex } from "./useLensIndex";
+import { TrackCards } from "./TrackCards";
 import { menuAt } from "@/lib/menuAt";
 
 // The Tracks lens, split out of LibraryLenses.tsx (2026-09-13, the lenses round: three lenses of
@@ -83,6 +84,8 @@ let tracksMem: {
   played: string | null;
   filter: string;
   scroll: number;
+  /** The cards' spot, apart from the rows': a switch between them starts each at its own. */
+  cardScroll: number;
 } = {
   genre: null,
   decade: null,
@@ -92,6 +95,7 @@ let tracksMem: {
   played: null,
   filter: "",
   scroll: 0,
+  cardScroll: 0,
 };
 
 /**
@@ -106,13 +110,30 @@ let tracksMem: {
  * album and the artist, as search results already do. The list is WINDOWED
  * — no cap to explain. DR comes from one bulk cache-only read, refreshed
  * when a sweep lands.
+ * AS CARDS (0.13.0-rc.4, his picks on "Tracks as Cards"): with the Library's one Rows or Cards
+ * choice on Cards, the list is a grid of track cards (TrackCards), and the lens's switch beside
+ * the sort flips that one choice, as the Albums and Artists lenses' do. A card says the artist and
+ * the album under the title, or, sorted by a figure a row shows in a cell of its own (the length,
+ * DR, the year, the record's), that figure in place of the album.
  */
 export function TracksLens({
   pools,
   actions,
+  cards,
+  cardSize,
+  cardGap,
+  fillRows,
+  onToggleLayout,
 }: {
   pools: MediaIndexPools[];
   actions: LensActions;
+  /** The Library's one Rows or Cards choice (libraryLayout). */
+  cards: boolean;
+  cardSize: number;
+  cardGap: number;
+  fillRows: boolean;
+  /** Flips libraryLayout, as the Albums and Artists lenses' chips do. */
+  onToggleLayout?: () => void;
 }): React.JSX.Element {
   const [mem, setMemState] = useState(tracksMem);
   const setMem = (patch: Partial<typeof tracksMem>): void => {
@@ -237,6 +258,23 @@ export function TracksLens({
     }
     return undefined;
   };
+  /** A card's line under the title: the artist, and the album or the figure the list is sorted by. */
+  const cardLineOf = (t: MediaNode): string => {
+    const dr = sort === "dr" ? drOf(t) : null;
+    const figure =
+      sort === "duration"
+        ? t.durationSecs != null
+          ? fmtTime(t.durationSecs)
+          : null
+        : sort === "dr"
+          ? dr != null
+            ? `DR${dr}`
+            : null
+          : sort === "year"
+            ? (t.year ?? null)
+            : metaOf(t);
+    return [t.artist, figure ?? t.album].filter(Boolean).join(FACT_SEP);
+  };
 
   // WINDOWED LIST (2026-09-01, user: the cap read as a wall): render only
   // the rows near the viewport, so every sort over thousands of tracks stays
@@ -254,6 +292,7 @@ export function TracksLens({
     itemSelector: "[data-win-item]",
     estimate: 57,
     overscan: 8,
+    enabled: !cards,
   });
   const start = win.first;
   const end = total === 0 ? 0 : win.last + 1;
@@ -301,7 +340,8 @@ export function TracksLens({
   const sel = useLensTrackSelection({ tracks: shown, actions });
   const { selT, setSelT, trackRowClick } = sel;
 
-  // the list scrolls its own column; the spot survives a trip away
+  // the list scrolls its own column; the spot survives a trip away (the cards' grid restores its
+  // own, useCardGrid)
   useEffect(() => {
     const el = listRef.current;
     if (el) requestAnimationFrame(() => el.scrollTo({ top: tracksMem.scroll }));
@@ -423,6 +463,18 @@ export function TracksLens({
               </PrimaryButton>
             </div>
           }
+          {/* layout beside sort, the Albums and Artists lenses' pairing */}
+          {onToggleLayout && (
+            <HeaderChip
+              data-tip={cards ? "Tracks as rows" : "Tracks as cards"}
+              aria-label={cards ? "Tracks as rows" : "Tracks as cards"}
+              data-lens-tracks-layout={cards ? "cards" : "rows"}
+              onClick={onToggleLayout}
+              className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
+            >
+              {cards ? <Rows3 size={16} /> : <LayoutGrid size={16} />}
+            </HeaderChip>
+          )}
           {/* the sort chip closes the row */}
           <SortChip
             sorts={trackSorts}
@@ -441,63 +493,85 @@ export function TracksLens({
       ) : (
         <div className="relative flex-1 min-w-0 min-h-0 flex flex-col">
           <LensTrackSelectionBar sel={sel} className="bottom-2 inset-x-0 z-20" />
-          <div
-            ref={listRef}
-            onScroll={(e) => {
-              tracksMem.scroll = e.currentTarget.scrollTop;
-            }}
-            className={cx(
-              "min-h-0 flex-1 overflow-y-auto px-1.5 -mx-1.5 -my-1",
-              selT.size > 0 ? "pt-1 pb-24" : "py-1",
-            )}
-            data-lens-tracks-list
-          >
-            <div>
-              {win.padTop > 0 && <div data-win-spacer="top" style={{ height: win.padTop }} />}
-              <div>
-                {windowed.map((t, i) => {
-                  const idx = start + i;
-                  return (
-                    <div key={nodeKey(t)} data-win-item className="border-b border-edge/50">
-                      <TrackRow
-                        node={t}
-                        // art, not a running-order number: a track's position
-                        // within its album reads as noise in a flat list
-                        showArt
-                        showPosition={false}
-                        isCurrent={actions.isCurrentTrack(t)}
-                        queued={actions.trackQueued(t)}
-                        menuOpen={actions.menuNodeId === t.id}
-                        favorited={actions.nodeFavorited(t)}
-                        selected={selT.has(nodeKey(t))}
-                        selStart={!(idx > 0 && selT.has(nodeKey(shown[idx - 1])))}
-                        selEnd={!(idx < total - 1 && selT.has(nodeKey(shown[idx + 1])))}
-                        dr={drOf(t)}
-                        lufs={lufsOf(t)}
-                        meta={metaOf(t)}
-                        // the second line's links — the search-results
-                        // treatment: the row plays, the names navigate
-                        onAlbumLink={
-                          actions.goToAlbum && t.album ? () => actions.goToAlbum?.(t) : undefined
-                        }
-                        onArtistLink={
-                          actions.goToArtist && t.artist ? () => actions.goToArtist?.(t) : undefined
-                        }
-                        onRowClick={(e) => trackRowClick(t, e)}
-                        onNavDrag={(e) => sel.startTrackDrag(t, e)}
-                        onHeart={() => actions.heartNode(t)}
-                        onPlayNow={(el) => actions.playTrack(t, el)}
-                        onMenu={(e) => sel.rowMenu(t, e)}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-              {win.padBottom > 0 && (
-                <div data-win-spacer="bottom" style={{ height: win.padBottom }} />
+          {cards ? (
+            <TrackCards
+              tracks={shown}
+              actions={actions}
+              selected={selT}
+              subtitleOf={cardLineOf}
+              cardSize={cardSize}
+              cardGap={cardGap}
+              fillRows={fillRows}
+              scrollTop={tracksMem.cardScroll}
+              onScrolled={(top) => {
+                tracksMem.cardScroll = top;
+              }}
+              onCardClick={trackRowClick}
+              onNavDrag={(t, e) => sel.startTrackDrag(t, e)}
+              onMenu={(t, e) => sel.rowMenu(t, e)}
+              roomBelow={selT.size > 0}
+            />
+          ) : (
+            <div
+              ref={listRef}
+              onScroll={(e) => {
+                tracksMem.scroll = e.currentTarget.scrollTop;
+              }}
+              className={cx(
+                "min-h-0 flex-1 overflow-y-auto px-1.5 -mx-1.5 -my-1",
+                selT.size > 0 ? "pt-1 pb-24" : "py-1",
               )}
+              data-lens-tracks-list
+            >
+              <div>
+                {win.padTop > 0 && <div data-win-spacer="top" style={{ height: win.padTop }} />}
+                <div>
+                  {windowed.map((t, i) => {
+                    const idx = start + i;
+                    return (
+                      <div key={nodeKey(t)} data-win-item className="border-b border-edge/50">
+                        <TrackRow
+                          node={t}
+                          // art, not a running-order number: a track's position
+                          // within its album reads as noise in a flat list
+                          showArt
+                          showPosition={false}
+                          isCurrent={actions.isCurrentTrack(t)}
+                          queued={actions.trackQueued(t)}
+                          menuOpen={actions.menuNodeId === t.id}
+                          favorited={actions.nodeFavorited(t)}
+                          selected={selT.has(nodeKey(t))}
+                          selStart={!(idx > 0 && selT.has(nodeKey(shown[idx - 1])))}
+                          selEnd={!(idx < total - 1 && selT.has(nodeKey(shown[idx + 1])))}
+                          dr={drOf(t)}
+                          lufs={lufsOf(t)}
+                          meta={metaOf(t)}
+                          // the second line's links — the search-results
+                          // treatment: the row plays, the names navigate
+                          onAlbumLink={
+                            actions.goToAlbum && t.album ? () => actions.goToAlbum?.(t) : undefined
+                          }
+                          onArtistLink={
+                            actions.goToArtist && t.artist
+                              ? () => actions.goToArtist?.(t)
+                              : undefined
+                          }
+                          onRowClick={(e) => trackRowClick(t, e)}
+                          onNavDrag={(e) => sel.startTrackDrag(t, e)}
+                          onHeart={() => actions.heartNode(t)}
+                          onPlayNow={(el) => actions.playTrack(t, el)}
+                          onMenu={(e) => sel.rowMenu(t, e)}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+                {win.padBottom > 0 && (
+                  <div data-win-spacer="bottom" style={{ height: win.padBottom }} />
+                )}
+              </div>
             </div>
-          </div>
+          )}
           <LensTrackMenu sel={sel} />
         </div>
       )}

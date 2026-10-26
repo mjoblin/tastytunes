@@ -1950,7 +1950,17 @@ export function LibraryScreen(): React.JSX.Element {
               onToggleLayout={() => void setLayout(cards ? "rows" : "cards")}
             />
           ) : (
-            <TracksLens pools={lensPools} actions={lensActions} />
+            <TracksLens
+              // the rows and the cards are two views, each from its own top and spot
+              key={cards ? "cards" : "rows"}
+              pools={lensPools}
+              actions={lensActions}
+              cards={cards}
+              cardSize={presetCardSize}
+              cardGap={presetGap}
+              fillRows={presetFillRows}
+              onToggleLayout={() => void setLayout(cards ? "rows" : "cards")}
+            />
           ))}
 
         {/* root: the lens doors and the sources (components/library/LibraryRoot) */}
