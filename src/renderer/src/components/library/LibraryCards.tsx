@@ -262,6 +262,128 @@ export function ContainerCard({
   );
 }
 
+/**
+ * A TRACK'S CARD (0.13.0-rc.4, his picks on "Tracks as Cards": the Tracks lens follows the
+ * Library's one Rows or Cards choice, and a track card's click plays). The album card's look for
+ * a track: its cover, the title, and under it what the caller says (the artist and the album, or
+ * the figure the list is sorted by). Its click is a track row's: a selection chord picks, any
+ * other click plays, so Play blooms in the middle as on the Queue's and the presets' cards; the
+ * heart and the ⋯ sit where an album card has them, and a right-click opens the same menu.
+ */
+export function TrackCard({
+  node,
+  playing,
+  menuOpen,
+  selected = false,
+  favorited,
+  subtitle,
+  onClick,
+  onPlayNow,
+  onHeart,
+  onMenu,
+  onNavDrag,
+}: {
+  node: MediaNode;
+  /** The playing track (and the queue source is live). */
+  playing: boolean;
+  menuOpen: boolean;
+  selected?: boolean;
+  favorited: boolean;
+  subtitle: string;
+  /** The selection grammar's first look at the click: true when it was a chord that picked. */
+  onClick(e: React.MouseEvent): boolean;
+  onPlayNow(el: HTMLElement | null): void;
+  onHeart(): void;
+  onMenu(e: React.MouseEvent): void;
+  onNavDrag?(e: React.PointerEvent): void;
+}): React.JSX.Element {
+  const ref = useRef<HTMLDivElement | null>(null);
+  return (
+    <div
+      ref={ref}
+      onContextMenu={onMenu}
+      data-library-card
+      data-track-card={node.title}
+      data-selected={selected || undefined}
+      className={cx(
+        "group relative text-left rounded-2xl p-2 pb-2.5 transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]",
+        playing
+          ? "bg-goldtile/70 tile-playing"
+          : selected
+            ? "bg-veil2 ring-2 ring-edge2"
+            : "bg-raised/50 ring-1 ring-edge card-hover-glow",
+        menuOpen && "ring-1 ring-edge2 z-10 motion-safe:scale-[1.04] card-glow-held",
+      )}
+    >
+      <button
+        className="block w-full cursor-pointer"
+        onClick={(e) => {
+          if (onClick(e)) return;
+          onPlayNow(ref.current);
+        }}
+        onPointerDown={(e) => {
+          if ((e.target as HTMLElement).closest("button") !== e.currentTarget) return;
+          onNavDrag?.(e);
+        }}
+      >
+        <div className="relative aspect-square w-full rounded-lg overflow-hidden bg-veil flex items-center justify-center">
+          <ArtImage
+            src={artSrc(node.artUrl, 240, artKeyOf(node))}
+            fallbackArt={
+              node.album
+                ? { artist: node.albumArtist ?? node.artist, album: node.album }
+                : undefined
+            }
+            lazy
+            shimmer
+            className="h-full w-full object-cover"
+            fallback={<Disc3 size={34} strokeWidth={1.2} className="text-dim" />}
+          />
+          {playing && (
+            <span className={cx("absolute top-1.5 left-1.5", cardChip())}>
+              <Eqbars />
+            </span>
+          )}
+          {/* the card's click plays: the bloom says so, and is the card's own click */}
+          <span
+            aria-hidden
+            className={cx(
+              "absolute inset-0 m-auto h-11 w-11 rounded-full bg-amber text-bg flex items-center justify-center transition-all duration-150 motion-safe:group-hover:scale-105 hover:shadow-[0_0_24px_rgb(var(--amber-rgb)_/_0.6)]",
+              menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
+            )}
+          >
+            <Play size={18} fill="currentColor" strokeWidth={0} className="translate-x-[1px]" />
+          </span>
+          <span
+            aria-label="More actions"
+            onClick={(e) => {
+              e.stopPropagation();
+              onMenu(e);
+            }}
+            className={cx(
+              "absolute bottom-1.5 right-1.5 text-dim hover:text-ink transition-all",
+              cardChip(),
+              menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
+            )}
+          >
+            <MoreHorizontal size={15} />
+          </span>
+        </div>
+        <div
+          className={cx(
+            "pt-1.5 text-[12.5px] truncate text-left",
+            playing ? "text-gold" : "text-ink",
+          )}
+        >
+          {node.title}
+        </div>
+        {subtitle && <div className="text-[11.5px] text-faint truncate text-left">{subtitle}</div>}
+      </button>
+      <HeartChip favorited={favorited} held={menuOpen} onHeart={onHeart} />
+    </div>
+  );
+}
+
 /** Row-cluster heart: hover-revealed control, permanently gold when set. */
 
 export function ContainerRow({
