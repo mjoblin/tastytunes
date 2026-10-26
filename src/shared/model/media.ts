@@ -351,7 +351,7 @@ export interface ArtistGroup {
   key: string;
   name: string;
   /** The server's own picture for the artist when it is a real one: not one of the indexed
-   *  albums' or tracks' covers (his minitunes, 2026-10-11: 370 of 371 artists carried one of
+   *  albums' or tracks' covers (an Asset library, 2026-10-11: 370 of 371 artists carried one of
    *  their own album covers; 0.12.0-rc.3, a user's MinimServer: some track's embedded cover). */
   own: string | null;
   /** The first of their albums with a picture, else the first of their tracks with one. */

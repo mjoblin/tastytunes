@@ -24,7 +24,7 @@ export const LENS_LABEL: Record<Lens, string> = {
 export const LENS_CRUMB_ID = "__lens__";
 /** The artist between the Artists lens crumb and an album opened from it —
  *  the trail says the path you took; clicking it returns to the lens focused
- *  on that artist (2026-09-01: "minitunes > Artists > <album>" read as a
+ *  on that artist (2026-09-01: "<server> > Artists > <album>" read as a
  *  hierarchy that doesn't exist and lost the one node connecting them). */
 export const LENS_ARTIST_CRUMB_ID = "__lens-artist__";
 /** The artist PAGE between the Artists crumb and an album opened from it (2026-10-11): the

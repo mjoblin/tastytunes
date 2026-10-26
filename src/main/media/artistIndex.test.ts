@@ -35,7 +35,7 @@ const pools = (p: Partial<MediaIndexPools>): MediaIndexPools[] => [
 
 describe("artistIndex: what the indexes know of an artist", () => {
   it("counts a server picture that is one of the albums' covers as a cover, not the artist's own", () => {
-    // his minitunes: 370 of 371 artists carried one of their own album covers
+    // an Asset library: 370 of 371 artists carried one of their own album covers
     const m = artistIndex(
       pools({
         artists: [artist("Muse", "http://a/aa/1/cover.jpg")],
