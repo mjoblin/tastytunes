@@ -23,6 +23,8 @@ import { ShortcutsOverlay } from "@/components/overlays/ShortcutsOverlay";
 import { CommandPalette } from "@/components/overlays/CommandPalette";
 import { InfoModal } from "@/components/overlays/InfoModal";
 import { MediaInfoModal } from "@/components/overlays/MediaInfoModal";
+import { ArtistPictureHost } from "@/components/library/ArtistPictureDialog";
+import { useArtistChoicesKept } from "@/lib/artistPictures";
 import { LargeQueueConfirm } from "@/components/overlays/LargeQueueConfirm";
 import { SurfaceBoundary } from "@/components/chrome/SurfaceBoundary";
 import { DisplayMode } from "@/components/playback/DisplayMode";
@@ -49,6 +51,7 @@ export default function App(): React.JSX.Element {
   useShortcuts();
   useIndexingToast();
   useDriveWaitToast();
+  useArtistChoicesKept();
 
   const screen = useStore((s) => s.screen);
   const connection = useStore((s) => s.connection);
@@ -57,6 +60,7 @@ export default function App(): React.JSX.Element {
   const nowPlaying = useStore((s) => s.nowPlaying);
   const diagnosticsOpen = useStore((s) => s.diagnosticsOpen);
   const mediaInfo = useStore((s) => s.mediaInfo);
+  const pictureChooser = useStore((s) => s.pictureChooser);
   const paletteOpen = useStore((s) => s.paletteOpen);
   const shortcutsOpen = useStore((s) => s.shortcutsOpen);
   const infoOpen = useStore((s) => s.infoOpen);
@@ -217,6 +221,9 @@ export default function App(): React.JSX.Element {
         </SurfaceBoundary>
         <SurfaceBoundary surface="media info" shape="quiet" resetKey={mediaInfo}>
           <MediaInfoModal target={mediaInfo} />
+        </SurfaceBoundary>
+        <SurfaceBoundary surface="the picture chooser" shape="quiet" resetKey={pictureChooser}>
+          <ArtistPictureHost />
         </SurfaceBoundary>
         <SurfaceBoundary surface="the large queue confirm" shape="quiet">
           <LargeQueueConfirm />

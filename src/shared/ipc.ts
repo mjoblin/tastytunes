@@ -40,6 +40,7 @@ import type {
   AppSettings,
   ArtistChoice,
   ArtistInfo,
+  ChosenPicture,
   ConnectionState,
   ContentRef,
   DiscoveredDevice,
@@ -361,9 +362,9 @@ export interface TastyTunesApi {
   /** An artist's albums and tracks in the indexed libraries (the Artists lens's counts), or
    *  null when no index knows them. */
   artistFacts(name: string): Promise<{ albums: number; tracks: number } | null>;
-  /** The picture chosen for an artist, as an address to draw (a moved cover found again), and
-   *  what it is; null when none is chosen (0.13.0). */
-  artistChoice(name: string): Promise<{ kind: ArtistChoice["kind"]; url: string } | null>;
+  /** The pictures chosen for artists, by name lowercased (0.13.0): an artist with none, or with
+   *  a Wikipedia image waiting for the artist lookups, is not in it. */
+  artistChoices(): Promise<Record<string, ChosenPicture>>;
   /** Choose an artist's picture, or clear the choice (null): the default picture comes back. */
   setArtistChoice(name: string, choice: ArtistChoice | null): Promise<boolean>;
   /** The images in an artist's Wikipedia article that may be chosen (with the artist lookups on;
@@ -593,7 +594,7 @@ export const IPC = {
   fetchArtistInfo: "tt:fetchArtistInfo",
   artistPictures: "tt:artistPictures",
   artistFacts: "tt:artistFacts",
-  artistChoice: "tt:artistChoice",
+  artistChoices: "tt:artistChoices",
   setArtistChoice: "tt:setArtistChoice",
   artistImages: "tt:artistImages",
   pickArtistPictureFile: "tt:pickArtistPictureFile",

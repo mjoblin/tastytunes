@@ -2,6 +2,7 @@ import { useStore } from "@/store";
 import { isFavorited, toggleFavorite } from "@/lib/favorites";
 import { refToFavorite, type MediaRef } from "@/lib/mediaRef";
 import { openInfoForRef } from "@/lib/mediaInfo";
+import { artistChoiceNow, resetArtistPicture, type CoverOffer } from "@/lib/artistPictures";
 
 /**
  * THE menu contents for a piece of media — what RowMenu did for the menu
@@ -16,8 +17,9 @@ import { openInfoForRef } from "@/lib/mediaInfo";
  *
  * Universal verbs live inside the builders: the HEART (derived from the live
  * favorites list via content identity; `heart` cap overrides for surfaces
- * that store richer favorites, e.g. the Library's titlePath) and the SEARCH
- * PIVOT (artists pivot on their own name, albums/tracks on their artist).
+ * that store richer favorites, e.g. the Library's titlePath), the SEARCH
+ * PIVOT (artists pivot on their own name, albums/tracks on their artist) and
+ * an artist's PICTURE verbs (artistPictureItems).
  * Surface-dependent verbs arrive as capabilities and are simply omitted when
  * a surface can't offer them.
  */
@@ -157,14 +159,41 @@ export function albumMenuItems(ref: MediaRef, caps: MediaMenuCaps = {}): MediaMe
   ];
 }
 
-/** An artist's menu is the pivot (plus local extras) — the queue verbs don't
- *  apply ("queue a whole artist" is undecided) and favorites key on
- *  album/track identity. Thin, but it's the one cross-collection question an
- *  artist can answer, and any future artist verb has a home here. */
+/**
+ * An artist's PICTURE verbs (0.13.0 rc.3, his pick: in the artist's menu everywhere, so a wrong
+ * picture spotted among the Artists view's cards is changed there): Choose a picture… opens the
+ * one chooser (ArtistPictureHost), and once a picture is chosen the reset, named for what comes
+ * back. Derived like the heart, from the window's map of chosen pictures (lib/artistPictures).
+ * The artist page's picture menu is these alone, with the page's own albums as the covers.
+ */
+export function artistPictureItems(name: string, covers?: readonly CoverOffer[]): MediaMenuItem[] {
+  if (!name.trim()) return [];
+  const chosen = artistChoiceNow(name);
+  return [
+    {
+      label: "Choose a picture…",
+      run: () => useStore.getState().setPictureChooser({ name, covers }),
+    },
+    ...(chosen
+      ? [
+          {
+            label: chosen.photoAfter ? "Reset to the Wikipedia photo" : "Reset the picture",
+            run: () => resetArtistPicture(name),
+          },
+        ]
+      : []),
+  ];
+}
+
+/** An artist's menu is the pivot and the picture verbs (plus local extras) —
+ *  the queue verbs don't apply ("queue a whole artist" is undecided) and
+ *  favorites key on album/track identity. Thin, but any future artist verb
+ *  has a home here. */
 export function artistMenuItems(ref: MediaRef, caps: MediaMenuCaps = {}): MediaMenuItem[] {
   return [
     ...cap("Open artist page", caps.openArtistPage),
     ...pivotItem(ref),
+    ...artistPictureItems(ref.title),
     ...(caps.utilityVerbs ?? []),
     ...infoItem(ref, caps),
     ...(caps.extra ?? []),

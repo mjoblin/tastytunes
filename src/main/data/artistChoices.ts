@@ -12,7 +12,7 @@ import { jsonFileStore } from "./jsonStore";
 // a folder of the picture files people chose, each copied in under a name made from its bytes, so
 // moving or deleting the original loses nothing. A choice is never replaced but by another, or
 // cleared (decisions/0013). Every other picture yields to it: main's answer for the rows and cards
-// (ipc/lookups artistPictures) and the artist page (artistChoice) both read resolveChoice.
+// (ipc/lookups artistPictures) and every window's map of them (artistChoices) both read resolveChoice.
 
 type Stored = ArtistChoice & { at: number };
 
@@ -74,6 +74,11 @@ const store = jsonFileStore<Record<string, Stored>>({
 
 export function choiceOf(name: string): ArtistChoice | null {
   return store.get()[keyOf(name)] ?? null;
+}
+
+/** Every artist with a choice, by name lowercased. */
+export function choiceKeys(): string[] {
+  return Object.keys(store.get());
 }
 
 /** Choose an artist's picture, or clear it (null); the files no choice names go, unless picked

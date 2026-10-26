@@ -2,6 +2,7 @@ import { BrowserWindow } from "electron";
 import { IPC } from "@shared/ipc";
 import type {
   ArtistChoice,
+  ChosenPicture,
   EmbeddedArtQuery,
   LyricsQuery,
   MediaIndexPools,
@@ -12,7 +13,13 @@ import { getSettings, newMcpToken } from "../data/persist";
 import { canEncrypt, getSecret, secretHint, setSecret } from "../data/secrets";
 import { fetchAlbumInfo } from "../lookups/albumInfo";
 import { artHostTrust, fetchArtDataUrl } from "../lookups/artFetch";
-import { isArtistChoice, pickPictureFile, resolveChoice, setChoice } from "../data/artistChoices";
+import {
+  choiceKeys,
+  isArtistChoice,
+  pickPictureFile,
+  resolveChoice,
+  setChoice,
+} from "../data/artistChoices";
 import { fetchArtistImages, fetchArtistInfo, knownArtistImage } from "../lookups/artistInfo";
 import { checkFanartKey, fetchFanartPhotos } from "../lookups/fanart";
 import { artThumbsStats, clearArtThumbs } from "../lookups/artThumbs";
@@ -56,13 +63,24 @@ export function registerLookupsIpc(): void {
     }
     return out;
   });
-  // THE CHOSEN PICTURE (0.13.0 round 7; data/artistChoices): the artist page reads it first, and
-  // the chooser offers the article's images, the artist's covers and a file. A Wikipedia image
+  // THE CHOSEN PICTURES (0.13.0 round 7; data/artistChoices), every one in one answer: a window
+  // holds them (lib/artistPictures), so the artist page draws its choice first and an artist's
+  // menu anywhere knows whether to offer the reset; the chooser offers the article's images,
+  // the artist's covers and a file. A Wikipedia image
   // is drawn only with the artist lookups on ("off = no requests, ever"), so with them off the
   // usual picture shows and the choice waits; a cover or a file shows either way.
-  handle(IPC.artistChoice, (_e, name: unknown) =>
-    typeof name === "string" ? chosen(name, mediaIndex.pools(), getSettings().artistInfo) : null,
-  );
+  handle(IPC.artistChoices, () => {
+    const photos = getSettings().artistInfo;
+    const pools = mediaIndex.pools();
+    const artists = artistIndex(pools);
+    const out: Record<string, ChosenPicture> = {};
+    for (const k of choiceKeys()) {
+      const c = chosen(k, pools, photos);
+      // a reset brings back the server's own picture first, then the photo (artistPictures)
+      if (c) out[k] = { ...c, photoAfter: photos && !artists.get(k)?.own && !!knownArtistImage(k) };
+    }
+    return out;
+  });
   handle(IPC.artistImages, async (_e, name: unknown) =>
     typeof name === "string" && name.trim() && getSettings().artistInfo
       ? fetchArtistImages(name)

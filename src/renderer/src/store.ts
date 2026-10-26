@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { contentPlayId, PLAYING_SETTLE_MS } from "@/lib/playingEntry";
 import type { InfoList, InfoPage } from "@/lib/infoSteps";
+import type { CoverOffer } from "@/lib/artistPictures";
 import { modalHasKeyboard } from "@/lib/keyboardOwner";
 import type { MenuCommand, PushMessage, Snapshot } from "@shared/ipc";
 import type {
@@ -28,6 +29,7 @@ import type {
   PlaylistActivation,
   HeldState,
   MediaInfoTarget,
+  ChosenPicture,
 } from "@shared/model";
 import type {
   Presets,
@@ -310,6 +312,12 @@ interface TTState {
    *  pages gone back from. Emptied when Info closes. */
   mediaInfoBack: InfoPage[];
   mediaInfoForward: InfoPage[];
+  /** The pictures chosen for artists, by name lowercased (main's artistChoices; lib/artistPictures
+   *  keeps it current); null until first read. */
+  artistChoices: Record<string, ChosenPicture> | null;
+  /** The artist whose picture is being chosen (ArtistPictureHost), and the covers the caller
+   *  offers when it has its own; null = closed. */
+  pictureChooser: { name: string; covers?: readonly CoverOffer[] } | null;
   paletteOpen: boolean;
   displayMode: boolean;
   /** Lyrics drawer on the Now Playing screen (ephemeral, not persisted). */
@@ -463,6 +471,8 @@ interface TTState {
   /** Opens (or closes, with null) the Info modal; a list makes it step (lib/infoSteps), and any
    *  open without one is a lone Info. */
   setMediaInfo: (target: MediaInfoTarget | null, list?: InfoList | null) => void;
+  setArtistChoices: (choices: Record<string, ChosenPicture>) => void;
+  setPictureChooser: (chooser: { name: string; covers?: readonly CoverOffer[] } | null) => void;
   /** EXPERIMENT (0.7 exploration): the album-DR map (albumDrKey -> AlbumDr),
    *  loaded lazily by useAlbumDr and updated in place by Analyze audio. */
   albumDr: Record<string, AlbumDr>;
@@ -624,6 +634,8 @@ export const useStore = create<TTState>((set, get) => ({
   mediaInfoList: null,
   mediaInfoBack: [],
   mediaInfoForward: [],
+  artistChoices: null,
+  pictureChooser: null,
   paletteOpen: false,
   displayMode: false,
   lyricsOpen: false,
@@ -802,6 +814,8 @@ export const useStore = create<TTState>((set, get) => ({
         ? { mediaInfo, mediaInfoList: list ?? null }
         : { mediaInfo: null, mediaInfoList: null, mediaInfoBack: [], mediaInfoForward: [] },
     ),
+  setArtistChoices: (artistChoices) => set({ artistChoices }),
+  setPictureChooser: (pictureChooser) => set({ pictureChooser }),
   albumDr: {},
   analysisStatsEpoch: 0,
   setAlbumDr: (albumDr) => set({ albumDr }),

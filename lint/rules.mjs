@@ -473,4 +473,33 @@ export const ONE_HOME = [
       code: "const ro = new ResizeObserver(() => {});",
     },
   },
+  {
+    id: "one-picture-chooser",
+    was: "none (0.13.0-rc.3: Choose a picture joined every artist's menu, and the artist page's own chooser became the app's one)",
+    // a surface opens the chooser through the store (mediaMenus artistPictureItems); App mounts
+    // the host, which alone mounts the dialog
+    selector: "JSXOpeningElement[name.name='ArtistPictureDialog']",
+    files: [`^${R}`],
+    allow: ["components/library/ArtistPictureDialog\\.tsx$"],
+    message:
+      "The picture chooser is mounted once (ArtistPictureHost); a surface opens it with artistPictureItems or setPictureChooser",
+    bad: {
+      file: `${R}components/library/ArtistHeader.tsx`,
+      code: "const x = <ArtistPictureDialog name={n} open={o} onClose={c} covers={[]} current={null} />;",
+    },
+  },
+  {
+    id: "card-chip",
+    was: "none (0.13.0-rc.3: the cards' square chips, in three sizes across nine hand-written copies, became one round chip)",
+    // the cards' chips' surface, as it was spelled in every copy
+    selector: strings(String.raw`/bg-panel\/80 ring-1/`),
+    files: [`^${R}`],
+    allow: ["components/chrome/Chrome\\.tsx$"],
+    message:
+      "A chip on a card's picture is cardChip (chrome/Chrome): one round chip, one size, in one place",
+    bad: {
+      file: `${R}components/library/LibraryCards.tsx`,
+      code: 'const c = "absolute top-1.5 left-1.5 h-7 w-7 rounded-lg bg-panel/80 ring-1 ring-edge";',
+    },
+  },
 ];

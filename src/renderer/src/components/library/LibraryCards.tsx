@@ -8,6 +8,7 @@ import { RowAction } from "@/components/media/RowAction";
 import { RowHeart } from "@/components/media/RowHeart";
 import { ArtImage } from "@/components/media/ArtImage";
 import { MediaArt } from "@/components/media/MediaArt";
+import { cardChip } from "@/components/chrome/Chrome";
 import { DrBadge } from "@/components/media/Waveform";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { DurationCell } from "@/components/media/DurationCell";
@@ -46,7 +47,8 @@ function HeartChip({
       }}
       className={cx(
         // 14px = the card's p-2 plus the chips' 6px inset from the art corner
-        "tip-bottom tip-end absolute top-3.5 right-3.5 z-10 h-8 w-8 rounded-lg bg-panel/80 ring-1 ring-edge flex items-center justify-center transition-all motion-safe:active:scale-90 cursor-pointer",
+        "tip-bottom tip-end absolute top-3.5 right-3.5 z-10 transition-all motion-safe:active:scale-90 cursor-pointer",
+        cardChip(),
         favorited
           ? "text-gold opacity-100"
           : cx(
@@ -183,7 +185,7 @@ export function ContainerCard({
             <div className="absolute inset-0 pointer-events-none bg-panel/30" />
           )}
           {playing && (
-            <span className="absolute top-1.5 left-1.5 h-7 w-7 rounded-lg bg-panel/80 ring-1 ring-edge flex items-center justify-center">
+            <span className={cx("absolute top-1.5 left-1.5", cardChip())}>
               <Eqbars />
             </span>
           )}
@@ -209,7 +211,8 @@ export function ContainerCard({
               aria-label="More actions"
               onClick={onMenu}
               className={cx(
-                "absolute bottom-1.5 right-1.5 h-8 w-8 rounded-lg bg-panel/80 ring-1 ring-edge text-dim hover:text-ink flex items-center justify-center transition-all",
+                "absolute bottom-1.5 right-1.5 text-dim hover:text-ink transition-all",
+                cardChip(),
                 menuOpen
                   ? "opacity-100"
                   : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",

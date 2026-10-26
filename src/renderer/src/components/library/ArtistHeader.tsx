@@ -5,13 +5,18 @@ import { tt } from "@/api";
 import { useStore } from "@/store";
 import { ArtistAbout, ArtistLinks, useArtistAbout } from "@/components/media/ArtistAbout";
 import { ArtImage } from "@/components/media/ArtImage";
-import { ArtistPictureDialog, type CoverOffer } from "@/components/library/ArtistPictureDialog";
 import { HeaderArt } from "@/components/library/HeaderArt";
 import { RowMenu } from "@/components/media/RowMenu";
 import { HEADER_ART_PX, useHeaderArtSize } from "@/hooks/useHeaderArtSize";
 import { artSrc } from "@/lib/artSrc";
 import { wikiThumbAt } from "@shared/artUrl";
-import { refreshArtistPicture, useArtistPictureAnswer } from "@/lib/artistPictures";
+import {
+  coverOffers,
+  refreshArtistPicture,
+  useArtistChoice,
+  useArtistPictureAnswer,
+} from "@/lib/artistPictures";
+import { artistPictureItems } from "@/lib/mediaMenus";
 import { cx, fmtCount } from "@/lib/format";
 import { menuAt } from "@/lib/menuAt";
 import { FACT_SEP } from "@/lib/mediaFacts";
@@ -39,9 +44,9 @@ import { FACT_SEP } from "@/lib/mediaFacts";
  * the cover behind it while it is retried. Once a name's picture has settled, a later answer
  * (Refresh details, main asked again) changes it in place without waiting again.
  * A PICTURE CHOSEN FOR THE ARTIST (0.13.0 round 7) comes before all of them, and the page waits
- * only for main to say whether there is one: the picture's menu (its ⋯ on hover or keyboard
- * focus, or a right-click on it) offers Choose a picture (ArtistPictureDialog) and, once one is
- * chosen, the reset back to the usual picture.
+ * only for the window's map of chosen pictures: the picture's menu (its ⋯ on hover or keyboard
+ * focus, or a right-click on it) holds the artist's picture verbs, Choose a picture and, once one
+ * is chosen, the reset (mediaMenus artistPictureItems, as every artist's menu has them).
  */
 /** How long the page waits for a photo lookup before it shows what it has. */
 const LOOKUP_WAIT_MS = 6000;
@@ -66,29 +71,9 @@ export function ArtistHeader({
   if (answer !== undefined) held.current = { name, value: answer };
   const known =
     answer !== undefined ? answer : held.current?.name === name ? held.current.value : undefined;
-  // the picture chosen for the artist, held per name while it is asked again after a change
-  const [chosenOf, setChosenOf] = useState<{
-    name: string;
-    value: Awaited<ReturnType<typeof tt.artistChoice>>;
-  } | null>(null);
-  const [askChosen, setAskChosen] = useState(0);
-  useEffect(() => {
-    let live = true;
-    void tt
-      .artistChoice(name)
-      .then((value) => {
-        if (live) setChosenOf({ name, value });
-      })
-      .catch(() => {
-        if (live) setChosenOf({ name, value: null });
-      });
-    return () => {
-      live = false;
-    };
-  }, [name, askChosen, lookups]);
-  const chosen = chosenOf?.name === name ? chosenOf.value : undefined;
+  // the picture chosen for the artist (the last answer held while the map is read again)
+  const chosen = useArtistChoice(name);
   const [menuPoint, setMenuPoint] = useState<{ x: number; y: number } | null>(null);
-  const [choosing, setChoosing] = useState(false);
   const { status, info } = useArtistAbout(name, true);
   const photo = lookups ? (info?.image ?? null) : null;
   // a slow lookup (MusicBrainz takes one request a second) stops being waited for
@@ -144,23 +129,10 @@ export function ArtistHeader({
   const icon = (px: number): React.ReactNode => (
     <UserRound size={px} strokeWidth={1} className="text-faint" />
   );
-  // the covers the chooser offers: the page's albums', each picture once
-  const covers: CoverOffer[] = folders
-    .filter((f, i) => f.artUrl && folders.findIndex((g) => g.artUrl === f.artUrl) === i)
-    .map((f) => ({ url: f.artUrl as string, album: f.title, serverUdn: f.serverUdn ?? null }));
   const openMenu = (e: React.MouseEvent): void => {
     e.preventDefault();
     e.stopPropagation();
     setMenuPoint(menuAt(e));
-  };
-  const reset = (): void => {
-    void tt
-      .setArtistChoice(name, null)
-      .then(() => {
-        refreshArtistPicture(name);
-        setAskChosen((n) => n + 1);
-      })
-      .catch(() => {});
   };
   return (
     <div className="flex items-start gap-6 pb-6 pt-2" data-artist-header ref={art.attachRow}>
@@ -216,27 +188,10 @@ export function ArtistHeader({
           title={name}
           at={menuPoint}
           onClose={() => setMenuPoint(null)}
-          items={[
-            { label: "Choose a picture…", run: () => setChoosing(true) },
-            ...(chosen
-              ? [
-                  {
-                    label: photo ? "Reset to the Wikipedia photo" : "Reset the picture",
-                    run: reset,
-                  },
-                ]
-              : []),
-          ]}
+          // the chooser offers the page's own albums' covers
+          items={artistPictureItems(name, coverOffers(folders))}
         />
       )}
-      <ArtistPictureDialog
-        name={name}
-        open={choosing}
-        onClose={() => setChoosing(false)}
-        covers={covers}
-        current={chosen ?? null}
-        onChosen={() => setAskChosen((n) => n + 1)}
-      />
       {/* a set width, the summary's measure (max-w-xl), so the links on the name's line keep one
           edge from artist to artist and end where the words do; a long name wraps before it
           reaches them */}
