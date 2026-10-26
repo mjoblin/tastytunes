@@ -19,9 +19,16 @@ import { FilterInput } from "@/components/controls/FilterInput";
 import { Chip, GAP_BETWEEN, GAP_WITHIN, HeaderChip } from "@/components/chrome/Chrome";
 import { SortChip } from "@/components/controls/SortChip";
 import { usePlayStats } from "@/lib/playStats";
-import { TrackRow } from "@/components/library/LibraryCards";
+import { CardBadge, TrackRow } from "@/components/library/LibraryCards";
 import { Eqbars } from "@/components/media/Eqbars";
-import { type LensActions, lc, nodeKey, orderArtists, RECORD_SORTS } from "./lensShared";
+import {
+  COPY_BADGE_TIP,
+  type LensActions,
+  lc,
+  nodeKey,
+  orderArtists,
+  RECORD_SORTS,
+} from "./lensShared";
 import {
   useLensTrackSelection,
   LensTrackSelectionBar,
@@ -617,14 +624,7 @@ export function ArtistsLens({
                         </div>
                         <div className="flex items-center gap-1.5 min-w-0 text-[12px] text-dim">
                           {alb.year && <span>{alb.year}</span>}
-                          {badge && (
-                            <span
-                              data-card-badge={badge}
-                              className="ml-auto shrink-0 text-[9.5px] px-1.5 py-px rounded-full ring-1 ring-edge"
-                            >
-                              {badge}
-                            </span>
-                          )}
+                          {badge && <CardBadge label={badge} tip={COPY_BADGE_TIP} />}
                         </div>
                       </div>
                       {/* THE ROW'S BUTTONS FLOAT over its end, shown on hover and while its menu

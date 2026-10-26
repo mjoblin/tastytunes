@@ -489,6 +489,20 @@ export const ONE_HOME = [
     },
   },
   {
+    id: "card-badge",
+    was: "none (0.13.0-rc.4: the album chip's tip arrived, and its three hand-written copies became CardBadge)",
+    // a set's volume count or which copy an album is, at the end of its line
+    selector: "JSXAttribute[name.name='data-card-badge']",
+    files: [`^${R}`],
+    allow: ["components/library/LibraryCards\\.tsx$"],
+    message:
+      "An album's chip at the end of its line is CardBadge (LibraryCards): one look, and its tip",
+    bad: {
+      file: `${R}components/library/lenses/ArtistsLens.tsx`,
+      code: "const x = <span data-card-badge={badge}>{badge}</span>;",
+    },
+  },
+  {
     id: "card-chip",
     was: "none (0.13.0-rc.3: the cards' square chips, in three sizes across nine hand-written copies, became one round chip)",
     // the cards' chips' surface, as it was spelled in every copy

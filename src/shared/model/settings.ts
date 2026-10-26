@@ -212,6 +212,10 @@ export interface AppSettings {
    *  A-Z rail, the most played first, or the newest arrival first (an artist's newest album). */
   lensArtistsSort: "name" | "plays" | "added";
   lensArtistsSortReversed: boolean;
+  /** The artist page's album order (0.13.0-rc.4, a user's question: the page's order, newest
+   *  first, was hidden behind the year each card cut off): by year, newest first, or by title. */
+  artistPageSort: "year" | "title";
+  artistPageSortReversed: boolean;
   /** Albums lens partition: everything, artist albums only, or compilations only. */
   lensAlbumsKind: "all" | "albums" | "compilations";
   /** Tracks lens sort — the third lens (2026-09-01), every track across the
@@ -505,6 +509,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   lensArtistsAlbumsOnly: false,
   lensArtistsSort: "name",
   lensArtistsSortReversed: false,
+  artistPageSort: "year",
+  artistPageSortReversed: false,
   lensAlbumsKind: "all",
   lensTracksSort: "title",
   lensTracksSortReversed: false,

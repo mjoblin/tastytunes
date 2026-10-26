@@ -8,6 +8,7 @@ import {
   drOptionsOf,
   filterFields,
   filterScopeCounts,
+  orderArtistAlbums,
   orderArtists,
   tempoBandLabel,
   tempoBandOf,
@@ -127,5 +128,38 @@ describe("the Tracks filter's scope", () => {
       const shown = tracks.filter((t) => matchesFilter("magic", filterFields(t, scope))).length;
       expect(shown).toBe(filterScopeCounts(tracks, "magic")[scope ?? "all"]);
     }
+  });
+});
+
+describe("the artist page's album order", () => {
+  const album = (title: string, year: string | null): MediaNode =>
+    ({ id: title, title, year, isContainer: true }) as MediaNode;
+  const albums = [
+    album("Powerslave", "1984"),
+    album("Killers", "1995"),
+    album("Iron Maiden", "1980"),
+    album("A Matter of Life and Death", null),
+    album("Fear of the Dark", "1995"),
+  ];
+  const titles = (l: MediaNode[]): string[] => l.map((a) => a.title);
+  it("is newest first by year, ties by title, the undated last", () => {
+    expect(titles(orderArtistAlbums(albums, "year", false))).toEqual([
+      "Fear of the Dark",
+      "Killers",
+      "Powerslave",
+      "Iron Maiden",
+      "A Matter of Life and Death",
+    ]);
+  });
+  it("is A to Z by title, and reversed turns either", () => {
+    expect(titles(orderArtistAlbums(albums, "title", false))).toEqual([
+      "A Matter of Life and Death",
+      "Fear of the Dark",
+      "Iron Maiden",
+      "Killers",
+      "Powerslave",
+    ]);
+    expect(titles(orderArtistAlbums(albums, "year", true))[0]).toBe("A Matter of Life and Death");
+    expect(titles(orderArtistAlbums(albums, "title", true))[0]).toBe("Powerslave");
   });
 });
