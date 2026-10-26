@@ -1,7 +1,7 @@
 /**
- * THE SERVER'S OWN FOLDER PATH FOR A BROWSE (0.13.0-rc.4; his drive's two Frozen Charlottes opened
- * from the Albums lens: "Couldn't browse this library", Retry no help, while the drive's folders
- * found them). A server that refuses an id (the streamer re-mints its drive's ids on a wake or a
+ * THE SERVER'S OWN FOLDER PATH FOR A BROWSE (0.13.0-rc.4; two copies of one album on a drive,
+ * opened from the Albums lens: "Couldn't browse this library", Retry no help, while the drive's
+ * folders found them). A server that refuses an id (the streamer re-mints its drive's ids on a wake or a
  * changed drive) has the browse re-walk these titles from its top (upnpBrowser browse). The
  * deepest crumb that carries a walked path (an index node's titlePath: an album opened from a
  * lens, the artist page or a search) gives it, with any folder entered below it; without one,

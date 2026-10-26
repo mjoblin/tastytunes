@@ -27,7 +27,7 @@ const node = (over: Partial<MediaNode>): MediaNode => ({
 
 describe("a server's own list, by its name", () => {
   it("is found among the names the surveyed servers use, and nothing else", () => {
-    // Asset (his minitunes), Gerbera, Emby and Jellyfin, MiniDLNA and UMS, from the 2026-08 survey
+    // Asset, Gerbera, Emby and Jellyfin, MiniDLNA and UMS, from the 2026-08 survey
     const asset = [
       "Album Artist",
       "Album",

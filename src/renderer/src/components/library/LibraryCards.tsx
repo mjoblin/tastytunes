@@ -434,7 +434,7 @@ function CardFormatLine({ details }: { details: CardDetails }): React.JSX.Elemen
       data-card-format={details.label ?? ""}
       data-tip={tip || undefined}
       className={cx(
-        "mt-0.5 h-4 flex items-center gap-1 min-w-0 text-[10.5px] text-faint/80 tabular-nums text-left",
+        "mt-1.5 h-4 flex items-center gap-1 min-w-0 text-[10.5px] text-faint/80 tabular-nums text-left",
         tip && "tip-bottom tip-lines",
       )}
     >
@@ -449,7 +449,7 @@ function CardFormatLine({ details }: { details: CardDetails }): React.JSX.Elemen
         <DrBadge
           dr={dr}
           titled={false}
-          className="ml-auto shrink-0 font-mono text-[10px] leading-[14px]"
+          className="ml-auto shrink-0 font-mono text-[10px] leading-[13px]"
         />
       )}
     </div>

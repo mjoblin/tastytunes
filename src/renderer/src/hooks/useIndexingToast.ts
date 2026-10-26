@@ -10,7 +10,7 @@ const BURST_MS = 2500;
 
 /**
  * One success toast when a media index goes building → ready WHILE THE
- * LIBRARY SCREEN IS NOT SHOWING (user ask, 2026-09-01): "minitunes indexed ·
+ * LIBRARY SCREEN IS NOT SHOWING (user ask, 2026-09-01): "<server> indexed ·
  * 4,590 tracks", or "2 libraries indexed" for a burst, with the house View
  * jump to the Library. Never while the Library shows — the root doors
  * already announce it in place (their count line fades from "Indexing…" to

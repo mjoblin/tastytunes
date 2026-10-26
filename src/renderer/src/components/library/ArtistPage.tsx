@@ -143,8 +143,8 @@ export function ArtistPage({
                 onEnter: () => onOpenAlbum(node),
                 onMenu: (e: React.MouseEvent) => actions.openMenu(node, e),
                 onNavDrag: (e: React.PointerEvent) => actions.dragAlbum([node], e, node.title),
-                // which copy, only when there is another (his Jack White: the same albums on
-                // minitunes and on the streamer's drive; a user's two editions of one album on one server),
+                // which copy, only when there is another (the same albums on a media server and
+                // on the streamer's drive; a user's two editions of one album on one server),
                 // the Albums lens's rule; an album with no other copy shows none, its year not
                 // squeezed by a chip that says nothing
                 badge: index.copyBadge(node, { formatShown: cards && detailsOf != null }),
