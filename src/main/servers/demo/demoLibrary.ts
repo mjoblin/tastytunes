@@ -232,7 +232,7 @@ export function buildDemoLibrary(host: string) {
       presets: Array.from({ length: 24 }, (_, i) => ({
         id: i + 1,
         name: i === 0 ? "Amber Nights" : `Demo Preset ${i + 1}`,
-        type: "MEDIA",
+        type: "UPnP", // the Evo's own word for a library preset (read 2026-10-17)
         class: "stream.media.upnp",
         state: "OK",
         is_playing: false, // real firmware never holds this true (verified live)

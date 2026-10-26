@@ -82,10 +82,13 @@ export interface AnalysisStrip {
   loud: string;
 }
 
-/** What a row can know without decoding: the cached DR and loudness. */
+/** What a row can know without decoding: the cached DR and loudness, and the tempo and key as
+ *  Info says them (above their floors). */
 export interface KnownStats {
   dr: number | null;
   lufs: number | null;
+  bpm: number | null;
+  key: string | null;
 }
 
 /** The block-loudness histogram: 0.1 LU bins from −70 LUFS (the absolute
@@ -174,4 +177,75 @@ export function audioAnalysisKey(
 /** Album identity for the DR map — artist|title, lowercased. */
 export function albumDrKey(a: Pick<MediaNode, "title" | "artist">): string {
   return `${a.artist ?? ""}|${a.title}`.toLowerCase();
+}
+
+/**
+ * MEASURED FACTS, SAID ONCE (0.12.0, the first of the measured facts): a track's tempo and key as
+ * the app says them, and only above the confidence the analysis earned (a beat grid below 0.35 is
+ * a guess, and a key below 0.3). The Info rows, the agents' tools and the scenes' readouts read
+ * these; the scenes' own spellings stay theirs (Terminal's plain "C#m").
+ */
+/** The music features' version (lib/features measures them): a stored analysis whose features
+ *  carry another is measured again once, on its next play or sweep. In shared/model since 0.12.0,
+ *  when the rows' and the agents' tempo and key, read in main, began to need it. */
+export const FEATURES_VERSION = 12; // 12: the tempo's octave check; 11: the breath and the cut read past a riser before the slam; 9: drops at frame resolution
+
+/** A stored analysis's music features when they are the current version's, else null: an older
+ *  version's tempo may sit an octave off (the 0.9.0 octave check), so none of its facts is said
+ *  until the track is measured again (0.12.0, his library held 47 such). */
+export function currentFeatures<F extends { version: number }>(f: F | null | undefined): F | null {
+  return f != null && f.version === FEATURES_VERSION ? f : null;
+}
+
+export const TEMPO_CONFIDENCE_FLOOR = 0.35;
+export const KEY_CONFIDENCE_FLOOR = 0.3;
+/** The pitch classes as a key is named, C = 0, with the usual sharps and flats. */
+export const PITCH_NAMES = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
+
+/** A track's tempo in whole beats per minute, or null below its confidence floor. */
+export function tempoBpm(
+  beats: { bpm: number; confidence: number } | null | undefined,
+): number | null {
+  return beats && beats.confidence >= TEMPO_CONFIDENCE_FLOOR && beats.bpm > 0
+    ? Math.round(beats.bpm)
+    : null;
+}
+
+/** A track's key by name ("A minor"), or null below its confidence floor. */
+export function keyName(
+  key: { tonic: number; mode: "major" | "minor"; confidence: number } | null | undefined,
+): string | null {
+  return key && key.confidence >= KEY_CONFIDENCE_FLOOR && PITCH_NAMES[key.tonic] != null
+    ? `${PITCH_NAMES[key.tonic]} ${key.mode}`
+    : null;
+}
+
+/** A key as a person or an agent writes it, for a filter: "A minor", "F# major", "B♭ minor",
+ *  "C♯m", "Am", a tonic alone ("E♭", either mode) or a mode alone ("minor", any tonic). Null
+ *  when it names neither (0.12.0, list_tracks' key filter). */
+export function parseKeyName(
+  s: string,
+): { tonic: number | null; mode: "major" | "minor" | null } | null {
+  const t = s.trim().toLowerCase().replace(/♯/g, "#").replace(/♭/g, "b").replace(/\s+/g, " ");
+  const modeOf = (m: string | undefined): "major" | "minor" | null =>
+    m == null ? null : m === "maj" || m === "major" ? "major" : "minor";
+  const alone = /^(major|minor)$/.exec(t);
+  if (alone) return { tonic: null, mode: modeOf(alone[1]) };
+  const k = /^([a-g])([#b]?) ?(major|minor|maj|min|m)?$/.exec(t);
+  if (!k) return null;
+  const natural = { c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11 }[k[1] as "c"];
+  const tonic = (natural + (k[2] === "#" ? 1 : k[2] === "b" ? -1 : 0) + 12) % 12;
+  return { tonic, mode: modeOf(k[3]) };
+}
+
+/** Whether a track's key, above its floor, is the one a filter asked for. */
+export function keyMatches(
+  key: { tonic: number; mode: "major" | "minor"; confidence: number } | null | undefined,
+  want: { tonic: number | null; mode: "major" | "minor" | null },
+): boolean {
+  if (!key || key.confidence < KEY_CONFIDENCE_FLOOR) return false;
+  return (
+    (want.tonic == null || key.tonic === want.tonic) &&
+    (want.mode == null || key.mode === want.mode)
+  );
 }

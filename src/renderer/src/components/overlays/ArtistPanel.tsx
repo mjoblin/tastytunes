@@ -10,7 +10,14 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import type { AlbumInfo, ArtistInfo, MediaInfoTarget, TrackCredit, TrackInfo } from "@shared/model";
+import type {
+  AlbumInfo,
+  ArtistInfo,
+  MediaInfoTarget,
+  MediaNode,
+  TrackCredit,
+  TrackInfo,
+} from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { deriveNowPlaying, cx } from "@/lib/format";
@@ -19,8 +26,19 @@ import { usePanelWidth } from "@/hooks/usePanelWidth";
 import { PanelResizeHandle } from "@/components/controls/PanelResizeHandle";
 import { Segmented } from "@/components/controls/Segmented";
 import { HeaderChip } from "@/components/chrome/Chrome";
-import { Section, sourceRows, streamRows, trackFormatRows } from "@/components/media/InfoRows";
-import { Waveform, usePlayingDr, usePlayingLoudness } from "@/components/media/Waveform";
+import {
+  InfoSections,
+  Section,
+  sourceRows,
+  streamRows,
+  trackFormatRows,
+} from "@/components/media/InfoRows";
+import {
+  Waveform,
+  usePlayingDr,
+  usePlayingLoudness,
+  usePlayingMeasured,
+} from "@/components/media/Waveform";
 import { audioAnalysisKey } from "@shared/model";
 import { FACT_SEP } from "@/lib/mediaFacts";
 
@@ -53,6 +71,7 @@ const TRACK_SETTLE_MS = 2000;
 export function ArtistPanel({ className }: { className?: string }): React.JSX.Element {
   const playingDr = usePlayingDr();
   const playingLoud = usePlayingLoudness();
+  const playingMeasured = usePlayingMeasured();
   const playState = useStore((s) => s.playState);
   const nowPlaying = useStore((s) => s.nowPlaying);
   const setArtistOpen = useStore((s) => s.setArtistOpen);
@@ -86,6 +105,8 @@ export function ArtistPanel({ className }: { className?: string }): React.JSX.El
   const [trackStatus, setTrackStatus] = useState<Status>("loading");
   const [trackInfo, setTrackInfo] = useState<TrackInfo | null>(null);
   const [streamTarget, setStreamTarget] = useState<MediaInfoTarget | null>(null);
+  // a disc's twin in the library (lib/mediaInfo): its waveform and measures, never its file facts
+  const [discTwin, setDiscTwin] = useState<MediaNode | null>(null);
   const [streamCopied, setStreamCopied] = useState(false);
   const [fetchNonce, setFetchNonce] = useState(0);
   const forceRef = useRef(false);
@@ -202,12 +223,20 @@ export function ArtistPanel({ className }: { className?: string }): React.JSX.El
     // Stream facts land at once; for local media the library node joins when
     // the (local, unmetered) content lookup answers — the modal's pattern.
     setStreamTarget(built.target);
+    setDiscTwin(null);
     if (!built.localQuery) return;
     let stale = false;
+    const disc = built.localQuery.durationSecs != null;
     void tt
       .mediaNodeInfo(built.localQuery, "show")
       .then((found) => {
         if (stale || !found) return;
+        // a disc stays the disc: the library file is not what plays (its format and its server
+        // are not the stream's), so only its waveform and measures are borrowed, and said so
+        if (disc) {
+          setDiscTwin(found.node);
+          return;
+        }
         setStreamTarget({
           ...found,
           stream: built.target.stream,
@@ -415,22 +444,36 @@ export function ArtistPanel({ className }: { className?: string }): React.JSX.El
                 contentKey={audioAnalysisKey(streamTarget.node)}
               />
             )}
-            <Section
-              title="Stream"
-              rows={streamTarget.stream ? streamRows(streamTarget.stream) : []}
-            />
-            <Section
-              title="Format"
-              rows={trackFormatRows(streamTarget.node, playingDr, playingLoud)}
-            />
-            <Section
-              title="Source"
-              rows={sourceRows(
-                streamTarget.node,
-                streamTarget.serverName ?? null,
-                streamTarget.serverProfile,
-              )}
-            />
+            {discTwin?.serverUdn && discTwin.id && (
+              <div data-disc-twin>
+                <Waveform
+                  serverUdn={discTwin.serverUdn}
+                  objectId={discTwin.id}
+                  contentKey={audioAnalysisKey(discTwin)}
+                />
+                <div className="mt-1.5 text-[11.5px] text-faint">
+                  Measured from the same track in your library.
+                </div>
+              </div>
+            )}
+            <InfoSections>
+              <Section
+                title="Stream"
+                rows={streamTarget.stream ? streamRows(streamTarget.stream) : []}
+              />
+              <Section
+                title="Format"
+                rows={trackFormatRows(streamTarget.node, playingDr, playingLoud, playingMeasured)}
+              />
+              <Section
+                title="Source"
+                rows={sourceRows(
+                  streamTarget.node,
+                  streamTarget.serverName ?? null,
+                  streamTarget.serverProfile,
+                )}
+              />
+            </InfoSections>
           </div>
         )}
 

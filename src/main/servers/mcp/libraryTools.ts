@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { artKeyOf, artUrlAt, artUrlResizable } from "@shared/artUrl";
+import { artKeyOf, artUrlAt, artUrlResizable, isDeviceArt } from "@shared/artUrl";
 import { nativeImage } from "electron";
 import { artHostTrust } from "../../lookups/artFetch";
 import { artThumb, fetchOrigin, JPEG_QUALITY, TIERS } from "../../lookups/artThumbs";
@@ -21,6 +21,13 @@ import {
 import {
   audioAnalysisKey,
   albumDrKey,
+  currentFeatures,
+  keyMatches,
+  keyName,
+  parseKeyName,
+  tempoBpm,
+  KEY_CONFIDENCE_FLOOR,
+  TEMPO_CONFIDENCE_FLOOR,
   playKey,
   LOSSLESS_CODECS,
   isHiRes,
@@ -582,6 +589,28 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
           .describe(
             "Only tracks with a recorded DR at least this; unanalyzed tracks are excluded.",
           ),
+        min_bpm: z
+          .number()
+          .min(20)
+          .max(300)
+          .optional()
+          .describe(
+            "Only tracks whose measured tempo is at least this many beats per minute; tracks without a confident tempo are excluded.",
+          ),
+        max_bpm: z
+          .number()
+          .min(20)
+          .max(300)
+          .optional()
+          .describe(
+            "Only tracks whose measured tempo is at most this many beats per minute; tracks without a confident tempo are excluded.",
+          ),
+        key: z
+          .string()
+          .optional()
+          .describe(
+            "Only tracks in this measured key, e.g. 'A minor', 'F# major', 'Bbm', a tonic alone ('Eb', either mode) or a mode alone ('minor'); tracks without a confident key are excluded.",
+          ),
         sort: z
           .enum([
             "title",
@@ -591,12 +620,13 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
             "duration",
             "dr",
             "loudness",
+            "tempo",
             "plays",
             "last_played",
           ])
           .optional()
           .describe(
-            "Default 'title'. 'plays' most played first; 'last_played' most recent first; 'dr' most dynamic first; 'duration' longest first.",
+            "Default 'title'. 'plays' most played first; 'last_played' most recent first; 'dr' most dynamic first; 'duration' longest first; 'tempo' fastest first, tracks without a confident tempo last.",
           ),
         limit: z.number().int().min(1).max(200).optional().describe("Default 50."),
         offset: z.number().int().min(0).optional().describe("For paging; default 0."),
@@ -622,6 +652,15 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
         };
         const lufsOf = (t: MediaNode): number | null =>
           audioAnalysisGet(audioAnalysisKey(t))?.lufs ?? null;
+        // tempo and key above their confidence floors, as Info says them (shared/model)
+        const featuresOf = (t: MediaNode) =>
+          currentFeatures(audioAnalysisGet(audioAnalysisKey(t))?.features);
+        const bpmOf = (t: MediaNode): number | null => tempoBpm(featuresOf(t)?.beats);
+        const wantKey = a.key != null ? parseKeyName(a.key) : null;
+        if (a.key != null && wantKey == null)
+          return err(
+            `"${a.key}" doesn't name a key. Try 'A minor', 'F# major', 'Bbm', 'Eb' or 'minor'.`,
+          );
         let tracks = groups.flatMap((p) => p.tracks);
         if (artistNeedle != null)
           tracks = tracks.filter(
@@ -651,6 +690,15 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
           const min = a.min_dr;
           tracks = tracks.filter((t) => (drOf(t) ?? -1) >= min);
         }
+        if (a.min_bpm != null || a.max_bpm != null) {
+          const lo = a.min_bpm ?? 0;
+          const hi = a.max_bpm ?? Infinity;
+          tracks = tracks.filter((t) => {
+            const bpm = bpmOf(t);
+            return bpm != null && bpm >= lo && bpm <= hi;
+          });
+        }
+        if (wantKey != null) tracks = tracks.filter((t) => keyMatches(featuresOf(t)?.key, wantKey));
         const stats = await playStatsFromRecord();
         const statOf = (t: MediaNode) => stats.tracks[playKey(t.title, t.artist, t.album)] ?? null;
         const sort = (a.sort as string | undefined) ?? "title";
@@ -673,6 +721,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
           if (sort === "dr") return (drOf(y) ?? -1) - (drOf(x) ?? -1) || byTitle(x, y);
           if (sort === "loudness")
             return (lufsOf(y) ?? -1000) - (lufsOf(x) ?? -1000) || byTitle(x, y);
+          if (sort === "tempo") return (bpmOf(y) ?? -1) - (bpmOf(x) ?? -1) || byTitle(x, y);
           if (sort === "plays")
             return (statOf(y)?.plays ?? 0) - (statOf(x)?.plays ?? 0) || byTitle(x, y);
           if (sort === "last_played")
@@ -689,6 +738,8 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
           tracks: page.map((t) => {
             const st = statOf(t);
             const dr = drOf(t);
+            const bpm = bpmOf(t);
+            const key = keyName(featuresOf(t)?.key);
             return {
               server_udn: t.serverUdn,
               object_id: t.id,
@@ -700,6 +751,8 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
               duration_seconds: t.durationSecs,
               ...(formatLabel(t.format) ? { format: formatLabel(t.format) } : {}),
               ...(dr != null ? { dr } : {}),
+              ...(bpm != null ? { bpm } : {}),
+              ...(key != null ? { key } : {}),
               plays: st?.plays ?? 0,
               last_played: st ? new Date(st.lastAt).toISOString() : null,
             };
@@ -749,6 +802,13 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
             null)
           : null;
         const albumDr = albumEntry?.dr ?? null;
+        // tempo and key as Info says them, above their floors, with the confidence either way;
+        // an analysis from before the music features (0.8.0) has neither until it plays again
+        // only the current version's (an older one's tempo may sit an octave off)
+        const features = currentFeatures(an?.features);
+        const beats = features?.beats ?? null;
+        const key = features?.key ?? null;
+        const round2 = (v: number): number => Math.round(v * 100) / 100;
         return ok({
           track: { title: t.title, artist: t.artist, album: t.album },
           analyzed: an != null,
@@ -761,6 +821,16 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
                 lufs: an.lufs ?? null,
                 loudness_range_lu: an.lra ?? null,
                 true_peak_dbtp: an.truePeakDb ?? null,
+                tempo_bpm: tempoBpm(beats),
+                tempo_confidence: beats ? round2(beats.confidence) : null,
+                key: keyName(key),
+                key_confidence: key ? round2(key.confidence) : null,
+                ...(features == null && an.features !== null
+                  ? {
+                      tempo_key_note:
+                        "Measured before the current tempo and key detection; they are measured again the next time it plays in TastyTunes, or with “Analyze audio” on its album.",
+                    }
+                  : {}),
               }
             : {
                 note: "Not analyzed yet. It is analyzed the first time it plays in TastyTunes, or with “Analyze audio” on its album.",
@@ -771,6 +841,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
             "TT-DR, the DR database's procedure; the album value needs every track analyzed.",
           loudness_definition:
             "EBU R128 integrated loudness (LUFS) with true peak (dBTP); the album value integrates across every track, gated as one programme.",
+          tempo_key_definition: `Tempo and key measured from the audio; each is given only when its confidence (0 to 1) reaches ${TEMPO_CONFIDENCE_FLOOR} for tempo and ${KEY_CONFIDENCE_FLOOR} for key, and is null below that.`,
         });
       },
     }),
@@ -806,7 +877,8 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
           );
         const tier = a.size ?? "card";
         const link = ctx.dm.snapshot().connection;
-        const trust = artHostTrust(link.phase === "connected" ? link.host : null);
+        const host = link.phase === "connected" ? link.host : null;
+        const trust = artHostTrust(host);
         let got: { bytes: Buffer; type: string } | null = null;
         let from: "server" | "file" = "server";
         if (node.artUrl)
@@ -814,7 +886,14 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
             ? await fetchOrigin(artUrlAt(node.artUrl, TIERS[tier]) ?? node.artUrl, trust).then(
                 (r) => (r ? { bytes: r.raw, type: r.type } : null),
               )
-            : await artThumb(artKeyOf(node), tier, node.artUrl, trust);
+            : // the same storage key as the cards (thumbKey), so both find one file
+              await artThumb(
+                artKeyOf(node),
+                tier,
+                node.artUrl,
+                trust,
+                isDeviceArt(node.artUrl, host),
+              );
         if (!got) {
           // the app's own fall-through (lib/bestArt): the picture inside the audio file when
           // the server has none, read through main's embedded-art lookup (its Settings switch

@@ -18,6 +18,7 @@ import {
 import {
   presetVolumeKey,
   type AppSettings,
+  type MediaIndexPools,
   type MediaNode,
   type MediaQueueAction,
   type MediaServerInfo,
@@ -30,11 +31,14 @@ import {
   nameSortKey,
   albumVolume,
   albumOfTrack,
+  indexAlbumFor,
   trackPosition,
 } from "@shared/model";
-import { albumDrKey } from "@shared/model";
+import { albumDrKey, artistSummary } from "@shared/model";
+import { setInfoHere } from "@/lib/infoHotkey";
+import { onScreenKey } from "@/lib/keyboardOwner";
 import { useAlbumDr } from "@/lib/audioAnalysis";
-import { FACT_SEP, albumFactsLine } from "@/lib/mediaFacts";
+import { FACT_SEP, albumFactsLine, albumFromTracks } from "@/lib/mediaFacts";
 import { usePlayStats } from "@/lib/playStats";
 import { useBestArt } from "@/lib/bestArt";
 import { queueWrite, tt } from "@/api";
@@ -47,6 +51,7 @@ import { isAlbumClass, isArtistClass, stripFurniture } from "@/lib/media";
 import { FilterInput } from "@/components/controls/FilterInput";
 import { ContainerCard, ContainerRow, TrackRow } from "@/components/library/LibraryCards";
 import { Crumbs } from "@/components/library/Crumbs";
+import { landingRowIndex, type LandingTrack } from "@/components/library/landing";
 import { SortChip } from "@/components/controls/SortChip";
 import {
   AlbumsLens,
@@ -78,6 +83,7 @@ import { useLibraryMenus, type MenusLate } from "@/components/library/useLibrary
 import { useLibraryFavorites } from "@/components/library/useLibraryFavorites";
 import { LibraryPopovers } from "@/components/library/LibraryPopovers";
 import { LibraryRoot } from "@/components/library/LibraryRoot";
+import { EmptyCrate } from "@/components/library/DoorArt";
 import { useIndexDoors } from "@/components/library/useIndexDoors";
 import { usePlayingMatch } from "@/components/library/usePlayingMatch";
 import { useQueueMatch } from "@/components/library/useQueueMatch";
@@ -143,6 +149,9 @@ const UNIFIED_SEARCH_CRUMB_ID = "__from-search__";
 const QUEUE_FAILED = "Couldn't reach the streamer. Nothing was queued.";
 /** Each artist page's scroll spot for the session (an album opened from it and Back). */
 const artistPageScroll = new Lru<string, number>(200);
+/** The stand-in album nodes an arrival builds (the arrival effect): an album opened from another
+ *  screen lands on one, and resolves to the index's own entry once the pools are in. */
+const standIns = new WeakSet<MediaNode>();
 
 /** One line of the windowed search results (see searchLines): every kind has one height. */
 type SearchLine =
@@ -161,6 +170,35 @@ type SearchLine =
  * container click = drill in); queue-replacing verbs live behind explicit
  * buttons and the ⋯ menu.
  */
+/** An artist's page as a node for Info, from the index that knows them best (Info sums an
+ *  artist's page from one index, as the Artists lens's row menu does). */
+/** Marks an arrival's stand-in album node (see standIns). */
+function standIn(node: MediaNode): MediaNode {
+  standIns.add(node);
+  return node;
+}
+
+function artistPageNode(name: string, pools: MediaIndexPools[]): MediaNode {
+  const best = pools
+    .map((g) => ({ g, n: artistSummary(name, g).trackCount }))
+    .sort((a, b) => b.n - a.n)[0].g;
+  return {
+    id: `artist-page:${name.toLowerCase()}`,
+    parentId: null,
+    title: name,
+    upnpClass: "object.container.person.musicArtist",
+    isContainer: true,
+    artUrl: null,
+    artist: null,
+    album: null,
+    year: null,
+    trackNumber: null,
+    durationSecs: null,
+    serverUdn: best.udn,
+    serverName: best.serverName,
+  };
+}
+
 export function LibraryScreen(): React.JSX.Element {
   const {
     libraryLayout,
@@ -247,8 +285,8 @@ export function LibraryScreen(): React.JSX.Element {
   // 0, listing not yet fetched) can't clobber a remembered spot.
   const loadedKey = useRef<string | null>(null);
   const pendingScroll = useRef<number | null>(null);
-  /** A track title a destination asked to land on (LibraryTarget.track). */
-  const pendingTrack = useRef<string | null>(null);
+  /** The track a destination asked to land on (LibraryTarget.track and its id and length). */
+  const pendingTrack = useRef<LandingTrack | null>(null);
   useLayoutEffect(() => {
     if (pendingScroll.current != null && scrollRef.current) {
       // a lens at the root holds the page at 0 (it scrolls its own column)
@@ -264,8 +302,16 @@ export function LibraryScreen(): React.JSX.Element {
       scrollRef.current &&
       loadedKey.current === nodeKey(serverUdn, path)
     ) {
-      const sel = `[data-library-track="${CSS.escape(pendingTrack.current)}"]`;
-      const row = scrollRef.current.querySelector<HTMLElement>(sel);
+      const rows = [...scrollRef.current.querySelectorAll<HTMLElement>("[data-library-track]")];
+      const at = landingRowIndex(
+        rows.map((r) => ({
+          title: r.dataset.libraryTrack ?? "",
+          id: r.dataset.libraryTrackId ?? null,
+          secs: r.dataset.libraryTrackSecs ? Number(r.dataset.libraryTrackSecs) : null,
+        })),
+        pendingTrack.current,
+      );
+      const row = at >= 0 ? rows[at] : null;
       pendingTrack.current = null;
       if (row) {
         scrollToCentered(row, "auto");
@@ -305,7 +351,10 @@ export function LibraryScreen(): React.JSX.Element {
   // pools also load while browsing a volume-suffixed album, so the header
   // can offer the set line without a lens ever having been opened
   const tailVol = albumVolume(path.at(-1)?.title ?? "");
-  const lensPools = useIndexPools(lens != null || tailVol != null);
+  // and while an album that arrived from another screen stands in for the index's own entry
+  const tailNode = path.at(-1)?.node;
+  const arrived = tailNode != null && standIns.has(tailNode);
+  const lensPools = useIndexPools(lens != null || tailVol != null || arrived);
 
   // Action feedback: the app-wide toast for failures, a gold pulse for wins.
   // (The screen's original local notice banner graduated into the toast.)
@@ -503,11 +552,14 @@ export function LibraryScreen(): React.JSX.Element {
               ? {
                   id: target.objectId,
                   title,
-                  // synthetic album node so the header renders without a
-                  // metadata re-fetch (art falls back to the first track's)
-                  node: {
+                  // a stand-in album node so the header renders without a metadata
+                  // re-fetch; the index's own entry replaces it as albumNode once the
+                  // pools are in (its keys are the Albums lens's), and until then the
+                  // tracks fill what it lacks (albumFromTracks)
+                  node: standIn({
                     id: target.objectId,
                     parentId: null,
+                    serverUdn: target.serverUdn,
                     title,
                     upnpClass: target.upnpClass ?? "object.container.album.musicAlbum",
                     isContainer: true,
@@ -517,11 +569,13 @@ export function LibraryScreen(): React.JSX.Element {
                     year: null,
                     trackNumber: null,
                     durationSecs: null,
-                  },
+                  }),
                 }
               : { id: `__fav-crumb-${i}__`, title },
           ),
-          track: target.track ?? null,
+          track: target.track
+            ? { title: target.track, id: target.trackId ?? null, secs: target.trackSecs ?? null }
+            : null,
           ...(target.fromSearch ? { lead: { id: UNIFIED_SEARCH_CRUMB_ID, title: "Search" } } : {}),
         });
         return;
@@ -676,31 +730,19 @@ export function LibraryScreen(): React.JSX.Element {
   // Backspace goes UP a level (folder semantics; above a source's root it
   // lands on the source list). ⌘/Alt ←/→ and mouse 4/5 are history, app-wide —
   // useShortcuts owns them since 2026-08-23.
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent): void => {
-      const target = e.target as HTMLElement | null;
-      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
-      if (e.key === "Backspace" && !e.metaKey && !e.ctrlKey && !e.altKey) {
-        e.preventDefault();
-        goUp();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-    };
+  useEffect(
+    () =>
+      onScreenKey((e) => {
+        const target = e.target as HTMLElement | null;
+        if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
+        if (e.key === "Backspace" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+          e.preventDefault();
+          goUp();
+        }
+      }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    path,
-    serverUdn,
-    filter,
-    searchState,
-    searchReturn,
-    searchMode,
-    searchQuery,
-    crossState,
-    lens,
-  ]);
+    [path, serverUdn, filter, searchState, searchReturn, searchMode, searchQuery, crossState, lens],
+  );
 
   const setLayout = async (libraryLayout: ScreenLayout): Promise<void> => {
     await saveSettings({ libraryLayout });
@@ -731,7 +773,7 @@ export function LibraryScreen(): React.JSX.Element {
     setPresetPicker,
     menuNodeId,
     openMenu,
-    tracksForInfo,
+    openInfoFor,
     volumeNavVerbs,
     analyzeVerbs,
     linkable,
@@ -869,8 +911,6 @@ export function LibraryScreen(): React.JSX.Element {
     });
   };
 
-  const setMediaInfo = useStore((s) => s.setMediaInfo);
-
   // -------------------------------------------------------------- derivation
 
   // The filter belongs to listings with playable media (albums/tracks);
@@ -883,8 +923,16 @@ export function LibraryScreen(): React.JSX.Element {
   // Album level: header with art + album metadata; tracks drop per-row art.
   // (Derived before the listing memo — album tracklists sort by track number.)
   const lastCrumbNode = path.length > 0 ? path[path.length - 1].node : undefined;
-  const albumNode =
+  const crumbAlbum =
     !searchMode && lastCrumbNode && isAlbumClass(lastCrumbNode.upnpClass) ? lastCrumbNode : null;
+  // an album that arrived from another screen is the index's own entry once the pools are in, so
+  // its DR, sweep, art and favorite keys are the ones every other way in uses
+  const albumNode = useMemo(() => {
+    if (!crumbAlbum || !standIns.has(crumbAlbum) || !lensPools) return crumbAlbum;
+    const pool = lensPools.find((g) => g.udn === (crumbAlbum.serverUdn ?? serverUdn));
+    const found = pool ? indexAlbumFor(crumbAlbum, pool) : null;
+    return found ? { ...found, serverUdn: found.serverUdn ?? pool?.udn } : crumbAlbum;
+  }, [crumbAlbum, lensPools, serverUdn]);
   /** An artist folder opens under the artist's picture and name (ArtistHeader). */
   const artistNode =
     !searchMode && lastCrumbNode && isArtistClass(lastCrumbNode.upnpClass) ? lastCrumbNode : null;
@@ -1166,8 +1214,34 @@ export function LibraryScreen(): React.JSX.Element {
   const { md, queueSourceActive, isCurrentTrack, isPlayingAlbum } = usePlayingMatch();
 
   const allTracks = useMemo(() => nodes.filter((n) => !n.isContainer), [nodes]);
+  const infoHereLate = useRef<(() => void) | null>(null);
+  useEffect(
+    () =>
+      setInfoHere(() => {
+        const open = infoHereLate.current;
+        open?.();
+        return open != null;
+      }),
+    [],
+  );
   menusLate.current = { albumNode, setSiblings, openVolume, allTracks };
-  const albumArtServer = albumNode ? (albumNode.artUrl ?? allTracks[0]?.artUrl ?? null) : null;
+  // ⌘I here (lib/infoHotkey): the album shown, an artist's folder, an artist's page, opened as
+  // their menus' Info… opens them (useLibraryMenus); late-bound, read when the key is pressed
+  const shownSubject =
+    !searchMode && !atRoot && state === "ready" ? (albumNode ?? artistNode) : null;
+  const shownArtistPage =
+    !searchMode && atRoot && lens === "artists" && artistPage && lensPools?.length
+      ? artistPageNode(artistPage, lensPools)
+      : null;
+  const infoSubject = shownSubject ?? shownArtistPage;
+  infoHereLate.current = infoSubject ? () => openInfoFor(infoSubject) : null;
+  // what the album's tracks say where the album is silent (lib/mediaFacts, the one rule the
+  // album's Info reads too): an album opened from another screen arrives with only its title
+  const albumSaid = useMemo(
+    () => (albumNode ? albumFromTracks(albumNode, allTracks) : null),
+    [albumNode, allTracks],
+  );
+  const albumArtServer = albumSaid?.artUrl ?? null;
   // the header's 160px tile (320 on retina) asks the first track's file when
   // the server's art is small (lib/bestArt)
   const firstTrack = allTracks[0];
@@ -1179,13 +1253,8 @@ export function LibraryScreen(): React.JSX.Element {
     true,
     albumNode ? artKeyOf(albumNode) : undefined,
   );
-  const albumArtist = albumNode
-    ? (albumNode.artist ??
-      (allTracks.length > 0 && allTracks.every((t) => t.artist === allTracks[0].artist)
-        ? allTracks[0].artist
-        : allTracks.length > 0
-          ? "Various artists"
-          : null))
+  const albumArtist = albumSaid
+    ? (albumSaid.artist ?? (allTracks.length > 0 ? "Various artists" : null))
     : null;
   const albumInQueue = allTracks.length > 0 && allTracks.every(trackQueued);
   // Format and size come from the tracks' <res> (Asset describes them; the
@@ -1398,6 +1467,7 @@ export function LibraryScreen(): React.JSX.Element {
       <EmptyState
         className="h-full"
         icon={Library}
+        art={<EmptyCrate />}
         title="No media libraries found"
         caption="UPnP servers on your network and USB storage attached to the streamer show up here."
       >
@@ -1420,7 +1490,14 @@ export function LibraryScreen(): React.JSX.Element {
     node: MediaNode,
     siblings: MediaNode[],
     ti: number,
-    opts: { showArt: boolean; note?: string | null; artistLabel?: string | null; links: boolean },
+    opts: {
+      showArt: boolean;
+      note?: string | null;
+      artistLabel?: string | null;
+      links: boolean;
+      /** The list Info steps through when it isn't `siblings` (an album's every disc). */
+      infoList?: MediaNode[];
+    },
   ): React.JSX.Element => (
     <TrackRow
       key={node.id}
@@ -1437,7 +1514,7 @@ export function LibraryScreen(): React.JSX.Element {
       selEnd={!(ti < siblings.length - 1 && selTracks.has(siblings[ti + 1].id))}
       onRowClick={(e) => trackRowClick(node, e)}
       onNavDrag={(e) => startTrackDrag(node, e)}
-      onMenu={(e) => openMenu(node, e)}
+      onMenu={(e) => openMenu(node, e, opts.infoList ?? siblings)}
       note={opts.note}
       artistLabel={opts.artistLabel}
       onAlbumLink={
@@ -1529,7 +1606,8 @@ export function LibraryScreen(): React.JSX.Element {
         setSelTracks(new Set());
       }}
     >
-      <header className="drag-region flex items-center gap-4 px-8 pt-8 pb-2">
+      {/* above the scroller, which reaches up under its lower strip for ring room (below) */}
+      <header className="drag-region relative z-10 flex items-center gap-4 px-8 pt-8 pb-2">
         {/* EXPERIMENT (0.7 exploration): the Analyze-audio sweep's pulse —
             the silent seconds between its toasts, made visible (the panel
             waveform's "Reading the file…" grammar). BASELINE-paired with the
@@ -1676,7 +1754,7 @@ export function LibraryScreen(): React.JSX.Element {
           the bare root, where the screen title already says it; the trail
           folds its middle when it would not fit (Crumbs) */}
       {!searchMode && (serverUdn != null || lens != null || path.length > 0) && (
-        <div data-library-crumbs className="no-drag px-8 pb-3 text-[12.5px]">
+        <div data-library-crumbs className="no-drag relative z-10 px-8 pb-3 text-[12.5px]">
           <Crumbs
             items={[
               {
@@ -1740,21 +1818,35 @@ export function LibraryScreen(): React.JSX.Element {
           const key = nodeKey(serverUdn, path);
           if (loadedKey.current === key) scrollMemory.set(key, e.currentTarget.scrollTop);
         }}
+        // RING ROOM at the top edge (docs/renderer.md; his call, 2026-10-21, when the doors'
+        // label went and their hover glow was cut flat at this edge): the scroller reaches 24px
+        // up under the header and the trail, padded by as much, so nothing moves and a hover
+        // glow has room above the first row; the strip fades rather than cuts (fade-top), clear
+        // across its top 12px, where the heading's letters and the trail's words reach down into
+        // it (nothing shows behind words: History's rule), in over the 12px below them, so the
+        // glow and any row scrolled up dissolve under the heading; a row scrolled into view stops
+        // below the strip (scroll-pt-6). The header and the trail sit above the scroller, their
+        // controls clickable over the strip. Only while the PAGE scrolls: a lens scrolls its own
+        // columns, and a mask around them stopped Chromium's own lazy loading inside them (his
+        // lenses' pictures, 0.12.0-rc.3), so a lens keeps the page as it was. Under the mask
+        // ArtImage looks ahead for its lazy pictures itself (S84).
+        style={{ "--fade-top-clear": "12px", "--fade-top-solid": "24px" } as React.CSSProperties}
         className={cx(
           // stable gutter: without it the scrollbar's appearance shifts every
           // right-aligned control as listings shrink/grow (macOS always-on
           // scrollbars — the "filter box moves" report)
-          "flex-1 px-8 pt-1 [scrollbar-gutter:stable]",
+          "flex-1 px-8 [scrollbar-gutter:stable]",
           // every lens scrolls its own column under its toolbar (the miller view's columns, the
           // tracks list, the albums grid since 2026-10-11) — the page must not; the artist page
           // is a page, and scrolls as one
           atRoot && lens != null && !searchMode && !artistPage
-            ? "overflow-hidden min-h-0 pb-6"
-            : // the floating bar overlaps the last rows at full scroll —
-              // selection mode adds scroll-room so every row can clear it
-              selTracks.size > 0
-              ? "overflow-y-auto pb-28"
-              : "overflow-y-auto pb-8",
+            ? "pt-1 overflow-hidden min-h-0 pb-6"
+            : cx(
+                "-mt-6 pt-7 scroll-pt-6 fade-top",
+                // the floating bar overlaps the last rows at full scroll —
+                // selection mode adds scroll-room so every row can clear it
+                selTracks.size > 0 ? "overflow-y-auto pb-28" : "overflow-y-auto pb-8",
+              ),
         )}
       >
         {showLoading && (
@@ -1980,6 +2072,8 @@ export function LibraryScreen(): React.JSX.Element {
                 <div className="divide-y divide-edge/50">
                   {g.tracks.map((node, ti) =>
                     trackRow(node, g.tracks, ti, {
+                      // Info steps through the whole album, every disc
+                      infoList: tracks,
                       showArt: !albumNode,
                       note: albumNoteFor(node),
                       artistLabel: albumNode
@@ -2015,7 +2109,7 @@ export function LibraryScreen(): React.JSX.Element {
         linkable={linkable}
         goToAlbum={goToAlbum}
         goToArtist={goToArtist}
-        tracksForInfo={tracksForInfo}
+        openInfoFor={openInfoFor}
         presetPicker={presetPicker}
         setPresetPicker={setPresetPicker}
         savePreset={savePreset}
@@ -2027,10 +2121,6 @@ export function LibraryScreen(): React.JSX.Element {
         playContainer={playContainer}
         playAlbumFrom={playAlbumFrom}
         act={act}
-        lensPools={lensPools}
-        server={server}
-        setMediaInfo={setMediaInfo}
-        nodeUdn={nodeUdn}
         playlistPicker={playlistPicker}
         setPlaylistPicker={setPlaylistPicker}
         serverUdn={serverUdn}

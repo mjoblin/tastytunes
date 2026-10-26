@@ -1,6 +1,7 @@
 import { IPC } from "@shared/ipc";
 import { shell } from "electron";
-import { mcpBridge } from "../app/runtime";
+import { hasLocalNetworkPrivacy } from "../app/localNetwork";
+import { deviceManager, mcpBridge } from "../app/runtime";
 import { checkUpdatesOnDemand, downloadUpdate, installUpdate } from "../app/updater";
 import {
   sendMenuCommand,
@@ -14,6 +15,18 @@ import { handle, listen } from "../app/guard";
 export function registerAppIpc(): void {
   handle(IPC.openExternal, (_e, url: string) => {
     if (/^https?:/i.test(url)) return shell.openExternal(url);
+    return Promise.resolve();
+  });
+  handle(IPC.localNetworkPrivacy, () =>
+    Promise.resolve(hasLocalNetworkPrivacy(process.platform, process.getSystemVersion())),
+  );
+  // a surface that failed to render says so in the diagnostics log (SurfaceBoundary)
+  handle(IPC.reportRenderError, (_e, surface: string, message: string) => {
+    deviceManager.log(
+      "error",
+      "renderer",
+      `${String(surface).slice(0, 40)} failed to render: ${String(message).slice(0, 300)}`,
+    );
     return Promise.resolve();
   });
   handle(IPC.updateDownload, () => downloadUpdate());

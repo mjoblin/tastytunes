@@ -24,9 +24,11 @@ import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { useWindowedList } from "@/hooks/useWindowedList";
 import { useArtByKeys } from "@/lib/artByKey";
 import { fromPlayEvent } from "@/lib/mediaRef";
+import { refSiblings } from "@/lib/infoSteps";
 import { openRefInLibrary, playRefNow } from "@/lib/mediaActions";
 import { trackMenuItems, type MediaMenuItem } from "@/lib/mediaMenus";
 import { cx, fmtCount, fmtDuration, fmtTime, matchesFilter } from "@/lib/format";
+import { scrollToStart } from "@/lib/scroll";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { monthLine, monthStartOf, statsFor } from "@/lib/historyStats";
 
@@ -371,7 +373,7 @@ export function HistoryTimeline({
     const sc = scrollRef.current;
     if (!sc) return;
     const el = sc.querySelector<HTMLElement>(`[data-win-index="${i}"]`);
-    if (el) el.scrollIntoView({ block: "start" });
+    if (el) scrollToStart(sc, el);
     else sc.scrollTop = win.offsetOf(i);
   };
 
@@ -545,6 +547,12 @@ export function HistoryTimeline({
       items: trackMenuItems(ref, {
         playNow: () => void playRefNow(ref),
         openInLibrary: () => void openRefInLibrary(ref),
+        // Info steps through the plays as shown, the open sessions' (lib/infoSteps)
+        infoList: refSiblings(
+          items.flatMap((it) => (it.kind === "play" && it.event.kind === "play" ? [it.event] : [])),
+          ev,
+          fromPlayEvent,
+        ),
       }),
     });
   };

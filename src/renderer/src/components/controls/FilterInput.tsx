@@ -4,7 +4,8 @@ import { cx, fmtCount } from "@/lib/format";
 
 /**
  * Compact text filter for the list screens' headers. `/` focuses it from
- * anywhere (useShortcuts); Escape clears, then blurs. Shows shown/total while
+ * anywhere (useShortcuts); Escape and Enter hand the keyboard back without
+ * clearing, the ✕ (or ⌘⌫) clears. Shows shown/total while
  * active; the value lives in the store per screen (session only), so an
  * active filter is always visible in the box.
  */
@@ -82,7 +83,9 @@ export function FilterInput({
         onBlur={() => document.documentElement.classList.remove("filter-focused")}
         placeholder="Filter"
         spellCheck={false}
-        className="w-28 bg-transparent outline-none text-[12.5px] text-ink placeholder:text-faint"
+        // 80px of text (0.12.0, his call: people filter by a word or two, not long strings; the
+        // count's slot beside it is sized separately), so a toolbar fits more before it wraps
+        className="w-20 bg-transparent outline-none text-[12.5px] text-ink placeholder:text-faint"
       />
       {/* count + clear always occupy their space so the box never changes
           width — the slot is sized from THIS listing's total ("345/345"

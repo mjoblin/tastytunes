@@ -18,7 +18,7 @@ import {
   type KnownStats,
 } from "@shared/model";
 import { albumDr14 } from "@/lib/dr14";
-import { analyzeTrack } from "@/components/media/Waveform";
+import { analyzeTrack, storedIsCurrent } from "@/components/media/Waveform";
 
 const pending = new Set<string>();
 let queueTail: Promise<unknown> = Promise.resolve();
@@ -29,6 +29,20 @@ export interface AnalyzeAlbumResult {
   analyzed: number;
   /** The recorded album DR; null when any track failed to read. */
   dr: number | null;
+  /** Every track was already current, so every one was measured again (againIfDone). */
+  again: boolean;
+}
+
+/**
+ * ANALYZE AUDIO ALWAYS DOES REAL WORK (0.12.0, his ask: "what if the user wants to force a
+ * reanalysis?"). The tracks with no analysis, or one an earlier version wrote, are measured; when
+ * there are none, every track is measured again from its file. A current analysis of an unchanged
+ * file comes out the same, but a file replaced under the same title, artist, album and length
+ * keeps its old one otherwise. True when the sweep should measure again.
+ */
+async function againIfDone(tracks: readonly MediaNode[]): Promise<boolean> {
+  const current = await Promise.all(tracks.map((t) => storedIsCurrent(audioAnalysisKey(t))));
+  return current.every(Boolean);
 }
 
 /** The reason Analyze audio is disabled on the streamer's own server: its
@@ -96,9 +110,10 @@ async function sweep(
       }
     }
     if (tracks.length === 0) return null;
-    const drs = await sweepTracks(tracks, serverUdn, progress);
+    const again = await againIfDone(tracks);
+    const drs = await sweepTracks(tracks, serverUdn, progress, again);
     if (drs.length !== tracks.length)
-      return { tracks: tracks.length, analyzed: drs.length, dr: null };
+      return { tracks: tracks.length, analyzed: drs.length, dr: null, again };
     // the album's loudness integrates across every track's gated blocks (the
     // standard's album measurement), read back from the cache just written
     const stored = await Promise.all(
@@ -115,7 +130,7 @@ async function sweep(
     };
     void tt.albumDrPut(key, entry);
     useStore.getState().setAlbumDrEntry(key, entry);
-    return { tracks: tracks.length, analyzed: drs.length, dr: entry.dr };
+    return { tracks: tracks.length, analyzed: drs.length, dr: entry.dr, again };
   } finally {
     // a queued sweep repaints the affordance immediately; otherwise go quiet
     if (waiting === 0) useStore.getState().setAnalysisProgress(null);
@@ -128,12 +143,13 @@ async function sweepTracks(
   tracks: readonly MediaNode[],
   serverUdn: string,
   progress: (done: number, total: number) => void,
+  force = false,
 ): Promise<number[]> {
   const drs: number[] = [];
   for (let i = 0; i < tracks.length; i++) {
     progress(i, tracks.length);
     const t = tracks[i];
-    const a = await analyzeTrack(t.serverUdn ?? serverUdn, t.id, audioAnalysisKey(t));
+    const a = await analyzeTrack(t.serverUdn ?? serverUdn, t.id, audioAnalysisKey(t), { force });
     if (a) drs.push(a.dr);
   }
   progress(tracks.length, tracks.length);
@@ -150,7 +166,7 @@ async function sweepTracks(
 export async function analyzeTracks(
   label: string,
   tracks: readonly MediaNode[],
-): Promise<{ tracks: number; analyzed: number } | "busy" | null> {
+): Promise<{ tracks: number; analyzed: number; again: boolean } | "busy" | null> {
   if (tracks.length === 0) return null;
   const key = `tracks:${label}`;
   if (pending.has(key)) return "busy";
@@ -162,8 +178,9 @@ export async function analyzeTracks(
       useStore.getState().setAnalysisProgress({ key, album: label, done, total, queued: waiting });
     progress(0, tracks.length);
     try {
-      const drs = await sweepTracks(tracks, tracks[0].serverUdn ?? "", progress);
-      return { tracks: tracks.length, analyzed: drs.length };
+      const again = await againIfDone(tracks);
+      const drs = await sweepTracks(tracks, tracks[0].serverUdn ?? "", progress, again);
+      return { tracks: tracks.length, analyzed: drs.length, again };
     } finally {
       if (waiting === 0) useStore.getState().setAnalysisProgress(null);
     }
@@ -216,6 +233,8 @@ export function useAlbumDr(): Record<string, AlbumDr> {
 export function useKnownStats(keys: readonly string[]): Record<string, KnownStats> {
   const waveformsOn = useStore((s) => s.settings.waveforms);
   const sweepIdle = useStore((s) => s.analysisProgress == null);
+  // main remade the summaries (tempo and key joined them in 0.12.0): read again
+  const epoch = useStore((s) => s.analysisStatsEpoch);
   const sig = keys.join("\u0000");
   const [map, setMap] = useState<Record<string, KnownStats>>({});
   useEffect(() => {
@@ -230,8 +249,16 @@ export function useKnownStats(keys: readonly string[]): Record<string, KnownStat
     return () => {
       stale = true;
     };
-  }, [sig, sweepIdle, waveformsOn]);
+  }, [sig, sweepIdle, waveformsOn, epoch]);
   return map;
+}
+
+/** Which of these keys have a stored analysis, in the order given: the same cache-only read,
+ *  once, for a surface that draws a stored analysis rather than a cell (the Library's Tracks
+ *  door picks its waveforms by it). */
+export async function analyzedKeys(keys: readonly string[]): Promise<string[]> {
+  const known = await tt.audioStatsMany([...keys]).catch(() => null);
+  return known ? keys.filter((k) => k in known) : [];
 }
 
 /** The DR view of useKnownStats — what the Queue, Playlists and Favorites rows read. */

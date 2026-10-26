@@ -313,6 +313,15 @@ export class DeviceManager {
     this.setConnection({ phase: "idle" });
   }
 
+  /** Whether `socket` is still this manager's and open, waiting up to `ms` for a reconnect. */
+  private async socketBack(socket: SmoipSocket, ms = 5000): Promise<boolean> {
+    const until = Date.now() + ms;
+    while (this.socket === socket && !socket.isOpen() && Date.now() < until) {
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    return this.socket === socket && socket.isOpen();
+  }
+
   /** Rate-limited liveness probe, run on window focus and system resume. */
   healthCheck(): void {
     const now = Date.now();
@@ -557,6 +566,14 @@ export class DeviceManager {
       this.cache.systemPower.power !== "ON"
     ) {
       await this.ensureAwake(this.askedBy(cmd));
+      // The wake takes seconds, and the connection can drop and reconnect across it (or another
+      // streamer be chosen meanwhile): the command waits a moment for this manager's socket to be
+      // open again, else it fails loudly like any other, never into a closed socket (0.12.0-rc.2,
+      // the 0.11 re-score; S127)
+      if (!(await this.socketBack(socket))) {
+        this.log("warn", "command", `dropped ${cmd.type} — socket not open after the wake`);
+        throw new Error(`streamer socket not open after the wake (${cmd.type})`);
+      }
     }
 
     // PASSIVE-ONLY firmware policy (explicit user decision): there is NO command
@@ -990,7 +1007,9 @@ export class DeviceManager {
     for (const wc of this.frameWatchers) if (!wc.isDestroyed()) wc.send("tt:push", msg);
   }
 
-  private log(level: LogEntry["level"], scope: string, text: string): void {
+  /** A line in the diagnostics log (the ring the Device screen shows, and the console); public
+   *  since the URL scheme, whose verbs report there too (app/urlActions). */
+  log(level: LogEntry["level"], scope: string, text: string): void {
     const entry: LogEntry = { at: Date.now(), level, scope, text };
     this.logs.push(entry);
     if (this.logs.length > LOG_RING_SIZE) this.logs.shift();

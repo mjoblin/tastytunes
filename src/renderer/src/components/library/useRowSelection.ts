@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { onScreenKey } from "@/lib/keyboardOwner";
 
 // The row-selection grammar every listing surface speaks, in ONE home
 // (2026-09-13, step two of the lenses round; the Library's track rows, the
@@ -70,22 +71,22 @@ export function useRowSelection<K extends string | number = string>(d: {
 
   // The selection's keyboard: ⌘A gathers the rows shown; with a selection,
   // Esc exits. Never in a text box.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent): void => {
-      const t = e.target;
-      if (t instanceof HTMLElement && t.matches("input, textarea, [contenteditable]")) return;
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "a") {
-        if (!canSelectAll || keys.length === 0) return;
-        e.preventDefault();
-        setSelected(new Set(keys));
-        return;
-      }
-      if (selected.size === 0) return;
-      if (e.key === "Escape" && !holdEscape?.current) setSelected(new Set());
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [keys, canSelectAll, selected.size, holdEscape]);
+  useEffect(
+    () =>
+      onScreenKey((e) => {
+        const t = e.target;
+        if (t instanceof HTMLElement && t.matches("input, textarea, [contenteditable]")) return;
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "a") {
+          if (!canSelectAll || keys.length === 0) return;
+          e.preventDefault();
+          setSelected(new Set(keys));
+          return;
+        }
+        if (selected.size === 0) return;
+        if (e.key === "Escape" && !holdEscape?.current) setSelected(new Set());
+      }),
+    [keys, canSelectAll, selected.size, holdEscape],
+  );
   // nav-rail and play-bar blank clicks clear too (the queue's rule; top
   // strips are drag-region and never deliver clicks)
   useEffect(() => {

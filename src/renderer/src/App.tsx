@@ -24,6 +24,7 @@ import { CommandPalette } from "@/components/overlays/CommandPalette";
 import { InfoModal } from "@/components/overlays/InfoModal";
 import { MediaInfoModal } from "@/components/overlays/MediaInfoModal";
 import { LargeQueueConfirm } from "@/components/overlays/LargeQueueConfirm";
+import { SurfaceBoundary } from "@/components/chrome/SurfaceBoundary";
 import { DisplayMode } from "@/components/playback/DisplayMode";
 import { NowPlayingScreen } from "@/screens/NowPlayingScreen";
 import { QueueScreen } from "@/screens/QueueScreen";
@@ -57,6 +58,8 @@ export default function App(): React.JSX.Element {
   const diagnosticsOpen = useStore((s) => s.diagnosticsOpen);
   const mediaInfo = useStore((s) => s.mediaInfo);
   const paletteOpen = useStore((s) => s.paletteOpen);
+  const shortcutsOpen = useStore((s) => s.shortcutsOpen);
+  const infoOpen = useStore((s) => s.infoOpen);
   const displayMode = useStore((s) => s.displayMode);
   const setDisplayMode = useStore((s) => s.setDisplayMode);
 
@@ -170,24 +173,54 @@ export default function App(): React.JSX.Element {
 
       <div className="relative h-full flex flex-col">
         <div className="flex-1 flex min-h-0 relative">
-          <Nav />
+          {/* each surface in a boundary of its own (SurfaceBoundary): a failure stays in it */}
+          <SurfaceBoundary surface="the navigation" shape="strip">
+            <Nav />
+          </SurfaceBoundary>
           <main className="flex-1 min-w-0 min-h-0 relative">
             {/* main-area-only ambient art, behind the screen content */}
             {!coverWindow && ambient}
-            <div className="relative h-full">{content}</div>
-            {diagnosticsOpen && <DiagnosticsDrawer />}
+            <div className="relative h-full">
+              <SurfaceBoundary surface="this screen" shape="screen" resetKey={screen}>
+                {content}
+              </SurfaceBoundary>
+            </div>
+            {diagnosticsOpen && (
+              <SurfaceBoundary surface="diagnostics" shape="quiet">
+                <DiagnosticsDrawer />
+              </SurfaceBoundary>
+            )}
             <ToastHost />
           </main>
         </div>
-        <PlaybackBar />
-        {displayMode && <DisplayMode />}
+        <SurfaceBoundary surface="the playback bar" shape="strip">
+          <PlaybackBar />
+        </SurfaceBoundary>
+        {displayMode && (
+          <SurfaceBoundary surface="display mode" shape="quiet">
+            <DisplayMode />
+          </SurfaceBoundary>
+        )}
         {/* The modals stay mounted and take their open state themselves —
-            the shell's exit fade needs the DOM to outlive the close. */}
-        <ShortcutsOverlay />
-        {paletteOpen && <CommandPalette />}
-        <InfoModal />
-        <MediaInfoModal target={mediaInfo} />
-        <LargeQueueConfirm />
+            the shell's exit fade needs the DOM to outlive the close. A failed one draws
+            nothing and toasts; the next open tries again (resetKey). */}
+        <SurfaceBoundary surface="shortcuts" shape="quiet" resetKey={shortcutsOpen}>
+          <ShortcutsOverlay />
+        </SurfaceBoundary>
+        {paletteOpen && (
+          <SurfaceBoundary surface="the command palette" shape="quiet">
+            <CommandPalette />
+          </SurfaceBoundary>
+        )}
+        <SurfaceBoundary surface="info" shape="quiet" resetKey={infoOpen}>
+          <InfoModal />
+        </SurfaceBoundary>
+        <SurfaceBoundary surface="media info" shape="quiet" resetKey={mediaInfo}>
+          <MediaInfoModal target={mediaInfo} />
+        </SurfaceBoundary>
+        <SurfaceBoundary surface="the large queue confirm" shape="quiet">
+          <LargeQueueConfirm />
+        </SurfaceBoundary>
       </div>
     </div>
   );
@@ -340,6 +373,16 @@ function ConnectGate(): React.JSX.Element {
     prevDiscovering.current = discovering;
   }, [discovering]);
   const stillLooking = !busy && devices.length === 0 && sweeps >= 3;
+  // A Mac that asks before an app reaches the local network (macOS 15 and later) drops both the
+  // search and an IP typed by hand when the ask was declined, so the still-looking note names
+  // the setting there (main's app/localNetwork)
+  const [localNetworkPrivacy, setLocalNetworkPrivacy] = useState(false);
+  useEffect(() => {
+    void tt
+      .localNetworkPrivacy()
+      .then(setLocalNetworkPrivacy)
+      .catch(() => {});
+  }, []);
   // THE ADDRESS IN PLACE (0.10.0, the first five minutes): typing a streamer's IP opens a
   // field here rather than sending a new owner off to the Device screen
   const [ipOpen, setIpOpen] = useState(false);
@@ -488,6 +531,12 @@ function ConnectGate(): React.JSX.Element {
             <div className="text-[12.5px] text-faint max-w-sm leading-relaxed">
               Still looking. The search repeats on its own. If the streamer sits on a different
               subnet or Wi-Fi band, enter its IP manually below.
+            </div>
+          )}
+          {stillLooking && localNetworkPrivacy && (
+            <div data-local-network className="text-[12.5px] text-faint max-w-sm leading-relaxed">
+              Your Mac may be blocking TastyTunes from your local network. Allow it in System
+              Settings › Privacy & Security › Local Network.
             </div>
           )}
           <div className="flex items-center gap-4">

@@ -380,4 +380,47 @@ export const ONE_HOME = [
     message: "A Settings pointer reads Settings › Tab, never an arrow",
     bad: { file: `${R}screens/RadioScreen.tsx`, code: "const s = 'Settings → Connections';" },
   },
+  {
+    id: "window-keydown",
+    was: "none (0.12.0: the Library's Backspace and the Queue's Delete acted behind the Info window)",
+    selector:
+      "CallExpression[callee.object.name='window'][callee.property.name='addEventListener'][arguments.0.value='keydown']",
+    files: [`^${R}`],
+    allow: [
+      "lib/keyboardOwner\\.ts$",
+      "hooks/useShortcuts\\.ts$",
+      "hooks/usePopover\\.ts$",
+      "hooks/useNavDrag\\.tsx$",
+      "components/controls/Slider\\.tsx$",
+      "components/device/ToneEq\\.tsx$",
+    ],
+    message:
+      "A screen hears keys through onScreenKey (lib/keyboardOwner), quiet while a modal has the keyboard",
+    bad: {
+      file: `${R}screens/QueueScreen.tsx`,
+      code: "window.addEventListener('keydown', onKey);",
+    },
+  },
+  {
+    id: "scroll-into-view",
+    was: "none (docs/renderer.md banned it in prose; HistoryTimeline's month rail still called it, found 2026-10-13)",
+    selector: "CallExpression[callee.property.name='scrollIntoView']",
+    files: [`^${R}`],
+    message:
+      "scrollIntoView scrolls every scrollable ancestor, the window too: use lib/scroll's container-scoped helpers",
+    bad: {
+      file: `${R}components/history/HistoryTimeline.tsx`,
+      code: "el.scrollIntoView({ block: 'start' });",
+    },
+  },
+  {
+    id: "url-scheme-registration",
+    was: "none (0.12.0, the URL scheme: a dev run registering Electron.app would take tastytunes:// from the installed app)",
+    selector:
+      "CallExpression[callee.property.name=/^(setAsDefaultProtocolClient|removeAsDefaultProtocolClient)$/]",
+    allow: ["^src/main/app/urlActions\\.ts$"],
+    message:
+      "The tastytunes:// scheme is registered only in app/urlActions, and only by a packaged build",
+    bad: { file: "src/main/index.ts", code: 'app.setAsDefaultProtocolClient("tastytunes");' },
+  },
 ];

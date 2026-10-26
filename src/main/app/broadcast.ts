@@ -27,6 +27,13 @@ export function broadcastAlbumDrs(found: readonly { key: string; entry: AlbumDr 
       w.webContents.send(IPC.push, { kind: "albumDr", key, entry });
 }
 
+/** Every window re-reads the rows' measured facts: the stored analyses' summaries were remade
+ *  (refreshAnalysisSummaries, the tempo and key they gained in 0.12.0). */
+export function broadcastAnalysisStats(): void {
+  for (const w of BrowserWindow.getAllWindows())
+    w.webContents.send(IPC.push, { kind: "analysisStats" });
+}
+
 // The History tab's truth row stays live: every append (or failed append)
 // re-reads the stats and pushes them — the recents pattern, at track-boundary
 // frequency.

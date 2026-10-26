@@ -110,3 +110,48 @@ describe("the migration from the single-file cache", () => {
     expect(existsSync(join(dir, "analysis.json")) || existsSync(join(dir, "analysis"))).toBe(false);
   });
 });
+
+describe("summaries remade from their files", () => {
+  it("remakes only the stale summaries, in the background, and keeps them", async () => {
+    const before = store(5);
+    before.set("a", { dr: 9, env: [1, 2] });
+    before.set("b", { dr: 7, env: [3] });
+    before.flush();
+    // a later build summarizes more: what the old summaries lack is remade from the files
+    type S2 = { dr: number; n?: number };
+    const later = (): EntryStore<V, S2> =>
+      new EntryStore<V, S2>({
+        dir: () => dir,
+        name: "analysis",
+        cap: 5,
+        summarize: (v) => ({ dr: v.dr, n: v.env.length }),
+      });
+    const s = later();
+    expect(s.peekSummary("a")).toEqual({ dr: 9 });
+    const changed = await s.refreshSummaries((x) => x.n === undefined, 1);
+    expect(changed).toBe(2);
+    expect(s.peekSummary("a")).toEqual({ dr: 9, n: 2 });
+    expect(s.peekSummary("b")).toEqual({ dr: 7, n: 1 });
+    expect(await s.refreshSummaries((x) => x.n === undefined)).toBe(0);
+    s.flush();
+    expect(later().peekSummary("b")).toEqual({ dr: 7, n: 1 });
+  });
+
+  it("skips an entry whose file is gone, and joins a refresh already running", async () => {
+    const a = store(5);
+    a.set("a", { dr: 9, env: [1] });
+    a.set("b", { dr: 8, env: [1, 1] });
+    a.flush();
+    unlinkSync(join(dir, "analysis", readdirSync(join(dir, "analysis"))[0]));
+    const s = new EntryStore<V, { dr: number; n?: number }>({
+      dir: () => dir,
+      name: "analysis",
+      cap: 5,
+      summarize: (v) => ({ dr: v.dr, n: v.env.length }),
+    });
+    const one = s.refreshSummaries((x) => x.n === undefined);
+    const two = s.refreshSummaries((x) => x.n === undefined);
+    expect(two).toBe(one);
+    expect(await one).toBe(1);
+  });
+});

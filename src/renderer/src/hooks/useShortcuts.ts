@@ -1,5 +1,8 @@
 import { useEffect } from "react";
 import { tt } from "@/api";
+import { toggleInfo } from "@/lib/infoHotkey";
+import { infoBack, infoForward, stepInfo } from "@/lib/infoSteps";
+import { modalHasKeyboard } from "@/lib/keyboardOwner";
 import { useStore, type Screen } from "@/store";
 import { SCREENS, IS_MAC } from "@/lib/screens";
 
@@ -8,6 +11,17 @@ import { SCREENS, IS_MAC } from "@/lib/screens";
 // old hand-written copy had l: 'library', silently eating seek-forward).
 // One key a screen, the one it shows: the hidden-alias field that carried
 // Recently Played's R for a cycle went in 0.9.0 with no other user.
+/** The keys dnd-kit's keyboard sensor uses on a focused drag activator (see the guard below). */
+const DRAG_KEYS = new Set([
+  " ",
+  "Enter",
+  "Escape",
+  "ArrowUp",
+  "ArrowDown",
+  "ArrowLeft",
+  "ArrowRight",
+]);
+
 const SCREEN_KEYS: Record<string, Screen> = Object.fromEntries(
   SCREENS.map((s) => [s.key.toLowerCase(), s.id]),
 );
@@ -35,6 +49,21 @@ export function useShortcuts(opts?: { transportOnly?: boolean }): void {
         s.setPaletteOpen(!s.paletteOpen);
         return;
       }
+      // ⌘I / Ctrl+I: Info for what is in front of you (lib/infoHotkey), from anywhere but an
+      // open palette, shortcuts sheet or About. The View menu's Get Info carries the same key;
+      // this serves the keys the menu never sees.
+      if (
+        !transportOnly &&
+        (e.metaKey || e.ctrlKey) &&
+        !e.altKey &&
+        !e.shiftKey &&
+        (e.key === "i" || e.key === "I")
+      ) {
+        e.preventDefault();
+        const s = useStore.getState();
+        if (!s.paletteOpen && !s.shortcutsOpen && !s.infoOpen) toggleInfo();
+        return;
+      }
       // ⌘F / Ctrl+F: find semantics, and CONTEXTUAL like a browser's.
       //
       // Inside the Library it opens the LIBRARY's own search — that surface has
@@ -52,6 +81,8 @@ export function useShortcuts(opts?: { transportOnly?: boolean }): void {
         (e.key === "f" || e.key === "F")
       ) {
         e.preventDefault();
+        // a modal has the keyboard: no search opens behind it (lib/keyboardOwner)
+        if (modalHasKeyboard()) return;
         const s = useStore.getState();
         // ⌘⇧F is the editor idiom: find HERE (⌘F, contextual) vs search
         // EVERYWHERE (⌘⇧F, unconditional). The shift form is what reaches the
@@ -84,6 +115,14 @@ export function useShortcuts(opts?: { transportOnly?: boolean }): void {
       ) {
         e.preventDefault();
         const s = useStore.getState();
+        // the Info window's own pages while it is open, nothing behind another modal
+        // (lib/infoSteps, lib/keyboardOwner)
+        if (s.mediaInfo) {
+          if (e.key === "ArrowLeft") infoBack();
+          else infoForward();
+          return;
+        }
+        if (modalHasKeyboard()) return;
         if (e.key === "ArrowLeft") s.goBack();
         else s.goForward();
         return;
@@ -114,7 +153,13 @@ export function useShortcuts(opts?: { transportOnly?: boolean }): void {
       // bubbled event (`if (activator && event.target !== activator) return
       // false` in core.esm.js), so a child's keydown was never going to reorder
       // anything.
+      //
+      // THE DRAG'S KEYS ONLY (0.12.0-rc.2; the strict live gate's Radio check): the activator
+      // used to take EVERY key, so a click on a preset card's body (whose root is the activator)
+      // left R, Q and every screen key dead until focus moved. It owns what the sensor uses
+      // (Space and Enter lift and drop, Escape cancels, the arrows move) and nothing else.
       if (
+        DRAG_KEYS.has(e.key) &&
         target?.matches('[aria-roledescription="sortable"], [aria-roledescription="draggable"]')
       ) {
         return;
@@ -154,6 +199,22 @@ export function useShortcuts(opts?: { transportOnly?: boolean }): void {
         }
         if (e.key === "`") {
           s.setDiagnosticsOpen(!s.diagnosticsOpen);
+          return;
+        }
+        // A MODAL TAKES THE KEYBOARD (0.12.0, found building the Info modal's ‹ ›): with Info,
+        // the shortcuts overlay or About open, every key below acted on the room underneath
+        // (← and → skipped the streamer's track, ↑ and ↓ moved its volume, a letter switched
+        // the screen behind the modal, a digit recalled a preset). Escape, ? and ` above keep
+        // working; ← and → step the Info modal through the list it was opened from.
+        // Backspace goes back a page in Info, as it goes up a level in the Library.
+        if (s.mediaInfo || s.shortcutsOpen || s.infoOpen || modalHasKeyboard()) {
+          if (s.mediaInfo && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+            e.preventDefault();
+            void stepInfo(e.key === "ArrowLeft" ? -1 : 1);
+          } else if (s.mediaInfo && e.key === "Backspace") {
+            e.preventDefault();
+            infoBack();
+          }
           return;
         }
 
@@ -242,14 +303,18 @@ export function useShortcuts(opts?: { transportOnly?: boolean }): void {
     // evict it — these fire device commands, which must never fan out N×.
     window.__ttShortcutsOff?.();
     window.addEventListener("keydown", onKeyDown);
+    // the mouse's side buttons: the Info window's pages while it is open, nothing behind
+    // another modal, else the app's history
     const onMouseUp = (e: MouseEvent): void => {
-      if (transportOnly) return;
-      if (e.button === 3) {
-        e.preventDefault();
-        useStore.getState().goBack();
-      } else if (e.button === 4) {
-        e.preventDefault();
-        useStore.getState().goForward();
+      if (transportOnly || (e.button !== 3 && e.button !== 4)) return;
+      e.preventDefault();
+      const s = useStore.getState();
+      if (s.mediaInfo) {
+        if (e.button === 3) infoBack();
+        else infoForward();
+      } else if (!modalHasKeyboard()) {
+        if (e.button === 3) s.goBack();
+        else s.goForward();
       }
     };
     window.addEventListener("mouseup", onMouseUp);

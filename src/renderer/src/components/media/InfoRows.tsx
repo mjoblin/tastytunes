@@ -19,18 +19,34 @@ import { FACT_SEP } from "@/lib/mediaFacts";
 
 export type Row = [label: string, value: React.ReactNode];
 
+/** The sections of one Info surface share one label column, as wide as the longest label shown
+ *  (at most 9rem), its labels set against their values, so every label sits next to its value
+ *  and every section's values still line up (0.12.0, his ask: a fixed 112px column left a short
+ *  label like Year looking abandoned; right-aligned his pick, the Mac's Get Info look). Every
+ *  Section sits inside one. */
+export function InfoSections({ children }: { children: React.ReactNode }): React.JSX.Element {
+  return (
+    <div
+      data-info-sections
+      className="grid grid-cols-[fit-content(9rem)_minmax(0,1fr)] gap-x-4 gap-y-5"
+    >
+      {children}
+    </div>
+  );
+}
+
 export function Section({ title, rows }: { title: string; rows: Row[] }): React.JSX.Element | null {
   const shown = rows.filter(
     ([, v]) => v != null && v !== "" && !(Array.isArray(v) && v.length === 0),
   );
   if (shown.length === 0) return null;
   return (
-    <div data-info-section={title.toLowerCase()}>
-      <div className="microlabel mb-1.5">{title}</div>
-      <dl className="grid grid-cols-[112px_1fr] gap-x-4 gap-y-1 text-[12.5px]">
+    <div data-info-section={title.toLowerCase()} className="col-span-full grid grid-cols-subgrid">
+      <div className="microlabel mb-1.5 col-span-full">{title}</div>
+      <dl className="col-span-full grid grid-cols-subgrid gap-y-1 text-[12.5px]">
         {shown.map(([label, value]) => (
           <div key={label} className="contents">
-            <dt className="text-faint truncate">{label}</dt>
+            <dt className="text-faint truncate text-right">{label}</dt>
             <dd className="text-ink min-w-0 break-words" data-info-field={label}>
               {value}
             </dd>
@@ -113,23 +129,34 @@ export function streamRows(stream: StreamInfo): Row[] {
 }
 
 /** A track's own file format facts, from the library index. */
-/** What the Loudness row reads: the track's integrated loudness and true peak. */
+/** What the Loudness row reads: the track's integrated loudness, its range and true peak. */
 export interface LoudnessFacts {
   lufs: number | null;
   truePeakDb: number | null;
+  /** Loudness range in LU, measured and stored since 0.8.0, shown since 0.12.0. */
+  lra?: number | null;
 }
 
-/** "−9.8 LUFS · true peak −0.3 dBTP" — the standard's own units, one decimal. */
+/** What the Tempo and Key rows read: shared/model's tempoBpm and keyName, null below their
+ *  confidence floors. */
+export interface MeasuredFacts {
+  tempo: number | null;
+  key: string | null;
+}
+
+/** "−9.8 LUFS · range 6.2 LU · true peak −0.3 dBTP" — the standard's own units, one decimal. */
 export function loudnessLine(l: LoudnessFacts | null | undefined): string | null {
   if (l?.lufs == null) return null;
+  const range = l.lra != null ? `${FACT_SEP}range ${l.lra.toFixed(1)} LU` : "";
   const tp = l.truePeakDb != null ? `${FACT_SEP}true peak ${l.truePeakDb.toFixed(1)} dBTP` : "";
-  return `${l.lufs.toFixed(1)} LUFS${tp}`;
+  return `${l.lufs.toFixed(1)} LUFS${range}${tp}`;
 }
 
 export function trackFormatRows(
   node: MediaNode,
   dr: number | null = null,
   loud: LoudnessFacts | null = null,
+  measured: MeasuredFacts | null = null,
 ): Row[] {
   const f = node.format;
   if (node.isContainer || !f) return [];
@@ -155,6 +182,10 @@ export function trackFormatRows(
     // integrated, with the true peak beside it. Neutral text — a number, not
     // a verdict; the DR row above carries the judgement.
     ["Loudness", loudnessLine(loud)],
+    // TEMPO AND KEY (0.12.0, the first of the measured facts): the app's other facts measured
+    // from the file, beside DR and loudness, each only above its confidence floor
+    ["Tempo", measured?.tempo != null ? `${measured.tempo} bpm` : null],
+    ["Key", measured?.key ?? null],
   ];
 }
 

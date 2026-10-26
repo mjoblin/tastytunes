@@ -1,5 +1,7 @@
 import { create } from "zustand";
 import { contentPlayId, PLAYING_SETTLE_MS } from "@/lib/playingEntry";
+import type { InfoList, InfoPage } from "@/lib/infoSteps";
+import { modalHasKeyboard } from "@/lib/keyboardOwner";
 import type { MenuCommand, PushMessage, Snapshot } from "@shared/ipc";
 import type {
   AppSettings,
@@ -108,6 +110,10 @@ export interface LibraryNodeTarget {
   title: string;
   /** A track to land on: scrolled to and flashed once the album's listing lands. */
   track?: string;
+  /** The track's id and length, so of two tracks with its title the landing finds the one meant
+   *  (components/library/landing; Malcolm's twins, 0.12.0-rc.3). */
+  trackId?: string | null;
+  trackSecs?: number | null;
   /** The target's own class, for the stand-in node the Library lands on (an artist opened
    *  from Search landed as an album, with the album header's Play and heart, 2026-10-11);
    *  an album when unsaid. */
@@ -298,6 +304,12 @@ interface TTState {
   infoOpen: boolean;
   /** The media Info modal's subject; null = closed. */
   mediaInfo: MediaInfoTarget | null;
+  /** The list the Info modal was opened from, for its ‹ › (lib/infoSteps); null for a lone Info. */
+  mediaInfoList: InfoList | null;
+  /** The Info window's own history (lib/infoSteps): the pages behind the one shown and the
+   *  pages gone back from. Emptied when Info closes. */
+  mediaInfoBack: InfoPage[];
+  mediaInfoForward: InfoPage[];
   paletteOpen: boolean;
   displayMode: boolean;
   /** Lyrics drawer on the Now Playing screen (ephemeral, not persisted). */
@@ -448,10 +460,15 @@ interface TTState {
   adoptFrames: (frames: FrameEntry[]) => void;
   setShortcutsOpen: (open: boolean) => void;
   setInfoOpen: (open: boolean) => void;
-  setMediaInfo: (target: MediaInfoTarget | null) => void;
+  /** Opens (or closes, with null) the Info modal; a list makes it step (lib/infoSteps), and any
+   *  open without one is a lone Info. */
+  setMediaInfo: (target: MediaInfoTarget | null, list?: InfoList | null) => void;
   /** EXPERIMENT (0.7 exploration): the album-DR map (albumDrKey -> AlbumDr),
    *  loaded lazily by useAlbumDr and updated in place by Analyze audio. */
   albumDr: Record<string, AlbumDr>;
+  /** Bumped when main remade the stored analyses' summaries (the rows' measured facts read
+   *  again: useKnownStats). */
+  analysisStatsEpoch: number;
   setAlbumDr: (map: Record<string, AlbumDr>) => void;
   setAlbumDrEntry: (key: string, entry: AlbumDr) => void;
   /** EXPERIMENT: the running sweep's position (null = idle). */
@@ -604,6 +621,9 @@ export const useStore = create<TTState>((set, get) => ({
   shortcutsOpen: false,
   infoOpen: false,
   mediaInfo: null,
+  mediaInfoList: null,
+  mediaInfoBack: [],
+  mediaInfoForward: [],
   paletteOpen: false,
   displayMode: false,
   lyricsOpen: false,
@@ -775,8 +795,15 @@ export const useStore = create<TTState>((set, get) => ({
   adoptFrames: (frames) => set({ frames: frames.slice(-FRAME_RING_SIZE) }),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   setInfoOpen: (infoOpen) => set({ infoOpen }),
-  setMediaInfo: (mediaInfo) => set({ mediaInfo }),
+  // replaces the page shown (a step, a lookup landing); closing empties the history
+  setMediaInfo: (mediaInfo, list) =>
+    set(
+      mediaInfo
+        ? { mediaInfo, mediaInfoList: list ?? null }
+        : { mediaInfo: null, mediaInfoList: null, mediaInfoBack: [], mediaInfoForward: [] },
+    ),
   albumDr: {},
+  analysisStatsEpoch: 0,
   setAlbumDr: (albumDr) => set({ albumDr }),
   setAlbumDrEntry: (key, entry) => set((s) => ({ albumDr: { ...s.albumDr, [key]: entry } })),
   analysisProgress: null,
@@ -1001,6 +1028,8 @@ export const useStore = create<TTState>((set, get) => ({
           return { recents: msg.data };
         case "albumDr":
           return { albumDr: { ...s.albumDr, [msg.key]: msg.entry } };
+        case "analysisStats":
+          return { analysisStatsEpoch: s.analysisStatsEpoch + 1 };
         case "listening":
           return { listeningStats: msg.data };
         case "playStats":
@@ -1088,6 +1117,10 @@ export const useStore = create<TTState>((set, get) => ({
       case "palette":
         s.setPaletteOpen(!s.paletteOpen);
         break;
+      // ⌘I from the menu (lib/infoHotkey; lazy, as the hotkey's module reads the store)
+      case "info":
+        void import("@/lib/infoHotkey").then((m) => m.toggleInfo());
+        break;
       case "shortcuts":
         s.setShortcutsOpen(!s.shortcutsOpen);
         break;
@@ -1110,11 +1143,15 @@ export const useStore = create<TTState>((set, get) => ({
       case "screen":
         s.setScreen(command.screen as Screen);
         break;
+      // View › Back/Forward (⌘[ ⌘]): the Info window's own pages while it is open, nothing
+      // behind another modal, else the app's (lib/keyboardOwner, lib/infoSteps)
       case "navBack":
-        s.goBack();
+        if (s.mediaInfo) void import("@/lib/infoSteps").then((m) => m.infoBack());
+        else if (!modalHasKeyboard()) s.goBack();
         break;
       case "navForward":
-        s.goForward();
+        if (s.mediaInfo) void import("@/lib/infoSteps").then((m) => m.infoForward());
+        else if (!modalHasKeyboard()) s.goForward();
         break;
     }
   },

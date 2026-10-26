@@ -8,5 +8,12 @@ import { activeSourceId } from "@/lib/format";
  * now-playing push.
  */
 export function useQueueSourceActive(): boolean {
-  return useStore((s) => activeSourceId(s.zoneState, s.nowPlaying) === "MEDIA_PLAYER");
+  return useStore(queueSourceActive);
+}
+
+/** The same reading outside a component, at the moment it is asked (lib/mediaInfo's ⌘I). */
+export function queueSourceActive(
+  s: Pick<ReturnType<typeof useStore.getState>, "zoneState" | "nowPlaying">,
+): boolean {
+  return activeSourceId(s.zoneState, s.nowPlaying) === "MEDIA_PLAYER";
 }

@@ -98,6 +98,53 @@ export function yearFromTracks(
 }
 
 /**
+ * POOL RULE discs-from-file-names (MinimServer, 0.12.0-rc.3, Malcolm's box sets): a server that
+ * sends no disc numbers lists a ten-CD set as one album whose track numbers repeat ("Close Your
+ * Eyes" is track 11 twice), so it reads "track 11 of 143", sorts the discs together, and cannot
+ * tell the twins apart. The node rule file-disc (didl.ts) kept the disc a file name gives
+ * ("5-11 Close Your Eyes.flac") apart as fileDisc; an album takes those discs ALL OR NOTHING:
+ * only when every one of its tracks has one, they name at least two discs, and no disc and track
+ * number pair repeats. One track that does not fit and the album stays exactly as the server
+ * sent it, so a naming that only looks like disc-track changes nothing. A no-op on a server that
+ * sends its own discs (the parse never guessed). fileDisc leaves every track either way.
+ */
+export function discsFromFileNames(tracks: MediaNode[]): { tracks: MediaNode[]; albums: number } {
+  if (!tracks.some((t) => t.fileDisc != null)) return { tracks, albums: 0 };
+  const groups = new Map<string, MediaNode[]>();
+  for (const t of tracks) {
+    if (!t.album) continue;
+    const key = `${lc(t.album)}|${lc(t.albumArtist ?? t.artist)}`;
+    const g = groups.get(key);
+    if (g) g.push(t);
+    else groups.set(key, [t]);
+  }
+  const promoted = new Set<MediaNode>();
+  let albums = 0;
+  for (const g of groups.values()) {
+    if (g.length < 2 || g.some((t) => t.fileDisc == null || t.trackNumber == null)) continue;
+    const discs = new Set(g.map((t) => t.fileDisc as number));
+    if (discs.size < 2) continue;
+    const pairs = new Set(g.map((t) => `${t.fileDisc}:${t.trackNumber}`));
+    if (pairs.size !== g.length) continue;
+    for (const t of g) promoted.add(t);
+    albums++;
+  }
+  const discCountOf = new Map<string, number>();
+  for (const t of promoted) {
+    const key = `${lc(t.album)}|${lc(t.albumArtist ?? t.artist)}`;
+    discCountOf.set(key, Math.max(discCountOf.get(key) ?? 0, t.fileDisc as number));
+  }
+  const out = tracks.map((t) => {
+    if (t.fileDisc == null) return t;
+    const { fileDisc, ...rest } = t;
+    if (!promoted.has(t)) return rest;
+    const key = `${lc(t.album)}|${lc(t.albumArtist ?? t.artist)}`;
+    return { ...rest, discNumber: fileDisc, discCount: discCountOf.get(key) };
+  });
+  return { tracks: out, albums };
+}
+
+/**
  * POOL RULE duplicate-containers (Gerbera 2026-08-17): the same album arrives
  * as several containers — one under Albums, one under Artists/<each performer
  * on it>, … — same title and year; the copies under performer branches are

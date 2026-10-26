@@ -1,7 +1,11 @@
 import { useState } from "react";
 import {
   albumTracksOf,
+  artistSummary,
+  discCountIn,
+  discTrackCount,
   type MediaIndexPools,
+  type MediaInfoTarget,
   type MediaNode,
   type MediaServerInfo,
 } from "@shared/model";
@@ -10,7 +14,8 @@ import { tt } from "@/api";
 import { useStore } from "@/store";
 import { analyzeAlbum, analyzeTracks, USB_ANALYSIS_HINT } from "@/lib/audioAnalysis";
 import { fmtCount } from "@/lib/format";
-import { isAlbumClass } from "@/lib/media";
+import { openInfoInList } from "@/lib/infoSteps";
+import { isAlbumClass, isArtistClass } from "@/lib/media";
 import type { MediaMenuItem } from "@/lib/mediaMenus";
 import { itemFromNode } from "@/components/overlays/AddToPlaylistPanel";
 import type { Crumb } from "@/screens/LibraryScreen";
@@ -92,7 +97,13 @@ export function useLibraryMenus(d: {
     if (track.artist) d.openArtistPage(track.artist);
   };
 
-  const [menu, setMenu] = useState<{ node: MediaNode; x: number; y: number } | null>(null);
+  // `list`: the rows the node sits in, for Info's ‹ › (lib/infoSteps)
+  const [menu, setMenu] = useState<{
+    node: MediaNode;
+    x: number;
+    y: number;
+    list?: MediaNode[];
+  } | null>(null);
   // The Info modal wants an album's tracks summed: the browsed album's own
   // listing when the node IS the open album; otherwise the lens's index
   // (same server, same title, album artist / performers, and — when twin
@@ -105,6 +116,50 @@ export function useLibraryMenus(d: {
     const pool = lensPools.find((g) => g.udn === node.serverUdn);
     return pool ? albumTracksOf(node, pool) : undefined;
   };
+  // a track's "of 12" on its disc for the Info header: the open album's own listing when the
+  // track is in it (an album browsed from the server's folders has no index pools; his Only God
+  // Was Above Us read "track 1"), else the index
+  const discCountForInfo = (node: MediaNode): number | null => {
+    if (node.isContainer) return null;
+    const { albumNode, allTracks } = late.current;
+    if (albumNode && allTracks?.some((t) => t.id === node.id)) return discCountIn(node, allTracks);
+    const pool = lensPools?.find((g) => g.udn === node.serverUdn);
+    return pool ? discTrackCount(node, pool) : null;
+  };
+  // THE LIBRARY'S INFO, ONE HOME (0.12.0, with ⌘I; it lived inline in the menu's Info…): the
+  // target a node's Info shows (an artist's page summed by NAME from the index, the lens's merged
+  // rows and the server's person entities alike; an album's tracks; a track's place on its disc)
+  // and its opening, a track stepping through the rows it was opened from (lib/infoSteps). The
+  // menus' Info… and ⌘I on an album or an artist's page both open through it.
+  const infoTargetFor = (n: MediaNode): MediaInfoTarget => {
+    const server = servers?.find((x) => x.udn === serverUdn) ?? null;
+    const pool = lensPools?.find((g) => g.udn === (n.serverUdn ?? server?.udn)) ?? lensPools?.[0];
+    const artist =
+      n.isContainer && isArtistClass(n.upnpClass) && pool
+        ? artistSummary(n.title, pool)
+        : undefined;
+    const count = discCountForInfo(n);
+    return {
+      node: artist && !n.artUrl && artist.artUrl ? { ...n, artUrl: artist.artUrl } : n,
+      tracks: artist ? undefined : tracksForInfo(n),
+      artist,
+      ...(count != null ? { discTrackCount: count } : {}),
+      serverName: n.serverName ?? server?.name ?? null,
+      serverUdn: nodeUdn(n),
+      // what the index learned about this server (the modal's Indexed line + notes)
+      ...(pool?.profile ? { serverProfile: pool.profile } : {}),
+    };
+  };
+  const openInfoFor = (n: MediaNode, list?: readonly MediaNode[]): void => {
+    const at = !n.isContainer && list ? list.indexOf(n) : -1;
+    if (list && at >= 0 && list.length > 1)
+      openInfoInList(
+        infoTargetFor(n),
+        list.map((t) => () => infoTargetFor(t)),
+        at,
+      );
+    else useStore.getState().setMediaInfo(infoTargetFor(n));
+  };
   const [presetPicker, setPresetPicker] = useState<{
     node: MediaNode;
     x: number;
@@ -112,10 +167,10 @@ export function useLibraryMenus(d: {
   } | null>(null);
   // The card/row a popover belongs to holds its hover treatment while open.
   const menuNodeId = menu?.node.id ?? presetPicker?.node.id ?? null;
-  const openMenu = (node: MediaNode, e: React.MouseEvent): void => {
+  const openMenu = (node: MediaNode, e: React.MouseEvent, list?: MediaNode[]): void => {
     e.preventDefault();
     e.stopPropagation();
-    setMenu({ node, x: e.clientX, y: e.clientY });
+    setMenu({ node, x: e.clientX, y: e.clientY, list });
   };
 
   /** ⋯-menu garnish on a box set's open album: the volume walk as named
@@ -153,7 +208,11 @@ export function useLibraryMenus(d: {
     if (r == null) showNotice(`Couldn't read “${node.title}” from the server.`);
     else if (r.dr == null)
       showNotice(`Read ${r.analyzed} of ${r.tracks} tracks. An album DR needs all of them.`);
-    else showToast({ kind: "success", text: `“${node.title}” analyzed: DR${r.dr}` });
+    else
+      showToast({
+        kind: "success",
+        text: `“${node.title}” analyzed${r.again ? " again" : ""}: DR${r.dr}`,
+      });
   };
   /** The album selection bar's Analyze audio (0.8.0): each album's own sweep in
    *  turn, so every one lands its album DR; the sweep queue serializes them. */
@@ -186,8 +245,13 @@ export function useLibraryMenus(d: {
     showToast({ kind: "success", text: `Analyzing ${label}…` });
     const r = await analyzeTracks(label, readable);
     if (r === "busy" || r == null) return;
+    // one track by its name, more by their count; "again" when all were current and every one
+    // was measured again (lib/audioAnalysis' againIfDone)
     if (r.analyzed === r.tracks)
-      showToast({ kind: "success", text: `Analyzed ${fmtCount(r.tracks)} tracks` });
+      showToast({
+        kind: "success",
+        text: `Analyzed ${r.tracks === 1 && chosen.length === 1 ? label : `${fmtCount(r.tracks)} tracks`}${r.again ? " again" : ""}`,
+      });
     else showNotice(`Read ${r.analyzed} of ${r.tracks} tracks. The rest couldn't be read.`);
   };
   /** One-click save of a shown list as a playlist (the Queue's precedent:
@@ -213,15 +277,26 @@ export function useLibraryMenus(d: {
       showNotice("Couldn't create the playlist.");
     }
   };
+  // an album's, and since 0.12.0 a track's (his ask: one track measured again, as an album's
+  // sweep does; a current analysis is kept, an earlier version's re-measured)
   const analyzeVerbs = (node: MediaNode): MediaMenuItem[] | undefined => {
-    if (!waveformsOn || !node.isContainer || !isAlbumClass(node.upnpClass)) return undefined;
+    const track = !node.isContainer;
+    if (!waveformsOn || (!track && !isAlbumClass(node.upnpClass))) return undefined;
     const udn = nodeUdn(node);
     if (!udn) return undefined;
     // the streamer's own server: the verb stays, disabled, saying why — the
     // outcome is known before the click, and a vanished item teaches nothing
     if (unreadable(node))
       return [{ label: "Analyze audio", disabled: true, hint: USB_ANALYSIS_HINT, run: () => {} }];
-    return [{ label: "Analyze audio", run: () => void runAnalyzeAlbum(node, udn) }];
+    return [
+      {
+        label: "Analyze audio",
+        run: () =>
+          void (track
+            ? runAnalyzeTracks([{ ...node, serverUdn: udn }], `“${node.title}”`)
+            : runAnalyzeAlbum(node, udn)),
+      },
+    ];
   };
 
   return {
@@ -231,7 +306,7 @@ export function useLibraryMenus(d: {
     setPresetPicker,
     menuNodeId,
     openMenu,
-    tracksForInfo,
+    openInfoFor,
     volumeNavVerbs,
     analyzeVerbs,
     linkable,

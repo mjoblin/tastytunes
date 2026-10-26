@@ -9,6 +9,7 @@ import {
   useLensTrackSelection,
 } from "@/components/library/lenses/useLensTrackSelection";
 import { cx } from "@/lib/format";
+import type { LandingTrack } from "@/components/library/landing";
 
 /**
  * THE ARTIST PAGE (2026-10-11, the user: "we get to an album page from the albums lens. but we
@@ -41,13 +42,12 @@ export function ArtistPage({
   cardGap: number;
   fillRows: boolean;
   /** An album, and from an Appears-on row the track to land on. */
-  onOpenAlbum(node: MediaNode, track?: string): void;
+  onOpenAlbum(node: MediaNode, track?: LandingTrack): void;
 }): React.JSX.Element {
   const index = useLensIndex(pools);
   const key = lc(name);
   const artist = index.artists.find((a) => a.key === key) ?? null;
   const albums = artist?.albums ?? [];
-  const albumsSpanLibraries = new Set(albums.map((a) => a.serverUdn ?? "")).size > 1;
   // their tracks beyond their own albums: APPEARS ON, a credit on another artist's album (by
   // title, on its server), then TRACKS, the loose ones that belong to no album. One list, one
   // selection, two labelled runs
@@ -99,10 +99,11 @@ export function ArtistPage({
                 onEnter: () => onOpenAlbum(node),
                 onMenu: (e: React.MouseEvent) => actions.openMenu(node, e),
                 onNavDrag: (e: React.PointerEvent) => actions.dragAlbum([node], e, node.title),
-                // which library, only when this artist's albums come from more than one (his Jack
-                // White: the same albums on minitunes and on the streamer's drive); an artist on
-                // one library shows none, its years not squeezed out by a chip that says nothing
-                badge: albumsSpanLibraries ? (node.serverName ?? undefined) : undefined,
+                // which library, only when the same album is in another one too (his Jack White:
+                // the same albums on minitunes and on the streamer's drive), the Albums lens's
+                // rule; an album in one library shows none, its year not squeezed by a chip that
+                // says nothing
+                badge: index.inTwoLibraries(node) ? (node.serverName ?? undefined) : undefined,
               };
               return cards ? (
                 <ContainerCard
@@ -148,7 +149,16 @@ export function ArtistPage({
                         onHeart={() => actions.heartNode(t)}
                         onPlayNow={(el) => actions.playTrack(t, el)}
                         onMenu={(e) => sel.rowMenu(t, e)}
-                        onAlbumLink={album ? () => onOpenAlbum(album, t.title) : undefined}
+                        onAlbumLink={
+                          album
+                            ? () =>
+                                onOpenAlbum(album, {
+                                  title: t.title,
+                                  id: t.id,
+                                  secs: t.durationSecs,
+                                })
+                            : undefined
+                        }
                       />
                     );
                   })}

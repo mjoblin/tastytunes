@@ -69,7 +69,7 @@ export function useLensTrackSelection(d: { tracks: MediaNode[]; actions: LensAct
       e.preventDefault();
       e.stopPropagation();
       setLensMenu({ x: e.clientX, y: e.clientY });
-    } else actions.openMenu(t, e);
+    } else actions.openMenu(t, e, d.tracks);
   };
   /** The five verbs over the chosen tracks, in the bar and the plural menu
    *  alike; `at` is where a playlist panel opens. */

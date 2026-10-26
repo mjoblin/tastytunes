@@ -92,6 +92,14 @@ export interface MediaNode {
   discNumber?: number;
   discCount?: number;
   /**
+   * PROVISIONAL, a parse's guess for the pool rule discs-from-file-names (main/media/reconcile)
+   * and never kept: the disc a track's file name gives ("2-11 Close Your Eyes.flac", the second
+   * number its track number), read only when the server sent no disc (MinimServer sends none,
+   * 0.12.0-rc.3, Malcolm's box sets). The rule promotes it to discNumber only when every track
+   * of the album agrees, and drops it either way.
+   */
+  fileDisc?: number;
+  /**
    * The audio format of the primary <res>, when the server describes it
    * (DLNA attributes: protocolInfo mime, bitsPerSample, sampleFrequency,
    * bitrate in BYTES/s per the UPnP spec, size). Asset sends all of them
@@ -330,6 +338,60 @@ export function albumOfTrack(
   const want = track.album.trim().toLowerCase();
   const matches = pool.albums.filter((a) => a.title.trim().toLowerCase() === want);
   return matches.find((a) => trackInAlbumOf(track, a.artist)) ?? matches[0] ?? null;
+}
+
+/**
+ * The index's own entry for an album that arrived with only its id and title (Open in Library,
+ * Go to album, a favorite: the Library's stand-in node, 0.12.0-rc.2): the album with that id on
+ * the server, else the one album of that title there. Its artist, art and year make the album's
+ * keys (DR, sweep, art, favorite) the ones the Albums lens uses for the same album. Null when the
+ * index cannot say (two albums of that title, or none).
+ */
+export function indexAlbumFor(
+  album: Pick<MediaNode, "id" | "title">,
+  pool: { albums: MediaNode[] },
+): MediaNode | null {
+  const byId = pool.albums.find((a) => a.id === album.id);
+  if (byId) return byId;
+  const want = album.title.trim().toLowerCase();
+  const same = pool.albums.filter((a) => a.title.trim().toLowerCase() === want);
+  return same.length === 1 ? same[0] : null;
+}
+
+/**
+ * How many tracks share a track's disc on its album, as the index knows it: the "of 12" of the
+ * Info modal's "track 4 of 12" (0.12.0). A track's number counts within its disc, so the count
+ * does too; an album with no disc numbers counts whole. Null when the index holds no album.
+ */
+export function discTrackCount(
+  track: Pick<MediaNode, "album" | "artist" | "artists" | "albumArtist" | "discNumber">,
+  pool: { albums: MediaNode[]; tracks: ReadonlyArray<MediaNode> },
+): number | null {
+  const album = albumOfTrack(track, pool);
+  return album ? discCountIn(track, albumTracksOf(album, pool)) : null;
+}
+
+/** The same count from an album's own listing (a browsed album, which has no index pools).
+ *  Null, so no "of", when the album has no disc numbers and its track numbers repeat: the
+ *  numbers count within discs the server never named, and the whole album's count would say
+ *  "track 11 of 143" of a box set's eleventh track (0.12.0-rc.3, Malcolm's MinimServer). */
+export function discCountIn(
+  track: Pick<MediaNode, "discNumber">,
+  albumTracks: ReadonlyArray<Pick<MediaNode, "discNumber" | "trackNumber">>,
+): number | null {
+  const disc = track.discNumber ?? null;
+  if (disc == null) {
+    const seen = new Set<number>();
+    for (const t of albumTracks) {
+      const pos = trackPosition(t);
+      if (pos == null) continue;
+      if (seen.has(pos)) return null;
+      seen.add(pos);
+    }
+  }
+  const onDisc =
+    disc == null ? albumTracks : albumTracks.filter((t) => (t.discNumber ?? 1) === disc);
+  return onDisc.length > 0 ? onDisc.length : null;
 }
 
 /**
@@ -631,6 +693,8 @@ export interface MediaInfoTarget {
   stream?: StreamInfo;
   /** What the index learned about the server this came from — how it was crawled and every reconciliation that changed something. */
   serverProfile?: MediaServerProfile;
+  /** For a track: how many tracks share its disc on its album (discTrackCount), when known. */
+  discTrackCount?: number;
 }
 
 /**
@@ -685,6 +749,9 @@ export interface MediaInfoQuery {
   objectId?: string | null;
   /** See ContentRef.artUrl — the playing server, when the query has no hint. */
   artUrl?: string | null;
+  /** When given, a content match must also last as long (within CONTENT_DURATION_SLACK_SECS,
+   *  main/media/mediaInfo): a disc's track finding its twin in the library (0.12.0). */
+  durationSecs?: number | null;
 }
 
 /** One server's slice of a cross-server (all ready indexes) search. */
@@ -723,6 +790,7 @@ export type ProfileNote =
   | { kind: "duplicate-albums-merged"; count: number }
   | { kind: "years-from-tracks"; count: number }
   | { kind: "albums-from-their-tracks"; count: number }
+  | { kind: "discs-from-file-names"; count: number }
   | { kind: "search-failed-browsed-instead" }
   | { kind: "search-paged-smaller" }
   | { kind: "browse-capped"; count: number };
@@ -757,6 +825,10 @@ export function describeProfileNote(note: ProfileNote): string {
       return note.count === 1
         ? "1 album listed without an artist took its artist and name from its tracks"
         : `${note.count} albums listed without an artist took their artist and name from their tracks`;
+    case "discs-from-file-names":
+      return note.count === 1
+        ? "1 album with no disc numbers took them from its file names"
+        : `${note.count} albums with no disc numbers took them from their file names`;
     case "search-failed-browsed-instead":
       return "the server's search failed, so the library was indexed by browsing instead";
     case "search-paged-smaller":

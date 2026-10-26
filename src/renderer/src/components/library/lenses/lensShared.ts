@@ -15,7 +15,8 @@ export interface LensActions {
   openAlbum(node: MediaNode): void;
   playTrack(node: MediaNode, el: HTMLElement | null): void;
   playContainer(node: MediaNode, el: HTMLElement | null): void;
-  openMenu(node: MediaNode, e: React.MouseEvent): void;
+  /** A track's ⋯; `list` is the rows it sits in, so its Info steps through them. */
+  openMenu(node: MediaNode, e: React.MouseEvent, list?: MediaNode[]): void;
   menuNodeId: string | null;
   heartNode(node: MediaNode): void;
   /** Batch hearts: silent per-item toggles behind ONE aggregate undo entry. */
@@ -116,6 +117,37 @@ export function drOptionsOf(
   return [...counts.entries()]
     .map(([d, count]) => ({ value: String(d), label: `DR${d}`, count }))
     .sort((a, b) => Number(b.value) - Number(a.value));
+}
+
+/** THE TEMPO FACET'S BANDS (0.12.0, the third of the measured facts): twenty beats a minute
+ *  each, under 80 and 180 and up at the ends, the way a runner or a DJ asks ("around 165").
+ *  A track's band from its tempo as Info says it (above its floor); none without one. */
+const TEMPO_BAND_FLOORS = [0, 80, 100, 120, 140, 160, 180];
+export function tempoBandOf(bpm: number | null | undefined): string | null {
+  if (bpm == null || bpm <= 0) return null;
+  let band = 0;
+  for (const floor of TEMPO_BAND_FLOORS) if (bpm >= floor) band = floor;
+  return String(band);
+}
+export function tempoBandLabel(band: string): string {
+  const lo = Number(band);
+  if (lo === 0) return "Under 80 bpm";
+  if (lo === 180) return "180 bpm and up";
+  return `${lo}–${lo + 19} bpm`;
+}
+/** The bands the measured tracks fall in, slowest first, with their counts. Offered from the
+ *  first measured track (the picker's min of 1). */
+export function tempoOptionsOf(
+  bpms: ReadonlyArray<number | null>,
+): Array<{ value: string; label: string; count: number }> {
+  const counts = new Map<string, number>();
+  for (const b of bpms) {
+    const band = tempoBandOf(b);
+    if (band != null) counts.set(band, (counts.get(band) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([value, count]) => ({ value, label: tempoBandLabel(value), count }))
+    .sort((a, b) => Number(a.value) - Number(b.value));
 }
 
 /** The Format facet's tags for one track: its codec, plus the two DERIVED

@@ -10,6 +10,7 @@
 import {
   albumTracksOf,
   artistSummary,
+  discTrackCount,
   trackArtists,
   trackInAlbumOf,
   type MediaInfoQuery,
@@ -22,10 +23,24 @@ import { browseMetadataNode, serverUdnForArt } from "./upnpBrowser";
 
 const lc = (v: string | null | undefined): string => (v ?? "").trim().toLowerCase();
 
+/** How far a library track's length may stray from a disc track's and still be its twin: the
+ *  same recording ripped differs by a second or so of pregap and rounding, another master or
+ *  edit by more. */
+const CONTENT_DURATION_SLACK_SECS = 2;
+
 function contentMatch(q: MediaInfoQuery, n: MediaNode): boolean {
   if (lc(n.title) !== lc(q.title)) return false;
   if (q.artist && n.artist && !trackInAlbumOf(n, q.artist) && lc(n.artist) !== lc(q.artist))
     return false;
+  // A DISC'S TWIN MUST LAST AS LONG (0.12.0, Malcolm saw a CD track draw its library twin's
+  // waveform and scenes): the query carries the disc's length, and a library track of the same
+  // names that runs longer or shorter (another master, an edit) is not the one playing, nor one
+  // whose length is unknown
+  if (q.durationSecs != null)
+    return (
+      n.durationSecs != null &&
+      Math.abs(n.durationSecs - q.durationSecs) <= CONTENT_DURATION_SLACK_SECS
+    );
   return true;
 }
 
@@ -97,11 +112,14 @@ export async function lookupMediaInfo(
         ...profile,
       };
     }
+    // a track's "of 12" on its disc, for the Info modal's header (discTrackCount)
+    const count = node.isContainer ? null : discTrackCount(node, pool);
     return {
       node,
       tracks: node.isContainer ? albumTracksOf(node, pool) : undefined,
       serverName: pool.serverName,
       ...profile,
+      ...(count != null ? { discTrackCount: count } : {}),
     };
   };
   // 1. identity

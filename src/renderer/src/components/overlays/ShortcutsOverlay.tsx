@@ -37,6 +37,8 @@ const GROUPS: Array<{ title: string; rows: Array<[string, string]> }> = [
     title: "Navigate",
     rows: [
       [`${MOD}K`, "Command palette"],
+      [`${MOD}I`, "Info for the album or artist on screen, or else the playing track"],
+      ["← / →", "In Info, the previous or next track in its list"],
       // letters derive from the shared registry; the prose stays hand-written
       [
         SCREENS.map((s) => s.key).join(" "),

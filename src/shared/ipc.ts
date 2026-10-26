@@ -110,6 +110,7 @@ export type MenuCommand =
   | { id: "undo" }
   | { id: "about" }
   | { id: "palette" }
+  | { id: "info" }
   | { id: "shortcuts" }
   | { id: "displayMode" }
   | { id: "displayModeOn" }
@@ -146,6 +147,7 @@ export type PushMessage =
   | { kind: "recents"; data: RecentTrack[] }
   /** An album's DR, recorded by main the moment its last track was measured (2026-10-12). */
   | { kind: "albumDr"; key: string; entry: AlbumDr }
+  | { kind: "analysisStats" }
   | { kind: "listening"; data: ListeningRecordStats }
   /** The record's aggregate, whole (after a clear) — the reading surfaces' seed. */
   | { kind: "playStats"; data: PlayStats }
@@ -302,6 +304,12 @@ export interface TastyTunesApi {
   demoStart(): Promise<void>;
   command(cmd: StreamerCommand): Promise<void>;
   openExternal(url: string): Promise<void>;
+  /** Whether the OS asks before an app reaches the local network (macOS 15 and later), so the
+   *  welcome screen can say where to allow it. */
+  localNetworkPrivacy(): Promise<boolean>;
+  /** A surface that failed to render (components/chrome/SurfaceBoundary), for the diagnostics
+   *  log: which surface and the error's message. */
+  reportRenderError(surface: string, message: string): Promise<void>;
   getSettings(): Promise<AppSettings>;
   setSettings(patch: Partial<AppSettings>): Promise<AppSettings>;
   /** Fetch album art via the main process (bypasses CORS) as a data URL. */
@@ -348,7 +356,12 @@ export interface TastyTunesApi {
    *  its local media server, for renderer-side decode. Null on any miss. The bytes arrive as
    *  a Uint8Array (main sends a Buffer): the contract said ArrayBuffer until the typed
    *  handle held main's answer to it (0.11.0 sweep). */
-  expTrackAudio(serverUdn: string, objectId: string): Promise<Uint8Array | null>;
+  /** A track's bytes for the analysis decode; `tooLarge` when the file is past the size the
+   *  decode can hold (main/ipc/audio), refused before it is downloaded. */
+  expTrackAudio(
+    serverUdn: string,
+    objectId: string,
+  ): Promise<Uint8Array | { tooLarge: { bytes: number; maxBytes: number } } | null>;
   /** EXPERIMENT: a stored analysis by content key (null = none yet). */
   audioAnalysisGet(key: string): Promise<AudioAnalysis | null>;
   /** EXPERIMENT: persist a finished analysis under its content key. */
@@ -515,6 +528,8 @@ export const IPC = {
   demoStart: "tt:demoStart",
   command: "tt:command",
   openExternal: "tt:openExternal",
+  localNetworkPrivacy: "tt:localNetworkPrivacy",
+  reportRenderError: "tt:reportRenderError",
   getSettings: "tt:getSettings",
   setSettings: "tt:setSettings",
   fetchArt: "tt:fetchArt",

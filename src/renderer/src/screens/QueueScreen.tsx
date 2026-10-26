@@ -61,7 +61,8 @@ import { flashTarget, scrollToWithContext } from "@/lib/scroll";
 import { DND_ACCESSIBILITY, lockVertical } from "@/lib/dnd";
 import { cx, fmtDuration, fmtTime, matchesFilter, fmtCount } from "@/lib/format";
 import { toggleFavorite } from "@/lib/favorites";
-import { fromQueueItem, refToFavorite, refToPlaylistItem } from "@/lib/mediaRef";
+import { fromQueueItem, refToFavorite, refToPlaylistItem, type MediaRef } from "@/lib/mediaRef";
+import { refSiblings } from "@/lib/infoSteps";
 import { saveRefToPreset, openRefInLibrary } from "@/lib/mediaActions";
 import { NameLine } from "@/components/media/NameLine";
 import { trackMenuItems, type MediaMenuItem } from "@/lib/mediaMenus";
@@ -703,6 +704,8 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
             at={{ x: rowMenu.x, y: rowMenu.y }}
             onClose={() => setRowMenu(null)}
             items={queueRowActions(rowMenu.item, {
+              // Info steps through the queue (lib/infoSteps)
+              siblings: refSiblings(allItems, rowMenu.item, fromQueueItem),
               addToPlaylist: () =>
                 setPlaylistFor({ item: rowMenu.item, x: rowMenu.x, y: rowMenu.y }),
               saveToPreset: () => setPresetFor({ item: rowMenu.item, x: rowMenu.x, y: rowMenu.y }),
@@ -1717,7 +1720,11 @@ function QueueCard({
  */
 function queueRowActions(
   item: QueueListItem,
-  deps: { addToPlaylist: () => void; saveToPreset: () => void },
+  deps: {
+    addToPlaylist: () => void;
+    saveToPreset: () => void;
+    siblings?: { refs: MediaRef[]; index: number };
+  },
 ): MediaMenuItem[] {
   const remove: MediaMenuItem[] =
     item.id != null ? [{ label: "Remove from queue", run: () => removeFromQueue(item) }] : [];
@@ -1727,6 +1734,7 @@ function queueRowActions(
     addToPlaylist: deps.addToPlaylist,
     saveToPreset: deps.saveToPreset,
     openInLibrary: () => void openRefInLibrary(ref),
+    infoList: deps.siblings,
     extra: remove,
   });
 }

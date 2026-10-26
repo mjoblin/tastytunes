@@ -13,6 +13,7 @@ import {
   albumTracksOf,
   albumVolume,
   compareTrackOrder,
+  discCountIn,
   discGroups,
   editionless,
   emptyPlayStats,
@@ -22,6 +23,7 @@ import {
   formatLabel,
   groupSessions,
   inLibraryIndex,
+  indexAlbumFor,
   integrateLoudnessHistograms,
   isCompilation,
   isHiRes,
@@ -51,6 +53,14 @@ import {
   type MediaFormat,
   type MediaNode,
   type ResumeRun,
+  KEY_CONFIDENCE_FLOOR,
+  TEMPO_CONFIDENCE_FLOOR,
+  currentFeatures,
+  FEATURES_VERSION,
+  keyMatches,
+  keyName,
+  parseKeyName,
+  tempoBpm,
 } from "./model";
 
 // ------------------------------------------------------------------ fixtures
@@ -253,6 +263,23 @@ describe("orderTracks: sort only when (disc, position) is unique", () => {
   });
 });
 
+describe("discCountIn: the count after a track's place", () => {
+  it("counts the track's own disc", () => {
+    const album = [at(1, 1), at(2, 1), at(1, 2), at(2, 2), at(3, 2)];
+    expect(discCountIn(at(3, 2), album)).toBe(3);
+  });
+
+  it("counts a whole album without discs whose numbers do not repeat", () => {
+    expect(discCountIn(at(2), [at(1), at(2), at(3)])).toBe(3);
+  });
+
+  it("says no count when there are no discs and the numbers repeat (MinimServer's box sets)", () => {
+    // Malcolm's Songbooks+: track 11 of the box is on several discs the server never named
+    const box = [1, 2, 11, 1, 2, 11].map((n, i) => ({ ...at(n), id: i }));
+    expect(discCountIn(at(11), box)).toBeNull();
+  });
+});
+
 describe("discGroups: the quiet Disc N dividers", () => {
   it("is one undivided group when the album is one disc", () => {
     const tracks = [at(1, 1), at(2, 1)];
@@ -285,6 +312,28 @@ describe("albumVolume: a member of a multi-volume set", () => {
   it("needs the keyword and a real number, and a base before it", () => {
     for (const title of ["Rocky IV", "Formula One", "Part Time", "Disc 1", "Plain Album"])
       expect(albumVolume(title), title).toBeNull();
+  });
+});
+
+describe("indexAlbumFor: an arrived album as the index knows it", () => {
+  const album = (id: string, title: string, artist: string): MediaNode =>
+    track(id, title, { isContainer: true, artist, albumArtist: artist });
+  const pool = {
+    albums: [
+      album("a1", "Record", "Lead"),
+      album("a2", "Greatest Hits", "Lead"),
+      album("a3", "Greatest Hits", "Other Band"),
+    ],
+  };
+
+  it("finds the album by its id, then by a title only one album has", () => {
+    expect(indexAlbumFor({ id: "a3", title: "Greatest Hits" }, pool)?.artist).toBe("Other Band");
+    expect(indexAlbumFor({ id: "stale", title: " record " }, pool)?.id).toBe("a1");
+  });
+
+  it("says nothing when two albums share the title or none has it", () => {
+    expect(indexAlbumFor({ id: "stale", title: "Greatest Hits" }, pool)).toBeNull();
+    expect(indexAlbumFor({ id: "stale", title: "Unknown" }, pool)).toBeNull();
   });
 });
 
@@ -717,5 +766,59 @@ describe("integrateLoudnessHistograms: one loudness over several tracks' blocks"
   it("is null with no blocks at all", () => {
     expect(integrateLoudnessHistograms([])).toBeNull();
     expect(integrateLoudnessHistograms([new Array<number>(LOUD_HIST_BINS).fill(0)])).toBeNull();
+  });
+});
+
+describe("measured facts: tempo and key, said once (0.12.0)", () => {
+  it("rounds a confident tempo and withholds a guess", () => {
+    expect(tempoBpm({ bpm: 80.6, confidence: 0.6 })).toBe(81);
+    expect(tempoBpm({ bpm: 120, confidence: TEMPO_CONFIDENCE_FLOOR })).toBe(120);
+    expect(tempoBpm({ bpm: 120, confidence: 0.2 })).toBeNull();
+    expect(tempoBpm({ bpm: 0, confidence: 0.9 })).toBeNull();
+    expect(tempoBpm(null)).toBeNull();
+  });
+
+  it("names a confident key with its sharps and flats, and withholds a guess", () => {
+    expect(keyName({ tonic: 9, mode: "minor", confidence: 0.5 })).toBe("A minor");
+    expect(keyName({ tonic: 1, mode: "minor", confidence: 0.5 })).toBe("C♯ minor");
+    expect(keyName({ tonic: 3, mode: "major", confidence: KEY_CONFIDENCE_FLOOR })).toBe("E♭ major");
+    expect(keyName({ tonic: 9, mode: "minor", confidence: 0.1 })).toBeNull();
+    expect(keyName({ tonic: 12, mode: "major", confidence: 0.9 })).toBeNull();
+    expect(keyName(undefined)).toBeNull();
+  });
+
+  it("reads a key as a person or an agent writes it, for a filter", () => {
+    expect(parseKeyName("A minor")).toEqual({ tonic: 9, mode: "minor" });
+    expect(parseKeyName("F# major")).toEqual({ tonic: 6, mode: "major" });
+    expect(parseKeyName("B♭ minor")).toEqual({ tonic: 10, mode: "minor" });
+    expect(parseKeyName("bb min")).toEqual({ tonic: 10, mode: "minor" });
+    expect(parseKeyName("C♯m")).toEqual({ tonic: 1, mode: "minor" });
+    expect(parseKeyName("Am")).toEqual({ tonic: 9, mode: "minor" });
+    expect(parseKeyName("bm")).toEqual({ tonic: 11, mode: "minor" });
+    expect(parseKeyName("Cb maj")).toEqual({ tonic: 11, mode: "major" });
+    expect(parseKeyName("E♭")).toEqual({ tonic: 3, mode: null });
+    expect(parseKeyName(" Minor ")).toEqual({ tonic: null, mode: "minor" });
+    expect(parseKeyName("H minor")).toBeNull();
+    expect(parseKeyName("A dorian")).toBeNull();
+    expect(parseKeyName("")).toBeNull();
+  });
+
+  it("matches a key only above its floor, by tonic and mode as asked", () => {
+    const am = { tonic: 9, mode: "minor" as const, confidence: 0.5 };
+    expect(keyMatches(am, { tonic: 9, mode: "minor" })).toBe(true);
+    expect(keyMatches(am, { tonic: 9, mode: null })).toBe(true);
+    expect(keyMatches(am, { tonic: null, mode: "minor" })).toBe(true);
+    expect(keyMatches(am, { tonic: 9, mode: "major" })).toBe(false);
+    expect(keyMatches(am, { tonic: 0, mode: null })).toBe(false);
+    expect(keyMatches({ ...am, confidence: 0.1 }, { tonic: 9, mode: "minor" })).toBe(false);
+    expect(keyMatches(null, { tonic: null, mode: null })).toBe(false);
+  });
+
+  it("says a tempo or key only from the current version's features", () => {
+    const now = { version: FEATURES_VERSION, beats: { bpm: 81, confidence: 0.8 } };
+    expect(currentFeatures(now)).toBe(now);
+    expect(currentFeatures({ ...now, version: FEATURES_VERSION - 1 })).toBeNull();
+    expect(currentFeatures(null)).toBeNull();
+    expect(currentFeatures(undefined)).toBeNull();
   });
 });

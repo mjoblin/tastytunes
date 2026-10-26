@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, Copy, ExternalLink } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import { DEFAULT_SETTINGS, type AppSettings, type McpBind, type McpSettings } from "@shared/model";
 import { MCP_CLUSTERS, mcpClusterEnabled, type McpClusterInfo } from "@shared/mcpCatalog";
 import { AGENTS_GUIDE_URL } from "@shared/ipc";
@@ -8,7 +8,13 @@ import { useStore } from "@/store";
 import { cx } from "@/lib/format";
 import { HeaderChip } from "@/components/chrome/Chrome";
 import { useConfirmPopover } from "@/components/chrome/Confirm";
-import { SettingRow, Toggle, NumberField } from "@/components/settings/SettingsKit";
+import {
+  CopyRow,
+  SettingRow,
+  Toggle,
+  NumberField,
+  useCopied,
+} from "@/components/settings/SettingsKit";
 import { Segmented } from "@/components/controls/Segmented";
 
 // The MCP section, split out of SettingsScreen.tsx 2026-09-13 (the Settings split: the screen had held every
@@ -24,7 +30,7 @@ export function McpSection({
   const mcp = settings.mcp;
   const lan = mcp.bind === "lan";
   const status = useStore((s) => s.mcpStatus);
-  const [copied, setCopied] = useState<string | null>(null);
+  const { copied, copy } = useCopied();
   const tokenConfirm = useConfirmPopover();
 
   const saveMcp = (patch: Partial<McpSettings>): void => {
@@ -55,13 +61,6 @@ export function McpSection({
         ? mcp.disabledTools.filter((t) => t !== name)
         : [...mcp.disabledTools, name],
     });
-
-  const copy = (key: string, text: string): void => {
-    void navigator.clipboard.writeText(text).then(() => {
-      setCopied(key);
-      setTimeout(() => setCopied(null), 1600);
-    });
-  };
 
   const enabledTools = MCP_CLUSTERS.reduce(
     (n, c) => (clusterOn(c) ? n + c.tools.filter((t) => !toolOff(t.name)).length : n),
@@ -310,35 +309,6 @@ function mcpJsonSnippet(url: string, token: string | null): string {
 function claudeCommand(url: string, token: string | null): string {
   const base = `claude mcp add --transport http tastytunes ${url}`;
   return token ? `${base} --header "Authorization: Bearer ${token}"` : base;
-}
-
-function CopyRow({
-  label,
-  text,
-  copied,
-  onCopy,
-  hint,
-}: {
-  label: string;
-  text: string;
-  copied: boolean;
-  onCopy(): void;
-  hint?: string;
-}): React.JSX.Element {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="microlabel w-24 shrink-0">{label}</span>
-      <code className="flex-1 min-w-0 truncate font-mono text-[11px] text-faint">{text}</code>
-      <button
-        onClick={onCopy}
-        data-tip={copied ? "Copied" : (hint ?? "Copy")}
-        aria-label={`Copy ${label}`}
-        className="tip-top shrink-0 p-1.5 rounded text-dim hover:text-ink transition-colors"
-      >
-        {copied ? <Check size={13} className="text-led" /> : <Copy size={13} />}
-      </button>
-    </div>
-  );
 }
 
 // ---------------------------------------------------------------- primitives

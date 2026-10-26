@@ -34,6 +34,7 @@ import { RowMenu } from "@/components/media/RowMenu";
 import { AddToPlaylistPanel } from "@/components/overlays/AddToPlaylistPanel";
 import { toggleFavorite } from "@/lib/favorites";
 import { fromRecent, refToFavorite, refToPlaylistItem, type MediaRef } from "@/lib/mediaRef";
+import { refSiblings } from "@/lib/infoSteps";
 import { playRefNow, openRefInLibrary, saveRefToPreset } from "@/lib/mediaActions";
 import { NameLine } from "@/components/media/NameLine";
 import { PresetPicker } from "@/components/library/LibraryMenus";
@@ -237,6 +238,8 @@ export function HistoryScreen(): React.JSX.Element {
           setPlaylistFor({ label: ref.title, ...at });
         },
         openInLibrary: () => void openRefInLibrary(ref),
+        // Info steps through the Recent list as shown (lib/infoSteps)
+        infoList: refSiblings(shownRecents, entry, fromRecent),
       }),
     });
   };

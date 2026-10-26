@@ -1,6 +1,7 @@
 import { albumOfTrack, trackArtists, type MediaIndexPools, type MediaNode } from "@shared/model";
 import { focusArtistsLens } from "@/components/library/LibraryLenses";
 import type { Crumb } from "@/screens/LibraryScreen";
+import type { LandingTrack } from "@/components/library/landing";
 
 // The Library's lens navigation, lifted out of LibraryScreen (2026-09-10, the
 // landOn hygiene round): entering and leaving the three lenses, the albums and
@@ -47,7 +48,13 @@ export const setLensReturn = (lens: Lens): void => {
 export type Landing =
   /** An artist by name: their page (since 2026-10-11, every way to an artist). */
   | { artist: string }
-  | { udn: string | null; path: Crumb[]; track?: string | null; returnTo?: Lens; lead?: Crumb };
+  | {
+      udn: string | null;
+      path: Crumb[];
+      track?: LandingTrack | null;
+      returnTo?: Lens;
+      lead?: Crumb;
+    };
 
 export function lensNavigation(d: {
   lens: Lens | null;
@@ -61,7 +68,7 @@ export function lensNavigation(d: {
   lensPools: MediaIndexPools[] | null;
   /** True while an arrival or a history restore runs: those never record. */
   restoring: { current: boolean };
-  pendingTrack: { current: string | null };
+  pendingTrack: { current: LandingTrack | null };
   /** Record the spot being left (skipped while restoring). */
   pushSpot(): void;
   moveTo(udn: string | null, path: Crumb[]): void;
@@ -133,7 +140,7 @@ export function lensNavigation(d: {
 
   /** A lens result opens the SHARED native album leaf, scoped to its server;
    *  the lens crumb offers the way back with the lens state intact. */
-  const openAlbumFromLens = (node: MediaNode, track?: string): void => {
+  const openAlbumFromLens = (node: MediaNode, track?: LandingTrack): void => {
     if (!node.serverUdn || !d.lens) return;
     // a track's album (the Tracks lens's link or Go to album): land on THE
     // TRACK, scrolled to and washed, exactly as the Queue's link does through
@@ -162,7 +169,7 @@ export function lensNavigation(d: {
 
   /** An album opened from the artist page: the trail is Library › Artists › <artist> ›
    *  <album>, the artist crumb returning to the page; from an Appears-on row, on the track. */
-  const openAlbumFromArtistPage = (node: MediaNode, artist: string, track?: string): void => {
+  const openAlbumFromArtistPage = (node: MediaNode, artist: string, track?: LandingTrack): void => {
     if (!node.serverUdn) return;
     landOn({
       udn: node.serverUdn,
@@ -195,7 +202,7 @@ export function lensNavigation(d: {
       d.showNotice(`Couldn't find "${track.album ?? "that album"}" in this library.`);
       return;
     }
-    openAlbumFromLens(album, track.title);
+    openAlbumFromLens(album, { title: track.title, id: track.id, secs: track.durationSecs });
   };
   const goToArtistFromLens = (node: MediaNode): void => {
     if (node.artist) landOn({ artist: node.artist });

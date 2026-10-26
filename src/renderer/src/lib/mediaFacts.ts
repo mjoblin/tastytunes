@@ -1,11 +1,11 @@
 import {
   albumFormat,
   fmtBytes,
-  LOSSLESS_CODECS,
+  formatLabel,
   type MediaFormat,
   type MediaNode,
 } from "@shared/model";
-import { fmtKHz, fmtTime } from "@/lib/format";
+import { fmtTime } from "@/lib/format";
 
 /**
  * TWO REGISTERS, split by KIND OF FACT (user call, 2026-09-01):
@@ -40,23 +40,38 @@ export function albumFactsLine(
     .join(FACT_SEP);
 }
 
+/** An album as its tracks describe it, where the album itself is silent: its cover (the first
+ *  track's that has one), its artist and its year (when every track agrees). An album opened
+ *  from another screen lands as a bare node with only its title (LibraryScreen's arrival), and
+ *  a server may leave a container's art off; the Library header and the album's Info both read
+ *  this, so neither shows less than the other (0.12.0, his Only God Was Above Us: the header
+ *  had the cover, Info had none). Returns the album itself when the tracks add nothing. */
+export function albumFromTracks(album: MediaNode, tracks: readonly MediaNode[]): MediaNode {
+  if (tracks.length === 0) return album;
+  const agreed = <T>(of: (t: MediaNode) => T | null | undefined): T | null => {
+    const first = of(tracks[0]);
+    return first != null && tracks.every((t) => of(t) === first) ? first : null;
+  };
+  const artUrl = album.artUrl ?? tracks.find((t) => t.artUrl)?.artUrl ?? null;
+  const artist = album.artist ?? agreed((t) => t.albumArtist ?? t.artist);
+  const year = album.year ?? agreed((t) => t.year);
+  return artUrl === album.artUrl && artist === album.artist && year === album.year
+    ? album
+    : { ...album, artUrl, artist, year };
+}
+
 /** A track's collection facts — its duration. */
 export function trackFactsLine(node: Pick<MediaNode, "durationSecs">): string {
   return node.durationSecs ? fmtTime(node.durationSecs) : "";
 }
 
-/** The format tokens as Now Playing's chip row spells them — codec · kHz ·
- *  bit depth · kbps · lossless — from the server's description of the file,
- *  so a track at rest wears the same chips it will wear playing. */
-export function formatChips(f: MediaFormat | undefined | null): string[] {
-  if (!f) return [];
-  const out: string[] = [];
-  if (f.codec) out.push(f.codec);
-  if (f.rate) out.push(fmtKHz(f.rate));
-  if (f.bits) out.push(`${f.bits}-bit`);
-  if (f.kbps) out.push(`${f.kbps} kbps`);
-  if (f.codec && LOSSLESS_CODECS.has(f.codec.toUpperCase())) out.push("lossless");
-  return out;
+/** A track's format tokens as its Info header wears them: the album header's compact spelling,
+ *  codec and depth/rate ("FLAC", "16/44.1"), or codec and bitrate for a lossy file ("MP3",
+ *  "320 kbps"). The bitrate and the rest are the Format section's rows just below (0.12.0, his
+ *  call: six chips beside Open in Library wrapped to two rows). */
+export function trackFormatChips(f: MediaFormat | undefined | null): string[] {
+  const label = formatLabel(f);
+  return label ? label.split(" · ").filter(Boolean) : [];
 }
 
 /** An album's format tokens: "FLAC · 16/44.1" split into chips, or the one

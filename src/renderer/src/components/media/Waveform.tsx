@@ -3,13 +3,22 @@ import { tt } from "@/api";
 import { cx, fmtTime } from "@/lib/format";
 import { useStore } from "@/store";
 import { nowPlayingInfoTarget } from "@/lib/mediaInfo";
+import { useReadyIndexSig } from "@/hooks/useIndexPools";
 import { sniffSampleRate } from "@/lib/audioHeader";
 import { stripFromStored, stripToStored } from "@/lib/featureStrip";
 import { onsetsFromStored, onsetsToStored } from "@/lib/onsets";
 import { FEATURES_VERSION, featuresFromStored, featuresToStored } from "@/lib/features";
 import { measureOffThread } from "@/lib/measureClient";
 import type { Measured } from "@/lib/measure";
-import { audioAnalysisKey, type AudioAnalysis } from "@shared/model";
+import {
+  audioAnalysisKey,
+  currentFeatures,
+  fmtBytes,
+  keyName,
+  tempoBpm,
+  type AnalysisFeatures,
+  type AudioAnalysis,
+} from "@shared/model";
 import { AudioLines } from "lucide-react";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { Lru } from "@/lib/lru";
@@ -45,7 +54,10 @@ import { Lru } from "@/lib/lru";
 const CAPTURE_BUCKETS = 1200;
 
 /** What a decoded track measures as (lib/measure), the shape every surface reads. */
-export type Analysis = Measured;
+/** A measured track; `outdated` marks a stored analysis an earlier version wrote (a measurement
+ *  it lacks, or features of another version): Info offers Analyze audio again, which re-measures
+ *  it (analyzeTrack), as playing it does. */
+export type Analysis = Measured & { outdated?: boolean };
 
 // decoded analyses hold every envelope: the last 48 tracks (lib/lru)
 const cache = new Lru<string, Promise<Analysis | null>>(48);
@@ -56,6 +68,17 @@ const cache = new Lru<string, Promise<Analysis | null>>(48);
 // to the unreadable USB copy), and the network is held off for a minute.
 const failedAt = new Lru<string, number>(500);
 const FAILED_MEMO_MS = 60_000;
+// files main refused for their size (main/ipc/audio), so the absent line can say so
+const tooLarge = new Lru<string, { bytes: number; maxBytes: number }>(500);
+
+/** Why a track has no waveform, in the absent line's words (0.12.0: the reason crosses the IPC
+ *  now; a file past the size limit says so instead of naming two possible causes). */
+export function absentLine(serverUdn: string | null, objectId: string | null): string {
+  const big = serverUdn && objectId ? tooLarge.get(`${serverUdn}|${objectId}`) : undefined;
+  return big
+    ? `No waveform for this file. At ${fmtBytes(big.bytes)} it's larger than TastyTunes can analyze (${fmtBytes(big.maxBytes)}).`
+    : "No waveform for this file. It couldn't be read or decoded.";
+}
 
 /**
  * Optimistic seek hold, shared by every waveform surface: between a click
@@ -117,41 +140,63 @@ function fromStored(st: AudioAnalysis): Analysis {
     loudHist: st.loudHist ?? null,
     strip: st.strip ? stripFromStored(st.strip) : null,
     onsets: st.onsets ? onsetsFromStored(st.onsets) : null,
-    features: st.features ? featuresFromStored(st.features) : null,
+    // an older version's features say nothing (shared/model's currentFeatures): a peek (Info,
+    // never re-measuring) shows no tempo or key for them until the track is measured again
+    outdated:
+      predatesLoudness(st) || predatesStrip(st) || predatesOnsets(st) || predatesFeatures(st),
+    features: currentFeatures(st.features)
+      ? featuresFromStored(st.features as AnalysisFeatures)
+      : null,
   };
+}
+
+/** A stored analysis the current version would write the same: every measurement there, the
+ *  features its version. An entry from before loudness (0.7.0's cache shape) is incomplete and
+ *  is measured again ONCE, on the next play or Analyze audio, rather than carrying the gap
+ *  forever (user, 2026-09-05: re-analysis showed only DR); likewise the later measurements. */
+const isCurrent = (st: AudioAnalysis): boolean =>
+  !predatesLoudness(st) && !predatesStrip(st) && !predatesOnsets(st) && !predatesFeatures(st);
+
+/** Whether a track's stored analysis is current (Analyze audio's "is there work to do":
+ *  lib/audioAnalysis measures again what is current only when nothing else needs it). */
+export async function storedIsCurrent(contentKey: string): Promise<boolean> {
+  const st = await tt.audioAnalysisGet(contentKey).catch(() => null);
+  return st != null && isCurrent(st);
 }
 
 /** The analysis engine, exported for the Analyze-audio sweep
  *  (lib/audioAnalysis). contentKey engages the disk cache; the in-memory
- *  key stays LOCATION (udn|objectId), scoped to the session. */
+ *  key stays LOCATION (udn|objectId), scoped to the session. `force` measures
+ *  the file again even when a current analysis is stored (Analyze audio with
+ *  nothing else to do, 0.12.0: a file replaced under the same title, artist,
+ *  album and length keeps its old analysis otherwise). */
 export function analyzeTrack(
   serverUdn: string,
   objectId: string,
   contentKey: string | null = null,
+  { force = false }: { force?: boolean } = {},
 ): Promise<Analysis | null> {
   const key = `${serverUdn}|${objectId}`;
-  const hit = cache.get(key);
+  const hit = force ? undefined : cache.get(key);
   if (hit) return hit;
+  // a forced measurement: what a peek last found is old news
+  if (force) peeked.delete(key);
   const p = (async (): Promise<Analysis | null> => {
-    if (contentKey) {
+    if (contentKey && !force) {
       const stored = await tt.audioAnalysisGet(contentKey);
-      // an entry from before loudness (0.7.0's cache shape) is incomplete:
-      // measure it again ONCE, on the next play or Analyze audio, rather than
-      // carry the gap forever (user, 2026-09-05: re-analysis showed only DR)
-      if (
-        stored &&
-        !predatesLoudness(stored) &&
-        !predatesStrip(stored) &&
-        !predatesOnsets(stored) &&
-        !predatesFeatures(stored)
-      )
-        return fromStored(stored);
+      if (stored && isCurrent(stored)) return fromStored(stored);
     }
     const failed = failedAt.get(key);
-    if (failed != null && Date.now() - failed < FAILED_MEMO_MS) return null;
-    const bytes = await tt.expTrackAudio(serverUdn, objectId);
-    if (!bytes) return null;
-    const u8 = new Uint8Array(bytes);
+    if (!force && failed != null && Date.now() - failed < FAILED_MEMO_MS) return null;
+    const got = await tt.expTrackAudio(serverUdn, objectId);
+    if (!got) return null;
+    if (!ArrayBuffer.isView(got)) {
+      tooLarge.set(key, got.tooLarge);
+      return null;
+    }
+    // the bytes as they came: no copy (a 24/192 file is hundreds of MB, and its samples as
+    // many again; main/ipc/audio's cap is set by what the decode holds)
+    const u8 = got;
     // NATIVE RATE (2026-09-01): decodeAudioData resamples to its context's
     // rate, and at the device's 48k a 44.1k FLAC came back with a +0.5 dB
     // "peak" and a DR computed on interpolated samples — the harness had
@@ -171,7 +216,11 @@ export function analyzeTrack(
       ctx = new OfflineAudioContext(1, 1, 48000);
     }
     try {
-      const audio = await ctx.decodeAudioData(u8.slice().buffer);
+      // the decode takes (and detaches) the whole buffer; a view onto part of one is copied out
+      const whole = u8.byteOffset === 0 && u8.byteLength === u8.buffer.byteLength;
+      const audio = await ctx.decodeAudioData(
+        whole ? (u8.buffer as ArrayBuffer) : u8.slice().buffer,
+      );
       const chans: Float32Array[] = [];
       for (let c = 0; c < audio.numberOfChannels; c++) chans.push(audio.getChannelData(c));
       // the arithmetic (peaks, envelopes, DR, R128, the scenes' strip, onsets and
@@ -244,7 +293,14 @@ export function usePlayingFileRef(): {
   psRef.current = playState;
   const npRef = useRef(nowPlaying);
   npRef.current = nowPlaying;
+  // AFTER A REBUILD (his rc.3 launch, 2026-10-23: the seek bar's waveform waited for the next
+  // track): an index that is building answers no lookup, so a track that started then asks
+  // again once the ready indexes change; a file already found for this track is kept
+  const readySig = useReadyIndexSig();
+  const heldFor = useRef<string | null>(null);
   useEffect(() => {
+    if (heldFor.current === trackKey) return;
+    heldFor.current = null;
     let stale = false;
     setRef(null);
     const built = nowPlayingInfoTarget(psRef.current, npRef.current);
@@ -254,6 +310,7 @@ export function usePlayingFileRef(): {
       .mediaNodeInfo(built.localQuery, "show")
       .then((found) => {
         if (stale || !found?.node.serverUdn || !found.node.id) return;
+        heldFor.current = trackKey;
         setRef({
           serverUdn: found.node.serverUdn,
           objectId: found.node.id,
@@ -264,7 +321,7 @@ export function usePlayingFileRef(): {
     return () => {
       stale = true;
     };
-  }, [trackKey]);
+  }, [trackKey, readySig]);
   return ref;
 }
 
@@ -484,15 +541,14 @@ export function Waveform({
 
   // Absence explains itself here, quietly — the one place a curious user
   // looks when a track has no waveform (a 71MB track met the fetch cap in
-  // silence, 2026-09-01). The reason isn't known this side of the IPC, so
-  // the line names the two real causes rather than guessing at one.
+  // silence, 2026-09-01); since 0.12.0 a file past the size limit says so
+  // (absentLine), the rest name what is left.
   if (analysis === null)
     return enabled ? (
       <div data-waveform className="pt-1">
         <div className="microlabel mb-1.5">waveform</div>
         <div className="text-[11.5px] text-faint" data-waveform-absent>
-          No waveform for this file. It may be too large to analyze, or in a format that can't be
-          decoded.
+          {absentLine(serverUdn, objectId)}
         </div>
       </div>
     ) : null;
@@ -667,10 +723,32 @@ async function peekAnalysis(
   contentKey: string,
 ): Promise<Analysis | null | undefined> {
   const hit = cache.get(`${serverUdn}|${objectId}`);
-  if (hit) return hit;
-  const stored = await tt.audioAnalysisGet(contentKey);
-  return stored ? fromStored(stored) : undefined;
+  const found = hit
+    ? await hit
+    : await tt.audioAnalysisGet(contentKey).then((s) => (s ? fromStored(s) : undefined));
+  peeked.set(`${serverUdn}|${objectId}`, { found });
+  return found;
 }
+
+// What a peek last found, by location, read synchronously: a step in the Info modal looks the
+// next track's analysis up BEFORE it swaps (warmAnalysis, through lib/infoSteps), so the new track
+// renders whole in one frame instead of passing through "loading" (0.12.0: the waveform, the DR
+// and LUFS chips and the Format rows flashed out and back on every step)
+const peeked = new Lru<string, { found: Analysis | null | undefined }>(200);
+
+/** Looks a track's analysis up ahead of showing it (memory, then disk; never a decode). */
+export async function warmAnalysis(
+  serverUdn: string,
+  objectId: string,
+  contentKey: string,
+): Promise<void> {
+  await peekAnalysis(serverUdn, objectId, contentKey);
+}
+
+const knownNow = (serverUdn: string | null, objectId: string): KnownAnalysis | null => {
+  const hit = serverUdn ? peeked.get(`${serverUdn}|${objectId}`) : undefined;
+  return hit ? (hit.found === undefined ? "unknown" : hit.found) : null;
+};
 
 export type KnownAnalysis = Analysis | null | "loading" | "unknown";
 
@@ -687,11 +765,14 @@ export function useKnownAnalysis(
   contentKey: string,
 ): { available: boolean; state: KnownAnalysis; analyze(): void } {
   const enabled = useStore((s) => s.settings.waveforms);
-  const [state, setState] = useState<KnownAnalysis>("loading");
+  const [state, setState] = useState<KnownAnalysis>(
+    () => knownNow(serverUdn, objectId) ?? "loading",
+  );
   useEffect(() => {
     if (!enabled || !serverUdn) return;
     let stale = false;
-    setState("loading");
+    // what a step already looked up shows at once; the peek still runs, to catch a newer answer
+    setState(knownNow(serverUdn, objectId) ?? "loading");
     void peekAnalysis(serverUdn, objectId, contentKey).then((a) => {
       if (!stale) setState(a === undefined ? "unknown" : a);
     });
@@ -721,9 +802,14 @@ export function useKnownAnalysis(
 export function InfoWaveform({
   state,
   onAnalyze,
+  serverUdn = null,
+  objectId = null,
 }: {
   state: KnownAnalysis;
   onAnalyze(): void;
+  /** The file's location, for why it has no waveform (absentLine). */
+  serverUdn?: string | null;
+  objectId?: string | null;
 }): React.JSX.Element | null {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const ready = state != null && state !== "loading" && state !== "unknown";
@@ -748,17 +834,35 @@ export function InfoWaveform({
         </button>
       ) : state === null ? (
         <div className="text-[11.5px] text-faint" data-waveform-absent>
-          No waveform for this file. It may be too large to analyze, or in a format that can't be
-          decoded.
+          {absentLine(serverUdn, objectId)}
         </div>
       ) : (
         <>
           <canvas ref={canvasRef} className="w-full h-16 block" />
-          <div className="mt-1.5 font-mono text-[10.5px] text-faint">
-            peak {fmtDb(state.peakDb)}
-            {FACT_SEP}rms {fmtDb(state.rmsDb)}
-            {FACT_SEP}crest {fmtDb(state.crestDb)}
-            {state.lufs != null && `${FACT_SEP}${fmtLufs(state.lufs)}`}
+          <div className="mt-1.5 flex items-center gap-2">
+            <div className="min-w-0 flex-1 font-mono text-[10.5px] text-faint">
+              peak {fmtDb(state.peakDb)}
+              {FACT_SEP}rms {fmtDb(state.rmsDb)}
+              {FACT_SEP}crest {fmtDb(state.crestDb)}
+              {state.lufs != null && `${FACT_SEP}${fmtLufs(state.lufs)}`}
+            </div>
+            {/* AN EARLIER VERSION'S MEASUREMENT (0.12.0, his ask for a way to re-measure one
+                track): the verb that measures it again, an icon at the end of the measurements'
+                line with the reason in its tip, taking no row of its own (his call); its tempo
+                and key say nothing meanwhile (shared/model's currentFeatures) */}
+            {state.outdated && (
+              <button
+                data-info-outdated
+                data-info-analyze
+                onClick={onAnalyze}
+                aria-label="Analyze audio again"
+                data-tip="Measured by an earlier version of TastyTunes. Analyze audio again."
+                // no transition inside the frosted shell (S11): the shell fades as a whole
+                className="tip-top tip-end -my-1 shrink-0 rounded-md p-1 text-dim hover:bg-veil2 hover:text-ink"
+              >
+                <AudioLines size={14} />
+              </button>
+            )}
           </div>
         </>
       )}
@@ -820,7 +924,11 @@ export function usePlayingDr(): number | null {
 }
 
 /** The playing track's loudness facts for the Info surfaces (null until measured). */
-export function usePlayingLoudness(): { lufs: number | null; truePeakDb: number | null } | null {
+export function usePlayingLoudness(): {
+  lufs: number | null;
+  truePeakDb: number | null;
+  lra: number | null;
+} | null {
   const enabled = useStore((s) => s.settings.waveforms);
   const ref = usePlayingFileRef();
   const analysis = usePeaks(
@@ -829,8 +937,21 @@ export function usePlayingLoudness(): { lufs: number | null; truePeakDb: number 
     ref?.contentKey ?? null,
   );
   return analysis != null && analysis !== "loading" && analysis.lufs != null
-    ? { lufs: analysis.lufs, truePeakDb: analysis.truePeakDb }
+    ? { lufs: analysis.lufs, truePeakDb: analysis.truePeakDb, lra: analysis.lra }
     : null;
+}
+
+/** The playing track's tempo and key for the Stream tab's rows (shared/model's words). */
+export function usePlayingMeasured(): { tempo: number | null; key: string | null } | null {
+  const enabled = useStore((s) => s.settings.waveforms);
+  const ref = usePlayingFileRef();
+  const analysis = usePeaks(
+    enabled ? (ref?.serverUdn ?? null) : null,
+    ref?.objectId ?? null,
+    ref?.contentKey ?? null,
+  );
+  const f = analysis != null && analysis !== "loading" ? analysis.features : null;
+  return f ? { tempo: tempoBpm(f.beats), key: keyName(f.key) } : null;
 }
 
 /** Now Playing's format row wears the playing track's DR — at the END of the

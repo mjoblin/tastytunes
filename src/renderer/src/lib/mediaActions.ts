@@ -40,19 +40,32 @@ export async function openRefInLibrary(ref: MediaRef): Promise<boolean> {
     return false;
   };
   if (ref.kind !== "track" && ref.kind !== "album") return miss();
-  // an act: the Library navigates to the id, so it must answer on the server now
-  const info = await tt
-    .mediaNodeInfo(
-      {
-        kind: ref.kind,
-        title: ref.title,
-        artist: ref.artist,
-        album: ref.album,
-        artUrl: ref.artUrl,
-      },
-      "act",
-    )
-    .catch(() => null);
+  const byContent = {
+    kind: ref.kind,
+    title: ref.title,
+    artist: ref.artist,
+    album: ref.album,
+    artUrl: ref.artUrl,
+  };
+  // an act: the Library navigates to the id, so it must answer on the server now. A track asks
+  // by its id and length first, which the lookup already knew how to use: by title alone, of two
+  // tracks with one title on one album the first always won (Malcolm's twins, 0.12.0-rc.3); by
+  // content alone, as before, when that finds nothing (an id rotted, a length the server rounds)
+  const exact =
+    ref.kind === "track"
+      ? await tt
+          .mediaNodeInfo(
+            {
+              ...byContent,
+              serverUdn: ref.serverUdn,
+              objectId: ref.objectId,
+              durationSecs: ref.durationSecs,
+            },
+            "act",
+          )
+          .catch(() => null)
+      : null;
+  const info = exact ?? (await tt.mediaNodeInfo(byContent, "act").catch(() => null));
   const node = info?.node;
   if (!node?.serverUdn) return miss();
   if (ref.kind === "album") {
@@ -115,6 +128,8 @@ export async function openRefInLibrary(ref: MediaRef): Promise<boolean> {
     titlePath: (viaAlbum ? album.node.titlePath : null) ?? node.titlePath ?? [albumTitle],
     title: albumTitle,
     track: node.title,
+    trackId: node.id,
+    trackSecs: node.durationSecs,
   });
   return true;
 }

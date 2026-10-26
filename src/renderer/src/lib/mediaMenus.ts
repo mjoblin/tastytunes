@@ -59,10 +59,13 @@ export interface MediaMenuCaps {
   extra?: MediaMenuItem[];
   /**
    * Open the Info modal on this entity — everything the DIDL said about it
-   * (2026-08-16). Only surfaces holding a real MediaNode can offer it; a
-   * MediaRef-only surface (queue, favorites) leaves it out.
+   * (2026-08-16). A surface holding the real MediaNode (the Library) passes
+   * its own; every other surface gets Info derived from the ref (infoItem).
    */
   info?(): void;
+  /** The list this row sits in and its place there, so the derived Info steps through it
+   *  (lib/infoSteps; tracks only). */
+  infoList?: { refs: readonly MediaRef[]; index: number };
 }
 
 /**
@@ -74,7 +77,7 @@ export interface MediaMenuCaps {
 function infoItem(ref: MediaRef, caps: MediaMenuCaps): MediaMenuItem[] {
   if (caps.info) return [{ label: "Info…", run: caps.info }];
   if (ref.kind === "station") return [];
-  return [{ label: "Info…", run: () => void openInfoForRef(ref) }];
+  return [{ label: "Info…", run: () => void openInfoForRef(ref, caps.infoList) }];
 }
 
 const pivotEntity = (ref: MediaRef): string =>

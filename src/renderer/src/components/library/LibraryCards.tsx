@@ -222,7 +222,7 @@ export function ContainerCard({
             {badge && (
               <span
                 data-card-badge={badge}
-                className="shrink-0 text-[9.5px] px-1.5 py-px rounded-full ring-1 ring-edge text-faint"
+                className="ml-auto shrink-0 text-[9.5px] px-1.5 py-px rounded-full ring-1 ring-edge text-faint"
               >
                 {badge}
               </span>
@@ -361,7 +361,7 @@ export function ContainerRow({
             {badge && (
               <span
                 data-card-badge={badge}
-                className="shrink-0 text-[9.5px] px-1.5 py-px rounded-full ring-1 ring-edge text-faint"
+                className="ml-auto shrink-0 text-[9.5px] px-1.5 py-px rounded-full ring-1 ring-edge text-faint"
               >
                 {badge}
               </span>
@@ -541,6 +541,8 @@ export function TrackRow({
       onPointerDown={onNavDrag}
       onContextMenu={onMenu}
       data-library-track={node.title}
+      data-library-track-id={node.id}
+      data-library-track-secs={node.durationSecs ?? undefined}
     >
       {!isCurrent && selected && (
         <span

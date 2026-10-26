@@ -10,6 +10,7 @@ import { Chip } from "@/components/chrome/Chrome";
  */
 export function EmptyState({
   icon: Icon,
+  art,
   title,
   caption,
   compact,
@@ -17,6 +18,9 @@ export function EmptyState({
   children,
 }: {
   icon: LucideIcon;
+  /** A drawing in place of the glyph, for a screen whose empty state is its first impression
+   *  (the Library with no libraries: the doors' crate, empty). */
+  art?: React.ReactNode;
   title: string;
   caption?: string;
   /**
@@ -38,7 +42,7 @@ export function EmptyState({
         className,
       )}
     >
-      <Icon size={compact ? 34 : 56} strokeWidth={1} className="text-faint/50" />
+      {art ?? <Icon size={compact ? 34 : 56} strokeWidth={1} className="text-faint/50" />}
       {/* Title and caption are ONE block: they are a sentence and its
           footnote, and the gap between them should never be the same as the
           gap to the glyph above. (Non-compact keeps gap-4 between them, so

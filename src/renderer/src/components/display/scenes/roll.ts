@@ -1,3 +1,4 @@
+import { TEMPO_CONFIDENCE_FLOOR } from "@shared/model";
 import type {
   Rgb,
   Scene,
@@ -244,7 +245,7 @@ export class Roll implements Scene {
     // the row being read, lit a little (more in a drop's flash); the beat ticked along it ahead
     ctx.fillStyle = rgba(P.gold, 0.05 + 0.3 * this.flash);
     ctx.fillRect(left, rowY, width, rowH);
-    if (f.beat && f.beat.confidence >= 0.35 && !f.mini) {
+    if (f.beat && f.beat.confidence >= TEMPO_CONFIDENCE_FLOOR && !f.mini) {
       const period = 60 / f.beat.bpm;
       const bar = f.beat.onBar ? 0 : Math.round(f.beat.bar * 4) % 4;
       let t = pos - f.beat.phase * period;

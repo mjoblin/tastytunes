@@ -214,6 +214,32 @@ function formatOf(res: Record<string, unknown> | undefined): MediaFormat | null 
   return out;
 }
 
+/**
+ * NODE RULE file-disc (MinimServer, 0.12.0-rc.3, Malcolm's box sets): a multi-disc album arrives
+ * with per-disc track numbers and no disc ("Close Your Eyes" is track 11 twice on Songbooks+),
+ * and MinimServer's file URL ends with the file's own name, which a common naming gives the disc:
+ * ".../CD05 .../5-11 Close Your Eyes.flac" (MinimServer escapes as *XX, so *20 is a space). Read
+ * only when the server sent no disc, and only when the name starts with two numbers, the second
+ * the track number the server did send; a guess the album must confirm whole (the pool rule
+ * discs-from-file-names in reconcile.ts), so it is kept apart as fileDisc.
+ */
+export function fileDiscOf(resUrl: string | null, trackNumber: number | null): number | null {
+  if (!resUrl || trackNumber == null) return null;
+  let name = resUrl.split(/[?#]/)[0].split("/").pop() ?? "";
+  try {
+    name = decodeURIComponent(name);
+  } catch {
+    // a stray % in a file name: the prefix is all that is read
+  }
+  name = name.replace(/\*([0-9a-fA-F]{2})/g, (_, h: string) =>
+    String.fromCharCode(parseInt(h, 16)),
+  );
+  const m = /^(\d{1,2})-(\d{1,3})(?=[\s._-])/.exec(name);
+  if (!m) return null;
+  const disc = Number(m[1]);
+  return disc >= 1 && Number(m[2]) === trackNumber ? disc : null;
+}
+
 // ---------------------------------------------------------------- one node
 function nodeOf(raw: Record<string, unknown>, isContainer: boolean): MediaNode | null {
   const id = text(raw["@_id"]);
@@ -344,6 +370,10 @@ function nodeOf(raw: Record<string, unknown>, isContainer: boolean): MediaNode |
 
   const trackNumber =
     raw.originalTrackNumber != null ? Number(text(raw.originalTrackNumber)) : null;
+  const fileDisc =
+    !isContainer && raw.originalDiscNumber == null && trackNumber != null
+      ? fileDiscOf(res ? text(res) : null, trackNumber)
+      : null;
   return {
     ...(composers.length > 0 ? { composers } : {}),
     ...(genres.length > 0 ? { genre: genres } : {}),
@@ -369,6 +399,7 @@ function nodeOf(raw: Record<string, unknown>, isContainer: boolean): MediaNode |
       : {}),
     durationSecs: res ? parseDuration(text(res["@_duration"])) : null,
     ...(format ? { format } : {}),
+    ...(fileDisc != null ? { fileDisc } : {}),
   };
 }
 

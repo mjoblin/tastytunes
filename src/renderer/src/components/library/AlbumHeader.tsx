@@ -122,7 +122,9 @@ export function AlbumHeader(
                   {albumArtist}
                 </NameLink>
               ) : (
-                <div className="text-[14px] text-dim truncate">{albumArtist}</div>
+                <div data-album-artist className="text-[14px] text-dim truncate">
+                  {albumArtist}
+                </div>
               ))}
           </div>
           {/* facts + composers are one thought too, set tight (the

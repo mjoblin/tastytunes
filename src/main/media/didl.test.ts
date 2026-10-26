@@ -139,6 +139,32 @@ describe("extraction: a spec-clean track", () => {
     expect(node).toMatchObject({ trackNumber: 212, discNumber: 2, discCount: 2 });
   });
 
+  it("keeps a disc a MinimServer file name gives, apart, only when the server sent none (NODE RULE file-disc)", () => {
+    const minim = (track: number, file: string, disc = ""): MediaNode =>
+      itemNode(
+        "<dc:title>Close Your Eyes</dc:title>" +
+          TRACK +
+          `<upnp:originalTrackNumber>${track}</upnp:originalTrackNumber>` +
+          disc +
+          `<res duration="0:04:35.000">http://10.0.1.154:9790/minimserver/*/FLAC*20Music/Oscar*20Peterson/CD05*20AT*20THE*20OPERA*20HOUSE/${file}</res>`,
+      );
+    expect(minim(11, "5-11*20Close*20Your*20Eyes.flac").fileDisc).toBe(5);
+    expect(minim(6, "1-06%20Sultans%20of%20Swing.flac").fileDisc).toBe(1);
+    // the second number must be the track number the server sent
+    expect(minim(12, "5-11*20Close*20Your*20Eyes.flac").fileDisc).toBeUndefined();
+    // no disc-track prefix, or a plain track number
+    expect(minim(11, "11*20Close*20Your*20Eyes.flac").fileDisc).toBeUndefined();
+    expect(minim(11, "2014-11*20Close.flac").fileDisc).toBeUndefined();
+    // a server that sends its own disc is never second-guessed
+    const sent = minim(
+      11,
+      "5-11*20Close*20Your*20Eyes.flac",
+      "<upnp:originalDiscNumber>2</upnp:originalDiscNumber>",
+    );
+    expect(sent).toMatchObject({ discNumber: 2 });
+    expect(sent.fileDisc).toBeUndefined();
+  });
+
   it("takes the first date when dc:date and upnp:date both arrive (NODE RULE dates)", () => {
     // Gerbera sends both; they fold into one array under removeNSPrefix
     const node = itemNode(

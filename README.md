@@ -45,6 +45,17 @@ network. There's no account and no cloud service required.
 Without a streamer on the network, demo mode on the connect screen runs the
 whole app against a built-in virtual one with sample music libraries.
 
+On Linux, make the AppImage executable before you launch it. AppImages need
+FUSE 2, which newer Ubuntu releases don't include: install it with
+`sudo apt install libfuse2` (`libfuse2t64` on Ubuntu 24.04). Ubuntu 24.04 also
+restricts the sandbox that Electron apps like TastyTunes use, so if it doesn't
+start there, launch it with `--no-sandbox`:
+
+```bash
+chmod +x TastyTunes-x86_64.AppImage
+./TastyTunes-x86_64.AppImage --no-sandbox
+```
+
 You'll need a Cambridge Audio network player built on the StreamMagic
 platform, on the same network as your computer: Evo 75/150, CXN100 /
 CXN (V2), MXN10, AXN10, EXN100, Edge NQ, 851N. Developed and tested daily
@@ -66,11 +77,13 @@ For music on your local media servers, TastyTunes reads the audio file and shows
 
 Local media servers and the streamer's USB drive, combined into Artists, Albums and Tracks views, with genre, decade, format, and dynamic range filters.
 
+<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/library.webp" alt="The Library with its Albums, Artists, and Tracks cards over every library, and its two media servers below">
+
 <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/lens-albums.webp" alt="The Albums view combining every library into one collection">
 
 #### Artists and Tracks views
 
-The Artists view shows your artists, the selected artist's albums, and the selected album's tracks. The Tracks view lists every track in every library and can be filtered by decade, genre, format, and dynamic range, and the filtered list can be played as a whole.
+The Artists view shows your artists, the selected artist's albums, and the selected album's tracks. The Tracks view lists every track in every library and can be filtered by decade, genre, format, dynamic range, and tempo, and the filtered list can be played as a whole.
 
 <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/lens-artists.webp" alt="The Artists view with an artist selected, their albums in the middle column and the tracks of one album on the right">
 
@@ -216,6 +229,17 @@ Any enabled tool works the same way, such as `set_volume`, `set_power`, and
 `pause`. Bind the server to your network in Settings › AI agents, enable the
 tools the Home Assistant automation needs, copy the token into the
 `Authorization` header, and keep TastyTunes running.
+
+## Action links
+
+A `tastytunes://` link controls the streamer from anything that can open a link,
+such as an Elgato Stream Deck's Website action, Raycast, Alfred, Keyboard Maestro,
+Shortcuts, or a browser bookmark. `tastytunes://preset/3` recalls preset 3,
+`tastytunes://volume/up` turns the volume up a step, and
+`tastytunes://toggle-play` plays or pauses. To keep the focus where it is, open
+links in the background where the launcher allows it, such as `open -g` in
+Terminal. Every link is listed in Settings › Behavior (on Linux, the AppImage
+must be integrated with the desktop for links to work).
 
 ## Every feature
 
@@ -403,6 +427,7 @@ With Cambridge Audio's Evo CD transport (on an Evo streaming amplifier):
 - Notices are announced to screen readers
 - Undo for queue edits, favorites, playlist additions and schedule deletions, from the notice that follows each change
 - OS media keys
+- `tastytunes://` links for an Elgato Stream Deck and launchers: playback, volume, presets, sources, power and screens
 - A track-change notification with artwork when the window isn't focused
 
 ### Appearance

@@ -187,6 +187,47 @@ export class EntryStore<T, S> {
     this.scheduleWrite();
   }
 
+  private refreshing: Promise<number> | null = null;
+
+  /** Re-makes the summaries `stale` picks from their entries' files, a few per tick so the main
+   *  thread never stalls (0.12.0: the analyses' summaries gained tempo and key, and the ones made
+   *  before have neither until remade). No entry's use is counted; a call while one runs joins
+   *  it. Resolves to how many summaries changed. */
+  refreshSummaries(stale: (s: S) => boolean, perTick = 8): Promise<number> {
+    if (this.refreshing) return this.refreshing;
+    const keys = [...this.load()].filter(([, e]) => stale(e.s)).map(([k]) => k);
+    if (keys.length === 0) return Promise.resolve(0);
+    this.refreshing = new Promise((resolve) => {
+      let changed = 0;
+      const step = (): void => {
+        for (const key of keys.splice(0, perTick)) {
+          const entry = this.index?.get(key);
+          if (!entry || !stale(entry.s)) continue;
+          try {
+            const raw = JSON.parse(readFileSync(this.fileOf(key), "utf8")) as {
+              key?: string;
+              v?: T;
+            };
+            if (raw.key !== key || raw.v == null) continue;
+            entry.s = this.o.summarize(raw.v);
+            changed++;
+          } catch {
+            // a missing or foreign file: the next get forgets the entry
+          }
+        }
+        if (keys.length > 0) {
+          setImmediate(step);
+          return;
+        }
+        if (changed > 0) this.scheduleWrite();
+        this.refreshing = null;
+        resolve(changed);
+      };
+      setImmediate(step);
+    });
+    return this.refreshing;
+  }
+
   /** Every entry, the legacy file too (Settings' Clear). */
   clear(): void {
     this.index = new Map();

@@ -20,6 +20,7 @@ import { SCENES, SCENES_ORDERED, isAbstract, sceneNeeds } from "@/components/dis
 import { sceneIdleLine, useSceneLive } from "@/components/display/useSceneLive";
 import { useShuffledScene } from "@/components/display/useShuffledScene";
 import type { SceneId } from "@/components/display/scenes/types";
+import { onScreenKey } from "@/lib/keyboardOwner";
 
 /**
  * Full-screen "display mode" (Roon display mode / Volumio now-playing kiosk):
@@ -79,18 +80,19 @@ export function DisplayMode(): React.JSX.Element {
     toastTimer.current = setTimeout(() => setToast(null), 1500);
   };
   // Tab steps through the scenes without the mouse; Shift+Tab steps back
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key !== "Tab") return;
-      e.preventDefault();
-      const ids = SCENES_ORDERED.map((sc) => sc.id);
-      const i = ids.indexOf(settings.displayScene);
-      pickScene(ids[(i + (e.shiftKey ? -1 : 1) + ids.length) % ids.length]);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+  // (quiet while a modal has the keyboard: Info over Display mode keeps its Tab)
+  useEffect(
+    () =>
+      onScreenKey((e) => {
+        if (e.key !== "Tab") return;
+        e.preventDefault();
+        const ids = SCENES_ORDERED.map((sc) => sc.id);
+        const i = ids.indexOf(settings.displayScene);
+        pickScene(ids[(i + (e.shiftKey ? -1 : 1) + ids.length) % ids.length]);
+      }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings.displayScene]);
+    [settings.displayScene],
+  );
   // Display mode's 46vmin tile is the biggest art in the app: the file's own
   // picture when the server's is small (lib/bestArt)
   const art = useBestArt(

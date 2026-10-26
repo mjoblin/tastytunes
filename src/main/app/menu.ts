@@ -17,6 +17,22 @@ export interface MenuDeps {
 // the arrows belong to the renderer, which can tell inputs from shortcuts —
 // a menu accelerator would steal them app-wide. The renderer's shortcut set
 // is documented in the shortcuts overlay; the menu is the discoverable mirror.
+// every screen, in the nav's order and with the nav's names (Recently Played became History
+// in 0.8.0 and Playlists, Favorites and Radio had never been listed; the terminology pass,
+// 2026-09-17); the Go menu lists them and tastytunes://screen/<name> goes to them (app/urlActions)
+export const MENU_SCREENS: ReadonlyArray<readonly [screen: string, label: string]> = [
+  ["now-playing", "Now Playing"],
+  ["queue", "Queue"],
+  ["search", "Search"],
+  ["library", "Library"],
+  ["presets", "Presets"],
+  ["playlists", "Playlists"],
+  ["favorites", "Favorites"],
+  ["radio", "Radio"],
+  ["recently-played", "History"],
+  ["device", "Device"],
+];
+
 export function installAppMenu(deps: MenuDeps): void {
   const isMac = process.platform === "darwin";
 
@@ -112,6 +128,15 @@ export function installAppMenu(deps: MenuDeps): void {
   };
 
   const viewSubmenu: MenuItemConstructorOptions[] = [
+    // Info for what is in front of you, the Mac's Get Info key (0.12.0; the renderer's
+    // lib/infoHotkey decides what, and its own ⌘I handler serves keys the menu never sees)
+    {
+      id: "menu-info",
+      label: "Get Info",
+      accelerator: "CmdOrCtrl+I",
+      click: () => deps.sendToMain({ id: "info" }),
+    },
+    { type: "separator" },
     { id: "menu-mini", label: "Mini Player", click: () => deps.toggleMini() },
     {
       id: "menu-display",
@@ -171,21 +196,6 @@ export function installAppMenu(deps: MenuDeps): void {
   }
   const viewMenu: MenuItemConstructorOptions = { label: "View", submenu: viewSubmenu };
 
-  // every screen, in the nav's order and with the nav's names (Recently Played became History
-  // in 0.8.0 and Playlists, Favorites and Radio had never been listed; the terminology pass,
-  // 2026-09-17)
-  const screens: Array<[string, string]> = [
-    ["now-playing", "Now Playing"],
-    ["queue", "Queue"],
-    ["search", "Search"],
-    ["library", "Library"],
-    ["presets", "Presets"],
-    ["playlists", "Playlists"],
-    ["favorites", "Favorites"],
-    ["radio", "Radio"],
-    ["recently-played", "History"],
-    ["device", "Device"],
-  ];
   const goMenu: MenuItemConstructorOptions = {
     label: "Go",
     submenu: [
@@ -196,7 +206,7 @@ export function installAppMenu(deps: MenuDeps): void {
         click: () => deps.sendToMain({ id: "palette" }),
       },
       { type: "separator" },
-      ...screens.map(([screen, label]): MenuItemConstructorOptions => ({
+      ...MENU_SCREENS.map(([screen, label]): MenuItemConstructorOptions => ({
         id: `menu-screen-${screen}`,
         label,
         click: () => deps.sendToMain({ id: "screen", screen }),

@@ -1,6 +1,8 @@
 import { app, protocol } from "electron";
 import { join } from "node:path";
 import { installNavigationGuard } from "./guard";
+// tastytunes:// URLs: listened for before ready, held until whenReady takes them (app/urlInbox)
+import "./urlInbox";
 
 // THE PROCESS'S FIRST WORDS (main/index.ts imports this module before any other, so these run
 // before anything else in main is evaluated; split out of index.ts in the 0.11.0 sweep).
