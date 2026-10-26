@@ -206,9 +206,58 @@ export const RECORD_SORTS = new Set<string>(["lastPlayed", "plays", "wholeListen
 export const PLAY_THESE_MAX = 50;
 
 /** What an album's copy chip means, as its tip says it (the lens index's copyBadge: the library,
- *  else the format, else the folder, shown only when there is another copy; 0.13.0-rc.4, a user
- *  had to work out what "FLAC · 24/96" on one album was telling him). */
+ *  then which copy it is, shown only when there is another copy; 0.13.0-rc.4, a user had to work
+ *  out what "FLAC · 24/96" on one album was telling him). */
 export const COPY_BADGE_TIP = "There's another copy of this album";
+
+/**
+ * WHICH COPY an album is among its copies on one server, for its chip (0.13.0-rc.4, his pick on
+ * "Card details": the chip says where the copies DIFFER, never what they share; two copies of one
+ * album on a drive both said the folder name they share, and pushed the artist off the line).
+ * The first fact no other copy has: its format (left to the card's format line when the card
+ * shows one), its folder's name when that is not the album's title, then the part of its folder
+ * path the others don't share ("Music", "Rock › The Band"); else "Copy 2", its place among all
+ * the copies in the pools' order, so a copy a fact names stands for its number ("FLAC · 24/96",
+ * "Copy 2", "Copy 3"). `copies` holds the album itself.
+ */
+export function whichCopy(
+  a: MediaNode,
+  copies: readonly MediaNode[],
+  formatOf: (n: MediaNode) => string | null,
+  { formatShown = false }: { formatShown?: boolean } = {},
+): string {
+  const all = copies.includes(a) ? copies : [a, ...copies];
+  const folderOf = (n: MediaNode): string | null => {
+    const f = n.titlePath?.[n.titlePath.length - 1] ?? null;
+    return f && lc(f) !== lc(n.title) ? f : null;
+  };
+  const facts = [...(formatShown ? [] : [formatOf]), folderOf, folderPlaces(all)];
+  for (const fact of facts) {
+    const mine = fact(a);
+    if (mine && all.every((c) => c === a || lc(fact(c)) !== lc(mine))) return mine;
+  }
+  return `Copy ${all.indexOf(a) + 1}`;
+}
+
+/** Each copy's place on its server: the part of its folder path (the folders above its own) past
+ *  the part every copy shares, or the folder just above its own when it has nothing past that;
+ *  null without a path. */
+function folderPlaces(copies: readonly MediaNode[]): (n: MediaNode) => string | null {
+  const above = new Map(copies.map((c) => [c, c.titlePath ? c.titlePath.slice(0, -1) : null]));
+  const walked = [...above.values()].filter((p): p is string[] => p != null);
+  let shared = 0;
+  while (
+    walked.length > 0 &&
+    walked.every((p) => shared < p.length && lc(p[shared]) === lc(walked[0][shared]))
+  )
+    shared++;
+  return (n) => {
+    const p = above.get(n);
+    if (!p || p.length === 0) return null;
+    const past = p.slice(shared);
+    return past.length > 0 ? past.join(" › ") : p[p.length - 1];
+  };
+}
 
 /**
  * THE ARTIST PAGE'S ALBUM ORDER (0.13.0-rc.4, a user's question: the page lists an artist's albums

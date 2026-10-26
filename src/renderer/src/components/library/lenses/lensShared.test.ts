@@ -13,6 +13,7 @@ import {
   tempoBandLabel,
   tempoBandOf,
   tempoOptionsOf,
+  whichCopy,
 } from "./lensShared";
 
 describe("the tempo facet", () => {
@@ -161,5 +162,39 @@ describe("the artist page's album order", () => {
     ]);
     expect(titles(orderArtistAlbums(albums, "year", true))[0]).toBe("A Matter of Life and Death");
     expect(titles(orderArtistAlbums(albums, "title", true))[0]).toBe("Powerslave");
+  });
+});
+
+describe("which copy a chip names", () => {
+  const copy = (id: string, titlePath?: string[], format: string | null = null): MediaNode =>
+    ({ id, title: "Night Drive", titlePath, isContainer: true, format }) as unknown as MediaNode;
+  const formatOf = (n: MediaNode): string | null =>
+    (n as unknown as { format: string | null }).format;
+  it("names the format no other copy has, unless the card's format line says it", () => {
+    const a = copy("a", undefined, "FLAC · 24/96");
+    const b = copy("b", undefined, "FLAC · 16/44.1");
+    expect(whichCopy(a, [a, b], formatOf)).toBe("FLAC · 24/96");
+    expect(whichCopy(a, [a, b], formatOf, { formatShown: true })).toBe("Copy 1");
+    expect(whichCopy(b, [a, b], formatOf, { formatShown: true })).toBe("Copy 2");
+  });
+  it("names a folder no other copy has, but never one that only repeats the title", () => {
+    const a = copy("a", ["Music", "Night Drive (Deluxe)"]);
+    const b = copy("b", ["Music", "Night Drive"]);
+    expect(whichCopy(a, [a, b], formatOf)).toBe("Night Drive (Deluxe)");
+    expect(whichCopy(b, [a, b], formatOf)).toBe("Copy 2");
+  });
+  it("names the part of the path the copies don't share when their folders match", () => {
+    const a = copy("a", ["Drive", "Music", "The Band - Night Drive"]);
+    const b = copy("b", ["Drive", "Music", "Rock", "The Band", "The Band - Night Drive"]);
+    expect(whichCopy(a, [a, b], formatOf)).toBe("Music");
+    expect(whichCopy(b, [a, b], formatOf)).toBe("Rock › The Band");
+  });
+  it("numbers the copies nothing tells apart by their place among all, in the pools' order", () => {
+    const a = copy("a", undefined, "FLAC · 24/96");
+    const b = copy("b", undefined, "FLAC · 16/44.1");
+    const c = copy("c", undefined, "FLAC · 16/44.1");
+    expect(whichCopy(a, [a, b, c], formatOf)).toBe("FLAC · 24/96");
+    expect(whichCopy(b, [a, b, c], formatOf)).toBe("Copy 2");
+    expect(whichCopy(c, [a, b, c], formatOf)).toBe("Copy 3");
   });
 });

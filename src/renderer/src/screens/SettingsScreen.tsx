@@ -343,6 +343,13 @@ export function SettingsScreen(): React.JSX.Element {
                       checked={settings.presetFillRows}
                       onChange={(presetFillRows) => void save({ presetFillRows })}
                     />
+
+                    <Toggle
+                      label="Format and DR on album cards"
+                      hint="Displays each album's format and quality under its name in the Library, and its dynamic range once Audio analysis has measured it."
+                      checked={settings.albumCardFormat}
+                      onChange={(albumCardFormat) => void save({ albumCardFormat })}
+                    />
                   </div>
                 </section>
 

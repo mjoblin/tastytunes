@@ -19,7 +19,7 @@ import { FilterInput } from "@/components/controls/FilterInput";
 import { Chip, GAP_BETWEEN, GAP_WITHIN, HeaderChip } from "@/components/chrome/Chrome";
 import { SortChip } from "@/components/controls/SortChip";
 import { usePlayStats } from "@/lib/playStats";
-import { CardBadge, TrackRow } from "@/components/library/LibraryCards";
+import { CARD_BADGE_LINE, CardBadge, TrackRow } from "@/components/library/LibraryCards";
 import { Eqbars } from "@/components/media/Eqbars";
 import {
   COPY_BADGE_TIP,
@@ -622,8 +622,13 @@ export function ArtistsLens({
                           {playing && <Eqbars />}
                           <span className="truncate">{alb.title}</span>
                         </div>
-                        <div className="flex items-center gap-1.5 min-w-0 text-[12px] text-dim">
-                          {alb.year && <span>{alb.year}</span>}
+                        <div
+                          className={cx(
+                            "text-[12px] text-dim",
+                            badge ? CARD_BADGE_LINE : "flex items-center min-w-0",
+                          )}
+                        >
+                          <span className="truncate">{alb.year}</span>
                           {badge && <CardBadge label={badge} tip={COPY_BADGE_TIP} />}
                         </div>
                       </div>

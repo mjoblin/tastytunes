@@ -8,6 +8,7 @@ import {
 import { ArtistHeader } from "@/components/library/ArtistHeader";
 import { ContainerCard, ContainerRow, TrackRow } from "@/components/library/LibraryCards";
 import { useLensIndex } from "@/components/library/lenses/useLensIndex";
+import { useCardDetails } from "@/components/library/useCardDetails";
 import {
   COPY_BADGE_TIP,
   lc,
@@ -65,6 +66,8 @@ export function ArtistPage({
   onOpenAlbum(node: MediaNode, track?: LandingTrack): void;
 }): React.JSX.Element {
   const index = useLensIndex(pools);
+  // each card's format line, while Settings › Layout shows it (useCardDetails)
+  const detailsOf = useCardDetails(index);
   const key = lc(name);
   const artist = index.artists.find((a) => a.key === key) ?? null;
   const sort = useStore((s) => s.settings.artistPageSort);
@@ -144,7 +147,7 @@ export function ArtistPage({
                 // minitunes and on the streamer's drive; a user's two editions of one album on one server),
                 // the Albums lens's rule; an album with no other copy shows none, its year not
                 // squeezed by a chip that says nothing
-                badge: index.copyBadge(node),
+                badge: index.copyBadge(node, { formatShown: cards && detailsOf != null }),
                 badgeTip: COPY_BADGE_TIP,
               };
               return cards ? (
@@ -153,6 +156,7 @@ export function ArtistPage({
                   {...common}
                   // the page is the artist's: a card says its year, the order's key, whole
                   subtitle={node.year ?? ""}
+                  details={detailsOf?.(node)}
                   onPlay={(el) => void actions.playContainer(node, el)}
                 />
               ) : (

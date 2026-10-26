@@ -9,7 +9,9 @@ import { RowHeart } from "@/components/media/RowHeart";
 import { ArtImage } from "@/components/media/ArtImage";
 import { MediaArt } from "@/components/media/MediaArt";
 import { cardChip } from "@/components/chrome/Chrome";
-import { DrBadge } from "@/components/media/Waveform";
+import { DrBadge, drTone, fmtLufs } from "@/components/media/Waveform";
+import { SignalDot } from "@/components/device/SignalLamp";
+import type { CardDetails } from "@/components/library/useCardDetails";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { DurationCell } from "@/components/media/DurationCell";
 import { Eqbars } from "@/components/media/Eqbars";
@@ -73,6 +75,7 @@ export function ContainerCard({
   badgeTip,
   note,
   subtitle: line,
+  details,
   onHeart,
   onEnter,
   onPlay,
@@ -100,6 +103,9 @@ export function ContainerCard({
   /** The line under the name in place of the artist and year: an artist's card in the Artists
    *  lens says what the row says ("12 albums"; 0.13.0 round 12). */
   subtitle?: string;
+  /** An album's format line under its names (useCardDetails), absent where the surface has none
+   *  or Settings › Layout turns it off. */
+  details?: CardDetails;
   onHeart?(): void;
   /** The body click, with its event: a caller with a selection model reads the
    *  chord (⌘/ctrl, shift) and decides whether this click opens or picks. */
@@ -234,13 +240,12 @@ export function ContainerCard({
           {node.title}
         </div>
         {(subtitle || badge) && (
-          <div className="flex items-center gap-1.5 min-w-0">
-            {subtitle && (
-              <div className="text-[11.5px] text-faint truncate text-left">{subtitle}</div>
-            )}
+          <div className={badge ? CARD_BADGE_LINE : "flex min-w-0"}>
+            <div className="text-[11.5px] text-faint truncate text-left">{subtitle}</div>
             {badge && <CardBadge label={badge} tip={badgeTip} />}
           </div>
         )}
+        {details && <CardFormatLine details={details} />}
         {note && (
           // LAST, under the names: the card's own artist and year are what it
           // says about itself, and a surface's fact goes after them, never
@@ -385,18 +390,69 @@ export function TrackCard({
  * index's copyBadge), one home for the cards, the rows and the Artists lens's album column
  * (0.13.0-rc.4, when its tip arrived: three hand-written copies before). `tip` says what it means.
  */
+/**
+ * A LINE WITH A COPY'S CHIP (0.13.0-rc.4, his pick on "Card details": the chip never takes more
+ * than half the line, so the artist keeps the other half): two columns no wider than their text,
+ * the line's free width shared equally between them, so each keeps up to half and either uses
+ * what the other leaves, the chip at the line's right end, and either shortened with "…" past its
+ * share. The name's column is always there, empty when there is no name.
+ */
+export const CARD_BADGE_LINE =
+  "grid grid-cols-[minmax(0,max-content)_minmax(0,max-content)] justify-between items-center gap-1.5 min-w-0";
+
 export function CardBadge({ label, tip }: { label: string; tip?: string }): React.JSX.Element {
   return (
     <span
       data-card-badge={label}
       data-tip={tip}
       className={cx(
-        "ml-auto shrink-0 text-[9.5px] px-1.5 py-px rounded-full ring-1 ring-edge text-faint",
+        "ml-auto shrink-0 truncate text-[9.5px] px-1.5 py-px rounded-full ring-1 ring-edge text-faint",
         tip && "tip-bottom tip-end",
       )}
     >
       {label}
     </span>
+  );
+}
+
+/**
+ * AN ALBUM CARD'S FORMAT LINE (0.13.0-rc.4, his picks on "Card details"): the status lamp's glyph
+ * for its quality, its format, and DR's badge at the right once Audio analysis has measured it,
+ * one tip over the line in two short lines (the format, then the dynamic range) so a tip under a
+ * narrow card stays about its width. Held at its height when nothing is known, so every card in
+ * a grid keeps one height.
+ */
+function CardFormatLine({ details }: { details: CardDetails }): React.JSX.Element {
+  const dr = details.dr != null && details.dr > 0 ? details.dr : null;
+  const drWords =
+    dr != null
+      ? `DR${dr}, ${drTone(dr).word}${details.lufs != null ? `, ${fmtLufs(details.lufs)}` : ""}`
+      : null;
+  const tip = [details.tip, drWords].filter(Boolean).join("\n");
+  return (
+    <div
+      data-card-format={details.label ?? ""}
+      data-tip={tip || undefined}
+      className={cx(
+        "mt-0.5 h-4 flex items-center gap-1 min-w-0 text-[10.5px] text-faint/80 tabular-nums text-left",
+        tip && "tip-bottom tip-lines",
+      )}
+    >
+      {details.quality && (
+        // the hi-res ring reaches past the dot: a box its width, so every label starts in line
+        <span className="w-[13px] shrink-0 flex justify-center">
+          <SignalDot quality={details.quality} className="h-1.5 w-1.5" />
+        </span>
+      )}
+      {details.label && <span className="truncate">{details.label}</span>}
+      {dr != null && (
+        <DrBadge
+          dr={dr}
+          titled={false}
+          className="ml-auto shrink-0 font-mono text-[10px] leading-[14px]"
+        />
+      )}
+    </div>
   );
 }
 
@@ -506,18 +562,19 @@ export function ContainerRow({
           {node.title}
         </div>
         {(node.artist || badge) && (
-          <div className="flex items-center gap-1.5 min-w-0">
-            {node.artist &&
-              (onArtistLink ? (
-                <NameLink
-                  kind="artist"
-                  name={node.artist}
-                  onGo={onArtistLink}
-                  className="text-[12px] text-faint truncate hover:text-dim hover:underline underline-offset-2"
-                />
-              ) : (
-                <div className="text-[12px] text-faint truncate">{node.artist}</div>
-              ))}
+          <div className={badge ? CARD_BADGE_LINE : "flex min-w-0"}>
+            {!node.artist ? (
+              <span />
+            ) : onArtistLink ? (
+              <NameLink
+                kind="artist"
+                name={node.artist}
+                onGo={onArtistLink}
+                className="text-[12px] text-faint truncate hover:text-dim hover:underline underline-offset-2"
+              />
+            ) : (
+              <div className="text-[12px] text-faint truncate">{node.artist}</div>
+            )}
             {badge && <CardBadge label={badge} tip={badgeTip} />}
           </div>
         )}

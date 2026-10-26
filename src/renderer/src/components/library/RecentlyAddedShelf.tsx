@@ -7,6 +7,8 @@ import { ContainerCard } from "@/components/library/LibraryCards";
 import { RowMenu } from "@/components/media/RowMenu";
 import { useColumns } from "@/hooks/useColumns";
 import { useIndexPools } from "@/hooks/useIndexPools";
+import { lensIndexOf } from "@/components/library/lenses/useLensIndex";
+import { useCardDetails } from "@/components/library/useCardDetails";
 import { fmtAdded, fmtCount } from "@/lib/format";
 import { albumMenuItems, type MediaMenuItem } from "@/lib/mediaMenus";
 import { openAlbumNode, playAlbumNode } from "@/lib/mediaActions";
@@ -29,6 +31,8 @@ const SHELF_SCALE = 1;
  */
 export function RecentlyAddedShelf({ seeAll }: { seeAll(): void }): React.JSX.Element | null {
   const pools = useIndexPools();
+  // each card's format line, as the Albums lens's cards have it (useCardDetails)
+  const detailsOf = useCardDetails(pools ? lensIndexOf(pools) : null);
   const cardSize = Math.round(useStore((s) => s.settings.presetCardSize) * SHELF_SCALE);
   const gap = useStore((s) => s.settings.presetGap);
   const [attach, columns] = useColumns(cardSize, gap);
@@ -87,6 +91,7 @@ export function RecentlyAddedShelf({ seeAll }: { seeAll(): void }): React.JSX.El
               node={a}
               playing={false}
               menuOpen={menu?.key === key}
+              details={detailsOf?.(a)}
               note={a.addedAt ? fmtAdded(a.addedAt) : undefined}
               onEnter={() => openAlbumNode(a)}
               onPlay={() => void playAlbumNode(a)}

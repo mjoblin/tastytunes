@@ -1,4 +1,4 @@
-import { isHiRes } from "@shared/model";
+import { isHiRes, LOSSLESS_CODECS, type MediaFormat } from "@shared/model";
 import { cdToc, isCdPlayback, type ZoneNowPlaying, type ZonePlayState } from "@shared/smoip";
 
 export function cx(...parts: Array<string | false | null | undefined>): string {
@@ -238,6 +238,14 @@ export function signalQuality(playState: ZonePlayState | null): SignalQuality {
   if (md.lossless) return "lossless";
   if (md.codec || md.bitrate || md.sample_rate) return "lossy";
   return "unknown";
+}
+
+/** A FILE's quality in the lamp's terms (an album card's format line, 0.13.0-rc.4): signalQuality's
+ *  rule over the library's facts, lossless by the codec. */
+export function fileQuality(f: MediaFormat | null | undefined): SignalQuality {
+  if (!f?.codec) return "unknown";
+  if (!LOSSLESS_CODECS.has(f.codec)) return "lossy";
+  return isHiRes(f) ? "hires" : "lossless";
 }
 
 /** Fixed (non-accent) lamp colors so quality reads consistently across albums.
