@@ -205,6 +205,51 @@ export const RECORD_SORTS = new Set<string>(["lastPlayed", "plays", "wholeListen
 
 export const PLAY_THESE_MAX = 50;
 
+// ------------------------------------------------------------- the filter's scope
+
+/** The one field the Tracks lens's filter may be held to; null searches them all. */
+export type FilterScope = "title" | "artist" | "album";
+
+/**
+ * THE TRACKS FILTER'S FIELDS (0.13.0-rc.4, his picks on the decision page "Filter Scope": "search
+ * in" inside the filter box, remembered for the session as the pickers are). A track's title,
+ * artist, album and year, or the one field the scope names. The filter (matchesFilter over these)
+ * and its menu's counts (filterScopeCounts) read this one rule.
+ */
+export const filterFields = (
+  t: Pick<MediaNode, "title" | "artist" | "album" | "year">,
+  scope: FilterScope | null,
+): Array<string | null | undefined> =>
+  scope === "title"
+    ? [t.title]
+    : scope === "artist"
+      ? [t.artist]
+      : scope === "album"
+        ? [t.album]
+        : [t.title, t.artist, t.album, t.year];
+
+/** How many of these tracks the filter finds in each scope (all fields, then each one): the
+ *  scope menu's counts. One pass, each field read once (matchesFilter's rule: every word of the
+ *  filter somewhere in the fields). */
+export function filterScopeCounts(
+  tracks: readonly Pick<MediaNode, "title" | "artist" | "album" | "year">[],
+  filter: string,
+): Record<"all" | FilterScope, number> {
+  const words = filter.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const counts = { all: 0, title: 0, artist: 0, album: 0 };
+  const has = (text: string): boolean => words.every((w) => text.includes(w));
+  for (const t of tracks) {
+    const title = (t.title ?? "").toLowerCase();
+    const artist = (t.artist ?? "").toLowerCase();
+    const album = (t.album ?? "").toLowerCase();
+    if (has(`${title} ${artist} ${album} ${(t.year ?? "").toLowerCase()}`)) counts.all++;
+    if (has(title)) counts.title++;
+    if (has(artist)) counts.artist++;
+    if (has(album)) counts.album++;
+  }
+  return counts;
+}
+
 /**
  * THE ARTISTS LENS'S ORDERS (0.13.0 round 12, a sort as the other lenses have): by name, the
  * index's own order; the most played first; the newest arrival first, an artist ranked by their

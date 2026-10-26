@@ -3,8 +3,11 @@
  */
 import { describe, expect, it } from "vitest";
 import type { MediaNode } from "@shared/model";
+import { matchesFilter } from "@/lib/format";
 import {
   drOptionsOf,
+  filterFields,
+  filterScopeCounts,
   orderArtists,
   tempoBandLabel,
   tempoBandOf,
@@ -99,5 +102,30 @@ describe("the Artists lens's orders", () => {
       "Alvvays",
       "The Cure",
     ]);
+  });
+});
+
+describe("the Tracks filter's scope", () => {
+  const tracks = [
+    { title: "A Kind of Magic", artist: "Queen", album: "Greatest Hits", year: "1981" },
+    { title: "All I See", artist: "The Magic Numbers", album: "Those the Brokes", year: "2006" },
+    { title: "Polaris", artist: "Parannoul", album: "After the Magic", year: "2023" },
+    { title: "Magic Magic", artist: "Magic Band", album: "Magic", year: null },
+  ];
+  it("counts each field's matches as the filter finds them, all fields first", () => {
+    expect(filterScopeCounts(tracks, "magic")).toEqual({ all: 4, title: 2, artist: 2, album: 2 });
+    // every word somewhere: two words in one field, or across fields only when all are searched
+    expect(filterScopeCounts(tracks, "magic queen")).toEqual({
+      all: 1,
+      title: 0,
+      artist: 0,
+      album: 0,
+    });
+  });
+  it("is the filter's own rule: each scope's count is what the filter shows in it", () => {
+    for (const scope of [null, "title", "artist", "album"] as const) {
+      const shown = tracks.filter((t) => matchesFilter("magic", filterFields(t, scope))).length;
+      expect(shown).toBe(filterScopeCounts(tracks, "magic")[scope ?? "all"]);
+    }
   });
 });

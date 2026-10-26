@@ -35,6 +35,9 @@ import {
   decadeOf,
   RECORD_SORTS,
   PLAY_THESE_MAX,
+  filterFields,
+  filterScopeCounts,
+  type FilterScope,
 } from "./lensShared";
 import {
   useLensTrackSelection,
@@ -47,6 +50,14 @@ import { menuAt } from "@/lib/menuAt";
 
 // The Tracks lens, split out of LibraryLenses.tsx (2026-09-13, the lenses round: three lenses of
 // 600 to 800 lines shared one file); what the lenses share lives in ./lensShared.
+
+/** The filter's "search in" choices, in the menu's order, after All fields. */
+const SCOPES: FilterScope[] = ["title", "artist", "album"];
+const SCOPE_LABEL: Record<FilterScope, string> = {
+  title: "Title",
+  artist: "Artist",
+  album: "Album",
+};
 
 const TRACK_SORTS: Array<{
   value: AppSettings["lensTracksSort"];
@@ -83,6 +94,9 @@ let tracksMem: {
   /** The Played facet (0.8.0): a playedBucket, or null for any. */
   played: string | null;
   filter: string;
+  /** The filter's "search in" (0.13.0-rc.4): one field, or null for all of them; the session's,
+   *  as the pickers are, so a later search never quietly misses what another field holds. */
+  scope: FilterScope | null;
   scroll: number;
   /** The cards' spot, apart from the rows': a switch between them starts each at its own. */
   cardScroll: number;
@@ -94,6 +108,7 @@ let tracksMem: {
   format: null,
   played: null,
   filter: "",
+  scope: null,
   scroll: 0,
   cardScroll: 0,
 };
@@ -188,7 +203,7 @@ export function TracksLens({
   // the listening record changes with every play: the list is filtered and sorted again on it
   // only while a sort or the Played facet reads it (0.12.0-rc.2, the 0.11 re-score)
   const record = RECORD_SORTS.has(sort) || mem.played ? play : null;
-  const shown = useMemo(() => {
+  const { shown, scopeCounts } = useMemo(() => {
     let list = all;
     if (mem.genre) list = list.filter((t) => (t.genre ?? []).some((g) => lc(g) === mem.genre));
     if (mem.decade) list = list.filter((t) => decadeOf(t.year) === mem.decade);
@@ -200,8 +215,10 @@ export function TracksLens({
       list = list.filter((t) => playedBucket(tally?.get(t)?.lastAt ?? null) === mem.played);
     const fmt = mem.format;
     if (fmt) list = list.filter((t) => formatTags(t.format).includes(fmt));
+    // the scope menu counts what each field would find among what the facets leave
+    const scopeCounts = mem.filter ? filterScopeCounts(list, mem.filter) : null;
     if (mem.filter)
-      list = list.filter((t) => matchesFilter(mem.filter, [t.title, t.artist, t.album, t.year]));
+      list = list.filter((t) => matchesFilter(mem.filter, filterFields(t, mem.scope)));
     const byTitle = (a: MediaNode, b: MediaNode): number =>
       a.title.localeCompare(b.title) || (a.artist ?? "").localeCompare(b.artist ?? "");
     // album order: the album, then its running order (never compareTrackOrder
@@ -230,7 +247,7 @@ export function TracksLens({
         return (tally?.get(b)?.plays ?? 0) - (tally?.get(a)?.plays ?? 0) || byTitle(a, b);
       return byTitle(a, b);
     });
-    return reversed ? sorted.reverse() : sorted;
+    return { shown: reversed ? sorted.reverse() : sorted, scopeCounts };
     // drOf and lufsOf read statsByKey; listing it keeps the memo honest
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [all, mem, sort, reversed, statsByKey, record]);
@@ -322,7 +339,9 @@ export function TracksLens({
   // what the narrowing IS, in words — the auto-named playlist and the
   // sweep's pulse both read it: '"love" · Rock · 2010s · DR13'
   const narrowing = [
-    mem.filter ? `"${mem.filter.trim()}"` : null,
+    mem.filter
+      ? `"${mem.filter.trim()}"${mem.scope ? ` in ${SCOPE_LABEL[mem.scope].toLowerCase()}s` : ""}`
+      : null,
     mem.genre ? (genreOptions.find((g) => g.value === mem.genre)?.label ?? mem.genre) : null,
     mem.decade,
     mem.format ? (formatOptions.find((o) => o.value === mem.format)?.label ?? mem.format) : null,
@@ -369,6 +388,22 @@ export function TracksLens({
               onChange={(filter) => setMem({ filter })}
               shown={shown.length}
               total={all.length}
+              lead={
+                <PickerPill
+                  id="scope"
+                  inline
+                  neutral="All"
+                  clearLabel="All fields"
+                  clearCount={scopeCounts?.all}
+                  options={SCOPES.map((v) => ({
+                    value: v,
+                    label: SCOPE_LABEL[v],
+                    count: scopeCounts?.[v],
+                  }))}
+                  value={mem.scope}
+                  onChange={(scope) => setMem({ scope: scope as FilterScope | null })}
+                />
+              }
             />
             <div className={`flex flex-wrap items-center ${GAP_WITHIN} empty:hidden`}>
               <PickerPill
