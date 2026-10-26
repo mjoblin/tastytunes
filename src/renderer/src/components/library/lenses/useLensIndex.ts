@@ -4,9 +4,9 @@ import {
   FACT_SEP,
   albumFormat,
   albumTracksOf,
+  artistGroups,
   isCompilation,
   nameSortKey,
-  trackArtists,
 } from "@shared/model";
 import { decadeOptionsOf, formatTags, genreOptionsOf, lc, nodeKey } from "./lensShared";
 
@@ -14,10 +14,11 @@ import { decadeOptionsOf, formatTags, genreOptionsOf, lc, nodeKey } from "./lens
 export interface LensArtist {
   key: string;
   name: string;
-  /** The server's own artist picture, else an album's (the row's picture without a photo). */
+  /** The server's own artist picture, else a cover from their albums or tracks (the row's
+   *  picture until main answers). */
   artUrl: string | null;
-  /** The server's own artist picture alone: a known photo outranks an album's cover, never
-   *  the server's (ArtistArt). */
+  /** The server's own artist picture alone, when it is a real one and not a cover (the
+   *  artist page's serverArt; ArtistGroup.own, main's rule). */
   ownArt?: string | null;
   albums: MediaNode[];
   tracks: MediaNode[];
@@ -173,41 +174,26 @@ function build(pools: MediaIndexPools[]): LensIndex {
       });
     },
     get artists() {
-      return lazy("artists", () => {
-        const byKey = new Map<string, LensArtist>();
-        const ensure = (name: string): LensArtist => {
-          const key = lc(name);
-          let a = byKey.get(key);
-          if (!a) {
-            a = { key, name: name.trim(), artUrl: null, albums: [], tracks: [] };
-            byKey.set(key, a);
-          }
-          return a;
-        };
-        for (const g of pools) {
-          for (const e of g.artists) {
-            const a = ensure(e.title);
-            a.artUrl ??= e.artUrl;
-          }
-          for (const alb of g.albums) if (alb.artist) ensure(alb.artist).albums.push(alb);
-          // Every PERFORMER is an artist, and only performers — never the packed
-          // "A; B" string. A featured singer gets a row with their one track;
-          // the headliner keeps every track of the album (2026-08-15).
-          for (const t of g.tracks) for (const name of trackArtists(t)) ensure(name).tracks.push(t);
-        }
-        return [...byKey.values()]
+      // THE one grouping (shared/model artistGroups), main's too: every PERFORMER is an artist,
+      // never the packed "A; B" string (a featured singer gets a row with their one track, the
+      // headliner keeps every track of the album, 2026-08-15), and a server picture that is a
+      // cover is no artist's own
+      return lazy("artists", () =>
+        [...artistGroups(pools).values()]
           .filter((a) => a.albums.length > 0 || a.tracks.length > 0)
           .map((a) => ({
-            ...a,
-            ownArt: a.artUrl,
-            artUrl: a.artUrl ?? a.albums.find((x) => x.artUrl)?.artUrl ?? null,
+            key: a.key,
+            name: a.name,
+            ownArt: a.own,
+            artUrl: a.own ?? a.cover,
+            tracks: a.tracks,
             albums: [...a.albums].sort(
               (x, y) =>
                 (y.year ?? "").localeCompare(x.year ?? "") || x.title.localeCompare(y.title),
             ),
           }))
-          .sort((a, b) => nameSortKey(a.name).localeCompare(nameSortKey(b.name)));
-      });
+          .sort((a, b) => nameSortKey(a.name).localeCompare(nameSortKey(b.name))),
+      );
     },
     get albumGenres() {
       return lazy("albumGenres", () => genreOptionsOf(index.albums));

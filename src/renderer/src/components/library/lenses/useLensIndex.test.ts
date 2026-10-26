@@ -108,6 +108,33 @@ describe("lensIndexOf", () => {
     expect(lensIndexOf(pools).artists.find((a) => a.name === "The Band")?.albums).toHaveLength(1);
   });
 
+  it("reads an artist's own picture as main does: a server picture that is a cover is not theirs", () => {
+    const ix = lensIndexOf([
+      {
+        udn: "s1",
+        serverName: "One",
+        albums: [{ ...album("Covered", "Plain"), artUrl: "http://s/covered.jpg" }],
+        artists: [
+          {
+            ...node({ id: "ar-plain", title: "Plain", isContainer: true }),
+            artUrl: "http://s/covered.jpg",
+          },
+          {
+            ...node({ id: "ar-real", title: "Real", isContainer: true }),
+            artUrl: "http://s/userart.jpg",
+          },
+        ],
+        tracks: [node({ id: "r1", album: "Loose", artist: "Real" })],
+      },
+    ]);
+    const of = (name: string) => ix.artists.find((a) => a.name === name);
+    expect(of("Plain")).toMatchObject({ ownArt: null, artUrl: "http://s/covered.jpg" });
+    expect(of("Real")).toMatchObject({
+      ownArt: "http://s/userart.jpg",
+      artUrl: "http://s/userart.jpg",
+    });
+  });
+
   it("knows the compilations, and answers one index per snapshot", () => {
     const ix = lensIndexOf(pools);
     expect([...ix.compilationKeys]).toEqual(["s1|alb-Mixtape"]);
