@@ -45,6 +45,7 @@ import { queueWrite, tt } from "@/api";
 import { useStore } from "@/store";
 import { cx, matchesFilter } from "@/lib/format";
 import { useIndexPools } from "@/hooks/useIndexPools";
+import { browseWalk } from "@/components/library/browseWalk";
 import { MOD } from "@/lib/screens";
 import { flashTarget, scrollToCentered } from "@/lib/scroll";
 import { isAlbumClass, isArtistClass, stripFurniture } from "@/lib/media";
@@ -395,17 +396,17 @@ export function LibraryScreen(): React.JSX.Element {
       .mediaBrowse(
         serverUdn,
         path.length > 0 ? path[path.length - 1].id : null,
-        path
-          .filter(
-            (c) =>
-              c.id !== SEARCH_CRUMB_ID &&
-              c.id !== UNIFIED_SEARCH_CRUMB_ID &&
-              // lens crumbs are the app's, not the server's containers
-              c.id !== LENS_CRUMB_ID &&
-              c.id !== LENS_ARTIST_CRUMB_ID &&
-              c.id !== ARTIST_PAGE_CRUMB_ID,
-          )
-          .map((c) => c.title),
+        // the folders a refused id is re-walked by: an opened album's own walked path, never the
+        // app's crumbs (a lens's, an artist's, a search's), which no server has (browseWalk)
+        browseWalk(
+          path,
+          (id) =>
+            id === SEARCH_CRUMB_ID ||
+            id === UNIFIED_SEARCH_CRUMB_ID ||
+            id === LENS_CRUMB_ID ||
+            id === LENS_ARTIST_CRUMB_ID ||
+            id === ARTIST_PAGE_CRUMB_ID,
+        ),
       )
       .then((list) => {
         if (stale) return;
