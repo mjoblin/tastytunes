@@ -344,6 +344,79 @@ export function albumTracksOf(
   );
 }
 
+/** An artist as the indexes group them: their name as first spelled, their real server picture,
+ *  a cover, every album credited to them and every track they perform on (artistGroups). */
+export interface ArtistGroup {
+  /** The name lowercased and trimmed. */
+  key: string;
+  name: string;
+  /** The server's own picture for the artist when it is a real one: not one of the indexed
+   *  albums' or tracks' covers (his minitunes, 2026-10-11: 370 of 371 artists carried one of
+   *  their own album covers; 0.12.0-rc.3, a user's MinimServer: some track's embedded cover). */
+  own: string | null;
+  /** The first of their albums with a picture, else the first of their tracks with one. */
+  cover: string | null;
+  albums: MediaNode[];
+  tracks: MediaNode[];
+}
+
+const artistGroupsByPools = new WeakMap<readonly MediaIndexPools[], Map<string, ArtistGroup>>();
+
+/**
+ * EVERY ARTIST THE INDEXES KNOW, by name lowercased, made once per pools snapshot: an album
+ * belongs to its artist, a track to every performer (trackArtists, never the packed "A; B"),
+ * and a server's picture for an artist is theirs only when it is no album's or track's cover.
+ * THE one grouping (0.13.0-rc.3; it was two, main's artistIndex and the Artists lens, each with
+ * its own picture rule): main's counts and pictures for the rows (media/artistIndex) and the
+ * Artists lens, its cards and the artist page (useLensIndex) both read it, so they agree on who
+ * an artist is and what their own picture is.
+ */
+export function artistGroups(pools: readonly MediaIndexPools[]): Map<string, ArtistGroup> {
+  const known = artistGroupsByPools.get(pools);
+  if (known) return known;
+  const map = new Map<string, ArtistGroup>();
+  const group = (name: string | null | undefined): ArtistGroup | null => {
+    const key = name?.trim().toLowerCase();
+    if (!key) return null;
+    let g = map.get(key);
+    if (!g)
+      map.set(
+        key,
+        (g = { key, name: name!.trim(), own: null, cover: null, albums: [], tracks: [] }),
+      );
+    return g;
+  };
+  // every cover the indexes hold, an album's or a track's: an artist's picture that is one of
+  // them is a cover, and a photo outranks it
+  const coverArt = new Set<string>();
+  for (const p of pools) {
+    for (const a of p.albums) if (a.artUrl) coverArt.add(a.artUrl);
+    for (const t of p.tracks) if (t.artUrl) coverArt.add(t.artUrl);
+  }
+  for (const p of pools)
+    for (const a of p.artists) {
+      const g = group(a.title);
+      if (g && a.artUrl && !coverArt.has(a.artUrl)) g.own ??= a.artUrl;
+    }
+  for (const p of pools)
+    for (const a of p.albums) {
+      const g = group(a.artist);
+      if (!g) continue;
+      g.albums.push(a);
+      g.cover ??= a.artUrl;
+    }
+  for (const p of pools)
+    for (const t of p.tracks)
+      for (const n of trackArtists(t)) {
+        const g = group(n);
+        if (!g) continue;
+        g.tracks.push(t);
+        g.cover ??= t.artUrl;
+      }
+  artistGroupsByPools.set(pools, map);
+  return map;
+}
+
 /**
  * The album node a pool track belongs to — the inverse of albumTracksOf:
  * same title, and the track's performers pass trackInAlbumOf against the
