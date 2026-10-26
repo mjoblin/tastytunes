@@ -37,7 +37,9 @@ describe("the secrets store", () => {
     const { secrets } = await fresh();
     secrets.setSecret("lbToken", "  abcd-1234-wxyz  ");
     expect(file("secrets.json")).not.toContain("abcd-1234-wxyz");
-    expect(statSync(join(userData, "secrets.json")).mode & 0o777).toBe(0o600);
+    // owner-only on a filesystem with modes; Windows has none (DPAPI's encryption protects it)
+    if (process.platform !== "win32")
+      expect(statSync(join(userData, "secrets.json")).mode & 0o777).toBe(0o600);
     const again = (await fresh()).secrets;
     expect(again.getSecret("lbToken")).toBe("abcd-1234-wxyz");
     expect(again.secretHint("lbToken")).toEqual({ saved: true, ends: "wxyz" });
