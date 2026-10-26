@@ -144,7 +144,7 @@ export function AlbumsLens({
   const formatOptions = useMemo(
     () =>
       formatOptionsOf(
-        all.flatMap((a) => [...(albumCodecs.get(`${a.serverUdn}|${lc(a.title)}`) ?? [])]),
+        all.flatMap((a) => [...(albumCodecs.get(nodeKey(a)) ?? [])]),
         all.length,
       ),
     [all, albumCodecs],
@@ -187,10 +187,7 @@ export function AlbumsLens({
     if (mem.dr) list = list.filter((a) => String(albumDr[albumDrKey(a)]?.dr ?? "") === mem.dr);
     if (mem.played) list = list.filter((a) => playedBucket(playOf(a).lastAt) === mem.played);
     const fmt = mem.format;
-    if (fmt)
-      list = list.filter(
-        (a) => albumCodecs.get(`${a.serverUdn}|${lc(a.title)}`)?.has(fmt) ?? false,
-      );
+    if (fmt) list = list.filter((a) => albumCodecs.get(nodeKey(a))?.has(fmt) ?? false);
     if (mem.filter)
       list = list.filter((a) => matchesFilter(mem.filter, [a.title, a.artist, a.year]));
     const sorted = [...list].sort((a, b) => {

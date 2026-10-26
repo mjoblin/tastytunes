@@ -305,11 +305,19 @@ export function albumComposers(tracks: ReadonlyArray<Pick<MediaNode, "composers"
 
 /**
  * The tracks that belong to an album, from an index pool: same title on the
- * same server, credited to the album's artist (trackInAlbumOf), and — when
- * the pool holds TWIN EDITIONS (same title, same artist) — sharing the
- * album's art. In album order. THE one derivation of "an album's tracks"
- * that both the Info modal and MCP use; the Artists lens computes the same
- * rule over its memoized map (S13/S16 pin it).
+ * same server, and — when the pool holds TWIN EDITIONS (same title, same
+ * artist) — sharing the album's art. In album order. THE one derivation of
+ * "an album's tracks": the Info modal, MCP and the lenses' index (tracksOf:
+ * the Albums lens's play tallies and Format facet, the compilations, the
+ * Artists lens's album column) all read it (S13/S16 pin it).
+ * WHO ELSE CLAIMS THE TITLE decides how strictly a track's credit is read
+ * (0.13.0-rc.3). Where another album on the server has the same title (two
+ * artists' "Greatest Hits", two copies), a track must be credited to this
+ * album's artist (trackInAlbumOf). An album alone under its title takes every
+ * track of that title but one whose album artist names someone else: a
+ * compilation's tracks credit their own performers, and a server without an
+ * AlbumArtist role sends nothing else to tell by, so the strict reading left
+ * such an album with no tracks (no plays, no format).
  */
 export function albumTracksOf(
   album: Pick<MediaNode, "title" | "artist" | "artUrl">,
@@ -320,16 +328,17 @@ export function albumTracksOf(
 ): MediaNode[] {
   const title = album.title.trim().toLowerCase();
   const owner = (album.artist ?? "").trim().toLowerCase();
-  const twins =
-    pool.albums.filter(
-      (a) =>
-        a.title.trim().toLowerCase() === title && (a.artist ?? "").trim().toLowerCase() === owner,
-    ).length > 1;
+  const peers = pool.albums.filter((a) => a.title.trim().toLowerCase() === title);
+  const twins = peers.filter((a) => (a.artist ?? "").trim().toLowerCase() === owner).length > 1;
+  const credited = (t: MediaNode): boolean =>
+    peers.length > 1
+      ? trackInAlbumOf(t, album.artist ?? null)
+      : album.artist == null || !t.albumArtist || t.albumArtist.trim().toLowerCase() === owner;
   return orderTracks(
     pool.tracks.filter(
       (t) =>
         (t.album ?? "").trim().toLowerCase() === title &&
-        trackInAlbumOf(t, album.artist ?? null) &&
+        credited(t) &&
         (!twins || sameArt(t.artUrl, album.artUrl)),
     ),
   );

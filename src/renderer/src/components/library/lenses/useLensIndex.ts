@@ -6,7 +6,6 @@ import {
   albumTracksOf,
   isCompilation,
   nameSortKey,
-  orderTracks,
   trackArtists,
 } from "@shared/model";
 import { decadeOptionsOf, formatTags, genreOptionsOf, lc, nodeKey } from "./lensShared";
@@ -38,13 +37,13 @@ export interface LensIndex {
   /** The same album (its title and artist) is in more than one library: only then does a card
    *  say which library it is from (his ask, 2026-10-22: with two libraries every card said so). */
   inTwoLibraries(a: Pick<MediaNode, "title" | "albumArtist" | "artist">): boolean;
-  /** An album's key in the maps below: its server and its lowercased title. */
+  /** An album's server and its lowercased title: the albums that share one claim one title. */
   albumKey(a: Pick<MediaNode, "serverUdn" | "title">): string;
-  /** Each album's tracks by that key, in disc and position order (orderTracks). */
-  tracksByAlbum: Map<string, MediaNode[]>;
-  /** One album's own tracks: its key's, less another artist's album of the same title, and
-   *  split from a second copy on the same server by their pictures (albumTracksOf). What an
-   *  album's play tally is read over, so two copies keep their own counts (0.13.0). */
+  /** One album's own tracks, in disc and position order: its server's tracks of its title, less
+   *  another artist's album of the same title, and split from a second copy on the same server
+   *  by their pictures (albumTracksOf). THE album's tracks for everything the lenses read over
+   *  one: its play tally, its Format tags, whether it is a compilation, the Artists lens's album
+   *  column (0.13.0, so two copies and two artists' albums of one title keep their own). */
   tracksOf(a: MediaNode): MediaNode[];
   /** The chip an album's card wears to say WHICH copy it is, or undefined: its library when the
    *  same album is in another one too (his ask, 2026-10-22), and its format when another copy of
@@ -52,7 +51,7 @@ export interface LensIndex {
    *  format), its folder's name when the formats match too. One rule for the Albums lens, the
    *  Artists lens and the artist page. */
   copyBadge(a: MediaNode): string | undefined;
-  /** Each album's codec and format tags: the union over its tracks. */
+  /** Each album's codec and format tags, by nodeKey: the union over its own tracks. */
   albumCodecs: Map<string, Set<string>>;
   /** The albums that are compilations (by nodeKey). */
   compilationKeys: Set<string>;
@@ -77,6 +76,21 @@ function build(pools: MediaIndexPools[]): LensIndex {
     if (!cache.has(name)) cache.set(name, make());
     return cache.get(name) as T;
   };
+  /** Every track of a title on its server, by albumKey: private, read only by tracksOf, which
+   *  says which of them are an album's own (one home for an album's tracks). */
+  const tracksByKey = (): Map<string, MediaNode[]> =>
+    lazy("tracksByKey", () => {
+      const m = new Map<string, MediaNode[]>();
+      for (const g of pools)
+        for (const t of g.tracks) {
+          if (!t.album) continue;
+          const k = `${g.udn}|${lc(t.album)}`;
+          const list = m.get(k);
+          if (list) list.push(t);
+          else m.set(k, [t]);
+        }
+      return m;
+    });
   /** The albums by albumKey: a server's albums of one title, two copies among them. */
   const albumsByKey = (): Map<string, MediaNode[]> =>
     lazy("albumsByKey", () => {
@@ -111,22 +125,6 @@ function build(pools: MediaIndexPools[]): LensIndex {
       });
       return (libraries.get(sameAlbum(a))?.size ?? 0) > 1;
     },
-    get tracksByAlbum() {
-      return lazy("tracksByAlbum", () => {
-        const m = new Map<string, MediaNode[]>();
-        for (const g of pools)
-          for (const t of g.tracks) {
-            if (!t.album) continue;
-            const k = `${g.udn}|${lc(t.album)}`;
-            const list = m.get(k);
-            if (list) list.push(t);
-            else m.set(k, [t]);
-          }
-        // disc, then position — or the server's order when the numbers repeat
-        for (const [k, list] of m) m.set(k, orderTracks(list));
-        return m;
-      });
-    },
     tracksOf(a) {
       const memo = lazy("tracksOf", () => new Map<string, MediaNode[]>());
       const id = nodeKey(a);
@@ -135,7 +133,7 @@ function build(pools: MediaIndexPools[]): LensIndex {
         const k = albumKey(a);
         got = albumTracksOf(a, {
           albums: albumsByKey().get(k) ?? [a],
-          tracks: index.tracksByAlbum.get(k) ?? [],
+          tracks: tracksByKey().get(k) ?? [],
         });
         memo.set(id, got);
       }
@@ -159,10 +157,10 @@ function build(pools: MediaIndexPools[]): LensIndex {
     get albumCodecs() {
       return lazy("albumCodecs", () => {
         const m = new Map<string, Set<string>>();
-        for (const [k, list] of index.tracksByAlbum) {
+        for (const a of index.albums) {
           const set = new Set<string>();
-          for (const t of list) for (const tag of formatTags(t.format)) set.add(tag);
-          if (set.size > 0) m.set(k, set);
+          for (const t of index.tracksOf(a)) for (const tag of formatTags(t.format)) set.add(tag);
+          if (set.size > 0) m.set(nodeKey(a), set);
         }
         return m;
       });
@@ -170,8 +168,7 @@ function build(pools: MediaIndexPools[]): LensIndex {
     get compilationKeys() {
       return lazy("compilationKeys", () => {
         const keys = new Set<string>();
-        for (const a of index.albums)
-          if (isCompilation(a, index.tracksByAlbum.get(albumKey(a)))) keys.add(nodeKey(a));
+        for (const a of index.albums) if (isCompilation(a, index.tracksOf(a))) keys.add(nodeKey(a));
         return keys;
       });
     },
