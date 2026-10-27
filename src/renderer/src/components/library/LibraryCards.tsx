@@ -439,7 +439,9 @@ function CardFormatLine({ details }: { details: CardDetails }): React.JSX.Elemen
       data-card-format={details.label ?? ""}
       data-tip={tip || undefined}
       className={cx(
-        "mt-1.5 h-4 flex items-center gap-1 min-w-0 text-[10.5px] text-faint/80 tabular-nums text-left",
+        // text-dim, not the names' faint: new text clears 0016's floor in dark too (S139, the
+        // rc.4 gate: at faint/80 the line sat near 2.8 to 1 on the dark card)
+        "mt-1.5 h-4 flex items-center gap-1 min-w-0 text-[10.5px] text-dim tabular-nums text-left",
         tip && "tip-bottom tip-lines",
       )}
     >

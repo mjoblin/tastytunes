@@ -231,7 +231,7 @@ export function ViewOptions({ kind }: { kind: ViewKind }): React.JSX.Element {
                   className="w-full px-2.5 py-1.5 rounded-lg text-left text-[13px] text-dim enabled:hover:text-ink enabled:hover:bg-veil transition-colors disabled:opacity-50"
                 >
                   <span className="block">Match the {NAME[other]} view</span>
-                  <span className="block text-[10.5px] text-faint">
+                  <span className="block text-[10.5px] text-dim">
                     {matches ? "Already the same" : "Rows or Cards, and Format and DR"}
                   </span>
                 </button>
