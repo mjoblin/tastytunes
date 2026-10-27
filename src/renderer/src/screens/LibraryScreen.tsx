@@ -204,6 +204,7 @@ function artistPageNode(name: string, pools: MediaIndexPools[]): MediaNode {
 export function LibraryScreen(): React.JSX.Element {
   const {
     libraryLayout,
+    lensTracksLayout,
     librarySort,
     librarySortReversed,
     presetCardSize,
@@ -217,6 +218,7 @@ export function LibraryScreen(): React.JSX.Element {
   const setScreen = useStore((s) => s.setScreen);
   const systemInfo = useStore((s) => s.systemInfo);
   const cards = libraryLayout === "cards";
+  const tracksCards = lensTracksLayout === "cards";
 
   const [servers, setServers] = useState<MediaServerInfo[] | null>(null);
   const [serverUdn, setServerUdn] = useState<string | null>(null);
@@ -1923,7 +1925,6 @@ export function LibraryScreen(): React.JSX.Element {
               cardSize={presetCardSize}
               cardGap={presetGap}
               fillRows={presetFillRows}
-              onToggleLayout={() => void setLayout(cards ? "rows" : "cards")}
             />
           ) : lens === "artists" && artistPage ? (
             <ArtistPage
@@ -1948,19 +1949,18 @@ export function LibraryScreen(): React.JSX.Element {
               cardSize={presetCardSize}
               cardGap={presetGap}
               fillRows={presetFillRows}
-              onToggleLayout={() => void setLayout(cards ? "rows" : "cards")}
             />
           ) : (
             <TracksLens
-              // the rows and the cards are two views, each from its own top and spot
-              key={cards ? "cards" : "rows"}
+              // the rows and the cards are two views, each from its own top and spot; the Tracks
+              // view's own Rows or Cards since 0.13.0-rc.4 (his note on "View Options")
+              key={tracksCards ? "cards" : "rows"}
               pools={lensPools}
               actions={lensActions}
-              cards={cards}
+              cards={tracksCards}
               cardSize={presetCardSize}
               cardGap={presetGap}
               fillRows={presetFillRows}
-              onToggleLayout={() => void setLayout(cards ? "rows" : "cards")}
             />
           ))}
 

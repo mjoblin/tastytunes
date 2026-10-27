@@ -43,3 +43,24 @@ export function useCardDetails(
     };
   }, [on, index, albumDr]);
 }
+
+/** Each track's format, by node, made on its card's first read. */
+const trackFormats = new WeakMap<MediaNode, CardFormat>();
+
+/**
+ * A TRACK CARD'S FORMAT LINE (0.13.0-rc.4, his picks on "View Options": the album cards' line on
+ * the Tracks view's cards, with a switch of its own): the track's own format, and its DR and
+ * loudness as the view measures them (`measured`, the Tracks lens's own reads); null while
+ * Settings › Layout turns it off.
+ */
+export function useTrackCardDetails(
+  measured: (t: MediaNode) => { dr: number | null; lufs: number | null },
+): ((t: MediaNode) => CardDetails) | null {
+  const on = useStore((s) => s.settings.trackCardFormat);
+  if (!on) return null;
+  return (t) => {
+    let f = trackFormats.get(t);
+    if (!f) trackFormats.set(t, (f = cardFormat([t])));
+    return { ...f, ...measured(t) };
+  };
+}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUpRight, LayoutGrid, MoreHorizontal, Rows3 } from "lucide-react";
+import { ArrowUpRight, MoreHorizontal } from "lucide-react";
 import {
   albumFormat,
   type AppSettings,
@@ -16,8 +16,9 @@ import { isAlbumClass } from "@/lib/media";
 import { MediaArt } from "@/components/media/MediaArt";
 import { ArtistArt } from "@/components/media/ArtistArt";
 import { FilterInput } from "@/components/controls/FilterInput";
-import { Chip, GAP_BETWEEN, GAP_WITHIN, HeaderChip } from "@/components/chrome/Chrome";
+import { Chip, GAP_BETWEEN, GAP_WITHIN } from "@/components/chrome/Chrome";
 import { SortChip } from "@/components/controls/SortChip";
+import { ViewOptions } from "./ViewOptions";
 import { usePlayStats } from "@/lib/playStats";
 import { CARD_BADGE_LINE, CardBadge, TrackRow } from "@/components/library/LibraryCards";
 import { Eqbars } from "@/components/media/Eqbars";
@@ -122,7 +123,6 @@ export function ArtistsLens({
   cardSize,
   cardGap,
   fillRows,
-  onToggleLayout,
 }: {
   pools: MediaIndexPools[];
   actions: LensActions;
@@ -136,8 +136,6 @@ export function ArtistsLens({
   cardSize: number;
   cardGap: number;
   fillRows: boolean;
-  /** Flips libraryLayout, as the Albums lens's chip does. */
-  onToggleLayout?: () => void;
 }): React.JSX.Element {
   const [mem, setMemState] = useState(artistsMem);
   const setMem = (patch: Partial<typeof artistsMem>): void => {
@@ -359,19 +357,9 @@ export function ArtistsLens({
         >
           With albums
         </Chip>
-        {/* layout beside sort, alone on the right: the Albums lens's pairing */}
+        {/* View options beside sort, alone on the right: the Albums lens's pairing */}
         <div className={`ml-auto flex items-center ${GAP_WITHIN} shrink-0`}>
-          {onToggleLayout && (
-            <HeaderChip
-              data-tip={cards ? "Artists as rows" : "Artists as cards"}
-              aria-label={cards ? "Artists as rows" : "Artists as cards"}
-              data-lens-artists-layout={cards ? "cards" : "rows"}
-              onClick={onToggleLayout}
-              className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
-            >
-              {cards ? <Rows3 size={16} /> : <LayoutGrid size={16} />}
-            </HeaderChip>
-          )}
+          <ViewOptions kind="artists" />
           <SortChip
             sorts={artistSorts}
             neutral="name"

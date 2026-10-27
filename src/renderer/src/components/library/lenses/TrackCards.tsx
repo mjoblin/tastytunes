@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import type { MediaNode } from "@shared/model";
 import { TrackCard } from "@/components/library/LibraryCards";
+import type { CardDetails } from "@/components/library/useCardDetails";
 import { cx } from "@/lib/format";
 import { type LensActions, nodeKey } from "./lensShared";
 import { CARD_GRID_SCROLLER, useCardGrid, WINDOW_CARDS_ABOVE } from "./useCardGrid";
@@ -16,6 +17,7 @@ export function TrackCards({
   actions,
   selected,
   subtitleOf,
+  detailsOf,
   cardSize,
   cardGap,
   fillRows,
@@ -33,6 +35,8 @@ export function TrackCards({
   selected: ReadonlySet<string>;
   /** What a card says under the title. */
   subtitleOf(t: MediaNode): string;
+  /** A card's format line, while Settings › Layout shows it (useTrackCardDetails). */
+  detailsOf?: ((t: MediaNode) => CardDetails) | null;
   cardSize: number;
   cardGap: number;
   fillRows: boolean;
@@ -67,6 +71,7 @@ export function TrackCards({
       selected={selected.has(nodeKey(t))}
       favorited={actions.nodeFavorited(t)}
       subtitle={subtitleOf(t)}
+      details={detailsOf?.(t)}
       onClick={(e) => onCardClick(t, e)}
       onPlayNow={(el) => actions.playTrack(t, el)}
       onHeart={() => actions.heartNode(t)}

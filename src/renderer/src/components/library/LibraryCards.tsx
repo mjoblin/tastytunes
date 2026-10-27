@@ -278,6 +278,7 @@ export function TrackCard({
   selected = false,
   favorited,
   subtitle,
+  details,
   onClick,
   onPlayNow,
   onHeart,
@@ -291,6 +292,9 @@ export function TrackCard({
   selected?: boolean;
   favorited: boolean;
   subtitle: string;
+  /** The track's format line, an album card's (useTrackCardDetails), absent while Settings ›
+   *  Layout turns it off. */
+  details?: CardDetails;
   /** The selection grammar's first look at the click: true when it was a chord that picked. */
   onClick(e: React.MouseEvent): boolean;
   onPlayNow(el: HTMLElement | null): void;
@@ -379,17 +383,13 @@ export function TrackCard({
           {node.title}
         </div>
         {subtitle && <div className="text-[11.5px] text-faint truncate text-left">{subtitle}</div>}
+        {details && <CardFormatLine details={details} />}
       </button>
       <HeartChip favorited={favorited} held={menuOpen} onHeart={onHeart} />
     </div>
   );
 }
 
-/**
- * An album's chip at the end of its line (a set's volume count, or which copy it is: the lens
- * index's copyBadge), one home for the cards, the rows and the Artists lens's album column
- * (0.13.0-rc.4, when its tip arrived: three hand-written copies before). `tip` says what it means.
- */
 /**
  * A LINE WITH A COPY'S CHIP (0.13.0-rc.4, his pick on "Card details": the chip never takes more
  * than half the line, so the artist keeps the other half): two columns no wider than their text,
@@ -400,6 +400,11 @@ export function TrackCard({
 export const CARD_BADGE_LINE =
   "grid grid-cols-[minmax(0,max-content)_minmax(0,max-content)] justify-between items-center gap-1.5 min-w-0";
 
+/**
+ * An album's chip at the end of its line (a set's volume count, or which copy it is: the lens
+ * index's copyBadge), one home for the cards, the rows and the Artists lens's album column
+ * (0.13.0-rc.4, when its tip arrived: three hand-written copies before). `tip` says what it means.
+ */
 export function CardBadge({ label, tip }: { label: string; tip?: string }): React.JSX.Element {
   return (
     <span

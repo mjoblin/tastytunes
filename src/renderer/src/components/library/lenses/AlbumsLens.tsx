@@ -1,14 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import {
-  AudioLines,
-  Heart,
-  ListEnd,
-  ListPlus,
-  ListStart,
-  Play,
-  LayoutGrid,
-  Rows3,
-} from "lucide-react";
+import { AudioLines, Heart, ListEnd, ListPlus, ListStart, Play } from "lucide-react";
 import {
   albumDrKey,
   albumTracksOf,
@@ -26,7 +17,7 @@ import { playedBucket, playedOptionsOf } from "@/lib/playStatsView";
 import { useStore } from "@/store";
 import { useAlbumDr, USB_ANALYSIS_HINT } from "@/lib/audioAnalysis";
 import { FilterInput } from "@/components/controls/FilterInput";
-import { HeaderChip, GAP_BETWEEN, GAP_WITHIN } from "@/components/chrome/Chrome";
+import { GAP_BETWEEN, GAP_WITHIN } from "@/components/chrome/Chrome";
 import { SortChip } from "@/components/controls/SortChip";
 import { PickerPill } from "@/components/controls/PickerPill";
 import { Segmented } from "@/components/controls/Segmented";
@@ -45,6 +36,7 @@ import {
 import { useRowSelection } from "@/components/library/useRowSelection";
 import { useCardDetails } from "@/components/library/useCardDetails";
 import { useLensIndex } from "./useLensIndex";
+import { ViewOptions } from "./ViewOptions";
 import { CARD_GRID_SCROLLER, useCardGrid, WINDOW_CARDS_ABOVE } from "./useCardGrid";
 import { menuAt } from "@/lib/menuAt";
 
@@ -96,7 +88,6 @@ export function AlbumsLens({
   cardSize,
   cardGap,
   fillRows,
-  onToggleLayout,
 }: {
   pools: MediaIndexPools[];
   actions: LensActions;
@@ -104,9 +95,6 @@ export function AlbumsLens({
   cardSize: number;
   cardGap: number;
   fillRows: boolean;
-  /** Flips libraryLayout — sort and layout are one presentation pairing
-   *  (adjacent in the browse header), kept together here too. */
-  onToggleLayout?: () => void;
 }): React.JSX.Element {
   const [mem, setMemState] = useState(albumsMem);
   const setMem = (patch: Partial<typeof albumsMem>): void => {
@@ -493,19 +481,10 @@ export function AlbumsLens({
           </div>
         </div>
         <div className={`flex items-center ${GAP_WITHIN} shrink-0`}>
-          {/* layout beside sort — the browse header's presentation pairing
+          {/* View options beside sort — the browse header's presentation pairing
               ("alone on the right" bars filters and facets, not sort's own
-              established partner) */}
-          {onToggleLayout && (
-            <HeaderChip
-              data-tip={cards ? "Albums as rows" : "Albums as cards"}
-              aria-label={cards ? "Albums as rows" : "Albums as cards"}
-              onClick={onToggleLayout}
-              className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
-            >
-              {cards ? <Rows3 size={16} /> : <LayoutGrid size={16} />}
-            </HeaderChip>
-          )}
+              established partner); Rows or Cards is inside it since 0.13.0-rc.4 */}
+          <ViewOptions kind="albums" />
           <SortChip
             sorts={albumSorts}
             neutral="title"
