@@ -44,6 +44,9 @@ export function getSettings(): AppSettings {
     loaded = { ...DEFAULT_SETTINGS, ...(file as Partial<AppSettings>) };
     // The merge above is shallow — backfill nested objects from older files.
     loaded.mcp = { ...DEFAULT_SETTINGS.mcp, ...loaded.mcp };
+    // The Tracks view had no Rows or Cards of its own before 0.13.0-rc.4 (it followed the
+    // Library's one choice): an older file keeps what it showed
+    if (!("lensTracksLayout" in file)) loaded.lensTracksLayout = loaded.libraryLayout;
     // Heal a display font that was retired (e.g. an older file naming a face no
     // longer in the curated set) back to the default so the picker stays in sync.
     if (!DISPLAY_FONT_IDS.includes(loaded.displayFont)) {

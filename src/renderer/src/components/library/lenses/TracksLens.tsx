@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, LayoutGrid, Play, Rows3 } from "lucide-react";
+import { ChevronDown, Play } from "lucide-react";
 import {
   audioAnalysisKey,
   type AppSettings,
@@ -17,8 +17,10 @@ import { useKnownStats, USB_ANALYSIS_HINT } from "@/lib/audioAnalysis";
 import { useWindowedList } from "@/hooks/useWindowedList";
 import { fmtLufs } from "@/components/media/Waveform";
 import { FilterInput } from "@/components/controls/FilterInput";
-import { HeaderChip, PrimaryButton, GAP_BETWEEN, GAP_WITHIN } from "@/components/chrome/Chrome";
+import { PrimaryButton, GAP_BETWEEN, GAP_WITHIN } from "@/components/chrome/Chrome";
 import { SortChip } from "@/components/controls/SortChip";
+import { ViewOptions } from "./ViewOptions";
+import { useTrackCardDetails } from "@/components/library/useCardDetails";
 import { PickerPill } from "@/components/controls/PickerPill";
 import { TrackRow } from "@/components/library/LibraryCards";
 import { RowMenu } from "@/components/media/RowMenu";
@@ -138,17 +140,15 @@ export function TracksLens({
   cardSize,
   cardGap,
   fillRows,
-  onToggleLayout,
 }: {
   pools: MediaIndexPools[];
   actions: LensActions;
-  /** The Library's one Rows or Cards choice (libraryLayout). */
+  /** The Tracks view's own Rows or Cards (lensTracksLayout, 0.13.0-rc.4: kept apart from the
+   *  albums', his note on "View Options"). */
   cards: boolean;
   cardSize: number;
   cardGap: number;
   fillRows: boolean;
-  /** Flips libraryLayout, as the Albums and Artists lenses' chips do. */
-  onToggleLayout?: () => void;
 }): React.JSX.Element {
   const [mem, setMemState] = useState(tracksMem);
   const setMem = (patch: Partial<typeof tracksMem>): void => {
@@ -177,6 +177,8 @@ export function TracksLens({
   const statsByKey = useKnownStats(drKeys); // one home for known DR + loudness (lib/audioAnalysis)
   const drOf = (t: MediaNode): number | null => statsByKey[audioAnalysisKey(t)]?.dr ?? null;
   const lufsOf = (t: MediaNode): number | null => statsByKey[audioAnalysisKey(t)]?.lufs ?? null;
+  // each card's format line, while Settings › Layout shows it, its DR the rows' DR
+  const detailsOf = useTrackCardDetails((t) => ({ dr: drOf(t), lufs: lufsOf(t) }));
   // the tempo as Info says it, above its floor (the measured facts, 0.12.0)
   const tempoOf = (t: MediaNode): number | null => statsByKey[audioAnalysisKey(t)]?.bpm ?? null;
   const tempoOptions = useMemo(
@@ -498,18 +500,8 @@ export function TracksLens({
               </PrimaryButton>
             </div>
           }
-          {/* layout beside sort, the Albums and Artists lenses' pairing */}
-          {onToggleLayout && (
-            <HeaderChip
-              data-tip={cards ? "Tracks as rows" : "Tracks as cards"}
-              aria-label={cards ? "Tracks as rows" : "Tracks as cards"}
-              data-lens-tracks-layout={cards ? "cards" : "rows"}
-              onClick={onToggleLayout}
-              className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
-            >
-              {cards ? <Rows3 size={16} /> : <LayoutGrid size={16} />}
-            </HeaderChip>
-          )}
+          {/* View options beside sort, the Albums and Artists lenses' pairing */}
+          <ViewOptions kind="tracks" />
           {/* the sort chip closes the row */}
           <SortChip
             sorts={trackSorts}
@@ -534,6 +526,7 @@ export function TracksLens({
               actions={actions}
               selected={selT}
               subtitleOf={cardLineOf}
+              detailsOf={detailsOf}
               cardSize={cardSize}
               cardGap={cardGap}
               fillRows={fillRows}

@@ -17,6 +17,8 @@ import {
   type LensActions,
 } from "@/components/library/lenses/lensShared";
 import { SortChip } from "@/components/controls/SortChip";
+import { GAP_WITHIN } from "@/components/chrome/Chrome";
+import { ViewOptions } from "@/components/library/lenses/ViewOptions";
 import { useStore } from "@/store";
 import {
   LensTrackMenu,
@@ -107,16 +109,19 @@ export function ArtistPage({
               the order was there, unseen, behind each card's cut-off year) */}
           <div className="flex items-end justify-between gap-3 px-1 pt-2" data-artist-albums-head>
             <div className="microlabel pb-0.5">Albums</div>
-            <SortChip
-              sorts={ALBUM_SORTS}
-              neutral="year"
-              value={sort}
-              reversed={reversed}
-              onChange={(v) =>
-                void saveSettings({ artistPageSort: v, artistPageSortReversed: false })
-              }
-              onToggleReverse={() => void saveSettings({ artistPageSortReversed: !reversed })}
-            />
+            <div className={`flex items-center ${GAP_WITHIN}`}>
+              <ViewOptions kind="albums" />
+              <SortChip
+                sorts={ALBUM_SORTS}
+                neutral="year"
+                value={sort}
+                reversed={reversed}
+                onChange={(v) =>
+                  void saveSettings({ artistPageSort: v, artistPageSortReversed: false })
+                }
+                onToggleReverse={() => void saveSettings({ artistPageSortReversed: !reversed })}
+              />
+            </div>
           </div>
           <div
             className={cx(!cards && "divide-y divide-edge/50 -mx-2")}

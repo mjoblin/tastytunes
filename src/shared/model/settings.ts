@@ -142,6 +142,9 @@ export interface AppSettings {
    *  the format, and DR once measured (0.13.0-rc.4, his picks on "Card details"; on by default,
    *  for listeners who choose by format). */
   albumCardFormat: boolean;
+  /** The Tracks view's cards carry the same line, each track's own format and DR, with a switch
+   *  of its own (0.13.0-rc.4, his note on "View Options"). */
+  trackCardFormat: boolean;
   /** Now Playing content placement. */
   nowPlayingAlignH: AlignH;
   nowPlayingAlignV: AlignV;
@@ -187,6 +190,10 @@ export interface AppSettings {
   queueLayout: QueueLayout;
   presetsLayout: ScreenLayout;
   libraryLayout: ScreenLayout;
+  /** The Tracks view's own Rows or Cards (0.13.0-rc.4, his note on "View Options": albums and
+   *  tracks keep separate display settings, with a button to match the other). An older file
+   *  without it takes libraryLayout, the choice the Tracks view followed before (main's load). */
+  lensTracksLayout: ScreenLayout;
   /** Album-grid sort in the Library (tracks always sort by track number). */
   librarySort: "server" | "title" | "artist" | "year";
   librarySortReversed: boolean;
@@ -471,6 +478,10 @@ export interface AppSettings {
   eqPresets: Array<{ name: string; gains: number[] }>;
 }
 
+/** The card grids' size and gap, in px: Settings › Layout's sliders and the View options menu's. */
+export const CARD_SIZE_RANGE = { min: 120, max: 280 } as const;
+export const CARD_GAP_RANGE = { min: 8, max: 40 } as const;
+
 export const DEFAULT_SETTINGS: AppSettings = {
   lastHost: null,
   knownDevices: [],
@@ -496,6 +507,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   presetGap: 12,
   presetFillRows: true,
   albumCardFormat: true,
+  trackCardFormat: true,
   nowPlayingAlignH: "left",
   nowPlayingAlignV: "top",
   navCollapsed: false,
@@ -507,6 +519,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   queueLayout: "rows",
   presetsLayout: "cards",
   libraryLayout: "cards",
+  lensTracksLayout: "cards",
   librarySort: "server",
   librarySortReversed: false,
   lensAlbumsSort: "title",
