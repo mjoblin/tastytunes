@@ -34,6 +34,56 @@ interface SliderProps {
   step?: number;
 }
 
+/**
+ * A SLIDER OVER A SAVED SETTING (0.13.0-rc.4, his eye on View options: "when i drag a slider and
+ * release, the slider pops back to previous value before returning to just-set value"). A save
+ * round-trips through main before the store has the new value, and the sliders showed the saved
+ * value again the moment the drag ended; the value they were let go at now holds until the saved
+ * one arrives (or a moment passes, should main settle on another). `onLive`, where a view can
+ * follow the drag, hears each value as it moves, and the saved value the drag began from when
+ * the drag is abandoned; onCommit hears that start too, for an undo.
+ */
+export function useSliderDraft(
+  value: number,
+  {
+    onCommit,
+    onLive,
+  }: { onCommit(next: number, start: number): void; onLive?(next: number): void },
+): { shown: number; scrub(v: number): void; cancel(): void; commit(v: number): void } {
+  const [draft, setDraft] = useState<number | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const start = useRef<number | null>(null);
+  useEffect(() => {
+    if (dragging || draft == null) return;
+    // the saved value has arrived, or main settled on another: let it show
+    const t = setTimeout(() => setDraft(null), value === draft ? 0 : 2000);
+    return () => clearTimeout(t);
+  }, [value, draft, dragging]);
+  return {
+    shown: draft ?? value,
+    scrub: (v) => {
+      start.current ??= value;
+      setDragging(true);
+      setDraft(v);
+      onLive?.(v);
+    },
+    cancel: () => {
+      const from = start.current ?? value;
+      start.current = null;
+      setDragging(false);
+      setDraft(null);
+      onLive?.(from);
+    },
+    commit: (v) => {
+      const from = start.current ?? value;
+      start.current = null;
+      setDragging(false);
+      setDraft(v);
+      onCommit(v, from);
+    },
+  };
+}
+
 /** A pointer-driven slider styled as a thin faceplate track with an amber fill. */
 export function Slider({
   value,
