@@ -249,7 +249,8 @@ export function ArtImage({
             if (slow) setEased(src);
             setLoaded(src);
             // a card's picture stays in the window for when its card comes back (lib/artKeep)
-            if (shimmer && attempt === 0) keepArt(src);
+            if (shimmer && attempt === 0)
+              keepArt(src, e.currentTarget.naturalWidth, e.currentTarget.naturalHeight);
           }
         }}
         onError={() => {
