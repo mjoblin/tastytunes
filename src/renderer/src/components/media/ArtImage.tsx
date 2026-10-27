@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { cx } from "@/lib/format";
 import { useArtFallback } from "@/lib/artFallback";
+import { keepArt, shownBefore } from "@/lib/artKeep";
 
 /**
  * Artwork <img> that renders `fallback` when the URL is missing — or present
@@ -170,7 +171,8 @@ export function ArtImage({
   // a lazy picture turns eager once its own scroller brings it within reach (above)
   const [near, setNear] = useState(false);
   useEffect(() => {
-    if (!shimmer || !src || loaded === src) {
+    // a picture shown before this session comes back from memory or main's disk cache: no loader
+    if (!shimmer || !src || loaded === src || shownBefore(src)) {
       setSlow(false);
       return;
     }
@@ -246,6 +248,8 @@ export function ArtImage({
             // the header's picture looked as if it loaded again after its card)
             if (slow) setEased(src);
             setLoaded(src);
+            // a card's picture stays in the window for when its card comes back (lib/artKeep)
+            if (shimmer && attempt === 0) keepArt(src);
           }
         }}
         onError={() => {
