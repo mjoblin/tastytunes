@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Check, Copy } from "lucide-react";
 import { tt } from "@/api";
 import { cx } from "@/lib/format";
-import { Slider } from "@/components/controls/Slider";
+import { Slider, useSliderDraft } from "@/components/controls/Slider";
 import { Switch } from "@/components/controls/Switch";
 import { useConfirmPopover } from "@/components/chrome/Confirm";
 import { FACT_SEP } from "@/lib/mediaFacts";
@@ -210,8 +210,8 @@ export function SliderSetting({
   value: number;
   onCommit(next: number): void;
 }): React.JSX.Element {
-  const [scrub, setScrub] = useState<number | null>(null);
-  const shown = scrub ?? value;
+  const draft = useSliderDraft(value, { onCommit });
+  const shown = draft.shown;
   const toValue = (ratio: number): number => Math.round(min + ratio * (max - min));
 
   return (
@@ -222,12 +222,9 @@ export function SliderSetting({
             value={(shown - min) / (max - min)}
             ariaLabel={label}
             thumb="always"
-            onScrub={(r) => setScrub(toValue(r))}
-            onCancel={() => setScrub(null)}
-            onCommit={(r) => {
-              setScrub(null);
-              onCommit(toValue(r));
-            }}
+            onScrub={(r) => draft.scrub(toValue(r))}
+            onCancel={draft.cancel}
+            onCommit={(r) => draft.commit(toValue(r))}
           />
         </div>
         <span className="font-mono text-[11px] text-dim w-12 text-right tabular-nums">
