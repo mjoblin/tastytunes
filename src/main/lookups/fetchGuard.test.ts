@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allowed, privateAddress, v6Groups } from "./fetchGuard";
+import { allowed, localOnly, privateAddress, v6Groups } from "./fetchGuard";
 
 describe("v6Groups", () => {
   it("reads the compressed, dotted and expanded forms alike", () => {
@@ -87,5 +87,19 @@ describe("allowed", () => {
     expect(await allowed(url, none, resolveTo("10.0.0.5"))).toBe(false);
     expect(await allowed(url, none, resolveTo("93.184.216.34", "::ffff:7f00:1"))).toBe(false);
     expect(await allowed(url, none, resolveTo())).toBe(false);
+  });
+});
+
+describe("localOnly", () => {
+  it("is a private address or a name only the local network has", () => {
+    expect(localOnly("192.168.50.101")).toBe(true);
+    expect(localOnly("10.0.0.4")).toBe(true);
+    expect(localOnly("localhost")).toBe(true);
+    expect(localOnly("nas.local")).toBe(true);
+    expect(localOnly("minimserver")).toBe(true);
+  });
+  it("is not a public address or a dotted public name", () => {
+    expect(localOnly("8.8.8.8")).toBe(false);
+    expect(localOnly("upload.wikimedia.org")).toBe(false);
   });
 });

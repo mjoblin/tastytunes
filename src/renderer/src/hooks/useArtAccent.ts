@@ -1,6 +1,6 @@
 import { useEffect } from "react";
-import { tt } from "@/api";
 import { Lru } from "@/lib/lru";
+import { fetchArtSoon } from "@/lib/fetchArtSoon";
 
 // Plexamp-style per-album accent: sample the dominant color of the current art
 // and retint the app's amber accent by overriding --amber-rgb on :root. Art is
@@ -29,9 +29,14 @@ export function useArtAccent(artUrl: string | null, theme: "dark" | "light" = "d
     let cancelled = false;
     void (async () => {
       let rgb: string | null = null;
+      // a cover main could not fetch is asked again, and kept as no answer (fetchArtSoon)
+      const art = await fetchArtSoon(artUrl, () => !cancelled);
+      if (!art) {
+        if (!cancelled) apply(null);
+        return;
+      }
       try {
-        const art = await tt.fetchArt(artUrl);
-        if (art) rgb = await dominantColor(art.dataUrl, theme);
+        rgb = await dominantColor(art.dataUrl, theme);
       } catch {
         rgb = null;
       }
