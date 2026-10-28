@@ -16,7 +16,8 @@
  * the albums are the drive's folders, "Artist - Album" with no artist and no date, the tracks
  * keeping their tags) and searchPaged (MOCK_SEARCH_PAGED: Search honors StartingIndex and
  * RequestedCount, 150 at most). `artists` is the Artists folder's size (the mock's 400): a walk
- * lists every artist's folder, so a test that walks keeps it small.
+ * lists every artist's folder, so a test that walks keeps it small. holdUpnp (MOCK_UPNP_DELAY_MS)
+ * keeps the streamer's server listing unanswered until releaseUpnp(), rather than for a time.
  */
 import { createServer, type IncomingMessage } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -27,6 +28,7 @@ export interface FakeStreamerOptions {
   usbFolders?: boolean;
   searchPaged?: boolean;
   artists?: number;
+  holdUpnp?: boolean;
 }
 
 export interface FakeStreamer {
@@ -36,6 +38,8 @@ export interface FakeStreamer {
   readonly searchCalls: number;
   /** A standby or a replug: the mount moves, so every id is re-minted, and the counter with it. */
   rotate(): void;
+  /** Answers the server listing held by holdUpnp. */
+  releaseUpnp(): void;
   stop(): Promise<void>;
 }
 
@@ -129,6 +133,12 @@ export async function startFakeStreamer(opts: FakeStreamerOptions = {}): Promise
   let mount = 26;
   let updateId = 3;
   let searchCalls = 0;
+  let releaseUpnp = (): void => {};
+  const upnpHeld = opts.holdUpnp
+    ? new Promise<void>((r) => {
+        releaseUpnp = r;
+      })
+    : null;
 
   const server = createServer();
   await new Promise<void>((resolve, reject) => {
@@ -468,6 +478,7 @@ export async function startFakeStreamer(opts: FakeStreamerOptions = {}): Promise
         res.end(body);
       };
       if (u.pathname === "/smoip/system/upnp") {
+        if (upnpHeld) await upnpHeld;
         res.writeHead(200, { "content-type": "application/json" });
         res.end(
           JSON.stringify({
@@ -562,6 +573,7 @@ export async function startFakeStreamer(opts: FakeStreamerOptions = {}): Promise
       mount++;
       updateId++;
     },
+    releaseUpnp: () => releaseUpnp(),
     stop: () =>
       new Promise<void>((resolve) => {
         server.closeAllConnections();
