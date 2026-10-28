@@ -203,10 +203,10 @@ export function registerLookupsIpc(): void {
   handle(IPC.embeddedArt, (_e, query: EmbeddedArtQuery) => embeddedArtFor(connectedHost(), query));
   handle(IPC.fetchArt, async (_e, url: string) => {
     // a private address only for the streamer or a media server the app knows (lookups/artFetch);
-    // one not known yet waits for the server listing in flight (serversListed: the wash's first
-    // fetch came before the listing, 0.13.0-rc.5)
+    // one not known yet waits for the server listing in flight, however long it takes
+    // (serversListed: the wash's first fetch came before the listing, 0.13.0-rc.5)
     try {
-      if (unknownLocal(url, artHostTrust(connectedHost()))) await serversListed(8000);
+      if (unknownLocal(url, artHostTrust(connectedHost()))) await serversListed();
       return await fetchArtDataUrl(url, artHostTrust(connectedHost()));
     } catch {
       return null;

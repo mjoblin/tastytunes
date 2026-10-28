@@ -335,23 +335,17 @@ export async function refreshServers(host: string): Promise<MediaServerInfo[]> {
  * The streamer is asked for its media servers as the app connects, and the playing cover's first
  * fetch (the wash, the accent) came while the answer was still on its way: a cover on his Mac's
  * server was then an unknown local address, refused, and the wash kept the refusal for the whole
- * track. A picture on a local address not yet known waits here, `ms` at most, for the listing
- * that may name its server; with none in flight it is answered at once.
+ * track. A picture on a local address not yet known waits here for the listing that may name its
+ * server; with none in flight it is answered at once.
+ *
+ * However long the listing takes (his question: "so it would work even if the server takes (say)
+ * 9 or 10s to respond?"): it was waited for 8 s at most, and a listing later than that drew the
+ * wash only when the renderer asked again, up to 10 s after it landed. The listing ends on its
+ * own (the streamer's answer and each server's two calls time out at 8 s each, the servers one
+ * after another), so the cover now comes the moment the listing does.
  */
-export async function serversListed(ms: number): Promise<void> {
-  const run = listing?.run;
-  if (!run) return;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  await Promise.race([
-    run.then(
-      () => undefined,
-      () => undefined,
-    ),
-    new Promise<void>((r) => {
-      timer = setTimeout(r, ms);
-    }),
-  ]);
-  clearTimeout(timer);
+export async function serversListed(): Promise<void> {
+  await listing?.run.catch(() => undefined);
 }
 
 /** Whether a hostname is one of the media servers the streamer has listed: their art is
