@@ -13,6 +13,8 @@ import { getSettings, newMcpToken } from "../data/persist";
 import { canEncrypt, getSecret, secretHint, setSecret } from "../data/secrets";
 import { fetchAlbumInfo } from "../lookups/albumInfo";
 import { artHostTrust, fetchArtDataUrl } from "../lookups/artFetch";
+import { localOnly } from "../lookups/fetchGuard";
+import { serversListed } from "../media/upnpBrowser";
 import {
   choiceKeys,
   isArtistChoice,
@@ -200,8 +202,11 @@ export function registerLookupsIpc(): void {
   handle(IPC.radioByTags, (_e, tags: string[]) => radioByTags(tags));
   handle(IPC.embeddedArt, (_e, query: EmbeddedArtQuery) => embeddedArtFor(connectedHost(), query));
   handle(IPC.fetchArt, async (_e, url: string) => {
-    // a private address only for the streamer or a media server the app knows (lookups/artFetch)
+    // a private address only for the streamer or a media server the app knows (lookups/artFetch);
+    // one not known yet waits for the server listing in flight (serversListed: the wash's first
+    // fetch came before the listing, 0.13.0-rc.5)
     try {
+      if (unknownLocal(url, artHostTrust(connectedHost()))) await serversListed(8000);
       return await fetchArtDataUrl(url, artHostTrust(connectedHost()));
     } catch {
       return null;
@@ -222,3 +227,14 @@ function chosen(
 
 const chosenPicture = (name: string, pools: MediaIndexPools[], photos: boolean): string | null =>
   chosen(name, pools, photos)?.url ?? null;
+
+/** A picture on a local address the app does not trust yet: its server may be in a listing
+ *  still on its way (serversListed). */
+function unknownLocal(raw: string, trusted: (hostname: string) => boolean): boolean {
+  try {
+    const host = new URL(raw).hostname.replace(/^\[|\]$/g, "");
+    return !trusted(host) && localOnly(host);
+  } catch {
+    return false;
+  }
+}

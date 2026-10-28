@@ -330,6 +330,30 @@ export async function refreshServers(host: string): Promise<MediaServerInfo[]> {
   return run;
 }
 
+/**
+ * THE LISTING IN FLIGHT, SETTLED (0.13.0-rc.5, his rc.4: "the art wash isn't working anymore").
+ * The streamer is asked for its media servers as the app connects, and the playing cover's first
+ * fetch (the wash, the accent) came while the answer was still on its way: a cover on his Mac's
+ * server was then an unknown local address, refused, and the wash kept the refusal for the whole
+ * track. A picture on a local address not yet known waits here, `ms` at most, for the listing
+ * that may name its server; with none in flight it is answered at once.
+ */
+export async function serversListed(ms: number): Promise<void> {
+  const run = listing?.run;
+  if (!run) return;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([
+    run.then(
+      () => undefined,
+      () => undefined,
+    ),
+    new Promise<void>((r) => {
+      timer = setTimeout(r, ms);
+    }),
+  ]);
+  clearTimeout(timer);
+}
+
 /** Whether a hostname is one of the media servers the streamer has listed: their art is
  *  on the local network and is the app's to fetch (lookups/artFetch). */
 export function knownServerHost(hostname: string): boolean {
