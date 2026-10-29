@@ -18,6 +18,10 @@
  * RequestedCount, 150 at most). `artists` is the Artists folder's size (the mock's 400): a walk
  * lists every artist's folder, so a test that walks keeps it small. holdUpnp (MOCK_UPNP_DELAY_MS)
  * keeps the streamer's server listing unanswered until releaseUpnp(), rather than for a time.
+ * assetIds (MOCK_SECOND_BLANK, with the mock's /__test/media2/remint) gives every id a generation
+ * that remint() moves with the counter held, as Asset re-minted his library (0.13.0-rc.6), and an
+ * id of another generation answers as Asset answers one it no longer has: HTTP 200 and a blank,
+ * a container "-1" with an empty title, or an empty listing.
  */
 import { createServer, type IncomingMessage } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -29,6 +33,7 @@ export interface FakeStreamerOptions {
   searchPaged?: boolean;
   artists?: number;
   holdUpnp?: boolean;
+  assetIds?: boolean;
 }
 
 export interface FakeStreamer {
@@ -38,6 +43,8 @@ export interface FakeStreamer {
   readonly searchCalls: number;
   /** A standby or a replug: the mount moves, so every id is re-minted, and the counter with it. */
   rotate(): void;
+  /** assetIds: every id re-minted, the counter where it was. */
+  remint(): void;
   /** Answers the server listing held by holdUpnp. */
   releaseUpnp(): void;
   stop(): Promise<void>;
@@ -80,6 +87,10 @@ const xmlEsc = (s: string): string =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const durFmt = (secs: number): string =>
   `0:${String(Math.floor(secs / 60)).padStart(2, "0")}:${String(secs % 60).padStart(2, "0")}.000`;
+/** What Asset answers for an id it no longer has (his library, 2026-10-28): HTTP 200 and this. */
+const ASSET_BLANK =
+  '<container id="-1" parentID="-1" restricted="0" searchable="1"><dc:title></dc:title><dc:creator> </dc:creator><upnp:genre>Unknown</upnp:genre><upnp:class>object.container</upnp:class></container>';
+
 const didlWrap = (inner: string): string =>
   `<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/">${inner}</DIDL-Lite>`;
 const didlArt = (art: string | null): string =>
@@ -133,6 +144,8 @@ export async function startFakeStreamer(opts: FakeStreamerOptions = {}): Promise
   let mount = 26;
   let updateId = 3;
   let searchCalls = 0;
+  const assetIds = opts.assetIds === true;
+  let generation = 1;
   let releaseUpnp = (): void => {};
   const upnpHeld = opts.holdUpnp
     ? new Promise<void>((r) => {
@@ -381,6 +394,17 @@ export async function startFakeStreamer(opts: FakeStreamerOptions = {}): Promise
       .replace(/ parentID="([^"]+)"/g, (_, id: string) =>
         id === "0" ? ' parentID="0"' : ` parentID="${mount}:${id}"`,
       );
+  // assetIds: the generation prefixes every id but the root's
+  const generationIds = (didl: string): string =>
+    assetIds
+      ? didl
+          .replace(/ id="([^"]+)"/g, (_, id: string) =>
+            id === "0" ? ' id="0"' : ` id="g${generation}~${id}"`,
+          )
+          .replace(/ parentID="([^"]+)"/g, (_, id: string) =>
+            id === "0" ? ' parentID="0"' : ` parentID="g${generation}~${id}"`,
+          )
+      : didl;
   // the drive's albums are its folders: titled "Artist - Album", no artist and no date
   const usbFolders = (didl: string): string =>
     folders
@@ -537,7 +561,7 @@ export async function startFakeStreamer(opts: FakeStreamerOptions = {}): Promise
         return xml(
           200,
           soap(
-            `<u:SearchResponse ${cd}><Result>${xmlEsc(didlWrap(page.join("")))}</Result><NumberReturned>${page.length}</NumberReturned><TotalMatches>${parts.length}</TotalMatches><UpdateID>1</UpdateID></u:SearchResponse>`,
+            `<u:SearchResponse ${cd}><Result>${xmlEsc(generationIds(didlWrap(page.join(""))))}</Result><NumberReturned>${page.length}</NumberReturned><TotalMatches>${parts.length}</TotalMatches><UpdateID>1</UpdateID></u:SearchResponse>`,
           ),
         );
       }
@@ -549,12 +573,26 @@ export async function startFakeStreamer(opts: FakeStreamerOptions = {}): Promise
         objectId = m[2];
       }
       const meta = /<BrowseFlag>BrowseMetadata<\/BrowseFlag>/.test(body);
+      if (assetIds && objectId !== "0") {
+        // this generation's id answers; another's, as Asset answers an id it no longer has
+        const g = /^g(\d+)~(.*)$/.exec(objectId);
+        if (!g || Number(g[1]) !== generation) {
+          const blank = meta ? ASSET_BLANK : "";
+          return xml(
+            200,
+            soap(
+              `<u:BrowseResponse ${cd}><Result>${xmlEsc(didlWrap(blank))}</Result><NumberReturned>${meta ? 1 : 0}</NumberReturned><TotalMatches>${meta ? 1 : 0}</TotalMatches><UpdateID>1</UpdateID></u:BrowseResponse>`,
+            ),
+          );
+        }
+        objectId = g[2];
+      }
       const one = meta ? cdMetadata(objectId) : null;
       const all = meta ? (one ? [one] : null) : cdChildren(objectId);
       if (!all) return xml(500, "no such object");
       const parts = all.slice(start, start + 150);
       const didl = didlWrap(parts.join(""));
-      const result = rotating ? usbFolders(mountIds(didl)) : didl;
+      const result = rotating ? usbFolders(mountIds(didl)) : generationIds(didl);
       return xml(
         200,
         soap(
@@ -572,6 +610,9 @@ export async function startFakeStreamer(opts: FakeStreamerOptions = {}): Promise
     rotate() {
       mount++;
       updateId++;
+    },
+    remint() {
+      generation++;
     },
     releaseUpnp: () => releaseUpnp(),
     stop: () =>

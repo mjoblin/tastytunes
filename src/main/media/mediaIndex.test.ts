@@ -1,7 +1,16 @@
-import { beforeAll, describe, expect, it } from "vitest";
-import { describeProfileNote, type MediaIndexPools } from "@shared/model";
-import { startFakeStreamer, type FakeStreamerOptions } from "./__fixtures__/fakeStreamer";
-import { pools, rebuild } from "./mediaIndex";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+  describeProfileNote,
+  type MediaIndexPools,
+  type MediaNode,
+  type MediaServerInfo,
+} from "@shared/model";
+import {
+  startFakeStreamer,
+  type FakeStreamer,
+  type FakeStreamerOptions,
+} from "./__fixtures__/fakeStreamer";
+import { currentIdFor, ensureFresh, pools, rebuild, sameNode } from "./mediaIndex";
 import { refreshServers } from "./upnpBrowser";
 
 describe("rebuild: the drive's folder albums", () => {
@@ -55,5 +64,94 @@ describe("rebuild: the drive's folder albums", () => {
     const named = (p: MediaIndexPools | undefined): Array<[string, string | null]> | undefined =>
       p?.albums.map((a): [string, string | null] => [a.title, a.artist]).sort();
     expect(named(plain)).toEqual(named(usb));
+  });
+});
+
+describe("a library re-minted under an unmoved counter (Asset, 0.13.0-rc.6)", () => {
+  let server: FakeStreamer;
+  let servers: MediaServerInfo[];
+  const own = (): MediaIndexPools | undefined => pools().find((p) => p.udn === "mock-udn-1");
+  const amber = (): MediaNode | undefined => own()?.albums.find((a) => a.title === "Amber Nights");
+
+  beforeAll(async () => {
+    server = await startFakeStreamer({ assetIds: true, artists: 4 });
+    servers = await refreshServers(server.host);
+    ensureFresh(server.host, servers);
+    const listed = servers.find((x) => x.udn === "mock-udn-1");
+    if (listed) await rebuild(server.host, listed);
+  });
+
+  afterAll(() => server.stop());
+
+  it("is rebuilt on the next listing, though its counter did not move", async () => {
+    expect(amber()?.id).toMatch(/^g1~/);
+    server.remint();
+    ensureFresh(server.host, servers);
+    await vi.waitFor(() => expect(amber()?.id).toMatch(/^g2~/), { timeout: 10_000 });
+  });
+
+  it("finds a gone album and a gone track under their current ids", async () => {
+    const album = amber();
+    const track = own()?.tracks.find((t) => t.album === "Amber Nights" && t.trackNumber === 2);
+    expect(album && track).toBeTruthy();
+    if (!album || !track) return;
+    server.remint();
+    // the album's own rebuild, then the track traced through the index it replaced
+    const nowAlbum = await currentIdFor(server.host, "mock-udn-1", album.id);
+    const nowTrack = await currentIdFor(server.host, "mock-udn-1", track.id);
+    expect(nowAlbum).toBe(amber()?.id);
+    expect(nowAlbum).toMatch(/^g3~/);
+    expect(nowTrack).toMatch(/^g3~/);
+    expect(own()?.tracks.find((t) => t.id === nowTrack)?.title).toBe(track.title);
+    expect(await currentIdFor(server.host, "mock-udn-1", "g3~no-such-album")).toBeNull();
+  });
+});
+
+describe("sameNode: the node in a rebuilt index", () => {
+  const node = (over: Partial<MediaNode>): MediaNode => ({
+    id: "x",
+    parentId: "p",
+    title: "Manning Fireworks",
+    upnpClass: "object.container.album.musicAlbum",
+    isContainer: true,
+    artUrl: "http://asset/aa/364127631829389/cover.jpg",
+    artist: "MJ Lenderman",
+    album: null,
+    year: "2024",
+    trackNumber: null,
+    durationSecs: null,
+    ...over,
+  });
+  const was = node({ id: "co648974" });
+
+  it("finds an album by its picture, then by its title and artist", () => {
+    const now = node({ id: "coEDD6" });
+    expect(
+      sameNode({ albums: [now, node({ id: "o", title: "Other", artUrl: "a" })], tracks: [] }, was)
+        ?.id,
+    ).toBe("coEDD6");
+    const repictured = node({ id: "coNEW", artUrl: "http://asset/aa/1/cover.jpg" });
+    expect(sameNode({ albums: [repictured], tracks: [] }, was)?.id).toBe("coNEW");
+  });
+
+  it("answers null for no match or more than one", () => {
+    expect(sameNode({ albums: [], tracks: [] }, was)).toBeNull();
+    const twins = [node({ id: "a", artUrl: null }), node({ id: "b", artUrl: null })];
+    expect(sameNode({ albums: twins, tracks: [] }, node({ artUrl: null }))).toBeNull();
+  });
+
+  it("finds a track by its title, album and number", () => {
+    const t = (id: string, n: number): MediaNode =>
+      node({
+        id,
+        isContainer: false,
+        upnpClass: "object.item.audioItem.musicTrack",
+        title: "Rudolph",
+        album: "Manning Fireworks",
+        trackNumber: n,
+      });
+    expect(sameNode({ albums: [], tracks: [t("new3", 3), t("new4", 4)] }, t("old3", 3))?.id).toBe(
+      "new3",
+    );
   });
 });

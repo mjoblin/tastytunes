@@ -115,6 +115,10 @@ interface ViaContext {
   holdBinding: boolean;
   /** A play was attributed while unbound; the next queue list binds. */
   bindOnNextQueue: boolean;
+  /** A preset recall's: the queue that was there before it, and the context it replaced (see
+   *  cameToNothing). Null for any other verb. */
+  queueBefore: Set<number> | null;
+  previous: ViaContext | null;
 }
 let context: ViaContext | null = null;
 let lastQueueIds: Set<number> | null = null;
@@ -122,6 +126,30 @@ let lastQueueAt = 0;
 
 function clearContext(): void {
   context = null;
+}
+
+/** A bound context can no longer come to nothing: what it replaced is let go. */
+function bound(c: ViaContext): void {
+  c.queueBefore = null;
+  c.previous = null;
+}
+
+/** How long a preset recall may take to load its queue before it is taken to have loaded nothing:
+ *  the Presets screen's dead-recall wait (8 s) and a wake's (about 3 s), with room. */
+const PRESET_BIND_MS = 15_000;
+
+/**
+ * A RECALL THAT LOADED NOTHING CLAIMS NOTHING (0.13.0-rc.6, his preset 24). The streamer accepts
+ * a preset whose album its server no longer has and then does nothing, and the recall's context,
+ * never bound, claimed the next play anyway: a track of the queue already playing (preset 30's
+ * album, credited to preset 24 in his Resume and his history). A preset recall's context still
+ * unbound when a play starts from the queue that was there before it, or past PRESET_BIND_MS,
+ * came to nothing: the context it replaced stands again (unit-tested).
+ */
+function cameToNothing(c: ViaContext, kind: OpenPlay["kind"], queueId: number | null): boolean {
+  if (c.via.kind !== "preset" || c.queueIds != null || c.station != null) return false;
+  if (Date.now() - c.openedAt > PRESET_BIND_MS) return true;
+  return kind === "play" && queueId != null && (c.queueBefore?.has(queueId) ?? false);
 }
 
 /** The open context's `via` for a play that is starting, or nothing; binds and
@@ -133,11 +161,16 @@ function attribute(
 ): ListeningVia | undefined {
   const c = context;
   if (!c || kind === "external") return undefined;
+  if (cameToNothing(c, kind, queueId)) {
+    context = c.previous;
+    return attribute(kind, queueId, station);
+  }
   if (kind === "radio-session") {
     // a queue verb's context has nothing to say about the radio
     if (c.queueIds != null || c.holdBinding || c.bindOnNextQueue) return undefined;
     if (c.station == null) {
       c.station = station;
+      bound(c);
       return c.via;
     }
     if (c.station === station) return c.via;
@@ -151,9 +184,15 @@ function attribute(
   if (c.queueIds == null) {
     if (!c.holdBinding) {
       // the recall's queue may already have landed; otherwise the next list binds
-      if (lastQueueAt > c.openedAt && lastQueueIds && queueId != null && lastQueueIds.has(queueId))
+      if (
+        lastQueueAt > c.openedAt &&
+        lastQueueIds &&
+        queueId != null &&
+        lastQueueIds.has(queueId)
+      ) {
         c.queueIds = new Set(lastQueueIds);
-      else c.bindOnNextQueue = true;
+        bound(c);
+      } else c.bindOnNextQueue = true;
     }
     return c.via;
   }
@@ -506,6 +545,7 @@ export const listeningRecord = {
    *  activation (`holdBinding` while its batch still appends). Replaces any
    *  open context. */
   openContext(via: ListeningVia, opts?: { holdBinding?: boolean }): void {
+    const recall = via.kind === "preset";
     context = {
       via,
       openedAt: Date.now(),
@@ -513,6 +553,8 @@ export const listeningRecord = {
       station: null,
       holdBinding: opts?.holdBinding === true,
       bindOnNextQueue: false,
+      queueBefore: recall ? lastQueueIds : null,
+      previous: recall ? context : null,
     };
   },
   /** The activation's batch is over: the next queue list is what it loaded. */
@@ -536,6 +578,7 @@ export const listeningRecord = {
     if (c.bindOnNextQueue && !c.holdBinding) {
       c.queueIds = new Set(ids);
       c.bindOnNextQueue = false;
+      bound(c);
       return;
     }
     const set = c.queueIds;
@@ -558,6 +601,30 @@ export const listeningRecord = {
     return lines
       ? { events: lines.events.slice(), unreadable: lines.unreadable }
       : { events: [], unreadable: 0 };
+  },
+
+  /**
+   * WHAT A PRESET LAST PLAYED (0.13.0-rc.6, his preset 24: left with no picture, the repair had
+   * nothing to find its album by). The newest play credited to the slot on this streamer whose
+   * album is the slot's name as it was then; a play credited wrongly (a recall that loaded
+   * nothing, before cameToNothing) names another album and is passed over. Its album, artist and
+   * picture address, or null (unit-tested).
+   */
+  async presetLastAlbum(
+    streamer: string | null,
+    slot: number,
+  ): Promise<{ album: string; artist: string | null; artUrl: string | null } | null> {
+    const same = (a: string, b: string): boolean =>
+      a.trim().toLowerCase() === b.trim().toLowerCase();
+    const { events } = await this.readAll();
+    for (let i = events.length - 1; i >= 0; i--) {
+      const e = events[i];
+      if (e.kind !== "play" || e.via?.kind !== "preset" || e.via.id !== slot) continue;
+      if (streamer != null && e.via.streamer != null && e.via.streamer !== streamer) continue;
+      if (!e.album || !e.via.name || !same(e.album, e.via.name)) continue;
+      return { album: e.album, artist: e.artist, artUrl: e.artUrl ?? null };
+    }
+    return null;
   },
 
   /** Every event across all years, with the unreadable-line total — the MCP

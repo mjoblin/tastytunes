@@ -13,7 +13,7 @@ import {
   type MediaServerInfo,
   usbServer,
 } from "@shared/model";
-import { LARGE_QUEUE_TOKEN } from "@shared/ipc";
+import { LARGE_QUEUE_TOKEN, OBJECT_GONE_TOKEN } from "@shared/ipc";
 import { asArray, didlToNodes, parser, text } from "./didl";
 import { discsFromFileNames } from "./reconcile";
 import { loggedFetch } from "../netlog";
@@ -590,11 +590,26 @@ async function soapBrowseOnce(
   const br = doc.Envelope?.Body?.BrowseResponse;
   const didl = text(br?.Result);
   if (didl == null) return classify(res.status, body, entry.isStreamer);
+  if (flag === "BrowseMetadata" && namesNoObject(didl, objectId)) return "missing";
   return {
     didl,
     returned: Number(br?.NumberReturned ?? 0),
     total: Number(br?.TotalMatches ?? 0),
   };
+}
+
+/**
+ * A BLANK IS NOT AN OBJECT (0.13.0-rc.6, his preset 24). Asset answers an id it no longer has
+ * not with a fault but with HTTP 200 and a placeholder: a container "-1" with an empty title and
+ * no picture. Read as the object, it was "present" to the index's probe, and the preset repair
+ * saved it to his slot, which the streamer then listed as "[No title]" and still could not play.
+ * An answer to one object's metadata that names another object and no title, or names none, is
+ * the server saying the id is gone (unit-tested).
+ */
+function namesNoObject(didl: string, objectId: string): boolean {
+  const node = didlToNodes(didl)[0];
+  if (!node) return true;
+  return node.id !== objectId && !node.title.trim();
 }
 
 async function browseChildren(
@@ -946,8 +961,18 @@ export async function getSystemUpdateID(host: string, serverUdn: string): Promis
 
 // --------------------------------------------------------- queue/preset writes
 
+/** A play or a preset save of an id its server answered as gone (see namesNoObject): never
+ *  sent on to the streamer, whose preset would keep the blank and whose queue would load
+ *  nothing. ipc/media looks for the same album under its current id before it gives up. */
+export class ObjectGoneError extends Error {
+  constructor(readonly objectId: string) {
+    super(`${OBJECT_GONE_TOKEN}:${objectId}`);
+  }
+}
+
 async function metadataDidl(entry: ServerEntry, objectId: string): Promise<string> {
   const r = await soapBrowse(entry, objectId, "BrowseMetadata", 0, 200);
+  if (r === "missing") throw new ObjectGoneError(objectId);
   if (typeof r === "string") throw new Error("could not fetch item metadata");
   return r.didl;
 }

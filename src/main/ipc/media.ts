@@ -6,7 +6,13 @@ import { getSettings, updateSettings } from "../data/persist";
 import * as mediaIndex from "../media/mediaIndex";
 import { lookupMediaInfo } from "../media/mediaInfo";
 import { listRecentCandidates } from "../media/recentList";
-import { browse as mediaBrowse, presetSave, queueAdd, refreshServers } from "../media/upnpBrowser";
+import {
+  browse as mediaBrowse,
+  ObjectGoneError,
+  presetSave,
+  queueAdd,
+  refreshServers,
+} from "../media/upnpBrowser";
 import { handle } from "../app/guard";
 
 /** The media browser: servers, the indexes, browse, search, queueing, presets from the library, content resolve and the info lookups. (Split out of index.ts's registerIpc in the 0.11.0 sweep.) */
@@ -76,13 +82,16 @@ export function registerMediaIpc(): void {
       // Library plays are wake intents too — queue writes to a standby
       // streamer would otherwise land on deaf ears (probed 2026-07-23).
       await deviceManager.ensureAwake();
-      return queueAdd(streamerHost(), serverUdn, objectId, action, playFromId, {
-        confirmLarge: confirmLarge === true,
-      });
+      const opts = { confirmLarge: confirmLarge === true };
+      return withCurrentIds(serverUdn, objectId, playFromId, (id, from) =>
+        queueAdd(streamerHost(), serverUdn, id, action, from, opts),
+      );
     },
   );
   handle(IPC.mediaPresetSave, (_e, serverUdn: string, objectId: string, slot: number) =>
-    presetSave(streamerHost(), serverUdn, objectId, slot),
+    withCurrentIds(serverUdn, objectId, undefined, (id) =>
+      presetSave(streamerHost(), serverUdn, id, slot),
+    ),
   );
   handle(IPC.contentResolve, (_e, ref: ContentRef) => deviceManager.contentResolve(ref));
   handle(IPC.mediaNodeInfo, (_e, query: MediaInfoQuery, purpose: unknown) => {
@@ -94,4 +103,28 @@ export function registerMediaIpc(): void {
       purpose === "act" ? "act" : "show",
     );
   });
+}
+
+/**
+ * ONCE MORE UNDER THE CURRENT IDS (0.13.0-rc.6, his preset 24): a Library play or a preset save
+ * whose id its server answered as gone (a re-minted library, upnpBrowser's ObjectGoneError) goes
+ * again with the same album's and track's current ids, found by a rebuild of that server's index
+ * (mediaIndex.currentIdFor); with none found the refusal stands, and the renderer says so.
+ */
+async function withCurrentIds<T>(
+  serverUdn: string,
+  id: string,
+  from: string | undefined,
+  act: (id: string, from?: string) => Promise<T>,
+): Promise<T> {
+  try {
+    return await act(id, from);
+  } catch (e) {
+    if (!(e instanceof ObjectGoneError)) throw e;
+    const host = streamerHost();
+    const now = await mediaIndex.currentIdFor(host, serverUdn, id);
+    const nowFrom = from == null ? undefined : await mediaIndex.currentIdFor(host, serverUdn, from);
+    if (now == null || nowFrom === null) throw e;
+    return act(now, nowFrom);
+  }
 }
