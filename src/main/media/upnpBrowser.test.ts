@@ -1,9 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { startFakeStreamer, type FakeStreamer } from "./__fixtures__/fakeStreamer";
+import { LARGE_QUEUE_TRACKS } from "@shared/model";
 import {
+  LargeQueueError,
   ObjectGoneError,
   presetSave,
   probeObject,
+  queueAdd,
   refreshServers,
   search,
   serversListed,
@@ -71,6 +74,32 @@ describe("a blank is not an object: Asset's answer for an id it no longer has", 
       await expect(presetSave(server.host, "mock-udn-1", album.id, 90)).rejects.toBeInstanceOf(
         ObjectGoneError,
       );
+    } finally {
+      await server.stop();
+    }
+  });
+});
+
+describe("queueAdd: the large-queue guard (S77's static pin, a unit since 0.13.0-rc.6)", () => {
+  it("counts a container first and refuses one over LARGE_QUEUE_TRACKS unless confirmed", async () => {
+    const server = await startFakeStreamer({ artists: LARGE_QUEUE_TRACKS + 1 });
+    try {
+      await refreshServers(server.host);
+      const refused: unknown = await queueAdd(
+        server.host,
+        "mock-udn-1",
+        "lib-artists",
+        "REPLACE",
+      ).catch((e: unknown) => e);
+      expect(refused).toBeInstanceOf(LargeQueueError);
+      expect(refused instanceof LargeQueueError ? refused.tracks : 0).toBeGreaterThan(
+        LARGE_QUEUE_TRACKS,
+      );
+      expect(server.queueAdds).toBe(0);
+      await queueAdd(server.host, "mock-udn-1", "lib-artists", "REPLACE", undefined, {
+        confirmLarge: true,
+      });
+      expect(server.queueAdds).toBe(1);
     } finally {
       await server.stop();
     }

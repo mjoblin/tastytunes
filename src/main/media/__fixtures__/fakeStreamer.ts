@@ -41,6 +41,8 @@ export interface FakeStreamer {
   host: string;
   /** How many Search requests the server has answered. */
   readonly searchCalls: number;
+  /** How many queue writes (/smoip/queue/add) the streamer took. */
+  readonly queueAdds: number;
   /** A standby or a replug: the mount moves, so every id is re-minted, and the counter with it. */
   rotate(): void;
   /** assetIds: every id re-minted, the counter where it was. */
@@ -144,6 +146,7 @@ export async function startFakeStreamer(opts: FakeStreamerOptions = {}): Promise
   let mount = 26;
   let updateId = 3;
   let searchCalls = 0;
+  let queueAdds = 0;
   const assetIds = opts.assetIds === true;
   let generation = 1;
   let releaseUpnp = (): void => {};
@@ -374,6 +377,7 @@ export async function startFakeStreamer(opts: FakeStreamerOptions = {}): Promise
     if (deep) return didlContainer(id, deep[0], deep[1], "object.container", null);
     if (id === "lib-music") return didlContainer(id, "0", "Music", "object.container", null);
     if (id === "lib-singles") return didlContainer(id, "0", "Singles", "object.container", null);
+    if (id === "lib-artists") return didlContainer(id, "0", "Artists", "object.container", null);
     const alb = albumById(id);
     if (alb) return albumNode(alb, rotating && alb === DEEP ? "deep-nineties" : "lib-music");
     const t = /^(.+)-t(\d+)$/.exec(id);
@@ -501,6 +505,12 @@ export async function startFakeStreamer(opts: FakeStreamerOptions = {}): Promise
         res.writeHead(status, { "content-type": "text/xml" });
         res.end(body);
       };
+      if (u.pathname === "/smoip/queue/add") {
+        queueAdds++;
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end("{}");
+        return;
+      }
       if (u.pathname === "/smoip/system/upnp") {
         if (upnpHeld) await upnpHeld;
         res.writeHead(200, { "content-type": "application/json" });
@@ -606,6 +616,9 @@ export async function startFakeStreamer(opts: FakeStreamerOptions = {}): Promise
     host,
     get searchCalls() {
       return searchCalls;
+    },
+    get queueAdds() {
+      return queueAdds;
     },
     rotate() {
       mount++;

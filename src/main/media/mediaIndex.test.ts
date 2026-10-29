@@ -10,7 +10,7 @@ import {
   type FakeStreamer,
   type FakeStreamerOptions,
 } from "./__fixtures__/fakeStreamer";
-import { currentIdFor, ensureFresh, pools, rebuild, sameNode } from "./mediaIndex";
+import { currentIdFor, ensureFresh, pools, rebuild, revalidate, sameNode } from "./mediaIndex";
 import { refreshServers } from "./upnpBrowser";
 
 describe("rebuild: the drive's folder albums", () => {
@@ -70,6 +70,7 @@ describe("rebuild: the drive's folder albums", () => {
 describe("a library re-minted under an unmoved counter (Asset, 0.13.0-rc.6)", () => {
   let server: FakeStreamer;
   let servers: MediaServerInfo[];
+  let listed: MediaServerInfo | undefined;
   const own = (): MediaIndexPools | undefined => pools().find((p) => p.udn === "mock-udn-1");
   const amber = (): MediaNode | undefined => own()?.albums.find((a) => a.title === "Amber Nights");
 
@@ -77,7 +78,7 @@ describe("a library re-minted under an unmoved counter (Asset, 0.13.0-rc.6)", ()
     server = await startFakeStreamer({ assetIds: true, artists: 4 });
     servers = await refreshServers(server.host);
     ensureFresh(server.host, servers);
-    const listed = servers.find((x) => x.udn === "mock-udn-1");
+    listed = servers.find((x) => x.udn === "mock-udn-1");
     if (listed) await rebuild(server.host, listed);
   });
 
@@ -104,6 +105,25 @@ describe("a library re-minted under an unmoved counter (Asset, 0.13.0-rc.6)", ()
     expect(nowTrack).toMatch(/^g3~/);
     expect(own()?.tracks.find((t) => t.id === nowTrack)?.title).toBe(track.title);
     expect(await currentIdFor(server.host, "mock-udn-1", "g3~no-such-album")).toBeNull();
+  });
+
+  // S83's static pin, a unit since 0.13.0-rc.6 (the Browse-built half is resolveContent.test.ts's)
+  it("revalidates a search-built index by the id in hand, two askers sharing one rebuild", async () => {
+    if (!listed) throw new Error("the fake streamer lists no server");
+    const before = server.searchCalls;
+    await rebuild(server.host, listed);
+    const oneWalk = server.searchCalls - before;
+    const held = amber()?.id ?? "";
+    expect(await revalidate(server.host, "mock-udn-1", held)).toBe(false);
+    server.remint();
+    const asked = server.searchCalls;
+    const both = await Promise.all([
+      revalidate(server.host, "mock-udn-1", held),
+      revalidate(server.host, "mock-udn-1", held),
+    ]);
+    expect(both).toEqual([true, true]);
+    expect(server.searchCalls - asked).toBe(oneWalk);
+    expect(amber()?.id).not.toBe(held);
   });
 });
 
