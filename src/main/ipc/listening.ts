@@ -4,6 +4,7 @@ import { basename, join } from "node:path";
 import { IPC } from "@shared/ipc";
 import { playAlbumKey, playKey, type MediaIndexPools } from "@shared/model";
 import { broadcastListening } from "../app/broadcast";
+import { deviceManager } from "../app/runtime";
 import { getMainWindow } from "../app/windows";
 import { listeningRecord } from "../data/listeningRecord";
 import { playStatsFromRecord } from "../data/playStats";
@@ -63,6 +64,11 @@ export function registerListeningIpc(): void {
     }
     return out;
   });
+  handle(IPC.presetLastAlbum, (_e, slot: unknown) =>
+    typeof slot === "number"
+      ? listeningRecord.presetLastAlbum(deviceManager.snapshot().systemInfo?.udn ?? null, slot)
+      : null,
+  );
   handle(IPC.listeningYears, () => listeningRecord.years());
   handle(IPC.listeningStreamers, () => listeningRecord.streamers());
   handle(IPC.listeningYear, (_e, year: unknown) =>

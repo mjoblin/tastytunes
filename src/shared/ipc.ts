@@ -102,6 +102,16 @@ export function largeQueueCount(e: unknown): number | null {
   return m ? Number(m[1]) : null;
 }
 
+/**
+ * How main's "the server no longer has this" crosses IPC, the same way: a play or a preset save
+ * of an id its server answered as gone (upnpBrowser's ObjectGoneError), after main has looked for
+ * the same album or track under its current id and found none (0.13.0-rc.6). The caller says so
+ * rather than leave a silent nothing.
+ */
+export const OBJECT_GONE_TOKEN = "TT_OBJECT_GONE";
+export const objectGone = (e: unknown): boolean =>
+  (e instanceof Error ? e.message : "").includes(OBJECT_GONE_TOKEN);
+
 // -------------------------------------------------------- main -> renderer push
 
 /**
@@ -493,6 +503,11 @@ export interface TastyTunesApi {
   ): Promise<void>;
   /** Save a browsed item to a preset slot (1-99). */
   mediaPresetSave(serverUdn: string, objectId: string, slot: number): Promise<void>;
+  /** What a preset slot last played on the connected streamer, by the listening record: the
+   *  repair's way to a preset with no picture (listeningRecord.presetLastAlbum). */
+  presetLastAlbum(
+    slot: number,
+  ): Promise<{ album: string; artist: string | null; artUrl: string | null } | null>;
   /** Find a track by CONTENT on any server (index first, live fallback) —
    *  the renderer-facing face of main's resolveContent. Null when nothing
    *  matches or the device is disconnected. */
@@ -651,6 +666,7 @@ export const IPC = {
   mediaIndexPools: "tt:mediaIndexPools",
   mediaQueueAdd: "tt:mediaQueueAdd",
   mediaPresetSave: "tt:mediaPresetSave",
+  presetLastAlbum: "tt:presetLastAlbum",
   contentResolve: "tt:contentResolve",
   mediaNodeInfo: "tt:mediaNodeInfo",
   mediaIndexRebuild: "tt:mediaIndexRebuild",

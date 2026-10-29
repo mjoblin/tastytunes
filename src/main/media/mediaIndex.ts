@@ -134,6 +134,9 @@ const known = new Map<string, MediaServerInfo>();
 const building = new Set<string>();
 /** The build under way per server, so a second asker waits for the same walk. */
 const inflight = new Map<string, Promise<void>>();
+/** The index a rebuild replaced, per server, until the next: an id the renderer still holds
+ *  from just before it can be traced to its node and so to the node's current id (currentIdFor). */
+const retired = new Map<string, StoredIndex>();
 // The last build that produced NOTHING, per server, with a one-line reason —
 // so the Library's doors and Settings can say "couldn't index · Retry" instead
 // of quietly reverting to "not indexed" (2026-08-17). Cleared by any build.
@@ -559,6 +562,8 @@ async function buildNow(
     if (built) {
       // before the index is in place, so the pools never show it without its arrivals
       noteArrivals(server.udn, built.albums, stableArt(built));
+      const before = indexes.get(server.udn);
+      if (before) retired.set(server.udn, before);
       indexes.set(server.udn, built);
       rebuildHints.delete(server.udn);
       failed.delete(server.udn);
@@ -596,8 +601,12 @@ async function buildNow(
  * 2026-09-14). Before an answer from such an index is trusted: rebuild when
  * the counter moved, or when the id in hand no longer answers (a counter
  * that lies), and WAIT for the walk. True when rebuilt, so the caller asks
- * again; false when the index stood. Search-built indexes keep stable ids
- * and are not touched.
+ * again; false when the index stood.
+ *
+ * A search-built index too, since 0.13.0-rc.6: its ids were taken to stand, and Asset re-minted
+ * every id of his library with its counter unmoved (his preset 24: the index's Manning
+ * Fireworks answered as a blank, upnpBrowser's namesNoObject), so the id in hand is asked of
+ * every index, and a rebuild keeps the index's own strategy.
  */
 export async function revalidate(
   host: string,
@@ -621,7 +630,7 @@ export async function revalidate(
     if (moved) return true;
   }
   const existing = indexes.get(udn);
-  if (!existing || existing.strategy !== "browse") return false;
+  if (!existing) return false;
   const server =
     known.get(udn) ?? (await refreshServers(host).catch(() => [])).find((s) => s.udn === udn);
   if (!server) return false;
@@ -646,11 +655,77 @@ export async function revalidate(
     console.log(
       `[mediaIndex] ${server.name}: ${id != null && existing.updateId != null && id !== existing.updateId ? `ids rotated (counter ${existing.updateId} → ${id})` : `the id in hand no longer answers (counter ${id ?? "unread"})`}, rebuilding`,
     );
-    await build(host, server, "browse", "refresh");
+    await build(host, server, existing.strategy, "refresh");
     return indexes.get(udn)?.builtAt !== existing.builtAt;
   } finally {
     done?.();
   }
+}
+
+/**
+ * THE SAME ALBUM UNDER ITS CURRENT ID (0.13.0-rc.6, his preset 24). A play or a preset save of an
+ * id its server answered as gone (upnpBrowser's ObjectGoneError) asks here: the server's index is
+ * rebuilt, unless a rebuild since already replaced the index the id came from, and the same node
+ * is found in it (sameNode). Its current id, or null: no index or no such node to start from, a
+ * rebuild that came to nothing, or no single match. The streamer's USB drive heals its own way
+ * (revalidate, the Library's crumb walk) and is left to it.
+ */
+export async function currentIdFor(
+  host: string,
+  udn: string,
+  staleId: string,
+): Promise<string | null> {
+  load();
+  const server = known.get(udn);
+  const held = indexes.get(udn);
+  if (!server || !held || usbServer(server)) return null;
+  const find = (idx: StoredIndex | undefined): MediaNode | undefined =>
+    idx?.albums.find((n) => n.id === staleId) ?? idx?.tracks.find((n) => n.id === staleId);
+  let was = find(held);
+  if (was) {
+    await build(host, server, held.strategy, "refresh");
+    if (indexes.get(udn)?.builtAt === held.builtAt) return null;
+  } else {
+    was = find(retired.get(udn));
+    if (!was) return null;
+  }
+  const now = indexes.get(udn);
+  const hit = now ? sameNode(now, was) : null;
+  console.log(
+    `[mediaIndex] ${server.name}: ${was.title} answered as gone; ${hit ? `the same ${was.isContainer ? "album" : "track"} is now ${hit.id}` : "no single match after the rebuild"}`,
+  );
+  return hit?.id ?? null;
+}
+
+/** The node in a rebuilt index that is `was`: an album by its picture (the id is what Asset
+ *  re-mints, the picture's id what it keeps), then by its title and artist; a track by its
+ *  title, album and number, and its picture when it had one. Only a single match (unit-tested). */
+export function sameNode(
+  idx: Pick<StoredIndex, "albums" | "tracks">,
+  was: MediaNode,
+): MediaNode | null {
+  const one = (list: MediaNode[]): MediaNode | null => (list.length === 1 ? list[0] : null);
+  const loose = (v: string | null | undefined): string => (v ?? "").trim().toLowerCase();
+  if (was.isContainer) {
+    const byArt = was.artUrl ? one(idx.albums.filter((a) => a.artUrl === was.artUrl)) : null;
+    return (
+      byArt ??
+      one(
+        idx.albums.filter(
+          (a) => loose(a.title) === loose(was.title) && loose(a.artist) === loose(was.artist),
+        ),
+      )
+    );
+  }
+  return one(
+    idx.tracks.filter(
+      (t) =>
+        loose(t.title) === loose(was.title) &&
+        loose(t.album) === loose(was.album) &&
+        t.trackNumber === was.trackNumber &&
+        (was.artUrl == null || t.artUrl === was.artUrl),
+    ),
+  );
 }
 
 /** What else a heal checks, and when it stops: the user's likely next plays (likelyFor), and
@@ -956,6 +1031,17 @@ async function heal(
   return declined(`no mount confirmed (${misses.join("; ")})`);
 }
 
+/** Whether the index's first album (its first track, with no albums) no longer answers on its
+ *  server: a re-minted library under an unmoved counter. A server not answering says nothing. */
+async function idsGone(host: string, server: MediaServerInfo, held: StoredIndex): Promise<boolean> {
+  const probe = held.albums[0]?.id ?? held.tracks[0]?.id;
+  if (!probe || (await probeObject(host, server.udn, probe)) !== "missing") return false;
+  console.log(
+    `[mediaIndex] ${server.name}: an indexed id no longer answers (counter ${held.updateId ?? "unread"} unmoved), rebuilding`,
+  );
+  return true;
+}
+
 /**
  * Called on every server listing (Library entry): keep Tier A indexes fresh
  * automatically — build when absent, rebuild when SystemUpdateID moved or the
@@ -1005,7 +1091,10 @@ export function ensureFresh(host: string, servers: MediaServerInfo[]): void {
         const stale =
           (existing.updateId != null && id !== existing.updateId) ||
           Date.now() - existing.builtAt > TTL_MS;
-        if (!stale) return;
+        // an unmoved counter is no proof the ids stood: Asset re-minted every id of his library
+        // and kept its counter (0.13.0-rc.6, his preset 24), so one indexed album is asked too,
+        // one request, and an answer of "gone" rebuilds as a moved counter would
+        if (!stale && !(await idsGone(host, server, existing))) return;
         await build(host, server, existing.strategy, "refresh");
         return;
       }
