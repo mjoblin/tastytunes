@@ -38,10 +38,11 @@ import { lc } from "@/components/library/lenses/lensShared";
  *
  * MORE TO CHOOSE FROM, AND A LOOK FIRST (0.14.0, his call on a user's email, Plex's picture
  * editor): a Commons tab, the photos in the artist's Wikimedia Commons category the article
- * doesn't show; each picture's full size under it where its source says (Wikipedia, Commons);
- * and every picture opens large before it is used (double-click it, or its corner button), with
- * its size, its file page, the tab's others a step away (the arrow keys or the chevrons) and
- * "Use this picture" there too.
+ * doesn't show; and every picture opens large before it is used (double-click it, or its corner
+ * button), with its full size and file page where its source says (Wikipedia, Commons), the
+ * tab's others a step away (the arrow keys or the chevrons) and "Use this picture" there too.
+ * The size is the large view's alone (his look, 2026-10-30: "let's not show the resolution for
+ * these images"; it was under each tile).
  */
 type Tile = {
   key: string;
@@ -57,16 +58,15 @@ type Tile = {
 };
 type Source = "wiki" | "commons" | "fanart" | "covers" | "file";
 
-/** Five tiles to a row in the dialog's width, with room for the scrollbar (his look, 2026-10-30:
- *  "this feels a bit cramped"; they were 88 with an 8 gap). */
-const TILE_PX = 112;
-const GAP_PX = 12;
-/** The size line under a tile, and its gap. */
-const SIZE_PX = 18;
-/** Three rows of tiles with their size lines and gaps, with the ring's room: the grid's fixed
- *  height, the same on every tab so nothing moves. */
-const GRID_H = 3 * (TILE_PX + SIZE_PX) + 2 * GAP_PX + 8;
-/** A full size as the tile and the large view say it. */
+/** Four tiles to a row in the dialog's width, with room for the scrollbar (his look, 2026-10-30:
+ *  "this feels a bit cramped", then "larger still, with a slightly larger gap"; they were 88
+ *  with an 8 gap, five to a row). */
+const TILE_PX = 140;
+const GAP_PX = 16;
+/** Three rows of tiles and their gaps, with the ring's room: the grid's fixed height, the same
+ *  on every tab so nothing moves. */
+const GRID_H = 3 * TILE_PX + 2 * GAP_PX + 8;
+/** A full size as the large view says it. */
 const sizeText = (t: Pick<Tile, "width" | "height">): string | null =>
   t.width && t.height ? `${fmtCount(t.width)} × ${fmtCount(t.height)}` : null;
 /** A tile for an offer from Wikipedia or Commons. */
@@ -534,8 +534,7 @@ function Grid({ children }: { children: React.ReactNode }): React.JSX.Element {
 }
 
 /** The pictures to choose from, each a toggle: one chosen at a time across the tabs, each with
- *  its full size under it where its source says, and a corner button (or a double-click) that
- *  opens it large. No hover transitions inside the modal (ModalShell's note: they crawl over its
+ *  a corner button (or a double-click) that opens it large. No hover transitions inside the modal (ModalShell's note: they crawl over its
  *  blur). */
 function Tiles({
   tiles,
@@ -554,7 +553,6 @@ function Tiles({
     <Grid>
       {tiles.map((t) => {
         const on = t.key === selected;
-        const size = sizeText(t);
         return (
           <div key={t.key} className="group relative" style={{ width: TILE_PX }}>
             <button
@@ -577,7 +575,7 @@ function Tiles({
                 src={artSrc(t.url, TILE_PX)}
                 className="h-full w-full object-cover"
                 portraitTop
-                fallback={<UserRound size={28} strokeWidth={1} className="text-faint" />}
+                fallback={<UserRound size={32} strokeWidth={1} className="text-faint" />}
               />
             </button>
             <button
@@ -590,13 +588,6 @@ function Tiles({
             >
               <Maximize2 size={12} />
             </button>
-            <div
-              data-artist-picture-size={size ?? undefined}
-              className="truncate pt-1.5 text-center text-[11px] leading-[12px] text-faint tabular-nums"
-              style={{ height: SIZE_PX }}
-            >
-              {size}
-            </div>
           </div>
         );
       })}
