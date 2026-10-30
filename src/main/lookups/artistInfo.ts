@@ -131,8 +131,21 @@ function decoded(s: string): string {
   }
 }
 
+/** Asks in flight, by artist: the chooser's tabs and a choice's check ask together (0.14.0, the
+ *  Commons tab leaves out the article's photos), and ask the article once. */
+const imagesAsked = new Map<string, Promise<string[]>>();
+
 /** The images an artist's article offers, the lead picture first; empty with no article. */
-export async function fetchArtistImages(artist: string): Promise<string[]> {
+export function fetchArtistImages(artist: string): Promise<string[]> {
+  const key = artist.trim().toLowerCase();
+  const asked = imagesAsked.get(key);
+  if (asked) return asked;
+  const ask = articleImages(artist).finally(() => imagesAsked.delete(key));
+  imagesAsked.set(key, ask);
+  return ask;
+}
+
+async function articleImages(artist: string): Promise<string[]> {
   const info = await fetchArtistInfo(artist);
   const title = info?.wikipediaUrl
     ? decoded((info.wikipediaUrl.split("/wiki/")[1] ?? "").split(/[?#]/)[0])

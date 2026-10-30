@@ -24,6 +24,7 @@ import {
 } from "../data/artistChoices";
 import { fetchArtistImages, fetchArtistInfo, knownArtistImage } from "../lookups/artistInfo";
 import { checkFanartKey, fetchFanartPhotos } from "../lookups/fanart";
+import { fetchCommonsPhotos, fetchWikimediaSizes, wikimediaFile } from "../lookups/commons";
 import { artThumbsStats, clearArtThumbs } from "../lookups/artThumbs";
 import { fetchCoverArt } from "../lookups/coverArt";
 import { clearLookupCaches, lookupCacheStats } from "../lookups/diskCache";
@@ -39,6 +40,16 @@ import { demoHost } from "../servers/demoStreamer";
 import { handle } from "../app/guard";
 
 /** Internet lookups, each behind its own switch: lyrics, ListenBrainz, artist, album, disc and track context, cover art, radio directories, embedded and fetched pictures, and the lookup caches. (Split out of index.ts's registerIpc in the 0.11.0 sweep.) */
+
+/** The images a window may choose for an artist: the article's, fanart.tv's and Commons'. A
+ *  choice of anything else is refused (setArtistChoice). */
+async function offeredImages(name: string): Promise<string[]> {
+  return [
+    ...(await fetchArtistImages(name)),
+    ...(await fetchFanartPhotos(name)),
+    ...(await fetchCommonsPhotos(name)).map((o) => o.url),
+  ];
+}
 
 export function registerLookupsIpc(): void {
   // the rows' and cards' artist pictures: never a lookup (MusicBrainz answers one request a
@@ -83,11 +94,28 @@ export function registerLookupsIpc(): void {
     }
     return out;
   });
-  handle(IPC.artistImages, async (_e, name: unknown) =>
-    typeof name === "string" && name.trim() && getSettings().artistInfo
-      ? fetchArtistImages(name)
-      : [],
-  );
+  // the article's images with their sizes (0.14.0: each picture's size under it), and the
+  // artist's Commons photos the article doesn't show (the same photo is offered once)
+  handle(IPC.artistImages, async (_e, name: unknown) => {
+    if (typeof name !== "string" || !name.trim() || !getSettings().artistInfo) return [];
+    const urls = await fetchArtistImages(name);
+    const sizes = await fetchWikimediaSizes(urls);
+    return urls.map((url) => {
+      const s = sizes.get(wikimediaFile(url));
+      return {
+        url,
+        thumb: null,
+        width: s?.width ?? null,
+        height: s?.height ?? null,
+        page: s?.page ?? null,
+      };
+    });
+  });
+  handle(IPC.artistCommons, async (_e, name: unknown) => {
+    if (typeof name !== "string" || !name.trim() || !getSettings().artistInfo) return [];
+    const shown = new Set((await fetchArtistImages(name)).map(wikimediaFile));
+    return (await fetchCommonsPhotos(name)).filter((o) => !shown.has(wikimediaFile(o.url)));
+  });
   handle(IPC.pickArtistPictureFile, (e) =>
     pickPictureFile(BrowserWindow.fromWebContents(e.sender)),
   );
@@ -103,8 +131,7 @@ export function registerLookupsIpc(): void {
     if (!isArtistChoice(choice)) return false;
     if (choice.kind === "image") {
       if (!getSettings().artistInfo) return false;
-      const offered = [...(await fetchArtistImages(name)), ...(await fetchFanartPhotos(name))];
-      if (!offered.includes(choice.url)) return false;
+      if (!(await offeredImages(name)).includes(choice.url)) return false;
     }
     setChoice(name, choice);
     return true;

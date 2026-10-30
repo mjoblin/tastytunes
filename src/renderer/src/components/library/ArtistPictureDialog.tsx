@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
-import { UserRound } from "lucide-react";
-import type { ArtistChoice, MediaIndexPools } from "@shared/model";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, Maximize2, UserRound } from "lucide-react";
+import type { ArtistChoice, MediaIndexPools, PictureOffer } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { ModalShell } from "@/components/chrome/Overlay";
@@ -15,7 +15,7 @@ import {
   useArtistChoice,
   type CoverOffer,
 } from "@/lib/artistPictures";
-import { cx } from "@/lib/format";
+import { cx, fmtCount } from "@/lib/format";
 import { useIndexPools } from "@/hooks/useIndexPools";
 import { useLensIndex } from "@/components/library/lenses/useLensIndex";
 import { lc } from "@/components/library/lenses/lensShared";
@@ -35,13 +35,48 @@ import { lc } from "@/components/library/lenses/lensShared";
  * holding the picture chosen now, else Wikipedia's, moving once to the first tab with pictures
  * if that one answers empty before a tab is clicked. A source that cannot answer says why in its
  * tab (Liner notes off, no fanart.tv key) with the way to Settings › Connections.
+ *
+ * MORE TO CHOOSE FROM, AND A LOOK FIRST (0.14.0, his call on a user's email, Plex's picture
+ * editor): a Commons tab, the photos in the artist's Wikimedia Commons category the article
+ * doesn't show; each picture's full size under it where its source says (Wikipedia, Commons);
+ * and every picture opens large before it is used (double-click it, or its corner button), with
+ * its size, its file page, the tab's others a step away (the arrow keys or the chevrons) and
+ * "Use this picture" there too.
  */
-type Tile = { key: string; url: string; label: string; choice: ArtistChoice };
-type Source = "wiki" | "fanart" | "covers" | "file";
+type Tile = {
+  key: string;
+  /** What the tile shows (a smaller copy where the source has one). */
+  url: string;
+  /** What the large view shows and the choice keeps. */
+  full: string;
+  label: string;
+  choice: ArtistChoice;
+  width: number | null;
+  height: number | null;
+  page: string | null;
+};
+type Source = "wiki" | "commons" | "fanart" | "covers" | "file";
 
 const TILE_PX = 88;
-/** Three rows of tiles and their gaps, with the ring's room: the grid's fixed height. */
-const GRID_H = 3 * TILE_PX + 2 * 8 + 8;
+/** The size line under a tile, and its gap. */
+const SIZE_PX = 16;
+/** Three rows of tiles with their size lines and gaps, with the ring's room: the grid's fixed
+ *  height, the same on every tab so nothing moves. */
+const GRID_H = 3 * (TILE_PX + SIZE_PX) + 2 * 8 + 8;
+/** A full size as the tile and the large view say it. */
+const sizeText = (t: Pick<Tile, "width" | "height">): string | null =>
+  t.width && t.height ? `${fmtCount(t.width)} × ${fmtCount(t.height)}` : null;
+/** A tile for an offer from Wikipedia or Commons. */
+const offerTile = (o: PictureOffer, label: string): Tile => ({
+  key: o.url,
+  url: o.thumb ?? o.url,
+  full: o.url,
+  label,
+  choice: { kind: "image", url: o.url },
+  width: o.width,
+  height: o.height,
+  page: o.page,
+});
 
 /** The tab a choice lives on, as far as can be told before the sources answer. */
 const tabOf = (
@@ -78,7 +113,11 @@ export function ArtistPictureDialog({
   const jumpToSettingsTab = useStore((s) => s.jumpToSettingsTab);
   /** The tab clicked, if one was: the dialog no longer moves to another on its own. */
   const [clicked, setClicked] = useState<Source | null>(null);
-  const [images, setImages] = useState<{ of: string; urls: string[] } | null>(null);
+  const [images, setImages] = useState<{ of: string; offers: PictureOffer[] } | null>(null);
+  // Commons' photos (0.14.0), the ones the article doesn't show
+  const [commons, setCommons] = useState<{ of: string; offers: PictureOffer[] } | null>(null);
+  /** The picture open large, if one is. */
+  const [viewing, setViewing] = useState<Tile | null>(null);
   // fanart.tv's photos (0.13.0 round 11), asked only with a key saved: none saved, its tab says how
   const [fanart, setFanart] = useState<{ of: string; urls: string[]; keyed: boolean } | null>(null);
   const [file, setFile] = useState<{ file: string; url: string } | null>(null);
@@ -101,15 +140,24 @@ export function ArtistPictureDialog({
     setNotice(null);
     setSelected(currentUrl);
     setClicked(null);
+    setViewing(null);
     if (!lookups) return;
     let live = true;
     void tt
       .artistImages(name)
-      .then((urls) => {
-        if (live) setImages({ of: name, urls });
+      .then((offers) => {
+        if (live) setImages({ of: name, offers });
       })
       .catch(() => {
-        if (live) setImages({ of: name, urls: [] });
+        if (live) setImages({ of: name, offers: [] });
+      });
+    void tt
+      .artistCommons(name)
+      .then((offers) => {
+        if (live) setCommons({ of: name, offers });
+      })
+      .catch(() => {
+        if (live) setCommons({ of: name, offers: [] });
       });
     void tt
       .secretsStatus()
@@ -125,36 +173,42 @@ export function ArtistPictureDialog({
     };
   }, [open, name, lookups, currentKind, currentUrl]);
   const fan = fanart?.of === name ? fanart : null;
+  const unsized = { width: null, height: null, page: null };
   const fanartTiles: Tile[] = (fan?.urls ?? []).map((url, i) => ({
     key: url,
     url,
+    full: url,
     label: `fanart.tv photo ${i + 1}`,
     choice: { kind: "image", url },
+    ...unsized,
   }));
-  const wiki = images?.of === name ? images.urls : null;
-  const wikiTiles: Tile[] = (wiki ?? []).map((url, i) => ({
-    key: url,
-    url,
-    label: `Wikipedia image ${i + 1}`,
-    choice: { kind: "image", url },
-  }));
+  const wiki = images?.of === name ? images.offers : null;
+  const wikiTiles: Tile[] = (wiki ?? []).map((o, i) => offerTile(o, `Wikipedia image ${i + 1}`));
+  const fromCommons = commons?.of === name ? commons.offers : null;
+  const commonsTiles: Tile[] = (fromCommons ?? []).map((o, i) =>
+    offerTile(o, `Commons photo ${i + 1}`),
+  );
   const coverTiles: Tile[] = covers.map((c) => ({
     key: c.url,
     url: c.url,
+    full: c.url,
     label: `Cover of ${c.album}`,
     choice: { kind: "cover", url: c.url, album: c.album, serverUdn: c.serverUdn },
+    ...unsized,
   }));
   const fileTiles: Tile[] = file
     ? [
         {
           key: file.url,
           url: file.url,
+          full: file.url,
           label: "Chosen file",
           choice: { kind: "file", file: file.file },
+          ...unsized,
         },
       ]
     : [];
-  const all = [...wikiTiles, ...fanartTiles, ...coverTiles, ...fileTiles];
+  const all = [...wikiTiles, ...commonsTiles, ...fanartTiles, ...coverTiles, ...fileTiles];
   // until a tab is clicked: a fanart.tv photo chosen now is shown on its tab once fanart.tv
   // answers, and an opening tab that answers empty gives way to the first with pictures
   const opening = tabOf(current, lookups, coverTiles.length);
@@ -162,16 +216,33 @@ export function ArtistPictureDialog({
     clicked ??
     (current?.kind === "image" && fan?.urls.includes(current.url)
       ? "fanart"
-      : current || opening !== "wiki" || wiki == null || wiki.length > 0 || (lookups && !fan)
-        ? opening
-        : fanartTiles.length > 0
-          ? "fanart"
-          : coverTiles.length > 0
-            ? "covers"
-            : opening);
+      : current?.kind === "image" && fromCommons?.some((o) => o.url === current.url)
+        ? "commons"
+        : current || opening !== "wiki" || wiki == null || wiki.length > 0 || (lookups && !fan)
+          ? opening
+          : commonsTiles.length > 0
+            ? "commons"
+            : fanartTiles.length > 0
+              ? "fanart"
+              : coverTiles.length > 0
+                ? "covers"
+                : opening);
   const pick = all.find((t) => t.key === selected) ?? null;
+  // the large view steps through the tab it was opened from
+  const shown =
+    tab === "wiki"
+      ? wikiTiles
+      : tab === "commons"
+        ? commonsTiles
+        : tab === "fanart"
+          ? fanartTiles
+          : tab === "covers"
+            ? coverTiles
+            : fileTiles;
   const use = (): void => {
-    if (!pick) return;
+    if (pick) commit(pick);
+  };
+  const commit = (pick: Tile): void => {
     setSaving(true);
     setNotice(null);
     const failed = (): void => {
@@ -206,12 +277,13 @@ export function ArtistPictureDialog({
   return (
     <ModalShell
       open={open}
-      onClose={onClose}
+      // Escape and a click outside close the large view first, then the dialog
+      onClose={() => (viewing ? setViewing(null) : onClose())}
       escapeCloses
       label={`Picture for ${name}`}
       className="w-[34rem] max-w-[calc(100vw-3rem)] p-4"
     >
-      <div data-artist-picture-dialog>
+      <div data-artist-picture-dialog className="relative">
         <div className="text-[13px] font-medium text-ink">Picture for {name}</div>
         <div data-artist-picture-tabs className="mt-3">
           <Segmented<Source>
@@ -221,6 +293,11 @@ export function ArtistPictureDialog({
             onChange={setClicked}
             options={[
               { value: "wiki", label: "Wikipedia", count: lookups ? (wiki?.length ?? null) : null },
+              {
+                value: "commons",
+                label: "Commons",
+                count: lookups ? (fromCommons?.length ?? null) : null,
+              },
               {
                 value: "fanart",
                 label: "fanart.tv",
@@ -246,7 +323,33 @@ export function ArtistPictureDialog({
             ) : wikiTiles.length === 0 ? (
               <Note>Couldn’t find “{name}” on Wikipedia.</Note>
             ) : (
-              <Tiles tiles={wikiTiles} selected={selected} onSelect={setSelected} kind="image" />
+              <Tiles
+                tiles={wikiTiles}
+                selected={selected}
+                onSelect={setSelected}
+                onOpen={setViewing}
+                kind="image"
+              />
+            ))}
+          {tab === "commons" &&
+            (!lookups ? (
+              <LinerNotesOff onOpen={() => openConnections()} source="Wikimedia Commons" />
+            ) : fromCommons == null ? (
+              <Waiting />
+            ) : commonsTiles.length === 0 ? (
+              <Note>
+                {wikiTiles.length > 0
+                  ? `No other photos of “${name}” on Wikimedia Commons.`
+                  : `Couldn’t find “${name}” on Wikimedia Commons.`}
+              </Note>
+            ) : (
+              <Tiles
+                tiles={commonsTiles}
+                selected={selected}
+                onSelect={setSelected}
+                onOpen={setViewing}
+                kind="image"
+              />
             ))}
           {tab === "fanart" &&
             (!lookups ? (
@@ -272,13 +375,25 @@ export function ArtistPictureDialog({
             ) : fanartTiles.length === 0 ? (
               <Note>No photos of “{name}” on fanart.tv.</Note>
             ) : (
-              <Tiles tiles={fanartTiles} selected={selected} onSelect={setSelected} kind="image" />
+              <Tiles
+                tiles={fanartTiles}
+                selected={selected}
+                onSelect={setSelected}
+                onOpen={setViewing}
+                kind="image"
+              />
             ))}
           {tab === "covers" &&
             (coverTiles.length === 0 ? (
               <Note>No album covers of “{name}” in the library.</Note>
             ) : (
-              <Tiles tiles={coverTiles} selected={selected} onSelect={setSelected} kind="cover" />
+              <Tiles
+                tiles={coverTiles}
+                selected={selected}
+                onSelect={setSelected}
+                onOpen={setViewing}
+                kind="cover"
+              />
             ))}
           {tab === "file" && (
             <div className="space-y-3">
@@ -287,7 +402,13 @@ export function ArtistPictureDialog({
                 moved or deleted.
               </Note>
               {fileTiles.length > 0 && (
-                <Tiles tiles={fileTiles} selected={selected} onSelect={setSelected} kind="file" />
+                <Tiles
+                  tiles={fileTiles}
+                  selected={selected}
+                  onSelect={setSelected}
+                  onOpen={setViewing}
+                  kind="file"
+                />
               )}
               <SmallButton data-artist-picture-file onClick={chooseFile}>
                 {fileTiles.length > 0 ? "Choose another file…" : "Choose a file…"}
@@ -319,6 +440,19 @@ export function ArtistPictureDialog({
             )
           }
         />
+        {viewing && (
+          <LargeView
+            tile={viewing}
+            tiles={shown}
+            saving={saving}
+            onStep={setViewing}
+            onBack={() => setViewing(null)}
+            onUse={(t) => {
+              setSelected(t.key);
+              commit(t);
+            }}
+          />
+        )}
       </div>
     </ModalShell>
   );
@@ -381,50 +515,189 @@ function Grid({ children }: { children: React.ReactNode }): React.JSX.Element {
   );
 }
 
-/** The pictures to choose from, each a toggle: one chosen at a time across the tabs. No
- *  hover transitions inside the modal (ModalShell's note: they crawl over its blur). */
+/** The pictures to choose from, each a toggle: one chosen at a time across the tabs, each with
+ *  its full size under it where its source says, and a corner button (or a double-click) that
+ *  opens it large. No hover transitions inside the modal (ModalShell's note: they crawl over its
+ *  blur). */
 function Tiles({
   tiles,
   selected,
   onSelect,
+  onOpen,
   kind,
 }: {
   tiles: Tile[];
   selected: string | null;
   onSelect(key: string): void;
+  onOpen(t: Tile): void;
   kind: ArtistChoice["kind"];
 }): React.JSX.Element {
   return (
     <Grid>
       {tiles.map((t) => {
         const on = t.key === selected;
+        const size = sizeText(t);
         return (
-          <button
-            key={t.key}
-            aria-label={t.label}
-            aria-pressed={on}
-            data-artist-picture-tile={kind}
-            data-selected={on || undefined}
-            title={t.label}
-            onClick={() => onSelect(t.key)}
-            className={cx(
-              "relative block overflow-hidden rounded-lg bg-veil focus-kbd:outline-none",
-              on
-                ? "ring-2 ring-gold"
-                : "ring-1 ring-edge hover:ring-edge2 focus-kbd:ring-2 focus-kbd:ring-edge2",
-            )}
-            style={{ width: TILE_PX, height: TILE_PX }}
-          >
-            <ArtImage
-              src={artSrc(t.url, TILE_PX)}
-              className="h-full w-full object-cover"
-              portraitTop
-              fallback={<UserRound size={24} strokeWidth={1} className="text-faint" />}
-            />
-          </button>
+          <div key={t.key} className="group relative" style={{ width: TILE_PX }}>
+            <button
+              aria-label={t.label}
+              aria-pressed={on}
+              data-artist-picture-tile={kind}
+              data-selected={on || undefined}
+              title={t.label}
+              onClick={() => onSelect(t.key)}
+              onDoubleClick={() => onOpen(t)}
+              className={cx(
+                "relative block overflow-hidden rounded-lg bg-veil focus-kbd:outline-none",
+                on
+                  ? "ring-2 ring-gold"
+                  : "ring-1 ring-edge hover:ring-edge2 focus-kbd:ring-2 focus-kbd:ring-edge2",
+              )}
+              style={{ width: TILE_PX, height: TILE_PX }}
+            >
+              <ArtImage
+                src={artSrc(t.url, TILE_PX)}
+                className="h-full w-full object-cover"
+                portraitTop
+                fallback={<UserRound size={24} strokeWidth={1} className="text-faint" />}
+              />
+            </button>
+            <button
+              type="button"
+              aria-label={`View ${t.label} larger`}
+              title="View larger"
+              data-artist-picture-larger
+              onClick={() => onOpen(t)}
+              className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-panel/85 text-dim ring-1 ring-edge opacity-0 hover:text-ink group-hover:opacity-100 group-kbd:opacity-100 focus-kbd:opacity-100"
+            >
+              <Maximize2 size={12} />
+            </button>
+            <div
+              data-artist-picture-size={size ?? undefined}
+              className="truncate pt-1 text-center text-[11px] leading-[12px] text-faint tabular-nums"
+              style={{ height: SIZE_PX }}
+            >
+              {size}
+            </div>
+          </div>
         );
       })}
     </Grid>
+  );
+}
+
+/** A picture open large over the dialog, before it is used: its size and file page where its
+ *  source says, the tab's others a step away, and "Use this picture". */
+function LargeView({
+  tile,
+  tiles,
+  saving,
+  onStep,
+  onBack,
+  onUse,
+}: {
+  tile: Tile;
+  tiles: Tile[];
+  saving: boolean;
+  onStep(t: Tile): void;
+  onBack(): void;
+  onUse(t: Tile): void;
+}): React.JSX.Element {
+  const at = tiles.findIndex((t) => t.key === tile.key);
+  const prev = at > 0 ? tiles[at - 1] : null;
+  const next = at >= 0 && at < tiles.length - 1 ? tiles[at + 1] : null;
+  const ref = useRef<HTMLDivElement>(null);
+  // the view holds focus, so its arrow keys step and Escape reaches the dialog's close
+  useEffect(() => ref.current?.focus(), []);
+  const size = sizeText(tile);
+  return (
+    <div
+      ref={ref}
+      tabIndex={-1}
+      data-artist-picture-large={tile.key}
+      onKeyDown={(e) => {
+        if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+        e.preventDefault();
+        e.stopPropagation();
+        const to = e.key === "ArrowLeft" ? prev : next;
+        if (to) onStep(to);
+      }}
+      // -inset-2 with its padding: over the grid's ring room too, which reaches past the dialog's edge
+      className="absolute -inset-2 z-10 flex flex-col gap-3 rounded-xl bg-panel p-2 outline-none"
+    >
+      <div className="flex items-center gap-2">
+        <div className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">{tile.label}</div>
+        {tiles.length > 1 && (
+          <span className="text-[11px] text-faint tabular-nums">
+            {at + 1} of {tiles.length}
+          </span>
+        )}
+      </div>
+      <div className="relative flex min-h-0 flex-1 items-center justify-center">
+        <ArtImage
+          src={artSrc(tile.full, 1200)}
+          className="max-h-full max-w-full rounded-lg object-contain"
+          fallback={<UserRound size={48} strokeWidth={1} className="text-faint" />}
+        />
+        {prev && <StepButton label="Previous picture" side="left" onClick={() => onStep(prev)} />}
+        {next && <StepButton label="Next picture" side="right" onClick={() => onStep(next)} />}
+      </div>
+      <div className="flex items-center gap-3">
+        <div className="min-w-0 flex-1 truncate text-[12px] text-faint tabular-nums">
+          {size}
+          {size && tile.page && " · "}
+          {tile.page && (
+            <button
+              type="button"
+              data-artist-picture-page
+              onClick={() => void tt.openExternal(tile.page ?? "")}
+              className="text-dim underline decoration-gold/50 underline-offset-2 hover:text-ink"
+            >
+              {/commons\.wikimedia\.org/.test(tile.page)
+                ? "Open on Wikimedia Commons"
+                : "Open on Wikipedia"}
+            </button>
+          )}
+        </div>
+        <SmallButton data-artist-picture-back onClick={onBack}>
+          Back
+        </SmallButton>
+        <button
+          type="button"
+          data-artist-picture-use
+          disabled={saving}
+          onClick={() => onUse(tile)}
+          className="px-2.5 py-1 rounded-lg text-[12px] bg-gold text-bg font-medium hover:brightness-110 disabled:opacity-50"
+        >
+          Use this picture
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function StepButton({
+  label,
+  side,
+  onClick,
+}: {
+  label: string;
+  side: "left" | "right";
+  onClick(): void;
+}): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      className={cx(
+        "absolute top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full bg-panel/85 text-dim ring-1 ring-edge hover:text-ink",
+        side === "left" ? "left-1" : "right-1",
+      )}
+    >
+      {side === "left" ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+    </button>
   );
 }
 

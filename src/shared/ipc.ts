@@ -60,6 +60,7 @@ import type {
   MediaServerInfo,
   MissedSchedule,
   NetRequestEntry,
+  PictureOffer,
   Playlist,
   PlaylistActivation,
   HeldState,
@@ -377,9 +378,13 @@ export interface TastyTunesApi {
   artistChoices(): Promise<Record<string, ChosenPicture>>;
   /** Choose an artist's picture, or clear the choice (null): the default picture comes back. */
   setArtistChoice(name: string, choice: ArtistChoice | null): Promise<boolean>;
-  /** The images in an artist's Wikipedia article that may be chosen (with the artist lookups on;
-   *  cached; empty when the article has none or the artist has no article). */
-  artistImages(name: string): Promise<string[]>;
+  /** The images in an artist's Wikipedia article that may be chosen, each with its full size and
+   *  file page where Wikipedia says (with the artist lookups on; cached; empty when the article
+   *  has none or the artist has no article). */
+  artistImages(name: string): Promise<PictureOffer[]>;
+  /** The photos in the artist's Wikimedia Commons category that the article doesn't show, each
+   *  with its size (0.14.0; with the artist lookups on; cached; empty when there is no category). */
+  artistCommons(name: string): Promise<PictureOffer[]>;
   /** A picture file to choose: the system's open dialog, the file copied (and made no larger than
    *  it needs to be) into the app's data; null when cancelled or not a picture. */
   pickArtistPictureFile(): Promise<{ file: string; url: string } | "unreadable" | null>;
@@ -612,6 +617,7 @@ export const IPC = {
   artistChoices: "tt:artistChoices",
   setArtistChoice: "tt:setArtistChoice",
   artistImages: "tt:artistImages",
+  artistCommons: "tt:artistCommons",
   pickArtistPictureFile: "tt:pickArtistPictureFile",
   fetchAlbumInfo: "tt:fetchAlbumInfo",
   fetchTrackInfo: "tt:fetchTrackInfo",
