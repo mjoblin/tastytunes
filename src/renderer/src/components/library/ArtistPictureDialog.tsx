@@ -57,12 +57,15 @@ type Tile = {
 };
 type Source = "wiki" | "commons" | "fanart" | "covers" | "file";
 
-const TILE_PX = 88;
+/** Five tiles to a row in the dialog's width, with room for the scrollbar (his look, 2026-10-30:
+ *  "this feels a bit cramped"; they were 88 with an 8 gap). */
+const TILE_PX = 112;
+const GAP_PX = 12;
 /** The size line under a tile, and its gap. */
-const SIZE_PX = 16;
+const SIZE_PX = 18;
 /** Three rows of tiles with their size lines and gaps, with the ring's room: the grid's fixed
  *  height, the same on every tab so nothing moves. */
-const GRID_H = 3 * (TILE_PX + SIZE_PX) + 2 * 8 + 8;
+const GRID_H = 3 * (TILE_PX + SIZE_PX) + 2 * GAP_PX + 8;
 /** A full size as the tile and the large view say it. */
 const sizeText = (t: Pick<Tile, "width" | "height">): string | null =>
   t.width && t.height ? `${fmtCount(t.width)} × ${fmtCount(t.height)}` : null;
@@ -281,7 +284,7 @@ export function ArtistPictureDialog({
       onClose={() => (viewing ? setViewing(null) : onClose())}
       escapeCloses
       label={`Picture for ${name}`}
-      className="w-[34rem] max-w-[calc(100vw-3rem)] p-4"
+      className="w-[42rem] max-w-[calc(100vw-3rem)] p-5"
     >
       <div data-artist-picture-dialog className="relative">
         <div className="text-[13px] font-medium text-ink">Picture for {name}</div>
@@ -292,16 +295,28 @@ export function ArtistPictureDialog({
             value={tab}
             onChange={setClicked}
             options={[
-              { value: "wiki", label: "Wikipedia", count: lookups ? (wiki?.length ?? null) : null },
+              // a count still being asked keeps its room (null); a source that can't answer has
+              // none (Liner notes off, no fanart.tv key, said before the dialog has faded in)
+              {
+                value: "wiki",
+                label: "Wikipedia",
+                count: lookups ? (wiki?.length ?? null) : undefined,
+              },
               {
                 value: "commons",
                 label: "Commons",
-                count: lookups ? (fromCommons?.length ?? null) : null,
+                count: lookups ? (fromCommons?.length ?? null) : undefined,
               },
               {
                 value: "fanart",
                 label: "fanart.tv",
-                count: lookups && fan?.keyed ? fan.urls.length : null,
+                count: !lookups
+                  ? undefined
+                  : fan == null
+                    ? null
+                    : fan.keyed
+                      ? fan.urls.length
+                      : undefined,
               },
               { value: "covers", label: "Album covers", count: coverTiles.length },
               { value: "file", label: "File" },
@@ -312,7 +327,7 @@ export function ArtistPictureDialog({
             tile's ring, which the scroller would otherwise cut at its edge (his look, 2026-10-25) */}
         <div
           data-artist-picture-tab={tab}
-          className="mt-3 -mx-1 max-h-[45vh] overflow-y-auto p-1"
+          className="mt-3 -mx-1 max-h-[calc(100vh-13rem)] overflow-y-auto p-1"
           style={{ height: GRID_H }}
         >
           {tab === "wiki" &&
@@ -509,7 +524,10 @@ function Waiting(): React.JSX.Element {
 
 function Grid({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
-    <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(auto-fill, ${TILE_PX}px)` }}>
+    <div
+      className="grid"
+      style={{ gap: GAP_PX, gridTemplateColumns: `repeat(auto-fill, ${TILE_PX}px)` }}
+    >
       {children}
     </div>
   );
@@ -559,7 +577,7 @@ function Tiles({
                 src={artSrc(t.url, TILE_PX)}
                 className="h-full w-full object-cover"
                 portraitTop
-                fallback={<UserRound size={24} strokeWidth={1} className="text-faint" />}
+                fallback={<UserRound size={28} strokeWidth={1} className="text-faint" />}
               />
             </button>
             <button
@@ -568,13 +586,13 @@ function Tiles({
               title="View larger"
               data-artist-picture-larger
               onClick={() => onOpen(t)}
-              className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-panel/85 text-dim ring-1 ring-edge opacity-0 hover:text-ink group-hover:opacity-100 group-kbd:opacity-100 focus-kbd:opacity-100"
+              className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full bg-panel/85 text-dim ring-1 ring-edge opacity-0 hover:text-ink group-hover:opacity-100 group-kbd:opacity-100 focus-kbd:opacity-100"
             >
               <Maximize2 size={12} />
             </button>
             <div
               data-artist-picture-size={size ?? undefined}
-              className="truncate pt-1 text-center text-[11px] leading-[12px] text-faint tabular-nums"
+              className="truncate pt-1.5 text-center text-[11px] leading-[12px] text-faint tabular-nums"
               style={{ height: SIZE_PX }}
             >
               {size}
