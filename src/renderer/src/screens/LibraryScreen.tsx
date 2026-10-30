@@ -4,14 +4,12 @@ import type { LibrarySpot } from "@/store";
 import {
   HardDrive,
   Heart,
-  LayoutGrid,
   Library,
   ListEnd,
   ListPlus,
   ListStart,
   Play,
   RotateCw,
-  Rows3,
   Search,
   Usb,
 } from "lucide-react";
@@ -22,7 +20,6 @@ import {
   type MediaNode,
   type MediaQueueAction,
   type MediaServerInfo,
-  type ScreenLayout,
   orderTracks,
   discGroups,
   albumFormat,
@@ -45,6 +42,9 @@ import { queueWrite, tt } from "@/api";
 import { useStore } from "@/store";
 import { cx, matchesFilter } from "@/lib/format";
 import { useIndexPools } from "@/hooks/useIndexPools";
+import { ViewOptions } from "@/components/library/lenses/ViewOptions";
+import { useLensIndex } from "@/components/library/lenses/useLensIndex";
+import { useCardDetails } from "@/components/library/useCardDetails";
 import { browseWalk } from "@/components/library/browseWalk";
 import { MOD } from "@/lib/screens";
 import { flashTarget, scrollToCentered } from "@/lib/scroll";
@@ -72,13 +72,7 @@ import {
 } from "@/components/library/lensNavigation";
 import { SelectionBar, SelectionVerb } from "@/components/controls/SelectionBar";
 import { EmptyState } from "@/components/chrome/EmptyState";
-import {
-  HeaderChip,
-  PrimaryButton,
-  ScreenTitle,
-  GAP_BETWEEN,
-  GAP_WITHIN,
-} from "@/components/chrome/Chrome";
+import { PrimaryButton, ScreenTitle, GAP_BETWEEN, GAP_WITHIN } from "@/components/chrome/Chrome";
 import { useOneShotAsk } from "@/hooks/useOneShotAsk";
 import { useLibraryMenus, type MenusLate } from "@/components/library/useLibraryMenus";
 import { useLibraryFavorites } from "@/components/library/useLibraryFavorites";
@@ -112,6 +106,7 @@ export type Crumb = { id: string; title: string; node?: MediaNode };
 // 2026-07-24 (user ask); the reset now lives behind re-invoking Library while
 // already here, or the breadcrumb root. Per-folder scroll and filter memories
 // apply while browsing within a visit.
+const NO_POOLS: MediaIndexPools[] = [];
 const scrollMemory = new Map<string, number>();
 // Per-LEVEL filter memory: each folder keeps its own filter for the session
 // (the store's screenFilters.library always holds the current level's).
@@ -359,6 +354,12 @@ export function LibraryScreen(): React.JSX.Element {
   const tailNode = path.at(-1)?.node;
   const arrived = tailNode != null && standIns.has(tailNode);
   const lensPools = useIndexPools(lens != null || tailVol != null || arrived);
+  // a server's album cards take the format line too (0.14.0, his D6 pick: every album card,
+  // behind the same switch): the index's tracks give each its format, asked only while shown
+  const formatLine = useStore((s) => s.settings.albumCardFormat);
+  const folderPools = useIndexPools(formatLine && cards && lens == null);
+  const folderIndex = useLensIndex(folderPools ?? NO_POOLS);
+  const folderDetails = useCardDetails(folderPools ? folderIndex : null);
 
   // Action feedback: the app-wide toast for failures, a gold pulse for wins.
   // (The screen's original local notice banner graduated into the toast.)
@@ -747,10 +748,6 @@ export function LibraryScreen(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [path, serverUdn, filter, searchState, searchReturn, searchMode, searchQuery, crossState, lens],
   );
-
-  const setLayout = async (libraryLayout: ScreenLayout): Promise<void> => {
-    await saveSettings({ libraryLayout });
-  };
 
   // ----------------------------------------------------------------- actions
 
@@ -1411,6 +1408,7 @@ export function LibraryScreen(): React.JSX.Element {
       <ContainerCard
         key={node.id}
         node={node}
+        details={isAlbumClass(node.upnpClass) ? folderDetails?.(node) : undefined}
         playing={queueSourceActive && isPlayingAlbum(node)}
         menuOpen={menuNodeId === node.id}
         favorited={isAlbumClass(node.upnpClass) ? nodeFavorited(node) : undefined}
@@ -1735,14 +1733,9 @@ export function LibraryScreen(): React.JSX.Element {
             {!atRoot &&
               !albumNode &&
               (searchMode ? containers.length > 0 : rawContainerCount > 0) && (
-                <HeaderChip
-                  data-tip={cards ? "Albums & folders as rows" : "Albums & folders as cards"}
-                  aria-label={cards ? "Albums & folders as rows" : "Albums & folders as cards"}
-                  onClick={() => void setLayout(cards ? "rows" : "cards")}
-                  className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
-                >
-                  {cards ? <Rows3 size={16} /> : <LayoutGrid size={16} />}
-                </HeaderChip>
+                // the Library's one Rows or Cards, the format line and the card grid's size, gap
+                // and Fill rows (0.14.0, his D5 pick: the menu wherever the button was)
+                <ViewOptions kind="folders" />
               )}
           </div>
         </div>

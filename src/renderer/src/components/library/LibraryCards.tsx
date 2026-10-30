@@ -39,8 +39,13 @@ function HeartChip({
   held: boolean;
   onHeart(): void;
 }): React.JSX.Element {
+  // a real button, named, out of the Tab order (0.14.0, as the card's Play and More: ArtActions)
   return (
-    <span
+    <button
+      type="button"
+      tabIndex={-1}
+      aria-label={favorited ? "Remove from favorites" : "Add to favorites"}
+      aria-pressed={favorited}
       data-tip={favorited ? "Remove from favorites" : "Add to favorites"}
       data-card-heart={favorited ? "on" : "off"}
       onClick={(e) => {
@@ -60,7 +65,7 @@ function HeartChip({
       )}
     >
       <Heart size={14} fill={favorited ? "currentColor" : "none"} />
-    </span>
+    </button>
   );
 }
 
@@ -198,38 +203,6 @@ export function ContainerCard({
               <Eqbars />
             </span>
           )}
-          {album && (
-            <span
-              onClick={(e) => {
-                e.stopPropagation();
-                onPlay(ref.current);
-              }}
-              data-tip="Play, replacing the queue"
-              className={cx(
-                "tip-bottom absolute bottom-1.5 left-1.5 h-11 w-11 rounded-full bg-amber text-bg flex items-center justify-center transition-all duration-150 motion-safe:hover:scale-110 hover:shadow-[0_0_24px_rgb(var(--amber-rgb)_/_0.6)]",
-                menuOpen
-                  ? "opacity-100"
-                  : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
-              )}
-            >
-              <Play size={18} fill="currentColor" />
-            </span>
-          )}
-          {menuable && (
-            <span
-              aria-label="More actions"
-              onClick={onMenu}
-              className={cx(
-                "absolute bottom-1.5 right-1.5 text-dim hover:text-ink transition-all",
-                cardChip(),
-                menuOpen
-                  ? "opacity-100"
-                  : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
-              )}
-            >
-              <MoreHorizontal size={15} />
-            </span>
-          )}
         </div>
         <div
           className={cx(
@@ -256,9 +229,63 @@ export function ContainerCard({
           </div>
         )}
       </button>
+      {(album || menuable) && (
+        <ArtActions>
+          {album && (
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label="Play, replacing the queue"
+              onClick={() => onPlay(ref.current)}
+              data-tip="Play, replacing the queue"
+              className={cx(
+                "pointer-events-auto tip-bottom absolute bottom-1.5 left-1.5 h-11 w-11 rounded-full bg-amber text-bg flex items-center justify-center transition-all duration-150 motion-safe:hover:scale-110 hover:shadow-[0_0_24px_rgb(var(--amber-rgb)_/_0.6)]",
+                menuOpen
+                  ? "opacity-100"
+                  : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
+              )}
+            >
+              <Play size={18} fill="currentColor" />
+            </button>
+          )}
+          {menuable && (
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label="More actions"
+              onClick={onMenu}
+              className={cx(
+                "pointer-events-auto absolute bottom-1.5 right-1.5 text-dim hover:text-ink transition-all",
+                cardChip(),
+                menuOpen
+                  ? "opacity-100"
+                  : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
+              )}
+            >
+              <MoreHorizontal size={15} />
+            </button>
+          )}
+        </ArtActions>
+      )}
       {album && onHeart && (
         <HeartChip favorited={favorited === true} held={menuOpen} onHeart={onHeart} />
       )}
+    </div>
+  );
+}
+
+/**
+ * A CARD'S ART ACTIONS, BESIDE ITS OWN BUTTON (0.14.0, his K4 pick on the design page "TastyTunes
+ * 0.14.0 Design"): Play and More were spans drawn inside the card's button, a control within a
+ * control that nothing could name or reach. They are real buttons now, laid over the art where
+ * they were (the card's p-2 inset, the art's square), named for VoiceOver and kept out of the
+ * Tab order: the keyboard reaches them through the card's More menu. The layer takes no pointer
+ * itself, so the card under it still opens.
+ */
+function ArtActions({ children }: { children: React.ReactNode }): React.JSX.Element {
+  return (
+    <div data-card-actions className="pointer-events-none absolute inset-x-2 top-2 aspect-square">
+      {children}
     </div>
   );
 }
@@ -359,20 +386,6 @@ export function TrackCard({
           >
             <Play size={18} fill="currentColor" strokeWidth={0} className="translate-x-[1px]" />
           </span>
-          <span
-            aria-label="More actions"
-            onClick={(e) => {
-              e.stopPropagation();
-              onMenu(e);
-            }}
-            className={cx(
-              "absolute bottom-1.5 right-1.5 text-dim hover:text-ink transition-all",
-              cardChip(),
-              menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
-            )}
-          >
-            <MoreHorizontal size={15} />
-          </span>
         </div>
         <div
           className={cx(
@@ -385,6 +398,21 @@ export function TrackCard({
         {subtitle && <div className="text-[11.5px] text-faint truncate text-left">{subtitle}</div>}
         {details && <CardFormatLine details={details} />}
       </button>
+      <ArtActions>
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-label="More actions"
+          onClick={onMenu}
+          className={cx(
+            "pointer-events-auto absolute bottom-1.5 right-1.5 text-dim hover:text-ink transition-all",
+            cardChip(),
+            menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
+          )}
+        >
+          <MoreHorizontal size={15} />
+        </button>
+      </ArtActions>
       <HeartChip favorited={favorited} held={menuOpen} onHeart={onHeart} />
     </div>
   );

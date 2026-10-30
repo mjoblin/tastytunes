@@ -31,7 +31,6 @@ import {
   Disc3,
   Footprints,
   Heart,
-  LayoutGrid,
   Library,
   ListMusic,
   ListOrdered,
@@ -39,12 +38,12 @@ import {
   ListX,
   MoreHorizontal,
   Play,
-  Rows3,
   Search,
   X,
 } from "lucide-react";
 import { queueContentHash, type QueueListItem } from "@shared/smoip";
-import { presetVolumeKey, type QueueLayout, audioAnalysisKey } from "@shared/model";
+import { presetVolumeKey, audioAnalysisKey } from "@shared/model";
+import { ViewOptions } from "@/components/library/lenses/ViewOptions";
 import { type ContentRef, type QueueRestoreResult } from "@shared/model";
 import { tt } from "@/api";
 import { useConfirmPopover } from "@/components/chrome/Confirm";
@@ -224,9 +223,6 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
 
   const setFollowQueue = async (follow: boolean): Promise<void> => {
     await saveSettings({ followQueue: follow });
-  };
-  const setLayout = async (queueLayout: QueueLayout): Promise<void> => {
-    await saveSettings({ queueLayout });
   };
   // Cards get half a card of context above the target; rows get a full row.
   const scrollToCurrent = (): void => {
@@ -636,20 +632,9 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
               {clearConfirm.popover}
             </div>
             <div className={`flex items-center ${GAP_WITHIN}`}>
-              <HeaderChip
-                data-tip={cards ? "View as rows" : albums ? "View as cards" : "View as albums"}
-                aria-label={cards ? "View as rows" : albums ? "View as cards" : "View as albums"}
-                onClick={() => void setLayout(cards ? "rows" : albums ? "cards" : "albums")}
-                className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
-              >
-                {cards ? (
-                  <Rows3 size={16} />
-                ) : albums ? (
-                  <LayoutGrid size={16} />
-                ) : (
-                  <ListMusic size={16} />
-                )}
-              </HeaderChip>
+              {/* Rows, Cards or Albums, and the card grid's size, gap and Fill rows (0.14.0, his
+                  D5 pick on "View Options": the menu wherever a Rows or Cards button was) */}
+              <ViewOptions kind="queue" />
               <HeaderChip
                 data-tip="Scroll to the current track"
                 aria-label="Scroll to the current track"

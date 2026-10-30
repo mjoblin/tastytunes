@@ -21,6 +21,7 @@ import {
   type Favorite,
   type FavoriteMedia,
   type FavoriteStation,
+  type MediaIndexPools,
   type PlaylistItem,
 } from "@shared/model";
 import { type QueueListItem } from "@shared/smoip";
@@ -50,7 +51,8 @@ import { useStationTuning } from "@/hooks/useStationTuning";
 import { ScreenTitle, GAP_BETWEEN } from "@/components/chrome/Chrome";
 import { useQueueSourceActive } from "@/hooks/useQueueSourceActive";
 import { useIndexPools } from "@/hooks/useIndexPools";
-import { lensIndexOf } from "@/components/library/lenses/useLensIndex";
+import { lensIndexOf, useLensIndex } from "@/components/library/lenses/useLensIndex";
+import { useCardDetails } from "@/components/library/useCardDetails";
 import { menuAt } from "@/lib/menuAt";
 
 /** Kind visibility — session memory, like the Radio screen's chip state. */
@@ -65,7 +67,14 @@ const FAV_KINDS: readonly FavKind[] = ["all", "station", "album", "track"];
  * the item stays for the session (dimmed, hollow heart — one click undoes
  * an accident) and is gone on the next visit.
  */
+const NO_POOLS: MediaIndexPools[] = [];
+
 export function FavoritesScreen(): React.JSX.Element {
+  // each album card's format line, as the Albums view's cards have it (0.14.0, his D6 pick)
+  const formatLine = useStore((s) => s.settings.albumCardFormat);
+  const cardPools = useIndexPools(formatLine);
+  const cardIndex = useLensIndex(cardPools ?? NO_POOLS);
+  const detailsOf = useCardDetails(cardPools ? cardIndex : null);
   // the performer the library knows for a track saved from a compilation queue (display only)
   const performerOf = useSavedPerformer();
   const favorites = useStore((s) => s.favorites);
@@ -475,6 +484,7 @@ export function FavoritesScreen(): React.JSX.Element {
                       <ContainerCard
                         node={asNode(f)}
                         badge={copyChip(f)}
+                        details={detailsOf?.({ ...asNode(f), serverUdn: f.serverUdn ?? undefined })}
                         playing={albumPlaying(f)}
                         menuOpen={menu?.fav === f}
                         favorited={active}

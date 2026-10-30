@@ -348,7 +348,7 @@ export function SettingsScreen(): React.JSX.Element {
 
                     <Toggle
                       label="Format and DR on album cards"
-                      hint="Displays each album's format and quality under its name in the Library, and its dynamic range once Audio analysis has measured it."
+                      hint="Displays each album's format and quality under its name wherever albums show as cards, and its dynamic range once Audio analysis has measured it."
                       checked={settings.albumCardFormat}
                       onChange={(albumCardFormat) => void save({ albumCardFormat })}
                     />

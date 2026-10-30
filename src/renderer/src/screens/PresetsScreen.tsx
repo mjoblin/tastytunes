@@ -21,19 +21,18 @@ import {
   AlertTriangle,
   Crosshair,
   Footprints,
-  LayoutGrid,
   Library,
   Loader2,
   MoreHorizontal,
   Play,
   Radio,
   RadioTower,
-  Rows3,
   Volume2,
 } from "lucide-react";
 import { objectGone } from "@shared/ipc";
 import { isPreAmpMode, type PresetItem } from "@shared/smoip";
-import { presetVolumeKey, type ScreenLayout, type MediaNode } from "@shared/model";
+import { presetVolumeKey, type MediaNode } from "@shared/model";
+import { ViewOptions } from "@/components/library/lenses/ViewOptions";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { useLitPresets } from "@/hooks/useLitPresets";
@@ -312,9 +311,6 @@ export function PresetsScreen(): React.JSX.Element {
   const setFollowPresets = async (follow: boolean): Promise<void> => {
     await saveSettings({ followPresets: follow });
   };
-  const setLayout = async (presetsLayout: ScreenLayout): Promise<void> => {
-    await saveSettings({ presetsLayout });
-  };
 
   if (allItems.length === 0) {
     return (
@@ -350,14 +346,8 @@ export function PresetsScreen(): React.JSX.Element {
             total={allItems.length}
           />
           <div className={`flex items-center ${GAP_WITHIN}`}>
-            <HeaderChip
-              data-tip={cards ? "View as rows" : "View as cards"}
-              aria-label={cards ? "View as rows" : "View as cards"}
-              onClick={() => void setLayout(cards ? "rows" : "cards")}
-              className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
-            >
-              {cards ? <Rows3 size={16} /> : <LayoutGrid size={16} />}
-            </HeaderChip>
+            {/* Rows or Cards and the cards' size, gap and Fill rows (0.14.0, his D5 pick) */}
+            <ViewOptions kind="presets" />
             <HeaderChip
               data-tip="Scroll to the playing preset"
               aria-label="Scroll to the playing preset"

@@ -4,6 +4,7 @@ import {
   emptyPlayStats,
   foldPlayEvent,
   REDISCOVER_QUIET_DAYS,
+  type MediaIndexPools,
   type MediaNode,
 } from "@shared/model";
 import { useStore } from "@/store";
@@ -13,6 +14,8 @@ import { RowMenu } from "@/components/media/RowMenu";
 import { useColumns } from "@/hooks/useColumns";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { useIndexPools } from "@/hooks/useIndexPools";
+import { useLensIndex } from "@/components/library/lenses/useLensIndex";
+import { useCardDetails, type CardDetails } from "@/components/library/useCardDetails";
 import { useWholeRecord } from "@/hooks/useWholeRecord";
 import { shelvesFor, UNFINISHED_QUIET_DAYS, type ShelfAlbum } from "@shared/rediscover";
 import { albumMenuItems, type MediaMenuItem } from "@/lib/mediaMenus";
@@ -106,6 +109,8 @@ interface SectionDef {
   note?: (album: ShelfAlbum) => string;
 }
 
+const NO_POOLS: MediaIndexPools[] = [];
+
 export function HistoryRediscover({
   streamer,
 }: {
@@ -115,6 +120,10 @@ export function HistoryRediscover({
   const { events, years, allLoaded } = useWholeRecord(streamer);
   const recordOn = useStore((s) => s.settings.listeningRecord);
   const pools = useIndexPools(true);
+  // each card's format line, as the Albums view's cards have it (0.14.0, his D6 pick: the line on
+  // every album card, behind the same switch)
+  const index = useLensIndex(pools ?? NO_POOLS);
+  const detailsOf = useCardDetails(pools ? index : null);
   // the spot is remembered like every other screen's, and the heading layer
   // measures the scroller itself: one callback ref feeds both (the Timeline's)
   const scrollEl = useRef<HTMLDivElement | null>(null);
@@ -471,6 +480,7 @@ export function HistoryRediscover({
                 setRows={(next) => setRows(s.id, next)}
                 onMenu={openMenu}
                 menuKey={menu?.key}
+                detailsOf={detailsOf}
               />
             ))}
           </div>
@@ -486,12 +496,14 @@ function Section({
   setRows,
   onMenu,
   menuKey,
+  detailsOf,
 }: {
   def: SectionDef;
   rows: number;
   setRows(next: number): void;
   onMenu(album: MediaNode, e: React.MouseEvent): void;
   menuKey: string | undefined;
+  detailsOf: ((album: MediaNode) => CardDetails) | null;
 }): React.JSX.Element {
   const { id, title, detail, empty, albums, note } = def;
   const cardSize = useStore((s) => s.settings.presetCardSize);
@@ -548,6 +560,7 @@ function Section({
                   playing={false}
                   menuOpen={menuKey === key}
                   note={note?.(s)}
+                  details={detailsOf?.(s.album)}
                   onEnter={() => openAlbumNode(s.album)}
                   onPlay={() => void playAlbumNode(s.album)}
                   onMenu={(e) => onMenu(s.album, e)}
