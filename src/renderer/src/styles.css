@@ -13,8 +13,20 @@
 /* KEYBOARD REVEAL (0.13.0 round 4, the accessibility second layer): what a group shows on hover it
    shows while keyboard focus is anywhere in it, so a row's or a card's hidden buttons appear when
    Tab reaches them instead of being focused invisible (the 0.11 re-score). Every hover reveal
-   carries this twin (the lint rule hover-reveal-keyboard). */
-@custom-variant group-kbd (:root[data-keyboard-nav] .group:focus-within &);
+   carries this twin (the lint rule hover-reveal-keyboard). And since 0.14.0 (his K1 to K5) a
+   keyed list's CURRENT item shows them too while the list has the keyboard, as a hovered row does
+   (the list holds the focus, hooks/useListKeys, so focus-within never reaches the row). */
+@custom-variant group-kbd {
+  :root[data-keyboard-nav] .group:focus-within & {
+    @slot;
+  }
+  :root[data-keyboard-nav]
+    [data-list-active]:focus
+    :is(.group[data-list-current], [data-list-current] > .group)
+    & {
+    @slot;
+  }
+}
 
 /* Runtime-tintable accent: useArtAccent() overrides this per album.
    --gold-rgb is the STATIC state/brand gold (per theme, never art-tinted). */
@@ -264,6 +276,16 @@ textarea:focus-visible,
 select:focus-visible,
 [contenteditable]:focus-visible {
   outline: none;
+}
+/* A KEYED LIST'S CURRENT ITEM WEARS THE RING (0.14.0, his K5; hooks/useListKeys): the list holds
+   the focus and names its current item, so the ring is drawn on the item while the list has the
+   keyboard, and on the list itself once Escape has given the arrows back */
+[data-list-keys][data-list-active]:focus-visible {
+  outline: none;
+}
+:root[data-keyboard-nav] [data-list-keys][data-list-active]:focus [data-list-current] {
+  outline: 2px solid color-mix(in srgb, var(--color-ink) 70%, transparent);
+  outline-offset: 2px;
 }
 /* a name link sits in a line that truncates, which clips an outline to a sliver at its end:
    the link underlines instead, thick and in the ink, where the clip cannot reach */

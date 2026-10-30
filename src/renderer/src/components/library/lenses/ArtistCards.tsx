@@ -4,6 +4,8 @@ import { ContainerCard } from "@/components/library/LibraryCards";
 import { type LensActions } from "./lensShared";
 import { type LensArtist } from "./useLensIndex";
 import { CARD_GRID_SCROLLER, useCardGrid, WINDOW_CARDS_ABOVE } from "./useCardGrid";
+import { ListKeysContext, useListKeys } from "@/hooks/useListKeys";
+import { keyedEvent } from "@/lib/menuAt";
 
 // The Artists lens as cards (0.13.0 round 12; a user's suggestion, 2026-10-25: "a degree of uniformity
 // across the Album, Artist and Tracks sections ... only the Albums section gives a choice of
@@ -145,9 +147,28 @@ export function ArtistCards({
     });
     return () => cancelAnimationFrame(raf);
   }, [revealAt, placed]);
-  const card = (a: LensArtist): React.JSX.Element => (
+  // FROM THE KEYBOARD (0.14.0, his K1 to K6): the cards' four arrows; Enter is a card's click
+  // (the artist's page), "." its More menu
+  const keys = useListKeys({
+    count: artists.length,
+    columns: cols,
+    onEnter: (i) => {
+      const a = artists[i];
+      if (a) onOpenArtistPage?.(a.name);
+    },
+    onMenu: (i, el) => {
+      const a = artists[i];
+      if (a) actions.openMenu(lensArtistNode(a), keyedEvent(el));
+    },
+    reveal: (i) => {
+      if (windowed && scrollRef.current)
+        scrollRef.current.scrollTop = win.offsetOf(Math.floor(i / cols));
+    },
+  });
+  const card = (a: LensArtist, i: number): React.JSX.Element => (
     <ContainerCard
       key={a.key}
+      item={keys.item(i)}
       node={lensArtistNode(a)}
       playing={a.key === playingKey}
       menuOpen={actions.menuNodeId === `lens-artist:${a.key}`}
@@ -172,7 +193,12 @@ export function ArtistCards({
   return (
     <div className="relative min-h-0 flex-1">
       <div
-        ref={scrollRef}
+        {...keys.container}
+        ref={(el) => {
+          scrollRef.current = el;
+          keys.container.ref(el);
+        }}
+        aria-label="Artists"
         data-lens-artist-cards
         onScroll={(e) => onScrolled(e.currentTarget.scrollTop)}
         className="h-full overflow-y-auto pb-2"
@@ -183,45 +209,47 @@ export function ArtistCards({
           paddingRight: PAGE_PAD + (letterStarts ? RAIL_ROOM : 0),
         }}
       >
-        <div ref={bodyRef}>
-          {artists.length === 0 ? (
-            <div className="text-[15px] text-faint pt-4 px-1">Nothing matches that filter.</div>
-          ) : windowed && width === 0 ? null : windowed ? (
-            // the Albums lens's windowed rows: 8 px above the first, room for a hovered card's
-            // growth and ring under the scroller's top edge
-            <div style={{ paddingTop: 8, overflowAnchor: "none" }}>
-              {win.padTop > 0 && <div style={{ height: win.padTop }} />}
-              {Array.from({ length: win.last - win.first + 1 }, (_, i) => win.first + i).map(
-                (r) => (
-                  <div
-                    key={r}
-                    data-artist-cards-row
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: gridColumns(cols),
-                      gap: cardGap,
-                      marginBottom: cardGap,
-                    }}
-                  >
-                    {artists.slice(r * cols, (r + 1) * cols).map(card)}
-                  </div>
-                ),
-              )}
-              {win.padBottom > 0 && <div style={{ height: win.padBottom }} />}
-            </div>
-          ) : (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: gridColumns("auto-fill"),
-                gap: cardGap,
-                paddingTop: 8,
-              }}
-            >
-              {artists.map(card)}
-            </div>
-          )}
-        </div>
+        <ListKeysContext.Provider value={true}>
+          <div ref={bodyRef}>
+            {artists.length === 0 ? (
+              <div className="text-[15px] text-faint pt-4 px-1">Nothing matches that filter.</div>
+            ) : windowed && width === 0 ? null : windowed ? (
+              // the Albums lens's windowed rows: 8 px above the first, room for a hovered card's
+              // growth and ring under the scroller's top edge
+              <div style={{ paddingTop: 8, overflowAnchor: "none" }}>
+                {win.padTop > 0 && <div style={{ height: win.padTop }} />}
+                {Array.from({ length: win.last - win.first + 1 }, (_, i) => win.first + i).map(
+                  (r) => (
+                    <div
+                      key={r}
+                      data-artist-cards-row
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: gridColumns(cols),
+                        gap: cardGap,
+                        marginBottom: cardGap,
+                      }}
+                    >
+                      {artists.slice(r * cols, (r + 1) * cols).map((a, j) => card(a, r * cols + j))}
+                    </div>
+                  ),
+                )}
+                {win.padBottom > 0 && <div style={{ height: win.padBottom }} />}
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: gridColumns("auto-fill"),
+                  gap: cardGap,
+                  paddingTop: 8,
+                }}
+              >
+                {artists.map(card)}
+              </div>
+            )}
+          </div>
+        </ListKeysContext.Provider>
       </div>
       {letterStarts && (
         // over the scroller's right padding, clear of its scrollbar, so it stays as the grid

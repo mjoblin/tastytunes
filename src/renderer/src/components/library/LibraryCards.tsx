@@ -17,6 +17,7 @@ import { DurationCell } from "@/components/media/DurationCell";
 import { Eqbars } from "@/components/media/Eqbars";
 import { NameLine, NameLink } from "@/components/media/NameLine";
 import { artKeyOf, artSrc } from "@/lib/artSrc";
+import { useInListKeys, type ListItemAttrs } from "@/hooks/useListKeys";
 
 // The Library's four listing renderers — cards and rows for containers and
 // tracks. Pure presentation: every action arrives as a callback.
@@ -86,8 +87,11 @@ export function ContainerCard({
   onPlay,
   onMenu,
   onNavDrag,
+  item,
 }: {
   node: MediaNode;
+  /** In a keyed list (hooks/useListKeys, 0.14.0): the item's id and index for the list. */
+  item?: ListItemAttrs;
   /** The playing track belongs to this album (and the queue source is live). */
   playing: boolean;
   /** This card's ⋯ menu or preset picker is open — hold the hover treatment. */
@@ -137,11 +141,13 @@ export function ContainerCard({
   const subtitle = line ?? [node.artist, node.year].filter(Boolean).join(" · ");
   // an artist takes main's picture (a real server one, a known photo, an album cover)
   const artistPic = useArtistPicture(artist ? node.title : null);
+  const inList = useInListKeys();
   return (
     // Preset-card idiom: inset tile, hover grow + lift + glow; the highlight
     // wraps the gray tile so it stays legible over gold/orange covers.
     <div
       ref={ref}
+      {...item}
       onContextMenu={menuable ? onMenu : undefined}
       data-library-card
       data-selected={selected || undefined}
@@ -163,6 +169,8 @@ export function ContainerCard({
           whose whole-card click IS the play action) */}
       <button
         className="block w-full cursor-pointer"
+        // a keyed list is one Tab stop (K1): its cards are reached with the arrows
+        tabIndex={inList ? -1 : undefined}
         onClick={onEnter}
         onPointerDown={(e) => {
           // only the body: a press that lands on a nested control (the bloom) is that control's
@@ -311,8 +319,11 @@ export function TrackCard({
   onHeart,
   onMenu,
   onNavDrag,
+  item,
 }: {
   node: MediaNode;
+  /** In a keyed list (hooks/useListKeys, 0.14.0): the item's id and index for the list. */
+  item?: ListItemAttrs;
   /** The playing track (and the queue source is live). */
   playing: boolean;
   menuOpen: boolean;
@@ -330,9 +341,11 @@ export function TrackCard({
   onNavDrag?(e: React.PointerEvent): void;
 }): React.JSX.Element {
   const ref = useRef<HTMLDivElement | null>(null);
+  const inList = useInListKeys();
   return (
     <div
       ref={ref}
+      {...item}
       onContextMenu={onMenu}
       data-library-card
       data-track-card={node.title}
@@ -349,6 +362,7 @@ export function TrackCard({
     >
       <button
         className="block w-full cursor-pointer"
+        tabIndex={inList ? -1 : undefined}
         onClick={(e) => {
           if (onClick(e)) return;
           onPlayNow(ref.current);
@@ -510,8 +524,11 @@ export function ContainerRow({
   onHeart,
   onEnter,
   onMenu,
+  item,
 }: {
   node: MediaNode;
+  /** In a keyed list (hooks/useListKeys, 0.14.0): the item's id and index for the list. */
+  item?: ListItemAttrs;
   playing: boolean;
   menuOpen: boolean;
   /** Part of a multi-selection (album multi-select, 0.8.0): the tracks' own
@@ -548,8 +565,10 @@ export function ContainerRow({
   const menuable = album || artist || folderMenu;
   const muted = isMutedArt(node);
   const artistPic = useArtistPicture(artist ? node.title : null);
+  const inList = useInListKeys();
   return (
     <div
+      {...item}
       className={cx(
         "group relative grid grid-cols-[44px_1fr_auto_auto_auto_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
         playing
@@ -636,6 +655,7 @@ export function ContainerRow({
       {menuable ? (
         <button
           aria-label="More actions"
+          tabIndex={inList ? -1 : undefined}
           onClick={onMenu}
           className={cx(
             "p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-all",
@@ -695,8 +715,11 @@ export function TrackRow({
   showPosition = true,
   selStart = true,
   selEnd = true,
+  item,
 }: {
   node: MediaNode;
+  /** In a keyed list (hooks/useListKeys, 0.14.0): the item's id and index for the list. */
+  item?: ListItemAttrs;
   /** The listening record's cell (0.8.0): "12 plays" or "3 weeks ago" while
    *  the Tracks lens is sorted by plays / last played; undefined = no cell,
    *  null = the cell reserved but empty (never played). */
@@ -757,6 +780,7 @@ export function TrackRow({
   return (
     <div
       ref={ref}
+      {...item}
       className={cx(
         "group relative grid items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
         TRACK_GRID[

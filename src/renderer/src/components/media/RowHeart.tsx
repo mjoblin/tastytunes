@@ -1,5 +1,6 @@
 import { Heart } from "lucide-react";
 import { cx } from "@/lib/format";
+import { useInListKeys } from "@/hooks/useListKeys";
 
 /**
  * The heart on a list ROW, shared by the library and the queue.
@@ -19,9 +20,11 @@ export function RowHeart({
   held: boolean;
   onHeart(): void;
 }): React.JSX.Element {
+  const inList = useInListKeys();
   return (
     <button
       aria-label={favorited ? "Remove from favorites" : "Add to favorites"}
+      tabIndex={inList ? -1 : undefined}
       data-row-heart={favorited ? "on" : "off"}
       onClick={(e) => {
         e.stopPropagation();

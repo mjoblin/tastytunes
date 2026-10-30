@@ -6,9 +6,9 @@
  * track how the person is getting around: Tab or Shift+Tab marks the root
  * `data-keyboard-nav`, a pointer press clears it, and the stylesheet draws the ring (and the
  * `focus-kbd:` variant reveals) only under the mark. Someone navigating by keyboard starts
- * with Tab and keeps every ring; a pointer user sees none. The app has no arrow-key focus
- * travel of its own (no menus or lists with roving focus), so Tab is the only key that
- * moves focus and the only one that marks.
+ * with Tab and keeps every ring; a pointer user sees none. Tab is the only key that
+ * marks: the arrows in a menu or a keyed list (0.14.0, hooks/useListKeys) only move within what
+ * Tab already reached.
  */
 export const KEYBOARD_NAV_ATTR = "data-keyboard-nav";
 

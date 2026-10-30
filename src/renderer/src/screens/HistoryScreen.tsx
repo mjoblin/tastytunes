@@ -49,7 +49,9 @@ import { HistoryStats } from "@/components/history/HistoryStats";
 import { HistoryRediscover } from "@/components/history/HistoryRediscover";
 import { HistoryElsewhere } from "@/components/history/HistoryElsewhere";
 import { FACT_SEP } from "@/lib/mediaFacts";
-import { menuAt } from "@/lib/menuAt";
+import { menuAt, openMenuOn } from "@/lib/menuAt";
+import { KeyedList } from "@/components/controls/KeyedList";
+import type { ListItemAttrs } from "@/hooks/useListKeys";
 
 interface Block {
   session: string | null;
@@ -186,6 +188,12 @@ export function HistoryScreen(): React.JSX.Element {
     if (last && last.label === label) last.blocks.push(b);
     else days.push({ label, blocks: [b] });
   }
+  // the keyed list's lines (0.14.0): a session as one, else each of its tracks
+  const recentLines = days.reduce(
+    (n, d) =>
+      n + d.blocks.reduce((m, b) => m + (grouped && b.session != null ? 1 : b.entries.length), 0),
+    0,
+  );
 
   const toggleGrouped = (next: boolean): void => {
     void saveSettings({ recentsGrouped: next });
@@ -379,42 +387,62 @@ export function HistoryScreen(): React.JSX.Element {
               ref={scrollRef}
               className="flex-1 overflow-y-auto px-1" /* px-1: ring room at the scrollport's edges */
             >
-              <div className="max-w-2xl space-y-6">
-                {days.length === 0 && (
-                  <div className="text-[15px] text-faint pt-6 px-1">No matches for “{filter}”</div>
-                )}
-                {days.map((day) => (
-                  <div key={day.label}>
-                    <div className="microlabel mb-2 px-1">{day.label}</div>
-                    <div className="space-y-1 divide-y divide-edge/50">
-                      {day.blocks.map((block) =>
-                        grouped && block.session != null ? (
-                          <SessionRow
-                            key={block.id}
-                            block={block}
-                            now={now}
-                            live={headIsLive && block === blocks[0]}
-                            expanded={expanded.has(block.id)}
-                            onToggle={() => toggleExpand(block.id)}
-                          />
-                        ) : (
-                          // Discrete track, or "All songs" mode: one row per entry.
-                          block.entries.map((entry, i) => (
-                            <TrackRow
-                              key={`${block.id}-${i}`}
-                              entry={entry}
-                              now={now}
-                              live={headIsLive && block === blocks[0] && i === 0}
-                              hearted={heartedOf(entry)}
-                              onMenu={openRowMenu}
-                            />
-                          ))
-                        ),
+              {/* FROM THE KEYBOARD (0.14.0, his K1 to K6): the list one Tab stop, up and down
+                  through its sessions and tracks across the days, Enter opens or closes a
+                  session as its click does, "." a track's More menu */}
+              <KeyedList
+                label="Recent"
+                count={recentLines}
+                onEnter={(_i, el) => el?.click()}
+                onMenu={(_i, el) => openMenuOn(el)}
+                className="max-w-2xl space-y-6"
+              >
+                {(item) => {
+                  let line = 0;
+                  return (
+                    <>
+                      {days.length === 0 && (
+                        <div className="text-[15px] text-faint pt-6 px-1">
+                          No matches for “{filter}”
+                        </div>
                       )}
-                    </div>
-                  </div>
-                ))}
-              </div>
+                      {days.map((day) => (
+                        <div key={day.label}>
+                          <div className="microlabel mb-2 px-1">{day.label}</div>
+                          <div className="space-y-1 divide-y divide-edge/50">
+                            {day.blocks.map((block) =>
+                              grouped && block.session != null ? (
+                                <SessionRow
+                                  key={block.id}
+                                  item={item(line++)}
+                                  block={block}
+                                  now={now}
+                                  live={headIsLive && block === blocks[0]}
+                                  expanded={expanded.has(block.id)}
+                                  onToggle={() => toggleExpand(block.id)}
+                                />
+                              ) : (
+                                // Discrete track, or "All songs" mode: one row per entry.
+                                block.entries.map((entry, i) => (
+                                  <TrackRow
+                                    key={`${block.id}-${i}`}
+                                    item={item(line++)}
+                                    entry={entry}
+                                    now={now}
+                                    live={headIsLive && block === blocks[0] && i === 0}
+                                    hearted={heartedOf(entry)}
+                                    onMenu={openRowMenu}
+                                  />
+                                ))
+                              ),
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  );
+                }}
+              </KeyedList>
               <div className="microlabel mt-6 px-1">
                 up to {MAX_RECENTS} entries{FACT_SEP}stored locally{FACT_SEP}clears on demand
               </div>
@@ -444,7 +472,10 @@ function TrackRow({
   live,
   hearted,
   onMenu,
+  item,
 }: {
+  /** In the keyed list: the row's id and index. */
+  item?: ListItemAttrs;
   entry: RecentTrack;
   now: number;
   live?: boolean;
@@ -466,6 +497,7 @@ function TrackRow({
   const fav = ref ? refToFavorite(ref) : null;
   return (
     <MediaRow
+      item={item}
       attrs={{ "data-recent-row": "track" }}
       title={title ?? "—"}
       subtitle={subtitle ?? undefined}
@@ -505,7 +537,10 @@ function SessionRow({
   live,
   expanded,
   onToggle,
+  item,
 }: {
+  /** In the keyed list: the session's id and index. */
+  item?: ListItemAttrs;
   block: Block;
   now: number;
   live?: boolean;
@@ -527,6 +562,7 @@ function SessionRow({
   return (
     <div>
       <div
+        {...item}
         data-recent-row="session"
         onClick={expandable ? onToggle : undefined}
         className={cx(
@@ -558,6 +594,7 @@ function SessionRow({
         />
         {expandable && (
           <button
+            tabIndex={-1}
             onClick={(ev) => {
               ev.stopPropagation();
               onToggle();

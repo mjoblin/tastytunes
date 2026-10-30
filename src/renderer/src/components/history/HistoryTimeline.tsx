@@ -31,7 +31,8 @@ import { cx, fmtCount, fmtDuration, fmtTime, matchesFilter } from "@/lib/format"
 import { scrollToStart } from "@/lib/scroll";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { monthLine, monthStartOf, statsFor } from "@/lib/historyStats";
-import { menuAt } from "@/lib/menuAt";
+import { menuAt, openMenuOn } from "@/lib/menuAt";
+import { ListKeysContext, useListKeys, type ListItemAttrs } from "@/hooks/useListKeys";
 
 /**
  * The History screen's TIMELINE (0.8.0, rounds two and 2b): the whole
@@ -487,6 +488,31 @@ export function HistoryTimeline({
     return () => clearTimeout(t);
   }, [flash]);
 
+  // FROM THE KEYBOARD (0.14.0, his K1 to K6): the timeline one Tab stop; up and down through its
+  // sessions and plays (the month and day lines are headings, passed over); Enter opens or
+  // closes a session as its click does, "." a play's More menu
+  const lines = useMemo(
+    () => items.flatMap((it, i) => (it.kind === "session" || it.kind === "play" ? [i] : [])),
+    [items],
+  );
+  const lineOf = useMemo(() => new Map(lines.map((at, k) => [at, k])), [lines]);
+  const keys = useListKeys({
+    count: lines.length,
+    onEnter: (k) => {
+      const it = items[lines[k]];
+      if (it?.kind === "session") toggle(it.key);
+    },
+    onMenu: (_k, el) => openMenuOn(el),
+    reveal: (k) => {
+      const sc = scrollRef.current;
+      if (sc) sc.scrollTop = Math.max(0, win.offsetOf(lines[k]) - sc.clientHeight / 3);
+    },
+  });
+  const lineItem = (index: number): ListItemAttrs | undefined => {
+    const k = lineOf.get(index);
+    return k == null ? undefined : keys.item(k);
+  };
+
   // art for the rows on screen: the record carries none, the index knows the
   // track by its content key (one small IPC per slice, cached for the session)
   const slice = useMemo(() => items.slice(win.first, win.last + 1), [items, win.first, win.last]);
@@ -649,123 +675,139 @@ export function HistoryTimeline({
           {/* fade-top only while a day is held: at rest the first header must
               not dissolve; scrolled, the rows dissolve before they reach the label */}
           <div
-            ref={attachScroller}
+            {...keys.container}
+            ref={(el) => {
+              attachScroller(el);
+              keys.container.ref(el);
+            }}
+            aria-label="Timeline"
             className={cx("h-full overflow-y-auto px-1", overlayDay != null && "fade-top")}
             data-history-timeline
           >
-            <div className="max-w-2xl">
-              {items.length === 0 && years != null && (
-                <div className="text-[15px] text-faint pt-6 px-1">
-                  {narrowed ? "Nothing matches these filters" : "Nothing this year yet"}
-                </div>
-              )}
-              {win.padTop > 0 && <div data-win-spacer="top" style={{ height: win.padTop }} />}
-              {slice.map((it, i) => {
-                const index = win.first + i;
-                if (it.kind === "month") {
-                  const d = new Date(it.month);
-                  const thisYear = d.getFullYear() === new Date(now).getFullYear();
-                  return (
-                    <div
-                      key={it.key}
-                      data-win-kind="month"
-                      data-win-index={index}
-                      data-history-month-divider
-                      className="flex items-baseline gap-3 px-1 pt-6 pb-1 first:pt-1"
-                    >
-                      <span className="shrink-0 font-display text-[15px] text-ink">
-                        {d.toLocaleDateString(undefined, {
-                          month: "long",
-                          ...(thisYear ? {} : { year: "numeric" }),
-                        })}
-                      </span>
-                      {it.line && (
-                        <span className="min-w-0 flex-1 truncate text-[11.5px] text-faint">
-                          {it.line}
-                        </span>
-                      )}
-                    </div>
-                  );
-                }
-                if (it.kind === "day")
-                  return (
-                    <div
-                      key={it.key}
-                      data-win-kind="day"
-                      data-win-index={index}
-                      className="flex items-center gap-3 pt-5 pb-2 px-1 first:pt-1"
-                    >
-                      <span className="microlabel microlabel-strong">{dayLabel(it.day, now)}</span>
-                      {/* a hairline to the edge: the day boundary reads at a
-                          glance, at no cost in height */}
-                      <span aria-hidden className="flex-1 border-t border-edge/60" />
-                    </div>
-                  );
-                if (it.kind === "session") {
-                  const s = it.session;
-                  return (
-                    <button
-                      key={it.key}
-                      type="button"
-                      data-win-kind="session"
-                      data-win-index={index}
-                      data-history-session
-                      data-open={it.open ? "true" : "false"}
-                      onClick={() => toggle(it.key)}
-                      className="w-full flex items-baseline gap-3 px-1 pt-2 pb-1.5 text-left rounded-lg transition-colors hover:bg-veil"
-                    >
-                      <span className="shrink-0 font-mono text-[11.5px] tabular-nums text-ink">
-                        {timeOf(s.startAt)}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-[12.5px] text-dim">
-                        {sessionSummary(s)}
-                      </span>
-                      <span className="shrink-0 text-[11px] text-faint tabular-nums">
-                        {fmtDuration((s.endAt - s.startAt) / 1000)}
-                      </span>
-                      <ChevronRight
-                        size={14}
-                        className={cx(
-                          "shrink-0 self-center text-faint transition-transform",
-                          it.open && "rotate-90",
-                        )}
-                      />
-                    </button>
-                  );
-                }
-                const flashed = flash != null && it.event.at === flash;
-                return (
-                  <div
-                    key={it.key}
-                    data-win-kind="play"
-                    data-win-index={index}
-                    data-history-flash={flashed ? "true" : undefined}
-                    className={cx("pb-1", flashed && "rounded-xl ring-2 ring-gold/60")}
-                  >
-                    <EventRow event={it.event} artUrl={artOf(it.event)} onMenu={openRowMenu} />
+            <ListKeysContext.Provider value={true}>
+              <div className="max-w-2xl">
+                {items.length === 0 && years != null && (
+                  <div className="text-[15px] text-faint pt-6 px-1">
+                    {narrowed ? "Nothing matches these filters" : "Nothing this year yet"}
                   </div>
-                );
-              })}
-              {win.padBottom > 0 && (
-                <div data-win-spacer="bottom" style={{ height: win.padBottom }} />
-              )}
-              <div className="flex items-center gap-4 pt-5 pb-8 px-1">
-                <span className="microlabel">
-                  {total > 0
-                    ? `${fmtCount(total)} ${total === 1 ? "line" : "lines"}${FACT_SEP}${loadedYears.length === 1 ? String(loadedYears[0]) : `${loadedYears[loadedYears.length - 1]} to ${loadedYears[0]}`}`
-                    : "…"}
-                </span>
-                {nextEarlier != null && (
-                  <button
-                    onClick={() => void loadYear(nextEarlier)}
-                    data-history-earlier
-                    className="text-[12px] text-dim hover:text-ink underline-offset-2 hover:underline transition-colors"
-                  >
-                    Show {nextEarlier}
-                  </button>
                 )}
+                {win.padTop > 0 && <div data-win-spacer="top" style={{ height: win.padTop }} />}
+                {slice.map((it, i) => {
+                  const index = win.first + i;
+                  if (it.kind === "month") {
+                    const d = new Date(it.month);
+                    const thisYear = d.getFullYear() === new Date(now).getFullYear();
+                    return (
+                      <div
+                        key={it.key}
+                        data-win-kind="month"
+                        data-win-index={index}
+                        data-history-month-divider
+                        className="flex items-baseline gap-3 px-1 pt-6 pb-1 first:pt-1"
+                      >
+                        <span className="shrink-0 font-display text-[15px] text-ink">
+                          {d.toLocaleDateString(undefined, {
+                            month: "long",
+                            ...(thisYear ? {} : { year: "numeric" }),
+                          })}
+                        </span>
+                        {it.line && (
+                          <span className="min-w-0 flex-1 truncate text-[11.5px] text-faint">
+                            {it.line}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  }
+                  if (it.kind === "day")
+                    return (
+                      <div
+                        key={it.key}
+                        data-win-kind="day"
+                        data-win-index={index}
+                        className="flex items-center gap-3 pt-5 pb-2 px-1 first:pt-1"
+                      >
+                        <span className="microlabel microlabel-strong">
+                          {dayLabel(it.day, now)}
+                        </span>
+                        {/* a hairline to the edge: the day boundary reads at a
+                          glance, at no cost in height */}
+                        <span aria-hidden className="flex-1 border-t border-edge/60" />
+                      </div>
+                    );
+                  if (it.kind === "session") {
+                    const s = it.session;
+                    return (
+                      <button
+                        key={it.key}
+                        {...lineItem(index)}
+                        tabIndex={-1}
+                        type="button"
+                        data-win-kind="session"
+                        data-win-index={index}
+                        data-history-session
+                        data-open={it.open ? "true" : "false"}
+                        onClick={() => toggle(it.key)}
+                        className="w-full flex items-baseline gap-3 px-1 pt-2 pb-1.5 text-left rounded-lg transition-colors hover:bg-veil"
+                      >
+                        <span className="shrink-0 font-mono text-[11.5px] tabular-nums text-ink">
+                          {timeOf(s.startAt)}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-[12.5px] text-dim">
+                          {sessionSummary(s)}
+                        </span>
+                        <span className="shrink-0 text-[11px] text-faint tabular-nums">
+                          {fmtDuration((s.endAt - s.startAt) / 1000)}
+                        </span>
+                        <ChevronRight
+                          size={14}
+                          className={cx(
+                            "shrink-0 self-center text-faint transition-transform",
+                            it.open && "rotate-90",
+                          )}
+                        />
+                      </button>
+                    );
+                  }
+                  const flashed = flash != null && it.event.at === flash;
+                  return (
+                    <div
+                      key={it.key}
+                      data-win-kind="play"
+                      data-win-index={index}
+                      data-history-flash={flashed ? "true" : undefined}
+                      className={cx("pb-1", flashed && "rounded-xl ring-2 ring-gold/60")}
+                    >
+                      <EventRow
+                        item={lineItem(index)}
+                        event={it.event}
+                        artUrl={artOf(it.event)}
+                        onMenu={openRowMenu}
+                      />
+                    </div>
+                  );
+                })}
+                {win.padBottom > 0 && (
+                  <div data-win-spacer="bottom" style={{ height: win.padBottom }} />
+                )}
+                <div className="flex items-center gap-4 pt-5 pb-8 px-1">
+                  <span className="microlabel">
+                    {total > 0
+                      ? `${fmtCount(total)} ${total === 1 ? "line" : "lines"}${FACT_SEP}${loadedYears.length === 1 ? String(loadedYears[0]) : `${loadedYears[loadedYears.length - 1]} to ${loadedYears[0]}`}`
+                      : "…"}
+                  </span>
+                  {nextEarlier != null && (
+                    <button
+                      onClick={() => void loadYear(nextEarlier)}
+                      data-history-earlier
+                      className="text-[12px] text-dim hover:text-ink underline-offset-2 hover:underline transition-colors"
+                    >
+                      Show {nextEarlier}
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
+            </ListKeysContext.Provider>
           </div>
         </div>
         {/* the month rail: years as headings, months as landings */}
@@ -812,7 +854,10 @@ function EventRow({
   event: e,
   artUrl,
   onMenu,
+  item,
 }: {
+  /** In the keyed timeline: the row's id and index. */
+  item?: ListItemAttrs;
   event: ListeningEvent;
   artUrl: string | null;
   onMenu(ev: ListeningPlayEvent, e: React.MouseEvent): void;
@@ -828,6 +873,7 @@ function EventRow({
           : fmtTime(e.playedSeconds);
     return (
       <MediaRow
+        item={item}
         attrs={{ "data-history-row": "play" }}
         title={e.title}
         subtitle={<NameLine artist={e.artist} album={e.album} ref={ref} />}
@@ -852,6 +898,7 @@ function EventRow({
   if (e.kind === "radio-track")
     return (
       <MediaRow
+        item={item}
         attrs={{ "data-history-row": "radio-track" }}
         title={e.title}
         subtitle={[e.artist, e.station].filter(Boolean).join(FACT_SEP) || undefined}
@@ -863,6 +910,7 @@ function EventRow({
   if (e.kind === "radio-session")
     return (
       <MediaRow
+        item={item}
         attrs={{ "data-history-row": "radio-session" }}
         title={e.station ?? "Radio"}
         subtitle="Internet radio"
@@ -873,6 +921,7 @@ function EventRow({
     );
   return (
     <MediaRow
+      item={item}
       attrs={{ "data-history-row": "external" }}
       title={e.title ?? e.source ?? "Another source"}
       subtitle={<NameLine artist={e.artist} album={e.album} />}

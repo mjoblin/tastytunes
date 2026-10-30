@@ -12,6 +12,8 @@ import { cx, fmtTime, matchesFilter } from "@/lib/format";
 import { useStore } from "@/store";
 import { scrollToVisible } from "@/lib/scroll";
 import { useWindowedList } from "@/hooks/useWindowedList";
+import { ListKeysContext, useListKeys } from "@/hooks/useListKeys";
+import { keyedEvent } from "@/lib/menuAt";
 import { isAlbumClass } from "@/lib/media";
 import { MediaArt } from "@/components/media/MediaArt";
 import { ArtistArt } from "@/components/media/ArtistArt";
@@ -248,6 +250,50 @@ export function ArtistsLens({
   }, [shownArtists]);
   const albumsColRef = useRef<HTMLDivElement | null>(null);
   const tracksColRef = useRef<HTMLDivElement | null>(null);
+  // FROM THE KEYBOARD (0.14.0, his K1 to K6): each column one Tab stop, up and down within it,
+  // left and right between the three; Enter is a row's click (an artist or an album picked, a
+  // track played), "." its More menu
+  const artistKeys = useListKeys({
+    count: shownArtists.length,
+    initial: () => shownArtists.findIndex((a) => a.key === mem.artist),
+    onEnter: (i) => {
+      const a = shownArtists[i];
+      if (a) setMem({ artist: a.key === mem.artist ? null : a.key, album: null });
+    },
+    onMenu: (i, el) => {
+      const a = shownArtists[i];
+      if (a) actions.openMenu(lensArtistNode(a), keyedEvent(el));
+    },
+    reveal: (i) => void scrollColTo(i, REVEAL_PAD),
+    onRight: () => albumKeys.focus(),
+  });
+  const columnAlbums = selectedArtist?.albums ?? [];
+  const albumKeys = useListKeys({
+    count: columnAlbums.length,
+    initial: () => columnAlbums.findIndex((alb) => nodeKey(alb) === mem.album),
+    onEnter: (i) => {
+      const alb = columnAlbums[i];
+      if (alb) setMem({ album: nodeKey(alb) === mem.album ? null : nodeKey(alb) });
+    },
+    onMenu: (i, el) => {
+      const alb = columnAlbums[i];
+      if (alb && isAlbumClass(alb.upnpClass)) actions.openMenu(alb, keyedEvent(el));
+    },
+    onLeft: () => artistKeys.focus(),
+    onRight: () => trackKeys.focus(),
+  });
+  const trackKeys = useListKeys({
+    count: visibleTracks.length,
+    onEnter: (i, el) => {
+      const t = visibleTracks[i];
+      if (t && !trackRowClick(t, keyedEvent(el))) actions.playTrack(t, el);
+    },
+    onMenu: (i, el) => {
+      const t = visibleTracks[i];
+      if (t) sel.rowMenu(t, keyedEvent(el));
+    },
+    onLeft: () => albumKeys.focus(),
+  });
   // Restore each column's remembered spot once, after first paint.
   useEffect(() => {
     requestAnimationFrame(() => {
@@ -410,7 +456,12 @@ export function ArtistsLens({
             )}
             <div className="min-h-0 flex-1 flex gap-1">
               <div
-                ref={artistsColRef}
+                {...artistKeys.container}
+                ref={(el) => {
+                  artistsColRef.current = el;
+                  artistKeys.container.ref(el);
+                }}
+                aria-label="Artists"
                 onScroll={(e) => {
                   artistsMem.scroll.artists = e.currentTarget.scrollTop;
                 }}
@@ -419,117 +470,122 @@ export function ArtistsLens({
                 // padding box) without shifting the rows off the heading's edge
                 className="relative min-h-0 flex-1 overflow-y-auto px-1.5 -mx-1.5 py-1 -my-1"
               >
-                {win.padTop > 0 && <div style={{ height: win.padTop }} />}
-                {shownArtists.slice(win.first, win.last + 1).map((a) => {
-                  const selected = a.key === mem.artist;
-                  const playing = a.key === playingArtistKey;
-                  const menuOpen = actions.menuNodeId === `lens-artist:${a.key}`;
-                  return (
-                    <div
-                      key={a.key}
-                      ref={(el) => {
-                        if (selected && el) selectedRowRef.current = el;
-                      }}
-                      data-artist-row={a.name}
-                      onClick={() => setMem({ artist: selected ? null : a.key, album: null })}
-                      // a double-click opens the artist's page (the page re-selects the
-                      // artist, so the two clicks' toggle never shows on the way back)
-                      onDoubleClick={() => onOpenArtistPage?.(a.name)}
-                      // right-click = the ⋯ (the app-wide rule): the artist menu — the
-                      // pivot and Info. A lens artist is content identity, not a
-                      // node, so one is synthesized: the entity's server (or the first
-                      // album's) is what Info sums their page from.
-                      onContextMenu={(e) => {
-                        e.preventDefault();
-                        actions.openMenu(lensArtistNode(a), e);
-                      }}
-                      data-lens-artist-row={a.key}
-                      className={cx(
-                        // the eqbars' column only while the artist plays: the row's buttons float
-                        // (below), so a name has the row's whole width at rest
-                        "group relative grid items-center gap-2.5 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
-                        playing ? "grid-cols-[44px_1fr_auto]" : "grid-cols-[44px_1fr]",
-                        // SELECTED is "open here" — the Playlists sidebar's amber, so it
-                        // reads apart from gold (= playing); a row that is both keeps
-                        // the playing signals (gold title, eqbars) on the amber fill
-                        // (user, 2026-09-02: the selection "didn't look distinctive").
-                        // PLAYING is the app-wide row treatment — fill, ring and glow
-                        // (row-playing), the same as ContainerRow and every track row —
-                        // and it rides on top of the selection: a fill and an edge.
-                        playing && "row-playing",
-                        selected ? "bg-amberdim" : playing ? "bg-gold/10" : "hover:bg-veil",
-                      )}
-                    >
-                      <ArtistArt name={a.name} src={a.ownArt} cover={a.artUrl} />
-                      {/* under the floating buttons the name fades out rather than reflowing
-                      (the column is narrow: reserved buttons cut names to a few letters) */}
+                <ListKeysContext.Provider value={true}>
+                  {win.padTop > 0 && <div style={{ height: win.padTop }} />}
+                  {shownArtists.slice(win.first, win.last + 1).map((a, j) => {
+                    const selected = a.key === mem.artist;
+                    const playing = a.key === playingArtistKey;
+                    const menuOpen = actions.menuNodeId === `lens-artist:${a.key}`;
+                    return (
                       <div
+                        key={a.key}
+                        {...artistKeys.item(win.first + j)}
+                        ref={(el) => {
+                          if (selected && el) selectedRowRef.current = el;
+                        }}
+                        data-artist-row={a.name}
+                        onClick={() => setMem({ artist: selected ? null : a.key, album: null })}
+                        // a double-click opens the artist's page (the page re-selects the
+                        // artist, so the two clicks' toggle never shows on the way back)
+                        onDoubleClick={() => onOpenArtistPage?.(a.name)}
+                        // right-click = the ⋯ (the app-wide rule): the artist menu — the
+                        // pivot and Info. A lens artist is content identity, not a
+                        // node, so one is synthesized: the entity's server (or the first
+                        // album's) is what Info sums their page from.
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          actions.openMenu(lensArtistNode(a), e);
+                        }}
+                        data-lens-artist-row={a.key}
                         className={cx(
-                          "min-w-0",
-                          NAME_FADE[playing ? "playing" : "idle"][menuOpen ? "on" : "hover"],
+                          // the eqbars' column only while the artist plays: the row's buttons float
+                          // (below), so a name has the row's whole width at rest
+                          "group relative grid items-center gap-2.5 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
+                          playing ? "grid-cols-[44px_1fr_auto]" : "grid-cols-[44px_1fr]",
+                          // SELECTED is "open here" — the Playlists sidebar's amber, so it
+                          // reads apart from gold (= playing); a row that is both keeps
+                          // the playing signals (gold title, eqbars) on the amber fill
+                          // (user, 2026-09-02: the selection "didn't look distinctive").
+                          // PLAYING is the app-wide row treatment — fill, ring and glow
+                          // (row-playing), the same as ContainerRow and every track row —
+                          // and it rides on top of the selection: a fill and an edge.
+                          playing && "row-playing",
+                          selected ? "bg-amberdim" : playing ? "bg-gold/10" : "hover:bg-veil",
                         )}
                       >
+                        <ArtistArt name={a.name} src={a.ownArt} cover={a.artUrl} />
+                        {/* under the floating buttons the name fades out rather than reflowing
+                      (the column is narrow: reserved buttons cut names to a few letters) */}
                         <div
                           className={cx(
-                            "text-[13.5px] truncate",
-                            playing ? "text-gold" : selected ? "text-amber" : "text-ink",
+                            "min-w-0",
+                            NAME_FADE[playing ? "playing" : "idle"][menuOpen ? "on" : "hover"],
                           )}
                         >
-                          {a.name}
+                          <div
+                            className={cx(
+                              "text-[13.5px] truncate",
+                              playing ? "text-gold" : selected ? "text-amber" : "text-ink",
+                            )}
+                          >
+                            {a.name}
+                          </div>
+                          <div className="text-[12px] text-dim truncate">{artistLine(a)}</div>
                         </div>
-                        <div className="text-[12px] text-dim truncate">{artistLine(a)}</div>
-                      </div>
-                      {playing && (
-                        <div
-                          className={cx(
-                            menuOpen ? "opacity-0" : "group-hover:opacity-0 group-kbd:opacity-0",
-                          )}
-                        >
-                          <Eqbars />
-                        </div>
-                      )}
-                      {/* THE ROW'S BUTTONS FLOAT over its end, shown on hover and while its menu
+                        {playing && (
+                          <div
+                            className={cx(
+                              menuOpen ? "opacity-0" : "group-hover:opacity-0 group-kbd:opacity-0",
+                            )}
+                          >
+                            <Eqbars />
+                          </div>
+                        )}
+                        {/* THE ROW'S BUTTONS FLOAT over its end, shown on hover and while its menu
                       is open: the ↗ to the artist's page, as an album row's ↗ opens the album
                       (user, 2026-10-11: a click here selects, the ↗ goes there), and the ⋯,
                       the same artist menu the right-click opens */}
-                      <div
-                        className={cx(
-                          "absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2.5 transition-opacity",
-                          menuOpen
-                            ? "opacity-100"
-                            : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
-                        )}
-                      >
-                        {onOpenArtistPage && (
+                        <div
+                          className={cx(
+                            "absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2.5 transition-opacity",
+                            menuOpen
+                              ? "opacity-100"
+                              : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
+                          )}
+                        >
+                          {onOpenArtistPage && (
+                            <button
+                              tabIndex={-1}
+                              aria-label={`Open artist page for ${a.name}`}
+                              data-tip="Open artist page"
+                              data-lens-open-artist={a.name}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onOpenArtistPage(a.name);
+                              }}
+                              className="tip-bottom p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-colors"
+                            >
+                              <ArrowUpRight size={14} />
+                            </button>
+                          )}
                           <button
-                            aria-label={`Open artist page for ${a.name}`}
-                            data-tip="Open artist page"
-                            data-lens-open-artist={a.name}
+                            tabIndex={-1}
+                            aria-label="More actions"
+                            data-lens-artist-menu
                             onClick={(e) => {
                               e.stopPropagation();
-                              onOpenArtistPage(a.name);
+                              actions.openMenu(lensArtistNode(a), e);
                             }}
-                            className="tip-bottom p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-colors"
+                            className="p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-colors"
                           >
-                            <ArrowUpRight size={14} />
+                            <MoreHorizontal size={14} />
                           </button>
-                        )}
-                        <button
-                          aria-label="More actions"
-                          data-lens-artist-menu
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            actions.openMenu(lensArtistNode(a), e);
-                          }}
-                          className="p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-colors"
-                        >
-                          <MoreHorizontal size={14} />
-                        </button>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-                {win.padBottom > 0 && <div style={{ height: win.padBottom }} />}
+                    );
+                  })}
+                  {win.padBottom > 0 && <div style={{ height: win.padBottom }} />}
+                </ListKeysContext.Provider>
               </div>
               {/* the A-Z rail: fast travel for a long first column, in name order */}
               {letterStarts && <AzRail letters={[...letterStarts.keys()]} onJump={jumpToLetter} />}
@@ -554,7 +610,12 @@ export function ArtistsLens({
               ),
             )}
             <div
-              ref={albumsColRef}
+              {...albumKeys.container}
+              ref={(el) => {
+                albumsColRef.current = el;
+                albumKeys.container.ref(el);
+              }}
+              aria-label="Albums"
               onScroll={(e) => {
                 artistsMem.scroll.albums = e.currentTarget.scrollTop;
               }}
@@ -566,7 +627,7 @@ export function ArtistsLens({
               ) : selectedArtist.albums.length === 0 ? (
                 <div className="text-[12.5px] text-faint pt-2 px-1">No albums</div>
               ) : (
-                selectedArtist.albums.map((alb) => {
+                selectedArtist.albums.map((alb, ai) => {
                   const selected = nodeKey(alb) === mem.album;
                   const playing = actions.isPlayingAlbum(alb);
                   const menuOpen = actions.menuNodeId === alb.id;
@@ -574,6 +635,7 @@ export function ArtistsLens({
                   return (
                     <div
                       key={nodeKey(alb)}
+                      {...albumKeys.item(ai)}
                       data-lens-album-row={alb.title}
                       onClick={() => setMem({ album: selected ? null : nodeKey(alb) })}
                       onPointerDown={(e) => {
@@ -633,6 +695,7 @@ export function ArtistsLens({
                         )}
                       >
                         <button
+                          tabIndex={-1}
                           aria-label={`Open album ${alb.title}`}
                           data-tip="Open album"
                           data-lens-open-album={alb.title}
@@ -646,6 +709,7 @@ export function ArtistsLens({
                         </button>
                         {isAlbumClass(alb.upnpClass) ? (
                           <button
+                            tabIndex={-1}
                             aria-label="More actions"
                             onClick={(e) => {
                               e.stopPropagation();
@@ -686,7 +750,12 @@ export function ArtistsLens({
             )}
             <LensTrackSelectionBar sel={sel} className="bottom-2 inset-x-0 z-20" />
             <div
-              ref={tracksColRef}
+              {...trackKeys.container}
+              ref={(el) => {
+                tracksColRef.current = el;
+                trackKeys.container.ref(el);
+              }}
+              aria-label="Tracks"
               onScroll={(e) => {
                 artistsMem.scroll.tracks = e.currentTarget.scrollTop;
               }}
@@ -698,52 +767,55 @@ export function ArtistsLens({
               )}
               data-lens-tracks-col
             >
-              {albumTracks || looseTracks ? (
-                // Multi-disc albums get a quiet "Disc N" divider per disc — only
-                // when the list actually spans discs (discGroups is one group
-                // otherwise, and the divider never renders).
-                discGroups(albumTracks ?? looseTracks ?? []).map((g, gi) => (
-                  <div key={g.disc ?? `d${gi}`}>
-                    {g.disc != null && (
-                      <div className="microlabel px-1 pt-3 pb-1" data-disc-divider>
-                        Disc {g.disc}
+              <ListKeysContext.Provider value={true}>
+                {albumTracks || looseTracks ? (
+                  // Multi-disc albums get a quiet "Disc N" divider per disc — only
+                  // when the list actually spans discs (discGroups is one group
+                  // otherwise, and the divider never renders).
+                  discGroups(albumTracks ?? looseTracks ?? []).map((g, gi) => (
+                    <div key={g.disc ?? `d${gi}`}>
+                      {g.disc != null && (
+                        <div className="microlabel px-1 pt-3 pb-1" data-disc-divider>
+                          Disc {g.disc}
+                        </div>
+                      )}
+                      <div className="divide-y divide-edge/50">
+                        {g.tracks.map((t, ti) => (
+                          <TrackRow
+                            key={nodeKey(t)}
+                            node={t}
+                            item={trackKeys.item(visibleTracks.indexOf(t))}
+                            note={albumTracks ? albumFmt.notes[albumTracks.indexOf(t)] : null}
+                            // inside an album under its artist, guests read as "feat."
+                            artistLabel={
+                              selectedAlbum ? performerLine(t, selectedAlbum.artist) : null
+                            }
+                            showArt={looseTracks != null}
+                            isCurrent={actions.isCurrentTrack(t)}
+                            queued={actions.trackQueued(t)}
+                            menuOpen={actions.menuNodeId === t.id}
+                            favorited={actions.nodeFavorited(t)}
+                            selected={selT.has(nodeKey(t))}
+                            selStart={!(ti > 0 && selT.has(nodeKey(g.tracks[ti - 1])))}
+                            selEnd={
+                              !(ti < g.tracks.length - 1 && selT.has(nodeKey(g.tracks[ti + 1])))
+                            }
+                            onRowClick={(e) => trackRowClick(t, e)}
+                            onNavDrag={(e) => sel.startTrackDrag(t, e)}
+                            onHeart={() => actions.heartNode(t)}
+                            onPlayNow={(el) => actions.playTrack(t, el)}
+                            onMenu={(e) => sel.rowMenu(t, e)}
+                          />
+                        ))}
                       </div>
-                    )}
-                    <div className="divide-y divide-edge/50">
-                      {g.tracks.map((t, ti) => (
-                        <TrackRow
-                          key={nodeKey(t)}
-                          node={t}
-                          note={albumTracks ? albumFmt.notes[albumTracks.indexOf(t)] : null}
-                          // inside an album under its artist, guests read as "feat."
-                          artistLabel={
-                            selectedAlbum ? performerLine(t, selectedAlbum.artist) : null
-                          }
-                          showArt={looseTracks != null}
-                          isCurrent={actions.isCurrentTrack(t)}
-                          queued={actions.trackQueued(t)}
-                          menuOpen={actions.menuNodeId === t.id}
-                          favorited={actions.nodeFavorited(t)}
-                          selected={selT.has(nodeKey(t))}
-                          selStart={!(ti > 0 && selT.has(nodeKey(g.tracks[ti - 1])))}
-                          selEnd={
-                            !(ti < g.tracks.length - 1 && selT.has(nodeKey(g.tracks[ti + 1])))
-                          }
-                          onRowClick={(e) => trackRowClick(t, e)}
-                          onNavDrag={(e) => sel.startTrackDrag(t, e)}
-                          onHeart={() => actions.heartNode(t)}
-                          onPlayNow={(el) => actions.playTrack(t, el)}
-                          onMenu={(e) => sel.rowMenu(t, e)}
-                        />
-                      ))}
                     </div>
+                  ))
+                ) : (
+                  <div className="text-[12.5px] text-faint pt-2 px-1">
+                    {selectedArtist ? "Pick an album." : ""}
                   </div>
-                ))
-              ) : (
-                <div className="text-[12.5px] text-faint pt-2 px-1">
-                  {selectedArtist ? "Pick an album." : ""}
-                </div>
-              )}
+                )}
+              </ListKeysContext.Provider>
             </div>
           </div>
         </div>

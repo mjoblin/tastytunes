@@ -10,6 +10,8 @@ import {
   nameSortKey,
 } from "@shared/model";
 import { useWindowedList } from "@/hooks/useWindowedList";
+import { ListKeysContext, useListKeys } from "@/hooks/useListKeys";
+import { keyedEvent } from "@/lib/menuAt";
 import { cx, fmtAdded, matchesFilter, fmtCount } from "@/lib/format";
 import { compareRecentlyAdded } from "@shared/recentlyAdded";
 import { usePlayStats } from "@/lib/playStats";
@@ -301,6 +303,26 @@ export function AlbumsLens({
     setSelected: setSelA,
     rowClick: tileClick,
   } = useRowSelection({ keys: tileKeys });
+  // FROM THE KEYBOARD (0.14.0, his K1 to K6): one Tab stop, the arrows through the rows or the
+  // cards, Enter opens the album, "." its More menu; a windowed list renders the current one
+  const keys = useListKeys({
+    count: tiles.length,
+    columns: cards ? cols : undefined,
+    onEnter: (i) => {
+      const t = tiles[i];
+      if (t) actions.openAlbum(t.node);
+    },
+    onMenu: (i, el) => {
+      const t = tiles[i];
+      if (t) actions.openMenu(t.node, keyedEvent(el));
+    },
+    reveal: (i) => {
+      const sc = gridRef.current;
+      if (!sc) return;
+      if (windowed) sc.scrollTop = win.offsetOf(Math.floor(i / cols));
+      else if (linesWindowed) sc.scrollTop = lines.offsetOf(i);
+    },
+  });
   /** True = the click was a selection chord; the caller must not open. */
   const albumClick = (raw: MediaNode, e: React.MouseEvent): boolean => tileClick(nodeKey(raw), e);
   /** The picked albums as containers, a set's volumes in order. */
@@ -358,6 +380,7 @@ export function AlbumsLens({
         favorited={actions.nodeFavorited(rawNode)}
         badge={badge}
         badgeTip={set ? undefined : COPY_BADGE_TIP}
+        item={keys.item(ti)}
         details={detailsOf?.(rawNode, set?.volumes)}
         // in Recently added order a card says when its album arrived, where the app knows
         note={sort === "added" && rawNode.addedAt ? fmtAdded(rawNode.addedAt) : undefined}
@@ -376,6 +399,7 @@ export function AlbumsLens({
         key={nodeKey(rawNode)}
         node={node}
         selected={selA.has(nodeKey(rawNode))}
+        item={keys.item(ti)}
         selStart={!(ti > 0 && selA.has(tileKeys[ti - 1]))}
         selEnd={!(ti < tileKeys.length - 1 && selA.has(tileKeys[ti + 1]))}
         playing={
@@ -499,7 +523,12 @@ export function AlbumsLens({
       </div>
       <div className="relative flex-1 min-w-0 min-h-0 flex flex-col">
         <div
-          ref={gridRef}
+          {...keys.container}
+          ref={(el) => {
+            gridRef.current = el;
+            keys.container.ref(el);
+          }}
+          aria-label="Albums"
           data-lens-albums-scroll
           onScroll={(e) => {
             albumsMem.scroll = e.currentTarget.scrollTop;
@@ -507,72 +536,76 @@ export function AlbumsLens({
           className="min-h-0 flex-1 overflow-y-auto px-8 -mx-8 pb-2"
           style={CARD_GRID_SCROLLER}
         >
-          <div ref={bodyRef}>
-            {shown.length === 0 ? (
-              <div className="text-[15px] text-faint pt-4 px-1">Nothing matches those filters.</div>
-            ) : windowed && width === 0 ? null : windowed ? (
-              <div
-                data-albums-windowed
-                className={cx(selA.size > 0 && "pb-24")}
-                // overflow-anchor off (the Queue's rule): Chromium's scroll anchoring moved the
-                // restored spot as the spacers' estimated heights became measured ones
-                style={{ paddingTop: 8, overflowAnchor: "none" }}
-              >
-                {win.padTop > 0 && <div style={{ height: win.padTop }} />}
-                {Array.from({ length: win.last - win.first + 1 }, (_, i) => win.first + i).map(
-                  (r) => (
-                    <div
-                      key={r}
-                      data-albums-row
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: gridColumns(cols),
-                        gap: cardGap,
-                        marginBottom: cardGap,
-                      }}
-                    >
-                      {tiles
-                        .slice(r * cols, (r + 1) * cols)
-                        .map((t, j) => renderTile(t, r * cols + j))}
-                    </div>
-                  ),
-                )}
-                {win.padBottom > 0 && <div style={{ height: win.padBottom }} />}
-              </div>
-            ) : (
-              <div
-                className={cx(
-                  !cards && "divide-y divide-edge/50 -mx-2",
-                  // selection mode adds scroll-room under the floating bar (the S45 rule)
-                  selA.size > 0 && "pb-24",
-                )}
-                style={
-                  cards
-                    ? {
-                        display: "grid",
-                        gridTemplateColumns: gridColumns("auto-fill"),
-                        gap: cardGap,
-                        paddingTop: 8,
-                      }
-                    : undefined
-                }
-              >
-                {linesWindowed ? (
-                  <>
-                    {lines.padTop > 0 && <div style={{ height: lines.padTop }} />}
-                    {tiles.slice(lines.first, lines.last + 1).map((t, i) => (
-                      <div key={nodeKey(t.node)} data-albums-line>
-                        {renderTile(t, lines.first + i)}
+          <ListKeysContext.Provider value={true}>
+            <div ref={bodyRef}>
+              {shown.length === 0 ? (
+                <div className="text-[15px] text-faint pt-4 px-1">
+                  Nothing matches those filters.
+                </div>
+              ) : windowed && width === 0 ? null : windowed ? (
+                <div
+                  data-albums-windowed
+                  className={cx(selA.size > 0 && "pb-24")}
+                  // overflow-anchor off (the Queue's rule): Chromium's scroll anchoring moved the
+                  // restored spot as the spacers' estimated heights became measured ones
+                  style={{ paddingTop: 8, overflowAnchor: "none" }}
+                >
+                  {win.padTop > 0 && <div style={{ height: win.padTop }} />}
+                  {Array.from({ length: win.last - win.first + 1 }, (_, i) => win.first + i).map(
+                    (r) => (
+                      <div
+                        key={r}
+                        data-albums-row
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: gridColumns(cols),
+                          gap: cardGap,
+                          marginBottom: cardGap,
+                        }}
+                      >
+                        {tiles
+                          .slice(r * cols, (r + 1) * cols)
+                          .map((t, j) => renderTile(t, r * cols + j))}
                       </div>
-                    ))}
-                    {lines.padBottom > 0 && <div style={{ height: lines.padBottom }} />}
-                  </>
-                ) : (
-                  tiles.map((t, ti) => renderTile(t, ti))
-                )}
-              </div>
-            )}
-          </div>
+                    ),
+                  )}
+                  {win.padBottom > 0 && <div style={{ height: win.padBottom }} />}
+                </div>
+              ) : (
+                <div
+                  className={cx(
+                    !cards && "divide-y divide-edge/50 -mx-2",
+                    // selection mode adds scroll-room under the floating bar (the S45 rule)
+                    selA.size > 0 && "pb-24",
+                  )}
+                  style={
+                    cards
+                      ? {
+                          display: "grid",
+                          gridTemplateColumns: gridColumns("auto-fill"),
+                          gap: cardGap,
+                          paddingTop: 8,
+                        }
+                      : undefined
+                  }
+                >
+                  {linesWindowed ? (
+                    <>
+                      {lines.padTop > 0 && <div style={{ height: lines.padTop }} />}
+                      {tiles.slice(lines.first, lines.last + 1).map((t, i) => (
+                        <div key={nodeKey(t.node)} data-albums-line>
+                          {renderTile(t, lines.first + i)}
+                        </div>
+                      ))}
+                      {lines.padBottom > 0 && <div style={{ height: lines.padBottom }} />}
+                    </>
+                  ) : (
+                    tiles.map((t, ti) => renderTile(t, ti))
+                  )}
+                </div>
+              )}
+            </div>
+          </ListKeysContext.Provider>
         </div>
         {selA.size > 0 && (
           <SelectionBar

@@ -1,7 +1,7 @@
 /**
  * WHO HAS THE KEYBOARD (0.12.0, his report: ⌘← moved the app behind the Info window). While a
- * modal is open (any ModalShell: Info, the shortcuts sheet, About, the dialogs), the keys are
- * the modal's: nothing behind it may act on them. Before this, every screen's own key listener
+ * modal is open (any ModalShell: Info, the shortcuts sheet, About, the dialogs), or a popover
+ * card (a ⋯ menu, since 0.14.0's K4), the keys are its own: nothing behind it may act on them. Before this, every screen's own key listener
  * had to remember that and none did: the Library's Backspace went up a level behind Info, and
  * the Queue's Delete removed the selected tracks behind it.
  *

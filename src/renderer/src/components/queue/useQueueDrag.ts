@@ -364,13 +364,21 @@ export function useQueueDrag(d: {
     const oldIndex = items.findIndex((i) => i.id === active.id);
     const newIndex = items.findIndex((i) => i.id === over.id);
     if (oldIndex < 0 || newIndex < 0) return;
-    const from = items[oldIndex].position ?? oldIndex;
-    const to = items[newIndex].position ?? newIndex;
+    moveOne(items, oldIndex, newIndex);
+  };
+
+  /** One track from one place in `list` to another: shown at once, ONE change to the streamer,
+   *  and its undo. A drop's, and Option with the arrows (0.14.0, his K8): one home. */
+  const moveOne = (list: QueueListItem[], oldIndex: number, newIndex: number): void => {
+    const moved = list[oldIndex];
+    if (!moved || moved.id == null || oldIndex === newIndex) return;
+    const from = moved.position ?? oldIndex;
+    const to = list[newIndex]?.position ?? newIndex;
     const prevOrder = allItems.flatMap((i) => (i.id != null ? [i.id] : []));
     // Optimistic reorder; the streamer re-announces the authoritative queue.
-    setQueueItems(arrayMove(items, oldIndex, newIndex));
-    void tt.command({ type: "queueMove", id: active.id as number, from, to });
-    const movedTitle = items[oldIndex].metadata?.title;
+    setQueueItems(arrayMove(list, oldIndex, newIndex));
+    void tt.command({ type: "queueMove", id: moved.id, from, to });
+    const movedTitle = moved.metadata?.title;
     useStore
       .getState()
       .pushUndo(movedTitle ? `Move “${movedTitle}”` : "Move Track", () =>
@@ -440,5 +448,6 @@ export function useQueueDrag(d: {
     onDragEnd,
     onDragCancel,
     applyBlockMove,
+    moveOne,
   };
 }
