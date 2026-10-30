@@ -26,7 +26,7 @@ import { MCP_CLUSTERS, mcpClusterEnabled } from "@shared/mcpCatalog";
 import { app } from "electron";
 import type { MenuCommand } from "@shared/ipc";
 import type { DeviceManager } from "../device/deviceManager";
-import { getSettings, updateSettings } from "../data/persist";
+import { ensureMcpToken, getSettings, updateSettings } from "../data/persist";
 import { getSecret } from "../data/secrets";
 
 import { refreshServers } from "../media/upnpBrowser";
@@ -133,6 +133,8 @@ export class McpBridge {
   }
 
   private start(mcp: McpSettings): void {
+    // the token is minted the first time the server runs, never for an install that never does
+    ensureMcpToken();
     const host = mcp.bind === "lan" ? "0.0.0.0" : "127.0.0.1";
     const server = createServer((req, res) => void this.route(req, res, mcp.bind));
     server.on("error", (e: NodeJS.ErrnoException) => {

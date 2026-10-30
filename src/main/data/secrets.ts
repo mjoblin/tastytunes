@@ -25,8 +25,15 @@ interface Stored {
 
 const filePath = (): string => join(app.getPath("userData"), "secrets.json");
 
-/** The decrypted values, in the main process's memory only. */
-let cache: Map<string, string> | null = null;
+// THE KEYCHAIN ONLY WHEN A SECRET IS USED (0.14.0, his call after rc.4's install asked his Mac
+// for the keychain): the file is read as it is, and an entry is decrypted only when its value is
+// asked for, so a launch with no secrets, or with secrets nothing has asked for yet, never
+// reaches safeStorage; saving one writes the others back as they were stored.
+
+/** The file's entries as stored, read once. */
+let stored: Map<string, Stored> | null = null;
+/** The values decrypted so far, in the main process's memory only. */
+const values = new Map<string, string>();
 
 /** Whether this system can encrypt a secret. */
 export function canEncrypt(): boolean {
@@ -42,37 +49,43 @@ export function canEncrypt(): boolean {
   }
 }
 
-function load(): Map<string, string> {
-  if (cache) return cache;
-  cache = new Map();
+function load(): Map<string, Stored> {
+  if (stored) return stored;
+  stored = new Map();
   let parsed: unknown;
   try {
     parsed = JSON.parse(readFileSync(filePath(), "utf8"));
   } catch {
-    return cache;
+    return stored;
   }
   const entries = isRecord(parsed) && isRecord(parsed.entries) ? parsed.entries : {};
-  for (const [name, e] of Object.entries(entries)) {
-    if (!isRecord(e) || typeof e.value !== "string") continue;
-    try {
-      const value =
-        e.enc === true ? safeStorage.decryptString(Buffer.from(e.value, "base64")) : e.value;
-      if (value) cache.set(name, value);
-    } catch {
-      // a value this system cannot decrypt (another machine's keychain, a reset keychain) is
-      // gone: asked for again, never guessed at
-    }
+  for (const [name, e] of Object.entries(entries))
+    if (isRecord(e) && typeof e.value === "string" && e.value)
+      stored.set(name, { enc: e.enc === true, value: e.value });
+  return stored;
+}
+
+/** An entry's value, decrypted the first time it is asked for. */
+function valueOf(name: string): string | null {
+  const known = values.get(name);
+  if (known != null) return known;
+  const e = load().get(name);
+  if (!e) return null;
+  try {
+    const value = e.enc ? safeStorage.decryptString(Buffer.from(e.value, "base64")) : e.value;
+    if (!value) return null;
+    values.set(name, value);
+    return value;
+  } catch {
+    // a value this system cannot decrypt (another machine's keychain, a reset keychain) is
+    // gone: asked for again, never guessed at
+    return null;
   }
-  return cache;
 }
 
 function save(): void {
-  const enc = canEncrypt();
   const entries: Record<string, Stored> = {};
-  for (const [name, value] of load())
-    entries[name] = enc
-      ? { enc: true, value: safeStorage.encryptString(value).toString("base64") }
-      : { enc: false, value };
+  for (const [name, e] of load()) entries[name] = e;
   atomicWriteFileSync(filePath(), JSON.stringify({ v: 1, entries }));
   try {
     chmodSync(filePath(), 0o600);
@@ -83,19 +96,45 @@ function save(): void {
 
 /** A secret's value, for the main process's own use; null when none is saved. */
 export function getSecret(name: SecretName): string | null {
-  return load().get(name) ?? null;
+  return valueOf(name);
+}
+
+/** Whether a secret is saved, without decrypting it. */
+export function hasSecret(name: SecretName): boolean {
+  return load().has(name);
 }
 
 /** Save a secret, or forget it (null or blank). */
 export function setSecret(name: SecretName, value: string | null): void {
   const v = value?.trim() ?? "";
-  if (v) load().set(name, v);
-  else load().delete(name);
+  if (v) {
+    const enc = canEncrypt();
+    load().set(name, {
+      enc,
+      value: enc ? safeStorage.encryptString(v).toString("base64") : v,
+    });
+    values.set(name, v);
+  } else {
+    load().delete(name);
+    values.delete(name);
+  }
   save();
 }
 
 /** What Settings may know of a secret: whether one is saved, and its last four characters. */
 export function secretHint(name: SecretName): { saved: boolean; ends: string | null } {
+  if (!hasSecret(name)) return { saved: false, ends: null };
   const v = getSecret(name);
   return { saved: v != null, ends: v ? v.slice(-4) : null };
+}
+
+/** Whether saved secrets are encrypted here, asked without touching the keychain where it can
+ *  be told otherwise: from what is stored, else macOS's Keychain and Windows' DPAPI are always
+ *  there; only Linux has to ask whether a keyring is. */
+export function encryptsHere(): boolean {
+  if (process.env["TASTYTUNES_SECRETS_PLAIN"] === "1") return false;
+  const saved = [...load().values()];
+  if (saved.length > 0) return saved.every((e) => e.enc);
+  if (process.platform === "darwin" || process.platform === "win32") return true;
+  return canEncrypt();
 }

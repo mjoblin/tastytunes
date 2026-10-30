@@ -69,19 +69,25 @@ export function getSettings(): AppSettings {
  * MOVE THE TOKENS INTO THE SECRETS STORE (0.13.0 round 10; main/data/secrets): once, in whenReady
  * before any window opens (safeStorage needs the app ready; a window then never receives one).
  * A token found in settings.json moves and leaves the file: the newer one wins, since a build from
- * before the store writes its tokens there (the installed 0.12.0 mints an MCP token where it
- * finds none). Every install has its own MCP token from its first launch, minted here when there
- * is none.
+ * before the store writes its tokens there. The MCP token moves only while the agent server is on:
+ * 0.12.0 minted one for every install, and one nobody turned the server on for is dropped rather
+ * than carried into the keychain (0.14.0: the keychain only when a secret is used); turning the
+ * server on mints a new one (ensureMcpToken).
  */
 export function moveSecrets(): void {
   const s = getSettings() as Legacy;
   const lb = typeof s.lbToken === "string" ? s.lbToken.trim() : "";
   const mcp = typeof s.mcp.token === "string" ? s.mcp.token.trim() : "";
   if (lb) setSecret("lbToken", lb);
-  if (mcp) setSecret("mcpToken", mcp);
-  if (!getSecret("mcpToken")) setSecret("mcpToken", mintToken());
+  if (mcp && s.mcp.enabled) setSecret("mcpToken", mcp);
   secretsMoved = true;
   if ("lbToken" in s || "token" in s.mcp) updateSettings({});
+}
+
+/** The MCP server's token, minted the first time the server runs (0.14.0; before, every install
+ *  minted one at launch, and with it a keychain entry nobody asked for). */
+export function ensureMcpToken(): void {
+  if (!getSecret("mcpToken")) setSecret("mcpToken", mintToken());
 }
 
 /** A new MCP token: every agent on the old one stops working until it has this one. */

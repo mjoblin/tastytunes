@@ -10,7 +10,7 @@ import type {
 } from "@shared/model";
 import { connectedHost, deviceManager } from "../app/runtime";
 import { getSettings, newMcpToken } from "../data/persist";
-import { canEncrypt, getSecret, secretHint, setSecret } from "../data/secrets";
+import { encryptsHere, getSecret, secretHint, setSecret } from "../data/secrets";
 import { fetchAlbumInfo } from "../lookups/albumInfo";
 import { artHostTrust, fetchArtDataUrl } from "../lookups/artFetch";
 import { localOnly } from "../lookups/fetchGuard";
@@ -124,7 +124,7 @@ export function registerLookupsIpc(): void {
   // THE SECRETS STORE (0.13.0 round 10): a window learns only whether a token is saved and how it
   // ends; the MCP token itself goes to a window only for a Copy the person pressed
   handle(IPC.secretsStatus, () => ({
-    encrypted: canEncrypt(),
+    encrypted: encryptsHere(),
     lbToken: secretHint("lbToken"),
     mcpToken: secretHint("mcpToken"),
     fanartKey: secretHint("fanartKey"),
