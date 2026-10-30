@@ -16,6 +16,7 @@ import {
   type CoverOffer,
 } from "@/lib/artistPictures";
 import { cx, fmtCount } from "@/lib/format";
+import { FACT_SEP } from "@/lib/mediaFacts";
 import { useIndexPools } from "@/hooks/useIndexPools";
 import { useLensIndex } from "@/components/library/lenses/useLensIndex";
 import { lc } from "@/components/library/lenses/lensShared";
@@ -51,6 +52,8 @@ type Tile = {
   /** What the large view shows and the choice keeps. */
   full: string;
   label: string;
+  /** Where it comes from, as the chosen line says it. */
+  from: string;
   choice: ArtistChoice;
   width: number | null;
   height: number | null;
@@ -70,11 +73,12 @@ const GRID_H = 3 * TILE_PX + 2 * GAP_PX + 8;
 const sizeText = (t: Pick<Tile, "width" | "height">): string | null =>
   t.width && t.height ? `${fmtCount(t.width)} × ${fmtCount(t.height)}` : null;
 /** A tile for an offer from Wikipedia or Commons. */
-const offerTile = (o: PictureOffer, label: string): Tile => ({
+const offerTile = (o: PictureOffer, label: string, from: string): Tile => ({
   key: o.url,
   url: o.thumb ?? o.url,
   full: o.url,
   label,
+  from,
   choice: { kind: "image", url: o.url },
   width: o.width,
   height: o.height,
@@ -182,20 +186,24 @@ export function ArtistPictureDialog({
     url,
     full: url,
     label: `fanart.tv photo ${i + 1}`,
+    from: "fanart.tv",
     choice: { kind: "image", url },
     ...unsized,
   }));
   const wiki = images?.of === name ? images.offers : null;
-  const wikiTiles: Tile[] = (wiki ?? []).map((o, i) => offerTile(o, `Wikipedia image ${i + 1}`));
+  const wikiTiles: Tile[] = (wiki ?? []).map((o, i) =>
+    offerTile(o, `Wikipedia image ${i + 1}`, "Wikipedia"),
+  );
   const fromCommons = commons?.of === name ? commons.offers : null;
   const commonsTiles: Tile[] = (fromCommons ?? []).map((o, i) =>
-    offerTile(o, `Commons photo ${i + 1}`),
+    offerTile(o, `Commons photo ${i + 1}`, "Wikimedia Commons"),
   );
   const coverTiles: Tile[] = covers.map((c) => ({
     key: c.url,
     url: c.url,
     full: c.url,
     label: `Cover of ${c.album}`,
+    from: `Cover of ${c.album}`,
     choice: { kind: "cover", url: c.url, album: c.album, serverUdn: c.serverUdn },
     ...unsized,
   }));
@@ -206,6 +214,7 @@ export function ArtistPictureDialog({
           url: file.url,
           full: file.url,
           label: "Chosen file",
+          from: "File from this computer",
           choice: { kind: "file", file: file.file },
           ...unsized,
         },
@@ -448,9 +457,17 @@ export function ArtistPictureDialog({
               >
                 {notice}
               </p>
+            ) : selected ? (
+              <Chosen
+                url={pick?.url ?? selected}
+                current={selected === currentUrl}
+                // the picture chosen now, before its source answers, or after its source stopped
+                // offering it: still the current one, its source unsaid
+                from={pick?.from ?? null}
+              />
             ) : (
               <p data-artist-picture-chosen className="min-w-0 truncate text-[12px] text-faint">
-                {pick ? pick.label : "Nothing chosen yet"}
+                Nothing chosen yet
               </p>
             )
           }
@@ -470,6 +487,36 @@ export function ArtistPictureDialog({
         )}
       </div>
     </ModalShell>
+  );
+}
+
+/** The chosen line: which picture "Use this picture" means, the one in use now or a new one,
+ *  and where it comes from, with a small copy of it (his look, 2026-10-30: the tile's own label,
+ *  "Commons photo 2", didn't say it was the current picture). */
+function Chosen({
+  url,
+  current,
+  from,
+}: {
+  url: string;
+  current: boolean;
+  from: string | null;
+}): React.JSX.Element {
+  return (
+    <div data-artist-picture-chosen className="flex min-w-0 items-center gap-2 text-[12px]">
+      <span className="grid h-6 w-6 shrink-0 place-items-center overflow-hidden rounded bg-veil ring-1 ring-edge">
+        <ArtImage
+          src={artSrc(url, 24)}
+          className="h-full w-full object-cover"
+          portraitTop
+          fallback={<UserRound size={14} strokeWidth={1} className="text-faint" />}
+        />
+      </span>
+      <span className="min-w-0 truncate text-faint">
+        <span className="text-dim">{current ? "Current picture" : "New picture"}</span>
+        {from && `${FACT_SEP}${from}`}
+      </span>
+    </div>
   );
 }
 
