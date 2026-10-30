@@ -15,6 +15,7 @@ import {
 import { pools } from "../media/mediaIndex";
 import { audioResUrl } from "../media/upnpBrowser";
 import { loggedFetch } from "../netlog";
+import { closeAudioStream, openAudioStream, readAudioStream } from "../media/audioStream";
 import { handle } from "../app/guard";
 
 /**
@@ -80,6 +81,21 @@ export function registerAudioIpc(): void {
     } catch {
       return null;
     }
+  });
+  // A TRACK'S FILE IN PIECES (0.14.0, analysis with no size limit): FLAC, WAV and AIFF are
+  // measured as they arrive (main/media/audioStream), so no cap applies; the whole-file fetch
+  // above stays for the formats only a whole-file decode reads (MP3, AAC, Ogg)
+  handle(IPC.audioStreamOpen, async (_e, serverUdn: unknown, objectId: unknown) => {
+    const host = streamerHost();
+    if (!host || typeof serverUdn !== "string" || typeof objectId !== "string") return null;
+    const url = await audioResUrl(host, serverUdn, objectId, { analysis: true });
+    return url ? openAudioStream(url) : null;
+  });
+  handle(IPC.audioStreamRead, (_e, id: unknown) =>
+    typeof id === "number" ? readAudioStream(id) : { error: "closed" as const },
+  );
+  handle(IPC.audioStreamClose, (_e, id: unknown) => {
+    if (typeof id === "number") closeAudioStream(id);
   });
   // EXPERIMENT (0.7 exploration): the persisted analysis stores — content-
   // keyed track analyses and the album-DR map (lookups/audioAnalysis holds

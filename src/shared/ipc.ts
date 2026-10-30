@@ -412,6 +412,19 @@ export interface TastyTunesApi {
     serverUdn: string,
     objectId: string,
   ): Promise<Uint8Array | { tooLarge: { bytes: number; maxBytes: number } } | null>;
+  /** A track's file opened to be read in pieces for the analysis (0.14.0, no size limit): its
+   *  stream's id and declared length, or null when the server wouldn't give it. */
+  audioStreamOpen(
+    serverUdn: string,
+    objectId: string,
+  ): Promise<{ id: number; bytes: number | null } | null>;
+  /** The stream's next piece: bytes, null at the end, or why there are none ("stalled": no byte
+   *  arrived for twenty seconds; main/media/audioStream). */
+  audioStreamRead(
+    id: number,
+  ): Promise<Uint8Array | null | { error: "stalled" | "failed" | "closed" }>;
+  /** Stop reading a stream: its download ends. */
+  audioStreamClose(id: number): Promise<void>;
   /** EXPERIMENT: a stored analysis by content key (null = none yet). */
   audioAnalysisGet(key: string): Promise<AudioAnalysis | null>;
   /** EXPERIMENT: persist a finished analysis under its content key. */
@@ -623,6 +636,9 @@ export const IPC = {
   fetchTrackInfo: "tt:fetchTrackInfo",
   fetchDiscTracks: "tt:fetchDiscTracks",
   expTrackAudio: "tt:expTrackAudio",
+  audioStreamOpen: "tt:audioStreamOpen",
+  audioStreamRead: "tt:audioStreamRead",
+  audioStreamClose: "tt:audioStreamClose",
   audioAnalysisGet: "tt:audioAnalysisGet",
   audioAnalysisPut: "tt:audioAnalysisPut",
   albumDrMap: "tt:albumDrMap",

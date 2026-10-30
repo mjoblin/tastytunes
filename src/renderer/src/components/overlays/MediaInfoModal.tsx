@@ -587,6 +587,7 @@ function MediaInfoBody({
       {kind === "track" && known.available && (
         <InfoWaveform
           state={known.state}
+          partial={known.partial}
           onAnalyze={known.analyze}
           serverUdn={udn}
           objectId={node.id}

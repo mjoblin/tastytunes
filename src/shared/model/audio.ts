@@ -188,7 +188,7 @@ export function albumDrKey(a: Pick<MediaNode, "title" | "artist">): string {
 /** The music features' version (lib/features measures them): a stored analysis whose features
  *  carry another is measured again once, on its next play or sweep. In shared/model since 0.12.0,
  *  when the rows' and the agents' tempo and key, read in main, began to need it. */
-export const FEATURES_VERSION = 12; // 12: the tempo's octave check; 11: the breath and the cut read past a riser before the slam; 9: drops at frame resolution
+export const FEATURES_VERSION = 13; // 13: beat and drop times stored as gaps (a beat past 10:55 read 10:55) and the strip's loudness its window's own mean (it read 3 to 7 dB low by rate), for analysis with no size limit; 12: the tempo's octave check; 11: the breath and the cut read past a riser before the slam; 9: drops at frame resolution
 
 /** A stored analysis's music features when they are the current version's, else null: an older
  *  version's tempo may sit an octave off (the 0.9.0 octave check), so none of its facts is said

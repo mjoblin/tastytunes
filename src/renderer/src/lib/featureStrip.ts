@@ -1,4 +1,5 @@
 import { STRIP_BANDS, type AnalysisStrip } from "@shared/model";
+import { fed, Tape, type Sink } from "./stream/tape";
 
 /**
  * THE FEATURE STRIP (0.8.0, display mode's scenes). The app never hears the
@@ -31,46 +32,93 @@ const toByte = (db: number): number =>
   Math.max(0, Math.min(255, Math.round(((db - DB_FLOOR) / -DB_FLOOR) * 255)));
 
 export function computeStrip(chans: readonly Float32Array[], sampleRate: number): Strip {
-  const frames = chans[0].length;
-  const hop = Math.max(1, Math.round(sampleRate / STRIP_FPS));
-  const count = Math.max(1, Math.floor(frames / hop));
-  // ~21 Hz bins at every common rate: the bass band keeps three bins
-  const n = sampleRate > 60_000 ? 4096 : 2048;
-  const fft = new Fft(n);
-  const window = new Float32Array(n);
-  for (let i = 0; i < n; i++) window[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (n - 1));
-  // a full-scale sine's peak-bin magnitude under a Hann window is ~N/4
-  const ref = (n / 4) * (n / 4);
-  const edges = BAND_EDGES_HZ.map((hz) =>
-    Math.min(n / 2, Math.max(1, Math.round((hz / sampleRate) * n))),
-  );
-  const re = new Float64Array(n);
-  const im = new Float64Array(n);
-  const bands = new Uint8Array(count * STRIP_BANDS);
-  const loud = new Uint8Array(count);
-  const inv = 1 / chans.length;
-  for (let f = 0; f < count; f++) {
-    const center = f * hop + hop / 2;
-    const start = Math.round(center - n / 2);
-    let sumSq = 0;
-    for (let i = 0; i < n; i++) {
-      const idx = start + i;
-      let v = 0;
-      if (idx >= 0 && idx < frames) for (const c of chans) v += c[idx];
-      v *= inv;
-      re[i] = v * window[i];
-      im[i] = 0;
-      if (i >= n / 2 - hop / 2 && i < n / 2 + hop / 2) sumSq += v * v;
-    }
-    fft.transform(re, im);
-    for (let b = 0; b < STRIP_BANDS; b++) {
-      let power = 0;
-      for (let k = edges[b]; k < edges[b + 1]; k++) power += re[k] * re[k] + im[k] * im[k];
-      bands[f * STRIP_BANDS + b] = toByte(10 * Math.log10(power / ref + 1e-12));
-    }
-    loud[f] = toByte(10 * Math.log10(sumSq / hop + 1e-12));
+  return fed(new StripSink(sampleRate, chans.length, chans[0].length), chans).strip();
+}
+
+/**
+ * THE STRIP IN PIECES (0.14.0, analysis with no size limit): the same frames from a tape that holds
+ * a little of the track at a time (lib/stream/tape). A frame is read once the samples its window
+ * covers have arrived (or the track has ended, past which the window reads the zero padding it
+ * always read); computeStrip feeds it the whole track, so there is one way the strip is made.
+ */
+export class StripSink implements Sink {
+  private readonly hop: number;
+  private readonly count: number;
+  private readonly n: number;
+  private readonly fft: Fft;
+  private readonly window: Float32Array;
+  private readonly ref: number;
+  private readonly edges: number[];
+  private readonly re: Float64Array;
+  private readonly im: Float64Array;
+  private readonly inv: number;
+  /** How many samples each frame's loudness sums: the hop's middle, as much of it as the window
+   *  holds. */
+  private readonly loudN: number;
+  private readonly bands: Uint8Array;
+  private readonly loud: Uint8Array;
+  private f = 0;
+  constructor(sampleRate: number, channels: number, frames: number) {
+    this.hop = Math.max(1, Math.round(sampleRate / STRIP_FPS));
+    this.count = Math.max(1, Math.floor(frames / this.hop));
+    // ~21 Hz bins at every common rate: the bass band keeps three bins
+    const n = (this.n = sampleRate > 60_000 ? 4096 : 2048);
+    this.fft = new Fft(n);
+    this.window = new Float32Array(n);
+    for (let i = 0; i < n; i++) this.window[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (n - 1));
+    // a full-scale sine's peak-bin magnitude under a Hann window is ~N/4
+    this.ref = (n / 4) * (n / 4);
+    this.edges = BAND_EDGES_HZ.map((hz) =>
+      Math.min(n / 2, Math.max(1, Math.round((hz / sampleRate) * n))),
+    );
+    this.re = new Float64Array(n);
+    this.im = new Float64Array(n);
+    this.inv = 1 / channels;
+    let loudN = 0;
+    for (let i = 0; i < n; i++) if (i >= n / 2 - this.hop / 2 && i < n / 2 + this.hop / 2) loudN++;
+    this.loudN = Math.max(1, loudN);
+    this.bands = new Uint8Array(this.count * STRIP_BANDS);
+    this.loud = new Uint8Array(this.count);
   }
-  return { fps: STRIP_FPS, bands, loud };
+  private startOf(f: number): number {
+    return Math.round(f * this.hop + this.hop / 2 - this.n / 2);
+  }
+  get needs(): number {
+    return this.f < this.count ? Math.max(0, this.startOf(this.f)) : Infinity;
+  }
+  take(tape: Tape): void {
+    const { n, hop, re, im, window, inv, fft, edges, ref } = this;
+    for (; this.f < this.count; this.f++) {
+      const f = this.f;
+      const start = this.startOf(f);
+      if (start + n > tape.end && !tape.done) return;
+      let sumSq = 0;
+      for (let i = 0; i < n; i++) {
+        const v = tape.mixAt(start + i) * inv;
+        re[i] = v * window[i];
+        im[i] = 0;
+        if (i >= n / 2 - hop / 2 && i < n / 2 + hop / 2) sumSq += v * v;
+      }
+      fft.transform(re, im);
+      for (let b = 0; b < STRIP_BANDS; b++) {
+        let power = 0;
+        for (let k = edges[b]; k < edges[b + 1]; k++) power += re[k] * re[k] + im[k] * im[k];
+        this.bands[f * STRIP_BANDS + b] = toByte(10 * Math.log10(power / ref + 1e-12));
+      }
+      // the mean of the samples summed (0.14.0): divided by the hop, which is wider than the
+      // window, it read 3.3 to 3.7 dB low at 44.1 to 96 kHz and 6.7 dB low at 192 kHz, and the
+      // silences' -50 dBFS floor moved with the rate
+      this.loud[f] = toByte(10 * Math.log10(sumSq / this.loudN + 1e-12));
+    }
+  }
+  /** The frames read so far; whole once the tape is done. */
+  strip(): Strip {
+    return { fps: STRIP_FPS, bands: this.bands, loud: this.loud };
+  }
+  /** How many frames are read, for a strip shown while the file arrives. */
+  get framesDone(): number {
+    return this.f;
+  }
 }
 
 export const b64 = (u8: Uint8Array): string => {

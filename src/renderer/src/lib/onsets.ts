@@ -1,5 +1,6 @@
 import type { AnalysisOnsets } from "@shared/model";
 import { Fft, b64, unb64 } from "./featureStrip";
+import { fed, type Sink, type Tape } from "./stream/tape";
 
 /**
  * DRUM ONSETS (0.8.0, display mode's hits). The decode that leaves the strip
@@ -89,108 +90,142 @@ export function analyzeOnsets(
   chans: readonly Float32Array[],
   sampleRate: number,
 ): { onsets: Onsets; flux: Float32Array } {
-  const frames = chans[0].length;
-  const hop = Math.max(1, Math.round((sampleRate * ONSET_HOP_MS) / 1000));
-  const count = Math.max(1, Math.floor(frames / hop));
-  const n = sampleRate > 60_000 ? 2048 : 1024;
-  const bank = filterbank(sampleRate, n);
-  const nb = bank.lo.length;
-  const fft = new Fft(n);
-  const window = new Float32Array(n);
-  for (let i = 0; i < n; i++) window[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (n - 1));
-  const ref = (n / 4) * (n / 4);
-  const re = new Float64Array(n);
-  const im = new Float64Array(n);
-  const inv = 1 / chans.length;
+  return fed(new OnsetsSink(sampleRate, chans.length, chans[0].length), chans).result();
+}
 
-  // the log-magnitude band spectrogram, frame-major
-  const spec = new Float32Array(count * nb);
-  for (let f = 0; f < count; f++) {
-    const center = f * hop + hop / 2;
-    const start = Math.round(center - n / 2);
-    for (let i = 0; i < n; i++) {
-      const idx = start + i;
-      let v = 0;
-      if (idx >= 0 && idx < frames) for (const c of chans) v += c[idx];
-      re[i] = v * inv * window[i];
-      im[i] = 0;
-    }
-    fft.transform(re, im);
-    const row = f * nb;
-    for (let b = 0; b < nb; b++) {
-      let power = 0;
-      for (let k = bank.lo[b]; k < bank.hi[b]; k++) power += re[k] * re[k] + im[k] * im[k];
-      spec[row + b] = Math.log1p(Math.sqrt(power / ref) * LAMBDA);
-    }
+/**
+ * THE ONSETS IN PIECES (0.14.0, analysis with no size limit): the spectrogram's frames from a tape
+ * that holds a little of the track at a time (lib/stream/tape), each read once the samples its
+ * window covers have arrived; the flux and the peaks, which weigh the whole track (its 98th
+ * percentile, its accents), once it has all arrived. analyzeOnsets feeds it the whole track.
+ */
+export class OnsetsSink implements Sink {
+  private readonly hop: number;
+  private readonly count: number;
+  private readonly n: number;
+  private readonly bank: Bank;
+  private readonly nb: number;
+  private readonly fft: Fft;
+  private readonly window: Float32Array;
+  private readonly ref: number;
+  private readonly re: Float64Array;
+  private readonly im: Float64Array;
+  private readonly inv: number;
+  /** The log-magnitude band spectrogram, frame-major. */
+  private readonly spec: Float32Array;
+  private f = 0;
+  constructor(sampleRate: number, channels: number, frames: number) {
+    this.hop = Math.max(1, Math.round((sampleRate * ONSET_HOP_MS) / 1000));
+    this.count = Math.max(1, Math.floor(frames / this.hop));
+    const n = (this.n = sampleRate > 60_000 ? 2048 : 1024);
+    this.bank = filterbank(sampleRate, n);
+    this.nb = this.bank.lo.length;
+    this.fft = new Fft(n);
+    this.window = new Float32Array(n);
+    for (let i = 0; i < n; i++) this.window[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (n - 1));
+    this.ref = (n / 4) * (n / 4);
+    this.re = new Float64Array(n);
+    this.im = new Float64Array(n);
+    this.inv = 1 / channels;
+    this.spec = new Float32Array(this.count * this.nb);
   }
-
-  // the flux: what rose in each band against the (max-filtered) frame LAG frames back
-  const flux = new Float32Array(count);
-  const rise = (t: number, b: number): number => {
-    const p = (t - LAG) * nb;
-    const prev = Math.max(
-      spec[p + b],
-      b > 0 ? spec[p + b - 1] : 0,
-      b + 1 < nb ? spec[p + b + 1] : 0,
-    );
-    return Math.max(0, spec[t * nb + b] - prev);
-  };
-  for (let t = LAG; t < count; t++) {
-    let s = 0;
-    for (let b = 0; b < nb; b++) s += rise(t, b);
-    flux[t] = s;
+  private startOf(f: number): number {
+    const center = f * this.hop + this.hop / 2;
+    return Math.round(center - this.n / 2);
   }
-
-  // the scale of this track's hits
-  const sorted = Float32Array.from(flux).sort();
-  const p98 = sorted[Math.min(count - 1, Math.floor(count * 0.98))] || 0;
-  const delta = Math.max(DELTA_FLOOR, p98 * DELTA_SHARE);
-
-  const picks: number[] = [];
-  const raw: number[] = [];
-  let last = -Infinity;
-  for (let t = LAG; t < count; t++) {
-    const v = flux[t];
-    if (v <= 0 || t - last < COMBINE) continue;
-    let isMax = true;
-    for (let k = Math.max(0, t - PRE_MAX); k <= Math.min(count - 1, t + POST_MAX); k++)
-      if (flux[k] > v) {
-        isMax = false;
-        break;
+  get needs(): number {
+    return this.f < this.count ? Math.max(0, this.startOf(this.f)) : Infinity;
+  }
+  take(tape: Tape): void {
+    const { n, re, im, window, inv, fft, bank, nb, ref, spec } = this;
+    for (; this.f < this.count; this.f++) {
+      const f = this.f;
+      const start = this.startOf(f);
+      if (start + n > tape.end && !tape.done) return;
+      for (let i = 0; i < n; i++) {
+        re[i] = tape.mixAt(start + i) * inv * window[i];
+        im[i] = 0;
       }
-    if (!isMax) continue;
-    let sum = 0;
-    let m = 0;
-    for (let k = Math.max(0, t - PRE_AVG); k <= Math.min(count - 1, t + POST_AVG); k++) {
-      sum += flux[k];
-      m++;
+      fft.transform(re, im);
+      const row = f * nb;
+      for (let b = 0; b < nb; b++) {
+        let power = 0;
+        for (let k = bank.lo[b]; k < bank.hi[b]; k++) power += re[k] * re[k] + im[k] * im[k];
+        spec[row + b] = Math.log1p(Math.sqrt(power / ref) * LAMBDA);
+      }
     }
-    if (v < sum / m + delta) continue;
-    last = t;
-    picks.push(t);
-    raw.push(v);
   }
-  const peaks = Float32Array.from(raw).sort();
-  const accent =
-    peaks[Math.min(peaks.length - 1, Math.floor(peaks.length * ACCENT_PERCENTILE))] || 1;
-  const at: number[] = [];
-  const strength: number[] = [];
-  const type: number[] = [];
-  for (let i = 0; i < picks.length; i++) {
-    const s = Math.min(1, raw[i] / accent);
-    if (s < KEEP_FROM) continue;
-    at.push((picks[i] * ONSET_HOP_MS) / 1000);
-    strength.push(s);
-    type.push(typeAt(bank, rise, picks[i]));
+  /** The onsets and the flux, once every frame is read. */
+  result(): { onsets: Onsets; flux: Float32Array } {
+    const { count, nb, bank, spec } = this;
+    // the flux: what rose in each band against the (max-filtered) frame LAG frames back
+    const flux = new Float32Array(count);
+    const rise = (t: number, b: number): number => {
+      const p = (t - LAG) * nb;
+      const prev = Math.max(
+        spec[p + b],
+        b > 0 ? spec[p + b - 1] : 0,
+        b + 1 < nb ? spec[p + b + 1] : 0,
+      );
+      return Math.max(0, spec[t * nb + b] - prev);
+    };
+    for (let t = LAG; t < count; t++) {
+      let s = 0;
+      for (let b = 0; b < nb; b++) s += rise(t, b);
+      flux[t] = s;
+    }
+
+    // the scale of this track's hits
+    const sorted = Float32Array.from(flux).sort();
+    const p98 = sorted[Math.min(count - 1, Math.floor(count * 0.98))] || 0;
+    const delta = Math.max(DELTA_FLOOR, p98 * DELTA_SHARE);
+
+    const picks: number[] = [];
+    const raw: number[] = [];
+    let last = -Infinity;
+    for (let t = LAG; t < count; t++) {
+      const v = flux[t];
+      if (v <= 0 || t - last < COMBINE) continue;
+      let isMax = true;
+      for (let k = Math.max(0, t - PRE_MAX); k <= Math.min(count - 1, t + POST_MAX); k++)
+        if (flux[k] > v) {
+          isMax = false;
+          break;
+        }
+      if (!isMax) continue;
+      let sum = 0;
+      let m = 0;
+      for (let k = Math.max(0, t - PRE_AVG); k <= Math.min(count - 1, t + POST_AVG); k++) {
+        sum += flux[k];
+        m++;
+      }
+      if (v < sum / m + delta) continue;
+      last = t;
+      picks.push(t);
+      raw.push(v);
+    }
+    const peaks = Float32Array.from(raw).sort();
+    const accent =
+      peaks[Math.min(peaks.length - 1, Math.floor(peaks.length * ACCENT_PERCENTILE))] || 1;
+    const at: number[] = [];
+    const strength: number[] = [];
+    const type: number[] = [];
+    for (let i = 0; i < picks.length; i++) {
+      const s = Math.min(1, raw[i] / accent);
+      if (s < KEEP_FROM) continue;
+      at.push((picks[i] * ONSET_HOP_MS) / 1000);
+      strength.push(s);
+      type.push(typeAt(bank, rise, picks[i]));
+    }
+    return {
+      onsets: {
+        at: Float32Array.from(at),
+        strength: Float32Array.from(strength),
+        type: Uint8Array.from(type),
+      },
+      flux,
+    };
   }
-  return {
-    onsets: {
-      at: Float32Array.from(at),
-      strength: Float32Array.from(strength),
-      type: Uint8Array.from(type),
-    },
-    flux,
-  };
 }
 
 export function computeOnsets(chans: readonly Float32Array[], sampleRate: number): Onsets {

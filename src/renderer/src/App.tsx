@@ -25,6 +25,7 @@ import { InfoModal } from "@/components/overlays/InfoModal";
 import { MediaInfoModal } from "@/components/overlays/MediaInfoModal";
 import { ArtistPictureHost } from "@/components/library/ArtistPictureDialog";
 import { useArtistChoicesKept } from "@/lib/artistPictures";
+import { useStopSkippedAnalysis } from "@/components/media/Waveform";
 import { LargeQueueConfirm } from "@/components/overlays/LargeQueueConfirm";
 import { SurfaceBoundary } from "@/components/chrome/SurfaceBoundary";
 import { DisplayMode } from "@/components/playback/DisplayMode";
@@ -52,6 +53,8 @@ export default function App(): React.JSX.Element {
   useIndexingToast();
   useDriveWaitToast();
   useArtistChoicesKept();
+  // a skipped track's measuring stops with its download (0.14.0, his A3)
+  useStopSkippedAnalysis();
 
   const screen = useStore((s) => s.screen);
   const connection = useStore((s) => s.connection);

@@ -914,13 +914,26 @@ export async function audioResUrl(
   host: string,
   serverUdn: string,
   objectId: string,
+  { analysis = false }: { analysis?: boolean } = {},
 ): Promise<string | null> {
   try {
     const entry = await entryFor(host, serverUdn);
     const r = await soapBrowse(entry, objectId, "BrowseMetadata", 0, 1);
     if (typeof r === "string") return null;
-    const m = /<res\b[^>]*audio[^>]*>\s*(http[^<\s]+)\s*<\/res>/i.exec(r.didl);
-    return m ? m[1].replace(/&amp;/g, "&") : null;
+    const audio = [...r.didl.matchAll(/<res\b([^>]*audio[^>]*)>\s*(http[^<\s]+)\s*<\/res>/gi)].map(
+      (m) => ({ attrs: m[1], url: m[2].replace(/&amp;/g, "&") }),
+    );
+    const first = audio[0];
+    if (!first) return null;
+    // APPLE LOSSLESS THROUGH THE SERVER'S WAV COPY (0.14.0, his A2): nothing here decodes an MP4's
+    // Apple Lossless (Chromium has no decoder for it), and AAC in one only whole; a server that
+    // also offers the file as WAV (Asset decodes it as it sends) is read that way, in pieces,
+    // with every measure. The analysis only: embedded art is read from the file itself.
+    if (analysis && /audio\/(mp4|x-m4a|m4a|aac)/i.test(first.attrs)) {
+      const wav = audio.find((x) => /audio\/(x-)?wav/i.test(x.attrs));
+      if (wav) return wav.url;
+    }
+    return first.url;
   } catch {
     return null;
   }

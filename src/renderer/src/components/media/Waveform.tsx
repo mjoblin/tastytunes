@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { tt } from "@/api";
 import { cx, fmtTime } from "@/lib/format";
 import { useStore } from "@/store";
@@ -8,7 +8,7 @@ import { sniffSampleRate } from "@/lib/audioHeader";
 import { stripFromStored, stripToStored } from "@/lib/featureStrip";
 import { onsetsFromStored, onsetsToStored } from "@/lib/onsets";
 import { FEATURES_VERSION, featuresFromStored, featuresToStored } from "@/lib/features";
-import { measureOffThread } from "@/lib/measureClient";
+import { measureOffThread, measureStreamOffThread } from "@/lib/measureClient";
 import type { Measured } from "@/lib/measure";
 import {
   audioAnalysisKey,
@@ -57,7 +57,13 @@ const CAPTURE_BUCKETS = 1200;
 /** A measured track; `outdated` marks a stored analysis an earlier version wrote (a measurement
  *  it lacks, or features of another version): Info offers Analyze audio again, which re-measures
  *  it (analyzeTrack), as playing it does. */
-export type Analysis = Measured & { outdated?: boolean };
+export type Analysis = Measured & {
+  outdated?: boolean;
+  /** Still being measured (0.14.0, his A1: the waveform fills in as the file arrives): the
+   *  envelopes' first `ready` of `of` buckets hold their values; every other figure is empty
+   *  until it is done. Never stored. */
+  partial?: { ready: number; of: number };
+};
 
 // decoded analyses hold every envelope: the last 48 tracks (lib/lru)
 const cache = new Lru<string, Promise<Analysis | null>>(48);
@@ -70,14 +76,169 @@ const failedAt = new Lru<string, number>(500);
 const FAILED_MEMO_MS = 60_000;
 // files main refused for their size (main/ipc/audio), so the absent line can say so
 const tooLarge = new Lru<string, { bytes: number; maxBytes: number }>(500);
+// files whose server stopped sending (0.14.0, his A3: a stall is a silence, caught on its own),
+// so the absent line can say so and offer to try again
+const stalled = new Lru<string, true>(500);
+
+// A FILE BEING MEASURED (0.14.0, analysis with no size limit): the waveform's buckets so far, by
+// location, for every surface that draws it while the file arrives (his A1), and the way to stop
+// a playing track's measuring when it is skipped (his A3), unless something holds it: Info open on
+// the track, an Analyze audio sweep, a forced measurement.
+type Live = { ready: number; peak: Float32Array; rms: Float32Array };
+const live = new Map<string, Live>();
+const liveListeners = new Set<() => void>();
+const setLive = (key: string, v: Live | null): void => {
+  if (v) live.set(key, v);
+  else live.delete(key);
+  for (const l of liveListeners) l();
+};
+const subscribeLive = (l: () => void): (() => void) => {
+  liveListeners.add(l);
+  return () => liveListeners.delete(l);
+};
+const controllers = new Map<string, AbortController>();
+const holds = new Map<string, number>();
+// a Try again by location: every surface drawing the file asks once more
+const retries = new Map<string, number>();
+
+/** Keep a track's measuring going while the caller lives (Info open on it). */
+export function holdAnalysis(serverUdn: string, objectId: string): () => void {
+  const key = `${serverUdn}|${objectId}`;
+  holds.set(key, (holds.get(key) ?? 0) + 1);
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    const n = (holds.get(key) ?? 1) - 1;
+    if (n > 0) holds.set(key, n);
+    else holds.delete(key);
+  };
+}
+
+/** Stop a track's measuring (a skip), unless something holds it; the next play starts afresh. */
+export function stopAnalysis(serverUdn: string, objectId: string): void {
+  const key = `${serverUdn}|${objectId}`;
+  if (holds.has(key)) return;
+  controllers.get(key)?.abort();
+}
+
+/** Try a stalled file again: forget the stall, and every surface drawing it measures it again. */
+export function retryAnalysis(serverUdn: string, objectId: string): void {
+  const key = `${serverUdn}|${objectId}`;
+  stalled.delete(key);
+  failedAt.delete(key);
+  cache.delete(key);
+  peeked.delete(key);
+  retries.set(key, (retries.get(key) ?? 0) + 1);
+  for (const l of liveListeners) l();
+}
+
+/** What a file measured in pieces has so far, by location, while `key` is given (his A1). */
+function useLivePartial(key: string | null): Analysis | null {
+  const sofar = useSyncExternalStore(subscribeLive, () => (key ? (live.get(key) ?? null) : null));
+  return useMemo(() => (sofar ? partialOf(sofar) : null), [sofar]);
+}
+
+/** The analysis so far, while a file is measured in pieces: the envelopes' ready buckets. */
+function partialOf(l: Live): Analysis {
+  return {
+    peak: l.peak,
+    rms: l.rms,
+    peakDb: -Infinity,
+    rmsDb: -Infinity,
+    crestDb: 0,
+    dr: 0,
+    lufs: null,
+    lra: null,
+    truePeakDb: null,
+    loudHist: null,
+    strip: null,
+    onsets: null,
+    features: null,
+    partial: { ready: l.ready, of: l.peak.length },
+  };
+}
+
+/** A file measured in pieces (FLAC, WAV, AIFF): its analysis; "whole" when only the whole-file
+ *  decode reads it; null when it couldn't be measured (`stalled` says when the server stopped). */
+async function measureInPieces(
+  serverUdn: string,
+  objectId: string,
+  key: string,
+  signal: AbortSignal,
+): Promise<Analysis | "whole" | null> {
+  const opened = await tt.audioStreamOpen(serverUdn, objectId).catch(() => null);
+  if (!opened) return null;
+  try {
+    const out = await measureStreamOffThread(
+      () => tt.audioStreamRead(opened.id),
+      CAPTURE_BUCKETS,
+      (p) => setLive(key, p),
+      signal,
+    );
+    if ("measured" in out) return out.measured;
+    if ("whole" in out) return "whole";
+    if (out.failed === "stalled") stalled.set(key, true);
+    return null;
+  } finally {
+    setLive(key, null);
+    void tt.audioStreamClose(opened.id).catch(() => {});
+  }
+}
 
 /** Why a track has no waveform, in the absent line's words (0.12.0: the reason crosses the IPC
  *  now; a file past the size limit says so instead of naming two possible causes). */
 export function absentLine(serverUdn: string | null, objectId: string | null): string {
-  const big = serverUdn && objectId ? tooLarge.get(`${serverUdn}|${objectId}`) : undefined;
+  const key = serverUdn && objectId ? `${serverUdn}|${objectId}` : null;
+  if (key && stalled.get(key)) return "No waveform for this file. The server stopped sending it.";
+  const big = key ? tooLarge.get(key) : undefined;
   return big
     ? `No waveform for this file. At ${fmtBytes(big.bytes)} it's larger than TastyTunes can analyze (${fmtBytes(big.maxBytes)}).`
     : "No waveform for this file. It couldn't be read or decoded.";
+}
+
+/** How far a file being measured has got, in place of its figures (0.14.0, his A1). */
+function MeasuringLine({ at }: { at: { ready: number; of: number } }): React.JSX.Element {
+  return (
+    <div className="mt-1.5 font-mono text-[10.5px] text-faint" data-waveform-measuring>
+      Measuring{FACT_SEP}
+      {Math.round((at.ready / at.of) * 100)}%
+    </div>
+  );
+}
+
+/** The absent line, with Try again when the file's server stopped sending it (0.14.0, his A3). */
+function AbsentLine({
+  serverUdn,
+  objectId,
+  onRetry,
+}: {
+  serverUdn: string | null;
+  objectId: string | null;
+  /** Measures the file once the stall is forgotten (Info's Analyze); every surface drawing the
+   *  file asks again on its own. */
+  onRetry?: () => void;
+}): React.JSX.Element {
+  const isStalled = !!serverUdn && !!objectId && stalled.get(`${serverUdn}|${objectId}`) === true;
+  return (
+    <div className="flex items-baseline gap-2 text-[11.5px] text-faint" data-waveform-absent>
+      <span className="min-w-0">{absentLine(serverUdn, objectId)}</span>
+      {isStalled && (
+        <button
+          data-waveform-retry
+          onClick={() => {
+            if (!serverUdn || !objectId) return;
+            retryAnalysis(serverUdn, objectId);
+            onRetry?.();
+          }}
+          // no transition: Info's frosted shell fades as a whole (S11)
+          className="shrink-0 rounded-md px-1.5 py-px ring-1 ring-edge text-dim hover:bg-veil2 hover:text-ink"
+        >
+          Try again
+        </button>
+      )}
+    </div>
+  );
 }
 
 /**
@@ -174,7 +335,7 @@ export function analyzeTrack(
   serverUdn: string,
   objectId: string,
   contentKey: string | null = null,
-  { force = false }: { force?: boolean } = {},
+  { force = false, keep = false }: { force?: boolean; keep?: boolean } = {},
 ): Promise<Analysis | null> {
   const key = `${serverUdn}|${objectId}`;
   const hit = force ? undefined : cache.get(key);
@@ -188,6 +349,23 @@ export function analyzeTrack(
     }
     const failed = failedAt.get(key);
     if (!force && failed != null && Date.now() - failed < FAILED_MEMO_MS) return null;
+    // FLAC, WAV and AIFF in pieces (0.14.0): no size limit, the waveform filling in as it goes;
+    // a measuring something else wants (a sweep, a forced one) holds itself against a skip
+    const ac = new AbortController();
+    controllers.set(key, ac);
+    const release = keep || force ? holdAnalysis(serverUdn, objectId) : null;
+    let pieces: Analysis | "whole" | null;
+    try {
+      pieces = await measureInPieces(serverUdn, objectId, key, ac.signal);
+    } finally {
+      release?.();
+      if (controllers.get(key) === ac) controllers.delete(key);
+    }
+    if (ac.signal.aborted) throw new Error("cancelled");
+    if (pieces !== "whole") {
+      if (pieces && contentKey) void tt.audioAnalysisPut(contentKey, toStored(pieces));
+      return pieces;
+    }
     const got = await tt.expTrackAudio(serverUdn, objectId);
     if (!got) return null;
     if (!ArrayBuffer.isView(got)) {
@@ -238,16 +416,19 @@ export function analyzeTrack(
       return null;
     }
   })();
-  cache.set(key, p);
+  // every caller gets null for a stopped measuring; the cache forgets it
+  const settled = p.catch(() => null);
+  cache.set(key, settled);
   void p.then(
     (a) => {
       if (a != null) return;
       cache.delete(key);
       failedAt.set(key, Date.now());
     },
+    // a skipped track's measuring (cancelled) is no failure: its next play measures it
     () => cache.delete(key),
   );
-  return p;
+  return settled;
 }
 
 function usePeaks(
@@ -256,6 +437,10 @@ function usePeaks(
   contentKey: string | null = null,
 ): Analysis | null | "loading" {
   const [state, setState] = useState<Analysis | null | "loading">("loading");
+  // while the file is measured in pieces, what is measured so far (0.14.0, his A1)
+  const key = serverUdn && objectId ? `${serverUdn}|${objectId}` : null;
+  const partial = useLivePartial(state === "loading" ? key : null);
+  const attempt = useSyncExternalStore(subscribeLive, () => (key ? (retries.get(key) ?? 0) : 0));
   useEffect(() => {
     if (!serverUdn || !objectId) {
       setState(null);
@@ -269,8 +454,8 @@ function usePeaks(
     return () => {
       stale = true;
     };
-  }, [serverUdn, objectId, contentKey]);
-  return state;
+  }, [serverUdn, objectId, contentKey, attempt]);
+  return state === "loading" && partial ? partial : state;
 }
 
 /** The playing track's library identity, resolved by content — for surfaces
@@ -554,9 +739,7 @@ export function Waveform({
     return enabled ? (
       <div data-waveform className="pt-1">
         <div className="microlabel mb-1.5">waveform</div>
-        <div className="text-[11.5px] text-faint" data-waveform-absent>
-          {absentLine(serverUdn, objectId)}
-        </div>
+        <AbsentLine serverUdn={serverUdn} objectId={objectId} />
       </div>
     ) : null;
   return (
@@ -579,12 +762,17 @@ export function Waveform({
               void tt.command({ type: "seek", positionSecs: Math.round(pct * duration) });
             }}
           />
-          <div className="mt-1.5 font-mono text-[10.5px] text-faint">
-            peak {fmtDb(analysis.peakDb)}
-            {FACT_SEP}rms {fmtDb(analysis.rmsDb)}
-            {FACT_SEP}crest {fmtDb(analysis.crestDb)}
-            {analysis.lufs != null && `${FACT_SEP}${fmtLufs(analysis.lufs)}`}
-          </div>
+          {analysis.partial ? (
+            // the file still arriving (0.14.0, his A1): how far, in place of the figures
+            <MeasuringLine at={analysis.partial} />
+          ) : (
+            <div className="mt-1.5 font-mono text-[10.5px] text-faint">
+              peak {fmtDb(analysis.peakDb)}
+              {FACT_SEP}rms {fmtDb(analysis.rmsDb)}
+              {FACT_SEP}crest {fmtDb(analysis.crestDb)}
+              {analysis.lufs != null && `${FACT_SEP}${fmtLufs(analysis.lufs)}`}
+            </div>
+          )}
         </>
       )}
     </div>
@@ -729,10 +917,14 @@ async function peekAnalysis(
   objectId: string,
   contentKey: string,
 ): Promise<Analysis | null | undefined> {
-  const hit = cache.get(`${serverUdn}|${objectId}`);
-  const found = hit
-    ? await hit
-    : await tt.audioAnalysisGet(contentKey).then((s) => (s ? fromStored(s) : undefined));
+  const key = `${serverUdn}|${objectId}`;
+  const hit = cache.get(key);
+  // a file whose server stopped sending says so, with Try again, rather than offering Analyze
+  const found = stalled.get(key)
+    ? null
+    : hit
+      ? await hit
+      : await tt.audioAnalysisGet(contentKey).then((s) => (s ? fromStored(s) : undefined));
   peeked.set(`${serverUdn}|${objectId}`, { found });
   return found;
 }
@@ -770,10 +962,14 @@ export function useKnownAnalysis(
   serverUdn: string | null,
   objectId: string,
   contentKey: string,
-): { available: boolean; state: KnownAnalysis; analyze(): void } {
+): { available: boolean; state: KnownAnalysis; partial: Analysis | null; analyze(): void } {
   const enabled = useStore((s) => s.settings.waveforms);
   const [state, setState] = useState<KnownAnalysis>(
     () => knownNow(serverUdn, objectId) ?? "loading",
+  );
+  // while Analyze measures the file in pieces, what is measured so far (0.14.0, his A1)
+  const partial = useLivePartial(
+    enabled && serverUdn && state === "loading" ? `${serverUdn}|${objectId}` : null,
   );
   useEffect(() => {
     if (!enabled || !serverUdn) return;
@@ -790,9 +986,14 @@ export function useKnownAnalysis(
   const analyze = (): void => {
     if (!serverUdn) return;
     setState("loading");
-    void analyzeTrack(serverUdn, objectId, contentKey).then((a) => setState(a));
+    void analyzeTrack(serverUdn, objectId, contentKey, { keep: true }).then((a) => setState(a));
   };
-  return { available: enabled && serverUdn != null, state, analyze };
+  // Info open on a track keeps its measuring going through a skip (0.14.0, his A3)
+  useEffect(
+    () => (enabled && serverUdn ? holdAnalysis(serverUdn, objectId) : undefined),
+    [enabled, serverUdn, objectId],
+  );
+  return { available: enabled && serverUdn != null, state, partial, analyze };
 }
 
 /**
@@ -808,26 +1009,29 @@ export function useKnownAnalysis(
  */
 export function InfoWaveform({
   state,
+  partial = null,
   onAnalyze,
   serverUdn = null,
   objectId = null,
 }: {
   state: KnownAnalysis;
+  /** What Analyze has measured so far, while the file arrives. */
+  partial?: Analysis | null;
   onAnalyze(): void;
   /** The file's location, for why it has no waveform (absentLine). */
   serverUdn?: string | null;
   objectId?: string | null;
 }): React.JSX.Element | null {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const ready = state != null && state !== "loading" && state !== "unknown";
+  const shown = state === "loading" ? partial : state != null && state !== "unknown" ? state : null;
   useEffect(() => {
     // A study view, not a playhead: the whole envelope wears the "played"
     // brightness (progress 1) — nothing here is dim for being unheard.
-    if (canvasRef.current && ready)
-      draw(canvasRef.current, state, 1, { strip: false, style: "envelope" });
-  }, [state, ready]);
+    if (canvasRef.current && shown)
+      draw(canvasRef.current, shown, 1, { strip: false, style: "envelope" });
+  }, [shown]);
 
-  if (state === "loading") return null;
+  if (state === "loading" && !partial) return null;
   return (
     <div className="mt-4" data-info-waveform>
       <div className="microlabel mb-1.5">waveform</div>
@@ -840,9 +1044,13 @@ export function InfoWaveform({
           <AudioLines size={13} /> Analyze audio
         </button>
       ) : state === null ? (
-        <div className="text-[11.5px] text-faint" data-waveform-absent>
-          {absentLine(serverUdn, objectId)}
-        </div>
+        <AbsentLine serverUdn={serverUdn} objectId={objectId} onRetry={onAnalyze} />
+      ) : state === "loading" ? (
+        // the file still arriving (0.14.0, his A1): drawn so far, how far in place of the figures
+        <>
+          <canvas ref={canvasRef} className="w-full h-16 block" />
+          {partial?.partial && <MeasuringLine at={partial.partial} />}
+        </>
       ) : (
         <>
           <canvas ref={canvasRef} className="w-full h-16 block" />
@@ -997,5 +1205,61 @@ function SeekTrack({ analysis, shown }: { analysis: Analysis; shown: number }): 
     if (canvasRef.current)
       draw(canvasRef.current, analysis, shown, { strip: true, style: "bars", pitch: 2.25 });
   }, [analysis, shown]);
-  return <canvas ref={canvasRef} className="w-full h-8 block" data-seek-waveform />;
+  const p = analysis.partial;
+  return (
+    <canvas
+      ref={canvasRef}
+      className="w-full h-8 block"
+      data-seek-waveform
+      data-seek-waveform-partial={p ? Math.round((p.ready / p.of) * 100) : undefined}
+    />
+  );
+}
+
+/**
+ * A SKIP STOPS THE SKIPPED TRACK'S MEASURING (0.14.0, his A3, settled on the proposal): when the
+ * playing file changes, the last one's measuring stops, with its download, unless it played to
+ * its end (within END_SLACK_S of it: then the little left of the download finishes under the next
+ * track), or something holds it (Info open on it, an Analyze audio sweep). Mounted once, in App.
+ */
+const END_SLACK_S = 5;
+export function useStopSkippedAnalysis(): void {
+  const ref = usePlayingFileRef();
+  const playhead = useStore((s) => s.playhead);
+  const md = useStore((s) => s.playState?.metadata);
+  const duration = md?.duration ?? null;
+  const track = `${md?.title ?? ""}|${md?.artist ?? ""}|${md?.album ?? ""}`;
+  const seen = useRef<{
+    key: string;
+    track: string;
+    serverUdn: string;
+    objectId: string;
+    secs: number;
+    duration: number | null;
+  } | null>(null);
+  // after every render: a change of file is checked against where the last one had got to, then
+  // where this one is now is kept for the next change
+  useEffect(() => {
+    const key = ref ? `${ref.serverUdn}|${ref.objectId}` : null;
+    const prev = seen.current;
+    if (prev && prev.key !== key) {
+      const ended =
+        prev.duration != null && prev.duration > 0 && prev.secs >= prev.duration - END_SLACK_S;
+      if (!ended) stopAnalysis(prev.serverUdn, prev.objectId);
+    }
+    // between a track change and the next file's lookup, the playhead is the next track's: the
+    // last file keeps where it had got to (a track played to its end isn't taken for a skip)
+    if (prev && prev.key === key && prev.track !== track) return;
+    seen.current =
+      ref && key
+        ? {
+            key,
+            track,
+            serverUdn: ref.serverUdn,
+            objectId: ref.objectId,
+            secs: playhead?.secs ?? 0,
+            duration,
+          }
+        : null;
+  });
 }

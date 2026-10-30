@@ -149,7 +149,11 @@ async function sweepTracks(
   for (let i = 0; i < tracks.length; i++) {
     progress(i, tracks.length);
     const t = tracks[i];
-    const a = await analyzeTrack(t.serverUdn ?? serverUdn, t.id, audioAnalysisKey(t), { force });
+    // a sweep's measuring never stops for a skip (0.14.0, his A3)
+    const a = await analyzeTrack(t.serverUdn ?? serverUdn, t.id, audioAnalysisKey(t), {
+      force,
+      keep: true,
+    });
     if (a) drs.push(a.dr);
   }
   progress(tracks.length, tracks.length);
