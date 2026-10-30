@@ -88,6 +88,52 @@ describe("the Library at 50,000 tracks", () => {
     }, 300);
   });
 
+  it("finds each copy's tracks on a walked drive holding many copies of one album", () => {
+    // 0.14.0: the mock's folder-album drive (6,435 albums, 65 titles) took 40 s to draw the Albums
+    // lens, every copy walking every track of its title; a copy's tracks are its own folder's
+    const drive = (copies: number): MediaIndexPools[] => {
+      const albums: MediaIndexPools["albums"] = [];
+      const tracks: MediaIndexPools["tracks"] = [];
+      for (let c = 0; c < copies; c++) {
+        const titlePath = ["Drive", "Music", `Shelf ${c}`, "Amber Nights"];
+        const base = { serverUdn: "usb", serverName: "USB", artUrl: "art", titlePath };
+        albums.push({
+          ...large[0].albums[0],
+          ...base,
+          id: `a${c}`,
+          title: "Amber Nights",
+          artist: "Lead",
+        });
+        for (let n = 1; n <= 8; n++)
+          tracks.push({
+            ...large[0].tracks[0],
+            ...base,
+            id: `t${c}.${n}`,
+            title: `Track ${n}`,
+            album: "Amber Nights",
+            artist: "Lead",
+            trackNumber: n,
+          });
+      }
+      return [{ ...large[0], udn: "usb", albums, tracks }];
+    };
+    const few = drive(300);
+    const many = drive(3_000);
+    const own = lensIndexOf(many);
+    expect(own.albums.every((a) => own.tracksOf(a).length === 8)).toBe(true);
+    const run = (pools: MediaIndexPools[]): void => {
+      const index = lensIndexOf(pools);
+      for (const a of index.albums) index.tracksOf(a);
+    };
+    const t300 = Math.max(
+      timed(() => run(few)),
+      1,
+    );
+    const t3000 = timed(() => run(many));
+    expect(t3000, `${t3000.toFixed(0)} ms at 3,000 copies`).toBeLessThan(300);
+    expect(t3000 / t300, `${(t3000 / t300).toFixed(1)}x from 300 to 3,000 copies`).toBeLessThan(25);
+  });
+
   it("folds a 20,000-play record into its stats", () => {
     scales((pools) => record(pools), 500);
   });

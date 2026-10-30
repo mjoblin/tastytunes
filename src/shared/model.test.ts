@@ -386,6 +386,67 @@ describe("albumTracksOf: an album's tracks from an index pool", () => {
     expect(albumTracksOf(album, pool).map((t) => t.id)).toEqual(["m1", "m2"]);
   });
 
+  it("takes a walked album's tracks from its own folder, two copies with the same art each its own", () => {
+    // a drive's two copies of one album in two folders (0.14.0): by title and art each claimed both
+    const at = (folder: string): string[] => ["Drive", "Music", folder, "Frozen Charlotte"];
+    const pool = {
+      albums: [
+        { title: "Frozen Charlotte", artist: "Jack White" },
+        { title: "Frozen Charlotte", artist: "Jack White" },
+      ],
+      tracks: [
+        track("a2", "Two", {
+          album: "Frozen Charlotte",
+          trackNumber: 2,
+          artUrl: "art",
+          titlePath: at("A"),
+        }),
+        track("a1", "One", {
+          album: "Frozen Charlotte",
+          trackNumber: 1,
+          artUrl: "art",
+          titlePath: at("A"),
+        }),
+        track("b1", "One", {
+          album: "Frozen Charlotte",
+          trackNumber: 1,
+          artUrl: "art",
+          titlePath: at("B"),
+        }),
+      ],
+    };
+    const copyA = {
+      title: "Frozen Charlotte",
+      artist: "Jack White",
+      artUrl: "art",
+      titlePath: at("A"),
+    };
+    const copyB = {
+      title: "Frozen Charlotte",
+      artist: "Jack White",
+      artUrl: "art",
+      titlePath: at("B"),
+    };
+    expect(albumTracksOf(copyA, pool).map((t) => t.id)).toEqual(["a1", "a2"]);
+    expect(albumTracksOf(copyB, pool).map((t) => t.id)).toEqual(["b1"]);
+  });
+
+  it("falls back to the title rule where a walked album's folder holds none of its tracks", () => {
+    const pool = {
+      albums: [{ title: "Loose", artist: "Lead" }],
+      tracks: [
+        track("l1", "One", {
+          album: "Loose",
+          trackNumber: 1,
+          ...lead,
+          titlePath: ["Drive", "Other"],
+        }),
+      ],
+    };
+    const album = { title: "Loose", artist: "Lead", artUrl: null, titlePath: ["Drive", "Loose"] };
+    expect(albumTracksOf(album, pool).map((t) => t.id)).toEqual(["l1"]);
+  });
+
   it("splits twin editions (same title, same artist) by the art each track carries", () => {
     const pool = {
       albums: [
