@@ -330,9 +330,10 @@ export interface TastyTunesApi {
   /** The picture embedded in a track's audio file, for surfaces the server's
    *  small artwork can't fill. Null when off, unresolvable, or untagged. */
   embeddedArt(query: EmbeddedArtQuery): Promise<EmbeddedArt | null>;
-  /** Look up lyrics via LRCLIB (main process, in-memory cached; null = not found).
-   *  `force` bypasses the cache read — the user-driven refresh. */
-  fetchLyrics(query: LyricsQuery, force?: boolean): Promise<LyricsResult | null>;
+  /** Look up lyrics via LRCLIB (main process, disk cached). null: LRCLIB answered, no lyrics;
+   *  "unreachable": it was never really asked (a timeout, no network, a server error), nothing
+   *  kept, so asking again is worth it. `force` bypasses the cache read — the user-driven refresh. */
+  fetchLyrics(query: LyricsQuery, force?: boolean): Promise<LyricsResult | null | "unreachable">;
   /** Check the saved ListenBrainz token (null = network failure, not a verdict). */
   lbValidate(): Promise<{ valid: boolean; userName: string | null } | null>;
   /** The secrets store (0.13.0 round 10, main/data/secrets): what Settings may know of the tokens,

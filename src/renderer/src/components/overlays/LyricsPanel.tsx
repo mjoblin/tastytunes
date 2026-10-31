@@ -69,6 +69,12 @@ export function LyricsPanel({ className }: { className?: string }): React.JSX.El
           </div>
         )}
 
+        {status === "unreachable" && (
+          <div className="text-[13px] text-faint pt-2">
+            lrclib.net didn&apos;t answer. Refresh to try again.
+          </div>
+        )}
+
         {status === "none" && (
           <div className="text-[13px] text-faint pt-2">
             {isRadio || !hasQuery

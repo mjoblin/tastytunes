@@ -134,6 +134,7 @@ export function audioTools(ctx: ToolContext): Record<string, ToolImpl> {
           album: md.album ?? null,
           duration: md.duration ?? null,
         });
+        if (r === "unreachable") return err("lrclib.net didn't answer. Try again in a moment.");
         if (!r) return ok("No lyrics found for this track.");
         if (r.instrumental) return ok("Instrumental — no lyrics.");
         return ok({ title: md.title, artist: md.artist, lyrics: r.plain ?? r.synced });

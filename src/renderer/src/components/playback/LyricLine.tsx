@@ -27,11 +27,13 @@ export function LyricLine(): React.JSX.Element | null {
         ? null
         : status === "none"
           ? "No lyrics found for this track"
-          : result?.instrumental
-            ? "Instrumental"
-            : result?.plain
-              ? "No lyric timing data for this track"
-              : null;
+          : status === "unreachable"
+            ? "lrclib.net didn't answer"
+            : result?.instrumental
+              ? "Instrumental"
+              : result?.plain
+                ? "No lyric timing data for this track"
+                : null;
     if (!note) return null;
     // Same h-0 slot as the line itself: an explanation must not push the
     // vertically-centred art/details block around (see below).
