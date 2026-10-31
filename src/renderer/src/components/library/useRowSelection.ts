@@ -83,7 +83,11 @@ export function useRowSelection<K extends string | number = string>(d: {
           return;
         }
         if (selected.size === 0) return;
-        if (e.key === "Escape" && !holdEscape?.current) setSelected(new Set());
+        if (e.key === "Escape" && !holdEscape?.current) {
+          // this Escape is the selection's, not the keyboard's release (hooks/useShortcuts)
+          e.preventDefault();
+          setSelected(new Set());
+        }
       }),
     [keys, canSelectAll, selected.size, holdEscape],
   );

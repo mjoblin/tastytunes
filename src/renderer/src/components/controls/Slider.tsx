@@ -153,6 +153,8 @@ export function Slider({
     };
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === "Escape") {
+        // the drag's Escape, not the keyboard's release (hooks/useShortcuts)
+        e.preventDefault();
         end();
         onCancel?.();
       }

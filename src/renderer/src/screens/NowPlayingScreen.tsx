@@ -143,7 +143,10 @@ export function NowPlayingScreen(): React.JSX.Element {
   useEffect(() => {
     if (!scenesOpen) return;
     const offKey = onScreenKey((e) => {
-      if (e.key === "Escape") setScenesOpen(false);
+      if (e.key !== "Escape") return;
+      // this Escape is the picker's, not the keyboard's release (hooks/useShortcuts)
+      e.preventDefault();
+      setScenesOpen(false);
     });
     const onDown = (e: PointerEvent): void => {
       const el = e.target instanceof Element ? e.target : null;

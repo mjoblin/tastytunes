@@ -3,6 +3,7 @@ import { tt } from "@/api";
 import { toggleInfo } from "@/lib/infoHotkey";
 import { infoBack, infoForward, stepInfo } from "@/lib/infoSteps";
 import { modalHasKeyboard } from "@/lib/keyboardOwner";
+import { releaseKeyboard } from "@/lib/inputModality";
 import { useStore, type Screen } from "@/store";
 import { SCREENS, IS_MAC } from "@/lib/screens";
 
@@ -191,6 +192,13 @@ export function useShortcuts(opts?: { transportOnly?: boolean }): void {
           else if (s.artistOpen) s.setArtistOpen(false);
           else if (s.displayMode) s.setDisplayMode(false);
           else if (s.diagnosticsOpen) s.setDiagnosticsOpen(false);
+          // nothing to close: Escape lets go of the keyboard, as a click does (lib/inputModality),
+          // once every other listener has had the key; one that used it (a selection cleared, a
+          // picker closed, a drag cancelled) marks it handled, and that Escape stops there
+          else
+            setTimeout(() => {
+              if (!e.defaultPrevented && !modalHasKeyboard()) releaseKeyboard();
+            });
           return;
         }
         if (e.key === "?") {

@@ -12,6 +12,20 @@
  */
 export const KEYBOARD_NAV_ATTR = "data-keyboard-nav";
 
+/**
+ * Escape with nothing left to close lets go of the keyboard as a pointer press does
+ * (hooks/useShortcuts; his look, 2026-10-30: the ring stayed on a nav item Tab had reached
+ * after Escape, and a click took it away). Focus leaves the control, so Space and the arrows are
+ * the app's again rather than the hidden control's, and the mark goes. The next Tab carries on
+ * from where focus was (Chromium keeps the place), as Escape in a text box already releases it
+ * (FilterInput).
+ */
+export function releaseKeyboard(win: Window = window): void {
+  const doc = win.document;
+  if (doc.activeElement !== doc.body) (doc.activeElement as HTMLElement | null)?.blur?.();
+  doc.documentElement.removeAttribute(KEYBOARD_NAV_ATTR);
+}
+
 /** Installs the two listeners on this window; returns their removal. */
 export function trackInputModality(win: Window = window): () => void {
   const root = win.document.documentElement;
