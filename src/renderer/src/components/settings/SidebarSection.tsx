@@ -14,7 +14,6 @@ import {
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { Eye, EyeOff, Lock } from "lucide-react";
 import { useStore, type Screen } from "@/store";
 import { cx } from "@/lib/format";
@@ -32,7 +31,7 @@ import {
   type ScreenDef,
 } from "@/lib/screens";
 import { OrderHandle } from "@/components/controls/OrderHandle";
-import { DND_ACCESSIBILITY, lockVertical } from "@/lib/dnd";
+import { DND_ACCESSIBILITY, lockVertical, sortableStyle } from "@/lib/dnd";
 import { HeaderChip } from "@/components/chrome/Chrome";
 import { useConfirmPopover } from "@/components/chrome/Confirm";
 
@@ -212,7 +211,7 @@ function SortableSidebarRow({
   return (
     <div
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(lockVertical(transform)), transition }}
+      style={sortableStyle(lockVertical(transform), transition)}
       data-nav-order-row={id}
       className={cx(
         "group flex items-center gap-3 h-9 px-1.5 rounded-lg",

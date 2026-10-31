@@ -17,7 +17,6 @@ import {
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import {
   AlertTriangle,
   Crosshair,
@@ -41,7 +40,7 @@ import { Eqbars } from "@/components/media/Eqbars";
 import { EmptyActions, EmptyState } from "@/components/chrome/EmptyState";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { flashTarget, scrollToWithContext } from "@/lib/scroll";
-import { DND_ACCESSIBILITY, lockVertical } from "@/lib/dnd";
+import { CARD_MOTION, DND_ACCESSIBILITY, lockVertical, ROW_MOTION, sortableStyle } from "@/lib/dnd";
 import { CARD_GLYPH_STROKE, MEDIA_ART_FALLBACK } from "@/components/media/MediaArt";
 import { OrderHandle } from "@/components/controls/OrderHandle";
 import {
@@ -833,7 +832,7 @@ function PresetRow({
   return (
     <div
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(lockVertical(transform)), transition }}
+      style={sortableStyle(lockVertical(transform), transition, ROW_MOTION)}
       {...listItem}
       onContextMenu={menu.open}
       data-playing={playing || undefined}
@@ -842,7 +841,7 @@ function PresetRow({
         // trailing grip when it moved into the position cell (OrderHandle),
         // and an empty grid track still costs its gap.
         "group grid grid-cols-[26px_44px_1fr_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5",
-        "cursor-default transition-colors",
+        "cursor-default",
         isDragging && "z-10 bg-raised shadow-xl",
         // hold the hover highlight while this row's volume popover is open —
         // the pointer leaves the row, but the row is still what's being edited
@@ -977,7 +976,7 @@ function PresetCard({
   return (
     <div
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
+      style={sortableStyle(transform, transition, CARD_MOTION)}
       {...attributes}
       {...listeners}
       {...listItem}
@@ -989,7 +988,7 @@ function PresetCard({
         // it stays legible on gold/orange album covers.
         // Hover: a slight grow + lift (scale is layout-free, so edge-clipped
         // cards just clip at the scrollport; z-10 keeps the grown card on top).
-        "group relative text-left rounded-2xl p-2 pb-2.5 transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]",
+        "group relative text-left rounded-2xl p-2 pb-2.5 hover:z-10 motion-safe:hover:scale-[1.04]",
         isDragging && "z-10 opacity-90",
         playing ? "bg-goldtile/70 tile-playing" : "bg-raised/50 ring-1 ring-edge card-hover-glow",
         // held while this card's volume popover is open — the pointer has left,

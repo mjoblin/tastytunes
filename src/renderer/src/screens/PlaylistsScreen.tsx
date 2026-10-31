@@ -18,7 +18,6 @@ import {
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import {
   Library,
   ListMusic,
@@ -64,7 +63,7 @@ import { MediaArt } from "@/components/media/MediaArt";
 import { DurationCell } from "@/components/media/DurationCell";
 import { PresetPicker } from "@/components/library/LibraryMenus";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
-import { DND_ACCESSIBILITY, lockVertical } from "@/lib/dnd";
+import { DND_ACCESSIBILITY, lockVertical, ROW_MOTION, sortableStyle } from "@/lib/dnd";
 import { cx, fmtDuration, fmtRelative, matchesFilter } from "@/lib/format";
 import { Eqbars } from "@/components/media/Eqbars";
 import {
@@ -807,7 +806,7 @@ function TrackRow({
     <div
       ref={setNodeRef}
       {...listItem}
-      style={{ transform: CSS.Transform.toString(lockVertical(transform)), transition }}
+      style={sortableStyle(lockVertical(transform), transition, ROW_MOTION)}
       onContextMenu={(e) => {
         e.preventDefault();
         onMenu(e);
@@ -819,7 +818,6 @@ function TrackRow({
         dr !== undefined
           ? "grid-cols-[26px_44px_1fr_auto_auto_auto]"
           : "grid-cols-[26px_44px_1fr_auto_auto]",
-        "transition-colors",
         isDragging && "z-10 bg-raised shadow-xl",
         // current + queue audible: the queue row's full playing treatment;
         // current while another source plays: the parked resume point

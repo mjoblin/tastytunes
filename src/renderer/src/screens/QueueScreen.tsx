@@ -29,7 +29,6 @@ import {
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import type { Modifier } from "@dnd-kit/core";
 import {
   ArrowDownToLine,
@@ -61,7 +60,7 @@ import { Eqbars } from "@/components/media/Eqbars";
 import { EmptyActions, EmptyState } from "@/components/chrome/EmptyState";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { flashTarget, scrollToWithContext } from "@/lib/scroll";
-import { DND_ACCESSIBILITY, lockVertical } from "@/lib/dnd";
+import { CARD_MOTION, DND_ACCESSIBILITY, lockVertical, ROW_MOTION, sortableStyle } from "@/lib/dnd";
 import { cx, fmtDuration, fmtTime, matchesFilter, fmtCount } from "@/lib/format";
 import { isFavorited, toggleFavorite } from "@/lib/favorites";
 import { fromQueueItem, refToFavorite, refToPlaylistItem, type MediaRef } from "@/lib/mediaRef";
@@ -1495,8 +1494,8 @@ function QueueRow({
       }}
       style={
         staticDrag
-          ? undefined
-          : { transform: CSS.Transform.toString(lockVertical(transform)), transition }
+          ? sortableStyle(null, undefined, ROW_MOTION)
+          : sortableStyle(lockVertical(transform), transition, ROW_MOTION)
       }
       {...listItem}
       data-queue-id={item.id}
@@ -1514,7 +1513,6 @@ function QueueRow({
         dragLive && "pointer-events-none",
         // a selected row carries the block, and says so (the grip's cursor)
         bodyDrag && selected ? "cursor-grab active:cursor-grabbing" : "cursor-default",
-        "transition-colors",
         isDragging && !staticDrag && "z-10 bg-raised shadow-xl",
         // current + queue audible: full playing treatment; current while another
         // source plays: just the parked resume point, quietly set apart
@@ -1665,7 +1663,11 @@ function QueueCard({
       data-queue-id={item.id}
       data-queue-current={isCurrent || undefined}
       data-selected={selected || undefined}
-      style={staticDrag ? undefined : { transform: CSS.Transform.toString(transform), transition }}
+      style={
+        staticDrag
+          ? sortableStyle(null, undefined, CARD_MOTION)
+          : sortableStyle(transform, transition, CARD_MOTION)
+      }
       {...attributes}
       {...listeners}
       {...listItem}
@@ -1677,7 +1679,7 @@ function QueueCard({
       className={cx(
         // Hover grow matches PresetCard; scale is layout-free so edge-clipped
         // cards simply clip at the scrollport seam.
-        "group relative text-left rounded-2xl p-2 pb-2.5 transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]",
+        "group relative text-left rounded-2xl p-2 pb-2.5 hover:z-10 motion-safe:hover:scale-[1.04]",
         leanCard && LEAN_CARD,
         dragLive && "pointer-events-none",
         isDragging && !staticDrag && "z-10 opacity-90",
