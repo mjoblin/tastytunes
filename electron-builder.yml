@@ -39,6 +39,10 @@ protocols:
       - tastytunes
 mac:
   category: public.app-category.music
+  # macOS 13 and later since 0.14.0 (Electron 44 dropped macOS 12). Electron's own Info.plist
+  # says so too; stated here so the app's LSMinimumSystemVersion never drifts from the update
+  # feed's minimum, which electron-builder doesn't write (release.yml adds it)
+  minimumSystemVersion: "13.0"
   target:
     - dmg
     - zip # electron-updater on macOS updates from the zip, not the dmg

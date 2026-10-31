@@ -150,6 +150,20 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # THE UPDATE FEED'S macOS MINIMUM (0.14.0, Electron 44 dropped macOS 12). electron-builder
+      # writes the minimum into the app but not into latest-mac.yml, and the updater in copies
+      # already installed reads it only there, against os.release(): the Darwin version, so 22.0.0
+      # is macOS 13. Without it a Mac on macOS 12 would install an update it cannot open. The
+      # release is still a draft here, so nobody is offered the file before it says so.
+      - name: The update feed's macOS minimum
+        if: startsWith(github.ref, 'refs/tags/v') && runner.os == 'macOS'
+        run: |
+          node -e "const fs = require('fs'); const f = 'dist/latest-mac.yml'; let s = fs.readFileSync(f, 'utf8'); if (!/^minimumSystemVersion:/m.test(s)) s = s.replace(/\n*$/, '\n') + 'minimumSystemVersion: 22.0.0\n'; fs.writeFileSync(f, s)"
+          grep -q '^minimumSystemVersion: 22.0.0$' dist/latest-mac.yml
+          gh release upload "$GITHUB_REF_NAME" dist/latest-mac.yml --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Package only
         if: "!startsWith(github.ref, 'refs/tags/v')"
         run: npx electron-builder ${{ matrix.args }} --publish never

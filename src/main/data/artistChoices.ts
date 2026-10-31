@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { extname, join } from "node:path";
+import { dirname, extname, join } from "node:path";
 import { app, dialog, nativeImage, type BrowserWindow, type NativeImage } from "electron";
 import { PICKED_ART } from "@shared/artUrl";
 import { isRecord } from "@shared/guards";
@@ -189,6 +189,11 @@ function coverNow(
 /** The longest side a chosen file keeps: the artist page's picture at its largest, on Retina. */
 export const PICKED_MAX = 1200;
 
+/** Where the open dialog starts: the folder the last picture came from, this session. Electron
+ *  43's dialogs start in Downloads unless told (macOS used to remember the folder itself), so
+ *  the first choice starts in Pictures. */
+let pictureDir: string | null = null;
+
 /**
  * A picture file to choose: the open dialog, then the file copied in, no larger than the page
  * draws it, as a JPEG (a PNG keeps its transparency). JPEG and PNG only, the two Electron's
@@ -201,6 +206,7 @@ export async function pickPictureFile(
   const opts = {
     title: "Choose a picture",
     buttonLabel: "Choose",
+    defaultPath: pictureDir ?? app.getPath("pictures"),
     properties: ["openFile" as const],
     filters: [{ name: "Pictures", extensions: ["jpg", "jpeg", "png"] }],
   };
@@ -209,6 +215,7 @@ export async function pickPictureFile(
     : await dialog.showOpenDialog(opts);
   const path = got.canceled ? null : got.filePaths[0];
   if (!path) return null;
+  pictureDir = dirname(path);
   const file = keepPicture(
     nativeImage.createFromPath(path),
     extname(path).toLowerCase() === ".png",

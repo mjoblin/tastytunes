@@ -177,7 +177,12 @@ export async function checkUpdatesOnDemand(): Promise<UpdateCheckResult> {
     const v = r?.updateInfo?.version;
     // The update-available/-not-available handlers above still drive the
     // pushed UpdateState; this return only feeds the button's feedback line.
-    return v && isNewer(v, appVersion) ? { status: "update", version: v } : { status: "none" };
+    // Only an update electron-updater would offer counts (0.14.0): a feed's newer version
+    // this machine is below the minimum of (minimumSystemVersion, macOS 13 since Electron 44)
+    // is not one, though the feed names it.
+    return r?.isUpdateAvailable && v && isNewer(v, appVersion)
+      ? { status: "update", version: v }
+      : { status: "none" };
   } catch (e) {
     return { status: "error", error: e instanceof Error ? e.message : String(e) };
   }
