@@ -279,7 +279,7 @@ export function ToneEq({ label = true }: { label?: boolean } = {}): React.JSX.El
                         onClick={() => void deletePreset(p.name)}
                         data-tip="Delete preset"
                         aria-label={`Delete preset ${p.name}`}
-                        className="mr-1 rounded-full p-0.5 text-faint hover:text-alert opacity-0 group-hover/chip:opacity-100 transition-all"
+                        className="mr-1 rounded-full p-0.5 text-faint hover:text-alert opacity-0 group-hover/chip:opacity-100 focus-kbd:opacity-100 transition-all"
                       >
                         <X size={11} />
                       </button>
@@ -704,7 +704,7 @@ function CenteredSlider({
           className={cx(
             "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 h-3 w-3 rounded-full bg-gold",
             "shadow-[0_0_8px_rgb(var(--gold-rgb)_/_0.7)] transition-opacity",
-            dragging ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+            dragging ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
           )}
           style={{ left: `${ratio * 100}%` }}
         />

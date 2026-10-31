@@ -14,7 +14,7 @@ import { StationRow } from "@/components/media/StationRow";
 import { RowMenu } from "@/components/media/RowMenu";
 import { AddToPlaylistPanel } from "@/components/overlays/AddToPlaylistPanel";
 import { PresetPicker } from "@/components/library/LibraryMenus";
-import { favoriteAct, toggleFavorite } from "@/lib/favorites";
+import { favoriteAct, isFavorited, toggleFavorite } from "@/lib/favorites";
 import { activatePlaylist } from "@/lib/playlists";
 import {
   fromFavorite,
@@ -50,6 +50,7 @@ import {
   type SearchCategoryId,
   type SearchGroup,
 } from "@/lib/searchGroups";
+import { menuAt } from "@/lib/menuAt";
 
 /** Below this, a query matches half the library and every station on earth. */
 const MIN_RADIO_CHARS = 2;
@@ -407,11 +408,10 @@ export function SearchScreen(): React.JSX.Element {
   const nodeKind = (n: MediaNode): MediaKind => mediaKind(n.upnpClass, n.isContainer);
   const kindLabel = (k: MediaKind): string => k[0].toUpperCase() + k.slice(1);
 
-  const favKeys = useMemo(() => new Set(favorites.map(favoriteKey)), [favorites]);
-  /** Hearted, by content key — null fav (artists, identity-less) = no heart. */
+  /** Hearted, by its copy — null fav (artists, identity-less) = no heart. */
   const refFavorited = (ref: MediaRef): boolean => {
     const fav = refToFavorite(ref);
-    return fav != null && favKeys.has(favoriteKey(fav as Favorite));
+    return fav != null && isFavorited(fav, favorites);
   };
 
   // ---- the ⋯ (and right-click): items built at open time from the shared
@@ -436,7 +436,7 @@ export function SearchScreen(): React.JSX.Element {
     e.stopPropagation();
     const ref = fromNode(node);
     const udn = node.serverUdn;
-    const at = { x: e.clientX, y: e.clientY };
+    const at = menuAt(e);
     const queueVerb = (action: "PLAY_NOW" | "PLAY_NEXT" | "APPEND" | "REPLACE") =>
       udn ? () => void tt.mediaQueueAdd(udn, node.id, action) : undefined;
     const caps = {
@@ -483,7 +483,7 @@ export function SearchScreen(): React.JSX.Element {
     e.preventDefault();
     e.stopPropagation();
     const ref = fromFavorite(media);
-    const at = { x: e.clientX, y: e.clientY };
+    const at = menuAt(e);
     const favQueue = (action: "PLAY_NEXT" | "APPEND" | "REPLACE") => () =>
       void favoriteAct(media, (udn, id) => tt.mediaQueueAdd(udn, id, action));
     const caps = {
@@ -912,7 +912,7 @@ export function SearchScreen(): React.JSX.Element {
                   className={cx("gap-1.5", !empty && "motion-safe:active:scale-95")}
                 >
                   {c.label}
-                  <span className="tabular-nums opacity-70">
+                  <span className="tabular-nums fade-dark">
                     {c.pending ? "…" : c.unknown ? "—" : c.total}
                   </span>
                 </Chip>
@@ -1052,7 +1052,7 @@ export function SearchScreen(): React.JSX.Element {
                         if (inKind.length === 0) return null;
                         return (
                           <div key={k} className="space-y-1.5">
-                            <div className="microlabel pt-2 px-1 opacity-70">
+                            <div className="microlabel pt-2 px-1 fade-dark">
                               {k === "artist" ? "Artists" : k === "album" ? "Albums" : "Tracks"}{" "}
                               <span className="tabular-nums">{inKind.length}</span>
                             </div>

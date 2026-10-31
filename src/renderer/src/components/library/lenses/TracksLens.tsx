@@ -8,8 +8,9 @@ import {
   nameSortKey,
   trackPosition,
 } from "@shared/model";
-import { cx, matchesFilter, fmtCount, fmtAgo } from "@/lib/format";
-import { usePlayStats, playedBucket, playedOptionsOf } from "@/lib/playStats";
+import { cx, matchesFilter, fmtCount, fmtAgo, fmtTime } from "@/lib/format";
+import { usePlayStats } from "@/lib/playStats";
+import { playedBucket, playedOptionsOf, talliesOf } from "@/lib/playStatsView";
 import { useStore } from "@/store";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { useKnownStats, USB_ANALYSIS_HINT } from "@/lib/audioAnalysis";
@@ -18,6 +19,8 @@ import { fmtLufs } from "@/components/media/Waveform";
 import { FilterInput } from "@/components/controls/FilterInput";
 import { PrimaryButton, GAP_BETWEEN, GAP_WITHIN } from "@/components/chrome/Chrome";
 import { SortChip } from "@/components/controls/SortChip";
+import { ViewOptions } from "./ViewOptions";
+import { useTrackCardDetails } from "@/components/library/useCardDetails";
 import { PickerPill } from "@/components/controls/PickerPill";
 import { TrackRow } from "@/components/library/LibraryCards";
 import { RowMenu } from "@/components/media/RowMenu";
@@ -34,6 +37,9 @@ import {
   decadeOf,
   RECORD_SORTS,
   PLAY_THESE_MAX,
+  filterFields,
+  filterScopeCounts,
+  type FilterScope,
 } from "./lensShared";
 import {
   useLensTrackSelection,
@@ -41,9 +47,19 @@ import {
   LensTrackMenu,
 } from "./useLensTrackSelection";
 import { useLensIndex } from "./useLensIndex";
+import { TrackCards } from "./TrackCards";
+import { menuAt } from "@/lib/menuAt";
 
 // The Tracks lens, split out of LibraryLenses.tsx (2026-09-13, the lenses round: three lenses of
 // 600 to 800 lines shared one file); what the lenses share lives in ./lensShared.
+
+/** The filter's "search in" choices, in the menu's order, after All fields. */
+const SCOPES: FilterScope[] = ["title", "artist", "album"];
+const SCOPE_LABEL: Record<FilterScope, string> = {
+  title: "Title",
+  artist: "Artist",
+  album: "Album",
+};
 
 const TRACK_SORTS: Array<{
   value: AppSettings["lensTracksSort"];
@@ -80,7 +96,12 @@ let tracksMem: {
   /** The Played facet (0.8.0): a playedBucket, or null for any. */
   played: string | null;
   filter: string;
+  /** The filter's "search in" (0.13.0-rc.4): one field, or null for all of them; the session's,
+   *  as the pickers are, so a later search never quietly misses what another field holds. */
+  scope: FilterScope | null;
   scroll: number;
+  /** The cards' spot, apart from the rows': a switch between them starts each at its own. */
+  cardScroll: number;
 } = {
   genre: null,
   decade: null,
@@ -89,7 +110,9 @@ let tracksMem: {
   format: null,
   played: null,
   filter: "",
+  scope: null,
   scroll: 0,
+  cardScroll: 0,
 };
 
 /**
@@ -104,13 +127,28 @@ let tracksMem: {
  * album and the artist, as search results already do. The list is WINDOWED
  * — no cap to explain. DR comes from one bulk cache-only read, refreshed
  * when a sweep lands.
+ * AS CARDS (0.13.0-rc.4, his picks on "Tracks as Cards"): with the Library's one Rows or Cards
+ * choice on Cards, the list is a grid of track cards (TrackCards), and the lens's switch beside
+ * the sort flips that one choice, as the Albums and Artists lenses' do. A card says the artist and
+ * the album under the title, or, sorted by a figure a row shows in a cell of its own (the length,
+ * DR, the year, the record's), that figure in place of the album.
  */
 export function TracksLens({
   pools,
   actions,
+  cards,
+  cardSize,
+  cardGap,
+  fillRows,
 }: {
   pools: MediaIndexPools[];
   actions: LensActions;
+  /** The Tracks view's own Rows or Cards (lensTracksLayout, 0.13.0-rc.4: kept apart from the
+   *  albums', his note on "View Options"). */
+  cards: boolean;
+  cardSize: number;
+  cardGap: number;
+  fillRows: boolean;
 }): React.JSX.Element {
   const [mem, setMemState] = useState(tracksMem);
   const setMem = (patch: Partial<typeof tracksMem>): void => {
@@ -139,6 +177,8 @@ export function TracksLens({
   const statsByKey = useKnownStats(drKeys); // one home for known DR + loudness (lib/audioAnalysis)
   const drOf = (t: MediaNode): number | null => statsByKey[audioAnalysisKey(t)]?.dr ?? null;
   const lufsOf = (t: MediaNode): number | null => statsByKey[audioAnalysisKey(t)]?.lufs ?? null;
+  // each card's format line, while Settings › Layout shows it, its DR the rows' DR
+  const detailsOf = useTrackCardDetails((t) => ({ dr: drOf(t), lufs: lufsOf(t) }));
   // the tempo as Info says it, above its floor (the measured facts, 0.12.0)
   const tempoOf = (t: MediaNode): number | null => statsByKey[audioAnalysisKey(t)]?.bpm ?? null;
   const tempoOptions = useMemo(
@@ -165,18 +205,22 @@ export function TracksLens({
   // the listening record changes with every play: the list is filtered and sorted again on it
   // only while a sort or the Played facet reads it (0.12.0-rc.2, the 0.11 re-score)
   const record = RECORD_SORTS.has(sort) || mem.played ? play : null;
-  const shown = useMemo(() => {
+  const { shown, scopeCounts } = useMemo(() => {
     let list = all;
     if (mem.genre) list = list.filter((t) => (t.genre ?? []).some((g) => lc(g) === mem.genre));
     if (mem.decade) list = list.filter((t) => decadeOf(t.year) === mem.decade);
     if (mem.dr) list = list.filter((t) => String(drOf(t) ?? "") === mem.dr);
     if (mem.tempo) list = list.filter((t) => tempoBandOf(tempoOf(t)) === mem.tempo);
+    // each row's tally read once, when a sort or the facet reads the record
+    const tally = record ? talliesOf(record, list) : null;
     if (mem.played)
-      list = list.filter((t) => playedBucket(record?.track(t)?.lastAt ?? null) === mem.played);
+      list = list.filter((t) => playedBucket(tally?.get(t)?.lastAt ?? null) === mem.played);
     const fmt = mem.format;
     if (fmt) list = list.filter((t) => formatTags(t.format).includes(fmt));
+    // the scope menu counts what each field would find among what the facets leave
+    const scopeCounts = mem.filter ? filterScopeCounts(list, mem.filter) : null;
     if (mem.filter)
-      list = list.filter((t) => matchesFilter(mem.filter, [t.title, t.artist, t.album, t.year]));
+      list = list.filter((t) => matchesFilter(mem.filter, filterFields(t, mem.scope)));
     const byTitle = (a: MediaNode, b: MediaNode): number =>
       a.title.localeCompare(b.title) || (a.artist ?? "").localeCompare(b.artist ?? "");
     // album order: the album, then its running order (never compareTrackOrder
@@ -200,12 +244,12 @@ export function TracksLens({
       if (sort === "tempo") return (tempoOf(b) ?? -1) - (tempoOf(a) ?? -1) || byTitle(a, b);
       // the record's sorts: most recent / most played first, unplayed last
       if (sort === "lastPlayed")
-        return (record?.track(b)?.lastAt ?? 0) - (record?.track(a)?.lastAt ?? 0) || byTitle(a, b);
+        return (tally?.get(b)?.lastAt ?? 0) - (tally?.get(a)?.lastAt ?? 0) || byTitle(a, b);
       if (sort === "plays")
-        return (record?.track(b)?.plays ?? 0) - (record?.track(a)?.plays ?? 0) || byTitle(a, b);
+        return (tally?.get(b)?.plays ?? 0) - (tally?.get(a)?.plays ?? 0) || byTitle(a, b);
       return byTitle(a, b);
     });
-    return reversed ? sorted.reverse() : sorted;
+    return { shown: reversed ? sorted.reverse() : sorted, scopeCounts };
     // drOf and lufsOf read statsByKey; listing it keeps the memo honest
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [all, mem, sort, reversed, statsByKey, record]);
@@ -233,6 +277,23 @@ export function TracksLens({
     }
     return undefined;
   };
+  /** A card's line under the title: the artist, and the album or the figure the list is sorted by. */
+  const cardLineOf = (t: MediaNode): string => {
+    const dr = sort === "dr" ? drOf(t) : null;
+    const figure =
+      sort === "duration"
+        ? t.durationSecs != null
+          ? fmtTime(t.durationSecs)
+          : null
+        : sort === "dr"
+          ? dr != null
+            ? `DR${dr}`
+            : null
+          : sort === "year"
+            ? (t.year ?? null)
+            : metaOf(t);
+    return [t.artist, figure ?? t.album].filter(Boolean).join(FACT_SEP);
+  };
 
   // WINDOWED LIST (2026-09-01, user: the cap read as a wall): render only
   // the rows near the viewport, so every sort over thousands of tracks stays
@@ -250,6 +311,7 @@ export function TracksLens({
     itemSelector: "[data-win-item]",
     estimate: 57,
     overscan: 8,
+    enabled: !cards,
   });
   const start = win.first;
   const end = total === 0 ? 0 : win.last + 1;
@@ -279,7 +341,9 @@ export function TracksLens({
   // what the narrowing IS, in words — the auto-named playlist and the
   // sweep's pulse both read it: '"love" · Rock · 2010s · DR13'
   const narrowing = [
-    mem.filter ? `"${mem.filter.trim()}"` : null,
+    mem.filter
+      ? `"${mem.filter.trim()}"${mem.scope ? ` in ${SCOPE_LABEL[mem.scope].toLowerCase()}s` : ""}`
+      : null,
     mem.genre ? (genreOptions.find((g) => g.value === mem.genre)?.label ?? mem.genre) : null,
     mem.decade,
     mem.format ? (formatOptions.find((o) => o.value === mem.format)?.label ?? mem.format) : null,
@@ -297,7 +361,8 @@ export function TracksLens({
   const sel = useLensTrackSelection({ tracks: shown, actions });
   const { selT, setSelT, trackRowClick } = sel;
 
-  // the list scrolls its own column; the spot survives a trip away
+  // the list scrolls its own column; the spot survives a trip away (the cards' grid restores its
+  // own, useCardGrid)
   useEffect(() => {
     const el = listRef.current;
     if (el) requestAnimationFrame(() => el.scrollTo({ top: tracksMem.scroll }));
@@ -325,6 +390,22 @@ export function TracksLens({
               onChange={(filter) => setMem({ filter })}
               shown={shown.length}
               total={all.length}
+              lead={
+                <PickerPill
+                  id="scope"
+                  inline
+                  neutral="All"
+                  clearLabel="All fields"
+                  clearCount={scopeCounts?.all}
+                  options={SCOPES.map((v) => ({
+                    value: v,
+                    label: SCOPE_LABEL[v],
+                    count: scopeCounts?.[v],
+                  }))}
+                  value={mem.scope}
+                  onChange={(scope) => setMem({ scope: scope as FilterScope | null })}
+                />
+              }
             />
             <div className={`flex flex-wrap items-center ${GAP_WITHIN} empty:hidden`}>
               <PickerPill
@@ -412,13 +493,15 @@ export function TracksLens({
                 data-lens-these-more
                 aria-label="More for these tracks"
                 disabled={theseState !== "live"}
-                onClick={(e) => setTheseMenu({ x: e.clientX, y: e.clientY })}
+                onClick={(e) => setTheseMenu(menuAt(e))}
                 className="no-drag flex items-center h-8 px-2 rounded-l-none border-l border-bg/25 shadow-none"
               >
                 <ChevronDown size={14} />
               </PrimaryButton>
             </div>
           }
+          {/* View options beside sort, the Albums and Artists lenses' pairing */}
+          <ViewOptions kind="tracks" />
           {/* the sort chip closes the row */}
           <SortChip
             sorts={trackSorts}
@@ -437,63 +520,86 @@ export function TracksLens({
       ) : (
         <div className="relative flex-1 min-w-0 min-h-0 flex flex-col">
           <LensTrackSelectionBar sel={sel} className="bottom-2 inset-x-0 z-20" />
-          <div
-            ref={listRef}
-            onScroll={(e) => {
-              tracksMem.scroll = e.currentTarget.scrollTop;
-            }}
-            className={cx(
-              "min-h-0 flex-1 overflow-y-auto px-1.5 -mx-1.5 -my-1",
-              selT.size > 0 ? "pt-1 pb-24" : "py-1",
-            )}
-            data-lens-tracks-list
-          >
-            <div>
-              {win.padTop > 0 && <div data-win-spacer="top" style={{ height: win.padTop }} />}
-              <div>
-                {windowed.map((t, i) => {
-                  const idx = start + i;
-                  return (
-                    <div key={nodeKey(t)} data-win-item className="border-b border-edge/50">
-                      <TrackRow
-                        node={t}
-                        // art, not a running-order number: a track's position
-                        // within its album reads as noise in a flat list
-                        showArt
-                        showPosition={false}
-                        isCurrent={actions.isCurrentTrack(t)}
-                        queued={actions.trackQueued(t)}
-                        menuOpen={actions.menuNodeId === t.id}
-                        favorited={actions.nodeFavorited(t)}
-                        selected={selT.has(nodeKey(t))}
-                        selStart={!(idx > 0 && selT.has(nodeKey(shown[idx - 1])))}
-                        selEnd={!(idx < total - 1 && selT.has(nodeKey(shown[idx + 1])))}
-                        dr={drOf(t)}
-                        lufs={lufsOf(t)}
-                        meta={metaOf(t)}
-                        // the second line's links — the search-results
-                        // treatment: the row plays, the names navigate
-                        onAlbumLink={
-                          actions.goToAlbum && t.album ? () => actions.goToAlbum?.(t) : undefined
-                        }
-                        onArtistLink={
-                          actions.goToArtist && t.artist ? () => actions.goToArtist?.(t) : undefined
-                        }
-                        onRowClick={(e) => trackRowClick(t, e)}
-                        onNavDrag={(e) => sel.startTrackDrag(t, e)}
-                        onHeart={() => actions.heartNode(t)}
-                        onPlayNow={(el) => actions.playTrack(t, el)}
-                        onMenu={(e) => sel.rowMenu(t, e)}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-              {win.padBottom > 0 && (
-                <div data-win-spacer="bottom" style={{ height: win.padBottom }} />
+          {cards ? (
+            <TrackCards
+              tracks={shown}
+              actions={actions}
+              selected={selT}
+              subtitleOf={cardLineOf}
+              detailsOf={detailsOf}
+              cardSize={cardSize}
+              cardGap={cardGap}
+              fillRows={fillRows}
+              scrollTop={tracksMem.cardScroll}
+              onScrolled={(top) => {
+                tracksMem.cardScroll = top;
+              }}
+              onCardClick={trackRowClick}
+              onNavDrag={(t, e) => sel.startTrackDrag(t, e)}
+              onMenu={(t, e) => sel.rowMenu(t, e)}
+              roomBelow={selT.size > 0}
+            />
+          ) : (
+            <div
+              ref={listRef}
+              onScroll={(e) => {
+                tracksMem.scroll = e.currentTarget.scrollTop;
+              }}
+              className={cx(
+                "min-h-0 flex-1 overflow-y-auto px-1.5 -mx-1.5 -my-1",
+                selT.size > 0 ? "pt-1 pb-24" : "py-1",
               )}
+              data-lens-tracks-list
+            >
+              <div>
+                {win.padTop > 0 && <div data-win-spacer="top" style={{ height: win.padTop }} />}
+                <div>
+                  {windowed.map((t, i) => {
+                    const idx = start + i;
+                    return (
+                      <div key={nodeKey(t)} data-win-item className="border-b border-edge/50">
+                        <TrackRow
+                          node={t}
+                          // art, not a running-order number: a track's position
+                          // within its album reads as noise in a flat list
+                          showArt
+                          showPosition={false}
+                          isCurrent={actions.isCurrentTrack(t)}
+                          queued={actions.trackQueued(t)}
+                          menuOpen={actions.menuNodeId === t.id}
+                          favorited={actions.nodeFavorited(t)}
+                          selected={selT.has(nodeKey(t))}
+                          selStart={!(idx > 0 && selT.has(nodeKey(shown[idx - 1])))}
+                          selEnd={!(idx < total - 1 && selT.has(nodeKey(shown[idx + 1])))}
+                          dr={drOf(t)}
+                          lufs={lufsOf(t)}
+                          meta={metaOf(t)}
+                          // the second line's links — the search-results
+                          // treatment: the row plays, the names navigate
+                          onAlbumLink={
+                            actions.goToAlbum && t.album ? () => actions.goToAlbum?.(t) : undefined
+                          }
+                          onArtistLink={
+                            actions.goToArtist && t.artist
+                              ? () => actions.goToArtist?.(t)
+                              : undefined
+                          }
+                          onRowClick={(e) => trackRowClick(t, e)}
+                          onNavDrag={(e) => sel.startTrackDrag(t, e)}
+                          onHeart={() => actions.heartNode(t)}
+                          onPlayNow={(el) => actions.playTrack(t, el)}
+                          onMenu={(e) => sel.rowMenu(t, e)}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+                {win.padBottom > 0 && (
+                  <div data-win-spacer="bottom" style={{ height: win.padBottom }} />
+                )}
+              </div>
             </div>
-          </div>
+          )}
           <LensTrackMenu sel={sel} />
         </div>
       )}

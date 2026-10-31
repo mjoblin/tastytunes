@@ -1,16 +1,24 @@
 import { useEffect, useRef, useState } from "react";
-import { UserRound } from "lucide-react";
+import { MoreHorizontal, UserRound } from "lucide-react";
 import type { MediaNode } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { ArtistAbout, ArtistLinks, useArtistAbout } from "@/components/media/ArtistAbout";
 import { ArtImage } from "@/components/media/ArtImage";
 import { HeaderArt } from "@/components/library/HeaderArt";
+import { RowMenu } from "@/components/media/RowMenu";
 import { HEADER_ART_PX, useHeaderArtSize } from "@/hooks/useHeaderArtSize";
 import { artSrc } from "@/lib/artSrc";
 import { wikiThumbAt } from "@shared/artUrl";
-import { refreshArtistPicture, useArtistPictureAnswer } from "@/lib/artistPictures";
-import { fmtCount } from "@/lib/format";
+import {
+  coverOffers,
+  refreshArtistPicture,
+  useArtistChoice,
+  useArtistPictureAnswer,
+} from "@/lib/artistPictures";
+import { artistPictureItems } from "@/lib/mediaMenus";
+import { cx, fmtCount } from "@/lib/format";
+import { menuAt } from "@/lib/menuAt";
 import { FACT_SEP } from "@/lib/mediaFacts";
 
 /**
@@ -35,6 +43,10 @@ import { FACT_SEP } from "@/lib/mediaFacts";
  * picture, the photo, the server's own, a cover. A picture that fails shows the next one,
  * the cover behind it while it is retried. Once a name's picture has settled, a later answer
  * (Refresh details, main asked again) changes it in place without waiting again.
+ * A PICTURE CHOSEN FOR THE ARTIST (0.13.0 round 7) comes before all of them, and the page waits
+ * only for the window's map of chosen pictures: the picture's menu (its ⋯ on hover or keyboard
+ * focus, or a right-click on it) holds the artist's picture verbs, Choose a picture and, once one
+ * is chosen, the reset (mediaMenus artistPictureItems, as every artist's menu has them).
  */
 /** How long the page waits for a photo lookup before it shows what it has. */
 const LOOKUP_WAIT_MS = 6000;
@@ -59,6 +71,9 @@ export function ArtistHeader({
   if (answer !== undefined) held.current = { name, value: answer };
   const known =
     answer !== undefined ? answer : held.current?.name === name ? held.current.value : undefined;
+  // the picture chosen for the artist (the last answer held while the map is read again)
+  const chosen = useArtistChoice(name);
+  const [menuPoint, setMenuPoint] = useState<{ x: number; y: number } | null>(null);
   const { status, info } = useArtistAbout(name, true);
   const photo = lookups ? (info?.image ?? null) : null;
   // a slow lookup (MusicBrainz takes one request a second) stops being waited for
@@ -72,7 +87,8 @@ export function ArtistHeader({
   const settled = useRef<string | null>(null);
   const pending =
     settled.current !== name &&
-    ((known === undefined && !photo) || (looking && waitedOut !== name));
+    (chosen === undefined ||
+      (chosen == null && ((known === undefined && !photo) || (looking && waitedOut !== name))));
   if (!pending) settled.current = name;
   const [failed, setFailed] = useState<{ name: string; urls: string[] }>({ name, urls: [] });
   const gaveUp = failed.name === name ? failed.urls : [];
@@ -105,7 +121,7 @@ export function ArtistHeader({
   const cover = folders.find((f) => f.artUrl)?.artUrl ?? null;
   // main's answer is a cover when it is one of the page's own albums' pictures
   const knownCover = known != null && folders.some((f) => f.artUrl === known);
-  const choices = [knownCover ? null : known, photo, serverArt, known, cover].filter(
+  const choices = [chosen?.url, knownCover ? null : known, photo, serverArt, known, cover].filter(
     (u, i, all): u is string => !!u && all.indexOf(u) === i && !gaveUp.includes(u),
   );
   const picture = choices[0] ?? null;
@@ -113,6 +129,11 @@ export function ArtistHeader({
   const icon = (px: number): React.ReactNode => (
     <UserRound size={px} strokeWidth={1} className="text-faint" />
   );
+  const openMenu = (e: React.MouseEvent): void => {
+    e.preventDefault();
+    e.stopPropagation();
+    setMenuPoint(menuAt(e));
+  };
   return (
     <div className="flex items-start gap-6 pb-6 pt-2" data-artist-header ref={art.attachRow}>
       <HeaderArt
@@ -141,7 +162,36 @@ export function ArtistHeader({
         onGiveUp={() => {
           if (picture) setFailed({ name, urls: [...gaveUp, picture] });
         }}
+        onContextMenu={openMenu}
+        overlay={
+          <button
+            // bottom right, as a card's ⋯ is and exactly as Now Playing's picture has it (round,
+            // in the top chips' glass, the grip compact beyond it: his consistency check,
+            // 2026-10-25); no tip, the well clips to its rounded corners
+            aria-label="More actions"
+            data-artist-picture-menu
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={openMenu}
+            className={cx(
+              "absolute bottom-2 right-2 z-10 p-2 rounded-full bg-panel/60 backdrop-blur ring-1 ring-edge transition-all motion-safe:active:scale-90",
+              menuPoint
+                ? "text-ink opacity-100"
+                : "text-dim hover:text-ink opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
+            )}
+          >
+            <MoreHorizontal size={16} />
+          </button>
+        }
       />
+      {menuPoint && (
+        <RowMenu
+          title={name}
+          at={menuPoint}
+          onClose={() => setMenuPoint(null)}
+          // the chooser offers the page's own albums' covers
+          items={artistPictureItems(name, coverOffers(folders))}
+        />
+      )}
       {/* a set width, the summary's measure (max-w-xl), so the links on the name's line keep one
           edge from artist to artist and end where the words do; a long name wraps before it
           reaches them */}

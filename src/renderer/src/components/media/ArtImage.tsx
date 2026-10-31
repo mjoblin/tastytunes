@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { cx } from "@/lib/format";
 import { useArtFallback } from "@/lib/artFallback";
+import { keepArt, shownBefore } from "@/lib/artKeep";
 
 /**
  * Artwork <img> that renders `fallback` when the URL is missing — or present
@@ -45,20 +46,41 @@ const nearObservers = new Map<
   { io: IntersectionObserver; near: Map<Element, () => void> }
 >();
 
-function scrollerOf(el: Element): Element | null {
-  for (let p = el.parentElement; p; p = p.parentElement) {
-    if (/(auto|scroll)/.test(getComputedStyle(p).overflowY)) return p;
+/**
+ * An ancestor's mask and overflow, read once a frame: a lens's pictures mount together and share
+ * their ancestors, and reading each one's computed style once per picture made the Albums lens's
+ * every opening take a second at 5,000 albums (0.13.0, the scale fixture: 1.0 of its 1.9 s).
+ */
+let frameStyles: Map<Element, { masked: boolean; scrolls: boolean }> | null = null;
+function styleOf(el: Element): { masked: boolean; scrolls: boolean } {
+  if (!frameStyles) {
+    frameStyles = new Map();
+    requestAnimationFrame(() => {
+      frameStyles = null;
+    });
   }
+  let s = frameStyles.get(el);
+  if (!s) {
+    const cs = getComputedStyle(el);
+    s = {
+      masked:
+        (cs.maskImage !== "none" && cs.maskImage !== "") ||
+        (cs.webkitMaskImage !== "none" && cs.webkitMaskImage !== ""),
+      scrolls: /(auto|scroll)/.test(cs.overflowY),
+    };
+    frameStyles.set(el, s);
+  }
+  return s;
+}
+
+function scrollerOf(el: Element): Element | null {
+  for (let p = el.parentElement; p; p = p.parentElement) if (styleOf(p).scrolls) return p;
   return null;
 }
 
 /** Whether a mask sits on the picture's way up to the page (a fade cuts the look-ahead). */
 function underMask(el: Element): boolean {
-  for (let p = el.parentElement; p; p = p.parentElement) {
-    const cs = getComputedStyle(p);
-    if (cs.maskImage !== "none" && cs.maskImage !== "") return true;
-    if (cs.webkitMaskImage !== "none" && cs.webkitMaskImage !== "") return true;
-  }
+  for (let p = el.parentElement; p; p = p.parentElement) if (styleOf(p).masked) return true;
   return false;
 }
 
@@ -149,7 +171,8 @@ export function ArtImage({
   // a lazy picture turns eager once its own scroller brings it within reach (above)
   const [near, setNear] = useState(false);
   useEffect(() => {
-    if (!shimmer || !src || loaded === src) {
+    // a picture shown before this session comes back from memory or main's disk cache: no loader
+    if (!shimmer || !src || loaded === src || shownBefore(src)) {
       setSlow(false);
       return;
     }
@@ -225,6 +248,9 @@ export function ArtImage({
             // the header's picture looked as if it loaded again after its card)
             if (slow) setEased(src);
             setLoaded(src);
+            // a card's picture stays in the window for when its card comes back (lib/artKeep)
+            if (shimmer && attempt === 0)
+              keepArt(src, e.currentTarget.naturalWidth, e.currentTarget.naturalHeight);
           }
         }}
         onError={() => {

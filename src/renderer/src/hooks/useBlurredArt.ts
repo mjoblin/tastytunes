@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { tt } from "@/api";
 import { Lru } from "@/lib/lru";
+import { fetchArtSoon } from "@/lib/fetchArtSoon";
 
 /**
  * The ambient wash's art, BLURRED ONCE INTO A SMALL BITMAP instead of blurred
@@ -48,9 +48,14 @@ export function useBlurredArt(src: string | null | undefined): string | null {
     let cancelled = false;
     void (async () => {
       let blurred: string | null = null;
+      // a cover main could not fetch is asked again, and kept as no answer (fetchArtSoon)
+      const art = await fetchArtSoon(src, () => !cancelled);
+      if (!art) {
+        if (!cancelled) setOut(null);
+        return;
+      }
       try {
-        const art = await tt.fetchArt(src);
-        if (art) blurred = await bake(art.dataUrl);
+        blurred = await bake(art.dataUrl);
       } catch {
         blurred = null;
       }

@@ -274,7 +274,7 @@ describe("discCountIn: the count after a track's place", () => {
   });
 
   it("says no count when there are no discs and the numbers repeat (MinimServer's box sets)", () => {
-    // Malcolm's Songbooks+: track 11 of the box is on several discs the server never named
+    // a user's box set: track 11 of the box is on several discs the server never named
     const box = [1, 2, 11, 1, 2, 11].map((n, i) => ({ ...at(n), id: i }));
     expect(discCountIn(at(11), box)).toBeNull();
   });
@@ -350,7 +350,10 @@ describe("albumTracksOf: an album's tracks from an index pool", () => {
 
   it("takes the album's title and credit, featured tracks included, in album order", () => {
     const pool = {
-      albums: [{ title: "Record", artist: "Lead" }],
+      albums: [
+        { title: "Record", artist: "Lead" },
+        { title: "Record", artist: "Other Band" },
+      ],
       tracks: [
         track("t2", "Two", { album: "Record", trackNumber: 2, ...lead }),
         track("t1", "One", {
@@ -365,6 +368,22 @@ describe("albumTracksOf: an album's tracks from an index pool", () => {
     };
     const album = { title: "Record", artist: "Lead", artUrl: null };
     expect(albumTracksOf(album, pool).map((t) => t.id)).toEqual(["t1", "t2"]);
+    const theirs = { title: "Record", artist: "Other Band", artUrl: null };
+    expect(albumTracksOf(theirs, pool).map((t) => t.id)).toEqual(["x"]);
+  });
+
+  it("gives an album alone under its title every track of it but another album artist's", () => {
+    // a compilation from a server without an AlbumArtist role: each track credits its performer
+    const pool = {
+      albums: [{ title: "Mixtape", artist: "Various Artists" }],
+      tracks: [
+        track("m2", "B", { album: "Mixtape", trackNumber: 2, artist: "Someone Else" }),
+        track("m1", "A", { album: "Mixtape", trackNumber: 1, artist: "Someone" }),
+        track("o", "C", { album: "Mixtape", artist: "Band", albumArtist: "Band" }),
+      ],
+    };
+    const album = { title: "Mixtape", artist: "Various Artists", artUrl: null };
+    expect(albumTracksOf(album, pool).map((t) => t.id)).toEqual(["m1", "m2"]);
   });
 
   it("splits twin editions (same title, same artist) by the art each track carries", () => {
@@ -565,6 +584,8 @@ describe("foldPlayEvent: folding the record into play stats", () => {
         endAt: T0 + 260_000,
         plays: 2,
         listened: [playKey("One", "Band", "Record")],
+        // which copy the run was (0.13.0): its first play's facts, less the length
+        facts: { art: null, host: null, secs: null, rate: null, bits: null },
       },
     ]);
   });

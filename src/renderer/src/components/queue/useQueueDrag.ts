@@ -2,10 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { DragEndEvent, DragMoveEvent, DragStartEvent } from "@dnd-kit/core";
 import { arrayMove } from "@dnd-kit/sortable";
 import type { QueueListItem } from "@shared/smoip";
-import { favoriteKey, type Favorite } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
-import { toggleFavorite } from "@/lib/favorites";
+import { isFavorited, toggleFavorite } from "@/lib/favorites";
 import { fromQueueItem, refToFavorite } from "@/lib/mediaRef";
 import { flashNavTarget, navDropTargetAt } from "@/lib/navDrop";
 
@@ -389,9 +388,7 @@ export function useQueueDrag(d: {
       const fav = ref ? refToFavorite(ref) : null;
       return fav ? [fav] : [];
     });
-    const missing = favs.filter(
-      (f) => !favorites.some((x) => favoriteKey(x) === favoriteKey(f as Favorite)),
-    );
+    const missing = favs.filter((f) => !isFavorited(f, favorites));
     for (const f of missing) void toggleFavorite(f, { silent: true });
     if (missing.length === 0) return;
     const n = missing.length;

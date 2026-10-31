@@ -45,6 +45,7 @@ import { queueWrite, tt } from "@/api";
 import { useStore } from "@/store";
 import { cx, matchesFilter } from "@/lib/format";
 import { useIndexPools } from "@/hooks/useIndexPools";
+import { browseWalk } from "@/components/library/browseWalk";
 import { MOD } from "@/lib/screens";
 import { flashTarget, scrollToCentered } from "@/lib/scroll";
 import { isAlbumClass, isArtistClass, stripFurniture } from "@/lib/media";
@@ -89,7 +90,7 @@ import { usePlayingMatch } from "@/components/library/usePlayingMatch";
 import { useQueueMatch } from "@/components/library/useQueueMatch";
 import { useWindowedList } from "@/hooks/useWindowedList";
 import { Lru } from "@/lib/lru";
-import { AlbumHeader } from "@/components/library/AlbumHeader";
+import { AlbumCompactVerbs, AlbumCrumbArt, AlbumHeader } from "@/components/library/AlbumHeader";
 import { ArtistHeader } from "@/components/library/ArtistHeader";
 import { ArtistPage } from "@/components/library/ArtistPage";
 import { LibrarySearchBar } from "@/components/library/LibrarySearchBar";
@@ -100,6 +101,7 @@ import {
   useLibrarySearch,
   type SearchLate,
 } from "@/components/library/useLibrarySearch";
+import { menuAt } from "@/lib/menuAt";
 
 // Crumbs keep the entered node so an album level can render its header
 // (art, artist, year) without re-fetching metadata.
@@ -202,6 +204,7 @@ function artistPageNode(name: string, pools: MediaIndexPools[]): MediaNode {
 export function LibraryScreen(): React.JSX.Element {
   const {
     libraryLayout,
+    lensTracksLayout,
     librarySort,
     librarySortReversed,
     presetCardSize,
@@ -215,6 +218,7 @@ export function LibraryScreen(): React.JSX.Element {
   const setScreen = useStore((s) => s.setScreen);
   const systemInfo = useStore((s) => s.systemInfo);
   const cards = libraryLayout === "cards";
+  const tracksCards = lensTracksLayout === "cards";
 
   const [servers, setServers] = useState<MediaServerInfo[] | null>(null);
   const [serverUdn, setServerUdn] = useState<string | null>(null);
@@ -394,17 +398,17 @@ export function LibraryScreen(): React.JSX.Element {
       .mediaBrowse(
         serverUdn,
         path.length > 0 ? path[path.length - 1].id : null,
-        path
-          .filter(
-            (c) =>
-              c.id !== SEARCH_CRUMB_ID &&
-              c.id !== UNIFIED_SEARCH_CRUMB_ID &&
-              // lens crumbs are the app's, not the server's containers
-              c.id !== LENS_CRUMB_ID &&
-              c.id !== LENS_ARTIST_CRUMB_ID &&
-              c.id !== ARTIST_PAGE_CRUMB_ID,
-          )
-          .map((c) => c.title),
+        // the folders a refused id is re-walked by: an opened album's own walked path, never the
+        // app's crumbs (a lens's, an artist's, a search's), which no server has (browseWalk)
+        browseWalk(
+          path,
+          (id) =>
+            id === SEARCH_CRUMB_ID ||
+            id === UNIFIED_SEARCH_CRUMB_ID ||
+            id === LENS_CRUMB_ID ||
+            id === LENS_ARTIST_CRUMB_ID ||
+            id === ARTIST_PAGE_CRUMB_ID,
+        ),
       )
       .then((list) => {
         if (stale) return;
@@ -776,6 +780,7 @@ export function LibraryScreen(): React.JSX.Element {
     openInfoFor,
     volumeNavVerbs,
     analyzeVerbs,
+    recentListVerbs,
     linkable,
     goToAlbum,
     goToArtist,
@@ -1327,6 +1332,28 @@ export function LibraryScreen(): React.JSX.Element {
     albumArt,
   });
 
+  // THE COMPACT BAR (0.13.0 round 5, AlbumHeader's AlbumCompactVerbs): once the header's verbs have
+  // gone above the scroller's top (under its faded strip, where they can no longer be read), the
+  // trail takes the album's cover and its Play, heart and menu. Watched, not measured on scroll:
+  // one observer per album page, rooted at the page's own scroller.
+  const [verbsGone, setVerbsGone] = useState(false);
+  const albumPageKey =
+    !atRoot && state === "ready" && !searchMode && albumNode ? albumNode.id : null;
+  useEffect(() => {
+    setVerbsGone(false);
+    const root = scrollRef.current;
+    const verbs = root?.querySelector("[data-album-verbs]");
+    if (albumPageKey == null || !root || !verbs) return;
+    const io = new IntersectionObserver(
+      ([e]) =>
+        setVerbsGone(!e.isIntersecting && e.boundingClientRect.bottom <= (e.rootBounds?.top ?? 0)),
+      { root, rootMargin: "-24px 0px 0px 0px" },
+    );
+    io.observe(verbs);
+    return () => io.disconnect();
+  }, [albumPageKey]);
+  const compactBar = verbsGone && albumPageKey != null && albumNode != null;
+
   // "Retrieving…" only appears when a browse actually takes a moment —
   // cached/fast responses swap in without a flash of loading copy.
   const [showLoading, setShowLoading] = useState(false);
@@ -1376,6 +1403,8 @@ export function LibraryScreen(): React.JSX.Element {
   // the lists below carry no extra top margin in search mode), identical
   // above-gap too (mt-2 for whichever group lands first, mt-5 after).
   selectionLate.current = { heartNode, heartNodes, nodeFavorited };
+  /** A server's folders, browsed: a plain folder takes a ⋯ (Use as Recently added, 0.13.0). */
+  const folderMenus = serverUdn != null && !searchMode && lens == null;
   /** One container as the listing draws it: a card, or a row in the rows layout. */
   const containerItem = (node: MediaNode): React.JSX.Element =>
     cards ? (
@@ -1389,6 +1418,7 @@ export function LibraryScreen(): React.JSX.Element {
         onEnter={() => enter(node)}
         onPlay={(el) => void playContainer(node, el)}
         onMenu={(e) => openMenu(node, e)}
+        folderMenu={folderMenus}
         onNavDrag={
           isAlbumClass(node.upnpClass) ? (e) => startAlbumDrag([node], e, node.title) : undefined
         }
@@ -1407,6 +1437,7 @@ export function LibraryScreen(): React.JSX.Element {
         onHeart={isAlbumClass(node.upnpClass) ? () => heartNode(node) : undefined}
         onEnter={() => enter(node)}
         onMenu={(e) => openMenu(node, e)}
+        folderMenu={folderMenus}
         onNavDrag={
           isAlbumClass(node.upnpClass) ? (e) => startAlbumDrag([node], e, node.title) : undefined
         }
@@ -1754,53 +1785,71 @@ export function LibraryScreen(): React.JSX.Element {
           the bare root, where the screen title already says it; the trail
           folds its middle when it would not fit (Crumbs) */}
       {!searchMode && (serverUdn != null || lens != null || path.length > 0) && (
-        <div data-library-crumbs className="no-drag relative z-10 px-8 pb-3 text-[12.5px]">
-          <Crumbs
-            items={[
-              {
-                // Arriving from unified search, the trail LEADS with Search rather
-                // than burying it mid-trail: you didn't come through the library root,
-                // and the first crumb is the way back to where you did come from.
-                key: "root",
-                label: path[0]?.id === UNIFIED_SEARCH_CRUMB_ID ? "Search" : "Library",
-                onClick: () => jumpTo(0),
-                current: atRoot && !lens,
-              },
-              ...(atRoot && lens
-                ? artistPage
+        <div
+          data-library-crumbs
+          className="no-drag relative z-10 flex min-h-[36px] items-start gap-3 px-8 pb-3 text-[12.5px]"
+        >
+          <div className="min-w-0 flex-1">
+            <Crumbs
+              items={[
+                {
+                  // Arriving from unified search, the trail LEADS with Search rather
+                  // than burying it mid-trail: you didn't come through the library root,
+                  // and the first crumb is the way back to where you did come from.
+                  key: "root",
+                  label: path[0]?.id === UNIFIED_SEARCH_CRUMB_ID ? "Search" : "Library",
+                  onClick: () => jumpTo(0),
+                  current: atRoot && !lens,
+                },
+                ...(atRoot && lens
+                  ? artistPage
+                    ? [
+                        // the artist page over the Artists lens: the lens crumb leads back to
+                        // its columns, the artist still selected
+                        { key: "lens", label: LENS_LABEL[lens], onClick: closeArtistPage },
+                        { key: "artist-page", label: artistPage, current: true },
+                      ]
+                    : [{ key: "lens", label: LENS_LABEL[lens] }]
+                  : []),
+                ...(server && path[0]?.id !== LENS_CRUMB_ID
                   ? [
-                      // the artist page over the Artists lens: the lens crumb leads back to
-                      // its columns, the artist still selected
-                      { key: "lens", label: LENS_LABEL[lens], onClick: closeArtistPage },
-                      { key: "artist-page", label: artistPage, current: true },
-                    ]
-                  : [{ key: "lens", label: LENS_LABEL[lens] }]
-                : []),
-              ...(server && path[0]?.id !== LENS_CRUMB_ID
-                ? [
-                    {
-                      key: "server",
-                      label: server.name,
-                      onClick: () => jumpTo(1),
-                      current: path.length === 0,
-                    },
-                  ]
-                : []),
-              ...path.flatMap((crumb, i) =>
-                crumb.id === UNIFIED_SEARCH_CRUMB_ID
-                  ? []
-                  : [
                       {
-                        key: `${crumb.id}-${i}`,
-                        label: crumb.title,
-                        onClick: () => jumpTo(i + 2),
-                        current: i === path.length - 1,
-                        search: crumb.id === SEARCH_CRUMB_ID,
+                        key: "server",
+                        label: server.name,
+                        onClick: () => jumpTo(1),
+                        current: path.length === 0,
                       },
-                    ],
-              ),
-            ]}
-          />
+                    ]
+                  : []),
+                ...path.flatMap((crumb, i) =>
+                  crumb.id === UNIFIED_SEARCH_CRUMB_ID
+                    ? []
+                    : [
+                        {
+                          key: `${crumb.id}-${i}`,
+                          label: crumb.title,
+                          onClick: () => jumpTo(i + 2),
+                          current: i === path.length - 1,
+                          search: crumb.id === SEARCH_CRUMB_ID,
+                          lead:
+                            compactBar && albumNode && i === path.length - 1 ? (
+                              <AlbumCrumbArt albumNode={albumNode} albumArt={albumArt} />
+                            ) : undefined,
+                        },
+                      ],
+                ),
+              ]}
+            />
+          </div>
+          {compactBar && albumNode && (
+            <AlbumCompactVerbs
+              albumNode={albumNode}
+              playContainer={playContainer}
+              nodeFavorited={nodeFavorited}
+              heartNode={heartNode}
+              openMenu={openMenu}
+            />
+          )}
         </div>
       )}
 
@@ -1876,7 +1925,6 @@ export function LibraryScreen(): React.JSX.Element {
               cardSize={presetCardSize}
               cardGap={presetGap}
               fillRows={presetFillRows}
-              onToggleLayout={() => void setLayout(cards ? "rows" : "cards")}
             />
           ) : lens === "artists" && artistPage ? (
             <ArtistPage
@@ -1891,12 +1939,29 @@ export function LibraryScreen(): React.JSX.Element {
             />
           ) : lens === "artists" ? (
             <ArtistsLens
+              // a switch of layout is a fresh mount: the columns' windowing and spots attach to
+              // their scrollers as the lens mounts (its memory is module scope, so nothing is lost)
+              key={cards ? "cards" : "rows"}
               pools={lensPools}
               actions={lensActions}
               onOpenArtistPage={openArtistPage}
+              cards={cards}
+              cardSize={presetCardSize}
+              cardGap={presetGap}
+              fillRows={presetFillRows}
             />
           ) : (
-            <TracksLens pools={lensPools} actions={lensActions} />
+            <TracksLens
+              // the rows and the cards are two views, each from its own top and spot; the Tracks
+              // view's own Rows or Cards since 0.13.0-rc.4 (his note on "View Options")
+              key={tracksCards ? "cards" : "rows"}
+              pools={lensPools}
+              actions={lensActions}
+              cards={tracksCards}
+              cardSize={presetCardSize}
+              cardGap={presetGap}
+              fillRows={presetFillRows}
+            />
           ))}
 
         {/* root: the lens doors and the sources (components/library/LibraryRoot) */}
@@ -2025,9 +2090,7 @@ export function LibraryScreen(): React.JSX.Element {
             </SelectionVerb>
             <SelectionVerb
               icon={<ListPlus size={13} />}
-              onClick={(e) =>
-                setPlaylistMulti({ nodes: selectedNodes(), x: e.clientX, y: e.clientY })
-              }
+              onClick={(e) => setPlaylistMulti({ nodes: selectedNodes(), ...menuAt(e) })}
             >
               Add to playlist…
             </SelectionVerb>
@@ -2106,6 +2169,7 @@ export function LibraryScreen(): React.JSX.Element {
         heartNodes={heartNodes}
         volumeNavVerbs={volumeNavVerbs}
         analyzeVerbs={analyzeVerbs}
+        recentListVerbs={recentListVerbs}
         linkable={linkable}
         goToAlbum={goToAlbum}
         goToArtist={goToArtist}

@@ -21,6 +21,8 @@ import {
   type AlignV,
   type AmbientArtMode,
   type AmbientCoverage,
+  CARD_GAP_RANGE,
+  CARD_SIZE_RANGE,
   type MotionMode,
   type ThemePreference,
 } from "@shared/model";
@@ -36,6 +38,7 @@ import { McpSection } from "@/components/settings/McpSection";
 import { SchedulesSection } from "@/components/settings/SchedulesSection";
 import { LibrariesSection } from "@/components/settings/LibrariesSection";
 import { HistorySection } from "@/components/settings/HistorySection";
+import { FanartKeyRow } from "@/components/settings/FanartKeyRow";
 import { ListenBrainzSection } from "@/components/settings/ListenBrainzSection";
 import { UpdatesSection } from "@/components/settings/UpdatesSection";
 import { SidebarSection } from "@/components/settings/SidebarSection";
@@ -319,8 +322,8 @@ export function SettingsScreen(): React.JSX.Element {
                     <SliderSetting
                       label="Card size"
                       hint="Base width of each card."
-                      min={120}
-                      max={280}
+                      min={CARD_SIZE_RANGE.min}
+                      max={CARD_SIZE_RANGE.max}
                       unit="px"
                       value={settings.presetCardSize}
                       onCommit={(presetCardSize) => void save({ presetCardSize })}
@@ -329,8 +332,8 @@ export function SettingsScreen(): React.JSX.Element {
                     <SliderSetting
                       label="Card gap"
                       hint="Space between cards."
-                      min={8}
-                      max={40}
+                      min={CARD_GAP_RANGE.min}
+                      max={CARD_GAP_RANGE.max}
                       unit="px"
                       value={settings.presetGap}
                       onCommit={(presetGap) => void save({ presetGap })}
@@ -341,6 +344,20 @@ export function SettingsScreen(): React.JSX.Element {
                       hint="Stretch cards so each row spans the full width, sizes flexing with the window. Off keeps cards at the exact size above."
                       checked={settings.presetFillRows}
                       onChange={(presetFillRows) => void save({ presetFillRows })}
+                    />
+
+                    <Toggle
+                      label="Format and DR on album cards"
+                      hint="Displays each album's format and quality under its name in the Library, and its dynamic range once Audio analysis has measured it."
+                      checked={settings.albumCardFormat}
+                      onChange={(albumCardFormat) => void save({ albumCardFormat })}
+                    />
+
+                    <Toggle
+                      label="Format and DR on track cards"
+                      hint="Displays each track's format and quality under its name in the Tracks view, and its dynamic range once Audio analysis has measured it."
+                      checked={settings.trackCardFormat}
+                      onChange={(trackCardFormat) => void save({ trackCardFormat })}
                     />
                   </div>
                 </section>
@@ -444,10 +461,12 @@ export function SettingsScreen(): React.JSX.Element {
 
                   <Toggle
                     label="Liner notes"
-                    hint="The panel on Now Playing with Artist, Album and Track tabs: Wikipedia summaries, release details and track credits matched via MusicBrainz, fetched when you open them. Also shows a CD's track names on the Queue screen and artists' photos in the Library. Sends the current artist, album and track names, an artist's name when you open their page, or a CD's MusicBrainz release. Off means no requests will be sent. The panel's Stream tab stays either way."
+                    hint="The panel on Now Playing with Artist, Album and Track tabs: Wikipedia summaries, release details and track credits matched via MusicBrainz, fetched when you open them. Also shows a CD's track names on the Queue screen and artists' photos in the Library. Sends the current artist, album and track names, an artist's name when you open their page, the names of the artists in your library to have their photos ready, or a CD's MusicBrainz release. Off means no requests will be sent. The panel's Stream tab stays either way."
                     checked={settings.artistInfo}
                     onChange={(artistInfo) => void save({ artistInfo })}
                   />
+
+                  <FanartKeyRow lookups={settings.artistInfo} />
 
                   <Toggle
                     label="Missing album art"

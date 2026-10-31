@@ -423,4 +423,97 @@ export const ONE_HOME = [
       "The tastytunes:// scheme is registered only in app/urlActions, and only by a packaged build",
     bad: { file: "src/main/index.ts", code: 'app.setAsDefaultProtocolClient("tastytunes");' },
   },
+  {
+    id: "hover-reveal-keyboard",
+    was: "none (0.13.0 round 4, the accessibility second layer: the 0.11 re-score found two dozen controls hidden from the keyboard)",
+    // a class string that reveals on a group's hover (or hides on it) with no keyboard twin (one
+    // with focus-visible: is focus-reveal's to report)
+    selector: String.raw`:matches(Literal[value=/group-hover(\/[a-z]+)?:opacity-(0|100)(?![\w-])/]:not([value=/((group|focus)-kbd|focus-visible):opacity-/]), TemplateElement[value.raw=/group-hover(\/[a-z]+)?:opacity-(0|100)(?![\w-])/]:not([value.raw=/((group|focus)-kbd|focus-visible):opacity-/]))`,
+    files: [`^${R}`],
+    message:
+      "What a hover reveals, keyboard focus reveals too: add group-kbd: (focus anywhere in the group) or focus-kbd: (the control itself)",
+    bad: {
+      file: `${R}components/media/RowHeart.tsx`,
+      code: 'const c = "opacity-0 group-hover:opacity-100";',
+    },
+  },
+  {
+    id: "menu-anchor",
+    was: "none (0.13.0: his try of round 4, a Queue row's ⋯ pressed from the keyboard opened its menu in the window's top-left corner)",
+    // a point read straight off the pointer, { x: e.clientX, y: e.clientY }: a menu's comes from
+    // menuAt, which places a key press's under its control (it has no pointer: 0, 0). A hover
+    // (RowAction) and the drags follow the pointer itself, and keep it.
+    selector:
+      "ObjectExpression:has(Property[key.name='x'] > MemberExpression[property.name='clientX']):has(Property[key.name='y'] > MemberExpression[property.name='clientY'])",
+    files: [`^${R}`],
+    allow: [
+      "lib/menuAt\\.ts$",
+      "media/RowAction\\.tsx$",
+      "queue/useQueueDrag\\.ts$",
+      "hooks/useNavDrag\\.tsx$",
+    ],
+    message:
+      "A menu's point comes from menuAt(e) (lib/menuAt): a key press has no pointer, and a menu placed at it opens in the window's corner",
+    bad: {
+      file: `${R}screens/QueueScreen.tsx`,
+      code: "const at = { x: e.clientX, y: e.clientY };",
+    },
+  },
+  {
+    id: "lens-card-grid",
+    was: "none (0.13.0 round 12: the Artists lens took cards, and the Albums lens's grid moved into useCardGrid rather than gaining a copy)",
+    // a lens's card grid measures its width, counts its columns and windows its rows in one place
+    selector: "NewExpression[callee.name='ResizeObserver']",
+    files: [`^${R}components/library/lenses/`],
+    allow: ["lenses/useCardGrid\\.ts$"],
+    message:
+      "A lens's card grid is laid out by useCardGrid (lenses/useCardGrid): its width, columns, windowing and spot have one home",
+    bad: {
+      file: `${R}components/library/lenses/ArtistCards.tsx`,
+      code: "const ro = new ResizeObserver(() => {});",
+    },
+  },
+  {
+    id: "one-picture-chooser",
+    was: "none (0.13.0-rc.3: Choose a picture joined every artist's menu, and the artist page's own chooser became the app's one)",
+    // a surface opens the chooser through the store (mediaMenus artistPictureItems); App mounts
+    // the host, which alone mounts the dialog
+    selector: "JSXOpeningElement[name.name='ArtistPictureDialog']",
+    files: [`^${R}`],
+    allow: ["components/library/ArtistPictureDialog\\.tsx$"],
+    message:
+      "The picture chooser is mounted once (ArtistPictureHost); a surface opens it with artistPictureItems or setPictureChooser",
+    bad: {
+      file: `${R}components/library/ArtistHeader.tsx`,
+      code: "const x = <ArtistPictureDialog name={n} open={o} onClose={c} covers={[]} current={null} />;",
+    },
+  },
+  {
+    id: "card-badge",
+    was: "none (0.13.0-rc.4: the album chip's tip arrived, and its three hand-written copies became CardBadge)",
+    // a set's volume count or which copy an album is, at the end of its line
+    selector: "JSXAttribute[name.name='data-card-badge']",
+    files: [`^${R}`],
+    allow: ["components/library/LibraryCards\\.tsx$"],
+    message:
+      "An album's chip at the end of its line is CardBadge (LibraryCards): one look, and its tip",
+    bad: {
+      file: `${R}components/library/lenses/ArtistsLens.tsx`,
+      code: "const x = <span data-card-badge={badge}>{badge}</span>;",
+    },
+  },
+  {
+    id: "card-chip",
+    was: "none (0.13.0-rc.3: the cards' square chips, in three sizes across nine hand-written copies, became one round chip)",
+    // the cards' chips' surface, as it was spelled in every copy
+    selector: strings(String.raw`/bg-panel\/80 ring-1/`),
+    files: [`^${R}`],
+    allow: ["components/chrome/Chrome\\.tsx$"],
+    message:
+      "A chip on a card's picture is cardChip (chrome/Chrome): one round chip, one size, in one place",
+    bad: {
+      file: `${R}components/library/LibraryCards.tsx`,
+      code: 'const c = "absolute top-1.5 left-1.5 h-7 w-7 rounded-lg bg-panel/80 ring-1 ring-edge";',
+    },
+  },
 ];

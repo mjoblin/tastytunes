@@ -241,3 +241,67 @@ describe("trackMatchesEntry and albumMatchesEntry", () => {
     ).toBe(false);
   });
 });
+
+describe("the matchers on a real compilation's shapes", () => {
+  // Asset, 2026-08-21: the DIDL names the performer and the album artist; the
+  // queue entry carries the album artist and the server's album; the tag
+  // readout's album carries "[Disc 1]"
+  const splendour: MediaNode = {
+    id: "t",
+    parentId: "a",
+    title: "Down in Splendour",
+    upnpClass: "object.item.audioItem.musicTrack",
+    isContainer: false,
+    artUrl: null,
+    artist: "Straitjacket Fits",
+    albumArtist: "Various Artists",
+    album: "Nature's Best 2",
+    year: "2004",
+    trackNumber: 102,
+    durationSecs: 218,
+  };
+  const md: QueueListItemMetadata = {
+    class: "md.track.library",
+    source: "MEDIA_PLAYER",
+    name: null,
+    title: "Down in Splendour",
+    art_url: null,
+    track_number: 102,
+    duration: 218,
+    genre: null,
+    album: "Nature's Best 2",
+    artist: "Various Artists",
+  };
+
+  it("matches the compilation track to the queue entry naming the album artist", () => {
+    expect(trackMatchesEntry(splendour, md)).toBe(true);
+  });
+
+  it("matches an entry naming the performer, and not one naming a stranger", () => {
+    expect(trackMatchesEntry(splendour, { ...md, artist: "Straitjacket Fits" })).toBe(true);
+    expect(trackMatchesEntry(splendour, { ...md, artist: "Crowded House" })).toBe(false);
+  });
+
+  it("tells a twin title apart by duration, and never matches the readout's disc album", () => {
+    expect(trackMatchesEntry(splendour, { ...md, duration: 240 })).toBe(false);
+    expect(trackMatchesEntry(splendour, { ...md, album: "Nature's Best 2 [Disc 1]" })).toBe(false);
+  });
+
+  it("lets the album container own the entry by its title and artist identity", () => {
+    const album: MediaNode = {
+      ...splendour,
+      title: "Nature's Best 2",
+      artist: "Various Artists",
+      albumArtist: undefined,
+      isContainer: true,
+    };
+    expect(albumMatchesEntry(album, md)).toBe(true);
+  });
+
+  it("finds the playing entry by play_id first, by queue_id when there is none", () => {
+    const byPlayId = queue([{ id: 7, position: 0, metadata: md }], 7);
+    expect(playingQueueEntry(byPlayId, playState(9, null))?.id).toBe(7);
+    const byQueueId = queue([{ id: 9, position: 0, metadata: md }], null);
+    expect(playingQueueEntry(byQueueId, playState(9, null))?.id).toBe(9);
+  });
+});

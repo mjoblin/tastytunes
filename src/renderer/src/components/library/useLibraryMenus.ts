@@ -19,6 +19,7 @@ import { isAlbumClass, isArtistClass } from "@/lib/media";
 import type { MediaMenuItem } from "@/lib/mediaMenus";
 import { itemFromNode } from "@/components/overlays/AddToPlaylistPanel";
 import type { Crumb } from "@/screens/LibraryScreen";
+import { menuAt } from "@/lib/menuAt";
 
 // The Library's MENUS, lifted out of LibraryScreen (2026-09-13, the second
 // lift of the screen's hygiene round, after search mode): the open menu and
@@ -170,7 +171,7 @@ export function useLibraryMenus(d: {
   const openMenu = (node: MediaNode, e: React.MouseEvent, list?: MediaNode[]): void => {
     e.preventDefault();
     e.stopPropagation();
-    setMenu({ node, x: e.clientX, y: e.clientY, list });
+    setMenu({ node, ...menuAt(e), list });
   };
 
   /** ⋯-menu garnish on a box set's open album: the volume walk as named
@@ -299,7 +300,44 @@ export function useLibraryMenus(d: {
     ];
   };
 
+  // A SERVER'S OWN RECENTLY ADDED LIST, chosen where it lives (0.13.0 round 9): a folder the
+  // reader is browsing on a server, or a list-like container (Asset's New Albums is a plain
+  // album container, never a musicAlbum), never an artist or an album of tracks
+  const recentListVerbs = (node: MediaNode): MediaMenuItem[] | undefined => {
+    if (!serverUdn || !node.isContainer || isArtistClass(node.upnpClass)) return undefined;
+    if (node.upnpClass.startsWith("object.container.album.musicAlbum")) return undefined;
+    if ((nodeUdn(node) ?? serverUdn) !== serverUdn) return undefined;
+    const choice = {
+      id: node.id,
+      title: node.title,
+      titlePath: [...path.map((c) => c.title), node.title],
+    };
+    // the list in use already: said, not offered again
+    const inUse = mediaIndexStatuses.find((x) => x.udn === serverUdn)?.recentList;
+    if (inUse?.title === node.title)
+      return [
+        {
+          label: "Use as Recently added",
+          disabled: true,
+          hint: "Recently added comes from here. Settings › Libraries turns it off.",
+          run: () => {},
+        },
+      ];
+    return [
+      {
+        label: "Use as Recently added",
+        run: () =>
+          void tt
+            .setRecentlyAddedList(serverUdn, choice)
+            .then(() =>
+              showToast({ kind: "success", text: `Set Recently added to “${node.title}”` }),
+            ),
+      },
+    ];
+  };
+
   return {
+    recentListVerbs,
     menu,
     setMenu,
     presetPicker,

@@ -32,6 +32,8 @@ import {
   LOSSLESS_CODECS,
   isHiRes,
   LARGE_QUEUE_TRACKS,
+  copyStat,
+  peersByPlayKey,
 } from "@shared/model";
 import { audioAnalysisGet, albumDrMap } from "../../lookups/audioAnalysis";
 import { playStatsFromRecord } from "../../data/playStats";
@@ -412,12 +414,14 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
         // most played sorts, from the same album tally the Albums lens reads
         const wantsPlays = a.played != null || sort === "last_played" || sort === "most_played";
         const stats = wantsPlays ? await playStatsFromRecord() : null;
+        // each copy its own tally, against every library's tracks (shared/model/copies)
+        const peersOf = peersByPlayKey(indexPools());
         const tallies = new Map<MediaNode, { plays: number; lastAt: number }>();
         const tallyOf = (n: MediaNode): { plays: number; lastAt: number } => {
           let hit = tallies.get(n);
           if (!hit) {
             const pool = n.serverUdn ? poolOf.get(n.serverUdn) : undefined;
-            hit = pool && stats ? albumTally(n, pool, stats) : { plays: 0, lastAt: 0 };
+            hit = pool && stats ? albumTally(n, pool, stats, peersOf) : { plays: 0, lastAt: 0 };
             tallies.set(n, hit);
           }
           return hit;
@@ -700,7 +704,9 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
         }
         if (wantKey != null) tracks = tracks.filter((t) => keyMatches(featuresOf(t)?.key, wantKey));
         const stats = await playStatsFromRecord();
-        const statOf = (t: MediaNode) => stats.tracks[playKey(t.title, t.artist, t.album)] ?? null;
+        const peersOf = peersByPlayKey(indexPools());
+        const statOf = (t: MediaNode) =>
+          copyStat(stats, t, peersOf(playKey(t.title, t.artist, t.album)));
         const sort = (a.sort as string | undefined) ?? "title";
         const byTitle = (x: MediaNode, y: MediaNode): number =>
           x.title.localeCompare(y.title) || lc(x.artist).localeCompare(lc(y.artist));

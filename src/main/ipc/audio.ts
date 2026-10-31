@@ -18,14 +18,14 @@ import { loggedFetch } from "../netlog";
 import { handle } from "../app/guard";
 
 /**
- * THE LARGEST FILE THE ANALYSIS READS (0.12.0, from Malcolm's email: 24/192 FLACs past about
+ * THE LARGEST FILE THE ANALYSIS READS (0.12.0, from a user's email: 24/192 FLACs past about
  * 5:40 had no waveform). The renderer decodes the whole file at its native rate, so a file costs
  * its own size again as samples (a 6-minute 24/192 track is about 525 MB of them); the cap is a
  * memory bound. It was 256 MiB, with the renderer holding three copies of the file and main two.
  * With those copies gone, 512 MiB (about 11 minutes of 24/192 music, 22 of 24/96) costs about
  * what 256 MiB did, measured 2026-10-17 on 24/192 FLACs: a 507 MB file raised the window's
  * process by 2.2 GB and main's by 0.6 GB, where the old code took 2.0 GB and 0.7 GB for a 249 MB
- * one (journal/0.12.0.md). The streaming decoder (0.13.0) retires the cap.
+ * one (journal/0.12.0.md). The streaming decoder (0.14.0) retires the cap.
  * TASTYTUNES_ANALYSIS_MAX_BYTES lets a harness set it small.
  */
 const ANALYSIS_MAX_BYTES =

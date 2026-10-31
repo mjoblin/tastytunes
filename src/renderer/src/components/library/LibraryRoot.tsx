@@ -8,6 +8,7 @@ import type { Lens } from "@/components/library/lensNavigation";
 import { useIndexDoors } from "@/components/library/useIndexDoors";
 import { useDoorArt } from "@/components/library/useDoorArt";
 import { AlbumsArt, ArtistsArt, TracksArt } from "@/components/library/DoorArt";
+import { RecentlyAddedShelf } from "@/components/library/RecentlyAddedShelf";
 
 /** The sources' cards: a fixed, compact width (the card-size slider is for art). */
 const SOURCE_CARD_PX = 150;
@@ -32,6 +33,7 @@ export function LibraryRoot({
   enterServer: (udn: string) => void;
 }): React.JSX.Element {
   const presetGap = useStore((s) => s.settings.presetGap);
+  const saveSettings = useStore((s) => s.saveSettings);
   // Standby honesty: USB source cards dim (the streamer's own ContentDirectory
   // has no content until wake — probed 2026-07-23); external servers and the
   // local index browse fine while the device sleeps.
@@ -186,6 +188,16 @@ export function LibraryRoot({
             ))}
           </div>
         </div>
+      )}
+      {/* RECENTLY ADDED (0.13.0 round 9, his pick: a shelf under the doors rather than a fourth
+      door): the albums known to be recent, its See all the Albums lens in the same order */}
+      {doorsState === "ready" && (
+        <RecentlyAddedShelf
+          seeAll={() => {
+            void saveSettings({ lensAlbumsSort: "added", lensAlbumsSortReversed: false });
+            openLens("albums");
+          }}
+        />
       )}
       {(["servers", "usb"] as const).map((kind) => {
         const group = shownServers.filter((s) => (kind === "usb") === s.isStreamer);

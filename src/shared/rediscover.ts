@@ -57,9 +57,12 @@ export function shelvesFor(
   const seen = new Set<string>();
   const rows: ShelfAlbum[] = [];
   for (const pool of pools) {
-    // albumTracksOf keeps only tracks whose album title matches, so handing it
-    // that title's tracks alone gives the same answer without a pass over the
-    // whole pool per album (thousands of tracks, hundreds of albums)
+    // albumTracksOf keeps only tracks whose album title matches, and looks for a
+    // second copy only among the albums of that title, so handing it that
+    // title's tracks and albums alone gives the same answer without a pass over
+    // the whole pool per album (the albums' pass made the shelves grow as the
+    // square of the library: 62 times slower at 50,000 tracks than at 5,000,
+    // the scale fixture's first run, 0.13.0)
     const byAlbum = new Map<string, MediaNode[]>();
     for (const t of pool.tracks) {
       const k = lc(t.album);
@@ -67,13 +70,23 @@ export function shelvesFor(
       if (list) list.push(t);
       else byAlbum.set(k, [t]);
     }
+    const albumsByTitle = new Map<string, MediaNode[]>();
+    for (const a of pool.albums) {
+      const k = lc(a.title);
+      const list = albumsByTitle.get(k);
+      if (list) list.push(a);
+      else albumsByTitle.set(k, [a]);
+    }
     for (const album of pool.albums) {
       const id = `${lc(album.title)}|${lc(album.artist)}`;
       if (seen.has(id)) continue;
       seen.add(id);
       const t = albumTally(
         album,
-        { albums: pool.albums, tracks: byAlbum.get(lc(album.title)) ?? [] },
+        {
+          albums: albumsByTitle.get(lc(album.title)) ?? [album],
+          tracks: byAlbum.get(lc(album.title)) ?? [],
+        },
         stats,
       );
       rows.push({ album, plays: t.plays, lastAt: t.lastAt, tracks: t.tracks, reached: 0 });

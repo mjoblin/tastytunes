@@ -45,10 +45,9 @@ import {
 } from "lucide-react";
 import { SCENES } from "@/components/display/scenes";
 import { sleepTrackKey, type SleepAction } from "@shared/model";
-import { favoriteKey, type Favorite } from "@shared/model";
 import { activatePlaylist } from "@/lib/playlists";
 import { audioCaps, brightnessOptions, nextRepeatMode, repeatModeOf } from "@shared/smoip";
-import { toggleFavorite } from "@/lib/favorites";
+import { isFavorited, toggleFavorite } from "@/lib/favorites";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { systemTheme } from "@/hooks/useTheme";
@@ -559,8 +558,10 @@ export function buildCommands(ctx: CommandContext): Command[] {
         objectId: null,
         titlePath: null,
         durationSecs: playState?.metadata?.duration ?? null,
+        rate: playState?.metadata?.sample_rate ?? null,
+        bits: playState?.metadata?.bit_depth ?? null,
       };
-      const active = favorites.some((f) => favoriteKey(f) === favoriteKey(fav as Favorite));
+      const active = isFavorited(fav, favorites);
       cmds.push({
         id: "view:favtrack",
         label: active ? "Unfavorite this track" : "Favorite this track",

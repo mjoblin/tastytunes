@@ -60,6 +60,13 @@ export interface MediaIndexStatus {
   builtAt: number | null;
   updateId: number | null;
   profile?: MediaServerProfile;
+  /** The server's own Recently added list (0.13.0 round 9; shared/recentlyAdded): the one in
+   *  use, found by its name or chosen by the reader, or null; `recentOff` when the reader turned
+   *  it off in Settings › Libraries. */
+  recentList?: { title: string; chosen: boolean } | null;
+  recentOff?: boolean;
+  /** When the list was last read: the Library's pools are fetched again when it changes. */
+  recentAt?: number | null;
 }
 
 export interface MediaNode {
@@ -75,6 +82,11 @@ export interface MediaNode {
    * it, and the Library's browse re-walks it when the stored id has rotted.
    */
   titlePath?: string[];
+  /** An album's arrival in its index (0.13.0 round 9, shared/recentlyAdded): the day the app
+   *  first saw it, absent when it was there before the app began noting arrivals. */
+  addedAt?: number;
+  /** An album's place in its server's own Recently added list (0 first), when the list names it. */
+  recentRank?: number;
   upnpClass: string;
   isContainer: boolean;
   artUrl: string | null;
@@ -95,7 +107,7 @@ export interface MediaNode {
    * PROVISIONAL, a parse's guess for the pool rule discs-from-file-names (main/media/reconcile)
    * and never kept: the disc a track's file name gives ("2-11 Close Your Eyes.flac", the second
    * number its track number), read only when the server sent no disc (MinimServer sends none,
-   * 0.12.0-rc.3, Malcolm's box sets). The rule promotes it to discNumber only when every track
+   * 0.12.0-rc.3, a user's box sets). The rule promotes it to discNumber only when every track
    * of the album agrees, and drops it either way.
    */
   fileDisc?: number;
@@ -293,11 +305,19 @@ export function albumComposers(tracks: ReadonlyArray<Pick<MediaNode, "composers"
 
 /**
  * The tracks that belong to an album, from an index pool: same title on the
- * same server, credited to the album's artist (trackInAlbumOf), and — when
- * the pool holds TWIN EDITIONS (same title, same artist) — sharing the
- * album's art. In album order. THE one derivation of "an album's tracks"
- * that both the Info modal and MCP use; the Artists lens computes the same
- * rule over its memoized map (S13/S16 pin it).
+ * same server, and — when the pool holds TWIN EDITIONS (same title, same
+ * artist) — sharing the album's art. In album order. THE one derivation of
+ * "an album's tracks": the Info modal, MCP and the lenses' index (tracksOf:
+ * the Albums lens's play tallies and Format facet, the compilations, the
+ * Artists lens's album column) all read it (S13/S16 pin it).
+ * WHO ELSE CLAIMS THE TITLE decides how strictly a track's credit is read
+ * (0.13.0-rc.3). Where another album on the server has the same title (two
+ * artists' "Greatest Hits", two copies), a track must be credited to this
+ * album's artist (trackInAlbumOf). An album alone under its title takes every
+ * track of that title but one whose album artist names someone else: a
+ * compilation's tracks credit their own performers, and a server without an
+ * AlbumArtist role sends nothing else to tell by, so the strict reading left
+ * such an album with no tracks (no plays, no format).
  */
 export function albumTracksOf(
   album: Pick<MediaNode, "title" | "artist" | "artUrl">,
@@ -308,19 +328,93 @@ export function albumTracksOf(
 ): MediaNode[] {
   const title = album.title.trim().toLowerCase();
   const owner = (album.artist ?? "").trim().toLowerCase();
-  const twins =
-    pool.albums.filter(
-      (a) =>
-        a.title.trim().toLowerCase() === title && (a.artist ?? "").trim().toLowerCase() === owner,
-    ).length > 1;
+  const peers = pool.albums.filter((a) => a.title.trim().toLowerCase() === title);
+  const twins = peers.filter((a) => (a.artist ?? "").trim().toLowerCase() === owner).length > 1;
+  const credited = (t: MediaNode): boolean =>
+    peers.length > 1
+      ? trackInAlbumOf(t, album.artist ?? null)
+      : album.artist == null || !t.albumArtist || t.albumArtist.trim().toLowerCase() === owner;
   return orderTracks(
     pool.tracks.filter(
       (t) =>
         (t.album ?? "").trim().toLowerCase() === title &&
-        trackInAlbumOf(t, album.artist ?? null) &&
+        credited(t) &&
         (!twins || sameArt(t.artUrl, album.artUrl)),
     ),
   );
+}
+
+/** An artist as the indexes group them: their name as first spelled, their real server picture,
+ *  a cover, every album credited to them and every track they perform on (artistGroups). */
+export interface ArtistGroup {
+  /** The name lowercased and trimmed. */
+  key: string;
+  name: string;
+  /** The server's own picture for the artist when it is a real one: not one of the indexed
+   *  albums' or tracks' covers (an Asset library, 2026-10-11: 370 of 371 artists carried one of
+   *  their own album covers; 0.12.0-rc.3, a user's MinimServer: some track's embedded cover). */
+  own: string | null;
+  /** The first of their albums with a picture, else the first of their tracks with one. */
+  cover: string | null;
+  albums: MediaNode[];
+  tracks: MediaNode[];
+}
+
+const artistGroupsByPools = new WeakMap<readonly MediaIndexPools[], Map<string, ArtistGroup>>();
+
+/**
+ * EVERY ARTIST THE INDEXES KNOW, by name lowercased, made once per pools snapshot: an album
+ * belongs to its artist, a track to every performer (trackArtists, never the packed "A; B"),
+ * and a server's picture for an artist is theirs only when it is no album's or track's cover.
+ * THE one grouping (0.13.0-rc.3; it was two, main's artistIndex and the Artists lens, each with
+ * its own picture rule): main's counts and pictures for the rows (media/artistIndex) and the
+ * Artists lens, its cards and the artist page (useLensIndex) both read it, so they agree on who
+ * an artist is and what their own picture is.
+ */
+export function artistGroups(pools: readonly MediaIndexPools[]): Map<string, ArtistGroup> {
+  const known = artistGroupsByPools.get(pools);
+  if (known) return known;
+  const map = new Map<string, ArtistGroup>();
+  const group = (name: string | null | undefined): ArtistGroup | null => {
+    const key = name?.trim().toLowerCase();
+    if (!key) return null;
+    let g = map.get(key);
+    if (!g)
+      map.set(
+        key,
+        (g = { key, name: name!.trim(), own: null, cover: null, albums: [], tracks: [] }),
+      );
+    return g;
+  };
+  // every cover the indexes hold, an album's or a track's: an artist's picture that is one of
+  // them is a cover, and a photo outranks it
+  const coverArt = new Set<string>();
+  for (const p of pools) {
+    for (const a of p.albums) if (a.artUrl) coverArt.add(a.artUrl);
+    for (const t of p.tracks) if (t.artUrl) coverArt.add(t.artUrl);
+  }
+  for (const p of pools)
+    for (const a of p.artists) {
+      const g = group(a.title);
+      if (g && a.artUrl && !coverArt.has(a.artUrl)) g.own ??= a.artUrl;
+    }
+  for (const p of pools)
+    for (const a of p.albums) {
+      const g = group(a.artist);
+      if (!g) continue;
+      g.albums.push(a);
+      g.cover ??= a.artUrl;
+    }
+  for (const p of pools)
+    for (const t of p.tracks)
+      for (const n of trackArtists(t)) {
+        const g = group(n);
+        if (!g) continue;
+        g.tracks.push(t);
+        g.cover ??= t.artUrl;
+      }
+  artistGroupsByPools.set(pools, map);
+  return map;
 }
 
 /**
@@ -374,7 +468,7 @@ export function discTrackCount(
 /** The same count from an album's own listing (a browsed album, which has no index pools).
  *  Null, so no "of", when the album has no disc numbers and its track numbers repeat: the
  *  numbers count within discs the server never named, and the whole album's count would say
- *  "track 11 of 143" of a box set's eleventh track (0.12.0-rc.3, Malcolm's MinimServer). */
+ *  "track 11 of 143" of a box set's eleventh track (0.12.0-rc.3, a user's MinimServer). */
 export function discCountIn(
   track: Pick<MediaNode, "discNumber">,
   albumTracks: ReadonlyArray<Pick<MediaNode, "discNumber" | "trackNumber">>,

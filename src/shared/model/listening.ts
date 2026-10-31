@@ -4,6 +4,14 @@
 
 import type { MediaNode } from "./media";
 import { albumTracksOf, trackArtists } from "./media";
+import {
+  type CopyFacts,
+  type CopyRow,
+  artAddress,
+  copiesOf,
+  nodeFacts,
+  sameCopyRow,
+} from "./copies";
 
 /**
  * The ONE definition of "a listen", shared by the scrobbler and the listening
@@ -77,6 +85,11 @@ export interface PlayStat {
  *  kept current in the renderer by folding each new play event in. */
 export interface PlayStats {
   tracks: Record<string, PlayStat>;
+  /** The same tallies split by what tells copies apart (0.13.0): per play key, one bucket per
+   *  set of facts its plays carried (copies.ts). `tracks` stays the sum, for the surfaces about
+   *  the listening itself (History, Rediscover); a library row reads its copy's share
+   *  (copyStat). */
+  variants: Record<string, PlayVariant[]>;
   recent: ListeningPlayEvent[];
   since: number | null;
   /** Every RUN of plays per album (keyed playKey(null, null, album)), oldest
@@ -87,7 +100,89 @@ export interface PlayStats {
 export const PLAY_STATS_RECENT = 300;
 /** An empty fold, for a reader that builds its own (a streamer's slice of the record). */
 export function emptyPlayStats(): PlayStats {
-  return { tracks: {}, recent: [], since: null, albumRuns: {} };
+  return { tracks: {}, variants: {}, recent: [], since: null, albumRuns: {} };
+}
+
+/** One bucket of a track's plays: the facts they share and their tally. */
+export interface PlayVariant extends PlayStat {
+  facts: CopyFacts;
+}
+
+/** What a play says about the copy it was (copies.ts): the picture's address and host the
+ *  record kept (plays from before 0.13.0 kept neither), its length, rate and depth. */
+export function playFacts(
+  e: Pick<ListeningPlayEvent, "artUrl" | "artHost" | "duration" | "sampleRate" | "bitDepth">,
+): CopyFacts {
+  return {
+    art: artAddress(e.artUrl),
+    host: e.artHost ?? null,
+    secs: e.duration,
+    rate: e.sampleRate,
+    bits: e.bitDepth,
+  };
+}
+
+const factsId = (f: CopyFacts): string =>
+  [
+    f.art ?? "",
+    f.host ?? "",
+    f.secs != null ? Math.round(f.secs) : "",
+    f.rate ?? "",
+    f.bits ?? "",
+  ].join("|");
+
+/** The library's tracks by play key, made on the first ask: the other copies a row's plays are
+ *  told apart from (copyStat). */
+export function peersByPlayKey(
+  pools: ReadonlyArray<{ tracks: ReadonlyArray<MediaNode> }>,
+): (key: string) => readonly MediaNode[] {
+  let byKey: Map<string, MediaNode[]> | null = null;
+  return (key) => {
+    if (!byKey) {
+      byKey = new Map();
+      for (const g of pools)
+        for (const t of g.tracks) {
+          const k = playKey(t.title, t.artist, t.album);
+          const list = byKey.get(k);
+          if (list) list.push(t);
+          else byKey.set(k, [t]);
+        }
+    }
+    return byKey.get(key) ?? [];
+  };
+}
+
+/**
+ * A library track's tally: the plays of its title, artist and album that are this copy's
+ * (0.13.0). `peers` are the library's tracks that might share its play key (the index's, the
+ * listing's); the track itself counts whether or not it is among them. With no other copy the
+ * whole tally is its own; otherwise each bucket of plays goes to the copies its facts could be
+ * (copiesOf), and a bucket the facts cannot place counts on every copy, as before.
+ */
+export function copyStat(
+  stats: Pick<PlayStats, "tracks" | "variants">,
+  node: CopyRow,
+  peers: readonly CopyRow[],
+): PlayStat | null {
+  const k = playKey(node.title, node.artist, node.album);
+  const all = stats.tracks[k];
+  if (!all) return null;
+  const copies = [node];
+  for (const p of peers)
+    if (playKey(p.title, p.artist, p.album) === k && !copies.some((c) => sameCopyRow(c, p)))
+      copies.push(p);
+  const buckets = stats.variants[k];
+  if (copies.length <= 1 || !buckets) return all;
+  let row: PlayStat | null = null;
+  for (const b of buckets) {
+    if (!copiesOf(b.facts, copies, nodeFacts).includes(node)) continue;
+    row ??= { plays: 0, listens: 0, lastAt: 0, seconds: 0 };
+    row.plays += b.plays;
+    row.listens += b.listens;
+    row.lastAt = Math.max(row.lastAt, b.lastAt);
+    row.seconds += b.seconds;
+  }
+  return row;
 }
 
 /** "Not heard in a while": an album played, then left this long (the History
@@ -99,7 +194,9 @@ export const REDISCOVER_QUIET_DAYS = 90;
  * them, and how many tracks it has, by content (playKey over albumTracksOf).
  * ONE home for "has this album been played, and when": the History screen's
  * Rediscover shelves and the MCP's history_unplayed and history_rediscover all
- * read it.
+ * read it. Given `peersOf` (the library's tracks by play key), the tally is this
+ * copy's own, as the Albums lens reads it (0.13.0); without, every copy's together,
+ * as Rediscover's one row per album wants it.
  */
 export function albumTally(
   album: MediaNode,
@@ -107,13 +204,15 @@ export function albumTally(
     albums: ReadonlyArray<Pick<MediaNode, "title" | "artist">>;
     tracks: ReadonlyArray<MediaNode>;
   },
-  stats: Pick<PlayStats, "tracks">,
+  stats: Pick<PlayStats, "tracks" | "variants">,
+  peersOf?: (key: string) => readonly CopyRow[],
 ): { plays: number; lastAt: number; tracks: number } {
   const tracks = albumTracksOf(album, pool);
   let plays = 0;
   let lastAt = 0;
   for (const t of tracks) {
-    const st = stats.tracks[playKey(t.title, t.artist, t.album)];
+    const k = playKey(t.title, t.artist, t.album);
+    const st = peersOf ? copyStat(stats, t, [...peersOf(k), ...tracks]) : stats.tracks[k];
     if (!st) continue;
     plays += st.plays;
     lastAt = Math.max(lastAt, st.lastAt);
@@ -191,6 +290,21 @@ export function foldPlayEvent(stats: PlayStats, e: ListeningEvent): void {
   if (ev.at > row.lastAt) row.lastAt = ev.at;
   row.seconds += ev.playedSeconds;
   stats.tracks[k] = row;
+  // the copy's bucket, replaced rather than changed (the renderer folds into a shallow copy)
+  const facts = playFacts(ev);
+  const id = factsId(facts);
+  const buckets = stats.variants[k] ?? [];
+  const at = buckets.findIndex((b) => factsId(b.facts) === id);
+  const was = at >= 0 ? buckets[at] : { facts, plays: 0, listens: 0, lastAt: 0, seconds: 0 };
+  const bucket: PlayVariant = {
+    facts: was.facts,
+    plays: was.plays + 1,
+    listens: was.listens + (isListen(ev.playedSeconds, ev.duration) ? 1 : 0),
+    lastAt: Math.max(was.lastAt, ev.at),
+    seconds: was.seconds + ev.playedSeconds,
+  };
+  stats.variants[k] =
+    at >= 0 ? buckets.map((b, i) => (i === at ? bucket : b)) : [...buckets, bucket];
   // the album's runs: this play extends the last run when the previous
   // library play was the same album within the session gap, else opens one
   if (ev.album) {
@@ -204,7 +318,16 @@ export function foldPlayEvent(stats: PlayStats, e: ListeningEvent): void {
       playKey(null, null, prev.album) === ak &&
       ev.at >= prev.at &&
       ev.at - last.endAt <= SESSION_GAP_MS;
-    if (!continues) runs.push({ startAt: ev.at, endAt: ev.at, plays: 0, listened: [] });
+    // a run's facts are its first play's, less the length: they say which copy of the album
+    // it was (a later play from another copy of the same album would continue it, a rare mix)
+    if (!continues)
+      runs.push({
+        startAt: ev.at,
+        endAt: ev.at,
+        plays: 0,
+        listened: [],
+        facts: { ...facts, secs: null },
+      });
     const run = runs[runs.length - 1];
     run.plays += 1;
     run.endAt = Math.max(run.endAt, ev.at + ev.playedSeconds * 1000);
@@ -352,6 +475,11 @@ export interface ListeningPlayEvent extends ListeningEventBase {
   source: string | null;
   sourceId: string | null;
   via?: ListeningVia;
+  /** The picture's address the streamer reported, when it is the copy's own (a media server's;
+   *  never the streamer's drive's, which changes with every standby), and the host it came from
+   *  either way (0.13.0, additive): which copy of a track this was (copies.ts). */
+  artUrl?: string | null;
+  artHost?: string | null;
 }
 /** A stretch of internet radio on one station — "heard", never a listen. */
 export interface ListeningRadioSessionEvent extends ListeningEventBase {
@@ -436,6 +564,8 @@ export interface AlbumRun {
   endAt: number;
   plays: number;
   listened: string[];
+  /** Which copy of the album the run was (0.13.0): its first play's facts, less the length. */
+  facts?: CopyFacts;
 }
 
 /** The Settings truth row: what the record holds and whether writes work. */

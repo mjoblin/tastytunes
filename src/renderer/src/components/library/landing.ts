@@ -1,5 +1,5 @@
 /**
- * THE TRACK A LANDING LOOKS FOR (0.12.0-rc.3, Malcolm's two "Close Your Eyes" on Songbooks+): Open
+ * THE TRACK A LANDING LOOKS FOR (0.12.0-rc.3, a user's two same-titled tracks on one box set): Open
  * in Library, Go to album and the artist page's links land on an album and wash one row. A row
  * was found by its title alone, so of two tracks with one title on one album (a reprise, the same
  * song on two discs of a box set) the first always won. A landing now carries the track's id and

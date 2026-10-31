@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ExternalLink } from "lucide-react";
 import { DEFAULT_SETTINGS, type AppSettings, type McpBind, type McpSettings } from "@shared/model";
 import { MCP_CLUSTERS, mcpClusterEnabled, type McpClusterInfo } from "@shared/mcpCatalog";
@@ -32,6 +32,20 @@ export function McpSection({
   const status = useStore((s) => s.mcpStatus);
   const { copied, copy } = useCopied();
   const tokenConfirm = useConfirmPopover();
+  // THE TOKEN STAYS OFF THE SCREEN (0.13.0 round 10, the secrets store): shown masked to its last
+  // four characters, out of a screenshot's reach; a Copy asks main for it at that moment
+  const [tokenEnds, setTokenEnds] = useState<string | null>(null);
+  const readToken = (): void => {
+    void tt
+      .secretsStatus()
+      .then((s) => setTokenEnds(s.mcpToken.ends))
+      .catch(() => {});
+  };
+  useEffect(readToken, []);
+  const masked = `••••••••${tokenEnds ?? ""}`;
+  const copyWithToken = (key: string, make: (token: string) => string): void => {
+    void tt.mcpTokenReveal().then((token) => copy(key, make(token)));
+  };
 
   const saveMcp = (patch: Partial<McpSettings>): void => {
     void save({ mcp: { ...mcp, ...patch } });
@@ -122,9 +136,9 @@ export function McpSection({
                     <div className="min-w-0 flex-1">
                       <CopyRow
                         label="Token"
-                        text={mcp.token}
+                        text={masked}
                         copied={copied === "token"}
-                        onCopy={() => copy("token", mcp.token)}
+                        onCopy={() => copyWithToken("token", (token) => token)}
                       />
                     </div>
                     <button
@@ -136,7 +150,7 @@ export function McpSection({
                           question:
                             "Make a new token? Agents using the current one stop working until they have the new one.",
                           verb: "New token",
-                          onConfirm: () => saveMcp({ token: "" }),
+                          onConfirm: () => void tt.mcpTokenNew().then(readToken),
                         })
                       }
                       data-tip="Agents using the old token stop working."
@@ -149,15 +163,23 @@ export function McpSection({
                 )}
                 <CopyRow
                   label="Claude Code"
-                  text={claudeCommand(status.url, lan ? mcp.token : null)}
+                  text={claudeCommand(status.url, lan ? masked : null)}
                   copied={copied === "claude"}
-                  onCopy={() => copy("claude", claudeCommand(status.url!, lan ? mcp.token : null))}
+                  onCopy={() =>
+                    lan
+                      ? copyWithToken("claude", (token) => claudeCommand(status.url!, token))
+                      : copy("claude", claudeCommand(status.url!, null))
+                  }
                 />
                 <CopyRow
                   label="JSON config"
                   text={`"tastytunes": { "type": "http", "url": "${status.url}"${lan ? ', "headers": { … }' : ""} }`}
                   copied={copied === "json"}
-                  onCopy={() => copy("json", mcpJsonSnippet(status.url!, lan ? mcp.token : null))}
+                  onCopy={() =>
+                    lan
+                      ? copyWithToken("json", (token) => mcpJsonSnippet(status.url!, token))
+                      : copy("json", mcpJsonSnippet(status.url!, null))
+                  }
                   hint='For Cursor and other clients that take an "mcpServers" block with a url. Copies the full block.'
                 />
               </div>

@@ -138,6 +138,13 @@ export interface AppSettings {
   presetGap: number;
   /** Preset grid: stretch cards to fill each row (true) or keep them exact-size (false). */
   presetFillRows: boolean;
+  /** The Library's album cards carry a format line under their names: the status lamp's glyph,
+   *  the format, and DR once measured (0.13.0-rc.4, his picks on "Card details"; on by default,
+   *  for listeners who choose by format). */
+  albumCardFormat: boolean;
+  /** The Tracks view's cards carry the same line, each track's own format and DR, with a switch
+   *  of its own (0.13.0-rc.4, his note on "View Options"). */
+  trackCardFormat: boolean;
   /** Now Playing content placement. */
   nowPlayingAlignH: AlignH;
   nowPlayingAlignV: AlignV;
@@ -183,6 +190,10 @@ export interface AppSettings {
   queueLayout: QueueLayout;
   presetsLayout: ScreenLayout;
   libraryLayout: ScreenLayout;
+  /** The Tracks view's own Rows or Cards (0.13.0-rc.4, his note on "View Options": albums and
+   *  tracks keep separate display settings, with a button to match the other). An older file
+   *  without it takes libraryLayout, the choice the Tracks view followed before (main's load). */
+  lensTracksLayout: ScreenLayout;
   /** Album-grid sort in the Library (tracks always sort by track number). */
   librarySort: "server" | "title" | "artist" | "year";
   librarySortReversed: boolean;
@@ -196,10 +207,26 @@ export interface AppSettings {
    */
   /** Albums lens sort (the native album grid above keeps librarySort). */
   lensAlbumsSort:
-    "title" | "artist" | "year" | "dr" | "loudness" | "lastPlayed" | "plays" | "wholeListens";
+    | "title"
+    | "artist"
+    | "added"
+    | "year"
+    | "dr"
+    | "loudness"
+    | "lastPlayed"
+    | "plays"
+    | "wholeListens";
   lensAlbumsSortReversed: boolean;
   /** Artists lens: hide artists that only have loose tracks. */
   lensArtistsAlbumsOnly: boolean;
+  /** Artists lens sort (0.13.0 round 12, the third way the lenses differed): by name with the
+   *  A-Z rail, the most played first, or the newest arrival first (an artist's newest album). */
+  lensArtistsSort: "name" | "plays" | "added";
+  lensArtistsSortReversed: boolean;
+  /** The artist page's album order (0.13.0-rc.4, a user's question: the page's order, newest
+   *  first, was hidden behind the year each card cut off): by year, newest first, or by title. */
+  artistPageSort: "year" | "title";
+  artistPageSortReversed: boolean;
   /** Albums lens partition: everything, artist albums only, or compilations only. */
   lensAlbumsKind: "all" | "albums" | "compilations";
   /** Tracks lens sort — the third lens (2026-09-01), every track across the
@@ -342,10 +369,9 @@ export interface AppSettings {
    *  sends small artwork, the full picture is read from the file's own tags for
    *  the big surfaces. Reads from the media server over the local network. */
   artFromFiles: boolean;
-  /** Scrobble listens to ListenBrainz (needs a user token; radio is never scrobbled). */
+  /** Scrobble listens to ListenBrainz (needs a user token; radio is never scrobbled). The token,
+   *  from listenbrainz.org/settings, is the secrets store's lbToken since 0.13.0, never here. */
   lbEnabled: boolean;
-  /** ListenBrainz user token, from listenbrainz.org/settings. Stored locally. */
-  lbToken: string;
   /** Artist bio panel on Now Playing (MusicBrainz + Wikipedia, on demand). */
   artistInfo: boolean;
   /** Fill covers the media server doesn't have (MusicBrainz identifies the
@@ -436,6 +462,13 @@ export interface AppSettings {
    */
   presetArtists: Record<string, string>;
   /**
+   * Each media server's own Recently added list, as the reader set it (0.13.0 round 9): a
+   * container chosen in the Library (a folder's ⋯, Use as Recently added), with the titles of
+   * the folders down to it so an id the server re-mints is found again, or "off" (Settings ›
+   * Libraries). A server absent here uses the list found by its name. Keyed by server udn.
+   */
+  recentlyAddedLists: Record<string, { id: string; title: string; titlePath: string[] } | "off">;
+  /**
    * User-saved EQ gain-sets (7 gains, dB). LOCAL by design: the firmware has
    * no preset storage — the official app's EQ presets are client-side too
    * (confirmed on the wire: tapping/saving one produces zero device traffic),
@@ -444,6 +477,10 @@ export interface AppSettings {
    */
   eqPresets: Array<{ name: string; gains: number[] }>;
 }
+
+/** The card grids' size and gap, in px: Settings › Layout's sliders and the View options menu's. */
+export const CARD_SIZE_RANGE = { min: 120, max: 280 } as const;
+export const CARD_GAP_RANGE = { min: 8, max: 40 } as const;
 
 export const DEFAULT_SETTINGS: AppSettings = {
   lastHost: null,
@@ -469,6 +506,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   presetCardSize: 160,
   presetGap: 12,
   presetFillRows: true,
+  albumCardFormat: true,
+  trackCardFormat: true,
   nowPlayingAlignH: "left",
   nowPlayingAlignV: "top",
   navCollapsed: false,
@@ -480,11 +519,16 @@ export const DEFAULT_SETTINGS: AppSettings = {
   queueLayout: "rows",
   presetsLayout: "cards",
   libraryLayout: "cards",
+  lensTracksLayout: "cards",
   librarySort: "server",
   librarySortReversed: false,
   lensAlbumsSort: "title",
   lensAlbumsSortReversed: false,
   lensArtistsAlbumsOnly: false,
+  lensArtistsSort: "name",
+  lensArtistsSortReversed: false,
+  artistPageSort: "year",
+  artistPageSortReversed: false,
   lensAlbumsKind: "all",
   lensTracksSort: "title",
   lensTracksSortReversed: false,
@@ -530,7 +574,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   recents: true,
   artFromFiles: true,
   lbEnabled: false,
-  lbToken: "",
   artistInfo: true,
   albumArtLookup: true,
   radioDirectory: true,
@@ -545,7 +588,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
     disabledClusters: [],
     enabledClusters: [],
     disabledTools: [],
-    token: "",
   },
   mediaIndexAuto: true,
   settingsTab: "appearance",
@@ -562,5 +604,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   miniBounds: null,
   mainBounds: null,
   presetArtists: {},
+  recentlyAddedLists: {},
   eqPresets: [],
 };

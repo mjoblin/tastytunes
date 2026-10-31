@@ -167,7 +167,7 @@ export function nowPlayingInfoTarget(
   };
   // A DISC finds its twin in the library only by the same names AND the same length (main's
   // contentMatch): its waveform, scenes and dynamic range are measured from that file, the
-  // nearest thing to the disc the app can read (0.12.0, kept on purpose after Malcolm saw it)
+  // nearest thing to the disc the app can read (0.12.0, kept on purpose after a user saw it)
   const cd = isCdPlayback(md, display);
   const cdDuration = cd ? stub.durationSecs : null;
   // local media only: enrich from the library, by content

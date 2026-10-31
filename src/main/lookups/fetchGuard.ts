@@ -90,6 +90,14 @@ export function privateAddress(ip: string): boolean {
 type Resolve = (host: string) => Promise<{ address: string }[]>;
 const resolveAll: Resolve = (host) => lookup(host, { all: true });
 
+/** A host only the local network has: a private address, localhost, a .local or a single-label
+ *  name. Fetched only when trusted (allowed, below; and a picture on one waits for the streamer's
+ *  server listing before it is refused, ipc/lookups' fetchArt). */
+export function localOnly(host: string): boolean {
+  if (isIP(host)) return privateAddress(host);
+  return host === "localhost" || host.endsWith(".local") || !host.includes(".");
+}
+
 /** Whether `url` may be fetched: http(s), and on a private address only for a trusted host. */
 export async function allowed(
   url: URL,
@@ -99,9 +107,9 @@ export async function allowed(
   if (url.protocol !== "http:" && url.protocol !== "https:") return false;
   const host = url.hostname.replace(/^\[|\]$/g, "");
   if (trusted(host)) return true;
-  if (isIP(host)) return !privateAddress(host);
-  // a name only the local network resolves is the local network
-  if (host === "localhost" || host.endsWith(".local") || !host.includes(".")) return false;
+  // an address or a name only the local network has is the local network
+  if (localOnly(host)) return false;
+  if (isIP(host)) return true;
   try {
     const found = await resolve(host);
     return found.length > 0 && !found.some((a) => privateAddress(a.address));

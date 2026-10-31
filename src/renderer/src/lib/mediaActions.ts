@@ -49,7 +49,7 @@ export async function openRefInLibrary(ref: MediaRef): Promise<boolean> {
   };
   // an act: the Library navigates to the id, so it must answer on the server now. A track asks
   // by its id and length first, which the lookup already knew how to use: by title alone, of two
-  // tracks with one title on one album the first always won (Malcolm's twins, 0.12.0-rc.3); by
+  // tracks with one title on one album the first always won (a user's twins, 0.12.0-rc.3); by
   // content alone, as before, when that finds nothing (an id rotted, a length the server rounds)
   const exact =
     ref.kind === "track"

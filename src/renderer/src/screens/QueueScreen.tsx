@@ -45,12 +45,7 @@ import {
 } from "lucide-react";
 import { queueContentHash, type QueueListItem } from "@shared/smoip";
 import { presetVolumeKey, type QueueLayout, audioAnalysisKey } from "@shared/model";
-import {
-  favoriteKey,
-  type ContentRef,
-  type Favorite,
-  type QueueRestoreResult,
-} from "@shared/model";
+import { type ContentRef, type QueueRestoreResult } from "@shared/model";
 import { tt } from "@/api";
 import { useConfirmPopover } from "@/components/chrome/Confirm";
 import { useStore } from "@/store";
@@ -60,7 +55,7 @@ import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { flashTarget, scrollToWithContext } from "@/lib/scroll";
 import { DND_ACCESSIBILITY, lockVertical } from "@/lib/dnd";
 import { cx, fmtDuration, fmtTime, matchesFilter, fmtCount } from "@/lib/format";
-import { toggleFavorite } from "@/lib/favorites";
+import { isFavorited, toggleFavorite } from "@/lib/favorites";
 import { fromQueueItem, refToFavorite, refToPlaylistItem, type MediaRef } from "@/lib/mediaRef";
 import { refSiblings } from "@/lib/infoSteps";
 import { saveRefToPreset, openRefInLibrary } from "@/lib/mediaActions";
@@ -80,7 +75,13 @@ import { DragChip } from "@/components/controls/DragChip";
 import { clampChipPos } from "@/lib/navDrop";
 import { ModalShell } from "@/components/chrome/Overlay";
 import { PresetSavePanel, PresetPicker } from "@/components/library/LibraryMenus";
-import { HeaderChip, ScreenTitle, GAP_BETWEEN, GAP_WITHIN } from "@/components/chrome/Chrome";
+import {
+  HeaderChip,
+  ScreenTitle,
+  GAP_BETWEEN,
+  GAP_WITHIN,
+  cardChip,
+} from "@/components/chrome/Chrome";
 import { artSrc } from "@/lib/artSrc";
 import { useQueueDrag } from "@/components/queue/useQueueDrag";
 import { DiscQueue } from "@/components/queue/DiscQueue";
@@ -89,6 +90,7 @@ import { useDisc } from "@/hooks/useDisc";
 import { useQueueSelection, type SelectionLate } from "@/components/queue/useQueueSelection";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { useQueueSourceActive } from "@/hooks/useQueueSourceActive";
+import { menuAt } from "@/lib/menuAt";
 
 /**
  * Queue → preset: the shared PresetSavePanel in a centered modal. The device
@@ -510,7 +512,7 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
     onMenu: (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      setRowMenu({ item, x: e.clientX, y: e.clientY });
+      setRowMenu({ item, ...menuAt(e) });
     },
     item,
     isCurrent: item.id === playId,
@@ -774,10 +776,7 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
           >
             Move to bottom
           </SelectionVerb>
-          <SelectionVerb
-            icon={<ListPlus size={13} />}
-            onClick={(e) => setPlaylistBatch({ x: e.clientX, y: e.clientY })}
-          >
+          <SelectionVerb icon={<ListPlus size={13} />} onClick={(e) => setPlaylistBatch(menuAt(e))}>
             Add to playlist…
           </SelectionVerb>
           {selFavs.length > 0 && (
@@ -845,7 +844,7 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
                 onMenu={(item, e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  setRowMenu({ item, x: e.clientX, y: e.clientY });
+                  setRowMenu({ item, ...menuAt(e) });
                 }}
               />
             ) : cards ? (
@@ -1406,8 +1405,7 @@ function QueueRow({
   const favorites = useStore((s) => s.favorites);
   const ref = fromQueueItem(item);
   const favorite = ref ? refToFavorite(ref) : null;
-  const hearted =
-    favorite != null && favorites.some((f) => favoriteKey(f) === favoriteKey(favorite as Favorite));
+  const hearted = favorite != null && isFavorited(favorite, favorites);
 
   return (
     <div
@@ -1631,7 +1629,7 @@ function QueueCard({
             fallback={<Disc3 size={34} strokeWidth={1.2} className="text-faint" />}
           />
 
-          <div className="absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+          <div className="absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 group-kbd:opacity-100 transition-opacity flex items-center justify-center">
             <span
               className="h-11 w-11 rounded-full bg-amber text-bg flex items-center justify-center
                          transition-all duration-150 motion-safe:hover:scale-110
@@ -1642,7 +1640,7 @@ function QueueCard({
           </div>
 
           {/* the one card-chip grammar (ContainerCard's): ⋯ bottom-right on
-              the art, status top-left, one chip surface — this card used a
+              the art, status top-left, one chip (cardChip) — this card used a
               rounded-full blur chip at TOP-right, the only card that did */}
           <span
             aria-label="More actions"
@@ -1651,15 +1649,16 @@ function QueueCard({
               onMenu?.(e);
             }}
             className={cx(
-              "absolute bottom-1.5 right-1.5 z-10 h-8 w-8 rounded-lg bg-panel/80 ring-1 ring-edge text-dim hover:text-ink flex items-center justify-center transition-all",
-              menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+              "absolute bottom-1.5 right-1.5 z-10 text-dim hover:text-ink transition-all",
+              cardChip(),
+              menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
             )}
           >
             <MoreHorizontal size={15} />
           </span>
 
           {isCurrent && (
-            <span className="absolute top-1.5 left-1.5 flex items-center rounded-lg bg-panel/80 ring-1 ring-edge px-1.5 h-7">
+            <span className={cx("absolute top-1.5 left-1.5", cardChip())}>
               <Eqbars dim={!sourceActive} />
             </span>
           )}
@@ -1703,7 +1702,7 @@ function QueueCard({
             e.stopPropagation();
             removeFromQueue(item);
           }}
-          className="tip-bottom p-1 rounded text-faint opacity-0 group-hover:opacity-100 hover:text-alert transition-all"
+          className="tip-bottom p-1 rounded text-faint opacity-0 group-hover:opacity-100 group-kbd:opacity-100 hover:text-alert transition-all"
         >
           <X size={13} />
         </button>

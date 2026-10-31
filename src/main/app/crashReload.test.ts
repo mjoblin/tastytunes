@@ -1,9 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-// CI installs no Electron binary, so importing electron throws there: the module's app is mocked
-// (as permissions.test.ts does)
-vi.mock("electron", () => ({ app: { on: () => undefined } }));
-const { CRASH_MAX_RELOADS, CRASH_WINDOW_MS, reloads, takeReload } = await import("./crashReload");
+// electron is the one stub every test file runs with (vitest.setup.ts): CI has no Electron binary
+import { CRASH_MAX_RELOADS, CRASH_WINDOW_MS, reloads, takeReload } from "./crashReload";
 
 describe("takeReload: a dead renderer reloads, but never in a loop", () => {
   it("allows three reloads in a minute and refuses the fourth", () => {

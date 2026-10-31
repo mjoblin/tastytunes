@@ -1,4 +1,11 @@
-import { isHiRes, LOSSLESS_CODECS, type MediaFormat, type MediaNode } from "@shared/model";
+import {
+  type AppSettings,
+  isHiRes,
+  LOSSLESS_CODECS,
+  type MediaFormat,
+  type MediaNode,
+} from "@shared/model";
+import { compareRecentlyAdded } from "@shared/recentlyAdded";
 
 // The library lenses: OUR views over the union of every ready index —
 // alternative paths to the same leaf views the native flow uses, never a
@@ -197,3 +204,159 @@ export const decadeOf = (year: string | null | undefined): string | null =>
 export const RECORD_SORTS = new Set<string>(["lastPlayed", "plays", "wholeListens"]);
 
 export const PLAY_THESE_MAX = 50;
+
+/** What an album's copy chip means, as its tip says it (the lens index's copyBadge: the library,
+ *  then which copy it is, shown only when there is another copy; 0.13.0-rc.4, a user had to work
+ *  out what "FLAC · 24/96" on one album was telling him). */
+export const COPY_BADGE_TIP = "There's another copy of this album";
+
+/**
+ * WHICH COPY an album is among its copies on one server, for its chip (0.13.0-rc.4, his pick on
+ * "Card details": the chip says where the copies DIFFER, never what they share; two copies of one
+ * album on a drive both said the folder name they share, and pushed the artist off the line).
+ * The first fact no other copy has: its format (left to the card's format line when the card
+ * shows one), its folder's name when that is not the album's title, then the part of its folder
+ * path the others don't share ("Music", "Rock › The Band"); else "Copy 2", its place among all
+ * the copies in the pools' order, so a copy a fact names stands for its number ("FLAC · 24/96",
+ * "Copy 2", "Copy 3"). `copies` holds the album itself.
+ */
+export function whichCopy(
+  a: MediaNode,
+  copies: readonly MediaNode[],
+  formatOf: (n: MediaNode) => string | null,
+  { formatShown = false }: { formatShown?: boolean } = {},
+): string {
+  const all = copies.includes(a) ? copies : [a, ...copies];
+  const folderOf = (n: MediaNode): string | null => {
+    const f = n.titlePath?.[n.titlePath.length - 1] ?? null;
+    return f && lc(f) !== lc(n.title) ? f : null;
+  };
+  const facts = [...(formatShown ? [] : [formatOf]), folderOf, folderPlaces(all)];
+  for (const fact of facts) {
+    const mine = fact(a);
+    if (mine && all.every((c) => c === a || lc(fact(c)) !== lc(mine))) return mine;
+  }
+  return `Copy ${all.indexOf(a) + 1}`;
+}
+
+/** Each copy's place on its server: the part of its folder path (the folders above its own) past
+ *  the part every copy shares, or the folder just above its own when it has nothing past that;
+ *  null without a path. */
+function folderPlaces(copies: readonly MediaNode[]): (n: MediaNode) => string | null {
+  const above = new Map(copies.map((c) => [c, c.titlePath ? c.titlePath.slice(0, -1) : null]));
+  const walked = [...above.values()].filter((p): p is string[] => p != null);
+  let shared = 0;
+  while (
+    walked.length > 0 &&
+    walked.every((p) => shared < p.length && lc(p[shared]) === lc(walked[0][shared]))
+  )
+    shared++;
+  return (n) => {
+    const p = above.get(n);
+    if (!p || p.length === 0) return null;
+    const past = p.slice(shared);
+    return past.length > 0 ? past.join(" › ") : p[p.length - 1];
+  };
+}
+
+/**
+ * THE ARTIST PAGE'S ALBUM ORDER (0.13.0-rc.4, a user's question: the page lists an artist's albums
+ * newest first, and with the year cut off on each card he could not tell what the order was).
+ * By year, newest first, ties by title (the lens index's own order); or by title. Reversed turns
+ * the whole list, as the lenses' sorts do.
+ */
+export function orderArtistAlbums(
+  albums: readonly MediaNode[],
+  sort: AppSettings["artistPageSort"],
+  reversed: boolean,
+): MediaNode[] {
+  const byTitle = (a: MediaNode, b: MediaNode): number => a.title.localeCompare(b.title);
+  const byYear = (a: MediaNode, b: MediaNode): number => (b.year ?? "").localeCompare(a.year ?? "");
+  const sorted = [...albums].sort((a, b) =>
+    sort === "title" ? byTitle(a, b) || byYear(a, b) : byYear(a, b) || byTitle(a, b),
+  );
+  return reversed ? sorted.reverse() : sorted;
+}
+
+// ------------------------------------------------------------- the filter's scope
+
+/** The one field the Tracks lens's filter may be held to; null searches them all. */
+export type FilterScope = "title" | "artist" | "album";
+
+/**
+ * THE TRACKS FILTER'S FIELDS (0.13.0-rc.4, his picks on the decision page "Filter Scope": "search
+ * in" inside the filter box, remembered for the session as the pickers are). A track's title,
+ * artist, album and year, or the one field the scope names. The filter (matchesFilter over these)
+ * and its menu's counts (filterScopeCounts) read this one rule.
+ */
+export const filterFields = (
+  t: Pick<MediaNode, "title" | "artist" | "album" | "year">,
+  scope: FilterScope | null,
+): Array<string | null | undefined> =>
+  scope === "title"
+    ? [t.title]
+    : scope === "artist"
+      ? [t.artist]
+      : scope === "album"
+        ? [t.album]
+        : [t.title, t.artist, t.album, t.year];
+
+/** How many of these tracks the filter finds in each scope (all fields, then each one): the
+ *  scope menu's counts. One pass, each field read once (matchesFilter's rule: every word of the
+ *  filter somewhere in the fields). */
+export function filterScopeCounts(
+  tracks: readonly Pick<MediaNode, "title" | "artist" | "album" | "year">[],
+  filter: string,
+): Record<"all" | FilterScope, number> {
+  const words = filter.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const counts = { all: 0, title: 0, artist: 0, album: 0 };
+  const has = (text: string): boolean => words.every((w) => text.includes(w));
+  for (const t of tracks) {
+    const title = (t.title ?? "").toLowerCase();
+    const artist = (t.artist ?? "").toLowerCase();
+    const album = (t.album ?? "").toLowerCase();
+    if (has(`${title} ${artist} ${album} ${(t.year ?? "").toLowerCase()}`)) counts.all++;
+    if (has(title)) counts.title++;
+    if (has(artist)) counts.artist++;
+    if (has(album)) counts.album++;
+  }
+  return counts;
+}
+
+/**
+ * THE ARTISTS LENS'S ORDERS (0.13.0 round 12, a sort as the other lenses have): by name, the
+ * index's own order; the most played first; the newest arrival first, an artist ranked by their
+ * newest album in the Recently added order (dated, then a server's list). An artist the order
+ * knows nothing of (no plays, nothing dated or listed) follows in name order, and reversed turns
+ * the whole list, as the Albums lens does. The input is in name order.
+ */
+export function orderArtists<A extends { albums: readonly MediaNode[] }>(
+  artists: readonly A[],
+  sort: AppSettings["lensArtistsSort"],
+  reversed: boolean,
+  playsOf: (a: A) => number,
+): A[] {
+  let out = [...artists];
+  if (sort === "plays") {
+    const plays = new Map(out.map((a) => [a, playsOf(a)]));
+    out.sort((a, b) => (plays.get(b) ?? 0) - (plays.get(a) ?? 0));
+  } else if (sort === "added") {
+    const newest = new Map(
+      out.map((a) => [
+        a,
+        a.albums
+          .filter((x) => (x.addedAt ?? 0) > 0 || x.recentRank != null)
+          .sort(compareRecentlyAdded)[0] ?? null,
+      ]),
+    );
+    out.sort((a, b) => {
+      const x = newest.get(a) ?? null;
+      const y = newest.get(b) ?? null;
+      if (!x || !y) return (x ? 0 : 1) - (y ? 0 : 1);
+      const rank = (n: MediaNode): number => n.recentRank ?? Number.MAX_SAFE_INTEGER;
+      return (y.addedAt ?? 0) - (x.addedAt ?? 0) || rank(x) - rank(y);
+    });
+  }
+  if (reversed) out = out.reverse();
+  return out;
+}

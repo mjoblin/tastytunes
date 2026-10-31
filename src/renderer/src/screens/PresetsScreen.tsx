@@ -31,6 +31,7 @@ import {
   Rows3,
   Volume2,
 } from "lucide-react";
+import { objectGone } from "@shared/ipc";
 import { isPreAmpMode, type PresetItem } from "@shared/smoip";
 import { presetVolumeKey, type ScreenLayout, type MediaNode } from "@shared/model";
 import { tt } from "@/api";
@@ -52,13 +53,20 @@ import { Slider } from "@/components/controls/Slider";
 import { ArtImage } from "@/components/media/ArtImage";
 import { PopoverChrome } from "@/hooks/usePopover";
 import { POPOVER_CARD, PopoverCard } from "@/components/chrome/Overlay";
-import { HeaderChip, ScreenTitle, GAP_BETWEEN, GAP_WITHIN } from "@/components/chrome/Chrome";
+import {
+  HeaderChip,
+  ScreenTitle,
+  GAP_BETWEEN,
+  GAP_WITHIN,
+  cardChip,
+} from "@/components/chrome/Chrome";
 import { ConfirmActions, useConfirmPopover } from "@/components/chrome/Confirm";
 import { artSrc } from "@/lib/artSrc";
 import { RowMenu } from "@/components/media/RowMenu";
 import { openArtistInLibrary, openRefInLibrary } from "@/lib/mediaActions";
 import { fromNode } from "@/lib/mediaRef";
 import { TUNING_WINDOW_MS } from "@/hooks/useStationTuning";
+import { menuAt } from "@/lib/menuAt";
 
 /** A recall that moved nothing after this long is treated as dead — well inside TUNING_WINDOW_MS. */
 const DEAD_RECALL_MS = 8_000;
@@ -565,19 +573,41 @@ function PopoverStop({ children }: { children: React.ReactNode }): React.JSX.Ele
  * art URL is the preset's (the streamer keeps no object id worth trusting, Asset re-mints them
  * on a rescan, but the art id survives; 44/44 of the author's UPnP presets matched this way).
  * One home: the repair chip finds the album's current id with it, the ⋯ menu's Open in Library
- * and Go to artist find the album. Null when no album, or more than one, carries the art.
+ * and Go to artist find the album.
+ *
+ * A preset with no picture (0.13.0-rc.6, his preset 24, left "[No title]" by a repair that saved
+ * a blank) is found by what it last played (listeningRecord.presetLastAlbum): that play's
+ * picture, or its album and artist, in every library that has it. `by` says which way it was
+ * found and `last` names the album History has, for the repair's words.
  */
-async function presetAlbum(preset: PresetItem): Promise<MediaNode | null> {
-  if (!preset.art_url) return null;
+async function presetAlbums(
+  preset: PresetItem,
+): Promise<{ albums: MediaNode[]; by: "picture" | "history" | null; last: string | null }> {
   const pools = await tt.mediaIndexPools();
-  const hits = pools.flatMap((pool) =>
-    pool.albums.filter((a) => a.artUrl != null && a.artUrl === preset.art_url),
+  const all = pools.flatMap((pool) => pool.albums);
+  const pictured = (url: string): MediaNode[] => all.filter((a) => a.artUrl === url);
+  if (preset.art_url) return { albums: pictured(preset.art_url), by: "picture", last: null };
+  const last = preset.id == null ? null : await tt.presetLastAlbum(preset.id);
+  if (!last) return { albums: [], by: null, last: null };
+  const byPicture = last.artUrl ? pictured(last.artUrl) : [];
+  if (byPicture.length > 0) return { albums: byPicture, by: "history", last: last.album };
+  const loose = (v: string | null | undefined): string => (v ?? "").trim().toLowerCase();
+  const named = all.filter(
+    (a) =>
+      loose(a.title) === loose(last.album) &&
+      (last.artist == null || loose(a.artist) === loose(last.artist)),
   );
-  return hits.length === 1 ? hits[0] : null;
+  return { albums: named, by: "history", last: last.album };
+}
+
+/** The preset's one album, or null when no album, or more than one, is it. */
+async function presetAlbum(preset: PresetItem): Promise<MediaNode | null> {
+  const { albums } = await presetAlbums(preset);
+  return albums.length === 1 ? albums[0] : null;
 }
 
 /**
- * A PRESET'S ⋯ (0.12.0, his call after Malcolm's email asked why a preset plays rather than
+ * A PRESET'S ⋯ (0.12.0, his call after a user's email asked why a preset plays rather than
  * opening): a click still recalls (a preset is the streamer's button, and the streamer keeps no
  * track list for it), and the ⋯, where the trash used to be, holds the rest. Play; Open in
  * Library and Go to artist for a media preset (by its art, presetAlbum; a station or a saved
@@ -653,8 +683,8 @@ function usePresetMenu(
     open: (e) => {
       e.preventDefault();
       e.stopPropagation();
-      setAt({ x: e.clientX, y: e.clientY });
-      setFrom({ x: e.clientX, y: e.clientY });
+      setAt(menuAt(e));
+      setFrom(menuAt(e));
     },
     isOpen: at != null,
     // rendered only while something is open: a row's grid counts its children (S2's anatomy)
@@ -833,7 +863,7 @@ function PresetRow({
         onClick={menu.open}
         className={cx(
           "p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-all",
-          menu.isOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+          menu.isOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
         )}
       >
         <MoreHorizontal size={14} />
@@ -930,7 +960,7 @@ function PresetCard({
             )}
 
             {/* hover overlay — the whole card recalls the preset; the chip is the affordance */}
-            <div className="absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+            <div className="absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 group-kbd:opacity-100 transition-opacity flex items-center justify-center">
               <span
                 className="h-11 w-11 rounded-full bg-amber text-bg flex items-center justify-center
                          transition-all duration-150 motion-safe:hover:scale-110
@@ -942,17 +972,14 @@ function PresetCard({
 
             {playing && (
               // h/w match the corner buttons so the four corners feel weighted
-              <span className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-lg bg-panel/80 ring-1 ring-edge">
+              <span className={cx("absolute top-2 left-2", cardChip())}>
                 <Eqbars />
               </span>
             )}
             {tuning && (
               // same corner the playing chip will claim — spinner hands over to bars
-              <span
-                data-preset-tuning
-                className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-lg bg-panel/80 ring-1 ring-edge"
-              >
-                <Loader2 size={13} className="spin text-gold/90" />
+              <span data-preset-tuning className={cx("absolute top-2 left-2", cardChip())}>
+                <Loader2 size={14} className="spin text-gold/90" />
               </span>
             )}
           </div>
@@ -973,9 +1000,12 @@ function PresetCard({
             onClick={pv.openFrom}
             onPointerDown={(e) => e.stopPropagation()}
             data-preset-volume
-            className="tip-bottom absolute top-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-lg bg-panel/80 ring-1 ring-edge text-gold hover:text-ink transition-all"
+            className={cx(
+              "tip-bottom absolute top-2 right-2 z-10 text-gold hover:text-ink transition-all",
+              cardChip(),
+            )}
           >
-            <Volume2 size={13} />
+            <Volume2 size={14} />
           </button>
         )}
         <button
@@ -984,12 +1014,12 @@ function PresetCard({
           onPointerDown={(e) => e.stopPropagation()}
           onClick={menu.open}
           className={cx(
-            "absolute bottom-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-lg transition-all",
-            "bg-panel/80 ring-1 ring-edge text-dim hover:text-ink",
-            menu.isOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+            "absolute bottom-2 right-2 z-10 transition-all text-dim hover:text-ink",
+            cardChip(),
+            menu.isOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
           )}
         >
-          <MoreHorizontal size={14} />
+          <MoreHorizontal size={15} />
         </button>
       </div>
 
@@ -1044,9 +1074,15 @@ function RepairChip({
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<{ left: number; top: number } | null>(null);
-  const [match, setMatch] = useState<MediaNode | null | undefined>(undefined); // undefined = looking
+  // undefined = looking
+  const [found, setFound] = useState<Awaited<ReturnType<typeof presetAlbums>> | undefined>(
+    undefined,
+  );
+  const [pick, setPick] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
   const WIDTH = 268;
+  const match = found?.albums[pick] ?? null;
 
   const openFrom = async (e: React.MouseEvent): Promise<void> => {
     e.stopPropagation();
@@ -1056,19 +1092,29 @@ function RepairChip({
       left: Math.min(Math.max(8, r.left), window.innerWidth - WIDTH - 8),
       top: Math.min(r.bottom + 8, window.innerHeight - 200),
     });
-    setMatch(undefined);
+    setFound(undefined);
+    setPick(0);
+    setFailed(null);
     setOpen(true);
-    // the artwork is the fingerprint: same art url, same album, current id (presetAlbum)
-    setMatch(await presetAlbum(preset));
+    // the artwork is the fingerprint: same art url, same album, current id (presetAlbums)
+    setFound(await presetAlbums(preset));
   };
 
   const repair = async (): Promise<void> => {
     if (!match?.serverUdn || preset.id == null) return;
     setSaving(true);
+    setFailed(null);
     try {
       await tt.mediaPresetSave(match.serverUdn, match.id, preset.id);
       setOpen(false);
       onRepaired();
+    } catch (e) {
+      // main looked for the album under its current id first (ipc/media withCurrentIds)
+      setFailed(
+        objectGone(e)
+          ? "Couldn't save the preset. The server no longer has this album."
+          : "Couldn't save the preset.",
+      );
     } finally {
       setSaving(false);
     }
@@ -1082,9 +1128,9 @@ function RepairChip({
         aria-label="Repair preset (didn't load)"
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => void openFrom(e)}
-        className="tip-bottom absolute top-2 left-2 z-10 flex h-7 w-7 items-center justify-center rounded-lg bg-panel/80 ring-1 ring-alert/50 text-alert"
+        className={cx("tip-bottom absolute top-2 left-2 z-10 text-alert", cardChip(true))}
       >
-        <AlertTriangle size={13} />
+        <AlertTriangle size={14} />
       </button>
     ) : (
       <button
@@ -1127,21 +1173,64 @@ function RepairChip({
                 likely when the library was rescanned. The streamer accepts the recall and then does
                 nothing.
               </span>
-              {match === undefined && (
+              {found === undefined && (
                 <span className="block text-[11px] text-faint mt-2.5">Looking in the index…</span>
               )}
-              {match === null && (
+              {found != null && match == null && (
                 <span className="block text-[11px] text-faint mt-2.5">
-                  No match in the library index for this preset's artwork, so there's nothing safe
-                  to save. Re-save it by hand from the Library.
+                  {found.by === "picture"
+                    ? "No match in the library index for this preset's artwork, so there's nothing safe to save. Re-save it by hand from the Library."
+                    : found.last != null
+                      ? `This preset last played “${found.last}”, which isn't in the library index. Re-save it by hand from the Library.`
+                      : "This preset has no picture to match by, and History has no plays of it. Re-save it by hand from the Library."}
                 </span>
               )}
-              {match != null && (
+              {found != null && match != null && (
                 <>
-                  <span className="block text-[12px] text-ink mt-2.5 truncate">{match.title}</span>
-                  <span className="block text-[11px] text-dim truncate">
-                    {[match.artist, match.serverName].filter(Boolean).join(" · ")}
-                  </span>
+                  {(found.by === "history" || found.albums.length > 1) && (
+                    <span className="block text-[11px] text-faint mt-2.5">
+                      {found.by === "picture"
+                        ? "More than one album has this preset's picture. Choose the one to save."
+                        : found.albums.length > 1
+                          ? "This preset last played this album, and there's more than one copy. Choose the one to save."
+                          : "This preset last played this album."}
+                    </span>
+                  )}
+                  {found.albums.length > 1 ? (
+                    <span data-preset-repair-copies className="block mt-2 space-y-1">
+                      {found.albums.map((a, i) => (
+                        <button
+                          key={`${a.serverUdn ?? ""}|${a.id}`}
+                          data-preset-repair-copy
+                          aria-pressed={i === pick}
+                          onClick={() => setPick(i)}
+                          className={cx(
+                            "block w-full text-left rounded px-2 py-1 transition-colors",
+                            i === pick ? "bg-amberdim text-ink" : "text-dim hover:text-ink",
+                          )}
+                        >
+                          <span className="block text-[12px] truncate">{a.title}</span>
+                          <span className="block text-[11px] truncate">
+                            {[a.artist, a.serverName].filter(Boolean).join(" · ")}
+                          </span>
+                        </button>
+                      ))}
+                    </span>
+                  ) : (
+                    <>
+                      <span className="block text-[12px] text-ink mt-2.5 truncate">
+                        {match.title}
+                      </span>
+                      <span className="block text-[11px] text-dim truncate">
+                        {[match.artist, match.serverName].filter(Boolean).join(" · ")}
+                      </span>
+                    </>
+                  )}
+                  {failed && (
+                    <span data-preset-repair-failed className="block text-[11px] text-alert mt-2">
+                      {failed}
+                    </span>
+                  )}
                   <ConfirmActions
                     tone="gold"
                     busy={saving}

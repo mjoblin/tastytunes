@@ -722,6 +722,7 @@ export class DeviceManager {
           this.cache.playState,
           this.cache.nowPlaying?.source?.name ?? this.cache.playState.metadata?.source ?? null,
           this.cache.systemInfo?.udn ?? null,
+          this.connection.phase === "connected" ? this.connection.host : null,
         );
         this.noteHeld();
         return this.push({ kind: "playState", data: this.cache.playState });

@@ -47,7 +47,7 @@ export function CornerResizeHandle({
         className={cx(
           "pointer-events-none absolute bottom-0 h-7 w-7 transition-opacity",
           left ? "left-0" : "right-0",
-          dragging ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+          dragging ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
           left && "-scale-x-100",
           dragging && snapped ? "text-gold" : "text-dim",
         )}

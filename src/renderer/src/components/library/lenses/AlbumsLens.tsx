@@ -1,35 +1,30 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import {
-  AudioLines,
-  Heart,
-  ListEnd,
-  ListPlus,
-  ListStart,
-  Play,
-  LayoutGrid,
-  Rows3,
-} from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { AudioLines, Heart, ListEnd, ListPlus, ListStart, Play } from "lucide-react";
 import {
   albumDrKey,
   albumTracksOf,
   albumVolume,
+  type AppSettings,
   type MediaIndexPools,
   type MediaNode,
   nameSortKey,
 } from "@shared/model";
 import { useWindowedList } from "@/hooks/useWindowedList";
-import { cx, matchesFilter, fmtCount } from "@/lib/format";
-import { usePlayStats, playedBucket, playedOptionsOf } from "@/lib/playStats";
+import { cx, fmtAdded, matchesFilter, fmtCount } from "@/lib/format";
+import { compareRecentlyAdded } from "@shared/recentlyAdded";
+import { usePlayStats } from "@/lib/playStats";
+import { playedBucket, playedOptionsOf } from "@/lib/playStatsView";
 import { useStore } from "@/store";
 import { useAlbumDr, USB_ANALYSIS_HINT } from "@/lib/audioAnalysis";
 import { FilterInput } from "@/components/controls/FilterInput";
-import { HeaderChip, GAP_BETWEEN, GAP_WITHIN } from "@/components/chrome/Chrome";
+import { GAP_BETWEEN, GAP_WITHIN } from "@/components/chrome/Chrome";
 import { SortChip } from "@/components/controls/SortChip";
 import { PickerPill } from "@/components/controls/PickerPill";
 import { Segmented } from "@/components/controls/Segmented";
 import { ContainerCard, ContainerRow } from "@/components/library/LibraryCards";
 import { SelectionBar, SelectionVerb } from "@/components/controls/SelectionBar";
 import {
+  COPY_BADGE_TIP,
   type LensActions,
   lc,
   nodeKey,
@@ -39,17 +34,23 @@ import {
   PLAY_THESE_MAX,
 } from "./lensShared";
 import { useRowSelection } from "@/components/library/useRowSelection";
+import { useCardDetails } from "@/components/library/useCardDetails";
 import { useLensIndex } from "./useLensIndex";
+import { ViewOptions } from "./ViewOptions";
+import { CARD_GRID_SCROLLER, useCardGrid, WINDOW_CARDS_ABOVE } from "./useCardGrid";
+import { menuAt } from "@/lib/menuAt";
 
 // The Albums lens, split out of LibraryLenses.tsx (2026-09-13, the lenses round: three lenses of
 // 600 to 800 lines shared one file); what the lenses share lives in ./lensShared.
 
 const ALBUM_SORTS: Array<{
-  value: "title" | "artist" | "year" | "dr" | "loudness" | "lastPlayed" | "plays" | "wholeListens";
+  value: AppSettings["lensAlbumsSort"];
   label: string;
 }> = [
   { value: "title", label: "Title" },
   { value: "artist", label: "Artist" },
+  // the dated newest first, then a server's own list, then the rest (shared/recentlyAdded)
+  { value: "added", label: "Recently added" },
   { value: "year", label: "Year (newest first)" },
   { value: "dr", label: "Dynamic range" },
   { value: "loudness", label: "Loudness" },
@@ -77,8 +78,8 @@ let albumsMem: {
  *  call, 2026-09-01 / 2026-09-02): queue writes are one call per track with no
  *  progress affordance, so no gesture may hand the queue fifty albums. */
 
-/** Past this many tiles the cards grid windows its rows (0.11.0 sweep, for review). */
-const WINDOW_TILES_ABOVE = 120;
+/** Past this many tiles the grid windows its rows, cards (useCardGrid's threshold) and lines. */
+const WINDOW_TILES_ABOVE = WINDOW_CARDS_ABOVE;
 
 export function AlbumsLens({
   pools,
@@ -87,7 +88,6 @@ export function AlbumsLens({
   cardSize,
   cardGap,
   fillRows,
-  onToggleLayout,
 }: {
   pools: MediaIndexPools[];
   actions: LensActions;
@@ -95,9 +95,6 @@ export function AlbumsLens({
   cardSize: number;
   cardGap: number;
   fillRows: boolean;
-  /** Flips libraryLayout — sort and layout are one presentation pairing
-   *  (adjacent in the browse header), kept together here too. */
-  onToggleLayout?: () => void;
 }): React.JSX.Element {
   const [mem, setMemState] = useState(albumsMem);
   const setMem = (patch: Partial<typeof albumsMem>): void => {
@@ -120,6 +117,8 @@ export function AlbumsLens({
 
   // what the lenses derive from the pools, once per snapshot (useLensIndex)
   const index = useLensIndex(pools);
+  // each card's format line, while Settings › Layout shows it (useCardDetails)
+  const detailsOf = useCardDetails(index);
   const all = index.albums;
 
   // Facets from the data itself — the builders are shared with the Tracks
@@ -137,7 +136,7 @@ export function AlbumsLens({
   const formatOptions = useMemo(
     () =>
       formatOptionsOf(
-        all.flatMap((a) => [...(albumCodecs.get(`${a.serverUdn}|${lc(a.title)}`) ?? [])]),
+        all.flatMap((a) => [...(albumCodecs.get(nodeKey(a)) ?? [])]),
         all.length,
       ),
     [all, albumCodecs],
@@ -145,17 +144,17 @@ export function AlbumsLens({
   const albumPlay = useMemo(() => {
     const m = new Map<string, { plays: number; lastAt: number | null; whole: number }>();
     if (!play.ready) return m;
-    // an album's tracks together: plays and last played fold per track, and
-    // the WHOLE listens are the record's runs against this track set
-    for (const [k, tracks] of index.tracksByAlbum) {
-      const a = play.album(tracks);
+    // an album's own tracks together (its copy's, 0.13.0): plays and last played fold per
+    // track, and the WHOLE listens are the record's runs against this track set
+    for (const alb of all) {
+      const a = play.album(index.tracksOf(alb));
       if (a.plays > 0 || a.whole > 0)
-        m.set(k, { plays: a.plays, lastAt: a.lastAt, whole: a.whole });
+        m.set(nodeKey(alb), { plays: a.plays, lastAt: a.lastAt, whole: a.whole });
     }
     return m;
-  }, [index, play]);
+  }, [all, index, play]);
   const playOf = (a: MediaNode): { plays: number; lastAt: number | null; whole: number } =>
-    albumPlay.get(`${a.serverUdn}|${lc(a.title)}`) ?? { plays: 0, lastAt: null, whole: 0 };
+    albumPlay.get(nodeKey(a)) ?? { plays: 0, lastAt: null, whole: 0 };
   const playedOptions = useMemo(
     () => (play.ready ? playedOptionsOf(all.map((a) => playOf(a).lastAt)) : []),
     // playOf reads albumPlay; listing it keeps the memo honest
@@ -180,10 +179,7 @@ export function AlbumsLens({
     if (mem.dr) list = list.filter((a) => String(albumDr[albumDrKey(a)]?.dr ?? "") === mem.dr);
     if (mem.played) list = list.filter((a) => playedBucket(playOf(a).lastAt) === mem.played);
     const fmt = mem.format;
-    if (fmt)
-      list = list.filter(
-        (a) => albumCodecs.get(`${a.serverUdn}|${lc(a.title)}`)?.has(fmt) ?? false,
-      );
+    if (fmt) list = list.filter((a) => albumCodecs.get(nodeKey(a))?.has(fmt) ?? false);
     if (mem.filter)
       list = list.filter((a) => matchesFilter(mem.filter, [a.title, a.artist, a.year]));
     const sorted = [...list].sort((a, b) => {
@@ -192,6 +188,7 @@ export function AlbumsLens({
           nameSortKey(a.artist ?? "￿").localeCompare(nameSortKey(b.artist ?? "￿")) ||
           a.title.localeCompare(b.title)
         );
+      if (sort === "added") return compareRecentlyAdded(a, b);
       if (sort === "year")
         return (b.year ?? "").localeCompare(a.year ?? "") || a.title.localeCompare(b.title);
       if (sort === "dr") {
@@ -278,55 +275,27 @@ export function AlbumsLens({
   // History screens' lesson). The scroller spans the page's padding, so the cards' hover glow
   // keeps the room it had when the page scrolled them.
   const gridRef = useRef<HTMLDivElement | null>(null);
-  // WINDOWED CARDS (0.11.0 sweep): past WINDOW_TILES_ABOVE tiles the cards grid renders only
-  // the rows of cards near the scroller's viewport, as many columns as auto-fill would give
-  // (from the measured width inside the scroller, its scrollbar excluded), the rows' pitch
-  // measured by useWindowedList. Below it, and in the rows layout, every tile renders exactly
-  // as before.
-  const bodyRef = useRef<HTMLDivElement | null>(null);
-  const [width, setWidth] = useState(0);
-  useLayoutEffect(() => {
-    const el = bodyRef.current;
-    if (!el) return;
-    setWidth(el.getBoundingClientRect().width);
-    const ro = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  const cols = Math.max(1, Math.floor((width + cardGap) / (cardSize + cardGap)));
-  const windowed = cards && width > 0 && tiles.length > WINDOW_TILES_ABOVE;
-  const colWidth = fillRows ? (width - cardGap * (cols - 1)) / cols : cardSize;
-  const win = useWindowedList({
+  // the cards' geometry, windowing and the spot a trip away left: useCardGrid (one home since
+  // 0.13.0 round 12, the Artists lens's cards). Past WINDOW_TILES_ABOVE tiles it windows.
+  const windowed = cards && tiles.length > WINDOW_TILES_ABOVE;
+  const { bodyRef, width, cols, win, gridColumns } = useCardGrid({
     scrollRef: gridRef,
-    count: windowed ? Math.ceil(tiles.length / cols) : 0,
-    itemSelector: "[data-albums-row]",
-    // the art is square; the title and its second line below it
-    estimate: Math.round(colWidth) + 52 + cardGap,
-    overscan: 3,
-    enabled: windowed,
+    count: tiles.length,
+    cardSize,
+    cardGap,
+    fillRows,
+    windowed,
+    rowSelector: "[data-albums-row]",
+    restoreTop: albumsMem.scroll,
   });
-  // A TRIP AWAY COMES BACK TO THE SPOT, once the grid can hold it: the windowed grid holds no
-  // rows until it has measured its width, and a scrollTo then clamped the spot to 0 (the
-  // useScrollMemory rule), so settle a few frames, and apply once more after the rows it lands
-  // on have been measured (their height was an estimate until then)
-  useEffect(() => {
-    const target = albumsMem.scroll;
-    if (target <= 0) return;
-    let frames = 0;
-    let landed = 0;
-    let raf = requestAnimationFrame(function apply() {
-      const sc = gridRef.current;
-      if (!sc) return;
-      if (landed > 0 || sc.scrollHeight - sc.clientHeight >= target || frames++ > 30) {
-        sc.scrollTo({ top: target });
-        if (++landed >= 3 || Math.abs(sc.scrollTop - target) < 1) return;
-      }
-      raf = requestAnimationFrame(apply);
-    });
-    return () => cancelAnimationFrame(raf);
-  }, []);
-  const gridColumns = (n: number | "auto-fill"): string =>
-    fillRows ? `repeat(${n}, minmax(${cardSize}px, 1fr))` : `repeat(${n}, ${cardSize}px)`;
+  const linesWindowed = !cards && tiles.length > WINDOW_TILES_ABOVE;
+  const lines = useWindowedList({
+    scrollRef: gridRef,
+    count: linesWindowed ? tiles.length : 0,
+    itemSelector: "[data-albums-line]",
+    estimate: 56,
+    enabled: linesWindowed,
+  });
   const {
     selected: selA,
     setSelected: setSelA,
@@ -373,12 +342,11 @@ export function AlbumsLens({
   ): React.JSX.Element => {
     // a set tile is volume 1 wearing the base title and a count badge
     const node = set ? { ...rawNode, title: set.base, year: null } : rawNode;
-    // a set's count, else which library, only when the same album is in another one too
+    // a set's count, else which copy it is, only when there is another (useLensIndex.copyBadge),
+    // the format left to a card's format line when it shows one
     const badge = set
       ? `${set.volumes.length} volumes`
-      : index.inTwoLibraries(rawNode)
-        ? (rawNode.serverName ?? undefined)
-        : undefined;
+      : index.copyBadge(rawNode, { formatShown: cards && detailsOf != null });
     return cards ? (
       <ContainerCard
         key={nodeKey(rawNode)}
@@ -389,6 +357,10 @@ export function AlbumsLens({
         menuOpen={actions.menuNodeId === node.id}
         favorited={actions.nodeFavorited(rawNode)}
         badge={badge}
+        badgeTip={set ? undefined : COPY_BADGE_TIP}
+        details={detailsOf?.(rawNode, set?.volumes)}
+        // in Recently added order a card says when its album arrived, where the app knows
+        note={sort === "added" && rawNode.addedAt ? fmtAdded(rawNode.addedAt) : undefined}
         selected={selA.has(nodeKey(rawNode))}
         onHeart={() => actions.heartNode(rawNode)}
         onEnter={(e) => {
@@ -412,6 +384,7 @@ export function AlbumsLens({
         menuOpen={actions.menuNodeId === node.id}
         favorited={actions.nodeFavorited(rawNode)}
         badge={badge}
+        badgeTip={set ? undefined : COPY_BADGE_TIP}
         dr={albumDr[albumDrKey(node)]?.dr ?? null}
         onArtistLink={
           actions.goToArtist && node.artist ? () => actions.goToArtist?.(node) : undefined
@@ -508,19 +481,10 @@ export function AlbumsLens({
           </div>
         </div>
         <div className={`flex items-center ${GAP_WITHIN} shrink-0`}>
-          {/* layout beside sort — the browse header's presentation pairing
+          {/* View options beside sort — the browse header's presentation pairing
               ("alone on the right" bars filters and facets, not sort's own
-              established partner) */}
-          {onToggleLayout && (
-            <HeaderChip
-              data-tip={cards ? "Albums as rows" : "Albums as cards"}
-              aria-label={cards ? "Albums as rows" : "Albums as cards"}
-              onClick={onToggleLayout}
-              className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
-            >
-              {cards ? <Rows3 size={16} /> : <LayoutGrid size={16} />}
-            </HeaderChip>
-          )}
+              established partner); Rows or Cards is inside it since 0.13.0-rc.4 */}
+          <ViewOptions kind="albums" />
           <SortChip
             sorts={albumSorts}
             neutral="title"
@@ -541,11 +505,12 @@ export function AlbumsLens({
             albumsMem.scroll = e.currentTarget.scrollTop;
           }}
           className="min-h-0 flex-1 overflow-y-auto px-8 -mx-8 pb-2"
+          style={CARD_GRID_SCROLLER}
         >
           <div ref={bodyRef}>
             {shown.length === 0 ? (
               <div className="text-[15px] text-faint pt-4 px-1">Nothing matches those filters.</div>
-            ) : windowed ? (
+            ) : windowed && width === 0 ? null : windowed ? (
               <div
                 data-albums-windowed
                 className={cx(selA.size > 0 && "pb-24")}
@@ -592,7 +557,19 @@ export function AlbumsLens({
                     : undefined
                 }
               >
-                {tiles.map((t, ti) => renderTile(t, ti))}
+                {linesWindowed ? (
+                  <>
+                    {lines.padTop > 0 && <div style={{ height: lines.padTop }} />}
+                    {tiles.slice(lines.first, lines.last + 1).map((t, i) => (
+                      <div key={nodeKey(t.node)} data-albums-line>
+                        {renderTile(t, lines.first + i)}
+                      </div>
+                    ))}
+                    {lines.padBottom > 0 && <div style={{ height: lines.padBottom }} />}
+                  </>
+                ) : (
+                  tiles.map((t, ti) => renderTile(t, ti))
+                )}
               </div>
             )}
           </div>
@@ -638,9 +615,7 @@ export function AlbumsLens({
             <SelectionVerb
               icon={<ListPlus size={13} />}
               onClick={(e) =>
-                actions.addTracksToPlaylist(chosenATracks(), { x: e.clientX, y: e.clientY }, () =>
-                  setSelA(new Set()),
-                )
+                actions.addTracksToPlaylist(chosenATracks(), menuAt(e), () => setSelA(new Set()))
               }
             >
               Add to playlist…

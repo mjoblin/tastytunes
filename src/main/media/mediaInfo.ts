@@ -32,7 +32,7 @@ function contentMatch(q: MediaInfoQuery, n: MediaNode): boolean {
   if (lc(n.title) !== lc(q.title)) return false;
   if (q.artist && n.artist && !trackInAlbumOf(n, q.artist) && lc(n.artist) !== lc(q.artist))
     return false;
-  // A DISC'S TWIN MUST LAST AS LONG (0.12.0, Malcolm saw a CD track draw its library twin's
+  // A DISC'S TWIN MUST LAST AS LONG (0.12.0, a user saw a CD track draw its library twin's
   // waveform and scenes): the query carries the disc's length, and a library track of the same
   // names that runs longer or shorter (another master, an edit) is not the one playing, nor one
   // whose length is unknown

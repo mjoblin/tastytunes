@@ -1,15 +1,38 @@
 import { useMemo } from "react";
-import { albumOfTrack, type MediaIndexPools, type MediaNode } from "@shared/model";
+import {
+  albumOfTrack,
+  type AppSettings,
+  type MediaIndexPools,
+  type MediaNode,
+} from "@shared/model";
 import { ArtistHeader } from "@/components/library/ArtistHeader";
 import { ContainerCard, ContainerRow, TrackRow } from "@/components/library/LibraryCards";
 import { useLensIndex } from "@/components/library/lenses/useLensIndex";
-import { lc, nodeKey, type LensActions } from "@/components/library/lenses/lensShared";
+import { useCardDetails } from "@/components/library/useCardDetails";
+import {
+  COPY_BADGE_TIP,
+  lc,
+  nodeKey,
+  orderArtistAlbums,
+  type LensActions,
+} from "@/components/library/lenses/lensShared";
+import { SortChip } from "@/components/controls/SortChip";
+import { GAP_WITHIN } from "@/components/chrome/Chrome";
+import { ViewOptions } from "@/components/library/lenses/ViewOptions";
+import { useStore } from "@/store";
 import {
   LensTrackMenu,
   useLensTrackSelection,
 } from "@/components/library/lenses/useLensTrackSelection";
 import { cx } from "@/lib/format";
 import type { LandingTrack } from "@/components/library/landing";
+
+/** The page's album orders (0.13.0-rc.4): by year, newest first (the page's order since 0.11.0),
+ *  or by title; the chip's arrow turns either. */
+const ALBUM_SORTS: Array<{ value: AppSettings["artistPageSort"]; label: string }> = [
+  { value: "year", label: "Year (newest first)" },
+  { value: "title", label: "Title" },
+];
 
 /**
  * THE ARTIST PAGE (2026-10-11, the user: "we get to an album page from the albums lens. but we
@@ -45,9 +68,18 @@ export function ArtistPage({
   onOpenAlbum(node: MediaNode, track?: LandingTrack): void;
 }): React.JSX.Element {
   const index = useLensIndex(pools);
+  // each card's format line, while Settings › Layout shows it (useCardDetails)
+  const detailsOf = useCardDetails(index);
   const key = lc(name);
   const artist = index.artists.find((a) => a.key === key) ?? null;
-  const albums = artist?.albums ?? [];
+  const sort = useStore((s) => s.settings.artistPageSort);
+  const reversed = useStore((s) => s.settings.artistPageSortReversed);
+  const saveSettings = useStore((s) => s.saveSettings);
+  // in the order the page's sort asks (by year, newest first, unless changed: the lens index's)
+  const albums = useMemo(
+    () => orderArtistAlbums(artist?.albums ?? [], sort, reversed),
+    [artist, sort, reversed],
+  );
   // their tracks beyond their own albums: APPEARS ON, a credit on another artist's album (by
   // title, on its server), then TRACKS, the loose ones that belong to no album. One list, one
   // selection, two labelled runs
@@ -73,7 +105,24 @@ export function ArtistPage({
       <ArtistHeader name={artist?.name ?? name} serverArt={artist?.ownArt} folders={albums} />
       {albums.length > 0 && (
         <>
-          {label("Albums", true)}
+          {/* the albums' heading, and their order at its right (0.13.0-rc.4, a user's question:
+              the order was there, unseen, behind each card's cut-off year) */}
+          <div className="flex items-end justify-between gap-3 px-1 pt-2" data-artist-albums-head>
+            <div className="microlabel pb-0.5">Albums</div>
+            <div className={`flex items-center ${GAP_WITHIN}`}>
+              <ViewOptions kind="albums" />
+              <SortChip
+                sorts={ALBUM_SORTS}
+                neutral="year"
+                value={sort}
+                reversed={reversed}
+                onChange={(v) =>
+                  void saveSettings({ artistPageSort: v, artistPageSortReversed: false })
+                }
+                onToggleReverse={() => void saveSettings({ artistPageSortReversed: !reversed })}
+              />
+            </div>
+          </div>
           <div
             className={cx(!cards && "divide-y divide-edge/50 -mx-2")}
             style={
@@ -99,16 +148,20 @@ export function ArtistPage({
                 onEnter: () => onOpenAlbum(node),
                 onMenu: (e: React.MouseEvent) => actions.openMenu(node, e),
                 onNavDrag: (e: React.PointerEvent) => actions.dragAlbum([node], e, node.title),
-                // which library, only when the same album is in another one too (his Jack White:
-                // the same albums on minitunes and on the streamer's drive), the Albums lens's
-                // rule; an album in one library shows none, its year not squeezed by a chip that
-                // says nothing
-                badge: index.inTwoLibraries(node) ? (node.serverName ?? undefined) : undefined,
+                // which copy, only when there is another (the same albums on a media server and
+                // on the streamer's drive; a user's two editions of one album on one server),
+                // the Albums lens's rule; an album with no other copy shows none, its year not
+                // squeezed by a chip that says nothing
+                badge: index.copyBadge(node, { formatShown: cards && detailsOf != null }),
+                badgeTip: COPY_BADGE_TIP,
               };
               return cards ? (
                 <ContainerCard
                   key={nodeKey(node)}
                   {...common}
+                  // the page is the artist's: a card says its year, the order's key, whole
+                  subtitle={node.year ?? ""}
+                  details={detailsOf?.(node)}
                   onPlay={(el) => void actions.playContainer(node, el)}
                 />
               ) : (

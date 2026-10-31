@@ -17,12 +17,10 @@ export interface McpSettings {
   /** Opt-in cluster ids the user explicitly enabled (write-capable clusters
    *  are OFF until they appear here). */
   enabledClusters: string[];
-  /** Individual tool names switched off. */
+  /** Individual tool names switched off. The bearer token an agent on another machine sends
+   *  while the server is reachable from the local network (0.10.0) is the secrets store's
+   *  mcpToken since 0.13.0, never here: minted by main, renewed by its New token. */
   disabledTools: string[];
-  /** The bearer token an agent on another machine sends with each request while the server
-   *  is reachable from the local network (0.10.0). Minted by main when empty, so every install
-   *  has its own; set it empty to have a new one minted, which stops the old one working. */
-  token: string;
 }
 
 export interface McpStatus {

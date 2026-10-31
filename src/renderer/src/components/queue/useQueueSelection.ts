@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo } from "react";
 import { useRowSelection } from "@/components/library/useRowSelection";
 import type { QueueListItem } from "@shared/smoip";
-import { favoriteKey, type ContentRef, type Favorite } from "@shared/model";
+import { type ContentRef } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
-import { toggleFavorite } from "@/lib/favorites";
+import { isFavorited, toggleFavorite } from "@/lib/favorites";
 import { fromQueueItem, refToFavorite } from "@/lib/mediaRef";
 import { onScreenKey } from "@/lib/keyboardOwner";
 
@@ -139,12 +139,10 @@ export function useQueueSelection(d: {
     const fav = ref ? refToFavorite(ref) : null;
     return fav ? [fav] : [];
   });
-  const selAllHearted =
-    selFavs.length > 0 &&
-    selFavs.every((f) => favorites.some((x) => favoriteKey(x) === favoriteKey(f as Favorite)));
+  const selAllHearted = selFavs.length > 0 && selFavs.every((f) => isFavorited(f, favorites));
   const heartSelected = (): void => {
     const touched = selFavs.filter((f) => {
-      const has = favorites.some((x) => favoriteKey(x) === favoriteKey(f as Favorite));
+      const has = isFavorited(f, favorites);
       return selAllHearted ? has : !has;
     });
     for (const f of touched) void toggleFavorite(f, { silent: true });

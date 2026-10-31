@@ -25,9 +25,10 @@ import {
   showMainWindow,
   trayDeps,
 } from "./app/windows";
-import { getSettings } from "./data/persist";
+import { getSettings, moveSecrets } from "./data/persist";
 import { listeningRecord } from "./data/listeningRecord";
 import { registerIpc } from "./ipc";
+import { artistPrefetchAfterIndex, startArtistPrefetch } from "./lookups/artistPrefetch";
 import { flushArtThumbs } from "./lookups/artThumbs";
 import { flushLookupCaches } from "./lookups/diskCache";
 import * as mediaIndex from "./media/mediaIndex";
@@ -64,6 +65,8 @@ if (!gotLock) {
   app
     .whenReady()
     .then(() => {
+      // the tokens into the secrets store before any window opens, so none ever receives one
+      moveSecrets();
       denyPermissionsByDefault();
       serveArtProtocol();
       registerIpc();
@@ -118,7 +121,11 @@ if (!gotLock) {
       // tastytunes:// URLs, those that arrived before ready first (app/urlInbox)
       serveUrlActions();
       startScheduler(deviceManager);
-      mediaIndex.init((statuses) => deviceManager.setMediaIndex(statuses));
+      startArtistPrefetch();
+      mediaIndex.init((statuses) => {
+        deviceManager.setMediaIndex(statuses);
+        artistPrefetchAfterIndex();
+      });
       startUpdater((state) => {
         getMainWindow()?.webContents.send(IPC.push, { kind: "updateState", state });
       });

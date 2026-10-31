@@ -38,7 +38,9 @@ import type {
 import type {
   AlbumInfo,
   AppSettings,
+  ArtistChoice,
   ArtistInfo,
+  ChosenPicture,
   ConnectionState,
   ContentRef,
   DiscoveredDevice,
@@ -99,6 +101,16 @@ export function largeQueueCount(e: unknown): number | null {
   const m = new RegExp(`${LARGE_QUEUE_TOKEN}:(\\d+)`).exec(e instanceof Error ? e.message : "");
   return m ? Number(m[1]) : null;
 }
+
+/**
+ * How main's "the server no longer has this" crosses IPC, the same way: a play or a preset save
+ * of an id its server answered as gone (upnpBrowser's ObjectGoneError), after main has looked for
+ * the same album or track under its current id and found none (0.13.0-rc.6). The caller says so
+ * rather than leave a silent nothing.
+ */
+export const OBJECT_GONE_TOKEN = "TT_OBJECT_GONE";
+export const objectGone = (e: unknown): boolean =>
+  (e instanceof Error ? e.message : "").includes(OBJECT_GONE_TOKEN);
 
 // -------------------------------------------------------- main -> renderer push
 
@@ -322,6 +334,28 @@ export interface TastyTunesApi {
   fetchLyrics(query: LyricsQuery, force?: boolean): Promise<LyricsResult | null>;
   /** Check the saved ListenBrainz token (null = network failure, not a verdict). */
   lbValidate(): Promise<{ valid: boolean; userName: string | null } | null>;
+  /** The secrets store (0.13.0 round 10, main/data/secrets): what Settings may know of the tokens,
+   *  whether each is saved and its last four characters, and whether this system encrypts them. */
+  secretsStatus(): Promise<{
+    encrypted: boolean;
+    lbToken: { saved: boolean; ends: string | null };
+    mcpToken: { saved: boolean; ends: string | null };
+    fanartKey: { saved: boolean; ends: string | null };
+  }>;
+  /** Save a personal fanart.tv key once fanart.tv takes it (refused: not saved; unreachable:
+   *  saved, unchecked), or forget it (null). 0.13.0 round 11. */
+  setFanartKey(key: string | null): Promise<"works" | "refused" | "unreachable" | "removed">;
+  /** An artist's photos at fanart.tv, for the picture chooser; empty with no key or Liner notes off. */
+  artistFanart(name: string): Promise<string[]>;
+  /** Save the ListenBrainz token once ListenBrainz takes it (into the store, never settings):
+   *  refused, not kept; unreachable, kept unchecked; or forget it (null). */
+  setLbToken(
+    token: string | null,
+  ): Promise<{ verdict: "works" | "refused" | "unreachable" | "removed"; userName: string | null }>;
+  /** The MCP token itself, for a Copy the person pressed; nothing else asks for it. */
+  mcpTokenReveal(): Promise<string>;
+  /** A new MCP token: agents using the old one stop working until they have this one. */
+  mcpTokenNew(): Promise<void>;
   /** Consent step 1: start downloading the offered update. */
   updateDownload(): Promise<void>;
   /** Consent step 2: restart into the downloaded update now. */
@@ -338,6 +372,17 @@ export interface TastyTunesApi {
   /** An artist's albums and tracks in the indexed libraries (the Artists lens's counts), or
    *  null when no index knows them. */
   artistFacts(name: string): Promise<{ albums: number; tracks: number } | null>;
+  /** The pictures chosen for artists, by name lowercased (0.13.0): an artist with none, or with
+   *  a Wikipedia image waiting for the artist lookups, is not in it. */
+  artistChoices(): Promise<Record<string, ChosenPicture>>;
+  /** Choose an artist's picture, or clear the choice (null): the default picture comes back. */
+  setArtistChoice(name: string, choice: ArtistChoice | null): Promise<boolean>;
+  /** The images in an artist's Wikipedia article that may be chosen (with the artist lookups on;
+   *  cached; empty when the article has none or the artist has no article). */
+  artistImages(name: string): Promise<string[]>;
+  /** A picture file to choose: the system's open dialog, the file copied (and made no larger than
+   *  it needs to be) into the app's data; null when cancelled or not a picture. */
+  pickArtistPictureFile(): Promise<{ file: string; url: string } | "unreadable" | null>;
   /** Album details via MusicBrainz + Wikipedia (main process, cached; null = no match).
    *  `force` bypasses the cache read — the user-driven refresh. */
   fetchAlbumInfo(artist: string, album: string, force?: boolean): Promise<AlbumInfo | null>;
@@ -458,6 +503,11 @@ export interface TastyTunesApi {
   ): Promise<void>;
   /** Save a browsed item to a preset slot (1-99). */
   mediaPresetSave(serverUdn: string, objectId: string, slot: number): Promise<void>;
+  /** What a preset slot last played on the connected streamer, by the listening record: the
+   *  repair's way to a preset with no picture (listeningRecord.presetLastAlbum). */
+  presetLastAlbum(
+    slot: number,
+  ): Promise<{ album: string; artist: string | null; artUrl: string | null } | null>;
   /** Find a track by CONTENT on any server (index first, live fallback) —
    *  the renderer-facing face of main's resolveContent. Null when nothing
    *  matches or the device is disconnected. */
@@ -473,6 +523,17 @@ export interface TastyTunesApi {
   /** Force a media-index (re)build for one server (also the only way to
    *  build one for a Browse-only server). */
   mediaIndexRebuild(serverUdn: string): Promise<void>;
+  /** A server's own Recently added list (0.13.0 round 9): a container chosen in the Library,
+   *  "off", or null for the one found by its name; read again at once, with no walk. */
+  setRecentlyAddedList(
+    serverUdn: string,
+    choice: { id: string; title: string; titlePath: string[] } | "off" | null,
+  ): Promise<void>;
+  /** The folders Settings › Libraries offers as a server's Recently added list, the one found by
+   *  its name marked (main/media/recentList listRecentCandidates). */
+  recentListCandidates(
+    serverUdn: string,
+  ): Promise<Array<{ id: string; title: string; titlePath: string[]; named: boolean }>>;
   /** The renderer tells main whether display mode is on (2026-09-14): the MCP bridge reports it
    *  in get_status and list_scenes, and set_display_mode asks the window through a menu command. */
   reportDisplayMode(on: boolean): void;
@@ -536,12 +597,22 @@ export const IPC = {
   embeddedArt: "tt:embeddedArt",
   fetchLyrics: "tt:fetchLyrics",
   lbValidate: "tt:lbValidate",
+  secretsStatus: "tt:secretsStatus",
+  setLbToken: "tt:setLbToken",
+  mcpTokenReveal: "tt:mcpTokenReveal",
+  mcpTokenNew: "tt:mcpTokenNew",
+  setFanartKey: "tt:setFanartKey",
+  artistFanart: "tt:artistFanart",
   updateDownload: "tt:updateDownload",
   updateInstall: "tt:updateInstall",
   updateCheckNow: "tt:updateCheckNow",
   fetchArtistInfo: "tt:fetchArtistInfo",
   artistPictures: "tt:artistPictures",
   artistFacts: "tt:artistFacts",
+  artistChoices: "tt:artistChoices",
+  setArtistChoice: "tt:setArtistChoice",
+  artistImages: "tt:artistImages",
+  pickArtistPictureFile: "tt:pickArtistPictureFile",
   fetchAlbumInfo: "tt:fetchAlbumInfo",
   fetchTrackInfo: "tt:fetchTrackInfo",
   fetchDiscTracks: "tt:fetchDiscTracks",
@@ -595,9 +666,12 @@ export const IPC = {
   mediaIndexPools: "tt:mediaIndexPools",
   mediaQueueAdd: "tt:mediaQueueAdd",
   mediaPresetSave: "tt:mediaPresetSave",
+  presetLastAlbum: "tt:presetLastAlbum",
   contentResolve: "tt:contentResolve",
   mediaNodeInfo: "tt:mediaNodeInfo",
   mediaIndexRebuild: "tt:mediaIndexRebuild",
+  setRecentlyAddedList: "tt:setRecentlyAddedList",
+  recentListCandidates: "tt:recentListCandidates",
   displayModeReport: "tt:displayModeReport",
   radioSearch: "tt:radioSearch",
   radioTop: "tt:radioTop",

@@ -3,7 +3,7 @@ import type { MediaRef } from "@/lib/mediaRef";
 import { useStore } from "@/store";
 
 /**
- * TRACK INFO STEPS THROUGH ITS LIST (0.12.0, Malcolm's email of 2026-10-17: arrows "like
+ * TRACK INFO STEPS THROUGH ITS LIST (0.12.0, a user's email of 2026-10-17: arrows "like
  * iTunes/Apple Music", so a reader can look through an album's tracks without closing and
  * reopening). A surface that opens Info on one row of a list hands the whole list over: an
  * album's tracks, the Tracks view as filtered and sorted, the queue, a playlist, search results,

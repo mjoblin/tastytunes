@@ -1,11 +1,45 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { type AppSettings } from "@shared/model";
 import { tt } from "@/api";
-import { HeaderChip } from "@/components/chrome/Chrome";
 import { SettingRow, Toggle } from "@/components/settings/SettingsKit";
+import { SecretKeyRow, type SecretKeySpec } from "@/components/settings/SecretKey";
 
 // The ListenBrainz section, split out of SettingsScreen.tsx 2026-09-13 (the Settings split: the screen had held every
 // section and control at 2,142 lines); the shared rows and controls live in ./SettingsKit.
+
+// the token is checked with ListenBrainz before it is kept (ipc/lookups setLbToken): one it
+// refuses is not saved, and the dialog says so with the field still there to fix; a working one
+// says what is next, the switch below when scrobbling is off
+const lbToken = (scrobbling: boolean): SecretKeySpec => ({
+  id: "lbToken",
+  title: "ListenBrainz token",
+  noun: "token",
+  what: "ListenBrainz keeps a free, open log of what you listen to. With your token, TastyTunes can add what you play to it.",
+  getStep:
+    "Sign in to ListenBrainz (a MetaBrainz account is free) and copy your user token from its settings.",
+  getLabel: "Open listenbrainz.org",
+  getUrl: "https://listenbrainz.org/settings/",
+  placeholder: "user token",
+  check: (token) =>
+    tt.setLbToken(token).then((got) =>
+      got.verdict === "works"
+        ? {
+            verdict: "works",
+            said: `The token works${got.userName ? `, for ${got.userName}` : ""}. ${scrobbling ? "What you play is scrobbled to it." : "Turn on “Scrobble to ListenBrainz” to start."}`,
+          }
+        : got.verdict === "unreachable"
+          ? {
+              verdict: "unreachable",
+              said: "Couldn't reach listenbrainz.org to check the token. It's saved, and it will be tried when scrobbling.",
+            }
+          : {
+              verdict: "refused",
+              said: "ListenBrainz didn't accept this token. Check that it's the whole token and try again.",
+            },
+    ),
+  remove: () => tt.setLbToken(null).then(() => {}),
+  removeQuestion: "Remove your ListenBrainz token? Scrobbling stops until you add it again.",
+});
 
 export function ListenBrainzSection({
   settings,
@@ -14,7 +48,21 @@ export function ListenBrainzSection({
   settings: AppSettings;
   save(patch: Partial<AppSettings>): Promise<void>;
 }): React.JSX.Element {
-  const hasToken = settings.lbToken.trim().length > 0;
+  // THE TOKEN IS WRITE-ONLY HERE (0.13.0 round 10, the secrets store): the window learns only
+  // whether one is saved and how it ends; it is pasted in, replaced or removed, never shown
+  const [stored, setStored] = useState<{
+    saved: boolean;
+    ends: string | null;
+    encrypted: boolean;
+  } | null>(null);
+  const refresh = useCallback((): void => {
+    void tt
+      .secretsStatus()
+      .then((s) => setStored({ ...s.lbToken, encrypted: s.encrypted }))
+      .catch(() => {});
+  }, []);
+  useEffect(() => refresh(), [refresh]);
+  const hasToken = stored?.saved === true;
   const [tokenStatus, setTokenStatus] = useState<
     { valid: boolean; userName: string | null } | null | "checking" | "idle"
   >("idle");
@@ -26,11 +74,11 @@ export function ListenBrainzSection({
   useEffect(() => {
     if (hasToken) void validate();
     else setTokenStatus("idle");
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-check per token
-  }, [settings.lbToken]);
+    // re-checked per token: whether one is saved, and how it ends
+  }, [hasToken, stored?.ends]);
 
   const status = !hasToken
-    ? "Paste your user token from listenbrainz.org/settings."
+    ? "Your user token from listenbrainz.org, for scrobbling what you play to your account."
     : tokenStatus === "checking" || tokenStatus === "idle"
       ? "Checking token…"
       : tokenStatus === null
@@ -38,19 +86,20 @@ export function ListenBrainzSection({
         : tokenStatus.valid
           ? `Token valid, scrobbling as ${tokenStatus.userName ?? "you"}.`
           : "Token rejected by ListenBrainz.";
+  const kept =
+    stored && !stored.encrypted
+      ? " This system has no keyring, so the token is kept unencrypted in a file only your account can read."
+      : "";
 
   return (
     <div className="space-y-4 pt-1 border-t border-edge">
-      <SettingRow label="ListenBrainz token" hint={status}>
-        <div className="flex items-center gap-2">
-          <TokenField value={settings.lbToken} onCommit={(lbToken) => void save({ lbToken })} />
-          <HeaderChip
-            onClick={() => void tt.openExternal("https://listenbrainz.org/settings/")}
-            className="shrink-0 text-[12.5px] px-3 py-1.5 motion-safe:active:scale-90"
-          >
-            Get token
-          </HeaderChip>
-        </div>
+      <SettingRow label="ListenBrainz token" hint={status + kept}>
+        <SecretKeyRow
+          spec={lbToken(settings.lbEnabled)}
+          saved={hasToken}
+          ends={stored?.ends ?? null}
+          onChanged={refresh}
+        />
       </SettingRow>
       <Toggle
         label="Scrobble to ListenBrainz"
@@ -66,42 +115,3 @@ export function ListenBrainzSection({
     </div>
   );
 }
-
-/** Masked text input, committed on blur/Enter (Escape reverts). */
-function TokenField({
-  value,
-  onCommit,
-}: {
-  value: string;
-  onCommit(next: string): void;
-}): React.JSX.Element {
-  const [draft, setDraft] = useState<string | null>(null);
-
-  const commit = (): void => {
-    if (draft !== null && draft.trim() !== value) onCommit(draft.trim());
-    setDraft(null);
-  };
-
-  return (
-    <input
-      type="password"
-      autoComplete="off"
-      spellCheck={false}
-      value={draft ?? value}
-      placeholder="user token"
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-        if (e.key === "Escape") setDraft(null);
-      }}
-      className="w-48 bg-bg rounded-lg ring-1 ring-edge px-3 py-1.5 text-[12.5px] font-mono outline-none focus:ring-edge2 placeholder:text-faint"
-    />
-  );
-}
-
-/**
- * Numeric input that lets you actually type: edits live in a draft and are
- * clamped + committed on blur/Enter (Escape reverts). Clamping per keystroke
- * made intermediate values impossible — typing "45" became 10, then 100.
- */

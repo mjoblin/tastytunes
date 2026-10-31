@@ -15,6 +15,7 @@ export function FilterInput({
   shown,
   total,
   onSubmit,
+  lead,
 }: {
   value: string;
   onChange(value: string): void;
@@ -22,6 +23,9 @@ export function FilterInput({
   total: number;
   /** Optional Enter action (the Library escalates a filter to a full search). */
   onSubmit?(): void;
+  /** A control inside the box after the magnifier, a hairline before the text: the Tracks lens's
+   *  "search in" (0.13.0-rc.4). */
+  lead?: React.ReactNode;
 }): React.JSX.Element {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -56,6 +60,12 @@ export function FilterInput({
       )}
     >
       <Search size={13} className={value ? "text-gold" : "text-faint"} />
+      {lead && (
+        <>
+          {lead}
+          <span aria-hidden className="w-px h-4 shrink-0 bg-edge2" />
+        </>
+      )}
       <input
         ref={inputRef}
         data-filter-input

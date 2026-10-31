@@ -5,6 +5,7 @@ import { tt } from "@/api";
 import { useStore, type Screen } from "@/store";
 import { useDiscCount } from "@/hooks/useDisc";
 import { cx, fmtCount } from "@/lib/format";
+import { KEYBOARD_NAV_ATTR } from "@/lib/inputModality";
 import {
   MOD,
   orderedNavScreens,
@@ -16,6 +17,7 @@ import {
   type ScreenDef,
 } from "@/lib/screens";
 import { PopoverCard } from "@/components/chrome/Overlay";
+import { menuAt } from "@/lib/menuAt";
 
 /**
  * Right-click target: which nav item (a screen or a bottom-cluster tool), and
@@ -60,18 +62,27 @@ export function Nav(): React.JSX.Element {
   const toggleCollapsed = async (): Promise<void> => {
     await saveSettings({ navCollapsed: !collapsed });
   };
+  // the collapsed rail's names, on hover and on keyboard focus (0.13.0: a control reached with Tab
+  // says what it is, as one under the pointer does)
+  const showNavTip = (el: HTMLElement, label: string): void => {
+    if (!collapsed) return;
+    const r = el.getBoundingClientRect();
+    const pos = { label, top: r.top + r.height / 2, left: r.right + 10 };
+    if (navTipTimer.current) clearTimeout(navTipTimer.current);
+    navTipTimer.current = setTimeout(() => setNavTip(pos), 450);
+  };
+  const hideNavTip = (): void => {
+    if (navTipTimer.current) clearTimeout(navTipTimer.current);
+    setNavTip(null);
+  };
   const navTipHandlers = (label: string) => ({
-    onMouseEnter: (e: React.MouseEvent<HTMLElement>) => {
-      if (!collapsed) return;
-      const r = e.currentTarget.getBoundingClientRect();
-      const pos = { label, top: r.top + r.height / 2, left: r.right + 10 };
-      if (navTipTimer.current) clearTimeout(navTipTimer.current);
-      navTipTimer.current = setTimeout(() => setNavTip(pos), 450);
+    onMouseEnter: (e: React.MouseEvent<HTMLElement>) => showNavTip(e.currentTarget, label),
+    onMouseLeave: hideNavTip,
+    onFocus: (e: React.FocusEvent<HTMLElement>) => {
+      if (document.documentElement.hasAttribute(KEYBOARD_NAV_ATTR))
+        showNavTip(e.currentTarget, label);
     },
-    onMouseLeave: () => {
-      if (navTipTimer.current) clearTimeout(navTipTimer.current);
-      setNavTip(null);
-    },
+    onBlur: hideNavTip,
   });
 
   const hidden = sanitizeNavHidden(settings.navHidden);
@@ -101,7 +112,7 @@ export function Nav(): React.JSX.Element {
     (id: NavTool, label: string) =>
     (e: React.MouseEvent): void => {
       e.preventDefault();
-      setMenu({ kind: "tool", id, label, x: e.clientX, y: e.clientY });
+      setMenu({ kind: "tool", id, label, ...menuAt(e) });
     };
 
   const navItem = ({ id, label, icon: Icon, key }: ScreenDef): React.JSX.Element => (
@@ -116,7 +127,7 @@ export function Nav(): React.JSX.Element {
           ? undefined
           : (e) => {
               e.preventDefault();
-              setMenu({ kind: "screen", id, label, x: e.clientX, y: e.clientY });
+              setMenu({ kind: "screen", id, label, ...menuAt(e) });
             }
       }
       {...navTipHandlers(`${label} (${key})`)}
@@ -151,7 +162,7 @@ export function Nav(): React.JSX.Element {
                     {fmtCount(queueTotal)}
                   </span>
                 ))}
-          <span className="font-mono text-[9px] text-faint/60">{key}</span>
+          <span className="nav-key font-mono text-[9px] text-faint/60">{key}</span>
         </span>
       )}
     </button>
@@ -247,7 +258,7 @@ export function Nav(): React.JSX.Element {
               {!collapsed && (
                 <span className="flex-1 min-w-0 flex items-center gap-3 overflow-hidden whitespace-nowrap">
                   <span className="flex-1 text-left">Commands</span>
-                  <span className="font-mono text-[9px] text-faint/60">{MOD}K</span>
+                  <span className="nav-key font-mono text-[9px] text-faint/60">{MOD}K</span>
                 </span>
               )}
             </button>

@@ -526,6 +526,8 @@ const refOf = (kind: "album" | "track", r: TopEntry): MediaRef => ({
   serverUdn: null,
   serverName: null,
   objectId: null,
+  rate: null,
+  bits: null,
 });
 
 /** The rows are LINKS into the Library (user, 2026-09-05): an album lands on

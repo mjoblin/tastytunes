@@ -31,7 +31,7 @@ export function OrderHandle({
 }): React.JSX.Element {
   return (
     <div className="relative flex items-center justify-center">
-      <span className="flex items-center justify-center transition-opacity group-hover:opacity-0">
+      <span className="flex items-center justify-center transition-opacity group-hover:opacity-0 group-kbd:opacity-0">
         {children}
       </span>
       <button

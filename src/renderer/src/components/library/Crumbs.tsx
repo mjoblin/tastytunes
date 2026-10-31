@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { ChevronRight, Search } from "lucide-react";
 import { cx } from "@/lib/format";
 import { PopoverCard } from "@/components/chrome/Overlay";
+import { menuAt } from "@/lib/menuAt";
 
 /** One crumb of the trail: what it says and where it leads. */
 export interface CrumbItem {
@@ -13,6 +14,9 @@ export interface CrumbItem {
   current?: boolean;
   /** The way back to search results: gold with the glyph (the search bar's identity). */
   search?: boolean;
+  /** Drawn before the label: the album's cover once its header has scrolled away (the compact
+   *  bar, AlbumCrumbArt). */
+  lead?: React.ReactNode;
 }
 
 /** The trail keeps this many from the start (Library, the source, the volume)
@@ -69,7 +73,15 @@ export function Crumbs({ items }: { items: CrumbItem[] }): React.JSX.Element {
     : items;
   const crumb = (it: CrumbItem): React.JSX.Element => {
     const long = it.label.length > 28;
-    const label = <span className="block max-w-[14rem] truncate">{it.label}</span>;
+    const text = <span className="block max-w-[14rem] truncate">{it.label}</span>;
+    const label = it.lead ? (
+      <span className="flex items-center gap-1.5">
+        {it.lead}
+        {text}
+      </span>
+    ) : (
+      text
+    );
     if (!it.onClick)
       return (
         <span className="px-1.5 py-0.5 text-ink" data-tip={long ? it.label : undefined}>
@@ -111,7 +123,7 @@ export function Crumbs({ items }: { items: CrumbItem[] }): React.JSX.Element {
             <button
               data-library-crumbs-fold={hidden.length}
               data-tip={`${hidden.length} more`}
-              onClick={(e) => setFold({ x: e.clientX, y: e.clientY })}
+              onClick={(e) => setFold(menuAt(e))}
               className="px-1.5 py-0.5 rounded text-dim hover:text-ink hover:bg-veil transition-colors"
             >
               …

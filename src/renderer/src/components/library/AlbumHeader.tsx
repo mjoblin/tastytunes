@@ -5,6 +5,7 @@ import { useStore } from "@/store";
 import { artSrc, artKeyOf } from "@/lib/artSrc";
 import type { MediaNode } from "@shared/model";
 import { HeaderArt } from "@/components/library/HeaderArt";
+import { ArtImage } from "@/components/media/ArtImage";
 import { HEADER_ART_PX, useHeaderArtSize } from "@/hooks/useHeaderArtSize";
 import { NameLink } from "@/components/media/NameLine";
 import { DrChip, LufsChip } from "@/components/media/Waveform";
@@ -194,7 +195,7 @@ export function AlbumHeader(
               </div>
             )}
           </div>
-          <div className="flex items-center gap-2 pt-2 mt-auto">
+          <div className="flex items-center gap-2 pt-2 mt-auto" data-album-verbs>
             <button
               data-tip="Replaces the queue"
               // no queue-ack flash on the album screen: the whole-header
@@ -257,5 +258,77 @@ export function AlbumHeader(
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * THE COMPACT BAR (0.13.0 round 5; his call 2026-10-24, option B on the decision page): once the
+ * header's verbs have scrolled away on a long album, the trail tightens instead of a bar arriving.
+ * The album's crumb gains its cover (AlbumCrumbArt) and the header's Play, heart and menu join the
+ * trail's right end (AlbumCompactVerbs), the same verbs with the same handlers, so the album keeps
+ * its identity and its Play in reach. Pinning the header was ruled out: at the smallest window
+ * (800x520) it left about 150px for tracks. LibraryScreen decides when (the verbs' row out of
+ * view above the scroller's faded top).
+ */
+export function AlbumCrumbArt({
+  albumNode,
+  albumArt,
+}: {
+  albumNode: MediaNode;
+  albumArt: string | null;
+}): React.JSX.Element {
+  return (
+    <span
+      data-album-crumb-art
+      className="compact-in h-[18px] w-[18px] shrink-0 overflow-hidden rounded-[4px] bg-veil ring-1 ring-edge"
+    >
+      <ArtImage
+        src={artSrc(albumArt, 18, artKeyOf(albumNode))}
+        fallback={<Disc3 size={18} strokeWidth={1} className="text-faint" />}
+      />
+    </span>
+  );
+}
+
+export function AlbumCompactVerbs(
+  p: Pick<Fav, "nodeFavorited" | "heartNode"> &
+    Pick<Men, "openMenu"> & {
+      albumNode: MediaNode;
+      playContainer(node: MediaNode, el: HTMLElement | null): Promise<void>;
+    },
+): React.JSX.Element {
+  const { albumNode, nodeFavorited, heartNode, openMenu, playContainer } = p;
+  const hearted = nodeFavorited(albumNode);
+  return (
+    <div data-album-compact className="compact-in flex shrink-0 items-center gap-1.5">
+      <button
+        data-album-compact-play
+        data-tip="Replaces the queue"
+        onClick={() => void playContainer(albumNode, null)}
+        className="tip-bottom flex h-6 items-center gap-1.5 rounded-full bg-amber px-2.5 text-[12px] font-medium text-bg transition-all motion-safe:active:scale-95"
+      >
+        <Play size={11} fill="currentColor" /> Play
+      </button>
+      <button
+        data-tip={hearted ? "Remove from favorites" : "Add to favorites"}
+        aria-label={hearted ? "Remove from favorites" : "Add to favorites"}
+        data-album-compact-heart={hearted ? "on" : "off"}
+        onClick={() => heartNode(albumNode)}
+        className={cx(
+          "tip-bottom grid h-6 w-6 place-items-center rounded-full transition-all motion-safe:active:scale-90",
+          hearted ? "text-gold hover:text-ink" : "text-dim hover:bg-veil hover:text-ink",
+        )}
+      >
+        <Heart size={14} fill={hearted ? "currentColor" : "none"} />
+      </button>
+      <button
+        aria-label="More actions"
+        data-album-compact-menu
+        onClick={(e) => openMenu(albumNode, e)}
+        className="grid h-6 w-6 place-items-center rounded-full text-dim transition-colors hover:bg-veil hover:text-ink"
+      >
+        <MoreHorizontal size={14} />
+      </button>
+    </div>
   );
 }

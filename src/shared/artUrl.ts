@@ -34,9 +34,15 @@ export function artUrlResizable(url: string | null | undefined): boolean {
   return !!url && ASSET_ART.test(url);
 }
 
-// Wikimedia's thumbnails: .../wikipedia/<wiki>/thumb/<a>/<ab>/<file>/<width>px-<file>
+/** Where a picture file chosen for an artist is drawn from (main/data/artistChoices copies it
+ *  in, main/app/artProtocol serves it): this, then the copy's name. */
+export const PICKED_ART = "tt-art://picked/";
+
+// Wikimedia's thumbnails: .../wikipedia/<wiki>/thumb/<a>/<ab>/<file>/<width>px-<file>, on
+// upload. or, as Wikipedia has handed them out since 2026, thumb.wikimedia.org with a query
+// (found in 0.13.0 round 7: the pattern knew only the first, so no current photo was sharpened)
 const WIKI_THUMB =
-  /^(https:\/\/upload\.wikimedia\.org\/wikipedia\/[^/]+\/thumb\/.+\/)(\d+)px-([^/]+)$/;
+  /^(https:\/\/(?:upload|thumb)\.wikimedia\.org\/wikipedia\/[^/]+\/thumb\/.+\/)(\d+)px-([^/?#]+)(\?[^#]*)?$/;
 /** Wikimedia's standard thumbnail widths: a width off this list is made on demand and
  *  rate-limited, one on it is served from their cache. */
 const WIKI_STEPS = [330, 500, 960, 1280];
@@ -56,7 +62,7 @@ export function wikiThumbAt(url: string | null | undefined, px: number): string 
   const has = Number(m[2]);
   if (has >= want) return null;
   const step = WIKI_STEPS.find((w) => w >= want) ?? WIKI_STEPS[WIKI_STEPS.length - 1];
-  return step > has ? `${m[1]}${step}px-${m[3]}` : null;
+  return step > has ? `${m[1]}${step}px-${m[3]}${m[4] ?? ""}` : null;
 }
 
 /** A node's art identity: the server and the album it belongs to (its own title for an

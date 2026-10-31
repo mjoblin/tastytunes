@@ -151,7 +151,7 @@ describe("POOL RULE year-from-tracks (minidlna)", () => {
 });
 
 describe("POOL RULE discs-from-file-names (MinimServer)", () => {
-  // Malcolm's Songbooks+: per-disc track numbers, no disc, the disc in each file's name
+  // a user's box set: per-disc track numbers, no disc, the disc in each file's name
   const box = (fd: Array<[number, number]>, album = "Songbooks+"): MediaNode[] =>
     fd.map(([disc, n], i) =>
       track(`i${i}`, n === 11 ? "Close Your Eyes" : `Song ${disc}.${n}`, {

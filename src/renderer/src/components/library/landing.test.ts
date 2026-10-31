@@ -1,6 +1,6 @@
 /**
  * The landing's row: by id, then by title and length, then by title, so of two tracks with one
- * title (Malcolm's twin "Close Your Eyes", the mock's reprise) the landing washes the one asked for.
+ * title (a user's same-titled tracks, the mock's reprise) the landing washes the one asked for.
  */
 import { describe, expect, it } from "vitest";
 import { landingRowIndex, type LandingRow } from "./landing";

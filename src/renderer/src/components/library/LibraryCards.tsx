@@ -8,7 +8,10 @@ import { RowAction } from "@/components/media/RowAction";
 import { RowHeart } from "@/components/media/RowHeart";
 import { ArtImage } from "@/components/media/ArtImage";
 import { MediaArt } from "@/components/media/MediaArt";
-import { DrBadge } from "@/components/media/Waveform";
+import { cardChip } from "@/components/chrome/Chrome";
+import { DrBadge, drTone, fmtLufs } from "@/components/media/Waveform";
+import { SignalDot } from "@/components/device/SignalLamp";
+import type { CardDetails } from "@/components/library/useCardDetails";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { DurationCell } from "@/components/media/DurationCell";
 import { Eqbars } from "@/components/media/Eqbars";
@@ -46,12 +49,13 @@ function HeartChip({
       }}
       className={cx(
         // 14px = the card's p-2 plus the chips' 6px inset from the art corner
-        "tip-bottom tip-end absolute top-3.5 right-3.5 z-10 h-8 w-8 rounded-lg bg-panel/80 ring-1 ring-edge flex items-center justify-center transition-all motion-safe:active:scale-90 cursor-pointer",
+        "tip-bottom tip-end absolute top-3.5 right-3.5 z-10 transition-all motion-safe:active:scale-90 cursor-pointer",
+        cardChip(),
         favorited
           ? "text-gold opacity-100"
           : cx(
               "text-dim hover:text-ink",
-              held ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+              held ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
             ),
       )}
     >
@@ -64,10 +68,14 @@ export function ContainerCard({
   node,
   playing,
   menuOpen,
+  folderMenu = false,
   selected = false,
   favorited,
   badge,
+  badgeTip,
   note,
+  subtitle: line,
+  details,
   onHeart,
   onEnter,
   onPlay,
@@ -86,30 +94,42 @@ export function ContainerCard({
   favorited?: boolean;
   /** Provenance chip on the subtitle line (lens grids pooling several servers). */
   badge?: string;
+  /** What the chip means (CardBadge). */
+  badgeTip?: string;
   /** A quiet fact this surface knows about the album, under its names — how far
    *  a listen got, when it last played (History's Rediscover). Inside the card
    *  so it lifts with it; a line outside is covered by the hover glow. */
   note?: string;
+  /** The line under the name in place of the artist and year: an artist's card in the Artists
+   *  lens says what the row says ("12 albums"; 0.13.0 round 12). */
+  subtitle?: string;
+  /** An album's format line under its names (useCardDetails), absent where the surface has none
+   *  or Settings › Layout turns it off. */
+  details?: CardDetails;
   onHeart?(): void;
   /** The body click, with its event: a caller with a selection model reads the
    *  chord (⌘/ctrl, shift) and decides whether this click opens or picks. */
   onEnter(e: React.MouseEvent): void;
   onPlay(el: HTMLElement | null): void;
   onMenu(e: React.MouseEvent): void;
+  /** A plain folder takes a ⋯ too while its server is browsed (0.13.0): its one verb, Use as
+   *  Recently added (useLibraryMenus). Elsewhere a folder stays menu-less. */
+  folderMenu?: boolean;
   /** Albums drag to the nav rail (2026-09-02): a press on the card BODY arms
    *  the shared drag; the corner chips (play bloom, heart, ⋯) never do. */
   onNavDrag?(e: React.PointerEvent): void;
 }): React.JSX.Element {
   const ref = useRef<HTMLDivElement | null>(null);
   // Queue/preset verbs only make sense on albums — plain folders (USB
-  // volumes, Asset's virtual views) get no chips and no menu. ARTIST
-  // containers carry the ⋯ (their menu holds only the search-everywhere
-  // pivot — see ItemMenu) but never the play chip.
+  // volumes, Asset's virtual views) get no chips and no menu, but for the ⋯
+  // their server's browse gives them (folderMenu, 0.13.0: Use as Recently
+  // added). ARTIST containers carry the ⋯ (their menu holds only the
+  // search-everywhere pivot — see ItemMenu) but never the play chip.
   const album = isAlbumClass(node.upnpClass);
   const artist = isArtistClass(node.upnpClass);
-  const menuable = album || artist;
+  const menuable = album || artist || folderMenu;
   const muted = isMutedArt(node);
-  const subtitle = [node.artist, node.year].filter(Boolean).join(" · ");
+  const subtitle = line ?? [node.artist, node.year].filter(Boolean).join(" · ");
   // an artist takes main's picture (a real server one, a known photo, an album cover)
   const artistPic = useArtistPicture(artist ? node.title : null);
   return (
@@ -174,7 +194,7 @@ export function ContainerCard({
             <div className="absolute inset-0 pointer-events-none bg-panel/30" />
           )}
           {playing && (
-            <span className="absolute top-1.5 left-1.5 h-7 w-7 rounded-lg bg-panel/80 ring-1 ring-edge flex items-center justify-center">
+            <span className={cx("absolute top-1.5 left-1.5", cardChip())}>
               <Eqbars />
             </span>
           )}
@@ -187,7 +207,9 @@ export function ContainerCard({
               data-tip="Play, replacing the queue"
               className={cx(
                 "tip-bottom absolute bottom-1.5 left-1.5 h-11 w-11 rounded-full bg-amber text-bg flex items-center justify-center transition-all duration-150 motion-safe:hover:scale-110 hover:shadow-[0_0_24px_rgb(var(--amber-rgb)_/_0.6)]",
-                menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+                menuOpen
+                  ? "opacity-100"
+                  : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
               )}
             >
               <Play size={18} fill="currentColor" />
@@ -198,8 +220,11 @@ export function ContainerCard({
               aria-label="More actions"
               onClick={onMenu}
               className={cx(
-                "absolute bottom-1.5 right-1.5 h-8 w-8 rounded-lg bg-panel/80 ring-1 ring-edge text-dim hover:text-ink flex items-center justify-center transition-all",
-                menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+                "absolute bottom-1.5 right-1.5 text-dim hover:text-ink transition-all",
+                cardChip(),
+                menuOpen
+                  ? "opacity-100"
+                  : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
               )}
             >
               <MoreHorizontal size={15} />
@@ -215,20 +240,12 @@ export function ContainerCard({
           {node.title}
         </div>
         {(subtitle || badge) && (
-          <div className="flex items-center gap-1.5 min-w-0">
-            {subtitle && (
-              <div className="text-[11.5px] text-faint truncate text-left">{subtitle}</div>
-            )}
-            {badge && (
-              <span
-                data-card-badge={badge}
-                className="ml-auto shrink-0 text-[9.5px] px-1.5 py-px rounded-full ring-1 ring-edge text-faint"
-              >
-                {badge}
-              </span>
-            )}
+          <div className={badge ? CARD_BADGE_LINE : "flex min-w-0"}>
+            <div className="text-[11.5px] text-faint truncate text-left">{subtitle}</div>
+            {badge && <CardBadge label={badge} tip={badgeTip} />}
           </div>
         )}
+        {details && <CardFormatLine details={details} />}
         {note && (
           // LAST, under the names: the card's own artist and year are what it
           // says about itself, and a surface's fact goes after them, never
@@ -246,17 +263,219 @@ export function ContainerCard({
   );
 }
 
+/**
+ * A TRACK'S CARD (0.13.0-rc.4, his picks on "Tracks as Cards": the Tracks lens follows the
+ * Library's one Rows or Cards choice, and a track card's click plays). The album card's look for
+ * a track: its cover, the title, and under it what the caller says (the artist and the album, or
+ * the figure the list is sorted by). Its click is a track row's: a selection chord picks, any
+ * other click plays, so Play blooms in the middle as on the Queue's and the presets' cards; the
+ * heart and the ⋯ sit where an album card has them, and a right-click opens the same menu.
+ */
+export function TrackCard({
+  node,
+  playing,
+  menuOpen,
+  selected = false,
+  favorited,
+  subtitle,
+  details,
+  onClick,
+  onPlayNow,
+  onHeart,
+  onMenu,
+  onNavDrag,
+}: {
+  node: MediaNode;
+  /** The playing track (and the queue source is live). */
+  playing: boolean;
+  menuOpen: boolean;
+  selected?: boolean;
+  favorited: boolean;
+  subtitle: string;
+  /** The track's format line, an album card's (useTrackCardDetails), absent while Settings ›
+   *  Layout turns it off. */
+  details?: CardDetails;
+  /** The selection grammar's first look at the click: true when it was a chord that picked. */
+  onClick(e: React.MouseEvent): boolean;
+  onPlayNow(el: HTMLElement | null): void;
+  onHeart(): void;
+  onMenu(e: React.MouseEvent): void;
+  onNavDrag?(e: React.PointerEvent): void;
+}): React.JSX.Element {
+  const ref = useRef<HTMLDivElement | null>(null);
+  return (
+    <div
+      ref={ref}
+      onContextMenu={onMenu}
+      data-library-card
+      data-track-card={node.title}
+      data-selected={selected || undefined}
+      className={cx(
+        "group relative text-left rounded-2xl p-2 pb-2.5 transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]",
+        playing
+          ? "bg-goldtile/70 tile-playing"
+          : selected
+            ? "bg-veil2 ring-2 ring-edge2"
+            : "bg-raised/50 ring-1 ring-edge card-hover-glow",
+        menuOpen && "ring-1 ring-edge2 z-10 motion-safe:scale-[1.04] card-glow-held",
+      )}
+    >
+      <button
+        className="block w-full cursor-pointer"
+        onClick={(e) => {
+          if (onClick(e)) return;
+          onPlayNow(ref.current);
+        }}
+        onPointerDown={(e) => {
+          if ((e.target as HTMLElement).closest("button") !== e.currentTarget) return;
+          onNavDrag?.(e);
+        }}
+      >
+        <div className="relative aspect-square w-full rounded-lg overflow-hidden bg-veil flex items-center justify-center">
+          <ArtImage
+            src={artSrc(node.artUrl, 240, artKeyOf(node))}
+            fallbackArt={
+              node.album
+                ? { artist: node.albumArtist ?? node.artist, album: node.album }
+                : undefined
+            }
+            lazy
+            shimmer
+            className="h-full w-full object-cover"
+            fallback={<Disc3 size={34} strokeWidth={1.2} className="text-dim" />}
+          />
+          {playing && (
+            <span className={cx("absolute top-1.5 left-1.5", cardChip())}>
+              <Eqbars />
+            </span>
+          )}
+          {/* the card's click plays: the bloom says so, and is the card's own click */}
+          <span
+            aria-hidden
+            className={cx(
+              "absolute inset-0 m-auto h-11 w-11 rounded-full bg-amber text-bg flex items-center justify-center transition-all duration-150 motion-safe:group-hover:scale-105 hover:shadow-[0_0_24px_rgb(var(--amber-rgb)_/_0.6)]",
+              menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
+            )}
+          >
+            <Play size={18} fill="currentColor" strokeWidth={0} className="translate-x-[1px]" />
+          </span>
+          <span
+            aria-label="More actions"
+            onClick={(e) => {
+              e.stopPropagation();
+              onMenu(e);
+            }}
+            className={cx(
+              "absolute bottom-1.5 right-1.5 text-dim hover:text-ink transition-all",
+              cardChip(),
+              menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
+            )}
+          >
+            <MoreHorizontal size={15} />
+          </span>
+        </div>
+        <div
+          className={cx(
+            "pt-1.5 text-[12.5px] truncate text-left",
+            playing ? "text-gold" : "text-ink",
+          )}
+        >
+          {node.title}
+        </div>
+        {subtitle && <div className="text-[11.5px] text-faint truncate text-left">{subtitle}</div>}
+        {details && <CardFormatLine details={details} />}
+      </button>
+      <HeartChip favorited={favorited} held={menuOpen} onHeart={onHeart} />
+    </div>
+  );
+}
+
+/**
+ * A LINE WITH A COPY'S CHIP (0.13.0-rc.4, his pick on "Card details": the chip never takes more
+ * than half the line, so the artist keeps the other half): two columns no wider than their text,
+ * the line's free width shared equally between them, so each keeps up to half and either uses
+ * what the other leaves, the chip at the line's right end, and either shortened with "…" past its
+ * share. The name's column is always there, empty when there is no name.
+ */
+export const CARD_BADGE_LINE =
+  "grid grid-cols-[minmax(0,max-content)_minmax(0,max-content)] justify-between items-center gap-1.5 min-w-0";
+
+/**
+ * An album's chip at the end of its line (a set's volume count, or which copy it is: the lens
+ * index's copyBadge), one home for the cards, the rows and the Artists lens's album column
+ * (0.13.0-rc.4, when its tip arrived: three hand-written copies before). `tip` says what it means.
+ */
+export function CardBadge({ label, tip }: { label: string; tip?: string }): React.JSX.Element {
+  return (
+    <span
+      data-card-badge={label}
+      data-tip={tip}
+      className={cx(
+        "ml-auto shrink-0 truncate text-[9.5px] px-1.5 py-px rounded-full ring-1 ring-edge text-faint",
+        tip && "tip-bottom tip-end",
+      )}
+    >
+      {label}
+    </span>
+  );
+}
+
+/**
+ * AN ALBUM CARD'S FORMAT LINE (0.13.0-rc.4, his picks on "Card details"): the status lamp's glyph
+ * for its quality, its format, and DR's badge at the right once Audio analysis has measured it,
+ * one tip over the line in two short lines (the format, then the dynamic range) so a tip under a
+ * narrow card stays about its width. Held at its height when nothing is known, so every card in
+ * a grid keeps one height.
+ */
+function CardFormatLine({ details }: { details: CardDetails }): React.JSX.Element {
+  const dr = details.dr != null && details.dr > 0 ? details.dr : null;
+  const drWords =
+    dr != null
+      ? `DR${dr}, ${drTone(dr).word}${details.lufs != null ? `, ${fmtLufs(details.lufs)}` : ""}`
+      : null;
+  const tip = [details.tip, drWords].filter(Boolean).join("\n");
+  return (
+    <div
+      data-card-format={details.label ?? ""}
+      data-tip={tip || undefined}
+      className={cx(
+        // text-dim, not the names' faint: new text clears 0016's floor in dark too (S139, the
+        // rc.4 gate: at faint/80 the line sat near 2.8 to 1 on the dark card)
+        "mt-1.5 h-4 flex items-center gap-1 min-w-0 text-[10.5px] text-dim tabular-nums text-left",
+        tip && "tip-bottom tip-lines",
+      )}
+    >
+      {details.quality && (
+        // the hi-res ring reaches past the dot: a box its width, so every label starts in line
+        <span className="w-[13px] shrink-0 flex justify-center">
+          <SignalDot quality={details.quality} className="h-1.5 w-1.5" />
+        </span>
+      )}
+      {details.label && <span className="truncate">{details.label}</span>}
+      {dr != null && (
+        <DrBadge
+          dr={dr}
+          titled={false}
+          className="ml-auto shrink-0 font-mono text-[10px] leading-[13px]"
+        />
+      )}
+    </div>
+  );
+}
+
 /** Row-cluster heart: hover-revealed control, permanently gold when set. */
 
 export function ContainerRow({
   node,
   playing,
   menuOpen,
+  folderMenu = false,
   selected = false,
   selStart = true,
   selEnd = true,
   favorited,
   badge,
+  badgeTip,
   dr,
   onArtistLink,
   onNavDrag,
@@ -276,6 +495,8 @@ export function ContainerRow({
   favorited?: boolean;
   /** Provenance chip beside the subline (lens listings pooling several servers). */
   badge?: string;
+  /** What the chip means (CardBadge). */
+  badgeTip?: string;
   /** EXPERIMENT (0.7): the album's recorded TT-DR for the data cluster;
    *  null renders the reserved cell empty (absence as absence). */
   dr?: number | null;
@@ -288,13 +509,15 @@ export function ContainerRow({
   /** The row click, with its event (see ContainerCard.onEnter). */
   onEnter(e: React.MouseEvent): void;
   onMenu(e: React.MouseEvent): void;
+  /** A plain folder's ⋯ while its server is browsed (ContainerCard.folderMenu). */
+  folderMenu?: boolean;
 }): React.JSX.Element {
   // Same rule as cards: albums carry the full ⋯ menu; ARTISTS carry it too now
   // (theirs holds only the search-everywhere pivot — see ItemMenu). Plain
   // folders stay menu-less: a folder is filing, and none of the verbs apply.
   const album = isAlbumClass(node.upnpClass);
   const artist = isArtistClass(node.upnpClass);
-  const menuable = album || artist;
+  const menuable = album || artist || folderMenu;
   const muted = isMutedArt(node);
   const artistPic = useArtistPicture(artist ? node.title : null);
   return (
@@ -346,26 +569,20 @@ export function ContainerRow({
           {node.title}
         </div>
         {(node.artist || badge) && (
-          <div className="flex items-center gap-1.5 min-w-0">
-            {node.artist &&
-              (onArtistLink ? (
-                <NameLink
-                  kind="artist"
-                  name={node.artist}
-                  onGo={onArtistLink}
-                  className="text-[12px] text-faint truncate hover:text-dim hover:underline underline-offset-2"
-                />
-              ) : (
-                <div className="text-[12px] text-faint truncate">{node.artist}</div>
-              ))}
-            {badge && (
-              <span
-                data-card-badge={badge}
-                className="ml-auto shrink-0 text-[9.5px] px-1.5 py-px rounded-full ring-1 ring-edge text-faint"
-              >
-                {badge}
-              </span>
+          <div className={badge ? CARD_BADGE_LINE : "flex min-w-0"}>
+            {!node.artist ? (
+              <span />
+            ) : onArtistLink ? (
+              <NameLink
+                kind="artist"
+                name={node.artist}
+                onGo={onArtistLink}
+                className="text-[12px] text-faint truncate hover:text-dim hover:underline underline-offset-2"
+              />
+            ) : (
+              <div className="text-[12px] text-faint truncate">{node.artist}</div>
             )}
+            {badge && <CardBadge label={badge} tip={badgeTip} />}
           </div>
         )}
       </div>
@@ -394,7 +611,7 @@ export function ContainerRow({
           onClick={onMenu}
           className={cx(
             "p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-all",
-            menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+            menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
           )}
         >
           <MoreHorizontal size={14} />

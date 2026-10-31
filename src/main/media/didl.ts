@@ -215,7 +215,7 @@ function formatOf(res: Record<string, unknown> | undefined): MediaFormat | null 
 }
 
 /**
- * NODE RULE file-disc (MinimServer, 0.12.0-rc.3, Malcolm's box sets): a multi-disc album arrives
+ * NODE RULE file-disc (MinimServer, 0.12.0-rc.3, a user's box sets): a multi-disc album arrives
  * with per-disc track numbers and no disc ("Close Your Eyes" is track 11 twice on Songbooks+),
  * and MinimServer's file URL ends with the file's own name, which a common naming gives the disc:
  * ".../CD05 .../5-11 Close Your Eyes.flac" (MinimServer escapes as *XX, so *20 is a space). Read
