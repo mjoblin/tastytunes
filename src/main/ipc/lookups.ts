@@ -24,6 +24,7 @@ import {
 } from "../data/artistChoices";
 import { fetchArtistImages, fetchArtistInfo, knownArtistImage } from "../lookups/artistInfo";
 import { checkFanartKey, fetchFanartPhotos } from "../lookups/fanart";
+import { keepChoiceCopy } from "../lookups/choiceCopies";
 import { fetchCommonsPhotos, fetchWikimediaSizes, wikimediaFile } from "../lookups/commons";
 import { artThumbsStats, clearArtThumbs } from "../lookups/artThumbs";
 import { fetchCoverArt } from "../lookups/coverArt";
@@ -79,15 +80,17 @@ export function registerLookupsIpc(): void {
   // THE CHOSEN PICTURES (0.13.0 round 7; data/artistChoices), every one in one answer: a window
   // holds them (lib/artistPictures), so the artist page draws its choice first and an artist's
   // menu anywhere knows whether to offer the reset; the chooser offers the article's images,
-  // the artist's covers and a file. A Wikipedia image
-  // is drawn only with the artist lookups on ("off = no requests, ever"), so with them off the
-  // usual picture shows and the choice waits; a cover or a file shows either way.
+  // the artist's covers and a file. A picture from the web is drawn only with the artist lookups
+  // on ("off = no requests, ever") until its copy is kept (0.14.0), so with them off the usual
+  // picture shows and the choice waits; a copy, a cover or a file shows either way.
   handle(IPC.artistChoices, () => {
     const photos = getSettings().artistInfo;
     const pools = mediaIndex.pools();
     const artists = artistIndex(pools);
     const out: Record<string, ChosenPicture> = {};
     for (const k of choiceKeys()) {
+      // a choice made before its copy was kept gets one, in the background (lookups/choiceCopies)
+      void keepChoiceCopy(k, { pools, photos, streamer: connectedHost() });
       const c = chosen(k, pools, photos);
       // a reset brings back the server's own picture first, then the photo (artistPictures)
       if (c) out[k] = { ...c, photoAfter: photos && !artists.get(k)?.own && !!knownArtistImage(k) };
@@ -134,6 +137,12 @@ export function registerLookupsIpc(): void {
       if (!(await offeredImages(name)).includes(choice.url)) return false;
     }
     setChoice(name, choice);
+    // the copy it draws from, kept in the background: the address draws until it is there
+    void keepChoiceCopy(name, {
+      pools: mediaIndex.pools(),
+      photos: getSettings().artistInfo,
+      streamer: connectedHost(),
+    });
     return true;
   });
   // the artist page's facts line: the lens's counts, from the ready indexes
@@ -241,15 +250,16 @@ export function registerLookupsIpc(): void {
   });
 }
 
-/** An artist's chosen picture as resolveChoice finds it, a Wikipedia image only with the lookups
- *  on; null with no choice (or one waiting for the lookups). */
+/** An artist's chosen picture as resolveChoice finds it, a picture from the web only with the
+ *  lookups on or its copy kept (drawn from the copy, it asks nothing); null with no choice (or
+ *  one waiting for the lookups). */
 function chosen(
   name: string,
   pools: MediaIndexPools[],
   photos: boolean,
-): { kind: ArtistChoice["kind"]; url: string } | null {
+): { kind: ArtistChoice["kind"]; url: string; offered: string } | null {
   const c = resolveChoice(name, pools);
-  return c && (c.kind !== "image" || photos) ? c : null;
+  return c && (c.kind !== "image" || photos || c.url !== c.offered) ? c : null;
 }
 
 const chosenPicture = (name: string, pools: MediaIndexPools[], photos: boolean): string | null =>

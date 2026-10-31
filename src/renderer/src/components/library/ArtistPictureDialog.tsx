@@ -113,8 +113,9 @@ export function ArtistPictureDialog({
   onClose(): void;
   /** The covers of the artist's albums, each once. */
   covers: readonly CoverOffer[];
-  /** The picture chosen now, so its tile starts selected. */
-  current: { kind: ArtistChoice["kind"]; url: string } | null;
+  /** The picture chosen now: the address it was offered at, so its tile starts selected, and
+   *  the one it draws from (its kept copy, 0.14.0). */
+  current: { kind: ArtistChoice["kind"]; url: string; drawn: string } | null;
 }): React.JSX.Element {
   const lookups = useStore((s) => s.settings.artistInfo);
   const jumpToSettingsTab = useStore((s) => s.jumpToSettingsTab);
@@ -459,7 +460,9 @@ export function ArtistPictureDialog({
               </p>
             ) : selected ? (
               <Chosen
-                url={pick?.url ?? selected}
+                url={
+                  pick?.url ?? (selected === currentUrl ? (current?.drawn ?? selected) : selected)
+                }
                 current={selected === currentUrl}
                 // the picture chosen now, before its source answers, or after its source stopped
                 // offering it: still the current one, its source unsaid
@@ -778,14 +781,14 @@ export function ArtistPictureHost(): React.JSX.Element {
     () => own ?? coverOffers(index.artists.find((a) => a.key === lc(name))?.albums ?? []),
     [own, index, name],
   );
-  const current = useArtistChoice(name) ?? null;
+  const chosen = useArtistChoice(name) ?? null;
   return (
     <ArtistPictureDialog
       name={name}
       open={chooser != null}
       onClose={() => setPictureChooser(null)}
       covers={covers}
-      current={current}
+      current={chosen && { kind: chosen.kind, url: chosen.offered, drawn: chosen.url }}
     />
   );
 }

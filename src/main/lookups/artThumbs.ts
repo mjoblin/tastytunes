@@ -184,6 +184,16 @@ export async function fetchOrigin(
   }
 }
 
+/** An origin picture fetched in turn with the thumbnails' (the streamer's own art server one
+ *  picture at a time, the rest a few at once): a chosen picture's copy (lookups/choiceCopies). */
+export function fetchOriginInTurn(
+  url: string,
+  trusted: (hostname: string) => boolean,
+  device: boolean,
+): Promise<{ raw: Buffer; type: string } | null> {
+  return gate(() => fetchOrigin(url, trusted), device);
+}
+
 /** Every tier of one origin picture, made from one fetch and stored. */
 function makeAll(
   key: string,
