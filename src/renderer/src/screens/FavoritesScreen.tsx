@@ -46,7 +46,7 @@ import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { cx, matchesFilter } from "@/lib/format";
 import { favoriteAct, favoriteHasRoute, type FavoriteActResult } from "@/lib/favorites";
 import { flashTarget } from "@/lib/scroll";
-import { playingStationName } from "@/lib/radio";
+import { playingStationName, stationMenuItems } from "@/lib/radio";
 import { useStationTuning } from "@/hooks/useStationTuning";
 import { ScreenTitle, GAP_BETWEEN } from "@/components/chrome/Chrome";
 import { useQueueSourceActive } from "@/hooks/useQueueSourceActive";
@@ -311,6 +311,12 @@ export function FavoritesScreen(): React.JSX.Element {
   // ------------------------------------------------------------------- menus
 
   const [menu, setMenu] = useState<{ fav: FavoriteMedia; x: number; y: number } | null>(null);
+  // a station's menu, its heart (lib/radio stationMenuItems): "." from the keyboard, a right-click
+  const [stationMenu, setStationMenu] = useState<{
+    station: FavoriteStation;
+    x: number;
+    y: number;
+  } | null>(null);
   const [playlistFor, setPlaylistFor] = useState<{
     fav: FavoriteMedia;
     x: number;
@@ -436,6 +442,10 @@ export function FavoritesScreen(): React.JSX.Element {
                 label="Stations"
                 count={shownStations.length}
                 onEnter={(_i, el) => el?.click()}
+                onMenu={(i, el) => {
+                  const st = shownStations[i];
+                  if (st) setStationMenu({ station: st, ...menuAt(keyedEvent(el)) });
+                }}
                 className="space-y-1.5 max-w-2xl"
               >
                 {(item) =>
@@ -460,6 +470,10 @@ export function FavoritesScreen(): React.JSX.Element {
                           })
                         }
                         onHeart={() => toggleHeart(st)}
+                        onMenu={(e) => {
+                          e.preventDefault();
+                          setStationMenu({ station: st, ...menuAt(e) });
+                        }}
                       />
                     );
                   })
@@ -636,6 +650,17 @@ export function FavoritesScreen(): React.JSX.Element {
         </div>
       )}
 
+      {stationMenu && (
+        <RowMenu
+          title={stationMenu.station.name}
+          at={{ x: stationMenu.x, y: stationMenu.y }}
+          onClose={() => setStationMenu(null)}
+          items={stationMenuItems({
+            favorited: activeKeys.has(favoriteKey(stationMenu.station)),
+            onHeart: () => toggleHeart(stationMenu.station),
+          })}
+        />
+      )}
       {menu && (
         <RowMenu
           title={menu.fav.title}
@@ -704,6 +729,7 @@ function StationFavRow({
   tuning,
   onPlay,
   onHeart,
+  onMenu,
   item,
 }: {
   /** In the keyed list: the row's id and index. */
@@ -714,6 +740,8 @@ function StationFavRow({
   tuning: boolean;
   onPlay(): void;
   onHeart(): void;
+  /** Its More menu, the heart (a right-click, or "." in the keyed list). */
+  onMenu(e: React.MouseEvent): void;
 }): React.JSX.Element {
   // MediaRow carries the whole station treatment (tuning half-light, inline
   // eqbars); a soft-removed station dims and, like a soft-removed track, needs
@@ -734,6 +762,7 @@ function StationFavRow({
         ) : undefined
       }
       onClick={() => onPlay()}
+      onContextMenu={onMenu}
       actions={<RowHeart favorited={active} held onHeart={onHeart} />}
     />
   );

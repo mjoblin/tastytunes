@@ -83,7 +83,8 @@ import { useIndexDoors } from "@/components/library/useIndexDoors";
 import { usePlayingMatch } from "@/components/library/usePlayingMatch";
 import { useQueueMatch } from "@/components/library/useQueueMatch";
 import { useWindowedList } from "@/hooks/useWindowedList";
-import type { ListItemAttrs } from "@/hooks/useListKeys";
+import { ListKeysContext, useListKeys, type ListItemAttrs } from "@/hooks/useListKeys";
+import { searchStep, type SearchSpot } from "@/components/library/searchKeys";
 import { KeyedList } from "@/components/controls/KeyedList";
 import { keyedEvent } from "@/lib/menuAt";
 import { Lru } from "@/lib/lru";
@@ -1209,6 +1210,59 @@ export function LibraryScreen(): React.JSX.Element {
     overscan: 6,
     enabled: searchLines.length > 80,
   });
+  // FROM THE KEYBOARD (0.14.0, his K1 to K6): the search results one Tab stop across their
+  // windowed lines, a kind's cards a grid and its rows a column (components/library/searchKeys);
+  // Enter opens a result or plays a track as its click does, "." its More menu
+  const { searchSpots, firstOfLine } = useMemo(() => {
+    const spots: Array<SearchSpot & { node: MediaNode; list: MediaNode[] | null }> = [];
+    const first: number[] = [];
+    let section = -1;
+    searchLines.forEach((l, line) => {
+      first.push(spots.length);
+      if ("text" in l) section++;
+      else if ("nodes" in l)
+        l.nodes.forEach((node, col) =>
+          spots.push({ line, col, card: true, section, node, list: null }),
+        );
+      else if ("node" in l)
+        spots.push({
+          line,
+          col: 0,
+          card: false,
+          section,
+          node: l.node,
+          list: l.kind === "track" ? l.list : null,
+        });
+    });
+    return { searchSpots: spots, firstOfLine: first };
+  }, [searchLines]);
+  const searchKeys = useListKeys({
+    count: searchSpots.length,
+    step: (key, at) => searchStep(key, at, searchSpots),
+    onEnter: (i, el) => {
+      const r = searchSpots[i];
+      if (!r) return;
+      if (!r.list) enter(r.node);
+      else if (!trackRowClick(r.node, keyedEvent(el))) playTrack(r.node, el);
+    },
+    onMenu: (i, el) => {
+      const r = searchSpots[i];
+      if (r) openMenu(r.node, keyedEvent(el), r.list ?? undefined);
+    },
+    reveal: (i) => {
+      const r = searchSpots[i];
+      const sc = scrollRef.current;
+      if (r && sc) sc.scrollTop = Math.max(0, searchWin.offsetOf(r.line) - sc.clientHeight / 3);
+    },
+  });
+  const searchKeysRef = searchKeys.container.ref;
+  const searchListRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      searchBodyRef(el);
+      searchKeysRef(el);
+    },
+    [searchBodyRef, searchKeysRef],
+  );
 
   const crossItemCount = crossState
     ? crossState.groups.reduce((acc, g) => acc + g.items.length, 0)
@@ -1580,8 +1634,10 @@ export function LibraryScreen(): React.JSX.Element {
   );
 
   /** One line of the windowed search results; its spacing lives inside it (see searchLines). */
-  const searchLine = (line: SearchLine): React.JSX.Element => {
+  const searchLine = (line: SearchLine, li: number): React.JSX.Element => {
     const attrs = { "data-search-line": "", "data-win-kind": line.kind };
+    // the line's first result in the keyed list (searchSpots)
+    const at = firstOfLine[li];
     if ("group" in line) {
       const src = servers?.find((x) => x.udn === line.group.udn);
       return (
@@ -1627,7 +1683,7 @@ export function LibraryScreen(): React.JSX.Element {
             paddingTop: line.kind === "cards0" ? 8 : presetGap,
           }}
         >
-          {line.nodes.map((node) => containerItem(node))}
+          {line.nodes.map((node, col) => containerItem(node, searchKeys.item(at + col)))}
         </div>
       );
     // a row: its divider is its own top border, transparent on a section's first
@@ -1638,8 +1694,12 @@ export function LibraryScreen(): React.JSX.Element {
         className={cx("-mx-2 border-t", line.index === 0 ? "border-transparent" : "border-edge/50")}
       >
         {line.kind === "crow"
-          ? containerItem(line.node)
-          : trackRow(line.node, line.list, line.index, { showArt: true, links: true })}
+          ? containerItem(line.node, searchKeys.item(at))
+          : trackRow(line.node, line.list, line.index, {
+              showArt: true,
+              links: true,
+              item: searchKeys.item(at),
+            })}
       </div>
     );
   };
@@ -2069,10 +2129,20 @@ export function LibraryScreen(): React.JSX.Element {
         {((!atRoot && state === "ready" && searchMode && searchState) ||
           (crossMode && crossState)) &&
           searchLines.length > 0 && (
-            <div ref={searchBodyRef} data-search-list style={{ overflowAnchor: "none" }}>
-              {searchWin.padTop > 0 && <div style={{ height: searchWin.padTop }} />}
-              {searchLines.slice(searchWin.first, searchWin.last + 1).map(searchLine)}
-              {searchWin.padBottom > 0 && <div style={{ height: searchWin.padBottom }} />}
+            <div
+              {...searchKeys.container}
+              ref={searchListRef}
+              aria-label="Search results"
+              data-search-list
+              style={{ overflowAnchor: "none" }}
+            >
+              <ListKeysContext.Provider value={true}>
+                {searchWin.padTop > 0 && <div style={{ height: searchWin.padTop }} />}
+                {searchLines
+                  .slice(searchWin.first, searchWin.last + 1)
+                  .map((l, k) => searchLine(l, searchWin.first + k))}
+                {searchWin.padBottom > 0 && <div style={{ height: searchWin.padBottom }} />}
+              </ListKeysContext.Provider>
             </div>
           )}
 

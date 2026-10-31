@@ -5,10 +5,13 @@ import type { Favorite } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { toggleFavorite } from "@/lib/favorites";
-import { playingStationName, RADIO_DEBOUNCE_MS } from "@/lib/radio";
+import { playingStationName, RADIO_DEBOUNCE_MS, stationMenuItems } from "@/lib/radio";
 import { useStationTuning } from "@/hooks/useStationTuning";
 import { EmptyState } from "@/components/chrome/EmptyState";
 import { StationRow } from "@/components/media/StationRow";
+import { RowMenu } from "@/components/media/RowMenu";
+import { menuAt, openMenuOn } from "@/lib/menuAt";
+import { ListKeysContext, useListKeys } from "@/hooks/useListKeys";
 import { PresetSavePanel } from "@/components/library/LibraryMenus";
 import { PopoverCard } from "@/components/chrome/Overlay";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
@@ -101,6 +104,12 @@ export function RadioScreen(): React.JSX.Element {
     null,
   );
   const scrollRef = useScrollMemory("radio");
+  const [menu, setMenu] = useState<{
+    title: string;
+    x: number;
+    y: number;
+    items: Array<{ label: string; run(): void }>;
+  } | null>(null);
 
   // The default rail, fetched once per app session.
   const loadTop = async (): Promise<void> => {
@@ -215,6 +224,14 @@ export function RadioScreen(): React.JSX.Element {
 
   const shown =
     results ?? (cat === FAV_CAT ? favStations.map(favAsStation) : cat != null ? catStations : top);
+  // FROM THE KEYBOARD (0.14.0, his K1 to K6): the stations one Tab stop, Enter plays one as its
+  // click does, "." its More menu (its heart, and Save to preset on the playing one)
+  const keys = useListKeys({
+    count: shown?.length ?? 0,
+    onEnter: (_i, el) => el?.click(),
+    onMenu: (_i, el) => openMenuOn(el),
+  });
+
   const heading =
     results != null
       ? "Search results"
@@ -340,30 +357,48 @@ export function RadioScreen(): React.JSX.Element {
                 {results != null ? `No stations for “${query}”` : "No stations here right now."}
               </div>
             )}
-            <div className="space-y-1.5">
-              {shown.map((st) => {
-                const playing = playingName != null && st.name.trim().toLowerCase() === playingName;
-                return (
-                  <StationRow
-                    key={st.uuid}
-                    station={st}
-                    playing={playing}
-                    tuning={!playing && tuningUrl === st.url}
-                    favorited={favUrls.has(st.url)}
-                    onHeart={() =>
-                      void toggleFavorite({
-                        kind: "station",
-                        name: st.name,
-                        url: st.url,
-                        favicon: st.favicon,
-                        radioBrowserUuid: st.uuid !== st.url ? st.uuid : null,
-                      })
-                    }
-                    onPlay={() => void play(st)}
-                    onSave={(x, y) => setSaveFor({ station: st, x, y })}
-                  />
-                );
-              })}
+            <div {...keys.container} aria-label={heading} className="space-y-1.5">
+              <ListKeysContext.Provider value={true}>
+                {shown.map((st, i) => {
+                  const playing =
+                    playingName != null && st.name.trim().toLowerCase() === playingName;
+                  const favorited = favUrls.has(st.url);
+                  const heart = (): void =>
+                    void toggleFavorite({
+                      kind: "station",
+                      name: st.name,
+                      url: st.url,
+                      favicon: st.favicon,
+                      radioBrowserUuid: st.uuid !== st.url ? st.uuid : null,
+                    });
+                  return (
+                    <StationRow
+                      key={st.uuid}
+                      item={keys.item(i)}
+                      station={st}
+                      playing={playing}
+                      tuning={!playing && tuningUrl === st.url}
+                      favorited={favorited}
+                      onHeart={heart}
+                      onPlay={() => void play(st)}
+                      onSave={(x, y) => setSaveFor({ station: st, x, y })}
+                      onMenu={(e) => {
+                        e.preventDefault();
+                        const at = menuAt(e);
+                        setMenu({
+                          title: st.name,
+                          ...at,
+                          items: stationMenuItems({
+                            favorited,
+                            onHeart: heart,
+                            onSave: playing ? () => setSaveFor({ station: st, ...at }) : undefined,
+                          }),
+                        });
+                      }}
+                    />
+                  );
+                })}
+              </ListKeysContext.Provider>
             </div>
             <div className="microlabel mt-6 px-1">
               stations from radio-browser.info{FACT_SEP}community directory
@@ -372,6 +407,14 @@ export function RadioScreen(): React.JSX.Element {
         </div>
       )}
 
+      {menu && (
+        <RowMenu
+          title={menu.title}
+          at={{ x: menu.x, y: menu.y }}
+          onClose={() => setMenu(null)}
+          items={menu.items}
+        />
+      )}
       {saveFor && (
         <SaveStationPopover
           x={saveFor.x}

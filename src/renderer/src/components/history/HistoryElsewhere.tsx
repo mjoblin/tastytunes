@@ -19,7 +19,8 @@ import { cx, fmtCount, fmtRelative, matchesFilter } from "@/lib/format";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { Lru } from "@/lib/lru";
 import { ArtistAbout } from "@/components/media/ArtistAbout";
-import { menuAt } from "@/lib/menuAt";
+import { menuAt, openMenuOn } from "@/lib/menuAt";
+import { ListKeysContext, useListKeys, type ListItemAttrs } from "@/hooks/useListKeys";
 
 /**
  * The History screen's ELSEWHERE (0.8.0): the artists the record met away from
@@ -241,6 +242,29 @@ export function HistoryElsewhere({
   }, [pool, filter, sort, reversed]);
   useEffect(() => onCounts(artists.length, pool.length), [onCounts, artists.length, pool.length]);
 
+  // FROM THE KEYBOARD (0.14.0, his K1 to K6): the list one Tab stop; up and down through the
+  // artists and an open artist's tracks, as the Timeline's sessions and their plays; Enter opens
+  // or closes an artist, or opens a track the library holds, as its click does; "." the row's
+  // More menu. An open artist's About links stay Tab stops of their own.
+  const lines = useMemo(
+    () =>
+      artists.flatMap((a) => [
+        a.key,
+        ...(open.includes(a.key) ? a.tracks.map((t) => `${a.key}|${t.key}`) : []),
+      ]),
+    [artists, open],
+  );
+  const lineOf = useMemo(() => new Map(lines.map((k, i) => [k, i])), [lines]);
+  const keys = useListKeys({
+    count: lines.length,
+    onEnter: (_i, el) => el?.click(),
+    onMenu: (_i, el) => openMenuOn(el),
+  });
+  const itemFor = (key: string): ListItemAttrs | undefined => {
+    const i = lineOf.get(key);
+    return i == null ? undefined : keys.item(i);
+  };
+
   const [menu, setMenu] = useState<{
     title: string;
     x: number;
@@ -397,19 +421,22 @@ export function HistoryElsewhere({
                   : "Nothing heard away from your library yet."}
             </div>
           ) : (
-            <div className="space-y-1.5">
-              {artists.map((a) => (
-                <ArtistRow
-                  key={a.key}
-                  a={a}
-                  now={now}
-                  open={open.includes(a.key)}
-                  onToggle={() => toggleOpen(a.key)}
-                  menuFor={menu?.key ?? null}
-                  onMenu={(e) => artistMenu(e, a)}
-                  onTrackMenu={trackMenu}
-                />
-              ))}
+            <div {...keys.container} aria-label="Heard elsewhere" className="space-y-1.5">
+              <ListKeysContext.Provider value={true}>
+                {artists.map((a) => (
+                  <ArtistRow
+                    key={a.key}
+                    a={a}
+                    now={now}
+                    open={open.includes(a.key)}
+                    onToggle={() => toggleOpen(a.key)}
+                    menuFor={menu?.key ?? null}
+                    onMenu={(e) => artistMenu(e, a)}
+                    onTrackMenu={trackMenu}
+                    itemFor={itemFor}
+                  />
+                ))}
+              </ListKeysContext.Provider>
             </div>
           )}
         </div>
@@ -459,6 +486,7 @@ function ArtistRow({
   menuFor,
   onMenu,
   onTrackMenu,
+  itemFor,
 }: {
   a: HeardArtist;
   now: number;
@@ -468,6 +496,8 @@ function ArtistRow({
   menuFor: string | null;
   onMenu(e: React.MouseEvent): void;
   onTrackMenu(e: React.MouseEvent, t: HeardTrack): void;
+  /** In the keyed list: the artist's row (its key) or a track's (artist|track). */
+  itemFor(key: string): ListItemAttrs | undefined;
 }): React.JSX.Element {
   const ref = useRef<HTMLDivElement | null>(null);
   // the count is in the key: the record loads a year at a time, and a row that
@@ -487,6 +517,7 @@ function ArtistRow({
   return (
     <div ref={ref} data-elsewhere-artist={a.key} data-open={open ? "" : undefined}>
       <MediaRow
+        item={itemFor(a.key)}
         attrs={{ "data-elsewhere-row": "artist", "data-owned": a.inLibrary ? "" : undefined }}
         held={menuFor === a.key}
         title={a.name}
@@ -533,6 +564,7 @@ function ArtistRow({
             {a.tracks.map((t) => (
               <TrackRow
                 key={t.key}
+                item={itemFor(`${a.key}|${t.key}`)}
                 t={t}
                 now={now}
                 held={menuFor === t.key}
@@ -547,11 +579,13 @@ function ArtistRow({
 }
 
 function TrackRow({
+  item,
   t,
   now,
   held,
   onMenu,
 }: {
+  item?: ListItemAttrs;
   t: HeardTrack;
   now: number;
   held: boolean;
@@ -565,6 +599,7 @@ function TrackRow({
   return (
     <div ref={ref}>
       <MediaRow
+        item={item}
         attrs={{ "data-elsewhere-row": "track", "data-owned": t.owned ? "" : undefined }}
         held={held}
         title={t.title}

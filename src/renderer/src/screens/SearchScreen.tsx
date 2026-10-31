@@ -34,7 +34,7 @@ import {
 import { RowAction } from "@/components/media/RowAction";
 import { RowHeart } from "@/components/media/RowHeart";
 import { Segmented } from "@/components/controls/Segmented";
-import { playStation, playingStationName, RADIO_DEBOUNCE_MS } from "@/lib/radio";
+import { playStation, playingStationName, RADIO_DEBOUNCE_MS, stationMenuItems } from "@/lib/radio";
 import { useStationTuning } from "@/hooks/useStationTuning";
 import { useLitPresets } from "@/hooks/useLitPresets";
 import { cx, matchesFilter } from "@/lib/format";
@@ -736,6 +736,15 @@ export function SearchScreen(): React.JSX.Element {
       rows: (radio ?? []).map((st) => {
         const playing =
           radioPlayingName != null && st.name.trim().toLowerCase() === radioPlayingName;
+        const favorited = favStationUrls.has(st.url);
+        const heart = (): void =>
+          void toggleFavorite({
+            kind: "station",
+            name: st.name,
+            url: st.url,
+            favicon: st.favicon,
+            radioBrowserUuid: st.uuid !== st.url ? st.uuid : null,
+          });
         return {
           key: st.uuid,
           sortKey: st.name,
@@ -744,17 +753,19 @@ export function SearchScreen(): React.JSX.Element {
               station={st}
               playing={playing}
               tuning={!playing && tuningUrl === st.url}
-              favorited={favStationUrls.has(st.url)}
-              onHeart={() =>
-                void toggleFavorite({
-                  kind: "station",
-                  name: st.name,
-                  url: st.url,
-                  favicon: st.favicon,
-                  radioBrowserUuid: st.uuid !== st.url ? st.uuid : null,
-                })
-              }
+              favorited={favorited}
+              onHeart={heart}
               onPlay={() => void playRadio(st)}
+              // its heart from the keyboard ("."), whose button the results list keeps out of
+              // the Tab order
+              onMenu={(e) => {
+                e.preventDefault();
+                setRowMenu({
+                  title: st.name,
+                  ...menuAt(e),
+                  items: stationMenuItems({ favorited, onHeart: heart }),
+                });
+              }}
               // no onSave: save-to-preset belongs to the Radio screen, where
               // the panel has room — omitting the prop omits the button
             />

@@ -24,7 +24,8 @@ import { openAlbumNode, playAlbumNode } from "@/lib/mediaActions";
 import { cx, fmtCount } from "@/lib/format";
 import { scrollToWithContext } from "@/lib/scroll";
 import { Chip, GAP_WITHIN } from "@/components/chrome/Chrome";
-import { menuAt } from "@/lib/menuAt";
+import { keyedEvent, menuAt } from "@/lib/menuAt";
+import { ListKeysContext, useListKeys } from "@/hooks/useListKeys";
 
 /**
  * The History screen's REDISCOVER (0.8.0): sections of albums worth coming back
@@ -515,6 +516,29 @@ function Section({
   /** What the next ask would reveal — the control says the true number. */
   const step = Math.min(remaining, columns * STEP_ROWS);
   const grown = rows > COLLAPSED_ROWS;
+  // FROM THE KEYBOARD (0.14.0, his K1 to K6): each section's grid one Tab stop, all four arrows,
+  // Enter opens the album as its click does, "." its More menu; Show more stays its own stop
+  const keys = useListKeys({
+    count: shown.length,
+    columns,
+    onEnter: (i) => {
+      const s = shown[i];
+      if (s) openAlbumNode(s.album);
+    },
+    onMenu: (i, el) => {
+      const s = shown[i];
+      if (s) onMenu(s.album, keyedEvent(el));
+    },
+  });
+  // one ref for the column count and the list, stable so neither reattaches on a render
+  const keysRef = keys.container.ref;
+  const gridKeysRef = useCallback(
+    (node: HTMLElement | null) => {
+      gridRef(node);
+      keysRef(node);
+    },
+    [gridRef, keysRef],
+  );
 
   return (
     <section data-rediscover-section={id}>
@@ -542,7 +566,9 @@ function Section({
               push the cards into the clip), and this box is then exactly the
               width its columns are measured from */}
           <div
-            ref={gridRef}
+            {...keys.container}
+            ref={gridKeysRef}
+            aria-label={title}
             className="mt-2 grid"
             style={{
               gap,
@@ -551,22 +577,25 @@ function Section({
                 : `repeat(auto-fill, ${cardSize}px)`,
             }}
           >
-            {shown.map((s) => {
-              const key = `${s.album.serverUdn}|${s.album.id}`;
-              return (
-                <ContainerCard
-                  key={key}
-                  node={s.album}
-                  playing={false}
-                  menuOpen={menuKey === key}
-                  note={note?.(s)}
-                  details={detailsOf?.(s.album)}
-                  onEnter={() => openAlbumNode(s.album)}
-                  onPlay={() => void playAlbumNode(s.album)}
-                  onMenu={(e) => onMenu(s.album, e)}
-                />
-              );
-            })}
+            <ListKeysContext.Provider value={true}>
+              {shown.map((s, i) => {
+                const key = `${s.album.serverUdn}|${s.album.id}`;
+                return (
+                  <ContainerCard
+                    key={key}
+                    item={keys.item(i)}
+                    node={s.album}
+                    playing={false}
+                    menuOpen={menuKey === key}
+                    note={note?.(s)}
+                    details={detailsOf?.(s.album)}
+                    onEnter={() => openAlbumNode(s.album)}
+                    onPlay={() => void playAlbumNode(s.album)}
+                    onMenu={(e) => onMenu(s.album, e)}
+                  />
+                );
+              })}
+            </ListKeysContext.Provider>
           </div>
           {(remaining > 0 || grown) && (
             // mt-4: a hovered card in the last row lifts and glows over what sits

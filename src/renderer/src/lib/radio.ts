@@ -63,3 +63,20 @@ export async function playStation(station: PlayableStation): Promise<boolean> {
   });
   return true;
 }
+
+/**
+ * A station's More menu (0.14.0, for the keyboard's "." and a right-click, wherever a station is
+ * a row): its heart, and on the playing station the save to a preset, the two buttons a keyed
+ * list takes out of the Tab order.
+ */
+export function stationMenuItems(o: {
+  favorited: boolean;
+  onHeart(): void;
+  /** The playing station on the Radio screen, the one place the save is offered. */
+  onSave?: () => void;
+}): Array<{ label: string; run(): void }> {
+  return [
+    { label: o.favorited ? "Remove from favorites" : "Add to favorites", run: o.onHeart },
+    ...(o.onSave ? [{ label: "Save to preset…", run: o.onSave }] : []),
+  ];
+}

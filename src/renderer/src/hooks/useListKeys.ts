@@ -51,6 +51,10 @@ export interface ListKeysOptions {
   /** A card grid's columns: all four arrows move. Omit for rows; a function is asked at the key
    *  press (a grid that lays itself out with auto-fill). */
   columns?: number | (() => number);
+  /** A list whose items aren't one grid or one column (the Library's search results, card rows
+   *  between plain rows): the item an arrow, Home or End goes to from `at`, or null to leave the
+   *  key to the app. In place of `columns`. */
+  step?(key: string, at: number): number | null;
   /** Enter: what a click on the item does. */
   onEnter?(i: number, el: HTMLElement | null): void;
   /** ".", the menu key or Shift+F10: the item's More menu, anchored on it. */
@@ -140,6 +144,15 @@ export function useListKeys(o: ListKeysOptions): ListKeys {
   const itemEl = (i: number): HTMLElement | null =>
     el.current?.querySelector<HTMLElement>(`[data-list-item="${i}"]`) ?? null;
 
+  // Content between the items is its own (Search's "+3 more" between its sections, an artist's
+  // About links under its row in History's Elsewhere): a key there was pressing that button,
+  // and taking Enter acted on the list's current item instead (found 2026-10-31), so the list
+  // reads only its own focus and its items'
+  const inItem = (n: Node | null): boolean => {
+    const at = n instanceof Element ? n.closest("[data-list-item]") : null;
+    return at != null && el.current?.contains(at) === true;
+  };
+
   const setCurrent = useCallback((i: number) => setCurrentState(i), []);
 
   // the current item kept in view while the list has the keyboard, its ring clear of the edge; a
@@ -172,6 +185,7 @@ export function useListKeys(o: ListKeysOptions): ListKeys {
     // React, and is the menu's), never from a text box
     const t = e.target as HTMLElement;
     if (!el.current?.contains(t) || t.matches("input, textarea, [contenteditable]")) return;
+    if (t !== el.current && !inItem(t)) return;
     const { count } = opts.current;
     const columns =
       typeof opts.current.columns === "function" ? opts.current.columns() : opts.current.columns;
@@ -224,6 +238,13 @@ export function useListKeys(o: ListKeysOptions): ListKeys {
       opts.current.onDelete(at);
       return;
     }
+    if (opts.current.step) {
+      const next = opts.current.step(e.key, at);
+      if (next == null) return;
+      take();
+      setCurrentState(next);
+      return;
+    }
     if (!columns && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
       const side = e.key === "ArrowLeft" ? opts.current.onLeft : opts.current.onRight;
       if (!side) return;
@@ -253,7 +274,8 @@ export function useListKeys(o: ListKeysOptions): ListKeys {
 
   const onBlur = (e: React.FocusEvent): void => {
     const next = e.relatedTarget as Node | null;
-    if (next && e.currentTarget.contains(next)) return;
+    // still on the list's own (a row clicked), not the content between its items
+    if (next && e.currentTarget.contains(next) && inItem(next)) return;
     setActive(false);
     // Option let go elsewhere: the move still lands as one change
     if (moving.current) {
