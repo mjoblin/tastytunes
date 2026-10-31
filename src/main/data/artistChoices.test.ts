@@ -7,6 +7,7 @@ import {
   choiceOf,
   copyKept,
   isArtistChoice,
+  keepAsItCame,
   pickedPath,
   pickedUrl,
   resolveChoice,
@@ -164,6 +165,17 @@ describe("a chosen picture's copy (0.14.0)", () => {
     writeFileSync(join(dir(), FILE), "jpeg");
     setChoice("Band", { kind: "file", file: FILE });
     expect(setCopy("Band", choiceOf("Band")?.at ?? 0, COPY)).toBe(false);
+  });
+
+  it("keeps a picture nativeImage can't read as it came, when the windows draw it", () => {
+    const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="6" height="6"/>');
+    const file = keepAsItCame(svg, "image/svg+xml");
+    expect(file).toMatch(/^[0-9a-f]{24}\.svg$/);
+    expect(pickedPath(file ?? "")).not.toBeNull();
+    expect(keepAsItCame(Buffer.from("RIFF"), "image/webp")).toMatch(/\.webp$/);
+    // not a picture the windows draw, or too large
+    expect(keepAsItCame(Buffer.from("x"), "image/tiff")).toBeNull();
+    expect(keepAsItCame(Buffer.alloc(3 * 1024 * 1024), "image/gif")).toBeNull();
   });
 
   it("goes back to the address once the copy is gone", () => {

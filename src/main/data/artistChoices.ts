@@ -33,8 +33,9 @@ const keyOf = (name: string): string => name.trim().toLowerCase();
 /** The folder the chosen picture files are copied into. */
 const pickedDir = (): string => join(app.getPath("userData"), "artist-pictures");
 
-/** A copied file's name: its bytes' hash, and its kind. */
-const FILE_NAME = /^[0-9a-f]{24}\.(jpg|png)$/;
+/** A copied file's name: its bytes' hash, and its kind (a WebP, GIF or SVG only as a chosen
+ *  picture's copy kept as it came: keepAsItCame). */
+const FILE_NAME = /^[0-9a-f]{24}\.(jpg|png|webp|gif|svg)$/;
 
 /** The address a copied file is drawn from (app/artProtocol serves it). */
 export const pickedUrl = (file: string): string => `${PICKED_ART}${file}`;
@@ -213,6 +214,28 @@ export async function pickPictureFile(
     extname(path).toLowerCase() === ".png",
   );
   return file ? { file, url: pickedUrl(file) } : "unreadable";
+}
+
+/** The pictures the windows draw that nativeImage doesn't read, kept as they came: their
+ *  files' kinds, by type. */
+const AS_IT_CAME: Record<string, string> = {
+  "image/webp": "webp",
+  "image/gif": "gif",
+  "image/svg+xml": "svg",
+};
+/** The largest picture kept as it came (the thumbnail cache's passthrough bound). */
+const AS_IT_CAME_MAX = 2 * 1024 * 1024;
+
+/** A chosen picture's copy kept as it came, for a picture the windows draw but nativeImage
+ *  can't read (a WebP or GIF cover, an SVG logo), within AS_IT_CAME_MAX: its file's name, or
+ *  null for anything else. */
+export function keepAsItCame(bytes: Buffer, type: string): string | null {
+  const ext = AS_IT_CAME[type];
+  if (!ext || bytes.length === 0 || bytes.length > AS_IT_CAME_MAX) return null;
+  const file = `${createHash("sha256").update(bytes).digest("hex").slice(0, 24)}.${ext}`;
+  mkdirSync(pickedDir(), { recursive: true });
+  writeFileSync(join(pickedDir(), file), bytes);
+  return file;
 }
 
 /** A picture copied into the folder, no larger than the page draws it, as a JPEG (a PNG keeps

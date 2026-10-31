@@ -4,6 +4,7 @@ import type { MediaIndexPools } from "@shared/model";
 import {
   choiceOf,
   copyKept,
+  keepAsItCame,
   keepPicture,
   PICKED_MAX,
   resolveChoice,
@@ -77,7 +78,11 @@ async function copy(name: string, at: number, offered: string, ctx: CopyContext)
     if (!url) continue;
     const got = await fetchOriginInTurn(url, trusted, device);
     if (!got) continue;
-    const file = keepPicture(nativeImage.createFromBuffer(got.raw), got.type === "image/png");
+    // a picture nativeImage can't read (a WebP or GIF cover, an SVG) is kept as it came
+    const img = nativeImage.createFromBuffer(got.raw);
+    const file = img.isEmpty()
+      ? keepAsItCame(got.raw, got.type)
+      : keepPicture(img, got.type === "image/png");
     if (file) return setCopy(name, at, file);
   }
   return false;
