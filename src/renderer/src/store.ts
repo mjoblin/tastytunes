@@ -158,7 +158,9 @@ export interface AnalysisProgress {
   /** albumDrKey of the album under the needle. */
   key: string;
   album: string;
-  done: number;
+  /** The track being measured, counted from 1, so the first reads "1/12" ("0/12" felt like
+   *  nothing had started, his look 2026-10-30); 0 until the first begins, and no count shows. */
+  at: number;
   /** 0 while the sweep is still counting (browse in flight). */
   total: number;
   /** Sweeps waiting behind this one (the queue is global). */

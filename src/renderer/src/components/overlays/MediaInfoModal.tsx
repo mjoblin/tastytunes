@@ -601,7 +601,7 @@ function MediaInfoBody({
           {sweeping ? (
             <div className="text-[11.5px] text-faint motion-safe:animate-pulse">
               analyzing
-              {progress != null && progress.total > 0 && ` ${progress.done}/${progress.total}`}…
+              {progress != null && progress.at > 0 && ` ${progress.at}/${progress.total}`}…
             </div>
           ) : albumComplete ? (
             <div className="text-[12.5px] text-dim">

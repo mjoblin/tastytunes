@@ -1678,8 +1678,8 @@ export function LibraryScreen(): React.JSX.Element {
                 ? `${analysisProgress.album.slice(0, 39)}…`
                 : analysisProgress.album}
               ”
-              {analysisProgress.total > 0 &&
-                `${FACT_SEP}${analysisProgress.done}/${analysisProgress.total}`}
+              {analysisProgress.at > 0 &&
+                `${FACT_SEP}${analysisProgress.at}/${analysisProgress.total}`}
               {analysisProgress.queued > 0 && `${FACT_SEP}+${analysisProgress.queued} queued`}
             </div>
           )}
