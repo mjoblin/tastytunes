@@ -610,7 +610,9 @@ function Tiles({
               aria-pressed={on}
               data-artist-picture-tile={kind}
               data-selected={on || undefined}
-              title={t.label}
+              // a cover's tooltip names its album; the others' would only repeat the tab and a
+              // place in it (his look, 2026-10-30), so only VoiceOver hears them
+              title={kind === "cover" ? t.label : undefined}
               onClick={() => onSelect(t.key)}
               onDoubleClick={() => onOpen(t)}
               className={cx(
