@@ -5,6 +5,7 @@ import { tt } from "@/api";
 import { useStore } from "@/store";
 import { ModalShell } from "@/components/chrome/Overlay";
 import { ConfirmActions } from "@/components/chrome/Confirm";
+import { CloseButton } from "@/components/controls/CloseButton";
 import { Segmented } from "@/components/controls/Segmented";
 import { ArtImage } from "@/components/media/ArtImage";
 import { artSrc } from "@/lib/artSrc";
@@ -297,7 +298,12 @@ export function ArtistPictureDialog({
       className="w-[42rem] max-w-[calc(100vw-3rem)] p-5"
     >
       <div data-artist-picture-dialog className="relative">
-        <div className="text-[13px] font-medium text-ink">Picture for {name}</div>
+        {/* the app's close X at the top right, beside Cancel (his ask, 2026-10-30); its margin
+            keeps the heading's line height, so nothing below moves */}
+        <div className="flex items-center gap-2">
+          <div className="min-w-0 flex-1 text-[13px] font-medium text-ink">Picture for {name}</div>
+          <CloseButton onClick={onClose} className="-my-1.5" />
+        </div>
         <div data-artist-picture-tabs className="mt-3">
           <Segmented<Source>
             modal
@@ -482,6 +488,7 @@ export function ArtistPictureDialog({
             saving={saving}
             onStep={setViewing}
             onBack={() => setViewing(null)}
+            onClose={onClose}
             onUse={(t) => {
               setSelected(t.key);
               commit(t);
@@ -655,6 +662,7 @@ function LargeView({
   saving,
   onStep,
   onBack,
+  onClose,
   onUse,
 }: {
   tile: Tile;
@@ -662,6 +670,8 @@ function LargeView({
   saving: boolean;
   onStep(t: Tile): void;
   onBack(): void;
+  /** The dialog's own close: the X stays where it was, and closes the dialog from here too. */
+  onClose(): void;
   onUse(t: Tile): void;
 }): React.JSX.Element {
   const at = tiles.findIndex((t) => t.key === tile.key);
@@ -693,6 +703,7 @@ function LargeView({
             {at + 1} of {tiles.length}
           </span>
         )}
+        <CloseButton onClick={onClose} className="-my-1.5" />
       </div>
       <div className="relative flex min-h-0 flex-1 items-center justify-center">
         <ArtImage
