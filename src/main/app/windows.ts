@@ -93,7 +93,7 @@ export function createWindow(): void {
     minWidth: MIN_WIDTH,
     minHeight: MIN_HEIGHT,
     show: false,
-    backgroundColor: "#0e0d0b",
+    backgroundColor: "#1c1a17",
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     trafficLightPosition: { x: 18, y: 18 },
     // The app carries its own chrome — on Windows/Linux the menu bar stays

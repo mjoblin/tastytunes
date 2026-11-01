@@ -73,12 +73,12 @@ function readTokens(): Tokens {
       : [240, 168, 72];
   const ink = v("--color-ink") || "#f4efe6";
   return {
-    bg: v("--color-bg") || "#0e0d0b",
-    panel: v("--color-panel") || "#151311",
+    bg: v("--color-bg") || "#1c1a17",
+    panel: v("--color-panel") || "#23201d",
     edge: v("--color-edge") || "rgb(255 255 255 / 0.08)",
     ink,
-    dim: v("--color-dim") || "#a69e90",
-    faint: v("--color-faint") || "#82786a",
+    dim: v("--color-dim") || "#b4ab9c",
+    faint: v("--color-faint") || "#8f8374",
     gold,
     inkRgb: ink.startsWith("#") ? hexToRgb(ink) : [244, 239, 230],
     display: v("--font-display") || '"Fraunces Variable", Georgia, serif',
