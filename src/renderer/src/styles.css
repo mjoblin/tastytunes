@@ -7,6 +7,9 @@
 /* and motion-reduce: its mirror (0.12.0-rc.3): Tailwind's own read only the media query, so with
    Motion off in Settings the Library's indexing spinners kept turning where the icon belongs */
 @custom-variant motion-reduce (&:where(:root.reduce-motion, :root.reduce-motion *));
+/* light: (0.14.0-rc.2): the theme resolves into a .light class on :root (hooks/useTheme), so what
+   only light mode draws says so where it is drawn, as motion-safe: follows Motion */
+@custom-variant light (&:where(:root.light, :root.light *));
 /* a reveal on keyboard focus: focus-visible once Tab has moved focus (lib/inputModality), never
    after a click and a hotkey; the lint rule focus-reveal keeps focus-visible: out of the app */
 @custom-variant focus-kbd (:root[data-keyboard-nav] &:focus-visible);
