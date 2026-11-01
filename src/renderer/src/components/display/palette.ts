@@ -44,8 +44,8 @@ export function readTokens(): Tokens {
     light,
     bg: get("--color-bg", light ? [242, 238, 230] : [28, 26, 23]),
     ink: get("--color-ink", light ? [36, 29, 18] : [244, 239, 230]),
-    dim: get("--color-dim", light ? [95, 87, 73] : [180, 171, 156]),
-    faint: get("--color-faint", light ? [115, 108, 92] : [143, 131, 116]),
+    dim: get("--color-dim", light ? [95, 87, 73] : [166, 158, 144]),
+    faint: get("--color-faint", light ? [115, 108, 92] : [130, 120, 106]),
     gold: get("--gold-rgb", light ? [178, 118, 16] : [240, 168, 72]),
   };
 }

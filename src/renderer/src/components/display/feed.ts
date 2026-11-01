@@ -84,8 +84,8 @@ export class SceneFeed {
     light: false,
     bg: [28, 26, 23],
     ink: [244, 239, 230],
-    dim: [180, 171, 156],
-    faint: [143, 131, 116],
+    dim: [166, 158, 144],
+    faint: [130, 120, 106],
     gold: [240, 168, 72],
     accent: [
       [240, 168, 72],
