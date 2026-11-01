@@ -73,8 +73,8 @@ function readTokens(): Tokens {
       : [240, 168, 72];
   const ink = v("--color-ink") || "#f4efe6";
   return {
-    bg: v("--color-bg") || "#1c1a17",
-    panel: v("--color-panel") || "#23201d",
+    bg: v("--color-bg") || "#12110f",
+    panel: v("--color-panel") || "#191715",
     edge: v("--color-edge") || "rgb(255 255 255 / 0.08)",
     ink,
     dim: v("--color-dim") || "#a69e90",

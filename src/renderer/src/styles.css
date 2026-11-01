@@ -153,15 +153,16 @@
      follows the user's display-font choice (font-wordmark utility). */
   --font-wordmark: "Fraunces Variable", Georgia, serif;
 
-  /* warm charcoal "faceplate" palette (dark is the default theme). Lifted from near-black
-     #0e0d0b (user call, 2026-10-31: it felt too dark overall, the album art's wash being the
-     default look), panel, raised and the playing tile by the same step. The text levels stay
-     where they were, set by their steps from each other rather than by their contrast on the
-     ground: in dark, elegance wins over the contrast floor (user call, 2026-10-31,
+  /* warm near-black "faceplate" palette (dark is the default theme). Lifted from #0e0d0b to
+     #12110f, where the navigation panel's tint sat over it (user call, 2026-11-01: the main area
+     matching the navigation panel as it was, after #1c1a17 read brighter than expected in the
+     installed app); panel, raised and the playing tile by the same step. The text levels
+     stay where they were, set by their steps from each other rather than by their contrast on
+     the ground: in dark, elegance wins over the contrast floor (user call, 2026-10-31,
      decisions/0016), and a dim lifted to hold its contrast read too close to the ink */
-  --color-bg: #1c1a17;
-  --color-panel: #23201d;
-  --color-raised: #2b2722;
+  --color-bg: #12110f;
+  --color-panel: #191715;
+  --color-raised: #211e1a;
   --color-edge: rgb(255 255 255 / 0.08);
   --color-edge2: rgb(255 255 255 / 0.16);
   --color-ink: #f4efe6;
@@ -177,7 +178,7 @@
   /* fixed gold for brand + "currently playing" — never tinted by album art */
   --color-gold: rgb(var(--gold-rgb));
   --color-golddim: rgb(var(--gold-rgb) / 0.16);
-  --color-goldtile: #403523; /* playing tile: lifted and warmed toward gold */
+  --color-goldtile: #362c1b; /* playing tile: lifted and warmed toward gold */
   --color-led: #67dd8b;
   /* triple form so alert can be used at partial alpha the way gold/amber are */
   --alert-rgb: 224 101 79;
