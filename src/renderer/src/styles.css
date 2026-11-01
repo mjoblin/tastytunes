@@ -153,26 +153,30 @@
      follows the user's display-font choice (font-wordmark utility). */
   --font-wordmark: "Fraunces Variable", Georgia, serif;
 
-  /* warm near-black "faceplate" palette (dark is the default theme) */
-  --color-bg: #0e0d0b;
-  --color-panel: #151311;
-  --color-raised: #1d1a16;
+  /* warm charcoal "faceplate" palette (dark is the default theme). Lifted from near-black
+     #0e0d0b (user call, 2026-10-31: it felt too dark overall, the album art's wash being the
+     default look), panel, raised and the playing tile by the same step, dim and faint lifted
+     to keep their contrast where they sit (measured by S139, 7.6:1 and 4.7:1 on the bare ground) */
+  --color-bg: #1c1a17;
+  --color-panel: #23201d;
+  --color-raised: #2b2722;
   --color-edge: rgb(255 255 255 / 0.08);
   --color-edge2: rgb(255 255 255 / 0.16);
   --color-ink: #f4efe6;
-  --color-dim: #a69e90;
+  --color-dim: #b4ab9c;
   /* Lifted from #6f675b (3.48:1) to clear the 4.5:1 WCAG AA floor for normal
      text — measured 2026-08-04, hue and saturation preserved so the palette's
      warmth is unchanged. It dresses ~120 visible text nodes: queue positions,
      the playhead readouts on every screen, Device's field labels, Settings'
-     hint lines. Still the app's quietest text token. */
-  --color-faint: #82786a;
+     hint lines. Still the app's quietest text token. Lifted again with the ground
+     (2026-10-31) to hold 4.5:1 on it. */
+  --color-faint: #8f8374;
   --color-amber: rgb(var(--amber-rgb));
   --color-amberdim: rgb(var(--amber-rgb) / 0.14);
   /* fixed gold for brand + "currently playing" — never tinted by album art */
   --color-gold: rgb(var(--gold-rgb));
   --color-golddim: rgb(var(--gold-rgb) / 0.16);
-  --color-goldtile: #322817; /* playing tile: lifted and warmed toward gold */
+  --color-goldtile: #403523; /* playing tile: lifted and warmed toward gold */
   --color-led: #67dd8b;
   /* triple form so alert can be used at partial alpha the way gold/amber are */
   --alert-rgb: 224 101 79;
@@ -1215,4 +1219,34 @@ img {
    in dim, as the primary readouts they are */
 :root.light .playhead-time {
   color: var(--color-dim);
+}
+
+/* DARK MODE ON ITS LIFTED GROUND (0.14.0-rc.2, the ground from #0e0d0b to #1c1a17; the colors
+   are the dark tokens above). Gold and amber as text take a tenth of white, their faded forms
+   keeping their fade, so on the lighter ground the selected item's label on its own wash and the
+   playing title still clear decisions/0016's floor where they sit, and the faded forms hold where
+   they were; an icon keeps the bright gold. Held by the suite's text survey (S139). */
+:root:not(.light) .text-gold:not(svg) {
+  color: color-mix(in srgb, var(--color-gold) 90%, white);
+}
+:root:not(.light) .text-amber:not(svg) {
+  color: color-mix(in srgb, var(--color-amber) 90%, white);
+}
+:root:not(.light) .text-gold\/50:not(svg) {
+  color: color-mix(in oklab, color-mix(in srgb, var(--color-gold) 90%, white) 50%, transparent);
+}
+:root:not(.light) .text-gold\/70:not(svg) {
+  color: color-mix(in oklab, color-mix(in srgb, var(--color-gold) 90%, white) 70%, transparent);
+}
+:root:not(.light) .text-gold\/80:not(svg) {
+  color: color-mix(in oklab, color-mix(in srgb, var(--color-gold) 90%, white) 80%, transparent);
+}
+:root:not(.light) .text-gold\/90:not(svg) {
+  color: color-mix(in oklab, color-mix(in srgb, var(--color-gold) 90%, white) 90%, transparent);
+}
+:root:not(.light) .text-amber\/70:not(svg) {
+  color: color-mix(in oklab, color-mix(in srgb, var(--color-amber) 90%, white) 70%, transparent);
+}
+:root:not(.light) .text-amber\/90:not(svg) {
+  color: color-mix(in oklab, color-mix(in srgb, var(--color-amber) 90%, white) 90%, transparent);
 }
