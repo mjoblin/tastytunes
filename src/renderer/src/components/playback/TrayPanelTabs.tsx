@@ -371,7 +371,7 @@ export function PresetsTab({
   }
 
   const recall = (id: number) => (): void => {
-    void tt.command({ type: "recallPreset", presetId: id });
+    void tt.command({ type: "recallPreset", presetId: id, alreadyPlaying: lit.has(id) });
   };
 
   if (layout === "rows") {

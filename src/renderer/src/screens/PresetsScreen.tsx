@@ -34,9 +34,6 @@ import { HeaderChip, ScreenTitle, GAP_BETWEEN, GAP_WITHIN } from "@/components/c
 import { TUNING_WINDOW_MS } from "@/hooks/useStationTuning";
 import { PresetCard, PresetRow } from "@/components/presets/PresetTiles";
 
-/** A recall that moved nothing after this long is treated as dead — well inside TUNING_WINDOW_MS. */
-const DEAD_RECALL_MS = 8_000;
-
 export function PresetsScreen(): React.JSX.Element {
   const presets = useStore((s) => s.presets);
   const saveSettings = useStore((s) => s.saveSettings);
@@ -143,60 +140,39 @@ export function PresetsScreen(): React.JSX.Element {
   // A preset whose stored object id the media server no longer resolves is
   // ACCEPTED by the firmware and then silently ignored — no error, no state
   // change (live-probed 2026-07-27). Nothing distinguishes that from "slow"
-  // except the passage of time, so watch for a recall that moved nothing.
-  // A real recall lands in ~3s; 8s is generous and still inside the tuning
-  // window (TUNING_WINDOW_MS, shared with station rows).
-  const [deadIds, setDeadIds] = useState<Set<number>>(new Set());
-  const deadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const playbackSignature = (): string => {
-    const s = useStore.getState();
-    return JSON.stringify([
-      s.playState?.state,
-      s.playState?.queue_id,
-      s.playState?.metadata?.title,
-      s.queue?.play_id,
-      s.queue?.total,
-    ]);
-  };
+  // except the passage of time: main watches every recall and says when one
+  // came to nothing (main/device/recallWatch, 0.15.0: one clock, 8 s after the
+  // streamer is awake, still inside the tuning window, TUNING_WINDOW_MS)
+  const deadPresets = useStore((s) => s.deadPresets);
+  const clearDeadPreset = useStore((s) => s.clearDeadPreset);
   const recall = (presetId: number): void => {
     setTuningId(presetId);
     setWakeRecallId(asleep ? presetId : null);
-    setDeadIds((prev) => {
-      if (!prev.has(presetId)) return prev;
-      const next = new Set(prev);
-      next.delete(presetId);
-      return next;
-    });
+    clearDeadPreset(presetId);
     if (tuningTimer.current) clearTimeout(tuningTimer.current);
     tuningTimer.current = setTimeout(() => {
       setTuningId(null);
       setWakeRecallId(null);
     }, TUNING_WINDOW_MS);
-    // Recalling what is ALREADY playing legitimately changes nothing — the
-    // one false positive this check has, so it never arms in that case.
-    const alreadyPlaying = playingIds.has(presetId);
-    const before = playbackSignature();
-    if (deadTimer.current) clearTimeout(deadTimer.current);
-    if (!alreadyPlaying) {
-      deadTimer.current = setTimeout(() => {
-        if (playbackSignature() !== before) return;
-        setDeadIds((prev) => new Set(prev).add(presetId));
-        setTuningId((cur) => (cur === presetId ? null : cur));
-      }, DEAD_RECALL_MS);
-    }
-    void tt.command({ type: "recallPreset", presetId }).catch(() => {
-      setTuningId(null);
-      setWakeRecallId(null);
-      if (deadTimer.current) clearTimeout(deadTimer.current);
-    });
+    // Recalling what is ALREADY playing legitimately changes nothing, so main
+    // is told it is lit, and never watches that recall
+    void tt
+      .command({ type: "recallPreset", presetId, alreadyPlaying: playingIds.has(presetId) })
+      .catch(() => {
+        setTuningId(null);
+        setWakeRecallId(null);
+      });
   };
   useEffect(
     () => () => {
       if (tuningTimer.current) clearTimeout(tuningTimer.current);
-      if (deadTimer.current) clearTimeout(deadTimer.current);
     },
     [],
   );
+  // a recall main says came to nothing stops its tuning lamp
+  useEffect(() => {
+    if (tuningId != null && deadPresets.includes(tuningId)) setTuningId(null);
+  }, [deadPresets, tuningId]);
   // The claim can't rest on what this screen knew at CLICK time: for the first
   // seconds after connecting, systemPower is still null here while the main
   // process already knows the streamer is asleep — so the click reads awake,
@@ -210,19 +186,12 @@ export function PresetsScreen(): React.JSX.Element {
   // the same answer, and a rule this hard-won must not exist in two places.
   const playingIds = useLitPresets(allItems, wakeRecallId);
   const isPresetPlaying = (p: PresetItem): boolean => p.id != null && playingIds.has(p.id);
-  const isPresetDead = (p: PresetItem): boolean => p.id != null && deadIds.has(p.id);
+  const isPresetDead = (p: PresetItem): boolean => p.id != null && deadPresets.includes(p.id);
   const noteRepair = (id: number): void => {
     repairAt.current = Date.now();
     repairPlayingId.current = items.find(isPresetPlaying)?.id ?? null;
-    clearDead(id);
+    clearDeadPreset(id);
   };
-  const clearDead = (id: number): void =>
-    setDeadIds((prev) => {
-      if (!prev.has(id)) return prev;
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
 
   const onDragEnd = (event: DragEndEvent): void => {
     const { active, over } = event;

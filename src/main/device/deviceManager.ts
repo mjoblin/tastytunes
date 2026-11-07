@@ -67,6 +67,7 @@ import { errorMessage } from "@shared/guards";
 import { queueAdd } from "../media/upnpBrowser";
 import { demoHost, stopDemoStreamer } from "../servers/demoStreamer";
 import type { MediaQueueAction } from "@shared/model";
+import { RecallWatch } from "./recallWatch";
 
 interface Cache {
   playState: ZonePlayState | null;
@@ -246,7 +247,27 @@ export class DeviceManager {
     }
   }
 
+  // one clock for a recall that loaded nothing (0.15.0): every recall the app sends is watched
+  // here; the record and the windows hear the answer
+  private readonly recallWatch = new RecallWatch({
+    signature: () => this.playbackSignature(),
+    awake: () => this.cache.systemPower == null || this.cache.systemPower.power === "ON",
+    onDead: (id) => {
+      listeningRecord.recallCameToNothing(id);
+      this.push({ kind: "presetRecallDead", id });
+    },
+  });
+
+  /** What plays, as the recall watch compares it: the state, the queue entry and the title, and
+   *  the queue's position and size (what the Presets screen compared before 0.15.0). */
+  private playbackSignature(): string {
+    const ps = this.cache.playState;
+    const q = this.cache.queue;
+    return JSON.stringify([ps?.state, ps?.queue_id, ps?.metadata?.title, q?.play_id, q?.total]);
+  }
+
   connect(host: string, opts?: { remember?: boolean; demo?: boolean }): void {
+    this.recallWatch.cancel();
     // Leaving the demo for a real device shuts the demo server down (0.15.0: here, so no caller
     // has to remember it; an agent's connect_device left it running)
     if (demoHost() && host !== demoHost()) stopDemoStreamer();
@@ -308,6 +329,7 @@ export class DeviceManager {
   }
 
   disconnect(): void {
+    this.recallWatch.cancel();
     if (this.sleeper.current) this.setSleep(null);
     this.socket?.close();
     this.socket = null;
@@ -626,6 +648,11 @@ export class DeviceManager {
       case "resumeHeld":
         return this.resumeHeld(socket);
       case "recallPreset": {
+        // a recall of what already plays rightly changes nothing: the caller says so when it sees
+        // the preset lit, and the app's own last recall still playing says so too
+        const already =
+          cmd.alreadyPlaying === true ||
+          (this.lastRecalledPresetId === cmd.presetId && this.cache.playState?.state === "play");
         this.setRecalledPreset(cmd.presetId);
         listeningRecord.openContext({
           kind: "preset",
@@ -634,6 +661,7 @@ export class DeviceManager {
           streamer: this.cache.systemInfo?.udn ?? null,
         });
         socket.send("/zone/recall_preset", { preset: cmd.presetId });
+        this.recallWatch.recalled(cmd.presetId, already);
         // Feature 10: the preset's local volume override rides along on every
         // recall through the app — after a beat for the source switch — unless
         // the caller (a schedule with its own volume) opts out.
@@ -742,6 +770,7 @@ export class DeviceManager {
           streamer: this.cache.systemInfo?.udn ?? null,
         });
         this.sleeper.boundaryCheck(this.cache.playState);
+        this.recallWatch.onPlayback();
         scrobbler.onPlayState(this.cache.playState);
         listeningRecord.onPlayState(
           this.cache.playState,
@@ -770,6 +799,7 @@ export class DeviceManager {
         listeningRecord.onQueue(
           (this.cache.queue.items ?? []).map((i) => i.id).filter((id): id is number => id != null),
         );
+        this.recallWatch.onPlayback();
         // Mid-batch (playlist activation) the cache stays current but the
         // renderer hears nothing — one authoritative push lands at the end.
         if (this.queueOps.batching) return;
@@ -804,6 +834,7 @@ export class DeviceManager {
         // survive standby, USB queues are dropped; USB remount also lags,
         // hence the second, late refetch).
         if (prev != null && prev !== "ON" && this.cache.systemPower.power === "ON") {
+          this.recallWatch.onAwake();
           for (const delay of [2500, 10000]) {
             setTimeout(() => this.socket?.isOpen() && this.socket.send("/queue/list"), delay);
           }
