@@ -82,7 +82,7 @@ export class SceneFeed {
   lyricsOn = true;
   palette: ScenePalette = {
     light: false,
-    bg: [14, 13, 11],
+    bg: [18, 17, 15],
     ink: [244, 239, 230],
     dim: [166, 158, 144],
     faint: [130, 120, 106],

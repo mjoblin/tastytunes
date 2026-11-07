@@ -18,7 +18,6 @@ import {
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import {
   Library,
   ListMusic,
@@ -58,12 +57,13 @@ import { saveRefToPreset, openRefInLibrary, playRefNow, queueRef } from "@/lib/m
 import { NameLine } from "@/components/media/NameLine";
 import { trackMenuItems } from "@/lib/mediaMenus";
 import { OrderHandle } from "@/components/controls/OrderHandle";
+import { ListKeysContext, useListKeys, type ListItemAttrs } from "@/hooks/useListKeys";
 import { ArtImage } from "@/components/media/ArtImage";
 import { MediaArt } from "@/components/media/MediaArt";
 import { DurationCell } from "@/components/media/DurationCell";
 import { PresetPicker } from "@/components/library/LibraryMenus";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
-import { DND_ACCESSIBILITY, lockVertical } from "@/lib/dnd";
+import { DND_ACCESSIBILITY, lockVertical, ROW_MOTION, sortableStyle } from "@/lib/dnd";
 import { cx, fmtDuration, fmtRelative, matchesFilter } from "@/lib/format";
 import { Eqbars } from "@/components/media/Eqbars";
 import {
@@ -78,7 +78,7 @@ import { useOneShotAsk } from "@/hooks/useOneShotAsk";
 import { artSrc } from "@/lib/artSrc";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { useQueueSourceActive } from "@/hooks/useQueueSourceActive";
-import { menuAt } from "@/lib/menuAt";
+import { menuAt, openMenuOn } from "@/lib/menuAt";
 
 /**
  * Stored playlists: the collection on the left, the selected playlist's tracks
@@ -237,6 +237,39 @@ export function PlaylistsScreen(): React.JSX.Element {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
+  // FROM THE KEYBOARD (0.14.0, his K1 to K9): the playlists one Tab stop, Enter opens one as its
+  // click does; its tracks another, "." a track's More menu, Delete removes it with Undo, and
+  // Option with up or down moves it, ONE change to the playlist on Option's release
+  const listKeys = useListKeys({
+    count: shown.length,
+    initial: () => shown.findIndex((p) => p.id === selected?.id),
+    onEnter: (i) => {
+      const p = shown[i];
+      if (p) setSelectedId(p.id);
+    },
+  });
+  const [movePreview, setMovePreview] = useState<{ from: number; to: number } | null>(null);
+  useEffect(() => setMovePreview(null), [selected?.items]);
+  const shownTracks =
+    selected && movePreview
+      ? arrayMove(selected.items, movePreview.from, movePreview.to)
+      : (selected?.items ?? []);
+  const shownIds = movePreview ? arrayMove(ids, movePreview.from, movePreview.to) : ids;
+  const trackKeys = useListKeys({
+    count: shownTracks.length,
+    initial: () => (queuedId === selected?.id ? (playingIndex ?? 0) : 0),
+    onMenu: (_i, el) => openMenuOn(el),
+    onDelete: (i) => removeItem(i),
+    move: {
+      preview: (from, to) => setMovePreview({ from, to }),
+      commit: (from, to) => {
+        if (!selected) return setMovePreview(null);
+        void tt.playlistSetItems(selected.id, arrayMove(selected.items, from, to));
+      },
+      cancel: () => setMovePreview(null),
+    },
+  });
+
   const onDragEnd = (e: DragEndEvent): void => {
     if (!selected || !e.over || e.active.id === e.over.id) return;
     const from = ids.indexOf(String(e.active.id));
@@ -394,11 +427,21 @@ export function PlaylistsScreen(): React.JSX.Element {
       ) : (
         <div className="flex-1 min-h-0 flex gap-6 px-8 pb-8">
           {/* the collection */}
-          <div className="w-[280px] shrink-0 min-h-0 overflow-y-auto" ref={scrollMemory}>
+          <div
+            {...listKeys.container}
+            ref={(el) => {
+              scrollMemory(el);
+              listKeys.container.ref(el);
+            }}
+            aria-label="Playlists"
+            className="w-[280px] shrink-0 min-h-0 overflow-y-auto"
+          >
             <div className="flex flex-col gap-1">
-              {shown.map((p) => (
+              {shown.map((p, pi) => (
                 <button
                   key={p.id}
+                  {...listKeys.item(pi)}
+                  tabIndex={-1}
                   onClick={() => setSelectedId(p.id)}
                   aria-current={selected?.id === p.id ? "true" : undefined}
                   className={cx(
@@ -588,34 +631,42 @@ export function PlaylistsScreen(): React.JSX.Element {
               {/* divide-y divide-edge/50: the same hairline the queue and the
                   library's track lists use between rows */}
               <div
-                ref={detailScroll}
+                {...trackKeys.container}
+                ref={(el) => {
+                  detailScroll(el);
+                  trackKeys.container.ref(el);
+                }}
+                aria-label="Tracks"
                 className="flex-1 min-h-0 overflow-y-auto px-1.5 -mx-1.5 py-1 -my-1 divide-y divide-edge/50"
               >
-                <DndContext
-                  accessibility={DND_ACCESSIBILITY}
-                  sensors={sensors}
-                  collisionDetection={closestCenter}
-                  onDragEnd={onDragEnd}
-                >
-                  <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-                    {selected.items.map((item, i) => (
-                      <TrackRow
-                        key={ids[i]}
-                        id={ids[i]}
-                        index={i}
-                        dr={drFor(item)}
-                        item={item}
-                        current={queuedId === selected.id && playingIndex === i}
-                        sourceActive={queueSourceActive}
-                        onRemove={() => removeItem(i)}
-                        onMenu={(e) => setTrackMenu({ item, index: i, ...menuAt(e) })}
-                      />
-                    ))}
-                  </SortableContext>
-                </DndContext>
-                {selected.items.length === 0 && (
-                  <div className="microlabel px-1 py-6">This playlist is empty.</div>
-                )}
+                <ListKeysContext.Provider value={true}>
+                  <DndContext
+                    accessibility={DND_ACCESSIBILITY}
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={onDragEnd}
+                  >
+                    <SortableContext items={shownIds} strategy={verticalListSortingStrategy}>
+                      {shownTracks.map((item, i) => (
+                        <TrackRow
+                          key={shownIds[i]}
+                          id={shownIds[i]}
+                          listItem={trackKeys.item(i)}
+                          index={i}
+                          dr={drFor(item)}
+                          item={item}
+                          current={queuedId === selected.id && playingIndex === i}
+                          sourceActive={queueSourceActive}
+                          onRemove={() => removeItem(i)}
+                          onMenu={(e) => setTrackMenu({ item, index: i, ...menuAt(e) })}
+                        />
+                      ))}
+                    </SortableContext>
+                  </DndContext>
+                  {selected.items.length === 0 && (
+                    <div className="microlabel px-1 py-6">This playlist is empty.</div>
+                  )}
+                </ListKeysContext.Provider>
               </div>
             </div>
           )}
@@ -707,7 +758,10 @@ function TrackRow({
   onRemove,
   onMenu,
   dr,
+  listItem,
 }: {
+  /** In the keyed list (hooks/useListKeys, 0.14.0): the row's id and index. */
+  listItem?: ListItemAttrs;
   id: string;
   index: number;
   item: PlaylistItem;
@@ -751,7 +805,8 @@ function TrackRow({
     // the list can be reordered without a mouse.
     <div
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(lockVertical(transform)), transition }}
+      {...listItem}
+      style={sortableStyle(lockVertical(transform), transition, ROW_MOTION)}
       onContextMenu={(e) => {
         e.preventDefault();
         onMenu(e);
@@ -763,7 +818,6 @@ function TrackRow({
         dr !== undefined
           ? "grid-cols-[26px_44px_1fr_auto_auto_auto]"
           : "grid-cols-[26px_44px_1fr_auto_auto]",
-        "transition-colors",
         isDragging && "z-10 bg-raised shadow-xl",
         // current + queue audible: the queue row's full playing treatment;
         // current while another source plays: the parked resume point

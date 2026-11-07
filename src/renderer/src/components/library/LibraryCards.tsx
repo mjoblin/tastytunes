@@ -17,6 +17,7 @@ import { DurationCell } from "@/components/media/DurationCell";
 import { Eqbars } from "@/components/media/Eqbars";
 import { NameLine, NameLink } from "@/components/media/NameLine";
 import { artKeyOf, artSrc } from "@/lib/artSrc";
+import { useInListKeys, type ListItemAttrs } from "@/hooks/useListKeys";
 
 // The Library's four listing renderers — cards and rows for containers and
 // tracks. Pure presentation: every action arrives as a callback.
@@ -39,8 +40,13 @@ function HeartChip({
   held: boolean;
   onHeart(): void;
 }): React.JSX.Element {
+  // a real button, named, out of the Tab order (0.14.0, as the card's Play and More: ArtActions)
   return (
-    <span
+    <button
+      type="button"
+      tabIndex={-1}
+      aria-label={favorited ? "Remove from favorites" : "Add to favorites"}
+      aria-pressed={favorited}
       data-tip={favorited ? "Remove from favorites" : "Add to favorites"}
       data-card-heart={favorited ? "on" : "off"}
       onClick={(e) => {
@@ -60,7 +66,7 @@ function HeartChip({
       )}
     >
       <Heart size={14} fill={favorited ? "currentColor" : "none"} />
-    </span>
+    </button>
   );
 }
 
@@ -81,8 +87,11 @@ export function ContainerCard({
   onPlay,
   onMenu,
   onNavDrag,
+  item,
 }: {
   node: MediaNode;
+  /** In a keyed list (hooks/useListKeys, 0.14.0): the item's id and index for the list. */
+  item?: ListItemAttrs;
   /** The playing track belongs to this album (and the queue source is live). */
   playing: boolean;
   /** This card's ⋯ menu or preset picker is open — hold the hover treatment. */
@@ -132,11 +141,13 @@ export function ContainerCard({
   const subtitle = line ?? [node.artist, node.year].filter(Boolean).join(" · ");
   // an artist takes main's picture (a real server one, a known photo, an album cover)
   const artistPic = useArtistPicture(artist ? node.title : null);
+  const inList = useInListKeys();
   return (
     // Preset-card idiom: inset tile, hover grow + lift + glow; the highlight
     // wraps the gray tile so it stays legible over gold/orange covers.
     <div
       ref={ref}
+      {...item}
       onContextMenu={menuable ? onMenu : undefined}
       data-library-card
       data-selected={selected || undefined}
@@ -158,6 +169,8 @@ export function ContainerCard({
           whose whole-card click IS the play action) */}
       <button
         className="block w-full cursor-pointer"
+        // a keyed list is one Tab stop (K1): its cards are reached with the arrows
+        tabIndex={inList ? -1 : undefined}
         onClick={onEnter}
         onPointerDown={(e) => {
           // only the body: a press that lands on a nested control (the bloom) is that control's
@@ -198,38 +211,6 @@ export function ContainerCard({
               <Eqbars />
             </span>
           )}
-          {album && (
-            <span
-              onClick={(e) => {
-                e.stopPropagation();
-                onPlay(ref.current);
-              }}
-              data-tip="Play, replacing the queue"
-              className={cx(
-                "tip-bottom absolute bottom-1.5 left-1.5 h-11 w-11 rounded-full bg-amber text-bg flex items-center justify-center transition-all duration-150 motion-safe:hover:scale-110 hover:shadow-[0_0_24px_rgb(var(--amber-rgb)_/_0.6)]",
-                menuOpen
-                  ? "opacity-100"
-                  : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
-              )}
-            >
-              <Play size={18} fill="currentColor" />
-            </span>
-          )}
-          {menuable && (
-            <span
-              aria-label="More actions"
-              onClick={onMenu}
-              className={cx(
-                "absolute bottom-1.5 right-1.5 text-dim hover:text-ink transition-all",
-                cardChip(),
-                menuOpen
-                  ? "opacity-100"
-                  : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
-              )}
-            >
-              <MoreHorizontal size={15} />
-            </span>
-          )}
         </div>
         <div
           className={cx(
@@ -256,9 +237,63 @@ export function ContainerCard({
           </div>
         )}
       </button>
+      {(album || menuable) && (
+        <ArtActions>
+          {album && (
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label="Play, replacing the queue"
+              onClick={() => onPlay(ref.current)}
+              data-tip="Play, replacing the queue"
+              className={cx(
+                "pointer-events-auto tip-bottom absolute bottom-1.5 left-1.5 h-11 w-11 rounded-full bg-amber text-bg flex items-center justify-center transition-all duration-150 motion-safe:hover:scale-110 hover:shadow-[0_0_24px_rgb(var(--amber-rgb)_/_0.6)]",
+                menuOpen
+                  ? "opacity-100"
+                  : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
+              )}
+            >
+              <Play size={18} fill="currentColor" />
+            </button>
+          )}
+          {menuable && (
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label="More actions"
+              onClick={onMenu}
+              className={cx(
+                "pointer-events-auto absolute bottom-1.5 right-1.5 text-dim hover:text-ink transition-all",
+                cardChip(),
+                menuOpen
+                  ? "opacity-100"
+                  : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
+              )}
+            >
+              <MoreHorizontal size={15} />
+            </button>
+          )}
+        </ArtActions>
+      )}
       {album && onHeart && (
         <HeartChip favorited={favorited === true} held={menuOpen} onHeart={onHeart} />
       )}
+    </div>
+  );
+}
+
+/**
+ * A CARD'S ART ACTIONS, BESIDE ITS OWN BUTTON (0.14.0, his K4 pick on the design page "TastyTunes
+ * 0.14.0 Design"): Play and More were spans drawn inside the card's button, a control within a
+ * control that nothing could name or reach. They are real buttons now, laid over the art where
+ * they were (the card's p-2 inset, the art's square), named for VoiceOver and kept out of the
+ * Tab order: the keyboard reaches them through the card's More menu. The layer takes no pointer
+ * itself, so the card under it still opens.
+ */
+function ArtActions({ children }: { children: React.ReactNode }): React.JSX.Element {
+  return (
+    <div data-card-actions className="pointer-events-none absolute inset-x-2 top-2 aspect-square">
+      {children}
     </div>
   );
 }
@@ -284,8 +319,11 @@ export function TrackCard({
   onHeart,
   onMenu,
   onNavDrag,
+  item,
 }: {
   node: MediaNode;
+  /** In a keyed list (hooks/useListKeys, 0.14.0): the item's id and index for the list. */
+  item?: ListItemAttrs;
   /** The playing track (and the queue source is live). */
   playing: boolean;
   menuOpen: boolean;
@@ -303,9 +341,11 @@ export function TrackCard({
   onNavDrag?(e: React.PointerEvent): void;
 }): React.JSX.Element {
   const ref = useRef<HTMLDivElement | null>(null);
+  const inList = useInListKeys();
   return (
     <div
       ref={ref}
+      {...item}
       onContextMenu={onMenu}
       data-library-card
       data-track-card={node.title}
@@ -322,6 +362,7 @@ export function TrackCard({
     >
       <button
         className="block w-full cursor-pointer"
+        tabIndex={inList ? -1 : undefined}
         onClick={(e) => {
           if (onClick(e)) return;
           onPlayNow(ref.current);
@@ -359,20 +400,6 @@ export function TrackCard({
           >
             <Play size={18} fill="currentColor" strokeWidth={0} className="translate-x-[1px]" />
           </span>
-          <span
-            aria-label="More actions"
-            onClick={(e) => {
-              e.stopPropagation();
-              onMenu(e);
-            }}
-            className={cx(
-              "absolute bottom-1.5 right-1.5 text-dim hover:text-ink transition-all",
-              cardChip(),
-              menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
-            )}
-          >
-            <MoreHorizontal size={15} />
-          </span>
         </div>
         <div
           className={cx(
@@ -385,6 +412,21 @@ export function TrackCard({
         {subtitle && <div className="text-[11.5px] text-faint truncate text-left">{subtitle}</div>}
         {details && <CardFormatLine details={details} />}
       </button>
+      <ArtActions>
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-label="More actions"
+          onClick={onMenu}
+          className={cx(
+            "pointer-events-auto absolute bottom-1.5 right-1.5 text-dim hover:text-ink transition-all",
+            cardChip(),
+            menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
+          )}
+        >
+          <MoreHorizontal size={15} />
+        </button>
+      </ArtActions>
       <HeartChip favorited={favorited} held={menuOpen} onHeart={onHeart} />
     </div>
   );
@@ -482,8 +524,11 @@ export function ContainerRow({
   onHeart,
   onEnter,
   onMenu,
+  item,
 }: {
   node: MediaNode;
+  /** In a keyed list (hooks/useListKeys, 0.14.0): the item's id and index for the list. */
+  item?: ListItemAttrs;
   playing: boolean;
   menuOpen: boolean;
   /** Part of a multi-selection (album multi-select, 0.8.0): the tracks' own
@@ -520,8 +565,10 @@ export function ContainerRow({
   const menuable = album || artist || folderMenu;
   const muted = isMutedArt(node);
   const artistPic = useArtistPicture(artist ? node.title : null);
+  const inList = useInListKeys();
   return (
     <div
+      {...item}
       className={cx(
         "group relative grid grid-cols-[44px_1fr_auto_auto_auto_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
         playing
@@ -608,6 +655,7 @@ export function ContainerRow({
       {menuable ? (
         <button
           aria-label="More actions"
+          tabIndex={inList ? -1 : undefined}
           onClick={onMenu}
           className={cx(
             "p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-all",
@@ -667,8 +715,11 @@ export function TrackRow({
   showPosition = true,
   selStart = true,
   selEnd = true,
+  item,
 }: {
   node: MediaNode;
+  /** In a keyed list (hooks/useListKeys, 0.14.0): the item's id and index for the list. */
+  item?: ListItemAttrs;
   /** The listening record's cell (0.8.0): "12 plays" or "3 weeks ago" while
    *  the Tracks lens is sorted by plays / last played; undefined = no cell,
    *  null = the cell reserved but empty (never played). */
@@ -729,6 +780,7 @@ export function TrackRow({
   return (
     <div
       ref={ref}
+      {...item}
       className={cx(
         "group relative grid items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
         TRACK_GRID[

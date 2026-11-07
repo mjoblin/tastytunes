@@ -68,7 +68,9 @@ const DEVICE_GAP_MS = 10;
 // few thousand folders must still index within minutes (25 ms cost the harness's
 // 450-container walk its 30 s window)
 const DEVICE_WALK_GAP_MS = 10;
-const DEVICE_CANARY_MS = 2000;
+// the canary's first wait, doubling to the cap; shortened by the unit tests
+// (TASTYTUNES_DEVICE_CANARY_MS) so a silence they stage closes in under a second
+const DEVICE_CANARY_MS = Number(process.env["TASTYTUNES_DEVICE_CANARY_MS"] ?? 2000);
 // the cap, shortened by the harness (TASTYTUNES_DEVICE_COOL_MS) so a suite can
 // watch a silence open and close
 const DEVICE_COOL_MS = Number(process.env["TASTYTUNES_DEVICE_COOL_MS"] ?? 30_000);
@@ -912,13 +914,26 @@ export async function audioResUrl(
   host: string,
   serverUdn: string,
   objectId: string,
+  { analysis = false }: { analysis?: boolean } = {},
 ): Promise<string | null> {
   try {
     const entry = await entryFor(host, serverUdn);
     const r = await soapBrowse(entry, objectId, "BrowseMetadata", 0, 1);
     if (typeof r === "string") return null;
-    const m = /<res\b[^>]*audio[^>]*>\s*(http[^<\s]+)\s*<\/res>/i.exec(r.didl);
-    return m ? m[1].replace(/&amp;/g, "&") : null;
+    const audio = [...r.didl.matchAll(/<res\b([^>]*audio[^>]*)>\s*(http[^<\s]+)\s*<\/res>/gi)].map(
+      (m) => ({ attrs: m[1], url: m[2].replace(/&amp;/g, "&") }),
+    );
+    const first = audio[0];
+    if (!first) return null;
+    // APPLE LOSSLESS THROUGH THE SERVER'S WAV COPY (0.14.0, his A2): nothing here decodes an MP4's
+    // Apple Lossless (Chromium has no decoder for it), and AAC in one only whole; a server that
+    // also offers the file as WAV (Asset decodes it as it sends) is read that way, in pieces,
+    // with every measure. The analysis only: embedded art is read from the file itself.
+    if (analysis && /audio\/(mp4|x-m4a|m4a|aac)/i.test(first.attrs)) {
+      const wav = audio.find((x) => /audio\/(x-)?wav/i.test(x.attrs));
+      if (wav) return wav.url;
+    }
+    return first.url;
   } catch {
     return null;
   }

@@ -10,7 +10,7 @@ import type {
 } from "@shared/model";
 import { connectedHost, deviceManager } from "../app/runtime";
 import { getSettings, newMcpToken } from "../data/persist";
-import { canEncrypt, getSecret, secretHint, setSecret } from "../data/secrets";
+import { encryptsHere, getSecret, secretHint, setSecret } from "../data/secrets";
 import { fetchAlbumInfo } from "../lookups/albumInfo";
 import { artHostTrust, fetchArtDataUrl } from "../lookups/artFetch";
 import { localOnly } from "../lookups/fetchGuard";
@@ -24,6 +24,8 @@ import {
 } from "../data/artistChoices";
 import { fetchArtistImages, fetchArtistInfo, knownArtistImage } from "../lookups/artistInfo";
 import { checkFanartKey, fetchFanartPhotos } from "../lookups/fanart";
+import { keepChoiceCopy } from "../lookups/choiceCopies";
+import { fetchCommonsPhotos, fetchWikimediaSizes, wikimediaFile } from "../lookups/commons";
 import { artThumbsStats, clearArtThumbs } from "../lookups/artThumbs";
 import { fetchCoverArt } from "../lookups/coverArt";
 import { clearLookupCaches, lookupCacheStats } from "../lookups/diskCache";
@@ -39,6 +41,16 @@ import { demoHost } from "../servers/demoStreamer";
 import { handle } from "../app/guard";
 
 /** Internet lookups, each behind its own switch: lyrics, ListenBrainz, artist, album, disc and track context, cover art, radio directories, embedded and fetched pictures, and the lookup caches. (Split out of index.ts's registerIpc in the 0.11.0 sweep.) */
+
+/** The images a window may choose for an artist: the article's, fanart.tv's and Commons'. A
+ *  choice of anything else is refused (setArtistChoice). */
+async function offeredImages(name: string): Promise<string[]> {
+  return [
+    ...(await fetchArtistImages(name)),
+    ...(await fetchFanartPhotos(name)),
+    ...(await fetchCommonsPhotos(name)).map((o) => o.url),
+  ];
+}
 
 export function registerLookupsIpc(): void {
   // the rows' and cards' artist pictures: never a lookup (MusicBrainz answers one request a
@@ -68,26 +80,45 @@ export function registerLookupsIpc(): void {
   // THE CHOSEN PICTURES (0.13.0 round 7; data/artistChoices), every one in one answer: a window
   // holds them (lib/artistPictures), so the artist page draws its choice first and an artist's
   // menu anywhere knows whether to offer the reset; the chooser offers the article's images,
-  // the artist's covers and a file. A Wikipedia image
-  // is drawn only with the artist lookups on ("off = no requests, ever"), so with them off the
-  // usual picture shows and the choice waits; a cover or a file shows either way.
+  // the artist's covers and a file. A picture from the web is drawn only with the artist lookups
+  // on ("off = no requests, ever") until its copy is kept (0.14.0), so with them off the usual
+  // picture shows and the choice waits; a copy, a cover or a file shows either way.
   handle(IPC.artistChoices, () => {
     const photos = getSettings().artistInfo;
     const pools = mediaIndex.pools();
     const artists = artistIndex(pools);
     const out: Record<string, ChosenPicture> = {};
     for (const k of choiceKeys()) {
+      // a choice made before its copy was kept gets one, in the background (lookups/choiceCopies)
+      void keepChoiceCopy(k, { pools, photos, streamer: connectedHost() });
       const c = chosen(k, pools, photos);
       // a reset brings back the server's own picture first, then the photo (artistPictures)
       if (c) out[k] = { ...c, photoAfter: photos && !artists.get(k)?.own && !!knownArtistImage(k) };
     }
     return out;
   });
-  handle(IPC.artistImages, async (_e, name: unknown) =>
-    typeof name === "string" && name.trim() && getSettings().artistInfo
-      ? fetchArtistImages(name)
-      : [],
-  );
+  // the article's images with their sizes (0.14.0: each picture's size under it), and the
+  // artist's Commons photos the article doesn't show (the same photo is offered once)
+  handle(IPC.artistImages, async (_e, name: unknown) => {
+    if (typeof name !== "string" || !name.trim() || !getSettings().artistInfo) return [];
+    const urls = await fetchArtistImages(name);
+    const sizes = await fetchWikimediaSizes(urls);
+    return urls.map((url) => {
+      const s = sizes.get(wikimediaFile(url));
+      return {
+        url,
+        thumb: null,
+        width: s?.width ?? null,
+        height: s?.height ?? null,
+        page: s?.page ?? null,
+      };
+    });
+  });
+  handle(IPC.artistCommons, async (_e, name: unknown) => {
+    if (typeof name !== "string" || !name.trim() || !getSettings().artistInfo) return [];
+    const shown = new Set((await fetchArtistImages(name)).map(wikimediaFile));
+    return (await fetchCommonsPhotos(name)).filter((o) => !shown.has(wikimediaFile(o.url)));
+  });
   handle(IPC.pickArtistPictureFile, (e) =>
     pickPictureFile(BrowserWindow.fromWebContents(e.sender)),
   );
@@ -103,10 +134,15 @@ export function registerLookupsIpc(): void {
     if (!isArtistChoice(choice)) return false;
     if (choice.kind === "image") {
       if (!getSettings().artistInfo) return false;
-      const offered = [...(await fetchArtistImages(name)), ...(await fetchFanartPhotos(name))];
-      if (!offered.includes(choice.url)) return false;
+      if (!(await offeredImages(name)).includes(choice.url)) return false;
     }
     setChoice(name, choice);
+    // the copy it draws from, kept in the background: the address draws until it is there
+    void keepChoiceCopy(name, {
+      pools: mediaIndex.pools(),
+      photos: getSettings().artistInfo,
+      streamer: connectedHost(),
+    });
     return true;
   });
   // the artist page's facts line: the lens's counts, from the ready indexes
@@ -124,7 +160,7 @@ export function registerLookupsIpc(): void {
   // THE SECRETS STORE (0.13.0 round 10): a window learns only whether a token is saved and how it
   // ends; the MCP token itself goes to a window only for a Copy the person pressed
   handle(IPC.secretsStatus, () => ({
-    encrypted: canEncrypt(),
+    encrypted: encryptsHere(),
     lbToken: secretHint("lbToken"),
     mcpToken: secretHint("mcpToken"),
     fanartKey: secretHint("fanartKey"),
@@ -214,15 +250,16 @@ export function registerLookupsIpc(): void {
   });
 }
 
-/** An artist's chosen picture as resolveChoice finds it, a Wikipedia image only with the lookups
- *  on; null with no choice (or one waiting for the lookups). */
+/** An artist's chosen picture as resolveChoice finds it, a picture from the web only with the
+ *  lookups on or its copy kept (drawn from the copy, it asks nothing); null with no choice (or
+ *  one waiting for the lookups). */
 function chosen(
   name: string,
   pools: MediaIndexPools[],
   photos: boolean,
-): { kind: ArtistChoice["kind"]; url: string } | null {
+): { kind: ArtistChoice["kind"]; url: string; offered: string } | null {
   const c = resolveChoice(name, pools);
-  return c && (c.kind !== "image" || photos) ? c : null;
+  return c && (c.kind !== "image" || photos || c.url !== c.offered) ? c : null;
 }
 
 const chosenPicture = (name: string, pools: MediaIndexPools[], photos: boolean): string | null =>

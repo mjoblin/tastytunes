@@ -9,8 +9,8 @@ export interface SegmentedOption<T> {
   /** Rendered but inert and dimmed (e.g. a server with no matches) — the
    *  option stays visible so the control never reshapes with the data. */
   disabled?: boolean;
-  /** How many the option holds, after its label (Choose a picture's sources); null while it is
-   *  still being asked, so the label keeps its place. */
+  /** How many the option holds, in a pill after its label (Choose a picture's sources); null
+   *  while it is still being asked, the pill's room kept so the tab keeps its width. */
   count?: number | null;
 }
 
@@ -60,11 +60,14 @@ export function Segmented<T extends string | number | boolean>({
           {opt.icon}
           {opt.label}
           {opt.count !== undefined && (
+            // a pill with room for two digits, the count centred in it: a count arriving, or
+            // reaching ten, never widens the tab (his look, 2026-10-30); hidden while it is asked
             <span
               data-segment-count
               className={cx(
-                "min-w-[1ch] font-mono text-[10.5px] tabular-nums",
-                value === opt.value ? "text-gold/70" : "text-faint",
+                "grid h-4 min-w-[1.375rem] place-items-center rounded-full px-1 text-[10.5px] leading-none tabular-nums",
+                opt.count == null && "invisible",
+                value === opt.value ? "bg-gold/15 text-gold" : "bg-veil text-faint",
               )}
             >
               {opt.count ?? ""}

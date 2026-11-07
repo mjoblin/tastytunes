@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { cx } from "@/lib/format";
+import { useInListKeys } from "@/hooks/useListKeys";
 
 /**
  * The one hover-action button for a list ROW — play, ⋯, remove.
@@ -47,9 +48,12 @@ export function RowAction({
   size?: number;
 }): React.JSX.Element {
   const [quietFrom, setQuietFrom] = useState<{ x: number; y: number } | null>(null);
+  // in a keyed list the row is reached with the arrows and its actions through More (K1, K4)
+  const inList = useInListKeys();
   return (
     <button
       aria-label={label}
+      tabIndex={inList ? -1 : undefined}
       data-tip={quietFrom ? undefined : (tip ?? label)}
       onClick={(e) => {
         e.stopPropagation();

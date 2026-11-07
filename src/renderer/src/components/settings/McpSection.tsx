@@ -41,7 +41,8 @@ export function McpSection({
       .then((s) => setTokenEnds(s.mcpToken.ends))
       .catch(() => {});
   };
-  useEffect(readToken, []);
+  // read again once the server runs: its token is minted the first time it does (0.14.0)
+  useEffect(readToken, [mcp.enabled, status?.running]);
   const masked = `••••••••${tokenEnds ?? ""}`;
   const copyWithToken = (key: string, make: (token: string) => string): void => {
     void tt.mcpTokenReveal().then((token) => copy(key, make(token)));

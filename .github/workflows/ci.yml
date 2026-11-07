@@ -26,10 +26,9 @@ jobs:
           node-version: 22
           cache: npm
 
-      # the gate never launches Electron, so its ~100 MB binary is dead weight
+      # the gate never launches Electron, and since Electron 42 its npm package fetches the binary
+      # only when first asked for, so npm ci downloads none
       - run: npm ci
-        env:
-          ELECTRON_SKIP_BINARY_DOWNLOAD: 1
 
       # typecheck + lint + format:check + unit tests, as npm run check locally
       - run: npm run check

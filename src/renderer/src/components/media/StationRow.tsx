@@ -3,6 +3,7 @@ import type { RadioStation } from "@shared/model";
 import { MediaRow } from "@/components/media/MediaRow";
 import { RowAction } from "@/components/media/RowAction";
 import { RowHeart } from "@/components/media/RowHeart";
+import type { ListItemAttrs } from "@/hooks/useListKeys";
 
 /**
  * One internet-radio station, as a row.
@@ -26,6 +27,8 @@ export function StationRow({
   onHeart,
   onPlay,
   onSave,
+  onMenu,
+  item,
 }: {
   station: RadioStation;
   playing: boolean;
@@ -38,6 +41,10 @@ export function StationRow({
    *  the save panel belongs to the Radio screen, which has the room for it —
    *  and the button simply isn't rendered rather than wired to a no-op. */
   onSave?(x: number, y: number): void;
+  /** The row's More menu (lib/radio stationMenuItems): a right-click, or "." in a keyed list. */
+  onMenu?(e: React.MouseEvent): void;
+  /** In a keyed list: the row's id and index. */
+  item?: ListItemAttrs;
 }): React.JSX.Element {
   const tags = station.tags
     .split(",")
@@ -51,6 +58,7 @@ export function StationRow({
     .join(" ");
   return (
     <MediaRow
+      item={item}
       attrs={{ "data-radio-row": station.name }}
       title={station.name}
       subtitle={subtitle || undefined}
@@ -59,6 +67,7 @@ export function StationRow({
       playing={playing}
       tuning={tuning}
       onClick={() => onPlay()}
+      onContextMenu={onMenu}
       meta={
         tuning ? (
           <span data-radio-tuning className="text-gold/80 motion-safe:animate-pulse">

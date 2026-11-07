@@ -1,6 +1,7 @@
 import type { DraggableAttributes } from "@dnd-kit/core";
 import type { SyntheticListenerMap } from "@dnd-kit/core/dist/hooks/utilities";
 import { GripVertical } from "lucide-react";
+import { useInListKeys } from "@/hooks/useListKeys";
 
 /**
  * The leading cell of a reorderable row: its POSITION at rest, its drag handle
@@ -29,6 +30,8 @@ export function OrderHandle({
   /** What shows at rest — a track number, slot number, or the playing eqbars. */
   children: React.ReactNode;
 }): React.JSX.Element {
+  // in a keyed list a row moves with Option and the arrows (K8), so the grip is the pointer's
+  const inList = useInListKeys();
   return (
     <div className="relative flex items-center justify-center">
       <span className="flex items-center justify-center transition-opacity group-hover:opacity-0 group-kbd:opacity-0">
@@ -39,6 +42,7 @@ export function OrderHandle({
         title="Drag to reorder"
         {...attributes}
         {...listeners}
+        tabIndex={inList ? -1 : attributes?.tabIndex}
         onClick={(e) => e.stopPropagation()}
         className="absolute inset-0 grid place-items-center rounded text-dim opacity-0 transition-opacity group-hover:opacity-100 focus-kbd:opacity-100 hover:text-ink cursor-grab active:cursor-grabbing"
       >

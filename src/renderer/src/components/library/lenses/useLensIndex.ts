@@ -5,6 +5,7 @@ import {
   albumFormat,
   albumTracksOf,
   artistGroups,
+  folderKey,
   isCompilation,
   nameSortKey,
 } from "@shared/model";
@@ -92,6 +93,21 @@ function build(pools: MediaIndexPools[]): LensIndex {
         }
       return m;
     });
+  /** A walked server's tracks by their folder and album title (0.14.0): a folder album's own
+   *  tracks, handed to albumTracksOf so a drive of many copies never walks a whole title per copy. */
+  const tracksByFolder = (): Map<string, MediaNode[]> =>
+    lazy("tracksByFolder", () => {
+      const m = new Map<string, MediaNode[]>();
+      for (const g of pools)
+        for (const t of g.tracks) {
+          if (!t.album || !t.titlePath) continue;
+          const k = `${g.udn}|${lc(t.album)}|${folderKey(t.titlePath)}`;
+          const list = m.get(k);
+          if (list) list.push(t);
+          else m.set(k, [t]);
+        }
+      return m;
+    });
   /** The albums by albumKey: a server's albums of one title, two copies among them. */
   const albumsByKey = (): Map<string, MediaNode[]> =>
     lazy("albumsByKey", () => {
@@ -132,9 +148,12 @@ function build(pools: MediaIndexPools[]): LensIndex {
       let got = memo.get(id);
       if (!got) {
         const k = albumKey(a);
+        const inFolder = a.titlePath
+          ? tracksByFolder().get(`${k}|${folderKey(a.titlePath)}`)
+          : undefined;
         got = albumTracksOf(a, {
           albums: albumsByKey().get(k) ?? [a],
-          tracks: tracksByKey().get(k) ?? [],
+          tracks: inFolder ?? tracksByKey().get(k) ?? [],
         });
         memo.set(id, got);
       }

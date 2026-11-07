@@ -1,10 +1,21 @@
 import { readFile } from "node:fs/promises";
+import { extname } from "node:path";
 import { protocol } from "electron";
 import { isDeviceArt } from "@shared/artUrl";
 import { pickedPath } from "../data/artistChoices";
 import { artHostTrust } from "../lookups/artFetch";
 import { artThumb } from "../lookups/artThumbs";
 import { deviceManager } from "./runtime";
+
+/** A copied picture's type by its file's kind (data/artistChoices: a JPEG or PNG made by the
+ *  app, or a chosen picture kept as it came). */
+const PICKED_TYPES: Record<string, string> = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".webp": "image/webp",
+  ".gif": "image/gif",
+  ".svg": "image/svg+xml",
+};
 
 /** Serves the tt-art scheme app/boot registered (split out of index.ts in the 0.11.0 sweep);
  *  called once, in whenReady. */
@@ -22,7 +33,7 @@ export function serveArtProtocol(): void {
       try {
         return new Response(new Uint8Array(await readFile(path)), {
           headers: {
-            "content-type": path.endsWith(".png") ? "image/png" : "image/jpeg",
+            "content-type": PICKED_TYPES[extname(path)] ?? "image/jpeg",
             "cache-control": "public, max-age=31536000, immutable",
           },
         });

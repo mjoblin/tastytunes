@@ -143,7 +143,10 @@ export function NowPlayingScreen(): React.JSX.Element {
   useEffect(() => {
     if (!scenesOpen) return;
     const offKey = onScreenKey((e) => {
-      if (e.key === "Escape") setScenesOpen(false);
+      if (e.key !== "Escape") return;
+      // this Escape is the picker's, not the keyboard's release (hooks/useShortcuts)
+      e.preventDefault();
+      setScenesOpen(false);
     });
     const onDown = (e: PointerEvent): void => {
       const el = e.target instanceof Element ? e.target : null;
@@ -637,7 +640,13 @@ export function NowPlayingScreen(): React.JSX.Element {
             </div>
           </div>
 
-          <div className={cx("min-w-0 max-w-xl space-y-5", mirrored && "text-right")}>
+          {/* a column as tall as the art beside it, so a note can sit at the art's foot */}
+          <div
+            className={cx(
+              "flex min-w-0 max-w-xl flex-col space-y-5 self-stretch",
+              mirrored && "text-right",
+            )}
+          >
             <div className={cx("flex items-center gap-3", mirrored && "justify-end")}>
               {sourceName && <span className="badge">{sourceName}</span>}
               {state && state !== "play" && (state !== "buffering" || bufferingSettled) && (
@@ -744,25 +753,30 @@ export function NowPlayingScreen(): React.JSX.Element {
                 <LyricLine />
               </div>
             )}
-            {/* a note about the app, not a line of the track: twice the column's rhythm
-              above it (space-y-5's 20px collapses any smaller margin, so mt-3 read as
-              one more track line; user, 2026-10-06) */}
+            {/* A NOTE ABOUT THE APP, NOT A LINE OF THE TRACK (his design C, 2026-11-01): the
+              column's own label, level with the art's bottom edge (the column stretches to the
+              art and the note sinks to its foot), and at least twice the column's rhythm under
+              the track's lines when they run longer (his call, 2026-10-06). Named as the app
+              names it everywhere, full-screen display mode; the cross shows on hover and on
+              keyboard focus. */}
             {showDisplayHint && (
               <div
                 data-display-hint
-                className="mt-10 flex items-center gap-2 text-[12px] text-faint"
+                className={cx(
+                  "group/hint microlabel mt-auto flex items-center gap-2 pt-5 text-faint",
+                  mirrored && "justify-end",
+                )}
               >
-                <Maximize2 size={12} className="shrink-0" />
-                <span>
-                  Press <kbd className="font-mono text-dim">F</kbd> for Fullscreen Display mode,
-                  where the scenes can fill the screen.
-                </span>
+                {/* spaces between the pieces, which the flex row's gap lays out anyway, so the
+                  note reads as one sentence aloud ("Press F for…", not "PressFfor…") */}
+                <span>Press</span> <kbd className="badge tracking-normal">F</kbd>{" "}
+                <span>for full-screen display mode</span>
                 <button
                   type="button"
                   aria-label="Dismiss"
                   data-display-hint-dismiss
                   onClick={() => void saveSettings({ displayHintSeen: true })}
-                  className="shrink-0 rounded p-1 text-faint hover:text-ink transition-colors"
+                  className="-my-1 shrink-0 rounded p-1 text-faint opacity-0 transition-opacity group-hover/hint:opacity-100 hover:text-ink focus-kbd:opacity-100"
                 >
                   <X size={12} />
                 </button>

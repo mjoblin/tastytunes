@@ -1,4 +1,5 @@
 import { measureTrack, type MeasureJob, type MeasureReply, type Measured } from "./measure";
+import type { StreamFromWorker, StreamToWorker } from "./stream/protocol";
 
 /**
  * The page's side of the analysis worker: one worker for the session, made on
@@ -10,6 +11,8 @@ import { measureTrack, type MeasureJob, type MeasureReply, type Measured } from 
 let worker: Worker | null = null;
 let nextId = 1;
 const pending = new Map<number, { resolve: (m: Measured) => void; reject: (e: unknown) => void }>();
+/** A file being measured in pieces: what to do when the worker asks for more or says how far. */
+const streaming = new Map<number, (msg: StreamFromWorker) => void>();
 
 function getWorker(): Worker | null {
   if (worker) return worker;
@@ -21,8 +24,12 @@ function getWorker(): Worker | null {
     console.warn("[analysis] no worker, measuring on the main thread", err);
     return null;
   }
-  worker.onmessage = (e: MessageEvent<MeasureReply>): void => {
+  worker.onmessage = (e: MessageEvent<MeasureReply | StreamFromWorker>): void => {
     const reply = e.data;
+    if ("type" in reply) {
+      streaming.get(reply.id)?.(reply);
+      return;
+    }
     const job = pending.get(reply.id);
     if (!job) return;
     pending.delete(reply.id);
@@ -35,6 +42,7 @@ function getWorker(): Worker | null {
     console.warn("[analysis] worker failed, measuring on the main thread", ev.message);
     const jobs = [...pending.values()];
     pending.clear();
+    streaming.clear();
     worker?.terminate();
     worker = null;
     for (const job of jobs) job.reject(new Error("worker failed"));
@@ -60,5 +68,81 @@ export async function measureOffThread(
       job,
       chans.map((c) => c.buffer),
     );
+  });
+}
+
+/** How a file measured in pieces ended: measured; not a file that way can measure (the
+ *  whole-file way takes it); or failed, and why ("stalled": the server stopped sending). */
+export type StreamOutcome =
+  | { measured: Measured }
+  | { whole: "unsupported" | "unknown-length" | "no-worker" }
+  | { failed: string };
+
+/**
+ * A FILE MEASURED IN PIECES (0.14.0, analysis with no size limit): the next piece is read
+ * (`read`, main's audioStreamRead) only once the worker asks for it, so neither the page nor the
+ * worker ever holds the file; `onProgress` hears how far the waveform has got, for a waveform that
+ * fills in as the file arrives (his A1); `signal` stops it (his A3: a skipped track's measuring
+ * stops with its download).
+ */
+export function measureStreamOffThread(
+  read: () => Promise<Uint8Array | null | { error: string }>,
+  buckets: number,
+  onProgress?: (p: { ready: number; peak: Float32Array; rms: Float32Array }) => void,
+  signal?: AbortSignal,
+): Promise<StreamOutcome> {
+  const w = getWorker();
+  if (!w) return Promise.resolve({ whole: "no-worker" });
+  const id = nextId++;
+  const post = (msg: StreamToWorker, transfer?: Transferable[]): void =>
+    w.postMessage(msg, transfer ?? []);
+  return new Promise<StreamOutcome>((resolve) => {
+    let over = false;
+    const finish = (out: StreamOutcome): void => {
+      if (over) return;
+      over = true;
+      streaming.delete(id);
+      pending.delete(id);
+      signal?.removeEventListener("abort", stop);
+      resolve(out);
+    };
+    const stop = (): void => {
+      post({ type: "cancel", id });
+      finish({ failed: "cancelled" });
+    };
+    signal?.addEventListener("abort", stop, { once: true });
+    pending.set(id, {
+      resolve: (measured) => finish({ measured }),
+      reject: (err) => {
+        const why = err instanceof Error ? err.message : String(err);
+        finish(
+          why === "unsupported" || why === "unknown-length" ? { whole: why } : { failed: why },
+        );
+      },
+    });
+    streaming.set(id, (msg) => {
+      if (msg.type === "progress") onProgress?.(msg);
+      if (msg.type !== "want" || over) return;
+      void read().then(
+        (got) => {
+          if (over) return;
+          if (got === null) return post({ type: "end", id });
+          if (!(got instanceof Uint8Array)) {
+            post({ type: "cancel", id });
+            return finish({ failed: got.error });
+          }
+          // its own buffer, handed over rather than copied
+          const bytes =
+            got.byteOffset === 0 && got.byteLength === got.buffer.byteLength ? got : got.slice();
+          post({ type: "bytes", id, bytes }, [bytes.buffer]);
+        },
+        () => {
+          post({ type: "cancel", id });
+          finish({ failed: "failed" });
+        },
+      );
+    });
+    if (signal?.aborted) return stop();
+    post({ type: "open", id, buckets });
   });
 }

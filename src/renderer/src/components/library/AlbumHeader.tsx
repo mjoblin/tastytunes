@@ -175,8 +175,8 @@ export function AlbumHeader(
                   >
                     analyzing
                     {analysisProgress != null &&
-                      analysisProgress.total > 0 &&
-                      ` ${analysisProgress.done}/${analysisProgress.total}`}
+                      analysisProgress.at > 0 &&
+                      ` ${analysisProgress.at}/${analysisProgress.total}`}
                     …
                   </span>
                 ) : (

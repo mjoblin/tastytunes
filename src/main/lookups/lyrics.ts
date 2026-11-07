@@ -3,8 +3,11 @@
 // (renderer fetch can't set one). Results are cached per track in a bounded
 // disk-persisted LRU (diskCache.ts) — including DEFINITIVE misses ("LRCLIB
 // answered: no lyrics") — but transient failures (unreachable, timeout, 5xx)
-// are never cached, so the next request retries cleanly. `force` bypasses the
-// cache read for a user-driven refresh; its fresh answer overwrites the entry.
+// are never cached, so the next request retries cleanly. Such a failure is said
+// as "unreachable", never as "no lyrics": the window asks again, where a null
+// read as a miss left "No lyrics found" on a track until the line was toggled
+// off and on (his look, 2026-10-30). `force` bypasses the cache read for a
+// user-driven refresh; its fresh answer overwrites the entry.
 import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { app } from "electron";
@@ -25,6 +28,9 @@ const SYNC_TOLERANCE_SECS = 10;
 // until LRU turnover (the v1 file is removed on first use).
 const cache = new DiskCache<LyricsResult>("lyrics2", CACHE_MAX);
 let purgedV1 = false;
+// One request per track at a time: the lyric line, the panel, display mode and a scene's feed
+// each ask for the playing track, and each retries a failure, so they share one answer.
+const asking = new Map<string, Promise<LyricsResult | null | "unreachable">>();
 
 interface ApiRecord {
   plainLyrics: string | null;
@@ -50,7 +56,25 @@ async function getJson(url: string): Promise<Fetched> {
   }
 }
 
-export async function fetchLyrics(q: LyricsQuery, force = false): Promise<LyricsResult | null> {
+export function fetchLyrics(
+  q: LyricsQuery,
+  force = false,
+): Promise<LyricsResult | null | "unreachable"> {
+  const key = [q.artist, q.title, q.album ?? "", q.duration ?? ""].join("|").toLowerCase();
+  const pending = force ? undefined : asking.get(key);
+  if (pending) return pending;
+  const run = lookUp(key, q, force).finally(() => {
+    if (asking.get(key) === run) asking.delete(key);
+  });
+  asking.set(key, run);
+  return run;
+}
+
+async function lookUp(
+  key: string,
+  q: LyricsQuery,
+  force: boolean,
+): Promise<LyricsResult | null | "unreachable"> {
   if (!purgedV1) {
     purgedV1 = true;
     try {
@@ -59,7 +83,6 @@ export async function fetchLyrics(q: LyricsQuery, force = false): Promise<Lyrics
       // best-effort tidy-up of the generation-1 file
     }
   }
-  const key = [q.artist, q.title, q.album ?? "", q.duration ?? ""].join("|").toLowerCase();
   if (!force && cache.has(key)) return cache.get(key) ?? null;
 
   let result: LyricsResult | null = null;
@@ -132,5 +155,5 @@ export async function fetchLyrics(q: LyricsQuery, force = false): Promise<Lyrics
   }
 
   if (definitive) cache.set(key, result);
-  return result;
+  return result ?? (definitive ? null : "unreachable");
 }

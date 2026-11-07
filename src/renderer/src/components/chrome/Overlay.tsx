@@ -76,6 +76,10 @@ export function PopoverCard({
   const boxRef = useRef<HTMLDivElement | null>(null);
   const pos = useClampedPosition(boxRef, at.x, at.y);
   useDialogFocus(true, boxRef);
+  // A MENU HOLDS THE KEYBOARD (0.14.0, his K4): while it is open, nothing behind it hears a key
+  // (the arrows changed the volume under an open menu); the arrows move between its items
+  useEffect(() => holdKeyboard(), []);
+  const { onKeyDown, ...attrs } = rest;
 
   return createPortal(
     <>
@@ -90,13 +94,42 @@ export function PopoverCard({
         tabIndex={-1}
         className={cx("fixed z-50 outline-none", width, POPOVER_CARD, className)}
         style={pos}
-        {...rest}
+        {...attrs}
+        onKeyDown={(e) => {
+          onKeyDown?.(e);
+          if (!e.defaultPrevented) moveAmongItems(e);
+        }}
       >
         {children}
       </div>
     </>,
     document.body,
   );
+}
+
+/** Up and down (Home, End) through a menu's enabled buttons, round at the ends; a text box or
+ *  a slider inside keeps its own arrows. */
+function moveAmongItems(e: React.KeyboardEvent<HTMLDivElement>): void {
+  if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key)) return;
+  if ((e.target as HTMLElement).matches('input, textarea, [contenteditable], [role="slider"]'))
+    return;
+  const items = [...e.currentTarget.querySelectorAll<HTMLElement>("button:not([disabled])")].filter(
+    (b) => b.offsetParent !== null,
+  );
+  if (items.length === 0) return;
+  e.preventDefault();
+  const at = items.indexOf(document.activeElement as HTMLElement);
+  const next =
+    e.key === "Home"
+      ? 0
+      : e.key === "End"
+        ? items.length - 1
+        : e.key === "ArrowDown"
+          ? (at + 1) % items.length
+          : at <= 0
+            ? items.length - 1
+            : at - 1;
+  items[next].focus();
 }
 
 /**

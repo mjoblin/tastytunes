@@ -60,6 +60,7 @@ import type {
   MediaServerInfo,
   MissedSchedule,
   NetRequestEntry,
+  PictureOffer,
   Playlist,
   PlaylistActivation,
   HeldState,
@@ -329,9 +330,10 @@ export interface TastyTunesApi {
   /** The picture embedded in a track's audio file, for surfaces the server's
    *  small artwork can't fill. Null when off, unresolvable, or untagged. */
   embeddedArt(query: EmbeddedArtQuery): Promise<EmbeddedArt | null>;
-  /** Look up lyrics via LRCLIB (main process, in-memory cached; null = not found).
-   *  `force` bypasses the cache read — the user-driven refresh. */
-  fetchLyrics(query: LyricsQuery, force?: boolean): Promise<LyricsResult | null>;
+  /** Look up lyrics via LRCLIB (main process, disk cached). null: LRCLIB answered, no lyrics;
+   *  "unreachable": it was never really asked (a timeout, no network, a server error), nothing
+   *  kept, so asking again is worth it. `force` bypasses the cache read — the user-driven refresh. */
+  fetchLyrics(query: LyricsQuery, force?: boolean): Promise<LyricsResult | null | "unreachable">;
   /** Check the saved ListenBrainz token (null = network failure, not a verdict). */
   lbValidate(): Promise<{ valid: boolean; userName: string | null } | null>;
   /** The secrets store (0.13.0 round 10, main/data/secrets): what Settings may know of the tokens,
@@ -377,9 +379,13 @@ export interface TastyTunesApi {
   artistChoices(): Promise<Record<string, ChosenPicture>>;
   /** Choose an artist's picture, or clear the choice (null): the default picture comes back. */
   setArtistChoice(name: string, choice: ArtistChoice | null): Promise<boolean>;
-  /** The images in an artist's Wikipedia article that may be chosen (with the artist lookups on;
-   *  cached; empty when the article has none or the artist has no article). */
-  artistImages(name: string): Promise<string[]>;
+  /** The images in an artist's Wikipedia article that may be chosen, each with its full size and
+   *  file page where Wikipedia says (with the artist lookups on; cached; empty when the article
+   *  has none or the artist has no article). */
+  artistImages(name: string): Promise<PictureOffer[]>;
+  /** The photos in the artist's Wikimedia Commons category that the article doesn't show, each
+   *  with its size (0.14.0; with the artist lookups on; cached; empty when there is no category). */
+  artistCommons(name: string): Promise<PictureOffer[]>;
   /** A picture file to choose: the system's open dialog, the file copied (and made no larger than
    *  it needs to be) into the app's data; null when cancelled or not a picture. */
   pickArtistPictureFile(): Promise<{ file: string; url: string } | "unreadable" | null>;
@@ -407,6 +413,19 @@ export interface TastyTunesApi {
     serverUdn: string,
     objectId: string,
   ): Promise<Uint8Array | { tooLarge: { bytes: number; maxBytes: number } } | null>;
+  /** A track's file opened to be read in pieces for the analysis (0.14.0, no size limit): its
+   *  stream's id and declared length, or null when the server wouldn't give it. */
+  audioStreamOpen(
+    serverUdn: string,
+    objectId: string,
+  ): Promise<{ id: number; bytes: number | null } | null>;
+  /** The stream's next piece: bytes, null at the end, or why there are none ("stalled": no byte
+   *  arrived for twenty seconds; main/media/audioStream). */
+  audioStreamRead(
+    id: number,
+  ): Promise<Uint8Array | null | { error: "stalled" | "failed" | "closed" }>;
+  /** Stop reading a stream: its download ends. */
+  audioStreamClose(id: number): Promise<void>;
   /** EXPERIMENT: a stored analysis by content key (null = none yet). */
   audioAnalysisGet(key: string): Promise<AudioAnalysis | null>;
   /** EXPERIMENT: persist a finished analysis under its content key. */
@@ -612,11 +631,15 @@ export const IPC = {
   artistChoices: "tt:artistChoices",
   setArtistChoice: "tt:setArtistChoice",
   artistImages: "tt:artistImages",
+  artistCommons: "tt:artistCommons",
   pickArtistPictureFile: "tt:pickArtistPictureFile",
   fetchAlbumInfo: "tt:fetchAlbumInfo",
   fetchTrackInfo: "tt:fetchTrackInfo",
   fetchDiscTracks: "tt:fetchDiscTracks",
   expTrackAudio: "tt:expTrackAudio",
+  audioStreamOpen: "tt:audioStreamOpen",
+  audioStreamRead: "tt:audioStreamRead",
+  audioStreamClose: "tt:audioStreamClose",
   audioAnalysisGet: "tt:audioAnalysisGet",
   audioAnalysisPut: "tt:audioAnalysisPut",
   albumDrMap: "tt:albumDrMap",

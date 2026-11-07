@@ -4,14 +4,12 @@ import type { LibrarySpot } from "@/store";
 import {
   HardDrive,
   Heart,
-  LayoutGrid,
   Library,
   ListEnd,
   ListPlus,
   ListStart,
   Play,
   RotateCw,
-  Rows3,
   Search,
   Usb,
 } from "lucide-react";
@@ -22,7 +20,6 @@ import {
   type MediaNode,
   type MediaQueueAction,
   type MediaServerInfo,
-  type ScreenLayout,
   orderTracks,
   discGroups,
   albumFormat,
@@ -45,6 +42,9 @@ import { queueWrite, tt } from "@/api";
 import { useStore } from "@/store";
 import { cx, matchesFilter } from "@/lib/format";
 import { useIndexPools } from "@/hooks/useIndexPools";
+import { ViewOptions } from "@/components/library/lenses/ViewOptions";
+import { useLensIndex } from "@/components/library/lenses/useLensIndex";
+import { useCardDetails } from "@/components/library/useCardDetails";
 import { browseWalk } from "@/components/library/browseWalk";
 import { MOD } from "@/lib/screens";
 import { flashTarget, scrollToCentered } from "@/lib/scroll";
@@ -72,13 +72,7 @@ import {
 } from "@/components/library/lensNavigation";
 import { SelectionBar, SelectionVerb } from "@/components/controls/SelectionBar";
 import { EmptyState } from "@/components/chrome/EmptyState";
-import {
-  HeaderChip,
-  PrimaryButton,
-  ScreenTitle,
-  GAP_BETWEEN,
-  GAP_WITHIN,
-} from "@/components/chrome/Chrome";
+import { PrimaryButton, ScreenTitle, GAP_BETWEEN, GAP_WITHIN } from "@/components/chrome/Chrome";
 import { useOneShotAsk } from "@/hooks/useOneShotAsk";
 import { useLibraryMenus, type MenusLate } from "@/components/library/useLibraryMenus";
 import { useLibraryFavorites } from "@/components/library/useLibraryFavorites";
@@ -89,6 +83,10 @@ import { useIndexDoors } from "@/components/library/useIndexDoors";
 import { usePlayingMatch } from "@/components/library/usePlayingMatch";
 import { useQueueMatch } from "@/components/library/useQueueMatch";
 import { useWindowedList } from "@/hooks/useWindowedList";
+import { ListKeysContext, useListKeys, type ListItemAttrs } from "@/hooks/useListKeys";
+import { searchStep, type SearchSpot } from "@/components/library/searchKeys";
+import { KeyedList } from "@/components/controls/KeyedList";
+import { keyedEvent } from "@/lib/menuAt";
 import { Lru } from "@/lib/lru";
 import { AlbumCompactVerbs, AlbumCrumbArt, AlbumHeader } from "@/components/library/AlbumHeader";
 import { ArtistHeader } from "@/components/library/ArtistHeader";
@@ -112,6 +110,7 @@ export type Crumb = { id: string; title: string; node?: MediaNode };
 // 2026-07-24 (user ask); the reset now lives behind re-invoking Library while
 // already here, or the breadcrumb root. Per-folder scroll and filter memories
 // apply while browsing within a visit.
+const NO_POOLS: MediaIndexPools[] = [];
 const scrollMemory = new Map<string, number>();
 // Per-LEVEL filter memory: each folder keeps its own filter for the session
 // (the store's screenFilters.library always holds the current level's).
@@ -359,6 +358,12 @@ export function LibraryScreen(): React.JSX.Element {
   const tailNode = path.at(-1)?.node;
   const arrived = tailNode != null && standIns.has(tailNode);
   const lensPools = useIndexPools(lens != null || tailVol != null || arrived);
+  // a server's album cards take the format line too (0.14.0, his D6 pick: every album card,
+  // behind the same switch): the index's tracks give each its format, asked only while shown
+  const formatLine = useStore((s) => s.settings.albumCardFormat);
+  const folderPools = useIndexPools(formatLine && cards && lens == null);
+  const folderIndex = useLensIndex(folderPools ?? NO_POOLS);
+  const folderDetails = useCardDetails(folderPools ? folderIndex : null);
 
   // Action feedback: the app-wide toast for failures, a gold pulse for wins.
   // (The screen's original local notice banner graduated into the toast.)
@@ -747,10 +752,6 @@ export function LibraryScreen(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [path, serverUdn, filter, searchState, searchReturn, searchMode, searchQuery, crossState, lens],
   );
-
-  const setLayout = async (libraryLayout: ScreenLayout): Promise<void> => {
-    await saveSettings({ libraryLayout });
-  };
 
   // ----------------------------------------------------------------- actions
 
@@ -1209,6 +1210,59 @@ export function LibraryScreen(): React.JSX.Element {
     overscan: 6,
     enabled: searchLines.length > 80,
   });
+  // FROM THE KEYBOARD (0.14.0, his K1 to K6): the search results one Tab stop across their
+  // windowed lines, a kind's cards a grid and its rows a column (components/library/searchKeys);
+  // Enter opens a result or plays a track as its click does, "." its More menu
+  const { searchSpots, firstOfLine } = useMemo(() => {
+    const spots: Array<SearchSpot & { node: MediaNode; list: MediaNode[] | null }> = [];
+    const first: number[] = [];
+    let section = -1;
+    searchLines.forEach((l, line) => {
+      first.push(spots.length);
+      if ("text" in l) section++;
+      else if ("nodes" in l)
+        l.nodes.forEach((node, col) =>
+          spots.push({ line, col, card: true, section, node, list: null }),
+        );
+      else if ("node" in l)
+        spots.push({
+          line,
+          col: 0,
+          card: false,
+          section,
+          node: l.node,
+          list: l.kind === "track" ? l.list : null,
+        });
+    });
+    return { searchSpots: spots, firstOfLine: first };
+  }, [searchLines]);
+  const searchKeys = useListKeys({
+    count: searchSpots.length,
+    step: (key, at) => searchStep(key, at, searchSpots),
+    onEnter: (i, el) => {
+      const r = searchSpots[i];
+      if (!r) return;
+      if (!r.list) enter(r.node);
+      else if (!trackRowClick(r.node, keyedEvent(el))) playTrack(r.node, el);
+    },
+    onMenu: (i, el) => {
+      const r = searchSpots[i];
+      if (r) openMenu(r.node, keyedEvent(el), r.list ?? undefined);
+    },
+    reveal: (i) => {
+      const r = searchSpots[i];
+      const sc = scrollRef.current;
+      if (r && sc) sc.scrollTop = Math.max(0, searchWin.offsetOf(r.line) - sc.clientHeight / 3);
+    },
+  });
+  const searchKeysRef = searchKeys.container.ref;
+  const searchListRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      searchBodyRef(el);
+      searchKeysRef(el);
+    },
+    [searchBodyRef, searchKeysRef],
+  );
 
   const crossItemCount = crossState
     ? crossState.groups.reduce((acc, g) => acc + g.items.length, 0)
@@ -1406,11 +1460,13 @@ export function LibraryScreen(): React.JSX.Element {
   /** A server's folders, browsed: a plain folder takes a ⋯ (Use as Recently added, 0.13.0). */
   const folderMenus = serverUdn != null && !searchMode && lens == null;
   /** One container as the listing draws it: a card, or a row in the rows layout. */
-  const containerItem = (node: MediaNode): React.JSX.Element =>
+  const containerItem = (node: MediaNode, item?: ListItemAttrs): React.JSX.Element =>
     cards ? (
       <ContainerCard
         key={node.id}
+        item={item}
         node={node}
+        details={isAlbumClass(node.upnpClass) ? folderDetails?.(node) : undefined}
         playing={queueSourceActive && isPlayingAlbum(node)}
         menuOpen={menuNodeId === node.id}
         favorited={isAlbumClass(node.upnpClass) ? nodeFavorited(node) : undefined}
@@ -1426,6 +1482,7 @@ export function LibraryScreen(): React.JSX.Element {
     ) : (
       <ContainerRow
         key={node.id}
+        item={item}
         node={node}
         playing={queueSourceActive && isPlayingAlbum(node)}
         menuOpen={menuNodeId === node.id}
@@ -1444,8 +1501,22 @@ export function LibraryScreen(): React.JSX.Element {
       />
     );
 
-  const containerGrid = (list: MediaNode[]): React.JSX.Element => (
-    <div
+  // FROM THE KEYBOARD (0.14.0, his K1 to K6): each grid or column of rows one Tab stop, Enter
+  // opens a folder or an album as its click does, "." its More menu
+  const containerGrid = (list: MediaNode[], label = "Folders"): React.JSX.Element => (
+    <KeyedList
+      label={label}
+      grid={cards}
+      count={list.length}
+      onEnter={(i) => {
+        const n = list[i];
+        if (n) enter(n);
+      }}
+      onMenu={(i, el) => {
+        const n = list[i];
+        if (n && (isAlbumClass(n.upnpClass) || isArtistClass(n.upnpClass) || folderMenus))
+          openMenu(n, keyedEvent(el));
+      }}
       className={cx(!cards && "divide-y divide-edge/50 -mx-2")}
       style={
         cards
@@ -1460,8 +1531,8 @@ export function LibraryScreen(): React.JSX.Element {
           : undefined
       }
     >
-      {list.map((node) => containerItem(node))}
-    </div>
+      {(item) => list.map((node, i) => containerItem(node, item(i)))}
+    </KeyedList>
   );
 
   // AN ARTIST PAGE NAMES WHAT IT HOLDS (2026-10-11, user: "do we want to add an 'Albums' title
@@ -1478,7 +1549,7 @@ export function LibraryScreen(): React.JSX.Element {
         {albums.length > 0 && (
           <>
             <div className="microlabel pb-0.5 px-1 pt-2">Albums</div>
-            {containerGrid(albums)}
+            {containerGrid(albums, "Albums")}
           </>
         )}
         {other.length > 0 && (
@@ -1528,10 +1599,13 @@ export function LibraryScreen(): React.JSX.Element {
       links: boolean;
       /** The list Info steps through when it isn't `siblings` (an album's every disc). */
       infoList?: MediaNode[];
+      /** In a keyed list: the row's id and index. */
+      item?: ListItemAttrs;
     },
   ): React.JSX.Element => (
     <TrackRow
       key={node.id}
+      item={opts.item}
       node={node}
       showArt={opts.showArt}
       isCurrent={queueSourceActive && isCurrentTrack(node)}
@@ -1560,8 +1634,10 @@ export function LibraryScreen(): React.JSX.Element {
   );
 
   /** One line of the windowed search results; its spacing lives inside it (see searchLines). */
-  const searchLine = (line: SearchLine): React.JSX.Element => {
+  const searchLine = (line: SearchLine, li: number): React.JSX.Element => {
     const attrs = { "data-search-line": "", "data-win-kind": line.kind };
+    // the line's first result in the keyed list (searchSpots)
+    const at = firstOfLine[li];
     if ("group" in line) {
       const src = servers?.find((x) => x.udn === line.group.udn);
       return (
@@ -1607,7 +1683,7 @@ export function LibraryScreen(): React.JSX.Element {
             paddingTop: line.kind === "cards0" ? 8 : presetGap,
           }}
         >
-          {line.nodes.map((node) => containerItem(node))}
+          {line.nodes.map((node, col) => containerItem(node, searchKeys.item(at + col)))}
         </div>
       );
     // a row: its divider is its own top border, transparent on a section's first
@@ -1618,8 +1694,12 @@ export function LibraryScreen(): React.JSX.Element {
         className={cx("-mx-2 border-t", line.index === 0 ? "border-transparent" : "border-edge/50")}
       >
         {line.kind === "crow"
-          ? containerItem(line.node)
-          : trackRow(line.node, line.list, line.index, { showArt: true, links: true })}
+          ? containerItem(line.node, searchKeys.item(at))
+          : trackRow(line.node, line.list, line.index, {
+              showArt: true,
+              links: true,
+              item: searchKeys.item(at),
+            })}
       </div>
     );
   };
@@ -1658,8 +1738,8 @@ export function LibraryScreen(): React.JSX.Element {
                 ? `${analysisProgress.album.slice(0, 39)}…`
                 : analysisProgress.album}
               ”
-              {analysisProgress.total > 0 &&
-                `${FACT_SEP}${analysisProgress.done}/${analysisProgress.total}`}
+              {analysisProgress.at > 0 &&
+                `${FACT_SEP}${analysisProgress.at}/${analysisProgress.total}`}
               {analysisProgress.queued > 0 && `${FACT_SEP}+${analysisProgress.queued} queued`}
             </div>
           )}
@@ -1735,14 +1815,9 @@ export function LibraryScreen(): React.JSX.Element {
             {!atRoot &&
               !albumNode &&
               (searchMode ? containers.length > 0 : rawContainerCount > 0) && (
-                <HeaderChip
-                  data-tip={cards ? "Albums & folders as rows" : "Albums & folders as cards"}
-                  aria-label={cards ? "Albums & folders as rows" : "Albums & folders as cards"}
-                  onClick={() => void setLayout(cards ? "rows" : "cards")}
-                  className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
-                >
-                  {cards ? <Rows3 size={16} /> : <LayoutGrid size={16} />}
-                </HeaderChip>
+                // the Library's one Rows or Cards, the format line and the card grid's size, gap
+                // and Fill rows (0.14.0, his D5 pick: the menu wherever the button was)
+                <ViewOptions kind="folders" />
               )}
           </div>
         </div>
@@ -2054,10 +2129,20 @@ export function LibraryScreen(): React.JSX.Element {
         {((!atRoot && state === "ready" && searchMode && searchState) ||
           (crossMode && crossState)) &&
           searchLines.length > 0 && (
-            <div ref={searchBodyRef} data-search-list style={{ overflowAnchor: "none" }}>
-              {searchWin.padTop > 0 && <div style={{ height: searchWin.padTop }} />}
-              {searchLines.slice(searchWin.first, searchWin.last + 1).map(searchLine)}
-              {searchWin.padBottom > 0 && <div style={{ height: searchWin.padBottom }} />}
+            <div
+              {...searchKeys.container}
+              ref={searchListRef}
+              aria-label="Search results"
+              data-search-list
+              style={{ overflowAnchor: "none" }}
+            >
+              <ListKeysContext.Provider value={true}>
+                {searchWin.padTop > 0 && <div style={{ height: searchWin.padTop }} />}
+                {searchLines
+                  .slice(searchWin.first, searchWin.last + 1)
+                  .map((l, k) => searchLine(l, searchWin.first + k))}
+                {searchWin.padBottom > 0 && <div style={{ height: searchWin.padBottom }} />}
+              </ListKeysContext.Provider>
             </div>
           )}
 
@@ -2117,38 +2202,55 @@ export function LibraryScreen(): React.JSX.Element {
           </div>
         )}
         {!atRoot && state === "ready" && !searchMode && tracks.length > 0 ? (
-          <div
+          <KeyedList
+            label="Tracks"
+            count={tracks.length}
+            // an album opened from the keyboard starts on the playing track
+            initial={() => tracks.findIndex((t) => queueSourceActive && isCurrentTrack(t))}
+            onEnter={(i, el) => {
+              const t = tracks[i];
+              if (t && !trackRowClick(t, keyedEvent(el))) playTrack(t, el);
+            }}
+            onMenu={(i, el) => {
+              const t = tracks[i];
+              if (t) openMenu(t, keyedEvent(el), tracks);
+            }}
             className={cx(
               "divide-y divide-edge/50 -mx-2",
               containers.length > 0 && !searchMode && !artistNode && "mt-4",
             )}
           >
-            {/* an album leaf that spans discs gets the same quiet "Disc N"
+            {(item) => (
+              <>
+                {/* an album leaf that spans discs gets the same quiet "Disc N"
                 dividers as the lens (one group, no divider, otherwise) */}
-            {(albumNode ? discGroups(tracks) : [{ disc: null, tracks }]).map((g, gi) => (
-              <div key={g.disc ?? `d${gi}`}>
-                {g.disc != null && (
-                  <div className="microlabel px-2 pt-3 pb-1" data-disc-divider>
-                    Disc {g.disc}
+                {(albumNode ? discGroups(tracks) : [{ disc: null, tracks }]).map((g, gi) => (
+                  <div key={g.disc ?? `d${gi}`}>
+                    {g.disc != null && (
+                      <div className="microlabel px-2 pt-3 pb-1" data-disc-divider>
+                        Disc {g.disc}
+                      </div>
+                    )}
+                    <div className="divide-y divide-edge/50">
+                      {g.tracks.map((node, ti) =>
+                        trackRow(node, g.tracks, ti, {
+                          item: item(tracks.indexOf(node)),
+                          // Info steps through the whole album, every disc
+                          infoList: tracks,
+                          showArt: !albumNode,
+                          note: albumNoteFor(node),
+                          artistLabel: albumNode
+                            ? performerLine(node, albumArtist ?? albumNode.artist)
+                            : null,
+                          links: searchMode,
+                        }),
+                      )}
+                    </div>
                   </div>
-                )}
-                <div className="divide-y divide-edge/50">
-                  {g.tracks.map((node, ti) =>
-                    trackRow(node, g.tracks, ti, {
-                      // Info steps through the whole album, every disc
-                      infoList: tracks,
-                      showArt: !albumNode,
-                      note: albumNoteFor(node),
-                      artistLabel: albumNode
-                        ? performerLine(node, albumArtist ?? albumNode.artist)
-                        : null,
-                      links: searchMode,
-                    }),
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
+                ))}
+              </>
+            )}
+          </KeyedList>
         ) : null}
       </div>
 

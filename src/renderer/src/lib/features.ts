@@ -1,5 +1,6 @@
 import { FEATURES_VERSION, TEMPO_CONFIDENCE_FLOOR, type AnalysisFeatures } from "@shared/model";
 import { Fft, b64, unb64, type Strip } from "./featureStrip";
+import { feed, type Sink, type Tape } from "./stream/tape";
 import { ONSET_HOP_MS, type Onsets } from "./onsets";
 
 /**
@@ -95,13 +96,39 @@ export function computeFeatures(
   onsets: Onsets,
   flux: Float32Array,
 ): Features {
-  const seconds = chans[0].length / sampleRate;
+  const sinks = featureSinks(sampleRate, chans.length, chans[0].length, strip.fps);
+  feed([sinks.chroma, sinks.stereo, sinks.timbre], chans);
+  return featuresFrom(sinks, chans[0].length / sampleRate, strip, onsets, flux);
+}
+
+/** The windowed features' sinks: chroma, stereo and timbre, read from the tape as it fills. */
+export function featureSinks(
+  sampleRate: number,
+  channels: number,
+  frames: number,
+  fps: number,
+): { chroma: ChromaSink; stereo: StereoSink; timbre: TimbreSink } {
+  return {
+    chroma: new ChromaSink(sampleRate, channels, frames),
+    stereo: new StereoSink(sampleRate, channels, frames, fps),
+    timbre: new TimbreSink(sampleRate, channels, frames, fps),
+  };
+}
+
+/** The features, once the windowed sinks have read the whole track. */
+export function featuresFrom(
+  sinks: { chroma: ChromaSink; stereo: StereoSink; timbre: TimbreSink },
+  seconds: number,
+  strip: Strip,
+  onsets: Onsets,
+  flux: Float32Array,
+): Features {
   const beats = trackBeats(flux, onsets);
-  const chroma = computeChroma(chans, sampleRate);
+  const chroma = sinks.chroma.chroma();
   const key = keyOf(chroma);
   const changes = chordChanges(chroma);
-  const stereo = computeStereo(chans, sampleRate, strip.fps);
-  const timbre = computeTimbre(chans, sampleRate, strip.fps);
+  const stereo = sinks.stereo.stereo();
+  const timbre = sinks.timbre.timbre();
   const silences = findSilences(strip);
   const drops = findDrops(strip, onsets, beats);
   const sections = findSections(strip, chroma, seconds, drops);
@@ -286,48 +313,74 @@ function gridEvidence(
 
 // ---------------------------------------------------------------- chroma and key
 
-function computeChroma(chans: readonly Float32Array[], sampleRate: number): Chroma {
-  const frames = chans[0].length;
-  const hop = Math.round(sampleRate / CHROMA_FPS);
-  const count = Math.max(1, Math.floor(frames / hop));
-  const n = sampleRate > 60_000 ? 16384 : 8192;
-  const fft = new Fft(n);
-  const window = new Float32Array(n);
-  for (let i = 0; i < n; i++) window[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (n - 1));
-  const re = new Float64Array(n);
-  const im = new Float64Array(n);
-  const inv = 1 / chans.length;
-  // bin → pitch class, 55 Hz to 4 kHz
-  const binClass = new Int8Array(n / 2).fill(-1);
-  for (let k = 1; k < n / 2; k++) {
-    const hz = (k * sampleRate) / n;
-    if (hz < 55 || hz > 4000) continue;
-    binClass[k] = ((Math.round(12 * Math.log2(hz / 440)) % 12) + 12 + 9) % 12; // A = 9
-  }
-  const data = new Float32Array(count * 12);
-  for (let f = 0; f < count; f++) {
-    const start = f * hop + Math.round(hop / 2) - n / 2;
-    for (let i = 0; i < n; i++) {
-      const idx = start + i;
-      let v = 0;
-      if (idx >= 0 && idx < frames) for (const c of chans) v += c[idx];
-      re[i] = v * inv * window[i];
-      im[i] = 0;
-    }
-    fft.transform(re, im);
-    const row = f * 12;
+/**
+ * CHROMA IN PIECES (0.14.0, analysis with no size limit): each frame's window read from the tape
+ * (lib/stream/tape) once its samples have arrived, the mix and the arithmetic as before.
+ */
+export class ChromaSink implements Sink {
+  private readonly hop: number;
+  private readonly count: number;
+  private readonly n: number;
+  private readonly fft: Fft;
+  private readonly window: Float32Array;
+  private readonly re: Float64Array;
+  private readonly im: Float64Array;
+  private readonly inv: number;
+  private readonly binClass: Int8Array;
+  private readonly data: Float32Array;
+  private f = 0;
+  constructor(sampleRate: number, channels: number, frames: number) {
+    this.hop = Math.round(sampleRate / CHROMA_FPS);
+    this.count = Math.max(1, Math.floor(frames / this.hop));
+    const n = (this.n = sampleRate > 60_000 ? 16384 : 8192);
+    this.fft = new Fft(n);
+    this.window = new Float32Array(n);
+    for (let i = 0; i < n; i++) this.window[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (n - 1));
+    this.re = new Float64Array(n);
+    this.im = new Float64Array(n);
+    this.inv = 1 / channels;
+    // bin → pitch class, 55 Hz to 4 kHz
+    this.binClass = new Int8Array(n / 2).fill(-1);
     for (let k = 1; k < n / 2; k++) {
-      const pc = binClass[k];
-      if (pc >= 0) data[row + pc] += re[k] * re[k] + im[k] * im[k];
+      const hz = (k * sampleRate) / n;
+      if (hz < 55 || hz > 4000) continue;
+      this.binClass[k] = ((Math.round(12 * Math.log2(hz / 440)) % 12) + 12 + 9) % 12; // A = 9
     }
-    let max = 0;
-    for (let p = 0; p < 12; p++) {
-      data[row + p] = Math.sqrt(data[row + p]);
-      if (data[row + p] > max) max = data[row + p];
-    }
-    if (max > 0) for (let p = 0; p < 12; p++) data[row + p] /= max;
+    this.data = new Float32Array(this.count * 12);
   }
-  return { fps: CHROMA_FPS, data };
+  private startOf(f: number): number {
+    return f * this.hop + Math.round(this.hop / 2) - this.n / 2;
+  }
+  get needs(): number {
+    return this.f < this.count ? Math.max(0, this.startOf(this.f)) : Infinity;
+  }
+  take(tape: Tape): void {
+    const { n, re, im, window, inv, fft, binClass, data } = this;
+    for (; this.f < this.count; this.f++) {
+      const f = this.f;
+      const start = this.startOf(f);
+      if (start + n > tape.end && !tape.done) return;
+      for (let i = 0; i < n; i++) {
+        re[i] = tape.mixAt(start + i) * inv * window[i];
+        im[i] = 0;
+      }
+      fft.transform(re, im);
+      const row = f * 12;
+      for (let k = 1; k < n / 2; k++) {
+        const pc = binClass[k];
+        if (pc >= 0) data[row + pc] += re[k] * re[k] + im[k] * im[k];
+      }
+      let max = 0;
+      for (let p = 0; p < 12; p++) {
+        data[row + p] = Math.sqrt(data[row + p]);
+        if (data[row + p] > max) max = data[row + p];
+      }
+      if (max > 0) for (let p = 0; p < 12; p++) data[row + p] /= max;
+    }
+  }
+  chroma(): Chroma {
+    return { fps: CHROMA_FPS, data: this.data };
+  }
 }
 
 // Krumhansl-Kessler key profiles
@@ -402,85 +455,138 @@ function chordChanges(chroma: Chroma): Float32Array {
 
 // ---------------------------------------------------------------- stereo and timbre
 
-function computeStereo(
-  chans: readonly Float32Array[],
-  sampleRate: number,
-  fps: number,
-): Stereo | null {
-  if (chans.length < 2) return null;
-  const [L, R] = chans;
-  const hop = Math.max(1, Math.round(sampleRate / fps));
-  const count = Math.max(1, Math.floor(L.length / hop));
-  const pan = new Float32Array(count);
-  const width = new Float32Array(count);
-  let anyWidth = 0;
-  for (let f = 0; f < count; f++) {
-    let l = 0;
-    let r = 0;
-    let m = 0;
-    let s = 0;
-    const start = f * hop;
-    for (let i = start; i < start + hop && i < L.length; i++) {
-      l += L[i] * L[i];
-      r += R[i] * R[i];
-      const mid = (L[i] + R[i]) / 2;
-      const side = (L[i] - R[i]) / 2;
-      m += mid * mid;
-      s += side * side;
-    }
-    const lr = Math.sqrt(l) + Math.sqrt(r);
-    pan[f] = lr > 1e-9 ? (Math.sqrt(r) - Math.sqrt(l)) / lr : 0;
-    const ms = Math.sqrt(m) + Math.sqrt(s);
-    width[f] = ms > 1e-9 ? Math.min(1, (2 * Math.sqrt(s)) / ms) : 0;
-    anyWidth = Math.max(anyWidth, width[f]);
+/** STEREO IN PIECES (0.14.0): each frame's left and right read from the tape once they arrive. */
+export class StereoSink implements Sink {
+  private readonly two: boolean;
+  private readonly hop: number;
+  private readonly count: number;
+  private readonly frames: number;
+  private readonly pan: Float32Array;
+  private readonly width: Float32Array;
+  private anyWidth = 0;
+  private f = 0;
+  constructor(sampleRate: number, channels: number, frames: number, fps: number) {
+    this.two = channels >= 2;
+    this.hop = Math.max(1, Math.round(sampleRate / fps));
+    this.count = Math.max(1, Math.floor(frames / this.hop));
+    this.frames = frames;
+    this.fps = fps;
+    this.pan = new Float32Array(this.two ? this.count : 0);
+    this.width = new Float32Array(this.two ? this.count : 0);
   }
-  // identical channels are mono in a stereo coat
-  if (anyWidth < 0.02) return null;
-  return { fps, pan, width };
+  private readonly fps: number;
+  get needs(): number {
+    return this.two && this.f < this.count ? this.f * this.hop : Infinity;
+  }
+  take(tape: Tape): void {
+    if (!this.two) return;
+    const { hop, frames } = this;
+    const L = tape.chan[0];
+    const R = tape.chan[1];
+    for (; this.f < this.count; this.f++) {
+      const f = this.f;
+      const start = f * hop;
+      const stop = Math.min(start + hop, frames);
+      if (stop > tape.end) return;
+      let l = 0;
+      let r = 0;
+      let m = 0;
+      let s = 0;
+      for (let i = start; i < stop; i++) {
+        const li = L[i - tape.base];
+        const ri = R[i - tape.base];
+        l += li * li;
+        r += ri * ri;
+        const mid = (li + ri) / 2;
+        const side = (li - ri) / 2;
+        m += mid * mid;
+        s += side * side;
+      }
+      const lr = Math.sqrt(l) + Math.sqrt(r);
+      this.pan[f] = lr > 1e-9 ? (Math.sqrt(r) - Math.sqrt(l)) / lr : 0;
+      const ms = Math.sqrt(m) + Math.sqrt(s);
+      this.width[f] = ms > 1e-9 ? Math.min(1, (2 * Math.sqrt(s)) / ms) : 0;
+      this.anyWidth = Math.max(this.anyWidth, this.width[f]);
+    }
+  }
+  stereo(): Stereo | null {
+    // identical channels are mono in a stereo coat
+    if (!this.two || this.anyWidth < 0.02) return null;
+    return { fps: this.fps, pan: this.pan, width: this.width };
+  }
 }
 
-function computeTimbre(chans: readonly Float32Array[], sampleRate: number, fps: number): Timbre {
-  const frames = chans[0].length;
-  const hop = Math.max(1, Math.round(sampleRate / fps));
-  const count = Math.max(1, Math.floor(frames / hop));
-  const n = sampleRate > 60_000 ? 4096 : 2048;
-  const fft = new Fft(n);
-  const window = new Float32Array(n);
-  for (let i = 0; i < n; i++) window[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (n - 1));
-  const re = new Float64Array(n);
-  const im = new Float64Array(n);
-  const inv = 1 / chans.length;
-  const kLo = Math.max(1, Math.round((100 / sampleRate) * n));
-  const kHi = Math.min(n / 2 - 1, Math.round((8000 / sampleRate) * n));
-  const brightness = new Float32Array(count);
-  const noisiness = new Float32Array(count);
-  for (let f = 0; f < count; f++) {
-    const start = f * hop + Math.round(hop / 2) - n / 2;
-    for (let i = 0; i < n; i++) {
-      const idx = start + i;
-      let v = 0;
-      if (idx >= 0 && idx < frames) for (const c of chans) v += c[idx];
-      re[i] = v * inv * window[i];
-      im[i] = 0;
-    }
-    fft.transform(re, im);
-    let sum = 0;
-    let weighted = 0;
-    let logSum = 0;
-    let m = 0;
-    for (let k = kLo; k <= kHi; k++) {
-      const p = re[k] * re[k] + im[k] * im[k] + 1e-12;
-      sum += p;
-      weighted += p * ((k * sampleRate) / n);
-      logSum += Math.log(p);
-      m++;
-    }
-    const centroid = sum > 0 ? weighted / sum : 100;
-    brightness[f] = Math.max(0, Math.min(1, Math.log2(centroid / 100) / Math.log2(100)));
-    const flatness = Math.exp(logSum / m) / (sum / m);
-    noisiness[f] = Math.max(0, Math.min(1, 1 + Math.log10(Math.max(1e-4, flatness)) / 2));
+/** TIMBRE IN PIECES (0.14.0): each frame's window read from the tape once its samples arrive. */
+export class TimbreSink implements Sink {
+  private readonly hop: number;
+  private readonly count: number;
+  private readonly n: number;
+  private readonly fft: Fft;
+  private readonly window: Float32Array;
+  private readonly re: Float64Array;
+  private readonly im: Float64Array;
+  private readonly inv: number;
+  private readonly kLo: number;
+  private readonly kHi: number;
+  private readonly sampleRate: number;
+  private readonly fps: number;
+  private readonly brightness: Float32Array;
+  private readonly noisiness: Float32Array;
+  private f = 0;
+  constructor(sampleRate: number, channels: number, frames: number, fps: number) {
+    this.sampleRate = sampleRate;
+    this.fps = fps;
+    this.hop = Math.max(1, Math.round(sampleRate / fps));
+    this.count = Math.max(1, Math.floor(frames / this.hop));
+    const n = (this.n = sampleRate > 60_000 ? 4096 : 2048);
+    this.fft = new Fft(n);
+    this.window = new Float32Array(n);
+    for (let i = 0; i < n; i++) this.window[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (n - 1));
+    this.re = new Float64Array(n);
+    this.im = new Float64Array(n);
+    this.inv = 1 / channels;
+    this.kLo = Math.max(1, Math.round((100 / sampleRate) * n));
+    this.kHi = Math.min(n / 2 - 1, Math.round((8000 / sampleRate) * n));
+    this.brightness = new Float32Array(this.count);
+    this.noisiness = new Float32Array(this.count);
   }
-  return { fps, brightness, noisiness };
+  private startOf(f: number): number {
+    return f * this.hop + Math.round(this.hop / 2) - this.n / 2;
+  }
+  get needs(): number {
+    return this.f < this.count ? Math.max(0, this.startOf(this.f)) : Infinity;
+  }
+  take(tape: Tape): void {
+    const { n, re, im, window, inv, fft, kLo, kHi, sampleRate } = this;
+    for (; this.f < this.count; this.f++) {
+      const f = this.f;
+      const start = this.startOf(f);
+      if (start + n > tape.end && !tape.done) return;
+      for (let i = 0; i < n; i++) {
+        re[i] = tape.mixAt(start + i) * inv * window[i];
+        im[i] = 0;
+      }
+      fft.transform(re, im);
+      let sum = 0;
+      let weighted = 0;
+      let logSum = 0;
+      let m = 0;
+      for (let k = kLo; k <= kHi; k++) {
+        const p = re[k] * re[k] + im[k] * im[k] + 1e-12;
+        sum += p;
+        weighted += p * ((k * sampleRate) / n);
+        logSum += Math.log(p);
+        m++;
+      }
+      const centroid = sum > 0 ? weighted / sum : 100;
+      this.brightness[f] = Math.max(0, Math.min(1, Math.log2(centroid / 100) / Math.log2(100)));
+      const flatness = Math.exp(logSum / m) / (sum / m);
+      this.noisiness[f] = Math.max(0, Math.min(1, 1 + Math.log10(Math.max(1e-4, flatness)) / 2));
+    }
+  }
+  timbre(): Timbre {
+    return { fps: this.fps, brightness: this.brightness, noisiness: this.noisiness };
+  }
 }
 
 // ---------------------------------------------------------------- silences, sections, drops
@@ -1052,6 +1158,46 @@ const fromTenthsGaps = (bytes: Uint8Array): Float32Array => {
   }
   return out;
 };
+/** Seconds to hundredths, as u16 gaps (a beat grid: no two beats 655 s apart). */
+const centiGaps = (secs: ArrayLike<number>): Uint8Array => {
+  const gaps: number[] = [];
+  let prev = 0;
+  for (let i = 0; i < secs.length; i++) {
+    const t = Math.round(secs[i] * 100);
+    gaps.push(Math.max(0, t - prev));
+    prev += Math.max(0, t - prev);
+  }
+  return u16s(gaps);
+};
+const fromCentiGaps = (bytes: Uint8Array): Float32Array => {
+  const gaps = fromU16s(bytes);
+  const out = new Float32Array(gaps.length);
+  let t = 0;
+  for (let i = 0; i < gaps.length; i++) {
+    t += gaps[i];
+    out[i] = t / 100;
+  }
+  return out;
+};
+/** Each drop's build-up start, from its drop's tenth and its distance back in tenths. */
+const buildFromBack = (at: Uint8Array, back: Uint8Array): Float32Array => {
+  const tenths = fromU32s(at);
+  const backs = fromU16s(back);
+  return Float32Array.from(tenths, (t, i) => (t - (backs[i] ?? 0)) / 10);
+};
+const u32s = (values: ArrayLike<number>): Uint8Array => {
+  const out = new Uint8Array(values.length * 4);
+  const view = new DataView(out.buffer);
+  for (let i = 0; i < values.length; i++)
+    view.setUint32(i * 4, Math.max(0, Math.min(0xffffffff, Math.round(values[i]))), true);
+  return out;
+};
+const fromU32s = (bytes: Uint8Array): Float64Array => {
+  const out = new Float64Array(Math.floor(bytes.length / 4));
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  for (let i = 0; i < out.length; i++) out[i] = view.getUint32(i * 4, true);
+  return out;
+};
 const bytes01 = (values: ArrayLike<number>): Uint8Array =>
   Uint8Array.from({ length: values.length }, (_, i) =>
     Math.round(Math.max(0, Math.min(1, values[i])) * 255),
@@ -1067,7 +1213,9 @@ export function featuresToStored(f: Features): AnalysisFeatures {
           confidence: Math.round(f.beats.confidence * 1000) / 1000,
           downbeat: f.beats.downbeat,
           count: f.beats.times.length,
-          times: b64(u16s(Array.from(f.beats.times, (t) => Math.round(t * 100)))),
+          // gaps, in hundredths (0.14.0): absolute hundredths stopped at 655.35 s, so every beat
+          // after 10:55 of a long track read 10:55
+          times: b64(centiGaps(f.beats.times)),
         }
       : null,
     sections: f.sections
@@ -1104,8 +1252,16 @@ export function featuresToStored(f: Features): AnalysisFeatures {
     silences: b64(tenthsGaps(f.silences)),
     drops: {
       count: f.drops.at.length,
-      buildFrom: b64(u16s(Array.from(f.drops.buildFrom, (t) => Math.round(t * 10)))),
-      at: b64(u16s(Array.from(f.drops.at, (t) => Math.round(t * 10)))),
+      // the drops in u32 tenths and each build-up as its distance back from its drop (0.14.0):
+      // u16 tenths stopped at 6553.5 s, a long mix's
+      buildFrom: b64(
+        u16s(
+          Array.from(f.drops.at, (t, i) =>
+            Math.max(0, Math.round(t * 10) - Math.round(f.drops.buildFrom[i] * 10)),
+          ),
+        ),
+      ),
+      at: b64(u32s(Array.from(f.drops.at, (t) => Math.round(t * 10)))),
       strength: b64(bytes01(f.drops.strength)),
       chill: b64(Uint8Array.from(f.drops.chill, (c) => Math.min(255, Math.round(c * 4)))),
       breath: b64(Uint8Array.from(f.drops.breath, (c) => Math.min(255, Math.round(c * 4)))),
@@ -1120,7 +1276,7 @@ export function featuresFromStored(st: AnalysisFeatures): Features {
         bpm: st.beats.bpm,
         confidence: st.beats.confidence,
         downbeat: st.beats.downbeat,
-        times: Float32Array.from(fromU16s(unb64(st.beats.times)), (t) => t / 100),
+        times: fromCentiGaps(unb64(st.beats.times)),
       }
     : null;
   const sections = st.sections
@@ -1155,8 +1311,8 @@ export function featuresFromStored(st: AnalysisFeatures): Features {
     timbre,
     silences: fromTenthsGaps(unb64(st.silences)),
     drops: {
-      buildFrom: Float32Array.from(fromU16s(unb64(st.drops.buildFrom)), (t) => t / 10),
-      at: Float32Array.from(fromU16s(unb64(st.drops.at)), (t) => t / 10),
+      buildFrom: buildFromBack(unb64(st.drops.at), unb64(st.drops.buildFrom)),
+      at: Float32Array.from(fromU32s(unb64(st.drops.at)), (t) => t / 10),
       strength: from01(unb64(st.drops.strength)),
       chill: Float32Array.from(unb64(st.drops.chill ?? ""), (c) => c / 4),
       breath: Float32Array.from(unb64(st.drops.breath ?? ""), (c) => c / 4),

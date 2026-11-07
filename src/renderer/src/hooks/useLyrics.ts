@@ -9,7 +9,15 @@ export interface SyncedLine {
   text: string;
 }
 
-export type LyricsStatus = "loading" | "ready" | "none";
+/** "unreachable": lrclib.net didn't answer, asked again and still nothing (not "none", which is
+ *  LRCLIB's own answer that it has no lyrics). */
+export type LyricsStatus = "loading" | "ready" | "none" | "unreachable";
+
+/** A lookup that never reached LRCLIB is asked again after these waits, in seconds, while the
+ *  track stays, and reads as loading meanwhile; the first failure said "No lyrics found" until the
+ *  line was toggled off and on (his look, 2026-10-30). Main keeps no failure, so each is a real
+ *  ask. */
+const RETRY_SECS = [5, 15, 45];
 
 // "[mm:ss.xx] line" — repeated tags on one line share the text.
 export function parseLrc(lrc: string): SyncedLine[] {
@@ -107,6 +115,8 @@ export function useLyrics(): {
   const [result, setResult] = useState<LyricsResult | null>(null);
   const [fetchNonce, setFetchNonce] = useState(0);
   const forceRef = useRef(false);
+  // the retries spent on the settled query; a new track (or a refresh) starts again
+  const retried = useRef<{ for: typeof settled | null; n: number }>({ for: null, n: 0 });
 
   useEffect(() => {
     if (!settled.query) {
@@ -116,12 +126,25 @@ export function useLyrics(): {
     }
     const force = forceRef.current;
     forceRef.current = false;
+    if (retried.current.for !== settled || force) retried.current = { for: settled, n: 0 };
     let stale = false;
+    let again: ReturnType<typeof setTimeout> | undefined;
     setStatus("loading");
     void tt
       .fetchLyrics(settled.query, force)
       .then((res) => {
         if (stale) return;
+        if (res === "unreachable") {
+          setResult(null);
+          const wait = RETRY_SECS[retried.current.n];
+          if (wait == null) {
+            setStatus("unreachable");
+            return;
+          }
+          retried.current.n++;
+          again = setTimeout(() => setFetchNonce((n) => n + 1), wait * 1000);
+          return;
+        }
         setResult(res);
         setStatus(res && (res.plain || res.synced || res.instrumental) ? "ready" : "none");
       })
@@ -132,6 +155,7 @@ export function useLyrics(): {
       });
     return () => {
       stale = true;
+      clearTimeout(again);
     };
   }, [settled, fetchNonce]);
 

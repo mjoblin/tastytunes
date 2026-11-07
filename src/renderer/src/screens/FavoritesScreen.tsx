@@ -21,6 +21,7 @@ import {
   type Favorite,
   type FavoriteMedia,
   type FavoriteStation,
+  type MediaIndexPools,
   type PlaylistItem,
 } from "@shared/model";
 import { type QueueListItem } from "@shared/smoip";
@@ -45,13 +46,16 @@ import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { cx, matchesFilter } from "@/lib/format";
 import { favoriteAct, favoriteHasRoute, type FavoriteActResult } from "@/lib/favorites";
 import { flashTarget } from "@/lib/scroll";
-import { playingStationName } from "@/lib/radio";
+import { playingStationName, stationMenuItems } from "@/lib/radio";
 import { useStationTuning } from "@/hooks/useStationTuning";
 import { ScreenTitle, GAP_BETWEEN } from "@/components/chrome/Chrome";
 import { useQueueSourceActive } from "@/hooks/useQueueSourceActive";
 import { useIndexPools } from "@/hooks/useIndexPools";
-import { lensIndexOf } from "@/components/library/lenses/useLensIndex";
-import { menuAt } from "@/lib/menuAt";
+import { lensIndexOf, useLensIndex } from "@/components/library/lenses/useLensIndex";
+import { useCardDetails } from "@/components/library/useCardDetails";
+import { keyedEvent, menuAt } from "@/lib/menuAt";
+import { KeyedList } from "@/components/controls/KeyedList";
+import type { ListItemAttrs } from "@/hooks/useListKeys";
 
 /** Kind visibility — session memory, like the Radio screen's chip state. */
 type FavKind = "all" | "station" | "album" | "track";
@@ -65,7 +69,14 @@ const FAV_KINDS: readonly FavKind[] = ["all", "station", "album", "track"];
  * the item stays for the session (dimmed, hollow heart — one click undoes
  * an accident) and is gone on the next visit.
  */
+const NO_POOLS: MediaIndexPools[] = [];
+
 export function FavoritesScreen(): React.JSX.Element {
+  // each album card's format line, as the Albums view's cards have it (0.14.0, his D6 pick)
+  const formatLine = useStore((s) => s.settings.albumCardFormat);
+  const cardPools = useIndexPools(formatLine);
+  const cardIndex = useLensIndex(cardPools ?? NO_POOLS);
+  const detailsOf = useCardDetails(cardPools ? cardIndex : null);
   // the performer the library knows for a track saved from a compilation queue (display only)
   const performerOf = useSavedPerformer();
   const favorites = useStore((s) => s.favorites);
@@ -300,6 +311,12 @@ export function FavoritesScreen(): React.JSX.Element {
   // ------------------------------------------------------------------- menus
 
   const [menu, setMenu] = useState<{ fav: FavoriteMedia; x: number; y: number } | null>(null);
+  // a station's menu, its heart (lib/radio stationMenuItems): "." from the keyboard, a right-click
+  const [stationMenu, setStationMenu] = useState<{
+    station: FavoriteStation;
+    x: number;
+    y: number;
+  } | null>(null);
   const [playlistFor, setPlaylistFor] = useState<{
     fav: FavoriteMedia;
     x: number;
@@ -419,38 +436,67 @@ export function FavoritesScreen(): React.JSX.Element {
           {shownStations.length > 0 && (
             <>
               <div className="microlabel mt-2 mb-2 px-1">Stations</div>
-              <div className="space-y-1.5 max-w-2xl">
-                {shownStations.map((st) => {
-                  const active = activeKeys.has(favoriteKey(st));
-                  const playing =
-                    playingStation != null && st.name.trim().toLowerCase() === playingStation;
-                  return (
-                    <StationFavRow
-                      key={st.url}
-                      station={st}
-                      active={active}
-                      playing={playing}
-                      tuning={!playing && tuning === st.url}
-                      onPlay={() =>
-                        void playStation({
-                          url: st.url,
-                          name: st.name,
-                          favicon: st.favicon,
-                          uuid: st.radioBrowserUuid ?? undefined,
-                        })
-                      }
-                      onHeart={() => toggleHeart(st)}
-                    />
-                  );
-                })}
-              </div>
+              {/* FROM THE KEYBOARD (0.14.0, his K1 to K6): each kind one Tab stop, Enter plays or
+                  opens as a click does, "." a favorite's More menu */}
+              <KeyedList
+                label="Stations"
+                count={shownStations.length}
+                onEnter={(_i, el) => el?.click()}
+                onMenu={(i, el) => {
+                  const st = shownStations[i];
+                  if (st) setStationMenu({ station: st, ...menuAt(keyedEvent(el)) });
+                }}
+                className="space-y-1.5 max-w-2xl"
+              >
+                {(item) =>
+                  shownStations.map((st, si) => {
+                    const active = activeKeys.has(favoriteKey(st));
+                    const playing =
+                      playingStation != null && st.name.trim().toLowerCase() === playingStation;
+                    return (
+                      <StationFavRow
+                        key={st.url}
+                        item={item(si)}
+                        station={st}
+                        active={active}
+                        playing={playing}
+                        tuning={!playing && tuning === st.url}
+                        onPlay={() =>
+                          void playStation({
+                            url: st.url,
+                            name: st.name,
+                            favicon: st.favicon,
+                            uuid: st.radioBrowserUuid ?? undefined,
+                          })
+                        }
+                        onHeart={() => toggleHeart(st)}
+                        onMenu={(e) => {
+                          e.preventDefault();
+                          setStationMenu({ station: st, ...menuAt(e) });
+                        }}
+                      />
+                    );
+                  })
+                }
+              </KeyedList>
             </>
           )}
 
           {shownAlbums.length > 0 && (
             <>
               <div className="microlabel mt-5 mb-1 px-1">Albums</div>
-              <div
+              <KeyedList
+                label="Albums"
+                grid
+                count={shownAlbums.length}
+                onEnter={(i) => {
+                  const f = shownAlbums[i];
+                  if (f && (servers == null || favoriteHasRoute(f, servers))) enterAlbum(f);
+                }}
+                onMenu={(i, el) => {
+                  const f = shownAlbums[i];
+                  if (f) openMenu(f, keyedEvent(el));
+                }}
                 style={{
                   display: "grid",
                   gridTemplateColumns: presetFillRows
@@ -460,131 +506,161 @@ export function FavoritesScreen(): React.JSX.Element {
                   paddingTop: 8,
                 }}
               >
-                {shownAlbums.map((f) => {
-                  const key = favoriteKey(f);
-                  const active = activeKeys.has(key);
-                  const routed = servers == null || favoriteHasRoute(f, servers);
-                  return (
-                    <div
-                      key={key}
-                      data-fav-album={f.title}
-                      className={cx("relative", (!active || !routed) && "opacity-50")}
-                    >
-                      {/* heart rides INSIDE the card (favorited/onHeart) so it
+                {(item) =>
+                  shownAlbums.map((f, ai) => {
+                    const key = favoriteKey(f);
+                    const active = activeKeys.has(key);
+                    const routed = servers == null || favoriteHasRoute(f, servers);
+                    return (
+                      <div
+                        key={key}
+                        data-fav-album={f.title}
+                        className={cx("relative", (!active || !routed) && "opacity-50")}
+                      >
+                        {/* heart rides INSIDE the card (favorited/onHeart) so it
                           zooms and lifts with the hover animation */}
-                      <ContainerCard
-                        node={asNode(f)}
-                        badge={copyChip(f)}
-                        playing={albumPlaying(f)}
-                        menuOpen={menu?.fav === f}
-                        favorited={active}
-                        onHeart={() => toggleHeart(f)}
-                        onEnter={() => routed && enterAlbum(f)}
-                        onPlay={(el) => routed && playAlbum(f, el)}
-                        onMenu={(e) => openMenu(f, e)}
-                      />
-                      {busyKey === key && (
-                        <Loader2
-                          size={13}
-                          className="spin text-gold/80 absolute top-3.5 left-3.5 z-10"
+                        <ContainerCard
+                          item={item(ai)}
+                          node={asNode(f)}
+                          badge={copyChip(f)}
+                          details={detailsOf?.({
+                            ...asNode(f),
+                            serverUdn: f.serverUdn ?? undefined,
+                          })}
+                          playing={albumPlaying(f)}
+                          menuOpen={menu?.fav === f}
+                          favorited={active}
+                          onHeart={() => toggleHeart(f)}
+                          onEnter={() => routed && enterAlbum(f)}
+                          onPlay={(el) => routed && playAlbum(f, el)}
+                          onMenu={(e) => openMenu(f, e)}
                         />
-                      )}
-                      {!routed && f.serverName && (
-                        <div className="px-2 pt-0.5 text-[10.5px] text-faint truncate">
-                          {f.serverName} is offline
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+                        {busyKey === key && (
+                          <Loader2
+                            size={13}
+                            className="spin text-gold/80 absolute top-3.5 left-3.5 z-10"
+                          />
+                        )}
+                        {!routed && f.serverName && (
+                          <div className="px-2 pt-0.5 text-[10.5px] text-faint truncate">
+                            {f.serverName} is offline
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                }
+              </KeyedList>
             </>
           )}
 
           {shownTracks.length > 0 && (
             <>
               <div className="microlabel mt-5 mb-2 px-1">Tracks</div>
-              <div className="space-y-1.5 max-w-2xl">
-                {shownTracks.map((f) => {
-                  const key = favoriteKey(f);
-                  const active = activeKeys.has(key);
-                  const routed = servers == null || favoriteHasRoute(f, servers);
-                  return (
-                    // MediaRow's reserved duration column is what keeps every
-                    // heart on one vertical line — a track with no captured
-                    // length shows '–:––' instead of letting the heart drift
-                    <MediaRow
-                      key={key}
-                      attrs={{ "data-fav-track": f.title }}
-                      title={f.title}
-                      kind="track"
-                      artUrl={f.artUrl}
-                      artKey={playKey(f.title, f.artist, f.album)}
-                      subtitle={
-                        <>
-                          <NameLine
-                            artist={performerOf(f) ?? f.artist}
-                            album={f.album}
-                            ref={fromFavorite(f)}
-                          />
-                          {copyChip(f) ? `${FACT_SEP}${copyChip(f)}` : ""}
-                          {!routed && f.serverName
-                            ? `${(performerOf(f) ?? f.artist ?? f.album) ? " · " : ""}${f.serverName} is offline`
-                            : ""}
-                        </>
-                      }
-                      playing={trackPlaying(f)}
-                      dimmed={!active || !routed}
-                      duration={f.durationSecs ?? null}
-                      dr={drFor(f)}
-                      onClick={(el) => playTrack(f, el)}
-                      onContextMenu={(e) => openMenu(f, e)}
-                      actions={
-                        <>
-                          {routed && active && (
-                            <>
-                              <RowAction
-                                icon={Play}
-                                label="Play"
-                                tip={
-                                  favQueueMatches(f).length > 0
-                                    ? "Play, already in the queue"
-                                    : "Play now, slotted in after the current track"
-                                }
-                                pinned={menu?.fav === f}
-                                onClick={(e: React.MouseEvent) =>
-                                  playTrack(
-                                    f,
-                                    (e.currentTarget as HTMLElement).closest("[data-fav-track]"),
-                                  )
-                                }
-                              />
-                              <RowAction
-                                icon={MoreHorizontal}
-                                label="More actions"
-                                pinned={menu?.fav === f}
-                                onClick={(e) => openMenu(f, e)}
-                              />
-                            </>
-                          )}
-                          {busyKey === key && (
-                            <Loader2 size={13} className="spin text-gold/80 shrink-0" />
-                          )}
-                          {/* held: on THIS screen the heart is the state marker,
+              <KeyedList
+                label="Tracks"
+                count={shownTracks.length}
+                onEnter={(_i, el) => el?.click()}
+                onMenu={(i, el) => {
+                  const f = shownTracks[i];
+                  if (f) openMenu(f, keyedEvent(el));
+                }}
+                className="space-y-1.5 max-w-2xl"
+              >
+                {(item) =>
+                  shownTracks.map((f, ti) => {
+                    const key = favoriteKey(f);
+                    const active = activeKeys.has(key);
+                    const routed = servers == null || favoriteHasRoute(f, servers);
+                    return (
+                      // MediaRow's reserved duration column is what keeps every
+                      // heart on one vertical line — a track with no captured
+                      // length shows '–:––' instead of letting the heart drift
+                      <MediaRow
+                        key={key}
+                        item={item(ti)}
+                        attrs={{ "data-fav-track": f.title }}
+                        title={f.title}
+                        kind="track"
+                        artUrl={f.artUrl}
+                        artKey={playKey(f.title, f.artist, f.album)}
+                        subtitle={
+                          <>
+                            <NameLine
+                              artist={performerOf(f) ?? f.artist}
+                              album={f.album}
+                              ref={fromFavorite(f)}
+                            />
+                            {copyChip(f) ? `${FACT_SEP}${copyChip(f)}` : ""}
+                            {!routed && f.serverName
+                              ? `${(performerOf(f) ?? f.artist ?? f.album) ? " · " : ""}${f.serverName} is offline`
+                              : ""}
+                          </>
+                        }
+                        playing={trackPlaying(f)}
+                        dimmed={!active || !routed}
+                        duration={f.durationSecs ?? null}
+                        dr={drFor(f)}
+                        onClick={(el) => playTrack(f, el)}
+                        onContextMenu={(e) => openMenu(f, e)}
+                        actions={
+                          <>
+                            {routed && active && (
+                              <>
+                                <RowAction
+                                  icon={Play}
+                                  label="Play"
+                                  tip={
+                                    favQueueMatches(f).length > 0
+                                      ? "Play, already in the queue"
+                                      : "Play now, slotted in after the current track"
+                                  }
+                                  pinned={menu?.fav === f}
+                                  onClick={(e: React.MouseEvent) =>
+                                    playTrack(
+                                      f,
+                                      (e.currentTarget as HTMLElement).closest("[data-fav-track]"),
+                                    )
+                                  }
+                                />
+                                <RowAction
+                                  icon={MoreHorizontal}
+                                  label="More actions"
+                                  pinned={menu?.fav === f}
+                                  onClick={(e) => openMenu(f, e)}
+                                />
+                              </>
+                            )}
+                            {busyKey === key && (
+                              <Loader2 size={13} className="spin text-gold/80 shrink-0" />
+                            )}
+                            {/* held: on THIS screen the heart is the state marker,
                               so it stays visible even unset (soft removal keeps
                               the row; the hollow heart is the one-click undo) */}
-                          <RowHeart favorited={active} held onHeart={() => toggleHeart(f)} />
-                        </>
-                      }
-                    />
-                  );
-                })}
-              </div>
+                            <RowHeart favorited={active} held onHeart={() => toggleHeart(f)} />
+                          </>
+                        }
+                      />
+                    );
+                  })
+                }
+              </KeyedList>
             </>
           )}
         </div>
       )}
 
+      {stationMenu && (
+        <RowMenu
+          title={stationMenu.station.name}
+          at={{ x: stationMenu.x, y: stationMenu.y }}
+          onClose={() => setStationMenu(null)}
+          items={stationMenuItems({
+            favorited: activeKeys.has(favoriteKey(stationMenu.station)),
+            onHeart: () => toggleHeart(stationMenu.station),
+          })}
+        />
+      )}
       {menu && (
         <RowMenu
           title={menu.fav.title}
@@ -653,19 +729,26 @@ function StationFavRow({
   tuning,
   onPlay,
   onHeart,
+  onMenu,
+  item,
 }: {
+  /** In the keyed list: the row's id and index. */
+  item?: ListItemAttrs;
   station: FavoriteStation;
   active: boolean;
   playing: boolean;
   tuning: boolean;
   onPlay(): void;
   onHeart(): void;
+  /** Its More menu, the heart (a right-click, or "." in the keyed list). */
+  onMenu(e: React.MouseEvent): void;
 }): React.JSX.Element {
   // MediaRow carries the whole station treatment (tuning half-light, inline
   // eqbars); a soft-removed station dims and, like a soft-removed track, needs
   // its heart back before it plays again.
   return (
     <MediaRow
+      item={item}
       attrs={{ "data-fav-station": station.name }}
       title={station.name}
       kind="station"
@@ -679,6 +762,7 @@ function StationFavRow({
         ) : undefined
       }
       onClick={() => onPlay()}
+      onContextMenu={onMenu}
       actions={<RowHeart favorited={active} held onHeart={onHeart} />}
     />
   );

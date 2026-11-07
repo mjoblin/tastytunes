@@ -25,6 +25,8 @@ import {
   useLensTrackSelection,
 } from "@/components/library/lenses/useLensTrackSelection";
 import { cx } from "@/lib/format";
+import { KeyedList } from "@/components/controls/KeyedList";
+import { keyedEvent } from "@/lib/menuAt";
 import type { LandingTrack } from "@/components/library/landing";
 
 /** The page's album orders (0.13.0-rc.4): by year, newest first (the page's order since 0.11.0),
@@ -123,7 +125,20 @@ export function ArtistPage({
               />
             </div>
           </div>
-          <div
+          {/* FROM THE KEYBOARD (0.14.0, his K1 to K6): the albums one Tab stop, each run of tracks
+              another; Enter opens an album or plays a track, as their clicks do */}
+          <KeyedList
+            label="Albums"
+            grid={cards}
+            count={albums.length}
+            onEnter={(i) => {
+              const n = albums[i];
+              if (n) onOpenAlbum(n);
+            }}
+            onMenu={(i, el) => {
+              const n = albums[i];
+              if (n) actions.openMenu(n, keyedEvent(el));
+            }}
             className={cx(!cards && "divide-y divide-edge/50 -mx-2")}
             style={
               cards
@@ -138,37 +153,40 @@ export function ArtistPage({
                 : undefined
             }
           >
-            {albums.map((node) => {
-              const common = {
-                node,
-                playing: actions.isPlayingAlbum(node),
-                menuOpen: actions.menuNodeId === node.id,
-                favorited: actions.nodeFavorited(node),
-                onHeart: () => actions.heartNode(node),
-                onEnter: () => onOpenAlbum(node),
-                onMenu: (e: React.MouseEvent) => actions.openMenu(node, e),
-                onNavDrag: (e: React.PointerEvent) => actions.dragAlbum([node], e, node.title),
-                // which copy, only when there is another (the same albums on a media server and
-                // on the streamer's drive; a user's two editions of one album on one server),
-                // the Albums lens's rule; an album with no other copy shows none, its year not
-                // squeezed by a chip that says nothing
-                badge: index.copyBadge(node, { formatShown: cards && detailsOf != null }),
-                badgeTip: COPY_BADGE_TIP,
-              };
-              return cards ? (
-                <ContainerCard
-                  key={nodeKey(node)}
-                  {...common}
-                  // the page is the artist's: a card says its year, the order's key, whole
-                  subtitle={node.year ?? ""}
-                  details={detailsOf?.(node)}
-                  onPlay={(el) => void actions.playContainer(node, el)}
-                />
-              ) : (
-                <ContainerRow key={nodeKey(node)} {...common} />
-              );
-            })}
-          </div>
+            {(item) =>
+              albums.map((node, ai) => {
+                const common = {
+                  node,
+                  item: item(ai),
+                  playing: actions.isPlayingAlbum(node),
+                  menuOpen: actions.menuNodeId === node.id,
+                  favorited: actions.nodeFavorited(node),
+                  onHeart: () => actions.heartNode(node),
+                  onEnter: () => onOpenAlbum(node),
+                  onMenu: (e: React.MouseEvent) => actions.openMenu(node, e),
+                  onNavDrag: (e: React.PointerEvent) => actions.dragAlbum([node], e, node.title),
+                  // which copy, only when there is another (the same albums on a media server and
+                  // on the streamer's drive; a user's two editions of one album on one server),
+                  // the Albums lens's rule; an album with no other copy shows none, its year not
+                  // squeezed by a chip that says nothing
+                  badge: index.copyBadge(node, { formatShown: cards && detailsOf != null }),
+                  badgeTip: COPY_BADGE_TIP,
+                };
+                return cards ? (
+                  <ContainerCard
+                    key={nodeKey(node)}
+                    {...common}
+                    // the page is the artist's: a card says its year, the order's key, whole
+                    subtitle={node.year ?? ""}
+                    details={detailsOf?.(node)}
+                    onPlay={(el) => void actions.playContainer(node, el)}
+                  />
+                ) : (
+                  <ContainerRow key={nodeKey(node)} {...common} />
+                );
+              })
+            }
+          </KeyedList>
         </>
       )}
       {others.length > 0 && (
@@ -181,41 +199,56 @@ export function ArtistPage({
             .map((run) => (
               <div key={run.label} data-artist-run={run.label}>
                 {label(run.label, albums.length === 0 && run.from === 0)}
-                <div className="divide-y divide-edge/50 -mx-2">
-                  {others.slice(run.from, run.to).map((t, i) => {
-                    const ti = run.from + i;
-                    const album = t.album ? albumOf(t) : null;
-                    return (
-                      <TrackRow
-                        key={nodeKey(t)}
-                        node={t}
-                        showArt
-                        isCurrent={actions.isCurrentTrack(t)}
-                        queued={actions.trackQueued(t)}
-                        menuOpen={actions.menuNodeId === t.id}
-                        favorited={actions.nodeFavorited(t)}
-                        selected={sel.selT.has(nodeKey(t))}
-                        selStart={!(ti > run.from && sel.selT.has(nodeKey(others[ti - 1])))}
-                        selEnd={!(ti < run.to - 1 && sel.selT.has(nodeKey(others[ti + 1])))}
-                        onRowClick={(e) => sel.trackRowClick(t, e)}
-                        onNavDrag={(e) => sel.startTrackDrag(t, e)}
-                        onHeart={() => actions.heartNode(t)}
-                        onPlayNow={(el) => actions.playTrack(t, el)}
-                        onMenu={(e) => sel.rowMenu(t, e)}
-                        onAlbumLink={
-                          album
-                            ? () =>
-                                onOpenAlbum(album, {
-                                  title: t.title,
-                                  id: t.id,
-                                  secs: t.durationSecs,
-                                })
-                            : undefined
-                        }
-                      />
-                    );
-                  })}
-                </div>
+                <KeyedList
+                  label={run.label}
+                  count={run.to - run.from}
+                  onEnter={(i, el) => {
+                    const t = others[run.from + i];
+                    if (t && !sel.trackRowClick(t, keyedEvent(el))) actions.playTrack(t, el);
+                  }}
+                  onMenu={(i, el) => {
+                    const t = others[run.from + i];
+                    if (t) sel.rowMenu(t, keyedEvent(el));
+                  }}
+                  className="divide-y divide-edge/50 -mx-2"
+                >
+                  {(item) =>
+                    others.slice(run.from, run.to).map((t, i) => {
+                      const ti = run.from + i;
+                      const album = t.album ? albumOf(t) : null;
+                      return (
+                        <TrackRow
+                          key={nodeKey(t)}
+                          item={item(i)}
+                          node={t}
+                          showArt
+                          isCurrent={actions.isCurrentTrack(t)}
+                          queued={actions.trackQueued(t)}
+                          menuOpen={actions.menuNodeId === t.id}
+                          favorited={actions.nodeFavorited(t)}
+                          selected={sel.selT.has(nodeKey(t))}
+                          selStart={!(ti > run.from && sel.selT.has(nodeKey(others[ti - 1])))}
+                          selEnd={!(ti < run.to - 1 && sel.selT.has(nodeKey(others[ti + 1])))}
+                          onRowClick={(e) => sel.trackRowClick(t, e)}
+                          onNavDrag={(e) => sel.startTrackDrag(t, e)}
+                          onHeart={() => actions.heartNode(t)}
+                          onPlayNow={(el) => actions.playTrack(t, el)}
+                          onMenu={(e) => sel.rowMenu(t, e)}
+                          onAlbumLink={
+                            album
+                              ? () =>
+                                  onOpenAlbum(album, {
+                                    title: t.title,
+                                    id: t.id,
+                                    secs: t.durationSecs,
+                                  })
+                              : undefined
+                          }
+                        />
+                      );
+                    })
+                  }
+                </KeyedList>
               </div>
             ))}
         </div>

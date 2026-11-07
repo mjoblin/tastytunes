@@ -850,8 +850,10 @@ describe("revalidate through the device's lane: a silence on the wire is not a r
   let asset: MediaServerInfo | undefined;
   beforeAll(async () => {
     evo = await startFakeEvo({ secondServer: true });
-    // the cap, shortened as the suite shortens it, so a silence opens and closes in seconds
+    // the cap, shortened as the suite shortens it, and the canary's first wait, so a staged
+    // silence of 0.4 s closes in under a second (three real silences once cost every run 18 s)
     vi.stubEnv("TASTYTUNES_DEVICE_COOL_MS", "8000");
+    vi.stubEnv("TASTYTUNES_DEVICE_CANARY_MS", "200");
     m = await freshMedia();
   });
   afterAll(async () => {
@@ -906,13 +908,14 @@ describe("revalidate through the device's lane: a silence on the wire is not a r
     { timeout: 20_000 },
     async () => {
       evo.resetCounters();
-      evo.armFlap(3, { reset: false });
+      evo.armFlap(0.4, { reset: false });
       const t = Date.now();
       const stale = await m.revalidate(evo.host, OWN, "26:alb-1-t3");
       const waited = Date.now() - t;
       expect(stale).toBe(false);
-      expect(waited).toBeGreaterThan(2500);
-      expect(waited).toBeLessThan(12000);
+      // it waited out the silence, for the canary, and not to the cap
+      expect(waited).toBeGreaterThan(350);
+      expect(waited).toBeLessThan(5000);
       expect(m.deviceCooling()).toBe(false);
     },
   );
@@ -933,13 +936,13 @@ describe("revalidate through the device's lane: a silence on the wire is not a r
     "treats a body that dies partway as the device's silence: the probe waits for the canary and goes again",
     { timeout: 20_000 },
     async () => {
-      evo.armFlap(3, { reset: false, torn: true });
+      evo.armFlap(0.4, { reset: false, torn: true });
       const t = Date.now();
       const stale = await m.revalidate(evo.host, OWN, "26:alb-1-t3");
       const waited = Date.now() - t;
       expect(stale).toBe(false);
-      expect(waited).toBeGreaterThan(2500);
-      expect(waited).toBeLessThan(12000);
+      expect(waited).toBeGreaterThan(350);
+      expect(waited).toBeLessThan(5000);
       expect(m.deviceCooling()).toBe(false);
       expect(evo.stats().flaps).toBe(2);
     },
@@ -949,7 +952,7 @@ describe("revalidate through the device's lane: a silence on the wire is not a r
     "heals the asked-for answer after a restart with re-minted ids",
     { timeout: 20_000 },
     async () => {
-      evo.armFlap(3, { reset: true });
+      evo.armFlap(0.4, { reset: true });
       expect((await m.resolveContent(evo.host, ref))?.objectId).toBe("27:alb-1-t3");
     },
   );

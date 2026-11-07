@@ -174,7 +174,10 @@ export function Nav(): React.JSX.Element {
       className={cx(
         "shrink-0 flex flex-col border-r border-edge transition-all",
         collapsed ? "w-16" : "w-56",
-        ambientWindow ? "bg-transparent" : "bg-panel/60",
+        // the panel tint in light mode only (user call, 2026-10-31): on paper a darker frame sits
+        // back from the page, but in dark a lighter one read as raised and the content as sunk
+        // in a well, so dark keeps the window's one ground, as it has under the full-window wash
+        !ambientWindow && "light:bg-panel/60",
       )}
     >
       {/* macOS traffic-light inset + wordmark; draggable like a title bar */}

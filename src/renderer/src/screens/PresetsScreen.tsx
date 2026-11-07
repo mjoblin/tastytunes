@@ -11,29 +11,28 @@ import {
 } from "@dnd-kit/core";
 import {
   SortableContext,
+  arrayMove,
   rectSortingStrategy,
   sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import {
   AlertTriangle,
   Crosshair,
   Footprints,
-  LayoutGrid,
   Library,
   Loader2,
   MoreHorizontal,
   Play,
   Radio,
   RadioTower,
-  Rows3,
   Volume2,
 } from "lucide-react";
 import { objectGone } from "@shared/ipc";
 import { isPreAmpMode, type PresetItem } from "@shared/smoip";
-import { presetVolumeKey, type ScreenLayout, type MediaNode } from "@shared/model";
+import { presetVolumeKey, type MediaNode } from "@shared/model";
+import { ViewOptions } from "@/components/library/lenses/ViewOptions";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { useLitPresets } from "@/hooks/useLitPresets";
@@ -41,9 +40,17 @@ import { Eqbars } from "@/components/media/Eqbars";
 import { EmptyActions, EmptyState } from "@/components/chrome/EmptyState";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { flashTarget, scrollToWithContext } from "@/lib/scroll";
-import { DND_ACCESSIBILITY, lockVertical } from "@/lib/dnd";
+import { CARD_MOTION, DND_ACCESSIBILITY, lockVertical, ROW_MOTION, sortableStyle } from "@/lib/dnd";
 import { CARD_GLYPH_STROKE, MEDIA_ART_FALLBACK } from "@/components/media/MediaArt";
 import { OrderHandle } from "@/components/controls/OrderHandle";
+import {
+  gridColumnsOf,
+  ListKeysContext,
+  useInListKeys,
+  useListKeys,
+  type ListItemAttrs,
+} from "@/hooks/useListKeys";
+import { openMenuOn } from "@/lib/menuAt";
 
 /** The same glyph the tray panel's preset tiles fall back to — one table. */
 const PresetGlyph = MEDIA_ART_FALLBACK.preset;
@@ -264,6 +271,39 @@ export function PresetsScreen(): React.JSX.Element {
     void tt.command({ type: "presetMove", from: active.id as number, to: over.id as number });
   };
 
+  // FROM THE KEYBOARD (0.14.0, his K1 to K8): Presets one Tab stop; up and down through the
+  // rows, all four in the cards; Enter recalls as a click does, "." the preset's More menu (its
+  // repair there too), and Option with up or down moves it, ONE presetMove on Option's release
+  // (shown moved until the streamer's new list arrives). Presets aren't removed in the app.
+  const [movePreview, setMovePreview] = useState<{ from: number; to: number } | null>(null);
+  useEffect(() => setMovePreview(null), [presets]);
+  const shownItems = movePreview ? arrayMove(items, movePreview.from, movePreview.to) : items;
+  const cardGridRef = useRef<HTMLDivElement | null>(null);
+  const keys = useListKeys({
+    count: shownItems.length,
+    columns: cards ? () => gridColumnsOf(cardGridRef.current) : undefined,
+    initial: () => shownItems.findIndex(isPresetPlaying),
+    onEnter: (i) => {
+      const p = shownItems[i];
+      if (p?.id != null) recall(p.id);
+    },
+    onMenu: (_i, el) => openMenuOn(el),
+    move: filter
+      ? undefined
+      : {
+          preview: (from, to) => setMovePreview({ from, to }),
+          commit: (from, to) => {
+            const a = items[from]?.id;
+            const b = items[to]?.id;
+            if (a == null || b == null) return setMovePreview(null);
+            void tt.command({ type: "presetMove", from: a, to: b });
+            // a streamer that never answers doesn't leave the preview standing
+            setTimeout(() => setMovePreview(null), 4000);
+          },
+          cancel: () => setMovePreview(null),
+        },
+  });
+
   // Scroll container: combine scroll memory (skipped when following) with a
   // queryable ref for scroll-to-playing.
   const scrollMemory = useScrollMemory("presets", !followPresets);
@@ -312,9 +352,6 @@ export function PresetsScreen(): React.JSX.Element {
   const setFollowPresets = async (follow: boolean): Promise<void> => {
     await saveSettings({ followPresets: follow });
   };
-  const setLayout = async (presetsLayout: ScreenLayout): Promise<void> => {
-    await saveSettings({ presetsLayout });
-  };
 
   if (allItems.length === 0) {
     return (
@@ -350,14 +387,8 @@ export function PresetsScreen(): React.JSX.Element {
             total={allItems.length}
           />
           <div className={`flex items-center ${GAP_WITHIN}`}>
-            <HeaderChip
-              data-tip={cards ? "View as rows" : "View as cards"}
-              aria-label={cards ? "View as rows" : "View as cards"}
-              onClick={() => void setLayout(cards ? "rows" : "cards")}
-              className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
-            >
-              {cards ? <Rows3 size={16} /> : <LayoutGrid size={16} />}
-            </HeaderChip>
+            {/* Rows or Cards and the cards' size, gap and Fill rows (0.14.0, his D5 pick) */}
+            <ViewOptions kind="presets" />
             <HeaderChip
               data-tip="Scroll to the playing preset"
               aria-label="Scroll to the playing preset"
@@ -382,39 +413,64 @@ export function PresetsScreen(): React.JSX.Element {
       {/* rows: pt-1 keeps the playing ring unclipped; cards: pt-2 gives the
           hover grow + glow ring headroom on the top row */}
       <div
-        ref={setContainerRef}
+        {...keys.container}
+        ref={(el) => {
+          setContainerRef(el);
+          keys.container.ref(el);
+        }}
+        aria-label="Presets"
         className={cx(
           "flex-1 overflow-y-auto",
           cards ? "px-8 pb-8 pt-2" : "px-6 pb-6 pt-1 divide-y divide-edge/50",
         )}
       >
-        {items.length === 0 && (
-          <div className="text-[15px] text-faint pt-6 px-2">No matches for “{filter}”</div>
-        )}
-        {/* Reordering a partial list is ambiguous — drags are inert while filtered. */}
-        <DndContext
-          accessibility={DND_ACCESSIBILITY}
-          sensors={filter ? [] : sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={onDragEnd}
-        >
-          <SortableContext
-            items={items.map((p) => p.id as number)}
-            strategy={cards ? rectSortingStrategy : verticalListSortingStrategy}
+        <ListKeysContext.Provider value={true}>
+          {items.length === 0 && (
+            <div className="text-[15px] text-faint pt-6 px-2">No matches for “{filter}”</div>
+          )}
+          {/* Reordering a partial list is ambiguous — drags are inert while filtered. */}
+          <DndContext
+            accessibility={DND_ACCESSIBILITY}
+            sensors={filter ? [] : sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={onDragEnd}
           >
-            {cards ? (
-              <div
-                className="grid"
-                style={{
-                  gridTemplateColumns: presetFillRows
-                    ? `repeat(auto-fill, minmax(${presetCardSize}px, 1fr))`
-                    : `repeat(auto-fill, ${presetCardSize}px)`,
-                  gap: presetGap,
-                }}
-              >
-                {items.map((preset) => (
-                  <PresetCard
+            <SortableContext
+              items={items.map((p) => p.id as number)}
+              strategy={cards ? rectSortingStrategy : verticalListSortingStrategy}
+            >
+              {cards ? (
+                <div
+                  ref={cardGridRef}
+                  className="grid"
+                  style={{
+                    gridTemplateColumns: presetFillRows
+                      ? `repeat(auto-fill, minmax(${presetCardSize}px, 1fr))`
+                      : `repeat(auto-fill, ${presetCardSize}px)`,
+                    gap: presetGap,
+                  }}
+                >
+                  {shownItems.map((preset, i) => (
+                    <PresetCard
+                      key={preset.id}
+                      listItem={keys.item(i)}
+                      preset={preset}
+                      playing={isPresetPlaying(preset)}
+                      dead={isPresetDead(preset)}
+                      onRepaired={() => preset.id != null && noteRepair(preset.id)}
+                      tuning={tuningId === preset.id && !isPresetPlaying(preset)}
+                      onRecall={() => preset.id != null && recall(preset.id)}
+                      volume={volumeFor(preset.id as number)}
+                      canSetVolume={canSetVolume}
+                      onVolume={(level) => void saveVolume(preset.id as number, level)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                shownItems.map((preset, i) => (
+                  <PresetRow
                     key={preset.id}
+                    listItem={keys.item(i)}
                     preset={preset}
                     playing={isPresetPlaying(preset)}
                     dead={isPresetDead(preset)}
@@ -425,26 +481,11 @@ export function PresetsScreen(): React.JSX.Element {
                     canSetVolume={canSetVolume}
                     onVolume={(level) => void saveVolume(preset.id as number, level)}
                   />
-                ))}
-              </div>
-            ) : (
-              items.map((preset) => (
-                <PresetRow
-                  key={preset.id}
-                  preset={preset}
-                  playing={isPresetPlaying(preset)}
-                  dead={isPresetDead(preset)}
-                  onRepaired={() => preset.id != null && noteRepair(preset.id)}
-                  tuning={tuningId === preset.id && !isPresetPlaying(preset)}
-                  onRecall={() => preset.id != null && recall(preset.id)}
-                  volume={volumeFor(preset.id as number)}
-                  canSetVolume={canSetVolume}
-                  onVolume={(level) => void saveVolume(preset.id as number, level)}
-                />
-              ))
-            )}
-          </SortableContext>
-        </DndContext>
+                ))
+              )}
+            </SortableContext>
+          </DndContext>
+        </ListKeysContext.Provider>
       </div>
     </div>
   );
@@ -621,6 +662,9 @@ function usePresetMenu(
     pv: ReturnType<typeof usePresetVolumePopover>;
     canVolume: boolean;
     startRename(): void;
+    /** A preset that didn't load: its repair, the chip's, in the menu too (0.14.0, for the
+     *  keyboard, which the chip is out of the way of). */
+    repair?: () => void;
   },
 ): {
   open(e: React.MouseEvent): void;
@@ -650,6 +694,7 @@ function usePresetMenu(
   };
   const items = [
     { label: "Play", run: d.onRecall },
+    ...(d.repair ? [{ label: "Repair…", run: d.repair }] : []),
     ...(media
       ? [
           {
@@ -756,7 +801,10 @@ function PresetRow({
   volume,
   canSetVolume,
   onVolume,
+  listItem,
 }: {
+  /** In the keyed list (hooks/useListKeys, 0.14.0): the item's id and index. */
+  listItem?: ListItemAttrs;
   preset: PresetItem;
   playing: boolean;
   /** Recall was accepted and then silently ignored — see RepairChip. */
@@ -770,17 +818,22 @@ function PresetRow({
   });
   const pv = usePresetVolumePopover(volume, onVolume);
   const [renaming, setRenaming] = useState(false);
+  const repairRef = useRef<HTMLButtonElement | null>(null);
   const menu = usePresetMenu(preset, {
     onRecall,
     pv,
     canVolume: canSetVolume || volume != null,
     startRename: () => setRenaming(true),
+    repair: dead ? () => repairRef.current?.click() : undefined,
   });
+  // in the keyed list a preset is reached with the arrows, its actions through More (K1, K4)
+  const inList = useInListKeys();
 
   return (
     <div
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(lockVertical(transform)), transition }}
+      style={sortableStyle(lockVertical(transform), transition, ROW_MOTION)}
+      {...listItem}
       onContextMenu={menu.open}
       data-playing={playing || undefined}
       className={cx(
@@ -788,7 +841,7 @@ function PresetRow({
         // trailing grip when it moved into the position cell (OrderHandle),
         // and an empty grid track still costs its gap.
         "group grid grid-cols-[26px_44px_1fr_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5",
-        "cursor-default transition-colors",
+        "cursor-default",
         isDragging && "z-10 bg-raised shadow-xl",
         // hold the hover highlight while this row's volume popover is open —
         // the pointer leaves the row, but the row is still what's being edited
@@ -838,11 +891,19 @@ function PresetRow({
       </div>
 
       <span className="inline-flex items-center" onPointerDown={(e) => e.stopPropagation()}>
-        {dead && <RepairChip preset={preset} variant="row" onRepaired={() => onRepaired?.()} />}
+        {dead && (
+          <RepairChip
+            preset={preset}
+            variant="row"
+            buttonRef={repairRef}
+            onRepaired={() => onRepaired?.()}
+          />
+        )}
         {/* a set volume shows as its status (it changes what a recall does); setting one is the
             ⋯ menu's Preset volume… (0.12.0: the hover speaker went with the menu's arrival) */}
         {volume != null && (
           <button
+            tabIndex={inList ? -1 : undefined}
             data-tip={`Recalled at ${volume}% volume`}
             aria-label="Preset volume"
             onClick={pv.openFrom}
@@ -857,6 +918,7 @@ function PresetRow({
       </span>
 
       <button
+        tabIndex={inList ? -1 : undefined}
         aria-label="More actions"
         data-preset-menu
         onPointerDown={(e) => e.stopPropagation()}
@@ -883,7 +945,10 @@ function PresetCard({
   volume,
   canSetVolume,
   onVolume,
+  listItem,
 }: {
+  /** In the keyed list (hooks/useListKeys, 0.14.0): the item's id and index. */
+  listItem?: ListItemAttrs;
   preset: PresetItem;
   playing: boolean;
   /** Recall was accepted and then silently ignored — see RepairChip. */
@@ -897,19 +962,25 @@ function PresetCard({
   });
   const pv = usePresetVolumePopover(volume, onVolume);
   const [renaming, setRenaming] = useState(false);
+  const repairRef = useRef<HTMLButtonElement | null>(null);
   const menu = usePresetMenu(preset, {
     onRecall,
     pv,
     canVolume: canSetVolume || volume != null,
     startRename: () => setRenaming(true),
+    repair: dead ? () => repairRef.current?.click() : undefined,
   });
+  // in the keyed list a preset is reached with the arrows, its actions through More (K1, K4)
+  const inList = useInListKeys();
 
   return (
     <div
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
+      style={sortableStyle(transform, transition, CARD_MOTION)}
       {...attributes}
       {...listeners}
+      {...listItem}
+      tabIndex={inList ? -1 : attributes.tabIndex}
       onContextMenu={menu.open}
       data-playing={playing || undefined}
       className={cx(
@@ -917,7 +988,7 @@ function PresetCard({
         // it stays legible on gold/orange album covers.
         // Hover: a slight grow + lift (scale is layout-free, so edge-clipped
         // cards just clip at the scrollport; z-10 keeps the grown card on top).
-        "group relative text-left rounded-2xl p-2 pb-2.5 transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]",
+        "group relative text-left rounded-2xl p-2 pb-2.5 hover:z-10 motion-safe:hover:scale-[1.04]",
         isDragging && "z-10 opacity-90",
         playing ? "bg-goldtile/70 tile-playing" : "bg-raised/50 ring-1 ring-edge card-hover-glow",
         // held while this card's volume popover is open — the pointer has left,
@@ -929,7 +1000,11 @@ function PresetCard({
           to the artwork: playing top-left, a set volume's speaker top-right, the ⋯
           bottom-right (the card grammar's corner) */}
       <div className="relative">
-        <button className="relative block w-full cursor-pointer" onClick={onRecall}>
+        <button
+          className="relative block w-full cursor-pointer"
+          tabIndex={inList ? -1 : undefined}
+          onClick={onRecall}
+        >
           {/* the art well is a veil lift, never a panel hole — see LibraryCards */}
           <div className="aspect-square w-full rounded-lg overflow-hidden bg-veil flex items-center justify-center">
             {preset.art_urls && preset.art_urls.length > 1 ? (
@@ -988,13 +1063,21 @@ function PresetCard({
         {/* the alert takes the corner the tuning spinner hands over, and is a
           sibling of the recall button (not a child) — nested buttons are
           invalid, and this one must not also fire the recall */}
-        {dead && <RepairChip preset={preset} variant="card" onRepaired={() => onRepaired?.()} />}
+        {dead && (
+          <RepairChip
+            preset={preset}
+            variant="card"
+            buttonRef={repairRef}
+            onRepaired={() => onRepaired?.()}
+          />
+        )}
 
         {/* the gold speaker shows a set volume (presence and color are the status, the tooltip
           carries the percentage, a click adjusts it); setting one is the ⋯ menu's Preset
           volume… (0.12.0: the hover-revealed speaker went with the menu's arrival) */}
         {volume != null && (
           <button
+            tabIndex={inList ? -1 : undefined}
             data-tip={`Recalled at ${volume}% volume`}
             aria-label="Preset volume"
             onClick={pv.openFrom}
@@ -1009,6 +1092,7 @@ function PresetCard({
           </button>
         )}
         <button
+          tabIndex={inList ? -1 : undefined}
           aria-label="More actions"
           data-preset-menu
           onPointerDown={(e) => e.stopPropagation()}
@@ -1066,12 +1150,16 @@ function PresetCard({
 function RepairChip({
   preset,
   variant,
+  buttonRef,
   onRepaired,
 }: {
   preset: PresetItem;
   variant: "card" | "row";
+  /** The chip itself, for the preset menu's Repair… to press. */
+  buttonRef?: React.RefObject<HTMLButtonElement | null>;
   onRepaired(): void;
 }): React.JSX.Element {
+  const inList = useInListKeys();
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<{ left: number; top: number } | null>(null);
   // undefined = looking
@@ -1123,6 +1211,8 @@ function RepairChip({
   const chip =
     variant === "card" ? (
       <button
+        ref={buttonRef}
+        tabIndex={inList ? -1 : undefined}
         data-preset-dead
         data-tip="Didn't load. Click to repair."
         aria-label="Repair preset (didn't load)"
@@ -1134,6 +1224,8 @@ function RepairChip({
       </button>
     ) : (
       <button
+        ref={buttonRef}
+        tabIndex={inList ? -1 : undefined}
         data-preset-dead
         data-tip="Didn't load. Click to repair."
         aria-label="Repair preset (didn't load)"

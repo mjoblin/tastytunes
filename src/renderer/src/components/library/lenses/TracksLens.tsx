@@ -15,6 +15,8 @@ import { useStore } from "@/store";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { useKnownStats, USB_ANALYSIS_HINT } from "@/lib/audioAnalysis";
 import { useWindowedList } from "@/hooks/useWindowedList";
+import { ListKeysContext, useListKeys } from "@/hooks/useListKeys";
+import { keyedEvent } from "@/lib/menuAt";
 import { fmtLufs } from "@/components/media/Waveform";
 import { FilterInput } from "@/components/controls/FilterInput";
 import { PrimaryButton, GAP_BETWEEN, GAP_WITHIN } from "@/components/chrome/Chrome";
@@ -315,6 +317,22 @@ export function TracksLens({
   });
   const start = win.first;
   const end = total === 0 ? 0 : win.last + 1;
+  // FROM THE KEYBOARD (0.14.0, his K1 to K6): the rows' up and down; Enter is a row's click (it
+  // plays), "." its More menu; the window renders the current row first
+  const keys = useListKeys({
+    count: cards ? 0 : total,
+    onEnter: (i, el) => {
+      const t = shown[i];
+      if (t && !trackRowClick(t, keyedEvent(el))) actions.playTrack(t, el);
+    },
+    onMenu: (i, el) => {
+      const t = shown[i];
+      if (t) sel.rowMenu(t, keyedEvent(el));
+    },
+    reveal: (i) => {
+      if (listRef.current) listRef.current.scrollTop = win.offsetOf(i);
+    },
+  });
   const narrowed = Boolean(
     mem.filter || mem.genre || mem.decade || mem.dr || mem.tempo || mem.format || mem.played,
   );
@@ -541,7 +559,12 @@ export function TracksLens({
             />
           ) : (
             <div
-              ref={listRef}
+              {...keys.container}
+              ref={(el) => {
+                listRef.current = el;
+                keys.container.ref(el);
+              }}
+              aria-label="Tracks"
               onScroll={(e) => {
                 tracksMem.scroll = e.currentTarget.scrollTop;
               }}
@@ -551,53 +574,58 @@ export function TracksLens({
               )}
               data-lens-tracks-list
             >
-              <div>
-                {win.padTop > 0 && <div data-win-spacer="top" style={{ height: win.padTop }} />}
+              <ListKeysContext.Provider value={true}>
                 <div>
-                  {windowed.map((t, i) => {
-                    const idx = start + i;
-                    return (
-                      <div key={nodeKey(t)} data-win-item className="border-b border-edge/50">
-                        <TrackRow
-                          node={t}
-                          // art, not a running-order number: a track's position
-                          // within its album reads as noise in a flat list
-                          showArt
-                          showPosition={false}
-                          isCurrent={actions.isCurrentTrack(t)}
-                          queued={actions.trackQueued(t)}
-                          menuOpen={actions.menuNodeId === t.id}
-                          favorited={actions.nodeFavorited(t)}
-                          selected={selT.has(nodeKey(t))}
-                          selStart={!(idx > 0 && selT.has(nodeKey(shown[idx - 1])))}
-                          selEnd={!(idx < total - 1 && selT.has(nodeKey(shown[idx + 1])))}
-                          dr={drOf(t)}
-                          lufs={lufsOf(t)}
-                          meta={metaOf(t)}
-                          // the second line's links — the search-results
-                          // treatment: the row plays, the names navigate
-                          onAlbumLink={
-                            actions.goToAlbum && t.album ? () => actions.goToAlbum?.(t) : undefined
-                          }
-                          onArtistLink={
-                            actions.goToArtist && t.artist
-                              ? () => actions.goToArtist?.(t)
-                              : undefined
-                          }
-                          onRowClick={(e) => trackRowClick(t, e)}
-                          onNavDrag={(e) => sel.startTrackDrag(t, e)}
-                          onHeart={() => actions.heartNode(t)}
-                          onPlayNow={(el) => actions.playTrack(t, el)}
-                          onMenu={(e) => sel.rowMenu(t, e)}
-                        />
-                      </div>
-                    );
-                  })}
+                  {win.padTop > 0 && <div data-win-spacer="top" style={{ height: win.padTop }} />}
+                  <div>
+                    {windowed.map((t, i) => {
+                      const idx = start + i;
+                      return (
+                        <div key={nodeKey(t)} data-win-item className="border-b border-edge/50">
+                          <TrackRow
+                            node={t}
+                            item={keys.item(idx)}
+                            // art, not a running-order number: a track's position
+                            // within its album reads as noise in a flat list
+                            showArt
+                            showPosition={false}
+                            isCurrent={actions.isCurrentTrack(t)}
+                            queued={actions.trackQueued(t)}
+                            menuOpen={actions.menuNodeId === t.id}
+                            favorited={actions.nodeFavorited(t)}
+                            selected={selT.has(nodeKey(t))}
+                            selStart={!(idx > 0 && selT.has(nodeKey(shown[idx - 1])))}
+                            selEnd={!(idx < total - 1 && selT.has(nodeKey(shown[idx + 1])))}
+                            dr={drOf(t)}
+                            lufs={lufsOf(t)}
+                            meta={metaOf(t)}
+                            // the second line's links — the search-results
+                            // treatment: the row plays, the names navigate
+                            onAlbumLink={
+                              actions.goToAlbum && t.album
+                                ? () => actions.goToAlbum?.(t)
+                                : undefined
+                            }
+                            onArtistLink={
+                              actions.goToArtist && t.artist
+                                ? () => actions.goToArtist?.(t)
+                                : undefined
+                            }
+                            onRowClick={(e) => trackRowClick(t, e)}
+                            onNavDrag={(e) => sel.startTrackDrag(t, e)}
+                            onHeart={() => actions.heartNode(t)}
+                            onPlayNow={(el) => actions.playTrack(t, el)}
+                            onMenu={(e) => sel.rowMenu(t, e)}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {win.padBottom > 0 && (
+                    <div data-win-spacer="bottom" style={{ height: win.padBottom }} />
+                  )}
                 </div>
-                {win.padBottom > 0 && (
-                  <div data-win-spacer="bottom" style={{ height: win.padBottom }} />
-                )}
-              </div>
+              </ListKeysContext.Provider>
             </div>
           )}
           <LensTrackMenu sel={sel} />

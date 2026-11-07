@@ -525,7 +525,10 @@ function BandSlider({
   useEffect(() => {
     if (!dragging) return;
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === "Escape") setDragGain(null);
+      if (e.key !== "Escape") return;
+      // the drag's Escape, not the keyboard's release (hooks/useShortcuts)
+      e.preventDefault();
+      setDragGain(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -636,6 +639,8 @@ function CenteredSlider({
     if (!dragging) return;
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === "Escape") {
+        // the drag's Escape, not the keyboard's release (hooks/useShortcuts)
+        e.preventDefault();
         setDragValue(null);
         onCancel?.();
       }

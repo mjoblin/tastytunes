@@ -31,13 +31,29 @@ export type ArtistChoice =
   | { kind: "cover"; url: string; album: string; serverUdn: string | null }
   /** A picture file, copied into the app's data under `file`. */
   | { kind: "file"; file: string };
+// (0.14.0) A picture or a cover chosen is copied into the app's data too, and drawn from the copy
+// (main/lookups/choiceCopies): main keeps the copy's name beside the choice, never a window.
 
-/** A picture chosen for an artist as a window draws it (ipc artistChoices): the address (a moved
- *  cover found again), what it is, and whether a reset brings back the artist's Wikipedia photo
- *  (one is known, and no picture of the server's own outranks it), which the reset's label says. */
+/** A picture offered in the chooser (0.14.0): the address chosen, a smaller one for its tile where
+ *  the source has one (Wikimedia Commons), its full size where the source says (Wikipedia and
+ *  Commons), and the file's page there. */
+export interface PictureOffer {
+  url: string;
+  thumb: string | null;
+  width: number | null;
+  height: number | null;
+  page: string | null;
+}
+
+/** A picture chosen for an artist as a window draws it (ipc artistChoices): the address to draw
+ *  (its kept copy, 0.14.0, once made), the address it was offered at (a moved cover found again;
+ *  the chooser finds its tile by it), what it is, and whether a reset brings back the artist's
+ *  Wikipedia photo (one is known, and no picture of the server's own outranks it), which the
+ *  reset's label says. */
 export interface ChosenPicture {
   kind: ArtistChoice["kind"];
   url: string;
+  offered: string;
   photoAfter: boolean;
 }
 

@@ -7,15 +7,25 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // a test can tell what reached the file; each test a fresh userData and fresh modules.
 let userData = "";
 let available = true;
+// every call that could reach the keychain, counted (0.14.0: a launch that needs no secret
+// touches none)
+const touched = { available: 0, encrypt: 0, decrypt: 0 };
 vi.mock("electron", () => ({
   app: { getPath: () => userData, getVersion: () => "0.0.0", isPackaged: false, on: () => {} },
   safeStorage: {
-    isEncryptionAvailable: () => available,
+    isEncryptionAvailable: () => (touched.available++, available),
     getSelectedStorageBackend: () => "keychain",
-    encryptString: (s: string) => Buffer.from(`enc:${[...s].reverse().join("")}`),
-    decryptString: (b: Buffer) => [...b.toString().replace(/^enc:/, "")].reverse().join(""),
+    encryptString: (s: string) => (
+      touched.encrypt++,
+      Buffer.from(`enc:${[...s].reverse().join("")}`)
+    ),
+    decryptString: (b: Buffer) => (
+      touched.decrypt++,
+      [...b.toString().replace(/^enc:/, "")].reverse().join("")
+    ),
   },
 }));
+const keychainUse = (): number => touched.available + touched.encrypt + touched.decrypt;
 
 const fresh = async (): Promise<{
   secrets: typeof import("./secrets");
@@ -29,6 +39,7 @@ const file = (name: string): string => readFileSync(join(userData, name), "utf8"
 beforeEach(() => {
   userData = mkdtempSync(join(tmpdir(), "tt-secrets-"));
   available = true;
+  touched.available = touched.encrypt = touched.decrypt = 0;
   delete process.env["TASTYTUNES_SECRETS_PLAIN"];
 });
 
@@ -96,27 +107,86 @@ describe("the tokens leave settings.json", () => {
     expect(file("settings.json")).not.toMatch(/lbToken|"token"/);
   });
 
-  it("mint an MCP token where there is none, and a new one on request", async () => {
+  it("mint an MCP token only when the server first runs, and a new one on request", async () => {
     const { secrets, persist } = await fresh();
     persist.moveSecrets();
+    expect(secrets.getSecret("mcpToken")).toBeNull();
+    persist.ensureMcpToken();
     const first = secrets.getSecret("mcpToken");
     expect(first).toMatch(/^[\w-]{20,}$/);
+    persist.ensureMcpToken();
+    expect(secrets.getSecret("mcpToken")).toBe(first);
     persist.newMcpToken();
     expect(secrets.getSecret("mcpToken")).not.toBe(first);
   });
 
-  it("take a token an older build wrote since as the newer one", async () => {
+  it("take a token an older build wrote since as the newer one, while the server is on", async () => {
     const { secrets, persist } = await fresh();
     persist.moveSecrets();
     // the installed 0.12.0 finds no token and mints its own into settings.json
     writeFileSync(
       join(userData, "settings.json"),
-      JSON.stringify({ mcp: { token: "minted-by-0.12" } }),
+      JSON.stringify({ mcp: { enabled: true, token: "minted-by-0.12" } }),
     );
     const later = await fresh();
     later.persist.moveSecrets();
     expect(later.secrets.getSecret("mcpToken")).toBe("minted-by-0.12");
     expect(file("settings.json")).not.toContain("minted-by-0.12");
     void secrets;
+  });
+
+  it("drop the token 0.12.0 minted for an install that never turned the server on", async () => {
+    writeFileSync(
+      join(userData, "settings.json"),
+      JSON.stringify({ mcp: { enabled: false, token: "minted-by-0.12" } }),
+    );
+    const { secrets, persist } = await fresh();
+    persist.moveSecrets();
+    expect(secrets.getSecret("mcpToken")).toBeNull();
+    expect(file("settings.json")).not.toContain("minted-by-0.12");
+    expect(keychainUse()).toBe(0);
+  });
+});
+
+describe("the keychain only when a secret is used", () => {
+  it("a launch with no secrets never reaches it, Settings' hints included", async () => {
+    writeFileSync(join(userData, "settings.json"), JSON.stringify({ mcp: { enabled: false } }));
+    const { secrets, persist } = await fresh();
+    persist.moveSecrets();
+    expect(secrets.secretHint("lbToken")).toEqual({ saved: false, ends: null });
+    expect(secrets.secretHint("mcpToken")).toEqual({ saved: false, ends: null });
+    expect(secrets.getSecret("fanartKey")).toBeNull();
+    // where the platform's keychain is always there it is never asked; Linux asks for a keyring
+    expect(secrets.encryptsHere()).toBe(true);
+    if (process.platform === "darwin" || process.platform === "win32")
+      expect(keychainUse()).toBe(0);
+    else expect(touched.encrypt + touched.decrypt).toBe(0);
+  });
+
+  it("decrypts an entry only when it is asked for, and a save leaves the others as stored", async () => {
+    const first = await fresh();
+    first.secrets.setSecret("lbToken", "lb-token-1111");
+    first.secrets.setSecret("fanartKey", "fanart-2222");
+    const before = JSON.parse(file("secrets.json")) as { entries: Record<string, unknown> };
+    touched.available = touched.encrypt = touched.decrypt = 0;
+    const { secrets } = await fresh();
+    expect(secrets.hasSecret("lbToken")).toBe(true);
+    expect(touched.decrypt).toBe(0);
+    expect(secrets.secretHint("fanartKey")).toEqual({ saved: true, ends: "2222" });
+    expect(touched.decrypt).toBe(1);
+    secrets.setSecret("mcpToken", "mcp-3333");
+    expect(touched.decrypt).toBe(1);
+    const after = JSON.parse(file("secrets.json")) as { entries: Record<string, unknown> };
+    expect(after.entries.lbToken).toEqual(before.entries.lbToken);
+    expect((await fresh()).secrets.getSecret("lbToken")).toBe("lb-token-1111");
+  });
+
+  it("says unencrypted where the saved values are, without asking the keychain", async () => {
+    available = false;
+    (await fresh()).secrets.setSecret("lbToken", "plain-1");
+    available = true;
+    touched.available = 0;
+    expect((await fresh()).secrets.encryptsHere()).toBe(false);
+    expect(touched.available).toBe(0);
   });
 });

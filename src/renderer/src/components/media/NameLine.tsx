@@ -1,6 +1,7 @@
 import { openArtistInLibrary, openRefInLibrary } from "@/lib/mediaActions";
 import type { MediaRef } from "@/lib/mediaRef";
 import { cx } from "@/lib/format";
+import { useInListKeys } from "@/hooks/useListKeys";
 
 /**
  * The "artist — album" line of a row, with each NAME a link (ruled
@@ -48,9 +49,12 @@ export function NameLink({
   className?: string;
   children?: React.ReactNode;
 }): React.JSX.Element {
+  // in a keyed list the row is the stop, and Go to album and Go to artist are in its More (K1)
+  const inList = useInListKeys();
   return (
     <button
       {...data}
+      tabIndex={inList ? -1 : undefined}
       data-tip={kind === "artist" ? "Go to artist" : "Go to album"}
       data-name-link={kind}
       aria-label={`Go to ${kind} ${name}`}

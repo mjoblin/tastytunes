@@ -318,15 +318,31 @@ export function albumComposers(tracks: ReadonlyArray<Pick<MediaNode, "composers"
  * compilation's tracks credit their own performers, and a server without an
  * AlbumArtist role sends nothing else to tell by, so the strict reading left
  * such an album with no tracks (no plays, no format).
+ * A FOLDER IS ITS OWN ALBUM (0.14.0): where the index walked a folder tree (the streamer's USB
+ * drive, a plain-folder server), an album and its tracks each carry their folder's path, and an
+ * album's tracks are exactly the ones in its folder. Two copies of one album in two folders, art
+ * and all, each claimed both copies' tracks by title (doubled plays and formats); and a drive
+ * holding many copies made every copy walk every track of the title (the Albums lens took 40 s
+ * to draw on the mock's drive of 6,435 albums).
  */
 export function albumTracksOf(
-  album: Pick<MediaNode, "title" | "artist" | "artUrl">,
+  album: Pick<MediaNode, "title" | "artist" | "artUrl" | "titlePath">,
   pool: {
     albums: ReadonlyArray<Pick<MediaNode, "title" | "artist">>;
     tracks: ReadonlyArray<MediaNode>;
   },
 ): MediaNode[] {
   const title = album.title.trim().toLowerCase();
+  const folder = album.titlePath ? folderKey(album.titlePath) : null;
+  if (folder != null) {
+    const own = pool.tracks.filter(
+      (t) =>
+        t.titlePath != null &&
+        (t.album ?? "").trim().toLowerCase() === title &&
+        folderKey(t.titlePath) === folder,
+    );
+    if (own.length > 0) return orderTracks(own);
+  }
   const owner = (album.artist ?? "").trim().toLowerCase();
   const peers = pool.albums.filter((a) => a.title.trim().toLowerCase() === title);
   const twins = peers.filter((a) => (a.artist ?? "").trim().toLowerCase() === owner).length > 1;
@@ -663,6 +679,11 @@ export function discGroups<T extends Pick<MediaNode, "discNumber">>(
  * so a track belongs to the edition whose art it shares. Compared without
  * the size query, unknown on either side counts as a match.
  */
+/** A walked folder's identity: its titles from the source's root, joined (titlePath). */
+export function folderKey(path: readonly string[]): string {
+  return path.join("\u0000");
+}
+
 export function sameArt(a: string | null | undefined, b: string | null | undefined): boolean {
   if (!a || !b) return true;
   return a.split("?")[0] === b.split("?")[0];

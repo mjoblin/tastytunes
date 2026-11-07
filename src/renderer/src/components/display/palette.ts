@@ -42,7 +42,7 @@ export function readTokens(): Tokens {
   const light = root.classList.contains("light");
   return {
     light,
-    bg: get("--color-bg", light ? [242, 238, 230] : [14, 13, 11]),
+    bg: get("--color-bg", light ? [242, 238, 230] : [18, 17, 15]),
     ink: get("--color-ink", light ? [36, 29, 18] : [244, 239, 230]),
     dim: get("--color-dim", light ? [95, 87, 73] : [166, 158, 144]),
     faint: get("--color-faint", light ? [115, 108, 92] : [130, 120, 106]),

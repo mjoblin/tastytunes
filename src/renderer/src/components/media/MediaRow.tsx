@@ -5,6 +5,7 @@ import { MediaArt, type MediaArtKind } from "@/components/media/MediaArt";
 import { ArtistArt } from "@/components/media/ArtistArt";
 import { Eqbars } from "@/components/media/Eqbars";
 import { cx } from "@/lib/format";
+import { useInListKeys, type ListItemAttrs } from "@/hooks/useListKeys";
 
 /**
  * THE floating row — the app's second row skin, for heterogeneous collection
@@ -43,7 +44,10 @@ export function MediaRow({
   parked,
   slot,
   held,
+  item,
 }: {
+  /** In a keyed list (hooks/useListKeys, 0.14.0): the item's id and index for the list. */
+  item?: ListItemAttrs;
   title: string;
   subtitle?: React.ReactNode;
   artUrl?: string | null;
@@ -122,13 +126,16 @@ export function MediaRow({
    */
   held?: boolean;
 }): React.JSX.Element {
+  // a keyed list is one Tab stop (K1): its rows are reached with the arrows
+  const inList = useInListKeys();
   return (
     <div
       {...attrs}
+      {...item}
       data-media-row={title}
       data-held={held ? "" : undefined}
       role={onClick ? "button" : undefined}
-      tabIndex={onClick && !dimmed ? 0 : undefined}
+      tabIndex={onClick && !dimmed ? (inList ? -1 : 0) : undefined}
       onClick={(e) => !dimmed && onClick?.(e.currentTarget)}
       onContextMenu={onContextMenu}
       onKeyDown={(e) => {

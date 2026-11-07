@@ -78,11 +78,11 @@ async function sweep(
   serverUdn: string,
   pathTitles: string[],
 ): Promise<AnalyzeAlbumResult | null> {
-  const progress = (done: number, total: number): void =>
+  const progress = (at: number, total: number): void =>
     useStore.getState().setAnalysisProgress({
       key,
       album: album.title,
-      done,
+      at,
       total,
       queued: waiting,
     });
@@ -142,17 +142,20 @@ async function sweep(
 async function sweepTracks(
   tracks: readonly MediaNode[],
   serverUdn: string,
-  progress: (done: number, total: number) => void,
+  progress: (at: number, total: number) => void,
   force = false,
 ): Promise<number[]> {
   const drs: number[] = [];
   for (let i = 0; i < tracks.length; i++) {
-    progress(i, tracks.length);
+    progress(i + 1, tracks.length);
     const t = tracks[i];
-    const a = await analyzeTrack(t.serverUdn ?? serverUdn, t.id, audioAnalysisKey(t), { force });
+    // a sweep's measuring never stops for a skip (0.14.0, his A3)
+    const a = await analyzeTrack(t.serverUdn ?? serverUdn, t.id, audioAnalysisKey(t), {
+      force,
+      keep: true,
+    });
     if (a) drs.push(a.dr);
   }
-  progress(tracks.length, tracks.length);
   return drs;
 }
 
@@ -174,8 +177,8 @@ export async function analyzeTracks(
   waiting++;
   const run = queueTail.then(async () => {
     waiting--;
-    const progress = (done: number, total: number): void =>
-      useStore.getState().setAnalysisProgress({ key, album: label, done, total, queued: waiting });
+    const progress = (at: number, total: number): void =>
+      useStore.getState().setAnalysisProgress({ key, album: label, at, total, queued: waiting });
     progress(0, tracks.length);
     try {
       const again = await againIfDone(tracks);

@@ -7,14 +7,29 @@
 /* and motion-reduce: its mirror (0.12.0-rc.3): Tailwind's own read only the media query, so with
    Motion off in Settings the Library's indexing spinners kept turning where the icon belongs */
 @custom-variant motion-reduce (&:where(:root.reduce-motion, :root.reduce-motion *));
+/* light: (0.14.0-rc.2): the theme resolves into a .light class on :root (hooks/useTheme), so what
+   only light mode draws says so where it is drawn, as motion-safe: follows Motion */
+@custom-variant light (&:where(:root.light, :root.light *));
 /* a reveal on keyboard focus: focus-visible once Tab has moved focus (lib/inputModality), never
    after a click and a hotkey; the lint rule focus-reveal keeps focus-visible: out of the app */
 @custom-variant focus-kbd (:root[data-keyboard-nav] &:focus-visible);
 /* KEYBOARD REVEAL (0.13.0 round 4, the accessibility second layer): what a group shows on hover it
    shows while keyboard focus is anywhere in it, so a row's or a card's hidden buttons appear when
    Tab reaches them instead of being focused invisible (the 0.11 re-score). Every hover reveal
-   carries this twin (the lint rule hover-reveal-keyboard). */
-@custom-variant group-kbd (:root[data-keyboard-nav] .group:focus-within &);
+   carries this twin (the lint rule hover-reveal-keyboard). And since 0.14.0 (his K1 to K5) a
+   keyed list's CURRENT item shows them too while the list has the keyboard, as a hovered row does
+   (the list holds the focus, hooks/useListKeys, so focus-within never reaches the row). */
+@custom-variant group-kbd {
+  :root[data-keyboard-nav] .group:focus-within & {
+    @slot;
+  }
+  :root[data-keyboard-nav]
+    [data-list-active]:focus
+    :is(.group[data-list-current], [data-list-current] > .group)
+    & {
+    @slot;
+  }
+}
 
 /* Runtime-tintable accent: useArtAccent() overrides this per album.
    --gold-rgb is the STATIC state/brand gold (per theme, never art-tinted). */
@@ -138,10 +153,16 @@
      follows the user's display-font choice (font-wordmark utility). */
   --font-wordmark: "Fraunces Variable", Georgia, serif;
 
-  /* warm near-black "faceplate" palette (dark is the default theme) */
-  --color-bg: #0e0d0b;
-  --color-panel: #151311;
-  --color-raised: #1d1a16;
+  /* warm near-black "faceplate" palette (dark is the default theme). Lifted from #0e0d0b to
+     #12110f, where the navigation panel's tint sat over it (user call, 2026-11-01: the main area
+     matching the navigation panel as it was, after #1c1a17 read brighter than expected in the
+     installed app); panel, raised and the playing tile by the same step. The text levels
+     stay where they were, set by their steps from each other rather than by their contrast on
+     the ground: in dark, elegance wins over the contrast floor (user call, 2026-10-31,
+     decisions/0016), and a dim lifted to hold its contrast read too close to the ink */
+  --color-bg: #12110f;
+  --color-panel: #191715;
+  --color-raised: #211e1a;
   --color-edge: rgb(255 255 255 / 0.08);
   --color-edge2: rgb(255 255 255 / 0.16);
   --color-ink: #f4efe6;
@@ -157,7 +178,7 @@
   /* fixed gold for brand + "currently playing" — never tinted by album art */
   --color-gold: rgb(var(--gold-rgb));
   --color-golddim: rgb(var(--gold-rgb) / 0.16);
-  --color-goldtile: #322817; /* playing tile: lifted and warmed toward gold */
+  --color-goldtile: #362c1b; /* playing tile: lifted and warmed toward gold */
   --color-led: #67dd8b;
   /* triple form so alert can be used at partial alpha the way gold/amber are */
   --alert-rgb: 224 101 79;
@@ -264,6 +285,16 @@ textarea:focus-visible,
 select:focus-visible,
 [contenteditable]:focus-visible {
   outline: none;
+}
+/* A KEYED LIST'S CURRENT ITEM WEARS THE RING (0.14.0, his K5; hooks/useListKeys): the list holds
+   the focus and names its current item, so the ring is drawn on the item while the list has the
+   keyboard, and on the list itself once Escape has given the arrows back */
+[data-list-keys][data-list-active]:focus-visible {
+  outline: none;
+}
+:root[data-keyboard-nav] [data-list-keys][data-list-active]:focus [data-list-current] {
+  outline: 2px solid color-mix(in srgb, var(--color-ink) 70%, transparent);
+  outline-offset: 2px;
 }
 /* a name link sits in a line that truncates, which clips an outline to a sliver at its end:
    the link underlines instead, thick and in the ink, where the clip cannot reach */

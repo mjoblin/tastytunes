@@ -15,6 +15,7 @@ import {
 import { pools } from "../media/mediaIndex";
 import { audioResUrl } from "../media/upnpBrowser";
 import { loggedFetch } from "../netlog";
+import { closeAudioStream, openAudioStream, readAudioStream } from "../media/audioStream";
 import { handle } from "../app/guard";
 
 /**
@@ -40,6 +41,15 @@ export function registerAudioIpc(): void {
   // LOCAL media server, capped (ANALYSIS_MAX_BYTES), refused by its length before a byte of it
   // is downloaded and by a running count when the server sends none, so a file past the cap
   // costs nothing and the renderer can say why it has no waveform.
+  // THE EVIDENCE the playback bar keys its taller geometry on (settings.waveformSeen), set once:
+  // a track's file opened for measuring, or an analysis served (stored or read back). Since
+  // 0.14.0 a waveform draws while its file is measured, so waiting for the stored analysis let
+  // the seek strip grow for the first wave and the bar a moment later, two steps on a first run
+  // (his eye, 2026-11-01); the file opening comes before any wave, so the bar grows once.
+  const noteWaveformSeen = (): void => {
+    if (getSettings().waveformSeen) return;
+    broadcastSettings(updateSettings({ waveformSeen: true }));
+  };
   handle(IPC.expTrackAudio, async (_e, serverUdn: string, objectId: string) => {
     const host = streamerHost();
     if (!host || typeof serverUdn !== "string" || typeof objectId !== "string") return null;
@@ -54,6 +64,7 @@ export function registerAudioIpc(): void {
         void res.body.cancel();
         return tooLarge(declared);
       }
+      noteWaveformSeen();
       // one buffer the size the server declared (no second copy on the way to the renderer);
       // chunks gathered only when it declared none, or more arrived than it said
       const reader = res.body.getReader();
@@ -81,16 +92,26 @@ export function registerAudioIpc(): void {
       return null;
     }
   });
+  // A TRACK'S FILE IN PIECES (0.14.0, analysis with no size limit): FLAC, WAV and AIFF are
+  // measured as they arrive (main/media/audioStream), so no cap applies; the whole-file fetch
+  // above stays for the formats only a whole-file decode reads (MP3, AAC, Ogg)
+  handle(IPC.audioStreamOpen, async (_e, serverUdn: unknown, objectId: unknown) => {
+    const host = streamerHost();
+    if (!host || typeof serverUdn !== "string" || typeof objectId !== "string") return null;
+    const url = await audioResUrl(host, serverUdn, objectId, { analysis: true });
+    const stream = url ? await openAudioStream(url) : null;
+    if (stream) noteWaveformSeen();
+    return stream;
+  });
+  handle(IPC.audioStreamRead, (_e, id: unknown) =>
+    typeof id === "number" ? readAudioStream(id) : { error: "closed" as const },
+  );
+  handle(IPC.audioStreamClose, (_e, id: unknown) => {
+    if (typeof id === "number") closeAudioStream(id);
+  });
   // EXPERIMENT (0.7 exploration): the persisted analysis stores — content-
   // keyed track analyses and the album-DR map (lookups/audioAnalysis holds
   // the shape guards; the store is a cache, never truth).
-  // The first analysis SERVED — stored or read back — is the evidence the
-  // playback bar keys its taller geometry on (settings.waveformSeen); set
-  // once, here, at the one seam every analysis crosses.
-  const noteWaveformSeen = (): void => {
-    if (getSettings().waveformSeen) return;
-    broadcastSettings(updateSettings({ waveformSeen: true }));
-  };
   handle(IPC.audioAnalysisGet, (_e, key: unknown) => {
     const hit = typeof key === "string" ? audioAnalysisGet(key) : null;
     if (hit) noteWaveformSeen();

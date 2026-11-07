@@ -1,6 +1,14 @@
 import { useEffect, useLayoutEffect, useRef, useState, useMemo } from "react";
 import { useKnownDrs } from "@/lib/audioAnalysis";
 import { useWindowedList } from "@/hooks/useWindowedList";
+import {
+  gridColumnsOf,
+  ListKeysContext,
+  useInListKeys,
+  useListKeys,
+  type ListItemAttrs,
+  type ListKeysMove,
+} from "@/hooks/useListKeys";
 import { DrBadge } from "@/components/media/Waveform";
 import { createPortal } from "react-dom";
 import { useQueuePerformer } from "@/hooks/useQueuePerformer";
@@ -15,12 +23,12 @@ import {
 } from "@dnd-kit/core";
 import {
   SortableContext,
+  arrayMove,
   rectSortingStrategy,
   sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import type { Modifier } from "@dnd-kit/core";
 import {
   ArrowDownToLine,
@@ -31,7 +39,6 @@ import {
   Disc3,
   Footprints,
   Heart,
-  LayoutGrid,
   Library,
   ListMusic,
   ListOrdered,
@@ -39,12 +46,12 @@ import {
   ListX,
   MoreHorizontal,
   Play,
-  Rows3,
   Search,
   X,
 } from "lucide-react";
 import { queueContentHash, type QueueListItem } from "@shared/smoip";
-import { presetVolumeKey, type QueueLayout, audioAnalysisKey } from "@shared/model";
+import { presetVolumeKey, audioAnalysisKey } from "@shared/model";
+import { ViewOptions } from "@/components/library/lenses/ViewOptions";
 import { type ContentRef, type QueueRestoreResult } from "@shared/model";
 import { tt } from "@/api";
 import { useConfirmPopover } from "@/components/chrome/Confirm";
@@ -53,7 +60,7 @@ import { Eqbars } from "@/components/media/Eqbars";
 import { EmptyActions, EmptyState } from "@/components/chrome/EmptyState";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { flashTarget, scrollToWithContext } from "@/lib/scroll";
-import { DND_ACCESSIBILITY, lockVertical } from "@/lib/dnd";
+import { CARD_MOTION, DND_ACCESSIBILITY, lockVertical, ROW_MOTION, sortableStyle } from "@/lib/dnd";
 import { cx, fmtDuration, fmtTime, matchesFilter, fmtCount } from "@/lib/format";
 import { isFavorited, toggleFavorite } from "@/lib/favorites";
 import { fromQueueItem, refToFavorite, refToPlaylistItem, type MediaRef } from "@/lib/mediaRef";
@@ -90,7 +97,7 @@ import { useDisc } from "@/hooks/useDisc";
 import { useQueueSelection, type SelectionLate } from "@/components/queue/useQueueSelection";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { useQueueSourceActive } from "@/hooks/useQueueSourceActive";
-import { menuAt } from "@/lib/menuAt";
+import { keyedEvent, menuAt } from "@/lib/menuAt";
 
 /**
  * Queue → preset: the shared PresetSavePanel in a centered modal. The device
@@ -224,9 +231,6 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
 
   const setFollowQueue = async (follow: boolean): Promise<void> => {
     await saveSettings({ followQueue: follow });
-  };
-  const setLayout = async (queueLayout: QueueLayout): Promise<void> => {
-    await saveSettings({ queueLayout });
   };
   // Cards get half a card of context above the target; rows get a full row.
   const scrollToCurrent = (): void => {
@@ -391,6 +395,7 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
     onDragEnd,
     onDragCancel,
     applyBlockMove,
+    moveOne,
   } = useQueueDrag({
     items,
     allItems,
@@ -416,6 +421,67 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
     enabled: leanRows,
   });
   const leanRange: [number, number] = [leanWin.first, leanWin.last];
+
+  // FROM THE KEYBOARD (0.14.0, his K1 to K9): the Queue one Tab stop; up and down through the
+  // rows (all four in the cards; album by album in the Albums view, his settled call); Enter
+  // jumps to a track as its click does, "." its More menu, Delete removes it (or the selection)
+  // with Undo, and Option with up or down moves it, dropped on Option's release as ONE change
+  const groups = useMemo(() => (albums ? albumRuns(items) : []), [albums, items]);
+  const cardGridRef = useRef<HTMLDivElement | null>(null);
+  const moveBase = useRef<QueueListItem[] | null>(null);
+  const moveKeys: ListKeysMove = {
+    preview: (from, to) => {
+      const base = moveBase.current ?? items;
+      moveBase.current = base;
+      setQueueItems(arrayMove(base, from, to));
+    },
+    commit: (from, to) => {
+      const base = moveBase.current ?? items;
+      moveBase.current = null;
+      setQueueItems(base);
+      moveOne(base, from, to);
+    },
+    cancel: () => {
+      const base = moveBase.current;
+      moveBase.current = null;
+      if (base) setQueueItems(base);
+    },
+  };
+  const keys = useListKeys({
+    count: albums ? groups.length : items.length,
+    columns: cards ? () => gridColumnsOf(cardGridRef.current) : undefined,
+    initial: () =>
+      albums
+        ? groups.findIndex((g) => g.items.some((i) => i.id === playId))
+        : items.findIndex((i) => i.id === playId),
+    onEnter: (i, el) => {
+      const item = albums ? groups[i]?.items[0] : items[i];
+      if (!item || (!albums && rowClick(item, keyedEvent(el)))) return;
+      if (item.id != null) void tt.command({ type: "playQueueId", queueId: item.id });
+    },
+    onMenu: (i, el) => {
+      // an album's run has no menu of its own; its tracks' are a click away
+      const item = albums ? (groups[i]?.album == null ? groups[i]?.items[0] : null) : items[i];
+      if (item) setRowMenu({ item, ...menuAt(keyedEvent(el)) });
+    },
+    onDelete: (i) => {
+      if (selected.size > 0) return removeSelected();
+      if (!albums) {
+        const item = items[i];
+        if (item) removeFromQueue(item);
+        return;
+      }
+      const g = groups[i];
+      if (g?.album == null && g?.items[0]) removeFromQueue(g.items[0]);
+      else if (g) removeAlbumRun(g);
+    },
+    // a filtered or grouped queue doesn't reorder (the drags are inert there too)
+    move: filter || albums ? undefined : moveKeys,
+    reveal: (i) => {
+      if (leanRows && scrollElRef.current)
+        scrollElRef.current.scrollTop = leanWin.offsetOf(i) - scrollElRef.current.clientHeight / 3;
+    },
+  });
 
   const drKeys = useMemo(() => allItems.map(keyOf), [allItems]);
   const drByKey = useKnownDrs(drKeys);
@@ -636,20 +702,9 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
               {clearConfirm.popover}
             </div>
             <div className={`flex items-center ${GAP_WITHIN}`}>
-              <HeaderChip
-                data-tip={cards ? "View as rows" : albums ? "View as cards" : "View as albums"}
-                aria-label={cards ? "View as rows" : albums ? "View as cards" : "View as albums"}
-                onClick={() => void setLayout(cards ? "rows" : albums ? "cards" : "albums")}
-                className="no-drag tip-bottom p-2 motion-safe:active:scale-90"
-              >
-                {cards ? (
-                  <Rows3 size={16} />
-                ) : albums ? (
-                  <LayoutGrid size={16} />
-                ) : (
-                  <ListMusic size={16} />
-                )}
-              </HeaderChip>
+              {/* Rows, Cards or Albums, and the card grid's size, gap and Fill rows (0.14.0, his
+                  D5 pick on "View Options": the menu wherever a Rows or Cards button was) */}
+              <ViewOptions kind="queue" />
               <HeaderChip
                 data-tip="Scroll to the current track"
                 aria-label="Scroll to the current track"
@@ -796,10 +851,13 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
       {/* rows: pt-1 keeps the current ring unclipped; cards: pt-2 gives the
           hover grow + glow ring headroom on the top row */}
       <div
+        {...keys.container}
         ref={(el) => {
           scrollRef(el);
           scrollElRef.current = el;
+          keys.container.ref(el);
         }}
+        aria-label="Queue"
         className={cx(
           // overflow-anchor off: Chromium's scroll anchoring re-adjusts scrollTop
           // when rows reorder above the viewport, dragging the Move-to-bottom
@@ -816,121 +874,126 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
         {items.length === 0 && (
           <div className="text-[15px] text-faint pt-6 px-2">No matches for “{filter}”</div>
         )}
-        {/* Reordering a partial list is ambiguous — drags are inert while filtered. */}
-        <DndContext
-          accessibility={DND_ACCESSIBILITY}
-          sensors={filter || albums ? [] : sensors}
-          collisionDetection={closestCenter}
-          onDragStart={onDragStart}
-          onDragMove={onDragMove}
-          onDragCancel={onDragCancel}
-          onDragEnd={onDragEnd}
-        >
-          <SortableContext
-            items={items.map((i) => i.id as number)}
-            strategy={cards ? rectSortingStrategy : verticalListSortingStrategy}
+        <ListKeysContext.Provider value={true}>
+          {/* Reordering a partial list is ambiguous — drags are inert while filtered. */}
+          <DndContext
+            accessibility={DND_ACCESSIBILITY}
+            sensors={filter || albums ? [] : sensors}
+            collisionDetection={closestCenter}
+            onDragStart={onDragStart}
+            onDragMove={onDragMove}
+            onDragCancel={onDragCancel}
+            onDragEnd={onDragEnd}
           >
-            {albums ? (
-              <QueueAlbumGroups
-                items={items}
-                playId={playId}
-                drFor={drFor}
-                sourceActive={queueSourceActive}
-                currentRef={currentRef}
-                selectedIds={selected}
-                menuId={rowMenu?.item.id ?? null}
-                onRowClick={rowClick}
-                onGroupModClick={groupModClick}
-                onMenu={(item, e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setRowMenu({ item, ...menuAt(e) });
-                }}
-              />
-            ) : cards ? (
-              <div
-                className="grid"
-                style={{
-                  gridTemplateColumns: presetFillRows
-                    ? `repeat(auto-fill, minmax(${presetCardSize}px, 1fr))`
-                    : `repeat(auto-fill, ${presetCardSize}px)`,
-                  gap: presetGap,
-                }}
-              >
-                {items.map((item) => (
-                  <QueueCard key={item.id} {...rowProps(item)} />
-                ))}
-              </div>
-            ) : (
-              <>
-                {leanRows && leanRange[0] > 0 && (
-                  <div data-lean-spacer="top" style={{ height: leanWin.padTop }} />
-                )}
-                {items.slice(leanRange[0], leanRange[1] + 1).map((item, k) => {
-                  const idx = leanRange[0] + k;
-                  const prev = items[idx - 1];
-                  const next = items[idx + 1];
-                  return (
-                    <QueueRow
-                      key={item.id}
-                      {...rowProps(item)}
-                      dr={drFor(item)}
-                      selStart={!(prev?.id != null && selected.has(prev.id))}
-                      selEnd={!(next?.id != null && selected.has(next.id))}
-                      bodyDrag={selected.size > 0}
-                    />
-                  );
-                })}
-                {leanRows && leanRange[1] < items.length - 1 && (
-                  <div data-lean-spacer="bottom" style={{ height: leanWin.padBottom }} />
-                )}
-              </>
-            )}
-          </SortableContext>
-          {/* the batch drag's cursor chip: the active track as a stacked card
+            <SortableContext
+              items={items.map((i) => i.id as number)}
+              strategy={cards ? rectSortingStrategy : verticalListSortingStrategy}
+            >
+              {albums ? (
+                <QueueAlbumGroups
+                  groups={groups}
+                  groupItem={keys.item}
+                  playId={playId}
+                  drFor={drFor}
+                  sourceActive={queueSourceActive}
+                  currentRef={currentRef}
+                  selectedIds={selected}
+                  menuId={rowMenu?.item.id ?? null}
+                  onRowClick={rowClick}
+                  onGroupModClick={groupModClick}
+                  onMenu={(item, e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setRowMenu({ item, ...menuAt(e) });
+                  }}
+                />
+              ) : cards ? (
+                <div
+                  ref={cardGridRef}
+                  className="grid"
+                  style={{
+                    gridTemplateColumns: presetFillRows
+                      ? `repeat(auto-fill, minmax(${presetCardSize}px, 1fr))`
+                      : `repeat(auto-fill, ${presetCardSize}px)`,
+                    gap: presetGap,
+                  }}
+                >
+                  {items.map((item, i) => (
+                    <QueueCard key={item.id} {...rowProps(item)} listItem={keys.item(i)} />
+                  ))}
+                </div>
+              ) : (
+                <>
+                  {leanRows && leanRange[0] > 0 && (
+                    <div data-lean-spacer="top" style={{ height: leanWin.padTop }} />
+                  )}
+                  {items.slice(leanRange[0], leanRange[1] + 1).map((item, k) => {
+                    const idx = leanRange[0] + k;
+                    const prev = items[idx - 1];
+                    const next = items[idx + 1];
+                    return (
+                      <QueueRow
+                        key={item.id}
+                        {...rowProps(item)}
+                        listItem={keys.item(idx)}
+                        dr={drFor(item)}
+                        selStart={!(prev?.id != null && selected.has(prev.id))}
+                        selEnd={!(next?.id != null && selected.has(next.id))}
+                        bodyDrag={selected.size > 0}
+                      />
+                    );
+                  })}
+                  {leanRows && leanRange[1] < items.length - 1 && (
+                    <div data-lean-spacer="bottom" style={{ height: leanWin.padBottom }} />
+                  )}
+                </>
+              )}
+            </SortableContext>
+            {/* the batch drag's cursor chip: the active track as a stacked card
               with the count — the rows themselves never move */}
-          {/* IN THE LIST the batch chip rides dnd-kit's overlay (anchored at
+            {/* IN THE LIST the batch chip rides dnd-kit's overlay (anchored at
               the grab point, the make-room grammar); OVER THE RAIL both
               batch and single drags hand off to a cursor-anchored ghost —
               the overlay's grab offset would park the chip ON TOP of the
               target row, and the glow must stay visible (the two-state
               model, ruled with the user 2026-08-30). */}
-          <DragOverlay dropAnimation={null} modifiers={[chipToCursor]}>
-            {(() => {
-              if (!dragBatch || navHover != null) return null;
-              const md = allItems.find((it) => it.id === dragBatch.active)?.metadata;
-              return (
-                <DragChip
-                  title={md?.title ?? md?.name ?? "—"}
-                  artUrl={md?.art_url}
-                  count={dragBatch.ids.length}
-                />
-              );
-            })()}
-          </DragOverlay>
-          {navHover != null &&
-            railPt != null &&
-            (() => {
-              const carried = dragBatch ?? dragSingle;
-              if (!carried) return null;
-              const activeId = "active" in carried ? carried.active : carried.id;
-              const md = allItems.find((it) => it.id === activeId)?.metadata;
-              return createPortal(
-                <div
-                  data-nav-drag-ghost
-                  className="pointer-events-none fixed z-50"
-                  style={clampChipPos(railPt.x, railPt.y)}
-                >
+            <DragOverlay dropAnimation={null} modifiers={[chipToCursor]}>
+              {(() => {
+                if (!dragBatch || navHover != null) return null;
+                const md = allItems.find((it) => it.id === dragBatch.active)?.metadata;
+                return (
                   <DragChip
                     title={md?.title ?? md?.name ?? "—"}
                     artUrl={md?.art_url}
-                    count={"ids" in carried ? carried.ids.length : 1}
+                    count={dragBatch.ids.length}
                   />
-                </div>,
-                document.body,
-              );
-            })()}
-        </DndContext>
+                );
+              })()}
+            </DragOverlay>
+            {navHover != null &&
+              railPt != null &&
+              (() => {
+                const carried = dragBatch ?? dragSingle;
+                if (!carried) return null;
+                const activeId = "active" in carried ? carried.active : carried.id;
+                const md = allItems.find((it) => it.id === activeId)?.metadata;
+                return createPortal(
+                  <div
+                    data-nav-drag-ghost
+                    className="pointer-events-none fixed z-50"
+                    style={clampChipPos(railPt.x, railPt.y)}
+                  >
+                    <DragChip
+                      title={md?.title ?? md?.name ?? "—"}
+                      artUrl={md?.art_url}
+                      count={"ids" in carried ? carried.ids.length : 1}
+                    />
+                  </div>,
+                  document.body,
+                );
+              })()}
+          </DndContext>
+        </ListKeysContext.Provider>
       </div>
     </div>
   );
@@ -944,8 +1007,63 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
  * ungrouped rows. A reading-and-pruning view: drag reorder stays with the
  * rows and cards layouts.
  */
+/** The Albums view's runs: CONTIGUOUS entries of one album, an albumless entry a run of one. */
+type AlbumRun = { album: string | null; items: QueueListItem[] };
+function albumRuns(items: QueueListItem[]): AlbumRun[] {
+  const groups: AlbumRun[] = [];
+  for (const item of items) {
+    const album = item.metadata?.album ?? null;
+    const last = groups.at(-1);
+    if (album != null && last && last.album === album) last.items.push(item);
+    else groups.push({ album, items: [item] });
+  }
+  return groups;
+}
+
+/** Remove an album's run from the queue, offering to put it back (the header's ×, and Delete). */
+function removeAlbumRun(g: AlbumRun): void {
+  // Only titled entries can be found again — the same rule the single-row
+  // remove applies to its own undo offer.
+  const saved = g.items.flatMap((i) => {
+    const title = i.metadata?.title;
+    return title
+      ? [
+          {
+            content: {
+              title,
+              artist: i.metadata?.artist ?? null,
+              album: i.metadata?.album ?? null,
+            },
+            position: i.position ?? 0,
+          },
+        ]
+      : [];
+  });
+  snapQueueRows();
+  for (const i of g.items) if (i.id != null) void tt.command({ type: "queueDelete", id: i.id });
+  // One closure, two entry points — sequential, ascending positions, each
+  // restore arming the FLIP (the batch-remove pattern exactly).
+  const undoId = useStore
+    .getState()
+    .pushUndo(
+      g.album != null ? `Remove “${g.album}”` : `Remove ${g.items.length} Tracks`,
+      async () => {
+        for (const s of saved) {
+          snapQueueRows();
+          await restoreToQueue(s.content, s.position);
+        }
+      },
+    );
+  useStore.getState().showToast({
+    kind: "success",
+    text: `Removed ${g.items.length} ${g.items.length === 1 ? "track" : "tracks"} from “${g.album}”`,
+    action: { label: "Undo", undo: () => useStore.getState().runUndo(undoId) },
+  });
+}
+
 function QueueAlbumGroups({
-  items,
+  groups,
+  groupItem,
   playId,
   sourceActive,
   currentRef,
@@ -956,7 +1074,9 @@ function QueueAlbumGroups({
   onGroupModClick,
   drFor,
 }: {
-  items: QueueListItem[];
+  groups: AlbumRun[];
+  /** The keyed list's attributes for run `i` (hooks/useListKeys). */
+  groupItem(i: number): ListItemAttrs;
   playId: number | null;
   /** The screen's known-DR lookup (a reserved cell once the queue knows any). */
   drFor: (i: QueueListItem) => number | null | undefined;
@@ -970,52 +1090,6 @@ function QueueAlbumGroups({
   onGroupModClick(ids: number[], e: React.MouseEvent): boolean;
 }): React.JSX.Element {
   const performerFor = useQueuePerformer();
-  const groups: Array<{ album: string | null; items: QueueListItem[] }> = [];
-  for (const item of items) {
-    const album = item.metadata?.album ?? null;
-    const last = groups.at(-1);
-    if (album != null && last && last.album === album) last.items.push(item);
-    else groups.push({ album, items: [item] });
-  }
-  const removeAlbum = (g: { album: string | null; items: QueueListItem[] }): void => {
-    // Only titled entries can be found again — the same rule the single-row
-    // remove applies to its own undo offer.
-    const saved = g.items.flatMap((i) => {
-      const title = i.metadata?.title;
-      return title
-        ? [
-            {
-              content: {
-                title,
-                artist: i.metadata?.artist ?? null,
-                album: i.metadata?.album ?? null,
-              },
-              position: i.position ?? 0,
-            },
-          ]
-        : [];
-    });
-    snapQueueRows();
-    for (const i of g.items) if (i.id != null) void tt.command({ type: "queueDelete", id: i.id });
-    // One closure, two entry points — sequential, ascending positions, each
-    // restore arming the FLIP (the batch-remove pattern exactly).
-    const undoId = useStore
-      .getState()
-      .pushUndo(
-        g.album != null ? `Remove “${g.album}”` : `Remove ${g.items.length} Tracks`,
-        async () => {
-          for (const s of saved) {
-            snapQueueRows();
-            await restoreToQueue(s.content, s.position);
-          }
-        },
-      );
-    useStore.getState().showToast({
-      kind: "success",
-      text: `Removed ${g.items.length} ${g.items.length === 1 ? "track" : "tracks"} from “${g.album}”`,
-      action: { label: "Undo", undo: () => useStore.getState().runUndo(undoId) },
-    });
-  };
   return (
     <>
       {groups.map((g, gi) =>
@@ -1023,6 +1097,7 @@ function QueueAlbumGroups({
           g.items.map((item) => (
             <QueueRow
               key={item.id}
+              listItem={groupItem(gi)}
               onMenu={(e) => onMenu(item, e)}
               item={item}
               dr={drFor(item)}
@@ -1040,6 +1115,7 @@ function QueueAlbumGroups({
             className="mb-3"
           >
             <div
+              {...groupItem(gi)}
               className={cx(
                 "group mb-1.5 grid grid-cols-[44px_1fr_auto] items-center gap-3 rounded-lg px-2 py-1.5",
                 // the header rests one veil step above the tracks (they are
@@ -1081,7 +1157,7 @@ function QueueAlbumGroups({
                   icon={X}
                   label="Remove album from queue"
                   destructive
-                  onClick={() => removeAlbum(g)}
+                  onClick={() => removeAlbumRun(g)}
                 />
               </div>
             </div>
@@ -1319,6 +1395,8 @@ function snapQueueRows(): void {
 }
 
 interface QueueItemProps {
+  /** In the keyed list (hooks/useListKeys, 0.14.0): the row's id and index. */
+  listItem?: ListItemAttrs;
   /** A known TT-DR (undefined = the queue knows none yet, no cell). */
   dr?: number | null;
   onMenu?(e: React.MouseEvent): void;
@@ -1394,6 +1472,7 @@ function QueueRow({
   menuOpen = false,
   dragLive = false,
   dr,
+  listItem,
 }: QueueItemProps): React.JSX.Element {
   const lean = useLeanQueue();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -1415,9 +1494,10 @@ function QueueRow({
       }}
       style={
         staticDrag
-          ? undefined
-          : { transform: CSS.Transform.toString(lockVertical(transform)), transition }
+          ? sortableStyle(null, undefined, ROW_MOTION)
+          : sortableStyle(lockVertical(transform), transition, ROW_MOTION)
       }
+      {...listItem}
       data-queue-id={item.id}
       data-queue-current={isCurrent || undefined}
       data-selected={selected || undefined}
@@ -1433,7 +1513,6 @@ function QueueRow({
         dragLive && "pointer-events-none",
         // a selected row carries the block, and says so (the grip's cursor)
         bodyDrag && selected ? "cursor-grab active:cursor-grabbing" : "cursor-default",
-        "transition-colors",
         isDragging && !staticDrag && "z-10 bg-raised shadow-xl",
         // current + queue audible: full playing treatment; current while another
         // source plays: just the parked resume point, quietly set apart
@@ -1563,8 +1642,12 @@ function QueueCard({
   insertLine,
   menuOpen = false,
   dragLive = false,
+  listItem,
 }: QueueItemProps): React.JSX.Element {
   const leanCard = useLeanQueue();
+  // in the keyed list a card is reached with the arrows and moved with Option (K1, K8): the
+  // sortable's own Tab stop and its buttons' leave the Tab order
+  const inList = useInListKeys();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id as number,
   });
@@ -1580,9 +1663,15 @@ function QueueCard({
       data-queue-id={item.id}
       data-queue-current={isCurrent || undefined}
       data-selected={selected || undefined}
-      style={staticDrag ? undefined : { transform: CSS.Transform.toString(transform), transition }}
+      style={
+        staticDrag
+          ? sortableStyle(null, undefined, CARD_MOTION)
+          : sortableStyle(transform, transition, CARD_MOTION)
+      }
       {...attributes}
       {...listeners}
+      {...listItem}
+      tabIndex={inList ? -1 : attributes.tabIndex}
       onContextMenu={(e) => {
         e.preventDefault();
         onMenu?.(e);
@@ -1590,7 +1679,7 @@ function QueueCard({
       className={cx(
         // Hover grow matches PresetCard; scale is layout-free so edge-clipped
         // cards simply clip at the scrollport seam.
-        "group relative text-left rounded-2xl p-2 pb-2.5 transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]",
+        "group relative text-left rounded-2xl p-2 pb-2.5 hover:z-10 motion-safe:hover:scale-[1.04]",
         leanCard && LEAN_CARD,
         dragLive && "pointer-events-none",
         isDragging && !staticDrag && "z-10 opacity-90",
@@ -1616,6 +1705,7 @@ function QueueCard({
       )}
       <button
         className="relative block w-full cursor-pointer"
+        tabIndex={inList ? -1 : undefined}
         onClick={(e) => {
           if (onRowClick?.(e)) return;
           if (item.id != null) void tt.command({ type: "playQueueId", queueId: item.id });
@@ -1697,6 +1787,7 @@ function QueueCard({
         <button
           data-tip="Remove from queue"
           aria-label="Remove from queue"
+          tabIndex={inList ? -1 : undefined}
           onPointerDown={(e) => e.stopPropagation() /* keep dnd-kit's drag sensor out of it */}
           onClick={(e) => {
             e.stopPropagation();

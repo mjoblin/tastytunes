@@ -1,15 +1,18 @@
-import { mkdirSync, readdirSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { app } from "electron";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { MediaIndexPools, MediaNode } from "@shared/model";
 import {
   choiceOf,
+  copyKept,
   isArtistChoice,
+  keepAsItCame,
   pickedPath,
   pickedUrl,
   resolveChoice,
   setChoice,
+  setCopy,
 } from "./artistChoices";
 
 const dir = (): string => join(app.getPath("userData"), "artist-pictures");
@@ -76,6 +79,7 @@ describe("the chosen picture as drawn", () => {
     expect(resolveChoice("Band", [])).toEqual({
       kind: "image",
       url: "https://thumb.wikimedia.org/x.jpg",
+      offered: "https://thumb.wikimedia.org/x.jpg",
     });
   });
 
@@ -113,8 +117,88 @@ describe("the chosen picture as drawn", () => {
   it("draws a file from its copy, and nothing once the copy is gone", () => {
     writeFileSync(join(dir(), FILE), "jpeg");
     setChoice("Band", { kind: "file", file: FILE });
-    expect(resolveChoice("Band", [])).toEqual({ kind: "file", url: pickedUrl(FILE) });
+    expect(resolveChoice("Band", [])).toEqual({
+      kind: "file",
+      url: pickedUrl(FILE),
+      offered: pickedUrl(FILE),
+    });
     expect(pickedUrl(FILE)).toBe(`tt-art://picked/${FILE}`);
+  });
+});
+
+describe("a chosen picture's copy (0.14.0)", () => {
+  const COPY = "dddddddddddddddddddddddd.jpg";
+
+  it("draws a picture or a cover from its copy, and keeps the address it was offered at", () => {
+    writeFileSync(join(dir(), COPY), "jpeg");
+    setChoice("Band", { kind: "image", url: "https://thumb.wikimedia.org/x.jpg" });
+    const at = choiceOf("Band")?.at ?? 0;
+    expect(copyKept(choiceOf("Band")!)).toBe(false);
+    expect(setCopy("band", at, COPY)).toBe(true);
+    expect(copyKept(choiceOf("Band")!)).toBe(true);
+    expect(resolveChoice("Band", [])).toEqual({
+      kind: "image",
+      url: pickedUrl(COPY),
+      offered: "https://thumb.wikimedia.org/x.jpg",
+    });
+    // a cover's offered address is its album's now, found again on its server
+    setChoice("Band", {
+      kind: "cover",
+      url: "http://evo/art/1",
+      album: "Record",
+      serverUdn: "uuid:usb",
+    });
+    expect(setCopy("Band", choiceOf("Band")?.at ?? 0, COPY)).toBe(true);
+    expect(
+      resolveChoice("Band", pools([album("a", "Record", "http://evo/art/9")], "uuid:usb")),
+    ).toEqual({ kind: "cover", url: pickedUrl(COPY), offered: "http://evo/art/9" });
+  });
+
+  it("is named only on the choice it was made for, and never on a file", () => {
+    writeFileSync(join(dir(), COPY), "jpeg");
+    setChoice("Band", { kind: "image", url: "https://thumb.wikimedia.org/x.jpg" });
+    const at = choiceOf("Band")?.at ?? 0;
+    // chosen again while the copy was made: the copy was for the choice before
+    expect(setCopy("Band", at - 1, COPY)).toBe(false);
+    expect(setCopy("Band", at, "../settings.json")).toBe(false);
+    expect(choiceOf("Band")?.copy).toBeUndefined();
+    writeFileSync(join(dir(), FILE), "jpeg");
+    setChoice("Band", { kind: "file", file: FILE });
+    expect(setCopy("Band", choiceOf("Band")?.at ?? 0, COPY)).toBe(false);
+  });
+
+  it("keeps a picture nativeImage can't read as it came, when the windows draw it", () => {
+    const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="6" height="6"/>');
+    const file = keepAsItCame(svg, "image/svg+xml");
+    expect(file).toMatch(/^[0-9a-f]{24}\.svg$/);
+    expect(pickedPath(file ?? "")).not.toBeNull();
+    expect(keepAsItCame(Buffer.from("RIFF"), "image/webp")).toMatch(/\.webp$/);
+    // not a picture the windows draw, or too large
+    expect(keepAsItCame(Buffer.from("x"), "image/tiff")).toBeNull();
+    expect(keepAsItCame(Buffer.alloc(3 * 1024 * 1024), "image/gif")).toBeNull();
+  });
+
+  it("goes back to the address once the copy is gone", () => {
+    writeFileSync(join(dir(), COPY), "jpeg");
+    setChoice("Band", { kind: "image", url: "https://thumb.wikimedia.org/x.jpg" });
+    setCopy("Band", choiceOf("Band")?.at ?? 0, COPY);
+    rmSync(join(dir(), COPY));
+    expect(copyKept(choiceOf("Band")!)).toBe(false);
+    expect(resolveChoice("Band", [])?.url).toBe("https://thumb.wikimedia.org/x.jpg");
+  });
+
+  it("is kept by the sweep while its choice names it, and goes an hour after a new choice", () => {
+    const old = "eeeeeeeeeeeeeeeeeeeeeeee.jpg";
+    writeFileSync(join(dir(), old), "x");
+    setChoice("Other", { kind: "image", url: "https://thumb.wikimedia.org/o.jpg" });
+    setCopy("Other", choiceOf("Other")?.at ?? 0, old);
+    const twoHoursAgo = new Date(Date.now() - 7_200_000);
+    utimesSync(join(dir(), old), twoHoursAgo, twoHoursAgo);
+    setChoice("Band", null);
+    expect(readdirSync(dir())).toContain(old);
+    setChoice("Other", { kind: "image", url: "https://thumb.wikimedia.org/p.jpg" });
+    expect(readdirSync(dir())).not.toContain(old);
+    setChoice("Other", null);
   });
 });
 

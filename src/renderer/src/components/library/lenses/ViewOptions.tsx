@@ -1,11 +1,11 @@
 import { useRef, useState } from "react";
-import { LayoutGrid, Rows3, SlidersHorizontal, Undo2 } from "lucide-react";
+import { LayoutGrid, ListMusic, Rows3, SlidersHorizontal, Undo2 } from "lucide-react";
 import {
   type AppSettings,
   CARD_GAP_RANGE,
   CARD_SIZE_RANGE,
   DEFAULT_SETTINGS,
-  type ScreenLayout,
+  type QueueLayout,
 } from "@shared/model";
 import { useStore } from "@/store";
 import { cx } from "@/lib/format";
@@ -16,32 +16,66 @@ import { Segmented } from "@/components/controls/Segmented";
 import { Slider, useSliderDraft } from "@/components/controls/Slider";
 import { Switch } from "@/components/controls/Switch";
 
-/** The view a menu dresses: albums (the Albums view and the artist page), artists, or tracks. */
-export type ViewKind = "albums" | "artists" | "tracks";
+/** The view a menu dresses: albums (the Albums view and the artist page), artists, tracks, a
+ *  server's folders, the Queue or Presets (the last three since 0.14.0, his D5 and D6 picks on
+ *  "View Options": the menu wherever a Rows or Cards button was). */
+export type ViewKind = "albums" | "artists" | "tracks" | "folders" | "queue" | "presets";
 
 // Each kind's own Rows or Cards and Format and DR (his note on "View Options": albums and tracks
 // keep separate display settings). The Artists view shares the albums' Rows or Cards, the
-// Library's one choice before tracks had their own, and has no format line. Card size, gap and
-// Fill rows are every card grid's, as in Settings › Layout (his answer, 2026-10-26).
-const layoutOf = (s: AppSettings, kind: ViewKind): ScreenLayout =>
-  kind === "tracks" ? s.lensTracksLayout : s.libraryLayout;
+// Library's one choice before tracks had their own, and has no format line; a server's folders
+// share the albums' both (the one Library choice they always followed); the Queue has Rows, Cards
+// or Albums and Presets Rows or Cards, neither a format line (0.14.0). Card size, gap and Fill
+// rows are every card grid's, as in Settings › Layout (his answer, 2026-10-26).
+const layoutOf = (s: AppSettings, kind: ViewKind): QueueLayout =>
+  kind === "tracks"
+    ? s.lensTracksLayout
+    : kind === "queue"
+      ? s.queueLayout
+      : kind === "presets"
+        ? s.presetsLayout
+        : s.libraryLayout;
 const formatOf = (s: AppSettings, kind: ViewKind): boolean | null =>
-  kind === "albums" ? s.albumCardFormat : kind === "tracks" ? s.trackCardFormat : null;
-const layoutPatch = (kind: ViewKind, v: ScreenLayout): Partial<AppSettings> =>
-  kind === "tracks" ? { lensTracksLayout: v } : { libraryLayout: v };
+  kind === "albums" || kind === "folders"
+    ? s.albumCardFormat
+    : kind === "tracks"
+      ? s.trackCardFormat
+      : null;
+const layoutPatch = (kind: ViewKind, v: QueueLayout): Partial<AppSettings> =>
+  kind === "tracks"
+    ? { lensTracksLayout: v === "rows" ? "rows" : "cards" }
+    : kind === "queue"
+      ? { queueLayout: v }
+      : kind === "presets"
+        ? { presetsLayout: v === "rows" ? "rows" : "cards" }
+        : { libraryLayout: v === "rows" ? "rows" : "cards" };
 const formatPatch = (kind: ViewKind, v: boolean): Partial<AppSettings> =>
   kind === "tracks" ? { trackCardFormat: v } : { albumCardFormat: v };
-const NAME: Record<ViewKind, string> = { albums: "Albums", artists: "Artists", tracks: "Tracks" };
+const NAME: Record<ViewKind, string> = {
+  albums: "Albums",
+  artists: "Artists",
+  tracks: "Tracks",
+  folders: "Folders",
+  queue: "Queue",
+  presets: "Presets",
+};
 /** The view whose settings a Match button copies: albums and tracks match each other. */
 const OTHER: Record<ViewKind, ViewKind | null> = {
   albums: "tracks",
   artists: null,
   tracks: "albums",
+  folders: null,
+  queue: null,
+  presets: null,
 };
+/** A layout's name, as the menu's buttons and an undo's label say it. */
+const LAYOUT_NAME: Record<QueueLayout, string> = { rows: "Rows", cards: "Cards", albums: "Albums" };
 /** Everything a kind's menu sets, at its defaults: what Reset to defaults puts back. */
 const defaultsOf = (kind: ViewKind): Partial<AppSettings> => ({
   ...layoutPatch(kind, layoutOf(DEFAULT_SETTINGS, kind)),
-  ...(kind === "artists" ? {} : formatPatch(kind, formatOf(DEFAULT_SETTINGS, kind) ?? true)),
+  ...(formatOf(DEFAULT_SETTINGS, kind) == null
+    ? {}
+    : formatPatch(kind, formatOf(DEFAULT_SETTINGS, kind) ?? true)),
   presetCardSize: DEFAULT_SETTINGS.presetCardSize,
   presetGap: DEFAULT_SETTINGS.presetGap,
   presetFillRows: DEFAULT_SETTINGS.presetFillRows,
@@ -169,17 +203,17 @@ export function ViewOptions({ kind }: { kind: ViewKind }): React.JSX.Element {
           >
             <div className="microlabel px-2.5 pt-1 pb-1.5">View</div>
             <div className="px-1 pb-1">
-              <Segmented<ScreenLayout>
+              <Segmented<QueueLayout>
                 value={layout}
                 onChange={(v) =>
-                  change(
-                    `Show ${NAME[kind]} as ${v === "rows" ? "Rows" : "Cards"}`,
-                    layoutPatch(kind, v),
-                  )
+                  change(`Show ${NAME[kind]} as ${LAYOUT_NAME[v]}`, layoutPatch(kind, v))
                 }
                 options={[
                   { value: "rows", label: "Rows", icon: <Rows3 size={14} /> },
                   { value: "cards", label: "Cards", icon: <LayoutGrid size={14} /> },
+                  ...(kind === "queue"
+                    ? [{ value: "albums" as const, label: "Albums", icon: <ListMusic size={14} /> }]
+                    : []),
                 ]}
                 className="w-full [&>button]:flex-1 [&>button]:justify-center"
               />

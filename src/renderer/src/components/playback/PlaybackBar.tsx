@@ -72,7 +72,8 @@ export function PlaybackBar(): React.JSX.Element {
         // one level down).
         seekWaveformOn ? "h-[108px]" : "h-[92px]",
         "shrink-0 border-t border-edge grid grid-cols-[minmax(160px,1fr)_minmax(320px,520px)_minmax(215px,1fr)] items-center gap-6 px-4 transition-[height,background-color] duration-300",
-        ambientWindow ? "bg-transparent" : "bg-panel/80 backdrop-blur",
+        // the panel tint in light mode only, as the navigation's (Nav.tsx)
+        !ambientWindow && "light:bg-panel/80 light:backdrop-blur",
       )}
     >
       {/* now playing mini */}
