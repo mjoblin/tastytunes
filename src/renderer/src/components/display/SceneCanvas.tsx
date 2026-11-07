@@ -3,7 +3,7 @@ import { useStore } from "@/store";
 import { cx } from "@/lib/format";
 import type { SceneFeed } from "./feed";
 import { makeScene, resolveSettings, sceneDef } from "./scenes";
-import { isGlScene, isThreeScene, type SceneId } from "./scenes/types";
+import { isGlScene, isThreeScene, type SceneHit, type SceneId } from "./scenes/types";
 import { disposeRenderer, makeRenderer } from "./three";
 import { frameDelta } from "./clock";
 import { CATHODE_CURVES, CathodeFinish } from "./cathode";
@@ -22,6 +22,17 @@ import type * as THREE from "three";
  * loseContext, so a scene switch (seen live 2026-09-06: a blank stage after
  * Dream) and StrictMode's double mount both need fresh elements.
  */
+
+/** The hits each stage has been handed, by drum, kept on the stage as data-scene-hits (0.15.0):
+ *  what a scene got to draw, whichever way the hits were made (the file's onsets, else the
+ *  feed's own), readable from outside the loop. A few writes a second, only on a hit. */
+const handed = new WeakMap<HTMLElement, Record<SceneHit["type"], number>>();
+function countHits(stage: HTMLElement, hits: readonly SceneHit[]): void {
+  const n = handed.get(stage) ?? { kick: 0, snare: 0, hat: 0 };
+  for (const h of hits) n[h.type]++;
+  handed.set(stage, n);
+  stage.dataset.sceneHits = `kick ${n.kick} snare ${n.snare} hat ${n.hat}`;
+}
 export function SceneCanvas({
   scene,
   feed,
@@ -151,6 +162,7 @@ export function SceneCanvas({
       const dt = lastFrame ? frameDelta((now - lastFrame) / 1000) : 0;
       lastFrame = now;
       const f = feed.frame(now, w, h, mini, dt, wordsRef.current);
+      if (f.hits.length > 0) countHits(wrap, f.hits);
       if (isThreeScene(inst) && renderer) {
         inst.draw(renderer, f);
         if (octx && inst.overlay) {
