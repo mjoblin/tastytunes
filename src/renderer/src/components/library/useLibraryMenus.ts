@@ -18,7 +18,7 @@ import { openInfoInList } from "@/lib/infoSteps";
 import { isAlbumClass, isArtistClass } from "@/lib/media";
 import type { MediaMenuItem } from "@/lib/mediaMenus";
 import { itemFromNode } from "@/components/overlays/AddToPlaylistPanel";
-import type { Crumb } from "@/screens/LibraryScreen";
+import type { Crumb } from "@/components/library/libraryPlaces";
 import { menuAt } from "@/lib/menuAt";
 import { nameKey } from "@shared/keys";
 

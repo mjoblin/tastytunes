@@ -6,7 +6,7 @@ import { useStore } from "@/store";
 import { useNavDrag } from "@/hooks/useNavDrag";
 import { flashNavTarget } from "@/lib/navDrop";
 import type { Lens } from "@/components/library/lensNavigation";
-import type { Crumb } from "@/screens/LibraryScreen";
+import type { Crumb } from "@/components/library/libraryPlaces";
 
 // The Library's SELECTION AND DRAG, lifted out of LibraryScreen (2026-09-13,
 // the third lift of the screen's hygiene round, after search mode and the

@@ -9,7 +9,7 @@ import { tt } from "@/api";
 import { useStore } from "@/store";
 import { mediaKind } from "@/lib/media";
 import { useOneShotAsk } from "@/hooks/useOneShotAsk";
-import type { Crumb } from "@/screens/LibraryScreen";
+import type { Crumb } from "@/components/library/libraryPlaces";
 
 // The Library's whole-library SEARCH MODE, lifted out of LibraryScreen
 // (2026-09-13, the first lift of the screen's hygiene round; the lens

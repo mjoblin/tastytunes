@@ -1,6 +1,6 @@
 import { albumOfTrack, trackArtists, type MediaIndexPools, type MediaNode } from "@shared/model";
 import { focusArtistsLens } from "@/components/library/LibraryLenses";
-import type { Crumb } from "@/screens/LibraryScreen";
+import type { Crumb } from "@/components/library/libraryPlaces";
 import type { LandingTrack } from "@/components/library/landing";
 import { nameKey } from "@shared/keys";
 
