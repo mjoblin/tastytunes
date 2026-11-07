@@ -74,25 +74,25 @@ export function getSettings(): AppSettings {
  * than carried into the keychain (0.14.0: the keychain only when a secret is used); turning the
  * server on mints a new one (ensureMcpToken).
  */
-export function moveSecrets(): void {
+export async function moveSecrets(): Promise<void> {
   const s = getSettings() as Legacy;
   const lb = typeof s.lbToken === "string" ? s.lbToken.trim() : "";
   const mcp = typeof s.mcp.token === "string" ? s.mcp.token.trim() : "";
-  if (lb) setSecret("lbToken", lb);
-  if (mcp && s.mcp.enabled) setSecret("mcpToken", mcp);
+  if (lb) await setSecret("lbToken", lb);
+  if (mcp && s.mcp.enabled) await setSecret("mcpToken", mcp);
   secretsMoved = true;
   if ("lbToken" in s || "token" in s.mcp) updateSettings({});
 }
 
 /** The MCP server's token, minted the first time the server runs (0.14.0; before, every install
  *  minted one at launch, and with it a keychain entry nobody asked for). */
-export function ensureMcpToken(): void {
-  if (!getSecret("mcpToken")) setSecret("mcpToken", mintToken());
+export async function ensureMcpToken(): Promise<void> {
+  if (!(await getSecret("mcpToken"))) await setSecret("mcpToken", mintToken());
 }
 
 /** A new MCP token: every agent on the old one stops working until it has this one. */
-export function newMcpToken(): void {
-  setSecret("mcpToken", mintToken());
+export function newMcpToken(): Promise<void> {
+  return setSecret("mcpToken", mintToken());
 }
 
 export function updateSettings(patch: Partial<AppSettings>): AppSettings {

@@ -159,22 +159,22 @@ export function registerLookupsIpc(): void {
   handle(IPC.lbValidate, () => scrobbler.validateToken());
   // THE SECRETS STORE (0.13.0 round 10): a window learns only whether a token is saved and how it
   // ends; the MCP token itself goes to a window only for a Copy the person pressed
-  handle(IPC.secretsStatus, () => ({
-    encrypted: encryptsHere(),
-    lbToken: secretHint("lbToken"),
-    mcpToken: secretHint("mcpToken"),
-    fanartKey: secretHint("fanartKey"),
+  handle(IPC.secretsStatus, async () => ({
+    encrypted: await encryptsHere(),
+    lbToken: await secretHint("lbToken"),
+    mcpToken: await secretHint("mcpToken"),
+    fanartKey: await secretHint("fanartKey"),
   }));
   // a personal fanart.tv key (0.13.0 round 11): checked with fanart.tv before it is kept; a key
   // it refuses is not kept, one it could not be asked about is (checked again in use)
   handle(IPC.setFanartKey, async (_e, key: unknown) => {
     if (key === null) {
-      setSecret("fanartKey", null);
+      await setSecret("fanartKey", null);
       return "removed";
     }
     if (typeof key !== "string" || !key.trim()) return "refused";
     const verdict = await checkFanartKey(key.trim());
-    if (verdict !== "refused") setSecret("fanartKey", key.trim());
+    if (verdict !== "refused") await setSecret("fanartKey", key.trim());
     return verdict;
   });
   handle(IPC.artistFanart, (_e, name: unknown) =>
@@ -185,18 +185,18 @@ export function registerLookupsIpc(): void {
   // a ListenBrainz token checked with ListenBrainz before it is kept, as a fanart.tv key is
   handle(IPC.setLbToken, async (_e, token: unknown) => {
     if (token === null) {
-      setSecret("lbToken", null);
+      await setSecret("lbToken", null);
       return { verdict: "removed", userName: null };
     }
     if (typeof token !== "string" || !token.trim()) return { verdict: "refused", userName: null };
     const got = await scrobbler.validateToken(token.trim());
     if (got && !got.valid) return { verdict: "refused", userName: null };
-    setSecret("lbToken", token.trim());
+    await setSecret("lbToken", token.trim());
     return got
       ? { verdict: "works", userName: got.userName }
       : { verdict: "unreachable", userName: null };
   });
-  handle(IPC.mcpTokenReveal, () => getSecret("mcpToken") ?? "");
+  handle(IPC.mcpTokenReveal, async () => (await getSecret("mcpToken")) ?? "");
   handle(IPC.mcpTokenNew, () => newMcpToken());
   handle(IPC.fetchArtistInfo, (_e, artist: string, force?: boolean) =>
     getSettings().artistInfo ? fetchArtistInfo(artist, !!force) : null,

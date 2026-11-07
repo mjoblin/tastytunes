@@ -1,4 +1,12 @@
-import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname } from "node:path";
 
 // The one JSON-persistence layer for the local data files (favorites,
@@ -16,13 +24,19 @@ import { dirname } from "node:path";
  * file is always either the old complete content or the new complete content.
  * (No fsync — the threat model here is process death mid-write, which rename
  * fully covers; true power-loss durability would need fsync on file AND
- * directory for a marginal gain these files don't warrant.)
+ * directory for a marginal gain these files don't warrant.) A `mode` (the secrets store's 0600)
+ * applies to the temporary file before any data reaches it.
  */
-export function atomicWriteFileSync(path: string, data: string): void {
+export function atomicWriteFileSync(path: string, data: string, mode?: number): void {
   mkdirSync(dirname(path), { recursive: true });
   const tmp = `${path}.${process.pid}.tmp`;
   try {
-    writeFileSync(tmp, data);
+    // a mode given holds from the first byte (0.15.0, the secrets store): a temporary file a crash
+    // left behind would keep its own mode, so it goes first; the chmod makes the mode exact
+    // whatever the umask took
+    if (mode != null) rmSync(tmp, { force: true });
+    writeFileSync(tmp, data, mode != null ? { mode } : undefined);
+    if (mode != null) chmodSync(tmp, mode);
     renameSync(tmp, path);
   } catch (err) {
     try {

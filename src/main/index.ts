@@ -64,9 +64,9 @@ if (!gotLock) {
 
   app
     .whenReady()
-    .then(() => {
+    .then(async () => {
       // the tokens into the secrets store before any window opens, so none ever receives one
-      moveSecrets();
+      await moveSecrets();
       denyPermissionsByDefault();
       serveArtProtocol();
       registerIpc();
