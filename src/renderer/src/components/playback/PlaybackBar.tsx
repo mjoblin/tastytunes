@@ -28,6 +28,7 @@ import {
 import { SignalLamp } from "../device/SignalLamp";
 import { SleepTimer } from "./SleepTimer";
 import { DeviceSwitcher } from "../device/DeviceSwitcher";
+import { useChromeGround } from "@/hooks/useChromeGround";
 
 export function PlaybackBar(): React.JSX.Element {
   const playState = useStore((s) => s.playState);
@@ -46,7 +47,7 @@ export function PlaybackBar(): React.JSX.Element {
   const waking = useStore((s) => s.waking);
   const meta = deriveNowPlaying(playState, nowPlaying);
   const { connected, powered, active } = t;
-  const ambientWindow = useStore((s) => s.ambientWindowActive);
+  const ground = useChromeGround("bar");
 
   return (
     <footer
@@ -72,8 +73,8 @@ export function PlaybackBar(): React.JSX.Element {
         // one level down).
         seekWaveformOn ? "h-[108px]" : "h-[92px]",
         "shrink-0 border-t border-edge grid grid-cols-[minmax(160px,1fr)_minmax(320px,520px)_minmax(215px,1fr)] items-center gap-6 px-4 transition-[height,background-color] duration-300",
-        // the panel tint in light mode only, as the navigation's (Nav.tsx)
-        !ambientWindow && "light:bg-panel/80 light:backdrop-blur",
+        // the panel tint in light mode only, as the navigation's (hooks/useChromeGround)
+        ground,
       )}
     >
       {/* now playing mini */}

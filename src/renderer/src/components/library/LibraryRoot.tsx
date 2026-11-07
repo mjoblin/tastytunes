@@ -9,6 +9,7 @@ import { useIndexDoors } from "@/components/library/useIndexDoors";
 import { useDoorArt } from "@/components/library/useDoorArt";
 import { AlbumsArt, ArtistsArt, TracksArt } from "@/components/library/DoorArt";
 import { RecentlyAddedShelf } from "@/components/library/RecentlyAddedShelf";
+import { CARD_HOVER, CARD_TRANSITION } from "@/lib/cardHover";
 
 /** The sources' cards: a fixed, compact width (the card-size slider is for art). */
 const SOURCE_CARD_PX = 150;
@@ -104,10 +105,11 @@ export function LibraryRoot({
                   // centered, the indexing tip poked past the scrollport's left
                   // edge and clipped (user, 2026-08-29). Under the cursor the whole door
                   // grows, words and all, as every card does (his ask, 2026-10-21)
-                  "lib-door group tip-bottom tip-wide transition-all duration-200 ease-out",
+                  "lib-door group tip-bottom tip-wide",
+                  CARD_TRANSITION,
                   doorsState === "building"
                     ? "opacity-60 cursor-default"
-                    : "card-hover-glow cursor-pointer hover:z-10 motion-safe:hover:scale-[1.04]",
+                    : cx("card-hover-glow cursor-pointer", CARD_HOVER),
                 )}
               >
                 {/* the picture, clipped to the door (the door itself is not clipped: its tip
@@ -250,7 +252,9 @@ export function LibraryRoot({
                             : undefined
                     }
                     className={cx(
-                      "group relative rounded-2xl p-2 pb-2.5 bg-raised/50 ring-1 ring-edge card-hover-glow cursor-pointer transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]",
+                      "group relative rounded-2xl p-2 pb-2.5 bg-raised/50 ring-1 ring-edge card-hover-glow cursor-pointer",
+                      CARD_TRANSITION,
+                      CARD_HOVER,
                       s.isStreamer && inStandby && "opacity-50 tip-bottom",
                       building && "opacity-60",
                       failed && "tip-bottom",

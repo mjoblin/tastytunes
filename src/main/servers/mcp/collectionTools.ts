@@ -11,7 +11,7 @@ import { pools as indexPools } from "../../media/mediaIndex";
 import { isRadioMetadata } from "@shared/smoip";
 import { getSettings } from "../../data/persist";
 import { radioSearch, radioByTags } from "../../lookups/radioBrowser";
-import { LargeQueueError, queueAdd, refreshServers } from "../../media/upnpBrowser";
+import { LargeQueueError, refreshServers } from "../../media/upnpBrowser";
 import { searchServer as librarySearch } from "../../media/mediaIndex";
 import {
   type ToolContext,
@@ -262,8 +262,7 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
           // Browse-only server has no search to heal by below
           const fresh = await freshObjectId(host, fav.serverUdn, fav.objectId);
           try {
-            await queueAdd(
-              host,
+            await dm.queueAdd(
               fav.serverUdn,
               "id" in fresh ? fresh.id : fav.objectId,
               "PLAY_NOW",
@@ -287,7 +286,7 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
           );
           if (match) {
             try {
-              await queueAdd(host, server.udn, match.id, "PLAY_NOW", undefined, confirm);
+              await dm.queueAdd(server.udn, match.id, "PLAY_NOW", undefined, confirm);
             } catch (e) {
               if (e instanceof LargeQueueError)
                 return err(largeQueueAsk(e.tracks, "play_favorite"));

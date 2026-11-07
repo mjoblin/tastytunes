@@ -528,4 +528,43 @@ export const ONE_HOME = [
       "Two names are compared by nameKey() (shared/keys: trimmed, lowercased and NFC), a Content-Type by mediaType(), never by a hand-rolled trim().toLowerCase()",
     bad: { file: "src/main/lookups/commons.ts", code: "const key = artist.trim().toLowerCase();" },
   },
+  {
+    id: "card-hover",
+    was: "none (0.15.0, the hygiene pass: a card's hover was written out in six places and its motion in two homes)",
+    // the card's grow, as the hover or as its held look
+    selector: strings(String.raw`/motion-safe:(hover:)?scale-\[1\.04\]/`),
+    files: [`^${R}`],
+    allow: ["lib/cardHover\\.ts$"],
+    message:
+      "A card's hover is lib/cardHover's (CARD_HOVER, CARD_HELD, and its motion as CARD_TRANSITION or CARD_MOTION), never spelled out",
+    bad: {
+      file: `${R}components/library/LibraryCards.tsx`,
+      code: 'const c = "group relative hover:z-10 motion-safe:hover:scale-[1.04]";',
+    },
+  },
+  {
+    id: "chrome-ground",
+    was: "none (0.15.0, the hygiene pass: the navigation panel and the playback bar each spelled their ground, and had drifted apart in dark)",
+    // the chrome's light-mode panel tint
+    selector: strings(String.raw`/light:bg-panel\//`),
+    files: [`^${R}`],
+    allow: ["hooks/useChromeGround\\.ts$"],
+    message:
+      "The chrome's ground is useChromeGround's (clear under the wash, dark on the window's own ground, the panel tint in light only)",
+    bad: { file: `${R}components/Nav.tsx`, code: 'const c = "light:bg-panel/60";' },
+  },
+  {
+    id: "queue-add-wakes",
+    was: "none (0.15.0, the hygiene pass: an agent's resume_playback queued without waking the streamer, a step every caller had to remember)",
+    // the media browser's queue write, called bare
+    selector: "CallExpression[callee.type='Identifier'][callee.name='queueAdd']",
+    files: ["^src/main/"],
+    allow: ["device/(deviceManager|queueOps)\\.ts$", "\\.test\\.ts$"],
+    message:
+      "Queue writes go through DeviceManager.queueAdd, which wakes the streamer first; the media browser's queueAdd is the device layer's alone",
+    bad: {
+      file: "src/main/servers/mcp/editTools.ts",
+      code: 'await queueAdd(host, udn, id, "PLAY_NOW");',
+    },
+  },
 ];

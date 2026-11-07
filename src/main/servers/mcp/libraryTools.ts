@@ -37,7 +37,7 @@ import {
 } from "@shared/model";
 import { audioAnalysisGet, albumDrMap } from "../../lookups/audioAnalysis";
 import { playStatsFromRecord } from "../../data/playStats";
-import { LargeQueueError, queueAdd, refreshServers } from "../../media/upnpBrowser";
+import { LargeQueueError, refreshServers } from "../../media/upnpBrowser";
 import {
   searchServer as librarySearch,
   status as indexStatus,
@@ -1102,8 +1102,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
         const fresh = await freshObjectId(s.connection.host, a.server_udn, a.object_id);
         if ("error" in fresh) return err(fresh.error);
         try {
-          await ctx.dm.ensureAwake(); // agents get wake-on-intent too
-          await queueAdd(s.connection.host, a.server_udn, fresh.id, QUEUE_MODES[mode], undefined, {
+          await ctx.dm.queueAdd(a.server_udn, fresh.id, QUEUE_MODES[mode], undefined, {
             confirmLarge: a.confirm_large === true,
           });
         } catch (e) {

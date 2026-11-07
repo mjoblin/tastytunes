@@ -60,7 +60,7 @@ import { Eqbars } from "@/components/media/Eqbars";
 import { EmptyActions, EmptyState } from "@/components/chrome/EmptyState";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { flashTarget, scrollToWithContext } from "@/lib/scroll";
-import { CARD_MOTION, DND_ACCESSIBILITY, lockVertical, ROW_MOTION, sortableStyle } from "@/lib/dnd";
+import { DND_ACCESSIBILITY, lockVertical, ROW_MOTION, sortableStyle } from "@/lib/dnd";
 import { cx, fmtDuration, fmtTime, matchesFilter, fmtCount } from "@/lib/format";
 import { isFavorited, toggleFavorite } from "@/lib/favorites";
 import { fromQueueItem, refToFavorite, refToPlaylistItem, type MediaRef } from "@/lib/mediaRef";
@@ -98,6 +98,7 @@ import { useQueueSelection, type SelectionLate } from "@/components/queue/useQue
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { useQueueSourceActive } from "@/hooks/useQueueSourceActive";
 import { keyedEvent, menuAt } from "@/lib/menuAt";
+import { CARD_HELD, CARD_HOVER, CARD_MOTION } from "@/lib/cardHover";
 
 /**
  * Queue → preset: the shared PresetSavePanel in a centered modal. The device
@@ -1679,11 +1680,12 @@ function QueueCard({
       className={cx(
         // Hover grow matches PresetCard; scale is layout-free so edge-clipped
         // cards simply clip at the scrollport seam.
-        "group relative text-left rounded-2xl p-2 pb-2.5 hover:z-10 motion-safe:hover:scale-[1.04]",
+        "group relative text-left rounded-2xl p-2 pb-2.5",
+        CARD_HOVER,
         leanCard && LEAN_CARD,
         dragLive && "pointer-events-none",
         isDragging && !staticDrag && "z-10 opacity-90",
-        menuOpen && "z-10 motion-safe:scale-[1.04]",
+        menuOpen && CARD_HELD,
         isCurrent && sourceActive
           ? "bg-goldtile/70 tile-playing"
           : isCurrent

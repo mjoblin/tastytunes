@@ -18,6 +18,7 @@ import { Eqbars } from "@/components/media/Eqbars";
 import { NameLine, NameLink } from "@/components/media/NameLine";
 import { artKeyOf, artSrc } from "@/lib/artSrc";
 import { useInListKeys, type ListItemAttrs } from "@/hooks/useListKeys";
+import { CARD_HELD, CARD_HOVER, CARD_TRANSITION } from "@/lib/cardHover";
 
 // The Library's four listing renderers — cards and rows for containers and
 // tracks. Pure presentation: every action arrives as a callback.
@@ -152,7 +153,9 @@ export function ContainerCard({
       data-library-card
       data-selected={selected || undefined}
       className={cx(
-        "group relative text-left rounded-2xl p-2 pb-2.5 transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]",
+        "group relative text-left rounded-2xl p-2 pb-2.5",
+        CARD_TRANSITION,
+        CARD_HOVER,
         playing
           ? "bg-goldtile/70 tile-playing"
           : selected
@@ -161,7 +164,7 @@ export function ContainerCard({
         // held while this card's ⋯ menu / preset picker is open — the pointer
         // has left, but the card is still what's being acted on: keep the
         // full hover treatment (grow + glow), not just a ring
-        menuOpen && "ring-1 ring-edge2 z-10 motion-safe:scale-[1.04] card-glow-held",
+        menuOpen && cx("ring-1 ring-edge2 card-glow-held", CARD_HELD),
       )}
     >
       {/* the card CENTER always enters — play/menu are corner chips on the
@@ -351,13 +354,15 @@ export function TrackCard({
       data-track-card={node.title}
       data-selected={selected || undefined}
       className={cx(
-        "group relative text-left rounded-2xl p-2 pb-2.5 transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]",
+        "group relative text-left rounded-2xl p-2 pb-2.5",
+        CARD_TRANSITION,
+        CARD_HOVER,
         playing
           ? "bg-goldtile/70 tile-playing"
           : selected
             ? "bg-veil2 ring-2 ring-edge2"
             : "bg-raised/50 ring-1 ring-edge card-hover-glow",
-        menuOpen && "ring-1 ring-edge2 z-10 motion-safe:scale-[1.04] card-glow-held",
+        menuOpen && cx("ring-1 ring-edge2 card-glow-held", CARD_HELD),
       )}
     >
       <button

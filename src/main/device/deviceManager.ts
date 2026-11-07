@@ -64,6 +64,9 @@ import type { ResolvedContent } from "../media/resolveContent";
 import { scrobbler } from "../lookups/scrobbler";
 import { getNetRequests } from "../netlog";
 import { errorMessage } from "@shared/guards";
+import { queueAdd } from "../media/upnpBrowser";
+import { demoHost, stopDemoStreamer } from "../servers/demoStreamer";
+import type { MediaQueueAction } from "@shared/model";
 
 interface Cache {
   playState: ZonePlayState | null;
@@ -244,6 +247,9 @@ export class DeviceManager {
   }
 
   connect(host: string, opts?: { remember?: boolean; demo?: boolean }): void {
+    // Leaving the demo for a real device shuts the demo server down (0.15.0: here, so no caller
+    // has to remember it; an agent's connect_device left it running)
+    if (demoHost() && host !== demoHost()) stopDemoStreamer();
     // Renderer surfaces label the connection ("built-in demo") off this flag.
     this.demo = opts?.demo === true;
     // A recall remembered from one device means nothing on another.
@@ -311,6 +317,25 @@ export class DeviceManager {
     // Deliberate — no outage clock, no stranded courtesy.
     this.disconnectedSince = null;
     this.setConnection({ phase: "idle" });
+    stopDemoStreamer();
+  }
+
+  /**
+   * Put a media server's container or track on the streamer's queue (0.15.0: one home for the
+   * wake every caller had to remember, which an agent's resume_playback forgot). A play is a wake
+   * intent: queue writes to a standby streamer land on deaf ears (probed 2026-07-23).
+   */
+  async queueAdd(
+    serverUdn: string,
+    objectId: string,
+    action: MediaQueueAction,
+    playFromId?: string,
+    opts?: { confirmLarge?: boolean },
+  ): Promise<void> {
+    await this.ensureAwake();
+    const conn = this.snapshot().connection;
+    if (conn.phase !== "connected") throw new Error("not connected to a streamer");
+    await queueAdd(conn.host, serverUdn, objectId, action, playFromId, opts);
   }
 
   /** Whether `socket` is still this manager's and open, waiting up to `ms` for a reconnect. */

@@ -40,7 +40,7 @@ import { Eqbars } from "@/components/media/Eqbars";
 import { EmptyActions, EmptyState } from "@/components/chrome/EmptyState";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { flashTarget, scrollToWithContext } from "@/lib/scroll";
-import { CARD_MOTION, DND_ACCESSIBILITY, lockVertical, ROW_MOTION, sortableStyle } from "@/lib/dnd";
+import { DND_ACCESSIBILITY, lockVertical, ROW_MOTION, sortableStyle } from "@/lib/dnd";
 import { CARD_GLYPH_STROKE, MEDIA_ART_FALLBACK } from "@/components/media/MediaArt";
 import { OrderHandle } from "@/components/controls/OrderHandle";
 import {
@@ -75,6 +75,7 @@ import { fromNode } from "@/lib/mediaRef";
 import { TUNING_WINDOW_MS } from "@/hooks/useStationTuning";
 import { menuAt } from "@/lib/menuAt";
 import { nameKey } from "@shared/keys";
+import { CARD_HOVER, CARD_MOTION } from "@/lib/cardHover";
 
 /** A recall that moved nothing after this long is treated as dead — well inside TUNING_WINDOW_MS. */
 const DEAD_RECALL_MS = 8_000;
@@ -988,7 +989,8 @@ function PresetCard({
         // it stays legible on gold/orange album covers.
         // Hover: a slight grow + lift (scale is layout-free, so edge-clipped
         // cards just clip at the scrollport; z-10 keeps the grown card on top).
-        "group relative text-left rounded-2xl p-2 pb-2.5 hover:z-10 motion-safe:hover:scale-[1.04]",
+        "group relative text-left rounded-2xl p-2 pb-2.5",
+        CARD_HOVER,
         isDragging && "z-10 opacity-90",
         playing ? "bg-goldtile/70 tile-playing" : "bg-raised/50 ring-1 ring-edge card-hover-glow",
         // held while this card's volume popover is open — the pointer has left,
