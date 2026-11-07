@@ -16,11 +16,20 @@ export const FEED_HITS: Record<Drum, { over: number; gapMs: number }> = {
 
 export class FeedHits {
   private lastAt: Record<Drum, number> = { kick: -Infinity, snare: -Infinity, hat: -Infinity };
+  private quietUntil = -Infinity;
+
+  /** Make no hits for `ms` from `now`: after a seek, a new track or a resume the slow average
+   *  behind every transient lags the music, and every band would read as a hit (0.15.0, his
+   *  "mute the hits after a seek"). */
+  hold(now: number, ms: number): void {
+    this.quietUntil = now + ms;
+  }
 
   /** The hits one fresh reading makes: `heard` is each drum's transient, `now` the frame's
    *  milliseconds, `at` the track seconds the hits are stamped with. */
   read(heard: Record<Drum, number>, now: number, at: number): SceneHit[] {
     const hits: SceneHit[] = [];
+    if (now < this.quietUntil) return hits;
     for (const type of ["kick", "snare", "hat"] as const) {
       const { over, gapMs } = FEED_HITS[type];
       if (heard[type] > over && now - this.lastAt[type] >= gapMs) {

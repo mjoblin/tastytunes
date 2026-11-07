@@ -26,4 +26,13 @@ describe("the feed's own hits, for a track with no onset list", () => {
     ).toEqual([{ at: 1.1, strength: 0.9, type: "snare" }]);
     expect(feed.read({ ...quiet, kick: 0.9 }, 1000 + FEED_HITS.kick.gapMs, 1.2)).toHaveLength(1);
   });
+
+  it("makes none while held (after a seek, a new track or a resume), then as before", () => {
+    const feed = new FeedHits();
+    feed.hold(1000, 1400);
+    const loud = { kick: 0.9, snare: 0.9, hat: 0.9 };
+    expect(feed.read(loud, 1000, 5)).toEqual([]);
+    expect(feed.read(loud, 2399, 5.1)).toEqual([]);
+    expect(feed.read(loud, 2400, 5.2)).toHaveLength(3);
+  });
 });

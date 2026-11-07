@@ -109,6 +109,8 @@ export class SceneFeed {
   private hitPos: number | null = null;
   /** The feed's own hits, for a track with no onset list (feedHits.ts). */
   private feedHits = new FeedHits();
+  /** Whether the last fresh frame was playing (a start holds the feed's own hits). */
+  private wasPlaying = false;
   private hits: SceneHit[] = [];
   /** The music features and the eased readings drawn from them. */
   private features: Features | null = null;
@@ -450,13 +452,18 @@ export class SceneFeed {
     const dt = fresh && this.lastNow ? frameDelta((now - this.lastNow) / 1000) : 0;
     if (fresh) this.lastNow = now;
 
-    // the shown clock follows the reported one at a corrected rate
-    if (
+    // a jump of the clock (a seek, a new track) or a start leaves the slow average behind the
+    // music for about its time constant: the feed's own hits wait that long
+    const jumped =
       this.shownPos == null ||
-      !playing ||
       this.shownKey !== this.trackKey ||
-      Math.abs(position - this.shownPos) > SNAP_SECS
-    ) {
+      Math.abs(position - this.shownPos) > SNAP_SECS;
+    if (fresh) {
+      if (playing && (jumped || !this.wasPlaying)) this.feedHits.hold(now, SLOW_TAU * 1000);
+      this.wasPlaying = playing;
+    }
+    // the shown clock follows the reported one at a corrected rate
+    if (this.shownPos == null || jumped || !playing) {
       this.shownPos = position;
     } else {
       const err = position - this.shownPos;
