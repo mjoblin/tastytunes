@@ -39,9 +39,12 @@ export interface ListKeysMove {
   cancel(): void;
 }
 
-/** What a keyed list puts on each item's root (a card's, a row's). */
+/** What a keyed list puts on each item's root (a card's, a row's): an option of the list's
+ *  listbox (0.15.0: a screen reader hears each item by its own words, and which one is current). */
 export interface ListItemAttrs {
   id: string;
+  role: "option";
+  "aria-selected": boolean;
   "data-list-item": number;
   "data-list-current": "" | undefined;
 }
@@ -83,7 +86,7 @@ export interface ListKeys {
   container: {
     ref: (el: HTMLElement | null) => void;
     tabIndex: number;
-    role: "group";
+    role: "listbox";
     "aria-activedescendant": string | undefined;
     "data-list-keys": "";
     "data-list-active": "" | undefined;
@@ -304,7 +307,7 @@ export function useListKeys(o: ListKeysOptions): ListKeys {
     container: {
       ref,
       tabIndex: 0,
-      role: "group",
+      role: "listbox",
       "aria-activedescendant": active && current >= 0 ? `${base}-${current}` : undefined,
       "data-list-keys": "",
       "data-list-active": active && o.count > 0 ? "" : undefined,
@@ -315,6 +318,8 @@ export function useListKeys(o: ListKeysOptions): ListKeys {
     },
     item: (i: number) => ({
       id: `${base}-${i}`,
+      role: "option",
+      "aria-selected": i === current,
       "data-list-item": i,
       "data-list-current": i === current ? "" : undefined,
     }),

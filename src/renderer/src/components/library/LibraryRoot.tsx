@@ -10,6 +10,8 @@ import { useDoorArt } from "@/components/library/useDoorArt";
 import { AlbumsArt, ArtistsArt, TracksArt } from "@/components/library/DoorArt";
 import { RecentlyAddedShelf } from "@/components/library/RecentlyAddedShelf";
 import { CARD_HOVER, CARD_TRANSITION } from "@/lib/cardHover";
+import { useListKeys } from "@/hooks/useListKeys";
+import { KeyedList } from "@/components/controls/KeyedList";
 
 /** The sources' cards: a fixed, compact width (the card-size slider is for art). */
 const SOURCE_CARD_PX = 150;
@@ -43,6 +45,56 @@ export function LibraryRoot({
     useIndexDoors();
   const art = useDoorArt(doorsState === "ready");
   const shownServers = servers;
+  const doors = [
+    {
+      key: "albums" as const,
+      title: "Albums",
+      icon: Disc3,
+      count: readyIndexes.reduce((acc, x) => acc + x.albums, 0),
+      noun: "albums",
+    },
+    {
+      key: "artists" as const,
+      title: "Artists",
+      icon: Users,
+      count: readyIndexes.reduce((acc, x) => acc + x.artists, 0),
+      noun: "artists",
+    },
+    {
+      key: "tracks" as const,
+      title: "Tracks",
+      icon: Music2,
+      count: readyIndexes.reduce((acc, x) => acc + x.tracks, 0),
+      noun: "tracks",
+    },
+  ];
+  // a door opens its lens, waits while the first index builds, and asks again where it failed
+  const openDoor = (key: (typeof doors)[number]["key"]): void => {
+    if (doorsState === "building") return;
+    if (doorsState === "failed") {
+      for (const x of failedIndexes) void tt.mediaIndexRebuild(x.udn);
+      return;
+    }
+    openLens(key);
+  };
+  // FROM THE KEYBOARD (0.15.0, the 0.14 re-score: the front page was outside "every list"): the
+  // three doors one Tab stop, the arrows across them, Enter a door's click
+  const doorKeys = useListKeys({
+    count: doorsState === "hidden" ? 0 : doors.length,
+    columns: doors.length,
+    onEnter: (i) => {
+      const d = doors[i];
+      if (d) openDoor(d.key);
+    },
+  });
+  // a source card opens its server, or asks again where its index failed
+  const openSource = (s: (typeof servers)[number]): void => {
+    if (mediaIndexStatuses.find((x) => x.udn === s.udn)?.state === "failed") {
+      void tt.mediaIndexRebuild(s.udn);
+      return;
+    }
+    enterServer(s.udn);
+  };
   return (
     <div className="space-y-7 pt-1">
       {shownServers.length === 0 && (
@@ -57,31 +109,10 @@ export function LibraryRoot({
       with the sources' labeled sections below (his call, 2026-10-21) */}
       {doorsState !== "hidden" && (
         <div data-library-doors={doorsState} className="lib-doors">
-          <div className="lib-doors-row">
-            {[
-              {
-                key: "albums" as const,
-                title: "Albums",
-                icon: Disc3,
-                count: readyIndexes.reduce((acc, x) => acc + x.albums, 0),
-                noun: "albums",
-              },
-              {
-                key: "artists" as const,
-                title: "Artists",
-                icon: Users,
-                count: readyIndexes.reduce((acc, x) => acc + x.artists, 0),
-                noun: "artists",
-              },
-              {
-                key: "tracks" as const,
-                title: "Tracks",
-                icon: Music2,
-                count: readyIndexes.reduce((acc, x) => acc + x.tracks, 0),
-                noun: "tracks",
-              },
-            ].map((door) => (
+          <div className="lib-doors-row" {...doorKeys.container} aria-label="Library views">
+            {doors.map((door, i) => (
               <div
+                {...doorKeys.item(i)}
                 key={door.key}
                 data-library-lens={door.key}
                 aria-disabled={doorsState === "building" ? true : undefined}
@@ -92,14 +123,7 @@ export function LibraryRoot({
                       ? `Couldn't index ${failedIndexes.map((x) => `${x.serverName} (${x.failure ?? "no index"})`).join(", ")}. Click to retry.`
                       : undefined
                 }
-                onClick={() => {
-                  if (doorsState === "building") return;
-                  if (doorsState === "failed") {
-                    for (const x of failedIndexes) void tt.mediaIndexRebuild(x.udn);
-                    return;
-                  }
-                  openLens(door.key);
-                }}
+                onClick={() => openDoor(door.key)}
                 className={cx(
                   // tip-wide anchors the tooltip to the card's LEFT edge and wraps it:
                   // centered, the indexing tip poked past the scrollport's left
@@ -209,7 +233,14 @@ export function LibraryRoot({
             <div className="microlabel mb-0.5 px-1">
               {kind === "usb" ? "USB drives" : "Servers"}
             </div>
-            <div
+            <KeyedList
+              label={kind === "usb" ? "USB drives" : "Servers"}
+              grid
+              count={group.length}
+              onEnter={(i) => {
+                const g = group[i];
+                if (g) openSource(g);
+              }}
               style={{
                 display: "grid",
                 gridTemplateColumns: `repeat(auto-fill, ${SOURCE_CARD_PX}px)`,
@@ -217,125 +248,125 @@ export function LibraryRoot({
                 paddingTop: 8,
               }}
             >
-              {group.map((s) => {
-                // the card carries ITS server's index state (2026-09-14): the
-                // doors animate for any build, this says which one, and a
-                // stick's first index is a Build ask the Library never offered
-                const st = mediaIndexStatuses.find((x) => x.udn === s.udn) ?? null;
-                const state = st?.state ?? "none";
-                const building = state === "building";
-                const failed = state === "failed";
-                const unindexed = state === "none" && !s.searchable;
-                // the stick's counter moved (a standby renumbers it, so its music may be
-                // just as it was) and the app will not walk it unasked
-                const stale = st?.stale === true;
-                const Icon = s.isStreamer ? Usb : HardDrive;
-                return (
-                  <div
-                    key={s.udn}
-                    data-library-source
-                    data-library-source-state={state}
-                    onClick={() => {
-                      if (failed) {
-                        void tt.mediaIndexRebuild(s.udn);
-                        return;
+              {(item) =>
+                group.map((s, i) => {
+                  // the card carries ITS server's index state (2026-09-14): the
+                  // doors animate for any build, this says which one, and a
+                  // stick's first index is a Build ask the Library never offered
+                  const st = mediaIndexStatuses.find((x) => x.udn === s.udn) ?? null;
+                  const state = st?.state ?? "none";
+                  const building = state === "building";
+                  const failed = state === "failed";
+                  const unindexed = state === "none" && !s.searchable;
+                  // the stick's counter moved (a standby renumbers it, so its music may be
+                  // just as it was) and the app will not walk it unasked
+                  const stale = st?.stale === true;
+                  const Icon = s.isStreamer ? Usb : HardDrive;
+                  return (
+                    <div
+                      {...item(i)}
+                      key={s.udn}
+                      data-library-source
+                      data-library-source-state={state}
+                      onClick={() => openSource(s)}
+                      data-tip={
+                        s.isStreamer && inStandby
+                          ? "In standby. USB content appears once the streamer wakes."
+                          : failed
+                            ? `Couldn't index (${st?.failure ?? "no index"}). Click to retry.`
+                            : stale
+                              ? "The drive may have changed since it was last indexed."
+                              : undefined
                       }
-                      enterServer(s.udn);
-                    }}
-                    data-tip={
-                      s.isStreamer && inStandby
-                        ? "In standby. USB content appears once the streamer wakes."
-                        : failed
-                          ? `Couldn't index (${st?.failure ?? "no index"}). Click to retry.`
-                          : stale
-                            ? "The drive may have changed since it was last indexed."
-                            : undefined
-                    }
-                    className={cx(
-                      "group relative rounded-2xl p-2 pb-2.5 bg-raised/50 ring-1 ring-edge card-hover-glow cursor-pointer",
-                      CARD_TRANSITION,
-                      CARD_HOVER,
-                      s.isStreamer && inStandby && "opacity-50 tip-bottom",
-                      building && "opacity-60",
-                      failed && "tip-bottom",
-                      // the tip explains the caption, so it sits beside the card level
-                      // with the caption (user, 2026-10-05: the default put it beside the
-                      // card's middle, far from the cursor; under the card a low card's
-                      // tip ran into the playback bar)
-                      stale && "tip-low",
-                    )}
-                  >
-                    {/* one frame per card: the well is a veil lift with no ring of its own (see LibraryCards) */}
-                    <div className="h-[70px] w-full rounded-lg bg-veil flex items-center justify-center">
-                      {building ? (
-                        <>
-                          {/* the doors' loading glyph: a spinner reads as activity where a
+                      className={cx(
+                        "group relative rounded-2xl p-2 pb-2.5 bg-raised/50 ring-1 ring-edge card-hover-glow cursor-pointer",
+                        CARD_TRANSITION,
+                        CARD_HOVER,
+                        s.isStreamer && inStandby && "opacity-50 tip-bottom",
+                        building && "opacity-60",
+                        failed && "tip-bottom",
+                        // the tip explains the caption, so it sits beside the card level
+                        // with the caption (user, 2026-10-05: the default put it beside the
+                        // card's middle, far from the cursor; under the card a low card's
+                        // tip ran into the playback bar)
+                        stale && "tip-low",
+                      )}
+                    >
+                      {/* one frame per card: the well is a veil lift with no ring of its own (see LibraryCards) */}
+                      <div className="h-[70px] w-full rounded-lg bg-veil flex items-center justify-center">
+                        {building ? (
+                          <>
+                            {/* the doors' loading glyph: a spinner reads as activity where a
                           pulsing icon read as styling; reduced motion keeps the icon */}
-                          <Loader2
-                            size={28}
-                            strokeWidth={1.2}
-                            className="spin text-dim motion-reduce:hidden"
-                          />
+                            <Loader2
+                              size={28}
+                              strokeWidth={1.2}
+                              className="spin text-dim motion-reduce:hidden"
+                            />
+                            <Icon
+                              size={28}
+                              strokeWidth={1.2}
+                              className="hidden motion-reduce:block text-dim"
+                            />
+                          </>
+                        ) : (
                           <Icon
                             size={28}
                             strokeWidth={1.2}
-                            className="hidden motion-reduce:block text-dim"
+                            className="text-dim group-hover:text-ink transition-colors"
                           />
-                        </>
-                      ) : (
-                        <Icon
-                          size={28}
-                          strokeWidth={1.2}
-                          className="text-dim group-hover:text-ink transition-colors"
-                        />
-                      )}
+                        )}
+                      </div>
+                      <div className="pt-1.5 text-[12.5px] truncate">{s.name}</div>
+                      <div
+                        data-library-source-caption
+                        className={cx(
+                          "text-[11.5px] truncate",
+                          failed ? "text-alert" : "text-faint",
+                        )}
+                      >
+                        {building ? (
+                          <span className="motion-safe:animate-pulse">Indexing…</span>
+                        ) : failed ? (
+                          `Couldn't index${FACT_SEP}Retry`
+                        ) : state === "ready" && st && stale ? (
+                          <button
+                            data-library-source-build
+                            data-library-source-stale
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void tt.mediaIndexRebuild(s.udn);
+                            }}
+                            // the caption's own color, gold only under the cursor: after
+                            // a standby the streamer renumbers the drive and this shows
+                            // whether or not anything changed, so it offers, never alarms
+                            // (user, 2026-10-05)
+                            className="hover:text-gold transition-colors"
+                          >
+                            Check for changes
+                          </button>
+                        ) : state === "ready" && st ? (
+                          `Indexed${FACT_SEP}${fmtCount(st.albums)} ${st.albums === 1 ? "album" : "albums"}`
+                        ) : unindexed ? (
+                          <button
+                            data-library-source-build
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void tt.mediaIndexRebuild(s.udn);
+                            }}
+                            className="text-gold/90 hover:text-gold transition-colors"
+                          >
+                            {s.isStreamer ? "Index this drive" : "Index this server"}
+                          </button>
+                        ) : (
+                          (s.model ?? (s.isStreamer ? "Storage on the streamer" : "Media server"))
+                        )}
+                      </div>
                     </div>
-                    <div className="pt-1.5 text-[12.5px] truncate">{s.name}</div>
-                    <div
-                      data-library-source-caption
-                      className={cx("text-[11.5px] truncate", failed ? "text-alert" : "text-faint")}
-                    >
-                      {building ? (
-                        <span className="motion-safe:animate-pulse">Indexing…</span>
-                      ) : failed ? (
-                        `Couldn't index${FACT_SEP}Retry`
-                      ) : state === "ready" && st && stale ? (
-                        <button
-                          data-library-source-build
-                          data-library-source-stale
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void tt.mediaIndexRebuild(s.udn);
-                          }}
-                          // the caption's own color, gold only under the cursor: after
-                          // a standby the streamer renumbers the drive and this shows
-                          // whether or not anything changed, so it offers, never alarms
-                          // (user, 2026-10-05)
-                          className="hover:text-gold transition-colors"
-                        >
-                          Check for changes
-                        </button>
-                      ) : state === "ready" && st ? (
-                        `Indexed${FACT_SEP}${fmtCount(st.albums)} ${st.albums === 1 ? "album" : "albums"}`
-                      ) : unindexed ? (
-                        <button
-                          data-library-source-build
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void tt.mediaIndexRebuild(s.udn);
-                          }}
-                          className="text-gold/90 hover:text-gold transition-colors"
-                        >
-                          {s.isStreamer ? "Index this drive" : "Index this server"}
-                        </button>
-                      ) : (
-                        (s.model ?? (s.isStreamer ? "Storage on the streamer" : "Media server"))
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })
+              }
+            </KeyedList>
           </div>
         );
       })}

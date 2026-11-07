@@ -34,6 +34,20 @@ const GROUPS: Array<{ title: string; rows: Array<[string, string]> }> = [
     ],
   },
   {
+    title: "Lists",
+    // every list from the keyboard (0.14.0): a list is one Tab stop, and once Tab has brought you
+    // to it, it takes the arrows until Esc gives them back
+    rows: [
+      ["Tab", "Move to the next list; once there, the arrows move through it"],
+      ["↑ / ↓ / ← / →", "Move through the list (across too, in a grid of cards)"],
+      ["Enter", "Open or play what’s selected, as a click does"],
+      [".", "Its ⋯ menu"],
+      [IS_MAC ? "⌥↑ / ⌥↓" : "Alt+↑ / Alt+↓", "Move it, in the Queue, playlists and Presets"],
+      ["Delete", "Remove it from the Queue or a playlist"],
+      ["Esc", "Give the arrows back to playback and volume"],
+    ],
+  },
+  {
     title: "Navigate",
     rows: [
       [`${MOD}K`, "Command palette"],

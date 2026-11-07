@@ -99,6 +99,7 @@ import { FACT_SEP } from "@/lib/mediaFacts";
 import { useQueueSourceActive } from "@/hooks/useQueueSourceActive";
 import { keyedEvent, menuAt } from "@/lib/menuAt";
 import { CARD_HELD, CARD_HOVER, CARD_MOTION } from "@/lib/cardHover";
+import { ArtActions } from "@/components/library/LibraryCards";
 
 /**
  * Queue → preset: the shared PresetSavePanel in a centered modal. The device
@@ -1731,24 +1732,6 @@ function QueueCard({
             </span>
           </div>
 
-          {/* the one card-chip grammar (ContainerCard's): ⋯ bottom-right on
-              the art, status top-left, one chip (cardChip) — this card used a
-              rounded-full blur chip at TOP-right, the only card that did */}
-          <span
-            aria-label="More actions"
-            onClick={(e) => {
-              e.stopPropagation();
-              onMenu?.(e);
-            }}
-            className={cx(
-              "absolute bottom-1.5 right-1.5 z-10 text-dim hover:text-ink transition-all",
-              cardChip(),
-              menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
-            )}
-          >
-            <MoreHorizontal size={15} />
-          </span>
-
           {isCurrent && (
             <span className={cx("absolute top-1.5 left-1.5", cardChip())}>
               <Eqbars dim={!sourceActive} />
@@ -1768,6 +1751,24 @@ function QueueCard({
           )}
         </div>
       </button>
+      {/* the one card-chip grammar (ContainerCard's): ⋯ bottom-right on the art, status top-left,
+          one chip (cardChip); a real button beside the card's own since 0.15.0 (ArtActions), where
+          it was a span inside it, a control within a control nothing could name */}
+      <ArtActions>
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-label="More actions"
+          onClick={(e) => onMenu?.(e)}
+          className={cx(
+            "pointer-events-auto absolute bottom-1.5 right-1.5 z-10 text-dim hover:text-ink transition-all",
+            cardChip(),
+            menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
+          )}
+        >
+          <MoreHorizontal size={15} />
+        </button>
+      </ArtActions>
 
       <div className="mt-2 px-1 flex items-start gap-1">
         <div className="flex-1 min-w-0">

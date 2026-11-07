@@ -293,7 +293,7 @@ export function ContainerCard({
  * Tab order: the keyboard reaches them through the card's More menu. The layer takes no pointer
  * itself, so the card under it still opens.
  */
-function ArtActions({ children }: { children: React.ReactNode }): React.JSX.Element {
+export function ArtActions({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
     <div data-card-actions className="pointer-events-none absolute inset-x-2 top-2 aspect-square">
       {children}
