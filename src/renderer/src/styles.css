@@ -228,6 +228,12 @@
   --color-amberink: color-mix(in srgb, rgb(var(--amber-rgb)) 69%, black);
   --color-amberink-wash: color-mix(in srgb, rgb(var(--amber-rgb)) 57%, black);
   --color-amberbutton: color-mix(in srgb, rgb(var(--amber-rgb)) 78%, black);
+  /* the alert and the LED's green AS TEXT (0.15.0, the 0.14 re-score: 4.07 and 2.79 to 1 on the
+     page, under 0016's floor), and the alert deeper still on its own wash; the LED's dot and the
+     icons keep the bright forms */
+  --color-alertink: #a53d2c;
+  --color-alertink-wash: #8f3424;
+  --color-ledink: #156e3a;
   --color-goldtile: #eee0bd;
   --color-led: #1fa456;
   --alert-rgb: 199 74 53;
@@ -1173,6 +1179,19 @@ img {
 }
 :root.light .bg-amberdim.text-amber:not(svg) {
   color: var(--color-amberink-wash);
+}
+/* the alert and the LED's green as text, as gold is (0.15.0) */
+:root.light :is(.text-alert, .hover\:text-alert:hover):not(svg) {
+  color: var(--color-alertink);
+}
+:root.light
+  :is(.bg-alert\/10, .hover\:bg-alert\/10:hover):is(.text-alert, .hover\:text-alert:hover):not(
+    svg
+  ) {
+  color: var(--color-alertink-wash);
+}
+:root.light .text-led:not(svg) {
+  color: var(--color-ledink);
 }
 /* a gold or amber button under paper-colored text takes the deeper fill */
 :root.light .bg-gold.text-bg {
