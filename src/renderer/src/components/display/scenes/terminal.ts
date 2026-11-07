@@ -181,13 +181,10 @@ export class Terminal implements Scene {
       this.reset();
 
     // the drums: a kick sags the raster (with a rise, never a pop), a hat flickers the phosphor
-    if (f.hitsKnown) {
-      for (const hit of f.hits) {
-        if (hit.type === "kick") this.sagAim = Math.max(this.sagAim, hit.strength);
-        else if (hit.type === "hat")
-          this.flicker = Math.max(this.flicker, 0.4 + 0.6 * hit.strength);
-      }
-    } else if (f.kick > 0.5) this.sagAim = Math.max(this.sagAim, f.kick);
+    for (const hit of f.hits) {
+      if (hit.type === "kick") this.sagAim = Math.max(this.sagAim, hit.strength);
+      else if (hit.type === "hat") this.flicker = Math.max(this.flicker, 0.4 + 0.6 * hit.strength);
+    }
     this.sagAim = easeTowards(this.sagAim, 0, f.dt, 0.12);
     this.sag = easeTowards(this.sag, this.sagAim, f.dt, 0.03);
     this.flicker = easeTowards(this.flicker, 0, f.dt, 0.06);

@@ -60,8 +60,6 @@ interface Drop {
 export class Tide implements Scene {
   private phase = 0;
   private spray: Drop[] = [];
-  private lastSpray = 0;
-  private prevHighs = 0;
   /** A kick's heave of the swell, decaying. */
   private surge = 0;
   /** Where the surge is heading: a kick sets it, it decays, `surge` follows with a rise time. */
@@ -234,10 +232,6 @@ export class Tide implements Scene {
     ctx.lineWidth = 1 + 1.6 * f.loud + 0.8 * this.crest;
     ctx.stroke();
 
-    // spray off the crests on a snare or a hat; a kick heaves the swell. Without an onset list
-    // the strip's transient (with treble in it) sprays instead
-    const treble = highs - this.prevHighs;
-    this.prevHighs = highs;
     // a drop's release heaves the whole sea and flares the moon
     if (f.drop?.onDrop) {
       this.surgeAim = Math.max(this.surgeAim, 1.6);
@@ -258,27 +252,21 @@ export class Tide implements Scene {
       }
       if (this.glints.length > 160) this.glints.splice(0, this.glints.length - 160);
     };
+    // spray off the crests on a snare or a hat; a kick heaves the swell
     let sprayN = 0;
-    if (f.hitsKnown) {
-      for (const hit of f.hits) {
-        if (hit.type === "kick") this.surgeAim = Math.max(this.surgeAim, hit.strength);
-        else if (hit.type === "snare")
-          this.crestAim = Math.max(this.crestAim, 0.3 + 0.7 * hit.strength);
-        else {
-          this.glint = Math.max(this.glint, 0.35 + 0.65 * hit.strength);
-          fireGlints(5 + Math.round(8 * hit.strength));
-        }
-        if (hit.type !== "kick" && hit.strength >= 0.3)
-          sprayN +=
-            hit.type === "snare"
-              ? 4 + Math.round(8 * hit.strength)
-              : 1 + Math.round(3 * hit.strength);
+    for (const hit of f.hits) {
+      if (hit.type === "kick") this.surgeAim = Math.max(this.surgeAim, hit.strength);
+      else if (hit.type === "snare")
+        this.crestAim = Math.max(this.crestAim, 0.3 + 0.7 * hit.strength);
+      else {
+        this.glint = Math.max(this.glint, 0.35 + 0.65 * hit.strength);
+        fireGlints(5 + Math.round(8 * hit.strength));
       }
-    } else if ((f.onset > 0.4 || treble > 0.14) && highs > 0.3 && f.now - this.lastSpray > 350) {
-      this.lastSpray = f.now;
-      sprayN = 5 + Math.round(9 * f.onset);
-      this.glint = Math.max(this.glint, 0.6);
-      fireGlints(6);
+      if (hit.type !== "kick" && hit.strength >= 0.3)
+        sprayN +=
+          hit.type === "snare"
+            ? 4 + Math.round(8 * hit.strength)
+            : 1 + Math.round(3 * hit.strength);
     }
     if (!f.reduced && sprayN > 0) {
       const n = f.mini ? Math.min(3, sprayN) : sprayN;

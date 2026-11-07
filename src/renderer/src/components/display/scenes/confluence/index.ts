@@ -13,11 +13,9 @@ import { DEFAULT_PARAMS, Fluid } from "./fluid";
 import {
   EMIT_HZ,
   LIFT,
-  PULSE_ONSET,
   PUSH,
   SPLAT_RADIUS,
   VENT_INSET,
-  WHIRLPOOL_ONSET,
   dyeDissipation,
   ventFor,
   ventX,
@@ -149,7 +147,6 @@ export class Confluence implements ThreeScene {
   private w = 1;
   private h = 1;
   private emitAcc = 0;
-  private lastPulse = 0;
   private lastWhirl = 0;
   private handed: 1 | -1 = 1;
   private shownLine = "";
@@ -304,7 +301,7 @@ export class Confluence implements ThreeScene {
     }
     // THE DRUMS. A kick puffs a low vent (the stereo image leans it toward the side the sound
     // sits), a hi-hat flickers a high one, a snare sends a gust across the frame from alternating
-    // sides; without an onset list the strip's transient puffs the loudest band's vent
+    // sides
     const puff = (band: number, strength: number, scale = 1): void => {
       fluid.splat(
         clamp(ventX(band) + 0.1 * f.pan + (Math.random() - 0.5) * 0.04, 0.03, 0.97),
@@ -345,22 +342,12 @@ export class Confluence implements ThreeScene {
       whirl(1);
       fluid.splat(0.5, 0.5, 0, 0, 0.02, toColor(P.gold), 0.6);
     }
-    if (f.hitsKnown) {
-      for (const hit of f.hits) {
-        if (hit.type === "kick") {
-          puff(Math.random() < 0.5 ? 0 : 1, hit.strength);
-          if (hit.strength >= 0.7) whirl(hit.strength);
-        } else if (hit.type === "snare") gust(hit.strength);
-        else puff(Math.random() < 0.5 ? 4 : 5, hit.strength, 0.55);
-      }
-    } else {
-      if (f.onset > PULSE_ONSET && f.now - this.lastPulse > 140) {
-        this.lastPulse = f.now;
-        let top = 0;
-        for (let r = 1; r < 6; r++) if (f.bands[r] > f.bands[top]) top = r;
-        puff(top, f.onset);
-      }
-      if (f.onset > WHIRLPOOL_ONSET) whirl(f.onset);
+    for (const hit of f.hits) {
+      if (hit.type === "kick") {
+        puff(Math.random() < 0.5 ? 0 : 1, hit.strength);
+        if (hit.strength >= 0.7) whirl(hit.strength);
+      } else if (hit.type === "snare") gust(hit.strength);
+      else puff(Math.random() < 0.5 ? 4 : 5, hit.strength, 0.55);
     }
     // THE WORDS, a solid layer over the gas (stamped as ink before, they dissolved into a mess).
     // A new line renders its texture once; each frame the layer reads the latest dye and flow

@@ -52,9 +52,6 @@ export const GLINT_TAU = 0.12;
 export const CREST_TAU = 0.25;
 export const HALO_TAU = 0.6;
 export const WARM_TAU = 2;
-/** Without an onset list, the strip's transient a glint must clear, and its refractory. */
-export const HIT_THRESHOLD = 0.4;
-export const HIT_REFRACTORY_MS = 220;
 
 /**
  * The patch: rows spaced geometrically from the bow to the horizon (dense underfoot, where

@@ -206,9 +206,8 @@ export class Refrain implements Scene {
 
     // the kick's swell on the lit row, like Type's
     this.punchAim = easeTowards(this.punchAim, 0, f.dt, 0.12);
-    if (f.hitsKnown)
-      for (const hit of f.hits)
-        if (hit.type === "kick") this.punchAim = Math.max(this.punchAim, hit.strength);
+    for (const hit of f.hits)
+      if (hit.type === "kick") this.punchAim = Math.max(this.punchAim, hit.strength);
     this.punch = easeTowards(this.punch, this.punchAim, f.dt, 0.06);
 
     const still = f.reduced || this.settings.motion === false;

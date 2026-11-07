@@ -78,15 +78,12 @@ interface Page {
 }
 
 const SPARKS_MAX = 240;
-const HIT_THRESHOLD = 0.45;
-const HIT_REFRACTORY_MS = 200;
 
 export class Roll implements Scene {
   settings: SceneSettings = {};
   private drift = driftRecord();
   private page: Page | null = null;
   private sparks: Spark[] = [];
-  private lastHit = 0;
   private flash = 0;
   private pulse = 0;
   private lastLine = -1;
@@ -211,19 +208,11 @@ export class Roll implements Scene {
       }
       if (this.sparks.length > SPARKS_MAX) this.sparks.splice(0, this.sparks.length - SPARKS_MAX);
     };
-    if (f.hitsKnown) {
-      for (const hit of f.hits) {
-        if (hit.type === "kick") throwSparks(5 + Math.round(9 * hit.strength), [0, 1], 90, 80, -60);
-        else if (hit.type === "snare")
-          throwSparks(4 + Math.round(8 * hit.strength), [2, 3], 220, 40, 30);
-        else throwSparks(2 + Math.round(4 * hit.strength), [4, 5], 60, 30, 110);
-      }
-    } else {
-      const hit = Math.max(f.onset, f.kick);
-      if (hit > HIT_THRESHOLD && f.now - this.lastHit > HIT_REFRACTORY_MS) {
-        this.lastHit = f.now;
-        throwSparks(6 + Math.round(8 * hit), [0, 5], 120, 60, 40);
-      }
+    for (const hit of f.hits) {
+      if (hit.type === "kick") throwSparks(5 + Math.round(9 * hit.strength), [0, 1], 90, 80, -60);
+      else if (hit.type === "snare")
+        throwSparks(4 + Math.round(8 * hit.strength), [2, 3], 220, 40, 30);
+      else throwSparks(2 + Math.round(4 * hit.strength), [4, 5], 60, 30, 110);
     }
     if (f.beat?.onBeat) this.pulse = Math.max(this.pulse, f.beat.onBar ? 1 : 0.55);
     if (f.drop?.onDrop) {

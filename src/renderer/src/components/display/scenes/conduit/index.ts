@@ -31,8 +31,6 @@ import {
   DEFAULT_HITS,
   HEAT_TAU,
   HIT_FLOORS,
-  HIT_REFRACTORY_MS,
-  HIT_THRESHOLDS,
   KICK_REFRACTORY_MS,
   PULSES,
   PULSE_LIFE_MS,
@@ -59,7 +57,7 @@ import {
  * end of the wire. The lines are PAINTED ON THE WALL at their times, curved
  * with it and standing on its bulge, so they come toward you like signs in
  * a tunnel, gold while heard and back to ink after, and they sweep past
- * whole. The hits are the file's own drum onsets: a kick sends a RING OF
+ * whole. The hits are the drum onsets: a kick sends a RING OF
  * LIGHT down the pipe, a snare throws speed lines, a hat flickers the light
  * at the end; the wall's warmth is the passage's intensity, slowly, so the
  * drums stay legible as drums. A DROP: through the last of the build the
@@ -449,7 +447,6 @@ export class Conduit implements ThreeScene {
   private drift = driftRecord();
   private phase = 0;
   private heat = 0;
-  private lastHit = 0;
   private lastKick = 0;
   private pulses: Pulse[] = [];
   private sunFlick = 0;
@@ -802,28 +799,16 @@ void main() {
     const ahead = zOfSeconds(num(this.settings.ahead, DEFAULT_AHEAD_SECONDS));
     this.aheadUnits = easeTowards(this.aheadUnits, ahead, f.dt, 0.8);
 
-    // the hits: the file's own drum onsets when the track has them (exact to the clock and
-    // typed), else the strip's transient. A kick sends a ring of light down the pipe, a snare
+    // the hits: the drum onsets, typed (the file's own, else the feed's). A kick sends a ring of light down the pipe, a snare
     // throws speed lines, a hat flickers the light at the end; the Hits setting is the floor a
     // hit must clear. The camera is never touched.
     const hitsKey = String(this.settings.hits ?? DEFAULT_HITS);
-    if (f.hitsKnown) {
-      const floor = HIT_FLOORS[hitsKey] ?? HIT_FLOORS[DEFAULT_HITS];
-      for (const h of f.hits) {
-        if (h.strength < floor) continue;
-        if (h.type === "kick") this.kick(f, h.strength);
-        else if (h.type === "snare")
-          this.spawnStreaks(f, 3 + Math.round(7 * h.strength), h.strength);
-        else this.sunFlick = Math.max(this.sunFlick, 0.3 + 0.5 * h.strength);
-      }
-    } else {
-      const threshold = HIT_THRESHOLDS[hitsKey] ?? HIT_THRESHOLDS[DEFAULT_HITS];
-      const hit = Math.max(f.onset, f.kick);
-      if (hit > threshold && f.now - this.lastHit > HIT_REFRACTORY_MS) {
-        this.lastHit = f.now;
-        this.kick(f, hit);
-        this.spawnStreaks(f, 3 + Math.round(7 * hit), hit);
-      }
+    const floor = HIT_FLOORS[hitsKey] ?? HIT_FLOORS[DEFAULT_HITS];
+    for (const h of f.hits) {
+      if (h.strength < floor) continue;
+      if (h.type === "kick") this.kick(f, h.strength);
+      else if (h.type === "snare") this.spawnStreaks(f, 3 + Math.round(7 * h.strength), h.strength);
+      else this.sunFlick = Math.max(this.sunFlick, 0.3 + 0.5 * h.strength);
     }
     // the wall's warmth is the passage's intensity, slowly: never the hits, so a kick reads as
     // a kick and a loud passage as a warm one

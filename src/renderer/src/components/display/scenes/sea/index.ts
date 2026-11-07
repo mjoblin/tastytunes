@@ -12,8 +12,6 @@ import {
   EYE_HEIGHT,
   GLINT_TAU,
   HALO_TAU,
-  HIT_REFRACTORY_MS,
-  HIT_THRESHOLD,
   MINI_COLS,
   MINI_ROWS,
   MOON_DIR,
@@ -249,8 +247,6 @@ export class Sea implements ThreeScene {
   private crest = 0;
   private halo = 0;
   private warm = 0;
-  private lastHit = 0;
-  private prevHighs = 0;
   private invPV = new THREE.Matrix4();
   private eye = new THREE.Vector3();
   private moon = new THREE.Vector3(...MOON_DIR).normalize();
@@ -347,26 +343,14 @@ export class Sea implements ThreeScene {
     this.ensurePatch(f.mini);
     const speed = f.reduced ? 0.35 : 1;
     this.phase += f.dt * speed;
-    const highs = (f.bands[4] + f.bands[5]) / 2;
 
     // the swell is how loud, slowly; the chop is how noisy; a kick heaves the swell, a hat
     // fires the glints, a snare lights the crests; a drop heaves the whole sea and flares the
-    // moon. Without an onset list the strip's transient (with treble in it) does the work.
-    const treble = highs - this.prevHighs;
-    this.prevHighs = highs;
-    if (f.hitsKnown) {
-      for (const h of f.hits) {
-        if (h.type === "kick") this.surgeAim = Math.max(this.surgeAim, h.strength);
-        else if (h.type === "snare") this.crest = Math.max(this.crest, 0.3 + 0.7 * h.strength);
-        else this.glint = Math.max(this.glint, 0.35 + 0.65 * h.strength);
-      }
-    } else {
-      const hit = Math.max(f.onset, f.kick);
-      if (hit > HIT_THRESHOLD && f.now - this.lastHit > HIT_REFRACTORY_MS) {
-        this.lastHit = f.now;
-        this.surgeAim = Math.max(this.surgeAim, hit);
-        if (treble > 0.1 || highs > 0.4) this.glint = Math.max(this.glint, hit);
-      }
+    // moon.
+    for (const h of f.hits) {
+      if (h.type === "kick") this.surgeAim = Math.max(this.surgeAim, h.strength);
+      else if (h.type === "snare") this.crest = Math.max(this.crest, 0.3 + 0.7 * h.strength);
+      else this.glint = Math.max(this.glint, 0.35 + 0.65 * h.strength);
     }
     if (f.drop?.onDrop) {
       this.surgeAim = Math.max(this.surgeAim, 1.6);

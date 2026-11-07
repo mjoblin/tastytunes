@@ -3,22 +3,14 @@ import { PresenceTracker } from "../../presence";
 import { typePx, sceneFont } from "../../type";
 import { clamp, fitText, mix, rgb, rgba } from "../lib";
 import { BallPit, EROSION_SECONDS, WORLD_W, dropSpread, dropX, erosionPressure } from "./balls";
-import {
-  HIT_ONSET,
-  THROW_GAP_MS,
-  radiusForDrum,
-  radiusForHit,
-  registerForDrum,
-  registerOf,
-  sideOf,
-} from "./model";
+import { radiusForDrum, registerForDrum, sideOf } from "./model";
 
 /**
  * BALL PIT: the beats, thrown in (after packscape's Ball Pit, in this app's
  * voice). Every drum drops a rubber ball from above the frame: a kick a
  * bass-colored boulder from the left, a hat an air-colored marble from the
- * right, a snare the middle, sized by how hard; the hits are the file's own
- * drum onsets. They bounce like they mean it, pile up,
+ * right, a snare the middle, sized by how hard; the hits are the drum
+ * onsets. They bounce like they mean it, pile up,
  * and the tide takes the oldest in about a minute, the pile slumping after.
  * The current line is written on the back wall. A quiet, synthesized boing
  * per landing hides behind a toggle that is off by default.
@@ -90,7 +82,6 @@ class Foley {
 export class Pit implements Scene {
   settings: SceneSettings = {};
   private pit = new BallPit();
-  private lastThrow = 0;
   private foley: Foley | null = null;
   private wall = new PresenceTracker(700, 1600);
   /** Rings on the floor at each beat, dust where a ball lands, and a drop's rain of marbles. */
@@ -104,8 +95,7 @@ export class Pit implements Scene {
     ctx.fillStyle = rgb(P.bg);
     ctx.fillRect(0, 0, w, h);
 
-    // a drum throws a ball, from above the frame, on its register's side: one per hit from
-    // the file's own onset list, else the strip's transient when the track has none
+    // a drum throws a ball, from above the frame, on its register's side: one per hit
     const groundFrac = f.mini ? 0.92 : 0.86;
     const worldPerPx = WORLD_W / w;
     const skyY = h * groundFrac * worldPerPx + 40;
@@ -137,14 +127,9 @@ export class Pit implements Scene {
         skyY + Math.random() * 120,
       );
     }
-    if (f.hitsKnown) {
-      for (const hit of f.hits) {
-        const register = registerForDrum(hit.type, Math.random());
-        throwBall(register, radiusForDrum(hit.type, hit.strength));
-      }
-    } else if (f.onset > HIT_ONSET && f.now - this.lastThrow > THROW_GAP_MS && f.playing) {
-      this.lastThrow = f.now;
-      throwBall(registerOf(f.bands), radiusForHit(f.onset, f.loud));
+    for (const hit of f.hits) {
+      const register = registerForDrum(hit.type, Math.random());
+      throwBall(register, radiusForDrum(hit.type, hit.strength));
     }
     const dt = f.reduced ? f.dt * 0.5 : f.dt;
     const pressure = erosionPressure(this.pit.all().length / this.pit.capacity);
