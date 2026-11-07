@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useLayoutEffect } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useLayoutEffect,
+  useEffectEvent,
+} from "react";
 import { artKeyOf } from "@/lib/artSrc";
 import type { LibrarySpot } from "@/store";
 import {
@@ -291,7 +299,7 @@ export function LibraryScreen(): React.JSX.Element {
   const pendingScroll = useRef<number | null>(null);
   /** The track a destination asked to land on (LibraryTarget.track and its id and length). */
   const pendingTrack = useRef<LandingTrack | null>(null);
-  useLayoutEffect(() => {
+  const restoreListing = useEffectEvent(() => {
     if (pendingScroll.current != null && scrollRef.current) {
       // a lens at the root holds the page at 0 (it scrolls its own column)
       scrollRef.current.scrollTop = serverUdn == null && lens != null ? 0 : pendingScroll.current;
@@ -325,8 +333,8 @@ export function LibraryScreen(): React.JSX.Element {
     // runs when the LISTING commits (nodes, state); path and serverUdn are
     // read through loadedKey's guard, and a path change without a new listing
     // must not fire a restore against the old rows
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodes, state]);
+  });
+  useLayoutEffect(() => restoreListing(), [nodes, state]);
   const atRoot = serverUdn == null;
 
   // what the indexes offer: the doors' state, cross-server search (useIndexDoors)
@@ -337,7 +345,7 @@ export function LibraryScreen(): React.JSX.Element {
   // A LENS OPENS AT THE TOP OF THE PAGE: it scrolls its own column with the page held still, so
   // a root left scrolled would carry the lens up out of view; closing it at the root brings the
   // doors back to their own spot (a move between levels restores through the listing's effect)
-  useLayoutEffect(() => {
+  const holdLensTop = useEffectEvent(() => {
     const sc = scrollRef.current;
     if (!sc || serverUdn != null || searchMode) return;
     sc.scrollTop = artistPage
@@ -345,8 +353,8 @@ export function LibraryScreen(): React.JSX.Element {
       : lens != null
         ? 0
         : (scrollMemory.get(nodeKey(null, path)) ?? 0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lens, artistPage]);
+  });
+  useLayoutEffect(() => holdLensTop(), [lens, artistPage]);
 
   // (⌘A/Esc keyboard handling lives below the listing memo — its deps need
   // the visible tracks.)
@@ -522,7 +530,7 @@ export function LibraryScreen(): React.JSX.Element {
   const clearLibraryTarget = useStore((s) => s.clearLibraryTarget);
   /** Nonce this mount has already acted on — null until the first run. */
   const handledNonce = useRef<number | null>(null);
-  useEffect(() => {
+  const arrive = useEffectEvent(() => {
     // At most ONE action per nonce value per mount. StrictMode double-invokes
     // mount effects in dev (refs intact), and this effect is no longer
     // naturally idempotent the way the old always-reset version was: its first
@@ -604,8 +612,8 @@ export function LibraryScreen(): React.JSX.Element {
     } finally {
       restoring.current = false;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [libraryResetNonce]);
+  });
+  useEffect(() => arrive(), [libraryResetNonce]);
 
   // Keep the location current as you browse: history reads it as the spot being
   // left when a navigation goes elsewhere, and a return visit restores it (the
@@ -617,10 +625,13 @@ export function LibraryScreen(): React.JSX.Element {
   // Declared above the arrival effect, the clobber would come first and there
   // would be nothing left to restore.
   const setLibraryLocation = useStore((s) => s.setLibraryLocation);
-  useEffect(() => {
+  const recordLocation = useEffectEvent(() => {
     setLibraryLocation(snapshot());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverUdn, path, searchMode, searchQuery, searchState, crossState, lens, artistPage]);
+  });
+  useEffect(
+    () => recordLocation(),
+    [serverUdn, path, searchMode, searchQuery, searchState, crossState, lens, artistPage],
+  );
 
   // THE ARTIST PAGE is built from the indexes: an artist has one when an index holds their server
   // (the lens's artists always; a search's or a folder's artist when theirs is indexed)
@@ -740,17 +751,18 @@ export function LibraryScreen(): React.JSX.Element {
   // Backspace goes UP a level (folder semantics; above a source's root it
   // lands on the source list). ⌘/Alt ←/→ and mouse 4/5 are history, app-wide —
   // useShortcuts owns them since 2026-08-23.
+  const listenForBackspace = useEffectEvent(() =>
+    onScreenKey((e) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
+      if (e.key === "Backspace" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        goUp();
+      }
+    }),
+  );
   useEffect(
-    () =>
-      onScreenKey((e) => {
-        const target = e.target as HTMLElement | null;
-        if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
-        if (e.key === "Backspace" && !e.metaKey && !e.ctrlKey && !e.altKey) {
-          e.preventDefault();
-          goUp();
-        }
-      }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    () => listenForBackspace(),
     [path, serverUdn, filter, searchState, searchReturn, searchMode, searchQuery, crossState, lens],
   );
 

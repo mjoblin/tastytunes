@@ -57,7 +57,6 @@ export function useClampedPosition(
       left: Math.max(12, Math.min(x, window.innerWidth - r.width - 12)),
       top: Math.max(12, Math.min(y, window.innerHeight - r.height - 12)),
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [x, y]);
+  }, [ref, x, y]);
   return pos;
 }

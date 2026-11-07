@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useEffectEvent } from "react";
 import { cx } from "@/lib/format";
 
 /**
@@ -73,7 +73,7 @@ export function ScrollOnce({
       running.current = null;
     }, ms + 900);
   };
-  useEffect(() => {
+  const landText = useEffectEvent(() => {
     if (running.current) {
       clearTimeout(running.current);
       running.current = null;
@@ -85,8 +85,8 @@ export function ScrollOnce({
       pass();
     });
     return () => cancelAnimationFrame(raf);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- text is the trigger; the rest are refs
-  }, [text, wrap]);
+  });
+  useEffect(() => landText(), [text, wrap]);
   useEffect(
     () => () => {
       if (running.current) clearTimeout(running.current);

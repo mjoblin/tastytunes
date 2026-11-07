@@ -91,8 +91,8 @@ export function CommandPalette(): React.JSX.Element {
         inStandby,
         currentHost,
       }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- the builder reads the fields listed
     [
+      settings,
       connected,
       inStandby,
       currentHost,
@@ -109,13 +109,6 @@ export function CommandPalette(): React.JSX.Element {
       mediaIndex,
       audioSpec,
       favorites,
-      settings.theme,
-      settings.sleepAction,
-      settings.lyrics,
-      settings.artistInfo,
-      settings.navHidden,
-      settings.navHiddenTools,
-      settings.eqPresets,
       playlists,
       jumpToSettingsTab,
       requestLibrarySearch,

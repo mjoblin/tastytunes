@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Play } from "lucide-react";
 import {
   audioAnalysisKey,
@@ -177,24 +177,23 @@ export function TracksLens({
   // server for anything.
   const drKeys = useMemo(() => all.map((t) => audioAnalysisKey(t)), [all]);
   const statsByKey = useKnownStats(drKeys); // one home for known DR + loudness (lib/audioAnalysis)
-  const drOf = (t: MediaNode): number | null => statsByKey[audioAnalysisKey(t)]?.dr ?? null;
-  const lufsOf = (t: MediaNode): number | null => statsByKey[audioAnalysisKey(t)]?.lufs ?? null;
+  const drOf = useCallback(
+    (t: MediaNode): number | null => statsByKey[audioAnalysisKey(t)]?.dr ?? null,
+    [statsByKey],
+  );
+  const lufsOf = useCallback(
+    (t: MediaNode): number | null => statsByKey[audioAnalysisKey(t)]?.lufs ?? null,
+    [statsByKey],
+  );
   // each card's format line, while Settings › Layout shows it, its DR the rows' DR
   const detailsOf = useTrackCardDetails((t) => ({ dr: drOf(t), lufs: lufsOf(t) }));
   // the tempo as Info says it, above its floor (the measured facts, 0.12.0)
-  const tempoOf = (t: MediaNode): number | null => statsByKey[audioAnalysisKey(t)]?.bpm ?? null;
-  const tempoOptions = useMemo(
-    () => tempoOptionsOf(all.map((t) => tempoOf(t))),
-    // tempoOf reads statsByKey; listing it keeps the memo honest
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [all, statsByKey],
+  const tempoOf = useCallback(
+    (t: MediaNode): number | null => statsByKey[audioAnalysisKey(t)]?.bpm ?? null,
+    [statsByKey],
   );
-  const drOptions = useMemo(
-    () => drOptionsOf(all.map((t) => drOf(t))),
-    // drOf reads statsByKey; listing it keeps the memo honest
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [all, statsByKey],
-  );
+  const tempoOptions = useMemo(() => tempoOptionsOf(all.map((t) => tempoOf(t))), [all, tempoOf]);
+  const drOptions = useMemo(() => drOptionsOf(all.map((t) => drOf(t))), [all, drOf]);
   const formatOptions = useMemo(
     () =>
       formatOptionsOf(
@@ -252,9 +251,7 @@ export function TracksLens({
       return byTitle(a, b);
     });
     return { shown: reversed ? sorted.reverse() : sorted, scopeCounts };
-    // drOf and lufsOf read statsByKey; listing it keeps the memo honest
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [all, mem, sort, reversed, statsByKey, record]);
+  }, [all, mem, sort, reversed, drOf, lufsOf, tempoOf, record]);
   const playedOptions = useMemo(
     () => (play.ready ? playedOptionsOf(all.map((t) => play.track(t)?.lastAt ?? null)) : []),
     [all, play],

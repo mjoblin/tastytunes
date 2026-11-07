@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useEffectEvent } from "react";
 import { Heart, RadioTower, RotateCw, Search, X } from "lucide-react";
 import type { RadioStation } from "@shared/model";
 import type { Favorite } from "@shared/model";
@@ -158,14 +158,14 @@ export function RadioScreen(): React.JSX.Element {
   };
   // Restore path: screen remounts with a chip selected but nothing cached
   // (e.g. its earlier load came back empty) — fetch again.
-  useEffect(() => {
+  const restoreCategory = useEffectEvent(() => {
     if (cat != null && cat !== FAV_CAT && catStations == null) {
       catSeq.current++;
       loadCat(cat);
     }
     // mount-only
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  });
+  useEffect(() => restoreCategory(), []);
   const dropCat = (): void => {
     if (cat == null) return;
     catSeq.current++;

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, useMemo } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useMemo, useEffectEvent } from "react";
 import { useKnownDrs } from "@/lib/audioAnalysis";
 import { useWindowedList } from "@/hooks/useWindowedList";
 import {
@@ -510,7 +510,7 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
   // shouldn't replay a glide to a place you already were. The animation is
   // reserved for track changes while you're watching.
   const firstFollow = useRef(true);
-  useEffect(() => {
+  const followCurrent = useEffectEvent(() => {
     // Follow pauses while a filter is active — the current row may be hidden.
     if (followQueue && !filter && currentRef.current) {
       scrollToWithContext(
@@ -527,8 +527,8 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
     }
     firstFollow.current = false;
     // leanRows/items/leanWin are read for the windowed landing only; the effect stays keyed on the pointer
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playId, followQueue, cards, presetGap, filter]);
+  });
+  useEffect(() => followCurrent(), [playId, followQueue, cards, presetGap, filter]);
 
   // THE LANDING ANIMATES (user, 2026-08-27 — an instant re-order after the
   // line model read as a teleport): a FLIP pass flies every displaced row

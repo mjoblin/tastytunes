@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { AudioLines, Heart, ListEnd, ListPlus, ListStart, Play } from "lucide-react";
 import {
   albumDrKey,
@@ -155,13 +155,14 @@ export function AlbumsLens({
     }
     return m;
   }, [all, index, play]);
-  const playOf = (a: MediaNode): { plays: number; lastAt: number | null; whole: number } =>
-    albumPlay.get(nodeKey(a)) ?? { plays: 0, lastAt: null, whole: 0 };
+  const playOf = useCallback(
+    (a: MediaNode): { plays: number; lastAt: number | null; whole: number } =>
+      albumPlay.get(nodeKey(a)) ?? { plays: 0, lastAt: null, whole: 0 },
+    [albumPlay],
+  );
   const playedOptions = useMemo(
     () => (play.ready ? playedOptionsOf(all.map((a) => playOf(a).lastAt)) : []),
-    // playOf reads albumPlay; listing it keeps the memo honest
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [all, albumPlay, play.ready],
+    [all, playOf, play.ready],
   );
 
   // Compilation = named so by its album artist, or (tracks known) credited to
@@ -219,9 +220,7 @@ export function AlbumsLens({
       );
     });
     return reversed ? sorted.reverse() : sorted;
-    // playOf reads albumPlay; listing it keeps the memo honest
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [all, mem, sort, reversed, kind, compilationKeys, albumDr, albumCodecs, albumPlay]);
+  }, [all, mem, sort, reversed, kind, compilationKeys, albumDr, albumCodecs, playOf]);
 
   /**
    * Box sets (2026-08-24): volume siblings — same parsed base + artist, ≥2
@@ -326,21 +325,26 @@ export function AlbumsLens({
   /** True = the click was a selection chord; the caller must not open. */
   const albumClick = (raw: MediaNode, e: React.MouseEvent): boolean => tileClick(nodeKey(raw), e);
   /** The picked albums as containers, a set's volumes in order. */
-  const chosenA = (): MediaNode[] =>
-    tiles
-      .filter((t) => selA.has(nodeKey(t.node)))
-      .flatMap((t) => (t.set ? t.set.volumes : [t.node]));
+  const chosenA = useCallback(
+    (): MediaNode[] =>
+      tiles
+        .filter((t) => selA.has(nodeKey(t.node)))
+        .flatMap((t) => (t.set ? t.set.volumes : [t.node])),
+    [tiles, selA],
+  );
   /** The same, expanded to tracks from the index (the queue and playlist verbs
    *  want tracks, and the cap counts them). */
-  const chosenATracks = (): MediaNode[] =>
-    chosenA().flatMap((alb) => {
-      const pool = pools.find((g) => g.udn === alb.serverUdn);
-      return pool ? albumTracksOf(alb, pool) : [];
-    });
+  const chosenATracks = useCallback(
+    (): MediaNode[] =>
+      chosenA().flatMap((alb) => {
+        const pool = pools.find((g) => g.udn === alb.serverUdn);
+        return pool ? albumTracksOf(alb, pool) : [];
+      }),
+    [chosenA, pools],
+  );
   const selATrackCount = useMemo(
     () => (selA.size === 0 ? 0 : chosenATracks().length),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- chosenATracks reads selA and tiles, both listed
-    [selA, tiles, pools],
+    [selA, chosenATracks],
   );
   const selAOverCap = selATrackCount > PLAY_THESE_MAX;
   const capTip = `Choose albums that come to ${fmtCount(PLAY_THESE_MAX)} tracks or fewer`;

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useEffectEvent } from "react";
 import { useStore } from "@/store";
 import { cx } from "@/lib/format";
 import type { SceneFeed } from "./feed";
@@ -57,7 +57,7 @@ export function SceneCanvas({
   const finishRef = useRef({ finish, curve, fill, flicker });
   finishRef.current = { finish, curve, fill, flicker };
 
-  useEffect(() => {
+  const mountScene = useEffectEvent(() => {
     const wrap = wrapRef.current;
     if (!wrap) return;
     // the canvases are created HERE, not by React: StrictMode mounts an effect
@@ -237,8 +237,8 @@ export function SceneCanvas({
       }, 150);
     };
     // settings ride the effect above; the loop reads inst.settings each frame
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scene, feed, mini, gl]);
+  });
+  useEffect(() => mountScene(), [scene, feed, mini, gl]);
 
   return (
     <div ref={wrapRef} className={cx("relative block h-full w-full", className)} data-scene={scene}>

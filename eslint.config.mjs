@@ -8,6 +8,9 @@
 //   effect, refs, purity, …) that flag patterns this app uses on purpose
 //   (ModalShell holding its last children in a ref, hold-and-settle effects,
 //   Date.now() in the playhead). We don't use the compiler; revisit if we do.
+//   exhaustive-deps is an error since 0.15.0 (the hygiene pass fixed its 29 disables, an effect that
+//   reads what it does not react to reading it through useEffectEvent): ESLint exits 0 on a
+//   warning, so a warning let a new missing dependency through CI.
 // - restrict-template-expressions: numbers, booleans and nullish are fine in
 //   template strings here (ids, counts, optional fields in log lines).
 import js from "@eslint/js";
@@ -47,7 +50,7 @@ export default tseslint.config(
     plugins: { "react-hooks": reactHooks },
     rules: {
       "react-hooks/rules-of-hooks": "error",
-      "react-hooks/exhaustive-deps": "warn",
+      "react-hooks/exhaustive-deps": "error",
       // MCP tool arguments arrive untyped (any) and are interpolated into replies;
       // typing them at the boundary is its own round.
       "@typescript-eslint/restrict-template-expressions": [
