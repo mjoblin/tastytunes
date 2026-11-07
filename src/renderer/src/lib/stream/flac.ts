@@ -6,7 +6,7 @@
  * marker and the metadata blocks first (STREAMINFO is the decoder's description and says the
  * track's length), then each frame from its header to the next header whose frame number follows
  * its own, the header's CRC-8 checked, which no chance run of bytes inside a frame passes too.
- * The bytes held are about a frame and a network read.
+ * The bytes held are about a frame and a network read, a damaged file included (0.15.0).
  */
 
 /** What STREAMINFO says, and the description AudioDecoder takes. */
@@ -97,9 +97,13 @@ function header(b: Uint8Array, p: number, len: number): Header | null | undefine
 /** Splits a FLAC byte stream into its info and frames as the bytes arrive. */
 export class FlacFrames {
   private buf = new Uint8Array(1 << 20);
+  /** Where the unread bytes begin and end in `buf`. A read offset (0.15.0): the buffer is
+   *  compacted only once the offset passes half of it, where every frame used to copy the rest
+   *  down (63 times a file's bytes, the 0.14 re-score measured). */
+  private base = 0;
   private len = 0;
   private info: FlacInfo | null = null;
-  /** Where the current frame starts in `buf`, once its header is found. */
+  /** Where the current frame starts in the unread bytes, once its header is found. */
   private start = -1;
   private cur: Header | null = null;
   /** Where to look next for the following frame's header. */
@@ -107,6 +111,8 @@ export class FlacFrames {
   /** The first sample of the current frame. */
   private sample = 0;
   private minFrame = 1;
+  /** The most a frame can take: STREAMINFO's largest frame, else an uncompressed block's size. */
+  private maxFrame = 1 << 21;
 
   /** Add bytes; returns the info once known (with the frames it completed). */
   push(bytes: Uint8Array): { info: FlacInfo | null; frames: FlacFrame[] } {
@@ -117,23 +123,43 @@ export class FlacFrames {
     return { info: this.info, frames };
   }
 
-  /** The stream has ended: the last frame runs to its end. */
+  /** The stream has ended: the last frame runs to its end, unless it is longer than a frame can
+   *  be (a damaged tail, which the decoder would refuse whole). */
   end(): FlacFrame[] {
     const frames: FlacFrame[] = [];
     if (!this.info) return frames;
     this.readFrames(frames);
-    if (this.start >= 0 && this.cur && this.len > this.start)
-      frames.push({ data: this.buf.slice(this.start, this.len), sample: this.sample });
+    const b = this.unread();
+    if (
+      this.start >= 0 &&
+      this.cur &&
+      b.length > this.start &&
+      b.length - this.start <= this.maxFrame
+    )
+      frames.push({ data: b.slice(this.start), sample: this.sample });
     this.start = -1;
     this.cur = null;
     return frames;
   }
 
+  /** The bytes held, read or not yet framed: about a frame and a network read. */
+  get held(): number {
+    return this.len - this.base;
+  }
+
+  /** The unread bytes, as a view (no copy). */
+  private unread(): Uint8Array {
+    return this.buf.subarray(this.base, this.len);
+  }
+
   private append(bytes: Uint8Array): void {
     if (this.len + bytes.length > this.buf.length) {
-      const next = new Uint8Array(Math.max(this.buf.length * 2, this.len + bytes.length));
-      next.set(this.buf.subarray(0, this.len));
-      this.buf = next;
+      this.compact();
+      if (this.len + bytes.length > this.buf.length) {
+        const next = new Uint8Array(Math.max(this.buf.length * 2, this.len + bytes.length));
+        next.set(this.buf.subarray(0, this.len));
+        this.buf = next;
+      }
     }
     this.buf.set(bytes, this.len);
     this.len += bytes.length;
@@ -141,18 +167,18 @@ export class FlacFrames {
 
   /** The marker and the metadata blocks; false until they have all arrived. */
   private readInfo(): boolean {
-    const b = this.buf;
-    if (this.len < 8) return false;
+    const b = this.unread();
+    if (b.length < 8) return false;
     if (b[0] !== 0x66 || b[1] !== 0x4c || b[2] !== 0x61 || b[3] !== 0x43)
       throw new Error("not a FLAC stream");
     let p = 4;
     let streamInfo: Uint8Array | null = null;
     for (;;) {
-      if (this.len < p + 4) return false;
+      if (b.length < p + 4) return false;
       const last = (b[p] & 0x80) !== 0;
       const type = b[p] & 0x7f;
       const size = (b[p + 1] << 16) | (b[p + 2] << 8) | b[p + 3];
-      if (this.len < p + 4 + size) return false;
+      if (b.length < p + 4 + size) return false;
       if (type === 0 && size >= 34) streamInfo = b.slice(p + 4, p + 4 + 34);
       p += 4 + size;
       if (last) break;
@@ -164,6 +190,13 @@ export class FlacFrames {
     const sampleRate = (s[10] << 12) | (s[11] << 4) | (s[12] >> 4);
     const channels = ((s[12] >> 1) & 7) + 1;
     const bitsPerSample = (((s[12] & 1) << 4) | (s[13] >> 4)) + 1;
+    // an encoder that didn't record its largest frame: a frame stored uncompressed (each channel's
+    // samples, a side channel's extra bit, the headers) is as large as one can be
+    const maxFrame = (s[7] << 16) | (s[8] << 8) | s[9];
+    this.maxFrame =
+      maxFrame > 0
+        ? maxFrame
+        : Math.ceil((maxBlock * channels * (bitsPerSample + 1)) / 8) + 32 + 8 * channels;
     const totalFrames =
       (s[13] & 0xf) * 2 ** 32 + ((s[14] << 24) >>> 0) + ((s[15] << 16) | (s[16] << 8) | s[17]);
     const description = new Uint8Array(42);
@@ -175,10 +208,10 @@ export class FlacFrames {
   }
 
   private readFrames(out: FlacFrame[]): void {
-    const b = this.buf;
+    let b = this.unread();
     if (this.start < 0) {
       // the first frame starts where the metadata ended
-      const h = header(b, 0, this.len);
+      const h = header(b, 0, b.length);
       if (h === undefined) return;
       if (h === null) throw new Error("no frame after the metadata");
       this.start = 0;
@@ -193,33 +226,76 @@ export class FlacFrames {
       let found = -1;
       let next: Header | null = null;
       const expected = cur.variable ? cur.num + cur.size : cur.num + 1;
-      for (; q + 16 <= this.len; q++) {
+      for (; q + 16 <= b.length; q++) {
         if (b[q] !== 0xff) continue;
-        const h = header(b, q, this.len);
+        const h = header(b, q, b.length);
         if (h && h.num === expected) {
           found = q;
           next = h;
           break;
         }
       }
-      if (found < 0) {
-        // wait for more bytes; at the stream's end, end() takes the rest as the last frame
-        this.scan = Math.max(this.minFrame, q);
-        return;
+      if (found >= 0 && next) {
+        out.push({ data: b.slice(this.start, found), sample: this.sample });
+        this.sample += cur.size;
+        this.cur = next;
+        this.drop(found);
+        b = this.unread();
+        this.start = 0;
+        this.scan = this.minFrame;
+        continue;
       }
-      out.push({ data: b.slice(this.start, found), sample: this.sample });
-      this.sample += cur.size;
-      this.cur = next;
-      this.drop(found);
-      this.start = 0;
-      this.scan = this.minFrame;
+      // A FRAME LONGER THAN ONE CAN BE (0.15.0, the 0.14 re-score): the header that should follow
+      // was lost (a missing frame, a flipped bit). The next header that passes its CRC with a
+      // later number is taken, and the damaged stretch before it is dropped: the decoder, which
+      // refuses a bad frame and the whole decode with it, never sees it, and the bytes held stay
+      // near a frame. Normal reading stays as strict as it was: only past a frame's largest size
+      // is a later number believed. With none within a few frames' worth, the stream is damaged.
+      if (b.length - this.start > this.maxFrame + 16) {
+        const r = this.resync(b, cur, expected);
+        if (r) {
+          this.sample = cur.variable ? r.h.num : r.h.num * cur.size;
+          this.cur = r.h;
+          this.drop(r.at);
+          b = this.unread();
+          this.start = 0;
+          this.scan = this.minFrame;
+          continue;
+        }
+        if (b.length - this.start > 4 * this.maxFrame + 16)
+          throw new Error("a damaged FLAC stream: no frame where one should be");
+      }
+      // wait for more bytes; at the stream's end, end() takes the rest as the last frame
+      this.scan = Math.max(this.minFrame, q);
+      return;
     }
   }
 
-  /** Forget the bytes before `p`. */
+  /** The first header after the current frame's start whose number comes after `expected`, within
+   *  a plausible reach (a few thousand frames), its CRC checked by header(). */
+  private resync(b: Uint8Array, cur: Header, expected: number): { at: number; h: Header } | null {
+    const reach = cur.variable ? 4096 * cur.size : 4096;
+    for (let q = this.start + this.minFrame; q + 16 <= b.length; q++) {
+      if (b[q] !== 0xff) continue;
+      const h = header(b, q, b.length);
+      if (h && h.variable === cur.variable && h.num > expected && h.num <= expected + reach)
+        return { at: q, h };
+    }
+    return null;
+  }
+
+  /** Forget the unread bytes before `p`. */
   private drop(p: number): void {
-    this.buf.copyWithin(0, p, this.len);
-    this.len -= p;
+    this.base += p;
     if (this.scan >= p) this.scan -= p;
+    if (this.base > this.buf.length / 2) this.compact();
+  }
+
+  /** Move the unread bytes to the buffer's start. */
+  private compact(): void {
+    if (this.base === 0) return;
+    this.buf.copyWithin(0, this.base, this.len);
+    this.len -= this.base;
+    this.base = 0;
   }
 }
