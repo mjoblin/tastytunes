@@ -457,6 +457,9 @@ The complete list:
 | Library browsing | your media servers, on your LAN | always (it's the app) |
 | Lyrics | lrclib.net | on by default; toggleable |
 | Liner notes | musicbrainz.org · wikidata.org · wikipedia.org | on by default; toggleable |
+| Artist photos | musicbrainz.org · wikidata.org · wikipedia.org | with Liner notes on, for every artist in your library |
+| Picture suggestions | commons.wikimedia.org | with Liner notes on, when you look for an artist's picture |
+| fanart.tv photos | fanart.tv | off until you add your own key |
 | Missing album art | musicbrainz.org · coverartarchive.org | on by default; toggleable |
 | Radio directory | radio-browser.info | when you search or browse Radio |
 | Station logos | each station's own website or image host | when a station is shown |
