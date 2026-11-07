@@ -567,4 +567,18 @@ export const ONE_HOME = [
       code: 'await queueAdd(host, udn, id, "PLAY_NOW");',
     },
   },
+  {
+    id: "upnp-shapes",
+    was: "none (0.15.0, the hygiene pass: the demo and the tests' fake streamer each kept a copy of the media server's answers, and a live truth reached the second only if someone remembered)",
+    // a SOAP envelope, a DIDL-Lite document or a ContentDirectory answer spelled out
+    selector: strings(String.raw`/<s:Envelope|<DIDL-Lite|<u:\w+Response/`),
+    files: ["^src/main/servers/", "^src/main/media/__fixtures__/"],
+    allow: ["^src/main/servers/demo/upnpShapes\\.ts$"],
+    message:
+      "A media server's answers (the SOAP envelope, DIDL-Lite, the ContentDirectory's responses) come from servers/demo/upnpShapes, shared by the demo and the tests' fake",
+    bad: {
+      file: "src/main/media/__fixtures__/fakeStreamer.ts",
+      code: "const soap = (inner) => `<s:Envelope><s:Body>${inner}</s:Body></s:Envelope>`;",
+    },
+  },
 ];

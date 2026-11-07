@@ -1,11 +1,13 @@
+import { QUEUE_LEN, PLAYING_QUEUE_ID, type Dict } from "./demoShared";
 import {
-  QUEUE_LEN,
-  PLAYING_QUEUE_ID,
-  type Dict,
-  xmlEsc,
-  durFmt,
+  deviceDescription,
+  didlAlbumTrack,
   didlContainer,
-} from "./demoShared";
+  didlLooseTrack,
+  durFmt,
+  flacRes,
+  xmlEsc,
+} from "./upnpShapes";
 import { DISC_ART_PATH } from "./demoDisc";
 
 // The built-in demo's LIBRARY (split out of demoStreamer.ts 2026-09-13; the
@@ -643,13 +645,6 @@ export function buildDemoLibrary(host: string) {
   const albumById = (id: string): Album | undefined =>
     LIB_ALBUMS.find((a) => a.id === id) ?? SYN_ALBUMS.find((a) => a.id === id);
 
-  // Asset's artist block for a track (see the mock's didlArtists): with an
-  // album artist, AlbumArtist role + plain performers + Composer role and a
-  // dc:creator repeating the performers; without, one plain element.
-  const didlArtists = (md: Dict): string =>
-    md.albumArtist
-      ? `<dc:creator>${xmlEsc(String(md.artist))}</dc:creator><upnp:artist role="AlbumArtist">${xmlEsc(String(md.albumArtist))}</upnp:artist><upnp:artist>${xmlEsc(String(md.artist))}</upnp:artist>${md.composer ? `<upnp:artist role="Composer">${xmlEsc(String(md.composer))}</upnp:artist>` : ""}`
-      : `<upnp:artist>${xmlEsc(String(md.artist))}</upnp:artist>${md.composer ? `<upnp:artist role="Composer">${xmlEsc(String(md.composer))}</upnp:artist>` : ""}`;
   // The primary <res> with Asset's DLNA attributes (mirrors the mock): FLAC
   // 16/44.1 by default; `mp3: true` = MP3 320 kbps (Neon Track 5).
   // Variants mirror the mock: mp3, hires (FLAC 24/96), and Asset's m4a
@@ -662,25 +657,33 @@ export function buildDemoLibrary(host: string) {
         ? `<res duration="${durFmt(dur)}" size="${dur * (md.alac ? 400000 : 32000)}" bitrate="576000" bitsPerSample="24" sampleFrequency="96000" nrAudioChannels="2" protocolInfo="http-get:*:audio/mp4:DLNA.ORG_PN=AAC_ISO;DLNA.ORG_OP=01">file:///tmp/usm/1/${alb.id}/${n}.m4a</res>`
         : md.hires
           ? `<res duration="${durFmt(dur)}" size="${dur * 700000}" bitrate="576000" bitsPerSample="24" sampleFrequency="96000" nrAudioChannels="2" protocolInfo="http-get:*:audio/x-flac:DLNA.ORG_PN=FLAC;DLNA.ORG_OP=01">file:///tmp/usm/1/${alb.id}/${n}.flac</res>`
-          : `<res duration="${durFmt(dur)}" size="${dur * 100000}" bitrate="176400" bitsPerSample="16" sampleFrequency="44100" nrAudioChannels="2" protocolInfo="http-get:*:audio/x-flac:DLNA.ORG_PN=FLAC;DLNA.ORG_OP=01">file:///tmp/usm/1/${alb.id}/${n}.flac</res>`;
+          : flacRes(dur, `file:///tmp/usm/1/${alb.id}/${n}.flac`);
   };
   const didlTrack = (alb: Album, n: number): string => {
     const md = alb.track(n);
-    return `<item id="${alb.id}-t${n}" parentID="${alb.id}" restricted="true"><dc:title>${xmlEsc(String(md.title))}</dc:title><upnp:class>object.item.audioItem.musicTrack</upnp:class>${didlArtists(md)}<upnp:album>${xmlEsc(String(md.album))}</upnp:album>${(alb.genres ?? []).map((g) => `<upnp:genre>${xmlEsc(g)}</upnp:genre>`).join("")}<upnp:originalTrackNumber>${String(md.trackNo ?? n)}</upnp:originalTrackNumber>${md.disc ? `<upnp:originalDiscNumber>${String(md.disc)}</upnp:originalDiscNumber><upnp:originalDiscCount>${String(md.discCount)}</upnp:originalDiscCount>` : ""}<upnp:albumArtURI>${String(md.art_url)}</upnp:albumArtURI>${didlRes(alb, n, md)}</item>`;
+    const named = (v: unknown): string | undefined => (v ? String(v) : undefined);
+    return didlAlbumTrack(
+      `${alb.id}-t${n}`,
+      alb.id,
+      {
+        title: String(md.title),
+        artist: String(md.artist),
+        albumArtist: named(md.albumArtist),
+        composer: named(md.composer),
+        album: String(md.album),
+        trackNo: String(md.trackNo ?? n),
+        disc: md.disc ? { n: String(md.disc), count: String(md.discCount) } : undefined,
+        art: String(md.art_url),
+      },
+      alb.genres,
+      didlRes(alb, n, md),
+    );
   };
 
   const ARTIST_COUNT = 400;
   const artistName = (n: number): string =>
     n % 7 === 0 ? `Artist & Friends ${n}` : `Demo Artist ${n}`;
 
-  const didlLooseTrack = (
-    id: string,
-    parent: string,
-    title: string,
-    artist: string,
-    artU: string,
-  ): string =>
-    `<item id="${id}" parentID="${parent}" restricted="true"><dc:title>${xmlEsc(title)}</dc:title><upnp:class>object.item.audioItem.musicTrack</upnp:class><upnp:artist>${xmlEsc(artist)}</upnp:artist><upnp:albumArtURI>${artU}</upnp:albumArtURI><res duration="0:03:00.000" protocolInfo="*:*:*:*">file:///tmp/usm/1/singles/${id}.flac</res></item>`;
   const SINGLES: Array<[string, string, string]> = [
     ["sng-1", "Zeta Song", "The Amber Collective"],
     ["sng-2", "Alpha Song", "The Neon Collective"],
@@ -805,45 +808,23 @@ export function buildDemoLibrary(host: string) {
     return null;
   }
 
-  const DESCRIPTION_XML = `<?xml version="1.0"?>
-<root xmlns="urn:schemas-upnp-org:device-1-0">
-  <specVersion><major>1</major><minor>0</minor></specVersion>
-  <device>
-    <deviceType>urn:schemas-upnp-org:device:MediaRenderer:1</deviceType>
-    <friendlyName>Demo library</friendlyName>
-    <manufacturer>TastyTunes</manufacturer>
-    <UDN>uuid:demo-udn-1</UDN>
-    <serviceList>
-      <service>
-        <serviceType>urn:schemas-upnp-org:service:ContentDirectory:1</serviceType>
-        <serviceId>urn:upnp-org:serviceId:ContentDirectory</serviceId>
-        <controlURL>/upnp/control</controlURL>
-        <eventSubURL>/upnp/event</eventSubURL>
-        <SCPDURL>/upnp/scpd.xml</SCPDURL>
-      </service>
-    </serviceList>
-  </device>
-</root>`;
+  const DESCRIPTION_XML = deviceDescription({
+    deviceType: "MediaRenderer",
+    name: "Demo library",
+    manufacturer: "TastyTunes",
+    udn: "demo-udn-1",
+    base: "/upnp",
+    eventing: true,
+  });
 
-  const DESCRIPTION2_XML = `<?xml version="1.0"?>
-<root xmlns="urn:schemas-upnp-org:device-1-0">
-  <specVersion><major>1</major><minor>0</minor></specVersion>
-  <device>
-    <deviceType>urn:schemas-upnp-org:device:MediaServer:1</deviceType>
-    <friendlyName>Demo NAS</friendlyName>
-    <manufacturer>TastyTunes</manufacturer>
-    <UDN>uuid:demo-udn-2</UDN>
-    <serviceList>
-      <service>
-        <serviceType>urn:schemas-upnp-org:service:ContentDirectory:1</serviceType>
-        <serviceId>urn:upnp-org:serviceId:ContentDirectory</serviceId>
-        <controlURL>/upnp2/control</controlURL>
-        <eventSubURL>/upnp2/event</eventSubURL>
-        <SCPDURL>/upnp2/scpd.xml</SCPDURL>
-      </service>
-    </serviceList>
-  </device>
-</root>`;
+  const DESCRIPTION2_XML = deviceDescription({
+    deviceType: "MediaServer",
+    name: "Demo NAS",
+    manufacturer: "TastyTunes",
+    udn: "demo-udn-2",
+    base: "/upnp2",
+    eventing: true,
+  });
 
   return {
     art,

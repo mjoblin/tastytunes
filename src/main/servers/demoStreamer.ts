@@ -5,7 +5,9 @@
 //
 // Derived from dev/mock-streamer.mjs (the harness mock), minus that file's
 // env-var scenario knobs. Behavioral fixes discovered in either copy should
-// be mirrored into the other.
+// be mirrored into the other. Its media servers' wire shapes (the SOAP
+// envelope, DIDL-Lite, the ContentDirectory's answers) are demo/upnpShapes',
+// shared with the unit tests' fake streamer (0.15.0).
 //
 // The server binds an ephemeral loopback port; art URLs embed the port, so
 // all state is built only after listen() reports it.
@@ -13,7 +15,8 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { AddressInfo } from "node:net";
 import { WebSocketServer } from "ws";
 import { buildDemoLibrary } from "./demo/demoLibrary";
-import { PLAYING_QUEUE_ID, type Dict, xmlEsc, didlContainer } from "./demo/demoShared";
+import { PLAYING_QUEUE_ID, type Dict } from "./demo/demoShared";
+import { cd, didlContainer, didlWrap, soapEnvelope } from "./demo/upnpShapes";
 import { DISC, discPlaying, discRelease, discStopped } from "./demo/demoDisc";
 
 // StreamMagic's query parser decodes %-escapes but takes '+' LITERALLY
@@ -25,9 +28,6 @@ function rawParam(u: URL, key: string): string | null {
   return m ? decodeURIComponent(m[1].replace(/\+/g, "%2B")) : null;
 }
 type QueueItem = { id: number; position: number; srcId?: string; metadata: Dict };
-
-const didlWrap = (inner: string): string =>
-  `<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/">${inner}</DIDL-Lite>`;
 
 const readBody = (req: IncomingMessage): Promise<string> =>
   new Promise((resolve) => {
@@ -442,23 +442,19 @@ function buildDemo(host: string): {
         const body = await readBody(req);
         const soap3 = (inner: string): void => {
           res.writeHead(200, { "content-type": "text/xml" });
-          res.end(
-            `<?xml version="1.0"?>
-<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body>${inner}</s:Body></s:Envelope>`,
-          );
+          res.end(soapEnvelope(inner));
         };
         if (body.includes("GetSearchCapabilities"))
           return soap3(
-            '<u:GetSearchCapabilitiesResponse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"><SearchCaps>dc:creator,dc:date,dc:title,upnp:album,upnp:actor,upnp:artist,upnp:class,upnp:genre,@id,@parentID,@refID</SearchCaps></u:GetSearchCapabilitiesResponse>',
+            cd.searchCaps(
+              "dc:creator,dc:date,dc:title,upnp:album,upnp:actor,upnp:artist,upnp:class,upnp:genre,@id,@parentID,@refID",
+            ),
           );
         if (body.includes("GetSortCapabilities"))
           return soap3(
-            '<u:GetSortCapabilitiesResponse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"><SortCaps>dc:title,dc:date,upnp:class,upnp:album,upnp:originalTrackNumber</SortCaps></u:GetSortCapabilitiesResponse>',
+            cd.sortCaps("dc:title,dc:date,upnp:class,upnp:album,upnp:originalTrackNumber"),
           );
-        if (body.includes("GetSystemUpdateID"))
-          return soap3(
-            '<u:GetSystemUpdateIDResponse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"><Id>3</Id></u:GetSystemUpdateIDResponse>',
-          );
+        if (body.includes("GetSystemUpdateID")) return soap3(cd.systemUpdateId(3));
         if (body.includes("<u:Search")) {
           const q = (body.match(/contains &quot;(.*?)&quot;/)?.[1] ?? "").toLowerCase();
           const scope = body.match(/derivedfrom &quot;(.*?)&quot;/)?.[1] ?? "";
@@ -494,9 +490,7 @@ function buildDemo(host: string): {
                   parts.push(didl3Track(a, i));
               });
           }
-          return soap3(
-            `<u:SearchResponse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"><Result>${xmlEsc(didlWrap(parts.join("")))}</Result><NumberReturned>${parts.length}</NumberReturned><TotalMatches>${parts.length}</TotalMatches><UpdateID>3</UpdateID></u:SearchResponse>`,
-          );
+          return soap3(cd.search(didlWrap(parts.join("")), parts.length, parts.length, 3));
         }
         const objectId = body.match(/<ObjectID>(.*?)<\/ObjectID>/)?.[1] ?? "0";
         const flag = body.match(/<BrowseFlag>(.*?)<\/BrowseFlag>/)?.[1] ?? "BrowseDirectChildren";
@@ -506,31 +500,17 @@ function buildDemo(host: string): {
           res.writeHead(500);
           return res.end("<error/>");
         }
-        return soap3(
-          `<u:BrowseResponse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"><Result>${xmlEsc(didlWrap(all.join("")))}</Result><NumberReturned>${all.length}</NumberReturned><TotalMatches>${all.length}</TotalMatches><UpdateID>3</UpdateID></u:BrowseResponse>`,
-        );
+        return soap3(cd.browse(didlWrap(all.join("")), all.length, all.length, 3));
       }
       if (u.pathname === "/upnp2/control" && req.method === "POST") {
         const body = await readBody(req);
         const soap2 = (inner: string): void => {
           res.writeHead(200, { "content-type": "text/xml" });
-          res.end(
-            `<?xml version="1.0"?>
-<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body>${inner}</s:Body></s:Envelope>`,
-          );
+          res.end(soapEnvelope(inner));
         };
-        if (body.includes("GetSearchCapabilities"))
-          return soap2(
-            '<u:GetSearchCapabilitiesResponse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"><SearchCaps>*</SearchCaps></u:GetSearchCapabilitiesResponse>',
-          );
-        if (body.includes("GetSortCapabilities"))
-          return soap2(
-            '<u:GetSortCapabilitiesResponse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"><SortCaps></SortCaps></u:GetSortCapabilitiesResponse>',
-          );
-        if (body.includes("GetSystemUpdateID"))
-          return soap2(
-            '<u:GetSystemUpdateIDResponse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"><Id>7</Id></u:GetSystemUpdateIDResponse>',
-          );
+        if (body.includes("GetSearchCapabilities")) return soap2(cd.searchCaps("*"));
+        if (body.includes("GetSortCapabilities")) return soap2(cd.sortCaps(""));
+        if (body.includes("GetSystemUpdateID")) return soap2(cd.systemUpdateId(7));
         if (body.includes("<u:Search")) {
           const q = (body.match(/contains &quot;(.*?)&quot;/)?.[1] ?? "").toLowerCase();
           const scope = body.match(/derivedfrom &quot;(.*?)&quot;/)?.[1] ?? "";
@@ -568,9 +548,7 @@ function buildDemo(host: string): {
                   parts.push(didlTrack(a, n));
               }
           }
-          return soap2(
-            `<u:SearchResponse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"><Result>${xmlEsc(didlWrap(parts.join("")))}</Result><NumberReturned>${parts.length}</NumberReturned><TotalMatches>${parts.length}</TotalMatches><UpdateID>7</UpdateID></u:SearchResponse>`,
-          );
+          return soap2(cd.search(didlWrap(parts.join("")), parts.length, parts.length, 7));
         }
         const objectId = body.match(/<ObjectID>(.*?)<\/ObjectID>/)?.[1] ?? "0";
         const flag = body.match(/<BrowseFlag>(.*?)<\/BrowseFlag>/)?.[1] ?? "BrowseDirectChildren";
@@ -580,9 +558,7 @@ function buildDemo(host: string): {
           res.writeHead(500);
           return res.end("<error/>");
         }
-        return soap2(
-          `<u:BrowseResponse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"><Result>${xmlEsc(didlWrap(all.join("")))}</Result><NumberReturned>${all.length}</NumberReturned><TotalMatches>${all.length}</TotalMatches><UpdateID>7</UpdateID></u:BrowseResponse>`,
-        );
+        return soap2(cd.browse(didlWrap(all.join("")), all.length, all.length, 7));
       }
       if (u.pathname === "/smoip/system/upnp") {
         res.writeHead(200, { "content-type": "application/json" });
@@ -620,19 +596,10 @@ function buildDemo(host: string): {
         const body = await readBody(req);
         const soap = (inner: string): void => {
           res.writeHead(200, { "content-type": "text/xml" });
-          res.end(
-            `<?xml version="1.0"?>
-<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body>${inner}</s:Body></s:Envelope>`,
-          );
+          res.end(soapEnvelope(inner));
         };
-        if (body.includes("GetSearchCapabilities"))
-          return soap(
-            '<u:GetSearchCapabilitiesResponse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"><SearchCaps>*</SearchCaps></u:GetSearchCapabilitiesResponse>',
-          );
-        if (body.includes("GetSortCapabilities"))
-          return soap(
-            '<u:GetSortCapabilitiesResponse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"><SortCaps></SortCaps></u:GetSortCapabilitiesResponse>',
-          );
+        if (body.includes("GetSearchCapabilities")) return soap(cd.searchCaps("*"));
+        if (body.includes("GetSortCapabilities")) return soap(cd.sortCaps(""));
         if (body.includes("<u:Search")) {
           // scope-aware like Asset: results only for the class in `derivedfrom`,
           // and only on the fields the criteria actually reference
@@ -693,9 +660,7 @@ function buildDemo(host: string): {
                 );
             }
           }
-          return soap(
-            `<u:SearchResponse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"><Result>${xmlEsc(didlWrap(parts.join("")))}</Result><NumberReturned>${parts.length}</NumberReturned><TotalMatches>${parts.length}</TotalMatches><UpdateID>1</UpdateID></u:SearchResponse>`,
-          );
+          return soap(cd.search(didlWrap(parts.join("")), parts.length, parts.length, 1));
         }
         const objectId = body.match(/<ObjectID>(.*?)<\/ObjectID>/)?.[1] ?? "0";
         const flag = body.match(/<BrowseFlag>(.*?)<\/BrowseFlag>/)?.[1] ?? "BrowseDirectChildren";
@@ -710,10 +675,7 @@ function buildDemo(host: string): {
         const parts = all.slice(start, start + 150);
         const result = didlWrap(parts.join(""));
         res.writeHead(200, { "content-type": "text/xml" });
-        return res.end(
-          `<?xml version="1.0"?>
-<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body><u:BrowseResponse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"><Result>${xmlEsc(result)}</Result><NumberReturned>${parts.length}</NumberReturned><TotalMatches>${all.length}</TotalMatches><UpdateID>1</UpdateID></u:BrowseResponse></s:Body></s:Envelope>`,
-        );
+        return res.end(soapEnvelope(cd.browse(result, parts.length, all.length, 1)));
       }
       // Tone/EQ capability spec + state (mirrors the real Evo; reads and
       // atomic writes, full new state echoed back).
