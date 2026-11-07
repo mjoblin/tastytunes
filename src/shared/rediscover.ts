@@ -7,6 +7,7 @@ import {
   type MediaNode,
   type PlayStats,
 } from "./model";
+import { nameKey } from "@shared/keys";
 
 /**
  * The History screen's REDISCOVER sections (0.8.0): albums worth coming back to,
@@ -45,7 +46,6 @@ const UNFINISHED_MIN_TRACKS = 4;
 /** More from artists you play: this many of your most-played artists. */
 const TOP_ARTISTS = 12;
 
-const lc = (s: string | null | undefined): string => (s ?? "").trim().toLowerCase();
 const VARIOUS = /^various( artists)?$/;
 
 export function shelvesFor(
@@ -65,27 +65,27 @@ export function shelvesFor(
     // the scale fixture's first run, 0.13.0)
     const byAlbum = new Map<string, MediaNode[]>();
     for (const t of pool.tracks) {
-      const k = lc(t.album);
+      const k = nameKey(t.album);
       const list = byAlbum.get(k);
       if (list) list.push(t);
       else byAlbum.set(k, [t]);
     }
     const albumsByTitle = new Map<string, MediaNode[]>();
     for (const a of pool.albums) {
-      const k = lc(a.title);
+      const k = nameKey(a.title);
       const list = albumsByTitle.get(k);
       if (list) list.push(a);
       else albumsByTitle.set(k, [a]);
     }
     for (const album of pool.albums) {
-      const id = `${lc(album.title)}|${lc(album.artist)}`;
+      const id = `${nameKey(album.title)}|${nameKey(album.artist)}`;
       if (seen.has(id)) continue;
       seen.add(id);
       const t = albumTally(
         album,
         {
-          albums: albumsByTitle.get(lc(album.title)) ?? [album],
-          tracks: byAlbum.get(lc(album.title)) ?? [],
+          albums: albumsByTitle.get(nameKey(album.title)) ?? [album],
+          tracks: byAlbum.get(nameKey(album.title)) ?? [],
         },
         stats,
       );
@@ -109,7 +109,7 @@ export function shelvesFor(
 
   const artistPlays = new Map<string, number>();
   for (const r of rows) {
-    const a = lc(r.album.artist);
+    const a = nameKey(r.album.artist);
     if (r.plays > 0 && a && !VARIOUS.test(a))
       artistPlays.set(a, (artistPlays.get(a) ?? 0) + r.plays);
   }
@@ -120,11 +120,11 @@ export function shelvesFor(
       .map(([a], i) => [a, i]),
   );
   const moreFrom = rows
-    .filter((r) => r.plays === 0 && rank.has(lc(r.album.artist)))
+    .filter((r) => r.plays === 0 && rank.has(nameKey(r.album.artist)))
     .sort(
       (x, y) =>
-        (rank.get(lc(x.album.artist)) ?? TOP_ARTISTS) -
-          (rank.get(lc(y.album.artist)) ?? TOP_ARTISTS) ||
+        (rank.get(nameKey(x.album.artist)) ?? TOP_ARTISTS) -
+          (rank.get(nameKey(y.album.artist)) ?? TOP_ARTISTS) ||
         (Number(y.album.year) || 0) - (Number(x.album.year) || 0) ||
         x.album.title.localeCompare(y.album.title),
     );

@@ -100,6 +100,7 @@ import {
   type SearchLate,
 } from "@/components/library/useLibrarySearch";
 import { menuAt } from "@/lib/menuAt";
+import { nameKey } from "@shared/keys";
 
 // Crumbs keep the entered node so an album level can render its header
 // (art, artist, year) without re-fetching metadata.
@@ -869,10 +870,8 @@ export function LibraryScreen(): React.JSX.Element {
     const kids = album
       ? await tt.mediaBrowse(udn, album.id, [album.title]).catch(() => null)
       : null;
-    const title = track.title.trim().toLowerCase();
-    const same = (kids ?? []).filter(
-      (k) => !k.isContainer && k.title.trim().toLowerCase() === title,
-    );
+    const title = nameKey(track.title);
+    const same = (kids ?? []).filter((k) => !k.isContainer && nameKey(k.title) === title);
     // twin titles on one album are real (a reprise): the position tells them apart
     const start = same.find((k) => trackPosition(k) === trackPosition(track)) ?? same[0];
     if (!album || !start) {

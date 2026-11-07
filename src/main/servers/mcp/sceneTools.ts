@@ -2,6 +2,7 @@ import { z } from "zod";
 import { DISPLAY_SCENE_IDS, type DisplayScene } from "@shared/model";
 import { SCENE_TEXT, orderScenes, sceneText } from "@shared/scenes";
 import { type ToolContext, type ToolImpl, ok, err, appState, defineTool } from "./toolkit";
+import { nameKey } from "@shared/keys";
 
 // The MCP bridge's scene tools (2026-09-14, the catch-up round after the
 // visualizer landed): what the scenes are, which one shows on the wall
@@ -46,7 +47,7 @@ export function sceneTools(ctx: ToolContext): Record<string, ToolImpl> {
           ),
       },
       handler: (a) => {
-        const scene = String(a.scene).trim().toLowerCase();
+        const scene = nameKey(String(a.scene));
         if (!(DISPLAY_SCENE_IDS as readonly string[]).includes(scene))
           return err(
             `Unknown scene '${String(a.scene)}'. list_scenes gives the ids: ${DISPLAY_SCENE_IDS.join(", ")}.`,

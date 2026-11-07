@@ -23,6 +23,7 @@ import {
 } from "@shared/model";
 import { isRadioMetadata, radioTrackTitle, trackTitle, type ZonePlayState } from "@shared/smoip";
 import { getSettings } from "./persist";
+import { nameKey } from "@shared/keys";
 
 /**
  * The listening record: a full local play log as DURABLE USER DATA — the
@@ -614,8 +615,7 @@ export const listeningRecord = {
     streamer: string | null,
     slot: number,
   ): Promise<{ album: string; artist: string | null; artUrl: string | null } | null> {
-    const same = (a: string, b: string): boolean =>
-      a.trim().toLowerCase() === b.trim().toLowerCase();
+    const same = (a: string, b: string): boolean => nameKey(a) === nameKey(b);
     const { events } = await this.readAll();
     for (let i = events.length - 1; i >= 0; i--) {
       const e = events[i];

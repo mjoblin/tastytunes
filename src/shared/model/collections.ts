@@ -6,6 +6,7 @@ import type { ZonePlayState } from "../smoip";
 import { contentRowsHash, isRadioMetadata, radioTrackTitle } from "../smoip";
 import type { MediaNode } from "./media";
 import { type CopyFacts, artAddress, artHostOf, contradicts, copiesOf, nodeFacts } from "./copies";
+import { nameKey } from "@shared/keys";
 
 // --------------------------------------------------------------- recently played
 
@@ -54,7 +55,7 @@ export function recentMatchesPlayState(e: RecentTrack, ps: ZonePlayState | null)
   const md = ps?.metadata;
   if (!md) return false;
   const eq = (a: string | null | undefined, b: string | null | undefined): boolean =>
-    (a ?? "").trim().toLowerCase() === (b ?? "").trim().toLowerCase();
+    nameKey(a) === nameKey(b);
   const isRadio = isRadioMetadata(md);
   if (e.isRadio !== isRadio) return false;
   if (isRadio) {
@@ -120,10 +121,9 @@ export type Favorite = FavoriteStation | FavoriteMedia;
 export function favoriteContentKey(
   f: Favorite | Pick<FavoriteMedia, "kind" | "title" | "artist" | "album">,
 ): string {
-  const lc = (s: string | null | undefined): string => (s ?? "").trim().toLowerCase();
   if (f.kind === "station") return `station:${f.url}`;
-  if (f.kind === "album") return `album:${lc(f.title)}:${lc(f.artist)}`;
-  return `track:${lc(f.title)}:${lc(f.artist)}:${lc(f.album)}`;
+  if (f.kind === "album") return `album:${nameKey(f.title)}:${nameKey(f.artist)}`;
+  return `track:${nameKey(f.title)}:${nameKey(f.artist)}:${nameKey(f.album)}`;
 }
 
 /**
@@ -362,8 +362,7 @@ export function playlistContentHash(items: PlaylistItem[]): string {
  * way and the healing path can be shared.
  */
 export function playlistItemKey(i: PlaylistItem): string {
-  const lc = (s: string | null | undefined): string => (s ?? "").trim().toLowerCase();
-  return `track:${lc(i.title)}:${lc(i.artist)}:${lc(i.album)}`;
+  return `track:${nameKey(i.title)}:${nameKey(i.artist)}:${nameKey(i.album)}`;
 }
 
 /**

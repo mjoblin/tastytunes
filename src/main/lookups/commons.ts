@@ -2,6 +2,7 @@ import type { PictureOffer } from "@shared/model";
 import { DiskCache } from "./diskCache";
 import { fetchArtistInfo } from "./artistInfo";
 import { getJson, WD, WIKI } from "./mb";
+import { nameKey } from "@shared/keys";
 
 // MORE PHOTOS TO CHOOSE FROM (0.14.0, his call 2026-10-25 on a user's email, Plex's picture
 // editor): the photos in the artist's Wikimedia Commons category, found the way the article is
@@ -90,7 +91,7 @@ async function categoryOf(articleTitle: string): Promise<string | null | false> 
 
 /** The photos in an artist's Commons category, each with its size; empty with none found. */
 export async function fetchCommonsPhotos(artist: string): Promise<PictureOffer[]> {
-  const key = artist.trim().toLowerCase();
+  const key = nameKey(artist);
   if (cache.has(key)) return cache.get(key) ?? [];
   const info = await fetchArtistInfo(artist);
   const article = info?.wikipediaUrl

@@ -13,6 +13,7 @@ import { audioCaps, type ZonePlayState } from "@shared/smoip";
 import type { DeviceManager } from "../../device/deviceManager";
 import { getSettings } from "../../data/persist";
 import { pools as indexPools, revalidate } from "../../media/mediaIndex";
+import { nameKey } from "@shared/keys";
 
 // The MCP bridge's TOOLKIT (2026-09-13, the bridge split: 74 tool implementations
 // had sat in one 2,400-line member): the tool result and implementation shapes,
@@ -126,16 +127,14 @@ export function streamerKeep(
   devices: ReadonlyArray<{ udn: string; friendlyName: string }>,
 ): ((e: { streamer?: string | null }) => boolean) | null {
   if (typeof arg !== "string" || arg.trim() === "") return null;
-  const needle = arg.trim().toLowerCase();
+  const needle = nameKey(arg);
   if (needle === "before-0.8.0") return (e) => e.streamer == null;
   const byName = [...getSettings().knownDevices, ...devices].find(
-    (d) => d.friendlyName.trim().toLowerCase() === needle,
+    (d) => nameKey(d.friendlyName) === needle,
   );
   const udn = byName?.udn ?? arg.trim();
   return (e) => e.streamer === udn;
 }
-
-export const lc = (x: string | null | undefined): string => (x ?? "").trim().toLowerCase();
 
 const nodeIn = (pool: MediaIndexPools, id: string): MediaNode | null =>
   pool.albums.find((n) => n.id === id) ??
@@ -166,9 +165,9 @@ export async function freshObjectId(
     node && after
       ? (node.isContainer ? [...after.albums, ...after.artists] : after.tracks).find(
           (n) =>
-            lc(n.title) === lc(node.title) &&
-            lc(n.artist) === lc(node.artist) &&
-            (node.isContainer || lc(n.album) === lc(node.album)),
+            nameKey(n.title) === nameKey(node.title) &&
+            nameKey(n.artist) === nameKey(node.artist) &&
+            (node.isContainer || nameKey(n.album) === nameKey(node.album)),
         )
       : null;
   if (!again)

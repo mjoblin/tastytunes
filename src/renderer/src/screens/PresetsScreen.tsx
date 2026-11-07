@@ -74,6 +74,7 @@ import { openArtistInLibrary, openRefInLibrary } from "@/lib/mediaActions";
 import { fromNode } from "@/lib/mediaRef";
 import { TUNING_WINDOW_MS } from "@/hooks/useStationTuning";
 import { menuAt } from "@/lib/menuAt";
+import { nameKey } from "@shared/keys";
 
 /** A recall that moved nothing after this long is treated as dead — well inside TUNING_WINDOW_MS. */
 const DEAD_RECALL_MS = 8_000;
@@ -632,11 +633,10 @@ async function presetAlbums(
   if (!last) return { albums: [], by: null, last: null };
   const byPicture = last.artUrl ? pictured(last.artUrl) : [];
   if (byPicture.length > 0) return { albums: byPicture, by: "history", last: last.album };
-  const loose = (v: string | null | undefined): string => (v ?? "").trim().toLowerCase();
   const named = all.filter(
     (a) =>
-      loose(a.title) === loose(last.album) &&
-      (last.artist == null || loose(a.artist) === loose(last.artist)),
+      nameKey(a.title) === nameKey(last.album) &&
+      (last.artist == null || nameKey(a.artist) === nameKey(last.artist)),
   );
   return { albums: named, by: "history", last: last.album };
 }

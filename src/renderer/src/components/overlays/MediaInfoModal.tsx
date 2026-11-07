@@ -72,6 +72,7 @@ import {
 import { openInfoForRef } from "@/lib/mediaInfo";
 import { isAlbumClass, isArtistClass } from "@/lib/media";
 import { IS_MAC } from "@/lib/screens";
+import { nameKey } from "@shared/keys";
 
 /**
  * The Info modal: everything the server said about a piece of media, laid out
@@ -721,7 +722,6 @@ function AlbumTrackList({
   onOpen(t: MediaNode): void;
 }): React.JSX.Element {
   const groups = discGroups(tracks);
-  const lc = (v: string | null | undefined): string => (v ?? "").trim().toLowerCase();
   return (
     <div data-info-section="tracks" className="col-span-full">
       <div className="microlabel mb-1.5">Tracks</div>
@@ -734,7 +734,7 @@ function AlbumTrackList({
           )}
           {g.tracks.map((t) => {
             const dr = drs?.[audioAnalysisKey(t)] ?? null;
-            const other = t.artist && albumArtist && lc(t.artist) !== lc(albumArtist);
+            const other = t.artist && albumArtist && nameKey(t.artist) !== nameKey(albumArtist);
             return (
               <button
                 key={t.id}

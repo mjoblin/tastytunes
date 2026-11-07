@@ -4,6 +4,7 @@ import { tt } from "@/api";
 import { useStore } from "@/store";
 import { useReadyIndexSig } from "@/hooks/useIndexPools";
 import { Lru } from "@/lib/lru";
+import { nameKey } from "@shared/keys";
 
 /**
  * ARTIST PICTURES for rows and cards (0.11.0, a user's email: "Would it be possible for
@@ -23,7 +24,6 @@ let flushTimer: ReturnType<typeof setTimeout> | null = null;
 /** The index status the misses were answered from (module-wide: one change, one re-ask). */
 let seenIndex: unknown = null;
 
-const keyOf = (name: string): string => name.trim().toLowerCase();
 const emit = (): void => {
   for (const l of listeners) l();
 };
@@ -39,18 +39,18 @@ function flush(): void {
   if (asked.length === 0) return;
   void tt.artistPictures(asked).then(
     (m) => {
-      for (const n of asked) cache.set(keyOf(n), m[n] ?? null);
+      for (const n of asked) cache.set(nameKey(n), m[n] ?? null);
       emit();
     },
     () => {
-      for (const n of asked) cache.set(keyOf(n), null);
+      for (const n of asked) cache.set(nameKey(n), null);
       emit();
     },
   );
 }
 
 function want(name: string): void {
-  const k = keyOf(name);
+  const k = nameKey(name);
   if (!k || cache.has(k) || pending.has(k)) return;
   pending.set(k, name);
   flushTimer ??= setTimeout(flush, 0);
@@ -60,7 +60,7 @@ function want(name: string): void {
  *  every row showing the artist asks again, and takes main's answer (a real server picture still
  *  outranks the photo), and the window's chosen pictures are read again. */
 export function refreshArtistPicture(name: string): void {
-  cache.delete(keyOf(name));
+  cache.delete(nameKey(name));
   emit();
   loadArtistChoices();
 }
@@ -114,12 +114,12 @@ export function useArtistChoicesKept(): void {
 
 /** The picture chosen for an artist as the map has it now, for a menu built outside React. */
 export const artistChoiceNow = (name: string): ChosenPicture | null =>
-  useStore.getState().artistChoices?.[keyOf(name)] ?? null;
+  useStore.getState().artistChoices?.[nameKey(name)] ?? null;
 
 /** The picture chosen for an artist: undefined until the map is first read, null for none. A
  *  read again keeps the last answer until the new one lands. */
 export function useArtistChoice(name: string): ChosenPicture | null | undefined {
-  const k = keyOf(name);
+  const k = nameKey(name);
   return useStore((s) => (s.artistChoices ? (s.artistChoices[k] ?? null) : undefined));
 }
 
@@ -139,7 +139,7 @@ export function useArtistPicture(name: string | null | undefined): string | null
 /** Main's answer as it stands: undefined while it is being asked (the artist page waits for
  *  it rather than drawing a picture it may replace a moment later), null for none. */
 export function useArtistPictureAnswer(name: string | null | undefined): string | null | undefined {
-  const k = name ? keyOf(name) : null;
+  const k = name ? nameKey(name) : null;
   const mediaIndex = useStore((s) => s.mediaIndex);
   useEffect(() => {
     if (seenIndex === mediaIndex) return;

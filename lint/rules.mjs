@@ -516,4 +516,16 @@ export const ONE_HOME = [
       code: 'const c = "absolute top-1.5 left-1.5 h-7 w-7 rounded-lg bg-panel/80 ring-1 ring-edge";',
     },
   },
+  {
+    id: "name-key",
+    was: "none (0.15.0, the hygiene pass: the 0.11 re-score found 81 name keys hand-rolled in 42 files, none normalizing Unicode)",
+    // a string trimmed and lowercased in one chain, either order (optional links included)
+    selector:
+      "CallExpression[callee.property.name='toLowerCase'][callee.object.callee.property.name='trim'], CallExpression[callee.property.name='trim'][callee.object.callee.property.name='toLowerCase']",
+    files: ["^src/"],
+    allow: ["^src/shared/keys\\.ts$", "\\.test\\.tsx?$"],
+    message:
+      "Two names are compared by nameKey() (shared/keys: trimmed, lowercased and NFC), a Content-Type by mediaType(), never by a hand-rolled trim().toLowerCase()",
+    bad: { file: "src/main/lookups/commons.ts", code: "const key = artist.trim().toLowerCase();" },
+  },
 ];

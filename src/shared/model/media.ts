@@ -1,3 +1,4 @@
+import { nameKey } from "@shared/keys";
 // Media servers and what they hold: servers, the index's status, nodes and their formats,
 // the album and track rules (performers, compilations, track order, discs), artist and
 // album summaries, the info lookups and queueing actions, and name and title sorting.
@@ -262,8 +263,8 @@ export function performerLine(
 ): string | null {
   const names = trackArtists(n);
   if (!albumArtist || names.length < 2) return n.artist;
-  const key = albumArtist.trim().toLowerCase();
-  const lead = names.find((x) => x.trim().toLowerCase() === key);
+  const key = nameKey(albumArtist);
+  const lead = names.find((x) => nameKey(x) === key);
   if (!lead) return n.artist;
   const guests = names.filter((x) => x !== lead);
   return guests.length > 0 ? `${lead} feat. ${guests.join(", ")}` : n.artist;
@@ -285,7 +286,7 @@ export function isCompilation(
   if (VARIOUS.test(owner)) return true;
   if (!tracks || tracks.length < 2 || !owner) return false;
   const key = owner.toLowerCase();
-  const performerSets = tracks.map((t) => trackArtists(t).map((x) => x.trim().toLowerCase()));
+  const performerSets = tracks.map((t) => trackArtists(t).map((x) => nameKey(x)));
   const anyOwner = performerSets.some((set) => set.includes(key));
   const distinct = new Set(performerSets.map((set) => set.join("|"))).size;
   return !anyOwner && distinct >= 2;
@@ -295,9 +296,9 @@ export function isCompilation(
 export function albumComposers(tracks: ReadonlyArray<Pick<MediaNode, "composers">>): string[] {
   const known = tracks.filter((t) => t.composers && t.composers.length > 0);
   if (known.length === 0 || known.length < tracks.length) return [];
-  const first = known[0].composers!.map((x) => x.trim().toLowerCase());
+  const first = known[0].composers!.map((x) => nameKey(x));
   const same = known.every((t) => {
-    const c = t.composers!.map((x) => x.trim().toLowerCase());
+    const c = t.composers!.map((x) => nameKey(x));
     return c.length === first.length && c.every((x) => first.includes(x));
   });
   return same ? known[0].composers! : [];
@@ -332,30 +333,25 @@ export function albumTracksOf(
     tracks: ReadonlyArray<MediaNode>;
   },
 ): MediaNode[] {
-  const title = album.title.trim().toLowerCase();
+  const title = nameKey(album.title);
   const folder = album.titlePath ? folderKey(album.titlePath) : null;
   if (folder != null) {
     const own = pool.tracks.filter(
-      (t) =>
-        t.titlePath != null &&
-        (t.album ?? "").trim().toLowerCase() === title &&
-        folderKey(t.titlePath) === folder,
+      (t) => t.titlePath != null && nameKey(t.album) === title && folderKey(t.titlePath) === folder,
     );
     if (own.length > 0) return orderTracks(own);
   }
-  const owner = (album.artist ?? "").trim().toLowerCase();
-  const peers = pool.albums.filter((a) => a.title.trim().toLowerCase() === title);
-  const twins = peers.filter((a) => (a.artist ?? "").trim().toLowerCase() === owner).length > 1;
+  const owner = nameKey(album.artist);
+  const peers = pool.albums.filter((a) => nameKey(a.title) === title);
+  const twins = peers.filter((a) => nameKey(a.artist) === owner).length > 1;
   const credited = (t: MediaNode): boolean =>
     peers.length > 1
       ? trackInAlbumOf(t, album.artist ?? null)
-      : album.artist == null || !t.albumArtist || t.albumArtist.trim().toLowerCase() === owner;
+      : album.artist == null || !t.albumArtist || nameKey(t.albumArtist) === owner;
   return orderTracks(
     pool.tracks.filter(
       (t) =>
-        (t.album ?? "").trim().toLowerCase() === title &&
-        credited(t) &&
-        (!twins || sameArt(t.artUrl, album.artUrl)),
+        nameKey(t.album) === title && credited(t) && (!twins || sameArt(t.artUrl, album.artUrl)),
     ),
   );
 }
@@ -392,7 +388,7 @@ export function artistGroups(pools: readonly MediaIndexPools[]): Map<string, Art
   if (known) return known;
   const map = new Map<string, ArtistGroup>();
   const group = (name: string | null | undefined): ArtistGroup | null => {
-    const key = name?.trim().toLowerCase();
+    const key = name != null ? nameKey(name) : undefined;
     if (!key) return null;
     let g = map.get(key);
     if (!g)
@@ -445,8 +441,8 @@ export function albumOfTrack(
   pool: { albums: MediaNode[] },
 ): MediaNode | null {
   if (!track.album) return null;
-  const want = track.album.trim().toLowerCase();
-  const matches = pool.albums.filter((a) => a.title.trim().toLowerCase() === want);
+  const want = nameKey(track.album);
+  const matches = pool.albums.filter((a) => nameKey(a.title) === want);
   return matches.find((a) => trackInAlbumOf(track, a.artist)) ?? matches[0] ?? null;
 }
 
@@ -463,8 +459,8 @@ export function indexAlbumFor(
 ): MediaNode | null {
   const byId = pool.albums.find((a) => a.id === album.id);
   if (byId) return byId;
-  const want = album.title.trim().toLowerCase();
-  const same = pool.albums.filter((a) => a.title.trim().toLowerCase() === want);
+  const want = nameKey(album.title);
+  const same = pool.albums.filter((a) => nameKey(a.title) === want);
   return same.length === 1 ? same[0] : null;
 }
 
@@ -611,11 +607,11 @@ export function trackInAlbumOf(
   albumArtist: string | null,
 ): boolean {
   if (albumArtist == null) return true;
-  const want = albumArtist.trim().toLowerCase();
-  if (n.albumArtist) return n.albumArtist.trim().toLowerCase() === want;
+  const want = nameKey(albumArtist);
+  if (n.albumArtist) return nameKey(n.albumArtist) === want;
   const names = trackArtists(n);
   if (names.length === 0) return true;
-  return names.some((a) => a.trim().toLowerCase() === want);
+  return names.some((a) => nameKey(a) === want);
 }
 
 /**
@@ -724,8 +720,8 @@ export function artistSummary(
   name: string,
   pool: { albums: ReadonlyArray<MediaNode>; tracks: ReadonlyArray<MediaNode> },
 ): ArtistSummary {
-  const key = name.trim().toLowerCase();
-  const same = (v: string | null | undefined): boolean => (v ?? "").trim().toLowerCase() === key;
+  const key = nameKey(name);
+  const same = (v: string | null | undefined): boolean => nameKey(v) === key;
   const albums = pool.albums
     .filter((a) => same(a.artist))
     .map((a) => {
@@ -747,9 +743,7 @@ export function artistSummary(
   // not them — a loose single with no album is simply theirs
   const ownerOf = (t: MediaNode): string | null =>
     t.albumArtist ??
-    pool.albums.find(
-      (a) => t.album && a.title.trim().toLowerCase() === t.album.trim().toLowerCase(),
-    )?.artist ??
+    pool.albums.find((a) => t.album && nameKey(a.title) === nameKey(t.album))?.artist ??
     null;
   const guestOn = performs
     .filter((t) => {

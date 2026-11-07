@@ -52,6 +52,7 @@ import {
 } from "@/lib/searchGroups";
 import { menuAt, openMenuOn } from "@/lib/menuAt";
 import { KeyedList } from "@/components/controls/KeyedList";
+import { nameKey } from "@shared/keys";
 
 /** Below this, a query matches half the library and every station on earth. */
 const MIN_RADIO_CHARS = 2;
@@ -734,8 +735,7 @@ export function SearchScreen(): React.JSX.Element {
       // claim we looked. The chip stays live so it can be switched back on.
       unknown: hidden.has("radio") && radio === null,
       rows: (radio ?? []).map((st) => {
-        const playing =
-          radioPlayingName != null && st.name.trim().toLowerCase() === radioPlayingName;
+        const playing = radioPlayingName != null && nameKey(st.name) === radioPlayingName;
         const favorited = favStationUrls.has(st.url);
         const heart = (): void =>
           void toggleFavorite({

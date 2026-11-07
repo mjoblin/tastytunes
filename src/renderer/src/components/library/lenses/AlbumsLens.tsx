@@ -28,7 +28,6 @@ import { SelectionBar, SelectionVerb } from "@/components/controls/SelectionBar"
 import {
   COPY_BADGE_TIP,
   type LensActions,
-  lc,
   nodeKey,
   drOptionsOf,
   formatOptionsOf,
@@ -41,6 +40,7 @@ import { useLensIndex } from "./useLensIndex";
 import { ViewOptions } from "./ViewOptions";
 import { CARD_GRID_SCROLLER, useCardGrid, WINDOW_CARDS_ABOVE } from "./useCardGrid";
 import { menuAt } from "@/lib/menuAt";
+import { nameKey } from "@shared/keys";
 
 // The Albums lens, split out of LibraryLenses.tsx (2026-09-13, the lenses round: three lenses of
 // 600 to 800 lines shared one file); what the lenses share lives in ./lensShared.
@@ -173,7 +173,7 @@ export function AlbumsLens({
     let list = all;
     if (kind === "compilations") list = list.filter((a) => compilationKeys.has(nodeKey(a)));
     else if (kind === "albums") list = list.filter((a) => !compilationKeys.has(nodeKey(a)));
-    if (mem.genre) list = list.filter((a) => (a.genre ?? []).some((g) => lc(g) === mem.genre));
+    if (mem.genre) list = list.filter((a) => (a.genre ?? []).some((g) => nameKey(g) === mem.genre));
     if (mem.decade)
       list = list.filter(
         (a) => a.year != null && `${Math.floor(Number(a.year) / 10) * 10}s` === mem.decade,
@@ -235,7 +235,7 @@ export function AlbumsLens({
     for (const n of shown) {
       const v = albumVolume(n.title);
       if (!v) continue;
-      const k = `${lc(v.base)}|${lc(n.albumArtist ?? n.artist ?? "")}`;
+      const k = `${nameKey(v.base)}|${nameKey(n.albumArtist ?? n.artist ?? "")}`;
       const list = groups.get(k);
       if (list) list.push(n);
       else groups.set(k, [n]);
@@ -244,7 +244,7 @@ export function AlbumsLens({
     const out: Array<{ node: MediaNode; set?: { base: string; volumes: MediaNode[] } }> = [];
     for (const n of shown) {
       const v = albumVolume(n.title);
-      const k = v ? `${lc(v.base)}|${lc(n.albumArtist ?? n.artist ?? "")}` : null;
+      const k = v ? `${nameKey(v.base)}|${nameKey(n.albumArtist ?? n.artist ?? "")}` : null;
       const g = k ? groups.get(k) : undefined;
       if (!v || !g || g.length < 2) {
         out.push({ node: n });

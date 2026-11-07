@@ -18,12 +18,12 @@ import {
   type ToolImpl,
   ok,
   err,
-  lc,
   kindOf,
   largeQueueAsk,
   freshObjectId,
   defineTool,
 } from "./toolkit";
+import { nameKey } from "@shared/keys";
 
 // The MCP bridge's collection tools (the collections: radio, playlists and their edits,
 // favorites), one of six tool modules split out of mcpServer.ts 2026-09-13; the shapes and helpers
@@ -57,7 +57,7 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
           );
         }
         const q = a.query?.trim();
-        const g = a.genre?.trim().toLowerCase();
+        const g = a.genre != null ? nameKey(a.genre) : undefined;
         if (!q && !g) return err("Pass query and/or genre.");
         let stations;
         if (g && !q) stations = await radioByTags([g]);
@@ -282,8 +282,8 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
           const match = items.find(
             (n) =>
               kindOf(n) === fav.kind &&
-              lc(n.title) === lc(fav.title) &&
-              (fav.artist == null || n.artist == null || lc(n.artist) === lc(fav.artist)),
+              nameKey(n.title) === nameKey(fav.title) &&
+              (fav.artist == null || n.artist == null || nameKey(n.artist) === nameKey(fav.artist)),
           );
           if (match) {
             try {

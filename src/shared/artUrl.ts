@@ -1,4 +1,5 @@
 import type { MediaNode } from "./model";
+import { nameKey } from "@shared/keys";
 
 /**
  * Artwork URLs at the size we draw them.
@@ -74,7 +75,7 @@ export function artKeyOf(
 ): string {
   const album = node.isContainer ? node.title : (node.album ?? node.title);
   const artist = node.albumArtist ?? node.artist ?? "";
-  return `${node.serverUdn ?? ""}|${album.trim().toLowerCase()}|${artist.trim().toLowerCase()}`;
+  return `${node.serverUdn ?? ""}|${nameKey(album)}|${nameKey(artist)}`;
 }
 
 /** Whether a picture comes from the streamer's own art server: its host is the connected

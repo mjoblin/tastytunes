@@ -27,7 +27,6 @@ import { Eqbars } from "@/components/media/Eqbars";
 import {
   COPY_BADGE_TIP,
   type LensActions,
-  lc,
   nodeKey,
   orderArtists,
   RECORD_SORTS,
@@ -39,6 +38,7 @@ import {
 } from "./useLensTrackSelection";
 import { useLensIndex } from "./useLensIndex";
 import { ArtistCards, AzRail, artistLine, lensArtistNode } from "./ArtistCards";
+import { nameKey } from "@shared/keys";
 
 // The Artists lens, split out of LibraryLenses.tsx (2026-09-13, the lenses round: three lenses of
 // 600 to 800 lines shared one file); what the lenses share lives in ./lensShared.
@@ -68,7 +68,7 @@ let artistsMem: {
  *  Albums lenses' artist links. Keys match the lens's own: the lowercased,
  *  trimmed name. The lens then REVEALS the row near the top of its column. */
 export function focusArtistsLens(name: string): void {
-  artistsMem = { ...artistsMem, artist: lc(name), album: null, reveal: lc(name) };
+  artistsMem = { ...artistsMem, artist: nameKey(name), album: null, reveal: nameKey(name) };
 }
 
 /** How far from the column's top a revealed artist lands — about a row and
@@ -351,7 +351,7 @@ export function ArtistsLens({
   };
 
   // Playing-artist highlight is content identity, like everything else.
-  const playingArtistKey = actions.playingArtist ? lc(actions.playingArtist) : null;
+  const playingArtistKey = actions.playingArtist ? nameKey(actions.playingArtist) : null;
 
   const colHeading = (
     label: string,

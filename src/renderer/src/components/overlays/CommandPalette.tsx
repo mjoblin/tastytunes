@@ -9,6 +9,7 @@ import {
   buildCommands,
   fuzzyScore,
 } from "@/components/overlays/paletteCommands";
+import { nameKey } from "@shared/keys";
 
 /** A command's element id in the listbox: the input's active descendant names it. */
 const optionId = (i: number): string => `palette-command-${i}`;
@@ -132,7 +133,7 @@ export function CommandPalette(): React.JSX.Element {
     ],
   );
 
-  const q = query.trim().toLowerCase();
+  const q = nameKey(query);
   const filtered = useMemo<Command[]>(() => {
     if (!q) {
       return [...commands].sort(

@@ -2,6 +2,7 @@
 // loudness histograms an album integrates, and the keys analysis is stored under.
 
 import type { MediaNode } from "./media";
+import { nameKey } from "@shared/keys";
 
 /**
  * EXPERIMENT (0.7 exploration): a track's stored audio analysis — what the
@@ -226,7 +227,7 @@ export function keyName(
 export function parseKeyName(
   s: string,
 ): { tonic: number | null; mode: "major" | "minor" | null } | null {
-  const t = s.trim().toLowerCase().replace(/♯/g, "#").replace(/♭/g, "b").replace(/\s+/g, " ");
+  const t = nameKey(s).replace(/♯/g, "#").replace(/♭/g, "b").replace(/\s+/g, " ");
   const modeOf = (m: string | undefined): "major" | "minor" | null =>
     m == null ? null : m === "maj" || m === "major" ? "major" : "minor";
   const alone = /^(major|minor)$/.exec(t);

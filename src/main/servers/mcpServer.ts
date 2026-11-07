@@ -45,6 +45,7 @@ import { collectionTools } from "./mcp/collectionTools";
 import { audioTools } from "./mcp/audioTools";
 import { editTools } from "./mcp/editTools";
 import { sceneTools } from "./mcp/sceneTools";
+import { mediaType, nameKey } from "@shared/keys";
 
 function lanAddress(): string | null {
   for (const addrs of Object.values(networkInterfaces())) {
@@ -213,7 +214,7 @@ export class McpBridge {
       return;
     }
 
-    const type = (req.headers["content-type"] ?? "").split(";")[0].trim().toLowerCase();
+    const type = mediaType(req.headers["content-type"]);
     if (type !== "application/json") {
       reject(415, "The body must be application/json.");
       return;
@@ -312,13 +313,14 @@ export class McpBridge {
     const stats = await playStatsFromRecord();
     const run = resumeRun(stats.recent);
     if (!run) return { reason: "No album was left unfinished in the past week." };
-    const lc = (v: string | null | undefined): string => (v ?? "").trim().toLowerCase();
     const groups = indexPools();
     const albums = groups.flatMap((p) => p.albums);
     const node =
       albums.find(
-        (n) => lc(n.title) === lc(run.album) && (!run.artist || lc(n.artist) === lc(run.artist)),
-      ) ?? albums.find((n) => lc(n.title) === lc(run.album));
+        (n) =>
+          nameKey(n.title) === nameKey(run.album) &&
+          (!run.artist || nameKey(n.artist) === nameKey(run.artist)),
+      ) ?? albums.find((n) => nameKey(n.title) === nameKey(run.album));
     if (!node) return { reason: `"${run.album}" is not in any library index.` };
     const pool = groups.find((p) => p.udn === node.serverUdn);
     const tracks = (pool ? albumTracksOf(node, pool) : []).sort(

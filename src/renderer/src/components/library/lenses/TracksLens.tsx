@@ -28,7 +28,6 @@ import { TrackRow } from "@/components/library/LibraryCards";
 import { RowMenu } from "@/components/media/RowMenu";
 import {
   type LensActions,
-  lc,
   nodeKey,
   drOptionsOf,
   tempoBandLabel,
@@ -51,6 +50,7 @@ import {
 import { useLensIndex } from "./useLensIndex";
 import { TrackCards } from "./TrackCards";
 import { menuAt } from "@/lib/menuAt";
+import { nameKey } from "@shared/keys";
 
 // The Tracks lens, split out of LibraryLenses.tsx (2026-09-13, the lenses round: three lenses of
 // 600 to 800 lines shared one file); what the lenses share lives in ./lensShared.
@@ -209,7 +209,7 @@ export function TracksLens({
   const record = RECORD_SORTS.has(sort) || mem.played ? play : null;
   const { shown, scopeCounts } = useMemo(() => {
     let list = all;
-    if (mem.genre) list = list.filter((t) => (t.genre ?? []).some((g) => lc(g) === mem.genre));
+    if (mem.genre) list = list.filter((t) => (t.genre ?? []).some((g) => nameKey(g) === mem.genre));
     if (mem.decade) list = list.filter((t) => decadeOf(t.year) === mem.decade);
     if (mem.dr) list = list.filter((t) => String(drOf(t) ?? "") === mem.dr);
     if (mem.tempo) list = list.filter((t) => tempoBandOf(tempoOf(t)) === mem.tempo);

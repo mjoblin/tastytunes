@@ -79,6 +79,7 @@ import { artSrc } from "@/lib/artSrc";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { useQueueSourceActive } from "@/hooks/useQueueSourceActive";
 import { menuAt, openMenuOn } from "@/lib/menuAt";
+import { nameKey } from "@shared/keys";
 
 /**
  * Stored playlists: the collection on the left, the selected playlist's tracks
@@ -201,9 +202,7 @@ export function PlaylistsScreen(): React.JSX.Element {
   // has since edited out is a gap that no longer exists, so it drops from the
   // display. The stored record stays untouched; the next play rewrites it.
   const stillMissing = (selected?.lastMissing ?? []).filter((title) =>
-    (selected?.items ?? []).some(
-      (it) => it.title.trim().toLowerCase() === title.trim().toLowerCase(),
-    ),
+    (selected?.items ?? []).some((it) => nameKey(it.title) === nameKey(title)),
   );
   /** Is the live activation THIS playlist's? Another one running should grey
    *  this button, not turn it into that run's progress bar. */
@@ -693,9 +692,7 @@ const totalSecs = playlistTotalSecs;
  *  (performers where the library knows them: a compilation saved from the
  *  queue stores "Various Artists" on every row and would otherwise count 1). */
 const artistCount = (p: Playlist, performerOf: (i: PlaylistItem) => string | null): number =>
-  new Set(
-    p.items.map((i) => (performerOf(i) ?? i.artist ?? "").trim().toLowerCase()).filter(Boolean),
-  ).size;
+  new Set(p.items.map((i) => nameKey(performerOf(i) ?? i.artist)).filter(Boolean)).size;
 
 /**
  * The first few covers, stacked. Playlists are far easier to recognise by their

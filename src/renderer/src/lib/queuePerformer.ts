@@ -1,5 +1,6 @@
 import type { MediaIndexPools, MediaNode } from "@shared/model";
 import { trackMatchesEntry, type EntryLike } from "@/lib/playingEntry";
+import { nameKey } from "@shared/keys";
 
 /**
  * WHAT A QUEUE ENTRY'S ROW SHOWS FOR "ARTIST".
@@ -50,8 +51,7 @@ export function trackIndexFor(pools: MediaIndexPools[] | null): TrackIndex {
   return index;
 }
 
-const sameName = (a: string, b: string): boolean =>
-  a.trim().toLowerCase() === b.trim().toLowerCase();
+const sameName = (a: string, b: string): boolean => nameKey(a) === nameKey(b);
 
 /** The performer to show for a queue entry, or null when the device's string stands. */
 export function performerFor(md: EntryLike | null | undefined, index: TrackIndex): string | null {

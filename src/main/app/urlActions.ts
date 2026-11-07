@@ -6,6 +6,7 @@ import { MENU_SCREENS } from "./menu";
 import { deviceManager } from "./runtime";
 import { giveFocusBack, onUrl } from "./urlInbox";
 import { sendMenuCommand, showMainWindow, toggleMiniPlayer } from "./windows";
+import { nameKey } from "@shared/keys";
 
 /**
  * WHAT A tastytunes:// URL DOES (0.12.0, the URL scheme). The verbs are shared/urlActions; the
@@ -73,7 +74,7 @@ async function waitForStreamer(): Promise<boolean> {
 }
 
 const same = (a: string, b: string): boolean =>
-  a.trim().toLowerCase().replace(/\s+/g, " ") === b.trim().toLowerCase().replace(/\s+/g, " ");
+  nameKey(a).replace(/\s+/g, " ") === nameKey(b).replace(/\s+/g, " ");
 
 /** The command an action stands for, resolved against the streamer's own lists; a string is
  *  the reason it cannot be done. */

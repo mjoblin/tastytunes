@@ -4,7 +4,8 @@ import { getSettings } from "../../data/persist";
 import { fetchArtistInfo } from "../../lookups/artistInfo";
 import { fetchAlbumInfo } from "../../lookups/albumInfo";
 import { fetchLyrics } from "../../lookups/lyrics";
-import { type ToolContext, type ToolImpl, ok, err, lc, toneCaps, defineTool } from "./toolkit";
+import { type ToolContext, type ToolImpl, ok, err, toneCaps, defineTool } from "./toolkit";
+import { nameKey } from "@shared/keys";
 
 // The MCP bridge's audio tools (audio: tone and EQ, the analysis readouts, the display, the
 // lookups), one of six tool modules split out of mcpServer.ts 2026-09-13; the shapes and helpers
@@ -86,7 +87,7 @@ export function audioTools(ctx: ToolContext): Record<string, ToolImpl> {
       inputSchema: { name: z.string().describe("A saved preset name from get_audio_settings.") },
       handler: async (a) => {
         toneCaps(ctx);
-        const preset = getSettings().eqPresets.find((p) => lc(p.name) === lc(a.name));
+        const preset = getSettings().eqPresets.find((p) => nameKey(p.name) === nameKey(a.name));
         if (!preset)
           return err(
             `No saved EQ preset named '${String(a.name)}'. get_audio_settings lists them.`,

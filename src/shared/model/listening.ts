@@ -12,6 +12,7 @@ import {
   nodeFacts,
   sameCopyRow,
 } from "./copies";
+import { nameKey } from "@shared/keys";
 
 /**
  * The ONE definition of "a listen", shared by the scrobbler and the listening
@@ -50,8 +51,7 @@ export function playKey(
   artist: string | null | undefined,
   album: string | null | undefined,
 ): string {
-  const n = (v: string | null | undefined): string =>
-    (v ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  const n = (v: string | null | undefined): string => nameKey(v).replace(/\s+/g, " ");
   return `${n(title)}|${n(artist)}|${n(album)}`;
 }
 
@@ -271,9 +271,9 @@ export function inLibraryIndex(
       .map((s) => s.trim())
       .filter(Boolean),
   );
-  names.add(artist.trim().toLowerCase());
+  names.add(nameKey(artist));
   return candidates.some((n) =>
-    [...trackArtists(n), n.albumArtist].some((a) => a != null && names.has(a.trim().toLowerCase())),
+    [...trackArtists(n), n.albumArtist].some((a) => a != null && names.has(nameKey(a))),
   );
 }
 /** Fold one record line into the stats. Library plays only: an "external"

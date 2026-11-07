@@ -20,8 +20,7 @@ import {
 } from "@shared/model";
 import { pools, revalidate } from "./mediaIndex";
 import { browseMetadataNode, serverUdnForArt } from "./upnpBrowser";
-
-const lc = (v: string | null | undefined): string => (v ?? "").trim().toLowerCase();
+import { nameKey } from "@shared/keys";
 
 /** How far a library track's length may stray from a disc track's and still be its twin: the
  *  same recording ripped differs by a second or so of pregap and rounding, another master or
@@ -29,8 +28,13 @@ const lc = (v: string | null | undefined): string => (v ?? "").trim().toLowerCas
 const CONTENT_DURATION_SLACK_SECS = 2;
 
 function contentMatch(q: MediaInfoQuery, n: MediaNode): boolean {
-  if (lc(n.title) !== lc(q.title)) return false;
-  if (q.artist && n.artist && !trackInAlbumOf(n, q.artist) && lc(n.artist) !== lc(q.artist))
+  if (nameKey(n.title) !== nameKey(q.title)) return false;
+  if (
+    q.artist &&
+    n.artist &&
+    !trackInAlbumOf(n, q.artist) &&
+    nameKey(n.artist) !== nameKey(q.artist)
+  )
     return false;
   // A DISC'S TWIN MUST LAST AS LONG (0.12.0, a user saw a CD track draw its library twin's
   // waveform and scenes): the query carries the disc's length, and a library track of the same
@@ -54,13 +58,13 @@ function creditedArtistNode(
     tracks: ReadonlyArray<MediaNode>;
   },
 ): MediaNode | null {
-  const key = name.trim().toLowerCase();
+  const key = nameKey(name);
   const credited =
-    pool.albums.some((a) => (a.artist ?? "").trim().toLowerCase() === key) ||
+    pool.albums.some((a) => nameKey(a.artist) === key) ||
     pool.tracks.some(
       (t) =>
-        trackArtists(t).some((x) => x.trim().toLowerCase() === key) ||
-        (t.composers ?? []).some((c) => c.trim().toLowerCase() === key),
+        trackArtists(t).some((x) => nameKey(x) === key) ||
+        (t.composers ?? []).some((c) => nameKey(c) === key),
     );
   if (!credited) return null;
   return {
@@ -148,8 +152,8 @@ export async function lookupMediaInfo(
     if (candidates.length === 0) continue;
     // prefer the same album (tracks) — a title recorded on several
     const best =
-      (q.album && candidates.find((n) => lc(n.album) === lc(q.album))) ||
-      candidates.find((n) => q.artist == null || lc(n.artist) === lc(q.artist)) ||
+      (q.album && candidates.find((n) => nameKey(n.album) === nameKey(q.album))) ||
+      candidates.find((n) => q.artist == null || nameKey(n.artist) === nameKey(q.artist)) ||
       candidates[0];
     return confirm(pool, withAlbum(pool, best));
   }

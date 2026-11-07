@@ -39,6 +39,7 @@ import { artistIndex } from "../media/artistIndex";
 import * as mediaIndex from "../media/mediaIndex";
 import { demoHost } from "../servers/demoStreamer";
 import { handle } from "../app/guard";
+import { nameKey } from "@shared/keys";
 
 /** Internet lookups, each behind its own switch: lyrics, ListenBrainz, artist, album, disc and track context, cover art, radio directories, embedded and fetched pictures, and the lookup caches. (Split out of index.ts's registerIpc in the 0.11.0 sweep.) */
 
@@ -67,7 +68,7 @@ export function registerLookupsIpc(): void {
     // the picture chosen for them, else the server's real picture, else the photo, else a cover
     // (a server picture that is an album's cover counts as a cover)
     for (const n of want) {
-      const e = artists.get(n.trim().toLowerCase());
+      const e = artists.get(nameKey(n));
       out[n] =
         chosenPicture(n, pools, photos) ??
         e?.own ??
@@ -148,7 +149,7 @@ export function registerLookupsIpc(): void {
   // the artist page's facts line: the lens's counts, from the ready indexes
   handle(IPC.artistFacts, (_e, name: unknown) => {
     if (typeof name !== "string") return null;
-    const e = artistIndex(mediaIndex.pools()).get(name.trim().toLowerCase());
+    const e = artistIndex(mediaIndex.pools()).get(nameKey(name));
     return e ? { albums: e.albums, tracks: e.tracks } : null;
   });
   // Belt-and-braces gate: the renderer only asks while the setting is on, but

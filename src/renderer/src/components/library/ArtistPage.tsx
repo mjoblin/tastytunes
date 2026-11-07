@@ -11,7 +11,6 @@ import { useLensIndex } from "@/components/library/lenses/useLensIndex";
 import { useCardDetails } from "@/components/library/useCardDetails";
 import {
   COPY_BADGE_TIP,
-  lc,
   nodeKey,
   orderArtistAlbums,
   type LensActions,
@@ -28,6 +27,7 @@ import { cx } from "@/lib/format";
 import { KeyedList } from "@/components/controls/KeyedList";
 import { keyedEvent } from "@/lib/menuAt";
 import type { LandingTrack } from "@/components/library/landing";
+import { nameKey } from "@shared/keys";
 
 /** The page's album orders (0.13.0-rc.4): by year, newest first (the page's order since 0.11.0),
  *  or by title; the chip's arrow turns either. */
@@ -72,7 +72,7 @@ export function ArtistPage({
   const index = useLensIndex(pools);
   // each card's format line, while Settings › Layout shows it (useCardDetails)
   const detailsOf = useCardDetails(index);
-  const key = lc(name);
+  const key = nameKey(name);
   const artist = index.artists.find((a) => a.key === key) ?? null;
   const sort = useStore((s) => s.settings.artistPageSort);
   const reversed = useStore((s) => s.settings.artistPageSortReversed);
@@ -87,8 +87,8 @@ export function ArtistPage({
   // selection, two labelled runs
   const { others, appearsCount } = useMemo(() => {
     if (!artist) return { others: [], appearsCount: 0 };
-    const own = new Set(artist.albums.map((a) => `${a.serverUdn ?? ""}|${lc(a.title)}`));
-    const rest = artist.tracks.filter((t) => !own.has(`${t.serverUdn ?? ""}|${lc(t.album)}`));
+    const own = new Set(artist.albums.map((a) => `${a.serverUdn ?? ""}|${nameKey(a.title)}`));
+    const rest = artist.tracks.filter((t) => !own.has(`${t.serverUdn ?? ""}|${nameKey(t.album)}`));
     const appears = rest.filter((t) => t.album);
     return { others: [...appears, ...rest.filter((t) => !t.album)], appearsCount: appears.length };
   }, [artist]);

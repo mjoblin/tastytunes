@@ -8,6 +8,7 @@ import {
 // the scenes' string hash: a fixed, title-made order for ties (the same library draws the same
 // doors every visit)
 import { hashStr } from "@/components/display/scenes/lib";
+import { nameKey } from "@shared/keys";
 
 /**
  * WHAT THE LIBRARY'S DOORS SHOW (0.12.0-rc.3, his ask: "our custom entrypoints look too much like
@@ -40,8 +41,7 @@ export const WAVE_CANDIDATES = 300;
  *  reads as a gap, not a crate). */
 export const DOOR_MIN_PICTURES = 3;
 
-const norm = (v: string | null | undefined): string =>
-  (v ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+const norm = (v: string | null | undefined): string => nameKey(v).replace(/\s+/g, " ");
 
 /** Who a track counts for: its album artist, unless that is a compilation's. */
 function creditOf(t: MediaNode): string | null {

@@ -13,6 +13,7 @@
 import type { TrackCredit, TrackInfo, TrackInfoQuery } from "@shared/model";
 import { DiskCache } from "./diskCache";
 import { MB, mbFetch, type Fetched } from "./mb";
+import { nameKey } from "@shared/keys";
 
 /** The playing track's credits are asked for by the panel's tab: the urgent lane. */
 const ask = (url: string): Promise<Fetched> => mbFetch(url, true);
@@ -42,11 +43,11 @@ function pickRecording(
   album: string | null,
   durationSecs: number | null,
 ): MbRecording | undefined {
-  const albumKey = album?.trim().toLowerCase() ?? null;
+  const albumKey = album != null ? nameKey(album) : null;
   const rank = (r: MbRecording): [number, number] => {
     const onAlbum =
       albumKey != null &&
-      (r.releases ?? []).some((rel) => rel.title?.trim().toLowerCase() === albumKey);
+      (r.releases ?? []).some((rel) => rel.title != null && nameKey(rel.title) === albumKey);
     const delta =
       durationSecs != null && r.length != null
         ? Math.abs(r.length - durationSecs * 1000)

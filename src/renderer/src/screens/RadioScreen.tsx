@@ -19,6 +19,7 @@ import { cx } from "@/lib/format";
 import { Chip, ScreenTitle, GAP_WITHIN } from "@/components/chrome/Chrome";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { Lru } from "@/lib/lru";
+import { nameKey } from "@shared/keys";
 
 /**
  * Internet radio via the radio-browser.info community directory (keyless —
@@ -360,8 +361,7 @@ export function RadioScreen(): React.JSX.Element {
             <div {...keys.container} aria-label={heading} className="space-y-1.5">
               <ListKeysContext.Provider value={true}>
                 {shown.map((st, i) => {
-                  const playing =
-                    playingName != null && st.name.trim().toLowerCase() === playingName;
+                  const playing = playingName != null && nameKey(st.name) === playingName;
                   const favorited = favUrls.has(st.url);
                   const heart = (): void =>
                     void toggleFavorite({

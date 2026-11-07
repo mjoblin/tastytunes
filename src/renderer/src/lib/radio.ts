@@ -1,6 +1,7 @@
 import { isRadioMetadata, type ZonePlayState } from "@shared/smoip";
 import { tt } from "@/api";
 import { useStore } from "@/store";
+import { nameKey } from "@shared/keys";
 
 /** Radio search is a network call to the directory: type-ahead waits this long. ONE number for the Radio screen and unified search (2026-08-16). */
 export const RADIO_DEBOUNCE_MS = 350;
@@ -14,7 +15,9 @@ export const RADIO_DEBOUNCE_MS = 350;
 export function playingStationName(playState: ZonePlayState | null): string | null {
   const md = playState?.metadata;
   return isRadioMetadata(md) && (playState?.state === "play" || playState?.state === "buffering")
-    ? ((md?.station ?? md?.name)?.trim().toLowerCase() ?? null)
+    ? (md?.station ?? md?.name) != null
+      ? nameKey(md?.station ?? md?.name)
+      : null
     : null;
 }
 

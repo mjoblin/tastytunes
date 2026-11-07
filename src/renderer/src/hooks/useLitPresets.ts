@@ -3,6 +3,7 @@ import { presetVolumeKey } from "@shared/model";
 import { isRadioMetadata, queueContentHash, type PresetItem } from "@shared/smoip";
 import { useStore } from "@/store";
 import { activeSourceId } from "@/lib/format";
+import { nameKey } from "@shared/keys";
 
 /** Same art object regardless of scheme/query differences. */
 function urlsMatch(a: string, b: string): boolean {
@@ -125,8 +126,8 @@ export function useLitPresets(
     const isRadioPreset = (p: PresetItem): boolean =>
       /radio/i.test(p.class ?? "") || p.type === "Radio";
     const stationMatch = (p: PresetItem): boolean => {
-      const station = md?.station?.trim().toLowerCase();
-      return station != null && p.name?.trim().toLowerCase() === station;
+      const station = md?.station != null ? nameKey(md.station) : null;
+      return station != null && p.name != null && nameKey(p.name) === station;
     };
     /** null = this preset type has no content to check (inputs etc.) */
     const contentCheck = (p: PresetItem): boolean | null => {
