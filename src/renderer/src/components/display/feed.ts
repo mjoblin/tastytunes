@@ -6,7 +6,7 @@ import { tt } from "@/api";
 import { deriveNowPlaying, queuePlace } from "@/lib/format";
 import { useLyrics, type SyncedLine } from "@/hooks/useLyrics";
 import { DISPLAY_FONTS } from "@/hooks/useDisplayFont";
-import { usePlayingAnalysis, type Analysis } from "@/components/media/Waveform";
+import { usePlayingAnalysis, type Analysis } from "@/components/media/waveformAnalysis";
 import { useScenePalette } from "./palette";
 import { ONSET_TYPES, type Onsets } from "@/lib/onsets";
 import { dropClears, type DropTier, type Features } from "@/lib/features";

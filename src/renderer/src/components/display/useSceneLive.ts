@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { isRadioMetadata } from "@shared/smoip";
 import { useStore } from "@/store";
-import { usePlayingAnalysis } from "@/components/media/Waveform";
+import { usePlayingAnalysis } from "@/components/media/waveformAnalysis";
 import { nowPlayingInfoTarget } from "@/lib/mediaInfo";
 import { deriveNowPlaying } from "@/lib/format";
 import type { SceneNeeds } from "./scenes/types";

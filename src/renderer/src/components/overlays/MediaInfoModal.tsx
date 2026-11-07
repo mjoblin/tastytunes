@@ -34,13 +34,8 @@ import { useStore } from "@/store";
 import { ModalShell } from "@/components/chrome/Overlay";
 import { CloseButton } from "@/components/controls/CloseButton";
 import { ArtImage } from "@/components/media/ArtImage";
-import {
-  DrBadge,
-  DrChip,
-  InfoWaveform,
-  useKnownAnalysis,
-  warmAnalysis,
-} from "@/components/media/Waveform";
+import { DrBadge, DrChip, InfoWaveform } from "@/components/media/Waveform";
+import { useKnownAnalysis, warmAnalysis } from "@/components/media/waveformAnalysis";
 import {
   FACT_SEP,
   albumFactsLine,

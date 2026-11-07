@@ -33,12 +33,12 @@ import {
   streamRows,
   trackFormatRows,
 } from "@/components/media/InfoRows";
+import { Waveform } from "@/components/media/Waveform";
 import {
-  Waveform,
   usePlayingDr,
   usePlayingLoudness,
   usePlayingMeasured,
-} from "@/components/media/Waveform";
+} from "@/components/media/waveformAnalysis";
 import { audioAnalysisKey } from "@shared/model";
 import { FACT_SEP } from "@/lib/mediaFacts";
 
